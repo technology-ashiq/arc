@@ -107,6 +107,59 @@ PROC="commit-msg-draft"
   [[ "$output" == *"EMITS_BEFORE_EXIT"* ]] || { echo "$output"; false; }
 }
 
+@test "A-06 CARRY-OVER: an external-ok pack carrying an internal-only block in a carried-over draft is REFUSED" {
+  # ASSUMPTION A-06, discharged. Its trigger is written as a falsifiable sentence in PLAN.md: "a
+  # fixture pack declaring itself external-ok while carrying an internal-only-tagged block inside
+  # carried-over accepted-draft content is NOT refused -- the guard missed what a parse would have
+  # caught." This is the fixture that fires it or clears it, and it clears it.
+  #
+  # WHY THE CARRY-OVER PATH GETS ITS OWN FIXTURE RATHER THAN INHERITING THE ONE ABOVE. REQ-06 lets
+  # accepted drafts and rejection reasons ride the NEXT pack. That is a second, AUTOMATED route by
+  # which runtime-generated content re-enters an owner-approved input -- the owner approves the
+  # pack, not every byte that rode into it. A guard proven only on the hand-authored path would be
+  # a guard proven on the path a human already inspected.
+  #
+  # AND IT IS A PARSE, NOT A GREP. The top level declares `external-ok` in the very field the
+  # scanner reads; a check that trusted the outermost declaration, or that matched the literal
+  # string once and stopped, would pass this input straight through. This lane shipped exactly
+  # that shape once -- the propose-only guard was a grep, and a mutant module walked past it.
+  run node "$(RUN)" --process "$PROC" --driver mock --input '{"classification":"external-ok","pack-ref":"pack-002","carry_over":{"accepted_drafts":[{"draft":"the previous draft","classification":"internal-only"}]}}'
+  [ "$status" -eq 5 ] || { echo "an internal-only block inside carried-over content was NOT refused, got $status: $output"; false; }
+  [[ "$output" == *"internal-only"* ]] || { echo "the reason is not named: $output"; false; }
+  # The PATH is the half that proves the scanner walked into the carry-over structure rather than
+  # matching the word somewhere convenient.
+  [[ "$output" == *"carry_over.accepted_drafts[0].classification"* ]] || { echo "the marker path does not name the carried-over block: $output"; false; }
+}
+
+@test "A-06 CARRY-OVER NEGATIVE CONTROL: the same pack with a CLEAN carried-over draft proceeds" {
+  # Without this the test above passes on a guard that refuses any input containing the word
+  # carry_over, or any input at all. The two packs differ ONLY in the nested classification value,
+  # which is exactly the discrimination being tested. The empty recording dir makes the run fail at
+  # the DRIVER, so reaching the driver is itself the positive assertion.
+  local empty="$BATS_TEST_TMPDIR/no-recordings-carry"
+  mkdir -p "$empty"
+  run env ARC_MOCK_DIR="$empty" node "$(RUN)" --process "$PROC" --driver mock --input '{"classification":"external-ok","pack-ref":"pack-002","carry_over":{"accepted_drafts":[{"draft":"the previous draft","classification":"external-ok"}]}}'
+  [ "$status" -ne 5 ] || { echo "a clean carried-over draft was refused as internal-only: $output"; false; }
+  [[ "$output" == *"no recording for"* ]] || { echo "expected to reach the driver, got: $output"; false; }
+}
+
+@test "REQ-06: an UNMARKED input is refused for a CAPPED row, and only for a capped row" {
+  # The tightening this file's own module header named as a forward scope line since Phase 06, now
+  # built. REQ-06 reads "draft inputs ARE external-ok context packs" -- a positive declaration. An
+  # absent internal marker is not one, and an unclassified blob is indistinguishable from an
+  # approved pack to a check that only hunts for the word internal-only.
+  #
+  # Five cells, each killing a different wrong implementation, plus the reason check: an input that
+  # is both unmarked AND internally marked must be refused FOR THE MARKER, since both refuse and a
+  # boolean cannot tell those two apart.
+  run node "$(PROBE)" unmarked
+  [ "$status" -eq 0 ] || { echo "the probe did not run: $output"; false; }
+  [[ "$output" == *"UNMARKED_REFUSED_WHEN_CAPPED"* ]] || { echo "$output"; false; }
+  # The uncapped cell asserted here as well as inside the probe: this is the one that stops the
+  # rule becoming a repo-wide input schema, and every other class in router.yaml carries no cap.
+  [[ "$output" == *"unmarked_uncapped=false"* ]] || { echo "the rule leaked onto uncapped rows: $output"; false; }
+}
+
 @test "this file registers every test it declares" {
   # FIXED 2026-08-17 after an adversarial pass defeated the previous version, which counted
   # `^@test ` lines in the SOURCE -- the DECLARED count. bats silently DROPS a @test whose name
@@ -116,6 +169,6 @@ PROC="commit-msg-draft"
   # falls) and a silent removal (declared falls).
   declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "10" ] || { echo "expected 10 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "13" ] || { echo "expected 13 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

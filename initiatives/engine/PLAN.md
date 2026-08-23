@@ -93,8 +93,23 @@ Measured **2026-08-12** against `777808f`, not inherited: the design source's ow
 
 ## Appetite
 
-**9.5 days hard cap — EXTENDED from 7.5 by the owner on 2026-08-17**, at the day-5 kill checkpoint,
-in writing rather than absorbed silently. Working days throughout; `kickoff-lint` reads the first
+**12 days — EXTENDED a SECOND time by the owner on 2026-08-23, and this ruling changes what the cap
+IS.** The first extension (7.5 → 9.5) was slack against an overrunning phase. This one is different:
+asked to choose between a scope cut and a longer clock, the owner ruled **complete every phase, cut
+nothing, take whatever time it takes** — so for the remainder of this cycle the appetite is a
+**forecast that gets reported**, not a gate that can kill the work. The figure is derived rather than
+invented: 7.5 days burnt plus the 4.5 days phases 06, 07 and 08 still allocate at their own unchanged
+appetites. If the real number lands past 12, it is written down as an overrun; it is not answered by
+cutting a REQ.
+
+**The kill criteria below are NOT deleted, and that distinction matters.** The day-5 checkpoint and
+the STOP conditions inside REQ-02 and A-04 stay armed, because they guard *a boundary that cannot be
+proven*, which is a finding and not a schedule problem. What the owner suspended is the **scope-cut**
+response to a clock overrun — the branch that trades a requirement for a day. An UNPROVABLE fixture
+still stops this cycle.
+
+**9.5 days — the FIRST extension, from 7.5, by the owner on 2026-08-17**, at the day-5 kill
+checkpoint, in writing rather than absorbed silently. Working days throughout; `kickoff-lint` reads the first
 day-or-week figure in this section, so the live cap is stated first and the history follows it. The
 original: 7.5 working days — 1.5 weeks at a 5-day week (owner-ruled 2026-08-09, full appetite locked,
 the lean fallback offered and declined).

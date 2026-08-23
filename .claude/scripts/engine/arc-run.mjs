@@ -29,19 +29,22 @@
  * Usage:
  *   arc-run.mjs --process NAME [--driver NAME|auto] [--budget inr=N,min=M]
  *               [--input JSON|@FILE] [--root PATH] [--work-root PATH]
- *               [--trial-model ID] [--dry-run]
+ *               [--trial-model ID] [--transcript-dir PATH] [--dry-run]
  *
  * `--root` is where ARC lives; `--work-root` is where the DRIVER works (ADR-0220). They default
  * to the same place. `--trial-model` names a model for this invocation only, under ADR-0069(g)
  * -- it writes no router row and changes no tier, and the receipt records `model_source: trial`
  * so it can never be read back as a routing decision.
+ * `--transcript-dir` names where this run's scrubbed driver transcript is stored (REQ-03). It
+ * overrides ARC_RUN_TRANSCRIPT_DIR, and when NEITHER is set a run that produced a transcript
+ * says so on stderr instead of discarding it in silence.
  * Zero dependencies, Node 18+.
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
@@ -121,15 +124,58 @@ let inputArg = "";
 let root = "";
 let trialModel = "";
 let workRootArg = "";
+let transcriptDirArg = "";
 let dryRun = false;
 const seen = new Set();
+
+/**
+ * Read one value-taking flag, strictly.
+ *
+ * THREE REFUSALS, AND EACH ONE WAS A REAL BUG BEFORE IT WAS A RULE.
+ *
+ * ABSENT / EMPTY. `--work-root "$W"` with W unset silently aimed the driver at the ARC REPO --
+ * the precise accident this seam exists to prevent, since commit-msg-draft carries `git.op:
+ * add:*` and `commit:*`. `--trial-model "$M"` with M unset ran PRODUCTION ROUTING while the
+ * caller believed a trial ran. An empty value is an operator error, never "unset".
+ *
+ * A VALUE THAT IS ITSELF A FLAG. Found 2026-08-23 by two independent adversarial surfaces, both
+ * of which executed it: `--transcript-dir --dry-run` consumed `--dry-run` AS THE PATH. `dryRun`
+ * stayed false, so a caller asking for a PREVIEW got a real dispatch against a real driver with
+ * real money and a `run.completed` receipt on the spine, plus a directory literally named
+ * `--dry-run` in the working tree. The same shape defeats the given-twice rule by adjacency
+ * (`--transcript-dir --transcript-dir` passes), and `--transcript-dir --trial-model gpt-5` runs
+ * production routing while the command line says a trial. The old guard rejected `""` and
+ * `undefined` and treated every other string as a deliberate path -- missing-vs-empty wearing a
+ * third face.
+ *
+ * GIVEN TWICE. Silently picking one of two named values is the never-guess failure that
+ * `.claude/rules/lanes.md` records for `--lane`. This now covers EVERY value-taking flag rather
+ * than three of eight: `--process` names the receipt identity and the transcript filename, and
+ * `--root` selects the processes/ and router.yaml the whole run obeys -- a silent last-wins there
+ * is strictly more dangerous than one on a transcript path, and it was the state of this loop
+ * until both attackers pointed at it.
+ */
+function takeValue(flag, i) {
+  const key = flag.slice(2);
+  if (seen.has(key)) { console.error(`arc-run: ${flag} given twice -- that is an operator error, not a last-wins override`); process.exit(2); }
+  seen.add(key);
+  const v = argv[i + 1];
+  if (v === undefined || v === "") { console.error(`arc-run: ${flag} needs a value (an empty one is an operator error, not "unset")`); process.exit(2); }
+  if (v.startsWith("--")) {
+    console.error(`arc-run: ${flag} was handed ${JSON.stringify(v)}, which is another flag, not a value`);
+    console.error(`         a missing value must fail here rather than silently consuming the next option`);
+    process.exit(2);
+  }
+  return v;
+}
+
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === "--process") processName = argv[++i] ?? "";
-  else if (a === "--driver") driverArg = argv[++i] ?? "";
-  else if (a === "--budget") budgetStr = argv[++i] ?? "";
-  else if (a === "--input") inputArg = argv[++i] ?? "";
-  else if (a === "--root") root = argv[++i] ?? "";
+  if (a === "--process") processName = takeValue(a, i++);
+  else if (a === "--driver") driverArg = takeValue(a, i++);
+  else if (a === "--budget") budgetStr = takeValue(a, i++);
+  else if (a === "--input") inputArg = takeValue(a, i++);
+  else if (a === "--root") root = takeValue(a, i++);
   // THE SEAM (ADR-0220). Both are EXPLICIT and opt-in: a caller that passes neither gets
   // today's behaviour byte-for-byte, and nothing is ever inherited from the ambient
   // environment. That distinction is the whole decision -- reading ARC_DRIVER_MODEL off the
@@ -145,18 +191,19 @@ for (let i = 0; i < argv.length; i++) {
   // `.claude/rules/lanes.md` says of a repeated `--lane`: silently picking one of two named
   // values is the never-guess failure, and silently substituting a default for an absent one is
   // the same failure wearing a friendlier face.
-  else if (a === "--trial-model" || a === "--work-root") {
-    const key = a.slice(2);
-    if (seen.has(key)) { console.error(`arc-run: ${a} given twice -- that is an operator error, not a last-wins override`); process.exit(2); }
-    seen.add(key);
-    const v = argv[++i];
-    if (v === undefined || v === "") { console.error(`arc-run: ${a} needs a value (an empty one is an operator error, not "unset")`); process.exit(2); }
-    if (key === "trial-model") trialModel = v; else workRootArg = v;
-  }
+  // `--transcript-dir` joins this group rather than staying env-only (Cycle 7 Phase 06). The env
+  // var alone satisfied "the caller names the directory" and still let TWO phases of real
+  // dispatches go past REQ-03's per-dispatch transcript requirement, because nothing a caller
+  // FORGETS is a mechanism. A flag is a thing a caller wrote down on purpose, which is the same
+  // argument ADR-0220 made for --trial-model and --work-root; the env var stays for the callers
+  // that already set it, and the flag wins when both are present.
+  else if (a === "--trial-model") trialModel = takeValue(a, i++);
+  else if (a === "--work-root") workRootArg = takeValue(a, i++);
+  else if (a === "--transcript-dir") transcriptDirArg = takeValue(a, i++);
   else if (a === "--dry-run") dryRun = true;
   else { console.error(`arc-run: unknown option ${a}`); process.exit(2); }
 }
-if (!processName) { console.error("usage: arc-run.mjs --process NAME [--driver NAME|auto] [--budget inr=N,min=M] [--input JSON|@FILE] [--root PATH] [--work-root PATH] [--trial-model ID]"); process.exit(2); }
+if (!processName) { console.error("usage: arc-run.mjs --process NAME [--driver NAME|auto] [--budget inr=N,min=M] [--input JSON|@FILE] [--root PATH] [--work-root PATH] [--trial-model ID] [--transcript-dir PATH]"); process.exit(2); }
 
 function gitToplevel() {
   try { return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); }
@@ -238,6 +285,89 @@ if (workRootArg) {
   }
 }
 
+// ---------- where this run's scrubbed transcripts go (REQ-03) ----------
+//
+// RESOLVED ONCE, HERE, BEFORE ANY DRIVER RUNS. It used to be read inside `storeTranscript`, deep
+// in the dispatch, and three separate defects followed from that one placement:
+//
+//   1. A BAD DESTINATION COST A WHOLE DISPATCH. A path that was a regular file, or unwritable, or
+//      a typo, was discovered only after the driver had spawned and the money was spent -- and it
+//      surfaced as one WARN among the driver's own lines, with the run still exiting 0. Twelve
+//      lines above, `--work-root` refuses before the driver starts for exactly this reason, and
+//      its comment says why: a receipt blaming the DRIVER for the caller's flag is a false claim
+//      in an append-only ledger. The new member of the same strict group inherited none of it.
+//   2. THE OVERRIDE NOTICE REPEATED PER ATTEMPT. One flag, two lines on a schema retry, up to four
+//      down a fallback chain -- while the sibling warning twelve lines below carried a comment
+//      explaining that a line which repeats gets filtered by the eye exactly like a line that
+//      never appears. Reasoned about, and left open in the same function.
+//   3. THE EMPTY ENVIRONMENT VARIABLE READ AS "UNSET". `--transcript-dir ""` exits 2 saying an
+//      empty value is an operator error; `ARC_RUN_TRANSCRIPT_DIR=""`, six lines away, silently
+//      turned storage off and exited 0. That is the SAME defect one variable over -- the twin-fix
+//      recurrence this repository has now recorded four times -- and the idiom that produces it
+//      (`export VAR="$UNSET_THING"`) is house style in these very suites.
+//
+// The flag wins over the environment. The env var is ambient -- a harness may have exported it
+// three layers up -- while the flag is what this caller wrote down for this dispatch, and this
+// file already treats ambient configuration as the weaker signal.
+const transcriptEnvRaw = Object.prototype.hasOwnProperty.call(process.env, "ARC_RUN_TRANSCRIPT_DIR")
+  ? String(process.env.ARC_RUN_TRANSCRIPT_DIR)
+  : null;
+if (transcriptEnvRaw !== null && transcriptEnvRaw.trim() === "") {
+  console.error("arc-run: ARC_RUN_TRANSCRIPT_DIR is set but empty -- that is an operator error, not \"unset\"");
+  console.error("         unset it to disable transcript storage, or give it a directory");
+  process.exit(2);
+}
+// STRING INEQUALITY, NEVER `resolve()`. Two spellings of the SAME directory resolve unequal on
+// every filesystem this repo runs on -- `CaseDir` vs `casedir` on NTFS and APFS, a trailing dot
+// or space on Windows, an 8.3 short name, a junction -- so a resolve-based comparison told the
+// operator their transcript had gone somewhere else when it had gone exactly where they asked.
+// `resolve` is a string normaliser, not a filesystem identity. What is actually being reported is
+// a fact about CONFIGURATION -- two sources named a destination and one of them was used -- and
+// that fact is true whatever the two paths turn out to alias.
+if (transcriptDirArg && transcriptEnvRaw !== null && transcriptEnvRaw !== transcriptDirArg) {
+  console.error(`arc-run: --transcript-dir ${JSON.stringify(transcriptDirArg)} is in use; ARC_RUN_TRANSCRIPT_DIR ${JSON.stringify(transcriptEnvRaw)} is ignored for this run`);
+}
+const transcriptDirRaw = transcriptDirArg || (transcriptEnvRaw ?? "");
+let transcriptDir = "";
+if (transcriptDirRaw) {
+  // A name Win32 cannot address, accepted by Node and then unreachable by every consumer.
+  // Node's long-path handling bypasses Win32 normalisation, so it really creates `dotdir.` and
+  // reports success -- while cmd, PowerShell, Explorer, `git add` and the CI artifact uploader
+  // all fail to address it. Reserved device names are refused for the same reason
+  // `.claude/rules/lanes.md` refuses them for lane directories: they pass every grammar and break
+  // exactly one of the three CI legs. Evidence that exists and cannot be fetched is not evidence.
+  const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+  for (const part of transcriptDirRaw.split(/[\\/]+/)) {
+    if (!part || part === "." || part === "..") continue;
+    if (RESERVED.test(part)) {
+      console.error(`arc-run: --transcript-dir ${JSON.stringify(transcriptDirRaw)} contains the reserved device name ${JSON.stringify(part)}`);
+      process.exit(2);
+    }
+    if (/[. ]$/.test(part)) {
+      console.error(`arc-run: --transcript-dir ${JSON.stringify(transcriptDirRaw)} has a component ending in a dot or a space (${JSON.stringify(part)})`);
+      console.error("         Node creates it and no Win32 tool can address it afterwards");
+      process.exit(2);
+    }
+  }
+  if (transcriptDirRaw.trim() === "") {
+    console.error(`arc-run: --transcript-dir ${JSON.stringify(transcriptDirRaw)} is only whitespace`);
+    process.exit(2);
+  }
+  try {
+    mkdirSync(transcriptDirRaw, { recursive: true });
+    const st = statSync(transcriptDirRaw);
+    if (!st.isDirectory()) throw new Error("not a directory");
+    // realpath, so a symlinked or junctioned destination is resolved to where the bytes actually
+    // land. A lexical `resolve()` collapses `..` before the kernel resolves the link, so a
+    // containment check computed on the lexical path can pass while the write goes elsewhere.
+    transcriptDir = realpathSync(transcriptDirRaw);
+  } catch (e) {
+    console.error(`arc-run: --transcript-dir ${JSON.stringify(transcriptDirRaw)} cannot be used: ${e.message}`);
+    console.error("         refusing before the driver starts -- a destination discovered after the dispatch has already cost the run");
+    process.exit(2);
+  }
+}
+
 const fail = (reason, msg, extra = {}) => {
   console.error(`arc-run: ${msg}`);
   emitRun({ outcome: "fail", reason, ...extra });
@@ -300,6 +430,7 @@ let fallbacks = [];
 // row and therefore no claim either way -- which is not the same fact as `hosted: local`, and is
 // left as the empty string rather than defaulted to the reassuring value.
 let hosted = "";
+let routedCap = "";
 // Set by the router block below when the routed row is past its tenure. Acted on after the emit
 // helpers exist, because the refusal has to leave a receipt and the receipt needs the emitter.
 let expiredRow = null;
@@ -379,6 +510,11 @@ if (driverArg === "auto") {
   driver = row.driver;
   tier = row.tier;
   hosted = typeof row.hosted === "string" ? row.hosted : "";
+  // REQ-06: a `cap:` is what makes a row a HIRED runtime, and it is the only place where "the
+  // owner approved this specific input" is a real precondition. Read here so the data boundary can
+  // demand a positive `external-ok` declaration for capped rows and leave every in-house class
+  // untouched -- the tightening must not quietly become a repo-wide input schema.
+  routedCap = typeof row.cap === "string" ? row.cap : "";
   fallbacks = Array.isArray(row.fallback) ? row.fallback : [];
 }
 if (!DRIVERS.includes(driver)) { console.error(`arc-run: unknown driver \`${driver}\` (known: ${DRIVERS.join(", ")})`); process.exit(1); }
@@ -909,7 +1045,7 @@ function policyGate(name) {
 
 function invoke(name) {
   const sh = join(root, ".claude/scripts/engine/drivers", `${name}.sh`);
-  if (!existsSync(sh)) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null };
+  if (!existsSync(sh)) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null, spawned: false };
 
   const blocked = policyGate(name);
   if (blocked) {
@@ -947,7 +1083,7 @@ function invoke(name) {
       // must never be.
       verifyLanded(inc.id);
     }
-    return { code: 77, stdout: "", stderr: detail, cost: null, policyDenied: true };
+    return { code: 77, stdout: "", stderr: detail, cost: null, policyDenied: true, spawned: false };
   }
   const tmp = mkdtempSync(join(tmpdir(), "arc-run-"));
   const costFile = join(tmp, "cost.json");
@@ -1045,12 +1181,65 @@ function invoke(name) {
  * point, so the file on disk can never be the unscrubbed one -- the ordering IS the guarantee, and
  * inverting it would turn an evidence path into a leak path.
  */
-function storeTranscript(name, text) {
-  const dir = process.env.ARC_RUN_TRANSCRIPT_DIR;
-  if (!dir) return;
-  try {
-    mkdirSync(dir, { recursive: true });
+/**
+ * @param {string} name    the driver whose attempt this was
+ * @param {object} streams `{ stdout, stderr, spawned }` -- BOTH streams, and whether a driver ran
+ */
+function storeTranscript(name, streams) {
+  const out = String(streams?.stdout ?? "");
+  const err = String(streams?.stderr ?? "");
 
+  // NOTHING IS STORED FOR AN ATTEMPT THAT NEVER SPAWNED A DRIVER. `invoke()` returns arc-run's
+  // OWN message as `stderr` on two paths -- a driver whose .sh is not installed, and a policy
+  // denial -- and both reach here. With a destination set that wrote a transcript file whose
+  // entire body was arc-run refusing, inflating the very file COUNT a phase close reads with
+  // dispatches that never happened, one bogus file per missing driver down a fallback chain.
+  // With no destination it made the absence warning claim a driver had produced a transcript
+  // when no driver was ever spawned.
+  if (streams && streams.spawned === false) return;
+
+  // BOTH STREAMS, AND THE STDOUT HALF IS THE WHOLE POINT.
+  //
+  // This stored `r.stderr` alone, and two independent adversarial surfaces landed on the same
+  // consequence: on the fake-container fixture the container writes its answer to STDOUT and
+  // nothing to stderr, so every stored transcript contained exactly three lines -- all of them
+  // banners `hermes.mjs` prints in the PARENT process before the container starts. Zero bytes of
+  // runtime output. The suite's own assertion, `grep ADR-0222`, matched one of those banners, so
+  // deleting the container-stderr forwarding entirely left both storage tests green.
+  //
+  // Worse for the reason this feature exists: the near-miss JSON that Phase 08 lost -- a document
+  // the schema rejected for ONE missing property -- arrives on STDOUT. Storing stderr alone would
+  // have discarded it a second time, which is the failure this whole change is a response to.
+  //
+  // Labelled and concatenated rather than two files: one artifact per attempt is what REQ-03 asks
+  // for, and a reader needs to know which stream a line came from to tell a runtime's answer from
+  // its chatter.
+  const parts = [];
+  if (out.length) parts.push(`--- stdout ---\n${out.endsWith("\n") ? out : `${out}\n`}`);
+  if (err.length) parts.push(`--- stderr ---\n${err.endsWith("\n") ? err : `${err}\n`}`);
+  const text = parts.join("");
+
+  if (!transcriptDir) {
+    // LOUD ABSENCE, and this is the actual fix. Opt-in storage was correct and stays correct;
+    // what failed twice was that opting OUT looked exactly like having nothing to store. Two
+    // phases of real dispatches went past REQ-03 with the storage half armed and unused -- Phase
+    // 08 lost the one artifact that would have said whether a near-miss JSON shape was a prompt
+    // bug or a schema bug, and the Phase 06 certification evidence named a transcripts directory
+    // that was never written. Neither run said a word.
+    //
+    // PER ATTEMPT, NOT ONCE PER RUN. The once-guard was written to avoid repetition and hid the
+    // second loss instead: a schema retry discards TWO transcripts and reported one warning, and
+    // the suppressed one is the retry -- the attempt whose bytes distinguish a prompt bug from a
+    // schema bug, i.e. exactly the artifact this fix exists to keep. Naming the driver, the
+    // attempt and the byte count makes the repetition informative rather than noise, which is the
+    // property the once-guard was reaching for and missed.
+    if (text.length) {
+      process.stderr.write(`arc-run: WARN ${name} attempt ${attemptsMade} produced ${text.length} bytes of transcript and NO destination is set -- discarding. Pass --transcript-dir PATH (REQ-03 stores one per dispatch).\n`);
+    }
+    return;
+  }
+  const dir = transcriptDir;
+  try {
     // THE FILENAME IS SANITISED, because `processName` reached it by raw concatenation and a
     // process named `../processes/commit-msg-draft` wrote the transcript OUTSIDE the directory it
     // was handed -- proven. With a lane's evidence path as the target that silently redirects
@@ -1070,24 +1259,66 @@ function storeTranscript(name, text) {
     // "stored ... " and exited 0. Silent overwrite of evidence, reported as success. On a
     // one-second-mtime filesystem the loss would be near-total.
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const file = join(dir, `${safe}-${process.pid}-${stamp}.transcript.txt`);
-    if (!resolve(file).startsWith(resolve(dir) + sep)) {
-      process.stderr.write(`arc-run: WARN refusing to store a transcript outside ${dir}\n`);
+
+    // AN EMPTY TRANSCRIPT STILL WRITES A FILE, with a sentinel body -- returning early made "this
+    // dispatch was quiet", "the directory was unwritable" and "the feature is off" all look
+    // identical from the outside, and the file COUNT is what a phase close reads.
+    //
+    // BUT IT IS NAMED `.empty.transcript.txt`, because absence meaning failure is only half the
+    // property. Presence came to mean nothing: every dispatch on a driver that writes no output
+    // manufactured a file satisfying "a scrubbed transcript per dispatch is stored at
+    // initiatives/..." while carrying the single line "(no transcript output on this attempt)",
+    // and the stderr line announced a transcript had been stored. A count that a sentinel
+    // satisfies is a count that cannot tell evidence from bookkeeping.
+    //
+    // THIS BRANCH IS DEFENSIVE AND CURRENTLY UNREACHABLE, written down so nobody later deletes it
+    // as dead or writes a test that cannot pass. Once BOTH streams are stored, no driver in this
+    // tree produces an empty one: hermes writes its own banners to stderr on every dispatch, and
+    // mock names its missing recording there even when it fails. It stays because a future driver
+    // that is genuinely quiet must not become indistinguishable from an unwritable directory.
+    // Recorded as an unexercised path in evidence/phase-06/absent-evidence.md.
+    const empty = text.length === 0;
+    const file = join(dir, `${safe}-${process.pid}-${stamp}${empty ? ".empty" : ""}.transcript.txt`);
+
+    // CONTAINMENT, ASKED EXACTLY. `safe` cannot contain a separator (every character outside
+    // `[\w.-]` becomes `_`) and the name always ends in `-<pid>-<stamp>.transcript.txt`, so the
+    // joined component can never be `.` or `..`. A `startsWith(resolve(dir) + sep)` test was
+    // therefore unfalsifiable from the input it claimed to police -- and it produced a FALSE
+    // refusal for a filesystem-root or UNC-share-root destination, where `resolve(dir) + sep`
+    // double-separates. Directory equality is the exact question, `dir` is already a realpath, and
+    // this fails loudly if `join` is ever handed something that escapes.
+    if (dirname(resolve(file)) !== dir) {
+      process.stderr.write(`arc-run: WARN refusing to store a transcript outside ${JSON.stringify(dir)}\n`);
       return;
     }
 
-    // AN EMPTY TRANSCRIPT STILL WRITES A FILE, with a sentinel body. Returning early on empty text
-    // made "this dispatch was quiet", "the directory was unwritable" and "the feature is off" all
-    // look identical from the outside -- and the file COUNT is what a phase close reads. Absence
-    // now always means failure.
-    const body = String(text || "").length ? String(text) : "(no transcript output on this attempt)\n";
+    // U+FFFD MEANS THE BYTES WERE ALREADY LOST UPSTREAM, and the trail says so rather than
+    // presenting a lossy re-encoding as the driver's output. `spawnSync` decoded the child as
+    // utf8, so a driver forwarding a non-UTF-8 subprocess (a Windows console codepage, a vendor
+    // CLI emitting CP-1252 smart quotes) arrives here already substituted. ADR-0215 keeps this
+    // trail because injection shows in trails; a silently re-encoded trail is not that artifact.
+    const lossy = text.includes("�");
+    const header = lossy
+      ? "(arc-run: this transcript contains U+FFFD replacement characters -- the driver's output was not valid UTF-8 and those bytes were lost at capture, before this file was written)\n"
+      : "";
+    const body = empty ? "(no transcript output on this attempt)\n" : `${header}${text}`;
     writeFileSync(file, body, { encoding: "utf8", flag: "wx" });
-    process.stderr.write(`arc-run: stored the scrubbed ${name} transcript at ${file}\n`);
+    process.stderr.write(
+      empty
+        ? `arc-run: ${name} attempt ${attemptsMade} produced no output on either stream; wrote an EMPTY transcript marker at ${JSON.stringify(file)}\n`
+        : `arc-run: stored the scrubbed ${name} transcript (${text.length} bytes) at ${JSON.stringify(file)}\n`,
+    );
   } catch (e) {
     // A failure to store evidence must not silently pass as evidence stored. It also must not kill
     // a completed dispatch, so it is loud and non-fatal -- and the count of stored files is what
     // the phase close reads, never this line.
-    process.stderr.write(`arc-run: WARN could not store the ${name} transcript in ${dir}: ${e.message}\n`);
+    //
+    // THE PATH IS JSON-QUOTED, here and in every line above. Raw interpolation let a caller-chosen
+    // destination containing a NEWLINE forge a second physical line reading `arc-run: stored the
+    // scrubbed <driver> transcript at <path>` for a file that was never written -- a line-anchored
+    // match for anything grepping this output. `--work-root` twelve hundred lines up already
+    // quotes its path for precisely this reason.
+    process.stderr.write(`arc-run: WARN could not store the ${name} transcript in ${JSON.stringify(dir)}: ${e.message}\n`);
   }
 }
 
@@ -1098,7 +1329,7 @@ function attempt(name) {
   scrub(`the ${name} driver's stdout`, r.stdout);
   scrub(`the ${name} driver's transcript`, r.stderr);
   if (r.cost) scrub(`the ${name} driver's cost sidecar`, JSON.stringify(r.cost), r.cost);
-  storeTranscript(name, r.stderr);
+  storeTranscript(name, r);
 
   // A timeout is the BUDGET being spent, not the driver misbehaving. Classifying it as a
   // driver fault made budget exhaustion trigger the fallback chain -- which then spent the
@@ -1144,6 +1375,16 @@ if (dryRun) {
   console.log(`arc-run: would run \`${processName}\` on \`${driver}\`${tier ? ` (tier ${tier})` : ""}${fallbacks.length ? ` fallback ${fallbacks.join(" -> ")}` : ""}`);
   console.log(`         model ${effectiveModel ?? "unpinned"} (source: ${modelSource})`);
   console.log(`         driver workspace ${workRoot}${workRoot === root ? " (this repo -- no --work-root given)" : ""}`);
+  // THE PREVIEW REPORTS THE TRANSCRIPT DESTINATION, INCLUDING ITS ABSENCE. `--dry-run` exits
+  // before `attempt()`, so the loud-absence warning cannot fire here -- which made the one command
+  // a caller runs to check their line BEFORE spending money the one command that would not tell
+  // them they had forgotten the flag. That is precisely the failure mode ("a mechanism a caller
+  // could FORGET, and twice did") this flag exists to end, so the preview has to carry it.
+  console.log(
+    transcriptDir
+      ? `         transcripts ${transcriptDir}`
+      : "         transcripts NOWHERE -- no --transcript-dir and no ARC_RUN_TRANSCRIPT_DIR, so this dispatch would keep no trail (REQ-03)",
+  );
   process.exit(0);
 }
 
@@ -1228,7 +1469,7 @@ if (expiredRow) {
 //
 // Exit 5, its own code: arc-run already overloads 1 for "cannot proceed", and a boundary refusal
 // indistinguishable from a parse error is a boundary no fixture can assert.
-const refusal = boundaryRefusal({ input, processName, hosted });
+const refusal = boundaryRefusal({ input, processName, hosted, cap: routedCap });
 if (refusal) {
   console.error(`arc-run: ${refusal.reason}`);
   for (const m of refusal.markers) console.error(`arc-run:   ${m.path} ${m.why}`);

@@ -3,7 +3,7 @@
 status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
 phase: 06
-appetite: 9.5d
+appetite: 12d
 burn: 7.5d
 blocked-on: —
 depends-on: —
@@ -33,6 +33,15 @@ depends-on: —
 | 06 | **Certification or STOP** — 12 fixtures green against the real runtime with receipts, plus the scrubbed-transcript evidence path | 2 days | pending |
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
 | 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
+
+**CAP RAISED TO 12 DAYS BY OWNER RULING, 2026-08-23 — and the ruling was "no scope cut, finish every
+phase".** At 7.5 of 9.5 (79%) with phases 06, 07 and 08 still allocating 4.5 days, the arithmetic did
+not close and a scope cut was recommended (drop REQ-06's carry-over-path fixture, keep the three real
+dispatches). The owner declined it outright: complete all phases, cut nothing, take the time. So 12 =
+7.5 burnt + 4.5 still allocated, derived rather than invented, and the appetite is now a **forecast
+that gets reported** for the rest of this cycle rather than a gate that can kill the work. PLAN §
+Appetite carries the full ruling, including what did NOT change: REQ-02's and A-04's UNPROVABLE STOPs
+stay armed, because those guard a boundary that cannot be proven, which is a finding and not a clock.
 
 **Appetite burn: 7.5 of 9.5 days used (79%) — set 2026-08-18, advanced twice that day: once after the ADR-0223 round and REQ-07's three dispatches, again after ADR-0224 closed the answer-reliability confound. One long day, counted as one.** The clock is set the day the work happens, because this cycle has twice recorded the cost of setting it later: the Phase 04 close found it reading 0.0 for four days, and the day-5 checkpoint fired against a number a full working day stale. It was 5.5 of **7.5** when it was
 set, which is what **fired the day-5 kill checkpoint**; the checkpoint was read, the owner ruled

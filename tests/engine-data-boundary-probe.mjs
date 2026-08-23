@@ -62,6 +62,52 @@ const cases = {
   },
 
   /**
+   * REQ-06: an UNMARKED input is refused for a row carrying a `cap:`, not merely an internal-only
+   * one. "No internal marker was found" is an ABSENCE, and this repo has a standing rule that a
+   * pass condition which is only an absence cannot detect what it was written for — an
+   * unclassified blob and an owner-approved pack look identical to a check that only hunts for
+   * the word `internal-only`.
+   *
+   * Five cells, and each one exists to kill a different wrong implementation:
+   *   unmarked_capped     the rule fires at all
+   *   unmarked_uncapped   it does NOT become a repo-wide input schema (commit-msg-draft is uncapped)
+   *   external_capped     a properly declared pack still gets through
+   *   internal_capped     the internal-marker refusal WINS — the more specific fact is reported
+   *   nested_external     a deep external-ok does not vouch for the pack above it (A-06 mirrored)
+   */
+  unmarked() {
+    const refused = (input, cap) =>
+      Boolean(boundaryRefusal({ input, processName: "build-in-public-draft", hosted: "cloud", cap }));
+    const results = [
+      `unmarked_capped=${refused({ text: "x" }, "L1-drafts")}`,
+      `unmarked_uncapped=${refused({ text: "x" }, "")}`,
+      `external_capped=${refused({ classification: "external-ok", text: "x" }, "L1-drafts")}`,
+      `internal_capped=${refused({ classification: "internal-only" }, "L1-drafts")}`,
+      `nested_external=${refused({ carry_over: { drafts: [{ classification: "external-ok" }] } }, "L1-drafts")}`,
+    ];
+    console.log(results.join(" "));
+
+    // The internal-only case must be refused FOR THE MARKER, not for being unmarked. Both refuse,
+    // so a boolean cannot tell them apart and the reason is what carries the property.
+    const both = boundaryRefusal({
+      input: { classification: "internal-only" },
+      processName: "build-in-public-draft",
+      hosted: "cloud",
+      cap: "L1-drafts",
+    });
+    console.log(`internal_reason_wins=${Boolean(both) && both.reason.includes("is internal-only")}`);
+
+    const ok =
+      results[0].endsWith("=true") &&
+      results[1].endsWith("=false") &&
+      results[2].endsWith("=false") &&
+      results[3].endsWith("=true") &&
+      results[4].endsWith("=true") &&
+      Boolean(both) && both.reason.includes("is internal-only");
+    console.log(ok ? "UNMARKED_REFUSED_WHEN_CAPPED" : "UNMARKED_RULE_WRONG");
+  },
+
+  /**
    * The refusal must EMIT before it exits. Asserted on the source rather than by running a whole
    * dispatch, because the spine emitter refuses to write from this worktree by design — a
    * receipt written here would be real, valid and invisible to arc-inbox.

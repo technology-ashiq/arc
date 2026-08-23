@@ -134,6 +134,43 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   [ "$status" -eq 0 ]
 }
 
+@test "REQ-05 fixture 10: a budget decline STOPS -- the fallback chain is never walked" {
+  # THE ARM FIXTURE 10 OWED. `initiatives/engine/evidence/phase-06/fixture-10-capped-key.md` said it
+  # in as many words: the provider's HTTP 403 was measured, `cert 10` proves the hermes driver maps
+  # that message to exit 2 with a negative control -- and NOTHING proved the third link, that
+  # arc-run then stops. REQ-05 says "with zero silent continuation", and the two existing REQ-05
+  # tests assert the receipt reason and nothing about what happened next.
+  #
+  # It matters because `commit-msg-draft` HAS a chain (codex, generic-api). Walking it against a
+  # spent credential cannot succeed and spends the run budget again per hop -- a loop that cannot
+  # win and does not stop. arc-run guards it with `while (a.verdict === "driver" ...)`, and until
+  # now deleting that one word from the condition left every suite green.
+  ARC_DRIVER_FAKE="$(FAKE declined)" run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
+  [ "$status" -eq 1 ] || { echo "a budget decline did not fail the run: $output"; false; }
+
+  # POSITIVE ASSERTIONS FIRST. An absent "falling back" line is satisfied by a crash, by a typo in
+  # the process name, or by a run that never reached the driver at all -- so what proves the chain
+  # was not walked is the receipt naming the FIRST driver and exactly ONE attempt.
+  run grep -rh '"reason":"budget"' "$ARC_SPINE_ROOT/events"
+  [ "$status" -eq 0 ] || { echo "no budget receipt landed"; false; }
+  run grep -rh '"driver":"claude-code"' "$ARC_SPINE_ROOT/events"
+  [ "$status" -eq 0 ] || { echo "the receipt does not name the first driver"; false; }
+  run grep -rh '"attempts":1' "$ARC_SPINE_ROOT/events"
+  [ "$status" -eq 0 ] || { echo "more than one attempt was made against a spent budget"; false; }
+  # And the receipt must not name a driver further down the chain, which is the same fact read
+  # from the other side.
+  run grep -rh '"driver":"codex"' "$ARC_SPINE_ROOT/events"
+  [ "$status" -ne 0 ] || { echo "the fallback driver reached the spine -- the chain was walked"; false; }
+}
+
+@test "REQ-05 fixture 10 NEGATIVE CONTROL: a DRIVER fault on the same class DOES walk the chain" {
+  # Without this, the test above passes on a tree where the fallback loop was deleted outright,
+  # and "zero silent continuation" would be indistinguishable from "no continuation ever". The two
+  # runs differ only in what the fake reports, which is exactly the discrimination being tested.
+  ARC_DRIVER_FAKE="$(FAKE driverfail)" run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
+  [[ "$output" == *"falling back to"* ]] || { echo "a driver fault did not walk the chain: $output"; false; }
+}
+
 @test "REQ-05: an unavailable cost stays ABSENT - never zero, never estimated" {
   ARC_DRIVER_FAKE="$(FAKE good)" run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
   [ "$status" -eq 0 ]

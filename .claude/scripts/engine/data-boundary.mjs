@@ -44,6 +44,12 @@ const CLASSIFICATION_KEYS = new Set(["classification", "data-classification", "d
 const INTERNAL_VALUES = new Set(["internal-only", "internal_only", "internalonly"]);
 const PLANTED_TOKEN = /\bARC-INTERNAL-ONLY\b/;
 
+/**
+ * How a document says it MAY leave. REQ-06 reads "draft inputs ARE `external-ok` context packs",
+ * which is a positive declaration and not the absence of a negative one.
+ */
+const EXTERNAL_VALUES = new Set(["external-ok", "external_ok", "externalok"]);
+
 /** Walk depth cap. A document deeper than this is refused rather than partially inspected. */
 const MAX_DEPTH = 12;
 
@@ -100,15 +106,38 @@ export function findInternalMarkers(doc) {
 }
 
 /**
+ * Does this document POSITIVELY declare itself shareable, at its own top level?
+ *
+ * TOP LEVEL ONLY, AND THAT IS THE WHOLE POINT. A nested `external-ok` — inside a carried-over
+ * accepted draft, say — vouches for that block and for nothing above it. Accepting it as a
+ * declaration for the WHOLE pack would be the exact mirror of assumption A-06: content the runtime
+ * generated, riding back in on an automated path, granting itself permission to leave. The
+ * internal-marker scan walks the whole tree because one bad block is enough to refuse; this walks
+ * one level because one good block is not enough to allow.
+ *
+ * A non-object input has no top level to declare anything, so it declares nothing.
+ */
+export function declaresExternalOk(doc) {
+  if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return false;
+  for (const k of Object.keys(doc)) {
+    if (!CLASSIFICATION_KEYS.has(k)) continue;
+    const v = doc[k];
+    if (typeof v === "string" && EXTERNAL_VALUES.has(v.trim().toLowerCase())) return true;
+  }
+  return false;
+}
+
+/**
  * The one confinement decision. Returns null when the dispatch may proceed, or a refusal.
  *
  * @param {object} args
  * @param {*}      args.input        the process input document, already parsed
  * @param {string} args.processName  named in the refusal so an operator knows what was stopped
  * @param {string} args.hosted       the router row's `hosted:` value, or "" when unrouted
+ * @param {string} [args.cap]        the router row's `cap:` value, or "" when the row carries none
  * @returns {null | {code: number, reason: string, markers: object[]}}
  */
-export function boundaryRefusal({ input, processName, hosted }) {
+export function boundaryRefusal({ input, processName, hosted, cap }) {
   let markers;
   try {
     markers = findInternalMarkers(input);
@@ -118,6 +147,32 @@ export function boundaryRefusal({ input, processName, hosted }) {
     return {
       code: EXIT_DATA_BOUNDARY,
       reason: `${e.message} — refusing rather than dispatching a document that was not fully inspected`,
+      markers: [],
+    };
+  }
+
+  // THE UNMARKED INPUT, refused for a CAPPED row (Phase 08, REQ-06). Named as a forward scope line
+  // in this file's header since Phase 06 and built here.
+  //
+  // REQ-06 reads "draft inputs ARE external-ok context packs approved by the owner before
+  // dispatch". That is a positive declaration, and "no internal marker was found" is not one --
+  // it is an absence, and this repository has a standing rule that a pass condition which is only
+  // an absence cannot detect the thing it was written for. An unclassified blob and an approved
+  // pack are indistinguishable to a check that only looks for the word `internal-only`.
+  //
+  // GATED ON THE ROW CARRYING A `cap:`, not applied to everything. A cap is what makes a row a
+  // hired runtime — an outside contractor at the L1-drafts ceiling — and it is the only place
+  // where "the owner approved this specific input" is a real precondition. `commit-msg-draft` and
+  // every other in-house class carries no cap and is untouched, so this tightening cannot quietly
+  // become a repo-wide input schema.
+  //
+  // ORDER MATTERS: the internal-marker refusal above wins. An input that is BOTH unmarked at the
+  // top and carrying an internal-only block deeper down should be refused for the block, which is
+  // the more specific and more alarming fact.
+  if (!markers.length && String(cap || "").trim() && !declaresExternalOk(input)) {
+    return {
+      code: EXIT_DATA_BOUNDARY,
+      reason: `the input for ${processName} does not declare itself external-ok, and ${processName} routes to a cap: ${String(cap).trim()} row — an unclassified input is refused rather than assumed shareable`,
       markers: [],
     };
   }
