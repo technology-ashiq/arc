@@ -273,10 +273,14 @@ allowlist (`tools: []` is refused by the `claude-code` driver, because an absent
 `--allowedTools` means UNRESTRICTED and an empty grant fails closed — ADR-0223 working as
 designed). The policy row alone would not make it runnable, so it is not urgent.
 
-**Next step (owner's) — one ruling, and it is not a blocker:** the reference brain's action
-protocol lets the model emit `approve` / `reject` on a real inbox id. It is told in the
-prompt not to auto-approve money or kill decisions, but a prompt is not a tool contract,
-and REQ-07 requires ZERO write tools proven by a fixture. Recommended: drop those two
-actions and keep `open_room` / `set_speed` / `enter_hq`. Reasoning in
-`docs/design/reference/face-hq/SOURCE.md`. The brief's "purinjathu" read for Phase 00 rides
-along with it.
+**That ruling is DECIDED (2026-08-24), and it did not need the owner.** The reference brain's
+action protocol lets the model emit `approve` / `reject` on a real inbox id, restrained only
+by a prompt — which is not a tool contract, and REQ-07 requires ZERO write tools proven by a
+fixture. Both actions are out; `open_room` / `set_speed` / `enter_hq` stay. It is not a design
+call and the owner kept only the design, so asking would have been asking him to re-derive an
+answer E2 and REQ-07 already give. Enforced, not stated: `ASK_ACTIONS` + `actionAudit` in
+`face/src/lib/ask.mjs`, the action-side twin of `ROUTE_EFFECT` / `noHandsAudit`, with a write
+action, an UNCLASSIFIED action and an empty vocabulary each failing it. Reasoning in
+`docs/design/reference/face-hq/SOURCE.md`.
+
+**The owner's column is now ONE item:** the brief's "purinjathu" read for Phase 00.

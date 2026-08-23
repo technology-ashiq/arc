@@ -964,5 +964,32 @@ check("a dead handle SAYS it is dead rather than reporting a clean boundary",
   check("and defaults to zero rather than undefined", rooms.lanePhases({ phases: [] }).omitted === 0);
 }
 
+// REQ-07's OTHER half: what the brain may EMIT, not just what a room may call.
+//
+// The owner's reference build lets the model return {"type":"approve","id":...} and the UI
+// executes it, with a PROMPT telling the model not to auto-approve money or kill decisions.
+// A prompt is not a tool contract -- it is the decorative gate ADR-0049 describes -- and E2
+// Human Sovereignty puts the stamp in the owner's own hand. So the two write actions are not
+// in arc's vocabulary, and this is what makes that a contract instead of a sentence.
+{
+  const ask = await import(pathToFileURL(join(LIB, "ask.mjs")).href);
+  const a = ask.actionAudit();
+  check("the action vocabulary is clean", a.clean, a.line);
+  check("and it reaches something -- a boundary, not a dead feature", a.reachesSomething);
+  check("approve is NOT an action arc will execute", !("approve" in ask.ASK_ACTIONS));
+  check("nor reject", !("reject" in ask.ASK_ACTIONS));
+  check("navigation and view actions stay", ["open_room", "set_speed", "enter_hq"].every((k) => k in ask.ASK_ACTIONS));
+
+  // The arms that keep it alive. Each is a way the vocabulary could grow a hand.
+  const withWrite = ask.actionAudit({ ...ask.ASK_ACTIONS, approve: { effect: "write" } });
+  check("a write action makes the audit dirty, and is NAMED", !withWrite.clean && withWrite.hands.includes("approve"), withWrite.line);
+  // An UNCLASSIFIED action counts as a hand, for the same reason noHandsAudit treats an
+  // unknown method as write-reachable: the safe reading of "I do not know what this does"
+  // is not "probably nothing".
+  const unclassified = ask.actionAudit({ open_room: { effect: "navigate" }, mystery: {} });
+  check("an action with no declared effect counts as a hand", !unclassified.clean && unclassified.hands.includes("mystery"), unclassified.line);
+  check("and an EMPTY vocabulary is dead, not clean", !ask.actionAudit({}).clean, ask.actionAudit({}).line);
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;
