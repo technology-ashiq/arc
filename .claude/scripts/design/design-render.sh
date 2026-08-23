@@ -544,9 +544,16 @@ for m in "$RENDER_ROOT"/*.json "$RENDER_ROOT"/*/*.json; do
     rm -f "$PNG" "$META" 2>/dev/null || true
     exit 1
   fi
-  # Case 2: same route, same session, same pixels -- an iteration that changed nothing.
-  # This is a RESULT the self-review loop exists to produce, not a fault.
-  UNCHANGED="true"
+  # Case 2: same route, same session, same pixels -- not a fault. For a NON-iteration render
+  # that is the "nothing changed" result the loop exists to produce.
+  #
+  # For an ITERATION it is not, and this branch used to override the iteration-aware answer
+  # computed above: iter-3 returning to iter-1's pixels matched iter-1 here and was written
+  # `unchanged: true`, when iteration 3 had changed a great deal. The iteration comparison is
+  # authoritative because ADR-1417 defines the signal against the PREVIOUS iteration, so this
+  # branch must not speak for it. The loop still runs, because its three refusal cases apply
+  # to iterations exactly as they do to anything else.
+  [ "$ITER_GIVEN" -eq 1 ] || UNCHANGED="true"
 done
 
 # node writes the JSON so the route/url strings are escaped by a real serialiser rather than
