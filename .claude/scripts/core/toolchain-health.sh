@@ -102,16 +102,29 @@ emit_all(){
   elif have claude-mem; then R_MISS "claude-mem" "claude-mem install" "binary found, hooks off"
   else R_MISS "claude-mem" "npx claude-mem install" "session recall"; fi
 
+  # graphify-out/ and the hooks dir live in the MAIN clone alone (ADR-0075). Read relatively,
+  # every one of the lane worktrees reports "not built / no hook" for a graph that is fine --
+  # a worktree has no graphify-out/ by construction, and its .git is a FILE, not a hooks dir.
+  # --git-common-dir resolves to the main clone's .git from inside any worktree.
+  GCD=$(git rev-parse --git-common-dir 2>/dev/null || echo .git)
+  case "$GCD" in /*|?:*) ;; *) GCD="$PWD/$GCD" ;; esac
+  GMAIN=$(dirname "$GCD")
   if ! have graphify; then
     if [ "$OS" = win ]; then R_MISS "graphify" "pipx install graphifyy" "then graphify install --platform windows"
     else R_MISS "graphify" "pipx install graphifyy" "then graphify install"; fi
-  elif [ ! -f graphify-out/graph.json ]; then
+  elif [ ! -f "$GMAIN/graphify-out/graph.json" ]; then
     R_NG "graphify" "/graphify ." "then graphify hook install"
   else
-    if [ -f .git/hooks/post-commit ] && grep -qi graphify .git/hooks/post-commit 2>/dev/null; then GH="auto-rebuild hook OK"; else GH="run graphify hook install"; fi
+    # graphify ships post-checkout with a graphify-out guard and post-commit WITHOUT one. Hooks
+    # are shared by every worktree, so an unguarded post-commit seeds a junk partial graph in
+    # each. A graphify upgrade rewrites the hook and drops the guard, so this is a live check.
+    GHK="$GCD/hooks/post-commit"
+    if [ ! -f "$GHK" ] || ! grep -qi graphify "$GHK" 2>/dev/null; then GH="run graphify hook install"
+    elif ! grep -qF '[ -d "graphify-out" ] || exit 0' "$GHK" 2>/dev/null; then GH="hook on · WORKTREE GUARD MISSING (ADR-0075)"
+    else GH="auto-rebuild hook OK · guarded"; fi
     # portable mtime: GNU `stat -c %Y` then BSD/macOS `stat -f %m` (ADR-0007 bash-3.2 rule)
-    LC=$(git log -1 --format=%ct 2>/dev/null || echo 0)
-    GT=$( { stat -c %Y graphify-out/graph.json 2>/dev/null || stat -f %m graphify-out/graph.json 2>/dev/null; } || echo 0 )
+    LC=$(git -C "$GMAIN" log -1 --format=%ct 2>/dev/null || echo 0)
+    GT=$( { stat -c %Y "$GMAIN/graphify-out/graph.json" 2>/dev/null || stat -f %m "$GMAIN/graphify-out/graph.json" 2>/dev/null; } || echo 0 )
     [ -n "$GT" ] || GT=0
     if [ "$LC" -gt "$GT" ]; then R_STALE "graphify" "graphify update ." "$GH"; else R_OK "graphify" "ready · $GH"; fi
   fi

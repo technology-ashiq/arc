@@ -53,8 +53,13 @@ $ chmod +x .claude/hooks/*.sh .claude/statusline.sh        # mac/linux only
 - [ ] Rules globs match your layout? (`app/api/**` etc. in `.claude/rules/*.md`)
 - [ ] `$ npm i -D knip @axe-core/playwright` — dead-code detection for reviews, WCAG scans for QA.
 - [ ] Code graph (one-time per project, ~2 min): in Claude Code run `/graphify .` (builds
-      `graphify-out/` — commit it), then `$ graphify hook install` (auto-rebuild on every
-      commit, AST-only, free) and `$ graphify claude install` (query-first nudge).
+      `graphify-out/` — **gitignored, never committed**: it is machine-local and stores absolute
+      paths), then `$ graphify hook install` (auto-rebuild on every commit, AST-only, free).
+      **If the repo uses git worktrees, add `[ -d "graphify-out" ] || exit 0` to the installed
+      `post-commit`** — hooks are shared across worktrees and graphify ships that guard in
+      `post-checkout` only, so without it every lane commit seeds a junk partial graph. A
+      graphify upgrade rewrites the hook and drops the guard again (ADR-0075). Skip
+      `$ graphify claude install` where CLAUDE.md is hand-curated — it appends its own section.
       From then on it's fully automatic; the SessionStart hook reports status and catches
       up if the graph ever falls behind.
 
