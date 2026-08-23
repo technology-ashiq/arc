@@ -50,6 +50,24 @@ explicit `--driver`, or a fallback hop — the question asked is the same one: *
 this runtime?* If there is no row for the class, or the row does not name the runtime, `arc-run`
 refuses at exit **2**, naming the class, the driver and `engine/router.yaml`.
 
+**The fallback hop is a driver selection and is validated as one.** The first implementation of this
+ADR checked once, at routing time, and the fallback loop then reassigned the driver and invoked it
+with neither the grant check nor the closed-driver-set check re-run — reintroducing, at the third
+entry point, the exact shape this ADR closes at the other two. An adversarial pass proved it two
+ways. `router-row.mjs` decides a row is a hire by **exact set membership on the trimmed name**, so a
+fallback entry spelled `./hermes`, `Hermes`, or `x/../hermes` was not a runtime to the loader: the
+row needed none of the four terms and loaded with zero faults, while `invoke()` built the path with
+`join`, which normalises `./hermes` straight back to `hermes`. That is *validate one read, compare
+another* — the loader validated a trimmed exact string and the dispatcher used the raw string as a
+path. And because set membership was not re-checked either, a fallback entry of
+`../../../../../outside/evil` made `arc-run` execute an arbitrary script from anywhere on disk,
+named from a router row, with the process input on its argv.
+
+**The grant is an exact name, never a substring.** `grantChain.join(" ").includes(driver)` would
+pass every fixture written for this ADR, because no chain in them contains `hermes` as a substring —
+so the exactness this section argues for was, briefly, pinned by nothing. A row whose chain names
+`hermes-lookalike` grants `hermes` nothing, and there is a fixture that says so.
+
 The refusal happens at the same place the tenure check does: after routing is resolved, before any
 driver process exists.
 
@@ -71,12 +89,27 @@ behaves exactly as it did. The rule is scoped by `RUNTIME_DRIVERS`, which is the
 
 ## Consequences
 
-- **Termination becomes true as written.** Deleting the row makes the runtime unreachable by every
-  path, which is what the spec claimed and did not deliver. Step 1 (revoke the credential first)
-  keeps its own justification: the key is the money bound, and a live key spends if anything else
-  reaches the runtime.
-- **The four terms stop being optional.** A cap, a tenure, a judge and a review date now apply to
-  every dispatch of a hired runtime rather than to the subset that arrived by routing.
+- **Termination becomes true THROUGH arc-run.** Deleting the row makes the runtime unreachable by
+  every path arc-run controls: routed, explicitly named, and reached by a fallback hop.
+  **Corrected 2026-08-23 by an adversarial pass on this ADR** — the first wording said *"unreachable
+  by every path"*, and that is false. `drivers/hermes.sh` is a subprocess with a stable argv
+  contract that consults no router, so `bash drivers/hermes.sh run <process> <input> <budget>`
+  reaches the runtime with the row deleted. Step 1 — revoke the credential — is therefore not merely
+  ordered first for tidiness: **it is the only act that terminates the hire outright**, because the
+  runtime holds its own key and a live key spends for anyone who can execute a shell script. Writing
+  "every path" here would have been this ADR committing the exact false-comment-about-a-governance-
+  mechanism error it was written about.
+- **Three of the four terms now bind at dispatch; `judge` does not.** `cap` gates REQ-06's
+  external-ok requirement, `review_by` gates tenure, and `hosted` is attached to a boundary refusal.
+  **`judge` is shape-validated at load and read by nothing at dispatch** — `grep -rn '\bjudge\b'`
+  over the engine and policy modules returns the `REQUIRED` array and one refusal string, and
+  nothing else. It records WHO accepts or rejects a draft, which is a human act outside this code
+  path, and this ADR does not change that. Said here because the first draft claimed all four
+  "apply to every dispatch", which was three-quarters true and would have read as a guarantee.
+- **Under `--driver auto` the check is a tautology, deliberately.** `driver` is assigned from
+  `routedRow.driver`, which is the first element of the grant chain, so `granted` is always true on
+  that path. That is correct — routing IS the grant — and it means the rule's whole work is done on
+  the other two entry points: an explicit `--driver`, and a fallback hop.
 - **Test suites driving a runtime on a class that does not grant it must move.** They point at a
   fixture root whose router carries the grant. That is the correct shape anyway: a suite exercising
   the driver contract under a router that grants nothing was exercising the hole.

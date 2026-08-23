@@ -132,6 +132,14 @@ export function routerFaults(router) {
   const classes = (router && router.classes) || {};
   const out = [];
   for (const [name, row] of Object.entries(classes)) out.push(...rowFaults(name, row));
+
+  // `default:` IS A ROW AND IS CHECKED LIKE ONE. It was skipped entirely -- this loop walks
+  // `classes` alone -- so a `default:` naming the agent runtime loaded with zero faults and no
+  // terms. Nothing reads `router.default` for a driver today, which is exactly why it is worth
+  // closing now: it is inert, so the hole is free to fix and invisible to find later, and the day
+  // someone wires it the grant arrives already bypassed. Two fixture roots in this repo write a
+  // `default:` block that reads as meaningful configuration.
+  if (router && router.default) out.push(...rowFaults("default", router.default));
   return out;
 }
 

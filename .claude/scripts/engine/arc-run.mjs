@@ -529,7 +529,48 @@ if (driverArg === "auto") {
   // beside tenure, so they apply however the driver was chosen. See the comment there.
   fallbacks = Array.isArray(row.fallback) ? row.fallback : [];
 }
-if (!DRIVERS.includes(driver)) { console.error(`arc-run: unknown driver \`${driver}\` (known: ${DRIVERS.join(", ")})`); process.exit(1); }
+/**
+ * EVERY DRIVER SELECTION IS VALIDATED, INCLUDING A FALLBACK HOP (ADR-0225).
+ *
+ * FOUND BY AN ADVERSARIAL PASS ON ADR-0225 ITSELF, 2026-08-23, and PROVED by executing it. Both
+ * checks below ran once, on the driver chosen at routing time, and the fallback loop then
+ * reassigned `driver = next` and invoked it with neither check re-run. So the ADR that closes "a
+ * guard on one of two entry points" reintroduced the same shape at the third entry point, which is
+ * the fallback hop.
+ *
+ * WHAT THAT COST, MEASURED. `router-row.mjs` decides a row is a hire by EXACT set membership on the
+ * trimmed name, so a fallback entry spelled `./hermes`, `Hermes`, or `x/../hermes` is not a runtime
+ * to the loader: the row needs no cap, no hosted, no judge and no review_by, and loads with ZERO
+ * faults. `invoke()` then builds the path with `join(root, ".../drivers", name + ".sh")`, and
+ * `join` normalises `./hermes` back to `hermes` -- so the hire dispatched under a row carrying none
+ * of its four terms. That is "validate one read, compare another": the loader validated a trimmed
+ * exact string, and `invoke` used the raw string as a path.
+ *
+ * AND WORSE, because nothing re-checked set membership either: a fallback entry of
+ * `../../../../../outside/evil` made arc-run `bash` an arbitrary script from anywhere on disk,
+ * named from `engine/router.yaml`, with the process input on its argv. The driver name is supposed
+ * to come from a closed set of five, and the hop applied no set at all.
+ */
+function validateDriverSelection(name, how) {
+  if (!DRIVERS.includes(name)) {
+    console.error(`arc-run: unknown driver \`${name}\`${how} (known: ${DRIVERS.join(", ")})`);
+    console.error("         a driver name comes from that closed set -- never from a path, and never spelled differently");
+    process.exit(1);
+  }
+  if (!RUNTIME_DRIVERS.has(name)) return;
+  const grantChain = routedRow
+    ? [routedRow.driver, ...(Array.isArray(routedRow.fallback) ? routedRow.fallback : [])]
+    : [];
+  const granted = grantChain.some((d) => String(d || "").trim() === name);
+  if (!granted) {
+    console.error(`arc-run: \`${processName}\` does not grant the agent runtime \`${name}\`${how}`);
+    console.error(routedRow
+      ? `         its row in engine/router.yaml names ${grantChain.filter(Boolean).map((d) => `\`${String(d).trim()}\``).join(" -> ") || "no driver"}, and a hire is only reachable through a row that names it (ADR-0225)`
+      : "         there is no row for this class in engine/router.yaml at all, so nothing carries the cap, tenure, judge or review date this runtime must run under (ADR-0225)");
+    console.error("         a runtime with no grant has no terms -- add a reviewed row, or dispatch a class that has one");
+    process.exit(2);
+  }
+}
 
 /**
  * A HIRED RUNTIME IS UNREACHABLE WITHOUT A ROW THAT GRANTS IT (ADR-0225).
@@ -561,20 +602,7 @@ if (!DRIVERS.includes(driver)) { console.error(`arc-run: unknown driver \`${driv
  * the same set `router-row.mjs` reads to decide which rows must carry the four terms -- one
  * definition of "this is a hire", read by the loader and the dispatcher, so the two cannot drift.
  */
-if (RUNTIME_DRIVERS.has(driver)) {
-  const grantChain = routedRow
-    ? [routedRow.driver, ...(Array.isArray(routedRow.fallback) ? routedRow.fallback : [])]
-    : [];
-  const granted = grantChain.some((d) => String(d || "").trim() === driver);
-  if (!granted) {
-    console.error(`arc-run: \`${processName}\` does not grant the agent runtime \`${driver}\``);
-    console.error(routedRow
-      ? `         its row in engine/router.yaml names ${grantChain.filter(Boolean).map((d) => `\`${String(d).trim()}\``).join(" -> ") || "no driver"}, and a hire is only reachable through a row that names it (ADR-0225)`
-      : "         there is no row for this class in engine/router.yaml at all, so nothing carries the cap, tenure, judge or review date this runtime must run under (ADR-0225)");
-    console.error("         a runtime with no grant has no terms -- add a reviewed row, or dispatch a class that has one");
-    process.exit(2);
-  }
-}
+validateDriverSelection(driver, "");
 
 // THE TIER MUST REACH THE DRIVER OR IT IS A LABEL. Without this the routed tier changed
 // nothing: `high-judgment` and `balanced-workhorse` produced byte-identical invocations, the
@@ -1552,8 +1580,12 @@ if (overBudget()) {
 }
 
 while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbacks.length) {
-  const next = fallbacks.shift();
+  const next = String(fallbacks.shift() ?? "").trim();
   console.error(`arc-run: ${driver} reported a driver fault (${a.why}); falling back to ${next}`);
+  // THE HOP IS VALIDATED LIKE ANY OTHER SELECTION. Without this the closed driver set and the
+  // ADR-0225 grant were both bypassed by a fallback entry -- proved, with an arbitrary script
+  // outside the drivers directory executed from a router row.
+  validateDriverSelection(next, " on a fallback hop");
   driver = next;
   // THE PIN IS PER-DRIVER, SO IT IS RECOMPUTED PER HOP. It was resolved once from the ORIGINAL
   // driver and never revisited, so a fallback was spawned with the previous driver's model --
