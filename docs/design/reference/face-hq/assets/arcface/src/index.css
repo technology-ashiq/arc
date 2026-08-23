@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+/* Page base — the face stage owns the background; chapters draw over it. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #000000;
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: rgba(0, 255, 209, 0.28);
+  color: #ffffff;
+}
+
+/* visible focus everywhere — a11y floor from arc's own design brief */
+:focus-visible {
+  outline: 2px solid #00ffd1;
+  outline-offset: 2px;
+}
+
+/* respectful motion — arc honours reduced motion by contract */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* thin scrollbars for the horizontal tapes */
+* {
+  scrollbar-color: rgba(0, 255, 209, 0.35) rgba(255, 255, 255, 0.06);
+}
