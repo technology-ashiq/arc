@@ -270,9 +270,36 @@ negative control.
 the provider's 403 was measured and the driver's exit-2 mapping was fixtured, but **nothing proved
 arc-run then stops**. Deleting one word from arc-run's fallback condition had left every suite green.
 
+**THE SIXTH PASS ATTACKED ADR-0225 ITSELF, AND IT HAD REINTRODUCED ITS OWN DEFECT.** 17 findings, 13
+proved. The rule closes *"a guard that runs on only one of two entry points"* — and both it and the
+closed-driver-set check ran once, at routing time, while the fallback loop reassigned the driver and
+invoked it with neither re-run. `router-row.mjs` decides a row is a hire by EXACT set membership, so
+a fallback entry spelled `./hermes` is not a runtime to the loader (row loads with **zero faults**,
+no cap, no tenure, no judge) while `invoke()` builds the path with `join`, which normalises it back
+to `hermes`. **The hire dispatched under a row carrying none of its terms.** And with no set check on
+the hop, `fallback: [../../../../../outside/evil]` made arc-run **`bash` an arbitrary script from
+anywhere on disk**, named from `engine/router.yaml`, with the process input on its argv. Both
+executed by the attacker, not reasoned.
+
+**Two mutants proved the fixtures could not have caught it:** all three ADR-0225 tests passed
+`--dry-run`, so gating the guard on `dryRun` passed every one; and `join(" ").includes(driver)`
+survived, because no fixture chain contains `hermes` as a substring.
+
+**The one overlap in that pass was MINE.** Both surfaces landed on a fixture wired to the LIVE
+production router. I had already fixed one — the negative control asserted production still hires
+hermes, which goes red on 2026-09-01 when the live tenure lapses and red the moment anyone performs
+the ADR's own termination step — wrote a comment naming that failure, **and left the identical
+coupling in the test ten lines above it.** A twin-fix recurrence inside the diff that documented the
+twin. Also: the fixture builder was fail-open twice (an `if [ -d ]` around a copy whose absence 25
+tests could not detect; four writes and no assertion, so an empty scripts copy left 8 of 25 green),
+and ADR-0225 carried two false claims of its own — *"unreachable by every path"* (the driver is a
+subprocess that reads no router; revoking the key is the real termination) and *"all four terms
+apply to every dispatch"* (`judge` is read by nothing at dispatch). Both corrected in the ADR.
+
 Evidence: `certification-results-12-fixtures.md` (all twelve, with the ARM each was proven on — and
-two rows now say **less** than the running commentary did), `adversarial-passes.md`,
-`absent-evidence.md`, and `phase-07/key-ceiling-and-termination.md`.
+two rows now say **less** than the running commentary did), `adversarial-passes.md` (six passes,
+sixteen agents, 176 findings), `absent-evidence.md`, and
+`phase-07/key-ceiling-and-termination.md`.
 
 ### CORRECTION — IT WAS NOT THE TOOLSETS. THE RUNTIME WAS NEVER SENT THE BRIEF — 2026-08-19
 
