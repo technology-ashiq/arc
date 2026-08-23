@@ -8,6 +8,7 @@
   "agents": [],
   "scripts": [
     ".claude/scripts/hq/arc-brief.mjs",
+    ".claude/scripts/hq/arc-dash.mjs",
     ".claude/scripts/hq/arc-event.mjs",
     ".claude/scripts/hq/arc-event.sh",
     ".claude/scripts/hq/arc-inbox.mjs",
@@ -20,6 +21,7 @@
     ".claude/scripts/hq/jobs/brief-materialize.mjs",
     ".claude/scripts/hq/jobs/day-close-roll.mjs",
     ".claude/scripts/hq/lib/canonical.mjs",
+    ".claude/scripts/hq/lib/face/ask-offline.mjs",
     ".claude/scripts/hq/lib/jobs/audit.mjs",
     ".claude/scripts/hq/lib/jobs/cadence.mjs",
     ".claude/scripts/hq/lib/jobs/delegate.mjs",
@@ -76,5 +78,48 @@
     ".claude/hooks/policy-decide.sh",
     ".claude/hooks/SessionStart.d/60-jobs.sh"
   ],
-  "docs": []
+  "docs": [],
+  "face": {
+    "room": "spine",
+    "ring": "command",
+    "kinds": [
+      "day.closed",
+      "idea.captured",
+      "metric.observed",
+      "month.closed",
+      "note.logged",
+      "redaction.applied"
+    ],
+    "sanctioned": [
+      "spine.mjs reader",
+      "spine-health reader (Phase 03)"
+    ],
+    "stations": [
+      "L2 door",
+      "close-day",
+      "dedup",
+      "emit",
+      "receipt drawer",
+      "ring line",
+      "spine-health",
+      "tape",
+      "validate"
+    ],
+    "concepts": [
+      "ULID",
+      "arc dash (L2)",
+      "as-of",
+      "day.closed seal",
+      "envelope (15 keys)",
+      "idem key",
+      "playhead",
+      "quarantine",
+      "receipt",
+      "replay",
+      "request journal",
+      "spine",
+      "supersedes chain",
+      "torn line"
+    ]
+  }
 }

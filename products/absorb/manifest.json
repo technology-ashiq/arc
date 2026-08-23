@@ -18,5 +18,27 @@
     ".claude/scripts/absorb/study.mjs"
   ],
   "files": [],
-  "docs": []
+  "docs": [],
+  "face": {
+    "room": "absorb",
+    "ring": "kernel",
+    "kinds": [
+      "decision.recorded"
+    ],
+    "sanctioned": [
+      "registry.json",
+      "allowlist.txt",
+      "planoff evidence"
+    ],
+    "stations": [
+      "allowlist",
+      "registry",
+      "sealed-blind"
+    ],
+    "concepts": [
+      "PLANOFF A/B",
+      "allowlist / DO-NOT-WIDEN",
+      "technique T-NN"
+    ]
+  }
 }

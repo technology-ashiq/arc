@@ -1,0 +1,260 @@
+/* GENERATED FILE -- do not edit.
+   Copied from docs/design/system/tokens.css by .claude/scripts/core/face-tokens.mjs.
+   That file is the source of truth (ADR-1308); this one is a copy so the L3 tree stays
+   split-able (ADR-1316) and resolvable on the Windows CI leg. Edit the source, then run
+   the generator. `--check` fails CI on any drift, including a hand-edit here. */
+/* ============================================================================
+   arc face — CANONICAL DESIGN TOKENS
+   ============================================================================
+   THE SOURCE OF TRUTH (ADR-1308). Not the design tool, not the L3 repo, not a
+   variant directory: this file. L3 consumes it; neither a mockup nor a design
+   tool may be the origin of a value.
+
+   ── PROVENANCE ────────────────────────────────────────────────────────────
+   Extracted 2026-08-23 from the OWNER'S REFERENCE DESIGN at
+   docs/design/reference/face-hq/assets/arcface — a running eleven-room HQ,
+   read from its source (src/ui/kit.jsx, src/index.css, index.html) and from
+   the rendered pages, every room opened.
+
+   SUPERSEDES the previous contents of this file, which were adopted from
+   explore face-hq-v1 variant-a on 2026-08-19. That round was scored 18/100 by
+   the owner ("very basic, LKG design, boring tech"), and a second round on an
+   open brief did not clear the bar either. Both are kept for the record at
+   docs/design/explore/face-hq-v{1,2}/; neither is an input to this file any
+   more. The v1 system said "nothing over 16px anywhere, zero radius, cold ink
+   monochrome" — a prescriptive brief rendered faithfully. What replaced it is
+   not a compromise between the two; it is the reference, reconciled.
+
+   ── THE ONE STRUCTURAL IDEA ───────────────────────────────────────────────
+   The reference carries FIVE hues where the contract reserves FOUR. That is
+   not a conflict, it is the resolution: cyan is the product's own colour and
+   carries NO meaning, so the four reserved hues stay untouched and the surface
+   still has something to be built out of. Chrome, nav, focus, links, panel
+   titles and the live-data accent are all cyan, and none of them has to borrow
+   amber, green, red or violet to exist. That is why this palette survives the
+   contract intact where a four-hue palette could not.
+
+   ── RESERVED MEANINGS ARE LAW, NOT STYLE (E3, ADR-1313) ───────────────────
+     --amber   needs-you            ONLY
+     --green   real money           ONLY
+     --red     incident             ONLY
+     --violet  every non-real class ONLY (SIMULATED / REHEARSAL / DRILL /
+                                          EXPLORATORY), always hatched
+     --accent  the product itself   NO meaning, and never a fifth meaning
+   A fifth meaning does not get a fifth hue; it gets a label.
+
+   ── THREE COLLISIONS FOUND IN THE REFERENCE, AND HOW THEY RESOLVE ─────────
+   Each was found by reading src/ui/kit.jsx, not by looking at a screenshot,
+   and each is corrected HERE rather than by editing the owner's drop. The
+   reference is the target; the contract is the law; this file is where they
+   are made to agree.
+
+   1. SIMULATED wore AMBER. `SimBadge` rendered in --amber, which is reserved
+      for needs-you. A simulated number is not a request for the owner's
+      attention, and on a screen carrying both, the eye cannot tell them apart.
+      RESOLVED: the whole non-real family renders --violet on --hatch-violet.
+      Tokens: --sim-fg, --sim-hatch.
+
+   2. COUNCIL wore VIOLET. `KIND_FAMILY.council` rendered in --violet, which is
+      reserved for the non-real family. A council verdict is as real as any
+      receipt on the spine; colouring it violet says the opposite.
+      RESOLVED: council renders --accent-dim. It is a spine kind like any
+      other, so it takes the product colour, not a reserved one.
+
+   3. LIVE and SIMULATED REVENUE both wore GREEN. `StatusDot state="live"` and
+      the Money room's simulated-revenue `Stat` both rendered --green, which is
+      reserved for real money. Real revenue is 0 and the event that records it
+      has never fired, so a green 9,976 beside a green 0 is precisely the lie
+      the Truth Law exists to prevent. A SIMULATED badge does not undo it: the
+      eye reads the colour first and the badge second.
+      RESOLVED: liveness is a DATA-MODE statement, not a money statement, and
+      takes --mode-live (accent). Simulated currency takes --sim-fg. --green
+      stays unspent until revenue.received fires for the first time, which is
+      also what two independent designers invented unprompted in the v2 round.
+
+   ── ONE ACCESSIBILITY DEFECT FOUND, AND FIXED ─────────────────────────────
+   The reference's `COLOR.faint` is rgba(255,255,255,0.42), used for real text
+   (every `Stat` label). Composited on #000 that is 3.94:1 — BELOW the 4.5:1
+   floor arc's own brief sets. Raised to 46%, the first alpha that clears it at
+   4.56:1. Every ratio in this file was COMPUTED against --ground, not assumed;
+   the numbers are in the comments beside each token and are reproducible.
+
+   ── NO LITERALS DOWNSTREAM ────────────────────────────────────────────────
+   Every colour in L3 comes through a var() from this file. The reference
+   hard-codes its hues inline in JSX; that is correct for a reference and wrong
+   for the product. A second spelling of a colour is how reserved meanings rot.
+   ============================================================================ */
+
+:root{
+
+  /* ── ground ───────────────────────────────────────────────────────────────
+     True black, not a near-black. The particle face renders behind every room
+     at reduced presence, and its glow only reads against #000 — a #101114
+     ground greys the whole shell out. This is a load-bearing value, not a
+     preference. ── */
+  --ground: #000000;
+
+  /* panel — a translucent slab over the face, so the face stays visible
+     through the UI rather than being covered by it. Both values are from the
+     reference verbatim. */
+  --panel:        rgba(5,10,9,0.66);
+  --panel-blur:   14px;
+  --panel-border: rgba(255,255,255,0.12);
+
+  /* ── the product's own colour. NO MEANING. ────────────────────────────────
+     16.22:1 on --ground. Nav, focus rings, panel titles, receipt chips, links,
+     primary buttons, the live-data accent. It is deliberately NOT one of the
+     reserved four, which is the whole reason those four survive intact. ── */
+  --accent:      #00ffd1;
+  --accent-dim:  rgba(0,255,209,0.62);
+  --accent-line: rgba(0,255,209,0.30);  /* borders, hairlines — non-text */
+  --accent-wash: rgba(0,255,209,0.28);  /* ::selection, hover fills */
+  --on-accent:   #000000;               /* 16.22:1 read the other way */
+
+  /* ── the four reserved hues. meaning is fixed. never reused for chrome,
+     decoration, hover, or anything the brief did not name. all ratios computed
+     against --ground: amber 12.71:1 · green 12.05:1 · red 7.57:1 ·
+     violet 9.67:1 — every one clears 4.5:1. ── */
+  --amber:  #fbbf5d;  /* needs-you. ONLY. never a simulated badge (collision 1). */
+  --green:  #4ade80;  /* real money. ONLY. UNSPENT until revenue.received fires
+                         for the first time — it has fired 0 times in 1,150
+                         receipts, so this token renders nowhere in live content
+                         today. That absence is the point (collision 3). */
+  --red:    #ff6b6b;  /* incident. ONLY. 0 incident.raised receipts exist, so
+                         this token is likewise unspent in live content. */
+  --violet: #b9a2ff;  /* the non-real family: SIMULATED / REHEARSAL / DRILL /
+                         EXPLORATORY. Never council (collision 2). */
+
+  /* ink-on-hue — for small solid-fill chips only, never a panel fill.
+     ratios read the other direction, same numbers as above. */
+  --on-amber:  var(--ground);
+  --on-green:  #03130a;   /* the reference's own value — a green-black, not pure */
+  --on-red:    var(--ground);
+  --on-violet: var(--ground);
+
+  /* ── the non-real family's shared floor (E3) ──────────────────────────────
+     A diagonal line texture over the ground, not a tint: the panel stays
+     mostly --ground, so "no fill larger than a chip" holds even across a full
+     region. Hue alone is not enough — a colour-blind reader gets the texture. ── */
+  --sim-fg:    var(--violet);
+  --sim-line:  rgba(185,162,255,0.40);
+  /* The hatch lines are TRANSLUCENT, and that is a legibility requirement rather than a
+     taste call. At full --violet the stripes sit on top of body text and the Money room's
+     simulated panel became unreadable — a mark that says "not real" is worthless if it
+     also says nothing else. Measured on the rendered page, not reasoned about: 0.22 keeps
+     the texture unmistakable at a glance and leaves --prose above it legible. Anything
+     that needs a strong violet uses --sim-fg or --sim-line, which are for chips and
+     borders, where nothing is written underneath. */
+  --sim-hatch: repeating-linear-gradient(135deg,
+      rgba(185,162,255,0.22) 0px, rgba(185,162,255,0.22) 1.5px,
+      transparent 1.5px, transparent 9px);
+
+  /* ── data-mode chrome (ADR-1310) ──────────────────────────────────────────
+     live / replay / sim is a statement about the DATA SOURCE, not about money,
+     urgency or reality-class. Live therefore takes the product colour, never
+     --green. Sim is the one case that borrows from a reserved family, and it
+     borrows correctly: SIMULATED genuinely IS a non-real class. ── */
+  --mode-live:   var(--accent);
+  --mode-replay: var(--meta);
+  --mode-sim:    var(--sim-fg);
+  --mode-bg:     rgba(255,255,255,0.07);
+
+  /* ── event-kind families (the legend, one system for the whole product) ───
+     Correction from the reference: council moves off --violet (collision 2). ── */
+  --kind-factory:  var(--accent);
+  --kind-money:    var(--green);
+  --kind-decision: var(--amber);
+  --kind-council:  var(--accent-dim);
+  --kind-system:   var(--meta);
+
+  /* ── neutral ink ramp — greys only, no hue. computed on --ground. ── */
+  --prose: rgba(255,255,255,0.87);  /* 15.61:1 — primary text */
+  --meta:  rgba(255,255,255,0.60);  /* 7.37:1  — secondary, timestamps, ids */
+  --faint: rgba(255,255,255,0.46);  /* 4.56:1  — stat labels, legends.
+                                       RAISED from the reference's 0.42, which
+                                       computed 3.94:1 and carried real text. */
+  --hairline:        rgba(255,255,255,0.08);  /* row dividers — non-text */
+  --hairline-strong: rgba(255,255,255,0.20);  /* region + input borders */
+
+  /* focus — neutral by law? no: focus is a UI mechanism and the product colour
+     IS the UI. --accent at 16.22:1 clears the 3:1 non-text floor five times
+     over, and it is what the reference already does. */
+  --focus-ring: var(--accent);
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* ── type ─────────────────────────────────────────────────────────────────
+     Two faces, and the split is semantic, not decorative: DISPLAY carries the
+     sentence each room opens with ("If it isn't an event, it didn't happen."),
+     MONO carries everything the machine wrote — ids, kinds, timestamps,
+     commands, labels. If a human wrote it, it is display; if the log wrote it,
+     it is mono. Loaded from Google Fonts with a real fallback stack. ── */
+  --font-display: 'Anybody', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* step scale, taken from what the reference actually renders (the four most
+     used sizes are 11 / 10 / 10.5 / 9.5px — this is a dense instrument, and
+     the display sizes are the deliberate contrast against that density). */
+  --step-micro: 8.5px;   /* badges */
+  --step-meta:  10.5px;  /* labels, legends, receipt chips */
+  --step-data:  11px;    /* the workhorse — rows, kinds, ids, buttons */
+  --step-body:  13px;    /* prose inside panels */
+  --step-lede:  15px;    /* room subtitles */
+  --step-stat:  32px;    /* KPI numerals */
+  --step-room:  40px;    /* the room's opening sentence */
+  --step-hero:  72px;    /* landing only */
+
+  --track-wide: 0.30em;  /* panel titles */
+  --track-mid:  0.22em;  /* stat labels */
+  --track-tight:0.14em;  /* buttons */
+
+  /* numerals are tabular EVERYWHERE a number can change under the reader —
+     a KPI that reflows while it updates is a number you cannot trust. */
+  --numeric: tabular-nums;
+
+  /* ── rhythm ───────────────────────────────────────────────────────────────
+     8pt grid, 4pt internal. 44px is the a11y floor for anything clickable or
+     tabbable and it wins over density on those rows, never the reverse. ── */
+  --grid:    8px;
+  --grid-in: 4px;
+  --pad-panel: 24px;      /* p-6 in the reference; 28px at sm and up */
+  --row-h:      28px;
+  --row-h-live: 44px;     /* the floor. matches the reference's Btn min-h. */
+
+  /* radii — the reference's real scale. Pills for chips and status, soft
+     rectangles for panels. NOT zero: the v1 system's zero-radius rule was part
+     of what read as "basic". */
+  --radius-chip:  8px;    /* rounded-lg — receipts, buttons */
+  --radius-panel: 16px;   /* rounded-2xl — panels */
+  --radius-pill:  9999px; /* rounded-full — status dots, badges, nav pills */
+
+  /* ── motion ───────────────────────────────────────────────────────────────
+     State change only. The face's own ambient drift is the exception and is
+     owned by the face stage, not by this file. ── */
+  --dur-fast:  120ms;
+  --dur-state: 200ms;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── reduced motion — a contract, not a courtesy ───────────────────────────
+   The reference already honours this in src/index.css and it is carried
+   forward here so the token layer, not a component, is where it is enforced. */
+@media (prefers-reduced-motion: reduce){
+  :root{ --dur-fast: 0ms; --dur-state: 0ms; }
+}
+
+/* ── the two base rules the reference sets, kept at the token layer ──────── */
+:where(html, body){
+  background: var(--ground);
+  color: var(--prose);
+}
+
+::selection{
+  background: var(--accent-wash);
+  color: #ffffff;
+}
+
+:focus-visible{
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}

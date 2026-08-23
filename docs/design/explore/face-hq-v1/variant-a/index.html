@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arc — command center · variant A · Ink &amp; Signal, severe</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ── reset ── */
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:auto; }
+  body{
+    margin:0; background:var(--ground); color:var(--prose);
+    font-family:var(--font-mono); font-size:var(--step-body); line-height:1.55;
+  }
+  a{ color:inherit; text-decoration:none; }
+  code{ font-family:var(--font-mono); }
+  ul,ol,dl,p,h1,h2{ margin:0; }
+  strong{ font-weight:600; } /* browser default is 700+; the direction refuses weights above 600 */
+  button{ font:inherit; color:inherit; background:none; border:none; cursor:pointer; text-align:left; }
+  input{ font:inherit; color:var(--prose); background:none; }
+  input, button{ border-radius:0; appearance:none; -webkit-appearance:none; } /* zero radius, incl. native form chrome */
+  :focus-visible{ outline:2px solid var(--focus-ring); outline-offset:2px; }
+
+  /* ── sticky hud — the always-visible strip. never a navigation target. ── */
+  .hud{ position:sticky; top:0; z-index:10; background:var(--ground); border-bottom:1px solid var(--hairline-strong); }
+  .hud__top{ display:flex; align-items:center; gap:var(--grid); padding:0 var(--grid); height:44px; border-bottom:1px solid var(--hairline); }
+  .wordmark{ font-size:var(--step-label); font-weight:600; letter-spacing:0.04em; text-transform:uppercase; padding-right:var(--grid); flex:none; }
+  .tabs{ display:flex; gap:2px; flex:1; overflow-x:auto; }
+  .tab{ display:inline-flex; align-items:center; min-height:44px; padding:0 10px; font-size:var(--step-meta); text-transform:uppercase; letter-spacing:0.03em; color:var(--meta); border-bottom:2px solid var(--ground); white-space:nowrap; }
+  .tab:hover, .tab:focus-visible{ color:var(--prose); border-bottom-color:var(--hairline-strong); }
+  .hud__jump{ font-size:var(--step-meta); color:var(--meta); white-space:nowrap; padding-left:var(--grid); border-left:1px solid var(--hairline); flex:none; }
+  .hud__strip{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 20px; padding:8px var(--grid); font-size:var(--step-meta); color:var(--meta); }
+  .strip__item strong{ color:var(--prose); }
+  .strip__needsyou strong{ color:var(--amber); }
+  .money-real{ color:var(--green); font-weight:600; }
+  .ring-wrap{ display:inline-flex; align-items:center; gap:6px; }
+  .ring-wrap svg{ display:block; }
+  kbd{ font-family:var(--font-mono); border:1px solid var(--hairline-strong); padding:0 4px; color:var(--prose); font-size:var(--step-meta); }
+
+  /* ── screens ── */
+  main{ max-width:1400px; margin:0 auto; }
+  .screen{ min-height:100svh; padding:48px var(--grid) 64px; border-top:1px solid var(--hairline-strong); scroll-margin-top:96px; }
+  .screen:first-of-type{ border-top:none; }
+  .screen__head{ display:flex; align-items:baseline; gap:16px; margin-bottom:6px; flex-wrap:wrap; }
+  .screen__head h2{ font-size:var(--step-label); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; }
+  .screen__meta{ font-size:var(--step-meta); color:var(--meta); }
+  .screen__caption{ font-size:var(--step-body); color:var(--meta); margin-bottom:28px; }
+  .num-needsyou{ color:var(--amber); }
+
+  .cols{ display:grid; grid-template-columns:1.7fr 1fr; gap:48px; align-items:start; }
+  @media (max-width:1000px){ .cols{ grid-template-columns:1fr; } }
+
+  .region{ margin-bottom:32px; }
+  .region__label{ font-size:var(--step-meta); text-transform:uppercase; letter-spacing:0.05em; color:var(--meta); border-top:1px solid var(--hairline-strong); padding-top:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .region__label strong{ color:var(--prose); }
+  .region__label a{ color:var(--meta); text-decoration:underline; text-underline-offset:2px; display:inline-flex; align-items:center; min-height:44px; }
+  .region__label a:hover, .region__label a:focus-visible{ color:var(--prose); }
+
+  /* ── tables ── */
+  table.tbl{ width:100%; border-collapse:collapse; font-size:var(--step-body); }
+  .tbl th{ text-align:left; font-size:var(--step-meta); text-transform:uppercase; color:var(--meta); font-weight:500; padding:6px 10px 6px 0; border-bottom:1px solid var(--hairline-strong); }
+  .tbl td{ padding:8px 10px 8px 0; border-bottom:1px solid var(--hairline); vertical-align:top; }
+  .tbl tr.is-idle td{ color:var(--meta); }
+  .tbl code{ color:inherit; }
+
+  /* ── needs-you / receipt rows — the primary object's primary rhythm ── */
+  .row{ display:grid; grid-template-columns:250px 1fr 190px; column-gap:16px; align-items:center; min-height:var(--row-h); border-bottom:1px solid var(--hairline); padding:4px 0 4px 8px; }
+  .row--live{ min-height:var(--row-h-live); align-items:start; padding-top:8px; padding-bottom:8px; }
+  .row--selected{ border-left:2px solid var(--amber); padding-left:6px; }
+  .row--display{ grid-template-columns:220px 1fr 120px; }
+  .row__kind code{ color:var(--prose); }
+  .row__ulid{ display:block; font-size:var(--step-meta); color:var(--meta); margin-top:2px; letter-spacing:0; }
+  .row__note{ font-size:var(--step-body); color:var(--prose); }
+  .row__note--meta{ color:var(--meta); }
+  .row__action{ display:flex; justify-content:flex-end; align-items:center; gap:10px; min-height:44px; }
+  .row__hint{ color:var(--meta); font-size:var(--step-meta); }
+
+  .profile{ grid-column:1/-1; margin-top:10px; padding-top:10px; border-top:1px solid var(--hairline); font-size:var(--step-body); color:var(--prose); }
+  .profile dt{ display:inline; font-size:var(--step-meta); color:var(--meta); text-transform:uppercase; }
+  .profile dd{ display:inline; margin:0 20px 0 6px; }
+
+  .stamp{ grid-column:1/-1; display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; }
+  .stampbtn{ min-height:44px; min-width:44px; padding:0 16px; border:1px solid var(--hairline-strong); font-size:var(--step-body); text-transform:uppercase; letter-spacing:0.04em; }
+  .stampbtn:hover, .stampbtn:focus-visible{ border-color:var(--prose); }
+  .stampbtn kbd{ margin-right:6px; }
+  .reason{ display:flex; align-items:center; gap:8px; flex:1; min-width:240px; }
+  .reason label{ font-size:var(--step-meta); text-transform:uppercase; color:var(--meta); white-space:nowrap; }
+  .reason input{ flex:1; min-height:44px; border:1px solid var(--hairline-strong); padding:0 10px; }
+
+  /* ── tags / chips / seals — the only places colour touches anything larger than text ── */
+  .tag{ display:inline-flex; align-items:center; min-height:22px; padding:2px 7px; font-size:var(--step-meta); text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--hairline-strong); }
+  .tag--amber{ background:var(--amber); color:var(--on-amber); border-color:var(--amber); font-weight:600; }
+  .tag--green{ background:var(--green); color:var(--on-green); border-color:var(--green); font-weight:600; }
+  .tag--red{ background:var(--red); color:var(--on-red); border-color:var(--red); font-weight:600; }
+  .tag--violet{ background-image:var(--hatch-violet); background-color:var(--ground); color:var(--violet); border-color:var(--violet); }
+
+  .chip{ display:inline-flex; align-items:center; gap:10px; min-height:44px; padding:0 12px; border:1px solid var(--hairline-strong); font-size:var(--step-body); }
+  .chip code{ color:var(--prose); }
+  .chip__copy{ font-size:var(--step-meta); color:var(--meta); text-transform:uppercase; padding-left:10px; border-left:1px solid var(--hairline-strong); }
+  .chip:hover .chip__copy, .chip:focus-visible .chip__copy{ color:var(--prose); }
+
+  .seal{ display:inline-flex; align-items:flex-start; gap:10px; min-height:44px; padding:8px 12px; border:1px solid var(--hairline-strong); color:var(--meta); font-size:var(--step-body); max-width:56ch; }
+  .seal svg{ flex:none; margin-top:2px; }
+  .seal strong{ color:var(--prose); font-weight:500; }
+
+  .stampmark{ display:inline-block; border:2px solid var(--prose); padding:2px 10px; transform:rotate(-3deg); text-transform:uppercase; letter-spacing:0.08em; font-weight:600; font-size:var(--step-meta); transition:opacity var(--dur-stamp) ease-out; }
+
+  /* ── prose exception — humanist sans, only for real sentences ── */
+  .prose-sans{ font-family:var(--font-sans); font-size:14px; line-height:1.65; color:var(--prose); max-width:66ch; }
+  .prose-sans code{ font-family:var(--font-mono); font-size:13px; }
+
+  /* ── zero-ever / dashed-dotted language ── */
+  .zero-ever{ border-left:2px dashed var(--hairline-strong); padding:2px 0 2px 12px; }
+  .zero-ever__label{ font-size:var(--step-meta); text-transform:uppercase; color:var(--meta); margin-bottom:8px; }
+  .zero-ever ul{ list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:8px 18px; }
+  .zero-ever code{ color:var(--meta); }
+
+  /* ── state matrix — the proven pattern ── */
+  .state-matrix{ margin-top:36px; padding-top:10px; border-top:1px solid var(--hairline-strong); }
+  .state-matrix__cap{ font-size:var(--step-meta); text-transform:uppercase; letter-spacing:0.05em; color:var(--meta); margin-bottom:12px; }
+  .state-matrix__grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:14px; }
+  @media (max-width:1100px){ .state-matrix__grid{ grid-template-columns:repeat(2,1fr); } }
+  .state-chip{ border:1px solid var(--hairline); padding:8px 10px; font-size:var(--step-meta); color:var(--prose); }
+  .state-chip__k{ display:block; text-transform:uppercase; color:var(--meta); margin-bottom:5px; letter-spacing:0.04em; font-size:var(--step-meta); }
+  .state-chip code{ color:var(--prose); }
+
+  /* ── money ── */
+  .money-fig{ font-size:var(--step-label); font-weight:600; }
+  .money-fig.is-real{ color:var(--green); }
+  .money-line{ display:flex; justify-content:space-between; gap:16px; border-bottom:1px solid var(--hairline); padding:7px 0; font-size:var(--step-body); }
+  .money-line .lbl{ color:var(--meta); text-transform:uppercase; font-size:var(--step-meta); flex:none; }
+  .money-line .val{ text-align:right; color:var(--prose); }
+  .sim-panel{ background-image:var(--hatch-violet); background-color:var(--ground); border:1px solid var(--violet); padding:14px 16px; margin-top:18px; }
+  .sim-panel__cap{ margin-bottom:8px; }
+  .sim-panel p{ color:var(--prose); margin:0; font-size:var(--step-body); max-width:64ch; }
+
+  /* ── map ── */
+  .map-wrap{ border:1px solid var(--hairline-strong); padding:16px; }
+  .map-wrap svg{ display:block; width:100%; height:auto; }
+  .map-legend{ display:flex; gap:22px; flex-wrap:wrap; margin-top:14px; font-size:var(--step-meta); color:var(--meta); }
+  .map-legend span{ display:inline-flex; align-items:center; gap:7px; }
+  .legend-swatch{ width:10px; height:10px; border:1.5px solid var(--prose); display:inline-block; flex:none; }
+  .legend-swatch.dash{ border-style:dashed; }
+  .legend-swatch.dot{ border-style:dotted; }
+  .legend-swatch.fill{ background:var(--amber); border-color:var(--amber); }
+  .legend-swatch.idle{ border-color:var(--meta); }
+
+  /* ── tape ── */
+  .tape{ display:flex; list-style:none; margin:0; padding:0; overflow-x:auto; border-top:1px solid var(--hairline-strong); }
+  .tape li{ flex:none; min-width:160px; padding:14px 16px; border-left:1px solid var(--hairline-strong); display:flex; flex-direction:column; gap:4px; }
+  .tape__date{ font-size:var(--step-body); color:var(--prose); }
+  .tape__now .tape__date{ font-weight:600; }
+  .tape__label{ font-size:var(--step-meta); color:var(--meta); }
+
+  /* ── in-flight (Today, right column) ── */
+  .inflight{ list-style:none; margin:0; padding:0; }
+  .inflight li{ display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid var(--hairline); font-size:var(--step-body); }
+  .inflight li strong{ color:var(--prose); flex:none; }
+  .inflight li span.note{ color:var(--meta); font-size:var(--step-meta); text-align:right; }
+
+  .ask-row{ display:flex; align-items:center; gap:10px; max-width:680px; }
+  .ask-row label{ font-size:var(--step-meta); text-transform:uppercase; color:var(--meta); }
+  .ask-row input{ flex:1; min-height:44px; border:1px solid var(--hairline-strong); padding:0 12px; font-size:var(--step-body); }
+  .cite{ display:inline-flex; align-items:center; min-height:44px; padding:2px 10px; border:1px solid var(--hairline-strong); font-size:var(--step-meta); color:var(--meta); margin-right:8px; }
+  .cite:hover, .cite:focus-visible{ color:var(--prose); border-color:var(--prose); }
+
+  footer.meta{ padding:24px var(--grid) 48px; font-size:var(--step-meta); color:var(--meta); max-width:1400px; margin:0 auto; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition-duration:0.001ms !important; animation-duration:0.001ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div class="hud__top">
+    <span class="wordmark">arc</span>
+    <nav class="tabs" aria-label="sections — same document, no route change">
+      <a class="tab" href="#today">Today</a>
+      <a class="tab" href="#inbox">Inbox</a>
+      <a class="tab" href="#map">Map</a>
+      <a class="tab" href="#spine-tape">Spine / Tape</a>
+      <a class="tab" href="#council">Council room</a>
+      <a class="tab" href="#money">Money</a>
+      <a class="tab" href="#board">Board</a>
+      <a class="tab" href="#ask">Ask arc</a>
+    </nav>
+    <span class="hud__jump">⌘K jump — rooms · kinds · ULIDs · commands · concepts</span>
+  </div>
+  <div class="hud__strip" role="status" aria-label="always visible — floor, not a navigation target">
+    <span class="strip__item strip__needsyou">NEEDS-YOU <strong>2</strong></span>
+    <span class="strip__item">REAL <strong class="money-real">₹0</strong> <span class="tag tag--violet">SIM 0</span></span>
+    <span class="strip__item">MODE <strong>LIVE</strong> · as-of 2026-08-19</span>
+    <span class="strip__item">TAPE next → growth feed 2026-08-23 (T-4)</span>
+    <span class="strip__item ring-wrap">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+        <circle cx="10" cy="10" r="8" fill="none" stroke="var(--hairline-strong)" stroke-width="2.5"/>
+        <circle cx="10" cy="10" r="8" fill="none" stroke="var(--prose)" stroke-width="2.5"
+          stroke-dasharray="15.3 50.27" transform="rotate(-90 10 10)"/>
+      </svg>
+      <span>14/46 kinds fired</span>
+    </span>
+    <span class="strip__item">
+      <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>a</kbd>/<kbd>r</kbd> stamp · <kbd>w</kbd> why · <kbd>t</kbd> tape · <kbd>/</kbd> search
+    </span>
+  </div>
+</div>
+
+<main>
+
+<!-- ══════════════════════════════════ TODAY ══════════════════════════════════ -->
+<section id="today" class="screen">
+  <div class="screen__head">
+    <h2>Today</h2>
+    <span class="screen__meta">2026-08-19 · IST</span>
+  </div>
+  <p class="screen__caption">since you left: <strong>3</strong> receipts, <strong class="num-needsyou">2</strong> need you — needs-you is below, first, never collapsed.</p>
+
+  <div class="cols">
+    <div>
+      <div class="region">
+        <div class="region__label"><span>Needs-you</span><strong>2 open · never collapses</strong></div>
+
+        <div class="row row--live row--selected">
+          <div class="row__kind"><code>approval.requested</code><span class="row__ulid">01KZZRVSQJEAVD4YCZ8FDXR0DT</span></div>
+          <div class="row__note">growth · gate: growth gate 2 — exemplar articles review pack</div>
+          <div class="row__action"><span class="tag tag--amber">needs-you</span></div>
+          <dl class="profile"><dt>profile</dt><dd>growth gate 2 — review pack + preview URL</dd></dl>
+          <div class="stamp">
+            <button class="stampbtn stampbtn--a"><kbd>a</kbd>approve</button>
+            <button class="stampbtn stampbtn--r"><kbd>r</kbd>reject</button>
+            <div class="reason">
+              <label for="reason-1">reason — required</label>
+              <input id="reason-1" type="text" aria-describedby="reason-1-hint">
+            </div>
+          </div>
+          <span id="reason-1-hint" class="row__note--meta" style="grid-column:1/-1;font-size:11px;">the Stamp is the product's only write — nothing lands without a typed reason.</span>
+        </div>
+
+        <div class="row row--live">
+          <div class="row__kind"><code>approval.requested</code><span class="row__ulid">01KZZRW51QHTA9CFEX5JRRGY7C</span></div>
+          <div class="row__note">growth · gate: growth gate 1 — cluster c-001</div>
+          <div class="row__action"><span class="row__hint"><kbd>a</kbd> / <kbd>r</kbd></span><span class="tag tag--amber">needs-you</span></div>
+        </div>
+      </div>
+
+      <div class="region">
+        <div class="region__label"><span>Receipts feed</span><strong>today · 3</strong></div>
+        <div class="row row--display">
+          <div class="row__kind"><code>kickoff.done</code><span class="row__ulid">01M0B8T4ZQ1APZK5SJ7331K1KS</span></div>
+          <div class="row__note--meta">lane face</div>
+          <div class="row__action"></div>
+        </div>
+        <div class="row row--display">
+          <div class="row__kind"><code>approval.requested{gate: kickoff}</code><span class="row__ulid">01M0B8T5F81RC6V06MRY289B6D</span></div>
+          <div class="row__note--meta">lane face</div>
+          <div class="row__action"></div>
+        </div>
+        <div class="row row--display">
+          <div class="row__kind"><code>decision.recorded</code></div>
+          <div class="row__note">approve — reason: "pannu; WIP 6 vs guideline 2 acknowledged" <span class="row__note--meta">lane face</span></div>
+          <div class="row__action"><span class="stampmark">approved</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="region">
+        <div class="region__label"><span>In flight</span><a href="#map">→ full picture in Map</a></div>
+        <ul class="inflight">
+          <li><strong>bench</strong> P04 · 8d/7.25d <span class="note">production receipts 0</span></li>
+          <li><strong>engine</strong> P06 · 9.5d/7.5d <span class="note">3 dispatches, 0 accepted</span></li>
+          <li><strong>face</strong> P00 · 32d/1d <span class="note">born 2026-08-19</span></li>
+          <li><strong>growth</strong> P06 · 10d/8.0d <span class="note">2 approvals OPEN</span></li>
+          <li><strong>leads</strong> P03 · 11d/7.5d <span class="note">rehearsal only</span></li>
+          <li><strong>legal</strong> P00 · 5d/0d <span class="note">awaiting owner approval</span></li>
+          <li><strong>scheduler</strong> P03 · 3d/2.5d <span class="note">proving week → 08-24</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-matrix">
+    <div class="state-matrix__cap">STATE MATRIX — REFERENCE, NOT LIVE DATA</div>
+    <div class="state-matrix__grid">
+      <div class="state-chip"><span class="state-chip__k">empty</span>0 open <code>approval.requested</code> — inbox would read clear.</div>
+      <div class="state-chip"><span class="state-chip__k">loading</span>cursor syncing — last known counts held, greyed, staleness stated.</div>
+      <div class="state-chip"><span class="state-chip__k">error</span><code>BAD_REASON</code> — stamp refused, row holds its grid position.</div>
+      <div class="state-chip"><span class="state-chip__k">success</span><code>decision.recorded</code> prints on the row, 200ms, then files into the receipts feed.</div>
+      <div class="state-chip"><span class="state-chip__k">disabled</span><code>emit</code> — forever-human, no UI write exists for this verb.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ INBOX ══════════════════════════════════ -->
+<section id="inbox" class="screen">
+  <div class="screen__head">
+    <h2>Inbox</h2>
+    <span class="screen__meta"><code>approval.requested</code> · 2 open now · 49 ever · 41 <code>decision.recorded</code></span>
+  </div>
+  <p class="screen__caption">no separate queue: this is the needs-you region from Today, shown at full width — same rows, same cursor, same surface.</p>
+
+  <div class="region">
+    <div class="region__label"><span>Open</span><strong>2</strong></div>
+
+    <div class="row row--live">
+      <div class="row__kind"><code>approval.requested</code><span class="row__ulid">01KZZRVSQJEAVD4YCZ8FDXR0DT</span></div>
+      <div class="row__note">growth · gate: growth gate 2 — exemplar articles review pack</div>
+      <div class="row__action"><span class="row__hint"><kbd>a</kbd> / <kbd>r</kbd></span><span class="tag tag--amber">needs-you</span></div>
+    </div>
+
+    <div class="row row--live row--selected">
+      <div class="row__kind"><code>approval.requested</code><span class="row__ulid">01KZZRW51QHTA9CFEX5JRRGY7C</span></div>
+      <div class="row__note">growth · gate: growth gate 1 — cluster c-001</div>
+      <div class="row__action"><span class="tag tag--amber">needs-you</span></div>
+      <dl class="profile"><dt>profile</dt><dd>growth gate 1 — cluster card</dd></dl>
+      <div class="stamp">
+        <button class="stampbtn stampbtn--a"><kbd>a</kbd>approve</button>
+        <button class="stampbtn stampbtn--r"><kbd>r</kbd>reject</button>
+        <div class="reason">
+          <label for="reason-2">reason — required</label>
+          <input id="reason-2" type="text">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="region">
+    <div class="region__label"><span>Most recent decision</span><strong>today</strong></div>
+    <p class="prose-sans"><code>decision.recorded</code> — approve, reason: "pannu; WIP 6 vs guideline 2 acknowledged." 41 <code>decision.recorded</code> ever, 49 <code>approval.requested</code> ever — the other 47 are already decided, off this queue by construction, not by hiding.</p>
+  </div>
+
+  <div class="state-matrix">
+    <div class="state-matrix__cap">STATE MATRIX — REFERENCE, NOT LIVE DATA</div>
+    <div class="state-matrix__grid">
+      <div class="state-chip"><span class="state-chip__k">empty</span>0 open <code>approval.requested</code> — inbox is honestly, fully clear.</div>
+      <div class="state-chip"><span class="state-chip__k">loading</span>queue syncing from the last cursor.</div>
+      <div class="state-chip"><span class="state-chip__k">error</span><code>ALREADY_DECIDED</code> — another session decided this first; row collapses, cursor moves on.</div>
+      <div class="state-chip"><span class="state-chip__k">success</span>reason recorded, <code>decision.recorded</code> ULID printed on the row.</div>
+      <div class="state-chip"><span class="state-chip__k">disabled</span>reject with no typed reason — sealed until one is entered.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ MAP ══════════════════════════════════ -->
+<section id="map" class="screen">
+  <div class="screen__head">
+    <h2>Map</h2>
+    <span class="screen__meta">16 lanes · 7 LIVE lines lit</span>
+  </div>
+  <p class="screen__caption">enna nadakuthu? — one glance, no session opened. peripheral here, not the home surface — that's Today.</p>
+
+  <div class="map-wrap">
+    <svg viewBox="0 0 1180 400" role="img" aria-label="lanes as lines, stations as squares — LIVE lanes solid, IDLE lanes dim, growth's open gate lit amber">
+      <!-- bench -->
+      <line x1="130" y1="30" x2="1150" y2="30" stroke="var(--hairline-strong)" stroke-width="2"/>
+      <text x="0" y="34" font-size="11" fill="var(--prose)">bench</text>
+      <rect x="296" y="24" width="12" height="12" fill="none" stroke="var(--prose)" stroke-width="1.5"/>
+      <text x="316" y="34" font-size="11" fill="var(--meta)">guard NEXT-CHECK 2026-09-01</text>
+      <rect x="646" y="24" width="12" height="12" fill="none" stroke="var(--hairline-strong)" stroke-width="1.5" stroke-dasharray="3 2"/>
+      <text x="666" y="34" font-size="11" fill="var(--meta)">production receipts 0</text>
+
+      <!-- engine -->
+      <line x1="130" y1="80" x2="1150" y2="80" stroke="var(--hairline-strong)" stroke-width="2"/>
+      <text x="0" y="84" font-size="11" fill="var(--prose)">engine</text>
+      <rect x="296" y="74" width="12" height="12" fill="none" stroke="var(--prose)" stroke-width="1.5"/>
+      <text x="316" y="84" font-size="11" fill="var(--meta)">Hermes v2026.8.3 hired</text>
+      <rect x="646" y="74" width="12" height="12" fill="none" stroke="var(--hairline-strong)" stroke-width="1.5" stroke-dasharray="3 2"/>
+      <text x="666" y="84" font-size="11" fill="var(--meta)">3 dispatches, 0 accepted drafts</text>
+
+      <!-- face -->
+      <line x1="130" y1="130" x2="1150" y2="130" stroke="var(--hairline-strong)" stroke-width="2"/>
+      <text x="0" y="134" font-size="11" fill="var(--prose)">face</text>
+      <rect x="296" y="124" width="12" height="12" fill="none" stroke="var(--prose)" stroke-width="1.5"/>
+      <text x="316" y="134" font-size="11" fill="var(--meta)">born 2026-08-19 — this build</text>
+
+      <!-- growth -->
+      <line x1="130" y1="180" x2="1150" y2="180" stroke="var(--hairline-strong)" stroke-width="2"/>
+      <text x="0" y="184" font-size="11" fill="var(--prose)">growth</text>
+      <rect x="296" y="174" width="12" height="12" fill="none" stroke="var(--prose)" stroke-width="1.5"/>
+      <text x="316" y="184" font-size="11" fill="var(--meta)">INDEXABLE clock started 08-16</text>
+      <rect x="646" y="172" width="14" height="14" fill="var(--amber)" stroke="var(--amber)" stroke-width="1.5"/>
+      <rect x="643" y="169" width="20" height="20" fill="none" stroke="var(--amber)" stroke-width="1"/>
+      <text x="672" y="184" font-size="11" fill="var(--prose)">approval.requested ×2 — stamp station, OPEN</text>
+
+      <!-- leads -->
+      <line x1="130" y1="230" x2="1150" y2="230" stroke="var(--hairline-strong)" stroke-width="2"/>
+      <text x="0" y="234" font-size="11" fill="var(--prose)">leads</text>
+      <rect x="296" y="224" width="12" height="12" fill="none" stroke="var(--hairline-strong)" stroke-width="1.5" stroke-dasharray="3 2"/>
+      <text x="316" y="234" font-size="11" fill="var(--meta)">rehearsal only — live send = owner keystroke pending</text>
+
+      <!-- legal -->
+      <line x1="130" y1="280" x2="1150" y2="280" stroke="var(--hairline-strong)" stroke-width="2"/>
+      <text x="0" y="284" font-size="11" fill="var(--prose)">legal</text>
+      <rect x="296" y="274" width="12" height="12" fill="none" stroke="var(--prose)" stroke-width="1.5"/>
+      <text x="316" y="284" font-size="11" fill="var(--meta)">awaiting owner approval</text>
+
+      <!-- scheduler -->
+      <line x1="130" y1="330" x2="1150" y2="330" stroke="var(--hairline-strong)" stroke-width="2"/>
+      <text x="0" y="334" font-size="11" fill="var(--prose)">scheduler</text>
+      <rect x="296" y="324" width="12" height="12" fill="none" stroke="var(--prose)" stroke-width="1.5"/>
+      <text x="316" y="334" font-size="11" fill="var(--meta)">proving week restarted 08-17 → runs to 2026-08-24</text>
+
+      <!-- idle summary -->
+      <line x1="130" y1="378" x2="1150" y2="378" stroke="var(--hairline)" stroke-width="1.5"/>
+      <text x="0" y="382" font-size="11" fill="var(--meta)">idle ×9</text>
+      <text x="130" y="382" font-size="10" fill="var(--meta)">absorb · develop · evolve · ledger · memory · model-policy · policy · portfolio · design — real lanes, quiet, not a zero-receipt kind</text>
+    </svg>
+  </div>
+
+  <div class="map-legend" role="list" aria-label="map legend">
+    <span role="listitem"><span class="legend-swatch"></span>station — kind has fired</span>
+    <span role="listitem"><span class="legend-swatch fill"></span>stamp station — open gate</span>
+    <span role="listitem"><span class="legend-swatch dash"></span>0 receipts for this specific figure</span>
+    <span role="listitem"><span class="legend-swatch dot"></span>planned room — not yet built (pattern shown, none currently in this state)</span>
+    <span role="listitem"><span class="legend-swatch idle"></span>idle lane — real, just quiet</span>
+  </div>
+
+  <div class="region" style="margin-top:28px;">
+    <div class="region__label"><span>Zero ever</span><a href="#spine-tape">→ full census in Spine</a></div>
+    <div class="zero-ever">
+      <div class="zero-ever__label">fixture-proven, unexercised</div>
+      <ul>
+        <li><code>revenue.received</code></li><li><code>revenue.simulated</code></li>
+        <li><code>cost.incurred</code></li><li><code>incident.raised</code></li>
+        <li><code>experiment.*</code></li><li><code>policy.*</code></li>
+        <li><code>council.verdict</code></li><li><code>month.closed</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="state-matrix">
+    <div class="state-matrix__cap">STATE MATRIX — REFERENCE, NOT LIVE DATA</div>
+    <div class="state-matrix__grid">
+      <div class="state-chip"><span class="state-chip__k">empty</span>a lane with no clock, no open gate — line renders, nothing lit on it.</div>
+      <div class="state-chip"><span class="state-chip__k">loading</span>as-of cursor scrubbing — stations hold last-lit state.</div>
+      <div class="state-chip"><span class="state-chip__k">error</span><span class="tag tag--red">incident — ref only</span> a station reddened. 0 <code>incident.raised</code> receipts exist today.</div>
+      <div class="state-chip"><span class="state-chip__k">success</span>growth's stamp station, lit amber — 2 open gates.</div>
+      <div class="state-chip"><span class="state-chip__k">disabled</span>a planned room — dotted, not yet built.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ SPINE / TAPE ══════════════════════════════════ -->
+<section id="spine-tape" class="screen">
+  <div class="screen__head">
+    <h2>Spine / Tape</h2>
+    <span class="screen__meta">1,386 receipts · 21 <code>day.closed</code> seals · 14 of 46 kinds ever fired</span>
+  </div>
+  <p class="screen__caption">the spine is the census of every kind that has ever fired; the tape is the dated obligations read off it.</p>
+
+  <div class="cols">
+    <div>
+      <div class="region">
+        <div class="region__label"><span>Kind census</span><strong>fired ≥1</strong></div>
+        <table class="tbl">
+          <thead><tr><th>kind</th><th>count</th></tr></thead>
+          <tbody>
+            <tr><td><code>note.logged</code></td><td>917</td></tr>
+            <tr><td><code>approval.requested</code></td><td>49</td></tr>
+            <tr><td><code>decision.recorded</code></td><td>41</td></tr>
+            <tr><td><code>phase.closed</code></td><td>29</td></tr>
+            <tr><td><code>day.closed</code></td><td>21</td></tr>
+            <tr><td><code>review.completed</code></td><td>21</td></tr>
+            <tr><td><code>run.completed</code></td><td>17</td></tr>
+            <tr><td><code>lead.researched</code></td><td>15</td></tr>
+            <tr><td><code>kickoff.done</code></td><td>11</td></tr>
+            <tr><td><code>commit.done</code></td><td>2</td></tr>
+            <tr><td><code>constitution.adopted</code></td><td>1</td></tr>
+            <tr><td><code>content.published</code></td><td>1</td></tr>
+            <tr><td><code>develop.started</code></td><td>1</td></tr>
+            <tr><td><code>slice.done</code></td><td>1</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="region">
+        <div class="region__label"><span>Zero ever</span><strong>32 of 46 kinds</strong></div>
+        <div class="zero-ever">
+          <div class="zero-ever__label">fixture-proven, unexercised</div>
+          <ul>
+            <li><code>revenue.received</code></li><li><code>revenue.simulated</code></li>
+            <li><code>cost.incurred</code></li><li><code>incident.raised</code></li>
+            <li><code>experiment.*</code></li><li><code>policy.*</code></li>
+            <li><code>council.verdict</code></li><li><code>month.closed</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="region">
+        <div class="region__label"><span>Tape</span><strong><kbd>t</kbd> scrubs</strong></div>
+        <ol class="tape">
+          <li class="tape__now"><span class="tape__date">2026-08-19</span><span class="tape__label">today</span></li>
+          <li><span class="tape__date">2026-08-23</span><span class="tape__label">growth feed earliest read</span></li>
+          <li><span class="tape__date">2026-08-24</span><span class="tape__label">scheduler proving week ends</span></li>
+          <li><span class="tape__date">2026-08-31</span><span class="tape__label">hermes <code>review_by</code></span></li>
+          <li><span class="tape__date">2026-09-01</span><span class="tape__label">bench guard</span></li>
+          <li><span class="tape__date">2026-09-15</span><span class="tape__label">council 002 Review-by</span></li>
+          <li><span class="tape__date">2026-11-09</span><span class="tape__label">T-01 <code>review_by</code></span></li>
+          <li><span class="tape__date">2027-02-02</span><span class="tape__label">council 001 Review-by</span></li>
+          <li><span class="tape__date">2027-05-13/14</span><span class="tape__label">DPDP commencement</span></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-matrix">
+    <div class="state-matrix__cap">STATE MATRIX — REFERENCE, NOT LIVE DATA</div>
+    <div class="state-matrix__grid">
+      <div class="state-chip"><span class="state-chip__k">empty</span><code>revenue.received</code> — 0 receipts ever. dashed, in words.</div>
+      <div class="state-chip"><span class="state-chip__k">loading</span>tape scrubbing to an as-of day — counts hold, marked stale.</div>
+      <div class="state-chip"><span class="state-chip__k">error</span><code>WRONG_KIND</code> — a stamp fired at a kind that isn't <code>approval.requested</code>.</div>
+      <div class="state-chip"><span class="state-chip__k">success</span>1,386 receipts, 21 <code>day.closed</code> seals, counted live.</div>
+      <div class="state-chip"><span class="state-chip__k">disabled</span>a supersedes chain — sealed once superseded, never edited.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ COUNCIL ROOM ══════════════════════════════════ -->
+<section id="council" class="screen">
+  <div class="screen__head">
+    <h2>Council room</h2>
+    <span class="screen__meta">sessions 2 · roster 12</span>
+  </div>
+  <p class="screen__caption"><code>council.verdict</code> on the spine: 0 ever — both sessions are file-borne. the room is real; the receipt is not, yet.</p>
+
+  <div class="region">
+    <table class="tbl">
+      <thead><tr><th>session</th><th>outcome</th><th>mode</th><th>review-by</th><th>note</th></tr></thead>
+      <tbody>
+        <tr><td>001</td><td>CONDITIONAL / Medium → <strong>UNRESOLVED</strong></td><td>—</td><td>2027-02-02</td><td class="row__note--meta">file-borne</td></tr>
+        <tr><td>002</td><td>NO / Medium</td><td>standard mode</td><td>2026-09-15</td><td class="row__note--meta">file-borne</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="region">
+    <div class="region__label"><span>Roster</span><strong>12</strong></div>
+    <p class="prose-sans">3 stance · 1 researcher · 1 verifier · 7 experts.</p>
+  </div>
+
+  <div class="region">
+    <div class="region__label"><span>Scored</span></div>
+    <p class="prose-sans">scored 0 · Brier — (insufficient evidence).</p>
+  </div>
+
+  <div class="region">
+    <div class="zero-ever">
+      <div class="zero-ever__label">fixture-proven, unexercised</div>
+      <ul><li><code>council.verdict</code> — 0 ever</li></ul>
+    </div>
+  </div>
+
+  <div class="state-matrix">
+    <div class="state-matrix__cap">STATE MATRIX — REFERENCE, NOT LIVE DATA</div>
+    <div class="state-matrix__grid">
+      <div class="state-chip"><span class="state-chip__k">empty</span>no session ever opened — chamber reads clear.</div>
+      <div class="state-chip"><span class="state-chip__k">loading</span>loading roster and verdict.</div>
+      <div class="state-chip"><span class="state-chip__k">error</span><code>UNKNOWN_APPROVAL</code> — asked <kbd>w</kbd> why on a session with no linked approval.</div>
+      <div class="state-chip"><span class="state-chip__k">success</span>session 002 — NO / Medium, Review-by 2026-09-15.</div>
+      <div class="state-chip"><span class="state-chip__k">disabled</span><code>council.verdict</code> — 0 ever. station dashed until one fires.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ MONEY ══════════════════════════════════ -->
+<section id="money" class="screen">
+  <div class="screen__head">
+    <h2>Money</h2>
+    <span class="screen__meta">the hardest screen to design honestly</span>
+  </div>
+  <p class="screen__caption">real vs simulated never share a figure. these four cost lines are never totalled.</p>
+
+  <div class="cols">
+    <div>
+      <div class="region">
+        <div class="region__label"><span>Real revenue</span></div>
+        <div class="money-fig is-real">₹0</div>
+        <p class="row__note--meta" style="margin-top:4px;">0 <code>revenue.received</code> receipts ever — mechanism proven, live value pending.</p>
+        <div class="money-line"><span class="lbl">MRR</span><span class="val">—</span></div>
+        <div class="money-line"><span class="lbl">kill-distance</span><span class="val">NOT EVALUATED — no criteria receipt for a live venture month</span></div>
+      </div>
+
+      <div class="region">
+        <div class="region__label"><span>Costs</span><strong>never totalled</strong></div>
+        <div class="money-line"><span class="lbl">provider</span><span class="val">not instrumented</span></div>
+        <div class="money-line"><span class="lbl">infra</span><span class="val">not instrumented</span></div>
+        <div class="money-line"><span class="lbl">one-off</span><span class="val">not instrumented</span></div>
+        <div class="money-line"><span class="lbl">overhead</span><span class="val">not instrumented</span></div>
+        <p class="prose-sans" style="margin-top:14px;">These four lines are never summed into one total. None has fired a <code>cost.incurred</code> receipt yet — a total would be honest arithmetic on a figure with no receipt behind it.</p>
+      </div>
+
+      <div class="sim-panel">
+        <div class="sim-panel__cap tag tag--violet">SIMULATED</div>
+        <p>0 <code>revenue.simulated</code> receipts ever. This panel renders when one fires — watermarked, hatched, never averaged into the real figure above.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="region">
+        <div class="region__label"><span>North-star</span></div>
+        <p class="row__note--meta">₹/month per hour of the owner's attention — not instrumented.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-matrix">
+    <div class="state-matrix__cap">STATE MATRIX — REFERENCE, NOT LIVE DATA</div>
+    <div class="state-matrix__grid">
+      <div class="state-chip"><span class="state-chip__k">empty</span>real revenue — ₹0, 0 receipts ever. honest-empty, in words.</div>
+      <div class="state-chip"><span class="state-chip__k">loading</span>figures hold at last known value, greyed, staleness stated.</div>
+      <div class="state-chip"><span class="state-chip__k">error</span>no criteria receipt — kill-distance cannot compute. NOT EVALUATED.</div>
+      <div class="state-chip"><span class="state-chip__k">success</span><code>revenue.received</code> fires → figure turns live, sha shown. not yet.</div>
+      <div class="state-chip"><span class="state-chip__k">disabled</span>a total across honesty classes — sealed. never summed.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ BOARD ══════════════════════════════════ -->
+<section id="board" class="screen">
+  <div class="screen__head">
+    <h2>Board</h2>
+    <span class="screen__meta">16 lanes · 7 LIVE vs guideline 2 — informational</span>
+  </div>
+  <p class="screen__caption">Mode B: NOT CERTIFIED. Centuries claimed 0001–1399, next 1400.</p>
+
+  <div class="region">
+    <table class="tbl">
+      <thead><tr><th>lane</th><th>status</th><th>phase</th><th>appetite/burn</th><th>clock / note</th></tr></thead>
+      <tbody>
+        <tr><td>bench</td><td>LIVE</td><td>04</td><td>8d / 7.25d</td><td>guard NEXT-CHECK 2026-09-01 · production receipts 0</td></tr>
+        <tr><td>engine</td><td>LIVE</td><td>06</td><td>9.5d / 7.5d</td><td>Hermes v2026.8.3 hired · 3 dispatches, 0 accepted drafts · hermes <code>review_by</code> 2026-08-31</td></tr>
+        <tr>
+          <td>face</td><td>LIVE</td><td>00</td><td>32d / 1d</td>
+          <td>born 2026-08-19 (this build)
+            <div class="chip" style="margin-top:6px;"><code>/arc-phase-done 00 --lane face</code><span class="chip__copy">copy</span></div>
+          </td>
+        </tr>
+        <tr><td>growth</td><td>LIVE</td><td>06</td><td>10d / 8.0d</td><td>INDEXABLE clock started 08-16 · feed earliest read 2026-08-23 · <span class="tag tag--amber">needs-you ×2</span></td></tr>
+        <tr>
+          <td>leads</td><td>LIVE</td><td>03</td><td>11d / 7.5d</td>
+          <td>rehearsal only
+            <div class="seal" style="margin-top:6px;">
+              <svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true"><polyline points="5,8 5,4 11,4 11,8" fill="none" stroke="var(--meta)" stroke-width="1.4"/><rect x="3" y="8" width="10" height="8" fill="none" stroke="var(--meta)" stroke-width="1.4"/></svg>
+              <span><strong>live send</strong> — owner keystroke pending. forever-human, not a button.</span>
+            </div>
+          </td>
+        </tr>
+        <tr><td>legal</td><td>LIVE</td><td>00</td><td>5d / 0d</td><td>awaiting owner approval</td></tr>
+        <tr><td>scheduler</td><td>LIVE</td><td>03</td><td>3d / 2.5d</td><td>proving week restarted 08-17 → runs to 2026-08-24</td></tr>
+        <tr class="is-idle"><td>absorb</td><td>IDLE</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr class="is-idle"><td>develop</td><td>IDLE</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr class="is-idle"><td>evolve</td><td>IDLE</td><td>—</td><td>—</td><td>unexercised</td></tr>
+        <tr class="is-idle"><td>ledger</td><td>IDLE</td><td>—</td><td>—</td><td>mechanism proven, live value pending</td></tr>
+        <tr class="is-idle"><td>memory</td><td>IDLE</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr class="is-idle"><td>model-policy</td><td>IDLE</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr class="is-idle"><td>policy</td><td>IDLE</td><td>—</td><td>—</td><td>fixture-proven, unexercised</td></tr>
+        <tr class="is-idle"><td>portfolio</td><td>IDLE</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr class="is-idle"><td>design</td><td>IDLE</td><td>—</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="state-matrix">
+    <div class="state-matrix__cap">STATE MATRIX — REFERENCE, NOT LIVE DATA</div>
+    <div class="state-matrix__grid">
+      <div class="state-chip"><span class="state-chip__k">empty</span>a lane with no clock and no note — status and phase only.</div>
+      <div class="state-chip"><span class="state-chip__k">loading</span>board syncing from PROGRESS.md across 16 lanes.</div>
+      <div class="state-chip"><span class="state-chip__k">error</span>a lane over its appetite — burn exceeds guideline, flagged in words, not colour.</div>
+      <div class="state-chip"><span class="state-chip__k">success</span>7 LIVE, 9 IDLE, 16 accounted for.</div>
+      <div class="state-chip"><span class="state-chip__k">disabled</span>Mode B — NOT CERTIFIED. sealed until it is.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════ ASK ARC ══════════════════════════════════ -->
+<section id="ask" class="screen">
+  <div class="screen__head">
+    <h2>Ask arc</h2>
+    <span class="screen__meta">read-only — the assistant has its room, not the wheel</span>
+  </div>
+  <p class="screen__caption">bound to <kbd>/</kbd>. every answer cites the receipts it read; it cannot act — only the Stamp writes.</p>
+
+  <div class="region">
+    <div class="ask-row">
+      <label for="ask-q">ask</label>
+      <input id="ask-q" type="text" value="why is growth blocked?">
+    </div>
+  </div>
+
+  <div class="region">
+    <div class="region__label"><span>Answer</span></div>
+    <p class="prose-sans">2 <code>approval.requested</code> open in growth: growth gate 1 (cluster c-001) and growth gate 2 (exemplar articles review pack). INDEXABLE clock started 2026-08-16; feed earliest read 2026-08-23. 8.0 of 10 appetite days already burned. Nothing else in growth is blocked.</p>
+    <div style="margin-top:12px;">
+      <a class="cite" href="#inbox">why → 01KZZRVSQJEAVD4YCZ8FDXR0DT</a>
+      <a class="cite" href="#inbox">why → 01KZZRW51QHTA9CFEX5JRRGY7C</a>
+    </div>
+  </div>
+
+  <div class="region">
+    <div class="seal">
+      <svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true"><polyline points="5,8 5,4 11,4 11,8" fill="none" stroke="var(--meta)" stroke-width="1.4"/><rect x="3" y="8" width="10" height="8" fill="none" stroke="var(--meta)" stroke-width="1.4"/></svg>
+      <span><strong>ask arc cannot act</strong> on this. read-only, by construction — approve or reject with a reason is the only write, and it happens in Today or Inbox, never here.</span>
+    </div>
+  </div>
+
+  <div class="state-matrix">
+    <div class="state-matrix__cap">STATE MATRIX — REFERENCE, NOT LIVE DATA</div>
+    <div class="state-matrix__grid">
+      <div class="state-chip"><span class="state-chip__k">empty</span>no query yet — ask about a receipt, kind, ULID or lane.</div>
+      <div class="state-chip"><span class="state-chip__k">loading</span>reading receipts…</div>
+      <div class="state-chip"><span class="state-chip__k">error</span><code>UNKNOWN_APPROVAL</code> — asked about a ULID with no matching receipt.</div>
+      <div class="state-chip"><span class="state-chip__k">success</span>growth query answered above, 2 citations.</div>
+      <div class="state-chip"><span class="state-chip__k">disabled</span>write actions — sealed. only the Stamp writes.</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="meta">arc face — explore <code>face-hq-v1</code> · variant A · command center, Ink &amp; Signal severe · base <code>5132cad</code></footer>
+
+</body>
+</html>

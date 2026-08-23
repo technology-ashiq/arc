@@ -39,9 +39,13 @@ if (!root) {
 
 // Extended 12 -> 13 by ADR-0301: `evolve` declares what a module may optimize. Absent is the
 // silent, valid state — the field is opt-in and no existing manifest declares it.
+// Extended 13 -> 14 by ADR-1306 (face lane): `face` declares this product's room — the
+// birth-rule, same opt-in shape as `evolve`. The face renders zones 1–6 generically from
+// it; `face-coverage` (the tree validator) is the FAIL gate, so here `face` only has to be
+// a KNOWN field, not a validated schema — a manifest may carry it or not.
 const KNOWN_FIELDS = new Set([
   "name", "version", "requires", "commands", "agents", "scripts", "files",
-  "docs", "skeletonDirs", "envBlock", "envSentinel", "hooks", "evolve",
+  "docs", "skeletonDirs", "envBlock", "envSentinel", "hooks", "evolve", "face",
 ]);
 const SEMVER = /^\d+\.\d+\.\d+$/;
 const NAME_RE = /^[a-z][a-z-]*$/;

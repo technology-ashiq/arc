@@ -17,5 +17,38 @@
     ".claude/scripts/evolve/verdict.mjs"
   ],
   "files": [],
-  "docs": []
+  "docs": [],
+  "face": {
+    "room": "evolve",
+    "ring": "kernel",
+    "kinds": [
+      "council.outcome",
+      "council.verdict",
+      "experiment.assigned",
+      "experiment.closed",
+      "experiment.measured",
+      "experiment.opened",
+      "experiment.promoted",
+      "experiment.rolled_back",
+      "experiment.verdict",
+      "incident.raised",
+      "metric.observed",
+      "promotion.proposed"
+    ],
+    "sanctioned": [
+      "EXPERIMENT_KINDS",
+      "metric.observed",
+      "manifests evolve:"
+    ],
+    "stations": [
+      "arms",
+      "board"
+    ],
+    "concepts": [
+      "PENDING n/floor",
+      "champion / challenger",
+      "holdout cohort"
+    ],
+    "badge": "fixture-proven, unexercised"
+  }
 }

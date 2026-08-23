@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>arc — face HQ (reference)</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--prose);
+    font-family: var(--font-sans);
+    font-size: var(--fs-3);
+    line-height: var(--lh-normal);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, p, ul, ol, dl, dd, figure { margin: 0; }
+  ul, ol { padding: 0; list-style: none; }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  input, textarea { font: inherit; color: inherit; }
+  table { border-collapse: collapse; width: 100%; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* ---------------------------------------------------------- shell ---- */
+  .shell {
+    display: grid;
+    grid-template-columns: var(--rail-width) 1fr;
+    min-height: 100vh;
+  }
+
+  /* ------------------------------------------------------------ rail ---- */
+  .rail {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid var(--hairline);
+    background: var(--ink-raised);
+    padding: var(--sp-5) var(--sp-4) var(--sp-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-6);
+  }
+  .brand { display: flex; flex-direction: column; gap: 2px; }
+  .brand-mark { font-size: var(--fs-4); font-weight: 700; letter-spacing: -0.01em; }
+  .brand-sub { font-size: var(--fs-2); color: var(--muted); }
+
+  .mode-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-pill);
+    padding: 3px 4px;
+    width: fit-content;
+  }
+  .mode-opt {
+    font-size: var(--fs-1);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    padding: 3px 8px;
+    border-radius: var(--radius-pill);
+  }
+  .mode-opt.is-active { background: var(--ink); color: var(--prose); }
+
+  .rail-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .rail-kpi-label {
+    font-size: var(--fs-1);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .rail-kpi-value { font-size: var(--fs-6); font-weight: 700; line-height: var(--lh-tight); }
+  .rail-kpi-value.amber { color: var(--accent-amber); }
+
+  .rail-money { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+  .rail-money-item { display: flex; flex-direction: column; gap: 1px; }
+  .rail-money-tag { font-size: var(--fs-1); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .rail-money-value { font-size: var(--fs-4); font-weight: 600; }
+  .rail-money-value.green { color: var(--accent-green); }
+  .rail-money-value.violet { color: var(--accent-violet); }
+
+  .arc-ring-row { display: flex; align-items: center; gap: var(--sp-3); }
+  .arc-ring-caption { font-size: var(--fs-2); color: var(--muted); }
+  .arc-ring-caption b { color: var(--prose); font-weight: 600; }
+
+  .rail-tape { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .rail-tape-item { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-2); }
+  .rail-tape-item .t-label { color: var(--muted); }
+  .rail-tape-item .t-date { color: var(--prose); }
+
+  .rail-nav { display: flex; flex-direction: column; gap: 1px; }
+  .rail-nav-title { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 0 var(--sp-2) var(--sp-2); }
+  .rail-nav a {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 10px var(--sp-2);
+    min-height: 44px;
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-3);
+  }
+  .rail-nav a:hover { background: var(--ink); }
+  .rail-nav a .idx { font-family: var(--font-mono); font-size: var(--fs-1); color: var(--muted); width: 18px; }
+  .rail-nav a svg { flex: none; }
+  .rail-nav a .badge {
+    margin-left: auto;
+    background: var(--accent-amber);
+    color: var(--on-accent);
+    font-size: var(--fs-1);
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: var(--radius-pill);
+  }
+
+  .rail-footer { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-3); }
+  .rail-shortcuts { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-1); color: var(--muted); }
+  .rail-shortcuts kbd {
+    font-family: var(--font-mono);
+    background: var(--ink);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    padding: 1px 5px;
+    color: var(--prose);
+    font-size: 10px;
+  }
+  .rail-secondary a {
+    display: block;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    font-size: var(--fs-2);
+    color: var(--muted);
+    border-top: 1px solid var(--hairline);
+    padding-top: var(--sp-2);
+  }
+  .rail-secondary a:hover { color: var(--prose); }
+  .as-of { font-size: var(--fs-1); color: var(--muted); }
+
+  /* --------------------------------------------------------- content ---- */
+  .content { padding: var(--sp-7) var(--sp-6) var(--sp-8); max-width: var(--content-max); }
+  section {
+    padding-block: var(--sp-7);
+    border-bottom: 1px solid var(--hairline);
+  }
+  section:first-of-type { padding-top: 0; }
+  section:last-of-type { border-bottom: 0; }
+
+  .sec-head { display: flex; align-items: baseline; gap: var(--sp-3); margin-bottom: var(--sp-5); }
+  .sec-idx { font-family: var(--font-mono); font-size: var(--fs-2); color: var(--muted); }
+  .sec-title { font-size: var(--fs-5); font-weight: 700; letter-spacing: -0.01em; }
+  .sec-note { font-size: var(--fs-2); color: var(--muted); margin-left: auto; }
+
+  .stack { display: flex; flex-direction: column; gap: var(--sp-4); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-4); }
+
+  .eyebrow { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+
+  .why-btn {
+    font-size: var(--fs-1);
+    color: var(--muted);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .why-btn:hover { color: var(--prose); border-color: var(--muted); }
+
+  /* --- cards / panels --- */
+  .panel {
+    background: var(--ink-raised);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    padding: var(--sp-4);
+  }
+  .panel-dashed {
+    border: 1px dashed var(--hairline-strong);
+    border-radius: var(--radius-lg);
+    padding: var(--sp-5);
+    background: var(--ink);
+  }
+  .panel-dotted {
+    border: 1px dotted var(--hairline-strong);
+    border-radius: var(--radius-sm);
+  }
+
+  /* --- kind / ulid tags --- */
+  .kind-tag {
+    font-family: var(--font-mono);
+    font-size: var(--fs-2);
+    color: var(--prose);
+    background: var(--ink);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    padding: 3px 7px;
+  }
+  .ulid { font-family: var(--font-mono); font-size: var(--fs-2); color: var(--muted); }
+  .dashed-tag {
+    font-family: var(--font-mono);
+    font-size: var(--fs-2);
+    color: var(--muted);
+    border: 1px dashed var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    padding: 3px 7px;
+  }
+  .dotted-tag {
+    font-family: var(--font-mono);
+    font-size: var(--fs-2);
+    color: var(--muted);
+    border: 1px dotted var(--hairline-strong);
+    border-radius: var(--radius-pill);
+    padding: 3px 9px;
+  }
+
+  /* --- stamp component: the ONLY component allowed to decide --- */
+  .stamp-card {
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    background: var(--ink-raised);
+    padding: var(--sp-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+  }
+  .stamp-head { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+  .stamp-amber-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-amber); flex: none;
+  }
+  .stamp-title { font-size: var(--fs-4); font-weight: 600; }
+  .stamp-profile { font-size: var(--fs-3); color: var(--muted); }
+  .reason-block { display: flex; flex-direction: column; gap: 6px; }
+  .reason-label { font-size: var(--fs-2); color: var(--muted); display: flex; gap: 6px; }
+  .reason-label .req { color: var(--accent-amber); }
+  .reason-block textarea {
+    background: var(--ink);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    padding: var(--sp-3);
+    min-height: 56px;
+    resize: vertical;
+  }
+  .reason-block textarea:focus-visible { border-color: var(--prose); }
+  .stamp-actions { display: flex; gap: var(--sp-3); }
+  .btn-stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 44px;
+    padding: 0 var(--sp-4);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-3);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border: 1px solid var(--hairline-strong);
+    transition: border-color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
+  }
+  .btn-stamp:hover { border-color: var(--prose); }
+  .btn-stamp:active { transform: translateY(1px); }
+  .btn-stamp .kbd { font-family: var(--font-mono); font-weight: 400; font-size: var(--fs-1); color: var(--muted); text-transform: none; }
+
+  /* --- decided (success) stamp mark --- */
+  .stamp-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 68px; height: 68px;
+    border: 2px solid var(--prose);
+    border-radius: 50%;
+    transform: rotate(-8deg);
+    flex: none;
+  }
+  .stamp-mark-inner { text-align: center; line-height: 1.1; }
+  .stamp-mark-verb { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; display: block; }
+  .stamp-mark-kind { font-size: 8px; color: var(--muted); font-family: var(--font-mono); display: block; }
+
+  /* --- chips: exact CLI, never a button on a forever-human act --- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 44px;
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-md);
+    background: var(--ink);
+    font-family: var(--font-mono);
+    font-size: var(--fs-2);
+  }
+  .chip:hover { border-color: var(--prose); }
+  .chip .chip-verb {
+    font-family: var(--font-sans);
+    font-size: var(--fs-1);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  /* --- seal: forever-human, cannot be a button --- */
+  .seal {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    background: var(--ink);
+    color: var(--muted);
+  }
+  .seal-text { display: flex; flex-direction: column; gap: 2px; }
+  .seal-text b { color: var(--prose); font-size: var(--fs-3); font-weight: 600; }
+  .seal-text span { font-size: var(--fs-2); }
+
+  /* --- tables --- */
+  .data-table { font-size: var(--fs-3); }
+  .data-table th {
+    text-align: left;
+    font-size: var(--fs-1);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 600;
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--hairline-strong);
+  }
+  .data-table td {
+    padding: var(--sp-3);
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+  }
+  .data-table tr:last-child td { border-bottom: 0; }
+  .lane-name { font-family: var(--font-mono); font-weight: 600; }
+  .status-live { font-size: var(--fs-1); border: 1px solid var(--hairline-strong); border-radius: var(--radius-sm); padding: 2px 6px; color: var(--prose); }
+
+  /* --- map (lane lines) --- */
+  .map-row { display: grid; grid-template-columns: 120px 1fr 220px; align-items: center; gap: var(--sp-4); padding: var(--sp-3) 0; border-bottom: 1px solid var(--hairline); }
+  .map-row:last-child { border-bottom: 0; }
+  .map-lane-name { font-family: var(--font-mono); font-size: var(--fs-3); font-weight: 700; }
+  .map-track { position: relative; height: 22px; }
+  .map-note { font-size: var(--fs-2); color: var(--muted); }
+  .map-idle-wrap { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-4); }
+  .map-idle-pill { font-family: var(--font-mono); font-size: var(--fs-2); color: var(--muted); padding: 6px 10px; }
+
+  /* --- money --- */
+  .money-figure { font-size: var(--fs-6); font-weight: 700; }
+  .money-figure.green { color: var(--accent-green); }
+  .money-sub { font-size: var(--fs-2); color: var(--muted); margin-top: 2px; }
+  .cost-row { display: flex; justify-content: space-between; padding: var(--sp-2) 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-3); }
+  .cost-row:last-child { border-bottom: 0; }
+  .cost-row .amt { font-family: var(--font-mono); color: var(--muted); }
+
+  .simulated-panel {
+    background-image: var(--hatch-violet);
+    background-repeat: repeat;
+    border: 1px solid var(--accent-violet);
+    border-radius: var(--radius-lg);
+    padding: var(--sp-5);
+    position: relative;
+  }
+  .simulated-watermark {
+    position: absolute; top: var(--sp-3); right: var(--sp-3);
+    font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.12em;
+    color: var(--accent-violet); border: 1px solid var(--accent-violet);
+    border-radius: var(--radius-sm); padding: 3px 8px;
+  }
+  .simulated-panel .money-figure { color: var(--accent-violet); }
+
+  /* --- council --- */
+  .council-verdict-tag { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.05em; }
+  .roster-bar { display: flex; height: 8px; border-radius: var(--radius-pill); overflow: hidden; border: 1px solid var(--hairline-strong); }
+  .roster-seg { height: 100%; }
+  .roster-legend { display: flex; gap: var(--sp-4); font-size: var(--fs-2); color: var(--muted); flex-wrap: wrap; margin-top: var(--sp-2); }
+
+  /* --- ask arc --- */
+  .cmdk { border: 1px solid var(--hairline-strong); border-radius: var(--radius-md); background: var(--ink-raised); overflow: hidden; }
+  .cmdk-input { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-4); border-bottom: 1px solid var(--hairline); }
+  .cmdk-input input { flex: 1; background: none; border: 0; color: var(--prose); font-size: var(--fs-4); min-height: 24px; }
+  .cmdk-input input::placeholder { color: var(--muted); }
+  .cmdk-result { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); min-height: 44px; border-bottom: 1px solid var(--hairline); font-size: var(--fs-3); }
+  .cmdk-result:last-child { border-bottom: 0; }
+  .cmdk-result .r-kind { font-size: var(--fs-1); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; width: 88px; flex: none; }
+  .cmdk-result .r-main { font-family: var(--font-mono); }
+
+  .shortcut-table { font-size: var(--fs-3); }
+  .shortcut-table td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--hairline); }
+  .shortcut-table tr:last-child td { border-bottom: 0; }
+  .shortcut-table kbd {
+    font-family: var(--font-mono); background: var(--ink); border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm); padding: 2px 7px; color: var(--prose);
+  }
+
+  /* --- receipt drawer --- */
+  .drawer { background: var(--ink-sunken); border: 1px solid var(--hairline); border-radius: var(--radius-md); padding: var(--sp-4); }
+  .drawer-row { display: flex; gap: var(--sp-3); font-size: var(--fs-2); padding: 4px 0; }
+  .drawer-row .k { color: var(--muted); width: 110px; flex: none; font-family: var(--font-mono); }
+  .drawer-row .v { font-family: var(--font-mono); color: var(--prose); }
+  .drawer-row .v.absent { color: var(--muted); font-family: var(--font-sans); }
+
+  /* --- state matrix --- */
+  .matrix-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--sp-4); }
+  .matrix-cell { border: 1px solid var(--hairline); border-radius: var(--radius-md); padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); min-height: 200px; }
+  .matrix-label { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .matrix-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: var(--sp-2); }
+  .skeleton-bar { height: 10px; border-radius: var(--radius-sm); background: var(--hairline-strong); }
+  @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; } }
+  .skeleton-bar.animated { animation: pulse 1.4s ease-in-out infinite; }
+  .refusal-code { font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-3); }
+  .lock-icon { flex: none; }
+
+  @media (max-width: 1024px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail {
+      position: static;
+      height: auto;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .rail-nav { flex-direction: row; flex-wrap: wrap; }
+    .rail-tape, .rail-footer { display: none; }
+    .content { padding: var(--sp-5); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .matrix-grid { grid-template-columns: repeat(2, 1fr); }
+    .map-row { grid-template-columns: 90px 1fr; }
+    .map-row .map-note { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ============================================================ RAIL — always visible: needs-you, money, mode, ring, tape ==== -->
+  <aside class="rail" aria-label="status and navigation">
+
+    <div class="brand">
+      <span class="brand-mark">arc</span>
+      <span class="brand-sub">face · HQ — reference build</span>
+    </div>
+
+    <div class="mode-pill" role="group" aria-label="data mode">
+      <span class="mode-opt is-active">live</span>
+      <span class="mode-opt">replay</span>
+      <span class="mode-opt">sim</span>
+    </div>
+
+    <a class="rail-kpi" href="#inbox">
+      <span class="rail-kpi-label">needs-you</span>
+      <span class="rail-kpi-value amber mono">2</span>
+    </a>
+
+    <div class="rail-money">
+      <a class="rail-money-item" href="#money">
+        <span class="rail-money-tag">real</span>
+        <span class="rail-money-value green mono">₹0</span>
+      </a>
+      <a class="rail-money-item" href="#money">
+        <span class="rail-money-tag">sim</span>
+        <span class="rail-money-value violet mono">—</span>
+      </a>
+    </div>
+
+    <div class="arc-ring-row">
+      <svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="7 of 16 lanes LIVE, informational">
+        <circle cx="32" cy="32" r="26" fill="none" style="stroke:var(--hairline-strong)" stroke-width="6"/>
+        <circle cx="32" cy="32" r="26" fill="none" style="stroke:var(--prose)" stroke-width="6"
+          stroke-dasharray="71.5 91.9" stroke-linecap="butt" transform="rotate(-90 32 32)"/>
+      </svg>
+      <span class="arc-ring-caption"><b>7</b>/16 lanes LIVE<br>vs guideline 2 — informational</span>
+    </div>
+
+    <div class="rail-tape">
+      <span class="rail-nav-title">tape — nearest clocks</span>
+      <div class="rail-tape-item"><span class="t-label">growth feed earliest read</span><span class="t-date mono">08-23</span></div>
+      <div class="rail-tape-item"><span class="t-label">scheduler proving week</span><span class="t-date mono">08-24</span></div>
+      <div class="rail-tape-item"><span class="t-label">hermes review_by</span><span class="t-date mono">08-31</span></div>
+    </div>
+
+    <nav class="rail-nav" aria-label="rooms">
+      <span class="rail-nav-title">rooms</span>
+      <a href="#today"><span class="idx">01</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" style="stroke:var(--muted)"/></svg>
+        Today</a>
+      <a href="#inbox"><span class="idx">02</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 6h12v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6z" style="stroke:var(--muted)"/><path d="M2 6l2-4h8l2 4" style="stroke:var(--muted)"/></svg>
+        Inbox <span class="badge">2</span></a>
+      <a href="#map"><span class="idx">03</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 5h12M2 8h12M2 11h12" style="stroke:var(--muted)"/></svg>
+        Map</a>
+      <a href="#spine-tape"><span class="idx">04</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h12" style="stroke:var(--muted)"/><path d="M4 5v6M8 5v6M12 5v6" style="stroke:var(--muted)"/></svg>
+        Spine/Tape</a>
+      <a href="#council-room"><span class="idx">05</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2l6 3.5v5L8 14l-6-3.5v-5L8 2z" style="stroke:var(--muted)"/></svg>
+        Council room</a>
+      <a href="#money"><span class="idx">06</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 3h6M4 8h6M6 3v10M4 13h6" style="stroke:var(--muted)"/></svg>
+        Money</a>
+      <a href="#board"><span class="idx">07</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1" style="stroke:var(--muted)"/><path d="M2 7h12" style="stroke:var(--muted)"/></svg>
+        Board</a>
+      <a href="#ask-arc"><span class="idx">08</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" style="stroke:var(--muted)"/><path d="M10.3 10.3L14 14" style="stroke:var(--muted)"/></svg>
+        Ask arc</a>
+    </nav>
+
+    <div class="rail-footer">
+      <div class="rail-shortcuts">
+        <span><kbd>j</kbd>/<kbd>k</kbd> move</span>
+        <span><kbd>a</kbd>/<kbd>r</kbd> stamp (reason prompt)</span>
+        <span><kbd>w</kbd> why</span>
+        <span><kbd>t</kbd> tape</span>
+        <span><kbd>/</kbd> search</span>
+      </div>
+      <div class="rail-secondary">
+        <a href="#state-matrix">state matrix (reference)</a>
+      </div>
+      <span class="as-of">as-of 09c563f · 2026-08-19 IST</span>
+    </div>
+  </aside>
+
+  <!-- =========================================================== CONTENT ==== -->
+  <main class="content">
+
+    <!-- ===================================================== 01 TODAY ==== -->
+    <section id="today">
+      <div class="sec-head">
+        <span class="sec-idx">01</span>
+        <h1 class="sec-title">Today</h1>
+        <span class="sec-note">2026-08-19 · IST · since you left: 3 receipts today · 2 need you</span>
+      </div>
+
+      <div class="stack">
+        <span class="eyebrow">needs-you — never collapsed</span>
+
+        <div class="stamp-card">
+          <div class="stamp-head">
+            <span class="stamp-amber-dot" aria-hidden="true"></span>
+            <span class="kind-tag">approval.requested</span>
+            <span class="ulid">01KZZRVSQJEAVD4YCZ8FDXR0DT</span>
+          </div>
+          <div>
+            <div class="stamp-title">growth gate: exemplar articles review pack</div>
+            <div class="stamp-profile">profile — growth gate 2: review pack + preview URL</div>
+          </div>
+          <div class="reason-block">
+            <label class="reason-label" for="reason-1">reason <span class="req">(required)</span></label>
+            <textarea id="reason-1" placeholder="type the reason for this decision"></textarea>
+          </div>
+          <div class="stamp-actions">
+            <button class="btn-stamp">approve <span class="kbd">a</span></button>
+            <button class="btn-stamp">reject <span class="kbd">r</span></button>
+          </div>
+        </div>
+
+        <div class="stamp-card">
+          <div class="stamp-head">
+            <span class="stamp-amber-dot" aria-hidden="true"></span>
+            <span class="kind-tag">approval.requested</span>
+            <span class="ulid">01KZZRW51QHTA9CFEX5JRRGY7C</span>
+          </div>
+          <div>
+            <div class="stamp-title">growth gate: cluster c-001</div>
+            <div class="stamp-profile">profile — growth gate 1: cluster card</div>
+          </div>
+          <div class="reason-block">
+            <label class="reason-label" for="reason-2">reason <span class="req">(required)</span></label>
+            <textarea id="reason-2" placeholder="type the reason for this decision"></textarea>
+          </div>
+          <div class="stamp-actions">
+            <button class="btn-stamp">approve <span class="kbd">a</span></button>
+            <button class="btn-stamp">reject <span class="kbd">r</span></button>
+          </div>
+        </div>
+
+        <div class="panel" style="display:flex; align-items:center; justify-content:space-between; gap: var(--sp-4);">
+          <div>
+            <div class="stamp-title" style="font-size: var(--fs-3);">7 lanes in flight — bench · engine · face · growth · leads · legal · scheduler</div>
+            <div class="stamp-profile">full picture, geometric, one glance → Map</div>
+          </div>
+          <a class="why-btn" href="#map">Open Map →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== 02 INBOX ==== -->
+    <section id="inbox">
+      <div class="sec-head">
+        <span class="sec-idx">02</span>
+        <h1 class="sec-title">Inbox</h1>
+        <span class="sec-note">approval.requested queue — 49 ever · 41 decided · 2 open</span>
+      </div>
+
+      <div class="grid-2">
+        <div class="stack">
+          <span class="eyebrow">open (2)</span>
+          <table class="data-table">
+            <thead><tr><th>ulid</th><th>gate</th><th>title</th><th>status</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="ulid">01KZZRVSQJ…R0DT</td>
+                <td>growth gate 2</td>
+                <td>exemplar articles review pack</td>
+                <td><span class="kind-tag" style="border-color: var(--accent-amber); color: var(--accent-amber);">OPEN</span></td>
+              </tr>
+              <tr>
+                <td class="ulid">01KZZRW51Q…RGY7C</td>
+                <td>growth gate 1</td>
+                <td>cluster c-001</td>
+                <td><span class="kind-tag" style="border-color: var(--accent-amber); color: var(--accent-amber);">OPEN</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="stack">
+          <span class="eyebrow">decided today</span>
+          <div class="panel" style="display:flex; gap: var(--sp-4); align-items:center;">
+            <div class="stamp-mark" aria-hidden="true">
+              <div class="stamp-mark-inner">
+                <span class="stamp-mark-verb">approve</span>
+                <span class="stamp-mark-kind">decision.recorded</span>
+              </div>
+            </div>
+            <div>
+              <div class="stamp-title" style="font-size: var(--fs-3);">approval.requested{gate: kickoff}</div>
+              <div class="ulid">01M0B8T5F81RC6V06MRY289B6D</div>
+              <div class="stamp-profile" style="margin-top: 6px;">reason — "pannu; WIP 6 vs guideline 2 acknowledged"</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== 03 MAP ==== -->
+    <section id="map">
+      <div class="sec-head">
+        <span class="sec-idx">03</span>
+        <h1 class="sec-title">Map</h1>
+        <span class="sec-note">enna nadakuthu — one glance, no session</span>
+      </div>
+
+      <div class="stack">
+        <div class="map-row">
+          <span class="map-lane-name">bench</span>
+          <div class="map-track">
+            <svg width="100%" height="22" viewBox="0 0 400 22" preserveAspectRatio="none">
+              <line x1="0" y1="11" x2="400" y2="11" style="stroke:var(--hairline-strong)" stroke-width="2"/>
+              <line x1="0" y1="11" x2="360" y2="11" style="stroke:var(--muted)" stroke-width="4"/>
+              <circle cx="360" cy="11" r="5" style="fill:var(--ink-raised); stroke:var(--prose)" stroke-width="2"/>
+            </svg>
+          </div>
+          <span class="map-note">phase 04 · 8d / 7.25d · guard NEXT-CHECK 09-01 · production receipts 0</span>
+        </div>
+
+        <div class="map-row">
+          <span class="map-lane-name">engine</span>
+          <div class="map-track">
+            <svg width="100%" height="22" viewBox="0 0 400 22" preserveAspectRatio="none">
+              <line x1="0" y1="11" x2="400" y2="11" style="stroke:var(--hairline-strong)" stroke-width="2"/>
+              <line x1="0" y1="11" x2="316" y2="11" style="stroke:var(--muted)" stroke-width="4"/>
+              <circle cx="316" cy="11" r="5" style="fill:var(--ink-raised); stroke:var(--prose)" stroke-width="2"/>
+            </svg>
+          </div>
+          <span class="map-note">phase 06 · 9.5d / 7.5d · hermes v2026.8.3 · 3 dispatches, 0 accepted drafts</span>
+        </div>
+
+        <div class="map-row">
+          <span class="map-lane-name">face</span>
+          <div class="map-track">
+            <svg width="100%" height="22" viewBox="0 0 400 22" preserveAspectRatio="none">
+              <line x1="0" y1="11" x2="400" y2="11" style="stroke:var(--hairline-strong)" stroke-width="2"/>
+              <line x1="0" y1="11" x2="14" y2="11" style="stroke:var(--muted)" stroke-width="4"/>
+              <circle cx="14" cy="11" r="5" style="fill:var(--ink-raised); stroke:var(--prose)" stroke-width="2"/>
+            </svg>
+          </div>
+          <span class="map-note">phase 00 · 32d / 1d · born 2026-08-19 (this build)</span>
+        </div>
+
+        <div class="map-row">
+          <span class="map-lane-name">growth</span>
+          <div class="map-track">
+            <svg width="100%" height="22" viewBox="0 0 400 22" preserveAspectRatio="none">
+              <line x1="0" y1="11" x2="400" y2="11" style="stroke:var(--hairline-strong)" stroke-width="2"/>
+              <line x1="0" y1="11" x2="320" y2="11" style="stroke:var(--muted)" stroke-width="4"/>
+              <circle cx="320" cy="11" r="5" style="fill:var(--ink-raised); stroke:var(--prose)" stroke-width="2"/>
+              <circle cx="392" cy="11" r="4" style="fill:var(--accent-amber)"/>
+            </svg>
+          </div>
+          <span class="map-note">phase 06 · 10d / 8.0d · INDEXABLE clock 08-16 · <span style="color:var(--accent-amber)">● 2 open</span></span>
+        </div>
+
+        <div class="map-row">
+          <span class="map-lane-name">leads</span>
+          <div class="map-track">
+            <svg width="100%" height="22" viewBox="0 0 400 22" preserveAspectRatio="none">
+              <line x1="0" y1="11" x2="400" y2="11" style="stroke:var(--hairline-strong)" stroke-width="2"/>
+              <line x1="0" y1="11" x2="273" y2="11" style="stroke:var(--muted)" stroke-width="4"/>
+              <circle cx="273" cy="11" r="5" style="fill:var(--ink-raised); stroke:var(--prose)" stroke-width="2"/>
+            </svg>
+          </div>
+          <span class="map-note">phase 03 · 11d / 7.5d · REHEARSAL only — live send = owner keystroke pending</span>
+        </div>
+
+        <div class="map-row">
+          <span class="map-lane-name">legal</span>
+          <div class="map-track">
+            <svg width="100%" height="22" viewBox="0 0 400 22" preserveAspectRatio="none">
+              <line x1="0" y1="11" x2="400" y2="11" style="stroke:var(--hairline-strong)" stroke-width="2"/>
+              <circle cx="6" cy="11" r="5" style="fill:var(--ink-raised); stroke:var(--prose)" stroke-width="2"/>
+            </svg>
+          </div>
+          <span class="map-note">phase 00 · 5d / 0d · awaiting owner approval</span>
+        </div>
+
+        <div class="map-row">
+          <span class="map-lane-name">scheduler</span>
+          <div class="map-track">
+            <svg width="100%" height="22" viewBox="0 0 400 22" preserveAspectRatio="none">
+              <line x1="0" y1="11" x2="400" y2="11" style="stroke:var(--hairline-strong)" stroke-width="2"/>
+              <line x1="0" y1="11" x2="333" y2="11" style="stroke:var(--muted)" stroke-width="4"/>
+              <circle cx="333" cy="11" r="5" style="fill:var(--ink-raised); stroke:var(--prose)" stroke-width="2"/>
+            </svg>
+          </div>
+          <span class="map-note">phase 03 · 3d / 2.5d · proving week restarted 08-17 → runs to 08-24</span>
+        </div>
+
+        <div>
+          <span class="eyebrow">idle — planned, no phase open</span>
+          <div class="map-idle-wrap">
+            <span class="map-idle-pill dotted-tag">absorb</span>
+            <span class="map-idle-pill dotted-tag">develop</span>
+            <span class="map-idle-pill dotted-tag">evolve — unexercised</span>
+            <span class="map-idle-pill dotted-tag">ledger — mechanism proven, live value pending</span>
+            <span class="map-idle-pill dotted-tag">memory</span>
+            <span class="map-idle-pill dotted-tag">model-policy</span>
+            <span class="map-idle-pill dotted-tag">policy — fixture-proven, unexercised</span>
+            <span class="map-idle-pill dotted-tag">portfolio</span>
+            <span class="map-idle-pill dotted-tag">design</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== 04 SPINE/TAPE ==== -->
+    <section id="spine-tape">
+      <div class="sec-head">
+        <span class="sec-idx">04</span>
+        <h1 class="sec-title">Spine / Tape</h1>
+        <span class="sec-note">the log is the state</span>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: var(--sp-6);">
+        <div class="panel">
+          <span class="eyebrow">receipts</span>
+          <div class="money-figure mono" style="margin-top:6px;">1,386</div>
+          <div class="money-sub">21 day.closed seals · 14 of 46 kinds have ever fired</div>
+        </div>
+        <div class="panel">
+          <span class="eyebrow">today's receipts (2026-08-19)</span>
+          <div class="stack" style="gap:6px; margin-top:6px;">
+            <div><span class="kind-tag">kickoff.done</span> <span class="ulid">01M0B8T4ZQ1APZK5SJ7331K1KS</span></div>
+            <div><span class="kind-tag">approval.requested</span><span class="stamp-profile">{gate: kickoff}</span> <span class="ulid">01M0B8T5F81RC6V06MRY289B6D</span></div>
+            <div><span class="kind-tag">decision.recorded</span> <span class="stamp-profile">approve — "pannu; WIP 6 vs guideline 2 acknowledged"</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="stack">
+          <span class="eyebrow">14 kinds fired — counts, descending</span>
+          <table class="data-table">
+            <tbody>
+              <tr><td class="mono">note.logged</td><td class="mono" style="text-align:right;">917</td></tr>
+              <tr><td class="mono">approval.requested</td><td class="mono" style="text-align:right;">49</td></tr>
+              <tr><td class="mono">decision.recorded</td><td class="mono" style="text-align:right;">41</td></tr>
+              <tr><td class="mono">phase.closed</td><td class="mono" style="text-align:right;">29</td></tr>
+              <tr><td class="mono">day.closed (seals)</td><td class="mono" style="text-align:right;">21</td></tr>
+              <tr><td class="mono">review.completed</td><td class="mono" style="text-align:right;">21</td></tr>
+              <tr><td class="mono">run.completed</td><td class="mono" style="text-align:right;">17</td></tr>
+              <tr><td class="mono">lead.researched</td><td class="mono" style="text-align:right;">15</td></tr>
+              <tr><td class="mono">kickoff.done</td><td class="mono" style="text-align:right;">11</td></tr>
+              <tr><td class="mono">commit.done</td><td class="mono" style="text-align:right;">2</td></tr>
+              <tr><td class="mono">constitution.adopted</td><td class="mono" style="text-align:right;">1</td></tr>
+              <tr><td class="mono">content.published</td><td class="mono" style="text-align:right;">1</td></tr>
+              <tr><td class="mono">develop.started</td><td class="mono" style="text-align:right;">1</td></tr>
+              <tr><td class="mono">slice.done</td><td class="mono" style="text-align:right;">1</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="stack">
+          <span class="eyebrow">zero-ever — fixture-proven, unexercised</span>
+          <div style="display:flex; flex-wrap:wrap; gap: var(--sp-2);">
+            <span class="dashed-tag">revenue.received</span>
+            <span class="dashed-tag">revenue.simulated</span>
+            <span class="dashed-tag">cost.incurred</span>
+            <span class="dashed-tag">incident.raised</span>
+            <span class="dashed-tag">experiment.*</span>
+            <span class="dashed-tag">policy.*</span>
+            <span class="dashed-tag">council.verdict</span>
+            <span class="dashed-tag">month.closed</span>
+          </div>
+
+          <span class="eyebrow" style="margin-top: var(--sp-3);">receipt drawer — room → station → drawer</span>
+          <div class="drawer">
+            <div class="drawer-row"><span class="k">kind</span><span class="v">kickoff.done</span></div>
+            <div class="drawer-row"><span class="k">ulid</span><span class="v">01M0B8T4ZQ1APZK5SJ7331K1KS</span></div>
+            <div class="drawer-row"><span class="k">lane</span><span class="v">face</span></div>
+            <div class="drawer-row"><span class="k">as-of</span><span class="v">2026-08-19 IST</span></div>
+            <div class="drawer-row"><span class="k">sha</span><span class="v absent">— (not in fact-pack snapshot)</span></div>
+            <div class="drawer-row"><span class="k">supersedes</span><span class="v absent">— (none in this snapshot)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: var(--sp-6);">
+        <span class="eyebrow">tape — dated obligations</span>
+        <svg width="100%" height="28" viewBox="0 0 800 28" preserveAspectRatio="none" style="margin: var(--sp-3) 0;" role="img" aria-label="clock ruler, chronological">
+          <line x1="0" y1="14" x2="800" y2="14" style="stroke:var(--hairline-strong)" stroke-width="1"/>
+          <circle cx="20" cy="14" r="3" style="fill:var(--prose)"/>
+          <circle cx="120" cy="14" r="3" style="fill:var(--prose)"/>
+          <circle cx="220" cy="14" r="3" style="fill:var(--prose)"/>
+          <circle cx="320" cy="14" r="3" style="fill:var(--prose)"/>
+          <circle cx="420" cy="14" r="3" style="fill:var(--muted)"/>
+          <circle cx="560" cy="14" r="3" style="fill:var(--muted)"/>
+          <circle cx="680" cy="14" r="3" style="fill:var(--muted)"/>
+          <circle cx="780" cy="14" r="3" style="fill:var(--muted)"/>
+        </svg>
+        <table class="data-table">
+          <tbody>
+            <tr><td>growth feed earliest read</td><td class="mono" style="text-align:right;">2026-08-23</td></tr>
+            <tr><td>scheduler proving week</td><td class="mono" style="text-align:right;">2026-08-24</td></tr>
+            <tr><td>hermes review_by</td><td class="mono" style="text-align:right;">2026-08-31</td></tr>
+            <tr><td>bench guard</td><td class="mono" style="text-align:right;">2026-09-01</td></tr>
+            <tr><td>council 002 Review-by</td><td class="mono" style="text-align:right;">2026-09-15</td></tr>
+            <tr><td>T-01 review_by</td><td class="mono" style="text-align:right;">2026-11-09</td></tr>
+            <tr><td>council 001 Review-by</td><td class="mono" style="text-align:right;">2027-02-02</td></tr>
+            <tr><td>DPDP commencement</td><td class="mono" style="text-align:right;">2027-05-13/14</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===================================================== 05 COUNCIL ROOM ==== -->
+    <section id="council-room">
+      <div class="sec-head">
+        <span class="sec-idx">05</span>
+        <h1 class="sec-title">Council room</h1>
+        <span class="sec-note">sessions 2</span>
+      </div>
+
+      <div class="panel-dashed">
+        <div style="display:flex; align-items:center; gap: var(--sp-3); margin-bottom: var(--sp-4);">
+          <span class="dashed-tag">council.verdict — 0 ever</span>
+          <span class="stamp-profile">both sessions file-borne — station renders dashed</span>
+        </div>
+
+        <table class="data-table">
+          <thead><tr><th>session</th><th>verdict</th><th>outcome</th><th>Review-by</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="mono">001</td>
+              <td>CONDITIONAL / Medium</td>
+              <td>UNRESOLVED</td>
+              <td class="mono">2027-02-02</td>
+            </tr>
+            <tr>
+              <td class="mono">002</td>
+              <td>NO / Medium (standard mode)</td>
+              <td>—</td>
+              <td class="mono">2026-09-15</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="grid-3" style="margin-top: var(--sp-5);">
+          <div>
+            <span class="eyebrow">scored</span>
+            <div class="stamp-title mono">0</div>
+          </div>
+          <div>
+            <span class="eyebrow">Brier</span>
+            <div class="stamp-title">— (insufficient evidence)</div>
+          </div>
+          <div>
+            <span class="eyebrow">roster</span>
+            <div class="stamp-title mono">12</div>
+          </div>
+        </div>
+
+        <div style="margin-top: var(--sp-4);">
+          <div class="roster-bar" role="img" aria-label="roster composition, 12: 3 stance, 1 researcher, 1 verifier, 7 experts">
+            <span class="roster-seg" style="width: 25%; background: var(--prose);"></span>
+            <span class="roster-seg" style="width: 8.3%; background: var(--muted);"></span>
+            <span class="roster-seg" style="width: 8.3%; background: var(--hairline-strong);"></span>
+            <span class="roster-seg" style="width: 58.4%; background: var(--ink);"></span>
+          </div>
+          <div class="roster-legend">
+            <span>3 stance</span><span>1 researcher</span><span>1 verifier</span><span>7 experts</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== 06 MONEY ==== -->
+    <section id="money">
+      <div class="sec-head">
+        <span class="sec-idx">06</span>
+        <h1 class="sec-title">Money</h1>
+        <span class="sec-note">honest-empty — the hardest screen to design honestly</span>
+      </div>
+
+      <div class="grid-2" style="align-items: start;">
+        <div class="panel stack">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <span class="eyebrow">real revenue</span>
+            <button class="why-btn">Why?</button>
+          </div>
+          <div class="money-figure green mono">₹0</div>
+          <div class="money-sub">0 revenue.received receipts ever — mechanism proven, live value pending</div>
+
+          <div style="display:flex; gap: var(--sp-6); margin-top: var(--sp-3);">
+            <div>
+              <span class="eyebrow">MRR</span>
+              <div class="stamp-title mono">—</div>
+            </div>
+            <div>
+              <span class="eyebrow">kill-distance</span>
+              <div class="stamp-title">NOT EVALUATED</div>
+              <div class="stamp-profile">no criteria receipt for a live venture month</div>
+            </div>
+          </div>
+
+          <div style="margin-top: var(--sp-4);">
+            <span class="eyebrow">costs — never totalled</span>
+            <div class="cost-row"><span>provider</span><span class="amt mono">—</span></div>
+            <div class="cost-row"><span>infra</span><span class="amt mono">—</span></div>
+            <div class="cost-row"><span>one-off</span><span class="amt mono">—</span></div>
+            <div class="cost-row"><span>Overhead</span><span class="amt mono">—</span></div>
+          </div>
+
+          <div style="margin-top: var(--sp-3);">
+            <span class="eyebrow">north-star</span>
+            <div class="stamp-title">₹/month per hour of the owner's attention</div>
+            <div class="stamp-profile">not instrumented</div>
+          </div>
+        </div>
+
+        <div class="simulated-panel">
+          <span class="simulated-watermark">SIMULATED</span>
+          <span class="eyebrow" style="color: var(--accent-violet);">revenue.simulated</span>
+          <div class="money-figure mono" style="margin-top:6px;">0 ever</div>
+          <div class="money-sub" style="color: var(--accent-violet);">fixture-proven, unexercised — never co-rendered with real</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== 07 BOARD ==== -->
+    <section id="board">
+      <div class="sec-head">
+        <span class="sec-idx">07</span>
+        <h1 class="sec-title">Board</h1>
+        <span class="sec-note">16 lanes · 7 LIVE vs guideline 2 — informational</span>
+      </div>
+
+      <table class="data-table" style="margin-bottom: var(--sp-6);">
+        <thead><tr><th>lane</th><th>status</th><th>phase</th><th>appetite/burn</th><th>clock / note</th></tr></thead>
+        <tbody>
+          <tr><td class="lane-name">bench</td><td><span class="status-live">LIVE</span></td><td class="mono">04</td><td class="mono">8d / 7.25d</td><td>guard NEXT-CHECK 2026-09-01 · production receipts 0</td></tr>
+          <tr><td class="lane-name">engine</td><td><span class="status-live">LIVE</span></td><td class="mono">06</td><td class="mono">9.5d / 7.5d</td><td>Hermes v2026.8.3 hired · 3 dispatches, 0 accepted drafts · hermes review_by 2026-08-31</td></tr>
+          <tr><td class="lane-name">face</td><td><span class="status-live">LIVE</span></td><td class="mono">00</td><td class="mono">32d / 1d</td><td>born 2026-08-19 (this build)</td></tr>
+          <tr><td class="lane-name">growth</td><td><span class="status-live">LIVE</span></td><td class="mono">06</td><td class="mono">10d / 8.0d</td><td>INDEXABLE clock started 08-16 · feed earliest read 2026-08-23 · <span style="color:var(--accent-amber);">2 approvals OPEN</span></td></tr>
+          <tr><td class="lane-name">leads</td><td><span class="status-live">LIVE</span></td><td class="mono">03</td><td class="mono">11d / 7.5d</td><td>REHEARSAL only — live send = owner keystroke pending</td></tr>
+          <tr><td class="lane-name">legal</td><td><span class="status-live">LIVE</span></td><td class="mono">00</td><td class="mono">5d / 0d</td><td>awaiting owner approval</td></tr>
+          <tr><td class="lane-name">scheduler</td><td><span class="status-live">LIVE</span></td><td class="mono">03</td><td class="mono">3d / 2.5d</td><td>proving week restarted 08-17 → runs to 2026-08-24</td></tr>
+        </tbody>
+      </table>
+
+      <div class="grid-2">
+        <div>
+          <span class="eyebrow">idle (9) — planned rooms, no phase open</span>
+          <div class="map-idle-wrap">
+            <span class="map-idle-pill dotted-tag">absorb</span>
+            <span class="map-idle-pill dotted-tag">develop</span>
+            <span class="map-idle-pill dotted-tag">evolve — unexercised</span>
+            <span class="map-idle-pill dotted-tag">ledger — mechanism proven, live value pending</span>
+            <span class="map-idle-pill dotted-tag">memory</span>
+            <span class="map-idle-pill dotted-tag">model-policy</span>
+            <span class="map-idle-pill dotted-tag">policy — fixture-proven, unexercised</span>
+            <span class="map-idle-pill dotted-tag">portfolio</span>
+            <span class="map-idle-pill dotted-tag">design</span>
+          </div>
+        </div>
+        <div class="stack">
+          <span class="eyebrow">Mode B</span>
+          <div class="panel" style="display:flex; align-items:center; gap: var(--sp-3);">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="lock-icon"><rect x="3" y="7" width="10" height="7" rx="1" style="stroke:var(--muted)"/><path d="M5 7V5a3 3 0 0 1 6 0v2" style="stroke:var(--muted)"/></svg>
+            <span class="stamp-title" style="font-size: var(--fs-3);">NOT CERTIFIED</span>
+          </div>
+          <span class="stamp-profile">centuries claimed 0001–1399 · next 1400</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== 08 ASK ARC ==== -->
+    <section id="ask-arc">
+      <div class="sec-head">
+        <span class="sec-idx">08</span>
+        <h1 class="sec-title">Ask arc</h1>
+        <span class="sec-note">⌘K — rooms, kinds, ULIDs, commands, concepts</span>
+      </div>
+
+      <div class="grid-2">
+        <div class="cmdk">
+          <div class="cmdk-input">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" style="stroke:var(--muted)"/><path d="M10.3 10.3L14 14" style="stroke:var(--muted)"/></svg>
+            <input type="text" value="growth" readonly aria-label="ask arc search">
+            <kbd class="mono" style="border:1px solid var(--hairline-strong); border-radius: var(--radius-sm); padding: 2px 6px; font-size: var(--fs-1); color: var(--muted);">⌘K</kbd>
+          </div>
+          <div class="cmdk-result"><span class="r-kind">lane</span><span class="r-main">growth — LIVE · phase 06</span></div>
+          <div class="cmdk-result"><span class="r-kind">approval</span><span class="r-main">01KZZRVSQJ…R0DT — growth gate 2</span></div>
+          <div class="cmdk-result"><span class="r-kind">approval</span><span class="r-main">01KZZRW51Q…RGY7C — growth gate 1</span></div>
+          <div class="cmdk-result"><span class="r-kind">concept</span><span class="r-main">INDEXABLE clock — started 2026-08-16</span></div>
+        </div>
+
+        <div class="stack">
+          <span class="eyebrow">keyboard-first</span>
+          <table class="shortcut-table">
+            <tbody>
+              <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>move</td></tr>
+              <tr><td><kbd>a</kbd> / <kbd>r</kbd></td><td>stamp (reason prompt)</td></tr>
+              <tr><td><kbd>w</kbd></td><td>why</td></tr>
+              <tr><td><kbd>t</kbd></td><td>tape</td></tr>
+              <tr><td><kbd>/</kbd></td><td>search</td></tr>
+            </tbody>
+          </table>
+
+          <span class="eyebrow" style="margin-top: var(--sp-3);">command chips — exact CLI, face lane / phase 00</span>
+          <div style="display:flex; flex-direction:column; gap: var(--sp-2);">
+            <div class="chip"><span class="chip-verb">run</span>/arc-develop next --lane face</div>
+            <div class="chip"><span class="chip-verb">close</span>/arc-phase-done 0 --lane face</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============================================== STATE MATRIX (reference) ==== -->
+    <section id="state-matrix">
+      <div class="sec-head">
+        <span class="sec-idx">—</span>
+        <h1 class="sec-title">STATE MATRIX — REFERENCE, NOT LIVE DATA</h1>
+        <span class="sec-note">one object, five states — the approval.requested stamp card</span>
+      </div>
+
+      <div class="matrix-grid">
+        <div class="matrix-cell">
+          <span class="matrix-label">empty</span>
+          <div class="matrix-body">
+            <p style="color: var(--muted);">0 approvals open — inbox honestly empty.</p>
+          </div>
+        </div>
+
+        <div class="matrix-cell">
+          <span class="matrix-label">loading</span>
+          <div class="matrix-body">
+            <div class="skeleton-bar animated" style="width: 80%;"></div>
+            <div class="skeleton-bar animated" style="width: 55%;"></div>
+            <div class="skeleton-bar animated" style="width: 65%;"></div>
+            <p style="color: var(--muted); margin-top: var(--sp-2);">reading spine…</p>
+          </div>
+        </div>
+
+        <div class="matrix-cell">
+          <span class="matrix-label">error — refusal code</span>
+          <div class="matrix-body">
+            <span class="refusal-code">ALREADY_DECIDED</span>
+            <p style="color: var(--muted);">this approval.requested was already decided — no further action.</p>
+          </div>
+        </div>
+
+        <div class="matrix-cell">
+          <span class="matrix-label">success</span>
+          <div class="matrix-body" style="align-items:center; flex-direction:row; gap: var(--sp-3);">
+            <div class="stamp-mark" aria-hidden="true">
+              <div class="stamp-mark-inner">
+                <span class="stamp-mark-verb">approve</span>
+                <span class="stamp-mark-kind">decision.recorded</span>
+              </div>
+            </div>
+            <p style="color: var(--muted);">landed once (200ms) · ULID printed on the card.</p>
+          </div>
+        </div>
+
+        <div class="matrix-cell">
+          <span class="matrix-label">disabled / sealed</span>
+          <div class="matrix-body">
+            <div class="seal">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="none" class="lock-icon"><rect x="3" y="7" width="10" height="7" rx="1" style="stroke:var(--muted)"/><path d="M5 7V5a3 3 0 0 1 6 0v2" style="stroke:var(--muted)"/></svg>
+              <div class="seal-text">
+                <b>emit</b>
+                <span>forever-human · CLI-only · ADR-1300–1315</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>

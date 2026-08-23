@@ -1,7 +1,9 @@
 {
   "name": "council",
   "version": "1.0.0",
-  "requires": ["core"],
+  "requires": [
+    "core"
+  ],
   "commands": [
     ".claude/commands/arc-council.md"
   ],
@@ -25,10 +27,46 @@
     ".claude/scripts/council/council-calibrate.mjs"
   ],
   "docs": [
-    { "src": "docs/council/README.md", "dest": "docs/council/README.md" },
-    { "src": "docs/council/references/fairness.md", "dest": "docs/council/references/fairness.md" }
+    {
+      "src": "docs/council/README.md",
+      "dest": "docs/council/README.md"
+    },
+    {
+      "src": "docs/council/references/fairness.md",
+      "dest": "docs/council/references/fairness.md"
+    }
   ],
-  "skeletonDirs": ["docs/council/sessions/.juror"],
+  "skeletonDirs": [
+    "docs/council/sessions/.juror"
+  ],
   "envBlock": ".env.example",
-  "envSentinel": "^JUROR_BASE_URL="
+  "envSentinel": "^JUROR_BASE_URL=",
+  "face": {
+    "room": "council-chamber",
+    "ring": "factory",
+    "kinds": [
+      "council.outcome",
+      "council.verdict",
+      "decision.recorded"
+    ],
+    "sanctioned": [
+      "docs/council/sessions/*.md",
+      "council.verdict/outcome",
+      "calibrate output"
+    ],
+    "stations": [
+      "calibration",
+      "convene",
+      "intake",
+      "outcome",
+      "overdue queue"
+    ],
+    "concepts": [
+      "Brier",
+      "HIT/MISS/UNRESOLVED",
+      "POINT-ID",
+      "PREDICTION",
+      "Review-by"
+    ]
+  }
 }

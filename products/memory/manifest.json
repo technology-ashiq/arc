@@ -26,5 +26,23 @@
     ".claude/scripts/memory/memory-index.mjs"
   ],
   "files": [],
-  "docs": []
+  "docs": [],
+  "face": {
+    "room": "memory",
+    "ring": "kernel",
+    "kinds": [],
+    "sanctioned": [
+      "index.json",
+      "golden-queries.tsv",
+      "surfaced-cited.jsonl"
+    ],
+    "stations": [
+      "golden queries",
+      "recall"
+    ],
+    "concepts": [
+      "HISTORICAL DATA fence",
+      "golden gate (recall)"
+    ]
+  }
 }

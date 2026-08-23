@@ -1,0 +1,95 @@
+/*
+  arc face — reference item (face-hq-v1)
+  "Ink & Signal", executed at Linear density: calm, keyboard-first, near-monochrome
+  with one reserved accent. This is the craft anchor, not a competing thesis.
+
+  THE ONLY FILE WHERE A COLOUR VALUE MAY APPEAR.
+  index.html references every colour through var(--token) — nothing else.
+
+  Reserved meanings (do not repurpose):
+    amber   (--accent-amber)  = needs-you. Nowhere else.
+    green   (--accent-green)  = real money (revenue.received-class). Nowhere else.
+    red     (--accent-red)    = incident. Zero incident.raised receipts ever exist in
+                                 this fact set, so --accent-red is declared but does
+                                 not appear anywhere on this page — that absence is
+                                 the point, not an oversight.
+    violet  (--accent-violet) = every non-real class (SIMULATED / REHEARSAL / DRILL /
+                                 EXPLORATORY), always hatched, never a solid wash,
+                                 never co-rendered with a real figure.
+  Everything else — chrome, structure, focus, hairlines — stays neutral ink/prose/muted.
+*/
+
+:root {
+  /* ---- surfaces (ink direction) ---- */
+  --ink:            #101114; /* base background */
+  --ink-raised:      #17181c; /* one step up: cards, rail */
+  --ink-sunken:      #0b0c0e; /* one step down: code/JSON wells, hatch base */
+
+  /* ---- lines ---- */
+  --hairline:        #212226; /* default rule / border */
+  --hairline-strong:  #34363d; /* dashed / dotted / emphasised divider */
+
+  /* ---- text ---- */
+  --prose:           #e8e6e1; /* primary text on ink — 15.6:1 */
+  --muted:           #9ca3af; /* meta / secondary text on ink — 7.4:1 */
+  --on-accent:       #101114; /* text set on a filled accent chip */
+
+  /* ---- the four reserved accents (declared contrast pairs, brief §B) ---- */
+  --accent-amber:    #ffb020; /* needs-you on ink — 9.9:1 vs ink */
+  --accent-green:    #4ade80; /* money-real on ink — 12.6:1 vs ink */
+  --accent-red:      #f87171; /* incident on ink — 7.8:1 vs ink (unused by design) */
+  --accent-violet:   #a78bfa; /* non-real class on ink — 8.0:1 vs ink */
+
+  /* ---- focus (never amber — amber is needs-you only) ---- */
+  --focus-ring:      #ffffff;
+
+  /* ---- paper mode (print only — brief §B) ---- */
+  --paper-bg:        #f7f5f0;
+  --paper-prose:     #1a1b1e;
+  --paper-amber:     #92400e;
+
+  /* ---- hatch texture: sparse diagonal violet hairlines on ink-sunken,
+     the ONLY permitted rendering of the non-real class. Not a CSS gradient —
+     a tiled SVG pattern, so the "no gradients" rule holds. Colour values
+     (ink-sunken, violet) are embedded here, in tokens.css, as the law requires. ---- */
+  --hatch-violet: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Crect width='10' height='10' fill='%230b0c0e'/%3E%3Cpath d='M0,10 L10,0 M-2.5,2.5 L2.5,-2.5 M7.5,12.5 L12.5,7.5' stroke='%23a78bfa' stroke-width='1' stroke-opacity='0.55'/%3E%3C/svg%3E");
+
+  /* ---- type ---- */
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+
+  /* six decisive steps — no in-between sizes */
+  --fs-1: 11px;  /* micro: badges, eyebrow labels */
+  --fs-2: 12px;  /* meta: captions, timestamps */
+  --fs-3: 13px;  /* dense body: rows, list items — the working size */
+  --fs-4: 15px;  /* card titles, section labels */
+  --fs-5: 19px;  /* section headers */
+  --fs-6: 30px;  /* the few hero numerals: needs-you count, ₹, receipt total */
+
+  --lh-tight: 1.2;
+  --lh-normal: 1.55;
+
+  /* ---- 8pt grid, 4pt sub-unit ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* ---- radius: three sizes, applied by category, never by feel ---- */
+  --radius-sm: 4px;   /* badges, pills, kbd */
+  --radius-md: 6px;   /* cards, inputs, buttons */
+  --radius-lg: 10px;  /* large panels (SIMULATED card, rail) */
+  --radius-pill: 999px;
+
+  /* ---- motion: one duration, one curve, state-change only ---- */
+  --motion-fast: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ---- layout ---- */
+  --rail-width: 276px;
+  --content-max: 1120px;
+}
