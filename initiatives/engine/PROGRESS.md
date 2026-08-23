@@ -237,6 +237,41 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### MERGED, AND THE MERGED TREE VERIFIED — 2026-08-23
+
+PR **#217** squash-merged as **`761d4ae1`**. **CI on `main` at that SHA: 19/19, read per JOB**
+(`workflow_dispatch` run 32648119087). This repo's CI runs on PR and dispatch only, never on a push
+to `main` — so merging tests nothing and the dispatch is the evidence, not the merge.
+
+**The squash carried everything.** `git diff origin/main <branch-tip>` returns ten files and not one
+is engine's: they are `scheduler`'s and two ADRs that landed on `main` while this branch was open.
+A commit count is not a diff, which is why the diff was taken.
+
+**Phases 06 and 07 are CLOSED. Six of eight REQs validated.** What remains is Phase 08's REQ-07 —
+three real dispatches — and it is blocked on two things, both named rather than worked around: the
+**main clone**, because `.claude/state/` is gitignored and a linked worktree has its own empty spine
+that `arc-event` refuses by design, and an **owner pack approval**, because the `N=3` from
+2026-08-18 is spent and approving my own pack is precisely the self-authorising act POL-I exists to
+prevent. Runbook, pack, approval payload and input builder are all in place.
+
+**Two receipts are owed to the main clone and are not faked here:** `phase.closed` for 06 and 07.
+
+**A pattern sweep ran and found nothing, which is worth recording as a result rather than a
+silence.** The cycle non-negotiable says a fix is not applied until it has been attacked somewhere
+it was never made, so three of this session's defect shapes were grepped across the tree:
+
+- **alias-then-mutate** (`fallbacks = row.fallback`, then `shift()` eating the router row) — every
+  other `sort/pop/shift/splice` in `.claude/scripts/` runs on a freshly built array
+  (`readdirSync(...)`, `Object.keys(...)`, `.filter(...)`) or on a value that is only validated.
+  `arc-bench`'s ceiling table is read-only.
+- **a guard on one of N entry points** — the `--driver auto` branch now sets only `driver`, `tier`
+  and `fallbacks`, and each of those three IS routing. `hosted` and `cap` moved out today; tenure
+  moved out on 2026-08-17.
+- **a test pinned to a source SPELLING** — six exist, and five are structural invariants that are
+  *meant* to pin a spelling (the one confinement call site, the single redact import, the thin shell
+  wrapper, the emit path, `await canonicalDoc(processName)`). The fragile kind — a spelling used as
+  an ANCHOR to then check a behaviour — was the one that broke, and it is fixed.
+
 ### THE TRANSCRIPT WAS NEVER STORED, AND DELETING THE ROW NEVER TERMINATED THE HIRE — 2026-08-23
 
 Branch `feat/engine-cycle7-close-06-08`, PR **#217**. Owner ruled at the top of the session: **no
