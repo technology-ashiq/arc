@@ -1,0 +1,85 @@
+#!/usr/bin/env bats
+# face L3 -- the app layer (ADR-1316).
+#
+# L3 lives in-repo at face/ because a new repo could not be given CI from here, and an
+# ungated layer is not a layer that ships. These tests are what makes that decision honest:
+# every one of them runs in the SAME three-OS matrix as the rest of the suite, with no
+# npm install and no build step, because face/src/lib/*.mjs is dependency-free ESM.
+#
+# The "RAN: <n> checks" line is asserted on every probe. A node script that dies half-way
+# prints its oks and exits non-zero, and a wrapper that only checked $status would read the
+# first failure as the whole story -- three of those shipped in Cycle 6.
+bats_require_minimum_version 1.5.0
+load 'test_helper'
+
+@test "L3 logic runs with no install and no build, and every check passes" {
+  run node "$ARC_ROOT/tests/face/l3-logic.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
+  # Floor the count. "0 failed" is also what a suite that asserted nothing prints.
+  local n; n=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks.*/\1/p')
+  [ -n "$n" ] && [ "$n" -ge 35 ] || { echo "only $n checks ran: $output"; false; }
+}
+
+@test "the L3 logic layer imports NOTHING that needs an install" {
+  # The rule this suite depends on, asserted mechanically rather than trusted. A lib file
+  # that grows `import React` silently makes itself untestable on CI -- and the symptom is
+  # not a red test, it is a test that quietly stops covering the branch.
+  run bash -c "grep -rhoE \"^import[^\\\"']*[\\\"'][^./][^\\\"']*[\\\"']\" '$ARC_ROOT/face/src/lib/' 2>/dev/null || true"
+  [ "$status" -eq 0 ]
+  # Only node: builtins are allowed. Anything else is a package.
+  local bad
+  bad=$(printf '%s\n' "$output" | grep -v 'node:' | grep -v '^$' || true)
+  [ -z "$bad" ] || { echo "face/src/lib imports a package, which CI cannot install: $bad"; false; }
+  # Vacuous-pass guard: prove the directory was actually scanned.
+  local files; files=$(ls "$ARC_ROOT"/face/src/lib/*.mjs 2>/dev/null | wc -l | tr -d " ")
+  [ "$files" -ge 2 ] || { echo "expected the lib dir to hold modules; found $files"; false; }
+}
+
+@test "face/ imports nothing from .claude, so the repo split stays a directory move" {
+  # ADR-1316 keeps FACE-A's Option 1 reachable, and this is the tax that keeps it cheap.
+  # The dependency points ONE way: arc knows nothing about face/, face/ knows only HTTP.
+  run bash -c "grep -rlE '\\.claude/' '$ARC_ROOT/face/src' 2>/dev/null || true"
+  [ -z "$output" ] || { echo "face/src reaches into .claude: $output"; false; }
+  run bash -c "grep -rl 'face/src' '$ARC_ROOT/.claude/scripts' 2>/dev/null || true"
+  # face-tokens.mjs WRITES the copy, so it names the path; nothing may IMPORT from it.
+  local importers
+  importers=$(printf '%s\n' "$output" | grep -v 'face-tokens.mjs' | grep -v '^$' || true)
+  [ -z "$importers" ] || { echo "an arc script depends on face/: $importers"; false; }
+}
+
+@test "the L3 token copy is in sync with the canonical design tokens" {
+  run node "$ARC_ROOT/.claude/scripts/core/face-tokens.mjs" "$ARC_ROOT" --check
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"matches docs/design/system/tokens.css"* ]] || { echo "$output"; false; }
+  # The copy must carry the reserved hues, not merely exist. A truncated copy also "exists".
+  local copy="$ARC_ROOT/face/src/tokens.css"
+  [ -f "$copy" ] || { echo "no token copy at $copy"; false; }
+  grep -q -- "--amber" "$copy" || { echo "copy has no reserved hues"; false; }
+  grep -q -- "--accent" "$copy" || { echo "copy has no product accent"; false; }
+  grep -q "GENERATED FILE" "$copy" || { echo "copy is not marked generated"; false; }
+}
+
+@test "face-tokens REFUSES a hand-edited copy and a wrong source (mutant arms)" {
+  run node "$ARC_ROOT/.claude/scripts/core/face-tokens.mjs" "$ARC_ROOT" --selftest
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  for arm in "banner marks the file GENERATED" "copy carries the reserved-hue tokens" \
+             "copy carries the product accent" "a hand-edited copy exits 1" \
+             "a wrong repo root is refused, not copied"; do
+    [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "the L3 tree carries no build output and no vendored dependencies" {
+  # node_modules and dist are gitignored; this asserts the ignore actually holds, because a
+  # 197 MB directory arriving in the arc repo is the failure mode ADR-1316 was argued past.
+  [ ! -d "$ARC_ROOT/face/node_modules" ] || {
+    run bash -c "cd '$ARC_ROOT' && git ls-files face/node_modules | head -1"
+    [ -z "$output" ] || { echo "node_modules is TRACKED: $output"; false; }
+  }
+  run bash -c "cd '$ARC_ROOT' && git ls-files face/ | grep -cE 'node_modules|/dist/' || true"
+  [[ "$output" == "0" ]] || { echo "tracked build output under face/: $output"; false; }
+  # Vacuous-pass guard: face/ must actually be tracked, or the check above proves nothing.
+  run bash -c "cd '$ARC_ROOT' && git ls-files face/ | wc -l | tr -d ' '"
+  [ "$output" -ge 5 ] || { echo "face/ is barely tracked ($output files); the check above is vacuous"; false; }
+}

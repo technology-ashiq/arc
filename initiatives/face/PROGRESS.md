@@ -4,9 +4,9 @@ status: LIVE
 cycle: arc-face (Cycle 15, opened 2026-08-19)
 phase: 03
 appetite: 32d
-burn: 7d
+burn: 8d
 blocked-on: nothing structural — the design gate is DISCHARGED. The owner supplied the design himself rather than picking from the explore rounds, so the PICK is moot and block A can no longer take its second BELOW-BAR strike. Two items remain and neither blocks the build: one `hq.policy.yaml` row for face-ask (edit-denied to the machine by design, and not useful until the engine-lane empty-allowlist seam exists), and one owner ruling on the reference brain’s approve/reject action (see `docs/design/reference/face-hq/SOURCE.md`).
-depends-on: arc-face — L3 build (separate repo, born at Phase 04 entry, ADR-1300)
+depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersedes ADR-1300 on placement). A new repo could not be given CI from this session, and an ungated layer is not a layer that ships.
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
 > (tests green on CI per job + live demo + exit criteria + evidence). Evidence over
@@ -168,6 +168,27 @@ generic → Map animation → Tape play (keep as-of).
   — raised to the first alpha that clears it (4.56:1). Every ratio in the file is computed,
   none asserted. The structural finding is that the reference's fifth hue — cyan, carrying
   no meaning — is what lets the four reserved hues survive untouched.
+- 2026-08-23 — **Phase 04 opened; L3 flipped in-repo (ADR-1316).** ADR-1300 put L3 in its own
+  `arc-face` repo. That is now wrong for one narrow reason: this session cannot author
+  `.github/workflows/**`, so a new repo would be the ONE layer of the product with no CI at
+  all — the layer with the most code, the only build step, and the only place a rendering
+  bug can hide. The owner's rule for this cycle is that nothing is proven locally, so
+  "complete all phases" and "everything on CI" cannot both be true through a repo whose CI
+  cannot be written. FACE-A's cons for the in-repo option were re-measured rather than
+  assumed: `sync-to-project.sh` is an ALLOWLIST, so `face/` is excluded by construction
+  (the byte-identity golden moved by exactly one row, the new generator, 342 → 343), and
+  `ci.yml` never runs `npm install` at the repo root.
+- 2026-08-23 — **L3 scaffolded with the split kept cheap.** `face/` holds its own
+  `package.json`, Vite config and strict-TS setup, and imports NOTHING from `.claude/**` —
+  its only contract with arc is the L2 door's HTTP routes. The architecture rule that makes
+  the CI mandate real: **every decision lives in `face/src/lib/*.mjs`, dependency-free ESM,
+  and the `.tsx` files carry no branch worth asserting.** CI cannot install packages, so a
+  branch inside a component is a branch nobody tests. `tests/face/l3-logic.mjs` imports the
+  app's own modules directly and runs **39 checks with no install and no build**, in the
+  same three-OS matrix as everything else. Two bats tests assert the rule mechanically: no
+  `face/src/lib` module may import a package, and no arc script may import from `face/`.
+  `face-tokens.mjs` copies the canonical tokens into the app with a `--check` drift gate and
+  five mutant arms (a copy with no gate is drift with extra steps).
 
 ## Assumptions ledger — adjudicated by running the measurement, not by opinion
 
