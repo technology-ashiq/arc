@@ -86,6 +86,7 @@ export class Door {
    * @returns {Promise<any>}
    */
   async call(path, init = {}) {
+    /** @type {Record<string, string>} */
     const headers = { Accept: "application/json" };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     if (init.body !== undefined) headers["Content-Type"] = "application/json";

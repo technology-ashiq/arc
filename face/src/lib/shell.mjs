@@ -125,7 +125,7 @@ export function keyAction(ev, ctx) {
 export function moveRoom(order, current, delta) {
   if (!order.length) return current;
   const i = order.indexOf(current);
-  if (i === -1) return order[0];
+  if (i === -1) return order[0] ?? current;
   const next = i + delta;
   if (next < 0 || next >= order.length) return current;
   return order[next] ?? current;
