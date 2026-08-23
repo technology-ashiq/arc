@@ -367,6 +367,10 @@ export const RAISED_KINDS = Object.freeze([
  * @returns {Tone}
  */
 export function toneForKind(kind) {
+  // A record with NO kind threw here (`.indexOf` on undefined) and took the whole Inbox
+  // render path down with it. A malformed row is a row to draw quietly, not a reason for the
+  // room to refuse to exist -- and "quiet" is the honest answer for a kind we cannot name.
+  if (typeof kind !== "string" || !kind) return "quiet";
   // real money, and ONLY this kind. tokens.css: --green stays unspent until
   // revenue.received fires for the first time. cost.incurred is real and has fired
   // hundreds of times -- and it is not revenue, so it does not get the revenue colour.

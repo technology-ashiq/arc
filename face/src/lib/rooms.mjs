@@ -130,7 +130,11 @@ export function stateBadge(room) {
  * @param {Room} room
  */
 export function supportsAsOf(room) {
-  return room.live.state === "live" || room.live.state === "unexercised";
+  // A room with no `live` block THREW here rather than answering. That is a crash, not a
+  // refusal: the honest reply to "can this be scrubbed" when the shape is unrecognised is
+  // NO -- offering a scrubber over a room we cannot read is exactly the silently-does-nothing
+  // control this function exists to prevent.
+  return room?.live?.state === "live" || room?.live?.state === "unexercised";
 }
 
 /**

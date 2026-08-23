@@ -18,7 +18,7 @@ load 'test_helper'
   [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
   # Floor the count. "0 failed" is also what a suite that asserted nothing prints.
   local n; n=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks.*/\1/p')
-  [ -n "$n" ] && [ "$n" -ge 165 ] || { echo "only $n checks ran: $output"; false; }
+  [ -n "$n" ] && [ "$n" -ge 215 ] || { echo "only $n checks ran: $output"; false; }
 }
 
 @test "no L3 test or source file carries a byte that makes grep call it binary" {
@@ -83,6 +83,12 @@ load 'test_helper'
   # Vacuous-pass guard: the grep must actually have files to scan.
   local scanned; scanned=$(find "$ARC_ROOT/face/src" -type f \( -name '*.mjs' -o -name '*.tsx' -o -name '*.ts' \) | wc -l | tr -d " ")
   [ "$scanned" -ge 5 ] || { echo "only $scanned source files under face/src; the grep above proves nothing"; false; }
+  # The OTHER direction, with its own vacuous-pass guard. The first version of this half had
+  # none: run it against a directory that does not exist and grep returns nothing, status is
+  # 0, and the assertion passes. "No matches" and "nowhere to look" print identically.
+  [ -d "$ARC_ROOT/.claude/scripts" ] || { echo ".claude/scripts is not there; this half proves nothing"; false; }
+  local arcScripts; arcScripts=$(find "$ARC_ROOT/.claude/scripts" -name '*.mjs' | wc -l | tr -d " ")
+  [ "$arcScripts" -ge 20 ] || { echo "only $arcScripts scripts to scan; too few for this to mean anything"; false; }
   run bash -c "grep -rl 'face/src' '$ARC_ROOT/.claude/scripts' 2>/dev/null || true"
   # face-tokens.mjs WRITES the copy, so it names the path; nothing may IMPORT from it.
   local importers
@@ -105,9 +111,15 @@ load 'test_helper'
 @test "face-tokens REFUSES a hand-edited copy and a wrong source (mutant arms)" {
   run node "$ARC_ROOT/.claude/scripts/core/face-tokens.mjs" "$ARC_ROOT" --selftest
   [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Every arm BY NAME, including the three added after an adversarial pass showed the old
+  # "wrong repo root" arm exercised file-ABSENCE and never the content check -- a mutant that
+  # deleted that check passed the arm while replacing the app's stylesheet with 60 bytes of
+  # junk. A length-preserving hand-edit and a missing copy are the other two it could not see.
   for arm in "banner marks the file GENERATED" "copy carries the reserved-hue tokens" \
              "copy carries the product accent" "a hand-edited copy exits 1" \
-             "a wrong repo root is refused, not copied"; do
+             "a length-preserving hand-edit exits 1" "a missing copy exits 1" \
+             "a source that EXISTS but is not the token file is refused" \
+             "an absent source is refused, not copied"; do
     [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
   done
 }

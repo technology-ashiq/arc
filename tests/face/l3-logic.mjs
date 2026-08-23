@@ -782,5 +782,83 @@ const unverifiedLine = JSON.stringify(askLib.standingOf({ selfVerified: false },
 check("UNVERIFIED spends no reserved hue",
   !["--amber", "--green", "--red"].some((h) => unverifiedLine.includes(h)), unverifiedLine.slice(0, 80));
 
+// ---------- money: the module that decides what may wear real money's colour ----------
+// 1,597 lines and 40 exports, and this suite did not IMPORT it -- including `greenGate`,
+// which is the single gate between a simulated rupee and the hue reserved for a real one.
+const moneyLib = await import(pathToFileURL(join(LIB, "money.mjs")).href);
+check("money module loaded (vacuous-pass guard)", typeof moneyLib.greenGate === "function");
+
+const gateShut = moneyLib.greenGate({ health: { kinds: ["note.logged", "day.closed"] }, real: null });
+const gateOpen = moneyLib.greenGate({ health: { kinds: [moneyLib.REAL_KIND] }, real: null });
+check("green is UNSPENT while revenue.received has never fired", gateShut.spendable === false);
+check("green unlocks only once revenue.received HAS fired", gateOpen.spendable === true);
+check("the gate says WHY in words, both ways",
+  /never fired/i.test(gateShut.why) && gateShut.source.includes("/api/health"));
+
+// The only guarded path to --green. If this can be reached with the gate shut, the whole
+// Truth Law is broken, because a simulated rupee would wear the colour of a real one.
+check("--green is UNREACHABLE while the gate is shut",
+  moneyLib.moneyInk("real-money", gateShut) !== "var(--green)", moneyLib.moneyInk("real-money", gateShut));
+check("--green IS reachable once the gate opens", moneyLib.moneyInk("real-money", gateOpen) === "var(--green)");
+check("simulated money never reaches --green under either gate",
+  moneyLib.moneyInk("non-real", gateOpen) !== "var(--green)" && moneyLib.moneyInk("non-real", gateShut) !== "var(--green)",
+  moneyLib.moneyInk("non-real", gateOpen));
+
+// FAIL CLOSED, on every shape a bad read can produce. An adversarial pass opened this gate
+// with a STRING -- `{kinds: "the revenue.received kind"}` made indexOf find the substring and
+// returned spendable:true -- and crashed it with `{}` and `{kinds:null}`, which is not the
+// gate staying shut, it is the room refusing to render.
+for (const [label, health] of [
+  ["no health at all", null],
+  ["an empty object", {}],
+  ["kinds as a STRING containing the kind name", { kinds: `the ${moneyLib.REAL_KIND} kind` }],
+  ["kinds null", { kinds: null }],
+  ["kinds a number", { kinds: 7 }],
+]) {
+  const g = moneyLib.greenGate({ health, real: null });
+  check(`the gate stays SHUT on ${label}`, g.spendable === false, JSON.stringify(g.spendable));
+}
+check("a malformed health does not throw -- a shut gate, not a dead room",
+  typeof moneyLib.greenGate({}).spendable === "boolean");
+
+// MISSING is not 0, and four kinds of nothing are four different marks.
+const glyphs = ["measured", "never-fired", "absent", "not-served"].map((st) => moneyLib.zeroGlyph(st));
+check("the four zero states render four DIFFERENT shapes",
+  new Set(glyphs.map((g) => g.shape)).size === 4, glyphs.map((g) => g.shape).join("|"));
+check("every zero state carries a sentence saying WHICH kind of nothing it is",
+  glyphs.every((g) => typeof g.title === "string" && g.title.length > 20));
+check("never-fired says there is no measurement, not that the amount is zero",
+  /no measurement|no zero|never fired/i.test(moneyLib.zeroGlyph("never-fired").title));
+check("not-served says it is a fact about the READ, never about the money",
+  /about the READ/i.test(moneyLib.zeroGlyph("not-served").title));
+
+// Money formatting must not depend on the CI leg's ICU data.
+check("amounts are grouped without toLocaleString (same bytes on every leg)",
+  moneyLib.formatMinor(123456, "INR").text === "1,234.56" && moneyLib.formatMinor(0, "INR").text === "0.00",
+  moneyLib.formatMinor(123456, "INR").text);
+
+// The P&L's own scope, and the refusal it raises for anything finer.
+check("the P&L scopes by MONTH and says so", /month/i.test(moneyLib.asOfSupport().note ?? JSON.stringify(moneyLib.asOfSupport())));
+let monthRefused = false;
+try { moneyLib.pnlPath({ month: "not-a-month" }); } catch { monthRefused = true; }
+check("a malformed month is refused before it becomes a request", monthRefused);
+
+// ---------- fail CLOSED, not fail by crash ----------
+// Three functions threw on a shape a bad read can genuinely produce, and a throw is not a
+// refusal -- it is the room declining to render at all. A malformed row is a row to draw
+// quietly; a room whose shape we cannot read is a room with no scrubber.
+check("supportsAsOf answers NO on a room with no live block, rather than throwing",
+  rooms.supportsAsOf(undefined) === false && rooms.supportsAsOf({}) === false);
+check("supportsAsOf still says yes to a live room", rooms.supportsAsOf({ live: { state: "live" } }) === true);
+check("toneForKind answers 'quiet' for a record with no kind, rather than throwing",
+  inbox.toneForKind(undefined) === "quiet" && inbox.toneForKind(null) === "quiet");
+check("toneForKind still grants real-money to the one kind that earns it",
+  inbox.toneForKind("revenue.received") === "real-money");
+check("noHandsAudit refuses to bless a handle that reaches nothing",
+  askLib.noHandsAudit(Object.freeze({})).clean === false,
+  JSON.stringify(askLib.noHandsAudit(Object.freeze({})).clean));
+check("a dead handle SAYS it is dead rather than reporting a clean boundary",
+  /reaches nothing/i.test(askLib.noHandsAudit(Object.freeze({})).line));
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;

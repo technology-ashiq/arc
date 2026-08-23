@@ -354,15 +354,32 @@ export function rupees(amount) {
  */
 export function greenGate({ health, real }) {
   const source = "GET /api/health → spine.kinds (the set of kinds that have ever fired)";
-  const counted = real === null ? null : real.counts.revenue;
-  if (health === null)
+  const counted = real && real.counts ? real.counts.revenue : null;
+  if (!health || typeof health !== "object")
     return {
       spendable: false,
       why: "/api/health has not answered on this read, so nothing here can prove revenue.received has ever fired. Real money's colour stays unspent rather than being painted on an assumption.",
       source,
       contradiction: null,
     };
-  const fired = health.kinds.indexOf(REAL_KIND) !== -1;
+  // AN ARRAY, or the gate stays shut.
+  //
+  // This read `health.kinds.indexOf(REAL_KIND)` on whatever arrived, and an adversarial pass
+  // showed both halves of that failing open. `{kinds: "the revenue.received kind"}` -- a
+  // STRING -- made `indexOf` find the substring and returned `spendable: true`: the gate that
+  // guards real money's colour, opened by a sentence. And `{}` or `{kinds: null}` THREW,
+  // which is not the gate staying shut, it is the room refusing to render at all.
+  //
+  // A malformed health body is not evidence that revenue has ever arrived. It is no evidence,
+  // and no evidence means unspent.
+  if (!Array.isArray(health.kinds))
+    return {
+      spendable: false,
+      why: `/api/health answered without a kinds ARRAY (got ${health.kinds === undefined ? "no field" : typeof health.kinds}), so nothing here can prove ${REAL_KIND} has ever fired. Real money's colour stays unspent rather than being painted on a shape nobody checked.`,
+      source,
+      contradiction: null,
+    };
+  const fired = health.kinds.includes(REAL_KIND);
   // Both directions are checked. A kinds-set that omits a kind the P&L counted, and a P&L
   // counting nothing for a kind the kinds-set carries, are different bugs and neither is a
   // reason to pick the friendlier answer.
