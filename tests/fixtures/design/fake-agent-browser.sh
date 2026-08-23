@@ -21,7 +21,16 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     # The `|| break` matters: `shift 2` on a single remaining arg fails silently under
     # `set -u`-without-`-e`, the loop never advances, and a test fixture hangs a CI leg.
-    --session) [ "$#" -ge 2 ] || break; shift 2;;
+    # (That rule lived HERE and not in the script this fakes, until 2026-08-23.)
+    --session)
+      [ "$#" -ge 2 ] || break
+      # Record which session each invocation was given. Without this the suite could not
+      # observe session isolation at all: the fixture simply DROPPED the flag, so deleting
+      # `--session "$SESSION"` from design-render.sh left every test green while the whole
+      # point of ADR-1402 was gone. A headline acceptance that cannot fail is not one.
+      [ -n "${FAKE_AB_STATE:-}" ] && { mkdir -p "$FAKE_AB_STATE" 2>/dev/null || true; printf '%s
+' "$2" >> "$FAKE_AB_STATE/sessions"; }
+      shift 2;;
     *) break;;
   esac
 done

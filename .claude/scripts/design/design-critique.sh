@@ -51,6 +51,18 @@ _artifact() {
 case "$CMD" in
   begin)
     bash "$DESIGN_DIR/critic-scope-check.sh" --begin "$ROUTE" || exit 1
+    # Whitelist what is forwarded. This function hardcodes the meta/render READ path below,
+    # and --session/--iter/--mode move the renderer WRITE path -- so forwarding them blind
+    # would have the critic judging a stale PNG from a previous run, or nothing at all, and
+    # sealing that into a receipt.
+    for _a in "$@"; do
+      case "$_a" in
+        --session|--iter|--mode)
+          echo "design-critique: $_a is not forwardable -- it moves the render output path this command reads from." >&2
+          bash "$DESIGN_DIR/critic-scope-check.sh" --end >/dev/null 2>&1 || true
+          exit 1;;
+      esac
+    done
     if ! bash "$DESIGN_DIR/design-render.sh" "$ROUTE" "$@"; then
       # A failed render must not leave the boundary armed, or every later edit in the session
       # blocks for a reason nobody can see.

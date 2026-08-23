@@ -51,15 +51,36 @@ MEDIA="light"
 MODE="critique"
 SESSION_ARG=""
 ITER=""
+MODE_GIVEN=0
+SESSION_GIVEN=0
+ITER_GIVEN=0
+
+# A two-argument flag given as the LAST argument used to hang this script forever: `shift 2`
+# with one argument left FAILS and shifts nothing, `set -e` is off, so the loop re-read the
+# same $1 until the CI leg timed out. Measured on all five flags. The fix was already written
+# down 30 lines away in tests/fixtures/design/fake-agent-browser.sh, whose comment names this
+# exact failure -- applied to the fixture and never carried to the script it fakes. So each
+# branch now checks arity BEFORE consuming, and ${2:-default} is gone: it HID the arity error
+# instead of catching it.
+_need_value() {
+  [ "$2" -ge 2 ] || { echo "design-render: $1 needs a value" >&2; exit 1; }
+}
+# Two differing values for one flag is an operator error, not a last-wins override --
+# .claude/rules/lanes.md already ruled on exactly this shape for --lane, and the session IS
+# this script's lane: the duplicate guard keys on it, so silently picking one of two is
+# precisely the "never guess" failure.
+_no_redefine() {
+  [ "$2" -eq 0 ] || [ "$3" = "$4" ] || { echo "design-render: $1 given twice with different values ('$4' then '$3')" >&2; exit 1; }
+}
 shift 2>/dev/null || true
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --viewport) VIEWPORT="${2:-1440x900}"; shift 2;;
+    --viewport) _need_value --viewport "$#"; VIEWPORT="$2"; shift 2;;
     --pin-font) PIN_FONT=1; shift;;
-    --media) MEDIA="${2:-light}"; shift 2;;
-    --mode) MODE="${2:-}"; shift 2;;
-    --session) SESSION_ARG="${2:-}"; shift 2;;
-    --iter) ITER="${2:-}"; shift 2;;
+    --media) _need_value --media "$#"; MEDIA="$2"; shift 2;;
+    --mode) _need_value --mode "$#"; _no_redefine --mode "$MODE_GIVEN" "$2" "$MODE"; MODE="$2"; MODE_GIVEN=1; shift 2;;
+    --session) _need_value --session "$#"; _no_redefine --session "$SESSION_GIVEN" "$2" "$SESSION_ARG"; SESSION_ARG="$2"; SESSION_GIVEN=1; shift 2;;
+    --iter) _need_value --iter "$#"; _no_redefine --iter "$ITER_GIVEN" "$2" "$ITER"; ITER="$2"; ITER_GIVEN=1; shift 2;;
     # An unknown flag REFUSES rather than being swallowed. The old catch-all was `*) shift;;`,
     # which meant a typo like --sesion s1 vanished and the render silently proceeded in
     # critique mode under the default session -- an omitted --session wearing a flag's clothes.
@@ -74,7 +95,10 @@ case "$MODE" in
   *) echo "design-render: --mode takes explore or critique, got '$MODE'" >&2; exit 1;;
 esac
 
-if [ -n "$ITER" ]; then
+# Validate whenever the flag was GIVEN, never whenever the value is non-empty. `--iter ""`
+# -- the shape a caller produces writing --iter "$N" with N unset -- used to skip this check
+# entirely and silently overwrite the base render path instead of an iteration path.
+if [ "$ITER_GIVEN" -eq 1 ]; then
   case "$ITER" in
     1|2|3) ;;
     *) echo "design-render: --iter takes 1, 2 or 3, got '$ITER' (ADR-1401 caps the loop at three)" >&2; exit 1;;
@@ -96,19 +120,31 @@ fi
 # Explore MUST name its own, because three composers rendering at once through one browser
 # session race each other -- and an absent flag refuses rather than falling back, since a
 # silent default would reintroduce the race while looking like it worked.
-if [ "$MODE" = "explore" ]; then
-  if [ -z "$SESSION_ARG" ]; then
-    echo "design-render: REFUSED -- --session is required in explore mode (no default; a shared session races parallel renders)." >&2
-    exit 1
-  fi
-  SESSION="$SESSION_ARG"
+# Missing and empty are DIFFERENT here, in both directions. `--session ""` in critique mode
+# used to fall through :- and silently join the shared critique session; in explore mode it
+# reported "--session is required" when a --session had in fact been given. Both are the
+# missing-vs-empty conflation this repo has fixed four times elsewhere.
+if [ "$MODE" = "explore" ] && [ "$SESSION_GIVEN" -eq 0 ]; then
+  echo "design-render: REFUSED -- --session is required in explore mode (no default; a shared session races parallel renders)." >&2
+  exit 1
+fi
+if [ "$SESSION_GIVEN" -eq 1 ]; then
+  SESSION="$SESSION_ARG"          # let the grammar below reject "" with the RIGHT message
 else
-  SESSION="${SESSION_ARG:-design-critic}"
+  SESSION="design-critic"
 fi
 # The id becomes a directory name, so it is constrained where it is USED, not trusted.
 # Phase 01 will pass <explore-id>--variant-<x>; both fit this grammar.
+#
+# Characters spelled out, not `a-z`: a bracket range resolves through the locale's collation
+# table, which on macOS interleaves case, so `[!a-z0-9-]` does NOT fire for `Design` -- the id
+# is accepted on one OS and refused on the others, then collides with an existing `design`
+# directory on a case-insensitive filesystem. design-explore.sh:37 carries this exact lesson
+# for its explore id, which has exactly these semantics, and this range was written `a-z`
+# two files away from it. tests/portability.bats caught it on CI.
 case "$SESSION" in
-  ""|*[!a-z0-9-]*) echo "design-render: --session takes lowercase letters, digits and hyphens, got '$SESSION'" >&2; exit 1;;
+  ""|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*)
+    echo "design-render: --session takes lowercase letters, digits and hyphens, got '$SESSION'" >&2; exit 1;;
 esac
 VW="${VIEWPORT%x*}"
 VH="${VIEWPORT#*x}"
@@ -129,13 +165,64 @@ BASE="$SLUG"
 [ -n "$ITER" ] && BASE="$SLUG--iter-$ITER"
 PNG="$OUT_DIR/$BASE.png"
 META="$OUT_DIR/$BASE.json"
-mkdir -p "$OUT_DIR" || exit 1
+# mkdir deliberately NOT here: it used to run before the route-existence check, so every
+# refusal below left an empty session directory behind and falsified the suite's own claim
+# that refusing publishes nothing. It happens once the route resolves, further down.
 
-# Read the hash this exact path last published BEFORE the render overwrites it, so a plain
+# Read ONE field out of a meta file. The route is written through JSON.stringify and was
+# being read back with a raw regex that does not unescape -- so a Windows route like
+# docs\one.html round-tripped to docs\\one.html, compared unequal to itself, and a
+# same-route iteration was classed as a stale page and DELETED. That is the exact outcome
+# ADR-1417 exists to prevent, resurrected in the read path.
+#   exit 0 = present (value on stdout) · 3 = key absent · 1 = unreadable or malformed
+HAVE_NODE=0
+command -v node >/dev/null 2>&1 && HAVE_NODE=1
+_meta_field() {
+  if [ "$HAVE_NODE" = "1" ]; then
+    node -e '
+      const fs = require("fs");
+      let m; try { m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch (e) { process.exit(1); }
+      if (m === null || typeof m !== "object") process.exit(1);
+      const k = process.argv[2];
+      if (!Object.prototype.hasOwnProperty.call(m, k)) process.exit(3);
+      const v = m[k];
+      if (v === null) process.exit(3);
+      process.stdout.write(String(v));
+    ' "$1" "$2"
+    return $?
+  fi
+  # No-node fallback. Anchored to the whole pretty-printed line, and REFUSING when more than
+  # one line matches, because the old `head -1` let a decoy key ordered ahead of the real one
+  # decide the comparison.
+  # grep -c PRINTS 0 and EXITS 1 on no match, so `|| echo 0` appended a second zero and the
+  # comparison below saw a two-line count. Read the count, then normalise an empty capture.
+  _n="$(grep -c "^  \"$2\": " "$1" 2>/dev/null)" || true
+  [ -n "$_n" ] || _n=0
+  [ "$_n" = "1" ] || { [ "$_n" = "0" ] && return 3; return 1; }
+  sed -n "s/^  \"$2\": \"\(.*\)\",\{0,1\}$/\1/p" "$1" 2>/dev/null
+  return 0
+}
+
+# Read what this exact path last published BEFORE the render overwrites it, so a plain
 # same-path re-render can still report "nothing changed" instead of losing the comparison.
+#
+# _slug() is NOT injective -- docs/(shop)/page.html and docs/[shop]/page.html both collapse to
+# the same slug, as do a.b and a-b. Two such routes share one output path, and trusting
+# PREV_SHA blindly meant the second route's FIRST EVER render came out exit 0 carrying
+# "unchanged": true while the first route's PNG and receipt vanished. So the previous meta's
+# ROUTE is read too: a mismatch is a collision, and a collision is case 1 -- refuse rather
+# than overwrite. Making the slug injective would ripple through every hardcoded path in the
+# suite and in design-critique.sh; refusing closes the hole without that blast radius.
 PREV_SHA=""
+PREV_ROUTE=""
 if [ -f "$META" ]; then
-  PREV_SHA="$(sed -n 's/.*"screenshot_sha256": "\([^"]*\)".*/\1/p' "$META" | head -1)"
+  PREV_SHA="$(_meta_field "$META" screenshot_sha256)" || PREV_SHA=""
+  PREV_ROUTE="$(_meta_field "$META" route)" || PREV_ROUTE=""
+  if [ -n "$PREV_ROUTE" ] && [ "$PREV_ROUTE" != "$ROUTE" ]; then
+    echo "design-render: REFUSED -- '$ROUTE' and '$PREV_ROUTE' collapse to the same slug '$SLUG'." >&2
+    echo "One would silently overwrite the other's render and receipt. Rename one route." >&2
+    exit 1
+  fi
 fi
 
 # A repo-relative file becomes a file:// URL; anything already a URL is used as-is (Phase 2
@@ -152,6 +239,10 @@ case "$ROUTE" in
     URL="file:///$(printf '%s' "$ABS" | sed 's#^/##')"
     ;;
 esac
+
+# Only now, once the route is known good: an earlier mkdir left an empty session directory
+# behind on every refusal above.
+mkdir -p "$OUT_DIR" || { echo "design-render: cannot create $OUT_DIR" >&2; exit 1; }
 
 if ! command -v agent-browser >/dev/null 2>&1; then
   echo "design-render: agent-browser not on PATH -- the critic has no eyes." >&2
@@ -248,7 +339,12 @@ DETERMINISM_CSS='(async () => { const s = document.createElement("style");
 
 _ab set viewport "$VW" "$VH" >/dev/null 2>&1 \
   || { echo "design-render: could not set viewport ${VW}x${VH}" >&2; exit 1; }
-_ab set media "$MEDIA" >/dev/null 2>&1 || true
+# Fail-closed, like the viewport above. This was `|| true` while RECIPE hardcodes
+# "media-$MEDIA" into the meta and into every receipt built from it -- so a --media dark
+# render whose browser silently ignored the command was sealed as "judged in dark". A gate
+# that transforms what it measures must declare what the transform destroys, and this one
+# was asserting a transform it never checked had happened.
+_ab set media "$MEDIA" >/dev/null 2>&1 \n  || { echo "design-render: could not set media '$MEDIA'; refusing to record it in the recipe as if it had applied" >&2; exit 1; }
 if ! _ab open "$URL" --max-output 200 >/dev/null 2>&1; then
   echo "design-render: failed to open $URL" >&2
   _ab close >/dev/null 2>&1 || true
@@ -385,17 +481,52 @@ fi
 # the self-review loop's key signal became a deletion.
 UNCHANGED="false"
 [ -n "$PREV_SHA" ] && [ "$PREV_SHA" = "$SHA" ] && UNCHANGED="true"
-for m in "$RENDER_ROOT"/*/*.json; do
+
+# For an iteration, the ONLY meaningful comparison is the iteration before it. Comparing
+# against every meta in the session made a REVERT read as a no-op: iter-1 pixels A, iter-2
+# pixels B, iter-3 back to A reported "unchanged": true, when iteration 3 changed a great
+# deal. ADR-1417 defines the signal as "my revision changed nothing visible".
+if [ "$ITER_GIVEN" -eq 1 ]; then
+  UNCHANGED="false"
+  if [ "$ITER" -gt 1 ]; then
+    _prev_iter="$OUT_DIR/$SLUG--iter-$((ITER - 1)).json"
+    if [ -f "$_prev_iter" ]; then
+      _pv="$(_meta_field "$_prev_iter" screenshot_sha256)" || _pv=""
+      [ -n "$_pv" ] && [ "$_pv" = "$SHA" ] && UNCHANGED="true"
+    fi
+  fi
+fi
+
+# Both depths. The flat pattern is not legacy trivia: every meta written before ADR-1402 sits
+# at renders/<slug>.json, .claude/state/ is gitignored so those files are on every box that
+# ever ran a critique, and they are the ONLY metas that genuinely lack a session field. A
+# guard globbing */*.json alone could not see them at all -- so the fail-closed path this ADR
+# demanded was unreachable for exactly the population it was written for, and the suite's own
+# fixture was planted in a subdirectory production never produced, passing by avoiding the
+# real path.
+for m in "$RENDER_ROOT"/*.json "$RENDER_ROOT"/*/*.json; do
   [ -f "$m" ] || continue
   case "$m" in "$META") continue;; esac
-  grep -qF "\"screenshot_sha256\": \"$SHA\"" "$m" 2>/dev/null || continue
-  other_route="$(sed -n 's/.*"route": "\([^"]*\)".*/\1/p' "$m" | head -1)"
-  other_session="$(sed -n 's/.*"session": "\([^"]*\)".*/\1/p' "$m" | head -1)"
+  _sha_other="$(_meta_field "$m" screenshot_sha256)"; _rc=$?
+  # An unreadable or malformed meta is COULD NOT SCAN, which is not the same fact as no
+  # duplicate here. Both used to take the same silent `continue`, and an empty result set is
+  # the one thing a broken scanner and a clean tree agree on.
+  if [ "$_rc" -eq 1 ]; then
+    echo "design-render: REFUSED -- could not read meta $m; a meta this guard cannot parse is not evidence of no duplicate." >&2
+    rm -f "$PNG" "$META" 2>/dev/null || true
+    exit 1
+  fi
+  [ "$_rc" -eq 0 ] || continue
+  [ "$_sha_other" = "$SHA" ] || continue
+  other_route="$(_meta_field "$m" route)" || other_route=""
+  other_session="$(_meta_field "$m" session)"; _srC=$?
+  [ "$_srC" -eq 0 ] || other_session=""
   # A meta with no session field cannot be compared on (route, session). Falling through to
   # the old route-only comparison here is exactly how this ADR would silently revert in code
   # while every line of the spec still read as correct -- so it fails closed instead.
   if [ -z "$other_session" ]; then
     echo "design-render: REFUSED -- meta $m carries no session field; refusing to fall back to route-only comparison." >&2
+    echo "Written before ADR-1402, or by a writer that does not set one. Delete it or re-render it." >&2
     rm -f "$PNG" "$META" 2>/dev/null || true
     exit 1
   fi
@@ -428,14 +559,25 @@ if command -v node >/dev/null 2>&1; then
       screenshot_sha256: sha, viewport: `${vw}x${vh}@1`, recipe,
       session, iter: iter === "" ? null : Number(iter), unchanged: unchanged === "true",
     }, null, 2) + "\n");
-  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$ITER" "$UNCHANGED" "$META" || exit 1
+  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$ITER" "$UNCHANGED" "$META" \
+    || { rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
 else
   # This branch already emitted a DIFFERENT, smaller object than the node one above -- no url,
   # no png. Both now carry the three new keys, because a box without node writing a meta the
   # guard cannot read is the twin fix this repo keeps missing.
   if [ -n "$ITER" ]; then _iter_json="$ITER"; else _iter_json="null"; fi
-  printf '{\n  "route": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s",\n  "session": "%s",\n  "iter": %s,\n  "unchanged": %s\n}\n' \
-    "$ROUTE" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$_iter_json" "$UNCHANGED" > "$META" || exit 1
+  # Parity of KEYS was achieved here and parity of ESCAPING was not. A route carrying a quote
+  # produced unparseable JSON, and a crafted URL route injected a "session" key AHEAD of the
+  # real one -- a guard-disabling write on any box without node. The route is the one field
+  # with no grammar check upstream, so this branch refuses what it cannot represent rather
+  # than emitting a meta the guard will misread.
+  case "$ROUTE$URL" in
+    *\"*|*\\*) echo "design-render: REFUSED -- no node on this box, and the route contains a quote or backslash this fallback writer cannot escape safely." >&2
+       rm -f "$PNG" "$META" 2>/dev/null; exit 1;;
+  esac
+  printf '{\n  "route": "%s",\n  "url": "%s",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s",\n  "session": "%s",\n  "iter": %s,\n  "unchanged": %s\n}\n' \
+    "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$_iter_json" "$UNCHANGED" > "$META" \
+    || { rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
 fi
 
 echo "design-render: $ROUTE -> ${PNG#"$ROOT"/}"
