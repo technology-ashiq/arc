@@ -31,7 +31,7 @@ shift 2>/dev/null || true
 shift 2>/dev/null || true
 
 if [ -z "$CMD" ] || [ -z "$ID" ]; then
-  echo "design-explore: usage: design-explore.sh {init|check|render|status} <explore-id> [--brief <path>]" >&2
+  echo "design-explore: usage: design-explore.sh {init|check|render|status|surfaces|coverage} <explore-id> [--brief <path>]" >&2
   exit 1
 fi
 # Characters spelled out, not `a-z`: a bracket range resolves through the locale's
@@ -174,6 +174,80 @@ case "$CMD" in
       exit 1
     fi
     echo "design-explore: check OK — matrix + director call + 3 variants (thesis, page, tokens-only colour)"
+    ;;
+
+  surfaces)
+    # REQ-03 / ADR-1407: product canvas vs documentation, decided by MARKER.
+    #
+    # The judgment lives in design-lint.mjs, which already owns every parser in this product.
+    # A second implementation here would be the twin-fix shape: two readers of one contract,
+    # drifting apart the first time either is touched.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID' -- run init first" >&2; exit 1; }
+    sfails=0
+    seen=0
+    for v in $VARIANTS; do
+      page="$EX/variant-$v/index.html"
+      # EX is already absolute; prefixing $ROOT again would look plausible and resolve nowhere.
+      [ -f "$page" ] || continue
+      seen=$((seen + 1))
+      node "$DESIGN_DIR/design-lint.mjs" --surfaces "$page" || sfails=$((sfails + 1))
+    done
+    # Nothing to check is a MESSAGE, never a silent pass. An empty result set is the one
+    # thing a broken scanner and a clean tree agree on, and this lane has shipped that.
+    if [ "$seen" -eq 0 ]; then
+      echo "design-explore: no variant pages found under $EX -- nothing to classify (this is not a pass)" >&2
+      exit 1
+    fi
+    [ "$sfails" -eq 0 ] || { echo "design-explore: $sfails variant(s) failed the surface gate"; exit 1; }
+    echo "design-explore: surfaces ok across $seen variant(s)"
+    exit 0
+    ;;
+
+  coverage)
+    # REQ-03 / ADR-1403: every viewport the brief DECLARES must actually have been rendered.
+    #
+    # Cycle 3 rendered desktop only while section C sat there declaring surfaces nobody
+    # consumed. This is the control that makes the declaration load-bearing: a
+    # declared-but-unrendered surface is a run gap, and a run gap blocks PASS.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID' -- run init first" >&2; exit 1; }
+    BRIEF=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --brief) [ "$#" -ge 2 ] || { echo "design-explore: --brief needs a value" >&2; exit 1; }; BRIEF="$2"; shift 2;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
+    done
+    if [ -z "$BRIEF" ]; then
+      echo "design-explore: coverage needs --brief <path> -- the viewport set is DERIVED from the platform contract, never assumed" >&2
+      exit 1
+    fi
+    WANT="$(node "$DESIGN_DIR/design-lint.mjs" --viewports "$BRIEF")" || {
+      echo "design-explore: could not derive the viewport set from $BRIEF" >&2
+      exit 1
+    }
+    cfails=0
+    cseen=0
+    for v in $VARIANTS; do
+      [ -f "$EX/variant-$v/index.html" ] || continue
+      cseen=$((cseen + 1))
+      sess="$ID--variant-$v"
+      rdir="$ROOT/.claude/state/design/renders/$sess"
+      for want in $WANT; do
+        # The meta records viewport as WxH@1; match that exact shape rather than a substring,
+        # so 390x844 can never be satisfied by 1390x8440.
+        if ! grep -qs "\"viewport\": \"$want@1\"" "$rdir"/*.json; then
+          echo "ERR  [viewport-gap] variant-$v: the brief declares $want and no render at that viewport exists in $sess"
+          cfails=$((cfails + 1))
+        fi
+      done
+    done
+    if [ "$cseen" -eq 0 ]; then
+      echo "design-explore: no variant pages found under $EX -- nothing to cover (this is not a pass)" >&2
+      exit 1
+    fi
+    [ "$cfails" -eq 0 ] || { echo "design-explore: $cfails declared-but-unrendered surface(s) -- a contract the run never rendered is one nobody signed"; exit 1; }
+    echo "design-explore: coverage ok -- every declared viewport rendered across $cseen variant(s)"
+    exit 0
     ;;
 
   render)

@@ -31,7 +31,7 @@
 // Exit: 0 clean | 1 findings or unusable input. Never 2 (the design gate is warn-tier this
 // cycle; a lint that can exit 2 is a lint that can block a session by accident).
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, relative } from "node:path";
 
 const ROOT = process.cwd();
 const DEFAULT_TEMPLATE = join(ROOT, "docs", "templates", "design-brief-template.md");
@@ -453,6 +453,8 @@ function critiquedRoutes() {
 const argv = process.argv.slice(2);
 let templatePath = DEFAULT_TEMPLATE;
 let floorsMode = false;
+let viewportsMode = false;
+let surfacesMode = false;
 const briefs = [];
 const routes = [];
 const libEntries = [];
@@ -462,8 +464,118 @@ for (let i = 0; i < argv.length; i++) {
   if (a === "--route") { routes.push(resolve(ROOT, argv[++i] ?? "")); continue; }
   if (a === "--library") { libEntries.push(resolve(ROOT, argv[++i] ?? "")); continue; }
   if (a === "--floors") { floorsMode = true; continue; }
+  if (a === "--viewports") { viewportsMode = true; continue; }
+  if (a === "--surfaces") { surfacesMode = true; continue; }
   if (a.startsWith("--")) { console.log(`ERR  [usage] unknown flag ${a}`); process.exit(1); }
   briefs.push(resolve(ROOT, a));
+}
+
+// ---------- --viewports: the platform contract becomes the render set (ADR-1403) ----------
+//
+// Cycle 3 rendered desktop only while section C sat there declaring surfaces nobody consumed.
+// A platform contract the pipeline never renders is a contract nobody signed. This is an
+// EXPORT, so its parse errors are loud for the same reason --floors' are: a silently
+// defaulted viewport set is the original defect wearing a fix's clothes.
+const VIEWPORT_FOR = Object.freeze({ Desktop: "1440x900", Mobile: "390x844" });
+function platformRowAnswers(body, surface) {
+  // Anchored to a real table row, never a prose mention. The 2026-07-16 cosmetic-variant
+  // lesson and the 2026-08-02 prose-mention regex are the same lesson twice: tolerant
+  // DETECTION, strict GRAMMAR, and a sentence naming the label must never satisfy the check.
+  const re = new RegExp("^\\|[ \\t]*" + surface + "[ \\t]*\\|[ \\t]*([^|]*?)[ \\t]*\\|", "gmi");
+  const hits = [];
+  let m;
+  while ((m = re.exec(body)) !== null) hits.push(m[1].trim().toLowerCase());
+  return hits;
+}
+if (viewportsMode) {
+  const target = briefs[0];
+  if (!target) { console.log("ERR  [usage] --viewports needs a brief path"); process.exit(1); }
+  let text;
+  try { text = stripComments(stripFences(readFileSync(target, "utf8"))); }
+  catch { console.log("ERR  [brief-unreadable] " + target); process.exit(1); }
+  const secC = findSections(text).get("C");
+  if (secC.count !== 1) {
+    console.log('ERR  [platform-contract-missing] no single "## C. Platform contract" section -- refusing to default to desktop, because a defaulted set is how the contract stopped being consumed in the first place');
+    process.exit(1);
+  }
+  const out = [VIEWPORT_FOR.Desktop];
+  const hits = platformRowAnswers(secC.body, "Mobile");
+  if (hits.length !== 1) {
+    console.log("ERR  [platform-row] section C has " + hits.length + " rows for Mobile -- need exactly one");
+    process.exit(1);
+  }
+  if (hits[0] === "yes") out.push(VIEWPORT_FOR.Mobile);
+  else if (hits[0] !== "no") {
+    console.log('ERR  [platform-answer] the Mobile row answers "' + hits[0] + '" -- a platform contract answers yes or no, and this one is not guessed');
+    process.exit(1);
+  }
+  process.stdout.write(out.join("\n") + "\n");
+  process.exit(0);
+}
+
+// ---------- --surfaces: product canvas vs documentation, by MARKER (ADR-1407) ----------
+//
+// Cycle 3's variants spent 30-60% of their scroll on state-matrix and keyboard documentation
+// and the jury ranked them UP for it. The obvious gate -- refuse pages whose text says
+// "Reference" or "States" -- is the shape this lane has a scar from: design-explore.sh once
+// refused a correct variant over the rupee entity, because a text rule cannot tell a colour
+// literal from a currency sign. Classification is DECLARED. Nothing here reads page prose.
+if (surfacesMode) {
+  const target = briefs[0];
+  if (!target) { console.log("ERR  [usage] --surfaces needs a variant html path"); process.exit(1); }
+  let html;
+  try { html = readFileSync(target, "utf8"); }
+  catch { console.log("ERR  [variant-unreadable] " + target); process.exit(1); }
+  const rel = relative(ROOT, target).split("\\").join("/");
+  let bad = 0;
+
+  // Walk tags, tracking nesting. This is a MARKER check and not an HTML parser, so it tracks
+  // only the containers that can carry a marker and closes them by name.
+  const TOKEN = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*)>/g;
+  const CONTAINER = /^(section|div|main|article)$/;
+  const ATTR = /\bdata-arc-surface\s*=\s*"([^"]*)"/;
+  const stack = [];
+  let m;
+  while ((m = TOKEN.exec(html)) !== null) {
+    const closing = m[1] === "/";
+    const tag = m[2].toLowerCase();
+    const attrs = m[3];
+    if (!CONTAINER.test(tag)) continue;
+    if (closing) { stack.pop(); continue; }
+    if (/\/\s*$/.test(attrs)) continue;   // self-closing: opens nothing
+    const a = ATTR.exec(attrs);
+    if (a) {
+      const kind = a[1].trim();
+      if (kind !== "product" && kind !== "doc") {
+        console.log("ERR  [surface-unknown] " + rel + ': data-arc-surface="' + kind + '" -- the vocabulary is product or doc, and an unknown value fails closed');
+        bad++;
+      }
+      // Documentation ON the product canvas is the deterministic ERR this gate exists for.
+      // A doc surface as its own top-level sibling is legitimate; nested inside product is not.
+      if (kind === "doc" && stack.indexOf("product") !== -1) {
+        console.log("ERR  [doc-on-canvas] " + rel + ': a data-arc-surface="doc" region is nested inside a product surface -- reference material may be its own surface, never part of the canvas being judged');
+        bad++;
+      }
+      stack.push(kind);
+    } else if (tag === "section" && stack.indexOf("product") === -1 && stack.indexOf("doc") === -1) {
+      // A section that sits inside no MARKED surface fails CLOSED. The first cut asked for
+      // stack.length === 0, which sounded like "top level" and was not: <main> is itself a
+      // container and pushes, so a section inside <main> -- i.e. every real one -- never
+      // looked top-level and the check silently passed everything. Caught by running the gate
+      // against its own fixtures rather than by reading it; `node --check` was perfectly happy.
+      // A section nested inside an already-marked surface needs no marker of its own: it is
+      // part of that surface. One outside every marked surface is simply unclassified, and a
+      // composer who forgets the attribute gets a refusal rather than a guess.
+      console.log("ERR  [surface-unmarked] " + rel + ": a top-level <section> carries no data-arc-surface -- unmarked is refused, never assumed to be product");
+      bad++;
+      stack.push("unmarked");
+    } else {
+      stack.push(stack.length ? stack[stack.length - 1] : "");
+    }
+  }
+  if (bad > 0) { console.log("design-lint: " + bad + " surface error(s)"); process.exit(1); }
+  console.log("design-lint: surfaces ok");
+  process.exit(0);
 }
 
 if (floorsMode) {
