@@ -657,7 +657,7 @@ function boot(argv) {
     mode = "sim";
     root = resolve(flags.spine);
     if (!existsSync(join(root, "events"))) {
-      process.stderr.write(`arc-dash: ERROR BAD_SPINE -- --spine ${root} has no events/ dir; a sim mode over nothing answers confidently and wrongly\n`);
+      process.stderr.write(`arc-dash: ERROR BAD_SPINE -- --spine ${root} holds no event log at all; a sim mode over nothing answers confidently and wrongly\n`);
       process.exit(1);
     }
     // decide() shells arc-event, which resolves the spine itself -- point the child at
