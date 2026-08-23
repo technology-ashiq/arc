@@ -33,12 +33,30 @@ load 'test_helper'
   [[ "$output" == *"lanes, $cmds commands, $agents agents, $prods products, $rules rules, $procs processes,"* ]] || { echo "expected tree-derived counts (lanes=$lanes cmds=$cmds agents=$agents prods=$prods rules=$rules procs=$procs); got: $output"; false; }
   [[ "$output" == *" $lanes lanes,"* ]] || { echo "lane count is not the tree's $lanes: $output"; false; }
   [[ "$output" == *"-- all covered"* ]] || { echo "$output"; false; }
-  # The 164 gates/hooks/rules/lints/processes/concepts rows the gate did NOT read until
-  # 2026-08-23. Floored, not pinned: the inventories grow, and a floor still kills the
-  # mutant that deletes the loop and prints 0.
+  # The rows the gate did NOT read until 2026-08-23: 164 then, 219 after ADR-1317 added eight
+  # world-derived inventories. Floored, not pinned -- the inventories grow, and a floor still
+  # kills the mutant that deletes the loop and prints 0.
+  #
+  # The floor is RAISED with the reality it guards. Left at 150 it would still catch a total
+  # collapse and would sleep through a partial one: three whole inventories could stop being
+  # read and the number would sit comfortably above the line. A floor far below the truth has
+  # stopped measuring.
   local homed
   homed=$(printf '%s\n' "$output" | sed -n 's/.*, \([0-9]\{1,\}\) homed contract rows.*/\1/p')
-  [ -n "$homed" ] && [ "$homed" -ge 150 ] || { echo "homed-rows count missing or implausible ($homed): $output"; false; }
+  [ -n "$homed" ] && [ "$homed" -ge 210 ] || { echo "homed-rows count missing or implausible ($homed): $output"; false; }
+  # Three of the world-derived counts, floored the same way. Without them the summary line
+  # could say "all covered" with every one of the eight new readers returning nothing -- the
+  # mutant tests/face/coverage-readers.mjs exists to kill, asserted here as well because the
+  # two suites do not run on the same leg.
+  local bands
+  bands=$(printf '%s\n' "$output" | sed -n 's/.*, \([0-9]\{1,\}\) ADR bands.*/\1/p')
+  [ -n "$bands" ] && [ "$bands" -ge 10 ] || { echo "ADR bands missing or implausible ($bands): $output"; false; }
+  local plans
+  plans=$(printf '%s\n' "$output" | sed -n 's/.*, \([0-9]\{1,\}\) plans.*/\1/p')
+  [ -n "$plans" ] && [ "$plans" -ge 20 ] || { echo "plans missing or implausible ($plans): $output"; false; }
+  local gates
+  gates=$(printf '%s\n' "$output" | sed -n 's/.*, \([0-9]\{1,\}\) gates.*/\1/p')
+  [ -n "$gates" ] && [ "$gates" -ge 5 ] || { echo "gates missing or implausible ($gates): $output"; false; }
   # The kinds count is read back off the line and floored, which kills the mutant that made
   # the kind reader return nothing and still printed "all covered".
   kinds=$(printf '%s\n' "$output" | sed -n 's/.*face-coverage: \([0-9]\{1,\}\) kinds.*/\1/p')
@@ -120,15 +138,31 @@ load 'test_helper'
 }
 
 @test "the frozen contract still parses and still carries its declared counts" {
+  # FLOORS, not equalities, and the distinction is the whole point of this test.
+  #
+  # What it guards against is a contract that was TRUNCATED, corrupted, or half-written -- the
+  # failure where a generator writes 4 rooms over 33 and every downstream check happily agrees
+  # with the smaller world. A floor catches all of that.
+  #
+  # An EQUALITY catches something else: legitimate growth. `rooms !== 32` went red the moment
+  # ADR-1317 generated `chat-mcp`, a room that had been declared in planned-rooms.json and in
+  # ADR-1306 and generated nowhere -- a defect being FIXED. That is the third hard-coded count
+  # in this suite to fail that way in one day; the other two (l3-logic, dash-doors) were made
+  # to derive their expected value from the contract, and this one is the contract, so it has
+  # nothing to derive from. Hence floors.
+  #
+  # The count was never the protection anyway, as the note below already said: the gate checks
+  # room ids as VALUES, face-sections refuses a duplicate id, and l3-logic sweeps every room.
+  # A list length stayed 32 through a deleted id, a duplicated id and a swapped filler.
   run node -e "
     const fs = require('fs');
     const s = JSON.parse(fs.readFileSync(process.argv[1] + '/initiatives/face/contracts/expected-set.json', 'utf8'));
     const n = { rooms: s.rooms.list.length, kinds: Object.keys(s.kinds.map).length, commands: Object.keys(s.commands.map).length, agents: Object.keys(s.agents.map).length, lanes: Object.keys(s.lanes.map).length, products: Object.keys(s.products.map).length };
-    if (n.rooms !== 32) { console.log('rooms', n.rooms); process.exit(1); }
-    if (n.kinds !== 46) { console.log('kinds', n.kinds); process.exit(1); }
-    if (n.commands !== 26) { console.log('commands', n.commands); process.exit(1); }
-    if (n.agents !== 30) { console.log('agents', n.agents); process.exit(1); }
-    if (n.products !== 16) { console.log('products', n.products); process.exit(1); }
+    if (n.rooms < 33) { console.log('rooms', n.rooms); process.exit(1); }
+    if (n.kinds < 46) { console.log('kinds', n.kinds); process.exit(1); }
+    if (n.commands < 26) { console.log('commands', n.commands); process.exit(1); }
+    if (n.agents < 30) { console.log('agents', n.agents); process.exit(1); }
+    if (n.products < 16) { console.log('products', n.products); process.exit(1); }
     // A count pins KEY COUNT, never truth -- room ids are checked as values by the gate.
     console.log('RAN: contract carries', JSON.stringify(n));
   " "$ARC_ROOT"

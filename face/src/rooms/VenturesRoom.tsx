@@ -276,7 +276,7 @@ function Declared({ ids }: { ids?: Record<string, string> }) {
         ? "the registry served no venture roster, so this room cannot say which ventures are declared. That is a fact about this read, not about the company."
         : names.length === 0
           ? "ventures.yaml declares no ventures. That is a measured zero, not a missing read — the file was there and it was empty."
-          : `declared in ventures.yaml: ${names.join(", ")} — ${names.length === 1 ? "one venture" : `${names.length} ventures`}, each carrying a kill line. A venture appears here the moment it is declared, whether or not it has earned anything.`}
+          : `declared in ventures.yaml: ${names.join(", ")} — ${names.length === 1 ? "one venture, carrying a kill line" : `${names.length} ventures, each carrying a kill line`}. A venture appears here the moment it is declared, whether or not it has earned anything.`}
     </p>
   );
 }

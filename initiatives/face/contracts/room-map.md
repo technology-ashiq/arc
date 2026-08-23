@@ -183,16 +183,27 @@ An exclusion that does not name its file cannot be checked, and gets inherited b
 never written about. That is precisely how `gates` kept a reason that belonged to `lints`.
 
 **Nine new mutant arms** were added so none of the new checks can rot into a vacuous pass;
-each corrupts a real row and asserts the gate names the ghost. `--selftest` runs 17 arms
-plus the clean tree plus the exit-code arm, all PASS.
+each corrupts a real row and asserts the gate names the ghost.
+
+**And that turned out not to be enough.** Those arms mutate a GATHERED object -- push a ghost
+into `clean.gates.names`, assert a finding appears -- which proves the CHECK and says nothing
+about the READER. Measured on 2026-08-23: with `treeGates` mutated to return `{ names: [] }`,
+`face-coverage --selftest` exited **0**. That is the vacuous-pass rule one layer down, and it
+is why `tests/face/coverage-readers.mjs` now drives the readers against real files in a temp
+tree; it exits 1 on that mutant. `--selftest` runs **51 pure arms + 19 exit arms**, one per
+inventory, because an arm that shares its neighbour's finding class proves nothing about its own.
 
 ### Verified, not asserted
 
 | claim | how it was checked | result |
 |---|---|---|
 | every manifest carries a `face:` section generated from the contract | `face-sections.mjs --check` | 16 mapped, 0 unmapped by design |
-| the tree still satisfies the frozen contract | `face-coverage.mjs` | 46 kinds · 16 lanes · 26 commands · 30 agents · 16 products · 7 rules · 6 processes · 164 homed rows |
-| the gate fails closed on every dimension it claims | `face-coverage.mjs --selftest` | 17/17 mutant arms named |
+| the tree still satisfies the frozen contract | `face-coverage.mjs` | 46 kinds · 16 lanes · 26 commands · 30 agents · 16 products · 7 rules · 6 processes · **7 gates · 2 jobs · 1 venture · 14 ADR bands (266 files) · 24 plans · 6 capabilities · 4 planned rooms · 4 CI workflows** · 219 homed rows |
+| the gate fails closed on every dimension it claims | `face-coverage.mjs --selftest` | 51 pure arms + 19 exit arms, all named |
+| the READERS actually read their files | `tests/face/coverage-readers.mjs` | 31 checks; exits 1 on a reader mutated to return nothing, where `--selftest` exits 0 |
+| a room cannot hold something its zones hide | `tests/face/l3-logic.mjs` | 260 checks; sweeps all 34 rooms and fails if any hold has no zone |
+| the door serves what the rooms need | `tests/face/dash-doors.mjs` | 76 checks, incl. `inventories` and `/api/lane/:name` phases |
+| the four empty stations carry rows | opened in a browser | board 14 ADR bands · scheduler 2 jobs · ventures 1 declared · strategy 24 plans · bench PHASES 6 |
 
 An earlier draft of this document asserted the manifest claim from `PROGRESS.md` and a
 `grep` for `^face:` that returned **zero** — because the sections are nested, not
