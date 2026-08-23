@@ -1,33 +1,89 @@
-# PROGRESS.md — design (no live cycle)
+# PROGRESS.md — design v2 "Eyes, Taste, Rivals"
 
-status: IDLE
-cycle: arc-design (Cycle 3, closed 2026-07-30)
-phase: — (no live cycle)
-appetite: —
-burn: —
+status: LIVE
+cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
+phase: 00
+appetite: 12.5d
+burn: 0d
 blocked-on: —
 depends-on: —
+
+> Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
+> (tests green on CI read per JOB + live demo + exit criteria + evidence). Evidence over
+> assertion. Evidence is lane-scoped at `initiatives/design/evidence/phase-NN/` (ADR-0055).
+> ADRs, the retro-log, HISTORY and the trial-ledger stay at repo root (ADR-0053). This lane
+> holds ADR century **1400–1499**; ADR-1400..1417 are written there.
+> Cycle 3's frozen history: [`HISTORY-INDEX.md`](HISTORY-INDEX.md). The pre-v2 idle tracker is
+> archived at [`archive/PROGRESS-idle-2026-08-23.md`](archive/PROGRESS-idle-2026-08-23.md).
+
+## Phases
+
+| Phase | Capability | Appetite | Status |
+|---|---|---|---|
+| 00 | Renderer proof + isolation — `--session` mandatory in explore mode, `(route, session)` duplicate discriminator, session-less meta refuses, stable-shutter re-proved, callers swept mechanically, and the route-keyed output path re-scoped so two renders of one route can coexist | 1.5d | pending |
+| 01 | Eyes + viewports + canvas gate — composer scoped-Bash render grant, iron-law read allowlist, ≤3 immutable iterations, platform-contract viewports, marker-based doc-surface gate, sibling-render negative control | 1.5d | pending |
+| 02 | Registry + curator — `design.sources.yaml` + lint, `design-curator` at balanced-workhorse, robots.txt preflight, real pack from the two permitted galleries, planted-PNG ignore assertion | 1.5d | pending |
+| 03 | Taste loop — jury amended FOUR→N, one juror at high-judgment, pack-anchored BELOW-BAR, controlled owner blind score. **Carries the taste tripwire that gates phases 05–07** | 2d | pending |
+| 04 | EXP-A1 — ADR-0070's paired harness in the new regime, prediction pre-registered, reference item present, zero writes into model-policy's sealed bundle | 0.5d | pending |
+| 05 | Live sources — shadcn + 21st.dev search wiring, `.mcp.json` under the shared-file protocol, per-run availability lines, COULD-NOT-SCAN as its own outcome | 1.5d | pending |
+| 06 | Rival spike — terms clearance recorded FIRST, one provider one fixture, version+request+schema receipted, offline self-containment check, no adapter before the receipt | 1d | pending |
+| 07 | Rival integration — adapters on the engine driver pattern, one blind jury over arc×3 + rival + reference, rival-beats-all-arc rate receipted either way, blindness proved adversarially on two surfaces | 2d | pending |
+| 08 | Governance + retro — packager refuses non-arc renders and absent provenance, spend caps, manual-drop door, all three sealed predictions settled | 1d | pending |
+
+## Done-log
+
+Nothing closed yet — the cycle opens at Phase 00.
+
+**Kickoff, 2026-08-23.** Lane resolved `design` (via arg); WIP 6 counted, informational. Preflight
+archived the idle tracker rather than overwriting it. Brownfield survey run, then **its two
+load-bearing claims were checked against the tree and one was wrong** — `ui-composer` has no Bash
+at all, so DSV-B is a larger change than filed. Century **1400–1499** claimed after a 24-worktree
+sweep found `face` already holding 1300–1316 from an unmerged branch, which this worktree's own
+band table still lists as free. Research verified three external forks; four claims in the design
+source turned out stale or wrong (PR #61 already merged, v0 GA not beta, the composer grant, and
+a phase table summing to 11d against a declared 10d). **Three fresh attackers then returned 21
+findings across three surfaces with almost no overlap** — 19 applied, 2 applied in modified form,
+0 rejected outright. The two that changed the shape of the build: the renderer's output path is
+keyed on route ALONE, so iteration receipts could not have coexisted on disk and ADR-1417's
+discriminator had nothing to compare (moved into Phase 00); and ADR-1415's read allowlist had no
+enforcement surface at all, since `ui-composer` declares unscoped `Read` and the iron law is
+prompt prose — its negative control would have tested compliance, not refusal. Appetite moved
+11d -> 12.5d to cover that plus the mandatory adversarial pass missing from Phases 03 and 07.
+**Simulation gate: 12 blockers -> 2.** Both remaining were closed (ADR-1417's third case had a
+named fixture but no refusal contract; the caller-sweep DoD contradicted the out-of-scope line)
+but are **NOT re-verified** -- the process permits one respawn and it is spent, the same posture
+the engine lane recorded at 18 -> 6. A third round would be patching against the gate.
+
+## Appetite burn
+
+**0 of 12.5 days used.** Kill criteria: 50% tripwire if phases 00+01 are not green by end of day 3;
+taste tripwire before any rival spend if the post-Phase-03 controlled owner score does not beat
+a FRESHLY MEASURED plain-prompt bar after one re-run. The `~40/100` figure was carried forward
+from prose and has no measurement behind it, so Phase 03 re-derives it on the same brief, item
+count and panel before comparing.
 
 ## Now
 
-**Position:** no cycle is running in this lane. Cycle 3 · arc-design closed 2026-07-30;
-its whole past is reachable from [`HISTORY-INDEX.md`](HISTORY-INDEX.md), which links to the
-frozen records rather than copying them (ADR-0058).
+**Position:** **APPROVED by the owner 2026-08-23** and building. Phase 00 is open. Working mode
+set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-cycle16`, pushed
+freely, **one PR kept open and merged only when all nine phases are done**. No local test runs at
+all -- CI is the only gate. Multiple agents are authorised where they help.
 
-**Why this file exists at all:** the board is a VIEW whose values derive from each lane's
-machine header and nothing else (ADR-0051) — a `design` row on `PORTFOLIO.md` with no
-header to derive from would be a hand-written second truth, exactly what that ADR forbids.
-That is the whole reason, and [ADR-0062](../../docs/adr/0062-port-i-amendment-a-board-row-needs-a-machine-header.md)
-ratifies it: a lane on the board carries a machine header even with no live cycle.
+**Spine receipts:** the two kickoff receipts are NOT on the spine
+yet and cannot be emitted from here** — `arc-event` refuses inside a linked worktree by design
+(`SKIP WORKTREE_SPINE`), because `.claude/state/` is gitignored and an approval written here would
+be real, valid, and invisible to `arc-inbox`, which would print "no open approvals" while one sat
+in this tree. Both must be emitted from the main clone at `E:/Work_Hub/01_Automemory/arc`, or
+after this branch merges.
 
-This file is **not** what keeps the lane out of the eligible set — an earlier version of
-this note claimed it was, and that was wrong. `lane-resolve.sh` counts every validly-named
-directory under `initiatives/` as a known lane whether or not it holds a `PROGRESS.md`, and
-eligibility comes only from `status: LIVE` or `BLOCKED`; deleting this file would keep
-`design` ineligible just as well. It is load-bearing for the board, not the resolver.
+**Next step after approval:** Phase 00 — write `tests/design-render-session.bats` and watch
+`render_requires_session_in_explore_mode` and `session_less_meta_is_refused` fail RED before a
+line of the fix is written.
 
-**Next:** `/arc-kickoff --lane design` when a new design cycle starts. Nothing is pending
-here otherwise.
-
-blocked-on: —
-depends-on: —
+**Owner items running in parallel** (none block Phase 00):
+- ~~merge PR #61~~ — **already merged 2026-07-29**; no action outstanding.
+- By Phase 05: pay for Mobbin Pro or keep it `off` (recommendation on file: galleries-only,
+  revisit after Phase 03's score).
+- By Phase 06: which rival goes first. The design source recommended v0; the evidence gathered at
+  kickoff points the other way — see ADR-1413.
+- Before Phase 04: replace the session-authored EXP-A1 prediction with his own, if he wants one.
