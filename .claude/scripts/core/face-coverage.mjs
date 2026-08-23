@@ -528,6 +528,42 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
     ["hook", "hooks", hooks, (n) => `"${n}" is a hook unit in .claude/hooks/`],
     ["lint", "lints", lints, (n) => `"${n}" is a lint script in .claude/scripts/`],
   ];
+  // ---- THE META-CHECK: every contract inventory is DERIVED by something ----------------
+  //
+  // This class bit twice in one day and it is the reason this block exists rather than a
+  // written rule. The contract grew and a place that has to grow with it did not:
+  //
+  //   - `zonesFor` was a fixed list of 11 zone keys; eight inventories arrived and the screen
+  //     would have shown nothing, with no error anywhere.
+  //   - `roomRegistry`'s `byRoom` was a fixed list of 17; an 18th inventory rendered nowhere
+  //     while both gates exited 0 -- and that one made the zonesFor fix unreachable, so the
+  //     same defect in two layers hid each other.
+  //
+  // A written "remember to update all three" is precisely the kind of rule CLAUDE.md records
+  // as having failed to take. So the gate asks the question instead: is there a contract
+  // inventory that NOTHING derives? An inventory nobody derives can only ever be checked
+  // against itself, which is the whole failure ADR-1317 was written about, arriving one key
+  // at a time.
+  //
+  // The contract-only set is EXPLICIT and each entry says how it is derived instead.
+  const DERIVED_ELSEWHERE = new Set([
+    "kinds",      // treeKinds, imported from validate.mjs
+    "lanes",      // dirNames(initiatives/)
+    "commands",   // mdStems(.claude/commands)
+    "agents",     // mdStems(.claude/agents)
+    "products",   // treeProducts
+    "rules",      // mdStems(.claude/rules)
+    "processes",  // yamlStems(processes/)
+    "concepts",   // authored vocabulary, validated as {room, station} above
+  ]);
+  const derivedHere = new Set(worldInventories.map(([, key]) => key));
+  for (const [key, value] of Object.entries(contract)) {
+    if (key === "rooms" || key === "rings" || key.startsWith("$") || key === "version" || key === "frozen") continue;
+    if (!value || typeof value !== "object" || !value.map) continue;
+    if (derivedHere.has(key) || DERIVED_ELSEWHERE.has(key)) continue;
+    findings.push(`[contract] inventory "${key}" is in the contract and NOTHING derives it from the tree -- it can only ever be checked against itself, which is the failure this gate exists to end. Add a reader to WORLD_READERS, or name it in DERIVED_ELSEWHERE with how it is derived`);
+  }
+
   for (const [label, contractKey, tree, describe] of worldInventories) {
     // An inventory we could not READ is a finding, never an empty pass. "0 gates" and "the
     // gates file would not parse" are different facts, and the silent-zero version of this
@@ -671,6 +707,7 @@ async function selftest(repo) {
     ["process row in a ghost room", withMapRoom(clean, "processes", "ghost-room-xyz"), "ghost-room-xyz"],
     ["concept in a ghost room", withConcept(clean, { room: "ghost-room-xyz", station: "x" }), "ghost-room-xyz"],
     ["concept with no station", withConcept(clean, { room: "spine", station: "  " }), "names no station"],
+    ["a contract inventory nothing derives", withUnderivedInventory(clean), "NOTHING derives it"],
 
     // ---- the seven world-derived inventories (ADR-1317) --------------------------------
     //
@@ -779,6 +816,7 @@ async function selftest(repo) {
     ["lint on the tree", withTreeName(clean, "lints", "ghost-lint")],
     // And the class that has no equivalent above: a source that could not be read at all.
     ["an unreadable inventory source", withUnreadable(clean, "gates")],
+    ["a contract inventory nothing derives", withUnderivedInventory(clean)],
   ];
   let allExits = true;
   for (const [label, mutant] of exitArms) {
@@ -824,6 +862,21 @@ function withTreeName(data, treeKey, name) {
  */
 function withUnreadable(data, treeKey) {
   return { ...data, [treeKey]: { unreadable: "the selftest made it unreadable", names: [] } };
+}
+
+/**
+ * Add an inventory to the contract that nothing derives.
+ *
+ * The class this arm is for bit twice in one day: the contract grew and a place that must grow
+ * with it did not (`zonesFor`'s zone list, `roomRegistry`'s byRoom), and both times the result
+ * was rows that rendered nowhere with every gate green. The meta-check turns "remember to
+ * update all three" -- a written rule of exactly the kind CLAUDE.md records as having failed
+ * to take -- into a named failure.
+ */
+function withUnderivedInventory(data) {
+  const contract = JSON.parse(JSON.stringify(data.contract));
+  contract.somethingNobodyReads = { map: { alpha: "toolbelt" } };
+  return { ...data, contract };
 }
 
 function withMapRoom(data, inv, room) {
