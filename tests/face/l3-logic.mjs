@@ -927,7 +927,15 @@ check("a dead handle SAYS it is dead rather than reporting a clean boundary",
   // the disappearing-surface failure this whole product exists to not have.
   const lost = rooms.adrBandMap({ "9900": "no-such-room" }, registry.rooms);
   check("a band homed in a ghost room is kept and marked", lost.length === 1 && lost[0].roomName === null && lost[0].room === "no-such-room", JSON.stringify(lost));
-  check("a malformed band id is not drawn as a band", rooms.adrBandMap({ "not-a-band": "board" }, registry.rooms).length === 0);
+  // This arm used to assert the malformed band was DROPPED, which pinned the defect rather
+  // than the rule: a map that silently omits a row is exactly what this function's docstring
+  // refuses, and an adversarial pass pointed out the code did it for band ids while the same
+  // function carefully kept a row whose ROOM did not resolve. Both are now kept and marked.
+  const malformed = rooms.adrBandMap({ "not-a-band": "board", "1300s": "toolbelt" }, registry.rooms);
+  check("a malformed band id is KEPT, not silently dropped", malformed.length === 2, JSON.stringify(malformed.map((b) => b.band)));
+  check("and it is labelled as not a band id", malformed.every((b) => /not a band id/.test(b.label)), JSON.stringify(malformed.map((b) => b.label)));
+  check("while a well-formed band still reads as a range",
+    rooms.adrBandMap({ "0000": "board" }, registry.rooms)[0]?.label === "0000-0099");
   check("an absent band map yields an empty map, not a crash", rooms.adrBandMap(undefined, registry.rooms).length === 0);
   check("and an absent room list does not throw either", rooms.adrBandMap({ "0000": "board" }, undefined).length === 1);
 }

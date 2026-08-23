@@ -171,6 +171,16 @@ export function dogfoodVerdict(journal, spine, opts = {}) {
     reasons.push(`${days.length} of ${requiredDays} days carried a decision through the face`);
   if (journal.torn)
     reasons.push(`${journal.torn} journal line(s) could not be read, so this count is a floor and not a total`);
+  // THE SPINE TWIN. A torn journal line was a reason and a torn SPINE line was only a footnote
+  // printed after `met` had already been decided -- so a run with five clean days and one
+  // unreadable spine line said "REQ-10 MET: every one of them on the spine", exit 0.
+  //
+  // That line may be the `decision.recorded` made OUTSIDE the face, which is the single failure
+  // REQ-10 exists to detect: it cannot be matched against a journal entry precisely because it
+  // cannot be read. Twin-fix shape, and the selftest carried an arm for the journal half and
+  // none for this one -- so the missing half was invisible in the code AND in its control.
+  if (spine.torn)
+    reasons.push(`${spine.torn} spine line(s) could not be read, so "every decision is accounted for" cannot be claimed -- an unreadable line may be the one made outside the face`);
 
   const met = reasons.length === 0;
   const headline = met
@@ -291,6 +301,16 @@ function selftest() {
   armed("a torn journal line makes the count a floor, and it is not met",
     tornV.met === false && tornV.reasons.some((r) => /floor/i.test(r)));
 
+  // THE SPINE TWIN of the arm above, which did not exist. Five clean days plus one unreadable
+  // SPINE line reported "REQ-10 MET: every one of them on the spine", exit 0 -- while the
+  // unreadable line may be the decision made outside the face, the one thing this file exists
+  // to catch. The arm is here so the missing half cannot go missing again.
+  const spineTornV = dogfoodVerdict(mkJournal(clean), { ...mkSpine(cleanSpine), torn: 1 });
+  armed("a torn SPINE line also fails it, not just a torn journal line",
+    spineTornV.met === false && spineTornV.reasons.some((r) => /spine line/i.test(r)));
+  armed("and it says WHY: the unreadable line may be the one made outside",
+    spineTornV.reasons.some((r) => /outside the face/i.test(r)));
+
   for (const l of lines) process.stdout.write(l + "\n");
   process.stdout.write(`face-dogfood selftest: ${ok ? "PASS -- the requirement can be failed, by every route it can be failed by" : "FAIL"}\n`);
   return ok ? 0 : 1;
@@ -300,7 +320,14 @@ const KNOWN_FLAGS = ["--journal", "--spine", "--days", "--json", "--selftest"];
 
 /** An unrecognised `--` argument is exit 2, for the reason the sibling gates state at length. */
 function refuseUnknownFlags(argv, known) {
-  const bad = argv.filter((a) => a.startsWith("--") && !known.includes(a.split("=")[0]));
+  // The bare flag, and a SINGLE dash too.
+  //
+  // This used to strip at `=` so `--journal=DIR` passed the guard -- and then the parse loop,
+  // which only matches the space form, ignored it. The command answered about the DEFAULT
+  // journal while the caller believed it had named one. Both siblings refuse the equals form
+  // outright (`face-sections --check=true` exits 2); accepting a spelling and then not
+  // honouring it is worse than refusing it, because the caller gets an answer either way.
+  const bad = argv.filter((a) => a.startsWith("-") && !known.includes(a));
   if (bad.length) {
     process.stderr.write(`face-dogfood: unknown flag(s) ${bad.join(", ")} -- known flags are ${known.join(", ")}.\n`);
     process.exit(2);
@@ -315,7 +342,22 @@ if (isMainModule()) {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--journal") flags.journal = argv[++i];
     else if (argv[i] === "--spine") flags.spine = argv[++i];
-    else if (argv[i] === "--days") flags.days = Number(argv[++i]);
+    else if (argv[i] === "--days") {
+      // VALIDATED, never a bare Number(). `--days abc` produced NaN, `requiredDays ?? DEFAULT`
+      // only guards null and undefined, and `days.length < NaN` is false -- so the one floor
+      // that makes an empty run fail was deleted by a typo, and the command printed
+      // "REQ-10 MET" over an empty journal and an empty spine, exit 0. The lane's headline
+      // evidence claim was made true by one CLI word with nothing behind it. `--days 0` did
+      // the same thing on purpose.
+      const raw = argv[++i];
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1) {
+        process.stderr.write(`face-dogfood: --days ${raw} is not a number of days (want an integer >= 1). Refusing: an unusable value here silently REMOVES the floor this command exists to enforce.
+`);
+        process.exit(2);
+      }
+      flags.days = n;
+    }
   }
   const repo = argv.find((a) => !a.startsWith("--")
     && a !== flags.journal && a !== flags.spine && String(flags.days) !== a) || REPO_DEFAULT;

@@ -330,14 +330,24 @@ try {
 // So the two names are pinned against each other, from the sources, in both directions.
 const launcherSrc = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-face.mjs"), "utf8");
 const viteSrc = readFileSync(join(REPO, "face", "vite.config.ts"), "utf8");
-const envName = (launcherSrc.match(/DOOR_ORIGIN_ENV\s*=\s*"([A-Z_]+)"/) || [])[1];
-check("the launcher declares its door-origin env var", Boolean(envName), `got ${envName}`);
-check("and the app's dev proxy reads that SAME name", Boolean(envName) && viteSrc.includes(`process.env.${envName}`), `${envName} not found in vite.config.ts`);
-// The other direction: the proxy must read no OTHER ARC_DASH_* name, or the pin above could
-// pass while the value that actually wins comes from a variable nobody sets.
-const proxyReads = [...viteSrc.matchAll(/process\.env\.(ARC_[A-Z_]+)/g)].map((m) => m[1]);
-check("the proxy reads exactly one ARC_ variable", proxyReads.length === 1, `reads ${JSON.stringify(proxyReads)}`);
-check("and it is the one the launcher sets", proxyReads.length === 1 && proxyReads[0] === envName, `proxy=${proxyReads[0]} launcher=${envName}`);
+// A SET comparison, not a count. The first cut asserted "exactly one ARC_ variable" and went
+// red the moment a SECOND legitimate seam was added (the app port, after `--app-port` was
+// found to move the listener while the origin allow-list stayed pinned to the default). The
+// question was never how many there are; it is whether every name the proxy READS is a name
+// the launcher SETS, and vice versa. Either half missing is the same silent-fallback bug.
+const declared = [...launcherSrc.matchAll(/^export const [A-Z_]*ENV = "([A-Z_]+)";/gm)].map((m) => m[1]).sort();
+const proxyReads = [...new Set([...viteSrc.matchAll(/process\.env\.(ARC_[A-Z_]+)/g)].map((m) => m[1]))].sort();
+check("the launcher declares its env seams", declared.length >= 2, JSON.stringify(declared));
+check("the app's dev config reads ARC_ variables", proxyReads.length >= 2, JSON.stringify(proxyReads));
+check("every name the config READS is one the launcher SETS",
+  proxyReads.every((n) => declared.includes(n)), `reads ${JSON.stringify(proxyReads)} declared ${JSON.stringify(declared)}`);
+check("and every name the launcher SETS is one the config READS",
+  declared.every((n) => proxyReads.includes(n)), `declared ${JSON.stringify(declared)} reads ${JSON.stringify(proxyReads)}`);
+// The app port seam specifically: the config must derive BOTH the listener and the origin
+// allow-list from it, because deriving only one is the exact split that let every read work
+// and every stamp 403.
+check("the config derives its listen port from the seam", /port:\s*APP_PORT/.test(viteSrc), "server.port is not APP_PORT");
+check("and its self-origin set from the same seam", (viteSrc.match(/\$\{APP_PORT\}/g) || []).length >= 3, "SELF_ORIGINS does not use APP_PORT");
 // Positive control: the pin must be reading real files, not empty strings.
 check("both sources were actually read", launcherSrc.length > 2000 && viteSrc.length > 500, `launcher=${launcherSrc.length} vite=${viteSrc.length}`);
 

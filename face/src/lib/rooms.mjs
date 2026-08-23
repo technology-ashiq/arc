@@ -591,13 +591,19 @@ export function conceptGroups(payload, rooms, expected) {
  */
 export function adrBandMap(bands, rooms) {
   const byId = new Map((rooms || []).map((r) => [r.id, r]));
+  // A malformed band id is KEPT and marked, never filtered away. The filter was `/^\d{4}$/`
+  // and dropped anything else in silence -- so a contract row like "1300s" passed
+  // face-coverage (its room resolves fine) and then vanished from the map, which is precisely
+  // the "a map that silently omits one row" failure this function's own docstring refuses.
   return Object.entries(bands || {})
-    .filter(([band]) => /^\d{4}$/.test(band))
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([band, room]) => {
       // "0000" reads as a typo; "0000-0099" reads as a range, which is what a band is.
+      const wellFormed = /^\d{4}$/.test(band);
       const start = Number(band);
-      const label = `${band}-${String(start + 99).padStart(4, "0")}`;
+      // A band that is not four digits cannot be turned into a range; it is shown as itself,
+      // which is what makes it visibly wrong rather than invisibly absent.
+      const label = wellFormed ? `${band}-${String(start + 99).padStart(4, "0")}` : `${band} (not a band id)`;
       const found = byId.get(room);
       return { band, label, room, roomName: found ? found.name : null };
     });

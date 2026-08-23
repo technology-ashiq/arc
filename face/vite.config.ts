@@ -18,19 +18,31 @@ const DOOR = process.env.ARC_DASH_ORIGIN ?? 'http://127.0.0.1:8317'
 const DOOR_ORIGIN = new URL(DOOR).origin
 const DOOR_HOST = new URL(DOOR).host
 
+// The app's own port, from ONE seam that both the listener and the origin set derive from.
+//
+// It used to be the literal 5180 in three places. The launcher's `--app-port` moved the
+// LISTENER and left SELF_ORIGINS pinned to 5180, so the browser's real Origin was passed
+// through unrewritten and the door refused it: every read worked and every stamp 403'd --
+// verbatim the split this file's own comment warns about, reachable through a documented
+// flag. Worse in the other direction: whatever else the owner happened to run on
+// localhost:5180 became a trusted origin for an HQ that was not there.
+const APP_PORT = Number(process.env.ARC_FACE_APP_PORT ?? 5180)
+if (!Number.isInteger(APP_PORT) || APP_PORT < 1 || APP_PORT > 65535)
+  throw new Error(`ARC_FACE_APP_PORT is ${process.env.ARC_FACE_APP_PORT}, which is not a port. Refusing to start on a guess.`)
+
 // The dev server's own origins, which are the ONLY ones whose Origin may be rewritten.
 // A browser on the dev server sends one of these; anything else is a cross-origin request
 // and the door is supposed to refuse it.
 const SELF_ORIGINS = new Set([
-  `http://localhost:${5180}`,
-  `http://127.0.0.1:${5180}`,
-  `http://[::1]:${5180}`,
+  `http://localhost:${APP_PORT}`,
+  `http://127.0.0.1:${APP_PORT}`,
+  `http://[::1]:${APP_PORT}`,
 ])
 
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5180,
+    port: APP_PORT,
     strictPort: true,
     proxy: {
       '/api': {

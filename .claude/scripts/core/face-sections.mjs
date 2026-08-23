@@ -13,7 +13,7 @@
 //
 // Exit: 0 in sync / written | 1 drift (with --check) | 2 could not read the inputs.
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, realpathSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -146,34 +146,26 @@ export function roomRegistry(contract, copy) {
     }
   for (const k of Object.keys(kindsBy)) kindsBy[k].sort();
 
-  const byRoom = {
-    lanes: invert(contract.lanes?.map, (v) => v),
-    products: invert(contract.products?.map, (v) => v),
-    commands: invert(contract.commands?.map, (v) => v),
-    agents: invert(contract.agents?.map, (v) => v),
-    gates: invert(contract.gates?.map, (v) => v),
-    hooks: invert(contract.hooks?.map, (v) => v),
-    rules: invert(contract.rules?.map, (v) => v),
-    lints: invert(contract.lints?.map, (v) => v),
-    processes: invert(contract.processes?.map, (v) => v),
-    concepts: invert(contract.concepts?.map, (v) => v && v.room),
-    // ADR-1317. These are what turn four stations that NAMED a thing and rendered nothing --
-    // board's "ADR map", scheduler's "jobs table", ventures' "passports", strategy's "plans
-    // queue" -- into stations with rows. A station that promises and shows nothing is worse
-    // than no station: it tells the owner the face has looked, and it has not.
-    // ADRs are homed per BAND in the room of the lane that owns the band, so a lane room
-    // shows its own decisions. The board's "ADR map" station needs the OTHER view -- all
-    // fourteen at once, which is what a map is -- and gets it from `inventories` below,
-    // because homing and viewing are different questions and conflating them would have put
-    // one row in a station whose whole job is to show the shape of the record.
-    adrs: invert(contract.adrs?.map, (v) => v),
-    jobs: invert(contract.jobs?.map, (v) => v),
-    ventures: invert(contract.ventures?.map, (v) => v),
-    plans: invert(contract.plans?.map, (v) => v),
-    capabilities: invert(contract.capabilities?.map, (v) => v),
-    plannedRooms: invert(contract.plannedRooms?.map, (v) => v),
-    ci: invert(contract.ci?.map, (v) => v),
-  };
+  // DERIVED from the contract, not written out.
+  //
+  // This was a list of seventeen names, which is the same fixed-list defect `zonesFor` was
+  // explicitly fixed for one layer up -- and leaving it here made that fix unreachable: the
+  // renderer grew a fallback for unknown `holds` keys, and the generator could never put an
+  // unknown key into `holds` for it to catch. An 18th inventory added to the contract with
+  // three real rows rendered NOWHERE, with `face-sections --check` and `face-coverage` both
+  // exiting 0. Two fixed lists in a row, and only the second one was ever mentioned.
+  //
+  // `rooms` is the one `{list}`-shaped key and is skipped; `concepts` carries `{room,station}`
+  // and needs its own accessor. Everything else is a plain thing -> room map, and a NEW one is
+  // picked up here the day it is added.
+  const byRoom = {};
+  for (const [key, value] of Object.entries(contract)) {
+    if (key === "rooms" || key === "kinds") continue;         // handled above, different shapes
+    if (!value || typeof value !== "object" || !value.map) continue;
+    byRoom[key] = key === "concepts"
+      ? invert(value.map, (v) => v && v.room)
+      : invert(value.map, (v) => v);
+  }
 
   const rooms = rows.map((r) => {
     const c = copyRooms[r.id];
@@ -384,7 +376,12 @@ function selftest(repo) {
     // word "FAIL" into a transcript other checks read for exactly that word.
     driftExit = run(repo, true, true);
   } finally {
+    // RESTORE, or REMOVE. `if (before !== null)` left a bogus `{}` registry on any tree that
+    // did not already have one -- and the arm then reported PASS for the wrong reason, having
+    // detected the drift it created rather than the version mutation it meant to test. A
+    // control that leaves damage behind is not a control, and this one runs against $ARC_ROOT.
     if (before !== null) writeFileSync(rpath, before);
+    else if (existsSync(rpath)) rmSync(rpath);
   }
 
   let ok = true;

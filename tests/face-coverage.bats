@@ -48,15 +48,22 @@ load 'test_helper'
   # could say "all covered" with every one of the eight new readers returning nothing -- the
   # mutant tests/face/coverage-readers.mjs exists to kill, asserted here as well because the
   # two suites do not run on the same leg.
-  local bands
-  bands=$(printf '%s\n' "$output" | sed -n 's/.*, \([0-9]\{1,\}\) ADR bands.*/\1/p')
-  [ -n "$bands" ] && [ "$bands" -ge 10 ] || { echo "ADR bands missing or implausible ($bands): $output"; false; }
-  local plans
-  plans=$(printf '%s\n' "$output" | sed -n 's/.*, \([0-9]\{1,\}\) plans.*/\1/p')
-  [ -n "$plans" ] && [ "$plans" -ge 20 ] || { echo "plans missing or implausible ($plans): $output"; false; }
-  local gates
-  gates=$(printf '%s\n' "$output" | sed -n 's/.*, \([0-9]\{1,\}\) gates.*/\1/p')
-  [ -n "$gates" ] && [ "$gates" -ge 5 ] || { echo "gates missing or implausible ($gates): $output"; false; }
+  # EVERY world-derived count, floored, in one loop so the next inventory cannot be added
+  # without a floor. An adversarial pass disconnected a reader INSIDE gather() -- the seam
+  # between the readers (driven directly by coverage-readers.mjs) and the mutants (applied to
+  # what gather returns) -- and the gate printed "0 plans ... all covered" past all three
+  # controls it had. The gate's own selftest now crosses that seam; this asserts the same
+  # thing against the REAL repo, because the two suites do not run on the same leg.
+  #
+  # `capabilities` is deliberately absent from the list: a repo may legitimately carry no
+  # skills, no MCP servers and no pinned images, and a floor there would fail an honest zero.
+  local label floor got
+  for pair in "gates:5" "jobs:1" "ventures:1" "ADR bands:10" "plans:20" "planned rooms:2" "CI workflows:1"; do
+    label="${pair%:*}"; floor="${pair##*:}"
+    got=$(printf '%s\n' "$output" | sed -n "s/.*, \([0-9]\{1,\}\) $label.*/\1/p")
+    [ -n "$got" ] || { echo "could not read a count for '$label' from the summary line: $output"; false; }
+    [ "$got" -ge "$floor" ] || { echo "'$label' is $got, below the floor $floor -- a reader has stopped reading: $output"; false; }
+  done
   # The kinds count is read back off the line and floored, which kills the mutant that made
   # the kind reader return nothing and still printed "all covered".
   kinds=$(printf '%s\n' "$output" | sed -n 's/.*face-coverage: \([0-9]\{1,\}\) kinds.*/\1/p')

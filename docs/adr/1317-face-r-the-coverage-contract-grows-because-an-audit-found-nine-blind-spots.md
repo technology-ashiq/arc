@@ -65,10 +65,29 @@ from the on-disk source of truth (`arc.gates.yaml`, `hq.jobs.yaml`, `ventures.ya
 `docs/adr/`, `docs/strategy/plans/`, `planned-rooms.json`), so a thing added to arc without a
 room becomes a named failure without anyone remembering to update a list.
 
-**3. The exclusion note is narrowed, not deleted.** `lints` keeps its exemption with the
-reason restated (`legal-lints (4)` is deliberately one row for four scripts). `gates` loses it,
-because the reason was measured false. **An exclusion must now name the file that makes it
-true**, so the next one cannot be inherited by a row it was never written about.
+**3. The exclusion note is narrowed, not deleted.** `gates` loses its exemption because the
+reason was measured false. **An exclusion must now name the file that makes it true**, so the
+next one cannot be inherited by a row it was never written about.
+
+**3a. Amended the same day, after two fresh attackers.** The narrowed note was itself wrong,
+and in exactly the way it was written to prevent. It said `hooks` was "15 units behind 7
+event-level rows" and `lints` was "29 rows over 34 lint-named scripts". Measured:
+
+| claim | reality |
+|---|---|
+| 7 hook EVENTS | **6** event directories; the 7th contract row is `_dispatch.sh`, a script |
+| every hook covered | `.claude/hooks/policy-decide.sh` was in **no** contract row at all |
+| 34 lint-named scripts | **18**, of which 5 sit under a `lib/` and are implementations of a row |
+
+So both are now DERIVED too, and the exemption list is empty. `hooks` = the 6 event dirs plus
+every top-level script that is not one of their wrappers; `lints` = every lint-named script
+NOT under a `lib/`, a rule that keeps holding as those libraries move (a list of five
+filenames would not). `policy-decide.sh` is homed in `policy`.
+
+The lesson is narrower and sharper than the one this ADR started with: **an exclusion is a
+measurement, and a measurement decays.** The `gates` sentence was written when it was true of
+gates, inherited by two rows it was never about, and then restated twice — by me, in this
+file — without anyone re-running the count. Deriving costs less than remembering to re-measure.
 
 **4. ADRs are homed by BAND, not one row per file.** 265 rows would drown the contract and
 tell the owner nothing; the century bands already exist in `PORTFOLIO.md` and are how a person

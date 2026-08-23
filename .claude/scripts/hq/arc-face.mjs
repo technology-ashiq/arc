@@ -58,6 +58,17 @@ export const APP_PORT = 5180;
 export const DOOR_ORIGIN_ENV = "ARC_DASH_ORIGIN";
 
 /**
+ * The environment variable the app's dev config reads for its OWN port.
+ *
+ * Same seam, same reason, found by the same kind of attack. `--app-port` used to move the
+ * listener while `vite.config.ts` kept its origin allow-list pinned to the default 5180, so
+ * the browser's real Origin was passed through unrewritten and the door refused it: every
+ * read worked and every stamp 403'd. And in the other direction, whatever else happened to be
+ * running on 5180 became a trusted origin for an HQ that was not there.
+ */
+export const APP_PORT_ENV = "ARC_FACE_APP_PORT";
+
+/**
  * npm is `npm.cmd` on Windows and `npm` everywhere else.
  *
  * Knowing the NAME is not enough to run it, which is the whole point of the next function.
@@ -189,11 +200,50 @@ const KNOWN_FLAGS = ["--port", "--app-port", "--spine", "--token", "--no-open", 
  * @param {string[]} argv @param {string[]} known
  */
 export function refuseUnknownFlags(argv, known) {
-  const bad = argv.filter((a) => a.startsWith("--") && !known.includes(a));
+  // SINGLE dash too. `--` only was the whole guard, so `-no-open` sailed through unrecognised
+  // and then failed `argv.includes("--no-open")` -- accepted as an argument, ignored as a flag,
+  // and a browser opened for a caller who asked it not to. The near-miss set is bigger than
+  // the one spelling that was being checked for.
+  const bad = argv.filter((a) => a.startsWith("-") && !known.includes(a));
   if (bad.length) {
     process.stderr.write(`arc-face: unknown flag(s) ${bad.join(", ")} -- known flags are ${known.join(", ")}. Refusing rather than guessing which behaviour you meant.\n`);
     process.exit(2);
   }
+  // A REPEATED flag is an operator error, never a first-wins override. `--port 8620 --port
+  // 8621` silently took 8620 and said nothing -- the same class of silent pick that
+  // `.claude/rules/lanes.md` makes exit 5 for two `--lane` values, and for the same reason:
+  // choosing one of two explicitly named values is precisely the guess a refusal prevents.
+  const seen = new Set();
+  for (const a of argv) {
+    if (!a.startsWith("-")) continue;
+    if (seen.has(a)) {
+      process.stderr.write(`arc-face: ${a} was given more than once. Refusing rather than silently picking one of the values you named.\n`);
+      process.exit(2);
+    }
+    seen.add(a);
+  }
+}
+
+/**
+ * A port, or a refusal. Never a silent NaN.
+ *
+ * `Number(flagValue(...) || DEFAULT)` forwarded `--port abc` to the door as NaN, which threw
+ * ERR_SOCKET_BAD_PORT inside a child whose failure this launcher then reported as "the door
+ * exited with code 0" -- two wrong sentences from one unvalidated word. `--port 70000` went
+ * the same way.
+ *
+ * @param {string[]} argv @param {string} name @param {number} fallback @returns {number}
+ */
+function portValue(argv, name, fallback) {
+  const raw = flagValue(argv, name);
+  if (raw === null) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    process.stderr.write(`arc-face: ${name} ${raw} is not a port (want an integer 1-65535). Refusing rather than handing a child a value it will die on.
+`);
+    process.exit(2);
+  }
+  return n;
 }
 
 /** @param {string[]} argv @param {string} name @returns {string | null} */
@@ -312,8 +362,8 @@ async function main(argv) {
     return 1;
   }
 
-  const doorPort = Number(flagValue(argv, "--port") || DOOR_PORT);
-  const appPort = Number(flagValue(argv, "--app-port") || APP_PORT);
+  const doorPort = portValue(argv, "--port", DOOR_PORT);
+  const appPort = portValue(argv, "--app-port", APP_PORT);
   const spine = flagValue(argv, "--spine");
   // The launcher OWNS the token so it can compose the URL. An explicit one still wins, and
   // an inherited ARC_DASH_TOKEN wins over a fresh one -- otherwise a session that deliberately
@@ -341,12 +391,25 @@ async function main(argv) {
   process.on("SIGINT", () => { shutdown().then(() => process.exit(0)); });
   process.on("SIGTERM", () => { shutdown().then(() => process.exit(0)); });
 
-  // 1. The app's PORT, before anything expensive. If something is already serving there,
-  //    starting a second one means either a confusing crash or -- worse, and this is what
-  //    actually happened -- printing a URL that opens someone else's server while ours dies
-  //    quietly in the background.
+  // 1. BOTH ports, before anything expensive. Something already serving either one means this
+  //    launcher cannot own the pair, and every later check is then answering about a stranger.
+  //
+  //    The app-port half was written first and the door half was NOT -- the same twin-fix miss
+  //    this file already carries a scar for, in the twin that was supposedly the fixed one. An
+  //    attacker put an impostor door on the port: `waitForDoor`'s liveness guard cannot fire on
+  //    the first pass (a freshly spawned child has not started Node yet), `readyFromProbe`
+  //    calls any status but 401/403 "ready", so the launcher printed HQ is up and handed over a
+  //    URL whose app was wired to somebody else's spine -- labelled `"mode":"live"` -- with the
+  //    one irreversible route stamping into it. With a 404-only impostor it never exited at all.
+  //
+  //    A pre-flight is the only check that can tell "my child owns this port" from "something
+  //    answers here", because after the spawn the two are indistinguishable from outside.
   if (await portAnswers(appPort)) {
     process.stderr.write(`arc-face: ERROR -- something is already serving http://localhost:${appPort}/. That is probably an arc-face left running in another terminal; open it, stop it, or pass --app-port <n>. Starting a second one here would hand you a URL pointing at the wrong server.\n`);
+    return 1;
+  }
+  if ((await probe(doorPort, token)) !== null) {
+    process.stderr.write(`arc-face: ERROR -- something is already listening on http://127.0.0.1:${doorPort}/. This launcher cannot tell its own door from a stranger's once it has spawned one, so it refuses to start beside it: stop the other door, or pass --port <n>. A door that is not the one this launcher started would serve a different spine under the same URL.\n`);
     return 1;
   }
 
@@ -394,7 +457,7 @@ async function main(argv) {
   catch (err) { await shutdown(); process.stderr.write(`arc-face: ERROR -- ${err.message}\n`); return 1; }
   const app = spawn(plan.cmd, plan.args, {
     cwd: faceDir,
-    env: { ...process.env, [DOOR_ORIGIN_ENV]: `http://127.0.0.1:${doorPort}` },
+    env: { ...process.env, [DOOR_ORIGIN_ENV]: `http://127.0.0.1:${doorPort}`, [APP_PORT_ENV]: String(appPort) },
     stdio: ["ignore", "pipe", "pipe"],
     shell: plan.shell,
   });

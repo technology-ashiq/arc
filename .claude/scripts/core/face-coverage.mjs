@@ -105,20 +105,45 @@ async function readYaml(repo, relPath) {
   } catch (e) { return { ok: false, why: `${relPath} did not parse: ${e.message}` }; }
 }
 
+/**
+ * Pull `name` off each row -- and COUNT the rows that have none instead of dropping them.
+ *
+ * `.filter(n => typeof n === "string" && n)` discarded a nameless row in silence, so a gate
+ * that exists in arc with a malformed entry produced no finding and no count change: the exact
+ * claim this gate is built to make impossible, defeated by a missing key. A row that cannot be
+ * named cannot be homed either, and "I could not read one of them" is the honest answer.
+ *
+ * @param {unknown[]} rows @param {string} label @param {string} file
+ */
+function namesOrDrop(rows, label, file) {
+  const names = [];
+  let nameless = 0;
+  for (const r of rows) {
+    const n = r && typeof r === "object" ? /** @type {Record<string, unknown>} */ (r).name : undefined;
+    if (typeof n === "string" && n) names.push(n);
+    else nameless++;
+  }
+  if (nameless) return { unreadable: `${file} carries ${nameless} ${label} row(s) with no name -- a row that cannot be named cannot be homed`, names };
+  return { names };
+}
+
 /** `arc.gates.yaml` -> the 7 ship gates, by name. A machine-readable 1:1 registry. */
 export async function treeGates(repo) {
   const doc = await readYaml(repo, "arc.gates.yaml");
   if (!doc.ok) return { unreadable: doc.why, names: [] };
-  const list = Array.isArray(doc.value?.gates) ? doc.value.gates : [];
-  return { names: list.map((g) => g?.name).filter((n) => typeof n === "string" && n) };
+  // UNREADABLE, not empty, when the key is the wrong shape. `treeVentures` and
+  // `treePlannedRooms` already had this; these two twins did not, so a `gates:` that parsed to
+  // a map produced a clean empty inventory and a perfect score.
+  if (!Array.isArray(doc.value?.gates)) return { unreadable: "arc.gates.yaml has no gates list", names: [] };
+  return namesOrDrop(doc.value.gates, "gate", "arc.gates.yaml");
 }
 
 /** `hq.jobs.yaml` -> the scheduled jobs. The only things in the company that run unattended. */
 export async function treeJobs(repo) {
   const doc = await readYaml(repo, "hq.jobs.yaml");
   if (!doc.ok) return { unreadable: doc.why, names: [] };
-  const list = Array.isArray(doc.value?.jobs) ? doc.value.jobs : [];
-  return { names: list.map((j) => j?.name).filter((n) => typeof n === "string" && n) };
+  if (!Array.isArray(doc.value?.jobs)) return { unreadable: "hq.jobs.yaml has no jobs list", names: [] };
+  return namesOrDrop(doc.value.jobs, "job", "hq.jobs.yaml");
 }
 
 /**
@@ -167,11 +192,19 @@ export function treeAdrBands(repo) {
 export function treePlans(repo) {
   const dir = join(repo, "docs", "strategy", "plans");
   if (!existsSync(dir)) return { unreadable: "docs/strategy/plans is not on this tree", names: [] };
-  return {
-    names: readdirSync(dir)
-      .filter((n) => n.endsWith(".md") && (n.startsWith("PLAN-") || n.startsWith("BRIEF-")))
-      .map((n) => n.slice(0, -3)),
-  };
+  // EXCLUDE the index files by name; do not ALLOW-LIST two prefixes.
+  //
+  // The prefix allow-list was written to exclude README.md and then silently excluded every
+  // other spelling too -- `roadmap-2027.md`, `cycle8-plan.md` -- which is the same defect
+  // ADR-1317 named for `gates`: an exclusion inherited by rows it was never written about.
+  // Latent today (the real directory is 24 prefixed files plus README.md) and live the moment
+  // someone names a plan differently, which is exactly when nobody would be looking.
+  const INDEX_FILES = new Set(["README", "INDEX", "_index", "_toc"]);
+  const md = readdirSync(dir).filter((n) => n.endsWith(".md")).map((n) => n.slice(0, -3));
+  const excluded = md.filter((n) => INDEX_FILES.has(n));
+  const names = md.filter((n) => !INDEX_FILES.has(n));
+  // Say what was left out. A silent exclusion is how the last one grew past its reason.
+  return excluded.length ? { names, excluded } : { names };
 }
 
 /**
@@ -184,16 +217,96 @@ export function treePlans(repo) {
  */
 export function treeCapabilities(repo) {
   const names = [];
-  for (const s of dirNames(join(repo, ".claude", "skills"))) names.push(`skill:${s}`);
+  const skillsDir = join(repo, ".claude", "skills");
+  for (const s of dirNames(skillsDir)) names.push(`skill:${s}`);
+  // A skill written as a LOOSE FILE rather than a directory was dropped in silence, so a
+  // capability that exists in arc had no row and no failure. `dirNames` answers only the
+  // directory question, and the answer to the other one was nothing at all.
+  if (existsSync(skillsDir)) {
+    const loose = readdirSync(skillsDir).filter((n) => { try { return !statSync(join(skillsDir, n)).isDirectory(); } catch { return false; } });
+    if (loose.length) return { unreadable: `.claude/skills holds ${loose.length} entr(y/ies) that are not directories (${loose.slice(0, 3).join(", ")}) -- this reader only understands one skill per directory`, names };
+  }
   const mcpPath = join(repo, ".mcp.json");
   if (existsSync(mcpPath)) {
     try {
-      const servers = JSON.parse(readFileSync(mcpPath, "utf8")).mcpServers || {};
-      for (const s of Object.keys(servers)) names.push(`mcp:${s}`);
+      const parsed = JSON.parse(readFileSync(mcpPath, "utf8"));
+      // A .mcp.json with no `mcpServers` is a file this reader does not understand, not a
+      // repo with no servers. The two were the same answer, and only one of them is true.
+      if (!parsed || typeof parsed.mcpServers !== "object" || parsed.mcpServers === null)
+        return { unreadable: ".mcp.json carries no mcpServers object -- present but not in the shape this reader knows", names };
+      for (const s of Object.keys(parsed.mcpServers)) names.push(`mcp:${s}`);
     } catch { return { unreadable: ".mcp.json did not parse", names }; }
   }
   for (const d of dirNames(join(repo, "docker"))) names.push(`image:${d}`);
   return { names };
+}
+
+/**
+ * `.claude/hooks/` -> the hook surface, derived rather than exempted.
+ *
+ * `hooks` used to be excluded from tree derivation with the sentence "15 units behind 7
+ * event-level rows -- the inventory is the EVENT". An adversarial pass measured that: there
+ * are **6** event directories, not 7, and the seventh contract row is `_dispatch.sh`, which is
+ * a script and not an event. Worse, `policy-decide.sh` sits at the top of that directory and
+ * appears in **no** contract row at all -- invisible precisely because the inventory was
+ * exempt from being derived.
+ *
+ * That is the same defect ADR-1317 named for `gates`: an exclusion whose stated reason does
+ * not describe the tree. The honest inventory is the 6 events PLUS every top-level script that
+ * is not one of their wrappers, so a new hook cannot arrive without a row.
+ *
+ * @param {string} repo
+ */
+export function treeHooks(repo) {
+  const dir = join(repo, ".claude", "hooks");
+  if (!existsSync(dir)) return { unreadable: ".claude/hooks is not on this tree", names: [] };
+  const entries = readdirSync(dir, { withFileTypes: true });
+  const events = entries.filter((e) => e.isDirectory() && e.name.endsWith(".d")).map((e) => e.name.slice(0, -2));
+  // A top-level `X.sh` beside an `X.d/` is that event's wrapper and is the SAME thing, not a
+  // second one. Anything else at the top level is its own unit and needs its own row.
+  const eventSet = new Set(events);
+  const loose = entries
+    .filter((e) => e.isFile() && e.name.endsWith(".sh"))
+    .map((e) => e.name.slice(0, -3))
+    .filter((n) => !eventSet.has(n));
+  return { names: [...events, ...loose.map((n) => `${n}.sh`)].sort() };
+}
+
+/**
+ * `.claude/scripts/**` -> the lint surface, derived rather than exempted.
+ *
+ * The old exemption read "29 rows over 34 lint-named scripts". Measured: **18**, and the 29
+ * rows include a dozen entries that are not lint-named at all (`design-gate`, `render-hash`,
+ * `spec-verify`, ...). Neither number supported the sentence, which is the same failure mode
+ * as the `gates` exclusion ADR-1317 already caught: a reason nobody re-measured.
+ *
+ * TWO EXCLUSIONS REMAIN and both name their criterion rather than a filename:
+ *   - anything under a `lib/` directory is an IMPLEMENTATION of a row, not a row. Measured on
+ *     2026-08-23: 18 lint-named files, **5** of them under `lib/` (growth/lib/citation-lint,
+ *     growth/lib/slop-lint, hq/lib/policy/lint, leads/lib/research-lint, legal/lib/lints),
+ *     leaving 13 -- every one of which has a contract row. The rule keeps holding as those
+ *     libraries move, which a list of five filenames would not.
+ *   - a contract row that is not lint-named is fine and stays. The check is tree ⊆ contract:
+ *     a curated row for `design-gate` costs nothing, and a NEW lint script with no row fails.
+ *
+ * @param {string} repo
+ */
+export function treeLints(repo) {
+  const root = join(repo, ".claude", "scripts");
+  if (!existsSync(root)) return { unreadable: ".claude/scripts is not on this tree", names: [] };
+  const names = [];
+  const walk = (d, underLib) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const full = join(d, e.name);
+      if (e.isDirectory()) { walk(full, underLib || e.name === "lib"); continue; }
+      if (underLib) continue;
+      if (!/lint/i.test(e.name)) continue;
+      if (!/\.(mjs|sh)$/.test(e.name)) continue;
+      names.push(e.name.replace(/\.(mjs|sh)$/, ""));
+    }
+  };
+  walk(root, false);
+  return { names: [...new Set(names)].sort() };
 }
 
 /**
@@ -239,7 +352,7 @@ export function treePlannedRooms(repo) {
 // ---------- the check (pure: tree facts + contract -> findings) ----------
 export function coverageFindings({ kinds, lanes, commands, agents, products, rules, processes, contract,
   // ADR-1317: seven inventories derived from the WORLD rather than from the contract.
-  gates, jobs, ventures, adrBands, plans, capabilities, plannedRooms, ci }) {
+  gates, jobs, ventures, adrBands, plans, capabilities, plannedRooms, ci, hooks, lints }) {
   const findings = [];
   const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
@@ -412,6 +525,8 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
     ["capability", "capabilities", capabilities, (n) => `"${n}" is installed in this repo`],
     ["planned-room", "plannedRooms", plannedRooms, (n) => `"${n}" is declared in planned-rooms.json`],
     ["ci", "ci", ci, (n) => `"${n}" runs in .github/workflows/`],
+    ["hook", "hooks", hooks, (n) => `"${n}" is a hook unit in .claude/hooks/`],
+    ["lint", "lints", lints, (n) => `"${n}" is a lint script in .claude/scripts/`],
   ];
   for (const [label, contractKey, tree, describe] of worldInventories) {
     // An inventory we could not READ is a finding, never an empty pass. "0 gates" and "the
@@ -456,6 +571,32 @@ function treeProducts(repo) {
   });
 }
 
+/**
+ * Every world-derived inventory, and the SHAPE its reader must return.
+ *
+ * One table, read by `gather` to build the data AND by the selftest to prove the wiring. It
+ * exists because `gather` was an untested seam: the selftest mutates the object gather
+ * RETURNS, and `coverage-readers.mjs` imports the readers DIRECTLY -- so a mutant that
+ * disconnected any reader inside gather (`plans: { names: [] }`) printed "0 plans ... all
+ * covered" and every one of the three controls exited 0.
+ *
+ * A seam nothing crosses is a seam nothing tests. `selftestWiring` below crosses it.
+ */
+const WORLD_READERS = [
+  ["gates", (repo) => treeGates(repo)],
+  ["jobs", (repo) => treeJobs(repo)],
+  ["ventures", (repo) => treeVentures(repo)],
+  ["adrBands", (repo) => treeAdrBands(repo)],
+  ["plans", (repo) => treePlans(repo)],
+  ["capabilities", (repo) => treeCapabilities(repo)],
+  ["plannedRooms", (repo) => treePlannedRooms(repo)],
+  ["ci", (repo) => treeCi(repo)],
+  // Derived at last (ADR-1317 amended). Both carried an exclusion whose stated reason was
+  // measured false, and `hooks` was hiding a real uncovered file behind it.
+  ["hooks", (repo) => treeHooks(repo)],
+  ["lints", (repo) => treeLints(repo)],
+];
+
 async function gather(repo) {
   return {
     kinds: await treeKinds(repo),
@@ -468,14 +609,10 @@ async function gather(repo) {
     contract: loadContract(repo),
     // ADR-1317 -- each walks its own source of truth on disk, so the gate fails when ARC
     // grows rather than when the contract does.
-    gates: await treeGates(repo),
-    jobs: await treeJobs(repo),
-    ventures: await treeVentures(repo),
-    adrBands: treeAdrBands(repo),
-    plans: treePlans(repo),
-    capabilities: treeCapabilities(repo),
-    plannedRooms: treePlannedRooms(repo),
-    ci: treeCi(repo),
+    // Built from WORLD_READERS, so the wiring is DATA the selftest can cross-check rather
+    // than eight hand-written lines nothing can see. A mutant that disconnected any one of
+    // them printed "0 plans ... all covered" past every control this gate had.
+    ...Object.fromEntries(await Promise.all(WORLD_READERS.map(async ([key, read]) => [key, await read(repo)]))),
   };
 }
 
@@ -559,6 +696,8 @@ async function selftest(repo) {
       ["capability", "capabilities", "capabilities"],
       ["planned-room", "plannedRooms", "plannedRooms"],
       ["ci", "ci", "ci"],
+      ["hook", "hooks", "hooks"],
+      ["lint", "lints", "lints"],
     ].flatMap(([label, contractKey, treeKey]) => [
       [`tree ${label} with no room`, withTreeName(clean, treeKey, `ghost-${label}`), `ghost-${label}`],
       [`${label} row in a ghost room`, withMapRoom(clean, contractKey, "ghost-room-xyz"), "ghost-room-xyz"],
@@ -566,8 +705,35 @@ async function selftest(repo) {
     ]),
   ];
 
+  let allArmsWiring = true;
   const lines = [`clean tree passes: ${cleanOk ? "PASS" : "FAIL (" + cleanFindings.length + " gaps: " + cleanFindings.slice(0, 3).join("; ") + ")"}`];
-  let allArms = true;
+
+  // THE SEAM NOTHING CROSSED.
+  //
+  // Every mutant below operates on the object `gather()` RETURNED, and coverage-readers.mjs
+  // drives the readers DIRECTLY. Between those two lies `gather` itself, which nothing
+  // touched -- so disconnecting any reader inside it (`plans: { names: [] }`) printed
+  // "0 plans ... all covered" and all three controls exited 0. An adversarial pass measured
+  // exactly that, for `plans` and for `gates`, at HEAD.
+  //
+  // This crosses it: what `gather` produced for each world inventory is compared against what
+  // its reader returns when called independently. A disconnected, stubbed, or swapped reader
+  // now disagrees with itself and is named.
+  for (const [key, read] of WORLD_READERS) {
+    const fromGather = clean[key];
+    const direct = await read(repo);
+    const same = JSON.stringify(fromGather?.names ?? null) === JSON.stringify(direct?.names ?? null)
+      && Boolean(fromGather?.unreadable) === Boolean(direct?.unreadable);
+    if (!same) allArmsWiring = false;
+    lines.push(`wiring ${key.padEnd(26)} gather==reader: ${same ? "PASS" : `FAIL (gather ${JSON.stringify(fromGather?.names)?.slice(0, 60)} vs reader ${JSON.stringify(direct?.names)?.slice(0, 60)})`}`);
+    // And a non-empty floor, because two disconnected halves also agree. `capabilities` is the
+    // one inventory a repo may legitimately have none of, so it is floored at zero by name.
+    const mayBeEmpty = key === "capabilities";
+    const populated = Boolean(direct?.unreadable) || mayBeEmpty || (direct?.names?.length ?? 0) > 0;
+    if (!populated) allArmsWiring = false;
+    lines.push(`wiring ${key.padEnd(26)} reads something: ${populated ? "PASS" : "FAIL (read nothing on a tree that has some)"}`);
+  }
+  let allArms = allArmsWiring;
   for (const [label, mutant, needle] of arms) {
     const { findings } = coverageFindings(mutant);
     const named = findings.some((f) => f.includes(needle));
@@ -609,6 +775,8 @@ async function selftest(repo) {
     ["capability on the tree", withTreeName(clean, "capabilities", "skill:ghost")],
     ["planned room on the tree", withTreeName(clean, "plannedRooms", "ghost-room")],
     ["ci workflow on the tree", withTreeName(clean, "ci", "workflow:ghost")],
+    ["hook on the tree", withTreeName(clean, "hooks", "GhostHook")],
+    ["lint on the tree", withTreeName(clean, "lints", "ghost-lint")],
     // And the class that has no equivalent above: a source that could not be read at all.
     ["an unreadable inventory source", withUnreadable(clean, "gates")],
   ];

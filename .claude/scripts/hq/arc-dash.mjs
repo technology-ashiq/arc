@@ -47,7 +47,7 @@
 import { createServer } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, mkdirSync, appendFileSync, realpathSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { join, dirname, resolve, sep } from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -129,6 +129,9 @@ const STATUS = Object.freeze({
   // tell them apart. REGISTRY_ABSENT is a precondition the caller can fix; the two _FAILED
   // codes are a dependency answering badly, which is a gateway problem, not ours.
   REGISTRY_ABSENT: 503, ASK_FAILED: 502, BRIEF_FAILED: 502,
+  // A phases/ that resolves off the tree is a REFUSAL about this server's own layout, not a
+  // client mistake -- 500 would be right and unhelpful; 403 says "I will not serve that".
+  PHASES_OUTSIDE: 403,
   DECISION_REFUSED: 502,
 });
 
@@ -365,15 +368,31 @@ function phaseTitle(text) {
  * phases" and "this door does not report phases" are different facts, and a missing key
  * states the second while looking exactly like the first.
  */
-function lanePhases(dir) {
+function lanePhases(dir, repo) {
   const phasesDir = join(dir, "phases");
   if (!existsSync(phasesDir)) return { phases: [], phasesOmitted: 0 };
 
-  // withFileTypes + isFile(): a symlink answers isSymbolicLink(), never isFile(), so a link
-  // planted in phases/ cannot walk this read out of initiatives/. The lane NAME is fenced by
-  // validLaneName at the top of apiLane -- this door's one name guard, reused rather than
-  // re-spelled -- and no client input reaches a path here at all: the filenames come from
-  // readdir of that already-fenced directory.
+  // CONTAINMENT BY REALPATH, on the directory AND on every file.
+  //
+  // The previous guard was `withFileTypes` + `isFile()`, and the comment claimed "a link
+  // planted in phases/ cannot walk this read out of initiatives/". An adversarial pass
+  // measured that claim FALSE in two ways: `isFile()` stops a file symlink INSIDE the
+  // directory, but not a directory junction AT `phases/` itself, and not a HARDLINK -- which
+  // is a real directory entry by every test the OS offers. Both served arbitrary off-tree file
+  // content under this door's "file, not log" badge.
+  //
+  // Resolving and comparing is the only check that survives both, because it asks where the
+  // bytes actually ARE rather than what kind of entry points at them.
+  let fence;
+  let realPhases;
+  try {
+    fence = realpathSync(join(repo, "initiatives"));
+    realPhases = realpathSync(phasesDir);
+  } catch { return { phases: [], phasesOmitted: 0 }; }
+  const inside = (p) => p === fence || p.startsWith(fence + sep);
+  if (!inside(realPhases))
+    throw new DashError("PHASES_OUTSIDE", `${phasesDir} resolves outside initiatives/ -- refusing to serve file content from off the tree`);
+
   const names = readdirSync(phasesDir, { withFileTypes: true })
     .filter((d) => d.isFile() && d.name.endsWith(".md"))
     .map((d) => d.name)
@@ -384,7 +403,10 @@ function lanePhases(dir) {
       return key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0;
     });
 
-  const kept = names.slice(0, PHASE_LIST_CAP);
+  const kept = names.slice(0, PHASE_LIST_CAP)
+    // And each FILE, for the hardlink case: a hardlink is a real directory entry that passes
+    // isFile(), so only resolving it says whether the bytes live under initiatives/.
+    .filter((name) => { try { return inside(realpathSync(join(phasesDir, name))); } catch { return false; } });
   const phases = kept.map((name) => {
     const m = name.match(PHASE_FILE_RE);
     // A read that fails here is NOT swallowed into a shorter list: dropping a phase silently
@@ -413,7 +435,7 @@ function apiLane(ctx, laneName) {
   const progress = join(dir, "PROGRESS.md");
   if (!existsSync(progress)) throw new DashError("UNKNOWN_LANE", `no lane "${laneName}" (no initiatives/${laneName}/PROGRESS.md)`);
   const planPath = join(dir, "PLAN.md");
-  const { phases, phasesOmitted } = lanePhases(dir);
+  const { phases, phasesOmitted } = lanePhases(dir, ctx.repo);
   return {
     mode: ctx.mode, badge: "file, not log", lane: laneName,
     header: laneHeader(progress),
@@ -586,7 +608,29 @@ every <code>/api/*</code> read needs <code>Authorization: Bearer &lt;token&gt;</
 </script>`;
 
 // ---------- server ----------
+/**
+ * The flags this door knows. Anything else is exit 2, not a shrug.
+ *
+ * There was no guard here at all, and the near-misses land on the worst possible defaults:
+ *
+ *   --Port 8319   the port flag is dropped, the door binds the DEFAULT 8317 -- which is where
+ *                 the owner's LIVE door is. A harness aiming at a scratch port silently
+ *                 collides with production.
+ *   --Spine <dir> the fixture is dropped and the door goes to LIVE mode, serving the canonical
+ *                 spine to something that explicitly asked for a fixture.
+ *   --Token x     falls back to a random token, so the caller's own token never works.
+ *
+ * Every gate in this repo grew this guard after an adversarial pass; this file is the one that
+ * never did, and it is the one where the wrong default is the owner's real company.
+ */
+const KNOWN_DOOR_FLAGS = ["--port", "--spine", "--bind", "--token", "--routes"];
+
 function boot(argv) {
+  const bad = argv.filter((a) => a.startsWith("-") && !KNOWN_DOOR_FLAGS.includes(a));
+  if (bad.length) {
+    process.stderr.write(`arc-dash: ERROR BAD_ARGS -- unknown flag(s) ${bad.join(", ")}. Known flags are ${KNOWN_DOOR_FLAGS.join(", ")}. Refusing rather than falling back to a default: --Port would bind the live door's port and --Spine would serve the canonical spine to a caller that asked for a fixture.\n`);
+    process.exit(2);
+  }
   const flags = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -790,6 +834,24 @@ function boot(argv) {
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
   server.keepAliveTimeout = 5_000;
+
+  // A door that cannot BIND has not started, and must exit non-zero saying so.
+  //
+  // Without this the `uncaughtException` backstop below swallowed the fatal listen error, the
+  // loop drained, and the process exited **0** -- so every supervisor, fixture and script
+  // reading `$?` saw success from a door that never opened a socket. The launcher then read
+  // that 0 and printed "the door exited with code 0", two wrong sentences from one missing
+  // handler. The backstop exists to contain a bad REQUEST, not to absorb a failed boot.
+  server.on("error", (err) => {
+    const code = /** @type {NodeJS.ErrnoException} */ (err).code;
+    const why = code === "EADDRINUSE"
+      ? `something is already listening on ${bind}:${port}. Stop it, or pass --port <n>.`
+      : code === "EACCES"
+        ? `not permitted to bind ${bind}:${port}.`
+        : err.message;
+    process.stderr.write(`arc-dash: ERROR BIND_FAILED -- ${why}\n`);
+    process.exit(1);
+  });
 
   server.listen(port, bind, () => {
     process.stderr.write(`arc-dash: ${mode} mode on http://${bind === "::1" ? "[::1]" : bind}:${port} (spine: ${mode === "live" ? "canonical" : root})\n`);

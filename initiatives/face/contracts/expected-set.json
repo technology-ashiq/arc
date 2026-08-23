@@ -807,7 +807,8 @@
       "PreToolUse-edit": "toolbelt",
       "PostToolUse": "toolbelt",
       "PreCompact": "toolbelt",
-      "_dispatch.sh": "toolbelt"
+      "_dispatch.sh": "toolbelt",
+      "policy-decide.sh": "policy"
     }
   },
   "rules": {
