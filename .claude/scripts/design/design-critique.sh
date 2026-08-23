@@ -58,11 +58,14 @@ case "$CMD" in
       echo "design-critique: render refused -- nothing to critique." >&2
       exit 1
     fi
-    META="$ROOT/.claude/state/design/renders/$SLUG.json"
+    # design-render.sh writes SESSION-scoped since ADR-1402. Critique keeps the fixed
+    # literal it has always used, so this path is stable -- but it is READ here, which is
+    # why the caller sweep has to cover consumers and not only invocations.
+    META="$ROOT/.claude/state/design/renders/design-critic/$SLUG.json"
     echo ""
     echo "design-critique: ready for the critic."
     echo "  route:    $ROUTE"
-    echo "  render:   .claude/state/design/renders/$SLUG.png"
+    echo "  render:   .claude/state/design/renders/design-critic/$SLUG.png"
     echo "  meta:     ${META#"$ROOT"/}"
     echo "  artifact: $CRITIQUE_DIR/$(date +%Y-%m-%d)-$SLUG.md   <- the critic writes ONLY here"
     echo ""

@@ -5,10 +5,17 @@
 # screenshots are produced by two different commands then comparing them is not a comparison,
 # and a critic judging an unknown viewport is judging nothing in particular.
 #
-# Writes:  .claude/state/design/renders/<slug>.png
-#          .claude/state/design/renders/<slug>.json   (hash + viewport + url + recipe)
+# Writes:  .claude/state/design/renders/<session>/<slug>.png
+#          .claude/state/design/renders/<session>/<slug>.json
+#          ...or <slug>--iter-N.{png,json} when --iter is given (ADR-1401's self-review loop).
 #
-#   design-render.sh <route> [--viewport WxH]
+# The path is SESSION-scoped (ADR-1402) and the duplicate guard discriminates on
+# (route, session) (ADR-1417). Keyed on route alone, a same-route re-render overwrote the one
+# file at that path and the guard skipped it by path identity -- so the composer's most
+# valuable signal, "my revision changed nothing", was classed as a stale browser page,
+# refused, and deleted.
+#
+#   design-render.sh <route> [--mode explore|critique] [--session ID] [--iter N] [--viewport WxH]
 #
 # Exit: 0 rendered | 1 refused (blank/near-empty page, stale duplicate, transport missing,
 #                               determinism CSS not applied+painted)
@@ -37,15 +44,42 @@ VIEWPORT="1440x900"
 # use that needs it: comparing a route against a hash recorded elsewhere.
 PIN_FONT=0
 MEDIA="light"
+# Mode defaults to critique so every caller written before ADR-1402 keeps working untouched:
+# design-critique.sh forwards "$@" and design-explore.sh passes no flags at all. Explore mode
+# is the one that refuses without a session, because a shared session is exactly what races
+# three parallel composers.
+MODE="critique"
+SESSION_ARG=""
+ITER=""
 shift 2>/dev/null || true
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --viewport) VIEWPORT="${2:-1440x900}"; shift 2;;
     --pin-font) PIN_FONT=1; shift;;
     --media) MEDIA="${2:-light}"; shift 2;;
-    *) shift;;
+    --mode) MODE="${2:-}"; shift 2;;
+    --session) SESSION_ARG="${2:-}"; shift 2;;
+    --iter) ITER="${2:-}"; shift 2;;
+    # An unknown flag REFUSES rather than being swallowed. The old catch-all was `*) shift;;`,
+    # which meant a typo like --sesion s1 vanished and the render silently proceeded in
+    # critique mode under the default session -- an omitted --session wearing a flag's clothes.
+    *) echo "design-render: unknown argument '$1'" >&2
+       echo "usage: design-render.sh <route> [--mode explore|critique] [--session ID] [--iter N] [--viewport WxH] [--media light|dark] [--pin-font]" >&2
+       exit 1;;
   esac
 done
+
+case "$MODE" in
+  explore|critique) ;;
+  *) echo "design-render: --mode takes explore or critique, got '$MODE'" >&2; exit 1;;
+esac
+
+if [ -n "$ITER" ]; then
+  case "$ITER" in
+    1|2|3) ;;
+    *) echo "design-render: --iter takes 1, 2 or 3, got '$ITER' (ADR-1401 caps the loop at three)" >&2; exit 1;;
+  esac
+fi
 
 case "$MEDIA" in
   light|dark) ;;
@@ -57,9 +91,25 @@ if [ -z "$ROUTE" ]; then
   exit 1
 fi
 
-# Session is fixed and isolated, so a critique render never inherits cookies, viewport or a
-# stale page from somebody's QA session.
-SESSION="design-critic"
+# Session isolation, two ways. Critique keeps the fixed literal it has always used, so a
+# critique render never inherits cookies, viewport or a stale page from somebody's QA session.
+# Explore MUST name its own, because three composers rendering at once through one browser
+# session race each other -- and an absent flag refuses rather than falling back, since a
+# silent default would reintroduce the race while looking like it worked.
+if [ "$MODE" = "explore" ]; then
+  if [ -z "$SESSION_ARG" ]; then
+    echo "design-render: REFUSED -- --session is required in explore mode (no default; a shared session races parallel renders)." >&2
+    exit 1
+  fi
+  SESSION="$SESSION_ARG"
+else
+  SESSION="${SESSION_ARG:-design-critic}"
+fi
+# The id becomes a directory name, so it is constrained where it is USED, not trusted.
+# Phase 01 will pass <explore-id>--variant-<x>; both fit this grammar.
+case "$SESSION" in
+  ""|*[!a-z0-9-]*) echo "design-render: --session takes lowercase letters, digits and hyphens, got '$SESSION'" >&2; exit 1;;
+esac
 VW="${VIEWPORT%x*}"
 VH="${VIEWPORT#*x}"
 case "$VW" in ''|*[!0-9]*) echo "design-render: bad viewport '$VIEWPORT' (want WxH)" >&2; exit 1;; esac
@@ -71,10 +121,22 @@ case "$VH" in ''|*[!0-9]*) echo "design-render: bad viewport '$VIEWPORT' (want W
 _slug() { printf '%s' "$1" | tr '\\' '/' | sed 's#/#--#g; s#[^A-Za-z0-9-]#-#g' | tr '[:upper:]' '[:lower:]'; }
 SLUG="$(_slug "$ROUTE")"
 
-OUT_DIR="$ROOT/.claude/state/design/renders"
-PNG="$OUT_DIR/$SLUG.png"
-META="$OUT_DIR/$SLUG.json"
+RENDER_ROOT="$ROOT/.claude/state/design/renders"
+OUT_DIR="$RENDER_ROOT/$SESSION"
+# Iteration outputs are immutable: iter-2 never overwrites iter-1, which is what makes
+# "iteration 2 fixed what iteration 1 found" provable from the shas rather than narrated.
+BASE="$SLUG"
+[ -n "$ITER" ] && BASE="$SLUG--iter-$ITER"
+PNG="$OUT_DIR/$BASE.png"
+META="$OUT_DIR/$BASE.json"
 mkdir -p "$OUT_DIR" || exit 1
+
+# Read the hash this exact path last published BEFORE the render overwrites it, so a plain
+# same-path re-render can still report "nothing changed" instead of losing the comparison.
+PREV_SHA=""
+if [ -f "$META" ]; then
+  PREV_SHA="$(sed -n 's/.*"screenshot_sha256": "\([^"]*\)".*/\1/p' "$META" | head -1)"
+fi
 
 # A repo-relative file becomes a file:// URL; anything already a URL is used as-is (Phase 2
 # variants run on a dev server).
@@ -317,34 +379,63 @@ if [ "$SHAPE_OK" -ne 1 ]; then
   exit 1
 fi
 
-# Stale/duplicate guard (pre-mortem risk 3): the same pixels under two different route names
-# means one of them did not actually render -- almost always a stale page the browser never
-# navigated away from. Identical pixels for the SAME route are expected and fine.
-for m in "$OUT_DIR"/*.json; do
+# Stale/duplicate guard (pre-mortem risk 3), now discriminating on (route, session) per
+# ADR-1417. It walks EVERY session, not just this one: case 3 below is only visible across
+# sessions. Identical pixels mean one of three different things, and conflating them is how
+# the self-review loop's key signal became a deletion.
+UNCHANGED="false"
+[ -n "$PREV_SHA" ] && [ "$PREV_SHA" = "$SHA" ] && UNCHANGED="true"
+for m in "$RENDER_ROOT"/*/*.json; do
   [ -f "$m" ] || continue
   case "$m" in "$META") continue;; esac
-  if grep -qF "\"screenshot_sha256\": \"$SHA\"" "$m" 2>/dev/null; then
-    other="$(sed -n 's/.*"route": "\([^"]*\)".*/\1/p' "$m" | head -1)"
-    echo "design-render: REFUSED -- these exact pixels are already recorded for '$other'." >&2
+  grep -qF "\"screenshot_sha256\": \"$SHA\"" "$m" 2>/dev/null || continue
+  other_route="$(sed -n 's/.*"route": "\([^"]*\)".*/\1/p' "$m" | head -1)"
+  other_session="$(sed -n 's/.*"session": "\([^"]*\)".*/\1/p' "$m" | head -1)"
+  # A meta with no session field cannot be compared on (route, session). Falling through to
+  # the old route-only comparison here is exactly how this ADR would silently revert in code
+  # while every line of the spec still read as correct -- so it fails closed instead.
+  if [ -z "$other_session" ]; then
+    echo "design-render: REFUSED -- meta $m carries no session field; refusing to fall back to route-only comparison." >&2
+    rm -f "$PNG" "$META" 2>/dev/null || true
+    exit 1
+  fi
+  if [ "$other_route" != "$ROUTE" ]; then
+    # Case 1, unchanged from before: two routes cannot render identically.
+    echo "design-render: REFUSED -- these exact pixels are already recorded for '$other_route'." >&2
     echo "Two routes cannot render identically; the browser most likely never left the old page." >&2
     rm -f "$PNG" "$META" 2>/dev/null || true
     exit 1
   fi
+  if [ "$other_session" != "$SESSION" ]; then
+    # Case 3, which ADR-1417 left unspecified and the simulation gate caught: a crash-retry
+    # that minted a fresh session id and produced byte-identical pixels never re-rendered.
+    echo "design-render: REFUSED -- these exact pixels are already recorded for route '$ROUTE' in session '$other_session'; a different session re-rendering one route to identical pixels is a retry that never re-rendered." >&2
+    rm -f "$PNG" "$META" 2>/dev/null || true
+    exit 1
+  fi
+  # Case 2: same route, same session, same pixels -- an iteration that changed nothing.
+  # This is a RESULT the self-review loop exists to produce, not a fault.
+  UNCHANGED="true"
 done
 
 # node writes the JSON so the route/url strings are escaped by a real serialiser rather than
 # by printf, which is how a path containing a quote becomes an unparseable meta file.
 if command -v node >/dev/null 2>&1; then
   node -e '
-    const [route,url,png,sha,vw,vh,recipe,out] = process.argv.slice(1);
+    const [route,url,png,sha,vw,vh,recipe,session,iter,unchanged,out] = process.argv.slice(1);
     require("fs").writeFileSync(out, JSON.stringify({
       route, url, png: png.replace(/\\/g,"/"),
       screenshot_sha256: sha, viewport: `${vw}x${vh}@1`, recipe,
+      session, iter: iter === "" ? null : Number(iter), unchanged: unchanged === "true",
     }, null, 2) + "\n");
-  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$META" || exit 1
+  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$ITER" "$UNCHANGED" "$META" || exit 1
 else
-  printf '{\n  "route": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s"\n}\n' \
-    "$ROUTE" "$SHA" "$VW" "$VH" "$RECIPE" > "$META" || exit 1
+  # This branch already emitted a DIFFERENT, smaller object than the node one above -- no url,
+  # no png. Both now carry the three new keys, because a box without node writing a meta the
+  # guard cannot read is the twin fix this repo keeps missing.
+  if [ -n "$ITER" ]; then _iter_json="$ITER"; else _iter_json="null"; fi
+  printf '{\n  "route": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s",\n  "session": "%s",\n  "iter": %s,\n  "unchanged": %s\n}\n' \
+    "$ROUTE" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$_iter_json" "$UNCHANGED" > "$META" || exit 1
 fi
 
 echo "design-render: $ROUTE -> ${PNG#"$ROOT"/}"
