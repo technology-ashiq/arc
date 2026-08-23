@@ -84,6 +84,33 @@ arc_fingerprint() {
 
 # arc_hash_file <path> -- portable sha256 of a file (GNU sha256sum / BSD-macOS
 # shasum / cksum fallback). Empty string if the file is missing.
+# Resolve a path to its PHYSICAL spelling, keeping any tail that does not exist yet.
+#
+# NEVER compare path strings without this. One machine calls a directory /var/folders/x and
+# another calls the same directory /private/var/folders/x (macOS symlinks /var); Windows calls
+# one path both C:/Users/RUNNER~1 and C:/Users/runneradmin (8.3 short names); Git Bash
+# disagrees with git itself about /tmp. Every one of those is the same directory under a
+# different spelling, and a prefix strip that misses leaves the path absolute, matches no
+# allowed prefix, and blocks a boundary's own legitimate access.
+#
+# Lives in core because two design boundaries need it -- critic-scope-check.sh (writes) and
+# composer-scope-check.sh (reads). It was duplicated between them for exactly one commit.
+arc_canon_path() {
+  _cp="$1"; _cs=""
+  while [ -n "$_cp" ] && [ "$_cp" != "/" ] && [ ! -d "$_cp" ]; do
+    _cs="$(basename "$_cp")${_cs:+/$_cs}"
+    _cparent="$(dirname "$_cp")"
+    [ "$_cparent" = "$_cp" ] && break
+    _cp="$_cparent"
+  done
+  if [ -d "$_cp" ]; then
+    _cbase="$(cd "$_cp" 2>/dev/null && pwd -P)" || _cbase="$_cp"
+    printf '%s' "$_cbase${_cs:+/$_cs}"
+  else
+    printf '%s' "$1"
+  fi
+}
+
 arc_hash_file() {
   [ -f "$1" ] || { echo ""; return 0; }
   if   arc_have sha256sum; then sha256sum "$1"      | cut -d' ' -f1

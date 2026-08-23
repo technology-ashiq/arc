@@ -85,6 +85,11 @@ _arc_design_sandbox() {
   cp "$ARC_CORE_SRC"/*.json                       "$SANDBOX/.claude/scripts/core/" 2>/dev/null
   cp "$ARC_ROOT"/.claude/hooks/PreToolUse-edit.d/10-design-critic.sh \
      "$SANDBOX/.claude/hooks/PreToolUse-edit.d/" 2>/dev/null
+  # ADR-1415's read boundary. Without this copy every composer-scope hook case would run
+  # against an absent fragment and pass on nothing at all -- the vacuous shape the testing
+  # rules name, and the reason this sandbox mirrors the layout rather than approximating it.
+  mkdir -p "$SANDBOX/.claude/hooks/PreToolUse-read.d"
+  cp "$ARC_ROOT"/.claude/hooks/PreToolUse-read.d/10-design-composer.sh      "$SANDBOX/.claude/hooks/PreToolUse-read.d/" 2>/dev/null
   cd "$SANDBOX" || return 1
   git init -q
   # Repo-local identity, not GIT_AUTHOR_* env: the design scripts shell out to git in
