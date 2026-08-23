@@ -114,7 +114,12 @@ const cases = {
    */
   "receipt-shape"() {
     const src = readFileSync(join(ARC_ROOT, ".claude", "scripts", "engine", "arc-run.mjs"), "utf8");
-    const at = src.indexOf("const refusal = boundaryRefusal(");
+    // ANCHORED ON THE REFUSAL BLOCK, not on how the verdict was obtained. This searched for
+    // `const refusal = boundaryRefusal(` and went red the moment the confinement call was hoisted
+    // so the preview and the real dispatch could share ONE verdict -- the probe was pinned to a
+    // spelling rather than to the property it asserts, which is that the emit happens before the
+    // exit. The call site count is a separate assertion, in the bats file, and it stays exact.
+    const at = src.indexOf("const refusal = boundaryVerdict;");
     if (at < 0) { console.log("NO_CALL_SITE"); return; }
     const block = src.slice(at, at + 1200);
     const emitAt = block.indexOf("emitRun(");
