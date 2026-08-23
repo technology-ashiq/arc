@@ -205,8 +205,22 @@ export function dogfoodVerdict(journal, spine, opts = {}) {
 // ---------- CLI ----------
 
 async function run(repo, flags) {
-  const journalDir = flags.journal ?? join(repo, ".claude", "state", "hq", "dash-journal");
+  // DERIVED the way the door derives it, not guessed.
+  //
+  // This read `.claude/state/hq/dash-journal`, a path the door has never written to. arc-dash
+  // uses `ARC_DASH_JOURNAL_DIR || join(dirname(spineRoot), "face")`, and spineRoot() is
+  // `<repo>/.claude/state/hq` -- so the journal lives at `<repo>/.claude/state/face`. The tool
+  // that settles REQ-10 could not find its own input, and would have failed closed with "no
+  // journal directory" on the owner's real tree: honest, and useless.
+  //
+  // I invented the path instead of reading the file that defines it. Two layers of this lane's
+  // own rules say not to (verify a path against its defining file; derive, do not copy), and a
+  // cross-layer pin in tests/face/dash-doors.mjs now reads arc-dash's source so the two cannot
+  // drift apart again in silence.
   const spineRoot = flags.spine ?? join(repo, ".claude", "state", "hq");
+  const journalDir = flags.journal
+    ?? process.env.ARC_DASH_JOURNAL_DIR
+    ?? join(dirname(spineRoot), "face");
 
   // FAIL CLOSED on inputs that are not there, BEFORE reading either of them. "0 decisions,
   // requirement not met" and "I could not find the journal" are different facts and the second

@@ -351,6 +351,32 @@ check("and its self-origin set from the same seam", (viteSrc.match(/\$\{APP_PORT
 // Positive control: the pin must be reading real files, not empty strings.
 check("both sources were actually read", launcherSrc.length > 2000 && viteSrc.length > 500, `launcher=${launcherSrc.length} vite=${viteSrc.length}`);
 
+// ---------------------------------------------------------------------------------------
+// The DOOR writes the journal; face-dogfood READS it. Two files, one path, and nothing linked
+// them -- so face-dogfood defaulted to `.claude/state/hq/dash-journal`, which the door has
+// never written to. The tool that settles REQ-10 could not find its own input and would have
+// failed closed with "no journal directory" on the owner's real tree: honest, and useless.
+//
+// Pinned from BOTH sources, the same way the env-seam pin above works, because the failure is
+// silent on both sides: the door writes happily to a directory nobody reads, and the reader
+// reports an empty world it never looked at.
+const dashSrc = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "utf8");
+const dogfoodSrc = readFileSync(join(REPO, ".claude", "scripts", "core", "face-dogfood.mjs"), "utf8");
+check("the door derives its journal dir from dirname(spineRoot) + face",
+  /journalDir = process\.env\.ARC_DASH_JOURNAL_DIR \|\| join\(dirname\(root\), "face"\)/.test(dashSrc),
+  "arc-dash's journal default moved -- re-read it and update the reader");
+// The old literal is tested for on CODE lines only. The first cut grepped the whole file and
+// went red on the COMMENT that explains the bug -- a check that cannot tell prose from code
+// forces you to stop writing the explanation, which is a worse trade than the drift it guards.
+const dogfoodCode = dogfoodSrc.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+check("and the reader derives the SAME shape, not a literal of its own",
+  /join\(dirname\(spineRoot\), "face"\)/.test(dogfoodSrc) && !/dash-journal/.test(dogfoodCode),
+  "face-dogfood is not deriving the door's path");
+check("both honour ARC_DASH_JOURNAL_DIR, so an override moves BOTH",
+  /ARC_DASH_JOURNAL_DIR/.test(dashSrc) && /ARC_DASH_JOURNAL_DIR/.test(dogfoodSrc));
+// Positive control: the pin must be reading real files.
+check("both sources were actually read (journal pin)", dashSrc.length > 5000 && dogfoodSrc.length > 3000);
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // The floor moves with the suite. A count that stays at an old number is how a block that
 // stopped registering reads green: the assertions still pass, there are simply fewer of them.
