@@ -21,6 +21,17 @@ bats_require_minimum_version 1.5.0
 
 load test_helper
 
+# ONE granting root for the whole file (ADR-0225). A runtime driver is unreachable without a row
+# that names it, and the real router routes `commit-msg-draft` to `claude-code` -- so every dispatch
+# in this file used to reach the agent runtime through a row carrying no cap, no tenure and no
+# judge. That was the hole ADR-0225 closes, not a fixture detail, so the suite moves to a root whose
+# router carries the grant rather than the rule bending to keep the suite green.
+setup_file() {
+  ARC_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
+  export GRANT_ROOT="$BATS_FILE_TMPDIR/grant-root"
+  _arc_runtime_grant_root "$GRANT_ROOT" "$ARC_ROOT"
+}
+
 setup() {
   # AN AMBIENT ARC_RUN_TRANSCRIPT_DIR MUST NOT SURVIVE INTO A TEST. The repo now tells callers to
   # export this variable to collect evidence, so on any box where it IS exported every dispatch in
@@ -40,7 +51,7 @@ setup() {
 run_arc() {
   export ARC_HERMES_FAKE_CASE="$1"
   run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT"
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT"
 }
 
 # The planted key is FAKE: AWS-shaped, matching redact.mjs rule `aws-access-key-id`, and
@@ -211,7 +222,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   local dir="$BATS_TEST_TMPDIR/transcripts"
   export ARC_HERMES_FAKE_CASE="commit-clean-noisy"
   run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT" --transcript-dir "$dir"
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT" --transcript-dir "$dir"
   [ "$status" -eq 0 ] || { echo "the run did not succeed: $output"; false; }
 
   # ONE file, named, and then read. Globbing a whole directory proves only that SOME file in it
@@ -273,18 +284,23 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   local dir="$BATS_TEST_TMPDIR/flag-transcripts"
   export ARC_HERMES_FAKE_CASE="commit-clean-noisy"
   run --separate-stderr node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT" --transcript-dir "$dir"
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT" --transcript-dir "$dir"
   [ "$status" -eq 0 ] || { echo "the run did not succeed: $stderr"; false; }
   local f; f="$(find "$dir" -type f -name '*.transcript.txt')"
   [ -n "$f" ] || { echo "no transcript was stored in $dir"; false; }
   grep -q "RUNTIME-STDOUT-MARKER" "$f" || { echo "the transcript carries no runtime bytes"; false; }
 
-  # THE STREAM SPLIT IS PINNED HERE. arc-run's stdout IS the JSON receipt -- a sibling test parses
+  # THE STREAM SPLIT IS PINNED HERE. Note the variables: bats defines `$output`, `$lines`,
+  # `$stderr` and `$stderr_lines` -- there is NO `$stdout`. Under `--separate-stderr`, stdout
+  # lands in `$output`. Asserting on `$stdout` compares against an empty string, which is the
+  # vacuous-pass shape wearing a variable name; CI caught it because the assertion was a
+  # positive one.
+  # THE SPLIT ITSELF: arc-run's stdout IS the JSON receipt -- a sibling test parses
   # it -- and every operator line is stderr. bats merges the two into $output, so a substring
   # assertion is satisfied by the WRONG stream: move the storage line to stdout and every consumer
   # piping arc-run into jq breaks while these tests stay green.
-  [[ "$stdout" == *'"commits"'* ]] || { echo "stdout is not the receipt: $stdout"; false; }
-  [[ "$stdout" != *"stored the scrubbed"* ]] || { echo "an operator line reached stdout: $stdout"; false; }
+  [[ "$output" == *'"commits"'* ]] || { echo "stdout is not the receipt: $output"; false; }
+  [[ "$output" != *"stored the scrubbed"* ]] || { echo "an operator line reached stdout: $output"; false; }
   [[ "$stderr" == *"stored the scrubbed"* ]] || { echo "the storage line is not on stderr: $stderr"; false; }
 }
 
@@ -303,7 +319,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   export ARC_RUN_TRANSCRIPT_DIR="$envdir"
   export ARC_HERMES_FAKE_CASE="commit-clean-noisy"
   run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT" --transcript-dir "$flagdir"
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT" --transcript-dir "$flagdir"
   [ "$status" -eq 0 ] || { echo "the run did not succeed: $output"; false; }
   [[ "$output" == *"is ignored for this run"* ]] || { echo "the override was silent: $output"; false; }
   local nf; nf="$(find "$flagdir" -type f -name '*.transcript.txt' | wc -l | tr -d ' ')"
@@ -320,7 +336,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   unset ARC_RUN_TRANSCRIPT_DIR
   export ARC_HERMES_FAKE_CASE="commit-clean-noisy"
   run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT" --transcript-dir "$BATS_TEST_TMPDIR/only-flag"
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT" --transcript-dir "$BATS_TEST_TMPDIR/only-flag"
   [ "$status" -eq 0 ] || { echo "the run did not succeed: $output"; false; }
   [[ "$output" != *"is ignored for this run"* ]] || { echo "an ignored-env notice fired with no env var set: $output"; false; }
   # Paired positive, so a crash cannot satisfy the line above.
@@ -331,7 +347,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   export ARC_HERMES_FAKE_CASE="commit-clean"
   mkdir -p "$BATS_TEST_TMPDIR/one" "$BATS_TEST_TMPDIR/two"
   run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT" \
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT" \
     --transcript-dir "$BATS_TEST_TMPDIR/one" --transcript-dir "$BATS_TEST_TMPDIR/two"
   [ "$status" -eq 2 ] || { echo "two --transcript-dir values were accepted: $output"; false; }
   [[ "$output" == *"given twice"* ]] || { echo "the refusal does not name the cause: $output"; false; }
@@ -349,12 +365,12 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   # path -- missing-vs-empty wearing a third face.
   export ARC_HERMES_FAKE_CASE="commit-clean"
   run --separate-stderr node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT" --transcript-dir --dry-run
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT" --transcript-dir --dry-run
   [ "$status" -eq 2 ] || { echo "a flag was accepted as a path value: $stderr"; false; }
   [[ "$stderr" == *"which is another flag, not a value"* ]] || { echo "the refusal does not name the cause: $stderr"; false; }
   # THE POSITIVE HALF: prove no dispatch happened. An exit code alone does not distinguish
   # "refused before anything ran" from "ran and then failed".
-  [ -z "$stdout" ] || { echo "a driver produced output despite the refusal: $stdout"; false; }
+  [ -z "$output" ] || { echo "a driver produced output despite the refusal: $output"; false; }
 }
 
 @test "REQ-03 STORAGE: an empty --transcript-dir value is an operator error, not unset" {
@@ -363,7 +379,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   # evidence path while the command line still claims it is on.
   export ARC_HERMES_FAKE_CASE="commit-clean"
   run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT" --transcript-dir ""
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT" --transcript-dir ""
   [ "$status" -eq 2 ] || { echo "an empty --transcript-dir was accepted: $output"; false; }
   [[ "$output" == *"needs a value"* ]] || { echo "the refusal does not name the cause: $output"; false; }
 }
@@ -376,7 +392,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   export ARC_RUN_TRANSCRIPT_DIR=""
   export ARC_HERMES_FAKE_CASE="commit-clean"
   run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT"
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT"
   [ "$status" -eq 2 ] || { echo "an empty ARC_RUN_TRANSCRIPT_DIR was read as unset: $output"; false; }
   [[ "$output" == *"set but empty"* ]] || { echo "the refusal does not name the cause: $output"; false; }
 }
@@ -391,11 +407,11 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   touch "$afile"
   export ARC_HERMES_FAKE_CASE="commit-clean"
   run --separate-stderr node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT" --transcript-dir "$afile"
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT" --transcript-dir "$afile"
   [ "$status" -eq 2 ] || { echo "an unusable destination did not refuse: $stderr"; false; }
   [[ "$stderr" == *"cannot be used"* ]] || { echo "the refusal does not name the cause: $stderr"; false; }
   # The positive half: NO driver ran, so nothing was paid for.
-  [ -z "$stdout" ] || { echo "the driver ran before the destination was checked: $stdout"; false; }
+  [ -z "$output" ] || { echo "the driver ran before the destination was checked: $output"; false; }
 }
 
 @test "REQ-03 STORAGE: a reserved Windows device name is refused" {
@@ -405,7 +421,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   # can address it afterwards. Evidence that exists and cannot be fetched is not evidence.
   export ARC_HERMES_FAKE_CASE="commit-clean"
   run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT" --transcript-dir "$BATS_TEST_TMPDIR/nul"
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT" --transcript-dir "$BATS_TEST_TMPDIR/nul"
   [ "$status" -eq 2 ] || { echo "a reserved device name was accepted: $output"; false; }
   [[ "$output" == *"reserved device name"* ]] || { echo "the refusal does not name the cause: $output"; false; }
 }
@@ -418,7 +434,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   unset ARC_RUN_TRANSCRIPT_DIR
   export ARC_HERMES_FAKE_CASE="commit-clean-noisy"
   run --separate-stderr node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver hermes --root "$ARC_ROOT"
+    --process commit-msg-draft --driver hermes --root "$GRANT_ROOT"
   [ "$status" -eq 0 ] || { echo "the run did not succeed: $stderr"; false; }
   [[ "$stderr" == *"NO destination is set"* ]] || { echo "the discard was silent: $stderr"; false; }
   [[ "$stderr" == *"--transcript-dir"* ]] || { echo "the warning does not name the fix: $stderr"; false; }
@@ -435,7 +451,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   # for hermes, where it was matching arc's own unconditional banners rather than runtime output.
   unset ARC_RUN_TRANSCRIPT_DIR
   run --separate-stderr node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
-    --process commit-msg-draft --driver mock --root "$ARC_ROOT"
+    --process commit-msg-draft --driver mock --root "$GRANT_ROOT"
   [[ "$stderr" == *"NO destination is set"* ]] || { echo "a silent-stderr driver discarded its transcript in silence: $stderr"; false; }
 }
 

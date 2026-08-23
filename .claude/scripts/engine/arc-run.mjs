@@ -70,7 +70,7 @@ import { MODEL_RE } from "../hq/lib/validate.mjs";
 const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
-import { isExpired, routerFaults } from "./router-row.mjs";
+import { isExpired, routerFaults, RUNTIME_DRIVERS } from "./router-row.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
@@ -518,6 +518,51 @@ if (driverArg === "auto") {
   fallbacks = Array.isArray(row.fallback) ? row.fallback : [];
 }
 if (!DRIVERS.includes(driver)) { console.error(`arc-run: unknown driver \`${driver}\` (known: ${DRIVERS.join(", ")})`); process.exit(1); }
+
+/**
+ * A HIRED RUNTIME IS UNREACHABLE WITHOUT A ROW THAT GRANTS IT (ADR-0225).
+ *
+ * MEASURED 2026-08-23, and it falsified this repository's own termination spec for the SECOND time.
+ * `engine/router.yaml` says terminating the hire means deleting the row, and calls that "the only
+ * form with no reachable remainder: no row, no route". With the row deleted and the driver named on
+ * the command line, arc-run printed `would run build-in-public-draft on hermes` and exited 0. The
+ * wording it replaced had been found false the same way on 2026-08-17; the correction was never
+ * measured, so a false claim about a governance mechanism was corrected by another false claim
+ * about the same mechanism, inside the same comment.
+ *
+ * THE HOLE BEHIND IT IS LARGER THAN TERMINATION. `router-row.mjs` validates the four terms when the
+ * router LOADS, for rows that route to a runtime. Naming the driver explicitly is a different path,
+ * and it was ungoverned: `--driver hermes --process commit-msg-draft` runs the hire under a row that
+ * grants it nothing -- no cap, no tenure, no judge -- because that row names `claude-code` and so is
+ * not a runtime row at all. `arc-bench.mjs` makes `--driver` MANDATORY, so the one lane that spends
+ * real money took the ungoverned path. The identical observation was made about TENURE on
+ * 2026-08-17 (`loadRouter()` ran only inside the `--driver auto` branch) and fixed for tenure alone.
+ *
+ * THE GRANT MUST NAME THE THING GRANTED. "Any row exists for this class" would be satisfied by
+ * `commit-msg-draft`'s row, which is precisely the near-miss guard this cycle keeps finding.
+ *
+ * EXIT 2, not 5. Exit 5 is the data boundary and means the DOCUMENT may not go there; this is an
+ * operator error -- the caller named a contractor nobody hired -- which is what arc-run already
+ * spends 2 on. A fixture has to be able to tell the two apart.
+ *
+ * In-house drivers are untouched: they carry no terms, they are not hires, and `RUNTIME_DRIVERS` is
+ * the same set `router-row.mjs` reads to decide which rows must carry the four terms -- one
+ * definition of "this is a hire", read by the loader and the dispatcher, so the two cannot drift.
+ */
+if (RUNTIME_DRIVERS.has(driver)) {
+  const grantChain = routedRow
+    ? [routedRow.driver, ...(Array.isArray(routedRow.fallback) ? routedRow.fallback : [])]
+    : [];
+  const granted = grantChain.some((d) => String(d || "").trim() === driver);
+  if (!granted) {
+    console.error(`arc-run: \`${processName}\` does not grant the agent runtime \`${driver}\``);
+    console.error(routedRow
+      ? `         its row in engine/router.yaml names ${grantChain.filter(Boolean).map((d) => `\`${String(d).trim()}\``).join(" -> ") || "no driver"}, and a hire is only reachable through a row that names it (ADR-0225)`
+      : "         there is no row for this class in engine/router.yaml at all, so nothing carries the cap, tenure, judge or review date this runtime must run under (ADR-0225)");
+    console.error("         a runtime with no grant has no terms -- add a reviewed row, or dispatch a class that has one");
+    process.exit(2);
+  }
+}
 
 // THE TIER MUST REACH THE DRIVER OR IT IS A LABEL. Without this the routed tier changed
 // nothing: `high-judgment` and `balanced-workhorse` produced byte-identical invocations, the

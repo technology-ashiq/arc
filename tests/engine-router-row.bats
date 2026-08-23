@@ -252,6 +252,67 @@ YAML
   [[ "$output" == *"fallback chain"* ]] || { echo "the reason does not name the fallback: $output"; false; }
 }
 
+# ---------------------------------------------------------------------------------------------
+# ADR-0225 -- termination is a fixture, not a comment
+# ---------------------------------------------------------------------------------------------
+
+# A root whose router carries NO class rows at all: the state after the termination spec's step 2.
+terminated_root() {
+  local root="$1"
+  mkdir -p "$root/engine" "$root/processes"
+  cp "$ARC_ROOT/processes/build-in-public-draft.process.yaml" "$root/processes/"
+  cat > "$root/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes: {}
+default:
+  tier: balanced-workhorse
+  driver: claude-code
+  fallback: []
+YAML
+}
+
+@test "ADR-0225 TERMINATION: with the row deleted the runtime is unreachable, even named explicitly" {
+  # THE TERMINATION SPEC WAS FALSE TWICE, and this fixture exists because prose could not catch it.
+  # engine/router.yaml said deleting the row is "the only form with no reachable remainder: no row,
+  # no route". Measured 2026-08-23: arc-run printed `would run build-in-public-draft on hermes` and
+  # exited 0. The wording it REPLACED had been found false the same way on 2026-08-17 -- a false
+  # claim about a governance mechanism, corrected by another false claim about the same mechanism,
+  # inside the same comment. A termination step is a claim about behaviour and belongs here.
+  local root="$BATS_TEST_TMPDIR/terminated"
+  terminated_root "$root"
+  run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes --dry-run
+  [ "$status" -eq 2 ] || { echo "a deleted row did not terminate the hire, got $status: $output"; false; }
+  [[ "$output" == *"does not grant the agent runtime"* ]] || { echo "the refusal does not name the cause: $output"; false; }
+  # Exit 5 is the DATA BOUNDARY and means the document may not go there; this is an operator error.
+  # A fixture has to be able to tell the two apart, so the code is asserted and not merely non-zero.
+  [[ "$output" != *"internal-only"* ]] || { echo "a grant refusal was reported as a data-boundary refusal: $output"; false; }
+}
+
+@test "ADR-0225: a class whose row names ANOTHER driver does not vouch for the runtime" {
+  # "Any row exists for this class" would have been satisfied by commit-msg-draft, whose row names
+  # claude-code -- and that is precisely the near-miss guard shape this cycle keeps finding. The
+  # grant has to name the thing being granted. This is also the path arc-bench takes: it makes
+  # --driver MANDATORY, so the one lane that spends real money was the ungoverned one.
+  run node "$(RUN)" --root "$ARC_ROOT" --process commit-msg-draft --driver hermes --dry-run
+  [ "$status" -eq 2 ] || { echo "an ungranted class dispatched the runtime, got $status: $output"; false; }
+  [[ "$output" == *"does not grant the agent runtime"* ]] || { echo "$output"; false; }
+  # The refusal names what the row DOES grant, so the operator is not left guessing.
+  [[ "$output" == *"claude-code"* ]] || { echo "the refusal does not name the row's own chain: $output"; false; }
+}
+
+@test "ADR-0225 NEGATIVE CONTROL: the granted class still dispatches, and in-house drivers are untouched" {
+  # Without this, a rule that refuses EVERY runtime dispatch passes both tests above -- and the
+  # cycle would have shipped a termination that works by breaking the hire.
+  run node "$(RUN)" --root "$ARC_ROOT" --process build-in-public-draft --driver hermes --dry-run
+  [ "$status" -eq 0 ] || { echo "the granted class was refused: $output"; false; }
+  [[ "$output" == *"would run"* ]] || { echo "$output"; false; }
+  # And an in-house driver on an ungranted class is not a hire and is not touched by the rule.
+  run node "$(RUN)" --root "$ARC_ROOT" --process commit-msg-draft --driver mock --dry-run
+  [ "$status" -eq 0 ] || { echo "an in-house driver was caught by the runtime-grant rule: $output"; false; }
+}
+
 @test "this file registers every test it declares" {
   # FIXED 2026-08-17. It counted `^@test ` lines in the SOURCE -- the DECLARED count. bats silently
   # DROPS a @test whose name carries a non-ASCII character and the source line survives the drop,
@@ -259,6 +320,6 @@ YAML
   # the fixed form; this one, written the same week in the same directory, carried the defeated one.
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "16" ] || { echo "expected 16 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "19" ] || { echo "expected 19 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

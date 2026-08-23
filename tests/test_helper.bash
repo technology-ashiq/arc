@@ -1002,3 +1002,53 @@ arc_leave_the_repo() {
   [ -e "/.git" ] && { echo "a git repository at / would be read as this repo"; return 1; }
   return 0
 }
+
+# Build a throwaway arc root whose router GRANTS the agent runtime for `commit-msg-draft`.
+#
+# ADR-0225 made a runtime driver unreachable without a row that names it, which is what finally
+# makes the termination spec true -- deleting the row really does end the hire. The side effect is
+# that a suite exercising the DRIVER CONTRACT through `--driver hermes` on a class the real router
+# routes to `claude-code` was, all along, exercising the hole: an agent runtime dispatched under a
+# row carrying no cap, no tenure and no judge. Those suites move here rather than the rule bending
+# for them.
+#
+# CALL THIS FROM `setup_file`, NOT `setup`. The copy is 229 files; per test it is I/O-heavy and
+# load-sensitive, and this repo already records a flake of exactly that shape (engine-driver-contract
+# REQ-04, PASS and FAIL observed on byte-identical trees). Once per file is enough -- nothing in
+# these suites writes into the root.
+#
+# `review_by` is deliberately far in the future: this root exists to test storage and secrets, and a
+# tenure refusal here would be a different test failing for a reason it does not name.
+_arc_runtime_grant_root() {
+  local dest="$1" src="${2:-$ARC_ROOT}"
+  mkdir -p "$dest/engine" "$dest/processes" "$dest/.claude"
+  cp -r "$src/.claude/scripts" "$dest/.claude/"
+  cp "$src/processes/commit-msg-draft.process.yaml" "$dest/processes/"
+  # The eval fixture rides along: arc-run reads it to decide whether a bad answer is the DRIVER's
+  # fault or the PROCESS's, and without it every schema failure would be blamed on the process.
+  if [ -d "$src/tests/fixtures/engine/evals/commit-msg-draft" ]; then
+    mkdir -p "$dest/tests/fixtures/engine/evals"
+    cp -r "$src/tests/fixtures/engine/evals/commit-msg-draft" "$dest/tests/fixtures/engine/evals/"
+  fi
+  cat > "$dest/engine/router.yaml" <<'GRANTYAML'
+version: 1
+tiers:
+  - balanced-workhorse
+models:
+  balanced-workhorse:
+    claude-code: sonnet
+classes:
+  commit-msg-draft:
+    tier: balanced-workhorse
+    driver: hermes
+    cap: L1-drafts
+    hosted: local
+    judge: ashiq
+    review_by: 2099-12-31
+    fallback: []
+default:
+  tier: balanced-workhorse
+  driver: claude-code
+  fallback: []
+GRANTYAML
+}
