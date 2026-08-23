@@ -196,7 +196,13 @@ export function boundaryRefusal({ input, processName, hosted, cap }) {
   // Fixture 3 is the same refusal reported with the routing fact attached, NOT a second rule.
   // Writing it as its own check is how the two would drift.
   const where = String(hosted || "").trim().toLowerCase() === "cloud"
-    ? ` against a hosted: cloud row, which sends it off this machine`
+    // THE CLAUSE IS ABOUT THE ROW, NOT ABOUT THIS DISPATCH, and the difference is a true sentence
+    // versus a false one. `hosted` is read off the routed row however the driver was chosen, so
+    // `--driver mock` on a `hosted: cloud` class used to be refused with "which sends it off this
+    // machine" for a driver that reaches no provider at all. Safe direction, and still a statement
+    // the code could not back -- which is the class this cycle has now corrected in a router
+    // comment, an ADR and an evidence file.
+    ? ` against a row that routes off this machine (hosted: cloud)`
     : "";
   return {
     code: EXIT_DATA_BOUNDARY,
