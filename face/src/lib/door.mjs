@@ -27,7 +27,13 @@ export const KNOWN_REFUSALS = {
   LIMIT_INVALID: "That page size is outside the door's cap.",
   CURSOR_INVALID: "That cursor is not one this door issued.",
   REGISTRY_ABSENT: "The room registry has not been generated yet.",
-  ASOF_UNSUPPORTED: "This panel is file-borne; it has no day-granular history to scrub to.",
+  // NOT "this panel is file-borne". The door raises ASOF_UNSUPPORTED from more than one
+  // place and they mean different things: the P&L refuses a DAY because its native scope is
+  // a month, which has nothing to do with being file-borne. A house sentence that names one
+  // cause would MASK the door's own, more specific message -- and a refusal the client
+  // rewrites into the wrong reason is worse than one it does not recognise at all. Found by
+  // the Money room, which read the route before trusting this table.
+  ASOF_UNSUPPORTED: "This view has no history at that granularity. The door says which scope it does support.",
 };
 
 /**

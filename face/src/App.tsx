@@ -21,6 +21,12 @@ import GenericRoom from './rooms/GenericRoom'
 import IndexRoom from './rooms/IndexRoom'
 import Today from './rooms/Today'
 import Inbox from './rooms/Inbox'
+import SpineRoom from './rooms/SpineRoom'
+import BoardRoom from './rooms/BoardRoom'
+import CouncilRoom from './rooms/CouncilRoom'
+import AskArcRoom from './rooms/AskArcRoom'
+import MoneyRoom from './rooms/MoneyRoom'
+import VenturesRoom from './rooms/VenturesRoom'
 import MapRoom from './rooms/MapRoom'
 import { needsYouByRoom } from './lib/map.mjs'
 import { Failure, Loading } from './ui/kit'
@@ -202,6 +208,12 @@ export default function App() {
 function RoomHost({ room, rooms, door, onOpen, mode, token, needs, needsUnplaced }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void; mode?: string; token: string | null; needs: Record<string, number>; needsUnplaced: number }) {
   if (room.id === 'today') return <Today door={door} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'inbox') return <Inbox door={door} sentence={room.sentence} lede={room.lede} />
+  if (room.id === 'spine') return <SpineRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
+  if (room.id === 'board') return <BoardRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
+  if (room.id === 'council-chamber') return <CouncilRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
+  if (room.id === 'ask-arc') return <AskArcRoom door={door} room={room} sentence={room.sentence} lede={room.lede} onOpen={onOpen} />
+  if (room.id === 'money') return <MoneyRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
+  if (room.id === 'ventures') return <VenturesRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'map') return <MapRoom rooms={rooms} onOpen={onOpen} mode={mode} token={token} needsYou={needs} needsYouUnplaced={needsUnplaced} />
   if (room.render === 'index') return <IndexRoom room={room} rooms={rooms} door={door} />
   return <GenericRoom room={room} />

@@ -18,7 +18,39 @@ load 'test_helper'
   [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
   # Floor the count. "0 failed" is also what a suite that asserted nothing prints.
   local n; n=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks.*/\1/p')
-  [ -n "$n" ] && [ "$n" -ge 60 ] || { echo "only $n checks ran: $output"; false; }
+  [ -n "$n" ] && [ "$n" -ge 165 ] || { echo "only $n checks ran: $output"; false; }
+}
+
+@test "no L3 test or source file carries a byte that makes grep call it binary" {
+  # A literal NUL in a source file makes grep treat the whole file as binary, and a
+  # binary-flagged file is SKIPPED silently by every grep-driven gate -- including CI's own
+  # test-count floor. That is the "test that was never there" failure in .claude/rules/
+  # testing.md, arriving through a byte rather than through a character in a @test name.
+  # It happened here: a control-character assertion was written with the character embedded
+  # instead of built with String.fromCharCode.
+  run node -e "
+    const fs = require('fs'), path = require('path');
+    const roots = [path.join(process.argv[1], 'tests', 'face'), path.join(process.argv[1], 'face', 'src')];
+    let scanned = 0; const bad = [];
+    const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(f); continue; }
+      if (!/[.](mjs|js|ts|tsx|css)$/.test(e.name)) continue;
+      scanned++;
+      if (fs.readFileSync(f).includes(0)) bad.push(f);
+    } };
+    for (const r of roots) if (fs.existsSync(r)) walk(r);
+    if (bad.length) { console.log('BINARY-FLAGGED:', bad.join(', ')); process.exit(1); }
+    console.log('RAN: scanned', scanned, 'files, none carries a NUL');
+  " "$ARC_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: scanned"* ]] || { echo "$output"; false; }
+  # Vacuous-pass guard: the walk must actually have found files. Captured with a bash
+  # regex rather than sed: this line has been mangled twice by escaping, and a gate whose
+  # own extraction is fragile is a gate that will one day extract nothing and pass.
+  local n=""
+  [[ "$output" =~ RAN:\ scanned\ ([0-9]+)\ files ]] && n="${BASH_REMATCH[1]}"
+  [ -n "$n" ] && [ "$n" -ge 15 ] || { echo "only '$n' files scanned: $output"; false; }
 }
 
 @test "the L3 logic layer imports NOTHING that needs an install" {

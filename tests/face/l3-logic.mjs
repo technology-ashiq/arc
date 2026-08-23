@@ -479,8 +479,14 @@ check("a registry with no rooms is returned untouched rather than throwing",
 check("an empty reason is refused", inbox.validateReason("").ok === false);
 check("whitespace alone is not a reason", inbox.validateReason("   \n  ").ok === false);
 check("a real reason is accepted", inbox.validateReason("kill criteria met, closing it").ok === true);
+// The control character is BUILT, never embedded. Writing a literal NUL into this file made
+// grep treat the whole source as binary -- and a test file grep skips is the "test that was
+// never there" failure `.claude/rules/testing.md` names: green, and never run.
+const NUL = String.fromCharCode(0);
 check("a control character is refused (the spine refuses it too)",
-  inbox.validateReason("ok nope").ok === false);
+  inbox.validateReason(`ok${NUL}nope`).ok === false);
+check("the same reason WITHOUT the control character is accepted -- so the check above is about the character",
+  inbox.validateReason("oknope").ok === true);
 const long = "x".repeat(2100);
 check("a reason past the spine's byte cap is refused here, not at the door",
   inbox.validateReason(long).ok === false, `len=${long.length}`);
@@ -530,6 +536,149 @@ check("every tile carries the route and field it came from -- a number with a re
   tiles.every((t) => typeof t.why === "string" && t.why.length > 4));
 check("every tile carries the sentence that keeps a zero from lying",
   tiles.every((t) => typeof t.note === "string" && t.note.length > 4));
+
+// ---------- the Spine and Board rooms ----------
+const spineLib = await import(pathToFileURL(join(LIB, "spine.mjs")).href);
+check("spine module loaded (vacuous-pass guard)", typeof spineLib.quarantineView === "function");
+
+// THE RESERVED-HUE AUDIT. TONE_INK is the only table in this module that grants a hue, so
+// walking it proves no fifth meaning took one. This is the assertion the whole colour
+// contract rests on, and it is cheap precisely because the grant lives in one place.
+const RESERVED = ["--amber", "--green", "--red", "--violet"];
+const inks = Object.values(spineLib.TONE_INK);
+const reservedGranted = inks.filter((v) => RESERVED.some((r) => String(v).includes(r)));
+check("every reserved hue this module grants is granted at most once",
+  new Set(reservedGranted).size === reservedGranted.length, reservedGranted.join(","));
+check("the board spends NO reserved hue -- a lane near its kill line is not an incident",
+  RESERVED.every((r) => !JSON.stringify(spineLib.statusFacet("LIVE")).includes(r)
+    && !JSON.stringify(spineLib.statusFacet("BLOCKED")).includes(r)));
+
+// Quarantine: the number that reads as catastrophe and almost never is.
+// The door's OWN shape, read off a live /api/health rather than guessed: the block is
+// `spine.quarantined`, not `spine.quarantine`. The first draft of this fixture invented the
+// singular and the reader correctly answered "the door served no quarantine block" -- a
+// hand-built fixture that does not match the wire proves nothing about the wire.
+const health = {
+  root: "fixture", events: 1150, days: 22, daysClosed: 21, idemIndex: 0,
+  kindsSeen: 14, kinds: [], torn: [],
+    // The REAL refusal codes, taken from the shell's own FAMILY_OF_CODE and matched against
+  // what the canonical spine actually holds: a duplicate is DUP_IDEM, not "DUPLICATE_IDEM".
+  // The first draft of this fixture invented the names and the shell correctly answered
+  // "240 this shell will not classify" -- failing closed rather than guessing, which is the
+  // right behaviour and made the invented fixture look like a broken grouper.
+  quarantined: { total: 243, byCode: { DUP_IDEM: 239, SECRET: 1, UNKNOWN_KIND: 3 }, stubOnly: 1, unreadable: 0 },
+};
+const qv = spineLib.quarantineView(spineLib.readSpineHealth({ spine: health }));
+const headline = spineLib.quarantineHeadline(qv);
+
+// Assert the BREAKDOWN, not a chosen sentence. 243 is the number a retro once read as
+// catastrophic; only about 4 of them were real losses. The rule is that the total may never
+// stand ALONE, not that it may never lead.
+check("the quarantine total is broken into named parts, never left standing alone",
+  qv.total === 243 && qv.dedup === 239 && qv.withheld === 1 && qv.lost === 3 && qv.unknown === 0,
+  JSON.stringify({ t: qv.total, d: qv.dedup, w: qv.withheld, l: qv.lost, u: qv.unknown }));
+check("the bulk is named as deduplication and stated NOT to be loss",
+  qv.families.some((f) => f.family === "dedup" && f.count === 239 && /nothing was lost/i.test(f.sentence)));
+check("the headline carries the parts, not just the total",
+  typeof headline === "string" && /239|deduplicat|same receipt/i.test(headline), headline.slice(0, 120));
+
+// Failing CLOSED on a code it does not know is the right behaviour, and it is what makes the
+// classification real rather than a default. An invented code must land in `unknown`, never
+// be guessed into dedup -- guessing here would turn a real loss into "nothing was lost".
+const ghostQ = spineLib.quarantineView(spineLib.readSpineHealth({
+  spine: { ...health, quarantined: { total: 5, byCode: { NOT_A_REAL_CODE: 5 }, stubOnly: 0, unreadable: 0 } },
+}));
+check("a refusal code the shell does not know is UNCLASSIFIED, never guessed into a family",
+  ghostQ.unknown === 5 && ghostQ.dedup === 0 && ghostQ.lost === 0,
+  JSON.stringify({ u: ghostQ.unknown, d: ghostQ.dedup, l: ghostQ.lost }));
+
+// The eight laws are the room's text, and each one names the ADR it comes from.
+check("all eight spine laws are carried, each naming its ADR",
+  spineLib.SPINE_LAWS.length === 8 && spineLib.SPINE_LAWS.every((l) => /^ADR-00(2[4-9]|3[01])$/.test(l.adr)),
+  spineLib.SPINE_LAWS.map((l) => l.adr).join(","));
+
+// Board: three states for a day count, because a lane with no burn recorded is NOT a lane
+// burning zero.
+check("a measured burn is measured", spineLib.parseDays("4.5d").state === "measured");
+check("an absent burn is MISSING, never 0", spineLib.parseDays(undefined).state !== "measured" && spineLib.parseDays(undefined).days !== 0);
+check("an unreadable burn is its own state, not a zero and not a gap",
+  ["unreadable", "missing", "absent"].includes(spineLib.parseDays("banana").state), spineLib.parseDays("banana").state);
+
+// ---------- Ask arc: the brain with no hands ----------
+const askLib = await import(pathToFileURL(join(LIB, "ask.mjs")).href);
+check("ask module loaded (vacuous-pass guard)", typeof askLib.noHandsAudit === "function");
+
+// THE BOUNDARY, PROVEN RATHER THAN PROMISED.
+// A raw Door must audit as write-capable. This is the negative control: if the audit cannot
+// fail, its clean verdict on the read-only handle means nothing. Note WHY it is not
+// Object.keys -- a real Door's own keys are base/token/fetchImpl and NO methods, so an
+// own-keys audit hands the fully-armed client a clean bill of health.
+const rawDoor = new door.Door({ token: "t" });
+const rawAudit = askLib.noHandsAudit(rawDoor);
+check("a RAW door audits as write-reachable (the negative control)",
+  rawAudit.clean === false && rawAudit.writeReachable.includes("decide"),
+  JSON.stringify(rawAudit.writeReachable));
+check("the audit walks the PROTOTYPE chain, not just own keys",
+  Object.keys(rawDoor).every((k) => k !== "decide") && rawAudit.writeReachable.includes("decide"),
+  `ownKeys=${Object.keys(rawDoor).join("|")}`);
+check("an unrecognised member is counted write-reachable, not waved through",
+  rawAudit.unclassified.length > 0 && rawAudit.unclassified.every((m) => rawAudit.writeReachable.includes(m)),
+  JSON.stringify(rawAudit.unclassified));
+check("the raw door's verdict is a SENTENCE naming the defect, not a boolean",
+  typeof rawAudit.line === "string" && /defect|reach a write/i.test(rawAudit.line), rawAudit.line.slice(0, 60));
+
+const handle = askLib.readOnly(rawDoor, askLib.ASK_GRANTS);
+const handleAudit = askLib.noHandsAudit(handle);
+check("the read-only handle reaches NO write", handleAudit.clean === true && handleAudit.writeReachable.length === 0,
+  JSON.stringify(handleAudit.writeReachable));
+check("the handle NAMES what it withheld, so the boundary is legible and not merely true",
+  handleAudit.withheld.includes("decide") && handleAudit.withheld.includes("call"),
+  JSON.stringify(handleAudit.withheld));
+check("the handle is frozen, so a write cannot be attached after construction", Object.isFrozen(handle));
+
+let threw = false;
+try { askLib.readOnly(rawDoor, [...askLib.ASK_GRANTS, "decide"]); } catch { threw = true; }
+check("asking for `decide` REFUSES at construction rather than granting it", threw);
+threw = false;
+try { askLib.readOnly(rawDoor, [...askLib.ASK_GRANTS, "call"]); } catch { threw = true; }
+check("`call` counts as write-capable, because it can be pointed at /api/decide", threw);
+
+// UNVERIFIED is four classes, not two -- and an unreadable door is NOT a pass.
+//
+// The shapes here are the module's OWN: `claims` carry `key`, `resolutions` is a MAP keyed by
+// it, and the brain's self-assessment is `asked.selfVerified`. I guessed all three on the
+// first pass and the test failed for the wrong reason; reading the typedef costs less than
+// debugging an assertion that was never talking to the code.
+const KEY = "01ABCDEFGHIJKLMNOPQRSTUVWX";
+const claim = { key: KEY, kind: "ulid" };
+const standing = (asked, claims, res) => askLib.standingOf(asked, claims, res).klass;
+
+check("a claim nobody could read is UNVERIFIED, not resolved",
+  standing({ selfVerified: true }, [claim], { [KEY]: { key: KEY, state: "unreadable" } }) === "unverified",
+  standing({ selfVerified: true }, [claim], { [KEY]: { key: KEY, state: "unreadable" } }));
+check("a claim the door says is ABSENT is UNVERIFIED",
+  standing({ selfVerified: true }, [claim], { [KEY]: { key: KEY, state: "absent" } }) === "unverified");
+check("the brain's own selfVerified:false outranks a clean resolution -- its word stands",
+  standing({ selfVerified: false }, [claim], { [KEY]: { key: KEY, state: "resolved" } }) === "unverified");
+check("every citation resolving through the door IS verified",
+  standing({ selfVerified: true }, [claim], { [KEY]: { key: KEY, state: "resolved" } }) === "verified",
+  standing({ selfVerified: true }, [claim], { [KEY]: { key: KEY, state: "resolved" } }));
+check("an answer with nothing to cite is its own class, never UNVERIFIED",
+  ["absence", "uncited"].includes(standing({ selfVerified: true, source: "deterministic" }, [], {})),
+  standing({ selfVerified: true, source: "deterministic" }, [], {}));
+check("while a citation is still in flight the answer is not yet called proven",
+  standing({ selfVerified: true }, [claim], {}) === "checking");
+check("the UNVERIFIED sentence names how many broke and KEEPS the answer rather than deleting it",
+  /did not resolve/i.test(askLib.standingOf({ selfVerified: true }, [claim], { [KEY]: { key: KEY, state: "absent" } }).line)
+  && /kept and shown/i.test(askLib.standingOf({ selfVerified: true }, [claim], { [KEY]: { key: KEY, state: "absent" } }).line));
+check("UNVERIFIED lists the broken ids BY NAME, not as a count",
+  askLib.standingOf({ selfVerified: true }, [claim], { [KEY]: { key: KEY, state: "absent" } }).broken.includes(KEY));
+
+// UNVERIFIED must not spend a reserved hue: it is neither an incident nor a needs-you, and
+// a fifth meaning would cost one of the four permanently.
+const unverifiedLine = JSON.stringify(askLib.standingOf({ selfVerified: false }, [claim], { [KEY]: { key: KEY, state: "resolved" } }));
+check("UNVERIFIED spends no reserved hue",
+  !["--amber", "--green", "--red"].some((h) => unverifiedLine.includes(h)), unverifiedLine.slice(0, 80));
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;
