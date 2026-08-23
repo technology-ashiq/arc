@@ -35,7 +35,6 @@
       "lede": "a brain with no hands — it reads the live state, cites the ULID, and cannot stamp anything",
       "render": "bespoke"
     },
-
     "engine-room": {
       "sentence": "The model is a swappable part. The process is not.",
       "lede": "drivers, routers and budgets — the identity is the process file, the receipts and the constitution",
@@ -77,7 +76,6 @@
       "lede": "intake — a candidate tool, skill or dependency is reported and vetted, and nothing installs itself",
       "render": "generic"
     },
-
     "council-chamber": {
       "sentence": "Twelve seats. No rubber stamps.",
       "lede": "blind parallel debate, a verifier grading every point, one bounded rebuttal, then a verdict that commits with its dissent",
@@ -91,7 +89,7 @@
     },
     "review-ship": {
       "sentence": "Every gate blocks by default.",
-      "lede": "seven gates, commit-keyed — a new commit is a new review, and a profile switches the whole set as one",
+      "lede": "seven gates, commit-keyed — a new commit is a new review, and a profile switches the whole set as one. The workflows below are what RUNS them; whether the last run was green is not instrumented here, and this room will not imply it from a list of names",
       "render": "generic"
     },
     "design-studio": {
@@ -105,7 +103,6 @@
       "render": "generic",
       "source": "the owner's reference, adapted"
     },
-
     "money": {
       "sentence": "Real and simulated are different substances.",
       "lede": "revenue.received is real-only and has never fired; everything else on this screen says so in its own colour",
@@ -151,7 +148,6 @@
       "render": "bespoke",
       "source": "the owner's reference, verbatim"
     },
-
     "law": {
       "sentence": "It outranks every roadmap, plan, and line of code.",
       "lede": "three eternal articles, ten working ones, and the friction any amendment has to survive",
@@ -181,12 +177,17 @@
       "render": "index",
       "indexes": "concepts"
     },
-
     "lane": {
       "sentence": "One lane, six zones, the same shape every time.",
       "lede": "the template every born lane instantiates — plan, phase, burn, gates, evidence, and what it owes right now",
       "render": "generic",
       "template": true
+    },
+    "chat-mcp": {
+      "sentence": "arc answers from anywhere you already are.",
+      "lede": "planned, drawn dotted -- the door already speaks HTTP, so this is a surface question and not an engine one",
+      "render": "generic",
+      "planned": true
     }
   }
 }

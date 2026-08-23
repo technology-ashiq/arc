@@ -23,6 +23,7 @@
     ".claude/scripts/core/evolve-manifest.mjs",
     ".claude/scripts/core/face-coverage.mjs",
     ".claude/scripts/core/face-sections.mjs",
+    ".claude/scripts/core/face-dogfood.mjs",
     ".claude/scripts/core/face-tokens.mjs",
     ".claude/scripts/core/freeze-check.sh",
     ".claude/scripts/core/json-strict.mjs",
