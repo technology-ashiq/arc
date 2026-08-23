@@ -602,3 +602,44 @@ export function adrBandMap(bands, rooms) {
       return { band, label, room, roomName: found ? found.name : null };
     });
 }
+
+/**
+ * Which LANE owns this room, if any. The contract maps lane -> room; a room needs the inverse.
+ *
+ * The lane's phase specs are served by the door at /api/lane/:name, and until ADR-1317 nothing
+ * in the face asked for them: a lane room named `phase 04` in its stations and rendered
+ * nothing behind it, so the owner opening a lane mid-cycle got the tracker's one-line summary
+ * of what the phase promised instead of the promise.
+ *
+ * Returns null rather than guessing. Several rooms are not a lane's room at all (`concepts`,
+ * `today`), and a room that fetched a lane named after itself would 404 on every one of them.
+ *
+ * @param {string} roomId
+ * @param {Record<string, string> | undefined} laneMap  lane -> room, from the frozen contract
+ * @returns {string | null}
+ */
+export function laneForRoom(roomId, laneMap) {
+  if (!roomId || !laneMap || typeof laneMap !== "object") return null;
+  for (const [lane, room] of Object.entries(laneMap)) if (room === roomId) return lane;
+  return null;
+}
+
+/**
+ * The phase list a lane room draws, from the door's `/api/lane/:name` payload.
+ *
+ * THREE ANSWERS, NOT TWO. `absent` is the door not carrying the field at all (an older door,
+ * or a read that failed) and it is NOT the same as `none` -- a lane that genuinely has no
+ * phase specs yet. Drawing the second from the first is the exact lie this product is built to
+ * refuse, and it is the reason the door was made to send an explicit empty array.
+ *
+ * @param {unknown} payload
+ * @returns {{ state: "absent" | "none" | "some", phases: { phase: number|null, file: string, title: string|null, text?: string, truncated?: boolean }[], omitted: number }}
+ */
+export function lanePhases(payload) {
+  const body = payload && typeof payload === "object" ? /** @type {Record<string, unknown>} */ (payload) : null;
+  if (!body || !("phases" in body) || !Array.isArray(body.phases))
+    return { state: "absent", phases: [], omitted: 0 };
+  const phases = /** @type {{ phase: number|null, file: string, title: string|null }[]} */ (body.phases);
+  const omitted = typeof body.phasesOmitted === "number" ? body.phasesOmitted : 0;
+  return { state: phases.length ? "some" : "none", phases, omitted };
+}

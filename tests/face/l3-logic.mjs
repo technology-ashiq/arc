@@ -932,5 +932,29 @@ check("a dead handle SAYS it is dead rather than reporting a clean boundary",
   check("and an absent room list does not throw either", rooms.adrBandMap({ "0000": "board" }, undefined).length === 1);
 }
 
+// ADR-1317: a lane room reads its own phase specs. The room named `phase 04` in its stations
+// and rendered nothing behind it for a whole cycle -- the specs sat in the directory apiLane
+// already read, and nothing asked for them.
+{
+  const laneMap = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "expected-set.json"), "utf8")).lanes.map;
+  check("a lane's room resolves back to its lane", rooms.laneForRoom("money", laneMap) === "ledger", String(rooms.laneForRoom("money", laneMap)));
+  check("and the face lane's room resolves too", rooms.laneForRoom("toolbelt", laneMap) === "face", String(rooms.laneForRoom("toolbelt", laneMap)));
+  // The arm that stops every non-lane room fetching a lane named after itself and 404ing.
+  check("a room that is NOT a lane's resolves to null", rooms.laneForRoom("concepts", laneMap) === null, String(rooms.laneForRoom("concepts", laneMap)));
+  check("an absent lane map resolves to null, not a crash", rooms.laneForRoom("money", undefined) === null);
+  // Positive control: the map must have had entries, or every arm above passes on nothing.
+  check("the lane map actually had lanes in it", Object.keys(laneMap).length >= 10, `lanes=${Object.keys(laneMap).length}`);
+
+  // THREE states. A door that does not carry the field is ABSENT; a lane with no specs is
+  // NONE. Drawing the second from the first is the lie the explicit empty array exists for.
+  check("no phases key at all reads as ABSENT", rooms.lanePhases({ lane: "x" }).state === "absent");
+  check("an explicit empty array reads as NONE", rooms.lanePhases({ phases: [] }).state === "none");
+  check("a populated array reads as SOME", rooms.lanePhases({ phases: [{ file: "a.md", phase: 1, title: "t" }] }).state === "some");
+  check("a non-array phases value is ABSENT, never SOME", rooms.lanePhases({ phases: "nope" }).state === "absent");
+  check("a null payload does not throw", rooms.lanePhases(null).state === "absent");
+  check("the door's omitted count is carried through", rooms.lanePhases({ phases: [], phasesOmitted: 4 }).omitted === 4);
+  check("and defaults to zero rather than undefined", rooms.lanePhases({ phases: [] }).omitted === 0);
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;

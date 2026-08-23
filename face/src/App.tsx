@@ -9,7 +9,7 @@ import type { CSSProperties } from 'react'
 import './tokens.css'
 
 import { ASOF_ROUTES, Door, DoorError, decodeRegistry, tokenFromHash, unescapeDoorText } from './lib/door.mjs'
-import { byRing, findRoom, defaultRoom, errorSentence } from './lib/rooms.mjs'
+import { byRing, findRoom, defaultRoom, errorSentence, laneForRoom } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
 import { HOME, buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash } from './lib/shell.mjs'
 
@@ -234,7 +234,7 @@ export default function App() {
               window.history.replaceState(null, '', buildHash(room ? room.id : HOME, token, day))
             }}
           />
-          {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} needs={needs.counts} needsUnplaced={needs.unplaced} inventories={registry.inventories} /> : <NoSuchRoom id={roomId} />}
+          {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} needs={needs.counts} needsUnplaced={needs.unplaced} inventories={registry.inventories} laneMap={contract.lanes?.map} /> : <NoSuchRoom id={roomId} />}
         </section>
       </div>
     </main>
@@ -260,7 +260,7 @@ function asOfReaches(room: Room | null): boolean {
  * kept here -- a second spelling of that decision would drift the moment a room changes mode.
  * The two bespoke ids are the exception and they are named, not guessed.
  */
-function RoomHost({ room, rooms, door, onOpen, mode, token, needs, needsUnplaced, inventories }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void; mode?: string; token: string | null; needs: Record<string, number>; needsUnplaced: number; inventories?: Record<string, Record<string, string>> | null }) {
+function RoomHost({ room, rooms, door, onOpen, mode, token, needs, needsUnplaced, inventories, laneMap }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void; mode?: string; token: string | null; needs: Record<string, number>; needsUnplaced: number; inventories?: Record<string, Record<string, string>> | null; laneMap?: Record<string, string> }) {
   if (room.id === 'today') return <Today door={door} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'inbox') return <Inbox door={door} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'spine') return <SpineRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
@@ -268,10 +268,13 @@ function RoomHost({ room, rooms, door, onOpen, mode, token, needs, needsUnplaced
   if (room.id === 'council-chamber') return <CouncilRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'ask-arc') return <AskArcRoom door={door} room={room} sentence={room.sentence} lede={room.lede} onOpen={onOpen} />
   if (room.id === 'money') return <MoneyRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
-  if (room.id === 'ventures') return <VenturesRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
+  if (room.id === 'ventures') return <VenturesRoom door={door} room={room} sentence={room.sentence} lede={room.lede} declared={inventories?.ventures} />
   if (room.id === 'map') return <MapRoom rooms={rooms} onOpen={onOpen} mode={mode} token={token} needsYou={needs} needsYouUnplaced={needsUnplaced} />
   if (room.render === 'index') return <IndexRoom room={room} rooms={rooms} door={door} />
-  return <GenericRoom room={room} />
+  // A lane's own room reads that lane's phase specs from the door. `laneForRoom` returns
+  // null for every room that is NOT a lane's (concepts, today, review-ship), so those
+  // fetch nothing rather than 404 on a lane named after themselves.
+  return <GenericRoom room={room} door={door} lane={laneForRoom(room.id, laneMap)} />
 }
 
 /**
