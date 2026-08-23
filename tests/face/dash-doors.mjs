@@ -9,10 +9,15 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { connect } from "node:net";
-import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// The door's OWN serializer, so the phase-title assertion below cannot drift from the
+// representation contract it is checking against. Importing this module is sanctioned (its
+// isMainModule guard is realpath-based, so an import boots nothing).
+import { escapeDeep } from "../../.claude/scripts/hq/arc-dash.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");
@@ -99,6 +104,78 @@ try {
   check("lane header via the sanctioned parser", r.status === 200 && r.body.header && typeof r.body.header.status === "string");
   r = await j("/api/lane/no-such-lane", { headers: H });
   check("unknown lane -> UNKNOWN_LANE", r.status === 404 && r.body.error === "UNKNOWN_LANE");
+  const badLaneStatus = r.status; // the traversal set below must land on THIS, not a sibling 4xx
+
+  // ---- /api/lane/:name carries `phases` (phase-09: the specs the door never served) ----
+  // The specs sat in the directory apiLane already read, so a lane room could name `phase 04`
+  // and render nothing behind it. What is asserted here is the room's whole reason to exist:
+  // the owner reads what the phase PROMISED, not the tracker's one-line summary of it.
+  {
+    const PH = join(REPO, "initiatives", "face", "phases");
+    // POSITIVE CONTROL, FIRST. Every check under it is about a POPULATED array, and those
+    // pass vacuously against an empty fixture -- so the tree is proven to hold specs before
+    // the door is asked to prove it serves them.
+    const onDisk = readdirSync(PH).filter((f) => f.endsWith(".md")).sort();
+    check("positive control: this tree really holds face phase specs", onDisk.length >= 5, `onDisk=${onDisk.length}`);
+
+    const lr = await j("/api/lane/face", { headers: H });
+    // Read the array ONCE into a local that survives its own absence. Deleting the feature
+    // used to kill this file at the first `.find` on undefined -- red, but red by crashing,
+    // so the six checks after it never ran and the RAN line never printed. A block that dies
+    // reports nothing; a block that fails reports which of its promises broke.
+    const P = Array.isArray(lr.body.phases) ? lr.body.phases : null;
+    check("lane WITH phases: the array is populated",
+      lr.status === 200 && P !== null && P.length > 0, `n=${P && P.length}`);
+    check("every spec on the tree comes through the door, none quietly dropped",
+      P !== null && P.length === onDisk.length, `door=${P && P.length} disk=${onDisk.length}`);
+    check("and the caps are declared as untouched rather than assumed",
+      P !== null && lr.body.phasesOmitted === 0 && P.every((p) => p.truncated === false) && lr.body.phaseTextCap > 0,
+      `omitted=${lr.body.phasesOmitted} cap=${lr.body.phaseTextCap}`);
+
+    const last = onDisk[onDisk.length - 1];
+    const spec = P ? P.find((p) => p.file === last) : undefined;
+    const diskTitle = (readFileSync(join(PH, last), "utf8").split("\n")
+      .map((l) => l.trim()).find((l) => /^#{1,6}[ \t]+\S/.test(l)) || "").replace(/^#{1,6}[ \t]+/, "").trim();
+    check("an ACTUAL phase title comes back, through the door's own escape contract",
+      Boolean(spec) && diskTitle.length > 0 && spec.title === escapeDeep(diskTitle), `${spec && spec.title} != ${diskTitle}`);
+    check("the phase number and the spec filename come back",
+      Boolean(spec) && Number.isInteger(spec.phase) && /^phase-\d+-.+\.md$/.test(spec.file), JSON.stringify(spec && { phase: spec.phase, file: spec.file }));
+    // A title without the body is the tracker's summary with extra steps. `bytes` is the
+    // file on disk and `text` arrives escaped, so the two are NOT comparable -- asserting
+    // bytes >= text.length failed here for exactly that reason, which is the contract
+    // working. Each is checked against the fact it actually reports.
+    check("the BODY comes back, not just the title",
+      Boolean(spec) && typeof spec.text === "string" && spec.text.length > 200 && spec.bytes > 200, `len=${spec && spec.text.length} bytes=${spec && spec.bytes}`);
+
+    // A lane with NO phases/ dir. Discovered from the tree rather than named, so this cannot
+    // pass by pointing at a lane that quietly grew a phases dir -- and the discovery is
+    // itself a check, because "found none to ask about" is a dead fixture, not a pass.
+    const laneDirs = readdirSync(join(REPO, "initiatives"), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    const bare = laneDirs.filter((l) => existsSync(join(REPO, "initiatives", l, "PROGRESS.md")) && !existsSync(join(REPO, "initiatives", l, "phases")));
+    check("fixture control: this tree has a lane with no phases dir to ask about", bare.length >= 1, `lanes=${laneDirs.length}`);
+    const nr = await j(`/api/lane/${bare[0]}`, { headers: H });
+    check("lane WITHOUT a phases dir still answers 200", nr.status === 200, `${bare[0]} -> ${nr.status}`);
+    // The two facts that must not wear each other's clothes: "no phases" is an empty array,
+    // "this door does not report phases" is an absent key. Assert the KEY, then the length.
+    check("no phases dir -> the KEY IS PRESENT", Object.hasOwn(nr.body, "phases"), Object.keys(nr.body).join(","));
+    check("no phases dir -> an EXPLICIT empty array", Array.isArray(nr.body.phases) && nr.body.phases.length === 0, JSON.stringify(nr.body.phases));
+
+    // Traversal in the lane NAME. The guard is validLaneName -- the same one the handler
+    // already used for a bad lane -- so the refusal must be that SAME status, not a sibling
+    // 4xx that would tell an attacker the name was interesting.
+    for (const attack of ["..%2F..%2FPORTFOLIO.md", "face%2F..%2F..%2Fpackage.json", "..%5C..%5CPORTFOLIO.md", "initiatives"]) {
+      const tr = await j(`/api/lane/${attack}`, { headers: H });
+      check(`traversal in the lane name refused: ${attack}`,
+        tr.status === badLaneStatus && tr.body.error === "UNKNOWN_LANE" && !Object.hasOwn(tr.body, "phases"), `${tr.status} ${tr.body.error}`);
+    }
+    // `%2E%2E` is a case worth naming rather than deleting: the WHATWG URL parser treats a
+    // percent-encoded double-dot as a dot-SEGMENT and removes it during parsing, so the path
+    // collapses to /api/ and never reaches the lane handler at all. Same 404, earlier refusal
+    // -- and pinning it stops a future hand-rolled path parser from quietly re-opening it.
+    const dotSeg = await j("/api/lane/%2E%2E", { headers: H });
+    check("percent-encoded dot-segment dies at the URL parser, same 404, no file served",
+      dotSeg.status === badLaneStatus && dotSeg.body.error === "UNKNOWN_ROUTE" && !Object.hasOwn(dotSeg.body, "phases"), `${dotSeg.status} ${dotSeg.body.error}`);
+  }
 
   r = await j("/api/file/constitution", { headers: H });
   check("allow-listed file + sha", r.status === 200 && /^[0-9a-f]{64}$/.test(r.body.sha256 || ""));
@@ -179,7 +256,31 @@ try {
   {
     const rr = await j("/api/rooms", { headers: H });
     check("rooms door answers", rr.status === 200, `status=${rr.status}`);
-    check("rooms door serves the whole registry", rr.body.rooms && rr.body.rooms.length === 33, `rooms=${rr.body.rooms && rr.body.rooms.length}`);
+    // DERIVED from the registry on disk, not written down. This was `=== 33` and went red the
+    // moment ADR-1317 generated `chat-mcp` -- a room declared in planned-rooms.json and ADR-1306
+    // and generated nowhere, so the growth was a defect being FIXED, not a fixture breaking.
+    //
+    // The question this check actually asks is "does the door serve the WHOLE registry", and a
+    // literal cannot ask that: it goes red on a legitimate addition and stays green if the door
+    // and the registry drift to the same wrong number together. Against the file it is exact.
+    const onDisk = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms.length;
+    check("the registry on disk has rooms to serve (vacuous-pass guard)", onDisk >= 30, `onDisk=${onDisk}`);
+    check("rooms door serves the whole registry", rr.body.rooms && rr.body.rooms.length === onDisk, `served=${rr.body.rooms && rr.body.rooms.length} onDisk=${onDisk}`);
+
+    // `inventories` (ADR-1317). The board's ADR map needs all fourteen bands at once, which
+    // `holds` cannot give it: a room holds its own slice, and one band is not a smaller
+    // version of a map. Asserted as PRESENT and POPULATED, because the field arriving as
+    // undefined is exactly what the room renders as "the registry served no band map" -- a
+    // sentence that would be a lie if the door simply forgot to pass it through.
+    const invOnDisk = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).inventories || {};
+    check("positive control: the registry on disk carries inventories", Object.keys(invOnDisk).length >= 3, JSON.stringify(Object.keys(invOnDisk)));
+    check("the door serves inventories, not just holds", rr.body.inventories && typeof rr.body.inventories === "object", `got ${typeof rr.body.inventories}`);
+    check("and every inventory the file has reaches the wire",
+      rr.body.inventories && Object.keys(invOnDisk).every((k) => k in rr.body.inventories),
+      `disk=${JSON.stringify(Object.keys(invOnDisk))} wire=${JSON.stringify(Object.keys(rr.body.inventories || {}))}`);
+    check("the ADR bands come through with their rooms",
+      rr.body.inventories && Object.keys(rr.body.inventories.adrs || {}).length >= 10,
+      `bands=${Object.keys((rr.body.inventories || {}).adrs || {}).length}`);
     check("rooms door serves the five rings", Array.isArray(rr.body.rings) && rr.body.rings.length === 5, JSON.stringify(rr.body.rings));
 
     // THE REGRESSION PIN. readAll returns ENVELOPES ({ event, day, seq, line }), and the
@@ -241,4 +342,6 @@ check("and it is the one the launcher sets", proxyReads.length === 1 && proxyRea
 check("both sources were actually read", launcherSrc.length > 2000 && viteSrc.length > 500, `launcher=${launcherSrc.length} vite=${viteSrc.length}`);
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 30 ? 0 : 1;
+// The floor moves with the suite. A count that stays at an old number is how a block that
+// stopped registering reads green: the assertions still pass, there are simply fewer of them.
+process.exitCode = failed === 0 && ran >= 72 ? 0 : 1;

@@ -207,7 +207,14 @@ load 'test_helper'
   mkdir -p "$BATS_TEST_TMPDIR/nospine"
   run node "$ARC_ROOT/.claude/scripts/hq/arc-face.mjs" --spine "$BATS_TEST_TMPDIR/nospine" --port 8422 --app-port 5422 --no-open
   [ "$status" -eq 1 ] || { echo "expected exit 1; got $status"; echo "$output"; false; }
-  [[ "$output" == *"no events/ directory"* ]] || { echo "the refusal did not name the cause: $output"; false; }
+  # The launcher's own sentence, not the door's. It deliberately does not name the spine's
+  # directory layout -- that is the door's business, and `spine-reader-lint` greps every
+  # tracked hq module for those tokens outside a comment. CI caught exactly that on the first
+  # push of this file, in a string literal inside an error message.
+  [[ "$output" == *"not a spine the door will accept"* ]] || { echo "the refusal did not name the cause: $output"; false; }
+  # But the DOOR's reason must still reach the terminal, or the launcher has swallowed the
+  # only sentence that says what was actually wrong with the path.
+  [[ "$output" == *"BAD_SPINE"* ]] || { echo "the door's own refusal was swallowed: $output"; false; }
   # It must NOT have run an install to get here.
   [[ "$output" != *"npm install"* ]] || { echo "it installed dependencies before discovering the door could not start: $output"; false; }
   # And it must exit cleanly, not abort. Killing children and calling process.exit in the same

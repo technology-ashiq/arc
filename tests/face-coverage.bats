@@ -216,3 +216,48 @@ load 'test_helper'
   [ "$status" -eq 1 ] || { echo "expected exit 1 on a hand-edited registry; got $status: $output"; false; }
   [[ "$output" == *"rooms.generated.json"* ]] || { echo "$output"; false; }
 }
+
+@test "the coverage gate READS its sources, not just its own list (ADR-1317)" {
+  # The distinction this test exists for, and it is not academic. face-coverage's own
+  # selftest mutates a GATHERED data object -- it pushes a ghost name into clean.gates.names
+  # and asserts a finding appears. That proves the check works and says nothing about the
+  # reader. A mutant making treeGates return { names: [] } passes every one of those arms,
+  # and the gate then reports "all covered" for a file it never opened.
+  #
+  # Measured, not argued: with that mutant applied, `face-coverage --selftest` exited 0 and
+  # this suite exited 1. That is the vacuous-pass rule one layer down -- the assertion held
+  # while the code that mattered never ran.
+  run node "$ARC_ROOT/tests/face/coverage-readers.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
+  local n=""
+  [[ "$output" =~ RAN:\ ([0-9]+)\ checks ]] && n="${BASH_REMATCH[1]}"
+  [ -n "$n" ] && [ "$n" -ge 28 ] || { echo "only '$n' checks ran: $output"; false; }
+  # The arms that carry the weight, by name. A reader that silently returns nothing, and a
+  # source that could not be read being reported as empty, are the two failures that would
+  # let the gate lie with total confidence.
+  for arm in "a gate ADDED to the file appears in the reader" \
+             "treeVentures reads a MAP keyed by venture id" \
+             "treeAdrBands groups by century, not by file" \
+             "a gates file that will not parse is UNREADABLE, not empty" \
+             "a ventures LIST where a map belongs is UNREADABLE, not empty" \
+             "an ABSENT gates file is UNREADABLE, not empty" \
+             "against the real repo, gates are found"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "every world-derived inventory has its own exit arm, so deleting one loop is visible" {
+  # Eleven arms were not enough once: a mutant narrowing `if (findings.length)` to a single
+  # class passed all seventeen arms of the previous version, because every arm produced a
+  # [lane] finding among its others. An arm that shares its neighbour's finding class proves
+  # nothing about its own -- so each inventory added by ADR-1317 gets one.
+  run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" --selftest
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  for arm in "gate on the tree" "job on the tree" "venture on the tree" \
+             "adr band on the tree" "plan on the tree" "capability on the tree" \
+             "planned room on the tree" "ci workflow on the tree" \
+             "an unreadable inventory source"; do
+    [[ "$output" == *"exit 1 on a $arm"*"PASS"* ]] || { echo "exit arm missing: $arm"; echo "$output"; false; }
+  done
+}

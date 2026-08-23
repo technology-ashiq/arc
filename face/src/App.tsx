@@ -32,7 +32,10 @@ import MapRoom from './rooms/MapRoom'
 import { needsYouByRoom } from './lib/map.mjs'
 import { Failure, Loading } from './ui/kit'
 
-type Registry = { rings: string[]; rooms: Room[]; kindsEverFired: number; mode?: string }
+// `inventories` is nullable, not optional-with-a-default. A door serving a registry generated
+// before ADR-1317 sends null, and a room must be able to say "the registry carried no band map"
+// rather than draw an empty one — which would read as "the company has claimed no centuries".
+type Registry = { rings: string[]; rooms: Room[]; kindsEverFired: number; mode?: string; inventories?: Record<string, Record<string, string>> | null }
 
 export default function App() {
   const [registry, setRegistry] = useState<Registry | null>(null)
@@ -231,7 +234,7 @@ export default function App() {
               window.history.replaceState(null, '', buildHash(room ? room.id : HOME, token, day))
             }}
           />
-          {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} needs={needs.counts} needsUnplaced={needs.unplaced} /> : <NoSuchRoom id={roomId} />}
+          {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} needs={needs.counts} needsUnplaced={needs.unplaced} inventories={registry.inventories} /> : <NoSuchRoom id={roomId} />}
         </section>
       </div>
     </main>
@@ -257,11 +260,11 @@ function asOfReaches(room: Room | null): boolean {
  * kept here -- a second spelling of that decision would drift the moment a room changes mode.
  * The two bespoke ids are the exception and they are named, not guessed.
  */
-function RoomHost({ room, rooms, door, onOpen, mode, token, needs, needsUnplaced }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void; mode?: string; token: string | null; needs: Record<string, number>; needsUnplaced: number }) {
+function RoomHost({ room, rooms, door, onOpen, mode, token, needs, needsUnplaced, inventories }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void; mode?: string; token: string | null; needs: Record<string, number>; needsUnplaced: number; inventories?: Record<string, Record<string, string>> | null }) {
   if (room.id === 'today') return <Today door={door} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'inbox') return <Inbox door={door} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'spine') return <SpineRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
-  if (room.id === 'board') return <BoardRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
+  if (room.id === 'board') return <BoardRoom door={door} room={room} sentence={room.sentence} lede={room.lede} adrBands={inventories?.adrs} rooms={rooms} />
   if (room.id === 'council-chamber') return <CouncilRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'ask-arc') return <AskArcRoom door={door} room={room} sentence={room.sentence} lede={room.lede} onOpen={onOpen} />
   if (room.id === 'money') return <MoneyRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />

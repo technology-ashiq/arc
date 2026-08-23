@@ -30,7 +30,7 @@
 
 import { readFileSync, existsSync, readdirSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /** "Was this file RUN, or imported?" -- realpath BOTH sides. The endsWith form no-ops behind a rename. */
 function isMainModule() {
@@ -83,33 +83,38 @@ export function readJournal(dir) {
 }
 
 /**
- * Every decision the SPINE holds, from the day files themselves.
+ * Every decision the SPINE holds, through THE reader (ADR-0030).
  *
- * Read directly rather than through spine.mjs on purpose: this file must be able to answer
- * about a fixture spine in a worktree, and spine.mjs's reader refuses a linked worktree by
- * design. The shape it needs is one field deep.
+ * The first cut of this parsed the day files itself, justified by "spine.mjs refuses a linked
+ * worktree". That reason does not survive being checked: it is `spineRoot()`, the RESOLVER,
+ * that refuses a worktree -- `readAll(root)` takes the root explicitly, which is exactly how
+ * arc-dash drives a sim spine. Avoiding the resolver never required avoiding the reader.
  *
- * @param {string} root  the spine root (the dir holding events/)
- * @returns {{ days: string[], receipts: { day: string, id: string, decides: string }[], torn: number }}
+ * The difference is not tidiness. `readAll` serves the sqlite index when one exists and falls
+ * back to the scan, so a hand-rolled day-file walk would read a DIFFERENT set from everything
+ * else on a tree carrying `state.db` -- and would count torn lines by its own rule. A dogfood
+ * verdict that disagrees with the spine's own health reader about what the spine contains is
+ * evidence nobody can use.
+ *
+ * @param {string} root  the spine root
+ * @returns {Promise<{ days: string[], receipts: { day: string, id: string, decides: string }[], torn: number }>}
  */
-export function readSpineDecisions(root) {
-  const eventsDir = join(root, "events");
-  if (!existsSync(eventsDir)) return { days: [], receipts: [], torn: 0 };
+export async function readSpineDecisions(root) {
+  if (!existsSync(join(root, "events"))) return { days: [], receipts: [], torn: 0 };
+  const { readAll } = await import(pathToFileURL(join(REPO_DEFAULT, ".claude", "scripts", "hq", "spine.mjs")).href);
+  const { events, torn } = await readAll(root);
   const receipts = [];
-  const days = [];
-  let torn = 0;
-  for (const f of readdirSync(eventsDir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(n)).sort()) {
-    const day = f.slice(0, -".jsonl".length);
-    days.push(day);
-    for (const raw of readFileSync(join(eventsDir, f), "utf8").split("\n")) {
-      if (!raw.trim()) continue;
-      let e;
-      try { e = JSON.parse(raw); } catch { torn++; continue; }
-      if (e.kind !== "decision.recorded") continue;
-      receipts.push({ day, id: String(e.id ?? ""), decides: String((e.payload && e.payload.decides) ?? "") });
-    }
+  const days = new Set();
+  // The envelope is { event, day, seq, line } -- the EVENT is one level in. Reading `e.kind`
+  // off the envelope is not a crash, it is `undefined`, so every kind test quietly answers no
+  // and the report comes back well-formed and wrong. That exact mistake shipped in the door's
+  // /api/rooms handler and was caught only by a count that could not have been true.
+  for (const { event, day } of events) {
+    days.add(day);
+    if (event?.kind !== "decision.recorded") continue;
+    receipts.push({ day, id: String(event.id ?? ""), decides: String(event.payload?.decides ?? "") });
   }
-  return { days, receipts, torn };
+  return { days: [...days].sort(), receipts, torn: torn.length };
 }
 
 // ---------- the match (pure: two record sets -> a verdict) ----------
@@ -189,16 +194,18 @@ export function dogfoodVerdict(journal, spine, opts = {}) {
 
 // ---------- CLI ----------
 
-function run(repo, flags) {
+async function run(repo, flags) {
   const journalDir = flags.journal ?? join(repo, ".claude", "state", "hq", "dash-journal");
   const spineRoot = flags.spine ?? join(repo, ".claude", "state", "hq");
-  const journal = readJournal(journalDir);
-  const spine = readSpineDecisions(spineRoot);
 
-  // FAIL CLOSED on inputs that are not there. "0 decisions, requirement not met" and "I could
-  // not find the journal" are different facts and the second one must not wear the first's
-  // clothes -- a dogfood that reports "not met" because it read the wrong directory would
-  // send someone looking for a behaviour problem that does not exist.
+  // FAIL CLOSED on inputs that are not there, BEFORE reading either of them. "0 decisions,
+  // requirement not met" and "I could not find the journal" are different facts and the second
+  // must not wear the first's clothes -- a dogfood reporting "not met" because it read the
+  // wrong directory would send someone looking for a behaviour problem that does not exist.
+  //
+  // The order used to be the other way round, with both reads above these guards. It happened
+  // to be harmless because each reader returns empty for a missing input, which is exactly the
+  // kind of "harmless" that stops being harmless the first time a reader throws instead.
   if (!existsSync(journalDir)) {
     process.stderr.write(`face-dogfood: ERROR -- no journal directory at ${journalDir}. That is a fact about this READ, not about the owner's days.\n`);
     return 2;
@@ -207,6 +214,9 @@ function run(repo, flags) {
     process.stderr.write(`face-dogfood: ERROR -- no spine events/ under ${spineRoot}. From a linked worktree there is no canonical spine; name one with --spine.\n`);
     return 2;
   }
+
+  const journal = readJournal(journalDir);
+  const spine = await readSpineDecisions(spineRoot);
 
   const v = dogfoodVerdict(journal, spine, { requiredDays: flags.days ?? REQUIRED_DAYS });
   if (flags.json) {
@@ -309,6 +319,13 @@ if (isMainModule()) {
   }
   const repo = argv.find((a) => !a.startsWith("--")
     && a !== flags.journal && a !== flags.spine && String(flags.days) !== a) || REPO_DEFAULT;
-  try { process.exit(run(repo, flags)); }
-  catch (err) { process.stderr.write(`face-dogfood: ERROR -- ${err.message}\n`); process.exit(2); }
+  // `run` reads the spine through the canonical reader, which is async (it may open the sqlite
+  // index). A bare try/catch around an async call catches nothing: the promise rejects after
+  // the try block has already returned, so a read failure would have gone out as an unhandled
+  // rejection -- and node's exit code for that is 1, which this CLI defines as "requirement
+  // not met". A failed READ reported as a failed DOGFOOD is the exact confusion the fail-closed
+  // guards above exist to prevent, arriving through the error path instead of the happy one.
+  run(repo, flags)
+    .then((code) => process.exit(code))
+    .catch((err) => { process.stderr.write(`face-dogfood: ERROR -- ${err.message}\n`); process.exit(2); });
 }

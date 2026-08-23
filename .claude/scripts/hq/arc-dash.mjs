@@ -46,7 +46,7 @@
 
 import { createServer } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync, mkdirSync, appendFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, mkdirSync, appendFileSync, realpathSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -68,6 +68,16 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PAGE_DEFAULT = 500;
 const PAGE_CAP = 1000;
 const BODY_CAP = 64 * 1024;
+
+// Lane phase specs (face REQ / phase-09): 107 of them sat in the directory apiLane already
+// read and never came through the door, so a lane room could name `phase 04` and render
+// nothing behind it. Both caps are generous against today's tree (the widest lane holds 17
+// specs; the largest single spec is 43 KB) and BOTH are reported in the payload -- a
+// silently truncated spec reads exactly like a short one, which is the same lie as an
+// empty room wearing "no phases".
+const PHASE_TEXT_CAP = 128 * 1024;
+const PHASE_LIST_CAP = 200;
+const PHASE_FILE_RE = /^phase-(\d+)-(.+)\.md$/;
 
 // ---------- the sanctioned file allow-list (/api/file/:id -- ONLY these ids) ----------
 const FILE_ALLOW = Object.freeze({
@@ -210,7 +220,16 @@ async function apiRooms(ctx) {
     };
   });
 
-  return { mode: ctx.mode, rings: registry.rings, rooms, kindsEverFired: seen.size };
+  // `inventories` is served as-is (ADR-1317). It answers the question `holds` cannot: a room's
+  // `holds` is its own slice, and the board's "ADR map" station needs all fourteen bands at
+  // once -- one band is not a smaller version of a map, it is the wrong answer. Passed through
+  // rather than reshaped here, because the generator already owns the shape and a second
+  // spelling of it in the door is the drift ADR-1306 exists to prevent.
+  //
+  // `?? null` rather than `?? {}`: a registry generated before this field existed must reach
+  // the app as ABSENT, so the room can say "the registry served no band map" instead of
+  // drawing an empty map and implying the company has claimed no centuries.
+  return { mode: ctx.mode, rings: registry.rings, rooms, inventories: registry.inventories ?? null, kindsEverFired: seen.size };
 }
 
 async function apiSpine(ctx, url) {
@@ -322,17 +341,89 @@ function apiBoard(ctx) {
   return { mode: ctx.mode, badge: "file, not log", updated, lanes };
 }
 
+/** The heading a phase spec opens with, as a title rather than as markdown. */
+function phaseTitle(text) {
+  let firstNonEmpty = null;
+  for (const raw of text.split("\n", 40)) {
+    const line = raw.replace(/\r$/, "").trim();
+    if (!line) continue;
+    const h = line.match(/^#{1,6}[ \t]+(.+)$/);
+    if (h) return h[1].trim();
+    if (firstNonEmpty === null) firstNonEmpty = line;
+  }
+  // null, never "": an absent title is a fact about the file, and an empty string is a
+  // title that renders as a blank line nobody can tell from a missing one.
+  return firstNonEmpty;
+}
+
+/**
+ * Every phase spec a lane holds, WITH its body -- the point is that the owner opens the room
+ * mid-cycle and reads what the current phase actually promised, not the tracker's one-line
+ * summary of it.
+ *
+ * A lane with no phases/ dir returns an EMPTY ARRAY under a PRESENT key. "this lane has no
+ * phases" and "this door does not report phases" are different facts, and a missing key
+ * states the second while looking exactly like the first.
+ */
+function lanePhases(dir) {
+  const phasesDir = join(dir, "phases");
+  if (!existsSync(phasesDir)) return { phases: [], phasesOmitted: 0 };
+
+  // withFileTypes + isFile(): a symlink answers isSymbolicLink(), never isFile(), so a link
+  // planted in phases/ cannot walk this read out of initiatives/. The lane NAME is fenced by
+  // validLaneName at the top of apiLane -- this door's one name guard, reused rather than
+  // re-spelled -- and no client input reaches a path here at all: the filenames come from
+  // readdir of that already-fenced directory.
+  const names = readdirSync(phasesDir, { withFileTypes: true })
+    .filter((d) => d.isFile() && d.name.endsWith(".md"))
+    .map((d) => d.name)
+    // Zero-padded so numeric order IS lexical order, and unnumbered files ("~" sorts after
+    // every digit) land last instead of interleaving with the phases.
+    .sort((a, b) => {
+      const key = (n) => { const m = n.match(PHASE_FILE_RE); return (m ? m[1].padStart(6, "0") : "~") + n; };
+      return key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0;
+    });
+
+  const kept = names.slice(0, PHASE_LIST_CAP);
+  const phases = kept.map((name) => {
+    const m = name.match(PHASE_FILE_RE);
+    // A read that fails here is NOT swallowed into a shorter list: dropping a phase silently
+    // is the exact defect this function exists to close, so it surfaces as a refusal.
+    const full = readFileSync(join(phasesDir, name), "utf8");
+    const text = full.length > PHASE_TEXT_CAP ? full.slice(0, PHASE_TEXT_CAP) : full;
+    return {
+      phase: m ? Number(m[1]) : null,
+      file: name,
+      kind: m ? m[2] : null, // spec | tasks | runbook | known-holes ... whatever the lane wrote
+      title: phaseTitle(full),
+      // The file on disk, NOT the length of `text`: text is served escaped (the
+      // representation contract at the top of this file), so escaping alone can make it
+      // longer than the bytes it came from. bytes is the honest size when truncated is true.
+      bytes: Buffer.byteLength(full, "utf8"),
+      text,
+      truncated: text.length !== full.length,
+    };
+  });
+  return { phases, phasesOmitted: names.length - kept.length };
+}
+
 function apiLane(ctx, laneName) {
   if (!validLaneName(laneName)) throw new DashError("UNKNOWN_LANE", `"${laneName}" is not a valid lane name`);
   const dir = join(ctx.repo, "initiatives", laneName);
   const progress = join(dir, "PROGRESS.md");
   if (!existsSync(progress)) throw new DashError("UNKNOWN_LANE", `no lane "${laneName}" (no initiatives/${laneName}/PROGRESS.md)`);
   const planPath = join(dir, "PLAN.md");
+  const { phases, phasesOmitted } = lanePhases(dir);
   return {
     mode: ctx.mode, badge: "file, not log", lane: laneName,
     header: laneHeader(progress),
     progress: readFileSync(progress, "utf8"),
     plan: existsSync(planPath) ? readFileSync(planPath, "utf8") : null,
+    // Same representation as plan/progress above -- the file's own text, escaped by the one
+    // serializer -- plus the caps, stated so a client never has to guess what it is holding.
+    phases,
+    phasesOmitted,
+    phaseTextCap: PHASE_TEXT_CAP,
   };
 }
 

@@ -179,9 +179,12 @@
           "WIP guideline",
           "century band",
           "lane"
+        ],
+        "adrs": [
+          "0000"
         ]
       },
-      "itemCount": 8
+      "itemCount": 9
     },
     {
       "id": "ask-arc",
@@ -246,9 +249,12 @@
           "context pack",
           "router row",
           "unlock ladder"
+        ],
+        "adrs": [
+          "0200"
         ]
       },
-      "itemCount": 16
+      "itemCount": 17
     },
     {
       "id": "model-policy",
@@ -306,9 +312,12 @@
           "ceiling / cap / effective",
           "spend reservation",
           "two-key model"
+        ],
+        "adrs": [
+          "0500"
         ]
       },
-      "itemCount": 11
+      "itemCount": 12
     },
     {
       "id": "scheduler",
@@ -338,9 +347,16 @@
           "DRILL",
           "overdue (2x cadence)",
           "proving week"
+        ],
+        "adrs": [
+          "0800"
+        ],
+        "jobs": [
+          "brief-materialize",
+          "day-close-roll"
         ]
       },
-      "itemCount": 7
+      "itemCount": 10
     },
     {
       "id": "memory",
@@ -364,9 +380,12 @@
         "concepts": [
           "HISTORICAL DATA fence",
           "golden gate (recall)"
+        ],
+        "adrs": [
+          "0700"
         ]
       },
-      "itemCount": 4
+      "itemCount": 5
     },
     {
       "id": "evolve",
@@ -405,9 +424,12 @@
           "PENDING n/floor",
           "champion / challenger",
           "holdout cohort"
+        ],
+        "adrs": [
+          "0300"
         ]
       },
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "bench",
@@ -432,9 +454,12 @@
         "concepts": [
           "drift guard",
           "scorecard"
+        ],
+        "adrs": [
+          "0900"
         ]
       },
-      "itemCount": 5
+      "itemCount": 6
     },
     {
       "id": "absorb",
@@ -471,9 +496,12 @@
           "PLANOFF A/B",
           "allowlist / DO-NOT-WIDEN",
           "technique T-NN"
+        ],
+        "adrs": [
+          "0600"
         ]
       },
-      "itemCount": 10
+      "itemCount": 11
     },
     {
       "id": "council-chamber",
@@ -573,9 +601,12 @@
           "proof tier",
           "slice",
           "stuck fingerprint"
+        ],
+        "adrs": [
+          "0100"
         ]
       },
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "review-ship",
@@ -623,9 +654,15 @@
           "rls",
           "scan",
           "spine-api"
+        ],
+        "ci": [
+          "workflow:ci",
+          "workflow:measure-windows-cost",
+          "workflow:shard-calibrate",
+          "workflow:weigh-tests"
         ]
       },
-      "itemCount": 27
+      "itemCount": 31
     },
     {
       "id": "design-studio",
@@ -734,9 +771,20 @@
           "face: section",
           "generated command (G)",
           "room birth-rule"
+        ],
+        "adrs": [
+          "1300"
+        ],
+        "capabilities": [
+          "image:arc-tools",
+          "mcp:context7",
+          "mcp:playwright",
+          "mcp:stripe",
+          "mcp:supabase",
+          "skill:seo-article-writer"
         ]
       },
-      "itemCount": 26
+      "itemCount": 33
     },
     {
       "id": "money",
@@ -774,9 +822,12 @@
           "honesty classes",
           "kill line / kill-distance",
           "month-close"
+        ],
+        "adrs": [
+          "1000"
         ]
       },
-      "itemCount": 14
+      "itemCount": 15
     },
     {
       "id": "growth",
@@ -809,9 +860,12 @@
         "concepts": [
           "INDEXABLE clock",
           "gate 1 / gate 2 (growth)"
+        ],
+        "adrs": [
+          "1100"
         ]
       },
-      "itemCount": 9
+      "itemCount": 10
     },
     {
       "id": "leads",
@@ -852,9 +906,12 @@
           "REHEARSAL",
           "send window (IST)",
           "suppression / reply-stop"
+        ],
+        "adrs": [
+          "0400"
         ]
       },
-      "itemCount": 16
+      "itemCount": 17
     },
     {
       "id": "legal",
@@ -883,9 +940,12 @@
         ],
         "concepts": [
           "hash-chain (legal)"
+        ],
+        "adrs": [
+          "1200"
         ]
       },
-      "itemCount": 6
+      "itemCount": 7
     },
     {
       "id": "ops",
@@ -900,9 +960,12 @@
       "holds": {
         "kinds": [
           "incident.raised"
+        ],
+        "plannedRooms": [
+          "ops"
         ]
       },
-      "itemCount": 1
+      "itemCount": 2
     },
     {
       "id": "trader",
@@ -922,9 +985,12 @@
         ],
         "concepts": [
           "EXPLORATORY"
+        ],
+        "plannedRooms": [
+          "trader"
         ]
       },
-      "itemCount": 2
+      "itemCount": 3
     },
     {
       "id": "discover",
@@ -939,6 +1005,26 @@
       "holds": {
         "kinds": [
           "idea.captured"
+        ],
+        "plannedRooms": [
+          "discover"
+        ]
+      },
+      "itemCount": 2
+    },
+    {
+      "id": "chat-mcp",
+      "name": "Chat / MCP",
+      "ring": "command",
+      "status": "planned",
+      "sentence": "arc answers from anywhere you already are.",
+      "lede": "planned, drawn dotted -- the door already speaks HTTP, so this is a surface question and not an engine one",
+      "render": "generic",
+      "planned": true,
+      "stations": [],
+      "holds": {
+        "plannedRooms": [
+          "chat-mcp"
         ]
       },
       "itemCount": 1
@@ -963,9 +1049,12 @@
         ],
         "concepts": [
           "passport"
+        ],
+        "ventures": [
+          "lexos"
         ]
       },
-      "itemCount": 4
+      "itemCount": 5
     },
     {
       "id": "law",
@@ -1038,9 +1127,35 @@
         "concepts": [
           "Build-out Mandate",
           "pull trigger"
+        ],
+        "plans": [
+          "BRIEF-chat-mcp",
+          "PLAN-absorb",
+          "PLAN-bench",
+          "PLAN-cycle2-receipt-spine-v2.1",
+          "PLAN-cycle3-venture-launch",
+          "PLAN-design",
+          "PLAN-design-v2",
+          "PLAN-develop",
+          "PLAN-discover",
+          "PLAN-engine-process-layer",
+          "PLAN-evolve",
+          "PLAN-executor",
+          "PLAN-face",
+          "PLAN-growth",
+          "PLAN-leads",
+          "PLAN-ledger",
+          "PLAN-legal-pack",
+          "PLAN-memory",
+          "PLAN-model-policy",
+          "PLAN-ops",
+          "PLAN-policy",
+          "PLAN-portfolio",
+          "PLAN-scheduler",
+          "PLAN-trader"
         ]
       },
-      "itemCount": 2
+      "itemCount": 26
     },
     {
       "id": "org",
@@ -1122,5 +1237,42 @@
       },
       "itemCount": 22
     }
-  ]
+  ],
+  "inventories": {
+    "adrs": {
+      "1000": "money",
+      "1100": "growth",
+      "1200": "legal",
+      "1300": "toolbelt",
+      "0000": "board",
+      "0100": "develop",
+      "0200": "engine-room",
+      "0300": "evolve",
+      "0400": "leads",
+      "0500": "policy",
+      "0600": "absorb",
+      "0700": "memory",
+      "0800": "scheduler",
+      "0900": "bench"
+    },
+    "jobs": {
+      "brief-materialize": "scheduler",
+      "day-close-roll": "scheduler"
+    },
+    "ventures": {
+      "lexos": "ventures"
+    },
+    "plannedRooms": {
+      "ops": "ops",
+      "trader": "trader",
+      "discover": "discover",
+      "chat-mcp": "chat-mcp"
+    },
+    "ci": {
+      "workflow:ci": "review-ship",
+      "workflow:measure-windows-cost": "review-ship",
+      "workflow:shard-calibrate": "review-ship",
+      "workflow:weigh-tests": "review-ship"
+    }
+  }
 }

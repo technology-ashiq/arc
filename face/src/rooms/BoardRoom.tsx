@@ -28,12 +28,16 @@ import {
 } from "../lib/spine.mjs";
 import type { BoardRow, BoardView, Meter } from "../lib/spine.mjs";
 import type { Refused } from "../lib/inbox.mjs";
+import { adrBandMap } from "../lib/rooms.mjs";
 
 export type BoardRoomProps = {
   door: Door;
   room?: { sentence?: string; lede?: string };
   sentence?: string;
   lede?: string;
+  /** band id -> room id, straight off the registry. Absent is drawn as absent, never as empty. */
+  adrBands?: Record<string, string>;
+  rooms?: { id: string; name: string }[];
 };
 
 /** The board is file-borne. It changes when a lane's header changes, which is a commit,
@@ -42,7 +46,7 @@ const POLL_MS = 90_000;
 
 type Panel = { phase: "loading" } | { phase: "ok"; view: BoardView } | { phase: "error"; said: Refused };
 
-export function BoardRoom({ door, room, sentence, lede }: BoardRoomProps) {
+export function BoardRoom({ door, room, sentence, lede, adrBands, rooms }: BoardRoomProps) {
   const opening = openingFor("board", room, { sentence, lede });
   const [panel, setPanel] = useState<Panel>({ phase: "loading" });
   const [nonce, setNonce] = useState(0);
@@ -145,6 +149,8 @@ export function BoardRoom({ door, room, sentence, lede }: BoardRoomProps) {
         </>
       )}
 
+      <AdrMap bands={adrBands} rooms={rooms} />
+
       <footer className="b-foot">
         <span>read-only room · row order is the owner's, values are the lanes' own</span>
         <span className="b-foot-nums">
@@ -158,6 +164,66 @@ export function BoardRoom({ door, room, sentence, lede }: BoardRoomProps) {
 /* -------------------------------------------------------------------------- *
  * pieces
  * -------------------------------------------------------------------------- */
+
+/**
+ * The ADR map. This room has shipped a station called "ADR map" since Phase 05 and rendered
+ * nothing behind it: arc's 265 decisions were invisible to the face while the coverage gate
+ * reported "all covered" (ADR-1317). Fourteen century bands, one per lane, is the map -- a
+ * list of 265 files is a directory listing, and nobody navigates a decision record that way.
+ *
+ * An absent map is drawn as ABSENT. "The registry did not carry the bands" and "there are no
+ * decisions" are different facts, and this room's whole posture is refusing to draw the second
+ * from the first.
+ */
+function AdrMap({ bands, rooms }: { bands?: Record<string, string>; rooms?: { id: string; name: string }[] }) {
+  if (!bands) {
+    return (
+      <div className="b-adr">
+        <div className="b-adr-h">ADR MAP</div>
+        <p className="b-adr-none">
+          the registry served no band map, so this station cannot say where the decision record
+          lives. That is a fact about this read, not about the decisions.
+        </p>
+      </div>
+    );
+  }
+  const map = adrBandMap(bands, (rooms ?? []) as never[]);
+  if (!map.length) {
+    return (
+      <div className="b-adr">
+        <div className="b-adr-h">ADR MAP</div>
+        <p className="b-adr-none">the band map came back empty. No century has been claimed yet.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="b-adr">
+      <div className="b-adr-h">
+        ADR MAP <span className="b-adr-n">{map.length} bands</span>
+      </div>
+      <ul className="b-adr-list">
+        {map.map((b) => (
+          <li key={b.band} className="b-adr-row">
+            <span className="b-adr-band">{b.label}</span>
+            {b.roomName === null ? (
+              // The band resolves nowhere. Named rather than hidden: a map that quietly drops
+              // the one row whose room was renamed is worse than a map with a visible hole.
+              <span className="b-adr-lost" title={`homed in "${b.room}", which is not a room in this registry`}>
+                {b.room} — no such room
+              </span>
+            ) : (
+              <a className="b-adr-room" href={`#/${b.room}`}>{b.roomName}</a>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="b-adr-foot">
+        one century per lane — the band is the question "which lane owned this decision", which is
+        how a person finds one. The files themselves live at docs/adr/.
+      </p>
+    </div>
+  );
+}
 
 function ModeChip({ mode }: { mode: string | null }) {
   if (mode === null) return <span className="b-mode">mode unread</span>;
@@ -339,6 +405,20 @@ function firstClause(text: string): string {
  * -------------------------------------------------------------------------- */
 
 const CSS = `
+/* the ADR map -- the station that named a thing and drew nothing until ADR-1317 */
+.b-adr{margin-top:var(--space-l);padding-top:var(--space-m);border-top:1px solid var(--hairline);}
+.b-adr-h{font-family:var(--font-mono);font-size:var(--step-micro);letter-spacing:.08em;color:var(--accent);margin-bottom:var(--space-s);}
+.b-adr-n{color:var(--faint);margin-left:.5em;letter-spacing:0;}
+.b-adr-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.15rem 1.5rem;}
+.b-adr-row{display:flex;gap:.75rem;align-items:baseline;font-size:var(--step-micro);line-height:1.9;}
+.b-adr-band{font-family:var(--font-mono);color:var(--faint);}
+.b-adr-room{color:var(--ink);text-decoration:none;border-bottom:1px solid transparent;}
+.b-adr-room:hover{border-bottom-color:var(--accent);}
+/* named, never coloured: an unresolved band is a bookkeeping fact, not an incident */
+.b-adr-lost{font-family:var(--font-mono);color:var(--faint);text-decoration:line-through;}
+.b-adr-none{font-size:var(--step-micro);color:var(--faint);max-width:52ch;margin:0;}
+.b-adr-foot{margin-top:var(--space-s);font-size:var(--step-micro);color:var(--faint);max-width:72ch;}
+
 .b-room{font-family:var(--font-display);color:var(--prose);padding:calc(var(--grid)*3) calc(var(--grid)*3) calc(var(--grid)*6);max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:calc(var(--grid)*2);}
 .b-head{display:flex;align-items:flex-start;gap:calc(var(--grid)*2);flex-wrap:wrap;}
 .b-headtext{flex:1 1 420px;min-width:0;}

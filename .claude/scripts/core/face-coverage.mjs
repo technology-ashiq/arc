@@ -67,8 +67,179 @@ function yamlStems(p) {
   return readdirSync(p).filter((n) => n.endsWith(suffix)).map((n) => n.slice(0, -suffix.length));
 }
 
+// ---------- the seven inventories added by ADR-1317 ----------
+//
+// WHY THEY EXIST. Everything above compares one list against another list. That is a real
+// check and it is not the claim the owner asked for: "ethume miss aga kodathu" -- nothing in
+// arc may be missing from the face. A gate whose expected set IS the contract reports "all
+// covered" forever, however much grows outside it, and on 2026-08-23 a fresh audit measured
+// exactly that: nine whole surfaces of arc invisible while this gate printed "all covered".
+//
+// So each of these walks the SOURCE OF TRUTH on disk. A gate added to arc.gates.yaml, a job
+// added to hq.jobs.yaml, a venture, a plan, an ADR century, a planned room -- each becomes a
+// named failure without anyone remembering to update a list.
+
+/**
+ * Read one of arc's YAML files through THE parser, never a regex of our own.
+ *
+ * `hq.jobs.yaml`'s own header states the rule: this file is parsed by the same frozen subset
+ * the engine uses (ADR-0200) "so that arc never grows a second YAML parser class". A
+ * hand-rolled `^  - name:` scan here would be that second class, and it would disagree with
+ * the real parser on exactly the inputs that matter -- a commented-out gate, a quoted name, a
+ * block scalar containing the string it greps for.
+ *
+ * Loaded lazily and by URL because this gate must keep running in a tree where the engine
+ * directory is absent; an inventory that cannot be read is reported, never silently empty.
+ */
+async function readYaml(repo, relPath) {
+  const p = join(repo, relPath);
+  if (!existsSync(p)) return { ok: false, why: `${relPath} is not on this tree` };
+  let parseYamlSubset;
+  try {
+    ({ parseYamlSubset } = await import(pathToFileURL(join(repo, ".claude", "scripts", "engine", "yaml-subset.mjs")).href));
+  } catch (e) { return { ok: false, why: `the canonical YAML parser could not be loaded (${e.code || e.message})` }; }
+  try {
+    const res = parseYamlSubset(readFileSync(p, "utf8"));
+    if (!res || res.ok !== true) return { ok: false, why: `${relPath} did not parse: ${res?.error || "unknown"}` };
+    return { ok: true, value: res.value };
+  } catch (e) { return { ok: false, why: `${relPath} did not parse: ${e.message}` }; }
+}
+
+/** `arc.gates.yaml` -> the 7 ship gates, by name. A machine-readable 1:1 registry. */
+export async function treeGates(repo) {
+  const doc = await readYaml(repo, "arc.gates.yaml");
+  if (!doc.ok) return { unreadable: doc.why, names: [] };
+  const list = Array.isArray(doc.value?.gates) ? doc.value.gates : [];
+  return { names: list.map((g) => g?.name).filter((n) => typeof n === "string" && n) };
+}
+
+/** `hq.jobs.yaml` -> the scheduled jobs. The only things in the company that run unattended. */
+export async function treeJobs(repo) {
+  const doc = await readYaml(repo, "hq.jobs.yaml");
+  if (!doc.ok) return { unreadable: doc.why, names: [] };
+  const list = Array.isArray(doc.value?.jobs) ? doc.value.jobs : [];
+  return { names: list.map((j) => j?.name).filter((n) => typeof n === "string" && n) };
+}
+
+/**
+ * `ventures.yaml` -> the ventures and their kill lines.
+ *
+ * A MAP keyed by venture id, not a list -- getting that wrong would have produced an empty
+ * inventory that passes, which is the silent-zero failure this whole phase is about.
+ */
+export async function treeVentures(repo) {
+  const doc = await readYaml(repo, "ventures.yaml");
+  if (!doc.ok) return { unreadable: doc.why, names: [] };
+  const v = doc.value?.ventures;
+  if (!v || typeof v !== "object" || Array.isArray(v)) return { unreadable: "ventures.yaml has no ventures map", names: [] };
+  return { names: Object.keys(v) };
+}
+
+/**
+ * `docs/adr/` -> one row per CENTURY BAND, not per file.
+ *
+ * 266 rows would drown the contract and tell the owner nothing. The bands are already how a
+ * person navigates the decision record -- PORTFOLIO.md assigns one century per lane, and the
+ * band is what someone actually holds in their head when asking "why did we decide X".
+ */
+export function treeAdrBands(repo) {
+  const dir = join(repo, "docs", "adr");
+  if (!existsSync(dir)) return { unreadable: "docs/adr is not on this tree", names: [] };
+  const files = readdirSync(dir).filter((n) => /^\d{4}-.+\.md$/.test(n));
+  const bands = new Set(files.map((n) => n.slice(0, 2) + "00"));
+  return { names: [...bands].sort(), fileCount: files.length };
+}
+
+/**
+ * `docs/strategy/plans/` -> the PLAN and BRIEF documents the strategy room queues.
+ *
+ * PREFIXED, not "every .md". The first cut took the whole directory and homed
+ * `docs/strategy/plans/README.md` as a plan; the Strategy room then rendered a chip called
+ * "README" beside twenty-four real plans. That file is the directory's own index -- it names
+ * the pack and carries the kickoff instructions -- and a room that cannot tell a plan from
+ * the shelf it sits on is showing the owner its filesystem rather than his company.
+ *
+ * This is the one exclusion added by ADR-1317, and it obeys that ADR's own rule: an exclusion
+ * NAMES THE FILE that makes it true. Here it is `README.md`, and the prefix test is what makes
+ * a second index file (`INDEX.md`, `_toc.md`) excluded for the same stated reason rather than
+ * by a growing list of filenames nobody re-reads.
+ */
+export function treePlans(repo) {
+  const dir = join(repo, "docs", "strategy", "plans");
+  if (!existsSync(dir)) return { unreadable: "docs/strategy/plans is not on this tree", names: [] };
+  return {
+    names: readdirSync(dir)
+      .filter((n) => n.endsWith(".md") && (n.startsWith("PLAN-") || n.startsWith("BRIEF-")))
+      .map((n) => n.slice(0, -3)),
+  };
+}
+
+/**
+ * What arc actually HAS installed: skills, MCP servers, pinned tool images.
+ *
+ * `/arc-capability` and `/arc-toolcheck` exist as commands and are homed; what they operate
+ * ON was in no inventory, so a second skill or a stale MCP server changed nothing anywhere.
+ * Namespaced (`skill:`, `mcp:`, `image:`) because the three name-spaces can collide and a
+ * collision would silently make one cover for the other.
+ */
+export function treeCapabilities(repo) {
+  const names = [];
+  for (const s of dirNames(join(repo, ".claude", "skills"))) names.push(`skill:${s}`);
+  const mcpPath = join(repo, ".mcp.json");
+  if (existsSync(mcpPath)) {
+    try {
+      const servers = JSON.parse(readFileSync(mcpPath, "utf8")).mcpServers || {};
+      for (const s of Object.keys(servers)) names.push(`mcp:${s}`);
+    } catch { return { unreadable: ".mcp.json did not parse", names }; }
+  }
+  for (const d of dirNames(join(repo, "docker"))) names.push(`image:${d}`);
+  return { names };
+}
+
+/**
+ * `.github/workflows/` -> the CI surface.
+ *
+ * WHY WORKFLOWS AND NOT SUITES. There are 168 bats suites; 168 contract rows would drown the
+ * inventory and tell the owner nothing, the same reason ADRs are banded. And a test suite is
+ * not a feature of arc that needs a room -- it is how a feature is proven. The WORKFLOWS are
+ * the surface: they are what runs, what goes red, and what a phase closes against.
+ *
+ * What this deliberately does NOT do is report whether the last run was green. That is live
+ * state and the face has no feed for it, so the room says `not instrumented` rather than
+ * inventing a colour. Arc's own law is "tests green means green on CI, read per JOB" -- a
+ * fabricated green here would be the exact failure the whole face exists to prevent.
+ */
+export function treeCi(repo) {
+  const dir = join(repo, ".github", "workflows");
+  if (!existsSync(dir)) return { unreadable: ".github/workflows is not on this tree", names: [] };
+  const files = readdirSync(dir).filter((n) => /\.ya?ml$/.test(n));
+  let suites = 0;
+  try { suites = readdirSync(join(repo, "tests")).filter((n) => n.endsWith(".bats")).length; } catch { /* the count is a note, not the inventory */ }
+  return { names: files.map((n) => `workflow:${n.replace(/\.ya?ml$/, "")}`), suiteCount: suites };
+}
+
+/**
+ * `planned-rooms.json` -> the rooms arc has DECLARED but not built.
+ *
+ * This one caught a live defect the moment it was written: four planned rooms are declared
+ * here and in ADR-1306, and `chat-mcp` existed in no registry, no room-copy row and no Map
+ * station. The Map drew 33 stations and silently omitted a declared dotted one -- a map that
+ * hides a gap being precisely what the Map contract says a map cannot be.
+ */
+export function treePlannedRooms(repo) {
+  const p = join(repo, "initiatives", "face", "contracts", "planned-rooms.json");
+  if (!existsSync(p)) return { unreadable: "planned-rooms.json is not on this tree", names: [] };
+  try {
+    const list = JSON.parse(readFileSync(p, "utf8")).rooms;
+    if (!Array.isArray(list)) return { unreadable: "planned-rooms.json has no rooms array", names: [] };
+    return { names: list.map((r) => r?.room).filter((n) => typeof n === "string" && n) };
+  } catch (e) { return { unreadable: `planned-rooms.json did not parse: ${e.message}`, names: [] }; }
+}
+
 // ---------- the check (pure: tree facts + contract -> findings) ----------
-export function coverageFindings({ kinds, lanes, commands, agents, products, rules, processes, contract }) {
+export function coverageFindings({ kinds, lanes, commands, agents, products, rules, processes, contract,
+  // ADR-1317: seven inventories derived from the WORLD rather than from the contract.
+  gates, jobs, ventures, adrBands, plans, capabilities, plannedRooms, ci }) {
   const findings = [];
   const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
@@ -199,10 +370,22 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
 
   // ---- two more tree truths, derived the same way as the others -----------------------
   // Both are unambiguous on disk, which is why they are checked as TREE facts rather than
-  // only as contract-internal references. gates/hooks/lints are deliberately NOT derived
-  // from the tree: their on-disk spelling (helper scripts beside real hooks, bash gates
-  // beside .mjs lints) does not map 1:1 to the inventory, and a gate that invents false
-  // failures is worse than one that checks less.
+  // only as contract-internal references.
+  //
+  // THE REMAINING EXCLUSIONS, each naming the file that makes it true (ADR-1317). The old
+  // note covered `gates`, `hooks` and `lints` with one sentence -- "their on-disk spelling
+  // does not map 1:1 to the inventory" -- and an audit measured that sentence FALSE for
+  // gates: `arc.gates.yaml` carries exactly seven `- name:` rows, exactly the seven contract
+  // keys, a machine-readable registry. An eighth gate would have got no room and no failure.
+  // `gates` is now derived from the world with the others; these two keep the exemption:
+  //
+  //   hooks  -- .claude/hooks/*.d/ holds 15 units behind 7 event-level rows. The inventory
+  //             is the EVENT, deliberately, because that is the thing a person reasons about.
+  //   lints  -- 29 rows over 34 lint-named scripts; `legal-lints (4)` is one row for four
+  //             scripts on purpose. A 1:1 derivation here would invent five false failures.
+  //
+  // An exclusion that does not name its file cannot be checked, and gets inherited by rows it
+  // was never written about -- which is exactly how gates kept a reason belonging to lints.
   const ruleMap = contract.rules?.map || {};
   for (const r of rules || [])
     if (!has(ruleMap, r)) findings.push(`[rule] ".claude/rules/${r}.md" exists on the tree with no room in the contract`);
@@ -210,6 +393,41 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
   const procMap = contract.processes?.map || {};
   for (const p of processes || [])
     if (!has(procMap, p)) findings.push(`[process] "${p}" exists in processes/ with no room in the contract`);
+
+  // ---- the seven world-derived inventories (ADR-1317) ---------------------------------
+  //
+  // Everything above this line compares the contract against itself or against a tree fact
+  // someone remembered to gather. These seven walk a source of truth, so the gate fails when
+  // ARC grows -- not when the contract does.
+  //
+  // Each is checked the same way and each gets its own exit arm in the selftest, because the
+  // lesson from the last extension is that a mutant deleting ONE loop is invisible to a
+  // control that only proves "some finding appeared".
+  const worldInventories = [
+    ["gate", "gates", gates, (n) => `"${n}" is declared in arc.gates.yaml`],
+    ["job", "jobs", jobs, (n) => `"${n}" is scheduled in hq.jobs.yaml and runs unattended`],
+    ["venture", "ventures", ventures, (n) => `"${n}" carries a kill line in ventures.yaml`],
+    ["adr-band", "adrs", adrBands, (n) => `the ${n} ADR band exists in docs/adr/`],
+    ["plan", "plans", plans, (n) => `"${n}" exists in docs/strategy/plans/`],
+    ["capability", "capabilities", capabilities, (n) => `"${n}" is installed in this repo`],
+    ["planned-room", "plannedRooms", plannedRooms, (n) => `"${n}" is declared in planned-rooms.json`],
+    ["ci", "ci", ci, (n) => `"${n}" runs in .github/workflows/`],
+  ];
+  for (const [label, contractKey, tree, describe] of worldInventories) {
+    // An inventory we could not READ is a finding, never an empty pass. "0 gates" and "the
+    // gates file would not parse" are different facts, and the silent-zero version of this
+    // check would report a perfect score for a repository it never opened.
+    if (tree?.unreadable) {
+      findings.push(`[${label}] could not be read from the tree -- ${tree.unreadable}. A source that cannot be read is not a source with nothing in it`);
+      continue;
+    }
+    const map = contract[contractKey]?.map || {};
+    for (const name of tree?.names || [])
+      if (!has(map, name)) findings.push(`[${label}] ${describe(name)} with no room in the contract`);
+    // And the other direction, which two inventories were missing for a whole cycle: a key
+    // that exists is not a value that resolves.
+    for (const name of Object.keys(map)) roomRef(label, name, map[name]);
+  }
 
   // A contract row for a lane that is NO LONGER in the tree stays a WARN: that is the
   // remover's cleanup, not this gate's block. The live-lane case above is the FAIL.
@@ -248,6 +466,16 @@ async function gather(repo) {
     rules: mdStems(join(repo, ".claude", "rules")),
     processes: yamlStems(join(repo, "processes")),
     contract: loadContract(repo),
+    // ADR-1317 -- each walks its own source of truth on disk, so the gate fails when ARC
+    // grows rather than when the contract does.
+    gates: await treeGates(repo),
+    jobs: await treeJobs(repo),
+    ventures: await treeVentures(repo),
+    adrBands: treeAdrBands(repo),
+    plans: treePlans(repo),
+    capabilities: treeCapabilities(repo),
+    plannedRooms: treePlannedRooms(repo),
+    ci: treeCi(repo),
   };
 }
 
@@ -262,10 +490,14 @@ async function run(repoOrData, quiet = false) {
     process.stderr.write(`face-coverage: ${findings.length} coverage gap(s) -- every part of arc needs a home (ADR-1311)\n`);
     return 1;
   }
-  const homedRows = ["gates", "hooks", "rules", "lints", "processes"]
+  const homedRows = ["gates", "hooks", "rules", "lints", "processes", "adrs", "jobs", "ventures", "plans", "capabilities", "plannedRooms", "ci"]
     .reduce((n, k) => n + Object.keys(data.contract[k]?.map || {}).length, 0)
     + Object.keys(data.contract.concepts?.map || {}).length;
-  process.stdout.write(`face-coverage: ${data.kinds.length} kinds, ${data.lanes.length} lanes, ${data.commands.length} commands, ${data.agents.length} agents, ${data.products.length} products, ${data.rules.length} rules, ${data.processes.length} processes, ${homedRows} homed contract rows -- all covered\n`);
+  // The counts are printed from the TREE readers, not from the contract. That is the whole
+  // point of ADR-1317: the old line could say "all covered" while nine surfaces of arc were
+  // invisible, because every number in it came from the list being checked against itself.
+  const w = (inv) => (inv?.unreadable ? "UNREADABLE" : inv.names.length);
+  process.stdout.write(`face-coverage: ${data.kinds.length} kinds, ${data.lanes.length} lanes, ${data.commands.length} commands, ${data.agents.length} agents, ${data.products.length} products, ${data.rules.length} rules, ${data.processes.length} processes, ${w(data.gates)} gates, ${w(data.jobs)} jobs, ${w(data.ventures)} ventures, ${w(data.adrBands)} ADR bands (${data.adrBands?.fileCount ?? "?"} files), ${w(data.plans)} plans, ${w(data.capabilities)} capabilities, ${w(data.plannedRooms)} planned rooms, ${w(data.ci)} CI workflows (${data.ci?.suiteCount ?? "?"} bats suites), ${homedRows} homed contract rows -- all covered\n`);
   return 0;
 }
 
@@ -302,6 +534,36 @@ async function selftest(repo) {
     ["process row in a ghost room", withMapRoom(clean, "processes", "ghost-room-xyz"), "ghost-room-xyz"],
     ["concept in a ghost room", withConcept(clean, { room: "ghost-room-xyz", station: "x" }), "ghost-room-xyz"],
     ["concept with no station", withConcept(clean, { room: "spine", station: "  " }), "names no station"],
+
+    // ---- the seven world-derived inventories (ADR-1317) --------------------------------
+    //
+    // THREE arms apiece, because each closes a different hole and the first two look alike
+    // only until one of them is deleted:
+    //
+    //   ghost on the tree  -- arc grew and the contract did not. This is the one the whole
+    //                         phase exists for; without it the gate is back to comparing a
+    //                         list against itself.
+    //   ghost room         -- the contract row resolves nowhere. A key that exists is not a
+    //                         value that resolves; two inventories carried that hole for a
+    //                         whole cycle.
+    //   unreadable source  -- the source could not be read. This must be a FINDING, never a
+    //                         quiet zero: "0 gates" and "arc.gates.yaml would not parse" are
+    //                         different facts, and the silent version reports a perfect score
+    //                         for a repository it never opened.
+    ...[
+      ["gate", "gates", "gates"],
+      ["job", "jobs", "jobs"],
+      ["venture", "ventures", "ventures"],
+      ["adr-band", "adrs", "adrBands"],
+      ["plan", "plans", "plans"],
+      ["capability", "capabilities", "capabilities"],
+      ["planned-room", "plannedRooms", "plannedRooms"],
+      ["ci", "ci", "ci"],
+    ].flatMap(([label, contractKey, treeKey]) => [
+      [`tree ${label} with no room`, withTreeName(clean, treeKey, `ghost-${label}`), `ghost-${label}`],
+      [`${label} row in a ghost room`, withMapRoom(clean, contractKey, "ghost-room-xyz"), "ghost-room-xyz"],
+      [`${label} source unreadable`, withUnreadable(clean, treeKey), "not a source with nothing in it"],
+    ]),
   ];
 
   const lines = [`clean tree passes: ${cleanOk ? "PASS" : "FAIL (" + cleanFindings.length + " gaps: " + cleanFindings.slice(0, 3).join("; ") + ")"}`];
@@ -334,6 +596,21 @@ async function selftest(repo) {
     ["concept in a ghost room", withConcept(clean, { room: "ghost-room-xyz", station: "x" })],
     ["command in a ghost room", withMapRoom(clean, "commands", "ghost-room-xyz")],
     ["agent in a ghost room", withMapRoom(clean, "agents", "ghost-room-xyz")],
+    // One per world-derived inventory (ADR-1317). The reason there is an arm apiece rather
+    // than one representative is the same reason this list already has eleven: a mutant that
+    // narrowed `if (findings.length)` to a single class passed all seventeen arms of the
+    // previous version, because every arm produced a `[lane]` finding among others. An arm
+    // that shares its neighbour's finding class proves nothing about its own.
+    ["gate on the tree", withTreeName(clean, "gates", "ghost-gate")],
+    ["job on the tree", withTreeName(clean, "jobs", "ghost-job")],
+    ["venture on the tree", withTreeName(clean, "ventures", "ghost-venture")],
+    ["adr band on the tree", withTreeName(clean, "adrBands", "9900")],
+    ["plan on the tree", withTreeName(clean, "plans", "PLAN-ghost")],
+    ["capability on the tree", withTreeName(clean, "capabilities", "skill:ghost")],
+    ["planned room on the tree", withTreeName(clean, "plannedRooms", "ghost-room")],
+    ["ci workflow on the tree", withTreeName(clean, "ci", "workflow:ghost")],
+    // And the class that has no equivalent above: a source that could not be read at all.
+    ["an unreadable inventory source", withUnreadable(clean, "gates")],
   ];
   let allExits = true;
   for (const [label, mutant] of exitArms) {
@@ -357,6 +634,30 @@ function withKindHome(data, homes) {
   return { ...data, contract };
 }
 /** Point the FIRST row of `inv`.map at `room`, leaving its key in place. */
+/**
+ * Add a name to one of the WORLD-derived inventories, as if arc had grown it (ADR-1317).
+ *
+ * The mutation is on the tree side deliberately. A mutant applied to the contract proves the
+ * contract is read; only a mutant applied to the SOURCE proves the gate would notice arc
+ * growing, which is the entire claim the owner asked for.
+ */
+function withTreeName(data, treeKey, name) {
+  const inv = data[treeKey];
+  return { ...data, [treeKey]: { ...inv, names: [...(inv?.names || []), name] } };
+}
+
+/**
+ * Make one inventory's source unreadable.
+ *
+ * The arm this backs is the one that is easy to argue away: a source that cannot be read
+ * SHOULD be a finding, because the alternative is a gate that reports "all covered" for a
+ * file it never opened. `names: []` alongside is deliberate -- the mutant must fail on the
+ * unreadable flag itself, not merely on there being nothing to check.
+ */
+function withUnreadable(data, treeKey) {
+  return { ...data, [treeKey]: { unreadable: "the selftest made it unreadable", names: [] } };
+}
+
 function withMapRoom(data, inv, room) {
   const contract = JSON.parse(JSON.stringify(data.contract));
   const k = Object.keys(contract[inv]?.map || {})[0];

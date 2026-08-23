@@ -305,6 +305,15 @@
         ]
       },
       {
+        "id": "chat-mcp",
+        "name": "Chat / MCP",
+        "ring": "command",
+        "status": "planned",
+        "sources": [
+          "docs/strategy/plans/BRIEF-chat-mcp.md (sleeping — the face fires its trigger)"
+        ]
+      },
+      {
         "id": "ventures",
         "name": "Ventures",
         "ring": "money",
@@ -1298,6 +1307,89 @@
       "leads": "leads",
       "legal": "legal",
       "memory": "memory"
+    }
+  },
+  "adrs": {
+    "map": {
+      "1000": "money",
+      "1100": "growth",
+      "1200": "legal",
+      "1300": "toolbelt",
+      "0000": "board",
+      "0100": "develop",
+      "0200": "engine-room",
+      "0300": "evolve",
+      "0400": "leads",
+      "0500": "policy",
+      "0600": "absorb",
+      "0700": "memory",
+      "0800": "scheduler",
+      "0900": "bench"
+    }
+  },
+  "jobs": {
+    "map": {
+      "brief-materialize": "scheduler",
+      "day-close-roll": "scheduler"
+    }
+  },
+  "ventures": {
+    "map": {
+      "lexos": "ventures"
+    }
+  },
+  "plans": {
+    "map": {
+      "BRIEF-chat-mcp": "strategy",
+      "PLAN-absorb": "strategy",
+      "PLAN-bench": "strategy",
+      "PLAN-cycle2-receipt-spine-v2.1": "strategy",
+      "PLAN-cycle3-venture-launch": "strategy",
+      "PLAN-design-v2": "strategy",
+      "PLAN-design": "strategy",
+      "PLAN-develop": "strategy",
+      "PLAN-discover": "strategy",
+      "PLAN-engine-process-layer": "strategy",
+      "PLAN-evolve": "strategy",
+      "PLAN-executor": "strategy",
+      "PLAN-face": "strategy",
+      "PLAN-growth": "strategy",
+      "PLAN-leads": "strategy",
+      "PLAN-ledger": "strategy",
+      "PLAN-legal-pack": "strategy",
+      "PLAN-memory": "strategy",
+      "PLAN-model-policy": "strategy",
+      "PLAN-ops": "strategy",
+      "PLAN-policy": "strategy",
+      "PLAN-portfolio": "strategy",
+      "PLAN-scheduler": "strategy",
+      "PLAN-trader": "strategy"
+    }
+  },
+  "capabilities": {
+    "map": {
+      "skill:seo-article-writer": "toolbelt",
+      "mcp:supabase": "toolbelt",
+      "mcp:playwright": "toolbelt",
+      "mcp:context7": "toolbelt",
+      "mcp:stripe": "toolbelt",
+      "image:arc-tools": "toolbelt"
+    }
+  },
+  "plannedRooms": {
+    "map": {
+      "ops": "ops",
+      "trader": "trader",
+      "discover": "discover",
+      "chat-mcp": "chat-mcp"
+    }
+  },
+  "ci": {
+    "map": {
+      "workflow:ci": "review-ship",
+      "workflow:measure-windows-cost": "review-ship",
+      "workflow:shard-calibrate": "review-ship",
+      "workflow:weigh-tests": "review-ship"
     }
   }
 }

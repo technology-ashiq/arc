@@ -159,7 +159,16 @@ export function classifyDoorExit(code, stderrText) {
   if (err.includes("WORKTREE_SPINE") || err.includes("worktree"))
     return "the door refuses a git worktree: live mode needs the MAIN clone, because a worktree carries no canonical spine. Run this from the main checkout, or pass --spine <fixture> to drive a sim door.";
   if (err.includes("BAD_SPINE"))
-    return "the --spine path given has no events/ directory, and a sim door over nothing answers confidently and wrongly.";
+    // Deliberately does NOT name the spine's on-disk layout, for two reasons that agree.
+    //
+    // The layout is the door's business, not the launcher's: this file spawns two processes
+    // and relays what they say, so a second, drifting description of the spine's directory
+    // shape would be a copy waiting to go stale. And `spine-reader-lint` greps every tracked
+    // hq module for exactly those tokens outside a comment -- correctly, since a string
+    // literal CAN be a path, and it has caught a real planted bypass. Weakening a gate that
+    // works, to keep a sentence the door already prints one line above, would be the wrong
+    // trade in both directions. The door's own message stays visible; this one classifies it.
+    return "the --spine path given is not a spine the door will accept (its own refusal is above). Point --spine at a real fixture, or drop the flag to use the canonical spine from the main clone.";
   if (err.includes("EADDRINUSE") || err.includes("address already in use"))
     return `something is already listening on the door's port. Another arc-dash is probably up; stop it, or pass --port <n>.`;
   if (err.includes("BAD_BIND"))

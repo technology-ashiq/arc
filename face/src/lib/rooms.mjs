@@ -157,14 +157,55 @@ export function zonesFor(room) {
     ["hooks", "Hooks"],
     ["rules", "Rules"],
     ["lints", "Lints"],
+    // ADR-1317. Titled in the owner's terms, not the contract's: he does not think "adrs",
+    // he thinks "why did we decide this", and a zone header is the one place the product
+    // gets to speak his language instead of the schema's.
+    ["adrs", "Decisions behind it"],
+    ["jobs", "Runs unattended"],
+    ["ventures", "Ventures"],
+    ["plans", "Plans"],
+    ["capabilities", "Installed here"],
+    ["plannedRooms", "Planned"],
+    ["ci", "Proven by"],
     ["concepts", "Vocabulary"],
   ];
   const zones = [];
+  const placed = new Set();
   for (const [key, title] of ORDER) {
     const items = room.holds?.[key];
+    placed.add(key);
     if (Array.isArray(items) && items.length) zones.push({ key, title, items });
   }
+  // ANYTHING ELSE THE ROOM HOLDS, rendered rather than dropped.
+  //
+  // This list used to be the whole function, and it is the same failure the gate below it had
+  // just been fixed for: a fixed list silently loses what it does not know. The contract grew
+  // by eight inventories, the registry grew with it, every room carried the new rows -- and
+  // the screen would have shown nothing, with no error anywhere, because the renderer's ORDER
+  // had eleven entries. "It is in the data" and "the owner can see it" are different facts.
+  //
+  // An untitled key gets a derived title rather than being hidden: an ugly header is a
+  // problem someone fixes in a minute, and an invisible inventory is a problem nobody sees.
+  for (const key of Object.keys(room.holds || {})) {
+    if (placed.has(key)) continue;
+    const items = room.holds[key];
+    if (!Array.isArray(items) || !items.length) continue;
+    zones.push({ key, title: titleFromKey(key), items });
+  }
   return zones;
+}
+
+/**
+ * `plannedRooms` -> "Planned rooms". A fallback header, never a hidden zone.
+ * @param {string} key
+ * @returns {string}
+ */
+export function titleFromKey(key) {
+  const spaced = String(key).replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[-_]+/g, " ").trim();
+  // Sentence case, matching every titled zone above ("What it records", not "What It Records").
+  // `charAt` rather than `[0]`: an empty string indexes to undefined, and the guard above only
+  // proves the string is truthy AFTER trim -- tsc is right that the two are not the same claim.
+  return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase() : "Other";
 }
 
 /**
@@ -528,4 +569,36 @@ export function conceptGroups(payload, rooms, expected) {
     orphans,
     groups,
   };
+}
+
+/**
+ * The ADR band map: which century of the decision record belongs to which room.
+ *
+ * WHY THIS IS A MAP AND NOT A LIST OF 265 FILES. The board ships a station called "ADR map",
+ * and for a whole cycle it rendered nothing -- arc's entire decision record was invisible to
+ * the face while the coverage gate reported "all covered" (ADR-1317). The fix is not to dump
+ * 265 rows into a room; nobody navigates a decision record file by file. Bands are how a
+ * person actually holds it: PORTFOLIO.md assigns one century per lane, so "why did we decide
+ * X" becomes "which lane owned X", and the map answers that in fourteen rows.
+ *
+ * A band pointing at a room that does not exist is KEPT and marked, not dropped. A map that
+ * silently omits the one band whose room was renamed is the failure this product exists to
+ * not have -- and it is the shape the registry's own room-reference check already guards.
+ *
+ * @param {Record<string, string>} bands  band id -> room id, from the registry's `inventories`
+ * @param {Room[]} rooms
+ * @returns {{ band: string, label: string, room: string, roomName: string | null }[]}
+ */
+export function adrBandMap(bands, rooms) {
+  const byId = new Map((rooms || []).map((r) => [r.id, r]));
+  return Object.entries(bands || {})
+    .filter(([band]) => /^\d{4}$/.test(band))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([band, room]) => {
+      // "0000" reads as a typo; "0000-0099" reads as a range, which is what a band is.
+      const start = Number(band);
+      const label = `${band}-${String(start + 99).padStart(4, "0")}`;
+      const found = byId.get(room);
+      return { band, label, room, roomName: found ? found.name : null };
+    });
 }
