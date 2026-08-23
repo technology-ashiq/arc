@@ -76,6 +76,19 @@ setup() {
   # STRICT_LOCK_TIMEOUT_MS (15000) explicitly, which overrides ARC_SPINE_LOCK_TIMEOUT_MS. At
   # 8 waiters and a millisecond-scale section that is three orders of magnitude of headroom,
   # so nothing in this file may legitimately time out -- a LOCK_TIMEOUT here is a real fault.
+  #
+  # OBSERVED ONCE, AND NOT REPRODUCED (2026-08-24, face lane). One of 200 strict emits was
+  # refused with LOCK_TIMEOUT on `windows-latest, shard 6/12` -- `fail w=3 j=23`. The same
+  # commit's siblings passed it, the run before and the run after passed it, and the change
+  # under test could not reach the spine lock at all. The headroom argument above assumes the
+  # HOLDER gets scheduled; on a Windows runner carrying twelve shards that is an assumption
+  # about the machine, not about the code.
+  #
+  # Recorded rather than acted on, and the assertion is deliberately UNCHANGED: one
+  # non-reproducing event is not enough to loosen a lock test, and a timeout here is still the
+  # right thing to go red on. What this note buys the next reader is the difference between
+  # "first time" and "again" -- if it recurs, it is the lock, and the headroom sentence above
+  # is the claim to re-examine first.
 }
 
 # One emitter: PER_EMITTER strict emits, each with a payload no other emitter can produce.

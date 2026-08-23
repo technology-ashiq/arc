@@ -51,15 +51,39 @@ a renderer is how a renamed room silently empties a screen.
 ## Running it
 
 ```bash
-# 1. the door, from the MAIN clone (a worktree carries no canonical spine)
-node .claude/scripts/hq/arc-dash.mjs            # prints a URL with #token=...
-
-# 2. this app
-cd face && npm install && npm run dev
+node .claude/scripts/hq/arc-face.mjs
 ```
 
+That is the whole thing. It starts the door, installs this app's dependencies the first time
+(`npm ci`, from the tracked lockfile), starts the dev server, prints ONE URL with the token
+already in it, and opens it. Ctrl-C stops both. Run it from the **main clone** — a worktree
+carries no canonical spine, and the launcher says so by name rather than dying oddly.
+
+Flags, all optional: `--port` (door, 8317) · `--app-port` (this app, 5180) · `--spine <dir>`
+to drive a fixture instead of the canonical spine · `--no-open` · `--token`. An unknown or
+repeated flag is refused with exit 2 rather than quietly taking a default.
+
+<details><summary>the two processes by hand, if you need them separately</summary>
+
+```bash
+# 1. the door, from the MAIN clone
+node .claude/scripts/hq/arc-dash.mjs            # prints a URL with #token=...
+
+# 2. this app -- and then paste that token into the app's URL fragment yourself
+cd face && npm ci && npm run dev
+```
+
+This is what the launcher exists to replace. The token is regenerated every boot, so doing it
+by hand means hand-copying a 32-character secret into a URL bar before you can look at your
+own company — which is the kind of entry fee that gets a product used on day one and skipped
+on day three.
+
+</details>
+
 `vite.config.ts` proxies `/api` to the door, so the browser never sees a cross-origin
-request and the door keeps its zero-CORS posture (ADR-1312).
+request and the door keeps its zero-CORS posture (ADR-1312). Its listen port AND its
+origin allow-list both come from `ARC_FACE_APP_PORT`, which the launcher sets: they were two
+literals once, and moving one without the other made every read work while every stamp 403'd.
 
 ## Tokens
 

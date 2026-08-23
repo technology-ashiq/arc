@@ -124,9 +124,6 @@
           "note.logged",
           "redaction.applied"
         ],
-        "products": [
-          "hq"
-        ],
         "lints": [
           "spine-reader-lint"
         ],
@@ -145,6 +142,9 @@
           "spine",
           "supersedes chain",
           "torn line"
+        ],
+        "products": [
+          "hq"
         ]
       },
       "itemCount": 22
@@ -179,9 +179,12 @@
           "WIP guideline",
           "century band",
           "lane"
+        ],
+        "adrs": [
+          "0000"
         ]
       },
-      "itemCount": 8
+      "itemCount": 9
     },
     {
       "id": "ask-arc",
@@ -225,13 +228,6 @@
         "lanes": [
           "engine"
         ],
-        "products": [
-          "engine"
-        ],
-        "lints": [
-          "arc-compile-bytediff",
-          "process-lint"
-        ],
         "processes": [
           "brief-materialize",
           "build-in-public-draft",
@@ -240,15 +236,25 @@
           "kickoff-plan",
           "review-diff"
         ],
+        "lints": [
+          "arc-compile-bytediff",
+          "process-lint"
+        ],
         "concepts": [
           "capped key",
           "cert suite",
           "context pack",
           "router row",
           "unlock ladder"
+        ],
+        "products": [
+          "engine"
+        ],
+        "adrs": [
+          "0200"
         ]
       },
-      "itemCount": 16
+      "itemCount": 17
     },
     {
       "id": "model-policy",
@@ -298,6 +304,9 @@
         "lanes": [
           "policy"
         ],
+        "hooks": [
+          "policy-decide.sh"
+        ],
         "lints": [
           "policy-lint",
           "policy-matrix"
@@ -306,9 +315,12 @@
           "ceiling / cap / effective",
           "spend reservation",
           "two-key model"
+        ],
+        "adrs": [
+          "0500"
         ]
       },
-      "itemCount": 11
+      "itemCount": 13
     },
     {
       "id": "scheduler",
@@ -338,9 +350,16 @@
           "DRILL",
           "overdue (2x cadence)",
           "proving week"
+        ],
+        "adrs": [
+          "0800"
+        ],
+        "jobs": [
+          "brief-materialize",
+          "day-close-roll"
         ]
       },
-      "itemCount": 7
+      "itemCount": 10
     },
     {
       "id": "memory",
@@ -358,15 +377,18 @@
         "lanes": [
           "memory"
         ],
-        "products": [
-          "memory"
-        ],
         "concepts": [
           "HISTORICAL DATA fence",
           "golden gate (recall)"
+        ],
+        "products": [
+          "memory"
+        ],
+        "adrs": [
+          "0700"
         ]
       },
-      "itemCount": 4
+      "itemCount": 5
     },
     {
       "id": "evolve",
@@ -398,16 +420,19 @@
         "lanes": [
           "evolve"
         ],
-        "products": [
-          "evolve"
-        ],
         "concepts": [
           "PENDING n/floor",
           "champion / challenger",
           "holdout cohort"
+        ],
+        "products": [
+          "evolve"
+        ],
+        "adrs": [
+          "0300"
         ]
       },
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "bench",
@@ -432,9 +457,12 @@
         "concepts": [
           "drift guard",
           "scorecard"
+        ],
+        "adrs": [
+          "0900"
         ]
       },
-      "itemCount": 5
+      "itemCount": 6
     },
     {
       "id": "absorb",
@@ -456,9 +484,6 @@
         "lanes": [
           "absorb"
         ],
-        "products": [
-          "absorb"
-        ],
         "commands": [
           "arc-absorb"
         ],
@@ -471,9 +496,15 @@
           "PLANOFF A/B",
           "allowlist / DO-NOT-WIDEN",
           "technique T-NN"
+        ],
+        "products": [
+          "absorb"
+        ],
+        "adrs": [
+          "0600"
         ]
       },
-      "itemCount": 10
+      "itemCount": 11
     },
     {
       "id": "council-chamber",
@@ -496,9 +527,6 @@
           "council.outcome",
           "council.verdict",
           "decision.recorded"
-        ],
-        "products": [
-          "council"
         ],
         "commands": [
           "arc-council"
@@ -526,6 +554,9 @@
           "POINT-ID",
           "PREDICTION",
           "Review-by"
+        ],
+        "products": [
+          "council"
         ]
       },
       "itemCount": 23
@@ -552,9 +583,6 @@
         "lanes": [
           "develop"
         ],
-        "products": [
-          "develop"
-        ],
         "commands": [
           "arc-capability",
           "arc-develop"
@@ -573,9 +601,15 @@
           "proof tier",
           "slice",
           "stuck fingerprint"
+        ],
+        "products": [
+          "develop"
+        ],
+        "adrs": [
+          "0100"
         ]
       },
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "review-ship",
@@ -583,7 +617,7 @@
       "ring": "factory",
       "status": "built",
       "sentence": "Every gate blocks by default.",
-      "lede": "seven gates, commit-keyed — a new commit is a new review, and a profile switches the whole set as one",
+      "lede": "seven gates, commit-keyed — a new commit is a new review, and a profile switches the whole set as one. The workflows below are what RUNS them; whether the last run was green is not instrumented here, and this room will not imply it from a list of names",
       "render": "generic",
       "stations": [],
       "holds": {
@@ -592,11 +626,6 @@
           "qa.completed",
           "review.completed",
           "ship.done"
-        ],
-        "products": [
-          "git",
-          "qa",
-          "review"
         ],
         "commands": [
           "arc-audit",
@@ -623,9 +652,20 @@
           "rls",
           "scan",
           "spine-api"
+        ],
+        "products": [
+          "git",
+          "qa",
+          "review"
+        ],
+        "ci": [
+          "workflow:ci",
+          "workflow:measure-windows-cost",
+          "workflow:shard-calibrate",
+          "workflow:weigh-tests"
         ]
       },
-      "itemCount": 27
+      "itemCount": 31
     },
     {
       "id": "design-studio",
@@ -651,9 +691,6 @@
         "lanes": [
           "design"
         ],
-        "products": [
-          "design"
-        ],
         "commands": [
           "arc-design (legacy)",
           "arc-design-critique"
@@ -676,6 +713,9 @@
           "deterministic render",
           "thesis (design)",
           "tokens.css"
+        ],
+        "products": [
+          "design"
         ]
       },
       "itemCount": 20
@@ -697,9 +737,6 @@
       "holds": {
         "lanes": [
           "face"
-        ],
-        "products": [
-          "core"
         ],
         "commands": [
           "arc",
@@ -734,9 +771,23 @@
           "face: section",
           "generated command (G)",
           "room birth-rule"
+        ],
+        "products": [
+          "core"
+        ],
+        "adrs": [
+          "1300"
+        ],
+        "capabilities": [
+          "image:arc-tools",
+          "mcp:context7",
+          "mcp:playwright",
+          "mcp:stripe",
+          "mcp:supabase",
+          "skill:seo-article-writer"
         ]
       },
-      "itemCount": 26
+      "itemCount": 33
     },
     {
       "id": "money",
@@ -774,9 +825,12 @@
           "honesty classes",
           "kill line / kill-distance",
           "month-close"
+        ],
+        "adrs": [
+          "1000"
         ]
       },
-      "itemCount": 14
+      "itemCount": 15
     },
     {
       "id": "growth",
@@ -798,9 +852,6 @@
         "lanes": [
           "growth"
         ],
-        "products": [
-          "growth"
-        ],
         "lints": [
           "citation-lint",
           "slop-lint",
@@ -809,9 +860,15 @@
         "concepts": [
           "INDEXABLE clock",
           "gate 1 / gate 2 (growth)"
+        ],
+        "products": [
+          "growth"
+        ],
+        "adrs": [
+          "1100"
         ]
       },
-      "itemCount": 9
+      "itemCount": 10
     },
     {
       "id": "leads",
@@ -840,9 +897,6 @@
         "lanes": [
           "leads"
         ],
-        "products": [
-          "leads"
-        ],
         "lints": [
           "pii-tripwire",
           "rehearsal-check",
@@ -852,9 +906,15 @@
           "REHEARSAL",
           "send window (IST)",
           "suppression / reply-stop"
+        ],
+        "products": [
+          "leads"
+        ],
+        "adrs": [
+          "0400"
         ]
       },
-      "itemCount": 16
+      "itemCount": 17
     },
     {
       "id": "legal",
@@ -874,18 +934,21 @@
         "lanes": [
           "legal"
         ],
-        "products": [
-          "legal"
-        ],
         "lints": [
           "legal-lints (4)",
           "publish-gate"
         ],
         "concepts": [
           "hash-chain (legal)"
+        ],
+        "products": [
+          "legal"
+        ],
+        "adrs": [
+          "1200"
         ]
       },
-      "itemCount": 6
+      "itemCount": 7
     },
     {
       "id": "ops",
@@ -900,9 +963,12 @@
       "holds": {
         "kinds": [
           "incident.raised"
+        ],
+        "plannedRooms": [
+          "ops"
         ]
       },
-      "itemCount": 1
+      "itemCount": 2
     },
     {
       "id": "trader",
@@ -922,9 +988,12 @@
         ],
         "concepts": [
           "EXPLORATORY"
+        ],
+        "plannedRooms": [
+          "trader"
         ]
       },
-      "itemCount": 2
+      "itemCount": 3
     },
     {
       "id": "discover",
@@ -939,6 +1008,26 @@
       "holds": {
         "kinds": [
           "idea.captured"
+        ],
+        "plannedRooms": [
+          "discover"
+        ]
+      },
+      "itemCount": 2
+    },
+    {
+      "id": "chat-mcp",
+      "name": "Chat / MCP",
+      "ring": "command",
+      "status": "planned",
+      "sentence": "arc answers from anywhere you already are.",
+      "lede": "planned, drawn dotted -- the door already speaks HTTP, so this is a surface question and not an engine one",
+      "render": "generic",
+      "planned": true,
+      "stations": [],
+      "holds": {
+        "plannedRooms": [
+          "chat-mcp"
         ]
       },
       "itemCount": 1
@@ -963,9 +1052,12 @@
         ],
         "concepts": [
           "passport"
+        ],
+        "ventures": [
+          "lexos"
         ]
       },
-      "itemCount": 4
+      "itemCount": 5
     },
     {
       "id": "law",
@@ -1038,9 +1130,35 @@
         "concepts": [
           "Build-out Mandate",
           "pull trigger"
+        ],
+        "plans": [
+          "BRIEF-chat-mcp",
+          "PLAN-absorb",
+          "PLAN-bench",
+          "PLAN-cycle2-receipt-spine-v2.1",
+          "PLAN-cycle3-venture-launch",
+          "PLAN-design",
+          "PLAN-design-v2",
+          "PLAN-develop",
+          "PLAN-discover",
+          "PLAN-engine-process-layer",
+          "PLAN-evolve",
+          "PLAN-executor",
+          "PLAN-face",
+          "PLAN-growth",
+          "PLAN-leads",
+          "PLAN-ledger",
+          "PLAN-legal-pack",
+          "PLAN-memory",
+          "PLAN-model-policy",
+          "PLAN-ops",
+          "PLAN-policy",
+          "PLAN-portfolio",
+          "PLAN-scheduler",
+          "PLAN-trader"
         ]
       },
-      "itemCount": 2
+      "itemCount": 26
     },
     {
       "id": "org",
@@ -1089,9 +1207,6 @@
           "kickoff.done",
           "phase.closed"
         ],
-        "products": [
-          "plan"
-        ],
         "commands": [
           "arc-change",
           "arc-kickoff (G)",
@@ -1118,9 +1233,49 @@
           "machine header",
           "pre-mortem",
           "steel thread"
+        ],
+        "products": [
+          "plan"
         ]
       },
       "itemCount": 22
     }
-  ]
+  ],
+  "inventories": {
+    "adrs": {
+      "1000": "money",
+      "1100": "growth",
+      "1200": "legal",
+      "1300": "toolbelt",
+      "0000": "board",
+      "0100": "develop",
+      "0200": "engine-room",
+      "0300": "evolve",
+      "0400": "leads",
+      "0500": "policy",
+      "0600": "absorb",
+      "0700": "memory",
+      "0800": "scheduler",
+      "0900": "bench"
+    },
+    "jobs": {
+      "brief-materialize": "scheduler",
+      "day-close-roll": "scheduler"
+    },
+    "ventures": {
+      "lexos": "ventures"
+    },
+    "plannedRooms": {
+      "ops": "ops",
+      "trader": "trader",
+      "discover": "discover",
+      "chat-mcp": "chat-mcp"
+    },
+    "ci": {
+      "workflow:ci": "review-ship",
+      "workflow:measure-windows-cost": "review-ship",
+      "workflow:shard-calibrate": "review-ship",
+      "workflow:weigh-tests": "review-ship"
+    }
+  }
 }

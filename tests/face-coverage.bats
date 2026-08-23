@@ -33,12 +33,37 @@ load 'test_helper'
   [[ "$output" == *"lanes, $cmds commands, $agents agents, $prods products, $rules rules, $procs processes,"* ]] || { echo "expected tree-derived counts (lanes=$lanes cmds=$cmds agents=$agents prods=$prods rules=$rules procs=$procs); got: $output"; false; }
   [[ "$output" == *" $lanes lanes,"* ]] || { echo "lane count is not the tree's $lanes: $output"; false; }
   [[ "$output" == *"-- all covered"* ]] || { echo "$output"; false; }
-  # The 164 gates/hooks/rules/lints/processes/concepts rows the gate did NOT read until
-  # 2026-08-23. Floored, not pinned: the inventories grow, and a floor still kills the
-  # mutant that deletes the loop and prints 0.
+  # The rows the gate did NOT read until 2026-08-23: 164 then, 219 after ADR-1317 added eight
+  # world-derived inventories. Floored, not pinned -- the inventories grow, and a floor still
+  # kills the mutant that deletes the loop and prints 0.
+  #
+  # The floor is RAISED with the reality it guards. Left at 150 it would still catch a total
+  # collapse and would sleep through a partial one: three whole inventories could stop being
+  # read and the number would sit comfortably above the line. A floor far below the truth has
+  # stopped measuring.
   local homed
   homed=$(printf '%s\n' "$output" | sed -n 's/.*, \([0-9]\{1,\}\) homed contract rows.*/\1/p')
-  [ -n "$homed" ] && [ "$homed" -ge 150 ] || { echo "homed-rows count missing or implausible ($homed): $output"; false; }
+  [ -n "$homed" ] && [ "$homed" -ge 210 ] || { echo "homed-rows count missing or implausible ($homed): $output"; false; }
+  # Three of the world-derived counts, floored the same way. Without them the summary line
+  # could say "all covered" with every one of the eight new readers returning nothing -- the
+  # mutant tests/face/coverage-readers.mjs exists to kill, asserted here as well because the
+  # two suites do not run on the same leg.
+  # EVERY world-derived count, floored, in one loop so the next inventory cannot be added
+  # without a floor. An adversarial pass disconnected a reader INSIDE gather() -- the seam
+  # between the readers (driven directly by coverage-readers.mjs) and the mutants (applied to
+  # what gather returns) -- and the gate printed "0 plans ... all covered" past all three
+  # controls it had. The gate's own selftest now crosses that seam; this asserts the same
+  # thing against the REAL repo, because the two suites do not run on the same leg.
+  #
+  # `capabilities` is deliberately absent from the list: a repo may legitimately carry no
+  # skills, no MCP servers and no pinned images, and a floor there would fail an honest zero.
+  local label floor got
+  for pair in "gates:5" "jobs:1" "ventures:1" "ADR bands:10" "plans:20" "planned rooms:2" "CI workflows:1"; do
+    label="${pair%:*}"; floor="${pair##*:}"
+    got=$(printf '%s\n' "$output" | sed -n "s/.*, \([0-9]\{1,\}\) $label.*/\1/p")
+    [ -n "$got" ] || { echo "could not read a count for '$label' from the summary line: $output"; false; }
+    [ "$got" -ge "$floor" ] || { echo "'$label' is $got, below the floor $floor -- a reader has stopped reading: $output"; false; }
+  done
   # The kinds count is read back off the line and floored, which kills the mutant that made
   # the kind reader return nothing and still printed "all covered".
   kinds=$(printf '%s\n' "$output" | sed -n 's/.*face-coverage: \([0-9]\{1,\}\) kinds.*/\1/p')
@@ -120,15 +145,31 @@ load 'test_helper'
 }
 
 @test "the frozen contract still parses and still carries its declared counts" {
+  # FLOORS, not equalities, and the distinction is the whole point of this test.
+  #
+  # What it guards against is a contract that was TRUNCATED, corrupted, or half-written -- the
+  # failure where a generator writes 4 rooms over 33 and every downstream check happily agrees
+  # with the smaller world. A floor catches all of that.
+  #
+  # An EQUALITY catches something else: legitimate growth. `rooms !== 32` went red the moment
+  # ADR-1317 generated `chat-mcp`, a room that had been declared in planned-rooms.json and in
+  # ADR-1306 and generated nowhere -- a defect being FIXED. That is the third hard-coded count
+  # in this suite to fail that way in one day; the other two (l3-logic, dash-doors) were made
+  # to derive their expected value from the contract, and this one is the contract, so it has
+  # nothing to derive from. Hence floors.
+  #
+  # The count was never the protection anyway, as the note below already said: the gate checks
+  # room ids as VALUES, face-sections refuses a duplicate id, and l3-logic sweeps every room.
+  # A list length stayed 32 through a deleted id, a duplicated id and a swapped filler.
   run node -e "
     const fs = require('fs');
     const s = JSON.parse(fs.readFileSync(process.argv[1] + '/initiatives/face/contracts/expected-set.json', 'utf8'));
     const n = { rooms: s.rooms.list.length, kinds: Object.keys(s.kinds.map).length, commands: Object.keys(s.commands.map).length, agents: Object.keys(s.agents.map).length, lanes: Object.keys(s.lanes.map).length, products: Object.keys(s.products.map).length };
-    if (n.rooms !== 32) { console.log('rooms', n.rooms); process.exit(1); }
-    if (n.kinds !== 46) { console.log('kinds', n.kinds); process.exit(1); }
-    if (n.commands !== 26) { console.log('commands', n.commands); process.exit(1); }
-    if (n.agents !== 30) { console.log('agents', n.agents); process.exit(1); }
-    if (n.products !== 16) { console.log('products', n.products); process.exit(1); }
+    if (n.rooms < 33) { console.log('rooms', n.rooms); process.exit(1); }
+    if (n.kinds < 46) { console.log('kinds', n.kinds); process.exit(1); }
+    if (n.commands < 26) { console.log('commands', n.commands); process.exit(1); }
+    if (n.agents < 30) { console.log('agents', n.agents); process.exit(1); }
+    if (n.products < 16) { console.log('products', n.products); process.exit(1); }
     // A count pins KEY COUNT, never truth -- room ids are checked as values by the gate.
     console.log('RAN: contract carries', JSON.stringify(n));
   " "$ARC_ROOT"
@@ -215,4 +256,49 @@ load 'test_helper'
   run node "$ARC_ROOT/.claude/scripts/core/face-sections.mjs" "$t" --check
   [ "$status" -eq 1 ] || { echo "expected exit 1 on a hand-edited registry; got $status: $output"; false; }
   [[ "$output" == *"rooms.generated.json"* ]] || { echo "$output"; false; }
+}
+
+@test "the coverage gate READS its sources, not just its own list (ADR-1317)" {
+  # The distinction this test exists for, and it is not academic. face-coverage's own
+  # selftest mutates a GATHERED data object -- it pushes a ghost name into clean.gates.names
+  # and asserts a finding appears. That proves the check works and says nothing about the
+  # reader. A mutant making treeGates return { names: [] } passes every one of those arms,
+  # and the gate then reports "all covered" for a file it never opened.
+  #
+  # Measured, not argued: with that mutant applied, `face-coverage --selftest` exited 0 and
+  # this suite exited 1. That is the vacuous-pass rule one layer down -- the assertion held
+  # while the code that mattered never ran.
+  run node "$ARC_ROOT/tests/face/coverage-readers.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
+  local n=""
+  [[ "$output" =~ RAN:\ ([0-9]+)\ checks ]] && n="${BASH_REMATCH[1]}"
+  [ -n "$n" ] && [ "$n" -ge 28 ] || { echo "only '$n' checks ran: $output"; false; }
+  # The arms that carry the weight, by name. A reader that silently returns nothing, and a
+  # source that could not be read being reported as empty, are the two failures that would
+  # let the gate lie with total confidence.
+  for arm in "a gate ADDED to the file appears in the reader" \
+             "treeVentures reads a MAP keyed by venture id" \
+             "treeAdrBands groups by century, not by file" \
+             "a gates file that will not parse is UNREADABLE, not empty" \
+             "a ventures LIST where a map belongs is UNREADABLE, not empty" \
+             "an ABSENT gates file is UNREADABLE, not empty" \
+             "against the real repo, gates are found"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "every world-derived inventory has its own exit arm, so deleting one loop is visible" {
+  # Eleven arms were not enough once: a mutant narrowing `if (findings.length)` to a single
+  # class passed all seventeen arms of the previous version, because every arm produced a
+  # [lane] finding among its others. An arm that shares its neighbour's finding class proves
+  # nothing about its own -- so each inventory added by ADR-1317 gets one.
+  run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" --selftest
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  for arm in "gate on the tree" "job on the tree" "venture on the tree" \
+             "adr band on the tree" "plan on the tree" "capability on the tree" \
+             "planned room on the tree" "ci workflow on the tree" \
+             "an unreadable inventory source"; do
+    [[ "$output" == *"exit 1 on a $arm"*"PASS"* ]] || { echo "exit arm missing: $arm"; echo "$output"; false; }
+  done
 }

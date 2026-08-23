@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-face (Cycle 15, opened 2026-08-19)
-phase: 06
+phase: 09
 appetite: 32d
 burn: 14d
 blocked-on: nothing structural — the design gate is DISCHARGED. The owner supplied the design himself rather than picking from the explore rounds, so the PICK is moot and block A can no longer take its second BELOW-BAR strike. Two items remain and neither blocks the build: one `hq.policy.yaml` row for face-ask (edit-denied to the machine by design, and not useful until the engine-lane empty-allowlist seam exists), and one owner ruling on the reference brain’s approve/reject action (see `docs/design/reference/face-hq/SOURCE.md`).
@@ -28,11 +28,12 @@ depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersede
 | 03 | L2 `arc dash` — read door + spine-health reader + `arc-inbox` function extraction + decision door (parity fixture) + ask proxy + sim/replay + request journal; two fresh attackers | 4d | built, attacked twice, local green; CI verdict pending |
 | 04 | Shell — `face/` L3 born IN-REPO (ADR-1316); Today · Inbox on the live L2 doors; five-ring shell; keyboard model | 4d | **BUILT and proven — a real `decision.recorded` written from the face** |
 | 05 | Map + template + birth-rule + coverage — `face:` ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | **BUILT** — 33 stations, gate squares, coverage gate now watches 11 inventories |
-| 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | **BUILT** — all 33 rooms render: 22 generic · 2 index · 9 bespoke; swept and looked at |
+| 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | **BUILT** — all rooms render (33 at the time, **34** since ADR-1317 generated `chat-mcp`): 22 generic · 2 index · 9 bespoke · 1 planned; re-swept 2026-08-24, 0 crashed |
 | 07 | Ask arc — `face-ask` process + router row + `hq.policy.yaml` row + 20 golden questions + drafts-to-stamp; zero write tools | 3d | deterministic half BUILT and proven through the face (VERIFIED, citations resolved); model half waits on the engine seam |
-| 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | pending (needs L3 + 5 real days) |
+| 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | **EVIDENCE HARNESS BUILT + ONE-COMMAND START.** `node .claude/scripts/hq/arc-face.mjs` from the MAIN clone starts the door and the app, installs once from the tracked lockfile, and prints one URL with the token in it — the three-step morning (two terminals plus hand-copying a 32-char token) is what ends dogfoods, not the product. `face-dogfood.mjs` then settles the requirement by matching L2’s journal against `decision.recorded`; today it reads **NOT MET: 1 matched, 59 decided outside the face, 1 of 5 days**. The five days are calendar, not code |
+| 09 | Nothing missing — the completeness sweep: **nine** inventories derived from the WORLD (gates · jobs · ventures · adrs-by-band · plans · capabilities · planned-rooms · ci · **hooks + lints**), `chat-mcp` generated, four empty stations filled, `/api/lane/:name` carries phases, zones can no longer hide a hold | 3d | **BUILT + ATTACKED, CI verdict pending** — all nine audit gaps closed, then two fresh attackers found **20** more holes (13 derivation · 7 shell/OS, zero overlap) and every one is fixed. The exemption list is now EMPTY: the `hooks`/`lints` exclusion was re-measured and was itself false, hiding an uncovered `policy-decide.sh`. 220 homed rows; coverage selftest 93 arms; l3-logic 262 · dash-doors 78 · readers 31 |
 
-**Appetite burn: 7 of 32 days used (22%) — recomputed 2026-08-23.** Block A (6d): Phase 00
+**Appetite burn: the machine header above (`burn: 14d` of 32d) is the operative figure — it is what `PORTFOLIO.md` reads, and ADR-0051 makes this file the truth the board derives from. The block accounting below is NARRATIVE and it has fallen behind: it stops at the Phase 07 deterministic half and counts nothing for Phases 04, 06, 08 or 09, so its “7 days” is a floor over an incomplete list, not a second total. It is left standing rather than patched with a number nobody measured — a burn figure invented to make two paragraphs agree is exactly the kind of unmeasured entry this lane spent a cycle removing from generated tables.** Block A (6d): Phase 00
 1d + Phase 01 v1 ~2d + the v2 open-brief round ~1d + reference intake and token extraction
 ~1d = **5d of 6d (83%)**. It closes INSIDE its appetite and its kill condition can no
 longer fire: that kill needed two BELOW-BAR owner scores, and the owner ended the round by
@@ -272,10 +273,14 @@ allowlist (`tools: []` is refused by the `claude-code` driver, because an absent
 `--allowedTools` means UNRESTRICTED and an empty grant fails closed — ADR-0223 working as
 designed). The policy row alone would not make it runnable, so it is not urgent.
 
-**Next step (owner's) — one ruling, and it is not a blocker:** the reference brain's action
-protocol lets the model emit `approve` / `reject` on a real inbox id. It is told in the
-prompt not to auto-approve money or kill decisions, but a prompt is not a tool contract,
-and REQ-07 requires ZERO write tools proven by a fixture. Recommended: drop those two
-actions and keep `open_room` / `set_speed` / `enter_hq`. Reasoning in
-`docs/design/reference/face-hq/SOURCE.md`. The brief's "purinjathu" read for Phase 00 rides
-along with it.
+**That ruling is DECIDED (2026-08-24), and it did not need the owner.** The reference brain's
+action protocol lets the model emit `approve` / `reject` on a real inbox id, restrained only
+by a prompt — which is not a tool contract, and REQ-07 requires ZERO write tools proven by a
+fixture. Both actions are out; `open_room` / `set_speed` / `enter_hq` stay. It is not a design
+call and the owner kept only the design, so asking would have been asking him to re-derive an
+answer E2 and REQ-07 already give. Enforced, not stated: `ASK_ACTIONS` + `actionAudit` in
+`face/src/lib/ask.mjs`, the action-side twin of `ROUTE_EFFECT` / `noHandsAudit`, with a write
+action, an UNCLASSIFIED action and an empty vocabulary each failing it. Reasoning in
+`docs/design/reference/face-hq/SOURCE.md`.
+
+**The owner's column is now ONE item:** the brief's "purinjathu" read for Phase 00.

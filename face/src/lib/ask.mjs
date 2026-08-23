@@ -1392,3 +1392,76 @@ export function askable(q) {
   }
   return { ok: true, q: text };
 }
+
+/* ========================================================================== *
+ * 3. the ACTION vocabulary, decided rather than promised
+ *
+ * The no-hands boundary above is about ROUTES -- what a room can call. This is
+ * the other half: what the brain may EMIT for the shell to execute.
+ *
+ * The owner's reference build (`src/brain/persona.js`) lets the model return
+ * `{"type":"approve","id":...}` and `{"type":"reject",...}`, and the UI executes
+ * them. Its prompt tells the model not to auto-approve money or kill decisions.
+ *
+ * A PROMPT IS NOT A TOOL CONTRACT. REQ-07 requires zero write tools proven by a
+ * fixture, and E2 Human Sovereignty says the stamp belongs to the owner's own
+ * hand. An instruction not to do something is the decorative gate ADR-0049
+ * describes: a rule with nothing enforcing it. The model does not have to be
+ * adversarial for this to matter -- it only has to be wrong once, on the one
+ * irreversible route in the product.
+ *
+ * So `approve` and `reject` are NOT in this vocabulary, and the audit below is
+ * what makes that a contract instead of a sentence in a document. Nothing about
+ * the design changes: three words leave a protocol, and open_room / set_speed /
+ * enter_hq -- read and navigation, all of them reversible by looking elsewhere --
+ * stay exactly as the reference has them.
+ * ========================================================================== */
+
+/**
+ * Every action the brain may emit, and what executing it can reach.
+ * @type {Readonly<Record<string, Readonly<{ effect: "navigate"|"view"|"write", note: string }>>>}
+ */
+export const ASK_ACTIONS = Object.freeze({
+  open_room: Object.freeze({ effect: "navigate", note: "opens a room. The owner can already do this with one key; the brain doing it saves a search, not a decision." }),
+  set_speed: Object.freeze({ effect: "view", note: "changes the pace of the ambient view. Nothing outside this browser hears about it." }),
+  enter_hq: Object.freeze({ effect: "navigate", note: "leaves the opening face for the HQ proper." }),
+});
+
+/**
+ * Does an action vocabulary keep the brain's hands off the one write path?
+ *
+ * Written as an audit over DATA rather than a test over a list, so it stays true
+ * for whatever the vocabulary becomes: any action whose effect is `write`, and
+ * any action the vocabulary does not classify at all, is a hand. An unclassified
+ * action counts as a write for the same reason `noHandsAudit` treats an unknown
+ * method as write-reachable -- the safe reading of "I do not know what this does"
+ * is not "probably nothing".
+ *
+ * @param {Record<string, { effect?: string }>} [vocab]
+ * @returns {{ allowed: string[], hands: string[], clean: boolean, reachesSomething: boolean, line: string }}
+ */
+export function actionAudit(vocab = ASK_ACTIONS) {
+  /** @type {string[]} */ const allowed = [];
+  /** @type {string[]} */ const hands = [];
+  for (const name of Object.keys(vocab || {})) {
+    const own = Object.prototype.hasOwnProperty.call(vocab, name);
+    const effect = own ? (vocab[name] || {}).effect : undefined;
+    if (effect === "navigate" || effect === "view") allowed.push(name);
+    else hands.push(name);
+  }
+  // A vocabulary that permits NOTHING is not clean, it is dead -- the same distinction
+  // noHandsAudit had to learn when `Object.freeze({})` passed every assertion it made.
+  const reachesSomething = allowed.length > 0;
+  const clean = hands.length === 0 && reachesSomething;
+  return {
+    allowed: allowed.sort(),
+    hands: hands.sort(),
+    clean,
+    reachesSomething,
+    line: hands.length
+      ? `${hands.length} action(s) can act on the company: ${hands.sort().join(", ")}`
+      : reachesSomething
+        ? `${allowed.length} actions, all of them navigation or view — the stamp is not among them`
+        : "this vocabulary permits nothing at all, which is not a boundary but a dead feature",
+  };
+}
