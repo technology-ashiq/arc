@@ -60,9 +60,15 @@ function mdStems(p) {
   if (!existsSync(p)) return [];
   return readdirSync(p).filter((n) => n.endsWith(".md")).map((n) => n.slice(0, -3));
 }
+/** processes/<name>.process.yaml -> "<name>". The contract keys them by the bare name. */
+function yamlStems(p) {
+  if (!existsSync(p)) return [];
+  const suffix = ".process.yaml";
+  return readdirSync(p).filter((n) => n.endsWith(suffix)).map((n) => n.slice(0, -suffix.length));
+}
 
 // ---------- the check (pure: tree facts + contract -> findings) ----------
-export function coverageFindings({ kinds, lanes, commands, agents, products, contract }) {
+export function coverageFindings({ kinds, lanes, commands, agents, products, rules, processes, contract }) {
   const findings = [];
   const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
@@ -138,6 +144,52 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, con
   for (const a of agents)
     if (!agentKeys.has(a)) findings.push(`[agent] "${a}" exists in .claude/agents/ with no room in the contract`);
 
+  // ---- the six inventories that pointed at nothing ----------------------------------
+  // Until 2026-08-23 this gate validated kinds, lanes, commands, agents and products, and
+  // NOTHING ELSE. gates · hooks · rules · lints · processes · concepts — 164 contract rows
+  // between them, every one naming a room — were never read. All 164 happened to be
+  // correct, which is exactly why it went unnoticed: an unchecked map that is right today
+  // looks identical to a checked one. The owner's mandate is "ethume miss aga kodathu", and
+  // the gate that is supposed to make that checkable was covering 5 of 11 inventories.
+  //
+  // The failure this closes is the same one already found in `kinds`: a row whose room is a
+  // typo, a rename, or a room that was cut. `concepts` matters most — 107 terms are the ⌘K
+  // backing store, so a concept homed in a ghost room is a search result that opens nothing.
+  const roomRef = (inv, name, room) => {
+    if (typeof room !== "string" || room === "")
+      findings.push(`[${inv}] "${name}" has no room — an entry with no home is homelessness with a key`);
+    else if (!roomIds.has(room))
+      findings.push(`[${inv}] "${name}" is homed in "${room}", which is not a room in this contract`);
+  };
+  for (const inv of ["gates", "hooks", "rules", "lints", "processes"]) {
+    const map = contract[inv]?.map || {};
+    for (const name of Object.keys(map)) roomRef(inv, name, map[name]);
+  }
+  // A concept carries a station as well as a room: "which room" without "where in it" is
+  // half an answer, and ⌘K needs both to land the reader on the right zone.
+  const conceptMap = contract.concepts?.map || {};
+  for (const term of Object.keys(conceptMap)) {
+    const c = conceptMap[term];
+    if (!c || typeof c !== "object") { findings.push(`[concept] "${term}" has no { room, station } entry`); continue; }
+    roomRef("concept", term, c.room);
+    if (typeof c.station !== "string" || !c.station.trim())
+      findings.push(`[concept] "${term}" names no station — a room without a station is half a destination`);
+  }
+
+  // ---- two more tree truths, derived the same way as the others -----------------------
+  // Both are unambiguous on disk, which is why they are checked as TREE facts rather than
+  // only as contract-internal references. gates/hooks/lints are deliberately NOT derived
+  // from the tree: their on-disk spelling (helper scripts beside real hooks, bash gates
+  // beside .mjs lints) does not map 1:1 to the inventory, and a gate that invents false
+  // failures is worse than one that checks less.
+  const ruleMap = contract.rules?.map || {};
+  for (const r of rules || [])
+    if (!has(ruleMap, r)) findings.push(`[rule] ".claude/rules/${r}.md" exists on the tree with no room in the contract`);
+
+  const procMap = contract.processes?.map || {};
+  for (const p of processes || [])
+    if (!has(procMap, p)) findings.push(`[process] "${p}" exists in processes/ with no room in the contract`);
+
   // A contract row for a lane that is NO LONGER in the tree stays a WARN: that is the
   // remover's cleanup, not this gate's block. The live-lane case above is the FAIL.
   const warns = [];
@@ -172,6 +224,8 @@ async function gather(repo) {
     commands: mdStems(join(repo, ".claude", "commands")),
     agents: mdStems(join(repo, ".claude", "agents")),
     products: treeProducts(repo),
+    rules: mdStems(join(repo, ".claude", "rules")),
+    processes: yamlStems(join(repo, "processes")),
     contract: loadContract(repo),
   };
 }
@@ -187,7 +241,10 @@ async function run(repoOrData, quiet = false) {
     process.stderr.write(`face-coverage: ${findings.length} coverage gap(s) -- every part of arc needs a home (ADR-1311)\n`);
     return 1;
   }
-  process.stdout.write(`face-coverage: ${data.kinds.length} kinds, ${data.lanes.length} lanes, ${data.commands.length} commands, ${data.agents.length} agents, ${data.products.length} products -- all covered\n`);
+  const homedRows = ["gates", "hooks", "rules", "lints", "processes"]
+    .reduce((n, k) => n + Object.keys(data.contract[k]?.map || {}).length, 0)
+    + Object.keys(data.contract.concepts?.map || {}).length;
+  process.stdout.write(`face-coverage: ${data.kinds.length} kinds, ${data.lanes.length} lanes, ${data.commands.length} commands, ${data.agents.length} agents, ${data.products.length} products, ${data.rules.length} rules, ${data.processes.length} processes, ${homedRows} homed contract rows -- all covered\n`);
   return 0;
 }
 
@@ -211,6 +268,19 @@ async function selftest(repo) {
     ["kind homed nowhere", withKindHome(clean, []), "no homes"],
     ["kind homed in a ghost room", withKindHome(clean, ["ghost-room-xyz"]), "ghost-room-xyz"],
     ["born lane in a ghost room", withLaneRoom(clean, "ghost-room-xyz"), "ghost-room-xyz"],
+    // The six inventories added 2026-08-23. Most arms corrupt a REAL row rather than adding
+    // a key, because the class that went unwatched for a cycle was a value pointing nowhere,
+    // not an absent entry. Without an arm apiece, deleting any one of the new loops would be
+    // invisible — which is how the first five checks were proven and how these must be.
+    ["tree rule with no room", { ...clean, rules: [...clean.rules, "ghost-rule"] }, "ghost-rule"],
+    ["tree process with no room", { ...clean, processes: [...clean.processes, "ghost-process"] }, "ghost-process"],
+    ["gate in a ghost room", withMapRoom(clean, "gates", "ghost-room-xyz"), "ghost-room-xyz"],
+    ["hook in a ghost room", withMapRoom(clean, "hooks", "ghost-room-xyz"), "ghost-room-xyz"],
+    ["rule row in a ghost room", withMapRoom(clean, "rules", "ghost-room-xyz"), "ghost-room-xyz"],
+    ["lint in a ghost room", withMapRoom(clean, "lints", "ghost-room-xyz"), "ghost-room-xyz"],
+    ["process row in a ghost room", withMapRoom(clean, "processes", "ghost-room-xyz"), "ghost-room-xyz"],
+    ["concept in a ghost room", withConcept(clean, { room: "ghost-room-xyz", station: "x" }), "ghost-room-xyz"],
+    ["concept with no station", withConcept(clean, { room: "spine", station: "  " }), "names no station"],
   ];
 
   const lines = [`clean tree passes: ${cleanOk ? "PASS" : "FAIL (" + cleanFindings.length + " gaps: " + cleanFindings.slice(0, 3).join("; ") + ")"}`];
@@ -239,6 +309,20 @@ function withKindHome(data, homes) {
   const contract = JSON.parse(JSON.stringify(data.contract));
   const k = data.kinds.find((x) => contract.kinds?.map?.[x]);
   if (k) contract.kinds.map[k] = { ...contract.kinds.map[k], homes };
+  return { ...data, contract };
+}
+/** Point the FIRST row of `inv`.map at `room`, leaving its key in place. */
+function withMapRoom(data, inv, room) {
+  const contract = JSON.parse(JSON.stringify(data.contract));
+  const k = Object.keys(contract[inv]?.map || {})[0];
+  if (k) contract[inv].map[k] = room;
+  return { ...data, contract };
+}
+/** Replace the FIRST concept's entry with `entry`, leaving its term in place. */
+function withConcept(data, entry) {
+  const contract = JSON.parse(JSON.stringify(data.contract));
+  const t = Object.keys(contract.concepts?.map || {})[0];
+  if (t) contract.concepts.map[t] = entry;
   return { ...data, contract };
 }
 /** Point the FIRST born lane at a room id that does not exist. */
