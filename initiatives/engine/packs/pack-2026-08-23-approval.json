@@ -1,0 +1,8 @@
+{
+  "what": "approve pack-2026-08-23-cycle7 as external-ok material for N=3 build-in-public-draft dispatches",
+  "gate": "pack-approval",
+  "pack": "pack-2026-08-23-cycle7",
+  "classification": "external-ok",
+  "n": 3,
+  "why": "REQ-07 needs three real dispatches and the 2026-08-18 approval was spent on a round that produced zero usable drafts (the runtime was never sent the process brief). The material is five engineering findings from arc's own build-out: no product detail, no credential, no unshipped plan. One approval covers N dispatches with N declared here (ADR-0214); a fourth would exceed these terms."
+}

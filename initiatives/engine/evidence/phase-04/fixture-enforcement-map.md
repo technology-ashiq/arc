@@ -16,7 +16,7 @@ the STOP-gated phase, costs the cycle; discovering it in half an hour costs noth
 | 7 | Egress config matches its pin, **plus a behavioural arm** | `config` + `container` | **PARTIAL — read the row below. This is the finding** |
 | 8 | Marker planted in run N unrecallable in run N+1 | `config` | **Yes, with a caveat below** |
 | 9 | Hostile output → schema-fail → one retry → proposal receipt | `shim` + `arc-run` | **Yes.** ENG-E ladder, fixture-driven |
-| 10 | Exhausted capped key → `fail`/`budget` | `provider` | **Yes** — the provider returns HTTP 402. Needs the key |
+| 10 | Exhausted capped key → `fail`/`budget` | `provider` | **Yes** — ~~the provider returns HTTP 402~~ **403, corrected 2026-08-23 from the Phase 06 measurement**: OpenRouter returns 402 when the ACCOUNT is out of credits and **403 `Key limit exceeded (total limit)`** when the PER-KEY `limit` is spent, and ADR-0213 chose the per-key limit. The number here was read from documentation before a key existed. Needs the key |
 | 11 | Wall-clock overrun stops at the budget line | `shim` | **Yes.** Run-owned clock (ADR-0210) |
 | 12 | Unpinned runtime refused by a pin-required class | `arc-run` | **Yes.** Router/pin check |
 

@@ -51,9 +51,11 @@ If all pass:
    total appetite is burnt and the tripwire phase isn't done, STOP and force the
    scope-cut conversation now** — blown appetite gets flagged for /arc-retro. Then move
    `## Now` to the next phase.
-8. Refresh the code knowledge graph if available (`graphify update .`) — the next phase's
-   reviews and diagnoses should see the current blast radius, not last phase's.
-   (Skip if graphify's own git hook is installed — it already rebuilt on commit.)
+8. Knowledge-graph refresh (ADR-0075) — normally already done, so **verify rather than run**:
+   codegraph self-syncs through its daemon, and graphify rebuilds on every commit via the
+   guarded `post-commit` hook. Run `graphify update .` by hand only when `graphify hook status`
+   reports the hook missing, or when a graphify upgrade has overwritten `post-commit` and
+   dropped its `[ -d "graphify-out" ] || exit 0` worktree guard.
 9. Reply with a one-line summary + anything phase $(($1+1)) needs from me (keys,
    accounts, infra) per the "your-setup / pending" list.
 10. **Leave the receipt (spine)** — record the phase close, and that moving past it needs my

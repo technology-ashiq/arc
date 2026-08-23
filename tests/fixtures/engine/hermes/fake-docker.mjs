@@ -309,6 +309,17 @@ switch (kase) {
     line(`{"ok":true,"runtime":"hermes","note":"AKIA${"QQ7ZBQ4TESTONLY1".slice(0, 16)}"}`);
     break;
 
+  // A CLEAN RUN THAT ALSO WRITES TO THE CONTAINER'S STDERR, and it exists because nothing else
+  // did. Every other successful case writes stdout only, so a transcript assertion could be
+  // satisfied entirely by banners `hermes.mjs` prints in the PARENT process before the container
+  // starts -- which is exactly what two adversarial surfaces independently found on 2026-08-23:
+  // deleting the container-stderr forwarding left both storage tests green. The two marker strings
+  // below appear nowhere in arc, so a test that finds them has found RUNTIME bytes.
+  case "commit-clean-noisy":
+    process.stderr.write("fake-runtime: RUNTIME-STDERR-MARKER thinking about the diff\n");
+    line('{"commits":[{"sha":"a1b2c3d","subject":"fix: RUNTIME-STDOUT-MARKER a clean answer"}]}');
+    break;
+
   case "secret-stderr":
     boot();
     // On the transcript, not the answer. A scrub that only reads stdout passes this while the

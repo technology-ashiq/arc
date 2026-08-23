@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 22 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
+| `plans/` (25 files) | **ACTIVE — the operational layer** | Kickoff-ready: 23 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -530,6 +530,45 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     same read door + decision door exposed as MCP tools; the July `arcface` prototype is NOT
     reused (owner ruling 2026-08-18). `BRIEF-dashboard.md` superseded → moved to
     `docs/archive/`.
+
+25. **2026-08-23:** `plans/PLAN-design-v2.md` added (design v2 — "Eyes, Taste, Rivals":
+    the design lane's revision cycle; v1.2, landed owner-instructed 2026-08-23 from a
+    Cowork session; decisions DSV-A…L; ADR numbers at kickoff from the century claimed per
+    `PORTFOLIO.md` — **EXISTING lane `design`, a revision cycle, not a new lane**).
+    **Trigger FIRED twice: the owner's Build-out Mandate (2026-08-09 — same receipt as
+    correction #15, cited by the kickoff ADRs) AND ADR-0070's own revisit clause** — the
+    owner scored the lane's real output ~10/100 on craft vs ~40/100 for a plain prompt
+    (2026-08-23), which is the "looser brief + owner dissatisfied on craft grounds" case
+    that ADR names as its re-run condition. Provenance: a five-cause root-cause analysis
+    (13 renders read with vision; composer designs blind, gates/jury reward compliance
+    over craft, zero visual references at compose time, declared mobile never rendered) →
+    an owner-brought external review the same day, **every point verified against the repo
+    before adjudication** (ADR-0070 + its phase-02 evidence read; `design-render.sh` read
+    line-by-line; Mobbin MCP docs fetched) — the plan's §10 rejected registry carries the
+    graveyard. Core: composer-tier changes ONLY via EXP-A1 (ADR-0070's paired harness
+    re-run in the new regime, owner prediction pre-registered, promotion by the standing
+    formula — a permanent re-seat by fiat is rejected on the record) · composer
+    render-in-loop ≤3 iterations with immutable per-iteration receipts on a session-safe
+    renderer (`--session` mandatory; the #57 stable-shutter guard is already in tree —
+    P00 re-proves it per platform; cross-OS hash equality is out of contract under
+    `PIN_FONT=0`) · platform-contract viewports (a declared-but-unrendered surface blocks
+    PASS) · `design-curator` reference packs (images gitignored, `sources.md` provenance
+    only, adaptable-principle wording) · craft-first N-item model-mixed jury + BELOW-BAR
+    anchored to the pack · doc-surface gate by explicit marker, never text-match (the
+    ₹-entity over-refusal precedent) · `design.sources.yaml` source registry, owner-only
+    birth, arrays for `kind`/`allowed_use`, auth none/env/oauth/manual — a future tool is
+    one lint-clean YAML entry; **Mobbin corrected on the record to paid Pro+ OAuth,
+    default `off`** (₹0 galleries + the already-installed shadcn MCP carry day one) ·
+    rival drafts (v0 first, Stitch second; spike before adapter, provider version in every
+    receipt) as unlabeled blind-jury items — a rival win becomes a NEW director-assigned
+    thesis rebuilt by arc, never a copy · outbound blind packages carry arc-authored
+    renders ONLY (REQ-01/ADR-0040 bars unmoved) · a controlled owner blind-score ritual
+    with a plain-prompt control every 3rd run, and a kill line: the post-P03 score must
+    beat the plain-prompt bar before any rival spend. Tier M, 10 days, phases P00→P06
+    (renderer proof first — nothing composes in parallel before it is green).
+    `PLAN-design.md` (v1) is **NOT superseded and does not move**: its Part 4 record stays
+    LOCKED and inherited, and its REQ-01 two-stream evidence bar is still `active` — the
+    next outbound blind package comes from a post-v2 explore under the packager lint.
 
 ## Provenance
 

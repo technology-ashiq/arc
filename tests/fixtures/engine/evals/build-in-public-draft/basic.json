@@ -1,6 +1,7 @@
 {
-  "note": "Eval fixture — WRITTEN, NEVER EXECUTED this cycle. A bench runner is a declared no-go; these exist so a later cycle has fuel rather than an archaeology project. `input` is keyed by the process's inputs[].name; `expected` must satisfy the process's output schema. The expected draft is deliberately a MODEST one — it states a fact and a surprise and stops — because a fixture showing an aspirational answer teaches a later comparison the wrong bar. `pack` carries CONTENT rather than a reference, so the data boundary can scan what is actually leaving.",
+  "note": "Eval fixture — WRITTEN, NEVER EXECUTED this cycle. A bench runner is a declared no-go; these exist so a later cycle has fuel rather than an archaeology project. `input` is keyed by the process's inputs[].name; `expected` must satisfy the process's output schema. The expected draft is deliberately a MODEST one — it states a fact and a surprise and stops — because a fixture showing an aspirational answer teaches a later comparison the wrong bar. `pack` carries CONTENT rather than a reference, so the data boundary can scan what is actually leaving, and `classification` is the owner's positive external-ok declaration -- REQ-06 asks for a declaration, and an absent internal-only marker is not one.",
   "input": {
+    "classification": "external-ok",
     "pack_ref": "pack-2026-08-18-cycle7",
     "pack": "### #tripwire-dead-on-arrival\nA test in the suite passed for four days while measuring nothing. Its probe asked a mounted volume for a config file that was never put there, so the probe skipped on every machine — and the assertion accepted the skip as a pass. It was green the whole time. The rule that came out of it: assert a probe RAN before asserting what it printed.\n"
   },

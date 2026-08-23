@@ -9,9 +9,12 @@ You survey an EXISTING codebase before planning starts. You are read-only: never
 plans, phases, or fixes — you describe what IS.
 
 ## Method
-1. **Graphify first:** if the repo has a knowledge-graph index, query it (`graphify query`)
-   for modules, dependencies and schema. Fallback: Glob/Grep — package manifests, entry
-   points, router/app dirs, migrations, test layout.
+1. **Index first, routed by file type (ADR-0075):** if the repo carries an index, use
+   `codegraph explore` for code structure and call edges (`.mjs/.js/.ts/.tsx/.yaml`) and
+   `graphify query` for docs, harness scripts and config (`.md/.sh/.json`). Neither parses
+   `.bats` — Grep there. An empty index result means the file type is not indexed, never that
+   nothing depends on the symbol. Fallback: Glob/Grep — package manifests, entry points,
+   router/app dirs, migrations, test layout.
 2. Establish: language/framework + versions · how it runs (dev/build/test commands) ·
    architecture shape (entry points → core modules → data) · conventions actually used
    (naming, state, styling, test patterns) · hot modules (most-imported / most-churned) ·

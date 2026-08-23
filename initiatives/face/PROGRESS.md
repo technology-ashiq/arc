@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-face (Cycle 15, opened 2026-08-19)
-phase: 03
+phase: 06
 appetite: 32d
 burn: 14d
 blocked-on: nothing structural — the design gate is DISCHARGED. The owner supplied the design himself rather than picking from the explore rounds, so the PICK is moot and block A can no longer take its second BELOW-BAR strike. Two items remain and neither blocks the build: one `hq.policy.yaml` row for face-ask (edit-denied to the machine by design, and not useful until the engine-lane empty-allowlist seam exists), and one owner ruling on the reference brain’s approve/reject action (see `docs/design/reference/face-hq/SOURCE.md`).

@@ -79,9 +79,14 @@ function fieldFault(name, v) {
  * fixing a four-field row a four-round trip, and the operator learns the shape one refusal at a
  * time -- the same reason capability-vet reports every failing condition in one run.
  */
-export function rowFaults(className, row) {
+export function rowFaults(className, row, where) {
+  // THE DISPLAY PATH IS A PARAMETER, because `default:` is a TOP-LEVEL key and every fault on it
+  // was reported as `classes.default` -- pointing an operator at a path that does not exist, and
+  // producing a message byte-identical to one for a class literally NAMED `default` under
+  // `classes:`. Two different rows, one undistinguishable diagnostic.
+  const at = where || `classes.${className}`;
   if (!row || typeof row !== "object" || Array.isArray(row)) {
-    return [`classes.${className} is not a mapping`];
+    return [`${at} is not a mapping`];
   }
   // A WRONG-TYPED `fallback` IS A FAULT, NOT A SILENT EMPTY LIST. `fallback: hermes` (a string
   // where a list was meant) used to make arc-run's `Array.isArray` false and the whole resilience
@@ -89,7 +94,7 @@ export function rowFaults(className, row) {
   const faults = [];
   const hasFallback = Object.prototype.hasOwnProperty.call(row, "fallback");
   if (hasFallback && !Array.isArray(row.fallback)) {
-    faults.push(`classes.${className} has a \`fallback\` that is not a list (${JSON.stringify(row.fallback)}) — a wrong-typed fallback silently becomes no fallback at all`);
+    faults.push(`${at} has a \`fallback\` that is not a list (${JSON.stringify(row.fallback)}) — a wrong-typed fallback silently becomes no fallback at all`);
   }
 
   // THE FALLBACK CHAIN IS PART OF "DOES THIS ROW REACH THE RUNTIME", and it was not.
@@ -122,7 +127,7 @@ export function rowFaults(className, row) {
 
   for (const k of REQUIRED) {
     const fault = fieldFault(k, row[k]);
-    if (fault) faults.push(`classes.${className} ${why}, and \`${k}\` ${fault}`);
+    if (fault) faults.push(`${at} ${why}, and \`${k}\` ${fault}`);
   }
   return faults;
 }
@@ -132,6 +137,20 @@ export function routerFaults(router) {
   const classes = (router && router.classes) || {};
   const out = [];
   for (const [name, row] of Object.entries(classes)) out.push(...rowFaults(name, row));
+
+  // `default:` IS A ROW AND IS CHECKED LIKE ONE. It was skipped entirely -- this loop walks
+  // `classes` alone -- so a `default:` naming the agent runtime loaded with zero faults and no
+  // terms. Nothing reads `router.default` for a driver today, which is exactly why it is worth
+  // closing now: it is inert, so the hole is free to fix and invisible to find later, and the day
+  // someone wires it the grant arrives already bypassed. Two fixture roots in this repo write a
+  // `default:` block that reads as meaningful configuration.
+  // `"default" in router`, NOT truthiness. `default: null` is a YAML VALUE and not an omission --
+  // the doctrine this very file states about `cap: null` twenty lines up -- and a truthy guard
+  // skipped it silently. `rowFaults` already refuses a non-mapping, so a null row is REPORTED
+  // rather than waved through.
+  if (router && typeof router === "object" && "default" in router) {
+    out.push(...rowFaults("default", router.default, "default (the top-level fallback row)"));
+  }
   return out;
 }
 

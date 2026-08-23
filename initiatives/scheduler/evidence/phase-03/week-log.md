@@ -279,3 +279,128 @@ week is meant to demonstrate, demonstrated against a real fault instead of a dri
 - The fire-drill has not been run and is not needed as a scheduled exercise this week: the system
   produced the real thing. It will still be run, because a drill proves the detector on demand
   rather than by luck.
+
+---
+
+## 2026-08-23 — the week audited, and the fire-drill armed
+
+### The audit, 2026-08-17..2026-08-22
+
+Computed from the spine only, in the canonical clone, over the six finished days of the restarted
+window. `--to 2026-08-23` is refused by design: an unfinished day counts every future slot MISSED.
+
+```
+brief-materialize   weekdays@06:00   expected 5  completed 4  drift p50 19392000ms
+  MISSED 2026-08-20T06:00:00+05:30
+day-close-roll      daily@00:15      expected 6  completed 5  drift p50 3000ms
+  MISSED 2026-08-20T00:15:00+05:30
+
+attempted 9  completed 9  failed 0  missed 2
+manual starts (target 0)  0
+incidents  policy-declined=0 overlap=0 receipt-write-failure=0 timeout=0 crash=0
+spend (expected 0)  INR 0
+
+NOT CLEAN: 2 unexplained gap(s)
+```
+
+Manual starts are **0** and spend is **INR 0** — two exit criteria met and not in doubt. The week
+is NOT CLEAN on gaps, and the reason is the finding below.
+
+### Finding 1 — ADR-0804 is wrong: the slot was DROPPED, not late
+
+The assumptions ledger asked exactly this and named exactly this trigger: *"the Phase-3 gap audit
+finds a slot with no `run.completed` and no catch-up run after a wake — a dropped slot, not a late
+one."* It has fired, and the receipts say so without inference:
+
+| Receipt | Fired at | Slot it carried |
+|---|---|---|
+| `scheduler:day-close-roll` | 2026-08-21T14:56:25 | `2026-08-21T00:15:00` |
+| `scheduler:brief-materialize` | 2026-08-21T14:56:25 | `2026-08-21T06:00:00` |
+
+The machine was off through 2026-08-20 — there is no `events/2026-08-20.jsonl` at all. On the wake,
+both jobs caught up, and **both carried the 08-21 slot, not the 08-20 one.** Windows queues only
+the most recent missed instance; two slots missed across one sleep means the older one is gone.
+`StartWhenAvailable` is therefore *late, not dropped* for a single missed slot (proved twice
+already, at 11:48 and 12:49) and **dropped for the second and older one**. ADR-0804's premise that
+Windows queues indefinitely holds for one slot and fails for two.
+
+### Finding 2 — an off day is structurally unexplainable, so "gap audit clean" is unreachable
+
+`audit.mjs` accepts an explanation only from the job itself:
+
+> AN EXPLANATION MUST COME FROM THE SCHEDULER ITSELF. […] seven hand-written `note.logged` events
+> with a session actor turned a completely dead scheduler into a CLEAN week.
+
+That rule is right and must stay — it is what stops the fire-drill's required true positive being
+erased by hand. But it has a consequence nobody wrote down: **a powered-off machine emits nothing,
+so a day the machine was off can never be explained, and any window containing one can never grade
+CLEAN.** The Phase-03 exit criterion *"gap audit clean (every expected slot has either a
+`run.completed` or an explained absence)"* is, as written, unreachable on a laptop that gets shut
+down. That is a real defect in the criterion, not in the machine.
+
+### Finding 3 — the fire-drill's own DoD is internally inconsistent
+
+The spec asks for two things that cannot both be true:
+
+- *"one job's OS registration is removed for **≥1 day**"*
+- *"The missed-run needs-you line **MUST appear** and is captured in evidence"*
+
+The detector's threshold is `OVERDUE_SLOTS = 2` and the test is `missed > OVERDUE_SLOTS`, so the
+line needs **three** missed slots. One day produces one. A drill run to the letter of the first
+bullet would have proved nothing and read as a passing drill — the precise shape this lane exists
+to refuse.
+
+### The drill, armed 2026-08-23 ~17:00 IST
+
+`brief-materialize` chosen over `day-close-roll`: a missed brief materialization loses nothing,
+while a missed day-close leaves a day unsealed. `day-close-roll` stays registered, so the heartbeat
+is never fully off and the drill's positive is isolated to one job.
+
+BEFORE, read off the OS:
+
+```
+TaskName          State
+brief-materialize Ready
+day-close-roll    Ready
+
+{"exists":true,"nextRunTime":"2026-08-24T06:00:00+05:30","lastTaskResult":0,
+ "settings":{"WakeToRun":false,"StartWhenAvailable":true,"RunLevel":"Limited",
+ "StopIfGoingOnBatteries":false,"LogonType":"Interactive","DisallowStartIfOnBatteries":false}}
+```
+
+AFTER `arc-jobs unregister brief-materialize`:
+
+```
+arc-jobs: unregistered brief-materialize
+arc-jobs: 1 arc task(s) remain: day-close-roll
+
+TaskName       State
+day-close-roll Ready
+
+brief-materialize -> {"exists":false}
+```
+
+`hq.jobs.yaml` still reads `enabled: true` for `brief-materialize`, and `git status` on the
+canonical clone reports the file untouched. **That is the required shape: the file promises and the
+OS has quietly stopped.** A yaml flip would have tested nothing, because `enabled: false`
+legitimately suppresses overdue.
+
+### When the line will appear — computed, not waited for
+
+`derivePanel` is pure and `--date D` is a replay, so the drill's outcome was predicted before it
+happened rather than discovered afterwards. Last real run 2026-08-21T14:56:25; weekday slots after
+it are 08-24, 08-25, 08-26; `missed > 2` first holds on the third:
+
+| Replay date | brief-materialize | needs-you |
+|---|---|---|
+| 2026-08-24 | healthy, next 08-25T06:00 | — |
+| 2026-08-25 | healthy, next 08-26T06:00 | — |
+| **2026-08-26** | **OVERDUE (3 missed)** | **`job brief-materialize silent since 2026-08-21T14:56:25+05:30 -- 3 scheduled slots missed (weekdays@06:00)`** |
+
+The replay also shows `day-close-roll` going overdue on 08-26, because a replay assumes no further
+runs. In the real world it stays registered and its `last` keeps advancing, so on the day it should
+read healthy while `brief-materialize` alone raises the line. **That difference is the drill's
+control: if both go overdue on 2026-08-26, the drill has caught something else and the day is an
+incident, not a pass.**
+
+So the capture date is **2026-08-26, after 06:00 IST**, and the drill is 3 days long, not 1.
