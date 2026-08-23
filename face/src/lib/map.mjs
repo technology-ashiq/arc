@@ -1185,6 +1185,74 @@ export function flightDots(model, opts = {}) {
  * @param {string | undefined} mode
  * @returns {{ token: string, label: string, real: boolean, background: string }}
  */
+/**
+ * Which rooms have something WAITING ON THE OWNER, and how many.
+ *
+ * REQ-04 asks the Map for open-gate squares, and the reason is the whole product's job in
+ * one mark: the Map is where you see the company at a glance, and "where am I needed" is the
+ * only question that cannot wait. Amber is the reserved hue for needs-you and this is the
+ * one place on the Map that spends a reserved hue at all -- everywhere else the map reads in
+ * stroke, shape and position precisely so that when amber appears it means exactly one thing.
+ *
+ * An approval resolves to a room by its GATE first (the contract maps all seven), then by its
+ * lane. If neither resolves, the item is NOT dropped -- it is counted as `unplaced` and the
+ * Map says so. A product whose claim is that nothing goes missing cannot silently swallow a
+ * decision that is waiting on its owner because the contract had no row for it.
+ *
+ * @param {{ gate?: string, venture?: string }[]} open   items from GET /api/inbox
+ * @param {{ gates?: { map?: Record<string, string> }, lanes?: { map?: Record<string, string> } }} contract
+ * @param {Set<string> | string[]} knownRooms
+ * @returns {{ counts: Record<string, number>, unplaced: number, total: number }}
+ */
+export function needsYouByRoom(open, contract, knownRooms) {
+  const known = knownRooms instanceof Set ? knownRooms : new Set(knownRooms || []);
+  const gates = (contract && contract.gates && contract.gates.map) || {};
+  const lanes = (contract && contract.lanes && contract.lanes.map) || {};
+  /** @type {Record<string, number>} */
+  const counts = {};
+  let unplaced = 0;
+  let total = 0;
+  for (const item of Array.isArray(open) ? open : []) {
+    total += 1;
+    const byGate = item && typeof item.gate === "string" ? gates[item.gate] : undefined;
+    const byLane = item && typeof item.venture === "string" ? lanes[item.venture] : undefined;
+    const room = (typeof byGate === "string" && known.has(byGate)) ? byGate
+      : (typeof byLane === "string" && known.has(byLane)) ? byLane
+        : null;
+    if (room === null) { unplaced += 1; continue; }
+    counts[room] = (counts[room] || 0) + 1;
+  }
+  return { counts, unplaced, total };
+}
+
+/**
+ * The square drawn beside a station that is waiting on the owner.
+ *
+ * A square, not a bigger circle: the map already spends circle/diamond/square on room KIND,
+ * and this mark has to be separable from all three at a glance. It sits off the track so it
+ * cannot be mistaken for a stop, and it carries the count as text because "some" is not a
+ * number a person can act on.
+ *
+ * @param {{ x: number, y: number }} station @param {number} count
+ * @returns {{ x: number, y: number, size: number, label: string, title: string }}
+ */
+export function gateSquare(station, count) {
+  const size = 11;
+  return {
+    x: station.x + 11,
+    y: station.y - 17,
+    size,
+    label: count > 9 ? "9+" : String(count),
+    title: `${count} decision${count === 1 ? "" : "s"} waiting on you in this room`,
+  };
+}
+
+/**
+ * The data-mode chip. Live, replay, simulated -- or, when nobody said, an absence stated in
+ * words rather than a claim made by default.
+ * @param {string | undefined} mode
+ * @returns {{ token: string, label: string, real: boolean, background: string }}
+ */
 export function modeChip(mode) {
   if (mode === "sim") return { token: "--mode-sim", label: "simulated", real: false, background: "var(--sim-hatch)" };
   if (mode === "replay") return { token: "--mode-replay", label: "replay", real: true, background: "none" };

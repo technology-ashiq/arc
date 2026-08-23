@@ -12,7 +12,9 @@ import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 // `a` is typed as the HTML anchor even inside <svg> -- React types the intrinsic, not the
 // namespace, while the renderer still creates the node in the SVG namespace from its parent.
 import type { MouseEvent } from "react";
-import { buildMap, flightDots, legendGeometry, readout } from "../lib/map.mjs";
+import { buildMap, flightDots, legendGeometry, readout,
+  gateSquare,
+} from "../lib/map.mjs";
 import type { DrawOp, MapRoomInput, MapStation } from "../lib/map.mjs";
 import { buildHash, parseHash } from "../lib/shell.mjs";
 
@@ -25,6 +27,15 @@ export type MapRoomProps = {
   mode?: string;
   /** carried through into every station's href so navigating never drops the dev token */
   token?: string | null;
+  /** roomId -> how many decisions are waiting on the owner there (REQ-04 gate squares) */
+  needsYou?: Record<string, number>;
+  /**
+   * How many open decisions the contract could place in NO room. Counted separately and
+   * shown in words, because a decision waiting on the owner that this map cannot draw is
+   * the one thing a coverage-first product may never let disappear. Zero is the normal
+   * case and says nothing; anything above zero is stated plainly.
+   */
+  needsYouUnplaced?: number;
   /** when given, a station click routes in-app instead of reloading on the fragment */
   onOpen?: (roomId: string) => void;
 };
@@ -80,7 +91,7 @@ function Ops({ ops }: { ops: readonly DrawOp[] }): React.JSX.Element {
   );
 }
 
-export default function MapRoom({ rooms, room, mode, token = null, onOpen }: MapRoomProps): React.JSX.Element {
+export default function MapRoom({ rooms, room, mode, token = null, onOpen, needsYou = {}, needsYouUnplaced = 0 }: MapRoomProps): React.JSX.Element {
   const [active, setActive] = useState<string | null>(null);
   const reduced = useSyncExternalStore(subscribeMotion, readMotion, serverMotion);
   const linkToken = currentToken(token);
@@ -119,6 +130,21 @@ export default function MapRoom({ rooms, room, mode, token = null, onOpen }: Map
       <circle className="hit" cx={s.x} cy={s.y} r={s.hitR} fill="transparent" />
       <circle className="focus" cx={s.x} cy={s.y} r={s.hitR - 4} fill="none" />
       <Ops ops={s.ops} />
+      {/* The ONE reserved hue this map spends. Everywhere else it reads in stroke, shape
+          and position, so that when amber appears it means exactly one thing: you are
+          needed here. REQ-04's open-gate square. */}
+      {(needsYou[s.id] ?? 0) > 0 ? (() => {
+        const g = gateSquare(s, needsYou[s.id] ?? 0);
+        return (
+          <g className="gate">
+            <title>{g.title}</title>
+            <rect x={g.x} y={g.y} width={g.size} height={g.size} rx={1.5} />
+            <text className="gatecount" x={g.x + g.size / 2} y={g.y + g.size - 2.5} textAnchor="middle">
+              {g.label}
+            </text>
+          </g>
+        );
+      })() : null}
       <text className="lbl" x={s.label.x} y={s.label.y} textAnchor={s.label.anchor}>
         {s.label.text}
       </text>
@@ -191,6 +217,15 @@ export default function MapRoom({ rooms, room, mode, token = null, onOpen }: Map
           </svg>
         </div>
       </div>
+
+      {needsYouUnplaced > 0 ? (
+        <p className="unplaced" role="status">
+          {needsYouUnplaced} decision{needsYouUnplaced === 1 ? " is" : "s are"} waiting on you
+          that this map cannot place — the contract maps neither their gate nor their lane to
+          a room. They are in the Inbox and they still need you; the gap is in the contract,
+          not in the queue.
+        </p>
+      ) : null}
 
       <div className="readout" aria-live="polite">
         <div className="readout-head">
@@ -282,10 +317,29 @@ const CSS = `
 .arc-map .st:focus-visible .focus { opacity: 1; }
 .arc-map .st:hover .lbl,
 .arc-map .st[data-active="yes"] .lbl { fill: var(--accent); }
+
+/* The one reserved hue this map spends. Amber is needs-you and nothing else, so a square
+   here is unambiguous the instant it appears. */
+.arc-map .gate rect { fill: var(--amber); stroke: none; }
+.arc-map .gate .gatecount {
+  fill: var(--on-amber);
+  font: 700 8px/1 var(--font-mono, monospace);
+  letter-spacing: 0;
+  pointer-events: none;
+}
 .arc-map .st[data-active="yes"] .focus { opacity: 0.55; }
 
 .arc-map .flight { color: var(--accent); }
 
+.arc-map .unplaced {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  color: var(--amber);
+  font: 400 12px/1.5 var(--font-mono, monospace);
+  max-width: 72ch;
+}
 .arc-map .readout {
   margin-top: calc(var(--grid) * 2);
   border: 1px solid var(--hairline-strong); border-radius: var(--radius-panel);

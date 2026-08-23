@@ -401,6 +401,34 @@ const dots = map.flightDots(model, { speed: 1 });
 check("flight dots exist only where something has actually run",
   Array.isArray(dots) && dots.every((d) => typeof d.d === "string" && d.d.length > 0), `dots=${dots.length}`);
 
+// REQ-04's open-gate squares: where is the owner NEEDED, not merely what exists.
+const roomIds = withLive.map((r) => r.id);
+const openFixture = [
+  { gate: "coverage", venture: "face" },   // resolves by gate
+  { gate: "coverage", venture: "face" },
+  { gate: "unknown-gate", venture: "engine" }, // falls back to the lane
+  { gate: "unknown-gate", venture: "no-such-lane" }, // resolves to neither
+];
+const needs = map.needsYouByRoom(openFixture, CONTRACT, roomIds);
+check("an approval is placed by its GATE first", (needs.counts[CONTRACT.gates.map["coverage"]] ?? 0) === 2,
+  JSON.stringify(needs.counts));
+check("an approval whose gate is unknown falls back to its LANE",
+  (needs.counts[CONTRACT.lanes.map["engine"]] ?? 0) === 1, JSON.stringify(needs.counts));
+// The rule the whole product turns on: something waiting on the owner may never be dropped
+// because the contract had no row for it.
+check("an approval that resolves to NO room is counted, never silently dropped",
+  needs.unplaced === 1 && needs.total === 4, `unplaced=${needs.unplaced} total=${needs.total}`);
+check("an empty inbox marks nothing rather than throwing",
+  map.needsYouByRoom([], CONTRACT, roomIds).total === 0);
+check("a malformed inbox body is survived, not crashed on",
+  map.needsYouByRoom(null, CONTRACT, roomIds).total === 0);
+const sq = map.gateSquare({ x: 100, y: 50 }, 3);
+check("the gate square sits OFF the track so it cannot be read as a stop",
+  sq.x !== 100 && sq.y !== 50 && sq.size > 0);
+check("the square carries the COUNT, because 'some' is not a number you can act on",
+  sq.label === "3" && /waiting on you/i.test(sq.title));
+check("a large count is capped so the mark stays a mark", map.gateSquare({ x: 0, y: 0 }, 42).label === "9+");
+
 // Mode is stated or it is not claimed. Drawing "live" on no evidence is the lie the whole
 // honesty vocabulary exists to prevent, and an unset prop is no evidence.
 const noMode = map.modeChip(undefined);

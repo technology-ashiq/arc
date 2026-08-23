@@ -22,6 +22,7 @@ import IndexRoom from './rooms/IndexRoom'
 import Today from './rooms/Today'
 import Inbox from './rooms/Inbox'
 import MapRoom from './rooms/MapRoom'
+import { needsYouByRoom } from './lib/map.mjs'
 import { Failure, Loading } from './ui/kit'
 
 type Registry = { rings: string[]; rooms: Room[]; kindsEverFired: number; mode?: string }
@@ -33,6 +34,10 @@ export default function App() {
   const [talking] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [concepts, setConcepts] = useState<Record<string, { room: string; station: string }>>({})
+  // Only the two maps the Map needs; the rest of the frozen contract is not this shell's
+  // business, and narrowing here keeps an `unknown` from travelling into a pure function.
+  const [contract, setContract] = useState<{ gates?: { map?: Record<string, string> }; lanes?: { map?: Record<string, string> } }>({})
+  const [openItems, setOpenItems] = useState<{ gate?: string; venture?: string }[]>([])
   const token = useMemo(
     // The token arrives in the fragment, either as arc-dash prints it (`#token=...`) or
     // alongside a room. Both shapes are one function's problem, not this component's.
@@ -63,8 +68,17 @@ export default function App() {
       .then((body: unknown) => {
         const got = conceptsFromContract(body, unescapeDoorText)
         if (got.ok) setConcepts(got.concepts)
+        // The same contract answers "which room owns this gate", which is what turns an open
+        // approval into a mark on the Map.
+        try { setContract(JSON.parse(unescapeDoorText((body as { text?: unknown }).text)) as { gates?: { map?: Record<string, string> }; lanes?: { map?: Record<string, string> } }) } catch { /* palette-only */ }
       })
       .catch(() => { /* rooms-only palette; the shell still works */ })
+    // What is waiting on the owner, so the Map can show WHERE he is needed rather than only
+    // what exists. A failure here leaves the Map correct and unmarked; it never blocks it.
+    door
+      .inbox(ac.signal)
+      .then((b: { open?: { gate?: string; venture?: string }[] }) => setOpenItems(Array.isArray(b.open) ? b.open : []))
+      .catch(() => { /* an unmarked map is honest; a blocked one is not */ })
     return () => ac.abort()
   }, [door])
 
@@ -151,6 +165,7 @@ export default function App() {
 
   const room = findRoom(registry.rooms, roomId) ?? defaultRoom(registry.rooms)
   const items: PaletteItem[] = paletteItems(registry.rooms, concepts)
+  const needs = needsYouByRoom(openItems, contract, registry.rooms.map((r) => r.id))
 
   return (
     <main style={pageStyle}>
@@ -172,7 +187,7 @@ export default function App() {
       <div style={frameStyle}>
         <Rings groups={groups} current={room ? room.id : HOME} onOpen={open} />
         <section style={roomStyle} aria-live="polite">
-          {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} /> : <NoSuchRoom id={roomId} />}
+          {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} needs={needs.counts} needsUnplaced={needs.unplaced} /> : <NoSuchRoom id={roomId} />}
         </section>
       </div>
     </main>
@@ -184,10 +199,10 @@ export default function App() {
  * kept here -- a second spelling of that decision would drift the moment a room changes mode.
  * The two bespoke ids are the exception and they are named, not guessed.
  */
-function RoomHost({ room, rooms, door, onOpen, mode, token }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void; mode?: string; token: string | null }) {
+function RoomHost({ room, rooms, door, onOpen, mode, token, needs, needsUnplaced }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void; mode?: string; token: string | null; needs: Record<string, number>; needsUnplaced: number }) {
   if (room.id === 'today') return <Today door={door} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'inbox') return <Inbox door={door} sentence={room.sentence} lede={room.lede} />
-  if (room.id === 'map') return <MapRoom rooms={rooms} onOpen={onOpen} mode={mode} token={token} />
+  if (room.id === 'map') return <MapRoom rooms={rooms} onOpen={onOpen} mode={mode} token={token} needsYou={needs} needsYouUnplaced={needsUnplaced} />
   if (room.render === 'index') return <IndexRoom room={room} rooms={rooms} door={door} />
   return <GenericRoom room={room} />
 }
