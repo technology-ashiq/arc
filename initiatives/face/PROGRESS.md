@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-face (Cycle 15, opened 2026-08-19)
 phase: 03
 appetite: 32d
-burn: 10d
+burn: 14d
 blocked-on: nothing structural — the design gate is DISCHARGED. The owner supplied the design himself rather than picking from the explore rounds, so the PICK is moot and block A can no longer take its second BELOW-BAR strike. Two items remain and neither blocks the build: one `hq.policy.yaml` row for face-ask (edit-denied to the machine by design, and not useful until the engine-lane empty-allowlist seam exists), and one owner ruling on the reference brain’s approve/reject action (see `docs/design/reference/face-hq/SOURCE.md`).
 depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersedes ADR-1300 on placement). A new repo could not be given CI from this session, and an ungated layer is not a layer that ships.
 
@@ -27,9 +27,9 @@ depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersede
 | 01 | Explore ×3 + design system — **superseded by the owner’s reference**: he supplied a running eleven-room HQ instead of picking from the rounds, and `tokens.css` is now extracted from it | 5d | **tokens CANONICALISED** from `docs/design/reference/face-hq/`; explore rounds kept for the record, no longer an input; PICK moot |
 | 03 | L2 `arc dash` — read door + spine-health reader + `arc-inbox` function extraction + decision door (parity fixture) + ask proxy + sim/replay + request journal; two fresh attackers | 4d | built, attacked twice, local green; CI verdict pending |
 | 04 | Shell — `face/` L3 born IN-REPO (ADR-1316); Today · Inbox on the live L2 doors; five-ring shell; keyboard model | 4d | **BUILT and proven — a real `decision.recorded` written from the face** |
-| 05 | Map + template + birth-rule + coverage — `face:` ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | birth-rule + coverage LANDED; Map + generic renderer need L3 |
-| 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | pending (needs L3) |
-| 07 | Ask arc — `face-ask` process + router row + `hq.policy.yaml` row + 20 golden questions + drafts-to-stamp; zero write tools | 3d | process + router row landed; policy row is the owner's (edit-denied to me) |
+| 05 | Map + template + birth-rule + coverage — `face:` ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | **BUILT** — 33 stations, gate squares, coverage gate now watches 11 inventories |
+| 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | **BUILT** — all 33 rooms render: 22 generic · 2 index · 9 bespoke; swept and looked at |
+| 07 | Ask arc — `face-ask` process + router row + `hq.policy.yaml` row + 20 golden questions + drafts-to-stamp; zero write tools | 3d | deterministic half BUILT and proven through the face (VERIFIED, citations resolved); model half waits on the engine seam |
 | 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | pending (needs L3 + 5 real days) |
 
 **Appetite burn: 7 of 32 days used (22%) — recomputed 2026-08-23.** Block A (6d): Phase 00
@@ -206,6 +206,27 @@ generic → Map animation → Tape play (keep as-of).
   — and each left a comment saying a twin existed and must not drift. Folded to one, and the
   registry is now decoded ONCE where it enters. Suites: L3 **123 checks**, doors **50**, both
   with no install and no build.
+- 2026-08-23 — **Phases 05 and 06 built; all 32 openable rooms swept and looked at.** Zero
+  failures. The generic renderer earns its keep: Bench is built entirely from derivation —
+  stations, what it records, lanes, vocabulary — and closes with its own receipt
+  (`rooms.generated.json · 5 declared · 3 zones drawn · status built`), which is the
+  no-number-without-a-receipt rule turned on the room itself. Ask arc answered a real
+  question through the deterministic reader with no model, no key and no spend, and came
+  back **VERIFIED**: "every one of 3 citations was put to the door and resolved". Its
+  no-hands panel COMPUTES its verdict from the handle the page holds — "0 write routes ·
+  call, decide withheld" — and the audit walks the prototype chain, because
+  `Object.keys(door)` returns no methods at all and an own-keys audit would clear a
+  fully-armed client.
+- 2026-08-23 — **two defects only looking could find, and one vacuous fix.** The non-real
+  hatch rendered at full violet over body text and made the Money room's simulated panel
+  unreadable — fixed in the TOKEN so it holds everywhere, at a measured opacity rather than
+  a guessed one. And a room opened at the scroll position of the last one, so leaving Money
+  half-read and opening Bench showed Bench's footer: every room here leads with a sentence
+  that is the point of the screen, and arriving from the bottom loses it. **The first fix
+  for that was a no-op whose check passed vacuously** — I reset the room column, but nothing
+  constrains its height so the WINDOW scrolls, and 0 === 0 read as success. Asserting the
+  precondition (that something had actually been parked away from the top) is what caught
+  it; the fix is now measured at 3388px of page overflow, parked at 700, zero after.
 
 ## Assumptions ledger — adjudicated by running the measurement, not by opinion
 
