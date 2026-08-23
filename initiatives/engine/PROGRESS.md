@@ -2,10 +2,10 @@
 
 status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
-phase: 06
+phase: 08
 appetite: 12d
-burn: 7.5d
-blocked-on: —
+burn: 8.5d
+blocked-on: external — REQ-07: three real dispatches, which need the MAIN CLONE and an owner pack approval
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -30,8 +30,8 @@ depends-on: —
 | 00 | Steel thread — **parked, shipped in Cycle 6** (canonical process layer, `arc-run`, driver contract, `router.yaml`) | — | ✅ done 2026-08-03 |
 | 04 | The law, and proof the hands exist — mandate receipt, ADR-0212 merged, runtime installed behind a container backend, ONE live headless invocation, **or the STOP fires** | 1 day | ✅ done 2026-08-16 |
 | 05 | The shim — `drivers/hermes` on the real 3-code contract, `drivers/mock` replay, two-surface adversarial pass on the output parser | 1.5 days | ✅ done 2026-08-17 |
-| 06 | **Certification or STOP** — 12 fixtures green against the real runtime with receipts, plus the scrubbed-transcript evidence path | 2 days | pending |
-| 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
+| 06 | **Certification or STOP** — 12 fixtures green against the real runtime with receipts, plus the scrubbed-transcript evidence path | 2 days | ✅ done 2026-08-23 |
+| 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | ✅ done 2026-08-23 |
 | 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
 
 **CAP RAISED TO 12 DAYS BY OWNER RULING, 2026-08-23 — and the ruling was "no scope cut, finish every
@@ -55,6 +55,43 @@ written as the smaller, true number. Kill checkpoint is read at **day 5**, not a
 on-track run is one that learns to be ignored.
 
 ## Done log
+
+- 2026-08-23 — **PHASE 06 AND PHASE 07 CLOSED TOGETHER.** `amendments: 2` (ADR-0225, and REQ-06's
+  classification input) · `reopened: n`. **Actual vs appetite: Phase 06 budgeted 2 days and cost
+  most of the cycle; Phase 07 budgeted 1 day and was largely built inside Phase 06's work, so the
+  two are reported as one span rather than split by a number nobody measured.**
+  - **CI GREEN ON THE MERGED-BOUND TREE, READ PER JOB, 19/19**, run 32645217729 at `67991185afe192b9267571f260dbb5be7a217f0f`. Head SHA
+    confirmed equal to local HEAD.
+  - **REQ-02 and REQ-03 `active` → `validated`** (Phase 06); **REQ-04 and REQ-05 `active` →
+    `validated`** (Phase 07).
+  - **The twelve fixtures, consolidated with the ARM each was proven on** —
+    `evidence/phase-06/certification-results-12-fixtures.md`. Two rows say LESS than the running
+    commentary did: fixture 5 has no real-container arm, and fixture 9's proposal-receipt arm was
+    never read off the spine for the real dispatches.
+  - **Fixture 10 was three links and the third was owed.** The provider's 403 was measured and the
+    driver's exit-2 mapping was fixtured; nothing proved arc-run then STOPS. Deleting one word from
+    the fallback condition had left every suite green.
+  - **The transcript claim in the Phase 06 evidence was FALSE and is corrected in place.** No
+    transcript is backfilled — reconstructing one would manufacture the evidence
+    `absent-evidence.md` exists to say is missing.
+  - **Termination is demonstrated, and demonstrating it found the defect** (ADR-0225): deleting the
+    row did not end the hire, and that wording was itself a correction of an earlier wording found
+    false the same way. Three fixtures pin it now.
+  - **The ceiling figure is ZERO**, read from the provider (`limit: 0`, `limit_reset: null`) and
+    enforced — a paid model returns 403 on the same key a `:free` model answers 200 on.
+  - **Six adversarial passes, sixteen agents, 176 findings**, and the sixth attacked the fix the
+    fifth produced: ADR-0225 had reintroduced its own defect at the fallback hop, where a row spelled
+    `./hermes` loaded with zero faults and dispatched the hire under none of its four terms, and a
+    row spelled `../../../outside/evil` executed an arbitrary script. Both proved by execution.
+  - **CI killed three of my own assertions and a code review killed a fourth**, all vacuous, all
+    written the same day inside work whose subject was tests that pass while measuring nothing.
+  - **Evidence bundles built and VERIFIED** (`arc-evidence.sh bundle` → `verify`, sha256
+    manifest) for both phases.
+  - **What is NOT closed: Phase 08.** REQ-06 is built and fixtured; REQ-07 needs three real
+    dispatches, which cannot run from a worktree — `.claude/state/` is gitignored, so a linked
+    worktree has its own empty spine and `arc-event` refuses it by design. The runbook, the pack,
+    the approval payload and the input builder are all in place:
+    `evidence/phase-08/req07-runbook.md`.
 
 - 2026-08-17 — **PHASE 05 CLOSED.** `/arc-phase-done 05 --lane engine`. REQ-01 `active` → `validated`.
   `amendments: 0` · `reopened: n`. **Actual vs appetite: budgeted 1.5 days; the shim itself was

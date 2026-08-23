@@ -1,0 +1,20 @@
+{
+  "phase": "07",
+  "commit": "67991185afe192b9267571f260dbb5be7a217f0f",
+  "short": "67991185",
+  "generated": "2026-08-23T14:41:30Z",
+  "files": [
+    {
+      "name": "calibration-baseline.md",
+      "sha256": "a8598158736a84c241c2c43f2017ee8d46355ecfa855b08a78a3d475f1dc57ad"
+    },
+    {
+      "name": "key-ceiling-and-termination.md",
+      "sha256": "ceabdbf58a306539e07d2ac4079256bb9e2cf36095f6aac61c44638fad2dfde8"
+    },
+    {
+      "name": "trigger-scan-2026-08-23.md",
+      "sha256": "ccdec25761cfecbd026b5ac734cb70e628c79e86aa5fee1b274e65736a93d761"
+    }
+  ]
+}
