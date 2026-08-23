@@ -160,6 +160,43 @@ PROC="commit-msg-draft"
   [[ "$output" == *"unmarked_uncapped=false"* ]] || { echo "the rule leaked onto uncapped rows: $output"; false; }
 }
 
+@test "REQ-06: the cap rule applies on the EXPLICIT --driver path, not only under auto" {
+  # FOUND BY RUNNING THE REAL DISPATCH SHAPE, 2026-08-23, and it is the same defect one layer down
+  # from the one ADR-0225 had just fixed: a guard that runs on only ONE of two entry points.
+  # `hosted` and `cap` were read inside the `--driver auto` branch, so a caller naming its driver
+  # carried `cap: ""` and this rule silently did not apply. The real REQ-07 input, with no
+  # classification at all, went straight past the boundary.
+  #
+  # `build-in-public-draft` is the only class in the real router carrying a cap, and it grants
+  # hermes -- so this is the production shape, not a fixture arrangement.
+  run node "$(RUN)" --root "$ARC_ROOT" --process build-in-public-draft --driver hermes \
+    --input '{"pack_ref":"p","pack":"nothing internal here"}'
+  [ "$status" -eq 5 ] || { echo "an unmarked input reached the runtime on the explicit path, got $status: $output"; false; }
+  [[ "$output" == *"does not declare itself external-ok"* ]] || { echo "the reason is not named: $output"; false; }
+}
+
+@test "REQ-06 NEGATIVE CONTROL: the same explicit dispatch with external-ok is NOT refused" {
+  # Without this the test above passes on a rule that refuses every capped dispatch -- which would
+  # mean REQ-07 could never run at all, i.e. a boundary that works by breaking the job.
+  run node "$(RUN)" --root "$ARC_ROOT" --process build-in-public-draft --driver hermes --dry-run \
+    --input '{"classification":"external-ok","pack_ref":"p","pack":"nothing internal here"}'
+  [ "$status" -eq 0 ] || { echo "a properly declared pack was refused: $output"; false; }
+  [[ "$output" == *"would run"* ]] || { echo "$output"; false; }
+}
+
+@test "boundary: fixture 3's routing fact is attached on the EXPLICIT --driver path too" {
+  # `hosted` had the identical one-entry-point hole, and it is OLDER than the cap rule. Fixture 3
+  # refuses an internal-only input "with the routing fact attached"; on the explicit-driver path
+  # that fact read EMPTY -- so the one code path whose entire job is to say where a document was
+  # about to go said nothing, exactly when a caller had bypassed routing to name the destination
+  # themselves. The probe-driven fixture-3 test above proves the FUNCTION; this proves the wiring.
+  run node "$(RUN)" --root "$ARC_ROOT" --process build-in-public-draft --driver hermes \
+    --input '{"classification":"internal-only","pack_ref":"p","pack":"x"}'
+  [ "$status" -eq 5 ] || { echo "expected 5, got $status: $output"; false; }
+  [[ "$output" == *"hosted: cloud"* ]] || { echo "the routing fact is missing on the explicit path: $output"; false; }
+  [[ "$output" == *"off this machine"* ]] || { echo "$output"; false; }
+}
+
 @test "this file registers every test it declares" {
   # FIXED 2026-08-17 after an adversarial pass defeated the previous version, which counted
   # `^@test ` lines in the SOURCE -- the DECLARED count. bats silently DROPS a @test whose name
@@ -169,6 +206,6 @@ PROC="commit-msg-draft"
   # falls) and a silent removal (declared falls).
   declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "13" ] || { echo "expected 13 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "16" ] || { echo "expected 16 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

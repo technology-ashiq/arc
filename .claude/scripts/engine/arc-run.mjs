@@ -494,6 +494,22 @@ if (routedRow) {
   // those in a reviewed diff -- so the receipt is an `approval.requested`, exactly like the
   // escalation ladder's, and acting on it is a human editing the file.
   expiredRow = isExpired(routedRow, TODAY) ? { name: processName, row: routedRow } : null;
+
+  // `hosted` AND `cap` ARE PROPERTIES OF THE ROW, NOT OF THE CALLER'S FLAG, so they are read here
+  // beside tenure rather than inside the `--driver auto` branch below.
+  //
+  // FOUND BY RUNNING IT, 2026-08-23, and it is the SAME defect one layer down from the one ADR-0225
+  // had just fixed: a guard that runs on only one of two entry points. Both fields lived in the
+  // auto branch, so a dispatch naming its driver explicitly carried `cap: ""` -- and REQ-06's new
+  // rule, that an unmarked input is refused for a capped row, silently did not apply to it. The
+  // real REQ-07 dispatch shape went straight past the boundary with no classification at all.
+  //
+  // `hosted` had the same hole and it is older: fixture 3 refuses an internal-only input "with the
+  // routing fact attached", and on the explicit-driver path that fact read empty -- so the one code
+  // path whose entire job is to say where a document was about to go said nothing, exactly when a
+  // caller had bypassed routing to name the destination themselves.
+  hosted = typeof routedRow.hosted === "string" ? routedRow.hosted : "";
+  routedCap = typeof routedRow.cap === "string" ? routedRow.cap : "";
 }
 
 if (driverArg === "auto") {
@@ -509,12 +525,8 @@ if (driverArg === "auto") {
   }
   driver = row.driver;
   tier = row.tier;
-  hosted = typeof row.hosted === "string" ? row.hosted : "";
-  // REQ-06: a `cap:` is what makes a row a HIRED runtime, and it is the only place where "the
-  // owner approved this specific input" is a real precondition. Read here so the data boundary can
-  // demand a positive `external-ok` declaration for capped rows and leave every in-house class
-  // untouched -- the tightening must not quietly become a repo-wide input schema.
-  routedCap = typeof row.cap === "string" ? row.cap : "";
+  // `hosted` and `cap` are NOT read here -- they are properties of the row and are read above,
+  // beside tenure, so they apply however the driver was chosen. See the comment there.
   fallbacks = Array.isArray(row.fallback) ? row.fallback : [];
 }
 if (!DRIVERS.includes(driver)) { console.error(`arc-run: unknown driver \`${driver}\` (known: ${DRIVERS.join(", ")})`); process.exit(1); }
