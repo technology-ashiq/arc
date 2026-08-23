@@ -61,8 +61,54 @@ _exempt() {
 # Strip comments before grepping: /* ... */ blocks (incl. multi-line) and // to end-of-line. A
 # token that appears only inside a comment (e.g. brief's "no path to events/*.jsonl") is
 # documentation, not a bypass. Line count is preserved so grep -n reports real line numbers.
+#
+# A `/*` PRECEDED BY A WORD CHARACTER IS NOT A COMMENT OPENER (2026-08-24).
+#
+# arc-dash.mjs serves an HTML shell containing `every <code>/api/*</code> read needs ...`. The
+# `/*` in `/api/*` opened a phantom block comment, and the stripper then blanked the next 99
+# LINES until it found something that looked like `*/`. Two real token-bearing lines lived in
+# that window and were invisible to this lint -- measured, not suspected: 2 hidden before the
+# rule, 0 after.
+#
+# That is precisely the failure this file's own loop comment names further down -- "a gate that
+# cannot tell 'I looked and found nothing' from 'I never looked'" -- reached through the
+# stripper rather than through awk exiting 127. It was found because an unrelated edit moved
+# where the phantom `*/` landed, which changed which lines were hidden. Nothing reported it.
+#
+# The rule is deliberately small: a real block comment opens after whitespace or after one of
+# `( = , ; { : ?`, never immediately after a letter, digit or `_`. A full JS lexer in awk is
+# not the answer to a path-shaped false positive, and a bigger rule here would be its own risk.
 _strip_comments() {
   awk '
+    function nquote(str, ch,   n, i) {
+      # how many of `ch` appear in `str`. Escaped quotes are NOT discounted -- see instring().
+      n=0
+      for (i=1; i<=length(str); i++) if (substr(str,i,1)==ch) n++
+      return n
+    }
+    function instring(str, pos,   head, bt) {
+      # Is position `pos` inside a string literal? An ODD number of any one quote character
+      # before it means an unclosed opener. Cheap, imperfect, and paired with the EOF check
+      # below, which is what turns a wrong guess into a reported non-scan instead of silence.
+      head = substr(str, 1, pos-1)
+      bt = sprintf("%c", 96)          # backtick, built rather than typed
+      return (nquote(head, "\"") % 2) || (nquote(head, "\047") % 2) || (nquote(head, bt) % 2)
+    }
+    function opener(str, from,   pos, prev) {
+      # index of the next REAL block-comment opener at or after `from`, or 0.
+      #
+      # TWO THINGS DISQUALIFY A `/*`, both found by tracing real tracked files:
+      #   a word char before it -- `/api/*` in the door served HTML, which blanked 99 lines
+      #   inside a string       -- `"/**"` and `` `/**` ``, globs in policy/lint.mjs,
+      #                            policy/resources.mjs and jobs/schema.mjs
+      while ((pos=index(substr(str,from),"/*"))>0) {
+        pos = pos + from - 1
+        prev = (pos==1) ? "" : substr(str,pos-1,1)
+        if (prev !~ /[A-Za-z0-9_]/ && !instring(str, pos)) return pos
+        from = pos + 2
+      }
+      return 0
+    }
     {
       s=$0
       if (inb) {
@@ -70,20 +116,37 @@ _strip_comments() {
         if (idx==0) { print ""; next }
         s=substr(s,idx+2); inb=0
       }
-      while ((a=index(s,"/*"))>0) {
+      # WHICHEVER COMES FIRST WINS. `//` used to be handled only after the block loop, so a
+      # `/*`-looking sequence inside a LINE comment opened a phantom block that ran to EOF.
+      # Real example, and the one that found this: schema.mjs:388 is a `//` comment whose prose
+      # contains `` `/**` `` -- a glob in backticks -- and everything after it was blanked.
+      # Three tracked files were affected. A comment cannot open a comment.
+      pos=1
+      while (1) {
+        a=opener(s,pos)
+        c=index(substr(s,pos),"//"); if (c>0) c=c+pos-1
+        if (c>0 && (a==0 || c<a)) { s=substr(s,1,c-1); break }
+        if (a==0) break
         rest=substr(s,a+2); b=index(rest,"*/")
-        if (b>0) { s=substr(s,1,a-1) substr(rest,b+2) }
+        if (b>0) { s=substr(s,1,a-1) substr(rest,b+2); pos=a }
         else { s=substr(s,1,a-1); inb=1; break }
       }
-      c=index(s,"//"); if (c>0) s=substr(s,1,c-1)
       print s
+    }
+    END {
+      # An unterminated block at EOF means the tail of this file was blanked, so it was NOT
+      # fully scanned -- and a bypass sitting in that tail is invisible. Signalled through the
+      # EXIT CODE, not stderr: the caller redirects this command stderr to /dev/null (for a
+      # stated reason about NUL bytes) and CHECKS the status, so stderr here would be exactly
+      # the silent channel this lint exists to not have.
+      if (inb) exit 3
     }' "$1"
 }
 
 # Bypass tokens: raw event/day files, the derived db, and direct sqlite.
 PATTERN='events/|\.jsonl|state\.db|node:sqlite|DatabaseSync'
 
-# ONE sanctioned non-spine JSONL, neutralised at the TOKEN and never at the line.
+# TWO sanctioned non-spine JSONLs, neutralised at the TOKEN and never at the line.
 #
 # `.jsonl` is a proxy for "raw spine file access", but the token's meaning depends on WHICH
 # jsonl. `.claude/state/memory/surfaced-cited.jsonl` is memory's own instance state -- the
@@ -96,9 +159,17 @@ PATTERN='events/|\.jsonl|state\.db|node:sqlite|DatabaseSync'
 # `events/surfaced-cited.jsonl`. After this sed such a line still carries `events/` and still
 # trips. tests/memory-golden.bats drives both halves against a throwaway git repo.
 #
+# The SECOND is arc-dash's own request journal, `journal-${day}.jsonl` (2026-08-24). Same
+# justification, different file: it is the DOOR's instance state -- the evidence half of REQ-10,
+# written beside the spine and never read as the spine -- and the door reaches actual spine data
+# only through spine.mjs, which is what this lint is for. It became visible when the stripper
+# stopped mis-parsing `/api/*` in the served HTML as a comment opener; it had been hidden, not
+# absent, which is the more useful half of that finding.
+#
 # The substitution runs AFTER comment stripping, so line numbers stay real. `sed` here is
-# BRE with no GNU-only flags -- the macOS BSD leg is a first-class runner.
-_sanction() { sed 's#surfaced-cited\.jsonl#surfaced-cited.SANCTIONED-NON-SPINE#g'; }
+# BRE with no GNU-only flags -- the macOS BSD leg is a first-class runner. `[$]` rather than
+# `\$` for the same reason: a bracket expression means the same thing to both seds.
+_sanction() { sed -e 's#surfaced-cited\.jsonl#surfaced-cited.SANCTIONED-NON-SPINE#g' -e 's#journal-[$]{day}\.jsonl#journal.SANCTIONED-NON-SPINE#g'; }
 
 # SCANNED CLEAN and COULD NOT SCAN are different answers, and this loop used to give the same one.
 #
@@ -133,8 +204,15 @@ while IFS= read -r f; do
 "
     continue
   fi
-  if ! _strip_comments "$f" > "$TMPF" 2>/dev/null; then
-    unscanned="$unscanned$f: the comment stripper exited non-zero -- this file was NOT scanned
+  _strip_comments "$f" > "$TMPF" 2>/dev/null
+  _strip_status=$?
+  if [ "$_strip_status" -eq 3 ]; then
+    unscanned="$unscanned$f: unterminated block comment -- the tail of this file was blanked and NOT scanned
+"
+    continue
+  fi
+  if [ "$_strip_status" -ne 0 ]; then
+    unscanned="$unscanned$f: the comment stripper exited $_strip_status -- this file was NOT scanned
 "
     continue
   fi

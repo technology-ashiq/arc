@@ -38,6 +38,8 @@ import type {
 /* -------------------------------------------------------------------------- */
 
 export type VenturesRoomProps = {
+  /** venture id -> room id, straight off the registry. Absent is drawn as absent, never empty. */
+  declared?: Record<string, string>;
   /** The L2 client. The shell owns the token; this room only reads through it. */
   door: Door;
   /** The registry's own entry for this room, when the shell has read /api/rooms. */
@@ -56,7 +58,7 @@ const POLL_MS = 45_000;
 
 /* -------------------------------------------------------------------------- */
 
-export function VenturesRoom({ door, room, sentence, lede }: VenturesRoomProps) {
+export function VenturesRoom({ door, room, sentence, lede, declared }: VenturesRoomProps) {
   const opening = moneyOpening("ventures", room, { sentence, lede });
   const [health, setHealth] = useState<Panel<HealthView>>({ phase: "loading" });
   const [real, setReal] = useState<Panel<PnlView>>({ phase: "loading" });
@@ -246,12 +248,36 @@ export function VenturesRoom({ door, room, sentence, lede }: VenturesRoomProps) 
         )}
       </section>
 
+      <Declared ids={declared} />
+
       <p className="v-foot">
         <b className="v-code">{asof.code}</b> — {asof.offer} Which ventures exist comes from a file
         and has no history to scrub either; what each one earned comes from the spine and scopes by
         month, never by day.
       </p>
     </section>
+  );
+}
+
+/**
+ * The ventures arc has DECLARED, from ventures.yaml (ADR-1317).
+ *
+ * This room's panels are about what each venture EARNED, which comes from the spine. That is
+ * the right main event and it left a hole: a venture declared in ventures.yaml but with no
+ * money yet appeared nowhere at all, so adding a second venture changed nothing on the screen
+ * that exists to watch them. Kill lines are the highest-consequence thing in arc; a roster
+ * that only lists what has already moved money is a roster you cannot use to notice a gap.
+ */
+function Declared({ ids }: { ids?: Record<string, string> }) {
+  const names = ids ? Object.keys(ids).sort() : null;
+  return (
+    <p className="v-foot v-declared">
+      {names === null
+        ? "the registry served no venture roster, so this room cannot say which ventures are declared. That is a fact about this read, not about the company."
+        : names.length === 0
+          ? "ventures.yaml declares no ventures. That is a measured zero, not a missing read — the file was there and it was empty."
+          : `declared in ventures.yaml: ${names.join(", ")} — ${names.length === 1 ? "one venture, carrying a kill line" : `${names.length} ventures, each carrying a kill line`}. A venture appears here the moment it is declared, whether or not it has earned anything.`}
+    </p>
   );
 }
 
@@ -603,6 +629,7 @@ const CSS = `
 .v-refused-h{font-size:var(--step-body);line-height:1.55;font-weight:300;color:var(--prose);margin:var(--grid-in) 0 0;max-width:82ch;}
 .v-reading{font-family:var(--font-mono);font-size:var(--step-data);color:var(--meta);margin:0;}
 .v-code{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--accent-dim);letter-spacing:var(--track-tight);}
+.v-declared{margin-top:var(--space-s);color:var(--faint);font-size:var(--step-micro);}
 .v-foot{font-size:var(--step-body);line-height:1.55;font-weight:300;color:var(--meta);margin:0;max-width:82ch;}
 .v-receipt{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:var(--step-meta);color:var(--accent-dim);border:1px solid var(--accent-line);border-radius:var(--radius-chip);padding:4px 9px;margin-top:var(--grid);overflow-wrap:anywhere;max-width:100%;}
 `;

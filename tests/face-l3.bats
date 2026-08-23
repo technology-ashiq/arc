@@ -137,3 +137,96 @@ load 'test_helper'
   run bash -c "cd '$ARC_ROOT' && git ls-files face/ | wc -l | tr -d ' '"
   [ "$output" -ge 5 ] || { echo "face/ is barely tracked ($output files); the check above is vacuous"; false; }
 }
+
+@test "REQ-10's dogfood evidence can be FAILED, by every route it can be failed by" {
+  # The requirement is not "the owner used the face" -- it is that for five real days EVERY
+  # decision went THROUGH it, and both sides leave a record: L2's journal writes the receipt
+  # ULID it emitted, and the spine holds every decision.recorded there has ever been.
+  #
+  # The arm that matters is `spine-only`: a decision.recorded with no journal line is a
+  # decision made OUTSIDE the face, which is the one thing REQ-10 asks not to happen -- and
+  # it has to fail even while every other number still looks healthy.
+  run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --selftest
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  for arm in "five clean days meet the requirement" \
+             "a decision made OUTSIDE the face fails the requirement" \
+             "a journal line with no receipt fails the requirement" \
+             "four days does not pass as five" \
+             "nine decisions in one day is still one day" \
+             "an empty journal is NOT met, and does not throw" \
+             "a torn journal line makes the count a floor"; do
+    [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face-dogfood fails CLOSED when it cannot find its inputs, and says which" {
+  # "0 decisions, requirement not met" and "I could not find the journal" are different facts,
+  # and the second must not wear the first's clothes -- reporting NOT MET because the wrong
+  # directory was read would send someone hunting a behaviour problem that does not exist.
+  run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+  [ "$status" -eq 2 ] || { echo "expected exit 2 for an unreadable input; got $status: $output"; false; }
+  [[ "$output" == *"about this READ"* ]] || { echo "$output"; false; }
+}
+
+@test "arc-face's startup decisions hold, including the two that shipped broken" {
+  # The launcher spans L2 and L3, so it lives with the L3 suite: what it is FOR is making the
+  # app openable in one command, which is the difference between a five-day dogfood happening
+  # and not happening.
+  #
+  # Two of these arms are regressions, both found by running the thing rather than reading it:
+  #   - spawning npm's .cmd shim without a shell, which Node has refused since the
+  #     CVE-2024-27980 fix and refuses with a bare EINVAL, on exactly one of the three legs;
+  #   - declaring the app ready because the PORT answered, when the thing answering was a dev
+  #     server left over from an earlier session and the launcher's own child was busy dying.
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-face.mjs" --selftest
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  for arm in "the app is started by running NODE, not a shim" \
+             "and never a .cmd/.bat target" \
+             "with no shell, so nothing is re-parsed as a command" \
+             "and refuses to drift to another port" \
+             "the token rides in the FRAGMENT, not the query" \
+             "an empty token is refused" \
+             "the token is NOT in the door's argv" \
+             "401 means UP-but-token-mismatch" \
+             "a DEAD child is reported, never waited out" \
+             "and a dead child does not pass because the port answers" \
+             "a worktree refusal is named as such"; do
+    [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
+  done
+  # Floor the arm count: a selftest that silently stopped registering arms also exits 0.
+  local arms; arms=$(printf '%s\n' "$output" | grep -c "PASS")
+  [ "$arms" -ge 24 ] || { echo "only $arms arms ran: $output"; false; }
+}
+
+@test "arc-face refuses a bad spine BEFORE it installs anything, and exits 1" {
+  # Ordering is the point of this test, not just the exit code. The door's refusals are the
+  # common ones and all of them are instant; paying a network dependency install first to
+  # reach a failure that was knowable in a second is precisely the friction this file removes.
+  # It is also what makes this test runnable on a clean CI box, where face/node_modules does
+  # not exist and must not be created.
+  mkdir -p "$BATS_TEST_TMPDIR/nospine"
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-face.mjs" --spine "$BATS_TEST_TMPDIR/nospine" --port 8422 --app-port 5422 --no-open
+  [ "$status" -eq 1 ] || { echo "expected exit 1; got $status"; echo "$output"; false; }
+  # The launcher's own sentence, not the door's. It deliberately does not name the spine's
+  # directory layout -- that is the door's business, and `spine-reader-lint` greps every
+  # tracked hq module for those tokens outside a comment. CI caught exactly that on the first
+  # push of this file, in a string literal inside an error message.
+  [[ "$output" == *"not a spine the door will accept"* ]] || { echo "the refusal did not name the cause: $output"; false; }
+  # But the DOOR's reason must still reach the terminal, or the launcher has swallowed the
+  # only sentence that says what was actually wrong with the path.
+  [[ "$output" == *"BAD_SPINE"* ]] || { echo "the door's own refusal was swallowed: $output"; false; }
+  # It must NOT have run an install to get here.
+  [[ "$output" != *"npm install"* ]] || { echo "it installed dependencies before discovering the door could not start: $output"; false; }
+  # And it must exit cleanly, not abort. Killing children and calling process.exit in the same
+  # tick raced libuv's teardown on Windows and produced exit 127 with an assertion, turning a
+  # correct refusal into what looked like a crash.
+  [[ "$output" != *"Assertion failed"* ]] || { echo "the launcher aborted instead of exiting: $output"; false; }
+}
+
+@test "arc-face refuses an unknown flag rather than guessing a behaviour" {
+  # --no_open, --noopen and --No-Open would each have silently taken the OTHER branch and
+  # opened a browser the caller asked it not to.
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-face.mjs" --no_open
+  [ "$status" -eq 2 ] || { echo "expected exit 2; got $status: $output"; false; }
+  [[ "$output" == *"unknown flag"* ]] || { echo "$output"; false; }
+}

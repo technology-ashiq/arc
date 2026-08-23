@@ -46,8 +46,8 @@
 
 import { createServer } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync, mkdirSync, appendFileSync, realpathSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, mkdirSync, appendFileSync, realpathSync } from "node:fs";
+import { join, dirname, resolve, sep } from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -68,6 +68,16 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PAGE_DEFAULT = 500;
 const PAGE_CAP = 1000;
 const BODY_CAP = 64 * 1024;
+
+// Lane phase specs (face REQ / phase-09): 107 of them sat in the directory apiLane already
+// read and never came through the door, so a lane room could name `phase 04` and render
+// nothing behind it. Both caps are generous against today's tree (the widest lane holds 17
+// specs; the largest single spec is 43 KB) and BOTH are reported in the payload -- a
+// silently truncated spec reads exactly like a short one, which is the same lie as an
+// empty room wearing "no phases".
+const PHASE_TEXT_CAP = 128 * 1024;
+const PHASE_LIST_CAP = 200;
+const PHASE_FILE_RE = /^phase-(\d+)-(.+)\.md$/;
 
 // ---------- the sanctioned file allow-list (/api/file/:id -- ONLY these ids) ----------
 const FILE_ALLOW = Object.freeze({
@@ -119,6 +129,9 @@ const STATUS = Object.freeze({
   // tell them apart. REGISTRY_ABSENT is a precondition the caller can fix; the two _FAILED
   // codes are a dependency answering badly, which is a gateway problem, not ours.
   REGISTRY_ABSENT: 503, ASK_FAILED: 502, BRIEF_FAILED: 502,
+  // A phases/ that resolves off the tree is a REFUSAL about this server's own layout, not a
+  // client mistake -- 500 would be right and unhelpful; 403 says "I will not serve that".
+  PHASES_OUTSIDE: 403,
   DECISION_REFUSED: 502,
 });
 
@@ -210,7 +223,16 @@ async function apiRooms(ctx) {
     };
   });
 
-  return { mode: ctx.mode, rings: registry.rings, rooms, kindsEverFired: seen.size };
+  // `inventories` is served as-is (ADR-1317). It answers the question `holds` cannot: a room's
+  // `holds` is its own slice, and the board's "ADR map" station needs all fourteen bands at
+  // once -- one band is not a smaller version of a map, it is the wrong answer. Passed through
+  // rather than reshaped here, because the generator already owns the shape and a second
+  // spelling of it in the door is the drift ADR-1306 exists to prevent.
+  //
+  // `?? null` rather than `?? {}`: a registry generated before this field existed must reach
+  // the app as ABSENT, so the room can say "the registry served no band map" instead of
+  // drawing an empty map and implying the company has claimed no centuries.
+  return { mode: ctx.mode, rings: registry.rings, rooms, inventories: registry.inventories ?? null, kindsEverFired: seen.size };
 }
 
 async function apiSpine(ctx, url) {
@@ -322,17 +344,108 @@ function apiBoard(ctx) {
   return { mode: ctx.mode, badge: "file, not log", updated, lanes };
 }
 
+/** The heading a phase spec opens with, as a title rather than as markdown. */
+function phaseTitle(text) {
+  let firstNonEmpty = null;
+  for (const raw of text.split("\n", 40)) {
+    const line = raw.replace(/\r$/, "").trim();
+    if (!line) continue;
+    const h = line.match(/^#{1,6}[ \t]+(.+)$/);
+    if (h) return h[1].trim();
+    if (firstNonEmpty === null) firstNonEmpty = line;
+  }
+  // null, never "": an absent title is a fact about the file, and an empty string is a
+  // title that renders as a blank line nobody can tell from a missing one.
+  return firstNonEmpty;
+}
+
+/**
+ * Every phase spec a lane holds, WITH its body -- the point is that the owner opens the room
+ * mid-cycle and reads what the current phase actually promised, not the tracker's one-line
+ * summary of it.
+ *
+ * A lane with no phases/ dir returns an EMPTY ARRAY under a PRESENT key. "this lane has no
+ * phases" and "this door does not report phases" are different facts, and a missing key
+ * states the second while looking exactly like the first.
+ */
+function lanePhases(dir, repo) {
+  const phasesDir = join(dir, "phases");
+  if (!existsSync(phasesDir)) return { phases: [], phasesOmitted: 0 };
+
+  // CONTAINMENT BY REALPATH, on the directory AND on every file.
+  //
+  // The previous guard was `withFileTypes` + `isFile()`, and the comment claimed "a link
+  // planted in phases/ cannot walk this read out of initiatives/". An adversarial pass
+  // measured that claim FALSE in two ways: `isFile()` stops a file symlink INSIDE the
+  // directory, but not a directory junction AT `phases/` itself, and not a HARDLINK -- which
+  // is a real directory entry by every test the OS offers. Both served arbitrary off-tree file
+  // content under this door's "file, not log" badge.
+  //
+  // Resolving and comparing is the only check that survives both, because it asks where the
+  // bytes actually ARE rather than what kind of entry points at them.
+  let fence;
+  let realPhases;
+  try {
+    fence = realpathSync(join(repo, "initiatives"));
+    realPhases = realpathSync(phasesDir);
+  } catch { return { phases: [], phasesOmitted: 0 }; }
+  const inside = (p) => p === fence || p.startsWith(fence + sep);
+  if (!inside(realPhases))
+    throw new DashError("PHASES_OUTSIDE", `${phasesDir} resolves outside initiatives/ -- refusing to serve file content from off the tree`);
+
+  const names = readdirSync(phasesDir, { withFileTypes: true })
+    .filter((d) => d.isFile() && d.name.endsWith(".md"))
+    .map((d) => d.name)
+    // Zero-padded so numeric order IS lexical order, and unnumbered files ("~" sorts after
+    // every digit) land last instead of interleaving with the phases.
+    .sort((a, b) => {
+      const key = (n) => { const m = n.match(PHASE_FILE_RE); return (m ? m[1].padStart(6, "0") : "~") + n; };
+      return key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0;
+    });
+
+  const kept = names.slice(0, PHASE_LIST_CAP)
+    // And each FILE, for the hardlink case: a hardlink is a real directory entry that passes
+    // isFile(), so only resolving it says whether the bytes live under initiatives/.
+    .filter((name) => { try { return inside(realpathSync(join(phasesDir, name))); } catch { return false; } });
+  const phases = kept.map((name) => {
+    const m = name.match(PHASE_FILE_RE);
+    // A read that fails here is NOT swallowed into a shorter list: dropping a phase silently
+    // is the exact defect this function exists to close, so it surfaces as a refusal.
+    const full = readFileSync(join(phasesDir, name), "utf8");
+    const text = full.length > PHASE_TEXT_CAP ? full.slice(0, PHASE_TEXT_CAP) : full;
+    return {
+      phase: m ? Number(m[1]) : null,
+      file: name,
+      kind: m ? m[2] : null, // spec | tasks | runbook | known-holes ... whatever the lane wrote
+      title: phaseTitle(full),
+      // The file on disk, NOT the length of `text`: text is served escaped (the
+      // representation contract at the top of this file), so escaping alone can make it
+      // longer than the bytes it came from. bytes is the honest size when truncated is true.
+      bytes: Buffer.byteLength(full, "utf8"),
+      text,
+      truncated: text.length !== full.length,
+    };
+  });
+  return { phases, phasesOmitted: names.length - kept.length };
+}
+
 function apiLane(ctx, laneName) {
   if (!validLaneName(laneName)) throw new DashError("UNKNOWN_LANE", `"${laneName}" is not a valid lane name`);
   const dir = join(ctx.repo, "initiatives", laneName);
   const progress = join(dir, "PROGRESS.md");
   if (!existsSync(progress)) throw new DashError("UNKNOWN_LANE", `no lane "${laneName}" (no initiatives/${laneName}/PROGRESS.md)`);
   const planPath = join(dir, "PLAN.md");
+  const { phases, phasesOmitted } = lanePhases(dir, ctx.repo);
   return {
     mode: ctx.mode, badge: "file, not log", lane: laneName,
     header: laneHeader(progress),
     progress: readFileSync(progress, "utf8"),
     plan: existsSync(planPath) ? readFileSync(planPath, "utf8") : null,
+    // Same representation as plan/progress above -- the file's own text, escaped by the one
+    // serializer -- plus the caps, stated so a client never has to guess what it is holding.
+    phases,
+    phasesOmitted,
+    phaseTextCap: PHASE_TEXT_CAP,
   };
 }
 
@@ -495,7 +608,29 @@ every <code>/api/*</code> read needs <code>Authorization: Bearer &lt;token&gt;</
 </script>`;
 
 // ---------- server ----------
+/**
+ * The flags this door knows. Anything else is exit 2, not a shrug.
+ *
+ * There was no guard here at all, and the near-misses land on the worst possible defaults:
+ *
+ *   --Port 8319   the port flag is dropped, the door binds the DEFAULT 8317 -- which is where
+ *                 the owner's LIVE door is. A harness aiming at a scratch port silently
+ *                 collides with production.
+ *   --Spine <dir> the fixture is dropped and the door goes to LIVE mode, serving the canonical
+ *                 spine to something that explicitly asked for a fixture.
+ *   --Token x     falls back to a random token, so the caller's own token never works.
+ *
+ * Every gate in this repo grew this guard after an adversarial pass; this file is the one that
+ * never did, and it is the one where the wrong default is the owner's real company.
+ */
+const KNOWN_DOOR_FLAGS = ["--port", "--spine", "--bind", "--token", "--routes"];
+
 function boot(argv) {
+  const bad = argv.filter((a) => a.startsWith("-") && !KNOWN_DOOR_FLAGS.includes(a));
+  if (bad.length) {
+    process.stderr.write(`arc-dash: ERROR BAD_ARGS -- unknown flag(s) ${bad.join(", ")}. Known flags are ${KNOWN_DOOR_FLAGS.join(", ")}. Refusing rather than falling back to a default: --Port would bind the live door's port and --Spine would serve the canonical spine to a caller that asked for a fixture.\n`);
+    process.exit(2);
+  }
   const flags = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -522,7 +657,7 @@ function boot(argv) {
     mode = "sim";
     root = resolve(flags.spine);
     if (!existsSync(join(root, "events"))) {
-      process.stderr.write(`arc-dash: ERROR BAD_SPINE -- --spine ${root} has no events/ dir; a sim mode over nothing answers confidently and wrongly\n`);
+      process.stderr.write(`arc-dash: ERROR BAD_SPINE -- --spine ${root} holds no event log at all; a sim mode over nothing answers confidently and wrongly\n`);
       process.exit(1);
     }
     // decide() shells arc-event, which resolves the spine itself -- point the child at
@@ -699,6 +834,24 @@ function boot(argv) {
   server.requestTimeout = 30_000;
   server.headersTimeout = 10_000;
   server.keepAliveTimeout = 5_000;
+
+  // A door that cannot BIND has not started, and must exit non-zero saying so.
+  //
+  // Without this the `uncaughtException` backstop below swallowed the fatal listen error, the
+  // loop drained, and the process exited **0** -- so every supervisor, fixture and script
+  // reading `$?` saw success from a door that never opened a socket. The launcher then read
+  // that 0 and printed "the door exited with code 0", two wrong sentences from one missing
+  // handler. The backstop exists to contain a bad REQUEST, not to absorb a failed boot.
+  server.on("error", (err) => {
+    const code = /** @type {NodeJS.ErrnoException} */ (err).code;
+    const why = code === "EADDRINUSE"
+      ? `something is already listening on ${bind}:${port}. Stop it, or pass --port <n>.`
+      : code === "EACCES"
+        ? `not permitted to bind ${bind}:${port}.`
+        : err.message;
+    process.stderr.write(`arc-dash: ERROR BIND_FAILED -- ${why}\n`);
+    process.exit(1);
+  });
 
   server.listen(port, bind, () => {
     process.stderr.write(`arc-dash: ${mode} mode on http://${bind === "::1" ? "[::1]" : bind}:${port} (spine: ${mode === "live" ? "canonical" : root})\n`);

@@ -91,7 +91,7 @@ snapshot and must be re-derived from `validate.mjs` (never copied), and
 `src/data/arcKnowledge.js` quotes 22 commands / 23 agents where the frozen contract counts
 **26 / 30**.
 
-## Open for the owner — one ruling
+## Decided 2026-08-24 — was open for the owner, and did not need to be
 
 The brain's action protocol (`src/brain/persona.js`) lets the model emit
 `{"type":"approve","id":...,"reason":"..."}` and `{"type":"reject",...}`, which the UI then
@@ -102,6 +102,22 @@ proven by a tool-list fixture, and E2 Human Sovereignty says the stamp belongs t
 alone. A prompt instruction not to do something is exactly the decorative gate ADR-0049
 describes: a rule with nothing enforcing it.
 
-Recommended: drop `approve` and `reject` from the action list. `open_room`, `set_speed` and
-`enter_hq` are read and navigation, and stay. Nothing about the design changes; three words
-leave a protocol.
+**Decided: `approve` and `reject` are not in arc's action vocabulary.** `open_room`,
+`set_speed` and `enter_hq` are read and navigation, and stay exactly as the reference has
+them. Nothing about the design changes; three words leave a protocol.
+
+Taken rather than asked, because the answer is forced by a requirement and not by taste. The
+owner kept the FACE for himself and handed over every other arc decision, and this is not a
+design call — it is what the model is permitted to DO, which REQ-07 and E2 already settle.
+Asking would have been asking him to re-derive an answer his own laws already give.
+
+And it is a CONTRACT now, not a paragraph. `face/src/lib/ask.mjs` carries `ASK_ACTIONS` and
+`actionAudit`, the action-side twin of the `ROUTE_EFFECT` / `noHandsAudit` pair that already
+holds the route side. Any action whose effect is `write` — and any action the vocabulary does
+not classify at all — makes the audit dirty and is named, on the same reasoning `noHandsAudit`
+uses for an unknown method: the safe reading of "I do not know what this does" is not
+"probably nothing". An empty vocabulary is reported as dead rather than clean, because
+`Object.freeze({})` once satisfied every assertion the route audit made.
+
+That is the retro lesson from this cycle applied to its own last open question: when a rule
+matters, stop writing it down and convert it into something that FAILS.

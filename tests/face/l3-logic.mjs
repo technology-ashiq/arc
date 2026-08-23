@@ -38,7 +38,20 @@ check("modules loaded (vacuous-pass guard)",
 const REG = join(REPO, "initiatives", "face", "contracts", "rooms.generated.json");
 check("the generated registry exists to test against", existsSync(REG));
 const registry = JSON.parse(readFileSync(REG, "utf8"));
-check("registry carries every room (fixture guard)", registry.rooms.length === 33, `rooms=${registry.rooms.length}`);
+// DERIVED from the contract, not written down. This was `=== 33` and it went red the moment
+// ADR-1317 generated `chat-mcp` -- a room that had been DECLARED in planned-rooms.json and
+// ADR-1306 and generated nowhere, which is a defect being fixed, not a fixture breaking.
+//
+// A hard-coded count is the weaker check in both directions: it goes red on a legitimate
+// addition, and it cannot tell a registry that grew correctly from one that grew wrongly.
+// Against the contract it can: the registry must carry every listed room plus the lane
+// TEMPLATE, exactly, and both a silent drop and a silent extra now fail.
+const contractRooms = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "expected-set.json"), "utf8")).rooms;
+const expectedRooms = contractRooms.list.length + (contractRooms.template ? 1 : 0);
+check("registry carries every room the contract lists, plus the template",
+  registry.rooms.length === expectedRooms, `registry=${registry.rooms.length} contract=${expectedRooms}`);
+// Vacuous-pass guard: two empties are also equal.
+check("and the contract actually listed rooms to compare against", expectedRooms >= 30, `expected=${expectedRooms}`);
 
 // The door adds `live` at read time; the registry on disk has none. Synthesise the four
 // states so every branch below is exercised, rather than only the one this tree happens to
@@ -859,6 +872,124 @@ check("noHandsAudit refuses to bless a handle that reaches nothing",
   JSON.stringify(askLib.noHandsAudit(Object.freeze({})).clean));
 check("a dead handle SAYS it is dead rather than reporting a clean boundary",
   /reaches nothing/i.test(askLib.noHandsAudit(Object.freeze({})).line));
+
+// ---------------------------------------------------------------------------------------
+// ADR-1317: a room's zones must not be able to hide what the room holds.
+//
+// `zonesFor` used to be a hard-coded list of eleven keys, which is the same failure the
+// coverage gate had one layer down: a fixed list silently loses what it does not know. The
+// contract grew by eight inventories, every room carried the new rows, and the screen would
+// have shown nothing -- no error, no empty state, just absence. "It is in the data" and "the
+// owner can see it" are different facts.
+{
+  const held = (room) => Object.entries(room.holds || {}).filter(([, v]) => Array.isArray(v) && v.length);
+  let worstRoom = null, worstMissing = [];
+  for (const room of registry.rooms) {
+    const zoneKeys = new Set(rooms.zonesFor(room).map((z) => z.key));
+    const missing = held(room).map(([k]) => k).filter((k) => !zoneKeys.has(k));
+    if (missing.length > worstMissing.length) { worstRoom = room.id; worstMissing = missing; }
+  }
+  check("no room holds anything its zones cannot show",
+    worstMissing.length === 0, `${worstRoom} hides ${JSON.stringify(worstMissing)}`);
+
+  // Positive control: the sweep must have had rooms WITH holds to sweep, or it proves nothing.
+  const roomsWithHolds = registry.rooms.filter((r) => held(r).length).length;
+  check("and the sweep actually had rooms to inspect", roomsWithHolds >= 20, `roomsWithHolds=${roomsWithHolds}`);
+
+  // The new inventories specifically -- named, because "no room hides anything" would also
+  // pass on a registry where none of them exist at all.
+  const zoneKeysAnywhere = new Set(registry.rooms.flatMap((r) => rooms.zonesFor(r).map((z) => z.key)));
+  for (const key of ["adrs", "jobs", "ventures", "plans", "capabilities", "ci"])
+    check(`the "${key}" inventory reaches a zone somewhere`, zoneKeysAnywhere.has(key), `zones=${[...zoneKeysAnywhere].join(",")}`);
+
+  // An UNKNOWN key gets a derived title rather than vanishing. This is the arm that keeps the
+  // fix alive: the next inventory added will not be in ORDER either.
+  const invented = rooms.zonesFor({ id: "x", holds: { someFutureThing: ["a", "b"] } });
+  check("an inventory nobody has titled yet still renders", invented.length === 1 && invented[0].items.length === 2, JSON.stringify(invented));
+  check("and gets a readable header, not a schema key", invented[0]?.title === "Some future thing", `title=${invented[0]?.title}`);
+  check("an empty hold is not rendered as an empty zone", rooms.zonesFor({ id: "x", holds: { adrs: [] } }).length === 0);
+}
+
+// ADR-1317: the board's ADR map. This station named a thing and drew nothing for a whole
+// cycle -- arc's 265 decisions were invisible to the face while the coverage gate printed
+// "all covered". What is asserted here is the part that can silently rot: the map is built
+// from the registry, so a renamed room must show as a HOLE rather than quietly vanish.
+{
+  const inv = registry.inventories || {};
+  check("the registry carries the band map the board needs", Object.keys(inv.adrs || {}).length >= 10, `bands=${Object.keys(inv.adrs || {}).length}`);
+  const map = rooms.adrBandMap(inv.adrs, registry.rooms);
+  check("every band resolves to a real room", map.length > 0 && map.every((b) => b.roomName !== null), JSON.stringify(map.filter((b) => !b.roomName)));
+  check("bands come back in ascending order", map.map((b) => b.band).join() === [...map.map((b) => b.band)].sort().join());
+  check("a band reads as a RANGE, not a bare number", map[0]?.label === `${map[0]?.band}-${String(Number(map[0]?.band) + 99).padStart(4, "0")}`, map[0]?.label);
+
+  // The arm that keeps the fix alive. A band pointing at a room that does not exist must be
+  // KEPT and marked: a map that silently drops the one row whose room was renamed is exactly
+  // the disappearing-surface failure this whole product exists to not have.
+  const lost = rooms.adrBandMap({ "9900": "no-such-room" }, registry.rooms);
+  check("a band homed in a ghost room is kept and marked", lost.length === 1 && lost[0].roomName === null && lost[0].room === "no-such-room", JSON.stringify(lost));
+  // This arm used to assert the malformed band was DROPPED, which pinned the defect rather
+  // than the rule: a map that silently omits a row is exactly what this function's docstring
+  // refuses, and an adversarial pass pointed out the code did it for band ids while the same
+  // function carefully kept a row whose ROOM did not resolve. Both are now kept and marked.
+  const malformed = rooms.adrBandMap({ "not-a-band": "board", "1300s": "toolbelt" }, registry.rooms);
+  check("a malformed band id is KEPT, not silently dropped", malformed.length === 2, JSON.stringify(malformed.map((b) => b.band)));
+  check("and it is labelled as not a band id", malformed.every((b) => /not a band id/.test(b.label)), JSON.stringify(malformed.map((b) => b.label)));
+  check("while a well-formed band still reads as a range",
+    rooms.adrBandMap({ "0000": "board" }, registry.rooms)[0]?.label === "0000-0099");
+  check("an absent band map yields an empty map, not a crash", rooms.adrBandMap(undefined, registry.rooms).length === 0);
+  check("and an absent room list does not throw either", rooms.adrBandMap({ "0000": "board" }, undefined).length === 1);
+}
+
+// ADR-1317: a lane room reads its own phase specs. The room named `phase 04` in its stations
+// and rendered nothing behind it for a whole cycle -- the specs sat in the directory apiLane
+// already read, and nothing asked for them.
+{
+  const laneMap = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "expected-set.json"), "utf8")).lanes.map;
+  check("a lane's room resolves back to its lane", rooms.laneForRoom("money", laneMap) === "ledger", String(rooms.laneForRoom("money", laneMap)));
+  check("and the face lane's room resolves too", rooms.laneForRoom("toolbelt", laneMap) === "face", String(rooms.laneForRoom("toolbelt", laneMap)));
+  // The arm that stops every non-lane room fetching a lane named after itself and 404ing.
+  check("a room that is NOT a lane's resolves to null", rooms.laneForRoom("concepts", laneMap) === null, String(rooms.laneForRoom("concepts", laneMap)));
+  check("an absent lane map resolves to null, not a crash", rooms.laneForRoom("money", undefined) === null);
+  // Positive control: the map must have had entries, or every arm above passes on nothing.
+  check("the lane map actually had lanes in it", Object.keys(laneMap).length >= 10, `lanes=${Object.keys(laneMap).length}`);
+
+  // THREE states. A door that does not carry the field is ABSENT; a lane with no specs is
+  // NONE. Drawing the second from the first is the lie the explicit empty array exists for.
+  check("no phases key at all reads as ABSENT", rooms.lanePhases({ lane: "x" }).state === "absent");
+  check("an explicit empty array reads as NONE", rooms.lanePhases({ phases: [] }).state === "none");
+  check("a populated array reads as SOME", rooms.lanePhases({ phases: [{ file: "a.md", phase: 1, title: "t" }] }).state === "some");
+  check("a non-array phases value is ABSENT, never SOME", rooms.lanePhases({ phases: "nope" }).state === "absent");
+  check("a null payload does not throw", rooms.lanePhases(null).state === "absent");
+  check("the door's omitted count is carried through", rooms.lanePhases({ phases: [], phasesOmitted: 4 }).omitted === 4);
+  check("and defaults to zero rather than undefined", rooms.lanePhases({ phases: [] }).omitted === 0);
+}
+
+// REQ-07's OTHER half: what the brain may EMIT, not just what a room may call.
+//
+// The owner's reference build lets the model return {"type":"approve","id":...} and the UI
+// executes it, with a PROMPT telling the model not to auto-approve money or kill decisions.
+// A prompt is not a tool contract -- it is the decorative gate ADR-0049 describes -- and E2
+// Human Sovereignty puts the stamp in the owner's own hand. So the two write actions are not
+// in arc's vocabulary, and this is what makes that a contract instead of a sentence.
+{
+  const ask = await import(pathToFileURL(join(LIB, "ask.mjs")).href);
+  const a = ask.actionAudit();
+  check("the action vocabulary is clean", a.clean, a.line);
+  check("and it reaches something -- a boundary, not a dead feature", a.reachesSomething);
+  check("approve is NOT an action arc will execute", !("approve" in ask.ASK_ACTIONS));
+  check("nor reject", !("reject" in ask.ASK_ACTIONS));
+  check("navigation and view actions stay", ["open_room", "set_speed", "enter_hq"].every((k) => k in ask.ASK_ACTIONS));
+
+  // The arms that keep it alive. Each is a way the vocabulary could grow a hand.
+  const withWrite = ask.actionAudit({ ...ask.ASK_ACTIONS, approve: { effect: "write" } });
+  check("a write action makes the audit dirty, and is NAMED", !withWrite.clean && withWrite.hands.includes("approve"), withWrite.line);
+  // An UNCLASSIFIED action counts as a hand, for the same reason noHandsAudit treats an
+  // unknown method as write-reachable: the safe reading of "I do not know what this does"
+  // is not "probably nothing".
+  const unclassified = ask.actionAudit({ open_room: { effect: "navigate" }, mystery: {} });
+  check("an action with no declared effect counts as a hand", !unclassified.clean && unclassified.hands.includes("mystery"), unclassified.line);
+  check("and an EMPTY vocabulary is dead, not clean", !ask.actionAudit({}).clean, ask.actionAudit({}).line);
+}
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;
