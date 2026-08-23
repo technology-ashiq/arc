@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
-phase: 00
+phase: 01
 appetite: 12.5d
-burn: 0d
+burn: 1.5d
 blocked-on: —
 depends-on: —
 
@@ -20,7 +20,7 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Renderer proof + isolation — `--session` mandatory in explore mode, `(route, session)` duplicate discriminator, session-less meta refuses, stable-shutter re-proved, callers swept mechanically, and the route-keyed output path re-scoped so two renders of one route can coexist | 1.5d | pending |
+| 00 | Renderer proof + isolation — `--session` mandatory in explore mode, `(route, session)` duplicate discriminator, session-less meta refuses, stable-shutter re-proved, callers swept mechanically, and the route-keyed output path re-scoped so two renders of one route can coexist | 1.5d | ✅ 2026-08-23 |
 | 01 | Eyes + viewports + canvas gate — composer scoped-Bash render grant, iron-law read allowlist, ≤3 immutable iterations, platform-contract viewports, marker-based doc-surface gate, sibling-render negative control | 1.5d | pending |
 | 02 | Registry + curator — `design.sources.yaml` + lint, `design-curator` at balanced-workhorse, robots.txt preflight, real pack from the two permitted galleries, planted-PNG ignore assertion | 1.5d | pending |
 | 03 | Taste loop — jury amended FOUR→N, one juror at high-judgment, pack-anchored BELOW-BAR, controlled owner blind score. **Carries the taste tripwire that gates phases 05–07** | 2d | pending |
@@ -32,7 +32,24 @@ depends-on: —
 
 ## Done-log
 
-Nothing closed yet — the cycle opens at Phase 00.
+**Phase 00 — CLOSED 2026-08-23.** REQ-01 green on `arc-ci` run **32655931704**, head SHA
+`40bbc2be`, **19/19 jobs read per JOB** across ubuntu 18/20/22, macOS and Windows. Tests 490–509
+ran as a contiguous block with no gaps. Red-first is a fact in git history, not a claim: run
+**32653287707** on the tests-only commit recorded `not ok 490` and `not ok 491` before any
+implementation existed. Evidence: `initiatives/design/evidence/phase-00/bundle.md`.
+
+Two fresh attackers on different surfaces returned **26 findings with one overlap** — both
+independently found that a value-taking flag given last spins the argument loop **forever**,
+hanging a CI leg, with the fix already written in the test fixture 30 lines away and never
+carried to the script it fakes. 22 fixed, 4 explicitly accepted in writing.
+
+**CI then found three things neither attacker did**, all invisible on this box: `[!a-z0-9-]` on
+the session id is a locale-collation trap that accepts `Design` on macOS and collides with
+`design` on a case-insensitive filesystem — the exact defect documented in a comment two files
+away; `portability.bats` keys its allowlist on `path:lineno` and my edits shifted every entry;
+and `portfolio-board.bats` had pinned "the design lane is IDLE" as an invariant, which Cycle 16
+falsified. **The caller sweep's twin was in CONSUMPTION, not invocation** — no caller needed a
+new flag, but `design-critique.sh` reads the output path.
 
 **Kickoff, 2026-08-23.** Lane resolved `design` (via arg); WIP 6 counted, informational. Preflight
 archived the idle tracker rather than overwriting it. Brownfield survey run, then **its two
@@ -56,7 +73,7 @@ the engine lane recorded at 18 -> 6. A third round would be patching against the
 
 ## Appetite burn
 
-**0 of 12.5 days used.** Kill criteria: 50% tripwire if phases 00+01 are not green by end of day 3;
+**1.5 of 12.5 days used.** Kill criteria: 50% tripwire if phases 00+01 are not green by end of day 3;
 taste tripwire before any rival spend if the post-Phase-03 controlled owner score does not beat
 a FRESHLY MEASURED plain-prompt bar after one re-run. The `~40/100` figure was carried forward
 from prose and has no measurement behind it, so Phase 03 re-derives it on the same brief, item
@@ -64,7 +81,7 @@ count and panel before comparing.
 
 ## Now
 
-**Position:** **APPROVED by the owner 2026-08-23** and building. Phase 00 is open. Working mode
+**Position:** **APPROVED by the owner 2026-08-23** and building. **Phase 00 is CLOSED**; Phase 01 is open. Working mode
 set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-cycle16`, pushed
 freely, **one PR kept open and merged only when all nine phases are done**. No local test runs at
 all -- CI is the only gate. Multiple agents are authorised where they help.
@@ -76,9 +93,12 @@ be real, valid, and invisible to `arc-inbox`, which would print "no open approva
 in this tree. Both must be emitted from the main clone at `E:/Work_Hub/01_Automemory/arc`, or
 after this branch merges.
 
-**Next step after approval:** Phase 00 — write `tests/design-render-session.bats` and watch
-`render_requires_session_in_explore_mode` and `session_less_meta_is_refused` fail RED before a
-line of the fix is written.
+**Next step:** Phase 01 — the composer gets eyes. A scoped Bash grant on `ui-composer`
+(it has NO Bash today), iron law 1 amended with an enumerated read allowlist enforced by a
+marker-armed PreToolUse Read hook rather than prompt prose, ≤3 immutable `iter-N` receipts,
+platform-contract viewports, and the marker-based doc-surface gate. Red-first again: the
+sibling-render negative control and the planted docs-on-canvas page must both be seen failing
+before the fix exists.
 
 **Owner items running in parallel** (none block Phase 00):
 - ~~merge PR #61~~ — **already merged 2026-07-29**; no action outstanding.

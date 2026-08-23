@@ -67,7 +67,7 @@ and the **composer's iron law 1 forbids reading the pack and its own render**
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | Two renders never collide, and iteration history survives | 3 concurrent renders → 3 correct route/hash pairs; `--session` omitted in explore mode refuses with exit 1; same route hashes identically ×3 on one platform; a meta with no `session` field refuses | 00 | active |
+| REQ-01 | Two renders never collide, and iteration history survives | 3 concurrent renders → 3 correct route/hash pairs; `--session` omitted in explore mode refuses with exit 1; same route hashes identically ×3 on one platform; a meta with no `session` field refuses | 00 | validated |
 | REQ-02 | The composer sees its own work before anyone else judges it | ≥1 self-caught defect visibly fixed across `self-review/iter-N/` receipts on a real run — **or** every iteration past the first records `unchanged: true` and the owner signs off that iteration 1 already cleared the bar; a 4th iteration refuses; a no-op records `unchanged: true` instead of being deleted | 01 | active |
 | REQ-03 | Every surface the brief declares is rendered and correctly classified | A declared-but-unrendered surface blocks PASS; a planted docs-on-canvas page returns ERR; a product page containing the word "Reference" passes; an unmarked surface fails closed | 01 | active |
 | REQ-04 | Briefs carry real reference screens, and the repo carries only facts about them | `design.sources.yaml` lint exits 0; a pack of 5–8 screens with `sources.md` provenance from ≥2 `active` sources; a PNG planted in the refpack dir is proven ignored by `git check-ignore`; a `status: off` source is never fetched | 02 | active |
