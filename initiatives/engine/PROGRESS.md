@@ -200,6 +200,80 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### THE TRANSCRIPT WAS NEVER STORED, AND DELETING THE ROW NEVER TERMINATED THE HIRE — 2026-08-23
+
+Branch `feat/engine-cycle7-close-06-08`, PR **#217**. Owner ruled at the top of the session: **no
+scope cut, complete every phase, take the time.** Cap 9.5d → 12d, recorded in PLAN § Appetite as a
+forecast rather than a gate; REQ-02's and A-04's UNPROVABLE STOPs stay armed, because those guard a
+boundary that cannot be proven, which is a finding and not a clock.
+
+**FINDING 1 — an evidence file asserted an artifact that has never existed.**
+`certification-run-01M07FX9ZAY3EHCQFKVVKA2RT7.md` said the run's scrubbed transcript was stored at
+`evidence/phase-06/transcripts/`. **`git log --all` on that path returns nothing**, and
+`.gitignore:30` un-ignores it, so it is not an artifact written and then excluded. One `ls` would
+have caught it; nobody ran one for six days. The identical miss took the three Phase 08 round-1
+dispatches the next day, where two runs returned JSON the schema rejected for one missing property
+and the exact shape is now unrecoverable.
+
+Cause: `storeTranscript` was opt-in on `ARC_RUN_TRANSCRIPT_DIR`, and **opting out was
+indistinguishable from having nothing to store.** Opt-in was the correct design — arc-run belongs to
+no lane and a hard-coded engine path would put bench's transcripts in engine's bundle. The defect was
+the silence.
+
+**FINDING 2 — the termination spec was false, for the SECOND time, in the same comment.**
+`engine/router.yaml` says step 2 of terminating the hire is to delete the row, *"the only form with
+no reachable remainder"*. With the row deleted: `would run build-in-public-draft on hermes`, **exit
+0**. The wording it replaced had been measured false the same way on 2026-08-17 — and the
+replacement was never measured. A false claim about a governance mechanism, corrected by another
+false claim about the same mechanism.
+
+The hole behind it is bigger: the four terms are enforced when the router **loads**, for rows that
+route to a runtime. Naming the driver explicitly was ungoverned, so `--driver hermes --process
+commit-msg-draft` ran the hire under a row granting it nothing. **`arc-bench` makes `--driver`
+mandatory, so the one lane that spends real money took the ungoverned path** — the identical
+observation made about *tenure* on 2026-08-17 and fixed for tenure alone. **ADR-0225.**
+
+**TWO ADVERSARIAL PASSES, FOUR AGENTS. The first returned 35 findings, 27 proved by execution — and
+the two surfaces AGREED twice, which in this lane has almost never happened.** Both independently
+executed `--transcript-dir --dry-run`, which consumed `--dry-run` **as the path**: a caller asking
+for a PREVIEW got a real dispatch, real money and a `run.completed` receipt on the append-only spine.
+Both independently proved the storage tests **vacuous** — the stored file held three lines, all of
+them banners `hermes.mjs` prints in the parent process, and `grep ADR-0222` was matching arc's own
+constant, so deleting the container-stderr forwarding left both tests green. And the artifact the
+whole change exists to preserve **arrives on stdout**, which was never stored: the fix as first
+written would have discarded it a second time.
+
+**CI KILLED THREE OF MY OWN ASSERTIONS, all vacuous, and that is the useful part.** `$stdout` is not
+a variable bats defines — under `--separate-stderr` stdout lands in `$output`, so four assertions
+were comparing against an empty string and only the positive one failed. `fixture 10`'s
+"the fallback chain is never walked" used an explicit `--driver`, and arc-run reads `fallback:` off
+the routed row **only on the auto path** — so the claim was true of a run that had no chain, and the
+negative control could not walk one either. And `"attempts":1` is not a field the budget receipt
+emits, so that grep could only ever have passed by accident.
+
+**What landed:** every value-taking flag strict (was 3 of 8 — and `--root` selects the `processes/`
+and `router.yaml` the whole run obeys); both streams stored and labelled, with fixture markers that
+appear nowhere in arc; the absence warning per attempt with driver, attempt and byte count; the
+destination validated before any driver starts, including reserved Windows device names;
+`ARC_RUN_TRANSCRIPT_DIR=""` an operator error (**the fourth twin-fix recurrence**); paths
+JSON-quoted after a newline in a destination forged a `stored the scrubbed…` line for a file never
+written; nothing stored for an attempt that never spawned a driver.
+
+**Also built, Phase 08 scope:** REQ-06's stricter rule — an **unmarked** input is refused for a row
+carrying a `cap:`, because *"no internal marker found"* is an absence and REQ-06 asks for a positive
+`external-ok` declaration. Uncapped classes untouched; a nested `external-ok` does not vouch for the
+pack above it. **Assumption A-06 discharged:** an `external-ok` pack carrying an `internal-only`
+block inside carried-over draft content **is** refused, path reported, with the clean twin as
+negative control.
+
+**And REQ-05 / fixture 10's owed arm**, which `fixture-10-capped-key.md` had named in as many words:
+the provider's 403 was measured and the driver's exit-2 mapping was fixtured, but **nothing proved
+arc-run then stops**. Deleting one word from arc-run's fallback condition had left every suite green.
+
+Evidence: `certification-results-12-fixtures.md` (all twelve, with the ARM each was proven on — and
+two rows now say **less** than the running commentary did), `adversarial-passes.md`,
+`absent-evidence.md`, and `phase-07/key-ceiling-and-termination.md`.
+
 ### CORRECTION — IT WAS NOT THE TOOLSETS. THE RUNTIME WAS NEVER SENT THE BRIEF — 2026-08-19
 
 The section below this one is **wrong about the cause**, and ADR-0224 is amended rather than retired.
