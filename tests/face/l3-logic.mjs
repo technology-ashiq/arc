@@ -178,6 +178,65 @@ check("the token rides as a bearer header, never in the query string",
 check("the reason is trimmed into the body, not sent raw",
   JSON.parse(seen.init.body).reason === "not yet");
 
+// THE RECEIVER PIN.
+//
+// The first cut stored `globalThis.fetch` and called it as `this.fetchImpl(...)`, which
+// loses the receiver. Node's fetch does not care; a BROWSER throws "Failed to execute
+// 'fetch' on 'Window': Illegal invocation", so the product was dead on arrival while every
+// check in this file passed. Found by opening the page, which is the only place it exists.
+//
+// Simulated here with a fetch that is receiver-sensitive the way the browser's is: it
+// throws unless `this` is the global. A regression to the unbound form fails immediately.
+// The stand-in must be UNBOUND on the global, exactly as window.fetch is. The first version
+// of this pin installed an already-bound function, so the unbound client worked too and the
+// check passed with the bug restored -- a vacuous pin, caught only by putting the bug back
+// and watching it stay green. The mutant is the negative control, always.
+const realFetch = globalThis.fetch;
+let receiverOk = false;
+try {
+  globalThis.fetch = function () {
+    if (this !== globalThis) throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+    return Promise.resolve({ ok: true, status: 200, statusText: "OK", json: async () => ({ ok: true }) });
+  };
+  // Construct with NO fetchImpl so the DEFAULT path is what gets exercised.
+  await new door.Door({ token: "t" }).health();
+  receiverOk = true;
+} catch { receiverOk = false; } finally { globalThis.fetch = realFetch; }
+check("the default fetch is BOUND, so a browser receiver check cannot reject it", receiverOk);
+
+// THE CROSS-LAYER PIN.
+//
+// The first cut of decide() sent `{ decision }`. arc-dash destructures
+// `{ id, verdict, reason }` and refuses anything else with BAD_VERDICT, so EVERY stamp in
+// the product would have been refused -- and nothing on the client side could have noticed:
+// the method was well-typed, the JSON well-formed, and the defect lived only in the gap
+// between two files. Neither file's own tests can catch that shape.
+//
+// So the field name is read out of arc-dash's OWN SOURCE rather than restated here. If
+// either side renames it, this fails loudly. A hard-coded "verdict" on both sides would be
+// two copies of a guess.
+const dashSrc = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "utf8");
+const destructure = dashSrc.match(/async function apiDecide\([^)]*\)\s*\{\s*const\s*\{([^}]*)\}\s*=\s*body/);
+check("apiDecide's destructure was found in the door's source (vacuous-pass guard)",
+  destructure !== null, "regex did not match -- the pin below would assert nothing");
+const wireFields = destructure ? destructure[1].split(",").map((s) => s.trim()).filter(Boolean) : [];
+check("the door reads exactly id, verdict and reason",
+  wireFields.length === 3 && wireFields.includes("id") && wireFields.includes("verdict") && wireFields.includes("reason"),
+  wireFields.join("|"));
+const sentBody = JSON.parse(seen.init.body);
+check("every field the door destructures is present in what the client sends",
+  wireFields.every((f) => f in sentBody), `sent=${Object.keys(sentBody).join("|")}`);
+check("the client sends NO field the door does not read (a silently ignored key is a lie)",
+  Object.keys(sentBody).every((k) => wireFields.includes(k)), Object.keys(sentBody).join("|"));
+
+// The door refuses a verdict that is not approve/reject; the client must not be the thing
+// that discovers that over the network.
+caught = null;
+try { await new door.Door({ fetchImpl: spy }).decide({ id: "01ABC", decision: "maybe", reason: "hm" }); }
+catch (e) { caught = e; }
+check("a verdict that is not approve or reject is refused before it leaves",
+  caught && caught.code === "BAD_VERDICT", caught && caught.code);
+
 // ---------- the shell: routing and the keyboard model ----------
 const shell = await import(pathToFileURL(join(LIB, "shell.mjs")).href);
 check("shell module loaded (vacuous-pass guard)", typeof shell.keyAction === "function");

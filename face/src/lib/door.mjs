@@ -76,8 +76,17 @@ export class Door {
   constructor(opts = {}) {
     this.base = opts.base ?? "";
     this.token = opts.token ?? null;
+    // BOUND, not merely referenced.
+    //
+    // `globalThis.fetch` stored on an instance and called as `this.fetchImpl(...)` loses its
+    // receiver, and the browser throws "Failed to execute 'fetch' on 'Window': Illegal
+    // invocation". Node's fetch does not care, so every test here passed and the product was
+    // dead on arrival in a browser -- the failure only exists where the tests are not.
+    //
+    // Found by opening the page. Nothing in the type system or the node suite could have
+    // said it: this is the class that only a running browser reports.
     /** @type {typeof fetch} */
-    this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+    this.fetchImpl = opts.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
   /**
@@ -129,6 +138,14 @@ export class Door {
   pnl(signal) { return this.call("/api/pnl", { signal }); }
 
   /**
+   * A sanctioned file, by ID rather than by path. The door holds an ALLOW-LIST and answers
+   * UNKNOWN_FILE_ID for anything else, so the id set is the door's to define and this
+   * client's only job is not to invent one. Callers pass the id; nobody builds a path.
+   * @param {string} id @param {AbortSignal} [signal]
+   */
+  file(id, signal) { return this.call(`/api/file/${encodeURIComponent(id)}`, { signal }); }
+
+  /**
    * @param {{ since?: string, kind?: string, date?: string, limit?: number, asof?: string }} q
    * @param {AbortSignal} [signal]
    */
@@ -142,6 +159,19 @@ export class Door {
   /**
    * THE ONE WRITE. Deliberately not called `post` or `submit`: the name of this method is
    * the name of the act, and there is exactly one of them in the product.
+   *
+   * THE WIRE FIELD IS `verdict`, NOT `decision`.
+   *
+   * The first cut of this method sent `decision`, and `arc-dash.mjs` destructures
+   * `{ id, verdict, reason }` and refuses anything else with BAD_VERDICT. Every stamp in the
+   * product would have been refused, and nothing on this side of the wire could have noticed:
+   * the method is well-typed, the JSON is well-formed, and the failure only exists in the gap
+   * between two files. A cross-layer test now pins the field name against arc-dash's own
+   * source, so renaming it on either side fails loudly instead of silently.
+   *
+   * The ARGUMENT stays `decision` because that is what it is in English; only the wire name
+   * is the door's to choose.
+   *
    * @param {{ id: string, decision: "approve" | "reject", reason: string }} stamp
    */
   decide(stamp) {
@@ -150,7 +180,9 @@ export class Door {
     // and its BAD_REASON is the authority -- but because a round trip to be told the box was
     // empty is a worse experience than being told before the request leaves.
     if (!reason) throw new DoorError("BAD_REASON", "a reason is required, in your own words", 0);
-    return this.call("/api/decide", { method: "POST", body: { id: stamp.id, decision: stamp.decision, reason } });
+    if (stamp.decision !== "approve" && stamp.decision !== "reject")
+      throw new DoorError("BAD_VERDICT", `a stamp is approve or reject, not ${JSON.stringify(stamp.decision)}`, 0);
+    return this.call("/api/decide", { method: "POST", body: { id: stamp.id, verdict: stamp.decision, reason } });
   }
 
   /** @param {string} q */
