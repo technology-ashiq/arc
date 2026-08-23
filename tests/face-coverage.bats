@@ -20,13 +20,25 @@ load 'test_helper'
   # Counts derived in pure SHELL. An inline `node -e` interpolating $ARC_ROOT into a
   # file:// URL is how this suite already went red on the Windows leg alone; the shell
   # does not need the path escaped into a URL, so it cannot make that mistake.
-  local lanes cmds agents prods kinds
+  local lanes cmds agents prods kinds rules procs
   lanes=$(ls -d "$ARC_ROOT"/initiatives/*/ 2>/dev/null | wc -l | tr -d " ")
   cmds=$(ls "$ARC_ROOT"/.claude/commands/*.md 2>/dev/null | wc -l | tr -d " ")
   agents=$(ls "$ARC_ROOT"/.claude/agents/*.md 2>/dev/null | wc -l | tr -d " ")
   prods=$(ls -d "$ARC_ROOT"/products/*/ 2>/dev/null | wc -l | tr -d " ")
-  [[ "$output" == *"lanes, $cmds commands, $agents agents, $prods products -- all covered"* ]] || { echo "expected tree-derived counts (lanes=$lanes cmds=$cmds agents=$agents prods=$prods); got: $output"; false; }
+  # rules and processes joined the gate on 2026-08-23, when it turned out to be watching
+  # 5 of 11 inventories. Their counts are derived here the same way and for the same reason:
+  # a reader that returns nothing must not be able to print "all covered".
+  rules=$(ls "$ARC_ROOT"/.claude/rules/*.md 2>/dev/null | wc -l | tr -d " ")
+  procs=$(ls "$ARC_ROOT"/processes/*.process.yaml 2>/dev/null | wc -l | tr -d " ")
+  [[ "$output" == *"lanes, $cmds commands, $agents agents, $prods products, $rules rules, $procs processes,"* ]] || { echo "expected tree-derived counts (lanes=$lanes cmds=$cmds agents=$agents prods=$prods rules=$rules procs=$procs); got: $output"; false; }
   [[ "$output" == *" $lanes lanes,"* ]] || { echo "lane count is not the tree's $lanes: $output"; false; }
+  [[ "$output" == *"-- all covered"* ]] || { echo "$output"; false; }
+  # The 164 gates/hooks/rules/lints/processes/concepts rows the gate did NOT read until
+  # 2026-08-23. Floored, not pinned: the inventories grow, and a floor still kills the
+  # mutant that deletes the loop and prints 0.
+  local homed
+  homed=$(printf '%s\n' "$output" | sed -n 's/.*, \([0-9]\{1,\}\) homed contract rows.*/\1/p')
+  [ -n "$homed" ] && [ "$homed" -ge 150 ] || { echo "homed-rows count missing or implausible ($homed): $output"; false; }
   # The kinds count is read back off the line and floored, which kills the mutant that made
   # the kind reader return nothing and still printed "all covered".
   kinds=$(printf '%s\n' "$output" | sed -n 's/.*face-coverage: \([0-9]\{1,\}\) kinds.*/\1/p')
@@ -78,6 +90,15 @@ load 'test_helper'
   mkdir -p "$t/initiatives/face/contracts"
   cp -r "$ARC_ROOT/products" "$t/products"
   cp "$ARC_ROOT/initiatives/face/contracts/expected-set.json" "$t/initiatives/face/contracts/"
+  # room-copy.json and the generated registry travel with the contract from 2026-08-23:
+  # face-sections builds BOTH artifacts in one pass, so a tree missing the authored half
+  # exits 2 (could not read the inputs) instead of 1 (drift), and this negative arm would
+  # then pass for the wrong reason.
+  cp "$ARC_ROOT/initiatives/face/contracts/room-copy.json" "$t/initiatives/face/contracts/"
+  cp "$ARC_ROOT/initiatives/face/contracts/rooms.generated.json" "$t/initiatives/face/contracts/"
+  # Sanity: the tree is clean BEFORE the edit, so exit 1 below can only be the hand-edit.
+  run node "$ARC_ROOT/.claude/scripts/core/face-sections.mjs" "$t" --check
+  [ "$status" -eq 0 ] || { echo "tree2 did not start clean: $output"; false; }
   node -e "
     const fs=require('fs'); const f=process.argv[1]+'/products/hq/manifest.json';
     const m=JSON.parse(fs.readFileSync(f,'utf8')); m.face.room='hand-edited-room';
@@ -184,14 +205,4 @@ load 'test_helper'
   run node "$ARC_ROOT/.claude/scripts/core/face-sections.mjs" "$t" --check
   [ "$status" -eq 1 ] || { echo "expected exit 1 on a hand-edited registry; got $status: $output"; false; }
   [[ "$output" == *"rooms.generated.json"* ]] || { echo "$output"; false; }
-}
-
-@test "face-coverage watches all eleven inventories, not the original five" {
-  run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT"
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  # The six added 2026-08-23 were 164 contract rows nobody read. Assert the gate SAYS it
-  # read them -- a silent pass here is indistinguishable from the hole this closed.
-  [[ "$output" == *"rules"* ]] || { echo "no rules in the summary: $output"; false; }
-  [[ "$output" == *"processes"* ]] || { echo "no processes in the summary: $output"; false; }
-  [[ "$output" == *"homed contract rows"* ]] || { echo "no homed-rows count: $output"; false; }
 }
