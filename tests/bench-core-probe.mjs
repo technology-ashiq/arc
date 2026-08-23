@@ -386,7 +386,12 @@ function recordingsWithCost(name, inr) {
       if (v === null || typeof v !== "object") return;
       if (Array.isArray(v)) { v.forEach((el, i) => walk(el, `${path}[${i}]`)); return; }
       for (const [k, val] of Object.entries(v)) {
+        // KEY NAMES ARE CHECKED TOO. The substring version this replaced searched the whole
+        // serialised text, so `{"limit_7919": true}` was caught by accident; walking values alone
+        // would have dropped that. A ceiling in a key name is a leak exactly as a ceiling in a
+        // value is.
         if (/worst_case/.test(k)) leaks.push(`${path}.${k} (key)`);
+        for (const c of CEILINGS) if (String(k).includes(c)) leaks.push(`${path}.${k} (key)`);
         walk(val, `${path}.${k}`);
       }
     };

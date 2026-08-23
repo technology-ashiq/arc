@@ -442,6 +442,47 @@ YAML
   [[ "$output" == *"falling back to ./hermes"* ]] || { echo "the fallback loop was never entered: $output"; false; }
 }
 
+@test "ADR-0225 NEGATIVE CONTROL: a correctly-spelled, fully-termed fallback INTO the runtime DISPATCHES" {
+  # THE TEST THAT WOULD HAVE CAUGHT THE CRITICAL, and its absence is why the bug shipped. Every
+  # fixture around it asserts a REFUSAL: a row that fails to load without the four terms, a
+  # path-shaped fallback refused by name. Nothing asserted the complement -- that the configuration
+  # `router-row.mjs` was extended to POLICE actually works when it is correct.
+  #
+  # It did not. `fallbacks` aliased `routedRow.fallback`, and `fallbacks.shift()` mutated the router
+  # row itself; the grant check at the hop then rebuilt its chain from an array the shift had already
+  # emptied. So a fully-termed `fallback: [hermes]` was refused at the hop, with a message that
+  # MISSTATED router.yaml, after attempt 1 had spawned a driver and spent budget -- on exit 2, which
+  # ADR-0219 publishes as a PRE-dispatch operator error, and with no receipt at all.
+  cat > "$RT_ROOT/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes:
+  commit-msg-draft:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback:
+      - hermes
+    cap: L1-drafts
+    hosted: local
+    judge: ashiq
+    review_by: 2099-12-31
+YAML
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/grantspine"
+  mkdir -p "$ARC_SPINE_ROOT" "$BATS_TEST_TMPDIR/hdata"
+  export ARC_DRIVER_FAKE="$ARC_ROOT/tests/fixtures/engine/driver-fakes/driverfail"
+  export ARC_HERMES_DOCKER="$ARC_ROOT/tests/fixtures/engine/hermes/fake-docker.mjs"
+  export ARC_HERMES_FAKE_CASE="commit-clean"
+  export ARC_HERMES_IMAGE="nousresearch/hermes-agent@sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e"
+  export ARC_HERMES_DATA="$BATS_TEST_TMPDIR/hdata"
+  export ARC_HERMES_USAGE_FILE=""
+  run node "$(RUN)" --root "$RT_ROOT" --process commit-msg-draft --driver auto \
+    --input '{"classification":"external-ok","diff":"x"}'
+  # The primary driver faults, the chain is walked, and the runtime is REACHED rather than refused.
+  [[ "$output" == *"falling back to hermes"* ]] || { echo "the chain was not walked: $output"; false; }
+  [[ "$output" != *"does not grant the agent runtime"* ]] || { echo "a fully-termed fallback into the runtime was REFUSED at the hop: $output"; false; }
+}
+
 @test "ADR-0225: RUNTIME_DRIVERS names a driver that is actually installed" {
   # Nothing tied the hire set to the driver set or to what is on disk, so shipping a second agent
   # runtime and forgetting to add it to RUNTIME_DRIVERS would leave it needing no row, no cap, no
@@ -466,6 +507,6 @@ YAML
   # the fixed form; this one, written the same week in the same directory, carried the defeated one.
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "23" ] || { echo "expected 23 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "24" ] || { echo "expected 24 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

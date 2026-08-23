@@ -40,7 +40,21 @@ export const EXIT_DATA_BOUNDARY = 5;
  * "internal only" would be a false-positive generator, so neither form is a substring search over
  * arbitrary text.
  */
-const CLASSIFICATION_KEYS = new Set(["classification", "data-classification", "dataClassification"]);
+const CLASSIFICATION_KEYS = new Set(["classification", "data-classification", "dataclassification"]);
+
+/**
+ * KEYS ARE NORMALISED THE SAME WAY VALUES ARE, and the mismatch was a real false negative.
+ *
+ * The value set accepts `internal-only`, `internal_only` and `internalonly` — three spellings of
+ * one word — while the key set was matched EXACTLY. So `data_classification` (the snake_case the
+ * value set explicitly anticipates) and `Classification` (a capital letter) were both unrecognised,
+ * and on an uncapped class such a document reached a driver. A checker that normalises one side of
+ * a comparison and not the other is `validate one read, compare another` at the character level.
+ *
+ * Lowercase, and separators folded out: `data-classification`, `data_classification`,
+ * `dataClassification` and `DataClassification` all become `dataclassification`.
+ */
+const normKey = (k) => String(k).toLowerCase().replace(/[-_\s]/g, "");
 const INTERNAL_VALUES = new Set(["internal-only", "internal_only", "internalonly"]);
 const PLANTED_TOKEN = /\bARC-INTERNAL-ONLY\b/;
 
@@ -91,7 +105,7 @@ export function findInternalMarkers(doc) {
       for (const [k, val] of Object.entries(v)) {
         // The classification FIELD, checked by key rather than by value alone: a document whose
         // prose happens to contain the phrase is not a classified document.
-        if (CLASSIFICATION_KEYS.has(k) && typeof val === "string" && INTERNAL_VALUES.has(val.trim().toLowerCase())) {
+        if (CLASSIFICATION_KEYS.has(normKey(k)) && typeof val === "string" && INTERNAL_VALUES.has(val.trim().toLowerCase())) {
           found.push({ path: `${path}.${k}`, why: `declares itself ${val.trim()}` });
         }
         walk(val, `${path}.${k}`, depth + 1);
@@ -120,7 +134,7 @@ export function findInternalMarkers(doc) {
 export function declaresExternalOk(doc) {
   if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return false;
   for (const k of Object.keys(doc)) {
-    if (!CLASSIFICATION_KEYS.has(k)) continue;
+    if (!CLASSIFICATION_KEYS.has(normKey(k))) continue;
     const v = doc[k];
     if (typeof v === "string" && EXTERNAL_VALUES.has(v.trim().toLowerCase())) return true;
   }

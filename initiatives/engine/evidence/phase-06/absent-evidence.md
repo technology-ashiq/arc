@@ -66,14 +66,25 @@ it were the driver's output. **Not closed:** the bytes themselves. Fixing that m
 child as a Buffer through every driver, which is a change to the capture path rather than to the
 storage path, and it is not this phase's business.
 
-**Two branches are unreachable and therefore untested.** The empty-transcript marker, and the
-absence warning's own `text.length` condition, both require a driver that produces nothing on
-*either* stream. Once both streams are stored, no driver in the tree does: hermes writes banners to
-stderr on every dispatch and mock names its missing recording there even when it fails. Both are
-kept as defensive code and both are labelled in the source as unreachable, so that a later reader
-neither deletes them as dead nor writes a test that cannot pass. The mutant that removes the
-`text.length` guard therefore survives the suite — recorded rather than papered over with a test
-that would assert nothing.
+**~~Two branches are unreachable and therefore untested.~~ WRONG, and a code review reached both in
+one command.** The claim was that the empty-transcript marker and the absence warning's `text.length`
+condition need a driver producing nothing on *either* stream, and that no driver in the tree does —
+hermes writes banners to stderr, mock names its missing recording there.
+
+`--budget min=0.00002` kills the driver before it writes a byte. Both streams empty, the sentinel
+written, the warning correctly silent. **Proved in one command**, against a claim asserted from
+reading the drivers rather than from trying to reach the state — which is the same shape as the
+transcript directory nobody ran `ls` on, recorded four sections up in this very file.
+
+**Both branches are now covered** by two tests in `tests/engine-hermes-secrets.bats`: the empty
+marker is named `.empty.transcript.txt` and is NOT announced as a stored transcript, and the absence
+warning does not fire for a run that produced nothing to discard. The mutant that removes the
+`text.length` guard no longer survives.
+
+**The lesson is the one this cycle keeps paying for:** an unreachability claim is a claim about
+behaviour, and it belongs in a fixture or in a measurement. Writing "no driver in the tree does this"
+after reading the drivers is exactly as strong as writing "the transcript was stored" after writing
+the storage code.
 
 **A `wx` collision across PID namespaces is a warning, not a failure.** The filename carries the pid
 and a millisecond stamp; two arc-run processes in separate containerised CI legs sharing one

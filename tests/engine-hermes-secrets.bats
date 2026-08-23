@@ -482,7 +482,47 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   [ "$n" -ge 1 ] || { echo "no transcript was stored in $dir"; false; }
 }
 
-@test "suite: all 25 tests in this file are REGISTERED" {
+@test "REQ-03 STORAGE: an EMPTY transcript is named as such, so the count cannot be padded" {
+  # I CALLED THIS BRANCH UNREACHABLE AND A CODE REVIEW REACHED IT IN ONE COMMAND. A budget small
+  # enough to kill the driver before it writes a byte produces a run where BOTH streams are empty,
+  # which is exactly the state the sentinel exists for. The source comment and
+  # `evidence/phase-06/absent-evidence.md` both said no driver in the tree could produce it -- an
+  # unreachability claim asserted from reading rather than from trying, which is the same shape as
+  # the transcript directory nobody ran `ls` on.
+  #
+  # `absence means failure` was only half the property: presence came to mean nothing, because
+  # every quiet dispatch manufactured a file carrying one sentinel line while the stderr announced
+  # a transcript had been stored -- and the file COUNT is what a phase close reads.
+  unset ARC_RUN_TRANSCRIPT_DIR
+  local dir="$BATS_TEST_TMPDIR/empty-transcripts"
+  export ARC_DRIVER_FAKE="$ARC_ROOT/tests/fixtures/engine/driver-fakes/good"
+  run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
+    --process commit-msg-draft --driver claude-code --root "$GRANT_ROOT" --input "$PACK_INPUT" \
+    --budget min=0.00002 --transcript-dir "$dir"
+  # The run FAILS -- that is the point of the budget -- and what is asserted is the NAME of what
+  # got written, not the outcome.
+  local n; n="$(find "$dir" -type f -name '*.empty.transcript.txt' | wc -l | tr -d ' ')"
+  [ "$n" -ge 1 ] || { echo "an empty transcript was not marked empty: $(ls "$dir" 2>/dev/null) :: $output"; false; }
+  [[ "$output" == *"EMPTY transcript marker"* ]] || { echo "the log line claims a real transcript: $output"; false; }
+  [[ "$output" != *"stored the scrubbed"* ]] || { echo "an empty file was announced as a stored transcript: $output"; false; }
+}
+
+@test "REQ-03 LOUD ABSENCE NEGATIVE CONTROL: a run with NO output warns about nothing" {
+  # The other half of the same reachable state, and the mutant it kills: deleting the `text.length`
+  # guard from the absence warning makes it fire unconditionally. `absent-evidence.md` recorded that
+  # mutant as surviving "because the branch is unreachable". It is reachable, so it does not.
+  unset ARC_RUN_TRANSCRIPT_DIR
+  export ARC_DRIVER_FAKE="$ARC_ROOT/tests/fixtures/engine/driver-fakes/good"
+  run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" \
+    --process commit-msg-draft --driver claude-code --root "$GRANT_ROOT" --input "$PACK_INPUT" \
+    --budget min=0.00002
+  [[ "$output" != *"NO destination is set"* ]] || { echo "the absence warning fired for a run that produced nothing to discard: $output"; false; }
+  # Paired positive, so a crash cannot satisfy the line above: the run must have reached the driver
+  # and been stopped by the budget.
+  [[ "$output" == *"budget"* ]] || { echo "the run did not reach the budget line: $output"; false; }
+}
+
+@test "suite: all 27 tests in this file are REGISTERED" {
   # bats silently DROPS a @test whose name carries a non-ASCII character; five such tests in this
   # cycle never ran and never failed, and the only signal was the count falling on CI.
   # FIXED 2026-08-17 after an adversarial pass defeated the previous version, which counted
@@ -493,6 +533,6 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   # falls) and a silent removal (declared falls).
   declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "25" ] || { echo "expected 25 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "27" ] || { echo "expected 27 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

@@ -336,6 +336,13 @@ if (transcriptDirRaw) {
   // all fail to address it. Reserved device names are refused for the same reason
   // `.claude/rules/lanes.md` refuses them for lane directories: they pass every grammar and break
   // exactly one of the three CI legs. Evidence that exists and cannot be fetched is not evidence.
+  // BEFORE the component loop, not after it. Sitting below, this was unreachable for a space-only
+  // value: the loop's trailing-dot-or-space arm matched first and reported "a component ending in a
+  // dot or a space", so only a tab- or newline-only value ever reached the message written for it.
+  if (transcriptDirRaw.trim() === "") {
+    console.error(`arc-run: --transcript-dir ${JSON.stringify(transcriptDirRaw)} is only whitespace`);
+    process.exit(2);
+  }
   const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
   for (const part of transcriptDirRaw.split(/[\\/]+/)) {
     if (!part || part === "." || part === "..") continue;
@@ -349,12 +356,14 @@ if (transcriptDirRaw) {
       process.exit(2);
     }
   }
-  if (transcriptDirRaw.trim() === "") {
-    console.error(`arc-run: --transcript-dir ${JSON.stringify(transcriptDirRaw)} is only whitespace`);
-    process.exit(2);
-  }
   try {
-    mkdirSync(transcriptDirRaw, { recursive: true });
+    // A PREVIEW READS AND DOES NOT WRITE. `--dry-run --transcript-dir <new path>` created the tree,
+    // and so did a run against a process that does not exist -- a side effect from the one command
+    // whose whole promise is that nothing happens. `--work-root`, the comparison this block draws,
+    // only stats. On a dry run the destination is still RESOLVED and reported; it is simply not
+    // brought into existence.
+    if (!dryRun) mkdirSync(transcriptDirRaw, { recursive: true });
+    else if (!existsSync(transcriptDirRaw)) { transcriptDir = resolve(transcriptDirRaw); throw null; }
     const st = statSync(transcriptDirRaw);
     if (!st.isDirectory()) throw new Error("not a directory");
     // realpath, so a symlinked or junctioned destination is resolved to where the bytes actually
@@ -362,9 +371,12 @@ if (transcriptDirRaw) {
     // containment check computed on the lexical path can pass while the write goes elsewhere.
     transcriptDir = realpathSync(transcriptDirRaw);
   } catch (e) {
+    // `throw null` above is the dry-run short-circuit: the path is reported, not created.
+    if (e === null) { /* previewed, not created */ } else {
     console.error(`arc-run: --transcript-dir ${JSON.stringify(transcriptDirRaw)} cannot be used: ${e.message}`);
     console.error("         refusing before the driver starts -- a destination discovered after the dispatch has already cost the run");
     process.exit(2);
+    }
   }
 }
 
@@ -527,7 +539,14 @@ if (driverArg === "auto") {
   tier = row.tier;
   // `hosted` and `cap` are NOT read here -- they are properties of the row and are read above,
   // beside tenure, so they apply however the driver was chosen. See the comment there.
-  fallbacks = Array.isArray(row.fallback) ? row.fallback : [];
+  // A COPY, NEVER AN ALIAS. `row` IS `routedRow`, so this handed the fallback loop the row's own
+  // array -- and `fallbacks.shift()` then MUTATED the router row. The grant check at the hop
+  // rebuilds its chain from `routedRow.fallback`, by which time the entry it is looking for had
+  // been shifted out of it, so a correctly spelled, fully-termed `fallback: [hermes]` -- the exact
+  // configuration `router-row.mjs` was extended in this same change to police -- was refused at the
+  // hop with a message that MISSTATED router.yaml, after attempt 1 had already spawned a driver and
+  // spent budget. Found by a code review, proved end to end.
+  fallbacks = Array.isArray(row.fallback) ? [...row.fallback] : [];
 }
 /**
  * EVERY DRIVER SELECTION IS VALIDATED, INCLUDING A FALLBACK HOP (ADR-0225).
@@ -603,6 +622,23 @@ function validateDriverSelection(name, how) {
  * definition of "this is a hire", read by the loader and the dispatcher, so the two cannot drift.
  */
 validateDriverSelection(driver, "");
+
+// THE WHOLE CHAIN IS VALIDATED BEFORE THE FIRST ATTEMPT, not as each hop is taken.
+//
+// The hop check below is a backstop and stays one; this is where a bad chain actually belongs. A
+// fallback entry that is not a driver -- `./hermes`, `Hermes`, `../../../outside/evil` -- was
+// discovered only when the chain was walked, which is AFTER attempt 1 spawned a driver and spent
+// real budget, and `validateDriverSelection` exits 2 with no receipt. Exit 2 is published by
+// ADR-0219 as a PRE-DISPATCH operator error, so spending it mid-run was itself a contract
+// violation: a run that cost money left no `run.completed` behind.
+//
+// A row whose chain cannot be walked is a broken row, and a broken row fails before it routes --
+// the same argument `router-row.mjs` makes for the four terms failing at LOAD rather than at
+// dispatch, because a fault that only appears when someone happens to reach it sits wrong for as
+// long as nobody does.
+for (const entry of fallbacks) {
+  validateDriverSelection(String(entry ?? "").trim(), ` in \`${processName}\`'s fallback chain`);
+}
 
 // THE TIER MUST REACH THE DRIVER OR IT IS A LABEL. Without this the routed tier changed
 // nothing: `high-judgment` and `balanced-workhorse` produced byte-identical invocations, the
@@ -1246,6 +1282,13 @@ function invoke(name) {
   return {
     code: timedOut ? 124 : overflowed ? 125 : (res.status ?? 1),
     stdout: res.stdout ?? "", stderr: res.stderr ?? "", cost, timedOut, overflowed,
+    // `spawned` IS SET ON EVERY RETURN, not only on the two that skip the spawn. Marking the
+    // not-installed and policy-denied paths `false` and leaving this one undefined covered two of
+    // THREE ways a driver can fail to run: a `spawnSync` that never launches reports `res.error`
+    // with `status: null` and both streams empty, and the transcript writer then produced an
+    // `.empty` marker for an attempt where no process existed -- the exact count inflation the
+    // marker exists to prevent. `status === null` with an `error` is the launch failure.
+    spawned: !(res.error && res.status === null && !timedOut),
   };
 }
 
@@ -1356,12 +1399,12 @@ function storeTranscript(name, streams) {
     // and the stderr line announced a transcript had been stored. A count that a sentinel
     // satisfies is a count that cannot tell evidence from bookkeeping.
     //
-    // THIS BRANCH IS DEFENSIVE AND CURRENTLY UNREACHABLE, written down so nobody later deletes it
-    // as dead or writes a test that cannot pass. Once BOTH streams are stored, no driver in this
-    // tree produces an empty one: hermes writes its own banners to stderr on every dispatch, and
-    // mock names its missing recording there even when it fails. It stays because a future driver
-    // that is genuinely quiet must not become indistinguishable from an unwritable directory.
-    // Recorded as an unexercised path in evidence/phase-06/absent-evidence.md.
+    // I CALLED THIS BRANCH UNREACHABLE AND A CODE REVIEW REACHED IT IN ONE COMMAND:
+    // `--budget min=0.00002` kills the driver before it writes a byte, so both streams are empty.
+    // The claim had been reasoned from reading the drivers -- hermes writes banners, mock names its
+    // missing recording -- rather than from trying to produce the state, which is the same shape as
+    // asserting a transcript was stored because the storage code had just been written. Both this
+    // branch and the absence warning's `text.length` arm are covered by fixtures now.
     const empty = text.length === 0;
     const file = join(dir, `${safe}-${process.pid}-${stamp}${empty ? ".empty" : ""}.transcript.txt`);
 
@@ -1456,6 +1499,21 @@ if (dryRun) {
     console.log(`arc-run: would REFUSE \`${processName}\` — its route EXPIRED on ${String(expiredRow.row.review_by ?? "").trim()} (today is ${TODAY}).`);
     console.log(`         Re-justify \`classes.${processName}\` in engine/router.yaml with a new review_by, or retire the row.`);
     process.exit(1);
+  }
+  // AND THE DATA BOUNDARY, for the identical reason, one branch over. The tenure arm above was
+  // added because a preview that says "would run" for a dispatch that refuses is wrong in the
+  // reassuring direction -- and the boundary refusal, which sits a hundred lines below this block's
+  // `process.exit(0)`, was left doing exactly that. REQ-06 made it materially worse: every capped-
+  // row dispatch is now boundary-gated, so the one command a caller runs BEFORE spending money was
+  // the one that would not tell them their pack is unclassified. Found by a code review.
+  //
+  // The same `boundaryRefusal()` call, not a second copy -- REQ-06 is explicit that there is one
+  // confinement function and never two call sites that can drift.
+  const dryRefusal = boundaryRefusal({ input, processName, hosted, cap: routedCap });
+  if (dryRefusal) {
+    console.log(`arc-run: would REFUSE \`${processName}\` — ${dryRefusal.reason}`);
+    for (const m of dryRefusal.markers) console.log(`         ${m.path} ${m.why}`);
+    process.exit(dryRefusal.code);
   }
   console.log(`arc-run: would run \`${processName}\` on \`${driver}\`${tier ? ` (tier ${tier})` : ""}${fallbacks.length ? ` fallback ${fallbacks.join(" -> ")}` : ""}`);
   console.log(`         model ${effectiveModel ?? "unpinned"} (source: ${modelSource})`);
