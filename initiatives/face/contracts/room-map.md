@@ -204,6 +204,8 @@ inventory, because an arm that shares its neighbour's finding class proves nothi
 | a room cannot hold something its zones hide | `tests/face/l3-logic.mjs` | 260 checks; sweeps all 34 rooms and fails if any hold has no zone |
 | the door serves what the rooms need | `tests/face/dash-doors.mjs` | 76 checks, incl. `inventories` and `/api/lane/:name` phases |
 | the four empty stations carry rows | opened in a browser | board 14 ADR bands · scheduler 2 jobs · ventures 1 declared · strategy 24 plans · bench PHASES 6 |
+| every room still renders after the phase-09 changes | drove all 34 through the shell and measured each room column | **0 crashed**, 0 thin (median 978 chars of content, none under 400); `chat-mcp` draws on the Map |
+| the lint that guards the spine reader is not blind | traced its comment stripper over every file it scans | 15 token-bearing lines are blanked and **all 15 are prose inside real comments** — 0 code lines hidden. Two were hidden before 2026-08-24 |
 
 An earlier draft of this document asserted the manifest claim from `PROGRESS.md` and a
 `grep` for `^face:` that returned **zero** — because the sections are nested, not
