@@ -89,21 +89,27 @@ and the single same-tier retry were both observed on the hosted runtime; that th
 a *proposal receipt* is pinned by the suite and was not separately read off the spine for those three
 dispatches.
 
-## And one claim in this bundle was FALSE until today
+## And one claim in this bundle was FALSE, then its correction was false too
 
-`certification-run-01M07FX9ZAY3EHCQFKVVKA2RT7.md` stated that the run's scrubbed transcript was
-stored at `initiatives/engine/evidence/phase-06/transcripts/`. **That directory has never existed in
-this repository** — `git log --all` on the path returns nothing and `.gitignore:30` un-ignores it, so
-it is not an artifact written and then excluded. The claim is struck and corrected in that file.
+`certification-run-01M07FX9ZAY3EHCQFKVVKA2RT7.md` states that the run's scrubbed transcript was
+stored at `initiatives/engine/evidence/phase-06/transcripts/`.
 
-The cause is mechanical rather than careless, which is why it is fixed in code and not in prose:
-`storeTranscript` is opt-in on `ARC_RUN_TRANSCRIPT_DIR`, and a run that set nothing **discarded the
-transcript in complete silence**. The identical miss happened again the next day, on the three
-Phase 08 round-1 dispatches, and cost the one artifact that would have said whether a near-miss JSON
-shape was a prompt bug or a schema bug.
+**Round one, 2026-08-23 morning:** that was marked FALSE, on the evidence that `git log --all`
+returns nothing for the path and `.gitignore` does not exclude it.
 
-**Closed 2026-08-23:** `arc-run` takes `--transcript-dir PATH`, and a dispatch that produces a
-transcript with no destination configured **says so on stderr**. Six tests in
-`tests/engine-hermes-secrets.bats` pin both halves, including a negative control proving the warning
-is bound to the absence rather than printed unconditionally. Opt-in was never the defect — opting out
-being indistinguishable from having nothing to store was.
+**Round two, the same day:** the original sentence was **TRUE**. Ten transcripts were on disk in the
+MAIN CLONE, untracked — including three `attempt2` retries recorded as unrecoverable. *Stored* and
+*in the repository* are different questions, and git history answers only the second. They are
+committed here now, secret-scanned.
+
+**Three times in one cycle, a false statement about a mechanism has been corrected by another false
+statement about the same mechanism** — twice in the router's termination comment, once here. The
+shape is always the same: reason from a signal ADJACENT to the question instead of looking at the
+thing itself. One `ls` settles this one.
+
+**What was genuinely broken, and is now fixed:** storage was opt-in on `ARC_RUN_TRANSCRIPT_DIR`, so a
+run that set nothing discarded its transcript in complete silence — which is exactly what took the
+three Phase 08 round-1 dispatches on 2026-08-18, whose transcripts exist nowhere. `arc-run` takes
+`--transcript-dir PATH`, stores BOTH streams, and announces a discard when no destination is set.
+Nine tests in `tests/engine-hermes-secrets.bats` pin it, including a negative control proving the
+warning is bound to the absence rather than printed unconditionally.

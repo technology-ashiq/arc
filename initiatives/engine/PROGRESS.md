@@ -1,11 +1,11 @@
 # PROGRESS.md — Cycle 7 · arc-engine "The Hired Hands"
 
-status: LIVE
+status: IDLE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
-phase: 08
+phase: 08 (cycle closed)
 appetite: 12d
-burn: 8.5d
-blocked-on: external — REQ-07: three real dispatches, which need the MAIN CLONE and an owner pack approval
+burn: 9.5d
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -32,7 +32,7 @@ depends-on: —
 | 05 | The shim — `drivers/hermes` on the real 3-code contract, `drivers/mock` replay, two-surface adversarial pass on the output parser | 1.5 days | ✅ done 2026-08-17 |
 | 06 | **Certification or STOP** — 12 fixtures green against the real runtime with receipts, plus the scrubbed-transcript evidence path | 2 days | ✅ done 2026-08-23 |
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | ✅ done 2026-08-23 |
-| 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
+| 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | ✅ done 2026-08-24 |
 
 **CAP RAISED TO 12 DAYS BY OWNER RULING, 2026-08-23 — and the ruling was "no scope cut, finish every
 phase".** At 7.5 of 9.5 (79%) with phases 06, 07 and 08 still allocating 4.5 days, the arithmetic did
@@ -55,6 +55,32 @@ written as the smaller, true number. Kill checkpoint is read at **day 5**, not a
 on-track run is one that learns to be ignored.
 
 ## Done log
+
+- 2026-08-24 — **PHASE 08 CLOSED. CYCLE 7 CLOSED. 6/6 phases, 8/8 REQ validated.**
+  `amendments: 2` · `reopened: n`. **Actual vs appetite: 9.5 of 12 days, ~79%** — the cap was raised
+  twice and both times in writing (7.5 → 9.5 at the day-5 checkpoint, 9.5 → 12 when the owner ruled
+  no scope cut). Neither raise bought new scope; the two pre-decided cuts stayed cut.
+  - **THE HIRE WORKS.** Three owner-approved dispatches, three `run.completed` receipts, **zero
+    quarantined**, **one attempt each**, 35.8–40.7 s: `01M0QZQ1SSKTCHXAZQZ5WGG917`,
+    `01M0QZSMMXZ0G4K4WPACMMHP4P`, `01M0QZV7A96F29EBR0MMY51SZ1`. Counted from the spine, never from
+    the suite. **2 accepted, 1 rejected**, one line of reason each.
+  - **The 2026-08-18 round took two attempts per dispatch and produced nothing** because the driver
+    sent a process name and never the brief. With the brief arriving the ladder was not needed once.
+  - **The transcript half earned its keep on the first round it applied to** — three transcripts
+    stored automatically, both streams. That round lost its own because storage was opt-in.
+  - **REQ-06 and REQ-07 `active` → `validated`.** All eight REQs are now validated.
+  - **Seven stale inbox items cleared with reasons**, including three verdict requests for drafts
+    that were never produced and four tier escalations whose cause was never the tier.
+  - **The retro is five pattern rows**, all recurring within the cycle, led by a correction that was
+    itself false three times over.
+  - **Production receipts across 2026-08-12..24:** 38 `approval.requested`, 38 `run.completed`, 33
+    `decision.recorded`, 14 `phase.closed`. 20 hermes dispatches, 6 ok — 3 this round, 3 the
+    isolation probes that closed the confound. The engine was pushed, not pulled.
+  - **What this cycle does NOT claim.** Fixture 5 has no real-container arm; fixture 9's
+    proposal-receipt arm was never read off the spine for the real dispatches; a transcript cannot
+    be joined to a receipt id by filename; and all three drafts chose the same pack entry out of
+    five, which three runs cannot explain. Each is in `absent-evidence.md` or the round's own
+    evidence rather than smoothed away.
 
 - 2026-08-23 — **PHASE 06 AND PHASE 07 CLOSED TOGETHER.** `amendments: 2` (ADR-0225, and REQ-06's
   classification input) · `reopened: n`. **Actual vs appetite: Phase 06 budgeted 2 days and cost
@@ -236,6 +262,41 @@ on-track run is one that learns to be ignored.
     mark. Next engine cycle starts at **0221**.
 
 ## Now
+
+### MERGED, AND THE MERGED TREE VERIFIED — 2026-08-23
+
+PR **#217** squash-merged as **`761d4ae1`**. **CI on `main` at that SHA: 19/19, read per JOB**
+(`workflow_dispatch` run 32648119087). This repo's CI runs on PR and dispatch only, never on a push
+to `main` — so merging tests nothing and the dispatch is the evidence, not the merge.
+
+**The squash carried everything.** `git diff origin/main <branch-tip>` returns ten files and not one
+is engine's: they are `scheduler`'s and two ADRs that landed on `main` while this branch was open.
+A commit count is not a diff, which is why the diff was taken.
+
+**Phases 06 and 07 are CLOSED. Six of eight REQs validated.** What remains is Phase 08's REQ-07 —
+three real dispatches — and it is blocked on two things, both named rather than worked around: the
+**main clone**, because `.claude/state/` is gitignored and a linked worktree has its own empty spine
+that `arc-event` refuses by design, and an **owner pack approval**, because the `N=3` from
+2026-08-18 is spent and approving my own pack is precisely the self-authorising act POL-I exists to
+prevent. Runbook, pack, approval payload and input builder are all in place.
+
+**Two receipts are owed to the main clone and are not faked here:** `phase.closed` for 06 and 07.
+
+**A pattern sweep ran and found nothing, which is worth recording as a result rather than a
+silence.** The cycle non-negotiable says a fix is not applied until it has been attacked somewhere
+it was never made, so three of this session's defect shapes were grepped across the tree:
+
+- **alias-then-mutate** (`fallbacks = row.fallback`, then `shift()` eating the router row) — every
+  other `sort/pop/shift/splice` in `.claude/scripts/` runs on a freshly built array
+  (`readdirSync(...)`, `Object.keys(...)`, `.filter(...)`) or on a value that is only validated.
+  `arc-bench`'s ceiling table is read-only.
+- **a guard on one of N entry points** — the `--driver auto` branch now sets only `driver`, `tier`
+  and `fallbacks`, and each of those three IS routing. `hosted` and `cap` moved out today; tenure
+  moved out on 2026-08-17.
+- **a test pinned to a source SPELLING** — six exist, and five are structural invariants that are
+  *meant* to pin a spelling (the one confinement call site, the single redact import, the thin shell
+  wrapper, the emit path, `await canonicalDoc(processName)`). The fragile kind — a spelling used as
+  an ANCHOR to then check a behaviour — was the one that broke, and it is fixed.
 
 ### THE TRANSCRIPT WAS NEVER STORED, AND DELETING THE ROW NEVER TERMINATED THE HIRE — 2026-08-23
 

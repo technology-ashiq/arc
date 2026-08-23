@@ -1,12 +1,12 @@
 {
   "phase": "06",
-  "commit": "67991185afe192b9267571f260dbb5be7a217f0f",
-  "short": "67991185",
-  "generated": "2026-08-23T14:41:19Z",
+  "commit": "78a292b7a99a4f51885b10cbe96f1a4b74590f9a",
+  "short": "78a292b7",
+  "generated": "2026-08-23T17:52:22Z",
   "files": [
     {
       "name": "absent-evidence.md",
-      "sha256": "10ca48d09e970cab34dbfc726c1ce2aeb92b52c146a28449b9915de39a945ffe"
+      "sha256": "ecb701064e78dcad3ecd8fdff46024d7d540aba112525e77392276deb5ed3b16"
     },
     {
       "name": "adversarial-passes.md",
@@ -14,11 +14,11 @@
     },
     {
       "name": "certification-results-12-fixtures.md",
-      "sha256": "fb86845b8a6ab0612e2934a1832d8a439e7284ba88691588865b7d33eca00713"
+      "sha256": "d6a2cf8f53630338a32b10edb86cd96e40a68f23f751ba0cd4382135164549aa"
     },
     {
       "name": "certification-run-01M07FX9ZAY3EHCQFKVVKA2RT7.md",
-      "sha256": "e408960bba9d6ec3905ca7b8f58e1fdd904f21e773d1d2b17ddb63dd38841ee8"
+      "sha256": "cc25a822c1caad1281875519a9a1f2dc4f14a9b513d475fa47ed815e388a5c8a"
     },
     {
       "name": "egress-trail-fa0391a11c61.log",
@@ -51,6 +51,46 @@
     {
       "name": "runtime-answer-reliability.md",
       "sha256": "12812854813028a5e1afe0382b84fedf968e1ccda27020897f96f9b240b10365"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt1-16120-2026-08-17T14-03-38-941Z.transcript.txt",
+      "sha256": "4fc79ae2c9e3ee2454235fbc8a1e97c588544ea711192c1b36049d99ab6a17ca"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt1-2026-08-17T09-12-44-932Z.transcript.txt",
+      "sha256": "7ac6c7b2578edf5572bb819aa01e16fa11f76b3320e5c1585f2443e58fed2b0a"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt1-32172-2026-08-17T14-00-09-796Z.transcript.txt",
+      "sha256": "4fc79ae2c9e3ee2454235fbc8a1e97c588544ea711192c1b36049d99ab6a17ca"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt1-38372-2026-08-17T11-36-05-124Z.transcript.txt",
+      "sha256": "8738a8b7cc6c428a505b877da6f4e4d1b67ec4a8e8541835bd0d2a741f1b0a03"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt1-39184-2026-08-17T11-27-06-985Z.transcript.txt",
+      "sha256": "0e3c74f85f8591f84d5b66f7cf1ec2cf2813f9ce2a662e8a33b2660917e73504"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt1-48120-2026-08-17T20-23-33-695Z.transcript.txt",
+      "sha256": "c0cbf98ca9d1b7c3337fa6392040bb9d660bd0d26c5e84d587496765b98696c9"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt1-9036-2026-08-17T11-31-22-983Z.transcript.txt",
+      "sha256": "ccd6d4291d42bf1120a07c38efee07583a5c5ad29733b57102be8d2c806f8dd4"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt2-38372-2026-08-17T11-38-56-956Z.transcript.txt",
+      "sha256": "bc888ff9fe735bc2d72384727aedcbabf64905c5309bdd81178dde8c960bb89a"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt2-39184-2026-08-17T11-29-23-663Z.transcript.txt",
+      "sha256": "431559d92a5d7909b664de35b05cb0a9df726dbb371ed8bd7b9eea5692df17cc"
+    },
+    {
+      "name": "transcripts/commit-msg-draft-hermes-attempt2-9036-2026-08-17T11-33-37-231Z.transcript.txt",
+      "sha256": "6f3d379d1bece36f76928a58220fec4b09ba295a42fe368280bc59865fa8b012"
     }
   ]
 }
