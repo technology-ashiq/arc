@@ -301,3 +301,84 @@ _payload() { printf '{"tool_name":"%s","tool_input":%s}' "$1" "$2"; }
       <<< "$(_payload Read '{"file_path":".claude/state/design/renders/lexos-v1--variant-b/x.png"}')"
   [ "$status" -eq 0 ] || { echo "an unarmed boundary must not block, got $status: $output"; false; }
 }
+
+# ---------- 8. the bookends that ARM the boundary ----------
+#
+# The finding this section exists for: `grep -rn` across commands, skills, processes, hooks
+# and CI found ZERO production callers of composer-scope-check.sh --begin and ZERO of
+# design-explore.sh surfaces|coverage|selfreview. Nothing armed the marker, so the hook's
+# `[ -f "$MARKER" ] || exit 0` made it a permanent no-op outside these tests. Three gates
+# were built and none were wired into the explore flow -- and every slice was green on CI,
+# which is precisely the distinction between "the assertions held" and "the guard guards".
+#
+# The shape is design-critique.sh begin/finish, which already does this for the CRITIC.
+
+_explore_sh() { echo "$SANDBOX/.claude/scripts/design/design-explore.sh"; }
+_marker() { echo "$SANDBOX/.claude/state/design/composer-session"; }
+
+@test "compose: arming is a real command, and it leaves the boundary armed" {
+  _composer_sandbox
+  [ ! -f "$(_marker)" ]
+  run bash "$(_explore_sh)" compose lexos-v1 --variant a
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -f "$(_marker)" ] || { echo "compose ran and armed nothing: $output"; false; }
+  grep -q 'explore=lexos-v1' "$(_marker)"
+  grep -q 'variant=variant-a' "$(_marker)"
+}
+
+@test "compose: the armed boundary actually refuses a sibling, end to end" {
+  _composer_sandbox
+  # The whole point. Arming through the production command, refusing through the production
+  # dispatcher, on a stdin payload -- no test-only --begin anywhere in the chain.
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "$(_payload Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}')"
+  [ "$status" -eq 2 ] || { echo "armed by the real command and still not refusing: $status $output"; false; }
+}
+
+@test "compose: without --variant it refuses rather than arming something vague" {
+  _composer_sandbox
+  run bash "$(_explore_sh)" compose lexos-v1
+  [ "$status" -ne 0 ]
+  [ ! -f "$(_marker)" ] || { echo "refused and armed anyway: $output"; false; }
+}
+
+@test "compose: a variant that does not exist refuses" {
+  _composer_sandbox
+  run bash "$(_explore_sh)" compose lexos-v1 --variant zz
+  [ "$status" -ne 0 ]
+  [ ! -f "$(_marker)" ]
+}
+
+@test "compose-done: releases the boundary even when the gates FAIL" {
+  _composer_sandbox
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  # variant-a/index.html is "page a" -- no surface markers at all, so the surface gate fails.
+  run bash "$(_explore_sh)" compose-done lexos-v1 --variant a
+  [ "$status" -ne 0 ] || { echo "an unmarked page cleared the composer gates: $output"; false; }
+  # THE POINT OF THIS CASE. design-critique.sh releases first and unconditionally because a
+  # boundary left armed blocks every later read in the session for a reason nobody can see --
+  # and the session that needs to fix what the gate just found is the one it would block.
+  [ ! -f "$(_marker)" ] || { echo "the gates failed and the boundary stayed armed: $output"; false; }
+}
+
+@test "compose-done: a page that clears the gates reports success and releases" {
+  _composer_sandbox
+  cat > "$SANDBOX/$EX/variant-a/index.html" <<'EOF'
+<!doctype html><title>a</title>
+<main><section data-arc-surface="product"><h1>Matter 4821</h1></section></main>
+EOF
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  run bash "$(_explore_sh)" compose-done lexos-v1 --variant a
+  [ "$status" -eq 0 ] || { echo "a correctly marked page did not clear: $output"; false; }
+  [ ! -f "$(_marker)" ]
+}
+
+@test "compose-done: an absent page is refused, not skipped" {
+  _composer_sandbox
+  rm -f "$SANDBOX/$EX/variant-a/index.html"
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  run bash "$(_explore_sh)" compose-done lexos-v1 --variant a
+  [ "$status" -ne 0 ] || { echo "a composer that wrote nothing was reported as finished: $output"; false; }
+  [ ! -f "$(_marker)" ]
+}
