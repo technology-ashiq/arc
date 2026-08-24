@@ -243,11 +243,19 @@ EOF
 <!doctype html><title>x</title>
 <main><section data-arc-surface="product"><h1>Matter</h1></section></main>
 EOF
-  mkdir -p "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a"
+  # The filenames the RENDERER emits, not two letters of convenience. This fixture used to be
+  # d.json and m.json -- names design-render.sh could not produce -- so the gate read green
+  # against a shape production never makes. It could not have produced them either: the output
+  # path carried no viewport component at all, so a second render overwrote the first and two
+  # metas could not coexist in one session. Writing the real names keeps this fixture honest,
+  # and design-render-session.bats proves separately that the renderer emits them.
+  SR="$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a"
+  SL="docs--design--explore--lexos-v1--variant-a--index-html"
+  mkdir -p "$SR"
   printf '{\n  "route": "docs/design/explore/lexos-v1/variant-a/index.html",\n  "viewport": "1440x900@1",\n  "session": "lexos-v1--variant-a"\n}\n' \
-    > "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a/d.json"
+    > "$SR/$SL--1440x900.json"
   printf '{\n  "route": "docs/design/explore/lexos-v1/variant-a/index.html",\n  "viewport": "390x844@1",\n  "session": "lexos-v1--variant-a"\n}\n' \
-    > "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a/m.json"
+    > "$SR/$SL--390x844.json"
   run bash "$(_explore)" coverage lexos-v1 --brief "$BRIEF"
   [ "$status" -eq 0 ]
 }

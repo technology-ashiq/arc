@@ -81,14 +81,14 @@ teardown() { _arc_teardown; }
   mkdir -p "$RENDERS"
   FAKE_AB_SHOTS="Z Z" run bash "$(_rs)" docs/one.html --mode explore --session s1
   [ "$status" -eq 0 ]
-  local sha; sha="$(grep -o '"screenshot_sha256": "[^"]*"' "$RENDERS/s1/docs--one-html.json" | cut -d'"' -f4)"
+  local sha; sha="$(grep -o '"screenshot_sha256": "[^"]*"' "$RENDERS/s1/docs--one-html--1440x900.json" | cut -d'"' -f4)"
   printf '{\n  "route": "docs/two.html",\n  "screenshot_sha256": "%s",\n  "viewport": "1440x900@1",\n  "recipe": "x"\n}\n' \
     "$sha" > "$RENDERS/docs--two-html.json"
   # docs/three.html renders to the SAME pixels as the planted meta. It must hit the
   # session-less refusal, not the different-route one -- so the only same-sha meta reachable
   # is the planted flat one. (The earlier version left s1's meta matching too, and passed
   # only because `legacy` sorts before `s1`.)
-  rm -f "$RENDERS/s1/docs--one-html.json"
+  rm -f "$RENDERS/s1/docs--one-html--1440x900.json"
   _reset_shots
   FAKE_AB_SHOTS="Z Z" run bash "$(_rs)" docs/three.html --mode explore --session s2
   [ "$status" -eq 1 ]
@@ -104,9 +104,9 @@ teardown() { _arc_teardown; }
   _reset_shots
   FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/one.html --mode explore --session s1 --iter 2
   [ "$status" -eq 0 ]
-  [ -f "$RENDERS/s1/docs--one-html--iter-2.png" ]
-  grep -q '"unchanged": true' "$RENDERS/s1/docs--one-html--iter-2.json"
-  [ -f "$RENDERS/s1/docs--one-html--iter-1.png" ]
+  [ -f "$RENDERS/s1/docs--one-html--1440x900--iter-2.png" ]
+  grep -q '"unchanged": true' "$RENDERS/s1/docs--one-html--1440x900--iter-2.json"
+  [ -f "$RENDERS/s1/docs--one-html--1440x900--iter-1.png" ]
 }
 
 @test "a REVERT is not unchanged: iter-3 back to iter-1's pixels reports changed" {
@@ -119,11 +119,11 @@ teardown() { _arc_teardown; }
   _reset_shots
   FAKE_AB_SHOTS="B B" run bash "$(_rs)" docs/one.html --mode explore --session s1 --iter 2
   [ "$status" -eq 0 ]
-  grep -q '"unchanged": false' "$RENDERS/s1/docs--one-html--iter-2.json"
+  grep -q '"unchanged": false' "$RENDERS/s1/docs--one-html--1440x900--iter-2.json"
   _reset_shots
   FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/one.html --mode explore --session s1 --iter 3
   [ "$status" -eq 0 ]
-  grep -q '"unchanged": false' "$RENDERS/s1/docs--one-html--iter-3.json"
+  grep -q '"unchanged": false' "$RENDERS/s1/docs--one-html--1440x900--iter-3.json"
 }
 
 @test "cross-route-duplicate: two different routes with identical pixels REFUSE as case 1" {
@@ -136,7 +136,7 @@ teardown() { _arc_teardown; }
   # Distinguish case 1 from case 3: both say "already recorded for", so assert the clause
   # only case 1 carries.
   echo "$output" | grep -q "Two routes cannot render identically"
-  [ ! -f "$RENDERS/s1/docs--two-html.png" ]
+  [ ! -f "$RENDERS/s1/docs--two-html--1440x900.png" ]
 }
 
 @test "cross-session-same-route: one route rendered identically under a fresh session REFUSES" {
@@ -239,7 +239,7 @@ teardown() { _arc_teardown; }
   _session_sandbox
   FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/one.html --mode explore --session s1 --iter 1
   [ "$status" -eq 0 ]
-  local m="$RENDERS/s1/docs--one-html--iter-1.json"
+  local m="$RENDERS/s1/docs--one-html--1440x900--iter-1.json"
   grep -q '"session": "s1"'    "$m"
   grep -q '"iter": 1'          "$m"
   grep -q '"unchanged": false' "$m"

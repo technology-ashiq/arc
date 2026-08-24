@@ -338,13 +338,43 @@ case "$CMD" in
       # which one wins differs between ubuntu, macOS and Git Bash, so one manifest passes on
       # one leg and fails on another. design-render.sh already refuses when more than one line
       # matches; same lesson, now carried. Ambiguity is a refusal, never a pick.
+      # Read the pixel WIDTH out of a meta's "viewport": "1440x900@1" line. Same tr -d '\r'
+      # and same whole-line anchoring as _sha_of above, for the same reason.
+      _vw_of() {
+        tr -d '\r' < "$1" 2>/dev/null \
+          | sed -n 's/^[[:space:]]*"viewport": "\([0-9][0-9]*\)x[0-9][0-9]*@.*$/\1/p' | head -1
+      }
+      # ONE meta per iteration -- but "one" stopped meaning "one file" when the renderer began
+      # writing a viewport component, which ADR-1403 requires: desktop and mobile in a single
+      # iteration are two metas and NEITHER is a decoy.
+      #
+      # Refusing on any multiple was right while a second file could only be a second ROUTE
+      # (the `ls | head -1` defect: LC_COLLATE decided the comparison, so a manifest passed on
+      # one OS leg and failed on another). It is wrong now, and the fix is not "pick one" --
+      # it is answering what a self-review row CLAIMS about. The row is the composer's judgment
+      # on the page it designed, so it claims about the primary surface: the WIDEST viewport of
+      # that iteration. coverage separately proves the narrow surface was rendered at all.
+      #
+      # Two metas at the SAME width is the original defect unchanged -- two routes in one
+      # session -- and still refuses. Resolving the viewport case must not resolve that one.
       _meta_for() {
-        _mf_n=0; _mf_hit=""
+        _mf_n=0; _mf_hit=""; _mf_w=-1; _mf_tie=0
         for _mf in "$sess"/*--iter-"$1".json; do
           [ -f "$_mf" ] || continue
-          _mf_n=$((_mf_n + 1)); _mf_hit="$_mf"
+          _mf_n=$((_mf_n + 1))
+          _mf_this="$(_vw_of "$_mf")"
+          # A meta with no readable viewport cannot be ranked, so it can never win on width.
+          # Treated as width 0 rather than skipped: it still COUNTS, so two unreadable metas
+          # tie at 0 and refuse instead of quietly leaving one candidate standing.
+          [ -n "$_mf_this" ] || _mf_this=0
+          if [ "$_mf_this" -gt "$_mf_w" ] 2>/dev/null; then
+            _mf_w="$_mf_this"; _mf_hit="$_mf"; _mf_tie=0
+          elif [ "$_mf_this" -eq "$_mf_w" ] 2>/dev/null; then
+            _mf_tie=1
+          fi
         done
-        [ "$_mf_n" -eq 1 ] || { [ "$_mf_n" -eq 0 ] && return 1; echo "AMBIGUOUS"; return 0; }
+        [ "$_mf_n" -eq 0 ] && return 1
+        [ "$_mf_tie" -eq 0 ] || { echo "AMBIGUOUS"; return 0; }
         printf '%s' "$_mf_hit"
       }
 

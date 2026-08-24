@@ -161,8 +161,22 @@ RENDER_ROOT="$ROOT/.claude/state/design/renders"
 OUT_DIR="$RENDER_ROOT/$SESSION"
 # Iteration outputs are immutable: iter-2 never overwrites iter-1, which is what makes
 # "iteration 2 fixed what iteration 1 found" provable from the shas rather than narrated.
+#
+# The VIEWPORT is part of that immutability in explore mode, and its absence made ADR-1403
+# unsatisfiable. coverage requires every viewport the brief DECLARES to have been rendered and
+# proves it by reading the viewport field out of every meta in the session -- but with the path
+# keyed on slug and iteration alone, rendering one route at 1440x900 and then at 390x844 wrote
+# the second straight over the first. Only the last viewport ever survived, so coverage could
+# never see two, and the gate's own passing fixture hand-wrote filenames this script cannot
+# emit. A requirement nothing can satisfy is not a requirement.
+#
+# CRITIQUE MODE DELIBERATELY DOES NOT MOVE. design-critique.sh builds
+# renders/design-critic/<slug>.json as a fixed literal and READS it; Phase 00's done-log
+# records that the caller sweep's twin was in consumption rather than invocation, and this is
+# that same seam. Critique renders one viewport per route, so it has nothing to disambiguate.
 BASE="$SLUG"
-[ -n "$ITER" ] && BASE="$SLUG--iter-$ITER"
+[ "$MODE" = "explore" ] && BASE="$BASE--${VW}x${VH}"
+[ -n "$ITER" ] && BASE="$BASE--iter-$ITER"
 PNG="$OUT_DIR/$BASE.png"
 META="$OUT_DIR/$BASE.json"
 # mkdir deliberately NOT here: it used to run before the route-existence check, so every
