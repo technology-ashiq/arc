@@ -340,6 +340,12 @@ _marker() { echo "$SANDBOX/.claude/state/design/composer-session"; }
   _composer_sandbox
   run bash "$(_explore_sh)" compose lexos-v1
   [ "$status" -ne 0 ]
+  # The refusal must name the MISSING FLAG. Asserting only a non-zero exit passes just as
+  # happily against a script with no compose subcommand at all -- which is precisely what it
+  # did on the red-first run, where this case sat green among five genuine reds. A refusal
+  # test cannot be red-first by construction, so the message is what separates "refused
+  # correctly" from "was never there".
+  echo "$output" | grep -q -- "--variant" || { echo "refused, but not for the missing flag: $output"; false; }
   [ ! -f "$(_marker)" ] || { echo "refused and armed anyway: $output"; false; }
 }
 
@@ -347,6 +353,9 @@ _marker() { echo "$SANDBOX/.claude/state/design/composer-session"; }
   _composer_sandbox
   run bash "$(_explore_sh)" compose lexos-v1 --variant zz
   [ "$status" -ne 0 ]
+  # Same reasoning as above: name the variant, so "no variant-zz" cannot be confused with
+  # "no such command".
+  echo "$output" | grep -q "zz" || { echo "refused without naming the variant: $output"; false; }
   [ ! -f "$(_marker)" ]
 }
 

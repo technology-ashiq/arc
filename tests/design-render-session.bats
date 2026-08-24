@@ -347,3 +347,60 @@ teardown() { _arc_teardown; }
   [ "$a" = "$b" ]
   [ "$b" = "$c" ]
 }
+
+# ---------- the viewport was never in the path (adversarial pass, 2026-08-24) ----------
+#
+# ADR-1403 makes the brief's platform contract load-bearing: coverage requires every DECLARED
+# viewport to have been rendered, and it proves that by reading the `viewport` field out of
+# every meta under renders/<id>--variant-<v>/. The output path, though, is keyed on the slug
+# and the iteration and NOTHING else -- so rendering one route at 1440x900 and then at 390x844
+# inside one session writes the second over the first, PNG and meta both. Only the last
+# viewport survives, coverage can never see two, and the requirement is unsatisfiable by
+# anything this script can emit.
+#
+# The passing coverage fixture hand-wrote `d.json` and `m.json`, filenames the renderer cannot
+# produce, so it was green against a shape production never makes. That is the failure this
+# section is really about: not the missing component, but a gate proved against invented input.
+#
+# CRITIQUE MODE MUST NOT MOVE. design-critique.sh reads a fixed literal --
+# renders/design-critic/<slug>.json -- and Phase 00's own done-log records that the caller
+# sweep's twin was in CONSUMPTION, not invocation. So the component is added in explore mode,
+# where --session is already mandatory and multiple viewports are the whole point.
+
+@test "explore: two viewports of ONE route in one session both survive" {
+  _session_sandbox
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/one.html --mode explore --session s1 --iter 1 --viewport 1440x900
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _reset_shots
+  FAKE_AB_SHOTS="B B" run bash "$(_rs)" docs/one.html --mode explore --session s1 --iter 1 --viewport 390x844
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Two metas, two PNGs, both readable. Counted rather than named, so this case states the
+  # REQUIREMENT (both survive) and not one particular spelling of the filename.
+  n="$(ls "$RENDERS/s1"/*--iter-1.json 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$n" -eq 2 ] || { echo "expected 2 iter-1 metas, one per viewport, got $n: $(ls "$RENDERS/s1" 2>/dev/null)"; false; }
+  # And they describe DIFFERENT viewports -- two files that both say 1440x900 would be the
+  # same bug wearing two names.
+  vp="$(cat "$RENDERS/s1"/*--iter-1.json | grep -o '"viewport": "[^"]*"' | sort -u | wc -l | tr -d ' ')"
+  [ "$vp" -eq 2 ] || { echo "two metas but not two viewports: $(cat "$RENDERS/s1"/*--iter-1.json | grep -o '\"viewport\": \"[^\"]*\"')"; false; }
+}
+
+@test "explore: the second viewport does not overwrite the first PNG either" {
+  _session_sandbox
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/one.html --mode explore --session s1 --iter 1 --viewport 1440x900
+  _reset_shots
+  FAKE_AB_SHOTS="B B" run bash "$(_rs)" docs/one.html --mode explore --session s1 --iter 1 --viewport 390x844
+  n="$(ls "$RENDERS/s1"/*--iter-1.png 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$n" -eq 2 ] || { echo "expected 2 iter-1 PNGs, got $n: $(ls "$RENDERS/s1" 2>/dev/null)"; false; }
+}
+
+@test "critique mode keeps the fixed literal path design-critique.sh reads" {
+  _session_sandbox
+  # The consumption half of the caller sweep, pinned. design-critique.sh builds
+  # renders/design-critic/<slug>.json by hand; if the explore-mode change leaks into critique
+  # mode, that read silently finds nothing and the critic judges a stale file or none at all.
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/one.html
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -f "$RENDERS/design-critic/docs--one-html.json" ] || {
+    echo "critique output moved: $(ls "$RENDERS/design-critic" 2>/dev/null)"; false; }
+  [ -f "$RENDERS/design-critic/docs--one-html.png" ]
+}

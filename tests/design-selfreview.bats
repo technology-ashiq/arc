@@ -209,3 +209,64 @@ EOF
   _sr
   [ "$status" -eq 0 ]
 }
+
+# ---------- two viewports per iteration (adversarial pass, 2026-08-24) ----------
+#
+# _meta_for globs "$sess"/*--iter-N.json and REFUSES when more than one file matches. That
+# refusal is itself a fix from the previous pass: `ls | head -1` picked by LC_COLLATE, so a
+# session holding a second route compared the wrong meta and WHICH one differed per OS leg.
+# Ambiguity became a refusal, correctly.
+#
+# It stops being correct the moment the renderer starts writing a viewport component, which
+# REQ-03 requires: one route rendered at desktop and at mobile inside one iteration is TWO
+# metas, and neither of them is a decoy. So the question this section answers is not "which
+# file" but "what is a self-review row CLAIMING about", and the answer is the primary surface
+# -- the widest viewport rendered for that iteration. The composer's own review is about the
+# page it designed; coverage separately proves the mobile surface was rendered at all.
+#
+# Genuine ambiguity -- two metas at the SAME viewport, which means two different routes -- must
+# still refuse. Resolving the viewport case must not quietly resolve that one too.
+
+# A render meta at an explicit viewport, written to the name the renderer will emit once the
+# viewport is part of the path.
+_meta_vp() {
+  printf '{\n  "route": "docs/design/explore/%s/variant-%s/index.html",\n  "screenshot_sha256": "%s",\n  "viewport": "%s@1",\n  "session": "%s--variant-%s",\n  "iter": %s,\n  "unchanged": false\n}\n' \
+    "$ID" "$V" "$3" "$2" "$ID" "$V" "$1" > "$SESS/$SLUG--$2--iter-$1.json"
+}
+
+@test "selfreview: desktop and mobile in one iteration -- the row claims the WIDEST" {
+  _sr_sandbox
+  _meta_vp 1 1440x900 "$A_SHA"
+  _meta_vp 1 390x844  "$C_SHA"
+  _meta_vp 2 1440x900 "$B_SHA"
+  _meta_vp 2 390x844  "$C_SHA"
+  _manifest <<EOF
+## Self-review
+
+| iter | input | output | defect | revision |
+|---|---|---|---|---|
+| 2 | $A_SHA | $B_SHA | the primary action sat below the fold | moved the action bar above the summary block |
+EOF
+  _sr
+  [ "$status" -eq 0 ] || { echo "two viewports read as ambiguity: $output"; false; }
+}
+
+@test "selfreview: two metas at the SAME viewport is still ambiguous and still refuses" {
+  _sr_sandbox
+  # The control that keeps the previous pass's fix alive. Same viewport, same iteration means
+  # two ROUTES in one session -- the decoy case -- and picking either one is the LC_COLLATE
+  # bug returning under a new name.
+  _meta_vp 1 1440x900 "$A_SHA"
+  _meta_vp 2 1440x900 "$B_SHA"
+  printf '{\n  "screenshot_sha256": "%s",\n  "viewport": "1440x900@1",\n  "iter": 2\n}\n' \
+    "$C_SHA" > "$SESS/some--other--route--1440x900--iter-2.json"
+  _manifest <<EOF
+## Self-review
+
+| iter | input | output | defect | revision |
+|---|---|---|---|---|
+| 2 | $A_SHA | $B_SHA | the primary action sat below the fold | moved the action bar above the summary block |
+EOF
+  _sr
+  [ "$status" -ne 0 ] || { echo "a genuine decoy was silently picked past: $output"; false; }
+}
