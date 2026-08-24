@@ -125,11 +125,33 @@ file is outside what this session may edit. Until it moves, Grep and Glob never 
 dispatcher and `L2`'s script-side fix is unreachable in production. Two cases are left RED
 naming exactly that, and on the fix run they were the **only** failures on any leg.
 
-**Next step:** the second two-surface adversarial pass by fresh agents — everything above is new
-code, and this lane's rule is that a fix is not applied until it has been attacked somewhere it
-was never made. The attacker prompt carries the closed list in
-[`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md) with the
-standing instruction to check each defect in every OTHER file.
+**Update 2026-08-25 — the second adversarial pass RAN, and it was the expensive one.** Two fresh
+agents on different surfaces returned **16 CONFIRMED findings and 2 surviving mutants**, all
+executed against the real scripts. Both found the `NF=8` defect independently. All 16 are closed
+(`e1f24c93`, `55b3af56`, `24be889a`, `2c2481e6`).
+
+Two of them said the *design* was wrong, not a line:
+
+- **the read boundary was a single global marker** while explore mode runs three composers, so
+  the last `--begin` won for everybody: composer a was allowed to read variant-b and refused its
+  own directory. Now per-composer, `--end` names what it releases, and more than one armed is a
+  refusal — a filesystem marker cannot tell which composer is calling, so the honest contract is
+  serial composition and the gate says so.
+- **the composer held unbounded `Write` with no write boundary at all**, so it rewrote the marker
+  that constrains it and then read the sibling. `composer-write-check.sh` +
+  `PreToolUse-edit.d/11-design-composer.sh` now scope composer writes to its own variant dir,
+  naming the marker and the guard as escapes rather than ordinary mistakes.
+
+**Phase 02 has started** (it depends on phase-00, not phase-01). Slice A is in: `design.sources.yaml`
+with ADR-1412's eight rows, `design-sources-lint.mjs` as the permission gate, verified with a
+control plus one mutant per invalid-field class. Registry deliberately does **not** ship to
+consumer projects — it carries the owner's approvals.
+
+**Next step:** read CI per JOB at `2c2481e6` (a run was in flight when the session ended), then
+Phase 02 Slice B — the `design-curator` agent at balanced-workhorse citing ADR-0069, the
+robots.txt preflight, and the fetch interface + fake. Open findings and the running defect list
+for the next attacker prompt are in
+[`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md).
 
 **Owner items running in parallel** (none block Phase 00):
 - ~~merge PR #61~~ — **already merged 2026-07-29**; no action outstanding.
