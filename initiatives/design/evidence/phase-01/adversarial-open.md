@@ -43,6 +43,42 @@ ubuntu-22 job and macOS shard 2/3.
 the CLOSED column above is new code, and this lane's rule is that a fix is not applied until it
 has been attacked somewhere it was never made.
 
+### Carried into that pass: EINTR on a gate's own output
+
+Seen once on `20f56454`, macOS shard 1/3, in **another lane's** gate:
+
+```
+pii-tripwire: VIOLATION resolved store path in a tracked file
+  file: .claude/scripts/leads/cfg.mjs:1
+.claude/scripts/leads/pii-tripwire.sh: line 79: printf: write error: Interrupted system call
+```
+
+The tripwire **detected the violation correctly and printed it**. The `printf` was then
+interrupted by a signal, and the run ended with that write failure instead of the intended
+exit 2, so the test asserting `status -eq 2` failed. It reads as a flake and it is not one in
+the way that word usually means: a gate whose exit code can be decided by an interrupted write
+is a gate that can be walked past at exactly the wrong moment. Detection was never the weak
+part.
+
+**The mechanism, checked rather than assumed.** `pii-tripwire.sh` runs `set -euo pipefail`, and
+the interrupted `printf` lives inside its `report()` function. With `-e`, a failed `printf`
+aborts the script then and there, carrying its own status — the scan never reaches the exit that
+would have said 2.
+
+My first note here claimed the same exposure was in the code this phase shipped. **That was
+wrong, and checking it is the only reason I know.** `design-explore.sh`,
+`composer-scope-check.sh` and `design-render.sh` all run `set -uo pipefail` with **no `-e`**, and
+every refusal path writes to stderr and then reaches an `exit 2` / `exit 0` on its own line — an
+interrupted write there is discarded, because the exit status comes from the explicit `exit` and
+not from the last command that happened to run. The exposure needs BOTH halves: output that can
+be interrupted, and `-e` (or a bare fall-through) letting that interruption decide the status.
+
+Carried into the next pass as a named class anyway, because "not exposed today" is a fact about
+today: *can any gate in this lane be made to report the wrong exit status by interrupting its
+output?* — and specifically, does any path here end on a command's status rather than on an
+explicit `exit`. Not fixed for leads: that lane runs in its own flow, and one lane does not
+patch another's gate over a single transient.
+
 ---
 
 ## The headline: the three gates are INERT
