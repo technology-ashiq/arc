@@ -110,9 +110,26 @@ while `ui-composer` also holds `Grep` and `Glob` (this is the kickoff assumption
 is opt-in; and the renderer's output path carries no viewport, which makes `coverage`
 unsatisfiable by anything it can write.
 
-**Next step:** wire the three gates into the explore flow — that is what turns the rest of the
-list from "untested" into "testable against the path production actually uses". Then the second
-two-surface adversarial pass, because every one of those fixes is new code.
+**Update 2026-08-24.** Six of the seven findings are closed, each red-first on CI and then green:
+`L1` the gates get a caller (`design-explore.sh compose` / `compose-done`, on the
+`design-critique.sh begin/finish` pattern), `L2` the scope check reads `tool_name` so an
+unscoped `Grep`/`Glob` fails closed while a malformed `Read` still fails open, `L3`/`S2` the
+suite now drives the real dispatcher on stdin, `L4` a page declaring no surface at all is
+refused, `L5` iteration receipts with no `self-review/` are a contradiction rather than a pass,
+`S3` the viewport joins the explore render path and a self-review row claims about the widest
+viewport, `S4` `render` writes where the gates read.
+
+**One row is blocked and is the owner's:** `.claude/settings.json` must change
+`"matcher": "Read"` to `"matcher": "Read|Grep|Glob"` on the `PreToolUse-read.sh` entry. That
+file is outside what this session may edit. Until it moves, Grep and Glob never reach the
+dispatcher and `L2`'s script-side fix is unreachable in production. Two cases are left RED
+naming exactly that, and on the fix run they were the **only** failures on any leg.
+
+**Next step:** the second two-surface adversarial pass by fresh agents — everything above is new
+code, and this lane's rule is that a fix is not applied until it has been attacked somewhere it
+was never made. The attacker prompt carries the closed list in
+[`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md) with the
+standing instruction to check each defect in every OTHER file.
 
 **Owner items running in parallel** (none block Phase 00):
 - ~~merge PR #61~~ — **already merged 2026-07-29**; no action outstanding.

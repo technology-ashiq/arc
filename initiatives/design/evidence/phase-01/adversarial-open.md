@@ -11,6 +11,40 @@ first, or by being accepted in writing with a reason. Nothing leaves it by being
 
 ---
 
+## Where this stands, 2026-08-24
+
+| # | Finding | State | Proof |
+|---|---|---|---|
+| L1 | the three gates are inert | **CLOSED** | red at `f100c1dc`, green at `4f720557` |
+| L2 | boundary covers `Read` while the agent holds three tools — *script side* | **CLOSED** | red at `691fb5b4`, green at `4f720557` |
+| L2 | *wiring side* — `settings.json` matches `Read` alone | **BLOCKED — owner** | red, deliberately left red |
+| L3 / S2 | the scope suite drove argv while production sends stdin | **CLOSED** | regression pins green at `4f720557` |
+| S2b | `policy-hook.bats` never listed `Read`/`Grep`/`Glob` | **PARTIAL** | `Read` green; `Grep`/`Glob` red behind the owner row |
+| L4 | `--surfaces` only checked `<section>` | **CLOSED** | red at `691fb5b4`, green at `4f720557` |
+| L5 | `selfreview` was opt-in | **CLOSED** | red at `691fb5b4`, green at `4f720557` |
+| S3 | the renderer's output path carried no viewport | **fix written**, red pushed at `20f56454` | |
+| S4 | `render` wrote where no gate reads | **CLOSED** | red at `691fb5b4`, green at `4f720557` |
+| S12a/c/d | the three minors | **open, batched** | — |
+
+**The one blocked row, stated plainly.** `.claude/settings.json` is outside what this session is
+permitted to edit; two layers refuse it, and that refusal is deliberate rather than a bug to
+route around. Until its `PreToolUse` entry for `PreToolUse-read.sh` reads
+`"matcher": "Read|Grep|Glob"` instead of `"matcher": "Read"`, Grep and Glob never reach the
+dispatcher and the script-side fix above is unreachable in production.
+
+Two cases stay RED naming exactly that — `settings.json arms the read boundary for Grep and
+Glob` in `design-composer-eyes.bats`, and the `Grep`/`Glob` rows of `PHASE 04 — settings.json
+actually ROUTES the policed tools` in `policy-hook.bats`. They are red on purpose. A hole that
+cannot be closed from here should be visible in the suite rather than skipped into silence, and
+on the fix run those two were the **only** failures on any leg, including the unsharded
+ubuntu-22 job and macOS shard 2/3.
+
+**Still owed before Phase 01 can close:** the second two-surface adversarial pass. Everything in
+the CLOSED column above is new code, and this lane's rule is that a fix is not applied until it
+has been attacked somewhere it was never made.
+
+---
+
 ## The headline: the three gates are INERT
 
 `grep -rn` across commands, skills, processes, hooks and CI found **zero callers** of
