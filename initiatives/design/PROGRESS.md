@@ -82,7 +82,7 @@ count and panel before comparing.
 ## Now
 
 **Position:** **APPROVED by the owner 2026-08-23** and building. **Phase 00 is CLOSED**; Phase 01 is open. Working mode
-set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-cycle16`, pushed
+set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-c16`, pushed
 freely, **one PR kept open and merged only when all nine phases are done**. No local test runs at
 all -- CI is the only gate. Multiple agents are authorised where they help.
 
@@ -93,12 +93,26 @@ be real, valid, and invisible to `arc-inbox`, which would print "no open approva
 in this tree. Both must be emitted from the main clone at `E:/Work_Hub/01_Automemory/arc`, or
 after this branch merges.
 
-**Next step:** Phase 01 — the composer gets eyes. A scoped Bash grant on `ui-composer`
-(it has NO Bash today), iron law 1 amended with an enumerated read allowlist enforced by a
-marker-armed PreToolUse Read hook rather than prompt prose, ≤3 immutable `iter-N` receipts,
-platform-contract viewports, and the marker-based doc-surface gate. Red-first again: the
-sibling-render negative control and the planted docs-on-canvas page must both be seen failing
-before the fix exists.
+**Phase 01 build state.** Three slices are in, each red-first: REQ-02a the composer read boundary
+as a marker-armed PreToolUse Read hook (ADR-1415), REQ-02b the self-review manifest substantiated
+against the artifacts, REQ-03 the platform contract becoming the render set plus the surface gate.
+Two fresh attackers on different surfaces then returned **26 findings**; `05fc34d0` closed the
+mechanical half.
+
+**The open half is written down** at
+[`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md) — it is a live
+worklist, not a report. Its headline is the one that matters: **the three gates have zero
+production callers**, so nothing arms the marker and the hook is a no-op outside `tests/`. The
+slices are green on CI and the gates do not yet guard. Also open: the boundary matches `Read`
+while `ui-composer` also holds `Grep` and `Glob` (this is the kickoff assumptions-ledger trigger,
+**FIRED**, owed a `/arc-change` route); the scope suite tests argv while production sends stdin;
+`--surfaces` only checks `<section>`, so a div-built page passes with zero markers; `selfreview`
+is opt-in; and the renderer's output path carries no viewport, which makes `coverage`
+unsatisfiable by anything it can write.
+
+**Next step:** wire the three gates into the explore flow — that is what turns the rest of the
+list from "untested" into "testable against the path production actually uses". Then the second
+two-surface adversarial pass, because every one of those fixes is new code.
 
 **Owner items running in parallel** (none block Phase 00):
 - ~~merge PR #61~~ — **already merged 2026-07-29**; no action outstanding.
