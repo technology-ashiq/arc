@@ -554,10 +554,15 @@ EOF
       echo "design-explore: no variants found under $EX -- nothing to substantiate (this is not a pass)" >&2
       exit 1
     fi
-    if [ "$srdirs" -gt 0 ] && [ "$srrows" -eq 0 ]; then
-      echo "ERR  [selfreview-no-rows] $srdirs variant(s) carry a self-review/ directory and NOT ONE judgeable row exists -- a manifest that claims iterations in prose is the narrated verdict this gate refuses"
-      exit 1
-    fi
+    # NOT "a self-review dir with zero rows is a refusal" -- that was the first cut and it was
+    # too broad: iteration 1 legitimately owes no row, so a variant that iterated ONCE has a
+    # directory, a manifest and nothing to put in it. Its own test said so and went red.
+    #
+    # The real case is already covered one loop up: every iteration past the first OWES a row,
+    # and a manifest that merely narrates ("I ran three iterations, trust me") fails there
+    # because the receipts exist and the rows do not. What remains here is the empty-result-set
+    # guard proper -- no variants at all -- which `surfaces` and `coverage` both have and this,
+    # the third sibling, did not.
     echo "design-explore: self-review manifests substantiated ($srrows row(s) across $srdirs of $srseen variant(s))"
     exit 0
     ;;
@@ -596,7 +601,14 @@ EOF
 
     # THE MARKER PATH, spelled once. Both the arm and the release below verify their EFFECT
     # against it, because "the command exited 0" and "the boundary moved" are different facts.
-    _CS_MARKER="$ROOT/.claude/state/design/composer-session"
+    #
+    # PER COMPOSER, matching what composer-scope-check.sh --begin actually writes. The first cut
+    # of this line named the old single global path -- I moved the writer and left this reader
+    # pointing where the file used to be, which is the fourth time in this cycle that changing a
+    # path broke something that rebuilt the name by hand. It was caught immediately, and by the
+    # assertion added three lines below: the check reported "--begin returned 0 but no marker
+    # exists", which was true.
+    _CS_MARKER="$ROOT/.claude/state/design/composer-session--$ID--variant-$V"
 
     if [ "$CMD" = "compose" ]; then
       # `env -u ARC_SCOPE_FORWARDED`, and then CHECK.
@@ -639,7 +651,8 @@ EOF
     # released one. Verified below rather than assumed, because a release that silently did
     # nothing blocks every later read in the session -- including the reads that would fix
     # whatever the gates are about to report.
-    env -u ARC_SCOPE_FORWARDED bash "$DESIGN_DIR/composer-scope-check.sh" --end >/dev/null 2>&1 || true
+    # NAMED, so finishing variant-c cannot disarm variant-b (F1's release half).
+    env -u ARC_SCOPE_FORWARDED bash "$DESIGN_DIR/composer-scope-check.sh" --end "$ID" "variant-$V" >/dev/null 2>&1 || true
     if [ -f "$_CS_MARKER" ]; then
       echo "design-explore: REFUSED -- --end ran and the marker is STILL at ${_CS_MARKER#"$ROOT"/}." >&2
       echo "The boundary leaked. Every later read in this session would block with no visible cause." >&2

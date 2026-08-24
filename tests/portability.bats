@@ -44,7 +44,7 @@ _LOCALE_RANGE_KNOWN() {
 .claude/scripts/design/design-critique.sh:42
 .claude/scripts/design/design-render.sh:157
 .claude/scripts/design/design-critique.sh:124
-.claude/scripts/design/design-render.sh:490
+.claude/scripts/design/design-render.sh:504
 EOF
 }
 
