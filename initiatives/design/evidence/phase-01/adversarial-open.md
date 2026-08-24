@@ -55,6 +55,37 @@ needs regenerating once the edit lands. That half is not the owner's.
 the CLOSED column above is new code, and this lane's rule is that a fix is not applied until it
 has been attacked somewhere it was never made.
 
+### New, and it is mine: the boundary's fast path costs ~370ms and now runs 3x as often
+
+Found by measuring my own change rather than by an attacker, minutes after widening the matcher
+to `Read|Grep|Glob`. On this Windows box:
+
+```
+bare bash spawn                 56 ms
+full PreToolUse-read dispatch  ~400 ms      (unarmed -- the exit-0 path)
+```
+
+So roughly **370ms of dispatcher work on every Read, and now on every Grep and every Glob too**,
+in every arc session, whether or not an explore run is armed. Grep and Glob are high-frequency
+tools; a session doing a hundred searches pays about forty seconds for a guard that is doing
+nothing at the time.
+
+**Why the fast path is not fast.** `composer-scope-check.sh` reaches its
+`[ -f "$MARKER" ] || exit 0` at line 100. Before that, on *every* invocation, it runs
+`git rev-parse --show-toplevel` — a whole git subprocess — sources `common.sh`, and probes
+`command -v` / `type` twice. The cheap check is last and the expensive setup is first.
+
+**Fixable, and deliberately not fixed here.** The hook sets `CLAUDE_PROJECT_DIR`, so `ROOT` can
+be derived without spawning git, the marker can be tested before any of the setup, and the
+canonicaliser only needs to exist on the path that actually canonicalises something. That is a
+reordering of a **security boundary's startup**, which is exactly the class that gets red-first
+tests and a two-surface adversarial pass — not a hot-patch applied minutes before that pass
+runs, on a branch that has just gone green. Widening the matcher was the correctness fix and it
+is done; making its fast path fast is a separate slice with its own proof.
+
+Recorded here with the numbers so the next pass inherits a measurement rather than a suspicion,
+and so nobody has to rediscover that the cost tripled the moment the matcher did.
+
 ### Carried into that pass: EINTR on a gate's own output
 
 Seen once on `20f56454`, macOS shard 1/3, in **another lane's** gate:
