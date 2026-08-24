@@ -705,6 +705,7 @@
         "lints": [
           "design-gate",
           "design-lint",
+          "design-sources-lint",
           "render-hash"
         ],
         "concepts": [
@@ -721,7 +722,7 @@
           "1400"
         ]
       },
-      "itemCount": 21
+      "itemCount": 22
     },
     {
       "id": "toolbelt",
