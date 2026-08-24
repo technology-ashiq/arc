@@ -281,13 +281,13 @@ teardown() { _arc_teardown; }
     [ "$st1" -eq 0 ] || { echo "round $round: route one exited $st1" >&2; false; }
     [ "$st2" -eq 0 ] || { echo "round $round: route two exited $st2" >&2; false; }
     [ "$st3" -eq 0 ] || { echo "round $round: route three exited $st3" >&2; false; }
-    grep -q '"route": "docs/one.html"'   "$RENDERS/r$round-a/docs--one-html.json"
-    grep -q '"route": "docs/two.html"'   "$RENDERS/r$round-b/docs--two-html.json"
-    grep -q '"route": "docs/three.html"' "$RENDERS/r$round-c/docs--three-html.json"
+    grep -q '"route": "docs/one.html"'   "$RENDERS/r$round-a/docs--one-html--1440x900.json"
+    grep -q '"route": "docs/two.html"'   "$RENDERS/r$round-b/docs--two-html--1440x900.json"
+    grep -q '"route": "docs/three.html"' "$RENDERS/r$round-c/docs--three-html--1440x900.json"
     local h1 h2 h3
-    h1="$(grep -o '"screenshot_sha256": "[^"]*"' "$RENDERS/r$round-a/docs--one-html.json")"
-    h2="$(grep -o '"screenshot_sha256": "[^"]*"' "$RENDERS/r$round-b/docs--two-html.json")"
-    h3="$(grep -o '"screenshot_sha256": "[^"]*"' "$RENDERS/r$round-c/docs--three-html.json")"
+    h1="$(grep -o '"screenshot_sha256": "[^"]*"' "$RENDERS/r$round-a/docs--one-html--1440x900.json")"
+    h2="$(grep -o '"screenshot_sha256": "[^"]*"' "$RENDERS/r$round-b/docs--two-html--1440x900.json")"
+    h3="$(grep -o '"screenshot_sha256": "[^"]*"' "$RENDERS/r$round-c/docs--three-html--1440x900.json")"
     [ "$h1" != "$h2" ]; [ "$h2" != "$h3" ]; [ "$h1" != "$h3" ]
   done
 }
