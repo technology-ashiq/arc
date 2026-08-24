@@ -174,9 +174,17 @@ OUT_DIR="$RENDER_ROOT/$SESSION"
 # renders/design-critic/<slug>.json as a fixed literal and READS it; Phase 00's done-log
 # records that the caller sweep's twin was in consumption rather than invocation, and this is
 # that same seam. Critique renders one viewport per route, so it has nothing to disambiguate.
-BASE="$SLUG"
-[ "$MODE" = "explore" ] && BASE="$BASE--${VW}x${VH}"
-[ -n "$ITER" ] && BASE="$BASE--iter-$ITER"
+# BASE_STEM is everything before the iteration suffix, and it exists so there is exactly ONE
+# spelling of it. The unchanged-detection below has to name the PREVIOUS iteration's file, and
+# it used to rebuild that name from "$SLUG--iter-N" by hand -- a second spelling that was
+# correct only while the stem was the slug. Adding the viewport broke it instantly: the
+# comparison looked for a file that no longer existed, found nothing, and every iteration
+# reported "unchanged": false. Phase 00's own suite caught it, and its done-log had already
+# named the class -- the caller sweep's twin is in CONSUMPTION, not invocation.
+BASE_STEM="$SLUG"
+[ "$MODE" = "explore" ] && BASE_STEM="$BASE_STEM--${VW}x${VH}"
+BASE="$BASE_STEM"
+[ -n "$ITER" ] && BASE="$BASE_STEM--iter-$ITER"
 PNG="$OUT_DIR/$BASE.png"
 META="$OUT_DIR/$BASE.json"
 # mkdir deliberately NOT here: it used to run before the route-existence check, so every
@@ -503,7 +511,10 @@ UNCHANGED="false"
 if [ "$ITER_GIVEN" -eq 1 ]; then
   UNCHANGED="false"
   if [ "$ITER" -gt 1 ]; then
-    _prev_iter="$OUT_DIR/$SLUG--iter-$((ITER - 1)).json"
+    # BASE_STEM, never "$SLUG" again: the previous iteration sits beside this one, under the
+    # same stem, and rebuilding that name from a different expression is how this read went
+    # looking for a file the writer had stopped producing.
+    _prev_iter="$OUT_DIR/$BASE_STEM--iter-$((ITER - 1)).json"
     if [ -f "$_prev_iter" ]; then
       _pv="$(_meta_field "$_prev_iter" screenshot_sha256)" || _pv=""
       [ -n "$_pv" ] && [ "$_pv" = "$SHA" ] && UNCHANGED="true"
