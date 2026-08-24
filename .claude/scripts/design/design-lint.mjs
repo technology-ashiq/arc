@@ -573,6 +573,21 @@ if (surfacesMode) {
       stack.push(stack.length ? stack[stack.length - 1] : "");
     }
   }
+  // A page that declares NO surface at all cannot be classified, and REQ-03 says unmarked
+  // fails closed. Everything above walks MARKED regions and top-level <section>s; a page
+  // built entirely from <div>s trips neither, carries zero markers, and passed. Cycle 3's
+  // variants -- the pages this gate was written against -- were div-built, so the gate did
+  // not cover the shape it exists for.
+  //
+  // The rule is deliberately not "every div needs a marker": that would demand an attribute
+  // on every layout wrapper and buy nothing. It is that zero declarations is the emptiest
+  // possible result, and an empty result set is the one thing a broken scanner and a clean
+  // page agree on. Checked on the RAW html, not on the walk, so a page whose only marker sits
+  // on a tag the walker skips still counts as having declared one.
+  if (!ATTR.test(html)) {
+    console.log("ERR  [surface-undeclared] " + rel + ": the page declares no data-arc-surface region at all -- a page that classifies nothing cannot be judged as product canvas, and unmarked fails closed");
+    bad++;
+  }
   if (bad > 0) { console.log("design-lint: " + bad + " surface error(s)"); process.exit(1); }
   console.log("design-lint: surfaces ok");
   process.exit(0);

@@ -82,6 +82,14 @@ matters, because it now does.
    This is enforced by `composer-scope-check.sh` behind a PreToolUse hook, not by your good
    intentions. A sibling variant's work is refused by name. Your variant's whole value is its
    independence: you do not know what the others are building, and you must not find out.
+
+   **The boundary covers `Grep` and `Glob` as well as `Read`**, because both of those return
+   another variant's content just as surely as opening the file does. One consequence worth
+   knowing before you hit it: a `Grep` or `Glob` with **no path** searches from the repo root,
+   which is every variant plus the matrix plus the brief — so an unscoped search is refused,
+   not narrowed. Always pass a path inside your own variant dir, your session's renders, or
+   the refpack. A bare `Read` with no file path is not refused; only search is, and only
+   because "no path" means "all of it".
 2. **Colour values live in `tokens.css`.** Not as a limit on WHICH colours — as a limit on
    WHERE they are written. Declare each one as a custom property and reference `var(--…)` in
    the page; a gradient, shadow or SVG fill is a token too (`--hero-wash: linear-gradient(…)`,

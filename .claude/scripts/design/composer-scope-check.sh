@@ -110,15 +110,41 @@ if [ -z "$EX" ] || [ -z "$VARIANT" ]; then
 fi
 
 TARGET="${1:-}"
+# The TOOL matters as much as the path, and reading only the path is why this boundary
+# covered one of the three read tools the composer holds.
+#
+# `Read` carries tool_input.file_path. `Grep` and `Glob` carry a pattern plus an OPTIONAL
+# path, and BOTH return a sibling variant's content. Widening settings.json to
+# `Read|Grep|Glob` is necessary and not sufficient: a Grep that NAMES a sibling is caught by
+# the .path fallback below, but a Grep with NO path searches from the repo root -- every
+# variant, the matrix, the brief -- and arrives here as an empty target.
+#
+# An empty target used to mean one thing. It means two:
+#   Read  + no file_path -> a malformed payload nobody can judge. Blocking it would break
+#                           unrelated reads for a reason with no visible cause. Fail OPEN.
+#   Grep  + no path      -> "all of it". That is the widest possible read, not an absent
+#   Glob  + no path         one, and it must fail CLOSED.
+TOOL=""
 if [ -z "$TARGET" ] && [ ! -t 0 ]; then
   STDIN="$(cat)"
   if command -v jq >/dev/null 2>&1; then
     TARGET="$(printf '%s' "$STDIN" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)"
+    TOOL="$(printf '%s' "$STDIN" | jq -r '.tool_name // empty' 2>/dev/null)"
   else
     TARGET="$(printf '%s' "$STDIN" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    [ -z "$TARGET" ] && TARGET="$(printf '%s' "$STDIN" | grep -o '"path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    TOOL="$(printf '%s' "$STDIN" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
   fi
 fi
-[ -z "$TARGET" ] && exit 0   # cannot tell what is being read -> do not block
+if [ -z "$TARGET" ]; then
+  case "$TOOL" in
+    Grep|Glob)
+      echo "BLOCKED by ui-composer scope: an unscoped $TOOL searches the whole tree, which includes every sibling variant, the matrix and the brief." >&2
+      echo "Pass an explicit path inside $EX/$VARIANT (or your session's renders / the brief's refpack)." >&2
+      exit 2;;
+  esac
+  exit 0   # cannot tell what is being read -> do not block
+fi
 
 TARGET="$(printf '%s' "$TARGET" | tr '\\' '/')"
 

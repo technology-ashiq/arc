@@ -16,8 +16,16 @@
 #
 #   design-explore.sh init  <id> --brief <path>   # scaffold + record base SHA + brief
 #   design-explore.sh check <id>                  # deterministic gate before critique
+#   design-explore.sh compose <id> --variant <x>  # ARM the composer read boundary
+#   design-explore.sh compose-done <id> --variant <x> [--brief <path>]
+#                                                 # release it, then run the composer gates
 #   design-explore.sh render <id>                 # one shared render command, all variants
 #   design-explore.sh status <id>                 # where this explore stands
+#   design-explore.sh surfaces|coverage|selfreview <id>   # the REQ-03 / REQ-02b gates
+#
+# compose/compose-done are the bookends, and they are the reason the gates are reachable at
+# all: the three of them shipped with zero production callers, so nothing armed the marker
+# and the read hook was a no-op everywhere except its own tests.
 #
 # Exit: 0 ok | 1 refused/incomplete. Never 2.
 set -uo pipefail
@@ -31,7 +39,7 @@ shift 2>/dev/null || true
 shift 2>/dev/null || true
 
 if [ -z "$CMD" ] || [ -z "$ID" ]; then
-  echo "design-explore: usage: design-explore.sh {init|check|render|status|surfaces|coverage|selfreview} <explore-id> [--brief <path>]" >&2
+  echo "design-explore: usage: design-explore.sh {init|check|compose|compose-done|render|status|surfaces|coverage|selfreview} <explore-id> [--variant <x>] [--brief <path>]" >&2
   exit 1
 fi
 # Characters spelled out, not `a-z`: a bracket range resolves through the locale's
@@ -285,16 +293,35 @@ case "$CMD" in
     rfails=0
     for v in $VARIANTS; do
       srdir="$EX/variant-$v/self-review"
+      sess="$ROOT/.claude/state/design/renders/$ID--variant-$v"
       # A variant composed in one pass has nothing to prove. Absence is not a failure; only
       # a CLAIM that cannot be substantiated is.
-      [ -d "$srdir" ] || continue
+      #
+      # But absence has two shapes and only one of them is innocent. If the session holds
+      # ITERATION receipts, iterations happened -- and a missing self-review/ then means
+      # nothing records what they were for, which is the gate's whole subject arriving as a
+      # silent pass. Opt-in is not fail-closed. So: no iterations, no obligation; iterations
+      # with no manifest directory, refused.
+      if [ ! -d "$srdir" ]; then
+        _iters=0
+        for _im in "$sess"/*--iter-*.json; do
+          [ -f "$_im" ] || continue
+          _iters=$((_iters + 1))
+        done
+        if [ "$_iters" -gt 0 ]; then
+          echo "ERR  [selfreview-dir-missing] variant-$v: $_iters iteration receipt(s) in $ID--variant-$v and no self-review/ directory -- iterations happened and nothing records what they were for"
+          rfails=$((rfails + 1))
+        fi
+        continue
+      fi
       man="$srdir/manifest.md"
       if [ ! -f "$man" ]; then
         echo "ERR  [selfreview-manifest-missing] variant-$v: a self-review/ directory with no manifest.md -- iterations happened and nothing records what they were for"
         rfails=$((rfails + 1))
         continue
       fi
-      sess="$ROOT/.claude/state/design/renders/$ID--variant-$v"
+      # `sess` is set once, above the self-review/ check, because that check now reads the
+      # session too. A second assignment here would be a second place to keep in step.
 
       # Read a meta's published hash. Anchored to the whole pretty-printed line: an
       # unanchored match would let any line mentioning the key decide the comparison.
@@ -416,6 +443,80 @@ EOF
     exit 0
     ;;
 
+  compose|compose-done)
+    # THE BOOKENDS THAT ARM THE BOUNDARY -- and the reason they exist at all.
+    #
+    # Phase 01 shipped three gates and wired none of them. `grep -rn` across commands,
+    # skills, processes, hooks and CI found ZERO callers of composer-scope-check.sh --begin
+    # and ZERO callers of surfaces|coverage|selfreview outside tests/. Nothing armed the
+    # marker, so `[ -f "$MARKER" ] || exit 0` made the read hook a permanent no-op in
+    # production. Every one of those slices was green on CI, which is exactly the distinction
+    # this repo already writes down: a green matrix is evidence the assertions held, never
+    # evidence a guard guards.
+    #
+    # The shape is not invented here. design-critique.sh begin/finish already arms the
+    # CRITIC's boundary, runs the work, and releases it -- and the design-critic contract
+    # says "invoked between begin and finish". This is that pattern for the composer.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID' -- run init first" >&2; exit 1; }
+    V=""
+    BRIEF=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --variant) [ "$#" -ge 2 ] || { echo "design-explore: --variant needs a value" >&2; exit 1; }; V="$2"; shift 2;;
+        --brief)   [ "$#" -ge 2 ] || { echo "design-explore: --brief needs a value" >&2; exit 1; }; BRIEF="$2"; shift 2;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
+    done
+    # Spelled out rather than a bracket range, for the reason the id check 380 lines above
+    # already carries: a range resolves through LC_COLLATE and macOS interleaves case.
+    case "$V" in
+      "") echo "design-explore: $CMD needs --variant <x> -- a boundary that cannot say which variant it protects is not a boundary" >&2; exit 1;;
+      *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: variant '$V' must be lowercase kebab" >&2; exit 1;;
+    esac
+    [ -d "$EX/variant-$V" ] || { echo "design-explore: no variant-$V under $EX" >&2; exit 1; }
+
+    if [ "$CMD" = "compose" ]; then
+      bash "$DESIGN_DIR/composer-scope-check.sh" --begin "$ID" "variant-$V" || exit 1
+      echo ""
+      echo "design-explore: read boundary ARMED for $ID variant-$V."
+      echo "  writes:  docs/design/explore/$ID/variant-$V/"
+      echo "  reads:   that dir, .claude/state/design/renders/$ID--variant-$V/,"
+      echo "           .claude/state/design/refpacks/$ID/   -- and nothing else"
+      echo "  renders: bash .claude/scripts/design/design-render.sh <page> --mode explore --session $ID--variant-$V --iter N"
+      echo ""
+      echo "Next: spawn the ui-composer agent for variant-$V, then run:"
+      echo "  bash .claude/scripts/design/design-explore.sh compose-done $ID --variant $V"
+      exit 0
+    fi
+
+    # compose-done. Release FIRST and unconditionally: design-critique.sh learned this the
+    # hard way -- whatever the gates below decide, a boundary left armed blocks every later
+    # read in the session for a reason nobody can see.
+    bash "$DESIGN_DIR/composer-scope-check.sh" --end >/dev/null 2>&1 || true
+
+    gfails=0
+    page="$EX/variant-$V/index.html"
+    if [ ! -f "$page" ]; then
+      echo "ERR  [compose-no-page] variant-$V has no index.html -- a composer that wrote nothing is not a composer that finished"
+      gfails=$((gfails + 1))
+    else
+      node "$DESIGN_DIR/design-lint.mjs" --surfaces "$page" || gfails=$((gfails + 1))
+    fi
+    # The self-review gate runs over the whole explore rather than this variant alone: its
+    # loop already skips a variant with nothing to prove, and scoping it here would need a
+    # second spelling of the same walk.
+    bash "$0" selfreview "$ID" || gfails=$((gfails + 1))
+    # coverage only when the caller names the brief, because the viewport set is DERIVED from
+    # the platform contract and a defaulted set is how the contract stopped being consumed.
+    if [ -n "$BRIEF" ]; then
+      bash "$0" coverage "$ID" --brief "$BRIEF" || gfails=$((gfails + 1))
+    fi
+
+    [ "$gfails" -eq 0 ] || { echo "design-explore: variant-$V did not clear the composer gates ($gfails failing)" >&2; exit 1; }
+    echo "design-explore: boundary released and variant-$V cleared the composer gates"
+    exit 0
+    ;;
+
   render)
     [ -d "$EX" ] || { echo "design-explore: no explore '$ID'" >&2; exit 1; }
     # ONE command renders every variant (frozen plan 2.5): same recipe, same viewport --
@@ -428,7 +529,16 @@ EOF
         rc=1
         continue
       fi
-      bash "$DESIGN_DIR/design-render.sh" "$page" || rc=1
+      # --mode explore --session <id>--variant-<v> is not optional decoration.
+      #
+      # Called bare, design-render.sh defaults MODE to critique and SESSION to design-critic,
+      # so every variant landed in renders/design-critic/ -- overwriting each other -- while
+      # coverage and selfreview read renders/<id>--variant-<v>. `render <id>` followed by
+      # `coverage <id>` therefore ALWAYS reported a viewport gap, and selfreview saw no metas
+      # at all. The one command that renders every variant was the one command whose output
+      # nothing consumed. Since ADR-1402 explore mode REQUIRES --session, so this is also the
+      # only spelling the renderer will accept in the mode these gates read.
+      bash "$DESIGN_DIR/design-render.sh" "$page" --mode explore --session "$ID--variant-$v" || rc=1
     done
     exit "$rc"
     ;;
@@ -448,7 +558,7 @@ EOF
     ;;
 
   *)
-    echo "design-explore: unknown command '$CMD' (want init|check|render|status)" >&2
+    echo "design-explore: unknown command '$CMD' (want init|check|compose|compose-done|render|status|surfaces|coverage|selfreview)" >&2
     exit 1
     ;;
 esac
