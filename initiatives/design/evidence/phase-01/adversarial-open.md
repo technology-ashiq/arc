@@ -39,6 +39,18 @@ cannot be closed from here should be visible in the suite rather than skipped in
 on the fix run those two were the **only** failures on any leg, including the unsharded
 ubuntu-22 job and macOS shard 2/3.
 
+**The one line is verified SUFFICIENT, not merely necessary.** Both cases were re-run against an
+**in-memory** copy of `settings.json` with the matcher patched — the file itself was not written,
+because the refusal is a guard and not an obstacle. `design-composer-eyes.bats`'s check finds all
+three tool names. `policy-hook.bats`'s own predicate, used verbatim, reports `live=true /
+mutant=false` for all six of `Bash Edit Write Read Grep Glob` — the mutant column being uniformly
+false is what makes that test non-vacuous, and it stays false, so the change routes the new tools
+without loosening the anchored match for the old ones. Nothing else moves. Whoever makes the edit
+will not make it and then discover it was not enough.
+
+`sync-to-project.sh` reads `settings.json`, so `tests/fixtures/sync-golden/tree-manifest.txt`
+needs regenerating once the edit lands. That half is not the owner's.
+
 **Still owed before Phase 01 can close:** the second two-surface adversarial pass. Everything in
 the CLOSED column above is new code, and this lane's rule is that a fix is not applied until it
 has been attacked somewhere it was never made.

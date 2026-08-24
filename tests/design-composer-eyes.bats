@@ -262,11 +262,20 @@ _payload() { printf '{"tool_name":"%s","tool_input":%s}' "$1" "$2"; }
   # The matcher is the arming surface. With `Read` alone the two other read tools never
   # reach the dispatcher at all, so every case above would pass against a hook production
   # never invokes -- the gate testing itself rather than the path.
-  m="$(node -e "
-    const d = require('$ARC_ROOT/.claude/settings.json');
+  # cd + a RELATIVE path, read with fs -- never require() on an interpolated "$ARC_ROOT".
+  # Git Bash hands out POSIX paths (/d/a/arc/arc) while node is a native Windows binary that
+  # wants D:\a\arc\arc, so the interpolated form dies with "Cannot find module
+  # '/d/a/arc/arc/.claude/settings.json'" on the windows leg ONLY. That is the worst shape a
+  # wiring test can take: it would have stayed red on Windows after the wiring was fixed, so
+  # its red would have stopped meaning anything. policy-hook.bats already reads this same file
+  # the working way -- cd, then a relative path -- and this now matches it.
+  cd "$ARC_ROOT"
+  m="$(node -e '
+    const fs = require("node:fs");
+    const d = JSON.parse(fs.readFileSync(".claude/settings.json", "utf8"));
     const e = (d.hooks.PreToolUse || []).find(x => /PreToolUse-read/.test(JSON.stringify(x.hooks || [])));
-    process.stdout.write(e ? String(e.matcher) : '');
-  ")"
+    process.stdout.write(e ? String(e.matcher) : "");
+  ')"
   [ -n "$m" ] || { echo "no PreToolUse entry dispatches to PreToolUse-read.sh"; false; }
   echo "$m" | grep -q 'Read'  || { echo "matcher lost Read: $m"; false; }
   echo "$m" | grep -q 'Grep'  || { echo "matcher does not arm Grep: $m"; false; }
