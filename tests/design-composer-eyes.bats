@@ -201,3 +201,103 @@ teardown() { _arc_teardown; }
   echo "$body" | grep -q "the matrix"
   echo "$body" | grep -q "the brief"
 }
+
+# ---------- 6. the OTHER two read tools (adversarial pass, 2026-08-24) ----------
+#
+# The boundary was built for `Read` and settings.json matches `Read` alone. `ui-composer`
+# declares `tools: Read, Glob, Grep, Write` -- and Grep and Glob each return a sibling
+# variant's CONTENT. This is verbatim the assumptions-ledger trigger written at kickoff:
+# "the allowlist covers one tool while the agent holds three".
+#
+# Widening the matcher is necessary and NOT sufficient, which is the part worth writing
+# down. Read's payload carries `tool_input.file_path`; Grep's and Glob's carry `pattern`
+# plus an OPTIONAL `path`. The scope check already falls back to `.path`, so a Grep that
+# NAMES a sibling is caught the moment the matcher fires. A Grep with NO path is the hole:
+# it searches from the repo root -- every variant, the matrix, the brief -- and arrives at
+# the check as an empty target, where `[ -z "$TARGET" ] && exit 0` treats it as "cannot
+# tell what is being read" and fails OPEN. For Read an absent file_path really is
+# unreadable. For Grep and Glob an absent path MEANS "everything", and the two must not
+# share a branch.
+
+_payload() { printf '{"tool_name":"%s","tool_input":%s}' "$1" "$2"; }
+
+@test "composer scope: a Grep that NAMES a sibling variant is refused" {
+  _composer_sandbox; _arm
+  run bash "$(_csc)" <<< "$(_payload Grep '{"pattern":"accent","path":"docs/design/explore/lexos-v1/variant-b"}')"
+  [ "$status" -eq 2 ] || { echo "expected refusal, got $status: $output"; false; }
+}
+
+@test "composer scope: a Grep with NO path searches the whole tree and is refused" {
+  _composer_sandbox; _arm
+  # The hole. An unscoped search is not "unreadable", it is "all of it".
+  run bash "$(_csc)" <<< "$(_payload Grep '{"pattern":"--accent"}')"
+  [ "$status" -eq 2 ] || { echo "expected refusal of an unscoped Grep, got $status: $output"; false; }
+}
+
+@test "composer scope: a Glob with NO path is refused for the same reason" {
+  _composer_sandbox; _arm
+  run bash "$(_csc)" <<< "$(_payload Glob '{"pattern":"**/*.css"}')"
+  [ "$status" -eq 2 ] || { echo "expected refusal of an unscoped Glob, got $status: $output"; false; }
+}
+
+@test "composer scope: a Glob scoped to its OWN variant dir is allowed" {
+  _composer_sandbox; _arm
+  # The paired positive control. A boundary that only proves it refuses has not proved it
+  # discriminates -- and a Grep/Glob rule that blocks everything would take the composer's
+  # own directory with it, which is the one place it must be able to look.
+  run bash "$(_csc)" <<< "$(_payload Glob '{"pattern":"*.css","path":"docs/design/explore/lexos-v1/variant-a"}')"
+  [ "$status" -eq 0 ] || { echo "expected its own dir to be allowed, got $status: $output"; false; }
+}
+
+@test "composer scope: a Read with NO file_path still fails OPEN, not closed" {
+  _composer_sandbox; _arm
+  # The distinction this whole section rests on, pinned from the other side. Read without a
+  # file_path is a malformed payload the hook cannot judge; blocking it would break unrelated
+  # reads for a reason nobody could see. Only Grep and Glob read an absent path as "all of it".
+  run bash "$(_csc)" <<< "$(_payload Read '{}')"
+  [ "$status" -eq 0 ] || { echo "a malformed Read payload must not block, got $status: $output"; false; }
+}
+
+@test "settings.json arms the read boundary for Grep and Glob, not for Read alone" {
+  # The matcher is the arming surface. With `Read` alone the two other read tools never
+  # reach the dispatcher at all, so every case above would pass against a hook production
+  # never invokes -- the gate testing itself rather than the path.
+  m="$(node -e "
+    const d = require('$ARC_ROOT/.claude/settings.json');
+    const e = (d.hooks.PreToolUse || []).find(x => /PreToolUse-read/.test(JSON.stringify(x.hooks || [])));
+    process.stdout.write(e ? String(e.matcher) : '');
+  ")"
+  [ -n "$m" ] || { echo "no PreToolUse entry dispatches to PreToolUse-read.sh"; false; }
+  echo "$m" | grep -q 'Read'  || { echo "matcher lost Read: $m"; false; }
+  echo "$m" | grep -q 'Grep'  || { echo "matcher does not arm Grep: $m"; false; }
+  echo "$m" | grep -q 'Glob'  || { echo "matcher does not arm Glob: $m"; false; }
+}
+
+# ---------- 7. the PRODUCTION path, which is stdin and not argv ----------
+#
+# Every case in section 5 drives the fragment with the path as `$1`. Production never does:
+# _dispatch.sh runs `bash "$f" < "$input"` with no arguments, so the path arrives as JSON on
+# stdin. Delete the stdin branch from composer-scope-check.sh and all fifteen argv cases stay
+# green -- the fifth vacuous-pass instance this cycle. These drive the real dispatcher with a
+# real payload, which is the only shape that proves the wiring.
+
+@test "composer scope: the real dispatcher blocks a sibling read from a STDIN payload" {
+  _composer_sandbox; _arm
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "$(_payload Read '{"file_path":".claude/state/design/renders/lexos-v1--variant-b/x.png"}')"
+  [ "$status" -eq 2 ] || { echo "expected the dispatcher to block, got $status: $output"; false; }
+}
+
+@test "composer scope: the real dispatcher passes its OWN render from a STDIN payload" {
+  _composer_sandbox; _arm
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "$(_payload Read '{"file_path":".claude/state/design/renders/lexos-v1--variant-a/x.png"}')"
+  [ "$status" -eq 0 ] || { echo "expected its own render to pass, got $status: $output"; false; }
+}
+
+@test "composer scope: with no marker the real dispatcher is a no-op on a STDIN payload" {
+  _composer_sandbox
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "$(_payload Read '{"file_path":".claude/state/design/renders/lexos-v1--variant-b/x.png"}')"
+  [ "$status" -eq 0 ] || { echo "an unarmed boundary must not block, got $status: $output"; false; }
+}

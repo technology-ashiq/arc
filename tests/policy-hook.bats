@@ -304,11 +304,15 @@ _ask() { # $1 = json payload
         && h.command.includes(".claude/hooks/PreToolUse")));
     const mutant = JSON.parse(JSON.stringify(s));
     delete mutant.hooks.PreToolUse;
-    const row = (cfg, tag) => ["Bash","Edit","Write"]
+    const row = (cfg, tag) => ["Bash","Edit","Write","Read","Grep","Glob"]
       .map((t) => tag + ":" + t + "=" + routed(cfg, t)).join(" ");
     console.log(row(s, "live") + " " + row(mutant, "mutant"));'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  for t in Bash Edit Write; do
+  # Read/Grep/Glob joined the list on 2026-08-24. ADR-1415 added a READ boundary and wired
+  # only `Read`, while the agent it governs declares `Read, Glob, Grep` -- so deleting the
+  # new matcher, or shipping it narrow, left this test green exactly the way deleting the
+  # whole block once did. The list is the tools that must be routed, so it grows with them.
+  for t in Bash Edit Write Read Grep Glob; do
     [[ "$output" == *"live:$t=true"* ]] || {
       echo "$t reaches no policy hook at all -- layer 1 is unreachable for it: $output"; false; }
     # THE MUTANT. If this says true, the predicate is not reading the wiring and the row above

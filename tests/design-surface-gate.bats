@@ -251,3 +251,108 @@ EOF
   run bash "$(_explore)" coverage lexos-v1 --brief "$BRIEF"
   [ "$status" -eq 0 ]
 }
+
+# ---------- the div-built page (adversarial pass, 2026-08-24) ----------
+#
+# The unmarked-surface rule fires on `tag === "section"` alone. A page built entirely from
+# <div>s therefore carries zero markers, trips nothing, and PASSES -- and Cycle 3's variants,
+# the ones this gate was written against, were div-built pages. The gate does not cover the
+# shape it exists for.
+#
+# The rule that closes it is not "every div needs a marker" -- that would demand an attribute
+# on every layout wrapper for no gain. It is that a page declaring NO surface at all cannot be
+# classified, and REQ-03 says unmarked fails closed. Zero markers is the emptiest possible
+# declaration, and an empty result set is the one thing a broken scanner and a clean page agree
+# on.
+
+@test "surfaces: a div-built page with ZERO markers fails closed" {
+  _surface_sandbox
+  cat > "$PAGE" <<'EOF'
+<!doctype html><title>case workspace</title>
+<div class="shell">
+  <div class="panel"><h1>Matter 4821</h1><p>Hearing on 12 Mar</p></div>
+  <div class="panel"><h2>Filings</h2><p>Three documents</p></div>
+</div>
+EOF
+  run bash "$(_explore)" surfaces lexos-v1
+  [ "$status" -ne 0 ] || { echo "a page declaring no surface at all passed: $output"; false; }
+  echo "$output" | grep -q "surface" || { echo "refused, but not by the surface gate: $output"; false; }
+}
+
+@test "surfaces: a div-built page that DOES mark its surfaces passes" {
+  _surface_sandbox
+  # The paired positive control. The rule above must fail the undeclared page without
+  # outlawing <div> as a surface container -- the marker is the contract, not the tag name.
+  cat > "$PAGE" <<'EOF'
+<!doctype html><title>case workspace</title>
+<div class="shell">
+  <div class="panel" data-arc-surface="product"><h1>Matter 4821</h1><p>Hearing on 12 Mar</p></div>
+  <div class="panel" data-arc-surface="product"><h2>Filings</h2><p>Three documents</p></div>
+</div>
+EOF
+  run bash "$(_explore)" surfaces lexos-v1
+  [ "$status" -eq 0 ] || { echo "a correctly marked div page was refused: $output"; false; }
+}
+
+# ---------- selfreview is opt-in (adversarial pass, 2026-08-24) ----------
+#
+# `[ -d "$srdir" ] || continue`. The reasoning written above it is right as far as it goes: a
+# variant composed in one pass has nothing to prove, and absence is not a failure. What it
+# misses is the case where absence is a CONTRADICTION -- iteration receipts sitting in the
+# session directory say iterations happened, and no self-review/ means nothing records what
+# they were for. Three iterations on disk and no manifest currently reads as a clean pass.
+
+@test "selfreview: iteration receipts on disk with NO self-review dir fails closed" {
+  _surface_sandbox
+  sess="$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a"
+  mkdir -p "$sess"
+  # Literal hashes rather than $(printf ... $(seq 64)): seq is not POSIX and this suite runs
+  # on three OS legs. A fixture that fails to BUILD on one leg fails the case for a reason
+  # that has nothing to do with the behaviour under test.
+  a64=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  b64=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  printf '{\n  "screenshot_sha256": "%s",\n  "iter": 1\n}\n' "$a64" > "$sess/page--iter-1.json"
+  printf '{\n  "screenshot_sha256": "%s",\n  "iter": 2\n}\n' "$b64" > "$sess/page--iter-2.json"
+  run bash "$(_explore)" selfreview lexos-v1
+  [ "$status" -ne 0 ] || { echo "iterations happened and nothing recorded them, yet this passed: $output"; false; }
+  echo "$output" | grep -qi "self-review" || { echo "refused, but not for the missing self-review: $output"; false; }
+}
+
+@test "selfreview: a variant composed in ONE pass still needs no self-review dir" {
+  _surface_sandbox
+  # The paired control, and the reason the rule above is about CONTRADICTION rather than
+  # about presence. No iteration receipts means no claim was made, and a gate that demanded a
+  # manifest here would force ceremony on the composer who got it right first time.
+  sess="$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a"
+  mkdir -p "$sess"
+  c64=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  printf '{\n  "screenshot_sha256": "%s",\n  "iter": null\n}\n' "$c64" > "$sess/page.json"
+  run bash "$(_explore)" selfreview lexos-v1
+  [ "$status" -eq 0 ] || { echo "a single-pass variant was refused: $output"; false; }
+}
+
+# ---------- render writes where the gates read (adversarial pass, 2026-08-24) ----------
+#
+# `design-explore.sh render` calls design-render.sh with NO flags. MODE then defaults to
+# critique and SESSION to design-critic, so output lands in renders/design-critic/ while
+# coverage and selfreview read renders/<id>--variant-<v>. `render <id>` followed by
+# `coverage <id>` therefore ALWAYS reports a viewport gap, and selfreview sees no metas at
+# all. Only the composer's hand-typed flags produce what the gates read -- which means the
+# one command that renders every variant is the one command whose output nothing consumes.
+
+@test "render: every variant is rendered into ITS OWN session, in explore mode" {
+  _surface_sandbox
+  printf '<!doctype html><title>a</title>\n' > "$PAGE"
+  # A stub renderer that records the argv it was handed. The real one needs a browser; what
+  # is under test here is the invocation, and a stub is the only way to assert argv without
+  # asserting a screenshot too.
+  cat > "$SANDBOX/.claude/scripts/design/design-render.sh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${CLAUDE_PROJECT_DIR:-.}/render-argv.log"
+STUB
+  run bash "$(_explore)" render lexos-v1
+  log="$SANDBOX/render-argv.log"
+  [ -f "$log" ] || { echo "the renderer was never invoked: $output"; false; }
+  grep -q -- "--mode explore" "$log" || { echo "render did not ask for explore mode: $(cat "$log")"; false; }
+  grep -q -- "--session lexos-v1--variant-a" "$log" || { echo "render did not scope the session to the variant: $(cat "$log")"; false; }
+}

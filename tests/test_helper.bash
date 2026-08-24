@@ -90,6 +90,13 @@ _arc_design_sandbox() {
   # rules name, and the reason this sandbox mirrors the layout rather than approximating it.
   mkdir -p "$SANDBOX/.claude/hooks/PreToolUse-read.d"
   cp "$ARC_ROOT"/.claude/hooks/PreToolUse-read.d/10-design-composer.sh      "$SANDBOX/.claude/hooks/PreToolUse-read.d/" 2>/dev/null
+  # The DISPATCHER and its shared runner, not only the fragment. Production never passes the
+  # path as argv: _dispatch.sh runs `bash "$f" < "$input"` with no arguments, so the path
+  # arrives as JSON on stdin. A sandbox holding the fragment alone can only be driven the
+  # argv way -- which is how fifteen green cases came to cover a branch production never
+  # takes, and deleting the stdin branch would have left every one of them passing.
+  cp "$ARC_ROOT"/.claude/hooks/PreToolUse-read.sh                          "$SANDBOX/.claude/hooks/" 2>/dev/null
+  cp "$ARC_ROOT"/.claude/hooks/_dispatch.sh                                "$SANDBOX/.claude/hooks/" 2>/dev/null
   cd "$SANDBOX" || return 1
   git init -q
   # Repo-local identity, not GIT_AUTHOR_* env: the design scripts shell out to git in
