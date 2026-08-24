@@ -108,7 +108,12 @@ arc_canon_path() {
     # A root of "/" would concatenate to "//path". On Cygwin/MSYS "//host/share" is a UNC
     # path and in POSIX a leading "//" is implementation-defined, so the result stops being
     # the thing both boundaries believe it is.
-    case "$_cbase" in /) _cbase="";; esac
+    #
+    # "//" is in the list for the same reason and was missed the first time: an input that
+    # ALREADY starts "//" resolves to a base of "//" and concatenated to "///no-such/f". A
+    # fresh attacker measured exactly that -- the guard named the UNC case in its own comment
+    # and then did not cover the spelling the comment is about.
+    case "$_cbase" in /|//) _cbase="";; esac
     printf '%s' "$_cbase${_cs:+/$_cs}"
   else
     printf '%s' "$1"

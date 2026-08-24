@@ -35,6 +35,7 @@ _sr() { run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" selfreview 
 A_SHA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 B_SHA="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 C_SHA="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+D_SHA="dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 
 teardown() { _arc_teardown; }
 
@@ -269,4 +270,90 @@ EOF
 EOF
   _sr
   [ "$status" -ne 0 ] || { echo "a genuine decoy was silently picked past: $output"; false; }
+}
+
+# ---------- what the previous cases did NOT prove (attacker mutants, 2026-08-25) ----------
+#
+# Two mutants survived the whole suite, and both are here because a fresh attacker built them
+# rather than because reading the tests suggested it.
+
+@test "selfreview: the WIDEST wins even when it sorts LAST on disk" {
+  # M1. The earlier case used 1440x900 and 390x844 -- and "1" sorts before "3", so the widest
+  # file happened to come FIRST in glob order. An attacker replaced the width comparison with
+  # "keep the first file seen" and the entire suite stayed green: the case named
+  # "the row claims the WIDEST" did not test widest, it tested glob order agreeing with it.
+  #
+  # 900x600 against 390x844 inverts that: 900 is the WIDER viewport and "9" sorts AFTER "3",
+  # so first-in-glob-order now picks the wrong one and the mutant dies.
+  _sr_sandbox
+  _meta_vp 1 390x844 "$A_SHA"
+  _meta_vp 1 900x600 "$B_SHA"
+  _meta_vp 2 390x844 "$C_SHA"
+  _meta_vp 2 900x600 "$D_SHA"
+  _manifest <<EOF
+## Self-review
+
+| iter | input | output | defect | revision |
+|---|---|---|---|---|
+| 2 | $B_SHA | $D_SHA | the primary action sat below the fold | moved the action bar above the summary block |
+EOF
+  _sr
+  [ "$status" -eq 0 ] || { echo "the widest was not chosen when it sorted last: $output"; false; }
+}
+
+@test "selfreview: a row with SIX cells is refused" {
+  # M2. The row-shape refusal was entirely untested -- deleting it left the suite green.
+  _sr_sandbox
+  _meta 1 "$A_SHA"
+  _meta 2 "$B_SHA"
+  _manifest <<EOF
+## Self-review
+
+| iter | input | output | defect | revision | extra |
+|---|---|---|---|---|---|
+| 2 | $A_SHA | $B_SHA | cramped header | moved it | spare |
+EOF
+  _sr
+  [ "$status" -ne 0 ] || { echo "a six-cell row was accepted: $output"; false; }
+  echo "$output" | grep -q "row-shape" || { echo "refused, but not for its shape: $output"; false; }
+}
+
+@test "selfreview: an escaped pipe cannot buy an empty revision cell" {
+  # THE ONE BOTH ATTACKERS FOUND, independently, in the same words: the check accepted 7|8
+  # fields, and 8 is EXACTLY a row carrying one escaped pipe -- the case it was written to
+  # refuse. The empty-revision rule was walked past with a single backslash-pipe, and the
+  # refusal message said "five cells and nothing else" while the code accepted six.
+  _sr_sandbox
+  _meta 1 "$A_SHA"
+  _meta 2 "$B_SHA"
+  _manifest <<EOF
+## Self-review
+
+| iter | input | output | defect | revision |
+|---|---|---|---|---|
+| 2 | $A_SHA | $B_SHA | tightened spacing \| and rhythm |  |
+EOF
+  _sr
+  [ "$status" -ne 0 ] || { echo "an escaped pipe bought an empty revision cell: $output"; false; }
+}
+
+@test "selfreview: a manifest that NARRATES iterations with zero rows is refused" {
+  # The narrated verdict this gate's own header says it exists to refuse -- and it passed.
+  _sr_sandbox
+  _meta 1 "$A_SHA"
+  _meta 2 "$B_SHA"
+  _manifest <<'EOF'
+## Self-review
+
+I ran three iterations and fixed the hierarchy each time. Trust me.
+EOF
+  _sr
+  [ "$status" -ne 0 ] || { echo "prose claiming iterations was accepted as substantiation: $output"; false; }
+}
+
+@test "selfreview: an empty explore is a message, not a pass" {
+  _sr_sandbox
+  rm -rf "$EXD" "$SESS"
+  _sr
+  [ "$status" -ne 0 ] || { echo "an empty explore reported substantiated: $output"; false; }
 }

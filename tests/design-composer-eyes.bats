@@ -50,12 +50,15 @@ teardown() { _arc_teardown; }
 
 @test "composer scope: --begin arms and --end releases" {
   _composer_sandbox
+  # The marker is PER COMPOSER since 2026-08-25. It was one global file while explore mode runs
+  # three composers, so the last --begin won for everybody: composer a was allowed to read
+  # variant-b and refused its own directory.
   run bash "$(_csc)" --begin lexos-v1 variant-a
   [ "$status" -eq 0 ]
-  [ -f "$SANDBOX/.claude/state/design/composer-session" ]
+  [ -f "$SANDBOX/.claude/state/design/composer-session--lexos-v1--variant-a" ]
   run bash "$(_csc)" --end
   [ "$status" -eq 0 ]
-  [ ! -f "$SANDBOX/.claude/state/design/composer-session" ]
+  [ ! -f "$SANDBOX/.claude/state/design/composer-session--lexos-v1--variant-a" ]
 }
 
 @test "composer scope: --begin without a variant refuses" {
@@ -323,7 +326,8 @@ _payload() { printf '{"tool_name":"%s","tool_input":%s}' "$1" "$2"; }
 # The shape is design-critique.sh begin/finish, which already does this for the CRITIC.
 
 _explore_sh() { echo "$SANDBOX/.claude/scripts/design/design-explore.sh"; }
-_marker() { echo "$SANDBOX/.claude/state/design/composer-session"; }
+# The per-composer marker for variant-a, which is what _arm and the compose bookends use.
+_marker() { echo "$SANDBOX/.claude/state/design/composer-session--lexos-v1--variant-a"; }
 
 @test "compose: arming is a real command, and it leaves the boundary armed" {
   _composer_sandbox
@@ -399,4 +403,97 @@ EOF
   run bash "$(_explore_sh)" compose-done lexos-v1 --variant a
   [ "$status" -ne 0 ] || { echo "a composer that wrote nothing was reported as finished: $output"; false; }
   [ ! -f "$(_marker)" ]
+}
+
+# ---------- 9. what two fresh attackers found in section 8 (2026-08-25) ----------
+#
+# Every case here pins a CONFIRMED finding that was executed against the real scripts. They are
+# grouped because they share one root: a boundary that reports its own state instead of being
+# asked for it.
+
+@test "compose: an inherited ARC_SCOPE_FORWARDED cannot make it report ARMED while arming nothing" {
+  _composer_sandbox
+  # composer-scope-check honours --begin only when ARC_SCOPE_FORWARDED != 1, and reads that
+  # from the ENVIRONMENT. With it set, --begin fell through to the enforcement half, hit
+  # `[ -f "$MARKER" ] || exit 0`, exited 0, and satisfied compose's `|| exit 1`. The operator
+  # was told "read boundary ARMED" while nothing was armed. compose now clears the variable
+  # for the control verb AND asserts the marker exists.
+  ARC_SCOPE_FORWARDED=1 run bash "$(_explore_sh)" compose lexos-v1 --variant a
+  [ "$status" -ne 0 ] || { echo "compose reported success under a forwarded env: $output"; false; }
+  [ ! -f "$(_marker)" ] || { echo "it also armed something: $output"; false; }
+}
+
+@test "compose: two composers armed at once REFUSE rather than the last one winning" {
+  _composer_sandbox
+  # The marker was a single global file while explore mode runs three composers. Arm a, then
+  # arm b, and the marker simply became b's: composer a was then ALLOWED to read variant-b and
+  # REFUSED its own directory -- both halves of the boundary inverted at once.
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  bash "$(_explore_sh)" compose lexos-v1 --variant b >/dev/null
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "$(_payload Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}')"
+  [ "$status" -eq 2 ] || { echo "a read was attributed to one of two armed composers: $status $output"; false; }
+  echo "$output" | grep -qi "armed at once" || { echo "refused, but not for the collision: $output"; false; }
+}
+
+@test "compose-done: --end releases only the NAMED composer" {
+  _composer_sandbox
+  # `--end` meant "release whatever is armed", so finishing variant-c disarmed variant-b and
+  # left b reading siblings for the rest of the run.
+  bash "$(_explore_sh)" compose lexos-v1 --variant b >/dev/null
+  bash "$(_csc)" --end lexos-v1 variant-c >/dev/null 2>&1
+  [ -f "$SANDBOX/.claude/state/design/composer-session--lexos-v1--variant-b" ] || {
+    echo "releasing variant-c released variant-b"; false; }
+}
+
+@test "composer scope: an ABSOLUTE Glob pattern is refused even with an allowed path" {
+  _composer_sandbox; _arm
+  # The gate read `path` and never `pattern`. Glob resolves the pattern against the filesystem,
+  # so an allowed path plus an absolute pattern returned the sibling while the gate said 0.
+  run bash "$(_csc)" <<< "$(_payload Glob "{\"path\":\"docs/design/explore/lexos-v1/variant-a\",\"pattern\":\"$SANDBOX/docs/design/explore/lexos-v1/variant-b/*.html\"}")"
+  [ "$status" -eq 2 ] || { echo "an absolute pattern escaped the scoped path: $status $output"; false; }
+}
+
+@test "composer scope: a Glob pattern containing .. is refused" {
+  _composer_sandbox; _arm
+  # This one does not escape today because the tool declines to walk `..` in a pattern. A rule
+  # that depends on another tool's current behaviour has an expiry date nobody will notice.
+  run bash "$(_csc)" <<< "$(_payload Glob '{"path":"docs/design/explore/lexos-v1/variant-a","pattern":"../variant-b/*.html"}')"
+  [ "$status" -eq 2 ] || { echo "a .. pattern was allowed: $status $output"; false; }
+}
+
+@test "composer scope: its own dir is allowed however the path is spelled" {
+  _composer_sandbox; _arm
+  # A false REFUSAL, not a hole -- and the more damaging direction day to day, because Grep and
+  # Glob take relative paths as a matter of course and `./x` is an ordinary spelling.
+  for p in "docs/design/explore/lexos-v1/variant-a/index.html" \
+           "./docs/design/explore/lexos-v1/variant-a/index.html" \
+           "docs/design/explore/lexos-v1/./variant-a/index.html" \
+           "docs//design/explore/lexos-v1/variant-a/index.html"; do
+    run bash "$(_csc)" <<< "$(_payload Read "{\"file_path\":\"$p\"}")"
+    [ "$status" -eq 0 ] || { echo "own dir refused when spelled '$p': $output"; false; }
+  done
+}
+
+@test "composer scope: a CRLF marker does not silently refuse every read" {
+  _composer_sandbox
+  # The marker is read with an anchored sed and had no `tr -d '\r'`, while _sha_of and _vw_of
+  # in design-explore.sh both carry one. A CRLF marker -- from PowerShell, an editor, or the
+  # composer's own Write -- yields an empty explore id on ubuntu and macOS and refuses EVERY
+  # composer read, while MSYS2 strips the CR and reads clean on Windows.
+  mkdir -p "$SANDBOX/.claude/state/design"
+  printf 'explore=lexos-v1\r\nvariant=variant-a\r\npid=1\r\n' \
+    > "$SANDBOX/.claude/state/design/composer-session--lexos-v1--variant-a"
+  run bash "$(_csc)" <<< "$(_payload Read '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html"}')"
+  [ "$status" -eq 0 ] || { echo "a CRLF marker refused the composer's own directory: $output"; false; }
+}
+
+@test "composer scope: a missing common.sh REFUSES rather than falling back" {
+  _composer_sandbox; _arm
+  # The inline fallback that used to stand here was a PRE-FIX copy of the canonicaliser, and no
+  # test could reach it because the sandbox always copies common.sh. A boundary that cannot
+  # resolve a path is not fail-safe; it is unguarded.
+  rm -f "$SANDBOX/.claude/scripts/core/common.sh"
+  run bash "$(_csc)" <<< "$(_payload Read '{"file_path":"/etc/passwd"}')"
+  [ "$status" -eq 2 ] || { echo "the boundary carried on without its resolver: $status $output"; false; }
 }

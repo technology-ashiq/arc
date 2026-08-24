@@ -364,3 +364,80 @@ STUB
   grep -q -- "--mode explore" "$log" || { echo "render did not ask for explore mode: $(cat "$log")"; false; }
   grep -q -- "--session lexos-v1--variant-a" "$log" || { echo "render did not scope the session to the variant: $(cat "$log")"; false; }
 }
+
+# ---------- what a fresh attacker got past these gates (2026-08-25) ----------
+
+@test "surfaces: a marker in a COMMENT does not count as a declaration" {
+  _surface_sandbox
+  # The zero-marker rule was checked against the RAW html, so a page declaring nothing passed
+  # three ways: a comment, a CSS selector, and a JS string. This rule exists FOR pages that
+  # declare nothing, so those three were the whole subject walking through.
+  cat > "$PAGE" <<'EOF'
+<!doctype html><title>x</title>
+<!-- data-arc-surface="product" was here once -->
+<div class="shell"><div class="panel"><h1>M</h1></div></div>
+EOF
+  run bash "$(_explore)" surfaces lexos-v1
+  [ "$status" -ne 0 ] || { echo "a marker in a comment satisfied the declaration rule: $output"; false; }
+}
+
+@test "surfaces: a marker in a <style> or <script> block does not count either" {
+  _surface_sandbox
+  cat > "$PAGE" <<'EOF'
+<!doctype html><title>x</title>
+<style>/* [data-arc-surface="product"] { color: red } */</style>
+<script>const SEL = 'data-arc-surface="product"';</script>
+<div class="shell"><div class="panel"><h1>M</h1></div></div>
+EOF
+  run bash "$(_explore)" surfaces lexos-v1
+  [ "$status" -ne 0 ] || { echo "a marker in style/script satisfied the declaration rule: $output"; false; }
+}
+
+@test "surfaces: doc-on-canvas is caught with a SINGLE-quoted attribute too" {
+  _surface_sandbox
+  # The attribute pattern knew only double quotes, so `data-arc-surface='doc'` nested inside a
+  # product surface sailed past the one refusal this gate exists for. HTML permits all three
+  # spellings and a composer has no idea which one the gate happens to recognise.
+  cat > "$PAGE" <<'EOF'
+<!doctype html><title>x</title>
+<main><section data-arc-surface="product"><h1>M</h1>
+<div data-arc-surface='doc'><table><tr><td>keys</td></tr></table></div>
+</section></main>
+EOF
+  run bash "$(_explore)" surfaces lexos-v1
+  [ "$status" -ne 0 ] || { echo "a single-quoted doc surface was not caught: $output"; false; }
+  echo "$output" | grep -q "doc-on-canvas" || { echo "refused, but not as doc-on-canvas: $output"; false; }
+}
+
+@test "surfaces: unbalanced container markup is refused, not silently re-nested" {
+  _surface_sandbox
+  # One stray </div> popped "product" off the stack, so a doc surface nested inside it read as
+  # top-level and doc-on-canvas never fired. The stack now pops BY NAME and a mismatch is its
+  # own refusal -- nesting that cannot be judged must not be judged anyway.
+  cat > "$PAGE" <<'EOF'
+<!doctype html><title>x</title>
+<main><section data-arc-surface="product"><h1>M</h1></div>
+<div data-arc-surface="doc"><table><tr><td>keys</td></tr></table></div>
+</section></main>
+EOF
+  run bash "$(_explore)" surfaces lexos-v1
+  [ "$status" -ne 0 ] || { echo "unbalanced markup passed: $output"; false; }
+}
+
+@test "coverage: a forged meta with no PNG and no route does NOT satisfy a viewport" {
+  _surface_sandbox
+  _brief_with_mobile "yes"
+  cat > "$PAGE" <<'EOF'
+<!doctype html><title>x</title>
+<main><section data-arc-surface="product"><h1>M</h1></section></main>
+EOF
+  # The attacker's file, verbatim -- not even valid JSON, and it satisfied BOTH declared
+  # viewports because coverage grepped every *.json in the session for the viewport TEXT.
+  # Combined with the composer's unbounded Write, the audited party forges its own evidence.
+  mkdir -p "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a"
+  printf '{\n  "viewport": "1440x900@1",\n  "second": "viewport": "390x844@1"\n}\n' \
+    > "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a/forged.json"
+  run bash "$(_explore)" coverage lexos-v1 --brief "$BRIEF"
+  [ "$status" -ne 0 ] || { echo "one forged file covered two viewports: $output"; false; }
+  echo "$output" | grep -q "viewport-gap" || { echo "refused, but not as a viewport gap: $output"; false; }
+}

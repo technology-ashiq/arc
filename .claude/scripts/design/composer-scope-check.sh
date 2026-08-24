@@ -29,27 +29,25 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 MARKER_DIR="$ROOT/.claude/state/design"
 MARKER="$MARKER_DIR/composer-session"
 
-# One canonicaliser, shared with critic-scope-check.sh via common.sh. It was duplicated here
-# first; a second copy of a path resolver that three-OS CI had already hardened is precisely
-# the twin-fix shape this repo keeps paying for, so the helper moved to core and both callers
-# use it. The local fallback keeps the hook fail-safe if common.sh is missing.
+# ONE canonicaliser, and no local copy of it.
+#
+# There used to be a fallback definition inlined here, and a comment calling it "fail-safe".
+# A fresh attacker measured what it actually was: a PRE-FIX copy. common.sh normalises a root
+# of "/" to "" for the UNC reason spelled out there; the inline copy was that body WITHOUT the
+# normalisation, so it returned "//no-such/f" where the canonical one returns "/no-such/f".
+# critic-scope-check.sh carried the identical stale twin. Third instance of that shape this
+# cycle -- and neither copy was ever exercised, because test_helper.bash always copies
+# common.sh into the sandbox, so no test could see the divergence.
+#
+# A duplicate that no test reaches is not a safety net, it is a second implementation drifting
+# in the dark. So: load the real one, and if it is missing, REFUSE. A hook that cannot load its
+# path resolver is not fail-safe -- it is unguarded, which for a read boundary is the failure
+# and not the fallback.
 . "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
 if ! command -v arc_canon_path >/dev/null 2>&1 && ! type arc_canon_path >/dev/null 2>&1; then
-  arc_canon_path() {
-    _cp="$1"; _cs=""
-    while [ -n "$_cp" ] && [ "$_cp" != "/" ] && [ ! -d "$_cp" ]; do
-      _cs="$(basename "$_cp")${_cs:+/$_cs}"
-      _cparent="$(dirname "$_cp")"
-      [ "$_cparent" = "$_cp" ] && break
-      _cp="$_cparent"
-    done
-    if [ -d "$_cp" ]; then
-      _cbase="$(cd "$_cp" 2>/dev/null && pwd -P)" || _cbase="$_cp"
-      printf '%s' "$_cbase${_cs:+/$_cs}"
-    else
-      printf '%s' "$1"
-    fi
-  }
+  echo "BLOCKED by ui-composer scope: cannot load .claude/scripts/core/common.sh, so paths cannot be canonicalised." >&2
+  echo "A boundary that cannot resolve a path cannot decide anything about it. Refusing rather than guessing." >&2
+  exit 2
 fi
 
 # Control verbs are only honoured when this script is invoked DIRECTLY, never when a path is
@@ -83,13 +81,23 @@ case "$ARC_SCOPE_VERB" in
       echo "explore=$ex"
       echo "variant=$variant"
       echo "pid=$$"
-    } > "$MARKER" || exit 2
+    } > "$MARKER_DIR/composer-session--$ex--$variant" || exit 2
     echo "composer-scope-check: read boundary armed for $ex/$variant"
     exit 0
     ;;
   --end)
-    rm -f "$MARKER" 2>/dev/null || true
-    echo "composer-scope-check: read boundary released"
+    # --end NAMES what it releases. The single global marker made `--end` mean "release
+    # whatever is armed", so `compose-done <id> --variant c` cheerfully disarmed variant-b's
+    # boundary and left b reading siblings. With no arguments it still clears everything,
+    # because a session that has lost track must be able to get back to a known state.
+    _e="${2:-}"; _v="${3:-}"
+    if [ -n "$_e" ] && [ -n "$_v" ]; then
+      rm -f "$MARKER_DIR/composer-session--$_e--$_v" 2>/dev/null || true
+      echo "composer-scope-check: read boundary released for $_e/$_v"
+    else
+      rm -f "$MARKER_DIR"/composer-session--* "$MARKER" 2>/dev/null || true
+      echo "composer-scope-check: read boundary released (all)"
+    fi
     exit 0
     ;;
 esac
@@ -97,10 +105,39 @@ esac
 # ---------- enforcement ----------
 
 # No marker -> no composer in flight -> nothing to enforce.
-[ -f "$MARKER" ] || exit 0
+# ONE marker per composer, and MORE THAN ONE is a refusal rather than a guess.
+#
+# This was a single global file while explore mode runs three composers. A fresh attacker
+# armed A, then armed B, and the marker simply became B's: composer A was then allowed to read
+# variant-b and REFUSED its own directory. Both halves of the boundary inverted at once, and
+# the marker's `pid=` field -- the one thing that could have detected it -- was written by
+# --begin and read by nothing.
+#
+# A filesystem marker cannot tell which composer is calling: the hook payload carries no
+# caller identity this script can trust. So the honest contract is SERIAL composition, and
+# more than one armed boundary fails CLOSED with a message that says why. Parallel composition
+# needs per-caller identity in the payload, which is a later question and not one to fake here
+# by picking a marker and hoping.
+_MK_N=0; MARKER=""
+for _mk in "$MARKER_DIR"/composer-session--*; do
+  [ -f "$_mk" ] || continue
+  _MK_N=$((_MK_N + 1)); MARKER="$_mk"
+done
+[ "$_MK_N" -eq 0 ] && exit 0
+if [ "$_MK_N" -gt 1 ]; then
+  echo "BLOCKED by ui-composer scope: $_MK_N composer boundaries are armed at once." >&2
+  echo "This read cannot be attributed to one of them, and picking is how composer A came to read variant-b." >&2
+  echo "Compose serially -- one compose / compose-done pair at a time." >&2
+  exit 2
+fi
 
-EX="$(sed -n 's/^explore=//p' "$MARKER" 2>/dev/null | head -1)"
-VARIANT="$(sed -n 's/^variant=//p' "$MARKER" 2>/dev/null | head -1)"
+# tr -d '\r' before the anchored sed, the same guard _sha_of and _vw_of carry in
+# design-explore.sh. Without it a CRLF marker -- written by PowerShell, an editor, or the
+# composer's own Write tool -- yields an empty EX on ubuntu and macOS while MSYS2 strips the CR
+# and reads clean on Windows. The consequence is not a silent pass but a total refusal: every
+# composer read blocked, on two legs out of three, for a reason invisible on the third.
+EX="$(tr -d '\r' < "$MARKER" 2>/dev/null | sed -n 's/^explore=//p' | head -1)"
+VARIANT="$(tr -d '\r' < "$MARKER" 2>/dev/null | sed -n 's/^variant=//p' | head -1)"
 # A marker we cannot read is not a licence to allow everything: it is a broken boundary, and
 # an empty read here would build allowlist prefixes ending in `/`, which match far too much.
 if [ -z "$EX" ] || [ -z "$VARIANT" ]; then
@@ -125,17 +162,45 @@ TARGET="${1:-}"
 #   Grep  + no path      -> "all of it". That is the widest possible read, not an absent
 #   Glob  + no path         one, and it must fail CLOSED.
 TOOL=""
+PATTERN=""
 if [ -z "$TARGET" ] && [ ! -t 0 ]; then
   STDIN="$(cat)"
   if command -v jq >/dev/null 2>&1; then
     TARGET="$(printf '%s' "$STDIN" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)"
     TOOL="$(printf '%s' "$STDIN" | jq -r '.tool_name // empty' 2>/dev/null)"
+    PATTERN="$(printf '%s' "$STDIN" | jq -r '.tool_input.pattern // empty' 2>/dev/null)"
   else
     TARGET="$(printf '%s' "$STDIN" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
     [ -z "$TARGET" ] && TARGET="$(printf '%s' "$STDIN" | grep -o '"path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
     TOOL="$(printf '%s' "$STDIN" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    PATTERN="$(printf '%s' "$STDIN" | grep -o '"pattern"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
   fi
 fi
+
+# THE PATTERN IS A PATH TOO, for Glob and Grep. Judging only `path` left the boundary open in
+# the most ordinary way there is: an ALLOWED path plus an ABSOLUTE pattern returns the sibling,
+# because the tool resolves the pattern against the filesystem and not against the path it was
+# handed. A fresh attacker did exactly that and got variant-b's index.html back while the gate
+# said 0.
+#
+# `../` in a pattern is refused too. That form happens not to escape today -- the tool declines
+# to walk `..` in a pattern -- but a rule that depends on another tool's current behaviour is a
+# rule with an expiry date nobody will notice passing.
+case "$TOOL" in
+  Grep|Glob)
+    case "$PATTERN" in
+      "") ;;
+      /*|[A-Za-z]:/*|[A-Za-z]:\\*)
+        echo "BLOCKED by ui-composer scope: an ABSOLUTE $TOOL pattern ('$PATTERN') is resolved against the filesystem, not against the path you passed." >&2
+        echo "That is the whole tree, including every sibling variant. Keep the pattern relative and scope it with path." >&2
+        exit 2;;
+      ..|../*|*/..|*/../*)
+        echo "BLOCKED by ui-composer scope: a $TOOL pattern containing '..' ('$PATTERN') leaves whatever path scopes it." >&2
+        exit 2;;
+    esac
+    ;;
+esac
+
 if [ -z "$TARGET" ]; then
   case "$TOOL" in
     Grep|Glob)
@@ -154,6 +219,28 @@ case "$TARGET" in
   ..|../*|*/..|*/../*)
     echo "BLOCKED by ui-composer scope: '$TARGET' contains a '..' segment." >&2
     exit 2
+    ;;
+esac
+
+# A RELATIVE target still needs normalising before it can be compared, and skipping that was a
+# false refusal rather than a hole: `./docs/.../variant-a/index.html` is the composer's OWN file
+# and was BLOCKED, as were `docs/./design/...` and `docs//design/...`. Grep and Glob take
+# relative paths as a matter of course, so this is the ordinary spelling, not an exotic one.
+#
+# Done AFTER the traversal refusal above, deliberately: `..` is judged on the raw string, and a
+# normaliser that collapsed segments first would be resolving the very thing the refusal exists
+# to catch. Nothing here can introduce a `..` -- it only removes `./` and doubled slashes.
+case "$TARGET" in
+  /*|[A-Za-z]:/*) ;;
+  *)
+    while :; do
+      case "$TARGET" in
+        ./*)  TARGET="${TARGET#./}"; continue;;
+        *//*) TARGET="$(printf '%s' "$TARGET" | sed 's#//*#/#g')"; continue;;
+        */./*) TARGET="$(printf '%s' "$TARGET" | sed 's#/\./#/#g')"; continue;;
+      esac
+      break
+    done
     ;;
 esac
 

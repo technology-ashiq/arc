@@ -218,10 +218,24 @@ _meta_field() {
   # decide the comparison.
   # grep -c PRINTS 0 and EXITS 1 on no match, so `|| echo 0` appended a second zero and the
   # comparison below saw a two-line count. Read the count, then normalise an empty capture.
-  _n="$(grep -c "^  \"$2\": " "$1" 2>/dev/null)" || true
+  # tr -d '\r' FIRST, for the reason _sha_of and _vw_of in design-explore.sh already carry it:
+  # the `$` anchor below cannot match past a CR, so a CRLF meta yields an EMPTY capture. MSYS2
+  # sed strips the CR silently, so this reads clean on Windows and fails on ubuntu and macOS --
+  # an OS-asymmetric defect no Windows-authored test can pin. The fix landed in the two design-
+  # explore readers and was left standing here: the third instance of the twin shape this cycle,
+  # found by a fresh attacker grepping the PATTERN rather than re-reading the file it was fixed in.
+  _v="$(tr -d '\r' < "$1" 2>/dev/null | sed -n "s/^  \"$2\": \"\(.*\)\",\{0,1\}$/\1/p")"
+  _n="$(tr -d '\r' < "$1" 2>/dev/null | grep -c "^  \"$2\": ")" || true
   [ -n "$_n" ] || _n=0
   [ "$_n" = "1" ] || { [ "$_n" = "0" ] && return 3; return 1; }
-  sed -n "s/^  \"$2\": \"\(.*\)\",\{0,1\}$/\1/p" "$1" 2>/dev/null
+  # The count said the key is there and the capture came back empty. That is UNREADABLE, not
+  # absent, and the distinction is load-bearing: every caller of this function treats rc=1 as
+  # "fail closed" and an empty rc=0 as "a value I can compare". Returning 0 with "" made the
+  # stale-duplicate guard skip the meta and the unchanged-detection report false, both silently.
+  # Every key read through here (screenshot_sha256, route, session) is a non-empty JSON string,
+  # so empty can only mean the line did not parse.
+  [ -n "$_v" ] || return 1
+  printf '%s\n' "$_v"
   return 0
 }
 
@@ -615,3 +629,9 @@ fi
 echo "design-render: $ROUTE -> ${PNG#"$ROOT"/}"
 echo "  viewport: ${VW}x${VH}@1  recipe: $RECIPE"
 echo "  screenshot_sha256: $SHA"
+
+# EXPLICIT, and the last line of the file. Without it this script inherits the status of the
+# echo above, so a successful render reported FAILURE whenever stdout was closed or its reader
+# had gone (`| head -0` gives 141 on SIGPIPE) -- and design-explore.sh render turns that into
+# `rc=1`, reporting a whole variant set as failed when every render worked.
+exit 0

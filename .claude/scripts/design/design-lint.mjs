@@ -529,35 +529,69 @@ if (surfacesMode) {
   const rel = relative(ROOT, target).split("\\").join("/");
   let bad = 0;
 
+  // COMMENTS, <script> and <style> are removed before anything looks at this page.
+  //
+  // Everything below judges markup, and all three of those carry text that LOOKS like markup
+  // without being any. A fresh attacker passed a page with zero real surfaces three ways --
+  // `<!-- data-arc-surface="product" was here once -->`, a CSS selector in a <style> block,
+  // and a JS string in a <script> -- each of which satisfied the "declares no surface at all"
+  // rule while the page declared nothing. Blanked rather than deleted so byte offsets and the
+  // tag walk stay aligned with the file a human is reading.
+  const inert = (s) => s.replace(/[^\n]/g, " ");
+  const markup = html
+    .replace(/<!--[\s\S]*?-->/g, inert)
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, inert)
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, inert);
+
   // Walk tags, tracking nesting. This is a MARKER check and not an HTML parser, so it tracks
   // only the containers that can carry a marker and closes them by name.
   const TOKEN = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*)>/g;
   const CONTAINER = /^(section|div|main|article)$/;
-  const ATTR = /\bdata-arc-surface\s*=\s*"([^"]*)"/;
+  // Double, single AND unquoted. `data-arc-surface='doc'` nested inside a product surface used
+  // to sail past the doc-on-canvas ERR -- the one refusal this gate exists for -- because the
+  // pattern only knew double quotes. HTML permits all three spellings and a composer writing
+  // the page has no idea which one the gate happens to recognise.
+  const ATTR = /\bdata-arc-surface\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/;
   const stack = [];
+  // Counted on the WALK, not by a regex over the raw file. See the blanking above: the raw-text
+  // form was satisfied by a marker in a comment.
+  let declared = 0;
   let m;
-  while ((m = TOKEN.exec(html)) !== null) {
+  while ((m = TOKEN.exec(markup)) !== null) {
     const closing = m[1] === "/";
     const tag = m[2].toLowerCase();
     const attrs = m[3];
     if (!CONTAINER.test(tag)) continue;
-    if (closing) { stack.pop(); continue; }
+    if (closing) {
+      // Pop BY NAME. An unconditional pop desyncs the stack on unbalanced markup, and one
+      // stray `</div>` was enough to pop "product" off and let a doc surface nested inside it
+      // read as top-level -- defeating doc-on-canvas, the refusal this gate exists for.
+      // Unbalanced markup is now its own refusal rather than a silent re-interpretation.
+      const top = stack.length ? stack[stack.length - 1] : null;
+      if (top && top.tag === tag) { stack.pop(); }
+      else {
+        console.log("ERR  [surface-unbalanced] " + rel + ": </" + tag + "> closes " + (top ? "<" + top.tag + ">" : "nothing") + " -- unbalanced container markup, so nesting cannot be judged and a doc region inside a product surface would read as top-level");
+        bad++;
+      }
+      continue;
+    }
     if (/\/\s*$/.test(attrs)) continue;   // self-closing: opens nothing
     const a = ATTR.exec(attrs);
     if (a) {
-      const kind = a[1].trim();
+      const kind = (a[1] !== undefined ? a[1] : a[2] !== undefined ? a[2] : a[3]).trim();
+      declared++;
       if (kind !== "product" && kind !== "doc") {
         console.log("ERR  [surface-unknown] " + rel + ': data-arc-surface="' + kind + '" -- the vocabulary is product or doc, and an unknown value fails closed');
         bad++;
       }
       // Documentation ON the product canvas is the deterministic ERR this gate exists for.
       // A doc surface as its own top-level sibling is legitimate; nested inside product is not.
-      if (kind === "doc" && stack.indexOf("product") !== -1) {
+      if (kind === "doc" && stack.some((e) => e.kind === "product")) {
         console.log("ERR  [doc-on-canvas] " + rel + ': a data-arc-surface="doc" region is nested inside a product surface -- reference material may be its own surface, never part of the canvas being judged');
         bad++;
       }
-      stack.push(kind);
-    } else if (tag === "section" && stack.indexOf("product") === -1 && stack.indexOf("doc") === -1) {
+      stack.push({ tag, kind });
+    } else if (tag === "section" && !stack.some((e) => e.kind === "product" || e.kind === "doc")) {
       // A section that sits inside no MARKED surface fails CLOSED. The first cut asked for
       // stack.length === 0, which sounded like "top level" and was not: <main> is itself a
       // container and pushes, so a section inside <main> -- i.e. every real one -- never
@@ -568,9 +602,9 @@ if (surfacesMode) {
       // composer who forgets the attribute gets a refusal rather than a guess.
       console.log("ERR  [surface-unmarked] " + rel + ": a top-level <section> carries no data-arc-surface -- unmarked is refused, never assumed to be product");
       bad++;
-      stack.push("unmarked");
+      stack.push({ tag, kind: "unmarked" });
     } else {
-      stack.push(stack.length ? stack[stack.length - 1] : "");
+      stack.push({ tag, kind: stack.length ? stack[stack.length - 1].kind : "" });
     }
   }
   // A page that declares NO surface at all cannot be classified, and REQ-03 says unmarked
@@ -582,9 +616,16 @@ if (surfacesMode) {
   // The rule is deliberately not "every div needs a marker": that would demand an attribute
   // on every layout wrapper and buy nothing. It is that zero declarations is the emptiest
   // possible result, and an empty result set is the one thing a broken scanner and a clean
-  // page agree on. Checked on the RAW html, not on the walk, so a page whose only marker sits
-  // on a tag the walker skips still counts as having declared one.
-  if (!ATTR.test(html)) {
+  // page agree on.
+  //
+  // COUNTED ON THE WALK. The first cut counted on the raw html, reasoning that a marker on a
+  // tag the walker skips should still count. A fresh attacker showed what that admitted:
+  // `<!-- data-arc-surface="product" was here once -->`, a CSS selector inside <style>, and a
+  // JS string inside <script> each satisfied it while the page declared nothing -- and this
+  // rule exists precisely FOR pages that declare nothing. There is no tag a marker can sit on
+  // that the walker skips, since CONTAINER covers every element that can be a surface, so the
+  // raw-text reading bought nothing and cost the rule.
+  if (declared === 0) {
     console.log("ERR  [surface-undeclared] " + rel + ": the page declares no data-arc-surface region at all -- a page that classifies nothing cannot be judged as product canvas, and unmarked fails closed");
     bad++;
   }
