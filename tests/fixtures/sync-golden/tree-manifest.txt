@@ -62,6 +62,7 @@
 .claude/hooks/PreCompact.sh	d7ebbd0d0dd68727f00f7cd045a28bcc23ee05bb58565da6152e3e2bb53329e1
 .claude/hooks/PreToolUse-edit.d/00-freeze.sh	828886bfb1cba995d9909a15e08066fe42ac309d3af608af154e4bb82abe7455
 .claude/hooks/PreToolUse-edit.d/10-design-critic.sh	24220634bcaef9277e9a5ae50951c36885ade261096db67ee62e8023fa5a02c6
+.claude/hooks/PreToolUse-edit.d/11-design-composer.sh	d3a2903221e05965bb43dfd462bf895e0934870d5b90d5cf8789875a5405c3c5
 .claude/hooks/PreToolUse-edit.d/40-policy.sh	8f77193c518caaeca127f37a37469ad584dad2dd8de6a86f0f7f116da53407de
 .claude/hooks/PreToolUse-edit.sh	8dea19705f6a3d6eb2d1b16d328becadd2183d869871a1b9dbc808b8c4d8ab23
 .claude/hooks/PreToolUse-read.d/10-design-composer.sh	030c04e52840a1f4953458e830eb541198e547344476df32482a7327a84e8781

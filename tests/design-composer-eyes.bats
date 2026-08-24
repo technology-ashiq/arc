@@ -497,3 +497,69 @@ EOF
   run bash "$(_csc)" <<< "$(_payload Read '{"file_path":"/etc/passwd"}')"
   [ "$status" -eq 2 ] || { echo "the boundary carried on without its resolver: $status $output"; false; }
 }
+
+# ---------- 10. the WRITE boundary (F2) ----------
+#
+# The read boundary was built and `Write` was left unbounded. A fresh attacker walked through
+# the gap end to end: blocked from READING variant-b, the composer used its own Write tool on
+# the marker file that constrains it, and then read variant-b. Cycle 7 paid for this exact
+# shape -- a propose-only guard a mutant module walked past by overwriting the canonical file.
+#
+# Driven through the REAL edit dispatcher on a stdin payload, because that is the only shape
+# that answers "does the guard guard" rather than "does the script decide correctly".
+
+_ewrite() { bash "$SANDBOX/.claude/hooks/PreToolUse-edit.sh"; }
+
+@test "composer write: its own variant dir is writable" {
+  _composer_sandbox
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(_payload Write '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html","content":"x"}')"
+  [ "$status" -eq 0 ] || { echo "the composer cannot write its own page: $output"; false; }
+}
+
+@test "composer write: the MARKER that constrains it is refused" {
+  _composer_sandbox
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  # The attacker's exact escape. Rewriting the marker is not a write, it is an escape, and the
+  # refusal says so rather than filing it under "outside your directory".
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(_payload Write '{"file_path":".claude/state/design/composer-session--lexos-v1--variant-a","content":"explore=lexos-v1"}')"
+  [ "$status" -eq 2 ] || { echo "the composer rewrote its own constraint: $status $output"; false; }
+}
+
+@test "composer write: the GUARD ITSELF is refused" {
+  _composer_sandbox
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(_payload Write '{"file_path":".claude/scripts/design/composer-scope-check.sh","content":"exit 0"}')"
+  [ "$status" -eq 2 ] || { echo "the composer rewrote the boundary: $status $output"; false; }
+}
+
+@test "composer write: a SIBLING variant is refused" {
+  _composer_sandbox
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(_payload Write '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}')"
+  [ "$status" -eq 2 ] || { echo "the composer wrote into another composer's work: $status $output"; false; }
+}
+
+@test "composer write: with NO composer armed the boundary is a no-op" {
+  _composer_sandbox
+  # An always-on rule would block every other agent in the repo, including the one that fixes
+  # what the composer got wrong.
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(_payload Write '{"file_path":"README.md","content":"x"}')"
+  [ "$status" -eq 0 ] || { echo "an unarmed boundary blocked an unrelated write: $output"; false; }
+}
+
+@test "composer write: an unidentifiable write fails CLOSED while armed" {
+  _composer_sandbox
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  # Deliberately the OPPOSITE of the read boundary. An unjudgeable read blocks unrelated work
+  # for no visible reason; an unjudgeable write while a composer is armed is the one thing this
+  # guard exists to stop.
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(_payload Write '{"content":"x"}')"
+  [ "$status" -eq 2 ] || { echo "a write with no readable path was allowed: $status $output"; false; }
+}

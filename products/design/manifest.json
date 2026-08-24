@@ -27,6 +27,7 @@
   ],
   "files": [
     ".claude/hooks/PreToolUse-edit.d/10-design-critic.sh",
+    ".claude/hooks/PreToolUse-edit.d/11-design-composer.sh",
     ".claude/hooks/PreToolUse-read.d/10-design-composer.sh"
   ],
   "docs": [
