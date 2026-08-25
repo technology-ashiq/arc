@@ -418,9 +418,38 @@ EOF
   # `[ -f "$MARKER" ] || exit 0`, exited 0, and satisfied compose's `|| exit 1`. The operator
   # was told "read boundary ARMED" while nothing was armed. compose now clears the variable
   # for the control verb AND asserts the marker exists.
-  ARC_SCOPE_FORWARDED=1 run bash "$(_explore_sh)" compose lexos-v1 --variant a
-  [ "$status" -ne 0 ] || { echo "compose reported success under a forwarded env: $output"; false; }
-  [ ! -f "$(_marker)" ] || { echo "it also armed something: $output"; false; }
+  #
+  # The first cut of this case asserted the WRONG half of that fix: it demanded compose REFUSE
+  # under a forwarded env. Refusing would disable the operator control verb in every session
+  # where the hook fragment legitimately exports the variable -- which is the ordinary case,
+  # not the attack. What shipped clears it for the verb and then verifies the EFFECT, so the
+  # contract to pin is that compose still arms FOR REAL, with exit code and effect agreeing.
+  #
+  # `env VAR=1 cmd` rather than a `VAR=1 run cmd` prefix: an env prefix on bats `run` is a
+  # prefix on a shell FUNCTION, and this repo has already been burned by assuming it reaches
+  # the child. `env` puts it in the child environment on all three legs, with no export to
+  # leak into the next case.
+  run env ARC_SCOPE_FORWARDED=1 bash "$(_explore_sh)" compose lexos-v1 --variant a
+  [ "$status" -eq 0 ] || { echo "a forwarded env disabled the control verb: $output"; false; }
+  [ -f "$(_marker)" ] || { echo "compose exited 0 and armed nothing: $output"; false; }
+  echo "$output" | grep -q "read boundary ARMED" || { echo "armed, but never said so: $output"; false; }
+}
+
+@test "compose: --begin exiting 0 while writing NO marker is refused, not reported ARMED" {
+  _composer_sandbox
+  # The negative control for the case above, and the reason that case is not vacuous. "compose
+  # exits 0 and the marker exists" on the happy path cannot tell a VERIFIED arm from an
+  # unverified one -- it passes either way while the assertion that does the work is deleted.
+  # So replace the boundary script with a mutant that exits 0 and writes nothing: precisely
+  # what the real script did under a forwarded env, reproduced without needing the env at all.
+  cat > "$(_csc)" <<'MUTANT'
+#!/usr/bin/env bash
+exit 0
+MUTANT
+  run bash "$(_explore_sh)" compose lexos-v1 --variant a
+  [ "$status" -ne 0 ] || { echo "a silent no-op arm was reported ARMED: $output"; false; }
+  [ ! -f "$(_marker)" ] || { echo "the mutant armed something after all: $output"; false; }
+  echo "$output" | grep -q "no marker exists" || { echo "refused, but not for the missing marker: $output"; false; }
 }
 
 @test "compose: two composers armed at once REFUSE rather than the last one winning" {

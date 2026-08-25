@@ -249,15 +249,24 @@ EOF
   # path carried no viewport component at all, so a second render overwrote the first and two
   # metas could not coexist in one session. Writing the real names keeps this fixture honest,
   # and design-render-session.bats proves separately that the renderer emits them.
+  #
+  # And the CONTENTS are the renderer's too, one layer down, for the same reason. coverage now
+  # demands a meta whose `png` exists on disk -- a meta pointing at nothing is a claim, which
+  # is exactly what the forged-meta case further down refuses. This fixture was left on the old
+  # three-field shape when that rule landed, so the POSITIVE control went red and the tightened
+  # rule was shipped with only its refusal half proven. A rule that can refuse and has nothing
+  # it accepts is half a rule, and the half that is missing is the one that catches over-reach.
   SR="$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a"
   SL="docs--design--explore--lexos-v1--variant-a--index-html"
   mkdir -p "$SR"
-  printf '{\n  "route": "docs/design/explore/lexos-v1/variant-a/index.html",\n  "viewport": "1440x900@1",\n  "session": "lexos-v1--variant-a"\n}\n' \
-    > "$SR/$SL--1440x900.json"
-  printf '{\n  "route": "docs/design/explore/lexos-v1/variant-a/index.html",\n  "viewport": "390x844@1",\n  "session": "lexos-v1--variant-a"\n}\n' \
-    > "$SR/$SL--390x844.json"
+  for vp in 1440x900 390x844; do
+    : > "$SR/$SL--$vp.png"
+    printf '{\n  "route": "docs/design/explore/lexos-v1/variant-a/index.html",\n  "url": "file:///lexos-v1/variant-a/index.html",\n  "png": ".claude/state/design/renders/lexos-v1--variant-a/%s--%s.png",\n  "screenshot_sha256": "0000000000000000000000000000000000000000000000000000000000000000",\n  "viewport": "%s@1",\n  "recipe": "test",\n  "session": "lexos-v1--variant-a",\n  "iter": null,\n  "unchanged": false\n}\n' \
+      "$SL" "$vp" "$vp" > "$SR/$SL--$vp.json"
+  done
   run bash "$(_explore)" coverage lexos-v1 --brief "$BRIEF"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "both declared viewports rendered and coverage still refused: $output"; false; }
+  echo "$output" | grep -q "coverage ok" || { echo "exit 0 without reporting coverage of anything: $output"; false; }
 }
 
 # ---------- the div-built page (adversarial pass, 2026-08-24) ----------
