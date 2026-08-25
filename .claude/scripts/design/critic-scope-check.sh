@@ -95,27 +95,31 @@ esac
 # So both sides go through one resolver instead: cd into the deepest part of the path that
 # exists and ask the shell for the physical path, then re-attach whatever did not exist yet
 # (the critique file is normally about to be created, so the tail often does not exist).
-_canon() {
-  _cp="$1"; _cs=""
-  while [ -n "$_cp" ] && [ "$_cp" != "/" ] && [ ! -d "$_cp" ]; do
-    _cs="$(basename "$_cp")${_cs:+/$_cs}"
-    _cparent="$(dirname "$_cp")"
-    [ "$_cparent" = "$_cp" ] && break
-    _cp="$_cparent"
-  done
-  if [ -d "$_cp" ]; then
-    _cbase="$(cd "$_cp" 2>/dev/null && pwd -P)" || _cbase="$_cp"
-    printf '%s' "$_cbase${_cs:+/$_cs}"
-  else
-    printf '%s' "$1"
-  fi
-}
+# One canonicaliser, now in core as arc_canon_path -- composer-scope-check.sh (ADR-1415)
+# needs the identical resolver, and a second copy of a path helper that three-OS CI had
+# already hardened is the twin-fix shape this repo keeps paying for. There is no local copy:
+# a duplicate no test can reach is not a safety net (see the block below).
+. "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
+if ! type arc_canon_path >/dev/null 2>&1; then
+  # The inline fallback that used to sit here was a PRE-FIX copy of common.sh's resolver --
+  # the same body without the root-of-"/" normalisation, so it returned "//no-such/f" where the
+  # canonical one returns "/no-such/f", and "//host/share" is a UNC path on Cygwin/MSYS. The
+  # comment above called it fail-safe; a fresh attacker measured it and it was a second
+  # implementation drifting in the dark, unreachable by any test because test_helper.bash
+  # always copies common.sh into the sandbox.
+  #
+  # composer-scope-check.sh carried the identical twin and is fixed the same way. A hook that
+  # cannot load its path resolver is not fail-safe -- for a scope boundary it is unguarded.
+  echo "BLOCKED by design-critic scope: cannot load .claude/scripts/core/common.sh, so paths cannot be canonicalised." >&2
+  echo "A boundary that cannot resolve a path cannot decide anything about it. Refusing rather than guessing." >&2
+  exit 2
+fi
 
 # Only absolute targets need resolving; a relative one is already repo-relative.
 case "$TARGET" in
   /*|[A-Za-z]:/*)
-    TARGET="$(_canon "$TARGET" | tr '\\' '/')"
-    ROOT_N="$(_canon "$ROOT" | tr '\\' '/')"
+    TARGET="$(arc_canon_path "$TARGET" | tr '\\' '/')"
+    ROOT_N="$(arc_canon_path "$ROOT" | tr '\\' '/')"
     case "$TARGET" in "$ROOT_N"/*) TARGET="${TARGET#"$ROOT_N"/}";; esac
     ;;
 esac

@@ -705,6 +705,7 @@
         "lints": [
           "design-gate",
           "design-lint",
+          "design-sources-lint",
           "render-hash"
         ],
         "concepts": [
@@ -716,9 +717,12 @@
         ],
         "products": [
           "design"
+        ],
+        "adrs": [
+          "1400"
         ]
       },
-      "itemCount": 20
+      "itemCount": 22
     },
     {
       "id": "toolbelt",
@@ -750,6 +754,7 @@
           "PreCompact",
           "PreToolUse",
           "PreToolUse-edit",
+          "PreToolUse-read",
           "SessionEnd",
           "SessionStart",
           "_dispatch.sh"
@@ -787,7 +792,7 @@
           "skill:seo-article-writer"
         ]
       },
-      "itemCount": 33
+      "itemCount": 34
     },
     {
       "id": "money",
@@ -1247,6 +1252,7 @@
       "1100": "growth",
       "1200": "legal",
       "1300": "toolbelt",
+      "1400": "design-studio",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",

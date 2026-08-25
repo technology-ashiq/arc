@@ -16,8 +16,16 @@
 #
 #   design-explore.sh init  <id> --brief <path>   # scaffold + record base SHA + brief
 #   design-explore.sh check <id>                  # deterministic gate before critique
+#   design-explore.sh compose <id> --variant <x>  # ARM the composer read boundary
+#   design-explore.sh compose-done <id> --variant <x> [--brief <path>]
+#                                                 # release it, then run the composer gates
 #   design-explore.sh render <id>                 # one shared render command, all variants
 #   design-explore.sh status <id>                 # where this explore stands
+#   design-explore.sh surfaces|coverage|selfreview <id>   # the REQ-03 / REQ-02b gates
+#
+# compose/compose-done are the bookends, and they are the reason the gates are reachable at
+# all: the three of them shipped with zero production callers, so nothing armed the marker
+# and the read hook was a no-op everywhere except its own tests.
 #
 # Exit: 0 ok | 1 refused/incomplete. Never 2.
 set -uo pipefail
@@ -31,7 +39,7 @@ shift 2>/dev/null || true
 shift 2>/dev/null || true
 
 if [ -z "$CMD" ] || [ -z "$ID" ]; then
-  echo "design-explore: usage: design-explore.sh {init|check|render|status} <explore-id> [--brief <path>]" >&2
+  echo "design-explore: usage: design-explore.sh {init|check|compose|compose-done|render|status|surfaces|coverage|selfreview} <explore-id> [--variant <x>] [--brief <path>]" >&2
   exit 1
 fi
 # Characters spelled out, not `a-z`: a bracket range resolves through the locale's
@@ -49,8 +57,18 @@ VARIANTS="a b c"
 case "$CMD" in
   init)
     BRIEF=""
+    # `shift 2` with one argument left FAILS and shifts nothing; set -e is off, so the loop
+    # re-reads the same $1 until the CI job times out. This is the identical defect
+    # design-render.sh documents in a nine-line comment, that five of its tests pin, and that
+    # this file's own `coverage` branch fixes correctly 160 lines below. Written twice in one
+    # tree and not carried to the sibling loop -- the twin-fix shape, third time this cycle.
+    # The catch-all is a refusal for the same reason: `--breif docs/x.md` used to vanish and
+    # report "init needs --brief", which is an omitted flag wearing a typo's clothes.
     while [ "$#" -gt 0 ]; do
-      case "$1" in --brief) BRIEF="${2:-}"; shift 2;; *) shift;; esac
+      case "$1" in
+        --brief) [ "$#" -ge 2 ] || { echo "design-explore: --brief needs a value" >&2; exit 1; }; BRIEF="$2"; shift 2;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
     done
     if [ -z "$BRIEF" ]; then
       echo "design-explore: init needs --brief <path> — exploration without declared intent is exploration of nothing" >&2
@@ -96,6 +114,14 @@ case "$CMD" in
     done
     echo "design-explore: scaffolded docs/design/explore/$ID (base $BASE)"
     echo "  next: the director assigns theses + writes matrix.md; composers fill variant-{a,b,c}/"
+    # EXPLICIT exit, here and in every branch below. Falling off the end of a `case` inherits
+    # the last command's status, so with stdout closed or a reader gone (`| head -0`) these
+    # branches reported FAILURE for a run that succeeded -- `check` exited 1 while passing, and
+    # `status` exited 141 on SIGPIPE. That is the same class as the interrupted-write defect
+    # seen in another lane's gate, and I had recorded that the design scripts were not exposed
+    # to it: I had checked the paths that end in an explicit `exit` and not the ones that end
+    # in an echo.
+    exit 0
     ;;
 
   check)
@@ -174,10 +200,511 @@ case "$CMD" in
       exit 1
     fi
     echo "design-explore: check OK — matrix + director call + 3 variants (thesis, page, tokens-only colour)"
+    exit 0
+    ;;
+
+  surfaces)
+    # REQ-03 / ADR-1407: product canvas vs documentation, decided by MARKER.
+    #
+    # The judgment lives in design-lint.mjs, which already owns every parser in this product.
+    # A second implementation here would be the twin-fix shape: two readers of one contract,
+    # drifting apart the first time either is touched.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID' -- run init first" >&2; exit 1; }
+    sfails=0
+    seen=0
+    for v in $VARIANTS; do
+      page="$EX/variant-$v/index.html"
+      # EX is already absolute; prefixing $ROOT again would look plausible and resolve nowhere.
+      [ -f "$page" ] || continue
+      seen=$((seen + 1))
+      node "$DESIGN_DIR/design-lint.mjs" --surfaces "$page" || sfails=$((sfails + 1))
+    done
+    # Nothing to check is a MESSAGE, never a silent pass. An empty result set is the one
+    # thing a broken scanner and a clean tree agree on, and this lane has shipped that.
+    if [ "$seen" -eq 0 ]; then
+      echo "design-explore: no variant pages found under $EX -- nothing to classify (this is not a pass)" >&2
+      exit 1
+    fi
+    [ "$sfails" -eq 0 ] || { echo "design-explore: $sfails variant(s) failed the surface gate"; exit 1; }
+    echo "design-explore: surfaces ok across $seen variant(s)"
+    exit 0
+    ;;
+
+  coverage)
+    # REQ-03 / ADR-1403: every viewport the brief DECLARES must actually have been rendered.
+    #
+    # Cycle 3 rendered desktop only while section C sat there declaring surfaces nobody
+    # consumed. This is the control that makes the declaration load-bearing: a
+    # declared-but-unrendered surface is a run gap, and a run gap blocks PASS.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID' -- run init first" >&2; exit 1; }
+    BRIEF=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --brief) [ "$#" -ge 2 ] || { echo "design-explore: --brief needs a value" >&2; exit 1; }; BRIEF="$2"; shift 2;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
+    done
+    if [ -z "$BRIEF" ]; then
+      echo "design-explore: coverage needs --brief <path> -- the viewport set is DERIVED from the platform contract, never assumed" >&2
+      exit 1
+    fi
+    # init resolves the brief against $ROOT; this handed it straight to node, cwd-relative, so
+    # the same relative path worked in one subcommand and failed in the other whenever the
+    # caller was not standing at the repo root. Traversal is refused here as init refuses it.
+    case "$BRIEF" in
+      ..|../*|*/..|*/../*) echo "design-explore: --brief may not contain a '..' segment" >&2; exit 1;;
+    esac
+    case "$BRIEF" in /*|[A-Za-z]:*) ;; *) BRIEF="$ROOT/$BRIEF";; esac
+    WANT="$(node "$DESIGN_DIR/design-lint.mjs" --viewports "$BRIEF")" || {
+      echo "design-explore: could not derive the viewport set from $BRIEF" >&2
+      exit 1
+    }
+    # An empty derived set would make the loop below never iterate and report a clean pass --
+    # the exact shape the surfaces branch spells out twenty lines above ("an empty result set
+    # is the one thing a broken scanner and a clean tree agree on").
+    if [ -z "$WANT" ]; then
+      echo "design-explore: derived an EMPTY viewport set from $BRIEF -- that is a broken contract, not a pass" >&2
+      exit 1
+    fi
+    cfails=0
+    cseen=0
+    for v in $VARIANTS; do
+      [ -f "$EX/variant-$v/index.html" ] || continue
+      cseen=$((cseen + 1))
+      sess="$ID--variant-$v"
+      rdir="$ROOT/.claude/state/design/renders/$sess"
+      for want in $WANT; do
+        # The meta records viewport as WxH@1; match that exact shape rather than a substring,
+        # so 390x844 can never be satisfied by 1390x8440.
+        #
+        # BUT A STRING IN A FILE IS NOT A RENDER. This used to grep every *.json in the session
+        # for the viewport text, so a fresh attacker satisfied BOTH declared viewports with one
+        # hand-written file that is not even valid JSON:
+        #
+        #     { "viewport": "1440x900@1", "second": "viewport": "390x844@1" }
+        #
+        # No PNG, no sha, no route, no render ever run -- and `coverage ok`. Combined with the
+        # composer's unbounded Write, the audited party forges its own evidence in one file.
+        # So each declared viewport must be carried by a DISTINCT meta that names this variant's
+        # page and whose PNG exists on disk. Evidence over assertion, applied to the evidence.
+        _hit=0
+        for _cm in "$rdir"/*.json; do
+          [ -f "$_cm" ] || continue
+          tr -d '\r' < "$_cm" 2>/dev/null | grep -q "^  \"viewport\": \"$want@1\",\{0,1\}$" || continue
+          # The meta must be about THIS variant's page...
+          tr -d '\r' < "$_cm" 2>/dev/null | grep -q "^  \"route\": \".*variant-$v/index\.html\",\{0,1\}$" || continue
+          # ...and the PNG it names must exist. A meta pointing at nothing is a claim.
+          _cpng="$(tr -d '\r' < "$_cm" 2>/dev/null | sed -n 's/^  "png": "\(.*\)",\{0,1\}$/\1/p' | head -1)"
+          [ -n "$_cpng" ] && [ -f "$ROOT/$_cpng" ] || continue
+          _hit=$((_hit + 1))
+        done
+        if [ "$_hit" -eq 0 ]; then
+          echo "ERR  [viewport-gap] variant-$v: the brief declares $want and no render at that viewport exists in $sess (a meta naming this variant's page, with its PNG on disk)"
+          cfails=$((cfails + 1))
+        fi
+      done
+    done
+    if [ "$cseen" -eq 0 ]; then
+      echo "design-explore: no variant pages found under $EX -- nothing to cover (this is not a pass)" >&2
+      exit 1
+    fi
+    [ "$cfails" -eq 0 ] || { echo "design-explore: $cfails declared-but-unrendered surface(s) -- a contract the run never rendered is one nobody signed"; exit 1; }
+    echo "design-explore: coverage ok -- every declared viewport rendered across $cseen variant(s)"
+    exit 0
+    ;;
+
+  selfreview)
+    # REQ-02b / ADR-1401: the self-review manifest, checked against the ARTIFACTS.
+    #
+    # "Iteration 2 fixed what iteration 1 found" has to be provable from the hashes, not
+    # narrated in prose. The lane's own history is the reason this is a gate and not a
+    # convention: a whole cycle of critiques, rankings, receipts and a sealed prediction was
+    # built on pixels nobody in the session ever opened, and the owner scored it 23/100.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID' -- run init first" >&2; exit 1; }
+    rfails=0
+    # COUNTERS, because `surfaces` and `coverage` both refuse an empty result set and this --
+    # the third sibling -- reported "substantiated" over one. A fresh attacker got a clean pass
+    # from a completely empty explore, from a self-review/ dir with an EMPTY manifest, and from
+    # a manifest whose entire content was the prose "I ran three iterations and fixed the
+    # hierarchy each time. Trust me." That last one is the narrated verdict this gate's own
+    # header says it exists to refuse.
+    srseen=0     # variants that exist at all
+    srdirs=0     # variants that CLAIM iterations (a self-review/ dir)
+    srrows=0     # rows actually judged
+    for v in $VARIANTS; do
+      srdir="$EX/variant-$v/self-review"
+      sess="$ROOT/.claude/state/design/renders/$ID--variant-$v"
+      [ -d "$EX/variant-$v" ] && srseen=$((srseen + 1))
+      # A variant composed in one pass has nothing to prove. Absence is not a failure; only
+      # a CLAIM that cannot be substantiated is.
+      #
+      # But absence has two shapes and only one of them is innocent. If the session holds
+      # ITERATION receipts, iterations happened -- and a missing self-review/ then means
+      # nothing records what they were for, which is the gate's whole subject arriving as a
+      # silent pass. Opt-in is not fail-closed. So: no iterations, no obligation; iterations
+      # with no manifest directory, refused.
+      if [ ! -d "$srdir" ]; then
+        _iters=0
+        for _im in "$sess"/*--iter-*.json; do
+          [ -f "$_im" ] || continue
+          _iters=$((_iters + 1))
+        done
+        if [ "$_iters" -gt 0 ]; then
+          echo "ERR  [selfreview-dir-missing] variant-$v: $_iters iteration receipt(s) in $ID--variant-$v and no self-review/ directory -- iterations happened and nothing records what they were for"
+          rfails=$((rfails + 1))
+        fi
+        continue
+      fi
+      srdirs=$((srdirs + 1))
+      man="$srdir/manifest.md"
+      if [ ! -f "$man" ]; then
+        echo "ERR  [selfreview-manifest-missing] variant-$v: a self-review/ directory with no manifest.md -- iterations happened and nothing records what they were for"
+        rfails=$((rfails + 1))
+        continue
+      fi
+      # `sess` is set once, above the self-review/ check, because that check now reads the
+      # session too. A second assignment here would be a second place to keep in step.
+
+      # Read a meta's published hash. Anchored to the whole pretty-printed line: an
+      # unanchored match would let any line mentioning the key decide the comparison.
+      # tr -d '\r' first: the $ anchor below cannot match past a CR, so a CRLF meta would
+      # yield an empty hash and fail every row with "the render published ". MSYS2 sed strips
+      # the CR silently, so the Windows leg reads clean while ubuntu and macOS fail -- an
+      # OS-asymmetric gate no Windows-authored test can pin.
+      _sha_of() { tr -d '\r' < "$1" 2>/dev/null | sed -n 's/^[[:space:]]*"screenshot_sha256": "\(.*\)",\{0,1\}[[:space:]]*$/\1/p' | head -1; }
+      # The iteration's meta, found by GLOB rather than by recomputing the slug. _slug()
+      # already exists in design-render.sh and design-critique.sh; a third copy is the
+      # twin-fix shape, and this needs the file, not the name.
+      # `ls ... | head -1` picks by LC_COLLATE when a session holds more than one route, so a
+      # second page rendered into the same session made the gate compare the WRONG meta -- and
+      # which one wins differs between ubuntu, macOS and Git Bash, so one manifest passes on
+      # one leg and fails on another. design-render.sh already refuses when more than one line
+      # matches; same lesson, now carried. Ambiguity is a refusal, never a pick.
+      # Read the pixel WIDTH out of a meta's "viewport": "1440x900@1" line. Same tr -d '\r'
+      # and same whole-line anchoring as _sha_of above, for the same reason.
+      _vw_of() {
+        tr -d '\r' < "$1" 2>/dev/null \
+          | sed -n 's/^[[:space:]]*"viewport": "\([0-9][0-9]*\)x[0-9][0-9]*@.*$/\1/p' | head -1
+      }
+      # ONE meta per iteration -- but "one" stopped meaning "one file" when the renderer began
+      # writing a viewport component, which ADR-1403 requires: desktop and mobile in a single
+      # iteration are two metas and NEITHER is a decoy.
+      #
+      # Refusing on any multiple was right while a second file could only be a second ROUTE
+      # (the `ls | head -1` defect: LC_COLLATE decided the comparison, so a manifest passed on
+      # one OS leg and failed on another). It is wrong now, and the fix is not "pick one" --
+      # it is answering what a self-review row CLAIMS about. The row is the composer's judgment
+      # on the page it designed, so it claims about the primary surface: the WIDEST viewport of
+      # that iteration. coverage separately proves the narrow surface was rendered at all.
+      #
+      # Two metas at the SAME width is the original defect unchanged -- two routes in one
+      # session -- and still refuses. Resolving the viewport case must not resolve that one.
+      _meta_for() {
+        _mf_n=0; _mf_hit=""; _mf_w=-1; _mf_tie=0
+        for _mf in "$sess"/*--iter-"$1".json; do
+          [ -f "$_mf" ] || continue
+          _mf_n=$((_mf_n + 1))
+          _mf_this="$(_vw_of "$_mf")"
+          # A meta with no readable viewport cannot be ranked, so it can never win on width.
+          # Treated as width 0 rather than skipped: it still COUNTS, so two unreadable metas
+          # tie at 0 and refuse instead of quietly leaving one candidate standing.
+          [ -n "$_mf_this" ] || _mf_this=0
+          if [ "$_mf_this" -gt "$_mf_w" ] 2>/dev/null; then
+            _mf_w="$_mf_this"; _mf_hit="$_mf"; _mf_tie=0
+          elif [ "$_mf_this" -eq "$_mf_w" ] 2>/dev/null; then
+            _mf_tie=1
+          fi
+        done
+        [ "$_mf_n" -eq 0 ] && return 1
+        [ "$_mf_tie" -eq 0 ] || { echo "AMBIGUOUS"; return 0; }
+        printf '%s' "$_mf_hit"
+      }
+
+      # The same walk, pinned to ONE viewport width. Used for the PREVIOUS iteration so a
+      # comparison is always surface-to-surface; see the pairing note at the call site.
+      _meta_at() {
+        _ma_n=0; _ma_hit=""
+        for _ma in "$sess"/*--iter-"$1".json; do
+          [ -f "$_ma" ] || continue
+          [ "$(_vw_of "$_ma")" = "$2" ] || continue
+          _ma_n=$((_ma_n + 1)); _ma_hit="$_ma"
+        done
+        [ "$_ma_n" -eq 0 ] && return 1
+        [ "$_ma_n" -eq 1 ] || { echo "AMBIGUOUS"; return 0; }
+        printf '%s' "$_ma_hit"
+      }
+
+      # Every iteration on disk past the first OWES a row. Without this, a manifest that
+      # merely mentions a table in prose satisfies the gate by looking like one -- the
+      # cosmetic-variant class this repo has logged twice.
+      for m in "$sess"/*--iter-*.json; do
+        [ -f "$m" ] || continue
+        n="$(printf '%s' "$m" | sed -n 's/.*--iter-\([0-9]*\)\.json$/\1/p')"
+        [ -n "$n" ] || continue
+        [ "$n" -ge 2 ] 2>/dev/null || continue
+        # One pattern, not two: the second subsumed the first ([[:space:]]* matches zero), so
+        # the pair read as two cases and was one, which is how a dead branch survives review.
+        if ! grep -qE "^[[:space:]]*\|[[:space:]]*$n[[:space:]]*\|[[:space:]]*[0-9a-f]{8,}" "$man" 2>/dev/null; then
+          echo "ERR  [selfreview-row-missing] variant-$v: iteration $n was rendered and the manifest carries no row for it"
+          rfails=$((rfails + 1))
+        fi
+      done
+
+      # Now judge the rows that ARE there. Anchored at line start so a sentence quoting a
+      # row can never be one.
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        # Field COUNT first. An escaped pipe inside a prose cell (legal CommonMark) shifts
+        # every field right, so the defect/revision checks silently read the wrong cells and an
+        # empty revision substantiated a row. A row whose shape is not the shape is refused,
+        # rather than parsed into something that looks plausible.
+        #
+        # SEVEN, and only seven. This accepted `7|8` and that was the bug wearing the fix's
+        # clothes: a canonical five-cell row splits into exactly 7 fields, and **8 is precisely
+        # a row carrying one escaped pipe** -- the case this check was written to refuse. A
+        # fresh attacker walked the empty-revision rule with a single `\|`:
+        #
+        #   | 2 | aaaa | cccc | cramped header |  |     -> nf=7, refused (empty revision)
+        #   | 2 | aaaa | cccc | cramped \| header |  |  -> nf=8, ACCEPTED; field 5 read as
+        #                                                 "cramped \", field 6 as "header",
+        #                                                 and the real empty cell never read
+        #
+        # The lesson is not "count fields", it is that a count with slack in it is not a count.
+        srrows=$((srrows + 1))
+        nf="$(printf '%s' "$line" | awk -F'|' '{print NF}')"
+        case "$nf" in
+          7) ;;
+          *) echo "ERR  [selfreview-row-shape] a manifest row splits into $nf fields -- five cells and nothing else, and a literal pipe inside a cell is not supported"
+             rfails=$((rfails + 1)); continue;;
+        esac
+        # [[:space:]], not a literal space: a tab-delimited row was selected by the grep above
+        # and then failed with an unusable message.
+        n="$(printf '%s' "$line" | awk -F'|' '{gsub(/[[:space:]]/,"",$2); print $2}')"
+        inh="$(printf '%s' "$line" | awk -F'|' '{gsub(/[[:space:]]/,"",$3); print $3}')"
+        outh="$(printf '%s' "$line" | awk -F'|' '{gsub(/[[:space:]]/,"",$4); print $4}')"
+        defect="$(printf '%s' "$line" | awk -F'|' '{print $5}' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        revision="$(printf '%s' "$line" | awk -F'|' '{print $6}' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+
+        if [ -z "$defect" ] || [ -z "$revision" ]; then
+          echo "ERR  [selfreview-empty] variant-$v iteration $n: the defect and revision cells are the whole point of the row"
+          rfails=$((rfails + 1)); continue
+        fi
+
+        cur="$(_meta_for "$n")"
+        if [ "$cur" = "AMBIGUOUS" ]; then
+          echo "ERR  [selfreview-ambiguous] variant-$v: more than one render meta matches iteration $n in $sess -- refusing to pick one by directory order"
+          rfails=$((rfails + 1)); continue
+        fi
+        if [ -z "$cur" ]; then
+          echo "ERR  [selfreview-no-render] variant-$v: the manifest claims iteration $n and there is no render meta for it"
+          rfails=$((rfails + 1)); continue
+        fi
+        # PAIR BY VIEWPORT. "Widest of iteration n" against "widest of iteration n-1" compares
+        # two DIFFERENT surfaces the moment the two iterations rendered different viewport
+        # sets, and a fresh attacker used exactly that: iteration 1 rendered mobile only,
+        # iteration 2 rendered mobile (byte-identical) plus desktop. Widest-vs-widest then
+        # compared desktop against mobile, the hashes differed, and a row claiming a fix passed
+        # while the only surface present in BOTH iterations had not moved a pixel.
+        #
+        # So iteration n's widest fixes the viewport, and n-1 is looked up AT THAT viewport.
+        # A previous iteration with no render there is a refusal: there is nothing to have
+        # improved on, and saying so is more useful than comparing whatever else is lying about.
+        cur_vw="$(_vw_of "$cur")"
+        prev_n=$((n - 1))
+        prev="$(_meta_at "$prev_n" "$cur_vw")"
+        if [ "$prev" = "AMBIGUOUS" ]; then
+          echo "ERR  [selfreview-ambiguous] variant-$v: more than one render meta matches iteration $prev_n at ${cur_vw}px in $sess"
+          rfails=$((rfails + 1)); continue
+        fi
+        if [ -z "$prev" ]; then
+          echo "ERR  [selfreview-no-render] variant-$v: iteration $n was judged at ${cur_vw}px and iteration $prev_n has no render at that viewport -- the two iterations cannot be compared surface to surface"
+          rfails=$((rfails + 1)); continue
+        fi
+
+        real_out="$(_sha_of "$cur")"
+        real_in="$(_sha_of "$prev")"
+        if [ "$outh" != "$real_out" ]; then
+          echo "ERR  [selfreview-output-hash] variant-$v iteration $n: the manifest names output $outh and the render published $real_out"
+          rfails=$((rfails + 1)); continue
+        fi
+        if [ "$inh" != "$real_in" ]; then
+          echo "ERR  [selfreview-input-hash] variant-$v iteration $n: the manifest names input $inh and iteration $prev_n published $real_in"
+          rfails=$((rfails + 1)); continue
+        fi
+
+        # The load-bearing rule. Identical hashes mean the pixels did not move, so nothing was
+        # visibly fixed -- and a row claiming otherwise is the narrated verdict this gate
+        # exists to refuse. An honest null claim ("unchanged") is accepted: under ADR-1417
+        # "nothing changed" is a first-class RESULT, not a fault.
+        if [ "$inh" = "$outh" ]; then
+          case "$(printf '%s' "$defect" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')" in
+            unchanged*) ;;
+            *)
+              echo "ERR  [selfreview-unchanged-claim] variant-$v iteration $n: input and output hashes are identical, so the pixels did not move -- a row may not claim it fixed '$defect'"
+              rfails=$((rfails + 1));;
+          esac
+        fi
+      done <<EOF
+$(grep -E "^[[:space:]]*\|[[:space:]]*[0-9]+[[:space:]]*\|" "$man" 2>/dev/null || true)
+EOF
+    done
+    [ "$rfails" -eq 0 ] || { echo "design-explore: $rfails self-review error(s)"; exit 1; }
+    # An empty result set is the one thing a broken reader and a clean tree agree on.
+    if [ "$srseen" -eq 0 ]; then
+      echo "design-explore: no variants found under $EX -- nothing to substantiate (this is not a pass)" >&2
+      exit 1
+    fi
+    # NOT "a self-review dir with zero rows is a refusal" -- that was the first cut and it was
+    # too broad: iteration 1 legitimately owes no row, so a variant that iterated ONCE has a
+    # directory, a manifest and nothing to put in it. Its own test said so and went red.
+    #
+    # The real case is already covered one loop up: every iteration past the first OWES a row,
+    # and a manifest that merely narrates ("I ran three iterations, trust me") fails there
+    # because the receipts exist and the rows do not. What remains here is the empty-result-set
+    # guard proper -- no variants at all -- which `surfaces` and `coverage` both have and this,
+    # the third sibling, did not.
+    echo "design-explore: self-review manifests substantiated ($srrows row(s) across $srdirs of $srseen variant(s))"
+    exit 0
+    ;;
+
+  compose|compose-done)
+    # THE BOOKENDS THAT ARM THE BOUNDARY -- and the reason they exist at all.
+    #
+    # Phase 01 shipped three gates and wired none of them. `grep -rn` across commands,
+    # skills, processes, hooks and CI found ZERO callers of composer-scope-check.sh --begin
+    # and ZERO callers of surfaces|coverage|selfreview outside tests/. Nothing armed the
+    # marker, so `[ -f "$MARKER" ] || exit 0` made the read hook a permanent no-op in
+    # production. Every one of those slices was green on CI, which is exactly the distinction
+    # this repo already writes down: a green matrix is evidence the assertions held, never
+    # evidence a guard guards.
+    #
+    # The shape is not invented here. design-critique.sh begin/finish already arms the
+    # CRITIC's boundary, runs the work, and releases it -- and the design-critic contract
+    # says "invoked between begin and finish". This is that pattern for the composer.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID' -- run init first" >&2; exit 1; }
+    V=""
+    BRIEF=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --variant) [ "$#" -ge 2 ] || { echo "design-explore: --variant needs a value" >&2; exit 1; }; V="$2"; shift 2;;
+        --brief)   [ "$#" -ge 2 ] || { echo "design-explore: --brief needs a value" >&2; exit 1; }; BRIEF="$2"; shift 2;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
+    done
+    # Spelled out rather than a bracket range, for the reason the id check 380 lines above
+    # already carries: a range resolves through LC_COLLATE and macOS interleaves case.
+    case "$V" in
+      "") echo "design-explore: $CMD needs --variant <x> -- a boundary that cannot say which variant it protects is not a boundary" >&2; exit 1;;
+      *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: variant '$V' must be lowercase kebab" >&2; exit 1;;
+    esac
+    [ -d "$EX/variant-$V" ] || { echo "design-explore: no variant-$V under $EX" >&2; exit 1; }
+
+    # THE MARKER PATH, spelled once. Both the arm and the release below verify their EFFECT
+    # against it, because "the command exited 0" and "the boundary moved" are different facts.
+    #
+    # PER COMPOSER, matching what composer-scope-check.sh --begin actually writes. The first cut
+    # of this line named the old single global path -- I moved the writer and left this reader
+    # pointing where the file used to be, which is the fourth time in this cycle that changing a
+    # path broke something that rebuilt the name by hand. It was caught immediately, and by the
+    # assertion added three lines below: the check reported "--begin returned 0 but no marker
+    # exists", which was true.
+    _CS_MARKER="$ROOT/.claude/state/design/composer-session--$ID--variant-$V"
+
+    if [ "$CMD" = "compose" ]; then
+      # `env -u ARC_SCOPE_FORWARDED`, and then CHECK.
+      #
+      # composer-scope-check.sh honours --begin/--end only when ARC_SCOPE_FORWARDED != 1, and it
+      # reads that straight out of the inherited environment. So a session that happens to
+      # export it -- which the hook fragment legitimately does when forwarding a tool payload --
+      # turned --begin into a no-op: the control verb fell through to the enforcement half, hit
+      # `[ -f "$MARKER" ] || exit 0`, exited 0, and satisfied this `|| exit 1`. The operator was
+      # told "read boundary ARMED" while nothing was armed and the composer ran unguarded.
+      #
+      # That is this file's own header failure -- a gate certifying its own absence -- so the
+      # fix is both halves: clear the variable so the verb is honoured, and then assert the
+      # marker exists rather than trusting an exit code that cannot tell the two cases apart.
+      env -u ARC_SCOPE_FORWARDED bash "$DESIGN_DIR/composer-scope-check.sh" --begin "$ID" "variant-$V" || exit 1
+      [ -f "$_CS_MARKER" ] || {
+        echo "design-explore: REFUSED -- --begin returned 0 but no marker exists at ${_CS_MARKER#"$ROOT"/}." >&2
+        echo "The boundary is NOT armed. Reporting it armed is the failure this check exists to stop." >&2
+        exit 1
+      }
+      echo ""
+      echo "design-explore: read boundary ARMED for $ID variant-$V."
+      echo "  writes:  docs/design/explore/$ID/variant-$V/"
+      echo "  reads:   that dir, .claude/state/design/renders/$ID--variant-$V/,"
+      echo "           .claude/state/design/refpacks/$ID/   -- and nothing else"
+      echo "  renders: bash .claude/scripts/design/design-render.sh <page> --mode explore --session $ID--variant-$V --iter N"
+      echo ""
+      echo "Next: spawn the ui-composer agent for variant-$V, then run:"
+      echo "  bash .claude/scripts/design/design-explore.sh compose-done $ID --variant $V"
+      exit 0
+    fi
+
+    # compose-done. Release FIRST and unconditionally: design-critique.sh learned this the
+    # hard way -- whatever the gates below decide, a boundary left armed blocks every later
+    # read in the session for a reason nobody can see.
+    #
+    # Same `env -u` as the arm, and the same reason. The old `|| true` here was worse than the
+    # arm's `|| exit 1`: with ARC_SCOPE_FORWARDED inherited, --end fell through to enforcement,
+    # the marker survived, and the swallow made a LEAKED boundary indistinguishable from a
+    # released one. Verified below rather than assumed, because a release that silently did
+    # nothing blocks every later read in the session -- including the reads that would fix
+    # whatever the gates are about to report.
+    # NAMED, so finishing variant-c cannot disarm variant-b (F1's release half).
+    env -u ARC_SCOPE_FORWARDED bash "$DESIGN_DIR/composer-scope-check.sh" --end "$ID" "variant-$V" >/dev/null 2>&1 || true
+    if [ -f "$_CS_MARKER" ]; then
+      echo "design-explore: REFUSED -- --end ran and the marker is STILL at ${_CS_MARKER#"$ROOT"/}." >&2
+      echo "The boundary leaked. Every later read in this session would block with no visible cause." >&2
+      exit 1
+    fi
+
+    gfails=0
+    page="$EX/variant-$V/index.html"
+    if [ ! -f "$page" ]; then
+      echo "ERR  [compose-no-page] variant-$V has no index.html -- a composer that wrote nothing is not a composer that finished"
+      gfails=$((gfails + 1))
+    else
+      node "$DESIGN_DIR/design-lint.mjs" --surfaces "$page" || gfails=$((gfails + 1))
+    fi
+    # The self-review gate runs over the whole explore rather than this variant alone: its
+    # loop already skips a variant with nothing to prove, and scoping it here would need a
+    # second spelling of the same walk.
+    bash "$0" selfreview "$ID" || gfails=$((gfails + 1))
+    # coverage only when the caller names the brief, because the viewport set is DERIVED from
+    # the platform contract and a defaulted set is how the contract stopped being consumed.
+    if [ -n "$BRIEF" ]; then
+      bash "$0" coverage "$ID" --brief "$BRIEF" || gfails=$((gfails + 1))
+    fi
+
+    [ "$gfails" -eq 0 ] || { echo "design-explore: variant-$V did not clear the composer gates ($gfails failing)" >&2; exit 1; }
+    echo "design-explore: boundary released and variant-$V cleared the composer gates"
+    exit 0
     ;;
 
   render)
     [ -d "$EX" ] || { echo "design-explore: no explore '$ID'" >&2; exit 1; }
+    # AN ARGUMENT LOOP, because this branch had none and silently swallowed everything after
+    # the id. `render <id> --viewport 390x844` accepted the flag, dropped it, rendered desktop
+    # and exited 0 -- so with the viewport now part of the render path (S3), the one command
+    # that renders every variant could only ever produce 1440x900 metas, and `coverage` was
+    # structurally unreachable for any brief declaring mobile. A flag accepted and discarded is
+    # worse than one refused: the caller has been told it was honoured.
+    RFLAGS=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --viewport|--media|--iter)
+          [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
+          RFLAGS="$RFLAGS $1 $2"; shift 2;;
+        # --mode and --session are NOT forwardable: they move the output path this command sets
+        # per variant, which is the whole reason it exists. design-critique.sh refuses the same
+        # flags for the same reason.
+        --mode|--session)
+          echo "design-explore: $1 is not forwardable -- render sets the mode and the per-variant session itself" >&2
+          exit 1;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
+    done
     # ONE command renders every variant (frozen plan 2.5): same recipe, same viewport --
     # otherwise screenshot comparisons are not comparisons. Reuses design-render.sh whole.
     rc=0
@@ -188,7 +715,19 @@ case "$CMD" in
         rc=1
         continue
       fi
-      bash "$DESIGN_DIR/design-render.sh" "$page" || rc=1
+      # --mode explore --session <id>--variant-<v> is not optional decoration.
+      #
+      # Called bare, design-render.sh defaults MODE to critique and SESSION to design-critic,
+      # so every variant landed in renders/design-critic/ -- overwriting each other -- while
+      # coverage and selfreview read renders/<id>--variant-<v>. `render <id>` followed by
+      # `coverage <id>` therefore ALWAYS reported a viewport gap, and selfreview saw no metas
+      # at all. The one command that renders every variant was the one command whose output
+      # nothing consumed. Since ADR-1402 explore mode REQUIRES --session, so this is also the
+      # only spelling the renderer will accept in the mode these gates read.
+      # RFLAGS is a deliberately word-split flag list, built only from values the loop above
+      # validated. Quoting it would hand design-render.sh one argument containing spaces.
+      # shellcheck disable=SC2086
+      bash "$DESIGN_DIR/design-render.sh" "$page" --mode explore --session "$ID--variant-$v" $RFLAGS || rc=1
     done
     exit "$rc"
     ;;
@@ -205,10 +744,11 @@ case "$CMD" in
         "$([ -f "$EX/variant-$v/thesis.txt" ] && echo yes || echo no)" \
         "$([ -f "$EX/variant-$v/index.html" ] && echo yes || echo no)"
     done
+    exit 0
     ;;
 
   *)
-    echo "design-explore: unknown command '$CMD' (want init|check|render|status)" >&2
+    echo "design-explore: unknown command '$CMD' (want init|check|compose|compose-done|render|status|surfaces|coverage|selfreview)" >&2
     exit 1
     ;;
 esac

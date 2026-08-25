@@ -15,15 +15,20 @@
     ".claude/agents/ui-composer.md"
   ],
   "scripts": [
+    ".claude/scripts/design/composer-scope-check.sh",
+    ".claude/scripts/design/composer-write-check.sh",
     ".claude/scripts/design/critic-scope-check.sh",
     ".claude/scripts/design/design-critique.sh",
     ".claude/scripts/design/design-explore.sh",
     ".claude/scripts/design/design-gate.sh",
     ".claude/scripts/design/design-lint.mjs",
-    ".claude/scripts/design/design-render.sh"
+    ".claude/scripts/design/design-render.sh",
+    ".claude/scripts/design/design-sources-lint.mjs"
   ],
   "files": [
-    ".claude/hooks/PreToolUse-edit.d/10-design-critic.sh"
+    ".claude/hooks/PreToolUse-edit.d/10-design-critic.sh",
+    ".claude/hooks/PreToolUse-edit.d/11-design-composer.sh",
+    ".claude/hooks/PreToolUse-read.d/10-design-composer.sh"
   ],
   "docs": [
     {

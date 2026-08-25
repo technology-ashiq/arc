@@ -808,7 +808,8 @@
       "PostToolUse": "toolbelt",
       "PreCompact": "toolbelt",
       "_dispatch.sh": "toolbelt",
-      "policy-decide.sh": "policy"
+      "policy-decide.sh": "policy",
+      "PreToolUse-read": "toolbelt"
     }
   },
   "rules": {
@@ -853,7 +854,8 @@
       "spine-reader-lint": "spine",
       "capability-vet": "develop",
       "arc-bytediff": "toolbelt",
-      "face-coverage": "toolbelt"
+      "face-coverage": "toolbelt",
+      "design-sources-lint": "design-studio"
     }
   },
   "concepts": {
@@ -1316,6 +1318,7 @@
       "1100": "growth",
       "1200": "legal",
       "1300": "toolbelt",
+      "1400": "design-studio",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
