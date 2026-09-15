@@ -160,6 +160,50 @@ PROC="commit-msg-draft"
   [[ "$output" == *"unmarked_uncapped=false"* ]] || { echo "the rule leaked onto uncapped rows: $output"; false; }
 }
 
+# A CAPPED HERMES ROW THAT NEITHER THE CALENDAR NOR THE TERMINATION SPEC CAN REMOVE.
+#
+# The three tests below used to run against `--root "$ARC_ROOT"` itself, for the production shape.
+# Tenure is checked BEFORE the cap rule, so on 2026-09-01 -- the day after the hermes row's
+# review_by -- every one of them stopped measuring the cap and started measuring the calendar: exit
+# 1 and "its route EXPIRED", on every OS, with no commit behind it. The owner deferred the hire
+# decision (2026-09-15), so the real row stays expired and these tests may not wait on it.
+#
+# A SYNTHETIC ROW, not the real router with its date moved -- and an adversarial pass is what forced
+# that. The first fix copied engine/router.yaml and moved one line, which still hung these tests on
+# the live row EXISTING: the router's own termination step 2 deletes it, and then all three exit 2
+# ("does not grant the agent runtime"), one of them printing a false reason. The deferred ruling can
+# be "retire", and a suite that breaks when the documented procedure is followed is pressure to
+# undo the procedure. `engine-router-row.bats` moved its negative control off the live router for
+# that same reason. This row carries the production shape the cap rule is about -- driver hermes,
+# `cap: L1-drafts`, `hosted: cloud` -- and a tenure that cannot lapse.
+#
+# What this root does NOT carry is `.claude/scripts`, so the exit-5 refusal cannot write its receipt
+# here: arc-run prints "could not emit run.completed" and still exits 5. These tests are about the
+# boundary's exit code and reason, not about its receipt.
+capped_root() {
+  local root="$1"
+  mkdir -p "$root/engine" "$root/processes"
+  cp "$ARC_ROOT/processes/build-in-public-draft.process.yaml" "$root/processes/"
+  cat > "$root/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes:
+  build-in-public-draft:
+    tier: balanced-workhorse
+    driver: hermes
+    cap: L1-drafts
+    hosted: cloud
+    judge: fixture
+    review_by: 2999-12-31
+    fallback: []
+default:
+  tier: balanced-workhorse
+  driver: claude-code
+  fallback: []
+YAML
+}
+
 @test "REQ-06: the cap rule applies on the EXPLICIT --driver path, not only under auto" {
   # FOUND BY RUNNING THE REAL DISPATCH SHAPE, 2026-08-23, and it is the same defect one layer down
   # from the one ADR-0225 had just fixed: a guard that runs on only ONE of two entry points.
@@ -168,8 +212,11 @@ PROC="commit-msg-draft"
   # classification at all, went straight past the boundary.
   #
   # `build-in-public-draft` is the only class in the real router carrying a cap, and it grants
-  # hermes -- so this is the production shape, not a fixture arrangement.
-  run node "$(RUN)" --root "$ARC_ROOT" --process build-in-public-draft --driver hermes \
+  # hermes -- so this row is the production shape, posed on a root whose tenure cannot lapse (see
+  # capped_root).
+  local root="$BATS_TEST_TMPDIR/capped"
+  capped_root "$root"
+  run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes \
     --input '{"pack_ref":"p","pack":"nothing internal here"}'
   [ "$status" -eq 5 ] || { echo "an unmarked input reached the runtime on the explicit path, got $status: $output"; false; }
   [[ "$output" == *"does not declare itself external-ok"* ]] || { echo "the reason is not named: $output"; false; }
@@ -178,7 +225,9 @@ PROC="commit-msg-draft"
 @test "REQ-06 NEGATIVE CONTROL: the same explicit dispatch with external-ok is NOT refused" {
   # Without this the test above passes on a rule that refuses every capped dispatch -- which would
   # mean REQ-07 could never run at all, i.e. a boundary that works by breaking the job.
-  run node "$(RUN)" --root "$ARC_ROOT" --process build-in-public-draft --driver hermes --dry-run \
+  local root="$BATS_TEST_TMPDIR/capped"
+  capped_root "$root"
+  run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes --dry-run \
     --input '{"classification":"external-ok","pack_ref":"p","pack":"nothing internal here"}'
   [ "$status" -eq 0 ] || { echo "a properly declared pack was refused: $output"; false; }
   [[ "$output" == *"would run"* ]] || { echo "$output"; false; }
@@ -190,7 +239,9 @@ PROC="commit-msg-draft"
   # that fact read EMPTY -- so the one code path whose entire job is to say where a document was
   # about to go said nothing, exactly when a caller had bypassed routing to name the destination
   # themselves. The probe-driven fixture-3 test above proves the FUNCTION; this proves the wiring.
-  run node "$(RUN)" --root "$ARC_ROOT" --process build-in-public-draft --driver hermes \
+  local root="$BATS_TEST_TMPDIR/capped"
+  capped_root "$root"
+  run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes \
     --input '{"classification":"internal-only","pack_ref":"p","pack":"x"}'
   [ "$status" -eq 5 ] || { echo "expected 5, got $status: $output"; false; }
   [[ "$output" == *"hosted: cloud"* ]] || { echo "the routing fact is missing on the explicit path: $output"; false; }

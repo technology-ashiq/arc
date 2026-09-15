@@ -263,6 +263,115 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### OUT-OF-CYCLE — `main` red since 2026-09-01: the hire's tenure expired, and it took bench's probe and three REQ-06 tests with it — 2026-09-15
+
+**Classification: a bug**, routed through `/arc-change` on 2026-09-15. Cycle 7 is closed, so this is
+post-close maintenance on engine-owned files, charged to no cycle's appetite, least of all bench's,
+which sits at 7.25 of 8d. Estimate 0.5d, reported at close. Branch `feat/engine-tenure-clock-fix`.
+
+**What happened.** `classes.build-in-public-draft` carries `review_by: 2026-08-31`. From 2026-09-01
+every dispatch of that class refuses with `its route EXPIRED`, which is ADR-0216 working as
+designed. No commit caused the red. No CI ran between 2026-08-24 and 2026-09-15, and the first run
+after that gap came back **7 of 19 jobs red, 90 test instances, all in two files**. The set is
+identical on `main` at `833ae45e` (dispatch 34979541989) and on PR #224 (run 34979051480), and
+every failing job's log names the expiry.
+
+**Owner rulings, 2026-09-15.** The hire decision is **deferred**: the row stays expired, neither
+renewed nor retired. ADR-0216 says expiry never renews itself, and a renewal is a reviewed diff.
+The tests get fixed through `/arc-change`, **without weakening the tenure gate**.
+
+**Three defects, and one root under all of them: code that reads the real router on the real calendar.**
+
+1. **`arc-bench.mjs` `driverTakesModel` is a PRODUCTION defect, not a test one (75 of the 90).**
+   The probe borrows the first runnable process as a vehicle to ask arc-run whether a DRIVER
+   carries a model. The first runnable process is `build-in-public-draft`, so its expired route
+   answers first: exit 1, neither recognised verdict, `OperatorError`. **Every bench run naming a
+   model on a model-capable driver dies today** (`runBench` probes before the first attempt), over
+   a hire the run never touches. A driver that cannot carry a model was spared: arc-run's
+   capability arm answers it before tenure. It is the stub defect that `driverTakesModel`'s own
+   comment records, one refusal later: "this PROCESS cannot be used" read as an answer about the
+   driver. Fix: a vehicle refused by tenure is skipped and the next runnable process is tried.
+   arc-run stays the only reader of tenure, so bench gets no second expiry computation of its own
+   ("validate one read, compare another"). If tenure refuses every runnable process, that is a
+   loud `OperatorError` naming the rows. Any other unrecognised answer stays loud exactly as now.
+2. **Three REQ-06 tests in `engine-data-boundary.bats` measure tenure, not the cap (15 of the 90).**
+   They dispatched the REAL row on purpose ("the production shape, not a fixture arrangement").
+   Tenure is checked before the cap rule, so since 09-01 they have been measuring the calendar. Fix:
+   a synthetic capped hermes row (`capped_root`) with the same three terms the cap rule is about
+   (driver hermes, `cap: L1-drafts`, `hosted: cloud`) and a tenure that cannot lapse.
+3. **`arc-run.mjs` said "Tests never reach this" about `todayISO()`, and that is false.** Every
+   dispatch reads `TODAY` at module scope, and two suites depended on its value. The comment now
+   states the rule about OUTCOMES: no test's verdict may depend on today's date.
+
+**The adversarial pass: two fresh agents, 16 findings, every in-scope one fixed and pinned.**
+
+- **A1 · the TWIN, on the dispatch path (medium, measured).** The first fix taught the probe about
+  tenure and left `runBench` blind. On a fixture with an eligible class past its review_by, 15 of 15
+  attempts were refused and the run reported 90 committed, and 14 duplicate tenure proposals went
+  to quarantine. Fixed: `runBench` asks arc-run once per eligible class, before admission, and a
+  class refused by tenure is recorded fixture by fixture as `failure: tenure`, the way a budget
+  refusal is. No group is admitted and nothing is reserved. `closeClass` counts the new reason as a
+  refusal, so the class proposes nothing.
+- **A2, A3, A6 · four WRONG probes passed every check (medium).** The attacker wrote them. One
+  computed expiry from the router itself, one probed only the last vehicle, one matched the refusal
+  anywhere, one skipped on any non-answer. Pinned with a scripted arc-run: a fixture tree may carry
+  its own `.claude/scripts/engine/arc-run.mjs`, answering from a table, so the checks can pose
+  orderings and near-misses the real one never produces. **All four mutants are now killed**, and
+  so is a mutant with the `runBench` skip removed (committed 150, 16 events on the spine).
+- **A7 · the old answer arms were unanchored (low, pre-existing).** A model id of `cannot apply a
+  model` is refused by arc-run as unclean, and arc-run echoes the id. The probe read that echo as
+  "driver not capable" and returned `false`. Both arms are now anchored to arc-run's own line,
+  stream and name.
+- **A4 / B4 · the `mock` check never reached the skip (vacuous).** Removed. A scripted
+  "tenure, then not capable" case replaces it.
+- **A5 · checks (a) and (b) were unguarded (low).** A throw from either killed the whole probe:
+  90 red instances instead of one readable FAIL. They are now wrapped.
+- **B1 · the first REQ-06 fixture still depended on the live row EXISTING (medium, measured).** It
+  was the real router with one date moved. The termination spec's own step 2 deletes that row, so
+  the deferred ruling could be "retire", and that would turn four tests red, one of them with a
+  false reason. `engine-router-row.bats` had already moved off the live router for exactly this.
+  Replaced by the synthetic row above. That also retires B2 (the pin broke on a quoted renewal or a
+  second hire row) and B5 (BSD `sed` adding a final newline).
+- **B3, B6, A9 · comments claimed more than the code holds.** Corrected: the fixture root cannot
+  emit its receipt and says so, the date rule is stated about outcomes, and "every bench run died"
+  is limited to model-capable drivers.
+
+**Known and open, recorded rather than fixed here.** They are outside this diff, none of them fails
+open, and each needs its own tracked change:
+
+- `arc-run --dry-run --budget inr=0` exits 1 and WRITES a `run.completed` (reason budget). That
+  contradicts "a preview reads and does not write". Bench's probe passes no `--budget`, so it is
+  not exposed here. (attack A #8)
+- After the first tenure proposal for a (class, review_by), each later refusal's emit is rejected
+  as `DUP_IDEM`, and arc-run prints "FAILED to record the tenure proposal ... no reviewable
+  receipt exists". That is false: the proposal is on the spine. The idempotency is right; the
+  message is wrong. (attack A #1, side effect)
+- The probe skips a vehicle refused by TENURE only. If the first vehicle does not grant a runtime
+  driver, it still throws, even when a later vehicle would answer. That fails loud, not open.
+  (attack A #10)
+- **From `/arc-review` of `a22dc3a7`** (verdict **ship**, archived at
+  `docs/reviews/2026-09-15-2342-feat-engine-tenure-clock-fix.md`):
+  - **Warning, dormant, not a regression:** the drift guard is a twin that was never taught about
+    tenure. `driftAlerts` would read a tenure-skipped class as "a total collapse" and file a false
+    inbox proposal. The receipt also carries no per-class refusal reason. It is muted today: the
+    only class with tenure declares 1 eval.
+  - **Nits:**
+    - The probe docstring still says "one process per RUN".
+    - No-`repo_state` fixtures get relabelled as tenure refusals.
+    - Tenure is read once per class, so a run crossing midnight behaves the old way.
+    - The (i.5) near-miss check would also pass on a crashed script.
+    - A tenure-partial run cannot pass replay.
+    - The `capped_root` heredoc is unquoted.
+    - `bench-harness.bats` needs re-weighing in `tests/shard-timings.json`.
+
+**Proof on this box, short of a suite run.** Section 7 of the steel probe, lifted out verbatim and
+replayed alone: 26 ok, 0 failed. The five mutants were each replayed against it, and all five were
+killed. The three REQ-06 commands were hand-run on `capped_root`: exit 5 / 0 / 5 with the expected
+reasons. The expected steel count is 70 → 83; CI measures it.
+
+**Done when:** CI is 19/19 on the PR head, read per JOB. After the merge, a `workflow_dispatch` on
+`main` is 19/19. `/arc-review` is done.
+
 ### MERGED, AND THE MERGED TREE VERIFIED — 2026-08-23
 
 PR **#217** squash-merged as **`761d4ae1`**. **CI on `main` at that SHA: 19/19, read per JOB**

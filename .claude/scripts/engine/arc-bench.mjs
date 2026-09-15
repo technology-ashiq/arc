@@ -706,8 +706,8 @@ export function driverTakesModel(root, driver, model) {
   // The tree-read the comment defended is exactly what caused the silent "not capable".
   if (!model) throw new OperatorError("driverTakesModel needs the model that will actually be used -- probing with a placeholder answers a question about the placeholder");
   const all = allProcessNames(root);
-  const processName = runnableProcessNames(root)[0];
-  if (!processName) {
+  const runnable = runnableProcessNames(root);
+  if (!runnable.length) {
     // The two cases are different facts and the operator fixes them differently, so the message
     // may not merge them. Pointing at a stub theory when the directory is simply empty sends the
     // reader looking for a file that is not there.
@@ -725,40 +725,119 @@ export function driverTakesModel(root, driver, model) {
   // the group -- and a reservation is only released by a measured spend, so the report would have
   // claimed 90 rupees committed for a run that reached no provider at all. Probing with the real
   // id puts arc-run's own validation in front of the money.
-  const res = spawnSync(process.execPath, [
-    join(root, ".claude/scripts/engine/arc-run.mjs"),
-    "--process", processName, "--driver", driver,
-    "--trial-model", model, "--dry-run", "--root", root,
-  ], { encoding: "utf8", cwd: root, timeout: 60000, killSignal: "SIGKILL" });
-  const said = `${res.stdout ?? ""}${res.stderr ?? ""}`;
+  //
+  // A VEHICLE WHOSE ROUTE HAS EXPIRED IS SKIPPED, NOT READ AS THE DRIVER'S ANSWER (2026-09-15).
+  // The process is only a vehicle -- arc-run has to get past it before it reaches the driver
+  // question. On 2026-09-01 the hermes row behind `build-in-public-draft` passed its review_by and
+  // arc-run began refusing that class by tenure, which is ADR-0216 working as designed. That class
+  // was the first runnable process, so from that day every bench run naming a model on a
+  // model-capable driver died HERE, over a hire the run never touches. (A driver that cannot carry
+  // a model is answered by arc-run's capability arm first, so it never reached tenure.) It is the
+  // stub defect recorded above, one refusal later.
+  //
+  // Tenure is read ONCE, by arc-run. Bench recognises arc-run's own refusal sentence for the
+  // process it probed, and does not re-derive expiry from the router: a second reader is a second
+  // copy, and this lane has paid for every second copy it has kept. Skipping can never produce a
+  // `false` -- it moves to the next vehicle or ends in a throw -- so a misread here fails loud.
+  const lapsed = [];
+  for (const processName of runnable) {
+    const res = spawnSync(process.execPath, [
+      join(root, ".claude/scripts/engine/arc-run.mjs"),
+      "--process", processName, "--driver", driver,
+      "--trial-model", model, "--dry-run", "--root", root,
+    ], { encoding: "utf8", cwd: root, timeout: 60000, killSignal: "SIGKILL" });
+    const said = `${res.stdout ?? ""}${res.stderr ?? ""}`;
 
-  // READ THE ANSWER, NOT THE EXIT CODE. arc-run spends exit 2 on every operator error it has --
-  // an unreadable --work-root, a malformed budget, an unknown process -- so a bare status check
-  // cannot tell "this driver cannot carry a model" from "you called me wrong", and exit 1 is a
-  // third thing again. Both arms below require the sentence arc-run prints for that exact
-  // decision, and they are the ONLY two answers this function accepts.
-  if (res.status === 0 && /\(source: trial\)/.test(said)) return true;
-  if (res.status === 2 && /cannot apply a model/.test(said)) return false;
+    // READ THE ANSWER, NOT THE EXIT CODE. arc-run spends exit 2 on every operator error it has --
+    // an unreadable --work-root, a malformed budget, an unknown process -- so a bare status check
+    // cannot tell "this driver cannot carry a model" from "you called me wrong", and exit 1 is a
+    // third thing again. Both arms below require the sentence arc-run prints for that exact
+    // decision, and they are the ONLY two answers about the driver this function accepts.
+    //
+    // ANCHORED, to the line, the stream and the name, since 2026-09-15. They matched a fragment
+    // anywhere in stdout+stderr, so a model id of `cannot apply a model` -- which arc-run refuses as
+    // "not a clean model id" and ECHOES -- read as "this driver cannot carry a model" and returned
+    // `false`: an operator error answered as a fact about the driver. The attack pass on the vehicle
+    // skip found it, one line above the anchored arm it was attacking.
+    if (res.status === 0 && trialApplied(res.stdout ?? "", model)) return true;
+    if (res.status === 2 && cannotApply(res.stderr ?? "", driver)) return false;
 
-  // ANYTHING ELSE IS LOUD. A probe whose failure mode is `return false` answers a question it was
-  // never asked, and it answers it in the direction that silently weakens the run: the model is
-  // dropped, the receipt says `source: none`, and every number bench produces is then a
-  // measurement of the wrong thing. There is no reading of an unrecognised answer under which
-  // continuing is better than stopping.
-  // THE TIMEOUT ARM GOES FIRST, and it did not. `spawnSync` sets BOTH `error` (ETIMEDOUT) and
-  // `signal` when it kills a slow child, so testing `res.error` first meant the branch written for
-  // exactly this case could never fire on any platform -- and it reported "spawn failed", which
-  // points a diagnosis at PATH or ENOENT when the real cause is a slow runner. Verified on win32;
-  // SIGKILL itself is fine there, Node maps it to TerminateProcess.
-  const timedOut = Boolean(res.signal) || res.error?.code === "ETIMEDOUT";
-  const why = timedOut ? `killed after the 60s probe timeout (signal ${res.signal ?? "none"})`
-    : res.error ? `spawn failed: ${res.error.message}`
-    : `exit ${res.status} with no recognised verdict`;
+    // The one answer about the VEHICLE, and the only non-answer that does not stop the probe.
+    const by = res.status === 1 ? expiredRouteDate(res.stdout ?? "", processName) : null;
+    if (by) { lapsed.push(`${processName} (review_by ${by})`); continue; }
+
+    // ANYTHING ELSE IS LOUD. A probe whose failure mode is `return false` answers a question it was
+    // never asked, and it answers it in the direction that silently weakens the run: the model is
+    // dropped, the receipt says `source: none`, and every number bench produces is then a
+    // measurement of the wrong thing. There is no reading of an unrecognised answer under which
+    // continuing is better than stopping.
+    // THE TIMEOUT ARM GOES FIRST, and it did not. `spawnSync` sets BOTH `error` (ETIMEDOUT) and
+    // `signal` when it kills a slow child, so testing `res.error` first meant the branch written for
+    // exactly this case could never fire on any platform -- and it reported "spawn failed", which
+    // points a diagnosis at PATH or ENOENT when the real cause is a slow runner. Verified on win32;
+    // SIGKILL itself is fine there, Node maps it to TerminateProcess.
+    const timedOut = Boolean(res.signal) || res.error?.code === "ETIMEDOUT";
+    const why = timedOut ? `killed after the 60s probe timeout (signal ${res.signal ?? "none"})`
+      : res.error ? `spawn failed: ${res.error.message}`
+      : `exit ${res.status} with no recognised verdict`;
+    throw new OperatorError(
+      `capability probe for driver \`${driver}\` with model \`${model}\` gave no usable answer -- ${why}.\n`
+      + `         Probed with process \`${processName}\` under root ${root}.`
+      + (lapsed.length ? ` Skipped before it, route EXPIRED: ${lapsed.join(", ")}.` : "")
+      + " arc-run said:\n"
+      + said.split("\n").filter(Boolean).map((l) => `           ${l}`).join("\n"),
+    );
+  }
+
+  // Every vehicle was refused by tenure. That is a fact about the ROUTER, not about the driver, and
+  // the operator fixes it in a reviewed diff -- so it is named as such rather than as "no answer".
   throw new OperatorError(
-    `capability probe for driver \`${driver}\` with model \`${model}\` gave no usable answer -- ${why}.\n`
-    + `         Probed with process \`${processName}\` under root ${root}. arc-run said:\n`
-    + said.split("\n").filter(Boolean).map((l) => `           ${l}`).join("\n"),
+    `capability probe for driver \`${driver}\` has no vehicle left: every runnable process is routed through a row whose tenure has EXPIRED -- ${lapsed.join(", ")}.\n`
+    + "         Re-justify or retire those rows in engine/router.yaml (ADR-0216). Bench does not renew a hire to get past it.",
   );
+}
+
+/**
+ * The review_by date in arc-run's own dry-run tenure refusal for THIS process, or null.
+ *
+ * Anchored to the start of a line and to the name that was probed, so a refusal about some other
+ * class, or any other line that happens to mention expiry, cannot pass for it. The sentence is
+ * arc-run's (`arc-run.mjs`, the `--dry-run` tenure arm); a change to that wording turns every
+ * expired vehicle back into a loud "no usable answer", which is the safe direction to break in.
+ */
+function expiredRouteDate(stdout, processName) {
+  const m = new RegExp("^arc-run: would REFUSE `" + reLiteral(processName) + "` \\u2014 its route EXPIRED on (\\d{4}-\\d{2}-\\d{2}) ", "m").exec(stdout);
+  return m ? m[1] : null;
+}
+
+/** arc-run's `--dry-run` line saying it would apply THIS trial model: stdout, whole line. */
+function trialApplied(stdout, model) {
+  return new RegExp("^ +model " + reLiteral(model) + " \\(source: trial\\)\\r?$", "m").test(stdout);
+}
+
+/** arc-run's refusal to record a model for THIS driver: stderr, start of line. */
+function cannotApply(stderr, driver) {
+  return new RegExp("^arc-run: driver `" + reLiteral(driver) + "` cannot apply a model,", "m").test(stderr);
+}
+
+/** A string matched as itself inside a RegExp, whatever characters a file name or id carries. */
+function reLiteral(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * The review_by date when arc-run would refuse this class by tenure for this driver, else null.
+ *
+ * Asked with a `--dry-run` shaped like the real attempt -- same class, same driver, same trial
+ * model when there is one -- so the answer is about the dispatch bench is about to make. Anything
+ * but that exact refusal returns null and leaves the attempts to report it, as they always have.
+ */
+function routeLapsedOn(root, processName, driver, trialModel) {
+  const args = [join(root, ".claude/scripts/engine/arc-run.mjs"), "--process", processName, "--driver", driver];
+  if (trialModel) args.push("--trial-model", trialModel);
+  args.push("--dry-run", "--root", root);
+  const res = spawnSync(process.execPath, args, { encoding: "utf8", cwd: root, timeout: 60000, killSignal: "SIGKILL" });
+  return res.status === 1 ? expiredRouteDate(res.stdout ?? "", processName) : null;
 }
 
 /**
@@ -1409,7 +1488,10 @@ function closeClass(entry) {
   entry.spread = medianWithSpread(entry.fixtures.filter((f) => !f.dry_run).map((f) => f.assertions.rate));
   // A partial class proposes NOTHING, and the reason travels with the verdict (ADR-0906).
   const anyUnscored = entry.fixtures.some((f) => (f.attempts || []).some((a) => !a.scored));
-  const anyRefused = entry.unselected.some((u) => u.reason.startsWith("failure: budget") || u.reason.includes("exhausted"));
+  // "failure: tenure" joined this list with the class-level tenure skip in `runBench`: a refusal
+  // class the verdict cannot see is a class whose partial run proposes as if it were whole.
+  const anyRefused = entry.unselected.some((u) => u.reason.startsWith("failure: budget")
+    || u.reason.startsWith("failure: tenure") || u.reason.includes("exhausted"));
   if (anyUnscored || anyRefused) entry.proposal = "NO PROPOSAL - partial run";
 }
 
@@ -1493,6 +1575,29 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
     const loaded = loadClass(root, cov.taskClass);
     packRevisions[cov.taskClass] = loaded.pack ? loaded.pack.revision : null;
     processVersions[cov.taskClass] = loaded.version;
+
+    // A CLASS WHOSE ROUTE HAS EXPIRED IS NOT BENCHED, AND THE REPORT SAYS SO (2026-09-15).
+    //
+    // The twin of the vehicle skip in `driverTakesModel`, found by the adversarial pass on it. That
+    // fix taught the PROBE about tenure and left the DISPATCH path blind: an eligible class past its
+    // review_by was admitted group by group, every attempt came back refused by arc-run, and the
+    // run reported money committed for invocations that reached no provider -- the exact
+    // consequence the probe's own comment exists to prevent. The attack pass measured it on a
+    // fixture: 15 of 15 attempts refused, 90 committed, 14 duplicate tenure proposals quarantined.
+    //
+    // Asked of arc-run once per class, BEFORE admission, so no group is reserved. arc-run stays the
+    // one reader of tenure. The fixtures are recorded as unselected with the reason, the way a
+    // budget refusal is, so the class is named rather than silently absent. Any other answer is
+    // left to the attempts, exactly as before: this adds a skip, never a new way to fail.
+    const lapsedOn = routeLapsedOn(root, cov.taskClass, driver, trialModel);
+    if (lapsedOn) {
+      partial = true;
+      for (const fx of loaded.fixtures) {
+        entry.unselected.push({ file: fx.file, reason: `failure: tenure -- the route for ${cov.taskClass} EXPIRED on ${lapsedOn}; re-justify or retire it in engine/router.yaml (ADR-0216)` });
+      }
+      closeClass(entry);
+      continue;
+    }
 
     for (const fx of loaded.fixtures) {
       if (!fx.id) { entry.unselected.push({ file: fx.file, reason: "declares no repo_state -- the case cannot be posed" }); continue; }
