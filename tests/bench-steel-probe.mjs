@@ -390,13 +390,25 @@ function eventsOn(spine) {
 // false. The fix that generalises is not another `mock` check. It is a control that goes RED when
 // the capability answer flips, whatever flipped it.
 {
+  // A THROW BECOMES A READABLE FAIL, NOT A DEAD PROBE. (a) and (b) called the probe bare, so on
+  // 2026-09-01, when the real tree's first vehicle expired, (a) threw and took every later check in
+  // this file with it: 90 red test instances saying "the probe did not finish" instead of one
+  // saying which answer was wrong.
+  const probeOrThrown = (root, driver, model = "haiku") => {
+    try { return driverTakesModel(root, driver, model); } catch (e) { return e; }
+  };
+  const said = (r) => (r instanceof Error ? `threw: ${String(r.message).split("\n")[0]}` : `returned ${r}`);
+
   // (a) THE POSITIVE CONTROL. This is the assertion that was missing, and it is the one that
-  // would have failed the day the stub landed.
-  check("a model-capable driver is REPORTED as capable", driverTakesModel(ROOT, "claude-code", "haiku") === true);
+  // would have failed the day the stub landed. It asks the REAL tree on purpose: it is the control
+  // that goes red when production's capability answer flips, whatever flipped it.
+  const realCapable = probeOrThrown(ROOT, "claude-code");
+  check("a model-capable driver is REPORTED as capable", realCapable === true, said(realCapable));
 
   // (b) The negative control, which only means something now that (a) exists beside it. Alone it
   // passed for two days while the answer was "not capable" for every driver on earth.
-  check("and a driver that cannot carry a model is reported as not capable", driverTakesModel(ROOT, "mock", "haiku") === false);
+  const realNotCapable = probeOrThrown(ROOT, "mock");
+  check("and a driver that cannot carry a model is reported as not capable", realNotCapable === false, said(realNotCapable));
 
   // (c) THE REAL MODEL ID IS WHAT GETS PROBED. The first fix sent a fixed `capability-probe`
   // string, so arc-run validated the placeholder's grammar and bench then used the OPERATOR's id
@@ -487,7 +499,7 @@ function eventsOn(spine) {
   // hermes row behind `build-in-public-draft` passed its review_by. That class is the first runnable
   // process in the real tree, so arc-run refused the probe by tenure, the probe had no arm for that,
   // and check (a) above THREW instead of answering -- on every OS, with no commit behind it. Every
-  // bench run that named a model died the same way.
+  // bench run naming a model on a model-capable driver died the same way.
   //
   // POSED WITH A FIXED PAST DATE, never with the live row. The CI red was a calendar accident, so
   // it cannot be the regression. 2000-01-01 is past on every clock this suite will ever run on, and
@@ -506,9 +518,6 @@ function eventsOn(spine) {
     ].join("\n"), "utf8");
     return t;
   };
-  // A throw becomes a readable FAIL here rather than killing the probe, which is what the
-  // unguarded call in (a) did on 2026-09-01 and took every later check in this file with it.
-  const probeOrThrown = (root, driver) => { try { return driverTakesModel(root, driver, "haiku"); } catch (e) { return e; } };
   const askArcRun = (root, proc) => spawnSync(process.execPath, [
     join(root, ".claude/scripts/engine/arc-run.mjs"), "--process", proc, "--driver", "claude-code",
     "--trial-model", "haiku", "--dry-run", "--root", root,
@@ -530,10 +539,11 @@ function eventsOn(spine) {
 
   const capable = probeOrThrown(skipTree, "claude-code");
   check("a capable driver is still REPORTED capable when the first vehicle's route has expired",
-    capable === true, capable instanceof Error ? `threw: ${String(capable.message).split("\n")[0]}` : `returned ${capable}`);
-  const notCapable = probeOrThrown(skipTree, "mock");
-  check("and a driver that cannot carry a model is still reported NOT capable, from the same tree",
-    notCapable === false, notCapable instanceof Error ? `threw: ${String(notCapable.message).split("\n")[0]}` : `returned ${notCapable}`);
+    capable === true, said(capable));
+  // No `mock` twin of this check. arc-run answers a driver that cannot carry a model at its
+  // capability arm, BEFORE tenure, so on this tree `mock` never reaches the skip at all -- the
+  // first attack pass measured it, and a check that runs no new line is a count, not a guard.
+  // Case (i.4) of the scripted set below poses "not capable AFTER a skip" for real.
 
   // When EVERY vehicle has lapsed, the fault is the router's, and the operator fixes it in a
   // reviewed diff -- so it has to be named as that, not as a driver that gave "no usable answer".
@@ -542,6 +552,146 @@ function eventsOn(spine) {
     none instanceof OperatorError && /no vehicle left/.test(none.message)
       && /build-in-public-draft \(review_by 2000-01-01\)/.test(none.message),
     none instanceof Error ? String(none.message).slice(0, 240) : `returned ${none}`);
+
+  // THE SCRIPTED arc-run. The real one only ever produces the orderings its router allows, and the
+  // first attack pass wrote four WRONG probes that passed every check above: one that computed
+  // expiry from the router itself, one that probed only the last vehicle, one that matched the
+  // refusal anywhere, one that skipped on any non-answer. `driverTakesModel` spawns
+  // `<root>/.claude/scripts/engine/arc-run.mjs`, so a tree can carry its own. This one answers each
+  // process from a table, byte for byte, and reads nothing else -- which is exactly what lets a
+  // check tell "bench asked arc-run" apart from "bench worked it out for itself".
+  const FAKE_ARC_RUN = [
+    'import { readFileSync } from "node:fs";',
+    'import { join } from "node:path";',
+    "const argv = process.argv.slice(2);",
+    "const flag = (f) => argv[argv.indexOf(f) + 1];",
+    'const table = JSON.parse(readFileSync(join(flag("--root"), "fake-arc-run.json"), "utf8"));',
+    'const row = table[flag("--process")] || { status: 3, stdout: "", stderr: "fake arc-run: no script for this process\\n" };',
+    'process.stdout.write(row.stdout || "");',
+    'process.stderr.write(row.stderr || "");',
+    "process.exitCode = row.status;",
+    "",
+  ].join("\n");
+  const fakeTree = (name, table, router = null) => {
+    const t = join(scratch, name);
+    mkdirSync(join(t, ".claude/scripts/engine"), { recursive: true });
+    mkdirSync(join(t, "processes"), { recursive: true });
+    writeFileSync(join(t, ".claude/scripts/engine/arc-run.mjs"), FAKE_ARC_RUN, "utf8");
+    for (const p of Object.keys(table)) writeFileSync(join(t, "processes", `${p}.process.yaml`), `name: ${p}\nversion: 1.0.0\n`, "utf8");
+    writeFileSync(join(t, "fake-arc-run.json"), JSON.stringify(table), "utf8");
+    if (router) {
+      mkdirSync(join(t, "engine"), { recursive: true });
+      writeFileSync(join(t, "engine", "router.yaml"), router, "utf8");
+    }
+    return t;
+  };
+  const EXPIRED = (p) => ({ status: 1, stderr: "",
+    stdout: `arc-run: would REFUSE \`${p}\` — its route EXPIRED on 2000-01-01 (today is 2000-01-02).\n         Re-justify \`classes.${p}\` in engine/router.yaml with a new review_by, or retire the row.\n` });
+  const APPLIES = (model) => ({ status: 0, stderr: "",
+    stdout: `arc-run: would run \`x\` on \`claude-code\`\n         model ${model} (source: trial)\n         driver workspace x\n` });
+  const CANNOT = (driver) => ({ status: 2, stdout: "",
+    stderr: `arc-run: driver \`${driver}\` cannot apply a model, so --trial-model would be recorded but never used\n` });
+
+  // The script is only worth anything if it speaks arc-run's actual sentence. Pinned against the
+  // refusal the REAL arc-run printed above, minus the one field that is today's date.
+  const realLine = String(first.stdout ?? "").split("\n")[0].replace(/\(today is [^)]*\)/, "");
+  const fakeLine = EXPIRED("build-in-public-draft").stdout.split("\n")[0].replace(/\(today is [^)]*\)/, "");
+  check("the scripted tenure refusal is byte-for-byte the sentence arc-run itself prints",
+    realLine.length > 0 && realLine === fakeLine, `real ${JSON.stringify(realLine)} vs scripted ${JSON.stringify(fakeLine)}`);
+
+  // (i.1) ONE READER. The router in this tree calls v1's route live until 2999; arc-run refuses it
+  // anyway. A probe that believed the file would stop at v1 with no recognised answer.
+  const liveOnPaper = ["version: 1", "tiers:", "  - balanced-workhorse", "classes:", "  v1:",
+    "    tier: balanced-workhorse", "    driver: hermes", "    cap: L1-drafts", "    hosted: cloud",
+    "    judge: fixture", "    review_by: 2999-01-01", "    fallback: []", ""].join("\n");
+  const oneReader = probeOrThrown(fakeTree("fake-one-reader", { v1: EXPIRED("v1"), v2: APPLIES("haiku") }, liveOnPaper), "claude-code");
+  check("tenure comes from ARC-RUN'S answer, never the router file: a row the file calls live but arc-run refuses is skipped",
+    oneReader === true, said(oneReader));
+
+  // (i.2) THE WHOLE LIST, IN ORDER. A probe fixed on one position -- first or last -- fails one of these.
+  const liveThenLapsed = probeOrThrown(fakeTree("fake-live-then-lapsed", { v1: APPLIES("haiku"), v2: EXPIRED("v2") }), "claude-code");
+  const twoLapsedThenLive = probeOrThrown(fakeTree("fake-two-lapsed", { v1: EXPIRED("v1"), v2: EXPIRED("v2"), v3: APPLIES("haiku") }), "claude-code");
+  check("the probe walks every vehicle in order: [live, expired] and [expired, expired, live] both answer capable",
+    liveThenLapsed === true && twoLapsedThenLive === true, `[live,expired] ${said(liveThenLapsed)}; [expired,expired,live] ${said(twoLapsedThenLive)}`);
+
+  // (i.3) EVERY NAME, not the last one seen.
+  const allGone = probeOrThrown(fakeTree("fake-all-lapsed", { v1: EXPIRED("v1"), v2: EXPIRED("v2") }), "claude-code");
+  check("when every vehicle has expired, the refusal names EVERY expired row",
+    allGone instanceof OperatorError && /no vehicle left/.test(allGone.message)
+      && /v1 \(review_by 2000-01-01\)/.test(allGone.message) && /v2 \(review_by 2000-01-01\)/.test(allGone.message),
+    allGone instanceof Error ? String(allGone.message).slice(0, 240) : said(allGone));
+
+  // (i.4) NOT CAPABLE, AFTER A SKIP. The real arc-run cannot pose this; the script can.
+  const lateNo = probeOrThrown(fakeTree("fake-skip-then-no", { v1: EXPIRED("v1"), v2: CANNOT("claude-code") }), "claude-code");
+  check("a driver answer that comes AFTER a skipped vehicle is still the answer, not capable included",
+    lateNo === false, said(lateNo));
+
+  // (i.5) EVERYTHING ELSE IS LOUD. Each case is a near-miss of an answer; each must throw "no usable
+  // answer" rather than skip or answer. The last two are the old unanchored arms: a trial line
+  // for a model nobody asked for, and an operator error that merely ECHOES "cannot apply a model".
+  const nearMisses = {
+    "a tenure refusal about ANOTHER class": { v1: EXPIRED("other"), v2: APPLIES("haiku") },
+    "the refusal on stderr": { v1: { status: 1, stdout: "", stderr: EXPIRED("v1").stdout }, v2: APPLIES("haiku") },
+    "the refusal mid-line": { v1: { ...EXPIRED("v1"), stdout: `note: ${EXPIRED("v1").stdout}` }, v2: APPLIES("haiku") },
+    "the refusal under exit 2": { v1: { ...EXPIRED("v1"), status: 2 }, v2: APPLIES("haiku") },
+    "a DIFFERENT refusal of the vehicle": { v1: { status: 1, stderr: "", stdout: "arc-run: would REFUSE `v1` — the input for v1 does not declare itself external-ok\n" }, v2: APPLIES("haiku") },
+    "a trial line for a model nobody asked for": { v1: APPLIES("some-other-model") },
+    "an operator error that echoes the words": { v1: { status: 2, stdout: "", stderr: 'arc-run: --trial-model "cannot apply a model" is not a clean model id\n' } },
+  };
+  const quiet = [];
+  let posed = 0;
+  for (const [label, table] of Object.entries(nearMisses)) {
+    posed += 1;
+    const r = probeOrThrown(fakeTree(`fake-near-miss-${posed}`, table), "claude-code");
+    if (!(r instanceof OperatorError && /no usable answer/.test(r.message))) quiet.push(`${label}: ${said(r)}`);
+  }
+  check("every near-miss of an answer is LOUD: no skip, no true, no false",
+    posed === 7 && quiet.length === 0, `posed ${posed}; not loud: ${quiet.join(" | ") || "none"}`);
+
+  // (i.6) THE DISPATCH PATH'S TWIN, found by the same attack pass. The probe learned about tenure and
+  // `runBench` did not: an eligible class past its review_by was admitted group by group, every
+  // attempt was refused, and the run committed money for invocations that reached no provider.
+  // Posed with arc-run's own machinery and a fixed past date, so arc-run decides and the calendar
+  // does not.
+  const benchTree = join(scratch, "tenure-bench");
+  mkdirSync(join(benchTree, "engine"), { recursive: true });
+  mkdirSync(join(benchTree, "processes"), { recursive: true });
+  mkdirSync(join(benchTree, "initiatives/bench"), { recursive: true });
+  cpSync(join(ROOT, ".claude/scripts"), join(benchTree, ".claude/scripts"), { recursive: true });
+  cpSync(join(ROOT, "processes/commit-msg-draft.process.yaml"), join(benchTree, "processes/commit-msg-draft.process.yaml"));
+  // The WHOLE eval and bench fixture directories, as bench-seal-probe copies them: arc-run
+  // validates every declared eval path, so a tree missing one fails for the wrong reason.
+  cpSync(join(ROOT, "tests/fixtures/engine/evals"), join(benchTree, "tests/fixtures/engine/evals"), { recursive: true });
+  cpSync(join(ROOT, "tests/fixtures/bench"), join(benchTree, "tests/fixtures/bench"), { recursive: true });
+  writeFileSync(join(benchTree, "initiatives/bench/ceilings.json"), JSON.stringify({
+    as_of: "2026-08-13", run_cap_inr: 1000, process_cap_inr: 1000, k: 3,
+    worst_case_inr_per_invocation: { mock: { "(unpinned)": 10 } },
+  }), "utf8");
+  writeFileSync(join(benchTree, "engine/router.yaml"), ["version: 1", "tiers:", "  - balanced-workhorse", "classes:",
+    "  commit-msg-draft:", "    tier: balanced-workhorse", "    driver: mock", "    cap: L1-drafts", "    hosted: local",
+    "    judge: fixture", "    review_by: 2000-01-01", "    fallback: []",
+    "default:", "  tier: balanced-workhorse", "  driver: claude-code", "  fallback: []", ""].join("\n"), "utf8");
+  const benchSpine = spineFor("tenure-bench-run");
+  const heldSpine = process.env.ARC_SPINE_ROOT;
+  process.env.ARC_SPINE_ROOT = benchSpine;
+  let lapsedRun;
+  try { lapsedRun = runBench(benchTree, { driver: "mock", budget: "inr=500" }); }
+  catch (e) { lapsedRun = e; }
+  finally { if (heldSpine === undefined) delete process.env.ARC_SPINE_ROOT; else process.env.ARC_SPINE_ROOT = heldSpine; }
+  const lapsedClass = lapsedRun instanceof Error ? null : lapsedRun.scorecard.classes.find((c) => c.task_class === "commit-msg-draft");
+  check("an ELIGIBLE class whose route has expired is not benched: no group admitted, nothing committed",
+    lapsedClass?.eligible === true && lapsedClass.selected === 0
+      && lapsedRun.provenance.budget.committed_inr === 0 && lapsedRun.provenance.budget.reconciliations.length === 0,
+    lapsedRun instanceof Error ? said(lapsedRun)
+      : `eligible ${lapsedClass?.eligible}, selected ${lapsedClass?.selected}, committed ${lapsedRun.provenance.budget.committed_inr}, groups ${lapsedRun.provenance.budget.reconciliations.length}`);
+  check("and every one of its fixtures is NAMED as refused by tenure, with the date, so the run is partial and proposes nothing",
+    lapsedClass !== null && lapsedClass !== undefined && lapsedClass.declared >= 5
+      && lapsedClass.unselected.length === lapsedClass.declared
+      && lapsedClass.unselected.every((u) => u.reason.startsWith("failure: tenure") && u.reason.includes("2000-01-01"))
+      && lapsedRun.outcome === "partial" && lapsedClass.proposal === "NO PROPOSAL - partial run",
+    lapsedClass ? JSON.stringify({ declared: lapsedClass.declared, unselected: lapsedClass.unselected.map((u) => u.reason.slice(0, 40)), outcome: lapsedRun.outcome, proposal: lapsedClass.proposal }).slice(0, 300) : said(lapsedRun));
+  check("and nothing was dispatched for it: the run left no receipt on the spine",
+    eventsOn(benchSpine).length === 0, `${eventsOn(benchSpine).length} event(s) on the spine`);
 }
 
 // ---- 8. BENCH AND ARC-RUN AGREE ON WHAT A JOB STUB IS -----------------------------------------

@@ -460,9 +460,11 @@ let expiredRow = null;
  * is settable in a unit probe. But EVERY dispatch reads this, tests included. This comment used to
  * say "Tests never reach this", and it was false: three REQ-06 tests and bench's capability probe
  * dispatched the REAL hermes row, so on 2026-09-01, the day after its review_by, CI went red on
- * every OS with no commit behind it. The rule is: a test never depends on today's date. Tenure
- * is exercised with fixed past or future review_by values in a fixture router, never with the
- * live row and the live clock.
+ * every OS with no commit behind it. The rule is about OUTCOMES: no test's verdict may depend on
+ * today's date. Tenure itself is exercised only with fixed past or future review_by values in a
+ * fixture router. A test that dispatches through the live router may still pass an expired row on
+ * its way -- bench's real-tree capability controls do -- but only if its verdict is the same on
+ * both sides of that row's review_by.
  */
 function todayISO() {
   const d = new Date();

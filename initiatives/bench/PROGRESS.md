@@ -148,9 +148,12 @@ in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **
 
 **2026-09-15: Phase 03's real event is BLOCKED again, this time from outside the lane.** Engine's
 hermes row expired on 2026-08-31. Since then `driverTakesModel` has borrowed its class as the probe
-vehicle, and every run that names a model throws `OperatorError` before reaching a provider. The owner
-deferred the hire decision. The probe fix is tracked in `initiatives/engine/PROGRESS.md` § Now
-(2026-09-15), on engine's clock, not this lane's 7.25 of 8d. Until it merges, the real event cannot start.
+vehicle, and every run naming a model on a model-capable driver throws `OperatorError` before
+reaching a provider. The owner deferred the hire decision. The fix is tracked in
+`initiatives/engine/PROGRESS.md` § Now (2026-09-15), on engine's clock, not this lane's 7.25 of 8d.
+It also closes the twin the attack pass found in `runBench`: an eligible class past its review_by
+is no longer admitted and charged, it is reported as `failure: tenure`. Until it merges, the real
+event cannot start.
 
 **Current position, 2026-08-17: 4 of 5 phases CLOSED. Phase 03's real-event half is now genuinely
 buildable, and is NOT built — it is waiting on money and an owner keystroke, nothing else.**

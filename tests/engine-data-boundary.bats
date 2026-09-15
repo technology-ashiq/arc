@@ -160,7 +160,7 @@ PROC="commit-msg-draft"
   [[ "$output" == *"unmarked_uncapped=false"* ]] || { echo "the rule leaked onto uncapped rows: $output"; false; }
 }
 
-# THE REAL ROUTER, WITH ONE LINE MOVED: that capped row's review_by, to a date that cannot pass.
+# A CAPPED HERMES ROW THAT NEITHER THE CALENDAR NOR THE TERMINATION SPEC CAN REMOVE.
 #
 # The three tests below used to run against `--root "$ARC_ROOT"` itself, for the production shape.
 # Tenure is checked BEFORE the cap rule, so on 2026-09-01 -- the day after the hermes row's
@@ -168,32 +168,40 @@ PROC="commit-msg-draft"
 # 1 and "its route EXPIRED", on every OS, with no commit behind it. The owner deferred the hire
 # decision (2026-09-15), so the real row stays expired and these tests may not wait on it.
 #
-# Copying the real file keeps the production shape; moving only review_by keeps tenure out of a test
-# that is not about tenure. The pin test below proves the copy differs from the real router in
-# exactly that one line, so the shape cannot drift out from under these tests unnoticed. `sed -E`
-# with a single-digit backreference and no `$` anchor, so BSD, GNU and a CRLF checkout all agree.
-unexpired_root() {
+# A SYNTHETIC ROW, not the real router with its date moved -- and an adversarial pass is what forced
+# that. The first fix copied engine/router.yaml and moved one line, which still hung these tests on
+# the live row EXISTING: the router's own termination step 2 deletes it, and then all three exit 2
+# ("does not grant the agent runtime"), one of them printing a false reason. The deferred ruling can
+# be "retire", and a suite that breaks when the documented procedure is followed is pressure to
+# undo the procedure. `engine-router-row.bats` moved its negative control off the live router for
+# that same reason. This row carries the production shape the cap rule is about -- driver hermes,
+# `cap: L1-drafts`, `hosted: cloud` -- and a tenure that cannot lapse.
+#
+# What this root does NOT carry is `.claude/scripts`, so the exit-5 refusal cannot write its receipt
+# here: arc-run prints "could not emit run.completed" and still exits 5. These tests are about the
+# boundary's exit code and reason, not about its receipt.
+capped_root() {
   local root="$1"
   mkdir -p "$root/engine" "$root/processes"
   cp "$ARC_ROOT/processes/build-in-public-draft.process.yaml" "$root/processes/"
-  sed -E 's/^(    review_by: )[0-9]{4}-[0-9]{2}-[0-9]{2}/\12999-12-31/' "$ARC_ROOT/engine/router.yaml" > "$root/engine/router.yaml"
-}
-
-@test "fixture: the unexpired root differs from the real router in exactly one review_by line" {
-  # Without this, a sed that matched nothing would hand the tests below the REAL router -- expired,
-  # so they would fail -- or, worse, a future edit to the helper could rewrite some other field and
-  # the tests would pass against a shape production does not have.
-  local root="$BATS_TEST_TMPDIR/unexpired-pin"
-  unexpired_root "$root"
-  [ -s "$root/engine/router.yaml" ] || { echo "the fixture router is empty -- the helper built nothing"; false; }
-  run diff "$ARC_ROOT/engine/router.yaml" "$root/engine/router.yaml"
-  [ "$status" -eq 1 ] || { echo "diff status $status -- 0 means the fixture moved nothing: $output"; false; }
-  local out_lines in_lines
-  out_lines="$(printf '%s\n' "$output" | grep -c '^< ' || true)"
-  in_lines="$(printf '%s\n' "$output" | grep -c '^> ' || true)"
-  [ "$out_lines" -eq 1 ] && [ "$in_lines" -eq 1 ] || { echo "expected one line out and one in, got $out_lines and $in_lines: $output"; false; }
-  printf '%s\n' "$output" | grep -Eq '^< +review_by: [0-9]{4}-[0-9]{2}-[0-9]{2}' || { echo "the line moved out is not a review_by: $output"; false; }
-  printf '%s\n' "$output" | grep -Eq '^> +review_by: 2999-12-31' || { echo "the line moved in is not the unexpired review_by: $output"; false; }
+  cat > "$root/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes:
+  build-in-public-draft:
+    tier: balanced-workhorse
+    driver: hermes
+    cap: L1-drafts
+    hosted: cloud
+    judge: fixture
+    review_by: 2999-12-31
+    fallback: []
+default:
+  tier: balanced-workhorse
+  driver: claude-code
+  fallback: []
+YAML
 }
 
 @test "REQ-06: the cap rule applies on the EXPLICIT --driver path, not only under auto" {
@@ -204,9 +212,10 @@ unexpired_root() {
   # classification at all, went straight past the boundary.
   #
   # `build-in-public-draft` is the only class in the real router carrying a cap, and it grants
-  # hermes -- so this is the production shape, with only its tenure moved (see unexpired_root).
-  local root="$BATS_TEST_TMPDIR/unexpired"
-  unexpired_root "$root"
+  # hermes -- so this row is the production shape, posed on a root whose tenure cannot lapse (see
+  # capped_root).
+  local root="$BATS_TEST_TMPDIR/capped"
+  capped_root "$root"
   run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes \
     --input '{"pack_ref":"p","pack":"nothing internal here"}'
   [ "$status" -eq 5 ] || { echo "an unmarked input reached the runtime on the explicit path, got $status: $output"; false; }
@@ -216,8 +225,8 @@ unexpired_root() {
 @test "REQ-06 NEGATIVE CONTROL: the same explicit dispatch with external-ok is NOT refused" {
   # Without this the test above passes on a rule that refuses every capped dispatch -- which would
   # mean REQ-07 could never run at all, i.e. a boundary that works by breaking the job.
-  local root="$BATS_TEST_TMPDIR/unexpired"
-  unexpired_root "$root"
+  local root="$BATS_TEST_TMPDIR/capped"
+  capped_root "$root"
   run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes --dry-run \
     --input '{"classification":"external-ok","pack_ref":"p","pack":"nothing internal here"}'
   [ "$status" -eq 0 ] || { echo "a properly declared pack was refused: $output"; false; }
@@ -230,8 +239,8 @@ unexpired_root() {
   # that fact read EMPTY -- so the one code path whose entire job is to say where a document was
   # about to go said nothing, exactly when a caller had bypassed routing to name the destination
   # themselves. The probe-driven fixture-3 test above proves the FUNCTION; this proves the wiring.
-  local root="$BATS_TEST_TMPDIR/unexpired"
-  unexpired_root "$root"
+  local root="$BATS_TEST_TMPDIR/capped"
+  capped_root "$root"
   run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes \
     --input '{"classification":"internal-only","pack_ref":"p","pack":"x"}'
   [ "$status" -eq 5 ] || { echo "expected 5, got $status: $output"; false; }
@@ -248,6 +257,6 @@ unexpired_root() {
   # falls) and a silent removal (declared falls).
   declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "17" ] || { echo "expected 17 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "16" ] || { echo "expected 16 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }
