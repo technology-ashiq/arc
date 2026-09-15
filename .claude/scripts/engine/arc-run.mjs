@@ -456,8 +456,13 @@ let expiredRow = null;
  * spine names its file from an IST timestamp, and the result was wrong for 22.9% of the clock. A
  * tenure check that flips a day early or late depending on the hour is not a tenure check.
  *
- * Tests never reach this -- `isExpired(row, today)` takes the day as a parameter precisely so the
- * boundary, which is the only interesting day, is settable.
+ * `isExpired(row, today)` takes the day as a parameter so its boundary, the only interesting day,
+ * is settable in a unit probe. But EVERY dispatch reads this, tests included. This comment used to
+ * say "Tests never reach this", and it was false: three REQ-06 tests and bench's capability probe
+ * dispatched the REAL hermes row, so on 2026-09-01, the day after its review_by, CI went red on
+ * every OS with no commit behind it. The rule is: a test never depends on today's date. Tenure
+ * is exercised with fixed past or future review_by values in a fixture router, never with the
+ * live row and the live clock.
  */
 function todayISO() {
   const d = new Date();

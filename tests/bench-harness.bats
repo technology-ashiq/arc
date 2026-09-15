@@ -64,8 +64,9 @@ STEEL_STATUS() { cat "$BATS_FILE_TMPDIR/steel.status"; }
   # enough that six of the eight sections could have vanished entirely and still cleared the
   # floor. A floor whose stated purpose is catching a silently dropped section, that cannot catch
   # a silently dropped section, is worse than no floor: it reads as a guard.
-  # 70 measured 2026-08-17 (51 before sections 7 and 8).
-  [ "$oks" -eq 70 ]
+  # 75 = the 70 measured 2026-08-17 (51 before sections 7 and 8) plus section 7's five tenure
+  # checks added 2026-09-15. Arithmetic until CI prints the count; the CI run is the measurement.
+  [ "$oks" -eq 75 ]
 }
 
 @test "the receipt is verified present in events and absent from quarantine" {

@@ -263,6 +263,56 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### OUT-OF-CYCLE — `main` red since 2026-09-01: the hire's tenure expired, and it took bench's probe and three REQ-06 tests with it — 2026-09-15
+
+**Classification: a bug**, routed through `/arc-change` on 2026-09-15. Cycle 7 is closed, so this is
+post-close maintenance on engine-owned files, charged to no cycle's appetite, least of all bench's,
+which sits at 7.25 of 8d. Estimate 0.5d, reported at close. Branch `feat/engine-tenure-clock-fix`.
+
+**What happened.** `classes.build-in-public-draft` carries `review_by: 2026-08-31`. From 2026-09-01
+every dispatch of that class refuses with `its route EXPIRED`, which is ADR-0216 working as
+designed. No commit caused the red. No CI ran between 2026-08-24 and 2026-09-15, and the first run
+after that gap came back **7 of 19 jobs red, 90 test instances, all in two files**. The set is
+identical on `main` at `833ae45e` (dispatch 34979541989) and on PR #224 (run 34979051480), and
+every failing job's log names the expiry.
+
+**Owner rulings, 2026-09-15.** The hire decision is **deferred**: the row stays expired, neither
+renewed nor retired. ADR-0216 says expiry never renews itself, and a renewal is a reviewed diff.
+The tests get fixed through `/arc-change`, **without weakening the tenure gate**.
+
+**Three defects, and one root under all of them: code that reads the real router on the real calendar.**
+
+1. **`arc-bench.mjs` `driverTakesModel` is a PRODUCTION defect, not a test one (75 of the 90).**
+   The probe borrows the first runnable process as a vehicle to ask arc-run whether a DRIVER
+   carries a model. The first runnable process is `build-in-public-draft`, so its expired route
+   answers first: exit 1, neither recognised verdict, `OperatorError`. **Every bench run that names
+   a model dies today** (`arc-bench.mjs:1471` probes before the first attempt), over a hire the run
+   never touches. It is the stub defect that
+   `arc-bench.mjs:698` records, one refusal later: "this PROCESS cannot be used" read as an answer
+   about the driver. Fix: a vehicle refused by tenure is skipped and the next runnable process is
+   tried. arc-run stays the only reader of tenure, so bench gets no second expiry computation of its
+   own ("validate one read, compare another"). If tenure refuses every runnable process, that is a
+   loud `OperatorError` naming the rows. Any other unrecognised answer stays loud exactly as now.
+2. **Three REQ-06 tests in `engine-data-boundary.bats` measure tenure, not the cap (15 of the 90).**
+   They dispatch the REAL row on purpose ("the production shape, not a fixture arrangement"). Tenure
+   is checked before the cap rule, so since 09-01 they have been measuring the calendar. Fix: a
+   fixture root carrying the real router with ONLY that row's `review_by` moved to `2999-12-31`,
+   plus a pin that the fixture differs from `engine/router.yaml` in exactly that one line. That way
+   the production shape cannot drift out from under the tests.
+3. **`arc-run.mjs:459` says "Tests never reach this", and that is false.** Every dispatch reads
+   `TODAY` at module scope, and two suites depended on its value. The comment becomes the rule: a
+   test never depends on today's date, and tenure is exercised only with fixed past and future dates.
+
+**The regressions are deterministic, because the CI red is a calendar accident and cannot be the
+proof.** One fixture tree has a first runnable process with `review_by: 2000-01-01` and a runnable
+second: the probe must answer from the second, and the answer must be the DRIVER's (`mock` → not
+capable, `claude-code` → capable). A second tree has every runnable process expired, and that
+must throw an `OperatorError` naming the expiry.
+
+**Done when:** CI is 19/19 on the PR head, read per JOB. After the merge, a `workflow_dispatch` on
+`main` is 19/19. Two fresh adversarial agents (decision logic · shell/OS boundary) have run, each
+handed this lane's fixed-defect list, with every hole they find pinned. `/arc-review` is done.
+
 ### MERGED, AND THE MERGED TREE VERIFIED — 2026-08-23
 
 PR **#217** squash-merged as **`761d4ae1`**. **CI on `main` at that SHA: 19/19, read per JOB**

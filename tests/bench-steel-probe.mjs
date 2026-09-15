@@ -480,6 +480,68 @@ function eventsOn(spine) {
   check("and the stub it skipped is named in the report, not silently dropped",
     nothing.job_stubs_skipped.join(",") === "only-a-stub" && nothing.scorecard.classes.length === 0,
     JSON.stringify(nothing.job_stubs_skipped));
+
+  // (i) A VEHICLE REFUSED BY TENURE IS SKIPPED, AND ITS REFUSAL IS NEVER THE DRIVER'S ANSWER.
+  //
+  // THE STUB DEFECT AGAIN, ONE REFUSAL LATER, AND IT KEPT MAIN RED FOR TWO WEEKS. On 2026-09-01 the
+  // hermes row behind `build-in-public-draft` passed its review_by. That class is the first runnable
+  // process in the real tree, so arc-run refused the probe by tenure, the probe had no arm for that,
+  // and check (a) above THREW instead of answering -- on every OS, with no commit behind it. Every
+  // bench run that named a model died the same way.
+  //
+  // POSED WITH A FIXED PAST DATE, never with the live row. The CI red was a calendar accident, so
+  // it cannot be the regression. 2000-01-01 is past on every clock this suite will ever run on, and
+  // the tree is otherwise arc's own machinery, so arc-run -- the one reader of tenure -- decides.
+  const lapsedTree = (name, processes) => {
+    const t = join(scratch, name);
+    cpSync(join(ROOT, ".claude/scripts"), join(t, ".claude/scripts"), { recursive: true });
+    mkdirSync(join(t, "processes"), { recursive: true });
+    for (const p of processes) cpSync(join(ROOT, "processes", `${p}.process.yaml`), join(t, "processes", `${p}.process.yaml`));
+    mkdirSync(join(t, "engine"), { recursive: true });
+    writeFileSync(join(t, "engine", "router.yaml"), [
+      "version: 1", "tiers:", "  - balanced-workhorse", "classes:",
+      "  build-in-public-draft:", "    tier: balanced-workhorse", "    driver: hermes", "    cap: L1-drafts",
+      "    hosted: cloud", "    judge: fixture", "    review_by: 2000-01-01", "    fallback: []",
+      "default:", "  tier: balanced-workhorse", "  driver: claude-code", "  fallback: []", "",
+    ].join("\n"), "utf8");
+    return t;
+  };
+  // A throw becomes a readable FAIL here rather than killing the probe, which is what the
+  // unguarded call in (a) did on 2026-09-01 and took every later check in this file with it.
+  const probeOrThrown = (root, driver) => { try { return driverTakesModel(root, driver, "haiku"); } catch (e) { return e; } };
+  const askArcRun = (root, proc) => spawnSync(process.execPath, [
+    join(root, ".claude/scripts/engine/arc-run.mjs"), "--process", proc, "--driver", "claude-code",
+    "--trial-model", "haiku", "--dry-run", "--root", root,
+  ], { encoding: "utf8", cwd: root, timeout: 60000, killSignal: "SIGKILL" });
+
+  const skipTree = lapsedTree("tenure-skip", ["build-in-public-draft", "commit-msg-draft"]);
+  // THE FIXTURE MUST POSE THE CASE, and that is asked of arc-run, not assumed from the YAML: the
+  // first vehicle is refused by tenure and the second is not, or the two checks after these prove
+  // nothing at all.
+  const first = askArcRun(skipTree, "build-in-public-draft");
+  check("the tenure fixture's FIRST runnable vehicle is refused by tenure, as arc-run itself reports",
+    runnableProcessNames(skipTree)[0] === "build-in-public-draft" && first.status === 1
+      && /its route EXPIRED on 2000-01-01/.test(first.stdout ?? ""),
+    `runnable ${runnableProcessNames(skipTree).join(",")}; status ${first.status}: ${String(first.stdout).slice(0, 160)}`);
+  const second = askArcRun(skipTree, "commit-msg-draft");
+  check("and its SECOND runnable vehicle is not refused",
+    second.status === 0 && /\(source: trial\)/.test(second.stdout ?? ""),
+    `status ${second.status}: ${String(second.stdout).slice(0, 160)}`);
+
+  const capable = probeOrThrown(skipTree, "claude-code");
+  check("a capable driver is still REPORTED capable when the first vehicle's route has expired",
+    capable === true, capable instanceof Error ? `threw: ${String(capable.message).split("\n")[0]}` : `returned ${capable}`);
+  const notCapable = probeOrThrown(skipTree, "mock");
+  check("and a driver that cannot carry a model is still reported NOT capable, from the same tree",
+    notCapable === false, notCapable instanceof Error ? `threw: ${String(notCapable.message).split("\n")[0]}` : `returned ${notCapable}`);
+
+  // When EVERY vehicle has lapsed, the fault is the router's, and the operator fixes it in a
+  // reviewed diff -- so it has to be named as that, not as a driver that gave "no usable answer".
+  const none = probeOrThrown(lapsedTree("tenure-all", ["build-in-public-draft"]), "claude-code");
+  check("a tree whose EVERY runnable vehicle has expired throws, naming the expired row as the cause",
+    none instanceof OperatorError && /no vehicle left/.test(none.message)
+      && /build-in-public-draft \(review_by 2000-01-01\)/.test(none.message),
+    none instanceof Error ? String(none.message).slice(0, 240) : `returned ${none}`);
 }
 
 // ---- 8. BENCH AND ARC-RUN AGREE ON WHAT A JOB STUB IS -----------------------------------------
