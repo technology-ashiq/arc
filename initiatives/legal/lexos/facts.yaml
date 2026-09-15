@@ -8,56 +8,110 @@
 #
 #   payment_model: none               <- LexOS ADR-0003, "Razorpay settles to each firm": each law
 #                                        firm is its own merchant. LexOS never takes the client's
-#                                        money, so there is no gateway and no merchant-of-record.
+#                                        money. Confirmed again by the owner 2026-08-16: LexOS is
+#                                        NOT collecting its own subscription yet either. The prices
+#                                        below are announced, not charged.
 #   gst_registered: false             <- the owner, 2026-08-15.
+#   operator.type: individual         <- the owner, 2026-08-16 (not incorporated).
+#   analytics: none                   <- the owner, 2026-08-16, and the repo agrees: LexOS
+#                                        package.json carries no analytics library at all.
 #   stores_third_party_client_data    <- LexOS is practice-management software for law firms; the
 #                                        records it holds are the firms' CLIENTS' matters. That is
 #                                        the definition of the processor role, and it is why this
 #                                        venture is the one the processor clauses were written for.
 #   site_url                          <- docs/lexos-idea.md names lexos.app.
 #
-# THE IDENTITY FIELDS ARE DELIBERATELY ABSENT. They are real-world facts about a real operator --
-# a legal name, a registered address, a working support mailbox, a named grievance officer -- and
-# inventing them would put a false statement on a customer-facing legal page, which is the one
-# thing this whole product exists to prevent. The fixtures use invented details precisely so no
-# real person's data becomes test data; the reverse duty applies here.
+# THREE IDENTITY FIELDS ARE STILL DELIBERATELY ABSENT (see OWNER OWES, below). They are real-world
+# facts about a real operator, and inventing them would put a false statement on a customer-facing
+# legal page, which is the one thing this whole product exists to prevent. The fixtures use invented
+# details precisely so no real person's data becomes test data; the reverse duty applies here.
 #
 # The schema will refuse this file and NAME each missing field. That refusal is the request: it is
 # machine-generated rather than my guess at what is needed.
+#
+# EDITING RULE: put a value AFTER the colon and NOTHING ELSE on that line. Guidance in this file
+# lives on its own comment lines, never beside a value — a first pass at this file was written with
+# the guidance inline, and uncommenting it dragged the prose into the YAML.
 
 venture: lexos
 site_url: "https://lexos.app"
 
-# The date the pages take effect. Must not be earlier than the day the owner approves them
-# (publish refuses BACKDATED), so it is set at approval time, not now.
+# ---- OWNER OWES: four values, and the schema will name each one until they are here -------------
+#
+# 1. operator.legal_name — the owner is a proprietor, so this is his OWN full name exactly as it
+#    appears on the PAN. "LexOS" is the trade name and is already recorded as such below; a trade
+#    name standing in for a legal name is a false statement about who the reader is contracting
+#    with. Uncomment and fill:
+# operator:
+#   legal_name: "..."
+#
+# 2. geographic_address — an address a legal notice can actually be served at: door/building,
+#    street, area, city, state, PIN. A city name alone is not a serviceable address, and both
+#    DPDP Rule 4(5) and Razorpay activation want the full one. Max 200 chars.
+# geographic_address: "..."
+#
+# 3. grievance.address — the grievance officer's postal address. If it is the same as the
+#    geographic_address above, say so and I will repeat the value rather than leave it empty.
+#   address: "..."
+#
+# 4. pricing.period — "month", "year" or "one-time" for the 599 / 1499 below. This is a money
+#    statement on a public page, so it is not something to infer from the amounts.
+#   period: month | year | one-time
+#
+# effective_date is NOT owed: it is set on the day the pages are approved, because publish refuses
+# a BACKDATED effective date.
 # effective_date: YYYY-MM-DD
 
-# ---- who the operator is (OWNER MUST SUPPLY) ------------------------------------------------
-# operator:
-#   type: entity | individual
-#   legal_name: "..."        the name on the incorporation record or the PAN
-#   trade_name: "LexOS"
+# ---- who the operator is ---------------------------------------------------------------------
+operator:
+  type: individual
+  trade_name: "LexOS"
+
+# ---- HELD ON THE OWNER'S MACHINE, NOT OWED: four values -------------------------------------
 #
-# registered_address: "..."  the address a legal notice can be served at
-# support:
-#   email: "..."
+# This repo is public. The support phone, the grievance officer's name and email, and the deletion
+# mailbox are one real person's contact details. The owner supplied all four on 2026-08-16 and ruled
+# on 2026-09-15 that they stay out of git: the live legal pages will have to show them, but a public
+# commit history is not the live legal pages, and a commit cannot be unpublished. His local working
+# copy of this file carries them, so a render run on his machine is complete; here the schema names
+# them as missing, which is true of this copy.
 #   phone: "..."
+#
 # grievance:
-#   name: "..."              a real person; Rule 4(5) also wants their DESIGNATION
+#   name: "..."
 #   email: "..."
+#
 # deletion_route:
 #   mailbox: "..."
 
+support:
+  email: "hello@lexos.in"
+
 # ---- what it does with data ------------------------------------------------------------------
+# `billing` and `usage-analytics` were both removed on 2026-08-16, not overlooked: no money is
+# collected yet and no analytics library exists, so listing either category would make the privacy
+# page describe collection that does not happen. Both come back the day the thing they name does.
 data_categories:
   - identity
   - contact
-  - billing
-  - usage-analytics
+  - account-credentials
+  - support-correspondence
   - client-matter-content
   - uploaded-documents
 
 stores_third_party_client_data: true
+
+# `billing-and-invoicing` is absent for the same reason as the `billing` category, and
+# `service-improvement` is absent because analytics is none — a purpose with no mechanism behind it
+# is a claim, not a disclosure.
+purposes:
+  - provide-the-service
+  - authenticate-and-secure
+  - support-and-communication
+  - legal-and-regulatory
+
+analytics:
+  - none
 
 retention: until-account-deletion
 
@@ -67,24 +121,32 @@ sub_processors:
   - "Resend (transactional email)"
 
 # ---- money -----------------------------------------------------------------------------------
+# payment_model stays `none` on the owner's 2026-08-16 answer: the plans below are published as
+# prices, and nothing charges them yet. The refund window therefore describes what will happen when
+# billing lands rather than a live transaction — read the rendered refund page before approving it,
+# because that is the page where this distinction either reads honestly or does not.
 payment_model: none
 payment_provider: none
 gst_registered: false
 refund_window_days: 14
 
-# pricing:
-#   plan_names: [...]
-#   plan_amounts_inr: [...]
+pricing:
+  plan_names:
+    - Individual
+    - Agency
+  plan_amounts_inr:
+    - 599
+    - 1499
 
-# ---- what we promise, in numbers (OWNER MUST CONFIRM -- these are commitments, not defaults) --
-# commitments:
-#   refund_decision_days: 5
-#   deletion_live_days: 7
-#   deletion_backup_days: 35
-#   renewal_notice_days: 7
-#   price_notice_days: 30
-#   breach_notice_hours: 72
-#   payment_failure_grace_days: 14
+# ---- what we promise, in numbers (owner-confirmed 2026-08-16) --------------------------------
+commitments:
+  refund_decision_days: 5
+  deletion_live_days: 7
+  deletion_backup_days: 35
+  renewal_notice_days: 7
+  price_notice_days: 30
+  breach_notice_hours: 72
+  payment_failure_grace_days: 14
 
 # ---- where the pages live on the site --------------------------------------------------------
 routes:
