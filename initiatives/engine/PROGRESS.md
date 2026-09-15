@@ -349,6 +349,20 @@ open, and each needs its own tracked change:
 - The probe skips a vehicle refused by TENURE only. If the first vehicle does not grant a runtime
   driver, it still throws, even when a later vehicle would answer. That fails loud, not open.
   (attack A #10)
+- **From `/arc-review` of `a22dc3a7`** (verdict **ship**, archived at
+  `docs/reviews/2026-09-15-2342-feat-engine-tenure-clock-fix.md`):
+  - **Warning, dormant, not a regression:** the drift guard is a twin that was never taught about
+    tenure. `driftAlerts` would read a tenure-skipped class as "a total collapse" and file a false
+    inbox proposal. The receipt also carries no per-class refusal reason. It is muted today: the
+    only class with tenure declares 1 eval.
+  - **Nits:**
+    - The probe docstring still says "one process per RUN".
+    - No-`repo_state` fixtures get relabelled as tenure refusals.
+    - Tenure is read once per class, so a run crossing midnight behaves the old way.
+    - The (i.5) near-miss check would also pass on a crashed script.
+    - A tenure-partial run cannot pass replay.
+    - The `capped_root` heredoc is unquoted.
+    - `bench-harness.bats` needs re-weighing in `tests/shard-timings.json`.
 
 **Proof on this box, short of a suite run.** Section 7 of the steel probe, lifted out verbatim and
 replayed alone: 26 ok, 0 failed. The five mutants were each replayed against it, and all five were
