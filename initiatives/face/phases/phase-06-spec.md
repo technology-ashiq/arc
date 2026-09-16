@@ -1,54 +1,56 @@
-# Phase 06 — Rooms (bespoke panels on the template)
+# Phase 06 — Session door: streaming work started by a click
 
-**Goal (one line):** all 32 rooms render real data on the template, with bespoke panels
-where the generic zones are not enough — honest states everywhere.
-**Appetite:** 5 days
+**Goal (one line):** REQ-08 — council convene, absorb read and hire certification start from a click, stream their phases, and land as receipts of existing kinds, always through `arc-run --driver` (ADR-1326, ADR-1333).
+**Appetite:** 2 days
 **Depends on:** phase-05
+**Serves:** REQ-08
+**Branch:** `feat/face-v2-06`
+**Preconditions (STOP if absent):** Phase 05's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 05` from the main clone.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] bespoke panels wave 1: Council · Money · Leads · Growth · Engine · Evolve · Board ·
-      Spine (registered per room id, inside zones — never a new layout)
-- [ ] wave 2: remaining rooms to their coverage-map spec, or explicitly generic (the
-      template IS a complete room)
-- [ ] honest states first-class everywhere: not instrumented / ABSENT (reason) / MISSING /
-      PENDING n/floor / fixture-proven-unexercised / SIMULATED / REHEARSAL / DRILL /
-      EXPLORATORY (ADR-1313) — **verified by a fresh agent** that has not seen the
-      implementation
-- [ ] honesty-classes fixture green: a fixture spine with real + simulated + rehearsal
-      rows → no panel sums them, watermark on every non-real value
-- [ ] all 32 rooms render real data in a live demo (REQ-06)
-- [ ] tests green on CI per job; tracker updated
+- [ ] Session door start / stream / attach beside the work door; every session's command line is `arc-run --driver …`; a command line naming a harness binary FAILs the fixture.
+- [ ] Click-started only: a fixture proves 0 sessions start on page load, on reload, or on attach.
+- [ ] A council convened from the `council` module streams its phases and lands a `council.verdict` receipt; absorb read and hire certification land receipts of kinds already in `validate.mjs` KINDS, or are labelled NOT SHIPPABLE (ADR-1334).
+- [ ] The Engine room shows driver, model and health; no key (ADR-1325).
+- [ ] Two fresh attackers (session decision logic · process/OS boundary); CI green per job; `/arc-phase-done 06` from the main clone.
 
 ## Verification plan
 
-One coarse line, refined at phase start via `/arc-change`: fresh-agent honest-states
-report + honesty-classes fixture + 32-room live demo evidence.
+Coarse (refined via `/arc-change` when the phase starts): the no-click and driver-only fixtures RED first, green per job; one real council convene from the face as the live demo, its receipt read back from the spine.
 
 ## Rabbit holes in this phase
 
-Bespoke panels for rooms the generic template already serves · charts for their own sake
-· panel-level caches (pre-mortem row 2).
+- **Long-running sessions outliving the door** — attach reads the session's own receipts; the door holds no session state of its own.
+- **Budget spend on a demo** — the convene uses the council's own budget guard; the face renders its refusal verbatim.
 
 ## Out of scope for this phase
 
-Ask arc (Phase 07) · any new L2 endpoint (sanctioned set is closed).
+New drivers or router classes (engine lane) · scheduled sessions (scheduler lane).
 
 ## Your-setup / pending
 
-None.
+The owner approves any real council spend the demo triggers; the owner runs the git for `feat/face-v2-06`.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- One write path, mandatory reason, byte-parity with the CLI (E2, E1, ADR-1302).
-- Reader-only over the spine; no second truth in the UI (SPINE-G/ADR-0030, A5, ADR-1301).
-- Every number has *Why?* precedents; no invented numbers, ETAs, health emoji (A1, E3).
-- Real vs simulated/rehearsal/drill never mixed or summed; MISSING ≠ 0; ABSENT with reason (E3, ADR-1313, ADR-1018, ADR-0416).
-- Kinds, gates, lanes, ADR ids verbatim (A5); unknown kinds/profiles render generically — nothing dropped silently (E1, ADR-1306).
-- Seals for every forever-human action; no button ever exists for them (E2, ADR-1303, ADR-0069 b1, ADR-0305, ADR-0110, ADR-1203).
-- Localhost + token; no PII; escaped serializer (ADR-1312, ADR-0410, LED-C, SPINE-E).
-- Design lane law: three theses, blind jury with reference, owner pick + prediction, two critique rounds max (ADR-1308, ADR-0034…0049).
-- Every new face lint starts WARN-first in the TRIAL set and earns FAIL through the trial ledger (A1) — `face-coverage` excepted (a validator over the tree, FAIL from birth like policy-lint, ADR-1311).
-- The Engine room's unlock-ladder rung indicator reads evidence only — the rung is never a control (E2).
-- Tests green on CI per job; two fresh attackers per gate (decision logic + shell/HTTP boundary); attacker prompt carries the lane's fixed-defect list; vacuous-pass rule (assert it RAN before asserting what it printed).
-- Zero product-code writes before explicit owner approval of this plan; L3 lives in-repo at `face/` with its own `package.json` and Vite build, and nothing in `.claude/scripts/**` gains a dependency (ADR-1316 supersedes ADR-1300 on placement, ADR-1309).
+<!-- Generated from PLAN.md at kickoff; resynced by /arc-change. Never hand-edited. -->
+
+- The served registry is the only room list: modules attach to served ids, orphans are checked both ways, and the four extra rooms are exempted by name only (ADR-1306, ADR-1321, ADR-1327).
+- Tokens have one source, `docs/design/system/tokens.css`; `face/src/tokens.css` is generated and never hand-edited, as `.claude/scripts/core/face-tokens.mjs --check` enforces; no colour literal under `face/src/modules/**`; council renders `--accent-dim` and violet is the non-real family alone (ADR-1308, ADR-1322).
+- Every decision lives in a `.mjs` that node imports with no install: `fold.mjs` imports nothing from React, Vite or three, `View.tsx` carries no branch worth asserting, and Tailwind stops at L3 (ADR-1320, ADR-1323).
+- `POST /api/decide` stays byte-parity with `arc-inbox`: the parity fixture is green on every PR of this cycle and is a Phase 05 exit criterion (ADR-1302, ADR-1333).
+- Zero new spine kinds: every op emits a kind already in `validate.mjs` KINDS, and an op that would need a new one does not ship (ADR-0026, ADR-1334).
+- Branch-only writes: a file-touching op writes to a `feat/face-*` branch, shows the diff and stops; `main` is untouchable and merge never exists in the face (ADR-1326).
+- The WORK door has no logic of its own: each op shells the same script a hand-run calls, proven per op by a no-second-path fixture; an op without a green fixture ships read-only with an honest badge (ADR-1326).
+- The SESSION door starts `arc-run --driver …`, never a harness binary (ADR-1326).
+- No provider key in the browser; Ask keeps zero write tools and `ASK_ACTIONS` = `open_room` · `set_speed` · `enter_hq` (ADR-1325).
+- No facts bundle under `face/src/**`: a module cites a door route or renders `NOT SERVED` (ADR-1324).
+- No new surface outside `.claude/scripts/` this cycle; the layout move belongs to the distribute lane, in one atomic PR (ADR-1319).
+- Real vs simulated / rehearsal / planned are never mixed or summed; planned rooms render dotted and every write inside them says REHEARSAL (ADR-1313, ADR-1328).
+- Both moods ship together from Phase 01; light is never deferred to a later batch (ADR-1331).
+- The reference is the target: v0.7 is the canonical design and the ported harness's frozen strings are the bar (ADR-1318, ADR-1330).
+- REQ-10 claims the surface is operable over two real days and never claims the habit holds (ADR-1329).
+- Localhost + token; no PII in git, the door or the intake; escaped serializer (ADR-1312).
+- Zero product-code writes before explicit owner approval of this plan; each phase lands as its own feat branch + PR, and a phase closes through `/arc-phase-done` from the main clone before the next phase's branch opens (ADR-1332).
+- Tests green on CI per job, never run on this box; the browser harness runs on every leg with Node ≥20.19 and Node 18 is a named, counted skip; structural face lints (`face-pure`, colour-literal, facts-bundle) FAIL from birth, heuristic arms start WARN-first; two fresh attackers per new gate (decision logic + shell/OS boundary) carrying the lane's fixed-defect list; assert it RAN before asserting what it printed (ADR-1335, ADR-1336).

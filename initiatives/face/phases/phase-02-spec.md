@@ -1,37 +1,39 @@
-# Phase 07 — Dogfood on the final surface + retro
+# Phase 02 — Shell + module frame: the v0.7 shell, the module tree, `face-pure`, the scaffold
 
-**Goal (one line):** REQ-10 — two real days where every decision goes through the face and ≥1 op per day is run from it, measured by `face-dogfood`; the retro and HISTORY close the cycle. Claims the surface is operable, never that the habit holds (ADR-1329).
-**Appetite:** 2 days (real calendar days)
-**Depends on:** phase-05, phase-06
-**Serves:** REQ-10
-**Branch:** `feat/face-v2-07` (retro, HISTORY, tracker only)
-**Preconditions (STOP if absent):** Phase 06's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 06` from the main clone.
+**Goal (one line):** REQ-03 — the v0.7 shell reads only the served registry, every module is four files whose decisions run under node, and `face-pure` FAILs drift before a single one of the 36 modules is written (ADR-1320).
+**Appetite:** 2 days
+**Depends on:** phase-01
+**Serves:** REQ-03
+**Branch:** `feat/face-v2-02`
+**Preconditions (STOP if absent):** Phase 01's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 01` from the main clone.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Both days run from the MAIN clone via `node .claude/scripts/hq/arc-face.mjs`.
-- [ ] `face-dogfood` reads MET for 2 days: every `decision.recorded` matched to the face journal, and ≥1 op receipt from the face on each day. If Phase 05's Block C gate fired and zero ops shipped, the op clause is recorded NOT MET and REQ-10 is re-scoped through `/arc-change` before these days start — never silently redefined.
-- [ ] The usage trend recorded since the command ring (Phase 03) is read next to the two days in the retro (retro-log 2026-09-16 lesson).
-- [ ] Assumptions ledger row 7 answered from the numbers: timing or Inbox shape.
-- [ ] ADR-1315's voice question asked at the retro (its trigger's natural place).
-- [ ] `/arc-retro` run; `docs/HISTORY.md` Cycle 16 row; `/arc-phase-done 07` from the main clone.
+- [ ] v0.7 shell ported: 240 px rail · 56 px header · ⌘K palette · the dock in the content column, **text-only** (ADR-1315); rail, palette and map read `/api/rooms` only — no shell file names a room.
+- [ ] `face/src/modules/<ring>/` tree; a served room with no module renders through the generic module and is REPORTED by name (ADR-1321).
+- [ ] `face/src/lib/registry.mjs` two-way reconcile (served ids ↔ module folders), node-tested in `tests/face/l3-logic.mjs`.
+- [ ] `face-pure` (FAIL from birth, `.claude/scripts/core/`): `fold.mjs` may import only relative `.mjs` and node builtins; `View.tsx` may hold no comparison or arithmetic operator, no `if`/`switch`, no nested ternary, and conditions only on boolean fields `fold()` returns. Mutants: a planted branch in a `View.tsx` and a planted React import in a `fold.mjs` both FAIL; files-scanned count asserted > 0.
+- [ ] `face-coverage` module half (REQ-04 groundwork): an orphan module folder FAILs; the extra-room exemption mechanism exists and is EMPTY until the factory and company rings add their named rows (ADR-1327).
+- [ ] `/arc-face-module <ring>/<id>` (hand-written command + `.claude/scripts/hq/face-module.mjs`): scaffolds the four files from a template, refuses an id `/api/rooms` does not serve, and the scaffolded module is green on `face-pure` + `face-coverage` in 1 command; the new command is homed in `face-coverage`'s commands inventory AND the root `CLAUDE.md` hand-written-command count ("The other 21 commands") is updated in the same PR; `face-module.mjs`'s main-guard realpaths both sides (symlinked-tmpdir mutant).
+- [ ] Browser suite green in both moods through the new shell on every Node ≥20.19 leg.
+- [ ] Two fresh attackers (lint decision logic · scaffold shell/OS boundary); CI green per job; `/arc-phase-done 02` from the main clone.
 
 ## Verification plan
 
-Coarse (refined via `/arc-change` when the phase starts): `node .claude/scripts/core/face-dogfood.mjs` output for each day, pasted verbatim into the evidence bundle.
+Coarse (refined via `/arc-change` when the phase starts): `face-pure` and `face-coverage` mutant fixtures RED first, then green on CI per job; scaffold demo from the main clone produces a green module in one command.
 
 ## Rabbit holes in this phase
 
-- **Counting a half day** — a day is MET or it is not; the harness decides.
-- **Claiming the habit** — two days prove operability only (ADR-1329).
+- **`face-pure` as a TSX parser** — structural scan only (PLAN rabbit holes); no TypeScript compiler API.
+- **Porting v0.7's `HQ.jsx` room switch** — it hard-codes rooms; the shell derives from `/api/rooms` instead (ADR-1306).
 
 ## Out of scope for this phase
 
-Raising the dogfood bar (a later cycle's question) · fixes beyond one-line — they become the next cycle's input.
+Any of the 36 modules' content → Phase 03 · `ops.mjs` behaviour → Phase 05 (the file exists, empty, from the scaffold).
 
 ## Your-setup / pending
 
-Two real days of the owner's time deciding and working through the face.
+The owner runs the git for `feat/face-v2-02`.
 
 ## Non-negotiables (verbatim from PLAN)
 
