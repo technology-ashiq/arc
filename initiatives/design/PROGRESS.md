@@ -246,10 +246,34 @@ consumer projects — it carries the owner's approvals.
   unrecordable. Red-first at `6f99ff09`. The row now names its surface by its hashes; the rule
   is in the Phase 01 spec.
 
-**Next step:** Phase 01's live demo — one fresh explore on the LexOS brief (mobile `yes`), per
-the spec's Verification plan, with text-only evidence. While a composer is armed, this session's
-own Read/Grep/Glob outside that variant are refused too (a marker cannot tell who calls), so the
-operator reads through Bash for the duration. Then `/arc-phase-done 01`, then Phase 02 Slice B. Open findings and the running defect list for
+- **The live demo is complete; Phase 01 still cannot close.** Evidence:
+  [`evidence/phase-01/live-demo-lexos-p02.md`](evidence/phase-01/live-demo-lexos-p02.md). It is
+  text only, and all 13 full hashes in it were verified against the renders.
+  - All three variants cleared the composer gates (4 manifest rows) and `check` (director call
+    6/7 structure, 4/4 art).
+  - Nine claimed fixes were each confirmed by opening the iteration PNGs by hand.
+  - Five defects were found in Phase 01's own machinery: four fixed or recorded, one open.
+  - **The open one: `ui-composer` Bash was never scoped.** A subagent's `tools:` field takes
+    tool names only, so `Bash(prefix:*)` granted all of Bash. The composers used Bash for node,
+    sed, python and PowerShell. A transcript audit found no sibling or boundary file touched,
+    which means isolation held in practice but was never enforced.
+  - Red-first for the one-surface self-review rule was confirmed on every leg of run
+    35142810771: exactly the two intended cases failed.
+- **Owner ruling 2026-09-17 ("sari pannu"), on both recommendations:**
+  1. approve the temporary probe that checks whether a PreToolUse payload carries `agent_type`;
+  2. a composer Bash-scope enforcement fragment under `.claude/hooks/PreToolUse.d/`, which is
+     the owner's edit because `.claude/hooks/**` is governance-denied.
+
+  The auto-mode classifier had denied the probe earlier as Self-Modification, before this
+  ruling.
+- **CI: Windows shard 6/12 hung in `Run bats self-tests`** on two consecutive runs (35136412678
+  and 35142810771, both cancelled after about 90 minutes) with no TAP in the log, because the
+  MSYS pipe is buffered. `fba9a89e` passed the identical 14-file shard. Cause not yet known.
+
+**Next step:** push the gate fixes and evidence and watch Windows shard 6 against a timeout. Then
+the `agent_type` probe under the ruling, the Bash-scope enforcement script and tests, and the
+exact fragment for the owner. `/arc-phase-done 01` follows only when the Bash scope is enforced,
+then Phase 02 Slice B. Open findings and the running defect list for
 the next attacker prompt are in
 [`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md).
 
