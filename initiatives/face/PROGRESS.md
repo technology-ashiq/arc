@@ -87,8 +87,9 @@ at 12d.
 worktree `arc-face-v2`, last pushed `78b65cb3`. Slices 01–08 proven and committed (intake, PII scan,
 SOURCE.md, design spec, modules contract, delta report, fixed-defects list, baseline shots).
 Harness (slices 09–17) is built and attacked (22 holes fixed, `fixed-defects.md`); red-first proof
-recorded (`evidence/phase-00/red-first.md`). CI run D `35150543730` was still running at pause; its
-first finished jobs showed exactly TWO open failures:
+recorded (`evidence/phase-00/red-first.md`). CI run D `35150543730` (13/19 green) finished after the
+pause: the browser suite is GREEN on ubuntu Node 20 + 22 and windows (33/33 rooms, 0 errors,
+settled), the Node 18 skip held, and the run has exactly TWO open failures, nothing else:
 1. `tests/face/cdp-client.mjs` — "a nested package with no linux binary is not covered by the
    hoisted copy" returns ok:true. Node DOES resolve a binary up the tree, so the real rule is a
    VERSION match: the resolved binding's `version` must satisfy the nested parent's
