@@ -1,12 +1,12 @@
 # PROGRESS.md — Cycle 15 · arc-face "The Working HQ"
 
-status: LIVE
-cycle: arc-face (Cycle 15, opened 2026-08-19)
-phase: 09
+status: IDLE
+cycle: arc-face (Cycle 15, opened 2026-08-19, closed 2026-09-16)
+phase: — (cycle closed 2026-09-16; 1 of 9 phases closed with evidence, REQ-01 validated; REQ-10 NOT MET, carried to face v2)
 appetite: 32d
 burn: 14.5d
-blocked-on: nothing structural — the design gate is DISCHARGED. The owner supplied the design himself rather than picking from the explore rounds, so the PICK is moot and block A can no longer take its second BELOW-BAR strike. Two items remain and neither blocks the build: one `hq.policy.yaml` row for face-ask (edit-denied to the machine by design, and not useful until the engine-lane empty-allowlist seam exists), and one owner ruling on the reference brain’s approve/reject action (see `docs/design/reference/face-hq/SOURCE.md`).
-depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersedes ADR-1300 on placement). A new repo could not be given CI from this session, and an ungated layer is not a layer that ships.
+blocked-on: —
+depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
 > (tests green on CI per job + live demo + exit criteria + evidence). Evidence over
@@ -265,6 +265,21 @@ generic → Map animation → Tape play (keep as-of).
   2026-08-23 22:43 → merged 2026-08-24 02:19) + ~0.5d close on 2026-09-16.
   **Metrics:** `amendments: 1` (the 2026-09-16 plan-drift `/arc-change`; the phase itself was
   born by one) · `reopened: n`.
+- 2026-09-16 — **CYCLE 15 CLOSED** (`/arc-retro --lane face`). **1 of 9 phases closed with
+  evidence** (09). Phases 00 and 03–07 were built and never closed through `/arc-phase-done`;
+  the owner ruled 2026-09-16 to record them as carried rather than close them now, because face v2
+  replaces the surface they built. **REQ-01 validated; REQ-02..09 stay active, i.e.
+  unvalidated; REQ-10 NOT MET** and carried to face v2 as its Phase 07 (FV2-L). Measured at
+  close from the main clone: `face-dogfood` → 6 decisions through the face, 54 outside it, 1 of
+  5 days. **Burn 14.5d of 32d (45%).** Assumptions at close: rows 1–4 HELD · row 5 FIRED (the
+  dogfood count above) · row 6 SUPERSEDED (ADR-1316 put L3 in-repo before cross-repo evidence was
+  ever needed) · row 7 unfalsified. Retro: three pattern rows (a phase outside the plan's table
+  is invisible to the plan lint · a cycle that saves every close for its end · a usage REQ placed
+  last), one recurrence appended to the 2026-08-24 exclusion-decay row, the scoreboard row, the
+  HISTORY row, and a trial-ledger section. Shipped and working: L2 `arc dash` (one read door + one
+  decision door byte-parity with `arc-inbox`) · L3 `face/` with one-command start · 34 rooms + a
+  34-station Map · `face-coverage` deriving nine inventories from the world · deterministic Ask arc
+  with zero write tools · the `face-dogfood` harness.
 
 ## Assumptions ledger — adjudicated by running the measurement, not by opinion
 
@@ -283,15 +298,17 @@ without one are named NOT YET EVALUABLE rather than quietly counted as holding.
 
 ## Now
 
-**Position (2026-09-16):** Phase 09 is **CLOSED** (done-log 2026-09-16, second entry). The
-plan drift is merged (#229). The rooms were opened by eye from the main clone, and the evidence
-bundle is written and verified. Cycle 15 is still open: `/arc-retro` has not run.
+**Position (2026-09-16):** **Cycle 15 is CLOSED** (done-log 2026-09-16, third entry). Phase 09
+closed with evidence (#230). Its receipts are on the canonical spine: `phase.closed`
+`01M2NJ5EWH4BSNBMYJVFJ8RYKM` and `approval.requested{gate: phase-done}`
+`01M2NJ5F736X7PNRD68H5DVYPG`, the second still waiting on the owner's stamp. The retro is written.
 
-**Next step:** merge `feat/face-c15-phase09-close` on green CI → from the main clone, leave
-the `phase.closed` + `approval.requested{gate: phase-done}` receipts → `/arc-retro --lane face`,
-closing Cycle 15 with REQ-10 **NOT MET and carried** (FV2-L) → the face v2 kickoff re-runs.
-Carry into face v2: the three sweep findings F1–F3 (`evidence/phase-09/room-sweep-by-eye.md`),
-and the ADR-1311 maintenance note in the done-log.
+**Next step:** the face v2 kickoff (`docs/strategy/plans/PLAN-face-v2.md` §14 step 2). It archives
+this PROGRESS and PLAN before it writes new ones. It inherits: REQ-10 (as face v2 Phase 07,
+FV2-L) · the sweep findings F1–F3 (`evidence/phase-09/room-sweep-by-eye.md`) · the ADR-1311
+maintenance note (done-log, Phase 09 close) · the ADR-1315 voice trigger, because v0.7's shell
+carries a voice dock · assumption row 5's open question: is the Inbox the wrong shape, or did the
+surface simply arrive too late in the cycle to be used?
 
 ---
 
