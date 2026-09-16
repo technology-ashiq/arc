@@ -3,6 +3,15 @@
 - **Status:** accepted
 - **Date:** 2026-08-23
 - **Lane:** face (Cycle 15)
+- **Reversibility:** two-way
+  (the seven inventories are additive, and each can be dropped from the contract and the
+  gate on its own)
+- **Revisit trigger:** something that exists in arc (a file, a registry row, a surface the
+  owner looks for) turns out to be in no `face-coverage` inventory → add an inventory derived
+  from that thing's own source file, never a hand-listed row. Or an exclusion comes back in
+  `room-map.md` without naming the file that makes it true → re-measure it, then derive it or
+  delete it. *(Trigger added 2026-09-16 at the Phase 09 close; this was the only face ADR
+  without one.)*
 - **Supersedes:** nothing. **Amends:** the frozen coverage contract at
   `initiatives/face/contracts/expected-set.json` and the exclusion note in
   `initiatives/face/contracts/room-map.md` §"what the gate does not read".

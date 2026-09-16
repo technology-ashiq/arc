@@ -82,4 +82,4 @@ via `/arc-change` in the design lane if Claude Design is used this cycle.
 - Every new face lint starts WARN-first in the TRIAL set and earns FAIL through the trial ledger (A1) — `face-coverage` excepted (a validator over the tree, FAIL from birth like policy-lint, ADR-1311).
 - The Engine room's unlock-ladder rung indicator reads evidence only — the rung is never a control (E2).
 - Tests green on CI per job; two fresh attackers per gate (decision logic + shell/HTTP boundary); attacker prompt carries the lane's fixed-defect list; vacuous-pass rule (assert it RAN before asserting what it printed).
-- Zero product-code writes before explicit owner approval of this plan; L3 stack never enters the arc repo (ADR-1300, ADR-1309).
+- Zero product-code writes before explicit owner approval of this plan; L3 lives in-repo at `face/` with its own `package.json` and Vite build, and nothing in `.claude/scripts/**` gains a dependency (ADR-1316 supersedes ADR-1300 on placement, ADR-1309).

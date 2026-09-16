@@ -30,8 +30,8 @@ depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersede
 | 05 | Map + template + birth-rule + coverage — `face:` ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | **BUILT** — 33 stations, gate squares, coverage gate now watches 11 inventories |
 | 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | **BUILT** — all rooms render (33 at the time, **34** since ADR-1317 generated `chat-mcp`): 22 generic · 2 index · 9 bespoke · 1 planned; re-swept 2026-08-24, 0 crashed |
 | 07 | Ask arc — `face-ask` process + router row + `hq.policy.yaml` row + 20 golden questions + drafts-to-stamp; zero write tools | 3d | deterministic half BUILT and proven through the face (VERIFIED, citations resolved); model half waits on the engine seam |
-| 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | **EVIDENCE HARNESS BUILT + ONE-COMMAND START.** `node .claude/scripts/hq/arc-face.mjs` from the MAIN clone starts the door and the app, installs once from the tracked lockfile, and prints one URL with the token in it — the three-step morning (two terminals plus hand-copying a 32-char token) is what ends dogfoods, not the product. `face-dogfood.mjs` then settles the requirement by matching L2’s journal against `decision.recorded`; today it reads **NOT MET: 1 matched, 59 decided outside the face, 1 of 5 days**. The five days are calendar, not code |
-| 09 | Nothing missing — the completeness sweep: **nine** inventories derived from the WORLD (gates · jobs · ventures · adrs-by-band · plans · capabilities · planned-rooms · ci · **hooks + lints**), `chat-mcp` generated, four empty stations filled, `/api/lane/:name` carries phases, zones can no longer hide a hold | 3d | **BUILT + ATTACKED, CI verdict pending** — all nine audit gaps closed, then two fresh attackers found **20** more holes (13 derivation · 7 shell/OS, zero overlap) and every one is fixed. The exemption list is now EMPTY: the `hooks`/`lints` exclusion was re-measured and was itself false, hiding an uncovered `policy-decide.sh`. 220 homed rows; coverage selftest 93 arms; l3-logic 262 · dash-doors 78 · readers 31 |
+| 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | **EVIDENCE HARNESS BUILT + ONE-COMMAND START.** `node .claude/scripts/hq/arc-face.mjs` from the MAIN clone starts the door and the app, installs once from the tracked lockfile, and prints one URL with the token in it — the three-step morning (two terminals plus hand-copying a 32-char token) is what ends dogfoods, not the product. `face-dogfood.mjs` then settles the requirement by matching L2’s journal against `decision.recorded`; today it reads **NOT MET: 1 matched, 59 decided outside the face, 1 of 5 days**. The five days are calendar, not code. **Next cycle (FV2-L, 2026-09-16):** REQ-10 closes NOT MET and moves to face v2 as its Phase 07 |
+| 09 | Nothing missing — the completeness sweep: **nine** inventories derived from the WORLD (gates · jobs · ventures · adrs-by-band · plans · capabilities · planned-rooms · ci · **hooks + lints**), `chat-mcp` generated, four empty stations filled, `/api/lane/:name` carries phases, zones can no longer hide a hold | 3d | **BUILT + ATTACKED, CI green per job (run 35097580662, 19/19); close pending the by-eye room sweep** — all nine audit gaps closed, then two fresh attackers found **20** more holes (13 derivation · 7 shell/OS, zero overlap) and every one is fixed. The exemption list is now EMPTY: the `hooks`/`lints` exclusion was re-measured and was itself false, hiding an uncovered `policy-decide.sh`. 220 homed rows; coverage selftest 93 arms; l3-logic 262 · dash-doors 78 · readers 31 |
 
 **Appetite burn: the machine header above (`burn: 14d` of 32d) is the operative figure — it is what `PORTFOLIO.md` reads, and ADR-0051 makes this file the truth the board derives from. The block accounting below is NARRATIVE and it has fallen behind: it stops at the Phase 07 deterministic half and counts nothing for Phases 04, 06, 08 or 09, so its “7 days” is a floor over an incomplete list, not a second total. It is left standing rather than patched with a number nobody measured — a burn figure invented to make two paragraphs agree is exactly the kind of unmeasured entry this lane spent a cycle removing from generated tables.** Block A (6d): Phase 00
 1d + Phase 01 v1 ~2d + the v2 open-brief round ~1d + reference intake and token extraction
@@ -228,6 +228,16 @@ generic → Map animation → Tape play (keep as-of).
   constrains its height so the WINDOW scrolls, and 0 === 0 read as success. Asserting the
   precondition (that something had actually been parked away from the top) is what caught
   it; the fix is now measured at 3388px of page overflow, parked at 700, zero after.
+- 2026-09-16 — **Phase 09 close attempt found plan drift, and it is fixed before the close.**
+  Phase 09 was born by `/arc-change` (ADR-1317) and never reached PLAN.md's Phases table.
+  So `kickoff-lint`'s "every phase serves a REQ" check never read it, and its clean exit
+  said nothing about Phase 09. That is the same shape as the gate Phase 09 fixed. Owner ruling
+  "REQ-01 → 09 sari": REQ-01 now maps to Phase 09 and Phase 05 keeps REQ-04. The ADR index
+  gains 1316 and 1317. ADR-1317 gains the Reversibility and Revisit trigger its 17 siblings
+  already had. The last Non-negotiable said "L3 stack never enters the arc repo" and had been
+  false since ADR-1316. It is reworded to match ADR-1316 and resynced into all nine phase
+  specs; Phase 09 never had that block. Appetite stays 32d, now honestly counted: Phase 09
+  adds 3d, and Phase 08's 5 dogfood days move to face v2 under FV2-L, so 30d is counted.
 
 ## Assumptions ledger — adjudicated by running the measurement, not by opinion
 
@@ -245,6 +255,20 @@ without one are named NOT YET EVALUABLE rather than quietly counted as holding.
 | 7 | file-borne truths have no usable history, so as-of applies to spine views only | **HOLDS, UNFALSIFIED** | no sanctioned file-history source appeared. The door enforces it: file-borne panels carry the `file, not log` badge, and `/api/pnl` refuses a day-granular `asof` with a named 501 rather than inventing one. |
 
 ## Now
+
+**Position (2026-09-16):** closing Cycle 15 so face v2 can start (`PLAN-face-v2.md`, FV2-L).
+Phase 09's build is merged and CI is green per job: run 35097580662, 19/19, and its tree
+matches `main` on every face path. The plan drift the close attempt found is fixed on
+`feat/face-c15-plan-drift` (done-log 2026-09-16).
+
+**Next step:** merge that branch on green CI → from the main clone, open every room of the
+face in a browser (Phase 09 verification item 5 — never actually done by eye, and stale since
+`PLAN-face-v2.md` added a plan) → `/arc-phase-done 09 --lane face` → `/arc-retro --lane face`,
+closing with REQ-10 **NOT MET and carried**. Then the face v2 kickoff re-runs.
+
+---
+
+*Earlier position (2026-08-24), kept for the record:*
 
 **Position:** the design gate is **discharged** — not by a pick, but because the owner
 supplied the design. `tokens.css` is canonical and derived from a product that already

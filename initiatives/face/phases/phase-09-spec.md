@@ -80,3 +80,18 @@ ADR-1317 records them with the measurement behind each.
 
 Phase 08's five calendar days; the Phase 07 model half (blocked on the engine lane's empty
 tool-allowlist seam); anything requiring `.github/**` edits, which this session cannot author.
+
+## Non-negotiables (verbatim from PLAN)
+
+- One write path, mandatory reason, byte-parity with the CLI (E2, E1, ADR-1302).
+- Reader-only over the spine; no second truth in the UI (SPINE-G/ADR-0030, A5, ADR-1301).
+- Every number has *Why?* precedents; no invented numbers, ETAs, health emoji (A1, E3).
+- Real vs simulated/rehearsal/drill never mixed or summed; MISSING ≠ 0; ABSENT with reason (E3, ADR-1313, ADR-1018, ADR-0416).
+- Kinds, gates, lanes, ADR ids verbatim (A5); unknown kinds/profiles render generically — nothing dropped silently (E1, ADR-1306).
+- Seals for every forever-human action; no button ever exists for them (E2, ADR-1303, ADR-0069 b1, ADR-0305, ADR-0110, ADR-1203).
+- Localhost + token; no PII; escaped serializer (ADR-1312, ADR-0410, LED-C, SPINE-E).
+- Design lane law: three theses, blind jury with reference, owner pick + prediction, two critique rounds max (ADR-1308, ADR-0034…0049).
+- Every new face lint starts WARN-first in the TRIAL set and earns FAIL through the trial ledger (A1) — `face-coverage` excepted (a validator over the tree, FAIL from birth like policy-lint, ADR-1311).
+- The Engine room's unlock-ladder rung indicator reads evidence only — the rung is never a control (E2).
+- Tests green on CI per job; two fresh attackers per gate (decision logic + shell/HTTP boundary); attacker prompt carries the lane's fixed-defect list; vacuous-pass rule (assert it RAN before asserting what it printed).
+- Zero product-code writes before explicit owner approval of this plan; L3 lives in-repo at `face/` with its own `package.json` and Vite build, and nothing in `.claude/scripts/**` gains a dependency (ADR-1316 supersedes ADR-1300 on placement, ADR-1309).
