@@ -61,7 +61,7 @@ tier: static
 sources: phase-00-spec.md, code:grep-fallback(1481; no .codegraph/), adrs(37), learning(3), retro(20), churn(461)
 decision: counts and file names only, never a matched value, so the proof itself cannot leak; nothing needed excluding — SOURCE.md (slice 03) records the clean result
 result: `scanned files=108 private contact values loaded=8` · `literal: 0 file(s)` · `email: 0 file(s)` · `indianPhone: 0 file(s)` · `secret: 0 file(s)` (exit 0) · mutant: `literal: 1 … email: 1 … indianPhone: 1 … secret: 1` MUTANT_EXIT=1 · gitleaks: `scanned ~1337810 bytes (1.34 MB)` `no leaks found` (exit 0)
-commit: (empty until proven)
+commit: e0b61682
 
 #### slice: 03
 
@@ -70,7 +70,7 @@ kind: logic
 risk: medium
 proof: (empty until proven)
 tier: (empty until proven)
-sources: phase-00-spec.md
+sources: phase-00-spec.md, code:grep-fallback(1481; no .codegraph/), adrs(37), learning(3), retro(22), churn(461)
 decision: (empty until proven)
 result: (empty until proven)
 commit: (empty until proven)
