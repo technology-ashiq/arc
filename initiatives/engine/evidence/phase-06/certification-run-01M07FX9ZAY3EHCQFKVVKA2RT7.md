@@ -18,27 +18,41 @@ driver   hermes
 by grepping the landed file for the ULID in both places — not by reading the emitter's exit code,
 which is the check this cycle has twice recorded as insufficient.
 
-~~The scrubbed transcript was stored at `initiatives/engine/evidence/phase-06/transcripts/`, which is
-REQ-03's storage half running for the first time on a real dispatch.~~
+The scrubbed transcript was stored at `initiatives/engine/evidence/phase-06/transcripts/`, which is
+REQ-03's storage half running for the first time on a real dispatch.
 
-**FALSE, AND CORRECTED 2026-08-23 BY LOOKING.** That directory has never existed in this repository:
-`git log --all -- initiatives/engine/evidence/phase-06/transcripts` returns nothing, and
-`.gitignore:30` un-ignores the path, so it is not a case of an artifact written and then excluded.
-No transcript was stored for this dispatch. `storeTranscript` is opt-in on `ARC_RUN_TRANSCRIPT_DIR`
-and this run did not set it, exactly as the three Phase 08 round-1 dispatches did not the next day —
-the same miss twice, recorded honestly there and asserted as done here.
+**THAT SENTENCE IS TRUE, AND I MARKED IT FALSE. Corrected a second time, 2026-08-23.**
 
-**Why the sentence was written at all is the reusable part.** The storage code had been built that
-same session, the destination path was in the plan, and the claim describes what *should* have
-happened rather than what was checked afterwards. It is the report-instead-of-artifact failure
-applied to a directory listing — one `ls` away, never run.
+On 2026-08-23 this file carried a struck-through block declaring the sentence above false, on the
+evidence that `git log --all` on the path returns nothing and `.gitignore` does not exclude it.
+Both observations are correct. **The conclusion drawn from them was not.**
 
-**Closed 2026-08-23, not merely noted.** `arc-run` now takes `--transcript-dir PATH` (a flag a caller
-writes down on purpose, the ADR-0220 argument), and a dispatch that produces a transcript with **no
-destination configured says so on stderr** instead of discarding it in silence. Six tests in
-`tests/engine-hermes-secrets.bats` pin both halves, including a negative control proving the warning
-is bound to the absence rather than printed unconditionally. Opt-in storage was never the defect;
-opting out being *indistinguishable from having nothing to store* was.
+The transcripts were on disk the whole time, in the MAIN CLONE, **untracked**. Ten of them, dated
+2026-08-17 and 2026-08-18 — including three `attempt2` files, which are the retry-ladder second
+attempts I had recorded as unrecoverable. They carry the container's own boot output (`s6-overlay`,
+`preinit`, container permissions), so they are runtime bytes and not arc's banners. They were never
+`git add`ed, so no commit, no bundle and no manifest ever saw them.
+
+**The precise distinction, which is the whole lesson:** *stored* was TRUE. *In the repository* was
+FALSE. Git history answers the second question and cannot answer the first, and I read one as the
+other — then wrote the wrong answer into the evidence with a strike-through and the word FALSE, which
+is more confident than the claim it replaced.
+
+**This is the third time in one cycle that a false statement about a mechanism was corrected by
+another false statement about the same mechanism.** The router's termination spec did it twice. This
+file has now done it twice. The shape is not carelessness about facts — it is reasoning from a
+signal that is *adjacent* to the question instead of looking at the thing itself. `ls` on the main
+clone answers it in one command, and neither the original claim nor its correction ran one.
+
+**The ten transcripts are now committed here**, verified free of every secret shape `DENY_RULES`
+names, so the bundle finally contains what this sentence always said it did.
+
+**What was genuinely missing, and what the 2026-08-23 work actually fixed:** storage was opt-in on
+`ARC_RUN_TRANSCRIPT_DIR` and a run that set nothing discarded its transcript **in silence**. That is
+what took the three Phase 08 round-1 dispatches on 2026-08-18, where the dispatch script did not set
+it — those transcripts do not exist anywhere, which is why the near-miss JSON shape from that round
+is still unrecoverable. `arc-run` now takes `--transcript-dir PATH`, stores BOTH streams, and says so
+out loud when a dispatch would keep no trail.
 
 ## What the run proves
 

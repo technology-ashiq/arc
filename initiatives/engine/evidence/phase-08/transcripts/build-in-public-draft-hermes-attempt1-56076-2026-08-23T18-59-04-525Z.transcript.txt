@@ -1,0 +1,37 @@
+--- stdout ---
+{"draft":"Three assertions I wrote today all passed for six hours, then CI killed every one of them on the three-machine matrix. The first compared a value against a variable the test framework doesn't define, so it was really comparing against an empty string. The second asserted a fallback chain was never walked, in a configuration that had no fallback chain. The third searched a receipt for a field the receipt never emits. None of them would have failed on a single machine; all three fell on the matrix that was already there for other reasons.","sources":["# ci-killed-three-of-my-own-assertions"],"task-class":"build-in-public-draft","pack-ref":"pack-2026-08-23-cycle7"}
+--- stderr ---
+hermes: workspace is a PRIVATE copy of E:/Work_Hub/01_Automemory/arc-runtime/or-template at C:\Users\ashiq\AppData\Local\Temp\arc-hermes-ws-1htTEQ\data (ADR-0222)
+hermes: egress mode network=arc-egress proxy=set
+hermes: toolsets vision — from the process declaration (ADR-0224)
+/package/admin/s6-overlay/libexec/preinit: info: container permissions: uid=0 (root), euid=0, gid=0 (root), egid=0
+/package/admin/s6-overlay/libexec/preinit: info: /run permissions: uid=0 (root), gid=0 (root), perms=oxorgxgruxuwur
+s6-rc: info: service s6rc-oneshot-runner: starting
+s6-rc: info: service s6rc-oneshot-runner successfully started
+s6-rc: info: service fix-attrs: starting
+s6-rc: info: service fix-attrs successfully started
+s6-rc: info: service legacy-cont-init: starting
+cont-init: info: running /etc/cont-init.d/01-hermes-setup
+cont-init: info: /etc/cont-init.d/01-hermes-setup exited 0
+cont-init: info: running /etc/cont-init.d/015-supervise-perms
+cont-init: info: /etc/cont-init.d/015-supervise-perms exited 0
+cont-init: info: running /etc/cont-init.d/02-reconcile-profiles
+cont-init: info: /etc/cont-init.d/02-reconcile-profiles exited 0
+s6-rc: info: service legacy-cont-init successfully started
+s6-rc: info: service main-hermes: starting
+s6-rc: info: service dashboard: starting
+s6-rc: info: service main-hermes successfully started
+s6-rc: info: service dashboard successfully started
+s6-rc: info: service legacy-services: starting
+s6-rc: info: service legacy-services successfully started
+s6-rc: info: service legacy-services: stopping
+s6-rc: info: service legacy-services successfully stopped
+s6-rc: info: service main-hermes: stopping
+s6-rc: info: service dashboard: stopping
+s6-rc: info: service dashboard successfully stopped
+s6-rc: info: service main-hermes successfully stopped
+s6-rc: info: service legacy-cont-init: stopping
+s6-rc: info: service legacy-cont-init successfully stopped
+s6-rc: info: service fix-attrs: stopping
+s6-rc: info: service fix-attrs successfully stopped
+s6-rc: warning: service s6rc-oneshot-runner is marked as essential, not stopping it

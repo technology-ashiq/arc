@@ -1,0 +1,8 @@
+{
+  "draft": "CI failed on three assertions I wrote that same day while fixing the vacuous tests. One compared against a variable the framework does not define (empty string). One asserted a fallback chain was never walked, in a config that had no fallback chain. One searched a receipt for a field the receipt does not emit. A three-machine matrix caught what one machine could not, on work whose entire subject was tests that pass while measuring nothing.",
+  "sources": [
+    "#ci-killed-three-of-my-own-assertions"
+  ],
+  "task-class": "build-in-public-draft",
+  "pack-ref": "pack-2026-08-23-cycle7"
+}

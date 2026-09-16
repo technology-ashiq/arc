@@ -1357,6 +1357,7 @@
       "PLAN-evolve": "strategy",
       "PLAN-executor": "strategy",
       "PLAN-face": "strategy",
+      "PLAN-face-v2": "strategy",
       "PLAN-growth": "strategy",
       "PLAN-leads": "strategy",
       "PLAN-ledger": "strategy",

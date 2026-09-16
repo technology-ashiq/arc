@@ -4,38 +4,41 @@ Phases 04 and 05 set the pattern and it is kept: a bundle that quietly shortens 
 expected-files list has stopped being evidence. Everything REQ-02 and REQ-03 name that this bundle
 cannot produce is named here, with the reason, as a finding rather than an omission.
 
-## 1. There is no scrubbed transcript for ANY Phase 06 dispatch
+## 1. ~~There is no scrubbed transcript for ANY Phase 06 dispatch~~ — WRONG, AND CORRECTED THE SAME DAY
 
 **Exit criterion:** *"A scrubbed transcript per dispatch is stored at
 `initiatives/engine/evidence/phase-06/`, scrubbed with the spine's own `scanSecrets()` and
 `DENY_RULES` rather than a second scanner."*
 
-**What exists:** the scrub half, fully. `arc-run` runs the spine's own scanner over the driver's
-stdout, its transcript and its cost sidecar, and a planted key stops the run before anything is
-written — four artifact classes with a negative control, in `tests/engine-hermes-secrets.bats`.
+**THIS SECTION SAID THE CRITERION WAS NOT MET. IT WAS MET.** The transcripts were on disk the whole
+time, in the **main clone**, untracked: ten of them, dated 2026-08-17 and 2026-08-18, including three
+`attempt2` files — the retry-ladder second attempts this section called unrecoverable. They carry the
+container's own boot output (`s6-overlay`, `preinit`), so they are runtime bytes rather than arc's
+banners. **They are committed here now**, verified free of every secret shape `DENY_RULES` names.
 
-**What is missing:** the stored files. `initiatives/engine/evidence/phase-06/transcripts/` does not
-exist and never has — `git log --all` on the path returns nothing, and `.gitignore:30` un-ignores
-`initiatives/*/evidence/**`, so this is not an artifact written and then excluded.
+**How the wrong answer was reached, because that is the reusable part.** The check run was
+`git log --all` on the path, plus `git check-ignore` to rule out an exclusion. Both returned exactly
+what they were asked and both answers were correct — *this path has never been committed*. That is a
+fact about the **repository**. The criterion is about the **disk**. Reading one as the other, and
+then writing the conclusion into the evidence under a strike-through and the word FALSE, produced a
+correction more confident than the claim it replaced.
 
-**Why:** `storeTranscript` is opt-in on `ARC_RUN_TRANSCRIPT_DIR`, and none of the Phase 06 dispatches
-set it. The opt-in itself was a correct decision — `arc-run` belongs to no lane, ten suites and five
-lanes drive the binary, and a hard-coded engine path would put bench's transcripts in engine's
-bundle. **The defect is that opting out was indistinguishable from having nothing to store.** A run
-that discarded its transcript said nothing at all.
+`ls` on the main clone answers it in one command. Neither the original claim nor its correction ran
+one, and this file's own §"look at the artifact" lesson was three sections away while I did it.
 
-**What it cost, twice.** `certification-run-01M07FX9ZAY3EHCQFKVVKA2RT7.md` asserted the transcript had
-been stored, and that claim stood for six days: the storage code had been written that session, the
-destination was in the plan, and nobody ran `ls`. Then the identical miss took the three Phase 08
-round-1 dispatches the next day, where two runs returned JSON the schema rejected for **one missing
-property** and the exact shape is now unrecoverable — the one artifact that would have said whether
-the fix was a prompt change or a schema change.
+**What was genuinely wrong, and what the fix actually fixed.** Storage was opt-in on
+`ARC_RUN_TRANSCRIPT_DIR`, and a run that set nothing discarded its transcript **in silence** — so
+whether a dispatch kept a trail depended on whether someone remembered a flag. That is what took the
+three Phase 08 round-1 dispatches on 2026-08-18: the dispatch script did not set it, and **those**
+transcripts exist nowhere, which is why that round's near-miss JSON shape is still unrecoverable.
+`arc-run` now takes `--transcript-dir PATH`, stores BOTH streams, and announces a discard when no
+destination is configured.
 
-**Fixed forward, not backfilled.** No transcript is reconstructed, because reconstructing one would
-be manufacturing the evidence this file exists to say is absent. `arc-run` now takes
-`--transcript-dir PATH`, and a dispatch producing a transcript with no destination configured
-**announces it on stderr**. Six tests pin both halves, including a negative control proving the
-warning is bound to the absence rather than printed unconditionally.
+**What this bundle still cannot show:** which of the ten transcripts belongs to the certification
+dispatch `01M07FX9ZAY3EHCQFKVVKA2RT7` specifically. The filenames carry the process, the driver, the
+attempt, a pid and a timestamp — deliberately, and it is enough to count dispatches and to read one.
+It is not enough to join a transcript to a receipt id. That join is a real gap and is named here
+rather than guessed at from clock skew.
 
 ## 2. Fixture 5 has no real-container arm
 
