@@ -66,7 +66,7 @@ do what the Constitution keeps human.
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | Coverage — the owner can find EVERY part of arc in the face | every born lane (15) + plan-ready lane (ops · trader · discover · chat-mcp) has a room; all 46 kinds render (typed or generic); all 26 commands, 30 agents, 6 processes, 7 gates, hooks, rules, lints map to a Toolbelt/Review entry; every glossary concept maps to a room+station — asserted by `face-coverage` (FAIL) against the tree, 0 misses; mutant tree (new lane + new kind) FAILs naming both | 05 | active |
+| REQ-01 | Coverage — the owner can find EVERY part of arc in the face | every born lane (15) + plan-ready lane (ops · trader · discover · chat-mcp) has a room; all 46 kinds render (typed or generic); all 26 commands, 30 agents, 6 processes, 7 gates, hooks, rules, lints map to a Toolbelt/Review entry; every glossary concept maps to a room+station — asserted by `face-coverage` (FAIL) against the tree, 0 misses; mutant tree (new lane + new kind) FAILs naming both | 09 | active |
 | REQ-02 | Today — the owner opens one front page and knows what needs him | the brief's 4 groups render from the reader with the 40-line collapse rules honoured; needs-you never collapses; KPI row each with *Why?* precedents; "since you left: N receipts, M need you" derived from a cursor | 04 | active |
 | REQ-03 | Stamp — the owner decides in the face exactly as the CLI would record it | every `approval.requested` profile in `validate.mjs`/lanes renders its detail body; approve/reject with mandatory reason emits `decision.recorded` byte-identical to `arc-inbox` (parity fixture from Phase 03 consumed here); refusal codes (`ALREADY_DECIDED`, `UNKNOWN_APPROVAL`, `BAD_REASON`) surface verbatim; route-enumeration fixture proves 0 other mutating routes; other needs-you kinds render as cards with chips, never stamps | 04 | active |
 | REQ-04 | Map — the owner reads the whole company from one transit map | all v1 lines/stations drawn from `face:` sections + planned-rooms registry; in-flight dots move on receipt; open-gate squares show counts; unexercised lines dashed, planned dotted; station click → chip/room; legible at 20+ lines per blind jury check | 05 | active |
@@ -76,6 +76,13 @@ do what the Constitution keeps human.
 | REQ-08 | Design law — the look is a blind-judged decision with a scoreable prediction | three theses × 8 signature screens as isolated variants passing `design-lint`; deterministic renders; blind jury ×3 vs the reference (4th item, position recorded); owner pick + falsifiable PREDICTION as `decision.recorded`; ≤2 critique rounds; winner's tokens become canonical `tokens.css` + core components passing design-lint | 01 | active |
 | REQ-09 | L2 door — one read door and one decision door the owner can trust | `arc dash` zero-dep server: read door `since=` ULID cursor <1 s p95 on a 10k-event fixture with a written cursor contract (page cap, `next`, malformed-cursor refusal, mid-append safety); `asof=` replay parameter on every spine-derived endpoint with a per-endpoint replay-identical fixture; spine-health reader (via `/arc-change` on `spine.mjs`); `/api/file/:id` allow-list only; decision door parity fixture green; full auth/origin matrix (`Authorization`-header token, absent/`null`/foreign Origin rejected, 0 CORS, 127.0.0.1 bind, DNS-rebinding fixture); XSS fixture on hostile `note.logged` payloads green; reader-only lint green; sim + replay modes labelled; local request journal written | 03 | active |
 | REQ-10 | Dogfood — arc actually operates through the face | ≥5 real days in which every decision the owner makes goes through the face — proven by L2's request journal (decision ULIDs) matched 1:1 to `decision.recorded` on the spine; brief opened daily; ≥1 as-of scrub used; retro logged | 08 | active |
+
+> **REQ-01 remapped 05 → 09 (2026-09-16, owner: "REQ-01 → 09 sari").** Phase 05 built the
+> coverage gate and still serves REQ-04. Phase 09 is what made REQ-01's claim ("EVERY part of
+> arc") true: the gate now derives its expected set from the world, not from its own list
+> (ADR-1317). Phase 09 was born by `/arc-change` on 2026-08-23 and never reached the Phases
+> table, so kickoff-lint's phase→REQ check never looked at it. The attempt to close Phase 09
+> caught that. The acceptance text above is unchanged.
 
 ## Appetite
 
@@ -108,6 +115,13 @@ instead (the legal-lane precedent).
 > REQ cap of 10 leaves no row for a separate design-system phase. Phase numbering 03–08 is
 > preserved so every design-source reference ("Phase 03 = L2 steel thread") stays true.
 
+> **Appetite note (2026-09-16, recorded at the Phase 09 close):** Phase 09 (3d) was added
+> by ADR-1317 on 2026-08-23, and this total was never touched. Phase 08's 5 real dogfood
+> days also leave this cycle: under FV2-L (`docs/strategy/plans/PLAN-face-v2.md` §3,
+> owner-locked) REQ-10 closes NOT MET and moves to face v2 as its Phase 07. So the total
+> stays **32d**, and the phases still counted against it sum to **30d**. The "sum to exactly
+> 32d" sentence above describes the plan as it stood at kickoff.
+
 ## Architecture (C4 concepts, Mermaid flowchart)
 
 ```mermaid
@@ -137,7 +151,7 @@ flowchart LR
 
 | # | Decision | Status |
 |---|---|---|
-| 1300 | FACE-A: L2 in the arc repo (product `hq`); L3 in its own repo `arc-face`; cross-repo evidence = repo + SHA + CI run id hashed into the bundle | accepted |
+| 1300 | FACE-A: L2 in the arc repo (product `hq`); L3 in its own repo `arc-face`; cross-repo evidence = repo + SHA + CI run id hashed into the bundle | accepted — placement half superseded by 1316 |
 | 1301 | FACE-B: three layers — one read door; parsers imported from the lints; spine-health added to `spine.mjs` via `/arc-change`; L3 never touches files | accepted |
 | 1302 | FACE-C: `/api/decide` IS the `arc-inbox` function; byte-parity fixture; reason mandatory; no bulk/default/undo | accepted |
 | 1303 | FACE-D: Stamp · Chip · Seal and no fourth; registry lint with mutant-button negative control | accepted |
@@ -153,6 +167,8 @@ flowchart LR
 | 1313 | FACE-N: honesty classes real · simulated · rehearsal · drill · exploratory — one hatched family, never summed, never co-rendered | accepted |
 | 1314 | FACE-O: v1 single-tenant local; hosted multi-tenant L2 is a later cycle with a named-demand trigger | accepted |
 | 1315 | FACE-P: voice deferred — optional Web Speech behind a setting, not v1 | accepted |
+| 1316 | FACE-Q: L3 flips to an in-repo `face/` (own `package.json` + Vite build, tests driven from `tests/`), because a new repo would have no CI | accepted |
+| 1317 | FACE-R: the coverage contract grows — `face-coverage` derives its inventories from the world (ADRs by band · gates · jobs · ventures · plans · capabilities · planned rooms · CI · hooks + lints), not from its own list | accepted |
 
 ## Non-negotiables
 
@@ -167,7 +183,7 @@ flowchart LR
 - Every new face lint starts WARN-first in the TRIAL set and earns FAIL through the trial ledger (A1) — `face-coverage` excepted (a validator over the tree, FAIL from birth like policy-lint, ADR-1311).
 - The Engine room's unlock-ladder rung indicator reads evidence only — the rung is never a control (E2).
 - Tests green on CI per job; two fresh attackers per gate (decision logic + shell/HTTP boundary); attacker prompt carries the lane's fixed-defect list; vacuous-pass rule (assert it RAN before asserting what it printed).
-- Zero product-code writes before explicit owner approval of this plan; L3 stack never enters the arc repo (ADR-1300, ADR-1309).
+- Zero product-code writes before explicit owner approval of this plan; L3 lives in-repo at `face/` with its own `package.json` and Vite build, and nothing in `.claude/scripts/**` gains a dependency (ADR-1316 supersedes ADR-1300 on placement, ADR-1309).
 
 ## No-gos (v1)
 
@@ -264,11 +280,12 @@ run one full explore on an HQ brief (`hq-dashboard-v1`), so Phase 01's machinery
 | 00 | Brief + coverage contract — the four contracts pass `design-lint`; Coverage-map room list frozen as the `face:` schema draft + planned-rooms registry; 8 signature screens named; assumptions carried | 1d | foundation (steel thread of the design contract) |
 | 01 | Explore ×3 + design system (design lane) — three theses, isolated variants, deterministic renders, blind jury vs reference, owner PICK + PREDICTION → winner's tokens canonicalised as `tokens.css` + core components | 5d | REQ-08 |
 | 03 | L2 `arc dash` — read door + spine-health reader (`/arc-change` on `spine.mjs`) + `arc-inbox` function extraction + decision door + ask proxy + sim/replay + request journal + fixtures; two fresh attackers | 4d | REQ-09 |
-| 04 | Shell — Today · Inbox (stamps + needs-you cards) · Spine/Tape on live L2 + sim; keyboard model; ⌘K; `arc-face` repo born | 4d | REQ-02 · REQ-03 · REQ-05 |
-| 05 | Map + template + birth-rule + coverage — `face:` sections ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | REQ-01 · REQ-04 |
+| 04 | Shell — Today · Inbox (stamps + needs-you cards) · Spine/Tape on live L2 + sim; keyboard model; ⌘K; L3 born in-repo at `face/` (ADR-1316, not a separate `arc-face` repo) | 4d | REQ-02 · REQ-03 · REQ-05 |
+| 05 | Map + template + birth-rule + coverage — `face:` sections ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | REQ-04 |
 | 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest) | 5d | REQ-06 |
 | 07 | Ask arc — `face-ask` process file + router row + `hq.policy.yaml` row + golden questions + drafts-to-stamp | 3d | REQ-07 |
-| 08 | Dogfood — 5 real days from the main clone; retro; HISTORY entry | 5d | REQ-10 |
+| 08 | Dogfood — 5 real days from the main clone; retro; HISTORY entry — **next cycle:** REQ-10 closes NOT MET and moves to face v2 as its Phase 07 (FV2-L) | 5d | REQ-10 |
+| 09 | Nothing missing — the completeness sweep: nine inventories derived from the world, `chat-mcp` generated, four empty stations filled, `/api/lane/:name` carries phases, a CI room in the honest-state vocabulary (ADR-1317) | 3d | REQ-01 |
 
 ## North-star
 
