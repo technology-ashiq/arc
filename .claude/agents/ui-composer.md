@@ -58,6 +58,27 @@ type that is set rather than designed, rhythm that drifts, a focal point that is
 thesis says it should be. Fix what you find, and say plainly in your manifest what the defect
 was and what the revision did about it.
 
+**Every viewport the platform contract declares, every iteration.** Desktop is always
+`--viewport 1440x900`; when the brief declares mobile `yes`, render `--viewport 390x844` in the same
+iteration too. A declared surface you never rendered blocks PASS at `compose-done`, and the
+viewport is part of the receipt's name, so both land side by side in your renders dir.
+
+**The manifest is a file with a fixed shape, and a gate reads it.** Once you have rendered a
+second iteration, write `variant-<x>/self-review/manifest.md`:
+
+```
+| iter | input | output | defect | revision |
+|---|---|---|---|---|
+| 2 | <iter-1 desktop screenshot_sha256> | <iter-2 desktop screenshot_sha256> | <what the iter-1 PNG showed was wrong> | <what you changed> |
+```
+
+One row per iteration past the first, iterations 2 and 3 only. `input` and `output` are copied
+from the `screenshot_sha256` field of the **desktop (1440x900)** meta JSON that sits beside each PNG
+in `.claude/state/design/renders/<explore-id>--variant-<x>/`. Never compute or invent them: the gate
+compares them against those files, and a row whose hashes do not match the renders is refused. Keep
+a literal `|` out of every cell. An `unchanged: true` iteration still gets its row, and the defect
+cell says why you left it as it was.
+
 The renderer no longer pins fonts or flattens antialiasing, so your typography is now judged as
 you wrote it. It used to be silently replaced with Arial before anyone looked. Design as if type
 matters, because it now does.

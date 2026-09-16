@@ -205,6 +205,20 @@ teardown() { _arc_teardown; }
   echo "$body" | grep -q "the brief"
 }
 
+@test "ui-composer names the manifest file, its row shape, the hash source and every declared viewport" {
+  # The contract said "say plainly in your manifest" and never said WHICH file, what shape, where
+  # the hashes come from, or that mobile must be rendered too -- while `compose-done` refuses
+  # iterations with no self-review/manifest.md, a row whose hashes do not match the renders, and a
+  # declared surface nobody rendered. A composer that followed the contract to the letter failed
+  # the gates it feeds. Found preparing Phase 01's live demo, 2026-09-17.
+  body="$(cat "$ARC_ROOT/.claude/agents/ui-composer.md")"
+  [ -n "$body" ] || { echo "the contract is unreadable"; false; }
+  echo "$body" | grep -qF 'self-review/manifest.md' || { echo "no manifest path"; false; }
+  echo "$body" | grep -qF '| iter | input | output | defect | revision |' || { echo "no row shape"; false; }
+  echo "$body" | grep -qF 'screenshot_sha256' || { echo "no hash source"; false; }
+  echo "$body" | grep -qF -- '--viewport 390x844' || { echo "mobile is never rendered"; false; }
+}
+
 # ---------- 6. the OTHER two read tools (adversarial pass, 2026-08-24) ----------
 #
 # The boundary was built for `Read` and settings.json matches `Read` alone. `ui-composer`
