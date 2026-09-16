@@ -386,42 +386,13 @@ case "$CMD" in
         tr -d '\r' < "$1" 2>/dev/null \
           | sed -n 's/^[[:space:]]*"viewport": "\([0-9][0-9]*\)x[0-9][0-9]*@.*$/\1/p' | head -1
       }
-      # ONE meta per iteration -- but "one" stopped meaning "one file" when the renderer began
-      # writing a viewport component, which ADR-1403 requires: desktop and mobile in a single
-      # iteration are two metas and NEITHER is a decoy.
-      #
-      # Refusing on any multiple was right while a second file could only be a second ROUTE
-      # (the `ls | head -1` defect: LC_COLLATE decided the comparison, so a manifest passed on
-      # one OS leg and failed on another). It is wrong now, and the fix is not "pick one" --
-      # it is answering what a self-review row CLAIMS about. The row is the composer's judgment
-      # on the page it designed, so it claims about the primary surface: the WIDEST viewport of
-      # that iteration. coverage separately proves the narrow surface was rendered at all.
-      #
-      # Two metas at the SAME width is the original defect unchanged -- two routes in one
-      # session -- and still refuses. Resolving the viewport case must not resolve that one.
-      _meta_for() {
-        _mf_n=0; _mf_hit=""; _mf_w=-1; _mf_tie=0
-        for _mf in "$sess"/*--iter-"$1".json; do
-          [ -f "$_mf" ] || continue
-          _mf_n=$((_mf_n + 1))
-          _mf_this="$(_vw_of "$_mf")"
-          # A meta with no readable viewport cannot be ranked, so it can never win on width.
-          # Treated as width 0 rather than skipped: it still COUNTS, so two unreadable metas
-          # tie at 0 and refuse instead of quietly leaving one candidate standing.
-          [ -n "$_mf_this" ] || _mf_this=0
-          if [ "$_mf_this" -gt "$_mf_w" ] 2>/dev/null; then
-            _mf_w="$_mf_this"; _mf_hit="$_mf"; _mf_tie=0
-          elif [ "$_mf_this" -eq "$_mf_w" ] 2>/dev/null; then
-            _mf_tie=1
-          fi
-        done
-        [ "$_mf_n" -eq 0 ] && return 1
-        [ "$_mf_tie" -eq 0 ] || { echo "AMBIGUOUS"; return 0; }
-        printf '%s' "$_mf_hit"
-      }
+      # ONE meta per iteration stopped meaning "one file" when the renderer began writing a
+      # viewport component (ADR-1403): desktop and mobile in one iteration are two metas and
+      # neither is a decoy. A row is resolved to its surface by the hash it names (see the call
+      # site); two metas at the SAME viewport is still two routes in one session, and refuses.
 
-      # The same walk, pinned to ONE viewport width. Used for the PREVIOUS iteration so a
-      # comparison is always surface-to-surface; see the pairing note at the call site.
+      # The walk pinned to ONE viewport width, used for both iterations of a row so a
+      # comparison is always surface-to-surface.
       _meta_at() {
         _ma_n=0; _ma_hit=""
         for _ma in "$sess"/*--iter-"$1".json; do
@@ -490,26 +461,62 @@ case "$CMD" in
           rfails=$((rfails + 1)); continue
         fi
 
-        cur="$(_meta_for "$n")"
-        if [ "$cur" = "AMBIGUOUS" ]; then
-          echo "ERR  [selfreview-ambiguous] variant-$v: more than one render meta matches iteration $n in $sess -- refusing to pick one by directory order"
-          rfails=$((rfails + 1)); continue
-        fi
-        if [ -z "$cur" ]; then
+        # A hash cell is a hash or it is nothing. Two empty cells against two metas that publish
+        # no hash would otherwise "match" all the way down, and an empty row would pass as an
+        # honest no-op.
+        case "$outh" in ""|*[!0123456789abcdef]*)
+          echo "ERR  [selfreview-output-hash] variant-$v iteration $n: the output cell '$outh' is not a sha256 hash"
+          rfails=$((rfails + 1)); continue;; esac
+        case "$inh" in ""|*[!0123456789abcdef]*)
+          echo "ERR  [selfreview-input-hash] variant-$v iteration $n: the input cell '$inh' is not a sha256 hash"
+          rfails=$((rfails + 1)); continue;; esac
+
+        # THE ROW NAMES ITS SURFACE BY ITS HASHES. A row used to be judged at the WIDEST viewport
+        # of its iteration, always, and Phase 01's live demo broke that on its second composer:
+        # iteration 3 fixed a textarea that cut an outcome's third line at 390px -- visibly, in
+        # the mobile PNG -- and desktop did not move because the defect was never there. The row
+        # could only name desktop's identical hashes and was refused as a no-op claiming a fix,
+        # so a defect that lives on one surface could not be recorded at all.
+        #
+        # So the OUTPUT hash picks the render of iteration n it was published by, and that
+        # render's viewport is the surface this row is about. More than one render publishing it
+        # is ambiguity, refused rather than picked.
+        cur=""; _cm_hits=0; _cm_any=0
+        for _cm in "$sess"/*--iter-"$n".json; do
+          [ -f "$_cm" ] || continue
+          _cm_any=$((_cm_any + 1))
+          [ "$(_sha_of "$_cm")" = "$outh" ] || continue
+          _cm_hits=$((_cm_hits + 1)); cur="$_cm"
+        done
+        if [ "$_cm_any" -eq 0 ]; then
           echo "ERR  [selfreview-no-render] variant-$v: the manifest claims iteration $n and there is no render meta for it"
           rfails=$((rfails + 1)); continue
         fi
-        # PAIR BY VIEWPORT. "Widest of iteration n" against "widest of iteration n-1" compares
-        # two DIFFERENT surfaces the moment the two iterations rendered different viewport
-        # sets, and a fresh attacker used exactly that: iteration 1 rendered mobile only,
-        # iteration 2 rendered mobile (byte-identical) plus desktop. Widest-vs-widest then
-        # compared desktop against mobile, the hashes differed, and a row claiming a fix passed
-        # while the only surface present in BOTH iterations had not moved a pixel.
+        if [ "$_cm_hits" -eq 0 ]; then
+          echo "ERR  [selfreview-output-hash] variant-$v iteration $n: the manifest names output $outh and no render of iteration $n published it"
+          rfails=$((rfails + 1)); continue
+        fi
+        if [ "$_cm_hits" -gt 1 ]; then
+          echo "ERR  [selfreview-ambiguous] variant-$v: more than one render of iteration $n publishes $outh in $sess -- refusing to pick one"
+          rfails=$((rfails + 1)); continue
+        fi
+        cur_vw="$(_vw_of "$cur")"
+        # The decoy refusal survives the change of selector. Two renders at the SAME viewport in
+        # one iteration means two ROUTES in one session, and a row whose hash happens to match
+        # one of them has not thereby shown which page it is about.
+        if [ "$(_meta_at "$n" "$cur_vw")" = "AMBIGUOUS" ]; then
+          echo "ERR  [selfreview-ambiguous] variant-$v: more than one render meta matches iteration $n at ${cur_vw}px in $sess -- refusing to pick one"
+          rfails=$((rfails + 1)); continue
+        fi
+        # PAIR BY VIEWPORT. Comparing different surfaces across iterations proves nothing, and a
+        # fresh attacker once used exactly that: iteration 1 rendered mobile only, iteration 2
+        # rendered mobile (byte-identical) plus desktop, widest-vs-widest compared desktop against
+        # mobile, the hashes differed, and a row claiming a fix passed while the only surface
+        # present in BOTH iterations had not moved a pixel.
         #
-        # So iteration n's widest fixes the viewport, and n-1 is looked up AT THAT viewport.
+        # So the surface the row named fixes the viewport, and n-1 is looked up AT THAT viewport.
         # A previous iteration with no render there is a refusal: there is nothing to have
         # improved on, and saying so is more useful than comparing whatever else is lying about.
-        cur_vw="$(_vw_of "$cur")"
         prev_n=$((n - 1))
         prev="$(_meta_at "$prev_n" "$cur_vw")"
         if [ "$prev" = "AMBIGUOUS" ]; then

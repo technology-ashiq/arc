@@ -217,6 +217,9 @@ teardown() { _arc_teardown; }
   echo "$body" | grep -qF '| iter | input | output | defect | revision |' || { echo "no row shape"; false; }
   echo "$body" | grep -qF 'screenshot_sha256' || { echo "no hash source"; false; }
   echo "$body" | grep -qF -- '--viewport 390x844' || { echo "mobile is never rendered"; false; }
+  # And which viewport's hashes: the gate resolves a row's surface from them (2026-09-17), so a
+  # contract that said "always desktop" made a mobile-only fix unrecordable.
+  echo "$body" | grep -qF 'from the same viewport' || { echo "no rule for which viewport the hashes come from"; false; }
 }
 
 # ---------- 6. the OTHER two read tools (adversarial pass, 2026-08-24) ----------

@@ -73,11 +73,14 @@ second iteration, write `variant-<x>/self-review/manifest.md`:
 ```
 
 One row per iteration past the first, iterations 2 and 3 only. `input` and `output` are copied
-from the `screenshot_sha256` field of the **desktop (1440x900)** meta JSON that sits beside each PNG
-in `.claude/state/design/renders/<explore-id>--variant-<x>/`. Never compute or invent them: the gate
-compares them against those files, and a row whose hashes do not match the renders is refused. Keep
-a literal `|` out of every cell. An `unchanged: true` iteration still gets its row, and the defect
-cell says why you left it as it was.
+from the `screenshot_sha256` field of the meta JSON that sits beside each PNG in
+`.claude/state/design/renders/<explore-id>--variant-<x>/`, **both from the viewport where the defect
+you fixed lives**: desktop (1440x900) when it shows on both surfaces, 390x844 when it exists only on
+mobile. The hashes are how the gate knows which surface the row is about, so input and output must
+come from the same viewport. Never compute or invent them: a row whose hashes do not match the
+renders is refused. Keep a literal `|` out of every cell. An iteration that fixed nothing still gets
+its row — its two hashes are identical, and the defect cell starts with `unchanged` and says why you
+left it as it was.
 
 The renderer no longer pins fonts or flattens antialiasing, so your typography is now judged as
 you wrote it. It used to be silently replaced with Arial before anyone looked. Design as if type

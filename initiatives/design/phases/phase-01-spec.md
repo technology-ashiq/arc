@@ -69,6 +69,15 @@ rendered and correctly classified as product canvas or documentation.
       whole or not at all; ids forbid `--` and edge hyphens; a marker whose filename disagrees
       with its content is MALFORMED and refused; every refusal class is tested on stderr alone;
       and every printed release is executed by a test from a subdirectory
+- [ ] **A self-review row names its surface by its hashes** (found by the live demo, 2026-09-17).
+      A row used to be judged at the WIDEST viewport of its iteration. On `lexos-p02`, composer B's
+      iteration 3 fixed a textarea that cut the third line of an outcome at 390px, and desktop did
+      not move because the defect was never there. The row could only name identical desktop
+      hashes and was refused as a no-op claiming a fix, so a defect on one surface was
+      unrecordable. Now the output hash selects the render (and so the viewport). The previous
+      iteration is compared at that viewport, and the rules stay as strict: cross-viewport pairs,
+      no-op claims at the named viewport, and two routes at one viewport are all still refused.
+      `ui-composer.md` says which viewport's hashes to copy
 - [ ] Two-surface adversarial pass by fresh agents on the doc-surface gate and the allowlist,
       holes fixed and pinned as fixtures
 - [ ] tests added & green **on CI, read per JOB at the branch head SHA**

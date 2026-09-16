@@ -213,7 +213,7 @@ EOF
 
 # ---------- two viewports per iteration (adversarial pass, 2026-08-24) ----------
 #
-# _meta_for globs "$sess"/*--iter-N.json and REFUSES when more than one file matches. That
+# The first cut globbed "$sess"/*--iter-N.json and REFUSED when more than one file matched. That
 # refusal is itself a fix from the previous pass: `ls | head -1` picked by LC_COLLATE, so a
 # session holding a second route compared the wrong meta and WHICH one differed per OS leg.
 # Ambiguity became a refusal, correctly.
@@ -235,7 +235,7 @@ _meta_vp() {
     "$ID" "$V" "$3" "$2" "$ID" "$V" "$1" > "$SESS/$SLUG--$2--iter-$1.json"
 }
 
-@test "selfreview: desktop and mobile in one iteration -- the row claims the WIDEST" {
+@test "selfreview: desktop and mobile in one iteration -- a row naming the desktop hashes passes" {
   _sr_sandbox
   _meta_vp 1 1440x900 "$A_SHA"
   _meta_vp 1 390x844  "$C_SHA"
@@ -277,7 +277,7 @@ EOF
 # Two mutants survived the whole suite, and both are here because a fresh attacker built them
 # rather than because reading the tests suggested it.
 
-@test "selfreview: the WIDEST wins even when it sorts LAST on disk" {
+@test "selfreview: the surface a row names is found by hash even when it sorts LAST on disk" {
   # M1. The earlier case used 1440x900 and 390x844 -- and "1" sorts before "3", so the widest
   # file happened to come FIRST in glob order. An attacker replaced the width comparison with
   # "keep the first file seen" and the entire suite stayed green: the case named

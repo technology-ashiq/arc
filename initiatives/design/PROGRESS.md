@@ -215,6 +215,37 @@ consumer projects — it carries the owner's approvals.
   (declared 1236, executed 1236). That confirms the macOS-only critic failure was the test
   helper's nested escaped quotes and not the boundary.
 
+- **Phase 01 live demo, in flight: explore `lexos-p02`.** Two real defects have already been
+  found in Phase 01's own machinery, both before any evidence was written.
+
+  **Setup.** The director assigned command center / guided workflow / narrative, differing on 7/7
+  structure dimensions and 4/4 art axes. Each `thesis.txt` carries the canonical case data,
+  because composers may not read `matrix.md`.
+
+  **Defect 1, the composer contract.** It never named `self-review/manifest.md`, its row shape,
+  the hash source or the mobile render, so a composer following it to the letter failed the gates
+  it feeds. Fixed at `334e991a`, before any composer ran.
+
+  **Variant A** cleared every gate with 2 iterations. **Its four claimed fixes were checked by
+  opening the iter-1 and iter-2 PNGs by hand**, at both viewports:
+  - an uppercased status pill
+  - a command line cut mid-word
+  - four boxed registers
+  - a mobile dock that swallowed the Notes register
+
+  All four are visibly fixed. Seen by hand but not caught by the composer: legal content truncated
+  with ellipses, the mobile due-this-week strip clipping, and about 60% empty ruled rows on
+  desktop. Those are critique inputs for Phase 03, not Phase 01 gates.
+
+  **Composer prompts are not identical.** B's prompt (and C's) adds a line asking the composer to
+  look hard for truncation and mobile clipping, learned from A. Phase 03 must weigh that before
+  comparing the three.
+
+  **Defect 2, the self-review gate.** Variant B's iteration 3 fixed a mobile-only textarea
+  defect. The gate judged every row at the widest viewport, so a single-surface fix was
+  unrecordable. Red-first at `6f99ff09`. The row now names its surface by its hashes; the rule
+  is in the Phase 01 spec.
+
 **Next step:** Phase 01's live demo — one fresh explore on the LexOS brief (mobile `yes`), per
 the spec's Verification plan, with text-only evidence. While a composer is armed, this session's
 own Read/Grep/Glob outside that variant are refused too (a marker cannot tell who calls), so the
