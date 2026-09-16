@@ -327,3 +327,37 @@ boundary refused the same write when the payload was literal.
     refusal.
 20. A test payload built with escaped quotes nested in `"$( )"` can arrive malformed on one leg,
     and an unparseable payload reads as "allowed".
+
+## Fifth pass, 2026-09-17 — the composer Bash boundary (`fd94e8f1`) — OPEN
+
+**Status: all rows below are OPEN.** The session stopped before any was fixed, so this list is the
+work queue for the resume. Two fresh agents attacked `composer-bash-check.sh`. Their findings are
+recorded exactly as they reported them: CONFIRMED means they executed it, PLAUSIBLE means they
+reasoned it.
+
+### Decision logic
+
+| # | Finding | Status |
+|---|---|---|
+| **BL-1 (High)** | **The renderer leaks a sibling through the page itself.** The composer writes its OWN `index.html` with `<iframe src="../variant-b/index.html">` and `<iframe src="../matrix.md">`; the write boundary allows it (own dir), the Bash boundary allows the render (own route, own session), and the renderer opens the page as `file://` with nothing restricting subresources. The screenshot in the composer's own session showed the sibling's thesis and the matrix line, and the composer is allowed to Read that PNG. `file:///abs` iframes and JS navigation are the same hole. **Pinning the command is not enough: the page is the attack.** | CONFIRMED, OPEN |
+| BL-2 (High, tests) | **Seven mutants keep every case green, and five of them open real bypasses.** M1: the alphabet check deleted, so `;cat<variant-b` placed in the ROUTE position passes; every compound case had its injection after `--viewport`, which a different check refuses first. M3: `-eq 1` loosened to `-ge 1`, so two markers allow variant-b. M4: `arc_cm_load` swapped for a plain read, so a `.bak`-only marker naming variant-b allows it. M7: the core-missing refusal changed to `exit 0` allows variant-b. M9: the no-jq parser blanked is invisible while jq is on PATH. M2 (arity) and M5/M6 (iter and viewport) survive only because the renderer re-checks. | CONFIRMED, OPEN |
+| BL-3 (Med) | **An unreadable identity allows.** The parser is chosen by `command -v jq`, not by jq working: a broken jq shim (exit 127) makes a composer's `cat` of variant-b exit 0. On the no-jq path, `"agent_type":"ui-composer"` also exits 0. Fix: when the prefilter matched and the identity cannot be read, refuse. | CONFIRMED, OPEN |
+| BL-4 (Med-low) | `ROOT` comes from the hook process cwd (`git rev-parse`), while the fragment finds the script through `CLAUDE_PROJECT_DIR`. Run from another repo, it reads the wrong marker, so variant-b is allowed. Lane defect #3 again. Fix: take ROOT from `CLAUDE_PROJECT_DIR`. | CONFIRMED in the hook, OPEN |
+| BL-5 (Low-med) | A repeated flag lets the last value win (`--session b --session a`, `--mode critique ... --mode explore`). Only the renderer's own duplicate check stops it, and the renderer has no such check for `--viewport`. Lane defect #13 again. Fix: refuse any repeated flag. | CONFIRMED in the hook, OPEN |
+| BL-6 (Low) | Viewport values are unbounded and not normalised: `99999999999999999999x800`, `0x0` and `01440x0900` all exit 0. `0x0` hung the renderer for 32s. A leading zero never matches the declared viewport. Fix: no leading zero, bounded digits, a maximum. | CONFIRMED in the hook, OPEN |
+| BL-7 (Low) | The jq and grep parsers disagree: ` ` inside the command; duplicate `command` keys (jq takes the last, grep the first); duplicate `agent_type`; `tool_name:"Bash"` with no jq. Only a harness-written payload has these shapes. Fix: one parser; refuse control characters after decoding. | CONFIRMED in the hook, OPEN |
+| BL-8 (Low) | The marker is not bound to the calling composer. The payload's `agent_id` is ignored, so a still-running composer A is treated as B once B is armed. Fix: record `agent_id` at the first composer call and refuse a mismatch. | PLAUSIBLE, OPEN |
+| BL-9 (Low) | The identity must match exactly: `UI-Composer`, `arc:ui-composer` and a trailing space all exit 0, so a namespaced plugin install silently disables the check. Fix: lowercase and strip a `*:` prefix. | PLAUSIBLE, OPEN |
+| aside | `design-render.sh:383` has a literal `\n` before `\|\|`, so the command becomes `agent-browser ... set media light n`, and the fail-closed media check tests a malformed command. | CONFIRMED, OPEN |
+
+Clean on the original: the main session, other agent types and non-Bash tools are untouched;
+all shell syntax is refused; `..` in any form is refused; sibling routes and sessions, other modes,
+unknown flags, missing values, no marker, two markers and a `.bak`-only marker are refused; no
+exit code other than 0 or 2; 16,000 flag pairs were refused in 2.8s; `--end` through Bash is
+refused.
+
+**What BL-1 changes about the plan.** The Bash boundary is necessary and not sufficient. Blindness
+now also needs the RENDER to be confined to the variant directory, for example by serving only
+that directory over loopback or by blocking every request outside it and refusing a capture whose
+frames left it. That is a renderer change and a design decision, so route it through `/arc-change`
+before Phase 01 closes.
