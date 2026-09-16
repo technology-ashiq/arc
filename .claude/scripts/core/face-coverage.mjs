@@ -490,12 +490,11 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
   // does not map 1:1 to the inventory" -- and an audit measured that sentence FALSE for
   // gates: `arc.gates.yaml` carries exactly seven `- name:` rows, exactly the seven contract
   // keys, a machine-readable registry. An eighth gate would have got no room and no failure.
-  // `gates` is now derived from the world with the others; these two keep the exemption:
-  //
-  //   hooks  -- .claude/hooks/*.d/ holds 15 units behind 7 event-level rows. The inventory
-  //             is the EVENT, deliberately, because that is the thing a person reasons about.
-  //   lints  -- 29 rows over 34 lint-named scripts; `legal-lints (4)` is one row for four
-  //             scripts on purpose. A 1:1 derivation here would invent five false failures.
+  // `gates` is now derived from the world with the others, and so are `hooks` and `lints`
+  // (ADR-1317 section 3a). The sentences that used to exempt them here ("15 units behind 7
+  // event-level rows", "29 rows over 34 lint-named scripts") were measured false and are gone.
+  // The derivations, and the one criterion lints keep, are documented on treeHooks and
+  // treeLints above. This note outlived the fix by three weeks, found at the Phase 09 close.
   //
   // An exclusion that does not name its file cannot be checked, and gets inherited by rows it
   // was never written about -- which is exactly how gates kept a reason belonging to lints.
