@@ -17,6 +17,7 @@
 #
 #   composer-scope-check.sh --begin <explore-id> <variant>   # arm for one composer
 #   composer-scope-check.sh --end                            # disarm
+#   composer-scope-check.sh --describe                       # what is armed, since when, how to release
 #   composer-scope-check.sh [<path>]                         # enforce; path from $1 or stdin
 #
 # Exit: 0 allow | 2 BLOCK. Never any other code -- this runs in a PreToolUse hook, where a
@@ -50,6 +51,57 @@ if ! command -v arc_canon_path >/dev/null 2>&1 && ! type arc_canon_path >/dev/nu
   exit 2
 fi
 
+# ---------- an armed boundary, described ----------
+#
+# A boundary outlives the compose that armed it whenever that compose dies before compose-done,
+# and then it refuses every read and write in the tree -- the operator's too, because a marker
+# cannot tell who is calling. lexos-p01/variant-a sat armed for three weeks that way, behind a
+# refusal that said neither when it was armed nor how to release it.
+#
+# So every read and write refusal DESCRIBES what is armed, and describing is all it does -- the
+# age comes from arc_armed_desc in common.sh, whose comment says why age never relaxes a
+# refusal. A stale boundary is released by a person, on purpose.
+
+# One field from a marker. CR-stripped for the same reason as the explore/variant reads below.
+_mk_field() { tr -d '\r' < "$1" 2>/dev/null | sed -n "s/^$2=//p" | head -1; }
+
+# The release a person can paste. compose-done is the flow's own release and it releases BEFORE
+# it judges, so it works on an abandoned run whose gates will fail -- but it refuses outright when
+# the variant directory is gone, so that case gets the direct --end. Only an id --begin could have
+# written is echoed back as a command; anything else gets the release-everything form rather than
+# its own text.
+_release_cmd() {
+  _rc_all="bash .claude/scripts/design/composer-scope-check.sh --end"
+  if [ -z "$1" ] || [ -z "$2" ]; then echo "$_rc_all"; return 0; fi
+  case "$1$2" in *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "$_rc_all"; return 0;; esac
+  case "$2" in
+    variant-?*)
+      if [ -d "$ROOT/docs/design/explore/$1/$2" ]; then
+        echo "bash .claude/scripts/design/design-explore.sh compose-done $1 --variant ${2#variant-}"
+        return 0
+      fi;;
+  esac
+  echo "$_rc_all $1 $2"
+}
+
+# Every armed boundary, two lines each, on stdout. Prints nothing when none is armed.
+_describe_all() {
+  for _da in "$MARKER_DIR"/composer-session--*; do
+    [ -f "$_da" ] || continue
+    _da_ex="$(_mk_field "$_da" explore)"; _da_v="$(_mk_field "$_da" variant)"
+    _da_name="$_da_ex/$_da_v"
+    case "$_da_ex" in ""|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _da_name="";; esac
+    case "$_da_v"  in ""|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _da_name="";; esac
+    [ -n "$_da_name" ] || _da_name="$(printf '%s' "${_da##*/}" | tr -cd 'abcdefghijklmnopqrstuvwxyz0123456789-') (names no valid explore/variant)"
+    echo "design composer boundary ARMED for $_da_name -- $(arc_armed_desc "$_da"). It never expires on its own."
+    echo "  if no composer is running it is stale; release: $(_release_cmd "$_da_ex" "$_da_v")"
+  done
+  return 0
+}
+
+# Every refusal once a marker exists goes through here, so none of them can forget the note.
+_refuse() { _describe_all >&2; exit 2; }
+
 # Control verbs are only honoured when this script is invoked DIRECTLY, never when a path is
 # forwarded into it as argv. A read of a file literally named "--end" would otherwise disarm
 # the boundary: the fragment forwards "$@", so a future caller passing the path positionally
@@ -57,7 +109,7 @@ fi
 # is carried behind an explicit flag, never inferred from position.
 ARC_SCOPE_VERB=""
 case "${1:-}" in
-  --begin|--end) [ "${ARC_SCOPE_FORWARDED:-0}" = "1" ] || ARC_SCOPE_VERB="$1";; esac
+  --begin|--end|--describe) [ "${ARC_SCOPE_FORWARDED:-0}" = "1" ] || ARC_SCOPE_VERB="$1";; esac
 
 case "$ARC_SCOPE_VERB" in
   --begin)
@@ -75,12 +127,13 @@ case "$ARC_SCOPE_VERB" in
         exit 2;;
     esac
     mkdir -p "$MARKER_DIR" || exit 2
-    # The marker records WHO is armed, so a stale marker is diagnosable rather than just
-    # mysteriously refusing reads.
+    # The marker records WHO is armed and WHEN, so an abandoned one is diagnosable rather than
+    # mysteriously refusing reads. It used to record `pid=$$` -- this process, gone one line
+    # later -- which looked like a liveness signal and could only ever say "dead".
     {
       echo "explore=$ex"
       echo "variant=$variant"
-      echo "pid=$$"
+      arc_armed_stamp
     } > "$MARKER_DIR/composer-session--$ex--$variant" || exit 2
     echo "composer-scope-check: read boundary armed for $ex/$variant"
     exit 0
@@ -100,6 +153,10 @@ case "$ARC_SCOPE_VERB" in
     fi
     exit 0
     ;;
+  --describe)
+    _describe_all
+    exit 0
+    ;;
 esac
 
 # ---------- enforcement ----------
@@ -109,9 +166,7 @@ esac
 #
 # This was a single global file while explore mode runs three composers. A fresh attacker
 # armed A, then armed B, and the marker simply became B's: composer A was then allowed to read
-# variant-b and REFUSED its own directory. Both halves of the boundary inverted at once, and
-# the marker's `pid=` field -- the one thing that could have detected it -- was written by
-# --begin and read by nothing.
+# variant-b and REFUSED its own directory. Both halves of the boundary inverted at once.
 #
 # A filesystem marker cannot tell which composer is calling: the hook payload carries no
 # caller identity this script can trust. So the honest contract is SERIAL composition, and
@@ -128,7 +183,7 @@ if [ "$_MK_N" -gt 1 ]; then
   echo "BLOCKED by ui-composer scope: $_MK_N composer boundaries are armed at once." >&2
   echo "This read cannot be attributed to one of them, and picking is how composer A came to read variant-b." >&2
   echo "Compose serially -- one compose / compose-done pair at a time." >&2
-  exit 2
+  _refuse
 fi
 
 # tr -d '\r' before the anchored sed, the same guard _sha_of and _vw_of carry in
@@ -143,7 +198,7 @@ VARIANT="$(tr -d '\r' < "$MARKER" 2>/dev/null | sed -n 's/^variant=//p' | head -
 if [ -z "$EX" ] || [ -z "$VARIANT" ]; then
   echo "BLOCKED by ui-composer scope: the marker exists but names no explore/variant." >&2
   echo "A boundary that cannot say what it protects is not a boundary. Re-arm or --end it." >&2
-  exit 2
+  _refuse
 fi
 
 TARGET="${1:-}"
@@ -193,10 +248,10 @@ case "$TOOL" in
       /*|[A-Za-z]:/*|[A-Za-z]:\\*)
         echo "BLOCKED by ui-composer scope: an ABSOLUTE $TOOL pattern ('$PATTERN') is resolved against the filesystem, not against the path you passed." >&2
         echo "That is the whole tree, including every sibling variant. Keep the pattern relative and scope it with path." >&2
-        exit 2;;
+        _refuse;;
       ..|../*|*/..|*/../*)
         echo "BLOCKED by ui-composer scope: a $TOOL pattern containing '..' ('$PATTERN') leaves whatever path scopes it." >&2
-        exit 2;;
+        _refuse;;
     esac
     ;;
 esac
@@ -206,7 +261,7 @@ if [ -z "$TARGET" ]; then
     Grep|Glob)
       echo "BLOCKED by ui-composer scope: an unscoped $TOOL searches the whole tree, which includes every sibling variant, the matrix and the brief." >&2
       echo "Pass an explicit path inside $EX/$VARIANT (or your session's renders / the brief's refpack)." >&2
-      exit 2;;
+      _refuse;;
   esac
   exit 0   # cannot tell what is being read -> do not block
 fi
@@ -218,7 +273,7 @@ TARGET="$(printf '%s' "$TARGET" | tr '\\' '/')"
 case "$TARGET" in
   ..|../*|*/..|*/../*)
     echo "BLOCKED by ui-composer scope: '$TARGET' contains a '..' segment." >&2
-    exit 2
+    _refuse
     ;;
 esac
 
@@ -278,10 +333,10 @@ case "$TARGET" in
   .claude/state/design/renders/"$EX"--variant-*|.claude/state/design/renders/"$EX"--variant-*/*)
     echo "BLOCKED by ui-composer scope: '$TARGET' belongs to a sibling variant." >&2
     echo "You are $VARIANT. Your variant's value is its independence -- you may not look." >&2
-    exit 2
+    _refuse
     ;;
 esac
 
 echo "BLOCKED by ui-composer scope: '$TARGET' is outside the read allowlist for $EX/$VARIANT." >&2
 echo "Allowed: your variant dir, your own session's renders, and the brief's reference pack." >&2
-exit 2
+_refuse

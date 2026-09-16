@@ -39,6 +39,16 @@ if ! command -v arc_canon_path >/dev/null 2>&1 && ! type arc_canon_path >/dev/nu
   exit 2
 fi
 
+# Every refusal once a marker exists says what is armed, since when, and how to release it. The
+# same marker arms both boundaries, so an abandoned compose locks writes exactly as it locks
+# reads, and a note on the read refusal alone would be the one-side-fixed twin this lane keeps
+# shipping. The description is the read boundary's own --describe: one spelling, not two. env -u,
+# because the fragment exports ARC_SCOPE_FORWARDED and a forwarded --describe is read as a path.
+_refuse() {
+  env -u ARC_SCOPE_FORWARDED bash "$ROOT/.claude/scripts/design/composer-scope-check.sh" --describe >&2 2>/dev/null
+  exit 2
+}
+
 # ---------- which composer, if any ----------
 #
 # Same per-composer marker set the read boundary reads, and the same rule: more than one armed
@@ -53,7 +63,7 @@ done
 if [ "$_MK_N" -gt 1 ]; then
   echo "BLOCKED by ui-composer write scope: $_MK_N composer boundaries are armed at once." >&2
   echo "This write cannot be attributed to one of them. Compose serially." >&2
-  exit 2
+  _refuse
 fi
 
 # tr -d '\r' before the anchored sed: a CRLF marker reads clean on Windows (MSYS2 strips it)
@@ -62,7 +72,7 @@ EX="$(tr -d '\r' < "$MARKER" 2>/dev/null | sed -n 's/^explore=//p' | head -1)"
 VARIANT="$(tr -d '\r' < "$MARKER" 2>/dev/null | sed -n 's/^variant=//p' | head -1)"
 if [ -z "$EX" ] || [ -z "$VARIANT" ]; then
   echo "BLOCKED by ui-composer write scope: the marker exists but names no explore/variant." >&2
-  exit 2
+  _refuse
 fi
 
 # ---------- what is being written ----------
@@ -83,7 +93,7 @@ fi
 if [ -z "$TARGET" ]; then
   echo "BLOCKED by ui-composer write scope: a write is in flight and its path could not be read from the payload." >&2
   echo "A write that cannot be identified cannot be allowed while a composer boundary is armed." >&2
-  exit 2
+  _refuse
 fi
 
 TARGET="$(printf '%s' "$TARGET" | tr '\\' '/')"
@@ -93,7 +103,7 @@ TARGET="$(printf '%s' "$TARGET" | tr '\\' '/')"
 case "$TARGET" in
   ..|../*|*/..|*/../*)
     echo "BLOCKED by ui-composer write scope: '$TARGET' contains a '..' segment." >&2
-    exit 2;;
+    _refuse;;
 esac
 
 # Normalise a relative target so an ordinary './x' spelling is judged as the path it is.
@@ -130,20 +140,20 @@ case "$TARGET" in
   .claude/state/design|.claude/state/design/*)
     echo "BLOCKED by ui-composer write scope: '$TARGET' is the boundary's own state." >&2
     echo "Rewriting the marker that constrains you is not a write, it is an escape." >&2
-    exit 2;;
+    _refuse;;
   .claude/scripts/design|.claude/scripts/design/*|.claude/hooks|.claude/hooks/*)
     echo "BLOCKED by ui-composer write scope: '$TARGET' is the guard itself." >&2
     echo "A boundary its subject can rewrite is not a boundary." >&2
-    exit 2;;
+    _refuse;;
 esac
 
 case "$TARGET" in
   docs/design/explore/"$EX"/variant-*|docs/design/explore/"$EX"/variant-*/*)
     echo "BLOCKED by ui-composer write scope: '$TARGET' belongs to a sibling variant." >&2
     echo "You are $VARIANT. Writing into another composer's work is not independence." >&2
-    exit 2;;
+    _refuse;;
 esac
 
 echo "BLOCKED by ui-composer write scope: '$TARGET' is outside $OWN_VARIANT/." >&2
 echo "Your variant directory is the only place you write -- page, tokens, assets, self-review." >&2
-exit 2
+_refuse

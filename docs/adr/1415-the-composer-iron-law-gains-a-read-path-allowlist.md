@@ -68,7 +68,7 @@ allowlist (PLAN ledger, `FIRED 2026-08-24`). The boundary is enforced for all th
 A filesystem marker also outlives the compose that armed it. An abandoned `lexos-p01/variant-a`
 boundary refused every read in its worktree for three weeks. The decision: **an armed boundary
 never relaxes with age.** Staleness is made visible — `armed_at`, age and the release command in
-every refusal, and a session-start line — but a stale marker still refuses. The alternative,
+every read and write refusal — but a stale marker still refuses. The alternative,
 releasing on a dead pid, was rejected on a fact rather than a preference: the recorded pid
 belongs to the short-lived `--begin` process, so it is dead immediately and would have disarmed
 every boundary on arrival.

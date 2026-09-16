@@ -721,19 +721,89 @@ _release_line() { echo "bash .claude/scripts/design/design-explore.sh compose-do
   [ ! -f "$(_marker)" ] || { echo "compose-done left an abandoned boundary armed: $status $output"; false; }
 }
 
-@test "abandoned boundary: session start announces an armed boundary, and only an armed one" {
+@test "abandoned boundary: --describe reports an armed boundary, and only an armed one" {
   _composer_sandbox
-  mkdir -p "$SANDBOX/.claude/hooks/SessionStart.d"
-  cp "$ARC_ROOT/.claude/hooks/SessionStart.d/00-context.sh" "$SANDBOX/.claude/hooks/SessionStart.d/"
-  run bash "$SANDBOX/.claude/hooks/SessionStart.d/00-context.sh"
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  echo "$output" | grep -q "Quick heads-up" || { echo "the hook did not run: $output"; false; }
-  ! echo "$output" | grep -qi "composer boundary" || { echo "announced a boundary nobody armed: $output"; false; }
+  # The one spelling of "what is armed", which the write boundary also calls. A session-start
+  # line was filed too and dropped: .claude/hooks/** is edit-denied by governance, and the first
+  # refused read now carries this same description, so the lock is visible on first contact.
+  run bash "$(_csc)" --describe
+  [ "$status" -eq 0 ] || { echo "--describe with nothing armed did not exit 0: $status $output"; false; }
+  [ -z "$output" ] || { echo "described a boundary nobody armed: $output"; false; }
   _old_marker 691200
-  run bash "$SANDBOX/.claude/hooks/SessionStart.d/00-context.sh"
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run bash "$(_csc)" --describe
+  [ "$status" -eq 0 ] || { echo "$status $output"; false; }
   echo "$output" | grep -q "composer boundary ARMED for lexos-v1/variant-a" || {
-    echo "an armed boundary went unannounced at session start: $output"; false; }
+    echo "an armed boundary went undescribed: $output"; false; }
   echo "$output" | grep -qF "(8 days ago)" || { echo "$output"; false; }
   echo "$output" | grep -qF "$(_release_line a)" || { echo "$output"; false; }
+  [ -f "$(_marker)" ] || { echo "--describe released the boundary it was asked to describe"; false; }
+}
+
+@test "abandoned boundary: a FORWARDED --describe is a path to judge, never a verb" {
+  _composer_sandbox; _arm
+  # The fragments export ARC_SCOPE_FORWARDED, and a tool payload naming a file "--describe"
+  # must not turn into a control verb -- same rule --begin and --end already follow.
+  # Through env, not as a prefix on `run`: bats never exports a prefix to the child.
+  run env ARC_SCOPE_FORWARDED=1 bash "$(_csc)" --describe
+  [ "$status" -eq 2 ] || { echo "a forwarded --describe was honoured as a verb: $status $output"; false; }
+  echo "$output" | grep -q "outside the read allowlist" || { echo "refused, but not as a path: $output"; false; }
+}
+
+# ---------- the same abandoned boundary, in the CRITIC (the twin) ----------
+#
+# critic-scope-check.sh arms the same way -- a marker written by --begin, deleted by --end -- and
+# wrote the same `pid=$$`. A critique run that dies before `finish` leaves every write outside
+# docs/design/critique/ refused, by a message that says nothing about when or how to release.
+# Fixing the composer and leaving this is the one-file-fixed twin the lane rules name.
+
+_critic_sh() { echo "$SANDBOX/.claude/scripts/design/critic-scope-check.sh"; }
+_critic_marker() { echo "$SANDBOX/.claude/state/design/critic-session"; }
+_old_critic_marker() {
+  mkdir -p "$SANDBOX/.claude/state/design"
+  printf 'route=docs/x.html\nallowed=docs/design/critique\narmed_at=2026-01-01T00:00:00Z\narmed_epoch=%s\n' \
+    "$(( $(date -u +%s) - $1 ))" > "$(_critic_marker)"
+  [ -s "$(_critic_marker)" ] || { echo "fixture critic marker is empty"; false; }
+}
+_edit_write() {
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(_payload Write "{\"file_path\":\"$1\",\"content\":\"x\"}")"
+}
+
+@test "abandoned critic boundary: --begin records when it armed, and no pid" {
+  _composer_sandbox
+  run bash "$(_critic_sh)" --begin docs/x.html
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -f "$(_critic_marker)" ] || { echo "--begin armed nothing: $output"; false; }
+  grep -Eq '^armed_at=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' "$(_critic_marker)" || {
+    echo "no armed_at in the critic marker:"; cat "$(_critic_marker)"; false; }
+  grep -Eq '^armed_epoch=[0-9]+$' "$(_critic_marker)" || { cat "$(_critic_marker)"; false; }
+  ! grep -q '^pid=' "$(_critic_marker)" || { echo "the critic still writes a dead-on-arrival pid"; false; }
+}
+
+@test "abandoned critic boundary: an eight-day-old marker still refuses and says how to release it" {
+  _composer_sandbox; _old_critic_marker 691200
+  _edit_write "README.md"
+  [ "$status" -eq 2 ] || { echo "age relaxed the critic boundary: $status $output"; false; }
+  echo "$output" | grep -q "design-critic scope" || { echo "refused by something else: $output"; false; }
+  echo "$output" | grep -qF "(8 days ago)" || { echo "the refusal does not say how old the boundary is: $output"; false; }
+  echo "$output" | grep -qF "bash .claude/scripts/design/critic-scope-check.sh --end" || {
+    echo "the refusal does not name its release: $output"; false; }
+}
+
+@test "abandoned critic boundary: the traversal refusal carries the note too" {
+  _composer_sandbox; _old_critic_marker 691200
+  # Refused BEFORE common.sh is loaded, so a note wired only into the later refusal would miss it.
+  _edit_write "docs/design/critique/../../README.md"
+  [ "$status" -eq 2 ] || { echo "$status $output"; false; }
+  echo "$output" | grep -q "'..' segment" || { echo "refused, but not as traversal: $output"; false; }
+  echo "$output" | grep -qF "(8 days ago)" || { echo "$output"; false; }
+}
+
+@test "abandoned critic boundary: a legacy pid-only critic marker still refuses" {
+  _composer_sandbox
+  mkdir -p "$SANDBOX/.claude/state/design"
+  printf 'route=docs/x.html\nallowed=docs/design/critique\npid=999999\n' > "$(_critic_marker)"
+  _edit_write "README.md"
+  [ "$status" -eq 2 ] || { echo "a dead pid released the critic boundary: $status $output"; false; }
+  echo "$output" | grep -q "armed at an unknown time" || { echo "$output"; false; }
 }

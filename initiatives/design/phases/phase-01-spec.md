@@ -56,9 +56,15 @@ rendered and correctly classified as product canvas or documentation.
       it was armed. Contract: `--begin` records `armed_at` (UTC) and stops writing `pid=`; a
       refusal names the armed explore/variant, its age, and the exact `compose-done` release
       command; age NEVER relaxes the refusal — an old marker and a legacy `pid=`-only marker
-      still refuse a sibling read (the negative control a "stale -> allow" mutant must fail);
-      and the session-start heads-up (extend `00-context.sh`, no new fragment) prints one line
-      when any boundary is armed, so the next lock surfaces on day 1 rather than week 3
+      still refuse a sibling read (the negative control a "stale -> allow" mutant must fail).
+      The description lives once, in `composer-scope-check.sh --describe`, which the write
+      boundary calls. **Dropped at build, 2026-09-16:** the session-start line in
+      `00-context.sh` — `.claude/hooks/**` is edit-denied by governance, and the first refused
+      read now carries the same description, so the lock surfaces on first contact anyway.
+      **Twin, found at build:** `critic-scope-check.sh` (ADR-0034) writes the same dead
+      `pid=$$` and locks writes the same way, so it gets the same stamp and note. The age logic
+      lives once, as `arc_armed_stamp` / `arc_armed_desc` in `core/common.sh`, which both
+      boundaries already source
 - [ ] Two-surface adversarial pass by fresh agents on the doc-surface gate and the allowlist,
       holes fixed and pinned as fixtures
 - [ ] tests added & green **on CI, read per JOB at the branch head SHA**

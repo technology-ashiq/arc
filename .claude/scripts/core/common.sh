@@ -120,6 +120,50 @@ arc_canon_path() {
   fi
 }
 
+# --- a run-scoped boundary: when it was armed ----------------------------------
+# The design boundaries arm by writing a marker and disarm by deleting it, so a run that dies
+# in between leaves its boundary refusing work indefinitely -- the operator's too, since a
+# marker cannot tell who is calling. A composer marker did exactly that for three weeks behind
+# a refusal that said neither when it was armed nor how to release it.
+#
+# These two are the one spelling of "when": arc_armed_stamp writes it into a marker and
+# arc_armed_desc reads it back as a phrase for a refusal. Describing is ALL they do. Age never
+# relaxes a refusal: the markers used to carry pid=$$, which is the --begin process itself and
+# dead on its next line, so a liveness check on it would have disarmed every boundary on arrival.
+arc_armed_stamp() {
+  printf 'armed_at=%s\narmed_epoch=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u +%s)"
+}
+
+# arc_armed_desc <marker-file>  ->  "armed at <iso> (<n> <unit>s ago)" | "armed at an unknown time"
+arc_armed_desc() {
+  _aa_at="$(tr -d '\r' < "$1" 2>/dev/null | sed -n 's/^armed_at=//p' | head -1)"
+  _aa_ep="$(tr -d '\r' < "$1" 2>/dev/null | sed -n 's/^armed_epoch=//p' | head -1)"
+  _aa_now="$(date -u +%s 2>/dev/null)"
+  # Digits only BEFORE any arithmetic: bash evaluates a[$(cmd)] inside $(( )), and a marker is
+  # read on every tool call. Leading zeros are stripped and 10# is kept, because a zero-padded
+  # value is octal to bash and an 8 or 9 in it kills a hook with an exit code that is neither
+  # allow nor block.
+  case "$_aa_ep"  in ""|*[!0123456789]*) _aa_ep="";;  esac
+  case "$_aa_now" in ""|*[!0123456789]*) _aa_now="";; esac
+  case "$_aa_at"  in ""|*[!0123456789TZ:-]*) _aa_at="";; esac
+  while :; do case "$_aa_ep" in 0?*) _aa_ep="${_aa_ep#0}";; *) break;; esac; done
+  if [ -z "$_aa_ep" ] || [ -z "$_aa_now" ] || [ -z "$_aa_at" ] || [ "${#_aa_ep}" -gt 12 ]; then
+    echo "armed at an unknown time"
+    return 0
+  fi
+  _aa_age=$(( 10#$_aa_now - 10#$_aa_ep ))
+  if [ "$_aa_age" -lt 0 ]; then
+    echo "armed at $_aa_at (in the future -- the marker or this clock is wrong)"
+    return 0
+  fi
+  if   [ "$_aa_age" -ge 86400 ]; then _aa_n=$((_aa_age / 86400)); _aa_u=day
+  elif [ "$_aa_age" -ge 3600 ];  then _aa_n=$((_aa_age / 3600));  _aa_u=hour
+  else                                _aa_n=$((_aa_age / 60));    _aa_u=minute
+  fi
+  [ "$_aa_n" -eq 1 ] || _aa_u="${_aa_u}s"
+  echo "armed at $_aa_at ($_aa_n $_aa_u ago)"
+}
+
 arc_hash_file() {
   [ -f "$1" ] || { echo ""; return 0; }
   if   arc_have sha256sum; then sha256sum "$1"      | cut -d' ' -f1
