@@ -281,3 +281,13 @@ load 'test_helper'
   run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" "--root=$dst" --check
   [ "$status" -eq 2 ] && [[ "$output" == *"unknown argument"* ]] || { echo "--root=: $status $output"; false; }
 }
+
+@test "face v2: the browser harness client logic runs with no install and no Chrome" {
+  # face/scripts/cdp.mjs, node-floor, lockfile-platforms and the pure half of smoke/harness-run,
+  # exercised against a scripted fake on every configuration, Node 18 included.
+  run node "$ARC_ROOT/tests/face/cdp-client.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
+  local n; n=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks.*/\1/p')
+  [ -n "$n" ] && [ "$n" -ge 60 ] || { echo "only $n checks ran: $output"; false; }
+}

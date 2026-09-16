@@ -1,0 +1,10 @@
+<!doctype html>
+<!-- A page that logs a real console error, opened over REAL Chrome by tests/face-browser.bats:
+     smoke.mjs --probe-file must see it and exit 1. It proves the real socket path detects an
+     error, which a fake whose answer equals the failure's answer never could (face v2 Phase 00). -->
+<html>
+  <head><meta charset="utf-8"><title>planted error</title></head>
+  <body>
+    <script src="planted-error.js"></script>
+  </body>
+</html>
