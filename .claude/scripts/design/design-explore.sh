@@ -190,7 +190,12 @@ case "$CMD" in
                 | grep -qiE "$COLOUR_PAT" && printf '%s\n' "$hit"
             done || true)"
         if [ -n "$smuggled" ]; then
-          _fail "colour-literal" "variant-$v carries a colour literal outside tokens.css: $(printf '%s' "$smuggled" | head -1 | cut -c1-100)"
+          # Repo-relative before the cut. grep reports the path it was given, which is absolute,
+          # and a 100-character cut on that spent the budget on the path: a literal on line 136
+          # of a real explore was reported as ":1", sending the composer to the wrong line.
+          _cl_hit="$(printf '%s' "$smuggled" | head -1)"
+          _cl_hit="${_cl_hit#"$ROOT"/}"
+          _fail "colour-literal" "variant-$v carries a colour literal outside tokens.css: $(printf '%s' "$_cl_hit" | cut -c1-200)"
         fi
       fi
     done

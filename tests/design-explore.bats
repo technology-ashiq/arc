@@ -135,6 +135,19 @@ _smuggle_setup() {
   [[ "$output" == *"colour-literal"* ]]
 }
 
+@test "colour-literal names the repo-relative file and the REAL line number" {
+  # Found on the lexos-p02 live demo: the refusal printed an absolute path cut at 100
+  # characters, so a literal on line 136 was reported as ":1" -- the path ate the budget and the
+  # line number was truncated mid-digit. A refusal that points at the wrong line sends the
+  # composer to fix the wrong thing.
+  _smuggle_setup
+  printf '<!doctype html>\n<style>\n.a{}\n.b{}\n.c{background:rgba(16,38,31,.06)}\n</style>\n' > "$EX_DIR/variant-a/index.html"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -ne 0 ] || { echo "the literal was not refused: $output"; false; }
+  [[ "$output" == *"outside tokens.css: docs/design/explore/hq-dashboard/variant-a/index.html:5:"* ]] || {
+    echo "the refusal does not name the relative file and line 5: $output"; false; }
+}
+
 @test "attack HOLE: hsl() literal is refused" {
   _smuggle_setup
   printf '<!doctype html><style>h1{background:hsl(300,100%%,50%%)}</style>\n' > "$EX_DIR/variant-c/index.html"
