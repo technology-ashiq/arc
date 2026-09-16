@@ -68,23 +68,23 @@ commit: e0b61682
 title: `docs/design/reference/face-hq/SOURCE.md` rewritten against v0.7 — form · where · what — and the four corrections on record (PLAN-face-v2 §1): **(1)** v0.7 renders violet for council AND simulated; the token law keeps council `--accent-dim` (ADR-1322) · **(2)** v0.7's `--blue` (neutral progress) is adopted · **(3)** `src/data/arcFacts.js` (137 KB facts snapshot) never enters the product (ADR-1324) · **(4)** v0.7's browser-side brain with a pasted key and `approve`/`reject` actions is not the product's Ask (ADR-1325).
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-00-spec.md, code:grep-fallback(1481; no .codegraph/), adrs(37), learning(3), retro(22), churn(461)
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+proof: grep counts over the new SOURCE.md for each required element (v0.7, 108 files, ADR-1322, --blue, ADR-1324, ADR-1325, PII scan: clean, SOURCE-v0.4.md, Google Fonts) must each be >= 1, and assets/arcface-v0.4/SOURCE-v0.4.md must exist and still hold the Decided 2026-08-24 ruling
+tier: static
+sources: phase-00-spec.md, code:grep-fallback(1482; no .codegraph/), adrs(37), learning(3), retro(22), churn(462)
+decision: the v0.4 SOURCE.md moves to assets/arcface-v0.4/SOURCE-v0.4.md with git mv instead of being overwritten, so its drop history, collision table and the 2026-08-24 brain ruling (cited by ADR-1325) survive; two intake findings recorded for later phases: Google Fonts fetched at runtime (Phase 01 vs ADR-1312) and the v0.4 collision table needing a re-check against the retuned v0.7 palette (Phase 01)
+result: `v0.7=12 108 files=1 ADR-1322=1 --blue=1 ADR-1324=1 ADR-1325=1 PII scan: clean=1 SOURCE-v0.4.md=2 Google Fonts=1` · SOURCE-v0.4.md present, `Decided 2026-08-24` count=1 · first ledger fill attempt (inline node -e) silently matched nothing — refilled from a file
+commit: 9c1a52de
 
 #### slice: 04
 
 title: `docs/design/system/hq-design-system-v0.7.md` copied from `E:/Work_Hub/01_Automemory/arc-face-hq2/docs/superpowers/specs/2026-09-15-hq-design-system.md`. **Contract**
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: sha256 of the owner's E:/Work_Hub/01_Automemory/arc-face-hq2/docs/superpowers/specs/2026-09-15-hq-design-system.md and of docs/design/system/hq-design-system-v0.7.md must be one unique value (uniq count 1), and the copy must be non-empty
+tier: static
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
+decision: copied byte-for-byte, not rewritten; its first line already names itself v0.7 and says rooms are polished against it, which is the role ADR-1318 gives it
+result: `sha256sum SRC DST | awk print-1 | uniq | wc -l` = 1 · `wc -l` = 78 · head: `# arc HQ design system (v0.7) — the workroom`
 commit: (empty until proven)
 
 #### slice: 05
