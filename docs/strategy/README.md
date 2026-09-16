@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-09-16 — PLAN-face-v2 added: the face lane's Cycle-16 revision — the owner's v0.7 HQ becomes arc's only frontend as 36 four-file modules, PLAN-face.md NOT superseded; 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (25 files) | **ACTIVE — the operational layer** | Kickoff-ready: 23 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
+| `plans/` (26 files) | **ACTIVE — the operational layer** | Kickoff-ready: 24 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -569,6 +569,51 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     `PLAN-design.md` (v1) is **NOT superseded and does not move**: its Part 4 record stays
     LOCKED and inherited, and its REQ-01 two-stream evidence bar is still `active` — the
     next outbound blind package comes from a post-v2 explore under the packager lint.
+
+26. **2026-09-16:** `plans/PLAN-face-v2.md` added (face v2 — "The Workroom": the owner's
+    v0.7 HQ becomes arc's only frontend). **Trigger: owner ruling, 2026-09-15** — he supplied
+    a finished, self-consistent 36-room system (`arc-face-hq2/assets/arcface` v0.7, read from
+    source: `roomRegistry.js`, `HQ.jsx`, `ui/kit.jsx`, the v0.7 design-system spec,
+    `smoke.mjs` + `flows.mjs`) and ruled it final: "inime ellame arc oda frontend ithu than…
+    ellame working modules". Third instance of the standing informative→operable expectation,
+    also carried by the Build-out Mandate (2026-08-09). Decisions **FV2-A…N** adjudicated at
+    landing; §10's rejected registry carries the graveyard. Core: `face/` stays the home
+    (ADR-1316 unchanged) and the **module contract replaces the room-file layout** — four
+    files per module and no fifth (`module.mjs` manifest · `fold.mjs` pure and node-importable
+    with no install · `ops.mjs` verbs · `View.tsx` render with no branch), ringed folders under
+    `face/src/modules/`, so a new arc lane gets a working room by adding ONE folder plus its
+    served registry row and no shell file is edited · the served registry stays the only room
+    list, orphans FAIL both directions (ADR-1306) · **council renders `--accent-dim` and violet
+    stays the non-real family alone** — v0.7 merges the two, `tokens.css` collision #2 separated
+    them with computed contrast reasoning, and the token file is where the reference and the
+    contract are made to agree · the token source gains a second mood (`html.hq` dark +
+    `html.hq.hq-light` paper, `--blue` for non-money progress), ratios computed per mood, the
+    generated copy still `--check`-guarded (ADR-1308) · Tailwind v4 enters L3 ONLY, `lib/*.mjs`
+    stays dependency-free so CI can still exercise the logic without an install · **no facts
+    snapshot in the product** (the 137 KB `arcFacts.js` stays in the design; the door serves a
+    fact or the room renders `NOT SERVED`, grep-lint enforced — its ancestor was already stale
+    on arrival at 22 commands / 23 agents against the frozen 26 / 30) · the brain keeps
+    `POST /api/ask` with zero write tools, no provider key in the browser, no approve/reject in
+    `ASK_ACTIONS` (REQ-07, E2, the 2026-08-24 SOURCE.md ruling) · **the WORK door** —
+    `/api/op/:id/plan|apply`, two-phase, with a per-op no-second-path fixture proving every op
+    shells the real CLI; file writes land on `feat/face-*` only, `main` untouchable, **merge
+    never exists in the face**; a tool's own refusal renders verbatim · the four extra rooms
+    (factory · executor · agents · story) are kept and exempted BY NAME rather than deleted to
+    satisfy a lint, and the three planned rooms (ops · trader · discover) stay dotted with every
+    write `REHEARSAL` · the design's own `smoke.mjs` + `flows.mjs` port across with their
+    frozen-string assertions (button text, placeholders, `data-*`, the h1 sentence, the events
+    emitted) rather than being re-invented — the single largest saving in the plan. Tier L, 22
+    days in three banked blocks (look 5d · rooms+truth 11d · verbs 6d) **+ 2 real dogfood days**,
+    phases P00→P07, with P03 run as five ring batches each exiting with its own `NOT SERVED`
+    list that P04 builds routes against. **Hard prerequisite: Cycle 15 closes first**
+    (`/arc-phase-done 09` → `/arc-retro`) with REQ-10 recorded **NOT MET and carried** —
+    `face-dogfood` reads 1 matched / 59 decided outside the face / 1 of 5 days, and dogfooding a
+    surface this cycle replaces measures nothing. The **two-day** dogfood bar is the owner's call
+    on the record (the company's first goal is venture revenue, and the money chain is blocked on
+    calendar-gated work); it claims the surface is operable and explicitly NOT that the habit
+    holds. `PLAN-face.md` (v1.0) is **NOT superseded and does not move**: it stays in `plans/` as
+    Cycle 15's frozen decision record, the same way `PLAN-design.md` stands beside
+    `PLAN-design-v2.md`.
 
 ## Provenance
 
