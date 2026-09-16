@@ -1,107 +1,68 @@
-# Phase 03 — L2 `arc dash` (the steel thread of the doors)
+# Phase 03 — The 36 modules, read-side, in five ring PRs
 
-**Goal (one line):** one zero-dep node server in the arc repo (product `hq`): ONE read
-door + ONE decision door + ask proxy, fixture-proven, attacked by two fresh agents.
-**Appetite:** 4 days (day-2 checkpoint: spine-health reader landed + `arc-inbox`
-function extracted, else the remaining deliverables — decision door, hostile-payload
-fixtures, ask proxy, sim/replay modes, journal, two attacker passes — do not fit days
-3–4 and Phase 03 splits at day 2; block B tripwire at day 4: parity + reader lint +
-<1 s fixture green, else Tape cut to a day picker; parity not green → L3 does not
-start, ship L2 alone)
-**Depends on:** phase-00
+**Goal (one line):** REQ-01 + REQ-05 — all 36 v0.7 modules render in both moods from what the door serves, and every gap is a named `NOT SERVED` entry instead of a bundled fact (ADR-1324).
+**Appetite:** 7 days — command 1d · kernel 2d · factory 1.5d · money 1.5d · company 1d
+**Depends on:** phase-02
+**Serves:** REQ-01, REQ-05
+**Branches:** `feat/face-v2-03-command` · `-kernel` · `-factory` · `-money` · `-company` — one PR each, in that order.
+**Preconditions (STOP if absent):** Phase 02's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 02` from the main clone.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] read door: `/api/spine?since=<ULID>` · `/api/health` · `/api/brief` · `/api/inbox` ·
-      `/api/pnl` · `/api/board` · `/api/lane/:x` · `/api/registry` · `/api/file/:id`
-      (allow-listed sanctioned ids only, through the lints' imported parsers — ADR-1301)
-- [ ] spine-health reader (quarantine counts by refusal code, idem-index size, torn lines)
-      added to `spine.mjs` itself **via `/arc-change`** — no consumer opens `_quarantine/`
-      or `derived/`
-- [ ] the read door refuses to serve **live mode** from inside a linked worktree —
-      `assertNotLinkedWorktree` extended to `arc dash`'s live-mode boot path; a worktree
-      instance exits with a named refusal instead of serving an empty/stale spine as
-      current (retro 2026-07-28: a day with zero receipts read as "no work happened");
-      fixture/sim/replay modes with an explicitly named spine path stay allowed —
-      labelled, never as live
-- [ ] decision door: `arc-inbox` approve/reject extracted into an importable function
-      (via `/arc-change`), `/api/decide` calls it; **byte-parity fixture** green
-      (CLI vs door → every envelope key identical except `id`/`ts` — the LIVE envelope
-      carries 16 keys, counted off a real line 2026-08-19; the design source's "15" was a
-      stale doc count, and the fixture derives the key list from the emitted event itself,
-      **`actor` named and asserted identical** — the fixture states both callers'
-      actor values explicitly and fails if the door substitutes its own); route-
-      enumeration fixture proves no other mutating route
-- [ ] ask proxy: `/api/ask` shells to `arc-run --process face-ask` (stub acceptable until
-      Phase 07 lands the process — refusal is the honest response before that)
-- [ ] security — the full auth/origin matrix, not three words (second-opinion finding
-      4): bind the literal `127.0.0.1` (an IPv6 `::1` instance only if explicitly
-      configured, same rules); per-session token travels in the `Authorization` header
-      ONLY — never a cookie, never a query string — so a hostile page cannot ride
-      ambient credentials; requests with an absent, `null`, or non-matching `Origin`
-      are rejected on EVERY route with a named refusal; zero CORS allowances (no
-      preflight approval ever); a hostile-local-page / DNS-rebinding fixture proves a
-      browser page on another origin can neither read nor decide
-- [ ] output contract: JSON values are served display-safe (HTML-escaped at the
-      serializer per the design source) and that representation contract is WRITTEN
-      into the door's docs — byte-parity (REQ-03) is about the spine WRITE, never the
-      read representation; hostile-payload fixtures green at the door (`<script>`,
-      RTL/bidi, 64 KB body → escaped, capped)
-- [ ] cursor fixture: 10k-event fixture spine, `since=` pagination, **<1 s p95**, plus a
-      torn-line / mid-write day-file case (a truncated last line in the currently-open
-      day-file, the same class the spine-health reader counts) — the door skips or
-      quarantines it without breaking the cursor or hanging the page (assumption row 1)
-- [ ] cursor CONTRACT written and fixture-tested (second-opinion finding 6): `since=` is
-      ULID-exclusive with stable total ordering; page cap + `next` cursor named in the
-      response; a malformed or unknown cursor is a named refusal, never an empty 200;
-      mid-read appends to the open day-file cannot skip or duplicate events (line-
-      boundary reads; sealed days are the immutable replay boundary per REQ-05)
-- [ ] as-of REPLAY contract on the read door (second-opinion finding 3): every
-      spine-derived endpoint (`spine` · `brief` · `inbox` · `pnl` · `board` · `lane`)
-      accepts an `asof=` day parameter and re-derives from the log ≤ that day; one
-      replay-identical fixture PER endpoint (full log vs replay → same JSON bytes on
-      sealed days) — written here so Phase 04's Tape consumes a contract, not a hope
-- [ ] sim + replay modes served and labelled (ADR-1310); local request journal written
-      (evidence for REQ-10, not truth)
-- [ ] reader-only lint (extended to L2) green; **two fresh attackers** run — one on the
-      decision logic, one on the HTTP/shell boundary — attacker prompt carries the lane's
-      fixed-defect list; found holes fixed + pinned as fixtures
-- [ ] tests green on CI per job; tracker updated
+**Per ring PR**
+- [ ] Every module in the ring is four files (ADR-1320) and green on `face-pure` + `face-coverage`.
+- [ ] Browser suite: the ring's modules open with 0 console errors and 0 exceptions in both moods on every Node ≥20.19 leg.
+- [ ] `initiatives/face/evidence/phase-03/not-served-<ring>.md` names every gap (module · panel · the route it needs) — this list, not PLAN-face-v2 §5.2's table, is what Phase 04 builds.
+- [ ] `face-dogfood` read and its count recorded in PROGRESS.md as a usage TREND (never counted toward REQ-10) — from the command ring onward.
+- [ ] Carried Cycle 15 findings (`initiatives/face/archive/evidence-cycle15-2026-09-16/phase-09/room-sweep-by-eye.md`) closed in their ring: **F1** the ADR band map names lanes, not rooms (the module that renders it) · **F2** the scheduler lede promises only what the module shows (kernel) · **F3** planned `trader` never wears LIVE (money, ADR-1328).
+- [ ] factory ring adds the named exemptions for `factory` · `executor` · `agents`; company ring adds `story` (ADR-1327) — unless the owner's §13 item 5 ruling gives a room a registry row instead.
+
+**Whole phase**
+- [ ] Shot review contract: candidate shots captured on the owner's box with the SAME contract as Phase 00's baseline (1440×1000, both moods, Chrome version recorded, `initiatives/face/evidence/phase-00/baseline-shots.json`); per ring, the `design-critic` agent — fresh, never the ring's author — judges each module's candidate against its baseline and writes `initiatives/face/evidence/phase-03/shot-review-RING.md`, one line per module × mood classed VIOLATION / BELOW-BAR / WEAKNESS / POLISH; a VIOLATION or BELOW-BAR blocks that ring's merge.
+- [ ] 36/36 in both moods on CI; a fresh agent reviews per-module shots against the v0.7 baseline with 0 VIOLATION and 0 BELOW-BAR (ADR-0049; ADR-1322's council colour is a declared delta).
+- [ ] Facts-bundle lint (FAIL from birth) refuses a planted facts module under `face/src/**`.
+- [ ] Block B tripwire reading (day 5 of 10, after command + kernel) recorded in PROGRESS.md; if 14 modules are not green → cut the remaining bespoke folds to generic renders.
+- [ ] The Phase 00 baseline list of throwing v1 rooms is empty.
+- [ ] Two fresh attackers (facts-bundle lint decision logic · module/browser shell-OS boundary), each carrying the lane's fixed-defect list, run against the ring PR that SHIPS the facts-bundle lint — not deferred to the phase close (retro-log 2026-08-02: bind the attack to the PR that ships the gate); holes fixed and pinned.
+- [ ] `/arc-phase-done 03` once, after the company ring merges.
 
 ## Verification plan
 
-One coarse line, refined at phase start via `/arc-change`: all fixtures in the PLAN's
-fixture set for REQ-09 green on CI per job (parity · hostile payloads · cursor <1 s ·
-route enumeration · replay-identical), each asserting it RAN before what it printed —
-**the parity fixture's CLI-side run targets a non-canonical fixture spine path**, since
-`assertNotLinkedWorktree` refuses any `arc-inbox` emit from this lane's worktree
-(`arc-face`) or from a CI runner, neither of which is the main clone.
+Coarse (refined via `/arc-change` when the phase starts): per ring, the browser suite's module count for that ring RED before its modules exist, then green per job; the whole-phase shot review by a fresh agent.
 
 ## Rabbit holes in this phase
 
-Endpoints beyond the sanctioned set · websockets/daemon (no-go) · a sqlite cache before
-the fixture demands it (assumption row 1 decides, not taste).
+- **Re-laying the owner's rooms** — markup moves as-is; only decisions move into `fold.mjs`.
+- **"Fixing" a `NOT SERVED` panel with a fetched file or a constant** — the facts-bundle lint and ADR-1324; the gap goes on the list.
+- **Planned rooms looking live** — rendered from `planned-rooms.json`, dotted, REHEARSAL (ADR-1328).
 
 ## Out of scope for this phase
 
-All L3 UI (Phase 04) · `face:` manifest sections (Phase 05) · the real `face-ask` process
-(Phase 07) · hosting/tenancy (ADR-1314).
+New door routes → Phase 04 · any verb, button that writes, or flow → Phase 05.
 
 ## Your-setup / pending
 
-None — localhost only.
+The owner runs the git for five ring PRs and may score a ring BELOW the reference (cycle kill criterion).
 
 ## Non-negotiables (verbatim from PLAN)
 
-- One write path, mandatory reason, byte-parity with the CLI (E2, E1, ADR-1302).
-- Reader-only over the spine; no second truth in the UI (SPINE-G/ADR-0030, A5, ADR-1301).
-- Every number has *Why?* precedents; no invented numbers, ETAs, health emoji (A1, E3).
-- Real vs simulated/rehearsal/drill never mixed or summed; MISSING ≠ 0; ABSENT with reason (E3, ADR-1313, ADR-1018, ADR-0416).
-- Kinds, gates, lanes, ADR ids verbatim (A5); unknown kinds/profiles render generically — nothing dropped silently (E1, ADR-1306).
-- Seals for every forever-human action; no button ever exists for them (E2, ADR-1303, ADR-0069 b1, ADR-0305, ADR-0110, ADR-1203).
-- Localhost + token; no PII; escaped serializer (ADR-1312, ADR-0410, LED-C, SPINE-E).
-- Design lane law: three theses, blind jury with reference, owner pick + prediction, two critique rounds max (ADR-1308, ADR-0034…0049).
-- Every new face lint starts WARN-first in the TRIAL set and earns FAIL through the trial ledger (A1) — `face-coverage` excepted (a validator over the tree, FAIL from birth like policy-lint, ADR-1311).
-- The Engine room's unlock-ladder rung indicator reads evidence only — the rung is never a control (E2).
-- Tests green on CI per job; two fresh attackers per gate (decision logic + shell/HTTP boundary); attacker prompt carries the lane's fixed-defect list; vacuous-pass rule (assert it RAN before asserting what it printed).
-- Zero product-code writes before explicit owner approval of this plan; L3 lives in-repo at `face/` with its own `package.json` and Vite build, and nothing in `.claude/scripts/**` gains a dependency (ADR-1316 supersedes ADR-1300 on placement, ADR-1309).
+<!-- Generated from PLAN.md at kickoff; resynced by /arc-change. Never hand-edited. -->
+
+- The served registry is the only room list: modules attach to served ids, orphans are checked both ways, and the four extra rooms are exempted by name only (ADR-1306, ADR-1321, ADR-1327).
+- Tokens have one source, `docs/design/system/tokens.css`; `face/src/tokens.css` is generated and never hand-edited, as `.claude/scripts/core/face-tokens.mjs --check` enforces; no colour literal under `face/src/modules/**`; council renders `--accent-dim` and violet is the non-real family alone (ADR-1308, ADR-1322).
+- Every decision lives in a `.mjs` that node imports with no install: `fold.mjs` imports nothing from React, Vite or three, `View.tsx` carries no branch worth asserting, and Tailwind stops at L3 (ADR-1320, ADR-1323).
+- `POST /api/decide` stays byte-parity with `arc-inbox`: the parity fixture is green on every PR of this cycle and is a Phase 05 exit criterion (ADR-1302, ADR-1333).
+- Zero new spine kinds: every op emits a kind already in `validate.mjs` KINDS, and an op that would need a new one does not ship (ADR-0026, ADR-1334).
+- Branch-only writes: a file-touching op writes to a `feat/face-*` branch, shows the diff and stops; `main` is untouchable and merge never exists in the face (ADR-1326).
+- The WORK door has no logic of its own: each op shells the same script a hand-run calls, proven per op by a no-second-path fixture; an op without a green fixture ships read-only with an honest badge (ADR-1326).
+- The SESSION door starts `arc-run --driver …`, never a harness binary (ADR-1326).
+- No provider key in the browser; Ask keeps zero write tools and `ASK_ACTIONS` = `open_room` · `set_speed` · `enter_hq` (ADR-1325).
+- No facts bundle under `face/src/**`: a module cites a door route or renders `NOT SERVED` (ADR-1324).
+- No new surface outside `.claude/scripts/` this cycle; the layout move belongs to the distribute lane, in one atomic PR (ADR-1319).
+- Real vs simulated / rehearsal / planned are never mixed or summed; planned rooms render dotted and every write inside them says REHEARSAL (ADR-1313, ADR-1328).
+- Both moods ship together from Phase 01; light is never deferred to a later batch (ADR-1331).
+- The reference is the target: v0.7 is the canonical design and the ported harness's frozen strings are the bar (ADR-1318, ADR-1330).
+- REQ-10 claims the surface is operable over two real days and never claims the habit holds (ADR-1329).
+- Localhost + token; no PII in git, the door or the intake; escaped serializer (ADR-1312).
+- Zero product-code writes before explicit owner approval of this plan; each phase lands as its own feat branch + PR, and a phase closes through `/arc-phase-done` from the main clone before the next phase's branch opens (ADR-1332).
+- Tests green on CI per job, never run on this box; the browser harness runs on every leg with Node ≥20.19 and Node 18 is a named, counted skip; structural face lints (`face-pure`, colour-literal, facts-bundle) FAIL from birth, heuristic arms start WARN-first; two fresh attackers per new gate (decision logic + shell/OS boundary) carrying the lane's fixed-defect list; assert it RAN before asserting what it printed (ADR-1335, ADR-1336).
