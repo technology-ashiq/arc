@@ -85,18 +85,18 @@ tier: static
 sources: phase-00-spec.md
 decision: copied byte-for-byte, not rewritten; its first line already names itself v0.7 and says rooms are polished against it, which is the role ADR-1318 gives it
 result: `sha256sum SRC DST | awk print-1 | uniq | wc -l` = 1 · `wc -l` = 78 · head: `# arc HQ design system (v0.7) — the workroom`
-commit: (empty until proven)
+commit: f063dfb6
 
 #### slice: 05
 
 title: `initiatives/face/contracts/modules-v2.json`, derived by a script from `src/hq/roomRegistry.js` + `rooms.generated.json`, never typed by hand: one row per module — `id` (always the SERVED id) · `alias` (the v0.7 id when it differs) · `ring` (read from `rooms.generated.json` for served ids and from `roomRegistry.js` for extras; both carry it and agree today — on disagreement the served ring wins and the delta report names it) · `class` (`served` | `served-planned` | `extra`) · v0.7 `reads` — plus the served entries that get no module (`chat-mcp` generic, `lane` template). Expected per PLAN § Module inventory: 36 modules = 29 same-id + 3 renamed + 4 extra; if the script disagrees, its output wins and the delta report says why.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
+proof: `node .claude/scripts/hq/face-modules-contract.mjs` writes the contract and `--check` exits 0 with the derived counts; the same --check against a scratch copy must exit 1 for a hand-edited ring (DRIFT) and 1 for an unserved, unaliased, non-extra room (ORPHAN naming it), 0 for the untouched control, 2 for missing inputs; the pair is committed as two face-l3.bats tests so CI replays it on every configuration
+tier: contract
+sources: phase-00-spec.md, code:grep-fallback(1485; no .codegraph/), adrs(37), learning(3), retro(21), churn(463)
+decision: the derivation lives at .claude/scripts/hq/face-modules-contract.mjs (ADR-1319: no new surface outside .claude/scripts); it reads roomRegistry.js as TEXT because the file imports phosphor icons and node cannot import it with no install; renames come from the registry's own ROOM_ALIASES (an alias key that is a served id), not a hand list; reads come from PLAN-face-v2 section 5.2's tables; output is deterministic (no timestamp) so --check can compare bytes, CRLF-normalised for the windows checkout; the main-guard realpaths both sides
+result: `wrote initiatives/face/contracts/modules-v2.json -- 36 modules = 29 same-id + 3 renamed + 4 extra (3 served-planned) · 34 served, 2 without a module · 0 ring conflict(s)` · renames `today<-overview engine-room<-engine council-chamber<-council` · extras `factory executor agents story` · no module `chat-mcp:generic module, reported lane:not a room module` · hand replay: control exit=0 · drift exit=1 (DRIFT) · orphan exit=1 (`ORPHAN … ghost-room`) · bad-root exit=2 · missing-inputs exit=2 · face-coverage all covered · embedded-program probe failures=0
 commit: (empty until proven)
 
 #### slice: 06
