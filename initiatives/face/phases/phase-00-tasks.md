@@ -49,18 +49,18 @@ tier: static
 sources: phase-00-spec.md, code:grep-fallback(1368; no .codegraph/), adrs(37), learning(3), retro(22), churn(352)
 decision: v0.4 moved with git mv, v0.7 copied with tar excluding four directories — `.gstack/` (a tool-state dir the spec did not name) excluded too; the three code comments and the tokens.css provenance line that cited the v0.4 path now cite arcface-v0.4, the token copy regenerated (face-tokens --check exit 0); SUPERSEDED.md in arcface-v0.4 and both explore rounds
 result: `source files=108 copied files=108 missing=0 extra=0 differ=0 excluded-dirs-present=0` (exit 0) · `git ls-files …/arcface-v0.4 | wc -l` = 70 · `git ls-files …/arcface | wc -l` = 108 · `face-tokens: face/src/tokens.css matches docs/design/system/tokens.css (14282 bytes)`
-commit: (empty until proven)
+commit: 7e428de6
 
 #### slice: 02
 
 title: PII grep of the whole intake (owner email, phone numbers, LexOS contact values held in `~/.arc-private/legal/lexos`) is clean; any file that carries them is excluded and named in `SOURCE.md`. The arc repo is public.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
+proof: scratchpad pii-scan.mjs over the 108 intake files — the owner email, every contact-shaped value in ~/.arc-private/legal/lexos/*.yaml, any email, any Indian mobile number and common secret-key shapes must all count 0, with files scanned > 0 and private values loaded > 0; a planted-PII mutant must exit 1; gitleaks dir over the same tree must report no leaks
+tier: static
+sources: phase-00-spec.md, code:grep-fallback(1481; no .codegraph/), adrs(37), learning(3), retro(20), churn(461)
+decision: counts and file names only, never a matched value, so the proof itself cannot leak; nothing needed excluding — SOURCE.md (slice 03) records the clean result
+result: `scanned files=108 private contact values loaded=8` · `literal: 0 file(s)` · `email: 0 file(s)` · `indianPhone: 0 file(s)` · `secret: 0 file(s)` (exit 0) · mutant: `literal: 1 … email: 1 … indianPhone: 1 … secret: 1` MUTANT_EXIT=1 · gitleaks: `scanned ~1337810 bytes (1.34 MB)` `no leaks found` (exit 0)
 commit: (empty until proven)
 
 #### slice: 03
