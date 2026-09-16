@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-face (Cycle 15, opened 2026-08-19)
 phase: 09
 appetite: 32d
-burn: 14d
+burn: 14.5d
 blocked-on: nothing structural — the design gate is DISCHARGED. The owner supplied the design himself rather than picking from the explore rounds, so the PICK is moot and block A can no longer take its second BELOW-BAR strike. Two items remain and neither blocks the build: one `hq.policy.yaml` row for face-ask (edit-denied to the machine by design, and not useful until the engine-lane empty-allowlist seam exists), and one owner ruling on the reference brain’s approve/reject action (see `docs/design/reference/face-hq/SOURCE.md`).
 depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersedes ADR-1300 on placement). A new repo could not be given CI from this session, and an ungated layer is not a layer that ships.
 
@@ -31,9 +31,9 @@ depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersede
 | 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | **BUILT** — all rooms render (33 at the time, **34** since ADR-1317 generated `chat-mcp`): 22 generic · 2 index · 9 bespoke · 1 planned; re-swept 2026-08-24, 0 crashed |
 | 07 | Ask arc — `face-ask` process + router row + `hq.policy.yaml` row + 20 golden questions + drafts-to-stamp; zero write tools | 3d | deterministic half BUILT and proven through the face (VERIFIED, citations resolved); model half waits on the engine seam |
 | 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | **EVIDENCE HARNESS BUILT + ONE-COMMAND START.** `node .claude/scripts/hq/arc-face.mjs` from the MAIN clone starts the door and the app, installs once from the tracked lockfile, and prints one URL with the token in it — the three-step morning (two terminals plus hand-copying a 32-char token) is what ends dogfoods, not the product. `face-dogfood.mjs` then settles the requirement by matching L2’s journal against `decision.recorded`; today it reads **NOT MET: 1 matched, 59 decided outside the face, 1 of 5 days**. The five days are calendar, not code. **Next cycle (FV2-L, 2026-09-16):** REQ-10 closes NOT MET and moves to face v2 as its Phase 07 |
-| 09 | Nothing missing — the completeness sweep: **nine** inventories derived from the WORLD (gates · jobs · ventures · adrs-by-band · plans · capabilities · planned-rooms · ci · **hooks + lints**), `chat-mcp` generated, four empty stations filled, `/api/lane/:name` carries phases, zones can no longer hide a hold | 3d | **BUILT + ATTACKED, CI green per job (run 35097580662, 19/19); close pending the by-eye room sweep** — all nine audit gaps closed, then two fresh attackers found **20** more holes (13 derivation · 7 shell/OS, zero overlap) and every one is fixed. The exemption list is now EMPTY: the `hooks`/`lints` exclusion was re-measured and was itself false, hiding an uncovered `policy-decide.sh`. 220 homed rows; coverage selftest 93 arms; l3-logic 262 · dash-doors 78 · readers 31 |
+| 09 | Nothing missing — the completeness sweep: **nine** inventories derived from the WORLD (gates · jobs · ventures · adrs-by-band · plans · capabilities · planned-rooms · ci · **hooks + lints**), `chat-mcp` generated, four empty stations filled, `/api/lane/:name` carries phases, zones can no longer hide a hold | 3d | ✅ **CLOSED 2026-09-16** (`/arc-phase-done`, evidence bundle verified; REQ-01 validated). **BUILT + ATTACKED, CI green per job (run 35120217717, 19/19, 3388/3388 executed); by-eye room sweep done** — all nine audit gaps closed, then two fresh attackers found **20** more holes (13 derivation · 7 shell/OS, zero overlap) and every one is fixed. The exemption list is now EMPTY: the `hooks`/`lints` exclusion was re-measured and was itself false, hiding an uncovered `policy-decide.sh`. 220 homed rows; coverage selftest 93 arms; l3-logic 262 · dash-doors 78 · readers 31 |
 
-**Appetite burn: the machine header above (`burn: 14d` of 32d) is the operative figure — it is what `PORTFOLIO.md` reads, and ADR-0051 makes this file the truth the board derives from. The block accounting below is NARRATIVE and it has fallen behind: it stops at the Phase 07 deterministic half and counts nothing for Phases 04, 06, 08 or 09, so its “7 days” is a floor over an incomplete list, not a second total. It is left standing rather than patched with a number nobody measured — a burn figure invented to make two paragraphs agree is exactly the kind of unmeasured entry this lane spent a cycle removing from generated tables.** Block A (6d): Phase 00
+**Appetite burn: the machine header above (`burn: 14.5d` of 32d) is the operative figure — it is what `PORTFOLIO.md` reads, and ADR-0051 makes this file the truth the board derives from. The block accounting below is NARRATIVE and it has fallen behind: it stops at the Phase 07 deterministic half and counts nothing for Phases 04, 06, 08 or 09, so its “7 days” is a floor over an incomplete list, not a second total. It is left standing rather than patched with a number nobody measured — a burn figure invented to make two paragraphs agree is exactly the kind of unmeasured entry this lane spent a cycle removing from generated tables.** Block A (6d): Phase 00
 1d + Phase 01 v1 ~2d + the v2 open-brief round ~1d + reference intake and token extraction
 ~1d = **5d of 6d (83%)**. It closes INSIDE its appetite and its kill condition can no
 longer fire: that kill needed two BELOW-BAR owner scores, and the owner ended the round by
@@ -238,6 +238,33 @@ generic → Map animation → Tape play (keep as-of).
   false since ADR-1316. It is reworded to match ADR-1316 and resynced into all nine phase
   specs; Phase 09 never had that block. Appetite stays 32d, now honestly counted: Phase 09
   adds 3d, and Phase 08's 5 dogfood days move to face v2 under FV2-L, so 30d is counted.
+- 2026-09-16 — **Phase 09 CLOSED** (`/arc-phase-done 09 --lane face`). Shipped: nine
+  inventories derived from the world (7 gates · 2 jobs · 1 venture · 14 ADR bands over 266
+  files · 25 plans · 6 capabilities · 4 planned rooms · 4 CI workflows / 168 bats suites ·
+  hooks + lints), `chat-mcp` generated and drawn on the Map (34 stations), four stations that
+  used to be empty now carry rows, `/api/lane/:name` serves phases, and CI's honest
+  `not instrumented` state is homed in Review & Ship. **Tests:** CI run 35120217717, 19/19 jobs,
+  **3388 declared = 3388 executed** on every leg, 0 `not ok`. Live at close:
+  `face-coverage --selftest` 92 arms PASS / 0 FAIL, `face-coverage` all covered (221 homed
+  rows), `face-sections --check` in sync, `kickoff-lint --lane face` pass. **Rooms, by eye:**
+  from the main clone, 33 of 33 rail rooms plus the `lane` template opened, 0 console errors,
+  5 screenshots actually looked at (`evidence/phase-09/room-sweep-by-eye.md`). **Found by
+  looking, fixed here:** `contracts/room-map.md` and a comment in `face-coverage.mjs` still said
+  `hooks`/`lints` were exempt, with the numbers ADR-1317 §3a had measured false three weeks
+  earlier. The code was right and the words were not. Corrected, and the sync golden row
+  regenerated. **Found by looking, moved to face v2:** F1 the ADR map shows room names where it
+  promises lanes (`1300–1399 → Toolbelt`) · F2 the scheduler's lede promises next fire / last
+  outcome it does not show · F3 planned `trader` wears a LIVE pill. **Trigger scan:** no ADR
+  revisit condition is true and no assumption fired unrouted. Note on ADR-1311: face-coverage
+  failed twice this cycle on a legitimate addition (`PLAN-face-v2` → #226/#227 on main; the
+  design lane's 1400 band + hook on its branch). Under ADR-1311 both were TRUE findings,
+  because the contract makes homing a maintenance job, so the trigger is not counted as fired.
+  But all 25 plans map to `strategy` and every band maps to one room, so a derivation could
+  have written both rows. That belongs in face v2's two-way module↔registry reconcile
+  (FV2-D). **Actual vs appetite:** ~1d of 3d (built and attacked
+  2026-08-23 22:43 → merged 2026-08-24 02:19) + ~0.5d close on 2026-09-16.
+  **Metrics:** `amendments: 1` (the 2026-09-16 plan-drift `/arc-change`; the phase itself was
+  born by one) · `reopened: n`.
 
 ## Assumptions ledger — adjudicated by running the measurement, not by opinion
 
@@ -256,15 +283,15 @@ without one are named NOT YET EVALUABLE rather than quietly counted as holding.
 
 ## Now
 
-**Position (2026-09-16):** closing Cycle 15 so face v2 can start (`PLAN-face-v2.md`, FV2-L).
-Phase 09's build is merged and CI is green per job: run 35097580662, 19/19, and its tree
-matches `main` on every face path. The plan drift the close attempt found is fixed on
-`feat/face-c15-plan-drift` (done-log 2026-09-16).
+**Position (2026-09-16):** Phase 09 is **CLOSED** (done-log 2026-09-16, second entry). The
+plan drift is merged (#229). The rooms were opened by eye from the main clone, and the evidence
+bundle is written and verified. Cycle 15 is still open: `/arc-retro` has not run.
 
-**Next step:** merge that branch on green CI → from the main clone, open every room of the
-face in a browser (Phase 09 verification item 5 — never actually done by eye, and stale since
-`PLAN-face-v2.md` added a plan) → `/arc-phase-done 09 --lane face` → `/arc-retro --lane face`,
-closing with REQ-10 **NOT MET and carried**. Then the face v2 kickoff re-runs.
+**Next step:** merge `feat/face-c15-phase09-close` on green CI → from the main clone, leave
+the `phase.closed` + `approval.requested{gate: phase-done}` receipts → `/arc-retro --lane face`,
+closing Cycle 15 with REQ-10 **NOT MET and carried** (FV2-L) → the face v2 kickoff re-runs.
+Carry into face v2: the three sweep findings F1–F3 (`evidence/phase-09/room-sweep-by-eye.md`),
+and the ADR-1311 maintenance note in the done-log.
 
 ---
 

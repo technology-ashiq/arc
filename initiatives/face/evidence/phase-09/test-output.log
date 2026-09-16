@@ -1,0 +1,43 @@
+# Phase 09 close -- CI verdict, read per JOB (not the watcher exit code)
+run: 35120217717 (pull_request, PR #229) head 10de42f3a4fddc4c87d2e1996d9bfa13c2a3bb7b
+merged to main as a742fbf0; git diff 10de42f3 a742fbf0 = empty (tree-identical)
+jobs: success=19
+
+## executed-vs-declared reconciliation, per job
+selftest (ubuntu-latest, 20) :: reconcile: declared 3388, executed 3388
+selftest (windows-latest, 20, shard 8/12) :: reconcile: declared 294, executed 294
+selftest (ubuntu-latest, 22) :: reconcile: declared 3388, executed 3388
+selftest (macos-latest, 20, shard 3/3) :: reconcile: declared 1079, executed 1079
+selftest (windows-latest, 20, shard 4/12) :: reconcile: declared 250, executed 250
+selftest (macos-latest, 20, shard 2/3) :: reconcile: declared 1176, executed 1176
+selftest (macos-latest, 20, shard 1/3) :: reconcile: declared 1133, executed 1133
+selftest (windows-latest, 20, shard 11/12) :: reconcile: declared 326, executed 326
+selftest (windows-latest, 20, shard 5/12) :: reconcile: declared 304, executed 304
+selftest (windows-latest, 20, shard 7/12) :: reconcile: declared 270, executed 270
+selftest (windows-latest, 20, shard 1/12) :: reconcile: declared 218, executed 218
+selftest (windows-latest, 20, shard 2/12) :: reconcile: declared 285, executed 285
+selftest (windows-latest, 20, shard 10/12) :: reconcile: declared 324, executed 324
+selftest (windows-latest, 20, shard 9/12) :: reconcile: declared 328, executed 328
+selftest (windows-latest, 20, shard 6/12) :: reconcile: declared 299, executed 299
+selftest (windows-latest, 20, shard 3/12) :: reconcile: declared 234, executed 234
+selftest (ubuntu-latest, 18) :: reconcile: declared 3388, executed 3388
+selftest (windows-latest, 20, shard 12/12) :: reconcile: declared 256, executed 256
+not ok lines across all jobs: 0
+
+## the Phase 09 suites (ubuntu-latest, 20)
+ok 1275 face-coverage: every lane, kind, command, agent and product in the tree has a home
+ok 1276 face-coverage fails CLOSED on every mutant arm, and exits non-zero on a real gap
+ok 1277 face-coverage REFUSES a tree with a real gap (negative arm on disk, not in memory)
+ok 1279 face-sections REFUSES a hand-edited section (negative arm)
+ok 1282 face-sections REFUSES every broken registry input (mutant arms)
+ok 1283 face-sections REFUSES a hand-edited registry (negative arm on disk, not in memory)
+ok 1286 dash doors: auth+origin matrix, cursor contract, refusals, XSS escape, one write door
+ok 1287 dash parity: CLI and door emit byte-identical decision.recorded (only id/ts/sha differ)
+ok 1291 L3 logic runs with no install and no build, and every check passes
+
+## live, on this box, at the close (single gate scripts, not suites)
+node .claude/scripts/core/face-coverage.mjs --selftest -> exit 0, 92 arm lines PASS, 0 FAIL
+  face-coverage selftest: PASS -- fails closed on every arm, passes the real tree
+node .claude/scripts/core/face-coverage.mjs -> face-coverage: 46 kinds, 16 lanes, 26 commands, 30 agents, 16 products, 7 rules, 6 processes, 7 gates, 2 jobs, 1 ventures, 14 ADR bands (266 files), 25 plans, 6 capabilities, 4 planned rooms, 4 CI workflows (168 bats suites), 221 homed contract rows -- all covered
+node .claude/scripts/core/face-sections.mjs --check -> face-sections: every face: section matches the contract (16 mapped, 0 unmapped by design); registry in sync (34 rooms)
+node .claude/scripts/plan/kickoff-lint.mjs --lane face -> kickoff-lint: all checks passed ✔

@@ -172,15 +172,21 @@ Eight inventories are now derived from the WORLD rather than from the contract: 
 `.mcp.json` + `docker/`) · `plannedRooms` (`planned-rooms.json`) · `ci`
 (`.github/workflows/`).
 
-Two exclusions remain, and **each now names the file that makes it true**:
+~~Two exclusions remain~~ **No exclusion remains** (ADR-1317 §3a, same day, after two fresh
+attackers). The table that stood here exempted `hooks` ("15 units behind 7 event-level rows")
+and `lints` ("29 rows over 34 lint-named scripts"). Both sentences were measured false, and
+both inventories are now derived:
 
-| inventory | why it is not derived 1:1 | the file |
+| inventory | derived as | reader |
 |---|---|---|
-| `hooks` | 15 units behind 7 **event-level** rows — the inventory is the event, because that is what a person reasons about | `.claude/hooks/*.d/` |
-| `lints` | 29 rows over 34 lint-named scripts; `legal-lints (4)` is deliberately one row for four | `.claude/scripts/**/*lint*` |
+| `hooks` | the event directories `.claude/hooks/*.d/` **plus** every top-level `.sh` that is not one of their wrappers (measured 2026-09-16: 6 events + `_dispatch.sh` + `policy-decide.sh` = 8) | `treeHooks` |
+| `lints` | every lint-named script under `.claude/scripts/**` that is **not** under a `lib/` directory. `lib/` holds implementations of a row, not rows. That is a criterion, not a list of filenames (measured 2026-09-16: 13) | `treeLints` |
 
 An exclusion that does not name its file cannot be checked, and gets inherited by rows it was
-never written about. That is precisely how `gates` kept a reason that belonged to `lints`.
+never written about. That is how `gates` kept a reason that belonged to `lints`. *This
+paragraph kept the false table for three weeks after §3a removed it. The Phase 09 close
+(2026-09-16) caught it, because it opened the contract instead of trusting the tracker's
+"exemption list is EMPTY".*
 
 **Nine new mutant arms** were added so none of the new checks can rot into a vacuous pass;
 each corrupts a real row and asserts the gate names the ghost.
