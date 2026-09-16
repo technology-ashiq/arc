@@ -146,7 +146,7 @@ is prose with a shell script next to it.
 | # | Finding | Why it matters |
 |---|---|---|
 | L1 | **The gates are inert** (above). Zero production callers; the marker is never armed. | REQ-02's "named technical mechanism" is not in the path. The negative control tests compliance, not refusal. |
-| L2 | **The read boundary covers `Read` only.** `ui-composer` also holds `Grep` and `Glob`, and either returns a sibling variant's content. | This is **verbatim the assumptions-ledger trigger** written at kickoff. It is FIRED and owed a `/arc-change` route. |
+| L2 | **The read boundary covers `Read` only.** `ui-composer` also holds `Grep` and `Glob`, and either returns a sibling variant's content. | This is **verbatim the assumptions-ledger trigger** written at kickoff. It is FIRED and owed a `/arc-change` route. **Routed 2026-09-16** — PLAN's ledger row now carries `FIRED 2026-08-24`. |
 | L3 | **The composer-scope suite is vacuous on the production path.** All 15 tests pass the path as `$1`; the real dispatcher passes it on **stdin**. Delete the stdin branch and every test still passes. | Fifth vacuous-pass instance this cycle. See S2 — the same hole from the shell side. |
 | L4 | **`--surfaces` only requires markers on `<section>`.** A page built from `<div>`s passes with zero markers. | Cycle 3's variants were div-built pages. The gate does not cover the shape it was written for. |
 | L5 | **`selfreview` is opt-in.** Three iterations on disk and no `self-review/` directory means no gate at all. | An absent artifact reads as a pass. Same class as L4: fail-closed is the contract, fail-open is the behaviour. |

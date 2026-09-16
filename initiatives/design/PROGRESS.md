@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
 phase: 01
 appetite: 12.5d
-burn: 1.5d
+burn: 3d
 blocked-on: —
 depends-on: —
 
@@ -73,7 +73,12 @@ the engine lane recorded at 18 -> 6. A third round would be patching against the
 
 ## Appetite burn
 
-**1.5 of 12.5 days used.** Kill criteria: 50% tripwire if phases 00+01 are not green by end of day 3;
+**3 of 12.5 days used (24%)** — corrected 2026-09-16 from a `1.5d` that stopped moving when Phase
+00 closed; the branch carries commits on three build days (08-23, 08-24, 08-25). **The 50%
+tripwire is CROSSED:** day 3 ended with Phase 01 open. Its stated purpose is to reassess the
+renderer approach, and the renderer phase (00) closed green on day 1 — the overrun is Phase 01's
+two adversarial passes (42 findings), not the renderer. The scope-cut conversation is owed to the
+owner before Phase 01's demo or any Phase 02 build continues. Kill criteria: 50% tripwire if phases 00+01 are not green by end of day 3;
 taste tripwire before any rival spend if the post-Phase-03 controlled owner score does not beat
 a FRESHLY MEASURED plain-prompt bar after one re-run. The `~40/100` figure was carried forward
 from prose and has no measurement behind it, so Phase 03 re-derives it on the same brief, item
@@ -147,10 +152,32 @@ with ADR-1412's eight rows, `design-sources-lint.mjs` as the permission gate, ve
 control plus one mutant per invalid-field class. Registry deliberately does **not** ship to
 consumer projects — it carries the owner's approvals.
 
-**Next step:** read CI per JOB at `2c2481e6` (a run was in flight when the session ended), then
-Phase 02 Slice B — the `design-curator` agent at balanced-workhorse citing ADR-0069, the
-robots.txt preflight, and the fetch interface + fake. Open findings and the running defect list
-for the next attacker prompt are in
+**Update 2026-09-16 — resumed after a three-week gap.**
+
+- **An abandoned composer boundary had locked this worktree.** `lexos-p01/variant-a` was armed on
+  08-25 by an explore run that never reached `compose-done`, and every Read, Grep and Glob here was
+  refused — the operator's included — until it was released by hand. Released with
+  `composer-scope-check.sh --end lexos-p01 variant-a`; the variant's files are untouched. Routed
+  via `/arc-change` as a Phase 01 exit criterion plus an ADR-1415 amendment: the marker's `pid=` is
+  the `--begin` process's own pid and is dead immediately, so it can never be a liveness signal,
+  and age must never relax a refusal.
+- **The kickoff assumption on the read allowlist is marked `FIRED 2026-08-24`** in PLAN's ledger.
+  Its fix (`5e33f34b`, matcher `Read|Grep|Glob`) and its tests were already in; the route was not.
+  The matcher change was the "owner row" listed above as blocked — it is closed.
+- **`origin/main` merged in** at `2f49aad1` (8 commits, incl. #225's calendar fix), no conflicts;
+  `tree-manifest.txt` re-derived after the merge and byte-identical to the merged file (352
+  lines). `arc-ci` run **35120950390**: 14/19 jobs green, and the 5 red selftest jobs fail on
+  `tests/design-refpack.bats` alone (14 each) — Slice B's red-first tests, as designed —
+  with `reconcile: declared 3535, executed 3535`.
+- **Phase 01's live demo brief is an owner question.** The spec names `lexos-case-workspace`
+  because it declares mobile `yes`; `face-hq` declares mobile `no` and cannot prove the
+  two-viewport path. LexOS explores are already committed four times, but committing more LexOS
+  pixels to this public repo is an outward action that needs the owner's explicit OK.
+
+**Next step:** the owner rules on the crossed tripwire (recommendation: no cut, continue all nine
+phases on the corrected burn). Then the stale-boundary fix red-first -> CI -> two fresh attackers,
+then Phase 01's live demo, then Phase 02 Slice B. Open findings and the running defect list for
+the next attacker prompt are in
 [`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md).
 
 **Owner items running in parallel** (none block Phase 00):

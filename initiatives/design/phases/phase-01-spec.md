@@ -46,6 +46,18 @@ rendered and correctly classified as product canvas or documentation.
 **Both**
 
 - [ ] Negative control: a composer attempting to read a **sibling** variant's render is refused
+- [ ] **An abandoned boundary is diagnosable and never fails open** (`/arc-change` 2026-09-16).
+      A compose that died without `compose-done` left `lexos-p01/variant-a` armed from 08-25 to
+      09-16 and refused every Read, Grep and Glob in the worktree, operator included, with a
+      message that did not say when it was armed or how to release it. The marker's `pid=` is
+      NOT a liveness signal: it is the pid of `composer-scope-check.sh --begin` itself, which
+      exits on the next line, so "pid dead -> release" would disarm every boundary the instant
+      it was armed. Contract: `--begin` records `armed_at` (UTC) and stops writing `pid=`; a
+      refusal names the armed explore/variant, its age, and the exact `compose-done` release
+      command; age NEVER relaxes the refusal — an old marker and a legacy `pid=`-only marker
+      still refuse a sibling read (the negative control a "stale -> allow" mutant must fail);
+      and the session-start heads-up (extend `00-context.sh`, no new fragment) prints one line
+      when any boundary is armed, so the next lock surfaces on day 1 rather than week 3
 - [ ] Two-surface adversarial pass by fresh agents on the doc-surface gate and the allowlist,
       holes fixed and pinned as fixtures
 - [ ] tests added & green **on CI, read per JOB at the branch head SHA**

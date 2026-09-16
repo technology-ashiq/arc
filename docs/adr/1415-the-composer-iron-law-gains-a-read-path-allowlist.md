@@ -58,3 +58,17 @@ the blindness that makes the panel worth anything is preserved by enumeration ra
 hope. Harder: the allowlist is now a security-shaped surface, so it needs a negative control —
 a composer that attempts to read a *sibling* variant's render must be refused, and that case is
 one of the adversarial fixtures for Phase 01.
+
+## Amendment 2026-09-16 — the enforcement surface, and what staleness may not do
+
+This ADR was premised on `Read` being the composer's read path. It is not the only one: `Grep`
+and `Glob` both return a sibling's content, which fired the kickoff assumption that tested this
+allowlist (PLAN ledger, `FIRED 2026-08-24`). The boundary is enforced for all three tools.
+
+A filesystem marker also outlives the compose that armed it. An abandoned `lexos-p01/variant-a`
+boundary refused every read in its worktree for three weeks. The decision: **an armed boundary
+never relaxes with age.** Staleness is made visible — `armed_at`, age and the release command in
+every refusal, and a session-start line — but a stale marker still refuses. The alternative,
+releasing on a dead pid, was rejected on a fact rather than a preference: the recorded pid
+belongs to the short-lived `--begin` process, so it is dead immediately and would have disarmed
+every boundary on arrival.
