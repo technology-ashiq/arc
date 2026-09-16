@@ -572,3 +572,28 @@ the first substance gate to go live since the set was created in Cycle 3.
 
 **The other eight stayed silent again.** Eleven phase closes now, three kickoffs, zero fires. Silence
 is still not evidence of correctness.
+
+## Cycle 15 · arc-face (2026-08-19 → 2026-09-16) — no promotion
+
+| date | gate | run-ref | fired? | false-positive? |
+|---|---|---|---|---|
+| 2026-09-16 | `appetite-sum` (**over-commit** branch) | arc-face Cycle 15, every run for 24 days | **no** | **no FP, but a MISSED true positive.** Phase 09 (3d) was in no Phases-table row, so the sum never saw it: 35d > 32d would have FAILed on 2026-08-23. The gate was blind, not clean |
+| 2026-09-16 | `nonneg-drift` | arc-face Cycle 15 | **no** | **missed true positive, two causes**: `phase-09-spec.md` had no Non-negotiables block, and the gate never read it because Phase 09 was not in the table. Separately, the last Non-negotiable had been false since ADR-1316, but PLAN and all eight spec copies agreed, so there was no copy-to-copy drift to see. The gate can catch drift between copies; it cannot catch drift between the rule and the world |
+| 2026-09-16 | `adr-wired` | arc-face Cycle 15 | **no** | **missed true positive**: ADR-1316 was cited by no phase spec and absent from the index, and an index row is what the gate walks |
+| 2026-09-16 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `current-state-structure` · `verify-red` · `birth-rule(kickoff-lint)` | arc-face kickoff + every run cycle-long | **no** | n/a: silent runs |
+
+**No gate is promotable.** Promotion needs ≥ 3 clean runs with zero false positives, and this cycle's
+silence was not clean. Three gates stayed quiet over defects squarely in their domain, because every
+one of them reads the plan's own tables (the Phases rows, the ADR index), and the defects lived in
+files those tables never listed. That is the Phase 09 lesson turned on the plan lint itself: a check
+that enumerates its own list reports "all passed" over whatever grew outside the list. The
+2026-09-16 retro-log row proposes deriving the phase set from `phases/` on disk. Until then, a silent
+`kickoff-lint` run says nothing about a phase that is not in the table.
+
+**Retro rulings (owner, 2026-09-16).** **P1 APPROVED:** a new `[phase-orphan]` group in
+`kickoff-lint.mjs` that derives the phase set from `phases/phase-*-spec.md` and flags a spec with
+no Phases-table row. It enters the `TRIAL` set (WARN-first), because a rough count today suggests
+bench, growth, develop and engine may trip it; the real parser measures that before anything
+ships. It is to be built through `/arc-change` in its own PR, with a good/mutant bats fixture and
+two fresh attackers. **P2 NOT APPROVED:** a built-but-unclosed WARN. The 2026-09-16 retro-log
+row stays the only record of that pattern.
