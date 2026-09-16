@@ -590,3 +590,11 @@ files those tables never listed. That is the Phase 09 lesson turned on the plan 
 that enumerates its own list reports "all passed" over whatever grew outside the list. The
 2026-09-16 retro-log row proposes deriving the phase set from `phases/` on disk. Until then, a silent
 `kickoff-lint` run says nothing about a phase that is not in the table.
+
+**Retro rulings (owner, 2026-09-16).** **P1 APPROVED:** a new `[phase-orphan]` group in
+`kickoff-lint.mjs` that derives the phase set from `phases/phase-*-spec.md` and flags a spec with
+no Phases-table row. It enters the `TRIAL` set (WARN-first), because a rough count today suggests
+bench, growth, develop and engine may trip it; the real parser measures that before anything
+ships. It is to be built through `/arc-change` in its own PR, with a good/mutant bats fixture and
+two fresh attackers. **P2 NOT APPROVED:** a built-but-unclosed WARN. The 2026-09-16 retro-log
+row stays the only record of that pattern.
