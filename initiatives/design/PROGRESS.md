@@ -270,11 +270,44 @@ consumer projects — it carries the owner's approvals.
   and 35142810771, both cancelled after about 90 minutes) with no TAP in the log, because the
   MSYS pipe is buffered. `fba9a89e` passed the identical 14-file shard. Cause not yet known.
 
-**Next step:** push the gate fixes and evidence and watch Windows shard 6 against a timeout. Then
-the `agent_type` probe under the ruling, the Bash-scope enforcement script and tests, and the
-exact fragment for the owner. `/arc-phase-done 01` follows only when the Bash scope is enforced,
-then Phase 02 Slice B. Open findings and the running defect list for
-the next attacker prompt are in
+- **2026-09-17, early hours: where this stopped.**
+  - **Pushed and green:** `a420fa48`, arc-ci run 35150455604, 14/19 jobs green. The 5 red jobs
+    fail on Slice B's 14 refpack tests alone, with `declared = executed` on every leg. That run
+    covers the self-review fix (`8c0d46be`), the colour-literal message fix (`d42ee967`) and the
+    demo evidence. **Windows shard 6 did not hang on it**, so the two earlier hangs look like
+    runner flake. Watch for a third.
+  - **The `agent_type` probe was run under the owner ruling and removed immediately.** Hook
+    payloads carry `agent_id` + `agent_type` for a subagent (`"Explore"` measured) and neither for
+    the main session.
+  - **Composer Bash boundary:**
+    - red-first at `a16b189e`, 12 cases in `tests/design-composer-bash.bats`;
+    - implementation pushed at `fd94e8f1` (`composer-bash-check.sh`, plus the contract, the
+      ADR-1415 amendment, the manifest and the golden);
+    - a jq and no-jq smoke run in a scratch repo passed every case.
+    - Its two CI runs were still in flight at the stop.
+    - **A two-surface adversarial pass was running at the stop.** Its findings are appended to
+      `evidence/phase-01/adversarial-open.md` § Fifth pass, if they arrived before the session
+      closed. If that section is missing, re-run the pass.
+
+**Resume here, in order:**
+1. **CI.** Read per JOB for `a16b189e` and `fd94e8f1`.
+   - Expected at `a16b189e`: the composer-bash refusal cases red.
+   - Expected at `fd94e8f1`: only the owner-fragment case red, plus the refpack 14.
+2. **Attack findings.** Fix every finding in § Fifth pass (red-first where it is a behaviour),
+   push, and read CI.
+3. **Owner edit.** Once the pass is fixed, the owner runs
+   `cp tests/fixtures/hooks/PreToolUse.d/10-design-composer.sh .claude/hooks/PreToolUse.d/10-design-composer.sh`.
+   Then register that fragment in `products/design/manifest.json` → `files`, regenerate the sync
+   golden, push, and confirm the fragment case goes green.
+4. **Re-verify one composer.** Run one live composer turn to prove the enforced scope does not
+   break the real loop (render, read the PNG, Write the manifest).
+5. **`/arc-phase-done 01`.**
+6. **Decision queued for the owner.** The read and write boundaries can scope to `ui-composer` by
+   `agent_type` (ADR-1415 revisit trigger), which ends the operator lock and allows parallel
+   composition. Route it through `/arc-change` with a recommendation.
+7. Phase 02 Slice B.
+
+Open findings and the running defect list for the next attacker prompt are in
 [`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md).
 
 **Owner items running in parallel** (none block Phase 00):
