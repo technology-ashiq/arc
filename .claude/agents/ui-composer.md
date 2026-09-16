@@ -46,6 +46,14 @@ then render it and **read the PNG back with vision** before anyone else judges i
 bash .claude/scripts/design/design-render.sh <your page> --mode explore --session <explore-id>--variant-<x> --iter N
 ```
 
+**That command is the only Bash you have, and a hook enforces it.** Run it exactly as written, as
+the whole command, from where you already are: no `cd`, no `&&` or `;`, no quotes, no second
+command, and a page and session that are your own variant's. Anything else is refused, which covers
+node, sed, python, PowerShell, `ls`, `mkdir` and `cat`. Write files with the Write tool (it creates
+directories), and read your renders and their meta JSON with the Read tool. The `Bash(...)` line in
+this file's frontmatter documents the grant; it does not enforce it, because a subagent's `tools:`
+field takes tool names only.
+
 `--iter` is 1, 2 or 3. A fourth refuses — the loop is capped on purpose. Each iteration writes
 its own immutable receipt, so `iter-2` never overwrites `iter-1` and "iteration 2 fixed what
 iteration 1 found" is provable from the hashes instead of narrated in prose.

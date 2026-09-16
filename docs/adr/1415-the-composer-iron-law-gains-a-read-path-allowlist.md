@@ -72,3 +72,35 @@ every read and write refusal — but a stale marker still refuses. The alternati
 releasing on a dead pid, was rejected on a fact rather than a preference: the recorded pid
 belongs to the short-lived `--begin` process, so it is dead immediately and would have disarmed
 every boundary on arrival.
+
+## Amendment 2026-09-17 — Bash was never scoped, and the harness says who is calling
+
+The allowlist assumed the composer's Bash was already narrow: its frontmatter grants
+`Bash(bash .claude/scripts/design/design-render.sh:*)`. It was not narrow. A subagent's `tools:`
+field takes tool names only, so the specifier granted all of Bash. On the Phase 01 live demo
+(`lexos-p02`) every composer ran node, `sed -i`, python and PowerShell through it. Bash walks past
+this ADR's read allowlist and the write boundary alike. A transcript audit found no composer
+touched a sibling, so isolation held in practice, but it was never enforced.
+
+**Decision:** Bash is enforced by a PreToolUse hook, `composer-bash-check.sh` behind
+`.claude/hooks/PreToolUse.d/10-design-composer.sh`, keyed on the payload's `agent_type`. An
+owner-approved probe on 2026-09-17 measured that field: present with the agent's name for a
+subagent, absent for the main session. The harness writes it and the agent cannot, so it can be
+trusted where a marker file cannot. For `ui-composer` exactly one command shape runs:
+- the renderer, `--mode explore`,
+- on a page inside the one armed variant,
+- into that variant's own session.
+
+Everyone else's Bash is untouched.
+
+**The route and the session are both pinned.** Rendering a sibling into the composer's own session
+would otherwise deliver a sibling's pixels to the one place this ADR lets the composer read.
+
+**The fragment is the owner's edit.** `.claude/hooks/**` is governance-denied to the session, so
+its canonical content lives at `tests/fixtures/hooks/PreToolUse.d/10-design-composer.sh`. A test
+stays red until the installed copy matches it.
+
+**Revisit trigger:** `agent_type` is identity, so the read and write boundaries could scope to
+`ui-composer` too, instead of refusing every caller while a marker exists. That would end the
+operator lock that started this cycle's `/arc-change`, and would allow parallel composition. It
+is a separate security-boundary change and needs its own owner decision.

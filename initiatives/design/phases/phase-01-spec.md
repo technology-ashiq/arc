@@ -12,7 +12,14 @@ rendered and correctly classified as product canvas or documentation.
 **REQ-02 — the composer sees its own work**
 
 - [ ] `ui-composer` gains exactly one scoped Bash entry point — `design-render.sh` and nothing
-      else. It has `tools: Read, Glob, Grep, Write` today and no Bash at all
+      else. It has `tools: Read, Glob, Grep, Write` today and no Bash at all.
+      **Found by the live demo (2026-09-17): the frontmatter grant alone scopes nothing.** A
+      subagent's `tools:` field takes tool names, so `Bash(prefix:*)` granted all of Bash, and every
+      composer ran node, sed and PowerShell. The scope is enforced by `composer-bash-check.sh`
+      behind a PreToolUse Bash fragment keyed on the payload's `agent_type`, per the ADR-1415
+      amendment: the renderer only, on the armed variant's own page and session. This bullet
+      closes only when that fragment is installed (the owner's edit, since `.claude/hooks/**` is
+      governance-denied) and the Bash boundary has had its two-surface adversarial pass
 - [ ] Iron law 1 gains the enumerated read allowlist of
       [ADR-1415](../../../docs/adr/1415-the-composer-iron-law-gains-a-read-path-allowlist.md):
       its own session's renders and the brief's refpack. Every existing prohibition survives
