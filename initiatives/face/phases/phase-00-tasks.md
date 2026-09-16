@@ -97,18 +97,18 @@ tier: contract
 sources: phase-00-spec.md, code:grep-fallback(1485; no .codegraph/), adrs(37), learning(3), retro(21), churn(463)
 decision: the derivation lives at .claude/scripts/hq/face-modules-contract.mjs (ADR-1319: no new surface outside .claude/scripts); it reads roomRegistry.js as TEXT because the file imports phosphor icons and node cannot import it with no install; renames come from the registry's own ROOM_ALIASES (an alias key that is a served id), not a hand list; reads come from PLAN-face-v2 section 5.2's tables; output is deterministic (no timestamp) so --check can compare bytes, CRLF-normalised for the windows checkout; the main-guard realpaths both sides
 result: `wrote initiatives/face/contracts/modules-v2.json -- 36 modules = 29 same-id + 3 renamed + 4 extra (3 served-planned) · 34 served, 2 without a module · 0 ring conflict(s)` · renames `today<-overview engine-room<-engine council-chamber<-council` · extras `factory executor agents story` · no module `chat-mcp:generic module, reported lane:not a room module` · hand replay: control exit=0 · drift exit=1 (DRIFT) · orphan exit=1 (`ORPHAN … ghost-room`) · bad-root exit=2 · missing-inputs exit=2 · face-coverage all covered · embedded-program probe failures=0
-commit: (empty until proven)
+commit: 62e25b6d
 
 #### slice: 06
 
 title: `initiatives/face/evidence/phase-00/delta-report.md` names every renamed id (`today`←overview · `engine-room`←engine · `council-chamber`←council), every extra (ADR-1327), the served-planned rooms (ADR-1328), and the served entries with no v0.7 design.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
+proof: grep counts over delta-report.md: every renamed id and its v0.7 alias, every extra, every served-planned room and both served entries without a module must each appear >= 1; the counts line quoted in the report must equal what `face-modules-contract.mjs --check` prints on the same tree
+tier: static
+sources: phase-00-spec.md, code:grep-fallback(1487; no .codegraph/), adrs(37), learning(3), retro(28), churn(465)
+decision: every figure is computed from the generated contract, never typed; section 5.2's own tables name 19 distinct new routes where its prose says 17 — recorded as a correction, still inside assumptions row 5's band; the throwing-v1-rooms baseline table is explicitly UNMEASURED until the browser suite's first CI run fills it, so an empty table cannot read as a clean result
+result: `today=3 overview=2 engine-room=2 council-chamber=2 factory=5 executor=3 agents=3 story=2 ops=2 trader=2 discover=2 chat-mcp=1 lane=3` · `--check`: `in sync -- 36 modules = 29 same-id + 3 renamed + 4 extra` (matches the quoted line) · `19 distinct` present
 commit: (empty until proven)
 
 #### slice: 07
