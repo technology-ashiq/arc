@@ -658,6 +658,10 @@ EOF
       echo "The boundary leaked. Every later read in this session would block with no visible cause." >&2
       exit 1
     fi
+    # Said BEFORE the gates, because this is also the release a refusal prints for an abandoned
+    # run -- and an abandoned run's gates fail. Without this line the person who followed that
+    # advice saw only "did not clear the composer gates" and exit 1, with the release invisible.
+    echo "design-explore: boundary released for $ID variant-$V -- the gates below judge the work, not the release"
 
     gfails=0
     page="$EX/variant-$V/index.html"

@@ -39,15 +39,17 @@ if ! command -v arc_canon_path >/dev/null 2>&1 && ! type arc_canon_path >/dev/nu
   exit 2
 fi
 
-# Every refusal once a marker exists says what is armed, since when, and how to release it. The
-# same marker arms both boundaries, so an abandoned compose locks writes exactly as it locks
-# reads, and a note on the read refusal alone would be the one-side-fixed twin this lane keeps
-# shipping. The description is the read boundary's own --describe: one spelling, not two. env -u,
-# because the fragment exports ARC_SCOPE_FORWARDED and a forwarded --describe is read as a path.
-_refuse() {
-  env -u ARC_SCOPE_FORWARDED bash "$ROOT/.claude/scripts/design/composer-scope-check.sh" --describe >&2 2>/dev/null
-  exit 2
-}
+# The same marker arms both boundaries, so an abandoned compose locks writes exactly as it locks
+# reads, and a fix on the read side alone would be the one-side-fixed twin this lane keeps
+# shipping. So this file does not keep its own copy of the marker reader, the id grammar or the
+# description: it SOURCES the read boundary, which stops after defining them (_mk_load,
+# _describe_all, _refuse). The first cut re-executed that script for every refusal instead --
+# another bash, git and common.sh load each time, measured at double the refusal cost.
+#
+# The local _refuse is the floor, not a copy: if the library is missing, a refusal must still
+# be exit 2. An undefined function would be "command not found" -- 127, which the dispatcher
+# treats as ALLOW.
+_refuse() { exit 2; }
 
 # ---------- which composer, if any ----------
 #
@@ -60,20 +62,36 @@ for _mk in "$MARKER_DIR"/composer-session--*; do
   _MK_N=$((_MK_N + 1)); MARKER="$_mk"
 done
 [ "$_MK_N" -eq 0 ] && exit 0
+
+# The library is loaded only once a marker exists. Every Edit and Write in every session runs
+# this hook, and loading it costs another git subprocess and another common.sh -- the unarmed
+# path must not pay for the armed one (adversarial-open: the fast path already costs ~370ms).
+# The library assigns ROOT, MARKER_DIR and MARKER at its top, so the marker found above is kept
+# aside and restored: loading it after the loop clobbered MARKER with the legacy global path,
+# and every write -- the composer's own included -- was refused as malformed.
+_WC_MARKER="$MARKER"
+if [ -f "$ROOT/.claude/scripts/design/composer-scope-check.sh" ]; then
+  . "$ROOT/.claude/scripts/design/composer-scope-check.sh"
+fi
+MARKER="$_WC_MARKER"
+if ! type _mk_load >/dev/null 2>&1; then
+  echo "BLOCKED by ui-composer write scope: a composer boundary is armed and composer-scope-check.sh could not be loaded to read it." >&2
+  exit 2
+fi
 if [ "$_MK_N" -gt 1 ]; then
   echo "BLOCKED by ui-composer write scope: $_MK_N composer boundaries are armed at once." >&2
   echo "This write cannot be attributed to one of them. Compose serially." >&2
   _refuse
 fi
 
-# tr -d '\r' before the anchored sed: a CRLF marker reads clean on Windows (MSYS2 strips it)
-# and yields an empty id on ubuntu and macOS, which would build a prefix ending in '/'.
-EX="$(tr -d '\r' < "$MARKER" 2>/dev/null | sed -n 's/^explore=//p' | head -1)"
-VARIANT="$(tr -d '\r' < "$MARKER" 2>/dev/null | sed -n 's/^variant=//p' | head -1)"
-if [ -z "$EX" ] || [ -z "$VARIANT" ]; then
-  echo "BLOCKED by ui-composer write scope: the marker exists but names no explore/variant." >&2
+# Validated before use, by the read boundary's own loader: CR-stripped, grammar-checked, and the
+# filename must agree with the content. A marker that fails is a broken boundary, refused -- and
+# its text never reaches the messages below, where an unvalidated id was echoed raw.
+if ! _mk_load "$MARKER"; then
+  echo "BLOCKED by ui-composer write scope: an armed composer marker is malformed -- its explore/variant is missing or invalid, or its filename disagrees with its content." >&2
   _refuse
 fi
+EX="$MK_EX"; VARIANT="$MK_VARIANT"
 
 # ---------- what is being written ----------
 

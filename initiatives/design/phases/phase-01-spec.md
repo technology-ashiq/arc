@@ -64,7 +64,11 @@ rendered and correctly classified as product canvas or documentation.
       **Twin, found at build:** `critic-scope-check.sh` (ADR-0034) writes the same dead
       `pid=$$` and locks writes the same way, so it gets the same stamp and note. The age logic
       lives once, as `arc_armed_stamp` / `arc_armed_desc` in `core/common.sh`, which both
-      boundaries already source
+      boundaries already source. **Attacked 2026-09-16** (two fresh agents, 20 findings, one
+      overlap — see `evidence/phase-01/adversarial-open.md` § Third pass): markers are written
+      whole or not at all; ids forbid `--` and edge hyphens; a marker whose filename disagrees
+      with its content is MALFORMED and refused; every refusal class is tested on stderr alone;
+      and every printed release is executed by a test from a subdirectory
 - [ ] Two-surface adversarial pass by fresh agents on the doc-surface gate and the allowlist,
       holes fixed and pinned as fixtures
 - [ ] tests added & green **on CI, read per JOB at the branch head SHA**

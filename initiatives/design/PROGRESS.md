@@ -182,9 +182,31 @@ consumer projects — it carries the owner's approvals.
   lands on both refusals — the read-fixed, write-left-open twin is exactly the shape this lane has
   shipped before.
 
-**Next step:** the stale-boundary tests are committed red-first; read CI per JOB for the expected
-new reds in `design-composer-eyes.bats`, then implement, then two fresh attackers, then Phase 01's
-live demo, then Phase 02 Slice B. Open findings and the running defect list for
+- **The stale-boundary fix, built and attacked.** The fix was proven red-first twice on
+  `arc-ci`:
+  - Run **35124911002** at `c6f33b7f`: 9 of the 10 composer cases were red for the reasons they
+    name, and the release pin was green as designed.
+  - Run **35126856883** at `2c8ae714`: those 10 went green, and the 4 critic-twin cases were red
+    first.
+  - Both runs showed `reconcile: declared = executed`, and the only other failure was Slice B's
+    14 known reds.
+
+  Two fresh attackers then returned **20 findings with one overlap**. 18 are fixed and 2 are
+  accepted in writing; the dispositions are in `evidence/phase-01/adversarial-open.md` § Third
+  pass.
+
+  Most findings were against the tests. A "stale allows non-siblings" mutant, a note on only some
+  paths, and a note on stdout all passed. The worst code finding was the change manufacturing the
+  lock it diagnoses: `--begin` exited 2 after writing the marker. Fixing turned up two more that
+  were my own:
+  - a line-bounded reader that took over five minutes on a megabyte marker line — a timeout the
+    harness treats as allow;
+  - a late library load that clobbered `MARKER` and refused the composer's own writes. The
+    scratch replay caught this before commit.
+
+**Next step:** read CI per JOB on the attacked-fix push; the expected reds are only Slice B's 14.
+Then Phase 01's live demo on the LexOS brief (text-only evidence), then `/arc-phase-done 01`, then
+Phase 02 Slice B. Open findings and the running defect list for
 the next attacker prompt are in
 [`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md).
 

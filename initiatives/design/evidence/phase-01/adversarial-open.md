@@ -225,3 +225,63 @@ Everything on this page is **new code when it is fixed**, so a second two-surfac
 pass by fresh agents runs against it before Phase 01 closes. The attacker prompt carries the
 "Closed by `05fc34d0`" list above with the standing instruction: check each one in every OTHER
 file.
+
+---
+
+## Third pass, 2026-09-16 — the abandoned-boundary change
+
+The change routed by `/arc-change` on 2026-09-16 (stamp + describe, never permissive) was
+attacked by two fresh agents before it merged: one on decision logic (12 findings), one on the
+shell/OS boundary (8). **One overlap**: both found that `--begin` could exit non-zero after the
+redirect had already created the marker. That is the change manufacturing the very abandoned
+lock it was built to diagnose.
+
+Most of the logic findings were against the TESTS, not the code. Mutants that kept the suite
+green:
+- "a stale boundary allows anything that is not a sibling"
+- a note on only the refusals a test happened to exercise
+- a note printed to stdout, which bats merges into `$output` and Claude Code never shows
+
+| # | Finding | Disposition |
+|---|---|---|
+| DL-1 / SH-3 | `--begin` exits 2 after writing the marker when the stamp is missing (composer and critic) | **fixed**: body written to a dot-name, stamp optional, moved into place whole |
+| DL-2 / DL-3 / DL-4 | tests pinned only the sibling refusal, only some refusal paths, and merged stdout into stderr | **fixed**: every read, write and critic refusal class is walked with `run --separate-stderr` |
+| DL-5 | a `.bak` copy: the printed release rebuilds the name from content and never deletes the file that refuses | **fixed**: a filename that disagrees with its content is MALFORMED; malformed markers print first, with release-all |
+| DL-6 | `--` in ids lets two composers share one marker file (defect #13 returning through the filename) | **fixed**: grammar forbids `--` and edge hyphens, and caps length at 64 |
+| DL-7 | the critic honours forwarded `--end` (defect #7's twin, never carried over) | **ACCEPTED in writing**: see below |
+| DL-8 | hostile marker text echoed raw into refusals | **fixed**: ids are validated before any use; a malformed marker prints only its sanitised filename |
+| DL-9 / DL-10 | the release for a dirless variant was untested, and every release was relative to cwd | **fixed**: releases are root-anchored; tests execute the printed release from a subdirectory |
+| DL-11 | with the critic and a composer both armed, only the first boundary is described | **ACCEPTED (low)**: see below |
+| DL-12 | compose-done released without saying so | **fixed**: prints "boundary released" before the gates |
+| SH-1 | quadratic zero-strip: 64k zeros held the hook for 79 s | **fixed**: length before shape, strip in one expansion |
+| SH-2 | golden manifest stale for the critic | **fixed**: regenerated last |
+| SH-4 | refusal cost doubled and grew about 390 ms per marker | **fixed**: pure-bash reader, no re-exec from the write side, at most five described |
+| SH-5 | hostile-payload test too long to reach the digit check; zero-pad test did not need the strip | **fixed**: 9-character payload, 8 zeros of padding |
+| SH-6 | the `--end` release was not scrubbed of `ARC_SCOPE_FORWARDED` | **fixed**: `env -u` in the printed command |
+| SH-7 | age fixtures sat exactly on unit boundaries | **fixed**: +1800 s / +600 s margins |
+| SH-8 | BSD tr/sed abort on invalid bytes under UTF-8 | **fixed**: no tr/sed remain on the marker path |
+
+**DL-7 accepted.** A critic fix needs the `10-design-critic.sh` fragment to export
+`ARC_SCOPE_FORWARDED`, and that fragment is under `.claude/hooks/**`, which governance keeps
+edit-denied. It is also unreachable in production: the dispatcher runs every fragment with the
+payload on stdin and no argv. This is recorded rather than fixed, and it needs one owner line in
+the fragment whenever a hooks edit is next made.
+
+**DL-11 accepted.** Each refusal describes the boundary that refused, and every release it prints
+works. Two boundaries therefore take two rounds of advice, and both rounds are true.
+
+**Found while fixing, not by an attacker:** the bounded reader was bounded in LINES, not bytes.
+One marker line of a million zeros held it for over five minutes, and a hook that outlives its
+timeout is treated as ALLOW. It is now at most 32 reads of at most 1024 characters, measured at
+142 ms on that marker.
+
+### Add to the running defect list for the next attacker
+11. `pid=$$` recorded the arming process itself, dead on arrival. A liveness check on it disarms
+    everything.
+12. Arithmetic on a file field: `a[$(cmd)]` executes inside `$(( ))`, and zero-padded values are
+    octal.
+13. A redirect group whose last command fails reports failure AFTER creating its file.
+14. A cap on lines is not a cap on bytes.
+15. A test that reads merged `$output` cannot tell stderr from stdout, and hooks are shown by
+    stderr only.
+16. A filename separator that is legal inside the fields it separates.

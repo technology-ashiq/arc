@@ -24,6 +24,31 @@ MARKER_DIR="$ROOT/.claude/state/design"
 MARKER="$MARKER_DIR/critic-session"
 ALLOWED="docs/design/critique"
 
+# Loaded up front, not only where the resolver is first needed: --begin stamps the marker and
+# every refusal describes it, and the traversal refusal fires before the resolver block below.
+# That block still REFUSES when this load failed -- see its comment.
+. "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
+
+# A critique run that dies before `finish` leaves this boundary armed, and it then refuses every
+# write outside docs/design/critique/ for everyone, indefinitely. The composer boundary did that
+# for three weeks behind a refusal that said nothing about when or how to release it, and this
+# file wrote the same dead-on-arrival pid. So every refusal once a marker exists says what is
+# armed, since when, and the release. Describing is all it does -- see arc_armed_desc.
+# The note goes to STDERR, which is what a PreToolUse hook exiting 2 is shown by. The route is
+# reduced to a safe alphabet before it is printed, in pure bash (no tr under a UTF-8 locale, where
+# BSD tr aborts on invalid bytes), and the release is anchored at the repo root so it works when
+# pasted from any directory in the repo.
+_refuse() {
+  if type arc_armed_desc >/dev/null 2>&1 && type arc_marker_get >/dev/null 2>&1; then
+    arc_marker_get "$MARKER" route
+    _rf_route="${ARC_MV//[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._\/-]/}"
+    arc_armed_desc "$MARKER"
+    echo "design critic boundary ARMED for route ${_rf_route:0:120} -- $ARC_ARMED_DESC. It never expires on its own." >&2
+    echo "  if no critique is running it is stale; release: cd \"\$(git rev-parse --show-toplevel)\" && bash .claude/scripts/design/critic-scope-check.sh --end" >&2
+  fi
+  exit 2
+}
+
 case "${1:-}" in
   --begin)
     route="${2:-}"
@@ -32,13 +57,23 @@ case "${1:-}" in
       exit 2
     fi
     mkdir -p "$MARKER_DIR" || exit 2
-    # The marker records WHAT is being critiqued, so a stale marker is diagnosable rather
-    # than just mysteriously blocking edits.
-    {
-      echo "route=$route"
-      echo "allowed=$ALLOWED"
-      echo "pid=$$"
-    } > "$MARKER" || exit 2
+    # The marker records WHAT is being critiqued and WHEN, so an abandoned one is diagnosable
+    # rather than mysteriously blocking edits. It used to record `pid=$$` -- this process, gone
+    # one line later -- which looked like a liveness signal and could only ever say "dead".
+    #
+    # Written whole or not at all, and the stamp is optional. `type ... && arc_armed_stamp` as the
+    # group's last command made a missing stamp exit 2 AFTER the redirect had created the marker,
+    # and design-critique.sh treats a failed --begin as "not armed" and never calls --end: an
+    # abandoned boundary, manufactured by the change meant to diagnose one. A dot-name the marker
+    # path never equals, then a move.
+    _ck_tmp="$MARKER_DIR/.critic-session.$$"
+    if ! { printf 'route=%s\nallowed=%s\n' "$route" "$ALLOWED"
+           if type arc_armed_stamp >/dev/null 2>&1; then arc_armed_stamp; fi
+         } > "$_ck_tmp" 2>/dev/null || ! mv -f "$_ck_tmp" "$MARKER" 2>/dev/null; then
+      rm -f "$_ck_tmp" 2>/dev/null
+      echo "critic-scope-check: could not write the marker -- the boundary is NOT armed" >&2
+      exit 2
+    fi
     echo "critic-scope-check: boundary armed -- writes restricted to $ALLOWED/ (route: $route)"
     exit 0
     ;;
@@ -76,7 +111,7 @@ case "$TARGET" in
   ..|../*|*/..|*/../*)
     echo "BLOCKED by design-critic scope: '$TARGET' contains a '..' segment." >&2
     echo "The critic may write only inside $ALLOWED/ -- traversal paths are refused." >&2
-    exit 2
+    _refuse
     ;;
 esac
 
@@ -99,7 +134,7 @@ esac
 # needs the identical resolver, and a second copy of a path helper that three-OS CI had
 # already hardened is the twin-fix shape this repo keeps paying for. There is no local copy:
 # a duplicate no test can reach is not a safety net (see the block below).
-. "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
+# (common.sh is loaded at the top of this file, so the refusal below has something to check.)
 if ! type arc_canon_path >/dev/null 2>&1; then
   # The inline fallback that used to sit here was a PRE-FIX copy of common.sh's resolver --
   # the same body without the root-of-"/" normalisation, so it returned "//no-such/f" where the
@@ -130,4 +165,4 @@ esac
 
 echo "BLOCKED by design-critic scope: writes restricted to $ALLOWED/ during a critique run." >&2
 echo "Target '$TARGET' is outside it. The critic reports; the creation side fixes (ADR-0034)." >&2
-exit 2
+_refuse
