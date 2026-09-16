@@ -397,6 +397,7 @@ export default function FaceStage() {
     let driftMul = 1
     let lastListenApplied = -1
     let presence = 1 // smoothed copy of stage.presence (+ voice wake)
+    let shiftX = 0 // smoothed copy of stage.shiftX (landing hero seat)
     // warp — the landing ⇄ HQ fly-through. The multipliers are smoothed
     // so a warp restarted mid-flight (or the post-flight settle, where
     // the targets snap back to 1) stays continuous instead of popping.
@@ -490,6 +491,12 @@ export default function FaceStage() {
       // recede upward slightly while reading, return when forward
       maskPoints.position.y = (1 - presence) * 1.7
       points.position.y = (1 - presence) * 0.8
+      // horizontal seat — the landing parks the face to the right
+      // (the Cloudflare-globe slot); HQ recenters it. Smoothed here
+      // so the slide is a glide, never a jump.
+      shiftX += ((stage.shiftX || 0) - shiftX) * 0.045
+      maskPoints.position.x = shiftX
+      points.position.x = shiftX * 0.55
 
       const currentMaskOpacity = 0.9 * warpOpacityMul
       maskMaterial.opacity = currentMaskOpacity

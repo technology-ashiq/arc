@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // THE FACE. The one element of the owner's reference design that must not change.
 //
-// Ported from docs/design/reference/face-hq/assets/arcface/src/face/FaceStage.jsx:
+// Ported from docs/design/reference/face-hq/assets/arcface-v0.4/src/face/FaceStage.jsx:
 // a 90x90 particle cyber-mask inside an ambient particle cloud, additively blended
 // and bloomed, both repelled by the cursor, with the listening / thinking / talking
 // states layered on top. Every constant is the reference's; none of them is a taste

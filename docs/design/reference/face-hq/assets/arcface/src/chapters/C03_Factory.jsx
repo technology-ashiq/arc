@@ -14,7 +14,7 @@ function ModuleCard({ p, i }) {
   const [open, setOpen] = useState(false)
   const era = ERA_BADGE[p.era] || ERA_BADGE.c1
   return (
-    <Panel className="group transition-colors hover:border-[#00ffd1]/45 h-full flex flex-col">
+    <Panel className="group transition-colors hover:border-[#2dd4bf]/45 h-full flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[11px] text-white/40" style={{ fontFamily: MONO }}>
           {String(i + 1).padStart(2, '0')}
@@ -24,9 +24,9 @@ function ModuleCard({ p, i }) {
           {era.label}
         </span>
       </div>
-      <h3 className="text-[24px] tracking-tight mb-2 text-white group-hover:text-[#00ffd1] transition-colors" style={{ fontWeight: 600 }}>
+      <h3 className="text-[24px] tracking-tight mb-2 text-white group-hover:text-[#2dd4bf] transition-colors" style={{ fontWeight: 600 }}>
         {p.id}
-        <span className="text-[#00ffd1]">.</span>
+        <span className="text-[#2dd4bf]">.</span>
       </h3>
       <p className="text-[12.5px] leading-[20px] text-white/60 mb-4" style={{ fontWeight: 300 }}>
         {p.purpose}
@@ -42,7 +42,7 @@ function ModuleCard({ p, i }) {
         {p.pieces.length > 3 && (
           <button
             onClick={() => setOpen(!open)}
-            className="mt-3 text-[10px] uppercase tracking-[0.18em] text-[#00ffd1]/85 hover:text-[#00ffd1] cursor-pointer min-h-[30px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00ffd1] rounded"
+            className="mt-3 text-[10px] uppercase tracking-[0.18em] text-[#2dd4bf]/85 hover:text-[#2dd4bf] cursor-pointer min-h-[30px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2dd4bf] rounded"
             style={{ fontFamily: MONO }}
           >
             {open ? '− less' : `+ ${p.pieces.length - 3} more`}
@@ -98,7 +98,7 @@ export default function C03_Factory() {
               {ARC.pipeline.stages.map((s, i) => (
                 <div key={s.name} className="flex items-stretch">
                   <div
-                    className="w-[200px] rounded-2xl border border-white/12 p-4 hover:border-[#00ffd1]/45 transition-colors"
+                    className="w-[200px] rounded-2xl border border-white/12 p-4 hover:border-[#2dd4bf]/45 transition-colors"
                     style={{ background: 'rgba(5,10,9,0.66)' }}
                   >
                     <div className="text-[10px] mb-2" style={{ fontFamily: MONO, color: COLOR.cyan }}>
@@ -113,7 +113,7 @@ export default function C03_Factory() {
                   </div>
                   {i < ARC.pipeline.stages.length - 1 && (
                     <div className="flex items-center px-1.5" aria-hidden="true">
-                      <span className="text-[#00ffd1]/60 text-[12px]">→</span>
+                      <span className="text-[#2dd4bf]/60 text-[12px]">→</span>
                     </div>
                   )}
                 </div>

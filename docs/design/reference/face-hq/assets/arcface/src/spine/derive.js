@@ -7,9 +7,13 @@
 import { spine } from './store.js'
 import { dayRevenue, dayCost } from './sim.js'
 import { hhmm } from './kinds.js'
+import { wsSummary } from './workspace.js'
+import { v06Summary } from './registries.js'
 
 export const today = () => spine.events.filter((e) => e.day === spine.dayIndex)
 export const clockLabel = () => hhmm(spine.clock) + ' IST'
+// green is real money's colour and stays unspent until the KIND fires (E3)
+export const greenFired = () => spine.events.some((e) => e.kind === 'revenue.received')
 
 export function kpis() {
   const t = today()
@@ -42,12 +46,17 @@ export function timeline(limit = 40) {
 }
 
 export function revenueSeries() {
+  // real revenue per day — a fold over revenue.received receipts (usually all-zero: honest)
+  const realByDay = {}
+  for (const e of spine.events) {
+    if (e.kind === 'revenue.received') realByDay[e.day] = (realByDay[e.day] || 0) + (e.payload.amount || 0)
+  }
   const out = []
   for (let d = Math.max(0, spine.dayIndex - 13); d < spine.dayIndex; d++) {
-    out.push({ day: d, label: `sim d${d}`, value: dayRevenue(d), cost: dayCost(d) })
+    out.push({ day: d, label: `sim d${d}`, value: dayRevenue(d), cost: dayCost(d), real: realByDay[d] || 0 })
   }
   const t = kpis()
-  out.push({ day: spine.dayIndex, label: 'today', value: t.simRev + t.realRev, cost: t.cost, live: true })
+  out.push({ day: spine.dayIndex, label: 'today', value: t.simRev, cost: t.cost, real: realByDay[spine.dayIndex] || 0, live: true })
   return out
 }
 
@@ -112,10 +121,20 @@ export function briefLines() {
   return {
     greeting: spine.clock < 12 * 60 ? 'Good morning, Ashiq.' : spine.clock < 17 * 60 ? 'Good afternoon, Ashiq.' : 'Good evening, Ashiq.',
     lines: [
-      { tag: 'needs-you', tone: 'amber', text: `${k.pending} decision${k.pending === 1 ? '' : 's'} in the inbox — ~${k.minutesNeeded} min` },
+      { tag: 'needs-you', tone: 'amber', text: `${k.pending} decision${k.pending === 1 ? '' : 's'} in the inbox · ~${k.minutesNeeded} min` },
       { tag: 'money', tone: 'green', text: `real ₹0 (honest) · simulated ₹${(k.simRev + k.realRev).toLocaleString('en-IN')} vs ₹${k.cost.toLocaleString('en-IN')} AI spend` },
       { tag: 'progress', tone: 'cyan', text: `${k.phases} phase${k.phases === 1 ? '' : 's'} closed · ${k.content} pieces published · ${k.ideas} ideas captured · ${calls ? '1 call booked' : 'no calls yet'}` },
-      { tag: 'background', tone: 'dim', text: `${today().length} receipts on the spine today · 0 quarantined · trader locked L0` },
+      { tag: 'yours', tone: 'cyan', text: (() => {
+        const w = wsSummary()
+        return w.events === 0
+          ? 'your company is empty. Ctrl+K, then paste a model, a hire, a skill or a lead'
+          : `${w.benchTotal} on the bench · ${w.hiresActive} hires active · ${w.adopted} skills adopted · ${w.leads} leads · ${w.published} published · ${w.events} receipts, persisted`
+      })() },
+      { tag: 'company', tone: 'cyan', text: (() => {
+        const v = v06Summary()
+        return `${v.awake} lanes awake · ${v.blocked} blocked · ${v.jobs} jobs (${v.fires} fires) · ${v.experiments} experiments · ${v.rules} rules promoted · ${v.incidents ? v.incidents + ' incidents open' : 'no open incident'}`
+      })() },
+      { tag: 'background', tone: 'dim', text: `${today().length} receipt${today().length === 1 ? '' : 's'} on the spine today · 0 quarantined · trader locked L0` },
     ],
   }
 }

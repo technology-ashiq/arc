@@ -95,7 +95,7 @@ export default function C06_HQ() {
                 </div>
                 <button
                   onClick={reset}
-                  className="text-[10.5px] uppercase tracking-[0.2em] text-[#00ffd1] border border-[#00ffd1]/45 rounded-full px-5 min-h-[44px] cursor-pointer hover:bg-[#00ffd1]/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00ffd1]"
+                  className="text-[10.5px] uppercase tracking-[0.2em] text-[#2dd4bf] border border-[#2dd4bf]/45 rounded-full px-5 min-h-[44px] cursor-pointer hover:bg-[#2dd4bf]/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2dd4bf]"
                   style={{ fontFamily: MONO }}
                 >
                   replay the demo
@@ -123,15 +123,15 @@ export default function C06_HQ() {
                   <div className="flex gap-2.5 flex-wrap">
                     <button
                       onClick={() => clear(q.id, 'approved')}
-                      className="text-[11px] uppercase tracking-[0.16em] text-black rounded-lg px-5 min-h-[44px] cursor-pointer transition-transform hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00ffd1]"
+                      className="text-[11px] uppercase tracking-[0.16em] text-black rounded-lg px-5 min-h-[44px] cursor-pointer transition-transform hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2dd4bf]"
                       style={{ fontFamily: MONO, fontWeight: 700, background: COLOR.green }}
                     >
                       approve
                     </button>
                     <button
                       onClick={() => clear(q.id, 'rejected — reason required')}
-                      className="text-[11px] uppercase tracking-[0.16em] rounded-lg px-5 min-h-[44px] cursor-pointer border transition-colors hover:bg-[#ff6b6b]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff6b6b]"
-                      style={{ fontFamily: MONO, fontWeight: 700, color: COLOR.red, borderColor: 'rgba(255,107,107,0.5)' }}
+                      className="text-[11px] uppercase tracking-[0.16em] rounded-lg px-5 min-h-[44px] cursor-pointer border transition-colors hover:bg-[#f87171]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f87171]"
+                      style={{ fontFamily: MONO, fontWeight: 700, color: COLOR.red, borderColor: 'rgba(248,113,113,0.5)' }}
                     >
                       reject · with reason
                     </button>
@@ -159,7 +159,7 @@ export default function C06_HQ() {
                       <span className="text-white/42" style={{ fontVariantNumeric: 'tabular-nums' }}>{d.at} IST</span>
                       <span style={{ color: d.action === 'approved' ? COLOR.green : COLOR.red }}>{d.action}</span>
                       <span className="text-white/68 truncate max-w-[300px]">{d.title}</span>
-                      <span style={{ color: 'rgba(0,255,209,0.55)' }}>⌗ {d.receipt}</span>
+                      <span style={{ color: 'rgba(45,212,191,0.55)' }}>⌗ {d.receipt}</span>
                     </div>
                   ))}
                 </div>
@@ -180,13 +180,13 @@ export default function C06_HQ() {
                     style={{
                       fontFamily: MONO,
                       fontWeight: 700,
-                      background: `rgba(0,255,209,${0.06 + i * 0.1})`,
+                      background: `rgba(45,212,191,${0.06 + i * 0.1})`,
                       color: i >= 3 ? '#001a14' : COLOR.cyan,
                     }}
                   >
                     {l.level}
                   </span>
-                  <div aria-hidden="true" className="h-1 rounded-full bg-[#00ffd1] shrink-0" style={{ width: `${8 + i * 11}%`, opacity: 0.25 + i * 0.17 }} />
+                  <div aria-hidden="true" className="h-1 rounded-full bg-[#2dd4bf] shrink-0" style={{ width: `${8 + i * 11}%`, opacity: 0.25 + i * 0.17 }} />
                   <span className="text-[11.5px] text-white/60 leading-tight" style={{ fontWeight: 300 }}>
                     {l.meaning}
                   </span>
@@ -197,7 +197,7 @@ export default function C06_HQ() {
               Promotion needs trial-ledger evidence — e.g. twenty consecutive drafts approved unedited. Any incident
               demotes automatically. Trust is re-earned, never argued back.
             </p>
-            <div className="rounded-xl border border-[#ff6b6b]/28 p-4" style={{ background: 'rgba(255,107,107,0.05)' }}>
+            <div className="rounded-xl border border-[#f87171]/28 p-4" style={{ background: 'rgba(248,113,113,0.05)' }}>
               <div className="text-[9.5px] uppercase tracking-[0.22em] mb-2.5" style={{ fontFamily: MONO, color: COLOR.red }}>
                 forever human — at any level
               </div>

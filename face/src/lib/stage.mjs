@@ -1,7 +1,7 @@
 // stage.mjs -- every decision the particle face makes, with no React and no three.js.
 //
 // The face itself is the ONE element of the owner's reference design that must not change
-// (docs/design/reference/face-hq/assets/arcface/src/face/FaceStage.jsx). Everything in this
+// (docs/design/reference/face-hq/assets/arcface-v0.4/src/face/FaceStage.jsx). Everything in this
 // file is ported from that source verbatim -- the numbers are the reference's numbers, and
 // where a constant looks arbitrary it is because it IS the reference's arbitrary constant,
 // tuned by eye. Do not "clean up" a magic number here; it is the design.

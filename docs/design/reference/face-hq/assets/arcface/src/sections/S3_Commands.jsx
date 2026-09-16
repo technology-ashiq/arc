@@ -11,13 +11,13 @@ export default function S3_Commands() {
 
   return (
     <section id="commands" className="relative w-full bg-[#000] text-white" style={{ fontFamily: FONT }}>
-      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#00ffd1]/25 to-transparent" />
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#2dd4bf]/25 to-transparent" />
 
       <div className="max-w-[1200px] mx-auto px-6 sm:px-12 py-24 sm:py-32">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-12 items-start">
           {/* left: heading + detail panel */}
           <div className="lg:sticky lg:top-16">
-            <div className="text-[11px] uppercase tracking-[0.32em] text-[#00ffd1]/70 mb-5">02 · the keyboard</div>
+            <div className="text-[11px] uppercase tracking-[0.32em] text-[#2dd4bf]/70 mb-5">02 · the keyboard</div>
             <h2
               className="text-[38px] sm:text-[58px] md:text-[72px] leading-[1.02] tracking-tight mb-6"
               style={{ fontWeight: 600, textTransform: 'capitalize' }}
@@ -35,13 +35,13 @@ export default function S3_Commands() {
               <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/8">
                 <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
                 <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-                <span className="w-2.5 h-2.5 rounded-full bg-[#00ffd1]/50" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#2dd4bf]/50" />
                 <span className="ml-3 text-[10px] uppercase tracking-[0.2em] text-white/30" style={{ fontFamily: MONO }}>
                   arc · command detail
                 </span>
               </div>
               <div className="p-5" style={{ fontFamily: MONO }}>
-                <div className="text-[15px] text-[#00ffd1] mb-2">
+                <div className="text-[15px] text-[#2dd4bf] mb-2">
                   <span className="text-white/30">$ </span>
                   {active.name}
                 </div>
@@ -49,7 +49,7 @@ export default function S3_Commands() {
                 <p className="text-[11.5px] leading-[19px] text-white/45">{active.detail}</p>
                 {active.product && (
                   <div className="mt-4 text-[10px] uppercase tracking-[0.2em] text-white/30">
-                    owned by <span className="text-[#00ffd1]/70">{active.product}</span>
+                    owned by <span className="text-[#2dd4bf]/70">{active.product}</span>
                   </div>
                 )}
               </div>
@@ -66,11 +66,11 @@ export default function S3_Commands() {
                 onClick={() => setActive(c)}
                 className={`text-left border rounded-lg px-4 py-3 transition-all duration-200 cursor-pointer ${
                   active.name === c.name
-                    ? 'border-[#00ffd1]/60 bg-[#00ffd1]/[0.05]'
+                    ? 'border-[#2dd4bf]/60 bg-[#2dd4bf]/[0.05]'
                     : 'border-white/8 bg-white/[0.015] hover:border-white/25'
                 }`}
               >
-                <div className={`text-[13px] mb-1 ${active.name === c.name ? 'text-[#00ffd1]' : 'text-white/85'}`}>
+                <div className={`text-[13px] mb-1 ${active.name === c.name ? 'text-[#2dd4bf]' : 'text-white/85'}`}>
                   {c.name}
                 </div>
                 <div className="text-[10.5px] text-white/35 leading-snug">{c.short}</div>

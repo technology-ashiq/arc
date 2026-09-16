@@ -1,13 +1,16 @@
 // 01 · THE SPINE — the full log: filters, receipt drawers, the
 // eight laws, and the real-spine connection status.
 import { useMemo, useState } from 'react'
-import { MONO, COLOR, Btn, SimBadge } from '../../ui/kit.jsx'
-import { RoomHead, HPanel, EventRow, ReceiptDrawer } from '../bits.jsx'
+import { Pulse } from '@phosphor-icons/react'
+import { UI, MONO, COLOR, Btn, SimBadge, PickRow } from '../../ui/kit.jsx'
+import { RoomHead, HPanel, KpiStrip, SectionLabel, Empty, EventRow, ReceiptDrawer } from '../bits.jsx'
 import { spine } from '../../spine/store.js'
 import { FAMILY, familyKey } from '../../spine/kinds.js'
 import { ARC } from '../../data/arcKnowledge.js'
 import { useSpine } from '../useSpine.js'
 import { uiBus } from '../../lib/uiBus.js'
+
+const FAM_OPTIONS = [{ value: 'all', label: 'all kinds' }, ...Object.keys(FAMILY).map((k) => ({ value: k, label: FAMILY[k].label }))]
 
 export default function SpineRoom() {
   useSpine()
@@ -29,80 +32,78 @@ export default function SpineRoom() {
     <>
       <RoomHead
         title="If it isn't an event, it didn't happen."
-        hint="append-only · canonical JSONL · closed 18-kind vocabulary · corrections supersede"
+        hint="Append-only, canonical JSONL, a closed 18-kind vocabulary. Corrections supersede, never edit."
         right={<SimBadge>{spine.source === 'real' ? `real spine · ${spine.realMeta?.count ?? 0} events` : 'simulated feed · real vocabulary'}</SimBadge>}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_1fr] gap-4 items-start">
-        <div>
-          {/* filters */}
-          <div className="flex flex-wrap items-center gap-1.5 mb-3" style={{ fontFamily: MONO }}>
-            {['all', ...Object.keys(FAMILY)].map((f) => (
-              <button key={f} onClick={() => setFam(f)} className="min-h-[32px] rounded-full px-3 text-[9.5px] uppercase tracking-[0.14em] cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00ffd1]" style={{ background: fam === f ? 'rgba(0,255,209,0.14)' : 'rgba(255,255,255,0.05)', color: fam === f ? COLOR.cyan : 'rgba(255,255,255,0.6)', border: `1px solid ${fam === f ? 'rgba(0,255,209,0.45)' : 'rgba(255,255,255,0.12)'}` }}>
-                {f === 'all' ? 'all kinds' : FAMILY[f].label}
-              </button>
-            ))}
-            {spine.source !== 'real' && (
-              <span className="ml-auto flex gap-1.5">
-                {['today', 'history'].map((d) => (
-                  <button key={d} onClick={() => setDay(d)} className="min-h-[32px] rounded-full px-3 text-[9.5px] uppercase tracking-[0.14em] cursor-pointer" style={{ background: day === d ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)', color: day === d ? '#fff' : 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.12)' }}>
-                    {d}
-                  </button>
-                ))}
-              </span>
-            )}
-          </div>
+      {/* the instrument strip — the log by the numbers */}
+      <KpiStrip
+        items={[
+          { v: rows.length, l: 'Events shown', sub: 'newest first, under this filter' },
+          { v: source.length, l: 'Events on the spine', sub: spine.source === 'real' ? 'your real spine, read-only' : 'simulated feed, every day' },
+          { v: Object.keys(FAMILY).length, l: 'Kind families', sub: 'closed vocabulary' },
+        ]}
+      />
 
-          <HPanel title={`the log — ${rows.length} events shown, newest first`} hint="click ⌗ for the receipt">
-            <div className="max-h-[560px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+      <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_1fr] gap-4 items-start">
+        <div className="min-w-0">
+          <HPanel
+            title="The log"
+            hint="newest first · ⌗ opens the receipt"
+            actions={spine.source !== 'real' ? <PickRow small options={['today', 'history']} value={day} onPick={setDay} /> : undefined}
+          >
+            <div className="mb-3">
+              <PickRow small options={FAM_OPTIONS} value={fam} onPick={setFam} />
+            </div>
+            <div className="max-h-[560px] overflow-y-auto -mx-2" style={{ scrollbarWidth: 'thin' }}>
               {rows.map((e) => (
                 <EventRow key={e.id} e={e} onReceipt={setReceipt} />
               ))}
-              {rows.length === 0 && <div className="py-8 text-center text-[12px] text-white/45">No events under this filter yet.</div>}
+              {rows.length === 0 && <Empty icon={Pulse} title="No events under this filter yet" hint="Widen the filter, or press play and let the day run. Every line that lands here is a receipt." />}
             </div>
-            {/* legend */}
-            <div className="border-t border-white/8 mt-3 pt-3 flex flex-wrap gap-x-4 gap-y-1.5" style={{ fontFamily: MONO }}>
-              <span className="text-[9px] uppercase tracking-[0.18em] text-white/40">legend</span>
-              {Object.entries(FAMILY).map(([k, f]) => (
-                <span key={k} className="inline-flex items-center gap-1.5 text-[9.5px] text-white/62">
-                  <span className="w-[6px] h-[6px] rounded-full" style={{ background: f.color }} /> {f.label}
-                </span>
-              ))}
+            <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--line-1)' }}>
+              <SectionLabel>Legend</SectionLabel>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                {Object.entries(FAMILY).map(([k, f]) => (
+                  <span key={k} className="inline-flex items-center gap-1.5 text-[11.5px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
+                    <span aria-hidden="true" className="w-[6px] h-[6px] rounded-full" style={{ background: f.color }} /> {f.label}
+                  </span>
+                ))}
+              </div>
             </div>
           </HPanel>
         </div>
 
-        <div>
-          <HPanel title="the eight spine laws" hint="each one a written decision">
+        <div className="min-w-0">
+          <HPanel title="The eight spine laws" hint="each one a written decision">
             <div className="grid grid-cols-1 gap-2">
               {ARC.spine.laws.map((law) => (
-                <div key={law.adr} className="rounded-lg border border-white/9 p-2.5" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                  <div className="flex items-baseline gap-2 mb-0.5">
-                    <span className="text-[9px]" style={{ fontFamily: MONO, color: COLOR.cyan }}>{law.adr}</span>
-                    <span className="text-[12px] text-white/90" style={{ fontWeight: 600 }}>{law.name}</span>
+                <div key={law.adr} className="p-3 min-w-0" style={{ background: 'var(--well)', border: '1px solid var(--line-1)', borderRadius: 'var(--r-md)' }}>
+                  <div className="flex items-baseline gap-2 mb-0.5 flex-wrap">
+                    <span className="text-[11px]" style={{ fontFamily: MONO, color: COLOR.cyan }}>{law.adr}</span>
+                    <span className="text-[13px]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{law.name}</span>
                   </div>
-                  <div className="text-[10.5px] leading-[16px] text-white/55" style={{ fontWeight: 300 }}>{law.what}</div>
+                  <div className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{law.what}</div>
                 </div>
               ))}
             </div>
           </HPanel>
 
-          <HPanel title="integrity" hint="mechanics, not promises">
-            <div className="space-y-2 text-[11px] leading-[17px] text-white/68" style={{ fontWeight: 300 }}>
-              <div><b className="text-white/90" style={{ fontWeight: 600 }}>Replay determinism</b> — delete every derived view, replay the log, byte-identical state. CI proves it on the real spine.</div>
-              <div><b className="text-white/90" style={{ fontWeight: 600 }}>Quarantine</b> — invalid events never block work in hook mode; they quarantine and surface. Today: 0 quarantined.</div>
-              <div><b className="text-white/90" style={{ fontWeight: 600 }}>Redaction</b> — fail-safe, stub-only: no field names, values, or lengths ever leak. 25 adversarial holes found and pinned before launch.</div>
-              <div><b className="text-white/90" style={{ fontWeight: 600 }}>Revenue truth</b> — revenue.received is real-only; the sim feed uses revenue.simulated. The P&L cannot be polluted by wishes.</div>
+          <HPanel title="Integrity" hint="mechanics, not promises">
+            <div className="space-y-2.5 text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
+              <div><b style={{ fontWeight: 600, color: 'var(--text-1)' }}>Replay determinism</b> — delete every derived view, replay the log, byte-identical state. CI proves it on the real spine.</div>
+              <div><b style={{ fontWeight: 600, color: 'var(--text-1)' }}>Quarantine</b> — invalid events never block work in hook mode; they quarantine and surface. Today: 0 quarantined.</div>
+              <div><b style={{ fontWeight: 600, color: 'var(--text-1)' }}>Redaction</b> — fail-safe, stub-only: no field names, values, or lengths ever leak. 25 adversarial holes found and pinned before launch.</div>
+              <div><b style={{ fontWeight: 600, color: 'var(--text-1)' }}>Revenue truth</b> — revenue.received is real-only; the sim feed uses revenue.simulated. The P&L cannot be polluted by wishes.</div>
             </div>
           </HPanel>
 
-          <HPanel title="data source" hint="views rebuild from either — A5" tone="cyan">
-            <div className="text-[11.5px] leading-[18px] text-white/70 mb-3" style={{ fontWeight: 300 }}>
+          <HPanel title="Data source" hint="views rebuild from either · A5" actions={<Btn small onClick={() => uiBus.openRoom('engine')}>Engine room →</Btn>}>
+            <p className="text-[13px] leading-[20px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
               {spine.source === 'real'
                 ? `Reading YOUR real spine (read-only): ${spine.realMeta?.files?.length || 0} day-files, ${spine.realMeta?.count || 0} events.`
                 : 'Currently rendering the simulated feed. Connect your real arc spine (read-only) from the Engine room — set ARC_SPINE_DIR in .env.local and run the dev server.'}
-            </div>
-            <Btn small onClick={() => uiBus.openRoom('engine')}>engine room →</Btn>
+            </p>
           </HPanel>
         </div>
       </div>

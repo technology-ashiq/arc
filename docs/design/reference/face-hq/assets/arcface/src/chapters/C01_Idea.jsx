@@ -28,8 +28,8 @@ export default function C01_Idea() {
             className="text-[20px] sm:text-[27px] md:text-[31px] leading-[1.32] tracking-tight text-white"
             style={{ fontWeight: 500 }}
           >
-            “arc is a receipt-driven company operating system: <span className="text-[#00ffd1]">one event spine</span>, one
-            process layer, one model router, <span className="text-[#00ffd1]">one human approval inbox</span>.”
+            “arc is a receipt-driven company operating system: <span className="text-[#2dd4bf]">one event spine</span>, one
+            process layer, one model router, <span className="text-[#2dd4bf]">one human approval inbox</span>.”
           </blockquote>
           <div className="mt-5 text-[12.5px] sm:text-[13.5px] text-white/62 leading-[22px]" style={{ fontWeight: 300 }}>
             Kernel runs the company · workflows do the work · ventures make the money · every claim has a receipt.

@@ -17,10 +17,10 @@ export default function S4_Agents() {
 
   return (
     <section id="agents" className="relative w-full bg-[#000] text-white overflow-hidden" style={{ fontFamily: FONT }}>
-      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#00ffd1]/25 to-transparent" />
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#2dd4bf]/25 to-transparent" />
 
       <div className="max-w-[1200px] mx-auto px-6 sm:px-12 py-24 sm:py-32">
-        <div className="text-[11px] uppercase tracking-[0.32em] text-[#00ffd1]/70 mb-5">03 · the staff</div>
+        <div className="text-[11px] uppercase tracking-[0.32em] text-[#2dd4bf]/70 mb-5">03 · the staff</div>
         <h2
           className="text-[38px] sm:text-[58px] md:text-[72px] leading-[1.02] tracking-tight mb-6"
           style={{ fontWeight: 600, textTransform: 'capitalize' }}
@@ -39,13 +39,13 @@ export default function S4_Agents() {
           <div className="relative w-[320px] h-[320px] sm:w-[460px] sm:h-[460px] shrink-0">
             {/* ring */}
             <svg viewBox="0 0 460 460" className="absolute inset-0 w-full h-full">
-              <circle cx="230" cy="230" r="168" fill="none" stroke="rgba(0,255,209,0.18)" strokeWidth="1" strokeDasharray="3 6" />
+              <circle cx="230" cy="230" r="168" fill="none" stroke="rgba(45,212,191,0.18)" strokeWidth="1" strokeDasharray="3 6" />
               <circle cx="230" cy="230" r="112" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
               {council.map((_, i) => {
                 const ang = (i / council.length) * Math.PI * 2 - Math.PI / 2
                 const x = 230 + Math.cos(ang) * 168
                 const y = 230 + Math.sin(ang) * 168
-                return <circle key={i} cx={x} cy={y} r="3.5" fill="#00ffd1" opacity="0.9" />
+                return <circle key={i} cx={x} cy={y} r="3.5" fill="#2dd4bf" opacity="0.9" />
               })}
             </svg>
             {/* center */}
@@ -54,7 +54,7 @@ export default function S4_Agents() {
               <div className="text-[30px] sm:text-[38px] tracking-tight" style={{ fontWeight: 600 }}>
                 Council
               </div>
-              <div className="text-[10px] uppercase tracking-[0.25em] text-[#00ffd1]/70 mt-1">12 jurors · blind debate</div>
+              <div className="text-[10px] uppercase tracking-[0.25em] text-[#2dd4bf]/70 mt-1">12 jurors · blind debate</div>
             </div>
             {/* juror labels */}
             {council.map((a, i) => {
@@ -65,7 +65,7 @@ export default function S4_Agents() {
               return (
                 <div
                   key={a.name}
-                  className="absolute text-[9px] sm:text-[10.5px] uppercase tracking-[0.14em] text-white/60 hover:text-[#00ffd1] transition-colors whitespace-nowrap"
+                  className="absolute text-[9px] sm:text-[10.5px] uppercase tracking-[0.14em] text-white/60 hover:text-[#2dd4bf] transition-colors whitespace-nowrap"
                   style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)', fontFamily: MONO }}
                   title={a.role}
                 >
@@ -80,7 +80,7 @@ export default function S4_Agents() {
               {ARC.council.summary}
             </p>
             <div className="text-[11px] uppercase tracking-[0.25em] text-white/35">
-              verdicts · <span className="text-[#00ffd1]/80">yes</span> / <span className="text-white/70">conditional</span> /{' '}
+              verdicts · <span className="text-[#2dd4bf]/80">yes</span> / <span className="text-white/70">conditional</span> /{' '}
               <span className="text-white/70">wait</span> / <span className="text-white/70">no</span> — then scored hit or miss
             </div>
           </div>
@@ -92,7 +92,7 @@ export default function S4_Agents() {
             .filter((g) => field.some((a) => a.group === g))
             .map((g) => (
               <div key={g}>
-                <div className="text-[10px] uppercase tracking-[0.3em] text-[#00ffd1]/60 mb-4 pb-2 border-b border-white/8">
+                <div className="text-[10px] uppercase tracking-[0.3em] text-[#2dd4bf]/60 mb-4 pb-2 border-b border-white/8">
                   {g === 'other' ? 'ops & analysis' : g} floor
                 </div>
                 <div className="space-y-4">
@@ -100,7 +100,7 @@ export default function S4_Agents() {
                     .filter((a) => a.group === g)
                     .map((a) => (
                       <div key={a.name} className="group">
-                        <div className="text-[13px] text-white/85 group-hover:text-[#00ffd1] transition-colors" style={{ fontFamily: MONO }}>
+                        <div className="text-[13px] text-white/85 group-hover:text-[#2dd4bf] transition-colors" style={{ fontFamily: MONO }}>
                           {a.name}
                         </div>
                         <div className="text-[11.5px] text-white/40 leading-snug mt-0.5" style={{ fontWeight: 300 }}>

@@ -16,7 +16,9 @@ function spineApi(env) {
     configureServer(server) {
       server.middlewares.use('/api/spine', (req, res) => {
         res.setHeader('content-type', 'application/json')
-        const dir = env.ARC_SPINE_DIR
+        // .env.local OR the shell env OR this machine's arc checkout.
+        // The API only ever READS the files — nothing is written to arc.
+        const dir = env.ARC_SPINE_DIR || process.env.ARC_SPINE_DIR || 'E:\\Work_Hub\\01_Automemory\\arc\\.claude\\state\\hq\\events'
         if (!dir) {
           res.end(JSON.stringify({ configured: false }))
           return
@@ -55,5 +57,12 @@ export default defineConfig(({ mode }) => {
   return {
     base: './',
     plugins: [react(), tailwindcss(), spineApi(env)],
+    server: {
+      watch: {
+        // .shots holds QA screenshots (and, at times, a live headless-Chrome
+        // profile whose lock files EBUSY the watcher on Windows) — never watch it
+        ignored: ['**/.shots/**'],
+      },
+    },
   }
 })

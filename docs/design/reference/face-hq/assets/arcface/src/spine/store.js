@@ -36,6 +36,10 @@ function notify() {
   version++
   listeners.forEach((fn) => fn(version))
 }
+// external modules (the workspace layer) may poke the store to re-render
+export function poke() {
+  notify()
+}
 
 function reveal(ev) {
   spine.events.push(ev)
@@ -152,10 +156,12 @@ export function recordDecision(approvalId, approved, reason, actionLabel) {
     module: 'hq',
     level: 'human',
     text: `${ap.title} — ${approved ? (actionLabel || 'approved') : 'rejected'} · reason: ${reason}`,
-    payload: { approved, reason, ref: ap.eventId, action: actionLabel || null },
+    payload: { approved, reason, ref: ap.eventId, approvalId: ap.id, action: actionLabel || null },
     decided: { ...ap, approved, reason, actionLabel },
   }
   reveal(ev)
+  // decisions on YOUR approvals persist with the workspace log
+  if (ap.ws && spine.persistHook) spine.persistHook(ev)
   notify()
   return ev
 }
@@ -173,6 +179,8 @@ export function changeAutonomy(capability, from, to, evidence) {
     payload: { capability, from, to, evidence },
   }
   reveal(ev)
+  // a rung climbed or lost is YOUR action — it survives reload
+  if (spine.persistHook) spine.persistHook(ev)
   notify()
   return ev
 }
@@ -205,8 +213,38 @@ export function appendCouncilVerdict(question, verdict, confidence, dissent) {
     payload: { question, verdict, confidence, dissent, session: 'live-demo' },
   }
   reveal(ev)
+  // a session YOU convened is a real verdict — it survives reload,
+  // and later gets scored HIT or MISS against reality (council.outcome)
+  if (spine.persistHook) spine.persistHook(ev)
   notify()
   return ev
+}
+
+// one honest sentence per real event — falls back to raw payload
+function realText(e) {
+  const p = e.payload || {}
+  switch (e.kind) {
+    case 'decision.recorded':
+      return `${p.verdict === 'approve' ? 'approved' : p.verdict === 'reject' ? 'rejected' : 'decided'} — ${p.reason || p.decides || ''}`.slice(0, 170)
+    case 'approval.requested':
+      return `approval requested — ${p.subject || p.title || p.summary || 'awaiting the owner'}`.slice(0, 170)
+    case 'phase.closed':
+      return `lane ${p.lane || '?'} · phase ${p.phase || '?'} closed${p.tests ? ` · tests ${p.tests}` : ''}`
+    case 'kickoff.done':
+      return `kickoff — lane ${p.lane || '?'}${p.cycle ? ` · ${p.cycle}` : ''}`
+    case 'run.completed':
+      return `run completed · ${p.process || e.process || ''}${p.outcome ? ` · ${p.outcome}` : ''}`
+    case 'review.completed':
+      return `review completed${p.verdict ? ` — ${p.verdict}` : ''}${p.lane ? ` · ${p.lane}` : ''}`
+    case 'council.verdict':
+      return `council verdict — ${p.verdict || p.call || ''}${p.confidence ? ` (${p.confidence})` : ''}`
+    case 'day.closed':
+      return `day closed · books sealed`
+    case 'note.logged':
+      return p.note || p.text || p.summary || 'note'
+    default:
+      return e.summary || e.text || JSON.stringify(p).slice(0, 150)
+  }
 }
 
 // ── real spine (dev API, read-only) ──
@@ -225,9 +263,9 @@ export async function tryConnectRealSpine() {
         t: d.getHours() * 60 + d.getMinutes(),
         dateLabel: isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10),
         kind: e.kind || 'note.logged',
-        module: e.module || e.source || 'spine',
+        module: e.process ? String(e.process).split('@')[0] : e.actor || 'spine',
         level: e.level || '',
-        text: e.summary || e.text || JSON.stringify(e.payload || e).slice(0, 140),
+        text: realText(e),
         payload: e.payload || e,
         real: true,
       }
