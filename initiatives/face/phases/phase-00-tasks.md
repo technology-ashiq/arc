@@ -121,18 +121,18 @@ tier: static
 sources: phase-00-spec.md, code:grep-fallback(1488; no .codegraph/), adrs(37), learning(3), retro(28), churn(466)
 decision: Cycle 15 stated the rule but never kept the file, so the seed comes from its nine attacker-fix commit bodies plus four more fix commits and the arc-face retro rows, grouped as process/CLI · HTTP door · gates/parsers · fixtures; applying it at once caught face-modules-contract.mjs (slice 05) refusing no unknown flag and silently ignoring `--root=DIR` — fixed, and two arms added to the slice-05 mutant test
 result: 13 cited SHAs: `13 ok`, 0 missing · `defect lines=34` · instruction present=1 · twin fix: `--chek` exit=2 `unknown argument` · `--root=.` exit=2 · `--root` with no value exit=2 · `--root . --check` exit=0 `in sync -- 36 modules`
-commit: (empty until proven)
+commit: 21a5651e
 
 #### slice: 08
 
 title: v0.7 baseline shots for REQ-01: the reference's own `scripts/shots.mjs` on the owner's box, 1440×1000, both moods, one shot per v0.7 room; PNGs stay local and gitignored (Cycle 15's `.playwright-mcp/` precedent); `initiatives/face/evidence/phase-00/baseline-shots.json` commits room id · mood · sha256 · viewport · Chrome version. **Harness thread (ADR-1330, ADR-1335)**
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
+proof: the reference's own scripts/shots.mjs, run over its built dist with the 36 v0.7 room ids from modules-v2.json in both moods at 1440x1000, must print one `shot` line per room x mood with no mood-mismatch warning; the manifest script must find 36 x 2 = 72 PNGs with 0 missing and 0 unexpected; all 72 sha256 values must be distinct (a repeated hash would mean a blank or stuck page); two shots opened by eye; the PNG folder must be git-ignored in the main clone
+tier: e2e-visual
+sources: phase-00-spec.md, code:grep-fallback(1490; no .codegraph/), adrs(37), learning(3), retro(30), churn(467)
+decision: captured from the owner's design app over its existing dist (no source newer than dist/index.html) so the owner's folder is only read, with output in the main clone's gitignored .playwright-mcp/ (Cycle 15 precedent) — a session scratchpad would not survive to Phase 03; ROOMS comes from the generated contract, not a hand list; Chrome version read from the binary's file metadata (running chrome.exe --version on Windows opens a browser window instead)
+result: shots.mjs EXIT=0 · `shot` lines=72 · warnings/failures=0 · `baseline-shots: modules=36 shots=72 missing=0 unexpected=0` · `72 unique hashes; min bytes 154510` · IGNORED_IN_MAIN · by eye: dark-engine.png (Engine room, kernel, dark) and light-overview.png (Today, light) render as the v0.7 design · Chrome 152.0.7977.83
 commit: (empty until proven)
 
 #### slice: 09
