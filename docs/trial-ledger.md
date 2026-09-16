@@ -577,7 +577,6 @@ is still not evidence of correctness.
 
 | date | gate | run-ref | fired? | false-positive? |
 |---|---|---|---|---|
-| 2026-09-16 | `appetite-sum` (**zero-slack** branch) | arc-face Cycle 15, every run cycle-long: 32d = 100% of 32d from kickoff, 30d = 94% after the 2026-09-16 plan-drift fix | **yes, every run** | **leaning false**: the cycle closed at **45% of 32d**, but that low burn is mostly phases never closed and a carried dogfood, not slack found in the build |
 | 2026-09-16 | `appetite-sum` (**over-commit** branch) | arc-face Cycle 15, every run for 24 days | **no** | **no FP, but a MISSED true positive.** Phase 09 (3d) was in no Phases-table row, so the sum never saw it: 35d > 32d would have FAILed on 2026-08-23. The gate was blind, not clean |
 | 2026-09-16 | `nonneg-drift` | arc-face Cycle 15 | **no** | **missed true positive, two causes**: `phase-09-spec.md` had no Non-negotiables block, and the gate never read it because Phase 09 was not in the table. Separately, the last Non-negotiable had been false since ADR-1316, but PLAN and all eight spec copies agreed, so there was no copy-to-copy drift to see. The gate can catch drift between copies; it cannot catch drift between the rule and the world |
 | 2026-09-16 | `adr-wired` | arc-face Cycle 15 | **no** | **missed true positive**: ADR-1316 was cited by no phase spec and absent from the index, and an index row is what the gate walks |
