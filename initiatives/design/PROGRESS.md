@@ -293,8 +293,16 @@ consumer projects — it carries the owner's approvals.
 1. **CI.** Read per JOB for `a16b189e` and `fd94e8f1`.
    - Expected at `a16b189e`: the composer-bash refusal cases red.
    - Expected at `fd94e8f1`: only the owner-fragment case red, plus the refpack 14.
-2. **Attack findings.** Fix every finding in § Fifth pass (red-first where it is a behaviour),
-   push, and read CI.
+2. **Attack findings.** The pass came back: 9 decision-logic findings and 11 shell findings, with
+   overlaps, all recorded OPEN in `adversarial-open.md` § Fifth pass. **Start with BL-1/BS-1, which
+   both attackers found independently: the composer's OWN page can iframe a sibling or the matrix,
+   and the `file://` render delivers those pixels into its readable session.** Pinning the Bash
+   command does not stop that. Confining the render to the variant directory is a renderer design
+   change, so route it through `/arc-change` with a recommendation first. Then fix the rest,
+   red-first where it is a behaviour, push, and read CI.
+   BS-4 (the dispatcher fails open when it cannot capture the payload) is in `_dispatch.sh`, which
+   is under the governance-denied `.claude/hooks/**`, so it is the owner's, and it affects every
+   guard.
 3. **Owner edit.** Once the pass is fixed, the owner runs
    `cp tests/fixtures/hooks/PreToolUse.d/10-design-composer.sh .claude/hooks/PreToolUse.d/10-design-composer.sh`.
    Then register that fragment in `products/design/manifest.json` → `files`, regenerate the sync

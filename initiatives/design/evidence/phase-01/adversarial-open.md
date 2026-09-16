@@ -356,6 +356,38 @@ unknown flags, missing values, no marker, two markers and a `.bak`-only marker a
 exit code other than 0 or 2; 16,000 flag pairs were refused in 2.8s; `--end` through Bash is
 refused.
 
+### Shell / OS boundary
+
+**Both attackers found the iframe leak independently: BS-1 is BL-1.** They also overlap on
+BS-2/BS-3 = BL-2 (mutants M1/M2/M3), on BS-6 = BL-3 + BL-7, and on BS-7 = BL-4.
+
+| # | Finding | Status |
+|---|---|---|
+| BS-1 (High) | **= BL-1.** An iframe in the composer's own page showed variant-b in its own session's PNG. `img` and `iframe` also reach render state, scripts and the brief. | CONFIRMED, OPEN |
+| BS-2 (High, tests) | **= BL-2 M1.** No case pins the alphabet on its own: `design-render.sh docs/.../variant-a/index.html;cat${IFS}docs/.../variant-b/index.html --mode explore --session lexos-v1--variant-a` passes once lines 71-74 are deleted. Add injections that ride inside the ROUTE word. | CONFIRMED, OPEN |
+| BS-3 (Med, tests) | **= BL-2 M2/M3.** The arity guard and the one-marker guard are unpinned: a trailing `--iter` exits 1 (read as ALLOW), and with two markers the last in glob order wins. | CONFIRMED, OPEN |
+| **BS-4 (Med, inherited)** | **The dispatcher fails OPEN when it cannot capture the payload.** With `TMPDIR` unwritable, `_dispatch.sh:50-51,61` fails the fragment's `< "$input"` redirect with exit 1, which is read as allow. **Every PreToolUse guard has this gap**, not only this one, and `_dispatch.sh` sits under the governance-denied `.claude/hooks/**`. Fix direction: in blocking mode, a failed capture, or a fragment exit other than 0 or 2, blocks. | CONFIRMED, OPEN — owner-side file |
+| BS-5 (Med) | **The owner's "one command" is incomplete.** Closing it also needs `.claude/hooks/PreToolUse.d/10-design-composer.sh` added to `products/design/manifest.json` → `files` and the sync golden regenerated; otherwise a selective install ships the check with nothing calling it. The test should also assert the manifest row. | CONFIRMED, OPEN |
+| BS-6 (Med, cond.) | **= BL-3/BL-7.** The grep fallback takes the first `agent_type` at ANY depth, and a broken jq shim exits 0. Take top-level keys only; block when the payload names `ui-composer` but its identity cannot be read. | CONFIRMED, OPEN |
+| BS-7 (Low) | **= BL-4.** ROOT from cwd, not `CLAUDE_PROJECT_DIR`. | CONFIRMED, OPEN |
+| BS-8 (Low, tests) | The four status-0 cases (main session, other agent, non-Bash, mention) still pass with the script deleted, because the fragment fails open. Pair each with a composer refusal in the same sandbox. | CONFIRMED, OPEN |
+| BS-9 (Low, harness) | The red-on-purpose fragment case keeps this file's CI job red until the owner acts, which hides any new regression in the other cases. Move it to its own file, or skip it with a counted reason. | CONFIRMED, OPEN |
+| BS-10 (Low) | Refusal messages echo `'$ROUTE'` and `'$1'` uncapped: a 20KB word produces 20KB of stderr. Cap every echoed value (lane defect #14). | CONFIRMED, OPEN |
+| BS-11 (Low) | jq on Windows emits CRLF. Git Bash strips the trailing CR in `$( )`, but Cygwin bash or WSL calling `jq.exe` would compare `ui-composer\r` and exit 0. Strip `\r` from AGENT and TOOL. | PLAUSIBLE, OPEN |
+
+Clean (shell): 18 hostile code points (NBSP, the U+2000 space family, zero-width spaces, BOM,
+fullwidth solidus and more) are refused under the C, UTF-8 and tr_TR locales. `\ ` in the bracket
+is a space. Word-splitting edges refuse. NUL is dropped in the safe direction. `...` components are
+not traversal. The renderer's own `_no_redefine` refuses a repeated `--mode`, `--session` or
+`--iter`. Large payloads cost 0.5-1.3s, and argv limits keep a flag flood well short of the
+timeout. The golden row matches. The `_bp` round-trip is exact. bash 3.2 (macOS) is unverified.
+
+**Process defect, for the next pass:** the two attackers shared one scratchpad. One overwrote the
+other's `sb.txt`, and between 02:56:57 and 02:57:50 its mutations ran inside the other's sandbox,
+`tmp.Cz0ZU6JXrT`: lines deleted, then restored, and a marker added. Every BS result was re-run in a
+private sandbox. BL results obtained inside that window against `tmp.Cz0ZU6JXrT` should be treated
+as unverified. **Give each attacker its own sub-directory.**
+
 **What BL-1 changes about the plan.** The Bash boundary is necessary and not sufficient. Blindness
 now also needs the RENDER to be confined to the variant directory, for example by serving only
 that directory over loopback or by blocking every request outside it and refusing a capture whose
