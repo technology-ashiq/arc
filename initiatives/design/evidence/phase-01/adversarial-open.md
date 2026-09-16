@@ -315,6 +315,9 @@ boundary refused the same write when the payload was literal.
   now builds the payload with `printf` into a variable and asserts its own fixture first. If the
   inference is wrong, the next macOS run fails on "fixture payload is malformed" instead of on
   "age relaxed", which settles it either way.
+- **Settled at `fba9a89e`** (run 35133832959): macOS shard 1/3 ran all four critic cases plus
+  every adversarial case (declared 1236, executed 1236), and all of them pass. The only change to
+  those cases was the payload spelling.
 
 ### Add to the running defect list for the next attacker
 17. A cap on the OUTPUT is not a cap on the WORK.

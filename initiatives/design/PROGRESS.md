@@ -204,9 +204,21 @@ consumer projects — it carries the owner's approvals.
   - a late library load that clobbered `MARKER` and refused the composer's own writes. The
     scratch replay caught this before commit.
 
-**Next step:** read CI per JOB on the attacked-fix push; the expected reds are only Slice B's 14.
-Then Phase 01's live demo on the LexOS brief (text-only evidence), then `/arc-phase-done 01`, then
-Phase 02 Slice B. Open findings and the running defect list for
+- **Review pass, then CI clean on the whole slice.** `code-reviewer` returned fix-first with 4
+  warnings; all were fixed at `fba9a89e`. Dispositions are in `adversarial-open.md` § Fourth
+  pass. W2 happened to this session mid-edit: a stale core refused its own reads with nothing
+  armed.
+
+  `arc-ci` run **35133832959** at `fba9a89e`: 14/19 jobs green. Each of the 5 red jobs fails on
+  `design-refpack.bats` alone, which is Slice B's 14 red-first tests, with `reconcile: declared =
+  executed` on every leg. **macOS shard 1/3 is green and ran every critic and adversarial case**
+  (declared 1236, executed 1236). That confirms the macOS-only critic failure was the test
+  helper's nested escaped quotes and not the boundary.
+
+**Next step:** Phase 01's live demo — one fresh explore on the LexOS brief (mobile `yes`), per
+the spec's Verification plan, with text-only evidence. While a composer is armed, this session's
+own Read/Grep/Glob outside that variant are refused too (a marker cannot tell who calls), so the
+operator reads through Bash for the duration. Then `/arc-phase-done 01`, then Phase 02 Slice B. Open findings and the running defect list for
 the next attacker prompt are in
 [`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md).
 
