@@ -592,3 +592,148 @@ _ewrite() { bash "$SANDBOX/.claude/hooks/PreToolUse-edit.sh"; }
       "$(_payload Write '{"content":"x"}')"
   [ "$status" -eq 2 ] || { echo "a write with no readable path was allowed: $status $output"; false; }
 }
+
+# ---------- an ABANDONED boundary (/arc-change 2026-09-16) ----------
+#
+# A compose that never reached compose-done left lexos-p01/variant-a armed from 08-25 to 09-16,
+# and every Read, Grep, Glob and Write in that worktree was refused -- the operator's included --
+# by a message that said neither when the boundary was armed nor how to release it.
+#
+# The obvious fix is the wrong one. The marker carried `pid=`, and "pid dead -> release" reads
+# like a liveness check, but that pid belongs to composer-scope-check.sh --begin, which exits on
+# the next line: the check would disarm every boundary the moment it was armed. So staleness is
+# made VISIBLE and never PERMISSIVE. Every refusal case below asserts status 2 before anything
+# else, so a "stale -> allow" mutant fails these cases instead of passing them with a nicer message.
+
+# A marker armed $1 seconds ago, spelled the way --begin will write it.
+_old_marker() {
+  mkdir -p "$SANDBOX/.claude/state/design"
+  printf 'explore=lexos-v1\nvariant=variant-a\narmed_at=2026-01-01T00:00:00Z\narmed_epoch=%s\n' \
+    "$(( $(date -u +%s) - $1 ))" > "$(_marker)"
+  [ -s "$(_marker)" ] || { echo "fixture marker is empty"; false; }
+}
+# The production read path: the real dispatcher, on a stdin payload, aimed at a sibling.
+_sibling_read() {
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "$(_payload Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}')"
+}
+_release_line() { echo "bash .claude/scripts/design/design-explore.sh compose-done lexos-v1 --variant $1"; }
+
+@test "abandoned boundary: compose records WHEN it armed, and no pid posing as liveness" {
+  _composer_sandbox
+  run bash "$(_explore_sh)" compose lexos-v1 --variant a
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -f "$(_marker)" ] || { echo "compose armed nothing: $output"; false; }
+  grep -Eq '^armed_at=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' "$(_marker)" || {
+    echo "no armed_at in the marker:"; cat "$(_marker)"; false; }
+  grep -Eq '^armed_epoch=[0-9]+$' "$(_marker)" || { echo "no armed_epoch in the marker:"; cat "$(_marker)"; false; }
+  ! grep -q '^pid=' "$(_marker)" || {
+    echo "pid= is the --begin process, dead on arrival -- it can only mislead whoever reads it"; false; }
+}
+
+@test "abandoned boundary: a refusal says when the boundary was armed and how to release it" {
+  _composer_sandbox
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  [ -f "$(_marker)" ] || { echo "compose armed nothing"; false; }
+  _sibling_read
+  [ "$status" -eq 2 ] || { echo "sibling read was not refused: $status $output"; false; }
+  echo "$output" | grep -q "sibling" || { echo "refused, but not as the sibling case: $output"; false; }
+  echo "$output" | grep -q "armed at 20" || { echo "the refusal does not say when it was armed: $output"; false; }
+  echo "$output" | grep -qF "$(_release_line a)" || { echo "the refusal does not name its release: $output"; false; }
+}
+
+@test "abandoned boundary: an eight-day-old marker STILL refuses a sibling and states its age" {
+  _composer_sandbox; _old_marker 691200
+  _sibling_read
+  [ "$status" -eq 2 ] || { echo "age relaxed the boundary: $status $output"; false; }
+  echo "$output" | grep -q "sibling" || { echo "refused, but not as the sibling case: $output"; false; }
+  echo "$output" | grep -qF "(8 days ago)" || { echo "the refusal does not say how old the boundary is: $output"; false; }
+  echo "$output" | grep -qF "$(_release_line a)" || { echo "$output"; false; }
+}
+
+@test "abandoned boundary: a legacy pid-only marker with a dead pid still refuses" {
+  _composer_sandbox
+  mkdir -p "$SANDBOX/.claude/state/design"
+  # Every marker armed before this change looks like this, including the one that locked the
+  # worktree. Nothing runs as pid 999999, and that must change nothing about the decision.
+  printf 'explore=lexos-v1\nvariant=variant-a\npid=999999\n' > "$(_marker)"
+  _sibling_read
+  [ "$status" -eq 2 ] || { echo "a dead pid released the boundary: $status $output"; false; }
+  echo "$output" | grep -q "armed at an unknown time" || { echo "$output"; false; }
+  echo "$output" | grep -qF "$(_release_line a)" || { echo "$output"; false; }
+}
+
+@test "abandoned boundary: a hostile armed_epoch is never evaluated as arithmetic" {
+  _composer_sandbox
+  mkdir -p "$SANDBOX/.claude/state/design"
+  # bash evaluates a[$(cmd)] inside $(( )), so an age computed from an unvalidated field would be
+  # a command-execution path planted in a file this boundary reads on every tool call.
+  printf 'explore=lexos-v1\nvariant=variant-a\narmed_at=2026-01-01T00:00:00Z\narmed_epoch=x[$(touch %s/pwned)]\n' \
+    "$SANDBOX" > "$(_marker)"
+  grep -q 'touch' "$(_marker)" || { echo "fixture did not plant the payload"; false; }
+  _sibling_read
+  [ "$status" -eq 2 ] || { echo "$status $output"; false; }
+  [ ! -e "$SANDBOX/pwned" ] || { echo "armed_epoch was EXECUTED"; false; }
+  echo "$output" | grep -q "armed at an unknown time" || { echo "$output"; false; }
+}
+
+@test "abandoned boundary: a zero-padded armed_epoch is decimal and never crashes the hook" {
+  _composer_sandbox
+  mkdir -p "$SANDBOX/.claude/state/design"
+  # $(( 00178... )) is OCTAL to bash, and an 8 or 9 in it is an expansion error that kills a
+  # non-interactive shell with exit 1 -- neither allow nor block, which this hook promises never to return.
+  printf 'explore=lexos-v1\nvariant=variant-a\narmed_at=2026-01-01T00:00:00Z\narmed_epoch=00%s\n' \
+    "$(( $(date -u +%s) - 7200 ))" > "$(_marker)"
+  _sibling_read
+  [ "$status" -eq 2 ] || { echo "the hook did not return a decision: $status $output"; false; }
+  echo "$output" | grep -qF "(2 hours ago)" || { echo "$output"; false; }
+}
+
+@test "abandoned boundary: two armed boundaries name BOTH release commands" {
+  _composer_sandbox
+  bash "$(_explore_sh)" compose lexos-v1 --variant a >/dev/null
+  bash "$(_explore_sh)" compose lexos-v1 --variant b >/dev/null
+  _sibling_read
+  [ "$status" -eq 2 ] || { echo "$status $output"; false; }
+  echo "$output" | grep -qi "armed at once" || { echo "refused, but not for the collision: $output"; false; }
+  echo "$output" | grep -qF "$(_release_line a)" || { echo "variant-a release missing: $output"; false; }
+  echo "$output" | grep -qF "$(_release_line b)" || { echo "variant-b release missing: $output"; false; }
+}
+
+@test "abandoned boundary: the WRITE refusal carries the same note (the twin)" {
+  _composer_sandbox; _old_marker 691200
+  # The same marker arms composer-write-check.sh, so the lock covered Write and Edit too. A note
+  # added to the read refusal alone would be the one-read-fixed, one-left-open shape again.
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(_payload Write '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}')"
+  [ "$status" -eq 2 ] || { echo "age relaxed the write boundary: $status $output"; false; }
+  echo "$output" | grep -q "write scope" || { echo "refused by something other than the write boundary: $output"; false; }
+  echo "$output" | grep -qF "(8 days ago)" || { echo "$output"; false; }
+  echo "$output" | grep -qF "$(_release_line a)" || { echo "$output"; false; }
+}
+
+@test "abandoned boundary: the release it prints works on a run whose gates fail" {
+  _composer_sandbox; _old_marker 691200
+  # An abandoned run is exactly the one whose gates will not clear, so the advice is only honest
+  # if compose-done releases BEFORE it judges. It does today; this pins it.
+  run bash "$(_explore_sh)" compose-done lexos-v1 --variant a
+  [ -n "$output" ] || { echo "compose-done printed nothing -- did it run?"; false; }
+  [ ! -f "$(_marker)" ] || { echo "compose-done left an abandoned boundary armed: $status $output"; false; }
+}
+
+@test "abandoned boundary: session start announces an armed boundary, and only an armed one" {
+  _composer_sandbox
+  mkdir -p "$SANDBOX/.claude/hooks/SessionStart.d"
+  cp "$ARC_ROOT/.claude/hooks/SessionStart.d/00-context.sh" "$SANDBOX/.claude/hooks/SessionStart.d/"
+  run bash "$SANDBOX/.claude/hooks/SessionStart.d/00-context.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  echo "$output" | grep -q "Quick heads-up" || { echo "the hook did not run: $output"; false; }
+  ! echo "$output" | grep -qi "composer boundary" || { echo "announced a boundary nobody armed: $output"; false; }
+  _old_marker 691200
+  run bash "$SANDBOX/.claude/hooks/SessionStart.d/00-context.sh"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  echo "$output" | grep -q "composer boundary ARMED for lexos-v1/variant-a" || {
+    echo "an armed boundary went unannounced at session start: $output"; false; }
+  echo "$output" | grep -qF "(8 days ago)" || { echo "$output"; false; }
+  echo "$output" | grep -qF "$(_release_line a)" || { echo "$output"; false; }
+}

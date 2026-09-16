@@ -77,8 +77,8 @@ the engine lane recorded at 18 -> 6. A third round would be patching against the
 00 closed; the branch carries commits on three build days (08-23, 08-24, 08-25). **The 50%
 tripwire is CROSSED:** day 3 ended with Phase 01 open. Its stated purpose is to reassess the
 renderer approach, and the renderer phase (00) closed green on day 1 — the overrun is Phase 01's
-two adversarial passes (42 findings), not the renderer. The scope-cut conversation is owed to the
-owner before Phase 01's demo or any Phase 02 build continues. Kill criteria: 50% tripwire if phases 00+01 are not green by end of day 3;
+two adversarial passes (42 findings), not the renderer. **Owner ruled 2026-09-16: no scope cut,
+all nine phases continue on the corrected burn.** Kill criteria: 50% tripwire if phases 00+01 are not green by end of day 3;
 taste tripwire before any rival spend if the post-Phase-03 controlled owner score does not beat
 a FRESHLY MEASURED plain-prompt bar after one re-run. The `~40/100` figure was carried forward
 from prose and has no measurement behind it, so Phase 03 re-derives it on the same brief, item
@@ -169,14 +169,22 @@ consumer projects — it carries the owner's approvals.
   lines). `arc-ci` run **35120950390**: 14/19 jobs green, and the 5 red selftest jobs fail on
   `tests/design-refpack.bats` alone (14 each) — Slice B's red-first tests, as designed —
   with `reconcile: declared 3535, executed 3535`.
-- **Phase 01's live demo brief is an owner question.** The spec names `lexos-case-workspace`
+- **Phase 01's live demo brief was an owner question.** The spec names `lexos-case-workspace`
   because it declares mobile `yes`; `face-hq` declares mobile `no` and cannot prove the
   two-viewport path. LexOS explores are already committed four times, but committing more LexOS
-  pixels to this public repo is an outward action that needs the owner's explicit OK.
+  pixels to this public repo is an outward action.
+- **Owner ruling 2026-09-16, one "ok" over three recommendations:** (1) no scope cut, (2) the
+  stale-boundary fix plan as filed in the Phase 01 spec, (3) the demo runs on the LexOS brief as
+  specified, and its evidence commits **text only** — shas, manifests, the by-hand verdict — never
+  the LexOS HTML or PNGs. Not yet a `decision.recorded` receipt: `arc-event` refuses in a linked
+  worktree, so it is emitted from the main clone or after the merge, with the kickoff pair.
+- **The lock covered writes too.** The same marker arms `composer-write-check.sh`, so the note
+  lands on both refusals — the read-fixed, write-left-open twin is exactly the shape this lane has
+  shipped before.
 
-**Next step:** the owner rules on the crossed tripwire (recommendation: no cut, continue all nine
-phases on the corrected burn). Then the stale-boundary fix red-first -> CI -> two fresh attackers,
-then Phase 01's live demo, then Phase 02 Slice B. Open findings and the running defect list for
+**Next step:** the stale-boundary tests are committed red-first; read CI per JOB for the expected
+new reds in `design-composer-eyes.bats`, then implement, then two fresh attackers, then Phase 01's
+live demo, then Phase 02 Slice B. Open findings and the running defect list for
 the next attacker prompt are in
 [`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md).
 

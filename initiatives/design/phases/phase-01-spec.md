@@ -48,7 +48,8 @@ rendered and correctly classified as product canvas or documentation.
 - [ ] Negative control: a composer attempting to read a **sibling** variant's render is refused
 - [ ] **An abandoned boundary is diagnosable and never fails open** (`/arc-change` 2026-09-16).
       A compose that died without `compose-done` left `lexos-p01/variant-a` armed from 08-25 to
-      09-16 and refused every Read, Grep and Glob in the worktree, operator included, with a
+      09-16 and refused every Read, Grep, Glob and Write in the worktree, operator included — the
+      write boundary reads the same marker, so both refusals carry the note — with a
       message that did not say when it was armed or how to release it. The marker's `pid=` is
       NOT a liveness signal: it is the pid of `composer-scope-check.sh --begin` itself, which
       exits on the next line, so "pid dead -> release" would disarm every boundary the instant
