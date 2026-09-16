@@ -1,7 +1,7 @@
 # PLAN — face v2 · "The Workroom" — v1.0
 
-> **STATUS: kickoff-grade — drafted in a Cowork session, 2026-09-15, awaiting the owner's
-> landing instruction.** The owner branches/commits/PRs this drop himself (no machine git).
+> **STATUS: kickoff-grade — landed owner-instructed from a Cowork session, 2026-09-16,
+> disk-only, git untouched.** The owner branches/commits/PRs this drop himself (no machine git).
 > Kickoff runs via the paste-ready prompts in §14. Decisions are letters (**FV2-A…N**); real
 > ADR numbers are assigned at kickoff from the **face band 1300–1399** (1300–1317 taken by
 > Cycle 15 — next free is 1318, re-swept across sibling worktrees at kickoff per the band
@@ -134,6 +134,14 @@ the product. ADR-1316's reasoning is unchanged: a layer this session cannot give
 layer that does not ship. *Reversibility:* two-way, and the split stays cheap by the module
 boundary this plan introduces.
 
+**And no new surface outside `.claude/scripts/` this cycle.** The ops registry lands beside the
+door it serves. arc's real layout problem — product code AND the spine living inside a vendor's
+folder, where deleting `.claude/` would take the company's ledger with it — is named here and is
+the **distribute lane's** work, not this one's: one atomic `git mv` PR with a compat shim, a lint
+that fails new references to the old path, and a `migrate-layout` command. Splitting the tree now
+would run two conventions at once for weeks and save nothing, because a directory move costs
+references, not files.
+
 **FV2-C — the module contract: four files, and no fifth.**
 `module.mjs` (manifest) · `fold.mjs` (pure) · `ops.mjs` (verbs) · `View.tsx` (render).
 `fold.mjs` imports nothing from React, Vite or three; `View.tsx` carries no branch worth
@@ -178,7 +186,12 @@ implementation. File-touching ops write to a `feat/face-*` branch only, show the
 stop: `main` is untouchable and **merge never exists in the face**. A tool's own guard
 (send-window, cap, budget, lint) refuses in its own words and the face renders that verbatim.
 *Why:* this is the affordance the owner has asked for three times, expressed so that A5 (no
-second logic path), E2 and the git workflow law all still hold.
+second logic path), E2 and the git workflow law all still hold. The SESSION door starts
+**`arc-run --driver …`, never a harness binary**: a session whose command line names a harness
+fails the fixture. The driver layer already exists (`engine/router.yaml` classes, `RUNTIME_DRIVERS`,
+`--driver auto`, the `drivers/<name> version` contract) and is the ONLY way a session picks a
+runtime — the face is harness-neutral by construction, and one hardcoded binary would end that
+silently.
 
 **FV2-J — the four `extra` rooms are kept as modules, labelled.** `factory` · `executor` ·
 `agents` · `story` exist in v0.7 and not in arc's registry. They ship as modules with an
@@ -483,7 +496,7 @@ Ground rules for this kickoff:
 - Hard sequence: P01 (tokens + kit) and P02 (module frame + face-pure lint) are green BEFORE any of the 36 modules is written. A lint that lands after the code it governs governs nothing.
 - P03 runs in five ring batches (command, kernel, factory, money, company), each its own feat branch and PR, each exiting with its own NOT SERVED list. That list — not this plan's table — is what P04 builds routes against.
 - P05's work door ships per-op or not at all: an op without a green no-second-path fixture does not ship, and the module renders read-only with an honest badge instead.
-- Non-negotiables: the served registry is the only room list (ADR-1306) · tokens have one source and the copy is generated (ADR-1308) · every decision lives in a .mjs node can import with no install · POST /api/decide stays byte-parity with arc-inbox · zero new spine kinds · branch-only writes, main untouchable, merge never in the face · no provider key in the browser · real vs simulated/rehearsal/planned never mixed · zero repo writes before approval.
+- Non-negotiables: the served registry is the only room list (ADR-1306) · tokens have one source and the copy is generated (ADR-1308) · every decision lives in a .mjs node can import with no install · POST /api/decide stays byte-parity with arc-inbox · zero new spine kinds · branch-only writes, main untouchable, merge never in the face · no provider key in the browser · the session door starts arc-run --driver, never a harness binary · no new surface outside .claude/scripts (the layout move is distribute's, in one atomic PR) · real vs simulated/rehearsal/planned never mixed · zero repo writes before approval.
 - Appetite: I will give the number (recommendation on file: 22 days effort in three banked blocks + 2 real dogfood days → Tier L). Kill criteria per §9 — the Block B tripwire gates all work-door spend. REQ-10's dogfood bar is TWO days by owner's call (FV2-L) — do not raise it back to five, and do not let it claim the habit holds.
 - Owner parallel steps: rule on §13 items 4 and 5 before P05; run the git for every phase PR.
 Emit kickoff.done + approval.requested{gate: kickoff} and STOP.
