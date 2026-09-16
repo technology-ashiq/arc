@@ -32,24 +32,9 @@ MARKER_DIR="$ROOT/.claude/state/design"
 
 # One canonicaliser, from core. No local copy: the read boundary carried a PRE-FIX duplicate of
 # this resolver for a whole cycle and no test could reach it. A hook that cannot load its path
-# resolver is not fail-safe -- for a scope boundary it is unguarded.
+# resolver is not fail-safe -- for a scope boundary it is unguarded, so with a marker armed a
+# missing or stale core is a refusal (below). With none armed it is nobody's business.
 . "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
-if ! command -v arc_canon_path >/dev/null 2>&1 && ! type arc_canon_path >/dev/null 2>&1; then
-  echo "BLOCKED by ui-composer write scope: cannot load .claude/scripts/core/common.sh, so paths cannot be canonicalised." >&2
-  exit 2
-fi
-
-# The same marker arms both boundaries, so an abandoned compose locks writes exactly as it locks
-# reads, and a fix on the read side alone would be the one-side-fixed twin this lane keeps
-# shipping. So this file does not keep its own copy of the marker reader, the id grammar or the
-# description: it SOURCES the read boundary, which stops after defining them (_mk_load,
-# _describe_all, _refuse). The first cut re-executed that script for every refusal instead --
-# another bash, git and common.sh load each time, measured at double the refusal cost.
-#
-# The local _refuse is the floor, not a copy: if the library is missing, a refusal must still
-# be exit 2. An undefined function would be "command not found" -- 127, which the dispatcher
-# treats as ALLOW.
-_refuse() { exit 2; }
 
 # ---------- which composer, if any ----------
 #
@@ -63,35 +48,41 @@ for _mk in "$MARKER_DIR"/composer-session--*; do
 done
 [ "$_MK_N" -eq 0 ] && exit 0
 
-# The library is loaded only once a marker exists. Every Edit and Write in every session runs
-# this hook, and loading it costs another git subprocess and another common.sh -- the unarmed
-# path must not pay for the armed one (adversarial-open: the fast path already costs ~370ms).
-# The library assigns ROOT, MARKER_DIR and MARKER at its top, so the marker found above is kept
-# aside and restored: loading it after the loop clobbered MARKER with the legacy global path,
-# and every write -- the composer's own included -- was refused as malformed.
-_WC_MARKER="$MARKER"
-if [ -f "$ROOT/.claude/scripts/design/composer-scope-check.sh" ]; then
-  . "$ROOT/.claude/scripts/design/composer-scope-check.sh"
-fi
-MARKER="$_WC_MARKER"
-if ! type _mk_load >/dev/null 2>&1; then
-  echo "BLOCKED by ui-composer write scope: a composer boundary is armed and composer-scope-check.sh could not be loaded to read it." >&2
+# The same marker arms both boundaries, so an abandoned compose locks writes exactly as it locks
+# reads, and a fix on one side alone is the one-side-fixed twin this lane keeps shipping. So the
+# marker reader, the id grammar and the description live ONCE, in core -- arc_cm_load and
+# arc_cm_describe -- and both boundaries call them.
+#
+# The first cut shared them by SOURCING composer-scope-check.sh instead. That is an executable
+# hook: an older copy of it, with no return guard, ran its whole enforcement body in here and
+# allowed writes this boundary refuses (probed: a render path, a refpack path and a pathless write
+# all exited 0). A library with no enforcement body cannot do that in any version.
+#
+# Checked only now, with a marker armed, so an unarmed write never depends on core being current.
+if ! type arc_canon_path >/dev/null 2>&1 || ! type arc_cm_load >/dev/null 2>&1 \
+   || ! type arc_cm_describe >/dev/null 2>&1; then
+  echo "BLOCKED by ui-composer write scope: a composer boundary is armed and .claude/scripts/core/common.sh is missing or older than this boundary, so it cannot be read or a path resolved." >&2
   exit 2
 fi
+
+# Every refusal from here goes through this, so none can forget the note, and the note goes to
+# STDERR -- what a PreToolUse hook exiting 2 is shown by.
+_refuse() { arc_cm_describe "$ROOT" >&2; exit 2; }
+
 if [ "$_MK_N" -gt 1 ]; then
   echo "BLOCKED by ui-composer write scope: $_MK_N composer boundaries are armed at once." >&2
   echo "This write cannot be attributed to one of them. Compose serially." >&2
   _refuse
 fi
 
-# Validated before use, by the read boundary's own loader: CR-stripped, grammar-checked, and the
-# filename must agree with the content. A marker that fails is a broken boundary, refused -- and
-# its text never reaches the messages below, where an unvalidated id was echoed raw.
-if ! _mk_load "$MARKER"; then
+# Validated before use: CR-stripped, grammar-checked, and the filename must agree with the
+# content. A marker that fails is a broken boundary, refused -- and its text never reaches the
+# messages below, where an unvalidated id was echoed raw.
+if ! arc_cm_load "$MARKER"; then
   echo "BLOCKED by ui-composer write scope: an armed composer marker is malformed -- its explore/variant is missing or invalid, or its filename disagrees with its content." >&2
   _refuse
 fi
-EX="$MK_EX"; VARIANT="$MK_VARIANT"
+EX="$ARC_MF_EXPLORE"; VARIANT="$ARC_MF_VARIANT"
 
 # ---------- what is being written ----------
 

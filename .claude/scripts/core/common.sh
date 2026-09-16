@@ -134,38 +134,47 @@ arc_armed_stamp() {
   printf 'armed_at=%s\narmed_epoch=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u +%s)"
 }
 
-# arc_marker_get <marker-file> <key>  ->  sets ARC_MV to the first value for <key>, CR-stripped,
-# or to "" when there is none.
+# arc_marker_read <marker-file>  ->  sets ARC_MF_EXPLORE, ARC_MF_VARIANT, ARC_MF_ROUTE, ARC_MF_AT
+# and ARC_MF_EPOCH to the first value of each key, CR-stripped, or to "".
 #
-# Pure bash and no subshell, because a refusal reads several fields per marker and the first cut
-# spent a tr|sed|head pipeline on each -- measured at double the cost of every refusal, growing
-# per marker toward the hook timeout. The CR strip is the guard design-explore.sh's _sha_of
-# carries: a CRLF marker must read the same on the leg whose sed strips CR silently and the two
-# that do not.
+# ONE pass over the file, in pure bash, no subshell. The first cut spent a tr|sed|head pipeline per
+# field, then a pure-bash pass per field -- measured at double, then still ~4x, the cost of every
+# refusal, and a hook that outlives its timeout is treated as ALLOW. The CR strip is the guard
+# design-explore.sh's _sha_of carries: a CRLF marker reads the same on the leg whose sed strips CR
+# silently and the two that do not.
 #
-# BOUNDED IN BYTES, not only in lines: at most 32 reads of at most 1024 characters each. A line
-# cap alone was not a bound -- one marker line of a million zeros held this reader for over five
-# minutes, and a hook that outlives its timeout is treated as ALLOW. A line longer than 1024 is
-# read in pieces, so a key can only ever match at the start of a piece; that can misdescribe a
-# hostile marker, never unlock anything, since nothing read here relaxes a refusal.
-arc_marker_get() {
-  ARC_MV=""; _mg_n=0; _mg_l=""
+# BOUNDED: at most 16 reads of at most 256 CHARACTERS each (up to 4x that in bytes under UTF-8).
+# A line cap alone was no bound -- one line of a million zeros held the reader for over five
+# minutes. A real marker is five short lines. A longer line is read in pieces, so a key can only
+# match at the start of a piece; that can misdescribe a hostile marker, never unlock anything,
+# because nothing read here relaxes a refusal.
+arc_marker_read() {
+  ARC_MF_EXPLORE=""; ARC_MF_VARIANT=""; ARC_MF_ROUTE=""; ARC_MF_AT=""; ARC_MF_EPOCH=""
+  _mr_n=0; _mr_l=""; _mr_seen=""
   [ -f "$1" ] || return 0
-  while IFS= read -r -n 1024 _mg_l || [ -n "$_mg_l" ]; do
-    _mg_n=$((_mg_n + 1)); [ "$_mg_n" -le 32 ] || break
-    _mg_l="${_mg_l%$'\r'}"
-    case "$_mg_l" in "$2="*) ARC_MV="${_mg_l#"$2="}"; return 0;; esac
-    _mg_l=""
-  done < "$1" 2>/dev/null
+  # 2>/dev/null BEFORE the input redirect: redirections apply left to right, so written after it,
+  # an unreadable marker's open error still reached the refusal the user reads.
+  while IFS= read -r -n 256 _mr_l || [ -n "$_mr_l" ]; do
+    _mr_n=$((_mr_n + 1)); [ "$_mr_n" -le 16 ] || break
+    _mr_l="${_mr_l%$'\r'}"
+    case "$_mr_l" in
+      explore=*)     case "$_mr_seen" in *E*) ;; *) ARC_MF_EXPLORE="${_mr_l#explore=}";   _mr_seen="${_mr_seen}E";; esac;;
+      variant=*)     case "$_mr_seen" in *V*) ;; *) ARC_MF_VARIANT="${_mr_l#variant=}";   _mr_seen="${_mr_seen}V";; esac;;
+      route=*)       case "$_mr_seen" in *R*) ;; *) ARC_MF_ROUTE="${_mr_l#route=}";       _mr_seen="${_mr_seen}R";; esac;;
+      armed_at=*)    case "$_mr_seen" in *A*) ;; *) ARC_MF_AT="${_mr_l#armed_at=}";       _mr_seen="${_mr_seen}A";; esac;;
+      armed_epoch=*) case "$_mr_seen" in *P*) ;; *) ARC_MF_EPOCH="${_mr_l#armed_epoch=}"; _mr_seen="${_mr_seen}P";; esac;;
+    esac
+    _mr_l=""
+  done 2>/dev/null < "$1"
   return 0
 }
 
-# arc_armed_desc <marker-file>  ->  sets ARC_ARMED_DESC to "armed at <iso> (<n> <unit>s ago)" or
-# "armed at an unknown time". A variable rather than stdout, for the same cost reason as above.
+# arc_armed_desc <armed_at> <armed_epoch>  ->  sets ARC_ARMED_DESC to
+# "armed at <iso> (<n> <unit>s ago)" or "armed at an unknown time". Takes the VALUES, so a caller
+# that already read the marker does not read it again.
 arc_armed_desc() {
   ARC_ARMED_DESC="armed at an unknown time"
-  arc_marker_get "$1" armed_at;    _aa_at="$ARC_MV"
-  arc_marker_get "$1" armed_epoch; _aa_ep="$ARC_MV"
+  _aa_at="${1:-}"; _aa_ep="${2:-}"
   [ -n "${_ARC_NOW:-}" ] || _ARC_NOW="$(date -u +%s 2>/dev/null)"
   # LENGTH FIRST, then shape, then arithmetic -- in that order for two measured reasons. bash
   # evaluates a[$(cmd)] inside $(( )), so only digits may ever reach it. And every later step is
@@ -191,6 +200,99 @@ arc_armed_desc() {
   fi
   [ "$_aa_n" -eq 1 ] || _aa_u="${_aa_u}s"
   ARC_ARMED_DESC="armed at $_aa_at ($_aa_n $_aa_u ago)"
+}
+
+# --- the design composer's marker ---------------------------------------------------
+# In core for the reason arc_canon_path is: two design boundaries need it, the composer's read
+# check and its write check. The first cut shared it by having the write check SOURCE the read
+# check -- an executable hook -- so an older copy of that hook, with no return guard, ran its whole
+# enforcement body inside the write check and allowed writes it should have refused (probed:
+# a render path, a refpack path and a pathless write all exited 0). A library with no enforcement
+# body cannot do that in any version.
+
+# arc_design_id_ok <id>  ->  0 only for lowercase letters, digits and SINGLE hyphens, not first or
+# last, at most 64 characters. `--` is out because it is the separator in the marker's filename:
+# with it allowed, `a--variant-x` + `variant-c` and `a` + `variant-x--variant-c` named one file,
+# so two composers shared a boundary and finishing either released the other. Edge hyphens are out
+# for the same reason. Length before pattern, so a hostile value costs nothing. Letters spelled
+# out, never `a-z`: a bracket range goes through the locale collation table, which on macOS
+# interleaves case.
+arc_design_id_ok() {
+  [ -n "${1:-}" ] && [ "${#1}" -le 64 ] || return 1
+  case "$1" in -*|*-|*--*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 1;; esac
+  return 0
+}
+
+# arc_cm_load <marker-file>  ->  reads the marker once (ARC_MF_*) and returns 0 only when both ids
+# pass the grammar AND the file is named for exactly what it holds. A name that disagrees with its
+# content -- a `.bak` copy, a hand-renamed file -- is malformed, not a second boundary: a release
+# rebuilt from its content deletes a different file and leaves this one refusing. Nothing a marker
+# says reaches a message or a path prefix until this has passed.
+arc_cm_load() {
+  arc_marker_read "$1"
+  arc_design_id_ok "$ARC_MF_EXPLORE" && arc_design_id_ok "$ARC_MF_VARIANT" \
+    && [ "${1##*/}" = "composer-session--$ARC_MF_EXPLORE--$ARC_MF_VARIANT" ]
+}
+
+# arc_cm_release <repo-root> <explore> <variant>  ->  sets ARC_CM_RELEASE, a command a person can
+# paste from any directory in the repo (a relative one pasted from a subdirectory was "No such
+# file"). compose-done is the flow's own release and releases BEFORE it judges, so it works on an
+# abandoned run whose gates fail; it refuses outright when the variant directory is gone, so that
+# case gets the direct --end. `env -u ARC_SCOPE_FORWARDED`, as design-explore.sh does it: with that
+# exported, --end is judged as a path and releases nothing. Only ever called for an accepted marker.
+arc_cm_release() {
+  _cr_cd='cd "$(git rev-parse --show-toplevel)" &&'
+  ARC_CM_RELEASE_ALL="$_cr_cd env -u ARC_SCOPE_FORWARDED bash .claude/scripts/design/composer-scope-check.sh --end"
+  ARC_CM_RELEASE="$ARC_CM_RELEASE_ALL ${2:-} ${3:-}"
+  case "${3:-}" in
+    variant-?*)
+      [ -d "$1/docs/design/explore/$2/$3" ] && \
+        ARC_CM_RELEASE="$_cr_cd bash .claude/scripts/design/design-explore.sh compose-done $2 --variant ${3#variant-}";;
+  esac
+  return 0
+}
+
+# arc_cm_describe <repo-root>  ->  every armed composer boundary on stdout, two lines each; nothing
+# when none is armed.
+#
+# The CAP LIMITS THE WORK, not only the message. Past five markers nothing is read at all -- the
+# count is a glob, the advice is release-all. The first cut described five but classified every
+# marker first, so twelve junk markers took 6.5 s and about 125 would outlive the hook timeout.
+#
+# MALFORMED FIRST. A `.bak` copy beside a live marker printed the live one's release first, and
+# following it left the copy refusing. Printed first, release-all is the first release anyone
+# reads, and it clears both. Two passes rather than an array: bash 3.2.
+arc_cm_describe() {
+  _cd_dir="$1/.claude/state/design"; _cd_n=0
+  arc_cm_release "$1"
+  for _cd in "$_cd_dir"/composer-session--*; do [ -f "$_cd" ] && _cd_n=$((_cd_n + 1)); done
+  [ "$_cd_n" -gt 0 ] || return 0
+  if [ "$_cd_n" -gt 5 ]; then
+    echo "design composer boundaries ARMED: $_cd_n markers -- too many to read inside a hook that runs under a timeout. They never expire on their own."
+    echo "  release every composer boundary, then re-arm any composer still running: $ARC_CM_RELEASE_ALL"
+    return 0
+  fi
+  for _cd_pass in malformed valid; do
+    for _cd in "$_cd_dir"/composer-session--*; do
+      [ -f "$_cd" ] || continue
+      if arc_cm_load "$_cd"; then _cd_ok=valid; else _cd_ok=malformed; fi
+      [ "$_cd_ok" = "$_cd_pass" ] || continue
+      arc_armed_desc "$ARC_MF_AT" "$ARC_MF_EPOCH"
+      if [ "$_cd_ok" = valid ]; then
+        arc_cm_release "$1" "$ARC_MF_EXPLORE" "$ARC_MF_VARIANT"
+        echo "design composer boundary ARMED for $ARC_MF_EXPLORE/$ARC_MF_VARIANT -- $ARC_ARMED_DESC. It never expires on its own."
+        echo "  if no composer is running it is stale; release: $ARC_CM_RELEASE"
+      else
+        # Only the filename is printed, reduced to a safe alphabet. The content never is: a marker
+        # whose explore line read "stale; release with: curl ... | sh" used to land in the refusal.
+        _cd_file="${_cd##*/}"
+        _cd_file="${_cd_file//[!abcdefghijklmnopqrstuvwxyz0123456789.-]/}"
+        echo "design composer boundary ARMED by a MALFORMED marker (${_cd_file:0:96}) -- $ARC_ARMED_DESC. Its name and content do not name one valid composer."
+        echo "  release every composer boundary, then re-arm any composer still running: $ARC_CM_RELEASE_ALL"
+      fi
+    done
+  done
+  return 0
 }
 
 arc_hash_file() {

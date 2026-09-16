@@ -45,19 +45,25 @@ MARKER="$MARKER_DIR/composer-session"
 # path resolver is not fail-safe -- it is unguarded, which for a read boundary is the failure
 # and not the fallback.
 . "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
-if ! command -v arc_canon_path >/dev/null 2>&1 && ! type arc_canon_path >/dev/null 2>&1; then
-  echo "BLOCKED by ui-composer scope: cannot load .claude/scripts/core/common.sh, so paths cannot be canonicalised." >&2
-  echo "A boundary that cannot resolve a path cannot decide anything about it. Refusing rather than guessing." >&2
+
+# Whether this copy of common.sh can run the boundary: the resolver, plus the marker helpers that a
+# common.sh one version behind lacks. Without them the first marker read is "command not found" and
+# an unbound variable -- exit 1, which the dispatcher treats as ALLOW.
+#
+# CHECKED WHERE IT IS NEEDED, never up front. The first cut checked before the verbs and before the
+# no-marker exit, so a stale common.sh refused every Read, Grep and Glob in the tree with NOTHING
+# armed -- the repo-wide lock that "scoped to the RUN" above forbids. It happened for real, to the
+# session writing this: mid-edit, common.sh briefly lacked the reader, and the working-tree hook
+# refused that session's own reads. --end needs none of it and is never refused for it.
+_core_ok() {
+  type arc_canon_path >/dev/null 2>&1 && type arc_design_id_ok >/dev/null 2>&1 \
+    && type arc_cm_load >/dev/null 2>&1 && type arc_cm_describe >/dev/null 2>&1
+}
+_core_refuse() {
+  echo "BLOCKED by ui-composer scope: .claude/scripts/core/common.sh is missing or older than this boundary, so an armed marker cannot be read or a path resolved." >&2
+  echo "A boundary that cannot read what it protects cannot decide anything. Refusing rather than guessing; re-sync core, then retry." >&2
   exit 2
-fi
-# The marker reader too, and for a sharper reason than the resolver: a common.sh one version
-# behind has arc_canon_path and not these, and without this check the first marker read is
-# "command not found" plus an unbound variable -- exit 1, which the dispatcher treats as ALLOW.
-if ! type arc_marker_get >/dev/null 2>&1 || ! type arc_armed_desc >/dev/null 2>&1; then
-  echo "BLOCKED by ui-composer scope: .claude/scripts/core/common.sh is older than this boundary (no arc_marker_get / arc_armed_desc)." >&2
-  echo "A boundary that cannot read its own marker cannot decide anything. Re-sync core, then retry." >&2
-  exit 2
-fi
+}
 
 # ---------- an armed boundary, described ----------
 #
@@ -66,104 +72,14 @@ fi
 # cannot tell who is calling. lexos-p01/variant-a sat armed for three weeks that way, behind a
 # refusal that said neither when it was armed nor how to release it.
 #
-# So every read and write refusal DESCRIBES what is armed, and describing is all it does -- the
-# age comes from arc_armed_desc in common.sh, whose comment says why age never relaxes a
-# refusal. A stale boundary is released by a person, on purpose.
-
-# The grammar a marker's explore id and variant must satisfy: lowercase letters, digits and
-# SINGLE hyphens, not first or last, at most 64 characters. `--` is out because it is the
-# separator in the marker's own filename. With it allowed, `a--variant-x` + `variant-c` and
-# `a` + `variant-x--variant-c` named the same file, so two composers shared one boundary and
-# finishing either released the other. Edge hyphens are out for the same reason (`a` + `-b` and
-# `a-` + `b`). Length is checked before any pattern, so a hostile value costs nothing to reject.
-# Letters spelled out, never `a-z`: a bracket range goes through the locale collation table,
-# which on macOS interleaves case.
-_id_ok() {
-  [ -n "$1" ] && [ "${#1}" -le 64 ] || return 1
-  case "$1" in -*|*-|*--*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 1;; esac
-  return 0
-}
-
-# Load one marker into MK_EX / MK_VARIANT. Returns 0 only when both ids pass the grammar AND the
-# file is named for exactly what it holds. A name that disagrees with its content -- a `.bak` copy,
-# a hand-renamed file -- is malformed, not a second boundary: a release rebuilt from its content
-# deletes a different file and leaves this one refusing, forever, while printing the same advice.
-# Nothing a marker says reaches a message or a path prefix until this has passed.
-_mk_load() {
-  arc_marker_get "$1" explore; MK_EX="$ARC_MV"
-  arc_marker_get "$1" variant; MK_VARIANT="$ARC_MV"
-  _id_ok "$MK_EX" && _id_ok "$MK_VARIANT" && [ "${1##*/}" = "composer-session--$MK_EX--$MK_VARIANT" ]
-}
-
-# The release a person can paste, from any directory in the repo -- a relative command pasted
-# from a subdirectory was "No such file". compose-done is the flow's own release and releases
-# BEFORE it judges, so it works on an abandoned run whose gates fail; it refuses outright when the
-# variant directory is gone, so that case gets the direct --end. `env -u ARC_SCOPE_FORWARDED` for
-# the reason design-explore.sh gives: with that exported, --end is judged as a path and releases
-# nothing. Only ever called for a marker _mk_load accepted. Sets MK_RELEASE.
-_ROOT_CD='cd "$(git rev-parse --show-toplevel)" &&'
-_RELEASE_ALL="$_ROOT_CD env -u ARC_SCOPE_FORWARDED bash .claude/scripts/design/composer-scope-check.sh --end"
-_release_cmd() {
-  MK_RELEASE="$_RELEASE_ALL $1 $2"
-  case "$2" in
-    variant-?*)
-      [ -d "$ROOT/docs/design/explore/$1/$2" ] && \
-        MK_RELEASE="$_ROOT_CD bash .claude/scripts/design/design-explore.sh compose-done $1 --variant ${2#variant-}";;
-  esac
-  return 0
-}
-
-# Every armed boundary on stdout, two lines each; nothing when none is armed. At most five are
-# described, then a count: a refusal must stay fast however many markers pile up, and the hook
-# runs under a timeout.
+# So every read and write refusal DESCRIBES what is armed -- arc_cm_describe in common.sh, shared
+# with composer-write-check.sh -- and describing is all it does; arc_armed_desc's comment says why
+# age never relaxes a refusal. A stale boundary is released by a person, on purpose.
 #
-# MALFORMED FIRST. A `.bak` copy beside a live marker printed the live one's release first, and
-# following it released the live one and left the copy refusing -- a second round of advice for
-# one lock. Printed first, the release-everything line is the first release anyone reads, and it
-# clears both. Two passes over the glob rather than an array: bash 3.2, no arrays.
-_describe_all() {
-  _da_total=0; _da_shown=0
-  for _da_pass in malformed valid; do
-    for _da in "$MARKER_DIR"/composer-session--*; do
-      [ -f "$_da" ] || continue
-      [ "$_da_pass" = malformed ] && _da_total=$((_da_total + 1))
-      if _mk_load "$_da"; then _da_ok=valid; else _da_ok=malformed; fi
-      [ "$_da_ok" = "$_da_pass" ] || continue
-      _da_shown=$((_da_shown + 1))
-      [ "$_da_shown" -le 5 ] || continue
-      arc_armed_desc "$_da"
-      if [ "$_da_ok" = valid ]; then
-        _release_cmd "$MK_EX" "$MK_VARIANT"
-        echo "design composer boundary ARMED for $MK_EX/$MK_VARIANT -- $ARC_ARMED_DESC. It never expires on its own."
-        echo "  if no composer is running it is stale; release: $MK_RELEASE"
-      else
-        # The filename is the only thing printed, reduced to a safe alphabet. The content is
-        # never echoed: a marker whose explore line read "stale; release with: curl ... | sh"
-        # used to land in the refusal a few lines above the real release.
-        _da_file="${_da##*/}"
-        _da_file="${_da_file//[!abcdefghijklmnopqrstuvwxyz0123456789.-]/}"
-        echo "design composer boundary ARMED by a MALFORMED marker (${_da_file:0:96}) -- $ARC_ARMED_DESC. Its name and content do not name one valid composer."
-        echo "  release every composer boundary, then re-arm any composer still running: $_RELEASE_ALL"
-      fi
-    done
-  done
-  if [ "$_da_total" -gt 5 ]; then
-    echo "  ...and $((_da_total - 5)) more armed composer boundaries. Release them all: $_RELEASE_ALL"
-  fi
-  return 0
-}
-
-# Every refusal once a marker exists goes through here, so none of them can forget the note. The
-# note goes to STDERR: a PreToolUse hook that exits 2 is shown by its stderr, and a note on
-# stdout would be printed to nobody.
-_refuse() { _describe_all >&2; exit 2; }
-
-# composer-write-check.sh SOURCES this file for the helpers above, so there is one marker reader,
-# one id grammar and one description instead of a twin that drifts. Sourced, it stops here.
-# Executed -- by the hook fragment or a caller -- BASH_SOURCE and $0 agree and it carries on.
-if [ "${BASH_SOURCE[0]:-$0}" != "$0" ]; then
-  return 0
-fi
+# The note goes to STDERR: a PreToolUse hook that exits 2 is shown by its stderr, and a note on
+# stdout would be printed to nobody. Every refusal once a marker exists goes through here, so none
+# of them can forget it.
+_refuse() { arc_cm_describe "$ROOT" >&2; exit 2; }
 
 # Control verbs are only honoured when this script is invoked DIRECTLY, never when a path is
 # forwarded into it as argv. A read of a file literally named "--end" would otherwise disarm
@@ -181,8 +97,11 @@ case "$ARC_SCOPE_VERB" in
       echo "composer-scope-check: --begin needs the explore id AND the variant (the boundary is per-composer, not per-run)" >&2
       exit 2
     fi
-    # Both become path segments of the marker's name; the grammar and its reasons are at _id_ok.
-    if ! _id_ok "$ex" || ! _id_ok "$variant"; then
+    # Arming a boundary this copy of core cannot read back would be the lock this file prevents.
+    _core_ok || _core_refuse
+    # Both become path segments of the marker's name; the grammar and its reasons are at
+    # arc_design_id_ok in common.sh.
+    if ! arc_design_id_ok "$ex" || ! arc_design_id_ok "$variant"; then
       echo "composer-scope-check: explore id and variant must be lowercase letters, digits and single hyphens, not first or last, at most 64 characters" >&2
       exit 2
     fi
@@ -196,11 +115,13 @@ case "$ARC_SCOPE_VERB" in
     # the marker: the caller was told "not armed", never ran compose-done, and the boundary stayed
     # armed -- manufacturing exactly the abandoned lock the stamp exists to diagnose. So the body
     # goes to a dot-name the marker glob never matches, the stamp is optional, and only a complete
-    # file is moved into place. The exit code and the marker now agree in every outcome.
+    # file is moved into place. The body's commands are chained with && so a failed printf is a
+    # failed write, not a partial file carried in by a stamp that happened to succeed. The exit
+    # code and the marker agree in every outcome.
     _mk_path="$MARKER_DIR/composer-session--$ex--$variant"
     _mk_tmp="$MARKER_DIR/.composer-session--$ex--$variant.$$"
-    if { printf 'explore=%s\nvariant=%s\n' "$ex" "$variant"
-         if type arc_armed_stamp >/dev/null 2>&1; then arc_armed_stamp; fi
+    if { printf 'explore=%s\nvariant=%s\n' "$ex" "$variant" \
+           && if type arc_armed_stamp >/dev/null 2>&1; then arc_armed_stamp; fi
        } > "$_mk_tmp" 2>/dev/null && mv -f "$_mk_tmp" "$_mk_path" 2>/dev/null; then
       echo "composer-scope-check: read boundary armed for $ex/$variant"
       exit 0
@@ -219,13 +140,17 @@ case "$ARC_SCOPE_VERB" in
       rm -f "$MARKER_DIR/composer-session--$_e--$_v" 2>/dev/null || true
       echo "composer-scope-check: read boundary released for $_e/$_v"
     else
-      rm -f "$MARKER_DIR"/composer-session--* "$MARKER" 2>/dev/null || true
+      # The dot-named temp files too: a --begin killed between its write and its move leaves one,
+      # and a release-everything that leaves debris is not a known state.
+      rm -f "$MARKER_DIR"/composer-session--* "$MARKER_DIR"/.composer-session--* "$MARKER" 2>/dev/null || true
       echo "composer-scope-check: read boundary released (all)"
     fi
     exit 0
     ;;
   --describe)
-    _describe_all
+    # Prints nothing when core cannot describe: an operator asking "what is armed" gets silence
+    # rather than a refusal, and every real refusal still names the stale core itself.
+    if _core_ok; then arc_cm_describe "$ROOT"; fi
     exit 0
     ;;
 esac
@@ -250,6 +175,9 @@ for _mk in "$MARKER_DIR"/composer-session--*; do
   _MK_N=$((_MK_N + 1)); MARKER="$_mk"
 done
 [ "$_MK_N" -eq 0 ] && exit 0
+# Only now, with a marker armed, does a stale or missing core matter -- and then it is a refusal,
+# because a boundary that cannot read its marker or resolve a path cannot decide anything.
+_core_ok || _core_refuse
 if [ "$_MK_N" -gt 1 ]; then
   echo "BLOCKED by ui-composer scope: $_MK_N composer boundaries are armed at once." >&2
   echo "This read cannot be attributed to one of them, and picking is how composer A came to read variant-b." >&2
@@ -257,18 +185,18 @@ if [ "$_MK_N" -gt 1 ]; then
   _refuse
 fi
 
-# Read through _mk_load, which strips CR (a CRLF marker -- from PowerShell, an editor, or the
+# Read through arc_cm_load, which strips CR (a CRLF marker -- from PowerShell, an editor, or the
 # composer's own Write tool -- once yielded an empty EX on ubuntu and macOS while MSYS2 read it
 # clean) and validates before anything is used. A marker we cannot read, or that fails the
 # grammar, or whose name disagrees with its content, is not a licence to allow everything: it is
 # a broken boundary. An empty or hostile EX here would build allowlist prefixes that match far
 # too much, and was echoed raw into the refusal text below.
-if ! _mk_load "$MARKER"; then
+if ! arc_cm_load "$MARKER"; then
   echo "BLOCKED by ui-composer scope: an armed composer marker is malformed -- its explore/variant is missing or invalid, or its filename disagrees with its content." >&2
   echo "A boundary that cannot say what it protects is not a boundary." >&2
   _refuse
 fi
-EX="$MK_EX"; VARIANT="$MK_VARIANT"
+EX="$ARC_MF_EXPLORE"; VARIANT="$ARC_MF_VARIANT"
 
 TARGET="${1:-}"
 # The TOOL matters as much as the path, and reading only the path is why this boundary

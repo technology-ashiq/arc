@@ -24,10 +24,10 @@ MARKER_DIR="$ROOT/.claude/state/design"
 MARKER="$MARKER_DIR/critic-session"
 ALLOWED="docs/design/critique"
 
-# Loaded up front, not only where the resolver is first needed: --begin stamps the marker and
-# every refusal describes it, and the traversal refusal fires before the resolver block below.
-# That block still REFUSES when this load failed -- see its comment.
-. "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
+# common.sh is loaded where it is first needed, never on the unarmed path: every Edit and Write in
+# every session runs this hook, and the first cut of the stamp loaded core before the no-marker
+# exit, charging all of them for a critique run that is almost never in flight. It is loaded by
+# --begin (for the stamp) and right after the marker check (for every refusal and the resolver).
 
 # A critique run that dies before `finish` leaves this boundary armed, and it then refuses every
 # write outside docs/design/critique/ for everyone, indefinitely. The composer boundary did that
@@ -39,10 +39,10 @@ ALLOWED="docs/design/critique"
 # BSD tr aborts on invalid bytes), and the release is anchored at the repo root so it works when
 # pasted from any directory in the repo.
 _refuse() {
-  if type arc_armed_desc >/dev/null 2>&1 && type arc_marker_get >/dev/null 2>&1; then
-    arc_marker_get "$MARKER" route
-    _rf_route="${ARC_MV//[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._\/-]/}"
-    arc_armed_desc "$MARKER"
+  if type arc_armed_desc >/dev/null 2>&1 && type arc_marker_read >/dev/null 2>&1; then
+    arc_marker_read "$MARKER"
+    _rf_route="${ARC_MF_ROUTE//[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._\/-]/}"
+    arc_armed_desc "$ARC_MF_AT" "$ARC_MF_EPOCH"
     echo "design critic boundary ARMED for route ${_rf_route:0:120} -- $ARC_ARMED_DESC. It never expires on its own." >&2
     echo "  if no critique is running it is stale; release: cd \"\$(git rev-parse --show-toplevel)\" && bash .claude/scripts/design/critic-scope-check.sh --end" >&2
   fi
@@ -65,10 +65,11 @@ case "${1:-}" in
     # group's last command made a missing stamp exit 2 AFTER the redirect had created the marker,
     # and design-critique.sh treats a failed --begin as "not armed" and never calls --end: an
     # abandoned boundary, manufactured by the change meant to diagnose one. A dot-name the marker
-    # path never equals, then a move.
+    # path never equals, the body chained with && so a failed printf is a failed write, then a move.
+    . "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
     _ck_tmp="$MARKER_DIR/.critic-session.$$"
-    if ! { printf 'route=%s\nallowed=%s\n' "$route" "$ALLOWED"
-           if type arc_armed_stamp >/dev/null 2>&1; then arc_armed_stamp; fi
+    if ! { printf 'route=%s\nallowed=%s\n' "$route" "$ALLOWED" \
+             && if type arc_armed_stamp >/dev/null 2>&1; then arc_armed_stamp; fi
          } > "$_ck_tmp" 2>/dev/null || ! mv -f "$_ck_tmp" "$MARKER" 2>/dev/null; then
       rm -f "$_ck_tmp" 2>/dev/null
       echo "critic-scope-check: could not write the marker -- the boundary is NOT armed" >&2
@@ -78,7 +79,7 @@ case "${1:-}" in
     exit 0
     ;;
   --end)
-    rm -f "$MARKER" 2>/dev/null || true
+    rm -f "$MARKER" "$MARKER_DIR"/.critic-session.* 2>/dev/null || true
     echo "critic-scope-check: boundary released"
     exit 0
     ;;
@@ -88,6 +89,8 @@ esac
 
 # No marker -> no critique run in flight -> nothing to enforce.
 [ -f "$MARKER" ] || exit 0
+# Armed: load core now, for every refusal below and for the resolver. See the note at the top.
+. "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
 
 TARGET="${1:-}"
 if [ -z "$TARGET" ] && [ ! -t 0 ]; then
@@ -134,7 +137,7 @@ esac
 # needs the identical resolver, and a second copy of a path helper that three-OS CI had
 # already hardened is the twin-fix shape this repo keeps paying for. There is no local copy:
 # a duplicate no test can reach is not a safety net (see the block below).
-# (common.sh is loaded at the top of this file, so the refusal below has something to check.)
+# (common.sh is loaded right after the marker check above, so the refusal below has something to check.)
 if ! type arc_canon_path >/dev/null 2>&1; then
   # The inline fallback that used to sit here was a PRE-FIX copy of common.sh's resolver --
   # the same body without the root-of-"/" normalisation, so it returned "//no-such/f" where the

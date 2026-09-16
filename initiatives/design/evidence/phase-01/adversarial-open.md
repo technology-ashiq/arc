@@ -285,3 +285,42 @@ timeout is treated as ALLOW. It is now at most 32 reads of at most 1024 characte
 15. A test that reads merged `$output` cannot tell stderr from stdout, and hooks are shown by
     stderr only.
 16. A filename separator that is legal inside the fields it separates.
+
+## Fourth pass, 2026-09-16 — code-reviewer on the attacked fix (`343a4fc6`)
+
+The verdict was fix-first, with nothing critical. Every warning was probed, and every warning is
+fixed.
+
+| # | Finding | Disposition |
+|---|---|---|
+| W1 | The five-marker cap limited the message, not the work: every marker was still classified, so 12 junk markers took 6.5 s | **fixed**: past five, NOTHING is read. The refusal gives a glob count and release-all (525 ms on 12 × 40KB junk markers) |
+| W2 | A stale `common.sh` refused every Read/Grep/Glob with NOTHING armed, and blocked `--end` too | **fixed**: core is checked only with a marker armed and inside `--begin`; `--end` needs nothing |
+| W3 | The write check SOURCED the read check, an executable hook, so an older copy ran its enforcement body inside the write check and allowed writes | **fixed**: the shared reader, grammar and description moved into `core/common.sh` (`arc_cm_load`, `arc_cm_describe`), a library with no enforcement body |
+| W4 | Nothing pinned the reader's read cap, and the megabyte case had its keys on lines 1-3 | **fixed**: keys after 40 junk lines must read MALFORMED; a megabyte line before the keys has a time bound; 12 junk markers have a time bound |
+| nits | "bytes" meant characters; `printf` was not chained; `2>/dev/null` came after the input redirect; the critic loaded core on the unarmed path; `--end` left temp files; there was no hostile-route, write-side stderr, failing-gates premise or age-branch test | **fixed**, each |
+
+**W2 was not hypothetical.** It happened to this session while it was fixing W3. `common.sh` was
+mid-edit and briefly lacked the new reader, and the working-tree hook then refused the session's
+own Read of the file it was editing, with nothing armed. The reviewer's "repo-wide lock" is a
+measured event, not a projection.
+
+**CI found one more that neither the attackers nor the reviewer found.** On the macOS leg only,
+the three critic cases built by `_edit_write` exited 0 with no output. That happened at
+`2c8ae714`, BEFORE the critic fix existed, and again at `343a4fc6`. On the same leg, the same
+boundary refused the same write when the payload was literal.
+
+- **Cause:** that helper built its JSON with escaped quotes nested inside `"$( )"`. A payload the
+  hook cannot parse gives an empty target, and an empty target is allowed.
+- **Status:** the cause is inferred, not reproduced, because this box has no bash 3.2. The helper
+  now builds the payload with `printf` into a variable and asserts its own fixture first. If the
+  inference is wrong, the next macOS run fails on "fixture payload is malformed" instead of on
+  "age relaxed", which settles it either way.
+
+### Add to the running defect list for the next attacker
+17. A cap on the OUTPUT is not a cap on the WORK.
+18. Sourcing an executable file for its functions imports its body from whatever version is on
+    disk.
+19. A precondition checked before the "nothing to do" exit turns every unrelated call into a
+    refusal.
+20. A test payload built with escaped quotes nested in `"$( )"` can arrive malformed on one leg,
+    and an unparseable payload reads as "allowed".
