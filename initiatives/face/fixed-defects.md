@@ -56,3 +56,26 @@ arc-face rows of `docs/retro-log.md`.
 
 - **A fixture quoted three numbers that could not all be true** (49 / 41 / "the only two") (retro 2026-08-19) — *derive every figure through the owning reader when it is written down.*
 - **The coverage suite pinned a summary line that was later widened** (`60ee2ef6`); a third hard-coded count (`8ea1e09a`) — *assert a marker and a floor, not an exact prose line.*
+
+## Face v2 Phase 00 — two fresh attackers + the first CI runs (2026-09-17)
+
+- **A lockfile check inferred the expected set from the siblings present**, so a lockfile stripped to the one Windows binding passed — `face/scripts/lockfile-platforms.mjs` — *the expected set comes from the parent's declaration (`optionalDependencies`), keyed by the parent's own path.*
+- **A smoke judged the door's room list against itself** — `face/scripts/smoke.mjs`, `harness-run.mjs` — *the expected set is read from the contract file (`rooms.generated.json`), never from the service under test.*
+- **"Settled" could mean 0 ms of watching, and an unsettled room passed** — `smoke.mjs` — *a minimum observation window, a drain after the last item, and "never settled" is a failure.*
+- **A test's timeout message matched the close-rejection it claimed to prove** — `tests/face/cdp-client.mjs` — *assert elapsed time and the specific reason, not only the method name.*
+- **Round-trip tests ran a codec against itself** — `cdp-client.mjs` — *every length path crosses the independent implementation.*
+- **A host `path.join` was used for another platform's lookup** — `face/scripts/cdp.mjs` findChrome — *use `path.posix` / `path.win32` for the platform being asked about.*
+- **`existsSync` accepted a directory as an executable, and a spawn error was an unhandled `'error'` event** — `cdp.mjs` — *require `isFile()`, and every spawned child gets an `'error'` listener before anything else.*
+- **A registry parser read one line per row, so a wrapped row vanished; `extra: true` inside a string counted as a key** — `.claude/scripts/hq/face-modules-contract.mjs` — *count declarations independently and refuse a mismatch; read keys as tokens, not substrings.*
+- **An unparseable plan row became `null` and an unknown mark became "served"** — same file — *every table row parses or is a named error; unknown is never a default.*
+- **Repeated flags were last-wins and an empty value resolved to the cwd** — `smoke.mjs`, `harness-run.mjs`, `lockfile-platforms.mjs` — *a repeated or empty flag is refused by name.*
+- **A child killed by a signal has `exitCode === null` and was waited out** — `cdp.mjs`, `harness-run.mjs`, `smoke.mjs` — *death is `exitCode !== null || signalCode !== null` (`face/scripts/proc.mjs isDead`).*
+- **One SIGTERM, no escalation, and a bats `run` that let children inherit fd 3** — `face/scripts/*`, `tests/face-browser.bats` — *kill the process tree with escalation, destroy the child's pipes, and `3>&-` on every `run` that starts a long-lived child.*
+- **A `sleep(5000)` raced against `'exit'` was never cleared** — `harness-run.mjs`, `smoke.mjs` — *a race timer is cleared or `unref()`ed.*
+- **A temp directory that would not delete was dropped silently** — same files — *a surviving directory is a WARN naming the path and error.*
+- **The door was started from the caller's cwd while the harness read its own repo** — `harness-run.mjs` — *every child that resolves a repo gets `cwd` set explicitly.*
+- **`vite preview` listened on 4173 while the origin allow-list followed APP_PORT**, so every stamp 403'd — `face/vite.config.ts` — *a port that is configurable is configured in every server block that checks it.*
+- **A greedy `sed 's/.*opened=…'` could read `not-opened=`** — `tests/face-browser.bats` — *anchor each extraction to its position in the line.*
+- **A `grep 'face/src'` matched `arcface/src` inside a reference path** — `tests/face-l3.bats` — *a path grep is bounded on the left.*
+- **The smoke port dropped the reference's own `THREE.Clock` exclusion** — `smoke.mjs` — *a port keeps the reference's frozen filters verbatim.*
+- **A request cancelled by the next navigation reported no `loadingFailed` on Windows**, so no later room ever settled — `smoke.mjs` — *track only the current navigation's `loaderId`.*

@@ -4,16 +4,17 @@
 // does not have and Node 20 hides behind --experimental-websocket, and it hardcoded one Windows
 // Chrome path. CI runs Node 20 on macOS and Windows, so this file carries its own RFC 6455
 // client (text frames, client masking, fragmentation, ping/pong, close) over node:http, and
-// looks Chrome up per OS. It imports nothing but node builtins, so tests/face/cdp-client.mjs
+// looks Chrome up per OS. It imports only node builtins and ./proc.mjs, so tests/face/cdp-client.mjs
 // can exercise every decision here with no install and no browser.
 //
 // This is a library: it has no main().
 import { request } from "node:http";
 import { randomBytes, createHash } from "node:crypto";
-import { spawn, execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { spawnTracked, isDead, deathReason } from "./proc.mjs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { EventEmitter } from "node:events";
-import { join, delimiter } from "node:path";
+import { join, posix, win32 } from "node:path";
 
 export const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const MAX_PAYLOAD = 64 * 1024 * 1024;
@@ -288,11 +289,21 @@ export class CdpSession {
   }
 }
 
-function scanPath(names, env, exists) {
+/** A path Chrome can be RUN from: a regular file. A directory "exists" and crashes spawn. */
+export function isRegularFile(p) {
+  try { return statSync(p).isFile(); } catch { return false; }
+}
+
+// The path rules of the platform being asked about, not of the host running the lookup, so a
+// linux lookup tested on the windows runner still splits PATH on ":" and joins with "/".
+const pathFor = (platform) => (platform === "win32" ? win32 : posix);
+
+function scanPath(names, env, exists, platform) {
+  const P = pathFor(platform);
   const found = [];
-  for (const dir of String(env.PATH ?? "").split(delimiter)) {
+  for (const dir of String(env.PATH ?? "").split(P.delimiter)) {
     if (!dir) continue;
-    for (const n of names) found.push(join(dir, n));
+    for (const n of names) found.push(P.join(dir, n));
   }
   return found.filter((p) => exists(p));
 }
@@ -314,7 +325,9 @@ function regAppPaths() {
  * Find Chrome. Every place looked is returned in `tried`, so a miss names where it looked
  * instead of saying "not found" (ADR-1335). CHROME_BIN is used when set, never relied on.
  */
-export function findChrome({ env = process.env, platform = process.platform, exists = existsSync, regQuery = regAppPaths } = {}) {
+export function findChrome({ env = process.env, platform = process.platform, exists = isRegularFile, regQuery = regAppPaths } = {}) {
+  const P = pathFor(platform);
+  const join = P.join;
   const tried = [];
   const pick = (source, candidates) => {
     for (const p of candidates) {
@@ -347,7 +360,7 @@ export function findChrome({ env = process.env, platform = process.platform, exi
       env.HOME && join(env.HOME, "Applications", "Google Chrome.app", "Contents", "MacOS", "Google Chrome"),
     ]);
   } else {
-    const onPath = scanPath(["google-chrome", "google-chrome-stable"], env, exists);
+    const onPath = scanPath(["google-chrome", "google-chrome-stable"], env, exists, platform);
     if (onPath.length === 0) tried.push("PATH: google-chrome, google-chrome-stable (none)");
     hit = pick("PATH", onPath) || pick("default", ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable"]);
   }
@@ -363,8 +376,13 @@ export function chromeArgs({ userDataDir, platform = process.platform, width = 1
     `--window-size=${width},${height}`,
     "--no-first-run",
     "--no-default-browser-check",
-    "--disable-gpu",
+    // Software WebGL on every OS: the face renders three.js, and a macOS runner has no GPU to
+    // give headless Chrome (CI 2026-09-17: "Could not create a WebGL context").
+    "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader",
     "--disable-extensions",
+    "--disable-breakpad",
+    "--disable-crash-reporter",
     ...(platform === "linux" ? ["--no-sandbox"] : []),
     "about:blank",
   ];
@@ -380,25 +398,29 @@ export function parseDevToolsActivePort(text) {
 }
 
 export function launchChrome(chromePath, args) {
-  const child = spawn(chromePath, args, { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
-  let stderr = "";
-  child.stderr.on("data", (d) => { stderr = (stderr + d.toString("utf8")).slice(-4000); });
-  child.stderrTail = () => stderr;
-  return child;
+  // Its own process group on POSIX, stderr captured, a spawn error recorded instead of thrown:
+  // proc.mjs holds the lifecycle rules every harness child follows.
+  return spawnTracked(chromePath, args);
 }
 
 /** Wait until Chrome has written its DevTools port, or has exited, or the cap passes. */
 export async function waitForDevTools(userDataDir, child, { timeoutMs = 30000, pollMs = 100 } = {}) {
   const file = join(userDataDir, "DevToolsActivePort");
   const started = Date.now();
+  let unparsed = null;
   while (Date.now() - started < timeoutMs) {
-    if (child.exitCode !== null) throw new Error(`Chrome exited (${child.exitCode}) before DevTools was ready: ${child.stderrTail().trim().slice(-500)}`);
+    if (child.spawnError) throw new Error(`Chrome could not start: ${child.spawnError.message}`);
+    if (isDead(child)) throw new Error(`Chrome ${deathReason(child)} before DevTools was ready: ${child.stderrTail().slice(-500)}`);
     if (existsSync(file)) {
-      const parsed = parseDevToolsActivePort(readFileSync(file, "utf8"));
+      const text = readFileSync(file, "utf8");
+      const parsed = parseDevToolsActivePort(text);
       if (parsed) return `ws://127.0.0.1:${parsed.port}${parsed.path}`;
+      unparsed = text;
     }
     await new Promise((r) => setTimeout(r, pollMs));
   }
+  // Absent and unreadable are different results (fixed-defects.md).
+  if (unparsed !== null) throw new Error(`Chrome's DevToolsActivePort did not parse within ${timeoutMs} ms: ${JSON.stringify(unparsed.slice(0, 200))}`);
   throw new Error(`Chrome wrote no DevToolsActivePort within ${timeoutMs} ms: ${child.stderrTail().trim().slice(-500)}`);
 }
 

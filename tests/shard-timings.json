@@ -159,6 +159,7 @@
     "spine-constitution.bats": 15,
     "runtime.bats": 15,
     "leads-ordering.bats": 15,
+    "face-browser.bats": 200,
     "face-dash.bats": 15,
     "face-l3.bats": 14,
     "growth-publish-thread.bats": 13,

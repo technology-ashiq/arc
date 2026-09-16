@@ -133,7 +133,7 @@ tier: e2e-visual
 sources: phase-00-spec.md, code:grep-fallback(1490; no .codegraph/), adrs(37), learning(3), retro(30), churn(467)
 decision: captured from the owner's design app over its existing dist (no source newer than dist/index.html) so the owner's folder is only read, with output in the main clone's gitignored .playwright-mcp/ (Cycle 15 precedent) — a session scratchpad would not survive to Phase 03; ROOMS comes from the generated contract, not a hand list; Chrome version read from the binary's file metadata (running chrome.exe --version on Windows opens a browser window instead)
 result: shots.mjs EXIT=0 · `shot` lines=72 · warnings/failures=0 · `baseline-shots: modules=36 shots=72 missing=0 unexpected=0` · `72 unique hashes; min bytes 154510` · IGNORED_IN_MAIN · by eye: dark-engine.png (Engine room, kernel, dark) and light-overview.png (Today, light) render as the v0.7 design · Chrome 152.0.7977.83
-commit: (empty until proven)
+commit: b77d27fb
 
 #### slice: 09
 
@@ -142,7 +142,7 @@ kind: logic
 risk: medium
 proof: (empty until proven)
 tier: (empty until proven)
-sources: phase-00-spec.md
+sources: phase-00-spec.md, code:grep-fallback(1491; no .codegraph/), adrs(37), learning(3), retro(26), churn(468)
 decision: (empty until proven)
 result: (empty until proven)
 commit: (empty until proven)

@@ -205,7 +205,7 @@
 .claude/scripts/hq/arc-pnl.mjs	3bf15f30e3461aa573e29c17a6eab901502af2c610344c9ca9df8bceb1d428c6
 .claude/scripts/hq/arc-pnl.sh	a90ec8a57d367b82dea236abaa64f98bff9e39d85f5872b74683b45c1b31f23b
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
-.claude/scripts/hq/face-modules-contract.mjs	e325328a856ae9f6b40af3e0a4bf5620210606e53eb21a0fbceb8db53bec1245
+.claude/scripts/hq/face-modules-contract.mjs	5f98ea1ebcb15edf9e19ed5a3d331c8bca4b8b63addf8200a5cc67bf4f02c918
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
 .claude/scripts/hq/jobs/day-close-roll.mjs	cf47ce763a261eba34350385555119025b29a1050469606dc728994996628523

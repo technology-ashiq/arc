@@ -29,55 +29,112 @@ export const PATHS = Object.freeze({
 
 class InputError extends Error {}
 
+const STRING = /'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g;
+const unquote = (s) => s.slice(1, -1);
+
+/**
+ * The top-level `key: value` pairs of one `{ ... }` row, read as tokens: a key only counts
+ * where a key can stand, so `extra: true` or `ring: 'money'` INSIDE a sentence string is text,
+ * never a property (attack 2026-09-17).
+ */
+export function rowProperties(line) {
+  const props = Object.create(null);
+  const re = /([A-Za-z_$][\w$]*)\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|[^,}]+)/y;
+  const body = line.trim().replace(/^\{/, "").replace(/\},?\s*$/, "");
+  let i = 0;
+  while (i < body.length) {
+    while (i < body.length && /[\s,]/.test(body[i])) i++;
+    if (i >= body.length) break;
+    re.lastIndex = i;
+    const m = re.exec(body);
+    if (!m) throw new InputError(`roomRegistry.js: cannot read a property at ${JSON.stringify(body.slice(i, i + 40))}`);
+    const raw = m[2].trim();
+    props[m[1]] = /^['"]/.test(raw) ? unquote(raw) : raw;
+    i = re.lastIndex;
+  }
+  return props;
+}
+
 /** ROOM_META rows and ROOM_ALIASES from the v0.7 registry source text. */
 export function parseRegistry(text) {
   const start = text.indexOf("export const ROOM_META");
   const end = text.indexOf("export const ROOM_IDS");
   if (start < 0 || end < 0 || end < start) throw new InputError("roomRegistry.js: ROOM_META block not found");
+  const block = text.slice(start, end);
   const rows = [];
-  for (const line of text.slice(start, end).split(/\r?\n/)) {
-    const id = line.match(/^\s*\{\s*id:\s*'([a-z0-9-]+)'/);
-    if (!id) continue;
-    const ring = line.match(/\bring:\s*'([a-z]+)'/);
-    if (!ring) throw new InputError(`roomRegistry.js: room ${id[1]} has no ring`);
-    rows.push({ id: id[1], ring: ring[1], extra: /\bextra:\s*true\b/.test(line), planned: /\bplanned:\s*true\b/.test(line) });
+  for (const line of block.split(/\r?\n/)) {
+    if (!/^\s*\{\s*id\s*:/.test(line)) continue;
+    const p = rowProperties(line);
+    if (typeof p.id !== "string" || !/^[a-z0-9-]+$/.test(p.id)) throw new InputError(`roomRegistry.js: a row has an unreadable id: ${line.trim().slice(0, 60)}`);
+    if (typeof p.ring !== "string" || !/^[a-z]+$/.test(p.ring)) throw new InputError(`roomRegistry.js: room ${p.id} has no ring`);
+    rows.push({ id: p.id, ring: p.ring, extra: p.extra === "true", planned: p.planned === "true" });
   }
+  // An independent count: every `id:` key that opens a row anywhere in the block, one line or
+  // not. A row wrapped over two lines, or written in a shape the line reader skips, makes the
+  // counts disagree and the derivation refuses instead of dropping the room.
+  const declared = (block.replace(STRING, (s) => (/^['"][a-z0-9-]+['"]$/.test(s) ? s : "''")).match(/\{\s*id\s*:/g) || []).length;
+  if (declared !== rows.length) throw new InputError(`roomRegistry.js: ROOM_META declares ${declared} rows but ${rows.length} were readable -- a row is not on one line or not in the expected shape`);
+  const ids = rows.map((r) => r.id);
+  const dup = ids.filter((id, i) => ids.indexOf(id) !== i);
+  if (dup.length) throw new InputError(`roomRegistry.js: duplicate room id(s): ${[...new Set(dup)].join(", ")}`);
   const al = text.match(/export const ROOM_ALIASES\s*=\s*\{([^}]*)\}/);
   if (!al) throw new InputError("roomRegistry.js: ROOM_ALIASES not found");
-  const aliases = {};
-  for (const m of al[1].matchAll(/'?([a-z0-9-]+)'?\s*:\s*'([a-z0-9-]+)'/g)) aliases[m[1]] = m[2];
+  const aliases = Object.create(null);
+  for (const m of al[1].matchAll(/['"]?([a-z0-9-]+)['"]?\s*:\s*['"]([a-z0-9-]+)['"]/g)) aliases[m[1]] = m[2];
   const ringOrder = (text.match(/export const RING_ORDER\s*=\s*\[([^\]]*)\]/) || [, ""])[1]
-    .match(/'([a-z]+)'/g)?.map((s) => s.slice(1, -1)) || [];
+    .match(/['"]([a-z]+)['"]/g)?.map((s) => s.slice(1, -1)) || [];
   if (rows.length === 0) throw new InputError("roomRegistry.js: ROOM_META holds no rows");
   if (ringOrder.length === 0) throw new InputError("roomRegistry.js: RING_ORDER not found");
   return { rows, aliases, ringOrder };
 }
 
-/** Planned reads per v0.7 room id from PLAN-face-v2.md section 5.2's tables. */
+/**
+ * Planned reads per v0.7 room id from PLAN-face-v2.md section 5.2's tables. Every table row in
+ * the section parses or is a named error: a header, a separator, or `| \`id\` [markers] | reads |
+ * verbs |`, where reads is a sequence of marks (✔ served · ★ new · — none) each followed by the
+ * routes it marks. An unknown mark, or a route before any mark, is an error -- never a default.
+ */
 export function parsePlannedReads(text) {
   const start = text.search(/^### 5\.2\b/m);
   const end = text.search(/^## 6\b/m);
   if (start < 0 || end < start) throw new InputError("PLAN-face-v2.md: section 5.2 not found");
-  const reads = {};
+  const reads = Object.create(null);
   for (const line of text.slice(start, end).split(/\r?\n/)) {
-    const cells = line.match(/^\|\s*`([a-z0-9-]+)`[^|]*\|([^|]*)\|/);
-    if (!cells) continue;
+    if (!line.startsWith("|")) continue;
+    if (/^\|\s*id\s*\|/.test(line) || /^\|[-:\s|]+\|?\s*$/.test(line)) continue;
+    const cells = line.match(/^\|\s*`([a-z0-9-]+)`\s*[*†]?\s*\|([^|]*)\|[^|]*\|\s*$/);
+    if (!cells) throw new InputError(`PLAN-face-v2.md 5.2: unreadable table row: ${line.slice(0, 80)}`);
+    const [, id, readsCell] = cells;
+    if (Object.hasOwn(reads, id)) throw new InputError(`PLAN-face-v2.md 5.2: room ${id} has two rows`);
     const out = [];
     let mark = null;
-    for (const tok of cells[2].matchAll(/(✔|★|—)|`([^`]+)`/g)) {
-      if (tok[1]) { mark = tok[1]; continue; }
-      out.push({ route: tok[2], planned: mark === "★" ? "new" : "served" });
-    }
-    reads[cells[1]] = out;
+    const rest = readsCell.replace(/(✔|★|—)|`([^`]+)`|\+|\s+/g, (all, m, route) => {
+      if (m) { mark = m; return ""; }
+      if (route !== undefined) {
+        if (mark === null) throw new InputError(`PLAN-face-v2.md 5.2: room ${id} names ${route} before any mark`);
+        if (mark === "—") throw new InputError(`PLAN-face-v2.md 5.2: room ${id} names ${route} under the no-read mark`);
+        out.push({ route, planned: mark === "★" ? "new" : "served" });
+        return "";
+      }
+      return "";
+    });
+    if (rest !== "") throw new InputError(`PLAN-face-v2.md 5.2: room ${id} has an unknown mark or token ${JSON.stringify(rest)}`);
+    if (mark === null) throw new InputError(`PLAN-face-v2.md 5.2: room ${id} has no mark at all`);
+    reads[id] = out;
   }
   return reads;
 }
 
 export function derive({ registryText, servedJson, planText }) {
   const { rows, aliases, ringOrder } = parseRegistry(registryText);
-  const servedList = Array.isArray(servedJson) ? servedJson : servedJson.rooms;
-  if (!Array.isArray(servedList) || servedList.length === 0) throw new InputError("rooms.generated.json: no rooms");
+  const servedList = servedJson && typeof servedJson === "object" ? (Array.isArray(servedJson) ? servedJson : servedJson.rooms) : null;
+  if (!Array.isArray(servedList) || servedList.length === 0) throw new InputError("rooms.generated.json: no `rooms` array");
+  servedList.forEach((r, i) => {
+    if (!r || typeof r !== "object" || typeof r.id !== "string" || typeof r.ring !== "string" || typeof r.status !== "string")
+      throw new InputError(`rooms.generated.json: rooms[${i}] is not {id, ring, status}`);
+  });
   const served = new Map(servedList.map((r) => [r.id, r]));
+  if (served.size !== servedList.length) throw new InputError("rooms.generated.json: duplicate served room id");
   const plannedReads = parsePlannedReads(planText);
 
   const modules = [];
@@ -89,15 +146,18 @@ export function derive({ registryText, servedJson, planText }) {
     let alias = null;
     if (served.has(row.id)) id = row.id;
     else {
-      const servedAlias = Object.keys(aliases).find((k) => aliases[k] === row.id && served.has(k));
-      if (servedAlias) { id = servedAlias; alias = row.id; }
+      const claimants = Object.keys(aliases).filter((k) => aliases[k] === row.id && served.has(k));
+      if (claimants.length > 1) throw new InputError(`roomRegistry.js: v0.7 room ${row.id} is claimed by ${claimants.length} served ids (${claimants.join(", ")}) -- one module cannot take two ids`);
+      if (claimants.length === 1) { id = claimants[0]; alias = row.id; }
     }
     if (id === null && !row.extra) { orphans.push(row.id); continue; }
+    if (used.has(id ?? row.id)) throw new InputError(`roomRegistry.js: two v0.7 rooms become module ${id ?? row.id}`);
+    if (!Object.hasOwn(plannedReads, row.id)) throw new InputError(`PLAN-face-v2.md 5.2: no row for v0.7 room ${row.id}`);
     const s = id === null ? null : served.get(id);
     let ring = row.ring;
     if (s && s.ring !== row.ring) { ringConflicts.push({ id, v07: row.ring, served: s.ring }); ring = s.ring; }
     const cls = s === null ? "extra" : s.status === "planned" ? "served-planned" : "served";
-    modules.push({ id: id ?? row.id, alias, ring, class: cls, reads: plannedReads[row.id] ?? null });
+    modules.push({ id: id ?? row.id, alias, ring, class: cls, reads: plannedReads[row.id] });
     used.add(id ?? row.id);
   }
   const order = (r) => { const i = ringOrder.indexOf(r); return i < 0 ? ringOrder.length : i; };

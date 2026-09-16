@@ -9,8 +9,9 @@
 //
 // VACUOUS-PASS GUARD: the first checks prove the modules loaded with real exports, and the last
 // line is "RAN: <n> checks, <f> failed"; the exit code also requires n to reach a floor.
-import { readFileSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname, resolve, win32 } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { startFakeCdp } from "./fake-cdp.mjs";
 
@@ -82,6 +83,7 @@ check("a mask key that is not 4 bytes is refused", throwsLike(() => cdp.encodeFr
         api.raw(api.frame("{not json"));
         api.reply({ id: msg.id, result: {} });
       }
+      else if (msg.method === "Page.probe") api.reply({ id: msg.id, result: {} });
       // "Never.answer" gets no reply on purpose.
     },
   });
@@ -93,6 +95,13 @@ check("a mask key that is not 4 bytes is refused", throwsLike(() => cdp.encodeFr
     check("every frame the client sent was masked", fake.unmaskedFrames === 0 && fake.received.length >= 1);
     check("an error reply rejects with the server's message", await rejectsLike(s.send("Echo.fail"), /planted failure/));
     check("a message split across a text frame and a continuation arrives whole", (await s.send("Split.message")).split === true);
+    // The 16- and 64-bit length paths cross the INDEPENDENT fake codec in both directions, so a
+    // length-field bug shared by cdp.mjs's encoder and decoder cannot pass (attack 2026-09-17).
+    for (const size of [200, 70000]) {
+      const big = "x".repeat(size);
+      const echoed = await s.send("Echo.ok", { v: big });
+      check(`a ${size}-character message round-trips through the independent fake`, echoed.echoed === big);
+    }
 
     const page = await cdp.openPage(s);
     const seen = [];
@@ -100,7 +109,9 @@ check("a mask key that is not 4 bytes is refused", throwsLike(() => cdp.encodeFr
     await s.send("Emit.events");
     check("a page only hears events for its own session id", page.sessionId === "S1" && seen.length === 1 && seen[0] === "mine");
     check("a malformed server message is counted, not thrown", s.malformed === 1);
-    check("a page's send carries its session id", fake.received.some((m) => m.method === "Echo.ok") && page.targetId === "T1");
+    await page.send("Page.probe", {});
+    const probe = fake.received.find((m) => m.method === "Page.probe");
+    check("a page's send carries its session id on the wire", page.targetId === "T1" && probe && probe.sessionId === "S1", JSON.stringify(probe));
 
     fake.api.ping("pp");
     let pongOk = false;
@@ -108,9 +119,17 @@ check("a mask key that is not 4 bytes is refused", throwsLike(() => cdp.encodeFr
     check("a server ping is answered with a pong carrying the same payload", pongOk);
 
     check("a call nobody answers times out instead of hanging", await rejectsLike(s.send("Never.answer"), /timed out/));
+    // A close must reject at once with the close reason -- not by the 1500 ms call timeout,
+    // whose message would also name the method (attack 2026-09-17).
     const pending = s.send("Never.answer");
+    const closedAt = Date.now();
     fake.api.closeWith(1001);
-    check("a server close rejects the calls still pending", await rejectsLike(pending, /Never\.answer/));
+    let closeMessage = "";
+    try { await pending; } catch (e) { closeMessage = String(e.message); }
+    const closeMs = Date.now() - closedAt;
+    check("a server close rejects the calls still pending, at once and with the close reason",
+      /Never\.answer/.test(closeMessage) && /socket closed|1001/.test(closeMessage) && !/timed out/.test(closeMessage) && closeMs < 1000,
+      `${closeMs} ms: ${closeMessage}`);
     check("a closed session refuses new calls", await rejectsLike(s.send("Echo.ok", { v: 1 }), /closed/));
   } finally {
     await fake.close();
@@ -133,11 +152,19 @@ check("a non-ws URL is refused", await rejectsLike(cdp.openSocket("http://127.0.
   const has = (...paths) => (p) => paths.includes(p);
   const bin = cdp.findChrome({ env: { CHROME_BIN: "/opt/chrome" }, platform: "linux", exists: has("/opt/chrome") });
   check("CHROME_BIN is used when it is set and exists", bin.path === "/opt/chrome" && bin.source === "CHROME_BIN");
-  const stale = cdp.findChrome({ env: { CHROME_BIN: "/gone", PATH: "/usr/bin" }, platform: "linux", exists: has("/usr/bin/google-chrome") });
-  check("a CHROME_BIN that does not exist falls through and is named in `tried`", stale.path === "/usr/bin/google-chrome" && stale.tried.some((t) => t.includes("/gone")));
+  // A PATH directory that is NOT one of the hard-coded defaults, and `source` asserted, so the
+  // PATH branch cannot pass by falling through to /usr/bin (attack 2026-09-17). The linux join is
+  // posix on every host, including the windows runner.
+  const stale = cdp.findChrome({ env: { CHROME_BIN: "/gone", PATH: "/opt/google/chrome:/usr/local/x" }, platform: "linux", exists: has("/opt/google/chrome/google-chrome") });
+  check("a CHROME_BIN that does not exist falls through to PATH and is named in `tried`",
+    stale.path === "/opt/google/chrome/google-chrome" && stale.source === "PATH" && stale.tried.some((t) => t.includes("/gone")), JSON.stringify(stale));
+  const dirBin = cdp.findChrome({ env: { CHROME_BIN: REPO, PATH: "" }, platform: "linux" });
+  check("a CHROME_BIN that is a directory is not taken as Chrome", dirBin.source !== "CHROME_BIN" && dirBin.tried.some((t) => t.includes(REPO)), JSON.stringify(dirBin.source));
+  check("isRegularFile is false for a directory and true for a file",
+    cdp.isRegularFile(REPO) === false && cdp.isRegularFile(fileURLToPath(import.meta.url)) === true);
   const reg = cdp.findChrome({ env: {}, platform: "win32", exists: has("D:\\Chrome\\chrome.exe"), regQuery: () => ["D:\\Chrome\\chrome.exe"] });
   check("windows reads the App Paths registry value first", reg.path === "D:\\Chrome\\chrome.exe" && reg.source === "registry");
-  const pf = join("C:\\PF", "Google", "Chrome", "Application", "chrome.exe");
+  const pf = win32.join("C:\\PF", "Google", "Chrome", "Application", "chrome.exe");
   const pff = cdp.findChrome({ env: { ProgramFiles: "C:\\PF" }, platform: "win32", exists: has(pf), regQuery: () => [] });
   check("windows falls back to %ProgramFiles% when the registry has no value", pff.path === pf && pff.source === "ProgramFiles");
   const winMiss = cdp.findChrome({ env: { ProgramFiles: "C:\\PF", LOCALAPPDATA: "C:\\L" }, platform: "win32", exists: () => false, regQuery: () => { throw new Error("no reg"); } });
@@ -147,6 +174,12 @@ check("a non-ws URL is refused", await rejectsLike(cdp.openSocket("http://127.0.
   const linuxMiss = cdp.findChrome({ env: { PATH: "/a:/b" }, platform: "linux", exists: () => false });
   check("a linux miss returns no path and a non-empty `tried`", linuxMiss.path === null && linuxMiss.tried.length >= 3);
 }
+check("chromeArgs asks for software WebGL and no longer disables the GPU path (macOS runner, CI 2026-09-17)",
+  cdp.chromeArgs({ userDataDir: "/t", platform: "darwin" }).includes("--enable-unsafe-swiftshader")
+  && cdp.chromeArgs({ userDataDir: "/t", platform: "darwin" }).includes("--use-angle=swiftshader")
+  && !cdp.chromeArgs({ userDataDir: "/t", platform: "win32" }).includes("--disable-gpu"));
+check("the smoke ignores exactly v0.7's THREE.Clock notice and nothing near it",
+  smoke.THREE_CLOCK.test("THREE.Clock: This module has been deprecated.") && !smoke.THREE_CLOCK.test("THREEXClock") && !smoke.THREE_CLOCK.test("THREE.WebGLRenderer: Error creating WebGL context."));
 check("chromeArgs adds --no-sandbox on linux only, and asks for port 0",
   cdp.chromeArgs({ userDataDir: "/t", platform: "linux" }).includes("--no-sandbox")
   && !cdp.chromeArgs({ userDataDir: "/t", platform: "win32" }).includes("--no-sandbox")
@@ -154,6 +187,25 @@ check("chromeArgs adds --no-sandbox on linux only, and asks for port 0",
 check("DevToolsActivePort parses port and browser path", JSON.stringify(cdp.parseDevToolsActivePort("9222\n/devtools/browser/abc\n")) === JSON.stringify({ port: 9222, path: "/devtools/browser/abc" }));
 check("a DevToolsActivePort with a bad port or path is refused",
   cdp.parseDevToolsActivePort("0\n/devtools/browser/x") === null && cdp.parseDevToolsActivePort("9222\n/other") === null && cdp.parseDevToolsActivePort("") === null);
+{
+  // A path that exists but cannot be run: launchChrome must not die on an unhandled 'error'
+  // event, and waitForDevTools must say it could not start (attack 2026-09-17).
+  const scratch = mkdtempSync(join(tmpdir(), "cdp-client-"));
+  try {
+    const child = cdp.launchChrome(join(REPO, "face", "scripts"), []);
+    let msg = "";
+    try { await cdp.waitForDevTools(scratch, child, { timeoutMs: 5000, pollMs: 20 }); } catch (e) { msg = String(e.message); }
+    check("a Chrome path that cannot run is a clear 'could not start', not a crash", /could not start|exited/.test(msg), msg);
+
+    writeFileSync(join(scratch, "DevToolsActivePort"), "9222\n /devtools/browser/x\n");
+    const idle = { exitCode: null, signalCode: null, spawnError: null, stderrTail: () => "" };
+    let msg2 = "";
+    try { await cdp.waitForDevTools(scratch, idle, { timeoutMs: 300, pollMs: 20 }); } catch (e) { msg2 = String(e.message); }
+    check("a DevToolsActivePort that exists but does not parse is reported as such, not as absent", /did not parse/.test(msg2), msg2);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 
 // ---- Node floor ----
 const floorCases = [["v18.20.4", false], ["v20.18.1", false], ["v20.19.0", true], ["v21.7.3", false], ["v22.11.0", false], ["v22.12.0", true], ["v24.1.0", true], ["banana", false]];
@@ -163,37 +215,104 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
 // ---- lockfile platform families ----
 {
   const lock = JSON.parse(readFileSync(join(REPO, "face", "package-lock.json"), "utf8"));
-  for (const [platform, arch, libc] of [["linux", "x64", "glibc"], ["darwin", "arm64", null], ["win32", "x64", null]]) {
+  for (const [platform, arch, libc] of [["linux", "x64", "glibc"], ["darwin", "arm64", null], ["win32", "x64", null], ["linux", "arm", "glibc"]]) {
     const r = lockMod.checkLockfile(lock, { platform, arch, libc });
-    check(`the tracked lockfile covers ${platform}-${arch}`, r.ok && r.families >= 1, JSON.stringify(r));
+    check(`the tracked lockfile covers ${platform}-${arch}`, r.ok && r.families >= 2, JSON.stringify(r));
   }
-  const mutant = structuredClone(lock);
-  for (const k of Object.keys(mutant.packages)) if (/binding-linux-x64-gnu$/.test(k)) delete mutant.packages[k];
-  const m = lockMod.checkLockfile(mutant, { platform: "linux", arch: "x64", libc: "glibc" });
-  check("a lockfile missing linux-x64-gnu names the family", !m.ok && m.missing.some((f) => f.includes("*")), JSON.stringify(m));
-  const none = lockMod.checkLockfile({ packages: { "node_modules/fsevents": { os: ["darwin"], cpu: [], optional: true } } }, { platform: "linux", arch: "x64", libc: "glibc" });
-  check("a lockfile with no families is an error, not a pass", !none.ok && /nothing was checked/.test(none.error));
+  const linux = { platform: "linux", arch: "x64", libc: "glibc" };
+  // The npm/cli#4828 damage itself: every rolldown binding gone except the one Windows needs.
+  const onlyWin = structuredClone(lock);
+  for (const k of Object.keys(onlyWin.packages)) if (/@rolldown\/binding-/.test(k) && !/win32-x64-msvc$/.test(k)) delete onlyWin.packages[k];
+  const w = lockMod.checkLockfile(onlyWin, linux);
+  check("a lockfile stripped to the Windows binding FAILS for linux and names the parent", !w.ok && w.missing.some((f) => f.startsWith("node_modules/rolldown")), JSON.stringify(w));
+  // An older npm writes no libc: the name's own -gnu/-musl token decides.
+  const muslOnly = structuredClone(lock);
+  delete muslOnly.packages["node_modules/@rolldown/binding-linux-x64-gnu"];
+  for (const k of Object.keys(muslOnly.packages)) delete muslOnly.packages[k].libc;
+  check("a musl-only binding with no libc field does not satisfy a glibc host", !lockMod.checkLockfile(muslOnly, linux).ok);
+  // A nested copy must be satisfied from its own resolution path, not by the hoisted copy.
+  const nested = structuredClone(lock);
+  nested.packages["node_modules/other/node_modules/lightningcss"] = { version: "9.9.9", optionalDependencies: { "lightningcss-win32-x64-msvc": "9.9.9", "lightningcss-linux-x64-gnu": "9.9.9" } };
+  nested.packages["node_modules/other/node_modules/lightningcss-win32-x64-msvc"] = { os: ["win32"], cpu: ["x64"], optional: true };
+  const n = lockMod.checkLockfile(nested, linux);
+  check("a nested package with no linux binary is not covered by the hoisted copy", !n.ok && n.missing.some((f) => f.startsWith("node_modules/other/node_modules/lightningcss")), JSON.stringify(n));
+  check("gnueabihf is one platform token, not gnu plus a remainder",
+    JSON.stringify(lockMod.platformOfName("lightningcss-linux-arm-gnueabihf")) === JSON.stringify({ os: "linux", cpu: "arm", libc: "glibc" }));
+  const none = lockMod.checkLockfile({ packages: { "node_modules/fsevents": { os: ["darwin"], cpu: [], optional: true } } }, linux);
+  check("a lockfile with no platform families is an error, not a pass", !none.ok && /nothing was checked/.test(none.error));
   check("a v1 lockfile with no packages map is refused", !lockMod.checkLockfile({ dependencies: {} }, { platform: "linux", arch: "x64" }).ok);
 }
 
 // ---- smoke + harness pure half ----
 {
-  const good = { openable: 33, opened: 33, countedErrors: 0 };
-  check("the verdict passes a full, clean run", smoke.judge(good).ok);
+  const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [] };
+  check("the verdict passes a full, clean, settled run", smoke.judge(good).ok);
   const stub = JSON.parse(readFileSync(join(REPO, "tests", "fixtures", "face", "smoke-stub-report.json"), "utf8"));
   check("the verdict FAILS the stub report of a smoke that never navigated", !smoke.judge(stub).ok && smoke.judge(stub).reasons.some((r) => /opened=0/.test(r)));
-  check("the verdict FAILS when nothing was openable", !smoke.judge({ openable: 0, opened: 0, countedErrors: 0 }).ok);
+  check("the verdict FAILS when nothing was openable", !smoke.judge({ ...good, openable: 0, opened: 0 }).ok);
   check("the verdict FAILS one counted error", !smoke.judge({ ...good, countedErrors: 1 }).ok);
+  check("the verdict FAILS a room that never settled", !smoke.judge({ ...good, unsettled: ["today"] }).ok);
+  check("the verdict FAILS a report that does not say what settled", !smoke.judge({ openable: 33, opened: 33, countedErrors: 0 }).ok);
+  check("the verdict FAILS NaN or missing counts", !smoke.judge({ ...good, openable: NaN, opened: NaN }).ok && !smoke.judge({ ...good, countedErrors: undefined }).ok);
+  check("the verdict FAILS a door that serves fewer rooms than the contract",
+    !smoke.judge({ ...good, openable: 1, opened: 1, expected: 33, missingFromDoor: ["inbox"], unexpectedFromDoor: [] }).ok);
+  check("the verdict FAILS a door that serves a room the contract does not know",
+    !smoke.judge({ ...good, expected: 33, missingFromDoor: [], unexpectedFromDoor: ["ghost"] }).ok);
+
   const rooms = smoke.openableRooms({ rooms: [{ id: "today", status: "built" }, { id: "lane", status: "template" }, { id: "ops", status: "planned" }] });
   check("openable rooms exclude templates and keep planned rooms", JSON.stringify(rooms.openable) === JSON.stringify(["today", "ops"]) && rooms.notOpened[0] === "lane");
   check("a rooms payload with no array is a setup error", throwsLike(() => smoke.openableRooms({}), /rooms/));
+  check("a malformed room entry is named by index, never dropped",
+    throwsLike(() => smoke.openableRooms({ rooms: [{ id: "today", status: "built" }, null] }), /rooms\[1\]/)
+    && throwsLike(() => smoke.openableRooms({ rooms: [{ id: 7, status: "built" }] }), /rooms\[0\]/)
+    && throwsLike(() => smoke.openableRooms({ rooms: [{ id: "x" }] }), /no status/));
+  check("a duplicate room id is a setup error", throwsLike(() => smoke.openableRooms({ rooms: [{ id: "a", status: "built" }, { id: "a", status: "built" }] }), /repeats/));
+
+  const full = ["--base", "http://x/", "--door", "http://d", "--token", "t"];
   check("smoke refuses an unknown flag", throwsLike(() => smoke.parseArgs(["--chek"]), /unknown argument/));
   check("smoke refuses a flag with no value", throwsLike(() => smoke.parseArgs(["--base", "--door", "x"]), /needs a value/));
-  check("smoke refuses a room timeout under a second", throwsLike(() => smoke.parseArgs(["--probe-file", "x", "--room-timeout-ms", "5"]), /1000/));
+  check("smoke refuses a repeated flag", throwsLike(() => smoke.parseArgs([...full, "--base", "http://y/"]), /twice/));
+  check("smoke refuses an empty value", throwsLike(() => smoke.parseArgs(["--base", "", "--door", "d", "--token", "t"]), /empty/));
+  check("smoke refuses a room timeout under a second", throwsLike(() => smoke.parseArgs([...full, "--room-timeout-ms", "5"]), /1000/));
   check("smoke requires base, door and token outside probe mode", throwsLike(() => smoke.parseArgs(["--base", "http://x/"]), /required/));
-  check("smoke parses an exclude list", JSON.stringify(smoke.parseArgs(["--probe-file", "p", "--exclude", "a, b,"]).exclude) === JSON.stringify(["a", "b"]));
+  check("smoke refuses --probe-file mixed with flags it would ignore", throwsLike(() => smoke.parseArgs(["--probe-file", "p", "--base", "http://x/"]), /runs alone/));
+  check("smoke parses an exclude list", JSON.stringify(smoke.parseArgs([...full, "--exclude", "a, b,"]).exclude) === JSON.stringify(["a", "b"]));
   check("harness-run refuses an unknown flag and the --flag=value form",
     throwsLike(() => harness.parseArgs(["--exclude=a"]), /unknown/) && throwsLike(() => harness.parseArgs(["--keep"]), /unknown/));
+  check("harness-run refuses an empty --face and a repeated flag",
+    throwsLike(() => harness.parseArgs(["--face", ""]), /empty/) && throwsLike(() => harness.parseArgs(["--face", "a", "--face", "b"]), /twice/));
+  const expected = harness.expectedOpenable(REPO);
+  const onDisk = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms;
+  check("harness-run's expected set is read from rooms.generated.json, templates excluded",
+    expected.length > 0 && expected.length === onDisk.filter((r) => r.status !== "template").length && !expected.includes("lane"), `expected=${expected.length}`);
+}
+
+// ---- child lifecycle (proc.mjs; shell/OS attack 2026-09-17) ----
+{
+  const proc = await imp("proc.mjs");
+  check("a child killed by a signal is dead, and the signal is named",
+    proc.isDead({ exitCode: null, signalCode: "SIGKILL" }) && /SIGKILL/.test(proc.deathReason({ exitCode: null, signalCode: "SIGKILL" })));
+  check("a child that never started is dead", proc.isDead({ exitCode: null, signalCode: null, spawnError: new Error("ENOENT") }));
+  check("a running child is not dead", !proc.isDead({ exitCode: null, signalCode: null, spawnError: null }));
+
+  // A child that IGNORES SIGTERM: stopTree must escalate and return, never wait forever.
+  const child = proc.spawnTracked(process.execPath, [join(REPO, "tests", "fixtures", "face", "sleeper.mjs")]);
+  await proc.delay(400);
+  const aliveBefore = !proc.isDead(child);
+  const t0 = Date.now();
+  await proc.stopTree(child, { graceMs: 500 });
+  const stopMs = Date.now() - t0;
+  let deadAfter = proc.isDead(child);
+  for (let i = 0; i < 20 && !deadAfter; i++) { await proc.delay(100); deadAfter = proc.isDead(child); }
+  check("stopTree ends a child that ignores SIGTERM, within its escalation window", aliveBefore && deadAfter && stopMs < 6000, `alive=${aliveBefore} dead=${deadAfter} ${stopMs} ms ${proc.deathReason(child)}`);
+
+  const t1 = Date.now();
+  const exited = await proc.waitExit({ exitCode: null, signalCode: null, once() {}, off() {} }, 150);
+  check("waitExit gives up at its cap and reports false", exited === false && Date.now() - t1 < 1000);
+
+  const dir = mkdtempSync(join(tmpdir(), "proc-remove-"));
+  writeFileSync(join(dir, "f.txt"), "x");
+  check("removeDir removes a directory and says so", (await proc.removeDir(dir, "cdp-client")) === true);
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

@@ -12,33 +12,47 @@
 //
 // Usage: harness-run.mjs [--face DIR] [--exclude id,id]
 // Exit:  0 smoke passed · 1 smoke failed · 2 setup failed (no dist, door or preview never up).
-import { spawn, execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, realpathSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { spawnTracked, isDead, deathReason, stopTree, removeDir, delay } from "./proc.mjs";
+import { findChrome } from "./cdp.mjs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runSmoke, summaryLines, judge, SetupError } from "./smoke.mjs";
+import { runSmoke, summaryLines, judge, openableRooms, SetupError } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FACE_DEFAULT = resolve(HERE, "..");
 const REPO = resolve(FACE_DEFAULT, "..");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function parseArgs(argv) {
   const opts = { exclude: [], face: FACE_DEFAULT };
+  const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--exclude" && argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")) {
-      opts.exclude = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
+    const a = argv[i];
+    const v = argv[i + 1];
+    if ((a === "--exclude" || a === "--face") && v !== undefined && !v.startsWith("--")) {
+      if (seen.has(a)) throw new SetupError(`${a} given twice -- which one is meant is not a guess`);
+      if (v.trim() === "") throw new SetupError(`${a} has an empty value (an empty --face would resolve to the current directory)`);
+      seen.add(a);
+      i++;
+      if (a === "--exclude") opts.exclude = v.split(",").map((s) => s.trim()).filter(Boolean);
+      else opts.face = v;
       continue;
     }
-    if (argv[i] === "--face" && argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")) {
-      opts.face = argv[++i];
-      continue;
-    }
-    throw new SetupError(`unknown or incomplete argument ${JSON.stringify(argv[i])} (flags: --exclude id,id, --face DIR)`);
+    throw new SetupError(`unknown or incomplete argument ${JSON.stringify(a)} (flags: --exclude id,id, --face DIR)`);
   }
   return opts;
+}
+
+/** The rooms the door SHOULD serve as openable, read from the contract file, not the door. */
+export function expectedOpenable(repo = REPO) {
+  const file = join(repo, "initiatives", "face", "contracts", "rooms.generated.json");
+  let payload;
+  try { payload = JSON.parse(readFileSync(file, "utf8")); }
+  catch (e) { throw new SetupError(`cannot read the expected room set at ${file}: ${e.message}`); }
+  return openableRooms(payload).openable;
 }
 
 function freePort() {
@@ -51,32 +65,23 @@ function freePort() {
 }
 
 function start(label, args, opts) {
-  const child = spawn(process.execPath, args, { ...opts, stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
-  let tail = "";
-  child.stderr.on("data", (d) => { tail = (tail + d.toString("utf8")).slice(-3000); });
+  const child = spawnTracked(process.execPath, args, opts);
   child.label = label;
-  child.tail = () => tail.trim();
   return child;
 }
 
 async function waitHttp(url, headers, child, capMs) {
   const started = Date.now();
   while (Date.now() - started < capMs) {
-    if (child.exitCode !== null) throw new SetupError(`${child.label} exited (${child.exitCode}) before answering ${url}: ${child.tail().slice(-600)}`);
+    if (isDead(child)) throw new SetupError(`${child.label} ${deathReason(child)} before answering ${url}: ${child.stderrTail().slice(-600)}`);
     try {
       const r = await fetch(url, { headers });
       if (r.status === 200) { await r.arrayBuffer(); return; }
       await r.arrayBuffer();
     } catch { /* not up yet */ }
-    await sleep(200);
+    await delay(200);
   }
-  throw new SetupError(`${child.label} did not answer ${url} with 200 within ${capMs} ms: ${child.tail().slice(-600)}`);
-}
-
-async function stop(child) {
-  if (!child || child.exitCode !== null) return;
-  child.kill();
-  await Promise.race([new Promise((r) => child.once("exit", r)), sleep(5000)]);
+  throw new SetupError(`${child.label} did not answer ${url} with 200 within ${capMs} ms: ${child.stderrTail().slice(-600)}`);
 }
 
 export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n")) {
@@ -86,6 +91,11 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
   const vitePkg = join(FACE, "node_modules", "vite", "package.json");
   if (!existsSync(vitePkg)) throw new SetupError(`${vitePkg} is missing -- run npm ci in ${FACE} first`);
   const viteBin = join(FACE, "node_modules", "vite", JSON.parse(readFileSync(vitePkg, "utf8")).bin.vite);
+  // The cheapest precondition first: no Chrome means no smoke, so fail before spending up to
+  // 50 s starting a fixture, a door and a preview (fixed-defects.md, cheap checks first).
+  const chrome = findChrome();
+  if (!chrome.path) throw new SetupError(`Chrome not found. Looked at: ${chrome.tried.join(" | ")}`);
+  const expected = expectedOpenable();
 
   const tmp = mkdtempSync(join(tmpdir(), "face-browser-"));
   const spine = join(tmp, "spine");
@@ -101,7 +111,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
 
     const doorPort = await freePort();
     door = start("arc-dash", [join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "--spine", spine, "--port", String(doorPort)],
-      { env: { ...process.env, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal") } });
+      { cwd: REPO, env: { ...process.env, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal") } });
     const headers = { Authorization: `Bearer ${token}` };
     await waitHttp(`http://127.0.0.1:${doorPort}/api/health`, headers, door, 20000);
     log(`door: up on ${doorPort}`);
@@ -117,6 +127,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
       door: `http://127.0.0.1:${doorPort}`,
       token,
       exclude: opts.exclude,
+      expected,
       roomTimeoutMs: 15000,
     }, log);
     for (const line of summaryLines(report)) log(line);
@@ -125,11 +136,9 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     if (!verdict.ok) log(`smoke: FAIL -- ${verdict.reasons.join("; ")}`);
     return verdict.ok ? 0 : 1;
   } finally {
-    await stop(preview);
-    await stop(door);
-    for (let i = 0; i < 5; i++) {
-      try { rmSync(tmp, { recursive: true, force: true }); break; } catch { await sleep(300); }
-    }
+    await stopTree(preview);
+    await stopTree(door);
+    await removeDir(tmp, "harness-run");
   }
 }
 

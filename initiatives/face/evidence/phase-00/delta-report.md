@@ -85,3 +85,7 @@ list is not "empty" — it is unmeasured, and the suite does not yet exist to me
   phase ports it (ADR-1335).
 - **29 of the 38 event kinds the flows assert do not exist in the spine** → Phase 05 binds them to
   real receipts or does not ship the op (ADR-1334).
+- **The shared face stage throws where WebGL is unavailable**, and the room around it fails to
+  open (first CI run, macOS runner: `THREE.WebGLRenderer: Error creating WebGL context`, 0 of 33
+  rooms opened). The harness now runs Chrome on software WebGL; the product fix is a Phase 02
+  shell item (`initiatives/face/debt-ledger.md`).

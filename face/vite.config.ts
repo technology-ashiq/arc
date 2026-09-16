@@ -97,5 +97,9 @@ export default defineConfig({
       },
     },
   },
+  // `vite preview` defaults to port 4173 while SELF_ORIGINS follow APP_PORT, so a plain
+  // `npm run preview` answered reads and 403'd every stamp: its Origin was never rewritten.
+  // Preview takes the same port as dev (preview.proxy already inherits server.proxy).
+  preview: { port: APP_PORT, strictPort: true },
   build: { outDir: 'dist', sourcemap: true },
 })
