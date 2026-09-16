@@ -83,6 +83,23 @@ at 12d.
 
 ## Now
 
+**RESUME HERE (2026-09-17, paused mid Phase 00 on the owner's call):** branch `feat/face-v2-00`,
+worktree `arc-face-v2`, last pushed `78b65cb3`. Slices 01–08 proven and committed (intake, PII scan,
+SOURCE.md, design spec, modules contract, delta report, fixed-defects list, baseline shots).
+Harness (slices 09–17) is built and attacked (22 holes fixed, `fixed-defects.md`); red-first proof
+recorded (`evidence/phase-00/red-first.md`). CI run D `35150543730` was still running at pause; its
+first finished jobs showed exactly TWO open failures:
+1. `tests/face/cdp-client.mjs` — "a nested package with no linux binary is not covered by the
+   hoisted copy" returns ok:true. Node DOES resolve a binary up the tree, so the real rule is a
+   VERSION match: the resolved binding's `version` must satisfy the nested parent's
+   `optionalDependencies` pin. Fix `checkLockfile` to compare versions, keep the test.
+2. macOS `face-browser` — 33/33 rooms opened, 0 errors, but `map` "never settled" (its network
+   never went quiet for 300 ms inside the 10 s cap). Read how the map room polls before changing
+   the settle rule; do not just raise the cap.
+Then: read run D per job for anything else · harvest `face-browser.bats`'s `shard-timing:` value
+into `tests/shard-timings.json` (provisional 200) · fill slices 09–19 in `phases/phase-00-tasks.md`
+from the CI evidence · `/arc-develop handoff 00`. Open debts: `initiatives/face/debt-ledger.md`.
+
 **Position (2026-09-17):** Cycle 16 is **APPROVED** — the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved") answers
 `approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP` on the main clone's spine. The
