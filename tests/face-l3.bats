@@ -274,4 +274,10 @@ load 'test_helper'
   run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" --root "$dst" --check
   [ "$status" -eq 1 ] || { echo "orphan room: expected exit 1, got $status: $output"; false; }
   [[ "$output" == *"ORPHAN"*"ghost-room"* ]] || { echo "$output"; false; }
+
+  # Near-miss flags are refused by name, never read as a write or as the current directory.
+  run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" --chek
+  [ "$status" -eq 2 ] && [[ "$output" == *"unknown argument"* ]] || { echo "--chek: $status $output"; false; }
+  run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" "--root=$dst" --check
+  [ "$status" -eq 2 ] && [[ "$output" == *"unknown argument"* ]] || { echo "--root=: $status $output"; false; }
 }

@@ -137,6 +137,16 @@ function readInput(root, rel) {
 }
 
 export function run(argv) {
+  // Unknown flags and the `--flag=value` form are refused by name: a near-miss like `--chek`
+  // or `--root=DIR` would otherwise fall through to a write, or to the current directory
+  // (fixed-defects.md, process lifecycle and CLI).
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--root") { i++; continue; }
+    if (a === "--check") continue;
+    console.error(`face-modules-contract: unknown argument ${JSON.stringify(a)} (flags: --root DIR, --check)`);
+    return 2;
+  }
   const rootIdx = argv.indexOf("--root");
   const root = rootIdx >= 0 ? argv[rootIdx + 1] : process.cwd();
   if (rootIdx >= 0 && (!root || root.startsWith("--"))) { console.error("face-modules-contract: --root needs a directory"); return 2; }

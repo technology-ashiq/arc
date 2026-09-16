@@ -109,18 +109,18 @@ tier: static
 sources: phase-00-spec.md, code:grep-fallback(1487; no .codegraph/), adrs(37), learning(3), retro(28), churn(465)
 decision: every figure is computed from the generated contract, never typed; section 5.2's own tables name 19 distinct new routes where its prose says 17 — recorded as a correction, still inside assumptions row 5's band; the throwing-v1-rooms baseline table is explicitly UNMEASURED until the browser suite's first CI run fills it, so an empty table cannot read as a clean result
 result: `today=3 overview=2 engine-room=2 council-chamber=2 factory=5 executor=3 agents=3 story=2 ops=2 trader=2 discover=2 chat-mcp=1 lane=3` · `--check`: `in sync -- 36 modules = 29 same-id + 3 renamed + 4 extra` (matches the quoted line) · `19 distinct` present
-commit: (empty until proven)
+commit: 001683aa
 
 #### slice: 07
 
 title: `initiatives/face/fixed-defects.md` seeded — the lane's running list of already-fixed defects that every attacker prompt this cycle carries: each Cycle 15 hole recorded in `initiatives/face/archive/**` and the arc-face rows of `docs/retro-log.md`, one line each (defect · file it was fixed in · the pattern to check elsewhere). Every attacker pass this cycle appends to it.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
+proof: every commit SHA the list cites must resolve (`git cat-file -e SHA^{commit}`), the list must carry >= 20 defect lines and the check-every-OTHER-file instruction; then the list is applied to the one script this phase has shipped so far — any line it violates is fixed in the same slice
+tier: static
+sources: phase-00-spec.md, code:grep-fallback(1488; no .codegraph/), adrs(37), learning(3), retro(28), churn(466)
+decision: Cycle 15 stated the rule but never kept the file, so the seed comes from its nine attacker-fix commit bodies plus four more fix commits and the arc-face retro rows, grouped as process/CLI · HTTP door · gates/parsers · fixtures; applying it at once caught face-modules-contract.mjs (slice 05) refusing no unknown flag and silently ignoring `--root=DIR` — fixed, and two arms added to the slice-05 mutant test
+result: 13 cited SHAs: `13 ok`, 0 missing · `defect lines=34` · instruction present=1 · twin fix: `--chek` exit=2 `unknown argument` · `--root=.` exit=2 · `--root` with no value exit=2 · `--root . --check` exit=0 `in sync -- 36 modules`
 commit: (empty until proven)
 
 #### slice: 08
