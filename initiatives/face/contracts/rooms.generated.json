@@ -1145,6 +1145,7 @@
           "PLAN-evolve",
           "PLAN-executor",
           "PLAN-face",
+          "PLAN-face-v2",
           "PLAN-growth",
           "PLAN-leads",
           "PLAN-ledger",
@@ -1158,7 +1159,7 @@
           "PLAN-trader"
         ]
       },
-      "itemCount": 26
+      "itemCount": 27
     },
     {
       "id": "org",
