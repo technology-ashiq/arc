@@ -357,3 +357,83 @@ EOF
   _sr
   [ "$status" -ne 0 ] || { echo "an empty explore reported substantiated: $output"; false; }
 }
+
+# ---------- a defect that lives on ONE surface (Phase 01 live demo, 2026-09-17) ----------
+#
+# The row used to be judged at the WIDEST viewport of its iteration, always. The live demo on the
+# LexOS brief broke that on its second composer: iteration 3 fixed a textarea that cut the third
+# line of an outcome at 390px -- a real defect, visibly fixed in the mobile PNG -- and desktop did
+# not move a pixel, because the defect was never there. The row could only name desktop hashes,
+# they were identical, and the gate refused it as "claims a fix while nothing moved". A defect that
+# exists on one surface could not be recorded at all.
+#
+# So a row now NAMES its surface by its hashes: the output hash picks the viewport it was rendered
+# at, and the previous iteration is looked up at THAT viewport. The pairing rule the attacker pass
+# forced stays exactly as strict -- input and output must come from one surface -- and so does the
+# decoy refusal: two metas at the named viewport in one iteration is still ambiguity.
+
+@test "selfreview: a mobile-only fix is recordable -- the row names the mobile hashes" {
+  _sr_sandbox
+  _meta_vp 1 1440x900 "$A_SHA"; _meta_vp 1 390x844 "$C_SHA"
+  _meta_vp 2 1440x900 "$B_SHA"; _meta_vp 2 390x844 "$D_SHA"
+  E_SHA="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  _meta_vp 3 1440x900 "$B_SHA"; _meta_vp 3 390x844 "$E_SHA"
+  _manifest <<EOF
+| iter | input | output | defect | revision |
+|---|---|---|---|---|
+| 2 | $A_SHA | $B_SHA | the primary action sat below the fold | moved the action bar above the summary block |
+| 3 | $D_SHA | $E_SHA | at 390px the outcome field cut its third line | gave the field a taller mobile minimum height |
+EOF
+  _sr
+  [ "$status" -eq 0 ] || { echo "a real mobile-only fix could not be recorded: $output"; false; }
+  echo "$output" | grep -q "substantiated (2 row" || { echo "did not judge both rows: $output"; false; }
+}
+
+@test "selfreview: input and output from two DIFFERENT viewports is still refused" {
+  _sr_sandbox
+  # The pairing rule, pinned from the other side now that the row chooses its surface: mobile of
+  # iteration 1 against desktop of iteration 2 differs trivially and proves nothing.
+  _meta_vp 1 1440x900 "$A_SHA"; _meta_vp 1 390x844 "$C_SHA"
+  _meta_vp 2 1440x900 "$B_SHA"; _meta_vp 2 390x844 "$D_SHA"
+  _manifest <<EOF
+| iter | input | output | defect | revision |
+|---|---|---|---|---|
+| 2 | $C_SHA | $B_SHA | the primary action sat below the fold | moved the action bar above the summary block |
+EOF
+  _sr
+  [ "$status" -ne 0 ] || { echo "a cross-viewport pair was accepted: $output"; false; }
+  echo "$output" | grep -q "selfreview-input-hash" || { echo "refused, but not for the pairing: $output"; false; }
+}
+
+@test "selfreview: the no-op rule holds at the viewport the row names" {
+  _sr_sandbox
+  # Mobile did not move between 2 and 3, so a row naming the mobile hashes may not claim a fix --
+  # the load-bearing rule, carried to whichever surface the row chose.
+  _meta_vp 1 1440x900 "$A_SHA"; _meta_vp 1 390x844 "$C_SHA"
+  _meta_vp 2 1440x900 "$B_SHA"; _meta_vp 2 390x844 "$D_SHA"
+  _meta_vp 3 1440x900 "$A_SHA"; _meta_vp 3 390x844 "$D_SHA"
+  _manifest <<EOF
+| iter | input | output | defect | revision |
+|---|---|---|---|---|
+| 2 | $A_SHA | $B_SHA | the primary action sat below the fold | moved the action bar above the summary block |
+| 3 | $D_SHA | $D_SHA | at 390px the outcome field cut its third line | gave the field a taller mobile minimum height |
+EOF
+  _sr
+  [ "$status" -ne 0 ] || { echo "a mobile no-op claimed a fix and passed: $output"; false; }
+  echo "$output" | grep -q "selfreview-unchanged-claim" || { echo "refused, but not as a no-op claim: $output"; false; }
+}
+
+@test "selfreview: an output hash that matches NO viewport of its iteration is refused" {
+  _sr_sandbox
+  _meta_vp 1 1440x900 "$A_SHA"; _meta_vp 1 390x844 "$C_SHA"
+  _meta_vp 2 1440x900 "$B_SHA"; _meta_vp 2 390x844 "$D_SHA"
+  F_SHA="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  _manifest <<EOF
+| iter | input | output | defect | revision |
+|---|---|---|---|---|
+| 2 | $A_SHA | $F_SHA | the primary action sat below the fold | moved the action bar above the summary block |
+EOF
+  _sr
+  [ "$status" -ne 0 ] || { echo "an invented output hash passed: $output"; false; }
+  echo "$output" | grep -q "selfreview-output-hash" || { echo "refused, but not for the output hash: $output"; false; }
+}
