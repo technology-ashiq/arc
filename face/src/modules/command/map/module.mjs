@@ -1,11 +1,10 @@
-// module.mjs -- command/map: the manifest (face v2 Phase 02, ADR-1320, ADR-1321).
+// module.mjs -- command/map: the manifest (face v2 Phase 03, ADR-1320, REQ-05).
 //
-// CARRIED: this module draws the Cycle 15 MapRoom renderer through the module frame until Phase 03's
-// command ring ports v0.7's MapRoom into this folder. It declares no route because the carried
-// renderer reads the door itself.
+// "If it is not on this map, it is not in the company." Every served room a station, drawn from the
+// registry the shell already read; the day's receipts decide which station is live today.
 export default Object.freeze({
   id: "map",
   ring: "command",
-  routes: Object.freeze([]),
+  routes: Object.freeze(["/api/health", "/api/spine"]),
   asOf: true,
 });

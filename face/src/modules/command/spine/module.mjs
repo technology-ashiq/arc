@@ -1,11 +1,9 @@
-// module.mjs -- command/spine: the manifest (face v2 Phase 02, ADR-1320, ADR-1321).
+// module.mjs -- command/spine: the manifest (face v2 Phase 03, ADR-1320, REQ-05).
 //
-// CARRIED: this module draws the Cycle 15 SpineRoom renderer through the module frame until Phase 03's
-// command ring ports v0.7's SpineRoom into this folder. It declares no route because the carried
-// renderer reads the door itself.
+// "If it isn't an event, it didn't happen." The log itself, read-only, filtered by the door.
 export default Object.freeze({
   id: "spine",
   ring: "command",
-  routes: Object.freeze([]),
+  routes: Object.freeze(["/api/health", "/api/spine"]),
   asOf: true,
 });

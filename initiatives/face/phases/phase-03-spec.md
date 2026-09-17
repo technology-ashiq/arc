@@ -28,7 +28,19 @@
 
 ## Verification plan
 
-Coarse (refined via `/arc-change` when the phase starts): per ring, the browser suite's module count for that ring RED before its modules exist, then green per job; the whole-phase shot review by a fresh agent.
+Refined 2026-09-17 at phase start (`/arc-change`, classified trivial and in scope: it names how each exit criterion above is proven and changes no REQ, ADR, appetite or non-negotiable). All tests run on CI only.
+
+**1 · The read host — once, in the command ring PR, for all 36.** `face/src/lib/door.mjs` names the door's routes in one table (`DOOR_ROUTES`: the served GET reads, and `/api/decide` · `/api/ask` as acts). A `module.mjs` `routes` list may name only those; a route the door does not serve is not declared, it is a `NOT SERVED` panel. `fold()` returns `reads` — the declared routes it needs, with a param or a query — and the host (`shell/RoomFrame.tsx`) loads exactly those through the door and folds again; the View reaches the door only through `ctx.onPick` · `ctx.onAct` · `ctx.onReread`. Every decision of that loop (a read's key and path, which payloads a fold may receive, what an act refreshes) is in `face/src/lib/registry.mjs`. Proof: `tests/face/module-frame.mjs` — a fixture handing `fold()` an undeclared route's payload FAILs by name (REQ-05), a read of an undeclared route is refused, a manifest declaring a route the door does not serve does not attach; red first on the missing exports.
+
+**2 · NOT SERVED is derived, never typed.** A fold returns a panel it cannot fill as `notServed(panel, route)`; the View draws the kit's `NotServed`, marked `data-not-served`. `tests/face/module-frame.mjs` folds every module of each shipped ring with no payloads and requires `evidence/phase-03/not-served-RING.md`'s table (module · panel · route) to EQUAL what the folds name, both ways. The smoke prints `smoke: not-served mood=M panels=N` per mood.
+
+**3 · Per ring.** `tests/face/module-frame.mjs` holds the shipped rings. For each: its module folders equal `contracts/modules-v2.json`'s ids for that ring (an ADR-1327 extra counted only with its exemption row), no View imports a Cycle 15 renderer from `face/src/rooms/`, every declared route is in `DOOR_ROUTES`, and every boolean-named field a fold returns is a boolean. Red first: the ring is added to the shipped list before its modules are ported, and the run FAILs by name. Then `tests/face-browser.bats` green per job on ubuntu Node 20 + 22, macOS and windows: every room opened in both moods, 0 errors, the render line equal to face-coverage's module half.
+
+**4 · Facts-bundle lint — command ring PR.** `.claude/scripts/core/face-facts.mjs` over `face/src`: structural arms FAIL from birth (a data file, a link, an import leaving face/src or turning a file into a value, a glob beyond `./` code, an asset URL, an env value, a fetch of anything but `/api/`, a text blob, a data literal of 200+ leaves, v0.7's bundle names); heuristic arms WARN (a 64+ leaf literal, a 512+ character string, a GENERATED banner, a repo-fact-shaped string in a module). `tests/face/face-facts.mjs` plants each arm, including v0.7's `arcFacts` shape, and holds the real tree at `fail=0`. Two fresh attackers (decision logic · shell/OS boundary) carrying `fixed-defects.md`, in the same PR.
+
+**5 · Shots.** `face/scripts/harness-run.mjs --shots DIR` captures every module at 1440×1000 in both moods with the Chrome version recorded, from the ring's branch build over the fixture spine; the `design-critic` agent, fresh, judges each against its Phase 00 baseline PNG with the ADR-1324 contract declared (a `NOT SERVED` panel is the honest state, not a defect) and writes one line per module × mood; a VIOLATION or BELOW-BAR blocks the ring's merge.
+
+**6 · Readings.** After each ring merges: `face-dogfood` from the main clone, its count recorded in PROGRESS.md as a trend. After the kernel ring: the Block B tripwire reading. The Phase 00 throwing-rooms list stays MEASURED EMPTY on every ring's smoke.
 
 ## Rabbit holes in this phase
 

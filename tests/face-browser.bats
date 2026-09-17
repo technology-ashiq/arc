@@ -185,13 +185,29 @@ render_verdict() {
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
   # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
   # 10 s -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
   # Both moods are judged, each from its own line, before the exit status is trusted: a harness
   # that ran only dark must not pass on dark's line (ADR-1331).
   local mood verdicts=0
   for mood in dark light; do
     smoke_summary_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
     render_verdict "$output" "$mood" "$half" || { echo "(harness exit $status)"; false; }
+    # REQ-05: the browser counts the NOT SERVED panels it drew, per mood -- the gap Phase 04 closes is
+    # measured where the owner sees it, not only in the fold's output.
+    printf '%s\n' "$output" | grep -qE "^smoke: not-served mood=$mood panels=[0-9]+ rooms=[a-z0-9,-]+\$" \
+      || { echo "no not-served line for mood=$mood (harness exit $status)"; false; }
+    # ... and the count the browser drew EQUALS the rows the shipped rings' NOT SERVED lists name, which
+    # module-frame holds equal to the folds: a panel that vanished from the page, or a count read as zero
+    # because it could not be read, fails here (face v2 Phase 03 attack).
+    local nsPanels nsExpected
+    nsPanels="$(printf '%s\n' "$output" | grep "^smoke: not-served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: not-served mood=$mood panels=\([0-9][0-9]*\) rooms=.*/\1/p")"
+    nsExpected="$(cat "$ARC_ROOT"/initiatives/face/evidence/phase-03/not-served-*.md | grep -c '^| `')"
+    [ -n "$nsPanels" ] && [ "$nsExpected" -gt 0 ] && [ "$nsPanels" = "$nsExpected" ] \
+      || { echo "mood=$mood: the browser drew '$nsPanels' NOT SERVED panels, the shipped rings' lists name $nsExpected"; false; }
+    # The shipped rings' module rooms open with the SERVED sentence as their heading: at least the six
+    # command modules were checked and none missed (a blank room is not an opened one).
+    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command checked=([6-9]|[1-9][0-9]+) miss=0\$" \
+      || { echo "heading check missing, too few checked, or a miss for mood=$mood (harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done
   [ "$verdicts" -eq 2 ] || { echo "judged $verdicts of 2 moods"; false; }

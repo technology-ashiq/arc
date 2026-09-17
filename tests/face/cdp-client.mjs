@@ -521,6 +521,41 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   check("a report with no render block prints zero modules, so the verdict refuses it rather than skipping it",
     bare === "smoke: render mood=light module=0 generic=0 unmarked=0 generic-rooms=none", bare);
 
+  // The NOT SERVED line (face v2 Phase 03, REQ-05): how many panels named a route the door does not
+  // serve, and in which rooms -- the browser's count of the gap Phase 04 closes.
+  const gaps = typeof smoke.notServedLine === "function" ? smoke.notServedLine({ mood: "dark", notServed: { panels: 3, rooms: ["today", "board"] } }) : null;
+  check("the not-served line counts NOT SERVED panels and names their rooms", gaps === "smoke: not-served mood=dark panels=3 rooms=today,board", String(gaps));
+  const noGaps = typeof smoke.notServedLine === "function" ? smoke.notServedLine({ mood: "light" }) : null;
+  check("a report that measured no NOT SERVED panel prints zero, never a missing line", noGaps === "smoke: not-served mood=light panels=0 rooms=none", String(noGaps));
+
+  // The heading check (face v2 Phase 03, the debt row on "opened"): a shipped ring's module room opens with
+  // the served sentence, entities undone; a blank or wrong heading is a miss the verdict refuses.
+  const hasHeading = typeof smoke.headingCheck === "function" && typeof smoke.headingLine === "function";
+  check("the smoke exports the heading check and line", hasHeading && Array.isArray(smoke.SENTENCE_RINGS) && smoke.SENTENCE_RINGS.includes("command"));
+  if (hasHeading) {
+    const served = { id: "inbox", ring: "command", sentence: "A machine may raise it. Only you &amp; nobody else may decide it." };
+    const good = smoke.headingCheck(served, { id: "inbox", render: "module", h1: "A machine may raise it. Only you & nobody else may decide it." });
+    check("a heading equal to the served sentence, entities undone, passes", good !== null && good.ok === true, JSON.stringify(good));
+    const blank = smoke.headingCheck(served, { id: "inbox", render: "module", h1: "" });
+    check("MUTANT: a blank heading on a shipped ring's module room is a miss", blank !== null && blank.ok === false, JSON.stringify(blank));
+    const absent = smoke.headingCheck(served, { id: "inbox", render: "module", h1: null });
+    check("MUTANT: no h1 at all is a miss, not a skip", absent !== null && absent.ok === false, JSON.stringify(absent));
+    check("a generic room and a room outside the shipped rings are not heading-checked",
+      smoke.headingCheck(served, { id: "inbox", render: "generic", h1: "x" }) === null && smoke.headingCheck({ ...served, ring: "kernel" }, { id: "inbox", render: "module", h1: "x" }) === null);
+    const missed = smoke.judge({ ...clean, mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], headings: { checked: 6, miss: [blank] } });
+    check("MUTANT: the verdict refuses a run with a heading miss, however clean", !missed.ok && missed.reasons.some((r) => /heading miss/.test(r)), JSON.stringify(missed.reasons));
+    const drifted = smoke.headingCheck({ ...served, sentence: "Nothing happened overnight." }, { id: "inbox", render: "module", h1: "Nothing happened overnight." }, "A machine may raise it. Only you & nobody else may decide it.");
+    check("MUTANT: a door serving a sentence the contract does not freeze is a miss, even when the page matches the door", drifted !== null && drifted.ok === false, JSON.stringify(drifted));
+    const frozenOk = smoke.headingCheck(served, { id: "inbox", render: "module", h1: "A machine may raise it. Only you & nobody else may decide it." }, "A machine may raise it. Only you & nobody else may decide it.");
+    check("a heading equal to the contract's sentence, with the door agreeing, passes", frozenOk !== null && frozenOk.ok === true, JSON.stringify(frozenOk));
+    const none = smoke.judge({ ...clean, mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], headings: { checked: 0, miss: [] } });
+    check("MUTANT: the verdict refuses a run that heading-checked no shipped-ring room", !none.ok && none.reasons.some((r) => /heading checked/.test(r)), JSON.stringify(none.reasons));
+    check("a NOT SERVED count that could not be read prints unread, never zero",
+      smoke.notServedLine({ mood: "dark", notServed: { panels: null, rooms: [] } }) === "smoke: not-served mood=dark panels=unread rooms=none");
+    check("the heading line counts what was checked and what missed",
+      smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }) === "smoke: heading mood=dark rings=command checked=6 miss=0", smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }));
+  }
+
   // The attack on the mood verdict (face v2 Phase 01).
   check("a report that names no mood FAILS, however clean", !smoke.judge({ ...clean, moodMiss: [] }).ok
     && smoke.judge({ ...clean, moodMiss: [] }).reasons.some((r) => /no mood named/.test(r)));

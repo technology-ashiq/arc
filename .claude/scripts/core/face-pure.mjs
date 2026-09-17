@@ -105,7 +105,12 @@ const isLineBreak = (c) => c === "\n" || c === "\r" || c === LS || c === PS;
 /** A line for a log anything parses: every line terminator in `text` made visible, so a name cannot forge a line. */
 export function oneLine(text) {
   let out = "";
-  for (const c of String(text)) out += isLineBreak(c) ? `<U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}>` : c;
+  // Every line terminator, and every other C0 or C1 control (ESC included), made visible: a file name that
+  // carries one cannot repaint the line a verdict is read from (face v2 Phase 03 attack).
+  for (const c of String(text)) {
+    const code = c.charCodeAt(0);
+    out += isLineBreak(c) || code < 0x20 || (code >= 0x7f && code <= 0x9f) ? `<U+${code.toString(16).toUpperCase().padStart(4, "0")}>` : c;
+  }
   return out;
 }
 
@@ -130,9 +135,13 @@ function isStarter(t) {
  * attribute strings are not code. Every bracket (`(` `[` `{` `${` a template and a JSX element) is
  * paired: `pair` on each end holds the other's index, and `inside` on every token holds the index
  * of the innermost bracket it sits in (-1 at the top level).
+ *
+ * With `text`, JSX text children and a template literal's literal parts are tokens too (`k: "text"`),
+ * for a reader that judges what text says (face-facts). They are opt-in: this lint's own View scan
+ * never sees them, so its stream is exactly the one it was built and attacked on.
  * @returns {{ tokens: object[], error: null | { message: string, line: number, col: number } }}
  */
-export function lex(text, { jsx = false } = {}) {
+export function lex(text, { jsx = false, text: keepText = false } = {}) {
   const src = String(text);
   const tokens = [];
   const stack = []; // indices of open bracket tokens
@@ -217,6 +226,7 @@ export function lex(text, { jsx = false } = {}) {
 
   const readRegex = () => {
     const at = here();
+    const from = i;
     advance(1);
     let inClass = false;
     for (;;) {
@@ -229,19 +239,24 @@ export function lex(text, { jsx = false } = {}) {
       advance(1);
     }
     while (i < src.length && /[a-z]/i.test(src[i])) advance(1);
-    push("re", "regex", at);
+    // The source rides on the token as a property, so a reader that judges text can measure a regex too.
+    tokens[push("re", "regex", at)].raw = src.slice(from, i);
   };
 
   const readTemplate = () => {
     const at = here();
     open("`", at, "tpl");
     advance(1);
+    let chunk = "";
+    let chunkAt = here();
+    const flush = () => { if (keepText && chunk !== "") push("text", chunk, chunkAt); chunk = ""; };
     for (;;) {
       const c = src[i];
       if (c === undefined) throw new LexError("an unterminated template literal", at.line, at.col);
-      if (c === "\\") { advance(src[i + 1] === undefined ? 1 : 2); continue; }
-      if (c === "`") { const end = here(); advance(1); close("`end", end, ["`"]); return; }
+      if (c === "\\") { const n = src[i + 1] === undefined ? 1 : 2; chunk += src.slice(i, i + n); advance(n); continue; }
+      if (c === "`") { flush(); const end = here(); advance(1); close("`end", end, ["`"]); return; }
       if (c === "$" && src[i + 1] === "{") {
+        flush();
         const o = here();
         open("${", o, "tpl-expr");
         advance(2);
@@ -250,8 +265,10 @@ export function lex(text, { jsx = false } = {}) {
         if (src[i] !== "}") throw new LexError("an unterminated ${ in a template literal", o.line, o.col);
         advance(1);
         close("}", e, ["${"]);
+        chunkAt = here();
         continue;
       }
+      chunk += c;
       advance(1);
     }
   };
@@ -311,6 +328,8 @@ export function lex(text, { jsx = false } = {}) {
       if (name === null) throw new LexError("a JSX tag this lint cannot read", at.line, at.col);
       advance(name.length);
     }
+    // The element's name, on its opening token -- a property, not a token, so the stream is unchanged.
+    tokens[openIdx].tag = name;
     // attributes
     for (;;) {
       skipJsxSpace();
@@ -344,11 +363,15 @@ export function lex(text, { jsx = false } = {}) {
     }
     push("p", "jsx>", here());
     // children
+    let chunk = "";
+    let chunkAt = here();
+    const flush = () => { if (keepText && chunk.trim() !== "") push("text", chunk, chunkAt); chunk = ""; };
     for (;;) {
       const c = src[i];
       if (c === undefined) throw new LexError(`an unclosed JSX element <${name}>`, at.line, at.col);
-      if (c === "{") { jsxContainer(); continue; }
+      if (c === "{") { flush(); jsxContainer(); chunkAt = here(); continue; }
       if (c === "<") {
+        flush();
         let j = i + 1;
         while (j < src.length && isSpace(src[j])) j++;
         if (src[j] === "/") {
@@ -369,8 +392,10 @@ export function lex(text, { jsx = false } = {}) {
           return;
         }
         jsxElement();
+        chunkAt = here();
         continue;
       }
+      chunk += c;
       advance(1);
     }
   };
@@ -461,11 +486,16 @@ function statementStart(tokens, i) {
  * Every static import and export-from statement: its token span, its specifier and the value names it binds.
  * @returns {{ start: number, end: number, spec: string, specAt: object, names: string[], typeOnly: boolean }[]}
  */
-function importStatements(tokens) {
+export function importStatements(tokens) {
   const out = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
-    if (!(isName(t, "import") || isName(t, "export")) || !statementStart(tokens, i)) continue;
+    // `import` and `export` are reserved: outside a property name they can only begin a statement, so the
+    // statement boundary is not asked. Asking it hid `hits++`, `debugger` or TypeScript's `x!` on the line
+    // before an import, whose end the ASI heuristic does not know (face v2 Phase 03 attack).
+    if (!(isName(t, "import") || isName(t, "export")) || t.prop === true || isP(tokens[i - 1], ".") || isP(tokens[i - 1], "?.")) continue;
+    // A reserved word used as an object key (`{ import: 1 }`) is not a statement either.
+    if (isP(tokens[i + 1], ":") || isP(tokens[i + 1], ",") || isP(tokens[i + 1], "}") || isP(tokens[i + 1], "=")) continue;
     if (isName(t, "import") && (isP(tokens[i + 1], "(") || isP(tokens[i + 1], "."))) continue;
     if (isName(t, "export") && !(isP(tokens[i + 1], "{") || isP(tokens[i + 1], "*") || (isName(tokens[i + 1], "type") && isP(tokens[i + 2], "{")))) continue;
     // Walk to the specifier: the string after `from`, or the string straight after `import`.

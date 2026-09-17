@@ -315,5 +315,190 @@ const namedRooms = (text) => {
     namedRooms("the money ring holds eight rooms; rows.map((r) => r); 'moneyish'; \"inbox zero\"").length === 0);
 }
 
+// ── the read host (face v2 Phase 03, REQ-05): a module declares routes, fold asks for reads, the host loads them ──
+const door = await import(pathToFileURL(join(LIB, "door.mjs")).href);
+{
+  check("READ HOST: door.mjs names the door's routes and registry.mjs exports the read host (vacuous-pass guard)",
+    door.DOOR_ROUTES && typeof door.DOOR_ROUTES === "object"
+    && ["readKey", "readPath", "readProblem", "plannedReads", "readsToLoad", "payloadsFor", "payloadOf", "foldModule", "actProblem", "actStarted", "actSettled", "afterAct", "notServed", "notServedOf"]
+      .every((k) => typeof reg[k] === "function"),
+    Object.keys(reg).join(","));
+}
+if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
+  const R = door.DOOR_ROUTES;
+  // DOOR_ROUTES is read off arc-dash's own ROUTES table, method for method -- a route the face thinks
+  // exists and the door does not serve is how a panel would wait forever.
+  const dash = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "utf8");
+  const served = [...dash.matchAll(/\{ method: "(GET|POST)", (path|prefix): "(\/api\/[a-z/-]*)"/g)]
+    .map((m) => `${m[1]} ${m[2] === "prefix" ? `${m[3]}:id` : m[3]}`).sort();
+  const named = Object.entries(R).map(([route, spec]) => `${spec.method} ${route}`).sort();
+  check("DOOR_ROUTES names exactly the routes arc-dash serves, method for method", served.length >= 10 && JSON.stringify(served) === JSON.stringify(named), `dash=${served.join(",")} face=${named.join(",")}`);
+
+  const manifest = { id: "board", ring: "command", routes: ["/api/board", "/api/lane/:id", "/api/spine"], asOf: true };
+  const mod = { key: "command/board", ring: "command", id: "board", manifest, ops: [], View, Icon, fold: (payloads, ctx) => ({ keys: Object.keys(payloads), picks: ctx.picks }) };
+  const fctx = { room: { id: "board" }, rooms: [], door: null, onOpen: () => {}, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: null, laneMap: undefined };
+  const board = reg.readKey({ route: "/api/board" });
+  const undeclared = reg.readKey({ route: "/api/inbox" });
+
+  let threw = null;
+  try { reg.foldModule(mod, { [board]: { state: "ok", data: {} }, [undeclared]: { state: "ok", data: { secret: 1 } } }, fctx, {}); } catch (e) { threw = e; }
+  check("UNDECLARED: a payload for a route the manifest does not declare FAILs the fold (REQ-05)", threw !== null && String(threw.message).includes("/api/inbox"), String(threw && threw.message));
+  const ok = reg.foldModule(mod, { [board]: { state: "ok", data: {} } }, fctx, { lane: "face" });
+  check("a declared route's payload reaches fold() under its read key", Array.isArray(ok.keys) && ok.keys.length === 1 && ok.keys[0] === board, JSON.stringify(ok));
+  check("fold() receives the View's picks through its context, as a copy", ok.picks && ok.picks.lane === "face", JSON.stringify(ok.picks));
+  let threwKey = null;
+  try { reg.payloadsFor(manifest, { "not a key": { state: "ok", data: 1 } }); } catch (e) { threwKey = e; }
+  check("UNDECLARED: a payload under a key that is not a read key FAILs too", threwKey !== null);
+
+  const bad = reg.collectModules({ ...ns("command", "policy"), "./modules/command/policy/module.mjs": { default: { id: "policy", ring: "command", routes: ["/api/policy"], asOf: true } } });
+  check("a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)", bad.modules.length === 0 && bad.problems.some((p) => p.kind === "manifest" && p.why.includes("/api/policy")), JSON.stringify(bad.problems));
+
+  const refuse = (name, read, needle) => {
+    const why = reg.readProblem(read, manifest);
+    check(`READ REFUSED: ${name}`, typeof why === "string" && why.includes(needle), String(why));
+  };
+  refuse("a route this module does not declare", { route: "/api/inbox" }, "/api/inbox");
+  refuse("a route the door does not serve", { route: "/api/policy" }, "/api/policy");
+  refuse("a param route with no id", { route: "/api/lane/:id" }, "id");
+  refuse("a plain route given an id", { route: "/api/board", param: "x" }, "id");
+  refuse("a query key the route does not take", { route: "/api/spine", query: { secret: "1" } }, "secret");
+  refuse("asof -- the door client's, never a module's", { route: "/api/spine", query: { asof: "2026-09-01" } }, "asof");
+  refuse("a query value that is an object", { route: "/api/spine", query: { kind: { x: 1 } } }, "kind");
+  check("READ REFUSED: an act route is never a read -- acts go through ctx.onAct",
+    typeof reg.readProblem({ route: "/api/decide" }, { ...manifest, routes: [...manifest.routes, "/api/decide"] }) === "string");
+  check("a declared read with its id and query passes", reg.readProblem({ route: "/api/lane/:id", param: "face" }, manifest) === null && reg.readProblem({ route: "/api/spine", query: { kind: "phase.closed", limit: 40 } }, manifest) === null);
+
+  const k1 = reg.readKey({ route: "/api/spine", query: { kind: "a", limit: 5 } });
+  const k2 = reg.readKey({ route: "/api/spine", query: { limit: 5, kind: "a" } });
+  const k3 = reg.readKey({ route: "/api/lane/:id", param: "a|b" });
+  const k4 = reg.readKey({ route: "/api/lane/:id", param: "a", query: {} });
+  check("readKey: one key per read -- query order does not matter", k1 === k2, `${k1} ${k2}`);
+  check("readKey: a separator in an id cannot collide with another read", k3 !== k4 && k3 !== reg.readKey({ route: "/api/lane/:id", param: "a" }), `${k3} ${k4}`);
+  check("readPath: the id is encoded and the query sorted", reg.readPath({ route: "/api/lane/:id", param: "a b/c" }) === "/api/lane/a%20b%2Fc"
+    && reg.readPath({ route: "/api/spine", query: { limit: 5, kind: "phase.closed" } }) === "/api/spine?kind=phase.closed&limit=5", reg.readPath({ route: "/api/spine", query: { limit: 5, kind: "phase.closed" } }));
+
+  const plan = reg.plannedReads({ reads: [{ route: "/api/board" }, { route: "/api/board" }, { route: "/api/inbox" }, { route: "/api/lane/:id", param: "face", poll: true }] }, manifest);
+  check("plannedReads: a repeated read is planned once, and a refused one is named, not planned",
+    plan.reads.length === 2 && plan.problems.length === 1 && plan.problems[0].includes("/api/inbox") && plan.reads.every((r) => typeof r.key === "string" && typeof r.path === "string"), JSON.stringify(plan));
+  check("plannedReads: a fold that returns no reads plans none", reg.plannedReads({}, manifest).reads.length === 0 && reg.plannedReads(null, manifest).reads.length === 0);
+  const laneKey = reg.readKey({ route: "/api/lane/:id", param: "face" });
+  check("readsToLoad: a planned read neither loaded nor in flight loads",
+    reg.readsToLoad(plan.reads, {}, new Set(), false).length === 2);
+  check("readsToLoad: a loaded read and an in-flight read do not load again",
+    reg.readsToLoad(plan.reads, { [board]: { state: "ok", data: {} } }, new Set([laneKey]), false).length === 0);
+  check("readsToLoad: a polled read loads again when a poll is due; an unpolled one does not",
+    JSON.stringify(reg.readsToLoad(plan.reads, { [board]: { state: "ok", data: {} }, [laneKey]: { state: "ok", data: {} } }, new Set(), true).map((r) => r.key)) === JSON.stringify([laneKey]));
+  check("payloadOf: a read not loaded yet is loading, never absent", reg.payloadOf({}, { route: "/api/board" }).state === "loading" && reg.payloadOf({ [board]: { state: "ok", data: 7 } }, { route: "/api/board" }).data === 7);
+
+  const actManifest = { ...manifest, routes: [...manifest.routes, "/api/decide"] };
+  check("ACT REFUSED: an act on a route the manifest does not declare", typeof reg.actProblem("/api/decide", { id: "x" }, manifest) === "string");
+  check("ACT REFUSED: an act on a read route", typeof reg.actProblem("/api/board", {}, actManifest) === "string");
+  check("ACT REFUSED: an act whose body is not an object", typeof reg.actProblem("/api/decide", "approve", actManifest) === "string");
+  check("a declared act with an object body passes", reg.actProblem("/api/decide", { id: "x" }, actManifest) === null);
+  const s1 = reg.actStarted({ [board]: { state: "ok", data: {} } }, "/api/decide", { id: "a" });
+  const s2 = reg.actStarted(s1.loaded, "/api/decide", { id: "b" });
+  const settled = reg.actSettled(s2.loaded, "/api/decide", s1.n, { state: "refused", code: "BAD_REASON", human: "no reason" });
+  const log = reg.payloadOf(settled, { route: "/api/decide", act: true });
+  check("actStarted/actSettled: an act's records keep their order and settle by number",
+    s1.n === 0 && s2.n === 1 && log.state === "ok" && Array.isArray(log.data) && log.data.length === 2 && log.data[0].result.state === "refused" && log.data[1].result.state === "pending", JSON.stringify(log));
+  const after = reg.afterAct(settled, "/api/decide");
+  check("afterAct: a stamp drops every read so the host reads again, and keeps the act log", !Object.hasOwn(after, board) && reg.payloadOf(after, { route: "/api/decide", act: true }).data.length === 2, JSON.stringify(Object.keys(after)));
+  const askLoaded = reg.actStarted({ [board]: { state: "ok", data: {} } }, "/api/ask", { q: "x" }).loaded;
+  check("afterAct: an ask changes nothing a read shows, so the reads stay", Object.hasOwn(reg.afterAct(askLoaded, "/api/ask"), board));
+  let actUndeclared = null;
+  try { reg.foldModule(mod, s1.loaded, fctx, {}); } catch (e) { actUndeclared = e; }
+  check("UNDECLARED: an act log for an undeclared route FAILs the fold like a read does", actUndeclared !== null && String(actUndeclared.message).includes("/api/decide"));
+
+  // ── the Phase 03 attack on the read host: each confirmed hole, pinned ──
+  {
+    let calls = 0;
+    const tricky = { get route() { calls++; return calls <= 1 ? "/api/board" : "/api/pnl"; } };
+    const p = reg.plannedReads({ reads: [tricky] }, manifest);
+    check("R1: a getter route is read ONCE -- the read checked is the read keyed and pathed",
+      p.reads.length === 1 && p.reads[0].route === "/api/board" && p.reads[0].path === "/api/board" && JSON.parse(p.reads[0].key)[0] === "/api/board" && calls === 1, JSON.stringify({ p, calls }));
+  }
+  {
+    const loose = { id: "board", ring: "command", routes: ["/api/board"], asOf: true };
+    const got = reg.collectModules({ ...ns("command", "board"), "./modules/command/board/module.mjs": { default: loose } });
+    loose.routes.push("/api/pnl");
+    const attachedManifest = got.modules[0] ? got.modules[0].manifest : null;
+    check("R2: a module attaches a FROZEN copy of its manifest -- widening the original afterwards changes nothing",
+      attachedManifest !== null && Object.isFrozen(attachedManifest) && Object.isFrozen(attachedManifest.routes) && attachedManifest.routes.length === 1, JSON.stringify(attachedManifest));
+  }
+  {
+    const lone = `face${String.fromCharCode(0xd800)}`;
+    let threwPlan = null;
+    let planned = null;
+    try { planned = reg.plannedReads({ reads: [{ route: "/api/lane/:id", param: lone }] }, manifest); } catch (e) { threwPlan = e; }
+    check("R3: an id with an unpaired surrogate is refused by readProblem, and planning never throws",
+      threwPlan === null && typeof reg.readProblem({ route: "/api/lane/:id", param: lone }, manifest) === "string" && planned !== null && planned.reads.length === 0, String(threwPlan));
+    check("R5: an id that is a dot segment is refused", typeof reg.readProblem({ route: "/api/lane/:id", param: ".." }, manifest) === "string" && typeof reg.readProblem({ route: "/api/lane/:id", param: "." }, manifest) === "string");
+  }
+  {
+    const laneAct = reg.readKey({ route: "/api/lane/:id", param: "act" });
+    const started = reg.actStarted({ [laneAct]: { state: "ok", data: { stale: true } } }, "/api/decide", { id: "x" }).loaded;
+    const dropped = reg.dropReads(started);
+    check("R4: dropReads drops a read of a lane named act, and keeps the act log", !Object.hasOwn(dropped, laneAct) && Object.hasOwn(dropped, reg.readKey({ route: "/api/decide", act: true })), JSON.stringify(Object.keys(dropped)));
+  }
+  check("R6: the host can ask whether a route is declared before it stores an act", reg.routeDeclared(manifest, "/api/board") === true && reg.routeDeclared(manifest, "/api/pnl") === false && reg.routeDeclared(manifest, "__proto__") === false);
+  {
+    let getterCalls = 0;
+    const withGetter = { get panels() { getterCalls++; return { deep: reg.notServed("x", "/api/x", "y") }; } };
+    const inMap = reg.notServedOf({ m: new Map([["k", reg.notServed("Mapped", "/api/m", "s")]]), s: new Set([reg.notServed("Set", "/api/s", "s")]), withGetter });
+    check("R7: notServedOf finds entries in a Map and a Set, and never calls a getter", inMap.length === 2 && getterCalls === 0, JSON.stringify({ inMap, getterCalls }));
+  }
+  {
+    const p = reg.plannedReads({ reads: [{ route: "/api/board" }, { route: "/api/board", poll: true }] }, manifest);
+    check("R8: a repeated read keeps the poll flag of either copy", p.reads.length === 1 && p.reads[0].poll === true, JSON.stringify(p.reads));
+  }
+  check("the host knows which acts re-read everything", reg.actRereads("/api/decide") === true && reg.actRereads("/api/ask") === false && reg.actRereads("/api/board") === false);
+
+  const ns1 = reg.notServed("Policy ladder", "/api/policy", "the ladder at a glance");
+  check("notServed names its panel and the route it needs, and is marked for a View by a boolean field", ns1.isNotServed === true && ns1.panel === "Policy ladder" && ns1.route === "/api/policy" && typeof ns1.sentence === "string");
+  const found2 = reg.notServedOf({ kpis: [ns1], panels: [{ title: "x", body: { deep: [reg.notServed("Learned", "/api/learn", "rules")] } }], plain: "text" });
+  check("notServedOf finds every NOT SERVED entry in a fold's output, nested, in order",
+    found2.length === 2 && found2[0].route === "/api/policy" && found2[1].route === "/api/learn", JSON.stringify(found2));
+}
+
+// ── shipped rings (face v2 Phase 03): a ring listed here is PORTED, and its NOT SERVED list is derived ──
+const SHIPPED_RINGS = ["command"];
+{
+  const contract = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "modules-v2.json"), "utf8"));
+  const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
+  const exemptions = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8")).exemptions.map((e) => e.id);
+  const MODULES = join(SRC, "modules");
+  for (const ring of SHIPPED_RINGS) {
+    const want = contract.modules.filter((m) => m.ring === ring && (m.class !== "extra" || exemptions.includes(m.id))).map((m) => m.id).sort();
+    const ringDir = join(MODULES, ring);
+    const have = existsSync(ringDir) ? readdirSync(ringDir).filter((id) => statSync(join(ringDir, id)).isDirectory()).sort() : [];
+    check(`SHIPPED RING ${ring}: its module folders are modules-v2.json's ids for the ring`, want.length > 0 && JSON.stringify(have) === JSON.stringify(want), `have=${have.join(",")} want=${want.join(",")}`);
+    const rows = [];
+    for (const id of have) {
+      const dir = join(ringDir, id);
+      const viewText = existsSync(join(dir, "View.tsx")) ? readFileSync(join(dir, "View.tsx"), "utf8") : "";
+      check(`SHIPPED RING ${ring}: ${id}'s View mounts no Cycle 15 renderer from face/src/rooms/`, viewText !== "" && !/from\s+["'][^"']*\/rooms\//.test(viewText));
+      const manifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
+      const notDoor = (manifest.routes || []).filter((r) => !Object.hasOwn(door.DOOR_ROUTES || {}, r));
+      check(`SHIPPED RING ${ring}: ${id} declares only door routes`, Array.isArray(manifest.routes) && notDoor.length === 0, notDoor.join(","));
+      const room = registry.rooms.find((r) => r.id === id) || { id, ring, name: id, sentence: "", lede: "", holds: { kinds: [] } };
+      const fctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {} };
+      let folded = null;
+      try { folded = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold({}, fctx); } catch (e) { check(`SHIPPED RING ${ring}: ${id}'s fold runs with nothing loaded yet`, false, e.message); continue; }
+      check(`SHIPPED RING ${ring}: ${id}'s fold runs with nothing loaded yet`, folded !== null && typeof folded === "object");
+      for (const ns of (typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [])) rows.push(`${id} | ${ns.panel} | ${ns.route}`);
+    }
+    // The evidence list is what Phase 04 builds; it must be what the folds actually render, both ways.
+    const listFile = join(REPO, "initiatives", "face", "evidence", "phase-03", `not-served-${ring}.md`);
+    const listed = existsSync(listFile)
+      ? [...readFileSync(listFile, "utf8").matchAll(/^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \|/gm)].map((m) => `${m[1]} | ${m[2]} | ${m[3]}`)
+      : null;
+    check(`NOT SERVED LIST ${ring}: evidence/phase-03/not-served-${ring}.md exists`, listed !== null);
+    const derived = [...new Set(rows)].sort();
+    check(`NOT SERVED LIST ${ring}: the list names exactly what the folds render NOT SERVED, both ways`,
+      listed !== null && JSON.stringify([...new Set(listed)].sort()) === JSON.stringify(derived),
+      `listed-only=${(listed || []).filter((r) => !derived.includes(r)).join(" ; ")} derived-only=${derived.filter((r) => !(listed || []).includes(r)).join(" ; ")}`);
+  }
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;
