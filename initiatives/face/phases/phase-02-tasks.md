@@ -37,6 +37,14 @@ riskiest-file: .claude/scripts/core/face-pure.mjs -- a hand-written TSX lexer ha
 expected-blockers: the first `tsc --noEmit` on CI is red on pre-existing Cycle 15 room code; product-lint and the sync golden stop every job for the new synced files (face-pure.mjs, face-module.mjs, the command file) if either registration is missed
 expected-proof-failures: the first implementation run shows face-pure findings on the carried module Views or the scaffold template, and at least one windows-only failure in the scaffold suite (a path separator in a module key, or the symlinked main-guard arm)
 
+### Prediction scores
+
+likely-failure-mode: hit — the scan MISSED branches no operator token shows, in exactly the named direction: a lookup after an object literal and a computed key, a keyword spelled as a property opening a JSX element, and two whitespace/line-terminator classes that hid an import or a keyword (decision-logic attacker H1, H3, M2; shell/OS H3); the spec-fidelity pass added a boolean-named binding the View made itself; the other direction (a construct a real View needs flagged) never fired on the nine carried Views or the template (evidence/phase-02/attacker-reports.md, spec-fidelity.md)
+likely-regression-site: hit — the typecheck half: `tsc --noEmit` joining the build found a pre-existing implicit any in face/src/lib/mood.mjs on the red-first run 35221247877 and the untyped ops lists on run 35224182573; the smoke through the new shell was green in both moods on every leg on its first implementation run (35224182573), so the rail/header half did not fire
+riskiest-file: hit — .claude/scripts/core/face-pure.mjs carried more confirmed holes than any other file (4 HIGH decision-logic findings, the line-terminator HIGH, M2 and three LOW, then the spec-fidelity naming finding), all fixed in b29c0404 and 7718ae00
+expected-blockers: hit — the first `tsc --noEmit` on CI was red on pre-existing Cycle 15 code (mood.mjs, run 35221247877); the second clause did not fire: product-lint and the sync golden were registered before the first push and stopped no job
+expected-proof-failures: miss — the first implementation run (35224182573) showed no face-pure finding on the carried Views or the template and no windows-only failure in the scaffold suite; its one red was the untyped ops lists under the new typecheck, which nobody predicted
+
 ### Slices
 
 #### slice: 01
@@ -47,9 +55,9 @@ risk: high
 proof: e2e-visual -- on CI, tests/face/module-frame.mjs finds no served room id as a quoted literal in any shell file (App.tsx, main.tsx, shell/**, lib/shell.mjs, lib/registry.mjs) and the same scan FAILs a planted one; the rail groups follow the served `rings`, home is the first openable room in them, and `g` resolves home from the registry; tests/face-browser.bats runs `tsc --noEmit` before `vite build` and, on every Node >=20.19 leg, prints both mood summaries clean through the new shell
 tier: e2e-visual
 sources: phase-02-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: App.tsx is the v0.7 shell (Rail 240 px, Header 56 px with the as-of scrub in the day player's place, Palette in v0.7's shape without its write intents, a text-only Dock asking through ask.mjs's read-only handle); rings, order and home come from the served registry (registry.mjs railGroups/homeRoom, byRing takes the served order), `g` returns room-home instead of spelling HOME, and the inbox chip opens the room that homes approval.requested; the face stage leaves the workroom in both moods as v0.7 has it (debt row paid) and keeps a WebGL guard; decisions the header and dock carried moved into registry.mjs (inboxChip, modeChip dot, citationLine) after the spec-fidelity pass; the shell-name scan is derived over every non-room file under face/src
+result: arc-ci run 35230101361 on PR head 7718ae00 (19/19 jobs success, read per job; evidence/phase-02/ci-jobs.json): `face-browser: tsc --noEmit exit 0` then `npm ci and vite build` ok on ubuntu Node 20 and 22, macOS and windows; `smoke: opened=33 openable=33 errors=0 ... mood=dark mood-miss=0` and the same in light on each; tests/face/module-frame.mjs ok on all 5 configurations, including "no served room is named in face/src/App.tsx" over the derived shell scan, "MUTANT: a planted onOpen('money') is found", "the rail follows the served ring order, not a constant" and "g asks for home and names no room"; red first on run 35221247877 (ERR_MODULE_NOT_FOUND for registry.mjs, FAIL g goes home)
+commit: 7718ae00
 
 #### slice: 02
 
@@ -59,9 +67,9 @@ risk: medium
 proof: integration -- on CI the browser smoke reads `data-render` off every room and prints `smoke: render mood=M module=N generic=G unmarked=0 generic-rooms=...` in both moods, where the bats verdict requires N to equal the module folders on disk and N+G to equal openable (a mutant line with module=0 FAILs); face-coverage on the real tree prints the same generic rooms BY NAME and exits 0
 tier: integration
 sources: phase-02-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: a module folder is face/src/modules/RING/ID; the nine rooms App.tsx used to switch on by id attach as CARRIED modules whose View mounts the Cycle 15 renderer until Phase 03 ports v0.7 (debt row); a served room with no module draws through RoomFrame's generic module, which prints a report line naming the room id above GenericRoom or IndexRoom (chosen by the registry's render field); section[data-room] carries data-render, smoke.mjs reads it per room and prints a render line per mood, and the bats render verdict requires the browser's module count and generic rooms to EQUAL face-coverage's module half
+result: arc-ci run 35230101361 on PR head 7718ae00 (19/19 jobs success, read per job; evidence/phase-02/ci-jobs.json): `smoke: render mood=dark module=9 generic=24 unmarked=0 generic-rooms=engine-room,model-policy,...` and the same in light on ubuntu Node 20 and 22, macOS and windows, judged EQUAL to face-coverage's module-half line by render_verdict; the render MUTANT CONTROL ok on every configuration; face-coverage on the real tree prints `module half folders=9 served=33 generic=24 orphans=0 exemptions=0 generic-rooms=...`
+commit: 7718ae00
 
 #### slice: 03
 
@@ -71,9 +79,9 @@ risk: medium
 proof: unit -- tests/face/module-frame.mjs (run beside l3-logic from tests/face-l3.bats) on CI: attachModules names an orphan folder, a served room with no module, a misplaced ring, a manifest whose id or ring disagrees with its folder, a template folder, one id in two rings and a malformed glob key; on the real tree it attaches every folder and its generic set EQUALS face-coverage's module half; red first on ERR_MODULE_NOT_FOUND before registry.mjs exists
 tier: unit
 sources: phase-02-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: registry.mjs parses glob keys (./modules/RING/ID/FILE only), collects whole modules (missing file, no fold, no ops list, no default component, manifest id/ring/routes/asOf) and attaches them to the served registry both ways (orphan, template, misplaced ring, duplicate id), with a null-prototype map and Object.hasOwn after the attack found `constructor`, and a third argument for ADR-1327 exempted ids so browser and gate agree; tests in tests/face/module-frame.mjs beside l3-logic (declared in the spec-fidelity evidence), crossing the real tree with face-coverage's module half
+result: arc-ci run 35230101361 on PR head 7718ae00 (19/19 jobs success, read per job; evidence/phase-02/ci-jobs.json): tests/face-l3.bats "the module frame attaches both ways, agrees with face-coverage, and no shell file names a room" ok on all 5 configurations (arms by name: ORPHAN, MISPLACED, the gate/browser generic equality, EXEMPTION AGREEMENT with and without a row, PROTOTYPE KEYS); red first on run 35221247877 (ERR_MODULE_NOT_FOUND)
+commit: 7718ae00
 
 #### slice: 04
 
@@ -83,9 +91,9 @@ risk: medium
 proof: unit -- tests/face/face-pure.mjs on CI: the real tree prints `face-pure: modules=N folds=N views=N` with N>0 and findings=0; the CLI exits 1 on a planted branch in a View.tsx and on a planted React import in a fold.mjs, each named by kind and line; every JSX-hidden branch in the assumptions ledger (`{x > 0 && <X/>}`, a ternary on raw data, a comparison inside a template literal) FAILs while a condition on an is/has/can/should/show field passes; every module's fold.mjs, module.mjs and ops.mjs is imported by node with no install and the boolean-named fields fold returns are booleans; red first on ERR_MODULE_NOT_FOUND
 tier: unit
 sources: phase-02-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: a hand-written lexer rather than a TypeScript parser (PLAN rabbit hole): JSX vs comparison and regex vs division by the token before, JavaScript's own whitespace and identifier classes, every line terminator, properties spelled like keywords; View rules for operators, keywords, calls (only .map, event methods, React's hooks from react, onX through ctx/props, local setX), lookups (after a name, a bracket, an object literal, and computed keys), defaults, nested ternaries, regexes, and conditions that must be a property read of fold's output named is/has/can/should/show, with any boolean-named binding the View makes itself a finding; imports of module.mjs/fold.mjs/ops.mjs followed transitively, relative .mjs inside face/src spelled exactly, node builtins except code loaders, no percent, query, fragment, require, import.meta, eval or Function; the four-file shape; every finding and name one line; FAIL from birth
+result: arc-ci run 35230101361 on PR head 7718ae00 (19/19 jobs success, read per job; evidence/phase-02/ci-jobs.json): tests/face-l3.bats "face-pure FAILs a planted branch in a View and a planted React import in a fold, and the tree is pure" ok on all 5 configurations, arms by name including PLANTED branch and React import, the three JSX-hidden branches of the assumptions ledger, a condition on a boolean field passes, LINE TERMINATOR, UNICODE SPACE and PERCENT; the real tree `face-pure: modules=9 folds=9 views=9 files=36 findings=0`; forged-line arm ran on ubuntu and macOS; red first on run 35221247877 (ERR_MODULE_NOT_FOUND for face-pure.mjs)
+commit: 7718ae00
 
 #### slice: 05
 
@@ -95,9 +103,9 @@ risk: medium
 proof: unit -- `face-coverage --selftest` on CI prints PASS by name for: an orphan module folder, a misplaced ring, a template folder, an ADR-1327 extra exempted by name passes, an exemption for a room that is not an extra (the unnamed fifth), an exemption citing another ADR, an exemption for a served room, an unreadable module tree; and an exit-1 arm for the orphan; tests/face-coverage.bats reads `exemptions=0` and `orphans=0` off the real tree
 tier: unit
 sources: phase-02-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: the module half lives in face-coverage.mjs (treeModules, moduleFindings) rather than a new gate, reads the served registry, modules-v2.json's extra class and initiatives/face/contracts/module-exemptions.json (created EMPTY), FAILs orphan, misplaced, template, duplicate and stray folders and every exemption that is not a named ADR-1327 extra with its folder, REPORTS generic rooms by id; eight selftest arms plus an exit arm and a wiring arm across gather; the walk never throws (UNREADABLE), and the entry uses process.exitCode
+result: arc-ci run 35230101361 on PR head 7718ae00 (19/19 jobs success, read per job; evidence/phase-02/ci-jobs.json): tests/face-coverage.bats "face-coverage's module half FAILs an orphan and an unnamed exemption, and the exemption list is EMPTY" ok on all 5 configurations (eight mutant arms and the orphan exit arm by name, the modules wiring arm); the real tree `orphans=0 exemptions=0` with folders derived by find; red first on run 35221247877 ("module arm missing or failed: an orphan module folder")
+commit: 7718ae00
 
 #### slice: 06
 
@@ -107,9 +115,9 @@ risk: medium
 proof: integration -- tests/face/face-module.mjs on CI scaffolds a served room with no module into a scratch copy in one command that exits 0 and prints GREEN on face-pure and face-coverage's module half; it refuses an unserved id, the served ring's mismatch, the lane template, an unexempted extra, an existing module, a bad ring/id grammar and an unknown or `--flag=value` argument; a red verdict removes what it wrote; the script run through a symlink in a temp dir still runs (a counted skip only where the OS cannot make a symlink); expected-set.json homes the command and root CLAUDE.md's hand-written count equals the command files minus the generated ones
 tier: integration
 sources: phase-02-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: face-module.mjs refuses before writing (unserved, misplaced, template, unexempted extra, existing module in any ring, a link on the way down, unreadable contracts), writes the four files from an inline template with wx, proves face-pure over the modules tree and face-coverage's module half (declared: not the whole gate, debt row), and on RED or any throw rolls back exactly the folders it created, naming anything it could not remove; the command is homed in design-studio (expected-set.json, rooms.generated.json regenerated by face-sections), products/hq carries the command and script, products/core carries face-pure, root CLAUDE.md counts 24 hand-written commands (27 files minus 3 generated)
+result: arc-ci run 35230101361 on PR head 7718ae00 (19/19 jobs success, read per job; evidence/phase-02/ci-jobs.json): tests/face-l3.bats "/arc-face-module scaffolds a module green on face-pure + face-coverage, and refuses what it must" ok on all 5 configurations, the log line `face-module: link-arm=ran posix-arms=ran symlink-arm=ran` on ubuntu and macOS; face-coverage on the real tree counts 27 commands, all homed; red first on run 35221247877 (FAIL the scaffold script exists)
+commit: 7718ae00
 
 #### slice: 07
 
@@ -119,9 +127,9 @@ risk: medium
 proof: e2e-visual -- gh run view --json jobs on the PR head SHA: tests/face-browser.bats green on ubuntu Node 20 + 22, macOS and windows, each job's log carrying `smoke: opened=33 openable=33 errors=0 ... mood=dark mood-miss=0`, the same line in light, and a render line per mood; ubuntu Node 18 a counted skip
 tier: e2e-visual
 sources: phase-02-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: the browser suite runs tsc --noEmit before vite build (the typecheck debt row, which found mood.mjs and then the untyped ops lists), opens every openable room in both moods through the new shell, and judges a render line per mood against face-coverage's module half; a mutant control refuses a shell that attached nothing, an unmarked room, a short count, reordered generic rooms, and a missing gate line
+result: arc-ci run 35230101361 on PR head 7718ae00 (19/19 jobs success, read per job; evidence/phase-02/ci-jobs.json): tests/face-browser.bats all 10 tests ok on ubuntu Node 20 and 22 (job 105231638919), windows shard 1/12 (105231638951) and macOS shard 1/3 (105231639067), both moods and both render lines each; ubuntu Node 18 (105231639058) the counted skip `SKIP: Vite 8 and @tailwindcss/oxide require Node >=20.19`
+commit: 7718ae00
 
 #### slice: 08
 
@@ -131,6 +139,6 @@ risk: medium
 proof: verified-real -- two fresh agents (decision logic: face-pure, registry reconcile, face-coverage module half; shell/OS boundary: face-module scaffold, lint walks, the browser render arm) each given fixed-defects.md; every confirmed hole fixed, pinned and appended to fixed-defects.md, reports in evidence/phase-02/attacker-reports.md; gh run view --json jobs on the PR head reads every job success (evidence/phase-02/ci-jobs.json); /arc-phase-done 02 from the main clone
 tier: verified-real
 sources: phase-02-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: two general-purpose agents launched together on 335e4d28, each in a private scratch directory with fixed-defects.md: decision logic found 10 (4 HIGH), shell/OS boundary found 11 (3 HIGH); all 21 dispositioned in evidence/phase-02/attacker-reports.md, 20 FIXED and pinned (one partly SCOPE: string concatenation in the shell-name scan), 21 lines appended to fixed-defects.md; the spec-fidelity pass found drift, dispositioned in evidence/phase-02/spec-fidelity.md with its fixes pinned
+result: attacker pair launched together on 335e4d28, dispositions in evidence/phase-02/attacker-reports.md (decision logic 10: 4 HIGH; shell/OS 11: 3 HIGH; 21 lines in fixed-defects.md); spec-fidelity FIDELITY: drift found, dispositions in evidence/phase-02/spec-fidelity.md; gh run view --json jobs read per job: PR #237 head 7718ae00 run 35230101361 19/19, merged d76657d1 (#237), main re-verified by workflow_dispatch run 35232834235 19/19 with the full suite 1..3409 and 0 not ok on ubuntu Node 20 (evidence/phase-02/ci-jobs.json); /arc-phase-done 02 from the main clone at d76657d1: kickoff-lint clean, live demo on the canonical spine 33/33 rooms (9 module, 24 generic) in both moods with 0 console errors, the scaffold demo GREEN in one command, receipts phase.closed 01M2QWMG3CSBD1B4JFSAKWEXYX and approval.requested 01M2QWMGM3FBKW5BMBAVAMZGKE
+commit: d76657d1

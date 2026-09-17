@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 02
+phase: 03
 appetite: 24d
-burn: 1.5d
+burn: 2d
 blocked-on: —
 depends-on: —
 
@@ -24,14 +24,14 @@ depends-on: —
 |---|---|---|---|
 | 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
-| 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | spec'd |
+| 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
 | 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | spec'd |
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | spec'd |
 | 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — needs owner rulings §13 items 4, 5 |
 | 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 1.5d of 24d.** Blocks: A · look (00–02) 1.5/6d · B · rooms + truth (03–04) 0/10d ·
+**Appetite burn: 2d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 0/10d ·
 C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
 35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
@@ -42,6 +42,9 @@ on CI** (run 35207463369 on `0b51ea17`, 19/19 jobs: `opened=33 ... mood=dark moo
 read of the 9 rooms × 2 moods is Phase 01's exit gate and is recorded at `/arc-phase-done 01`.
 **Block A, Phase 01 exit clause: GREEN** — the owner read the 9 rooms in both moods on 2026-09-17:
 "Render aagudhu — close pannu". No STOP; the kit port is not re-scoped.
+**Block A closed at Phase 02 (2026-09-17): 2d of its 6d.** `face-pure` FAILs from birth before any of
+the 36 modules is written (the precondition PLAN's pre-mortem row 4 rests on), and the 4 unspent days
+bank forward to Block B, whose day-5 reading after the command and kernel rings gates all work-door spend.
 
 **Usage trend (read at every Phase 03 ring close, never counted toward REQ-10):** — not started.
 
@@ -177,12 +180,66 @@ read of the 9 rooms × 2 moods is Phase 01's exit gate and is recorded at `/arc-
   `01M2QGWHBAX0329SNCX8Q2CPAX` · `approval.requested{gate: phase-done}` `01M2QGWHNYEBPAC97EEMV55JDH`
   — the second waits on the owner's stamp.
 
+- **2026-09-17 — Phase 02 CLOSED (`/arc-phase-done 02` from the main clone).** Shell + module frame:
+  v0.7's 240 px rail, 56 px header, ⌘K palette and a text-only dock (ADR-1315) in `face/src/App.tsx` and
+  `face/src/shell/`; rings, order and home read from `/api/rooms` and no shell file names a room (a
+  scan derived over every non-room file under face/src, with its own mutant); `face/src/modules/RING/ID/`
+  four files each, the nine bespoke rooms attached as CARRIED modules and the other 24 served rooms drawn
+  through the generic module with a report line naming the id; `face/src/lib/registry.mjs` attaching
+  folders to served rooms both ways; `face-pure` (FAIL from birth) over the four-file shape, fold/module/
+  ops imports followed transitively and every branch in a View; face-coverage's module half with the
+  EMPTY ADR-1327 exemption list; `/arc-face-module` scaffolding a module and proving it green in one
+  command or rolling back; the smoke's render line judged EQUAL to the gate's; `tsc --noEmit` in the build.
+  The face stage left the workroom in both moods, as v0.7 has it, WebGL-guarded and unmounted.
+  Merged as `d76657d1` (#237).
+  **Tests:** red first on run `35221247877` (every new suite red for its missing module, plus two reds
+  nobody planned: the typecheck's first run found an implicit any in `mood.mjs`, and the binary-byte
+  guard caught a literal NUL in the red-first suite itself — `evidence/phase-02/red-first.md`); the PR's
+  run `35230101361` 19/19 read per job on head `7718ae00`; the merged tree re-verified by
+  `workflow_dispatch` on `main`, run `35232834235`, 19/19, full suite `1..3409` with 0 not ok on ubuntu
+  Node 20 (`evidence/phase-02/ci-jobs.json`). Every L3 leg: `smoke: opened=33 openable=33 errors=0` and
+  `smoke: render mood=M module=9 generic=24 unmarked=0` in dark and in light.
+  **Live demo:** from the main clone at `d76657d1`, `node .claude/scripts/hq/arc-face.mjs --no-open` on the
+  canonical spine: all 33 openable rooms opened in the browser, 9 through their module and 24 through the
+  generic module, both moods, `<html>` classes confirmed, **0 console errors**; the Map and Today looked at
+  by eye; launcher stopped, ports 8317/5180 free. The scaffold from the main clone into a scratch copy:
+  `face-module.mjs kernel/engine-room` → `face-module: GREEN on face-pure and face-coverage` in one command.
+  **What the phase actually cost:** 0.5d of its 2d appetite; 5 CI runs (the red-first, the implementation
+  run red only on the untyped `ops` lists under the new typecheck, the attacker-fix run red only on
+  `spine-concurrency` — a spine lock timeout on windows shard 7 in files this phase never touched, green
+  on the next run — and two green) plus the `main` verification. Two fresh attackers found 21 holes —
+  7 HIGH: the lint's whitespace and line terminators narrower than node's (`import<EM SPACE>React`,
+  `// x<U+2028>import`), a percent-encoded specifier node and the lint resolved to different files, a
+  lookup after an object literal, the gate and the browser disagreeing on an exempted extra, a throw that
+  skipped the scaffold's rollback, a rollback that crashed on a locked file; all fixed and pinned, 21
+  lines in fixed-defects.md (`evidence/phase-02/attacker-reports.md`). Spec-fidelity: **drift found**, every
+  finding dispositioned (`evidence/phase-02/spec-fidelity.md`), the naming loophole in "a boolean field
+  fold() returns" and three shell decisions fixed. Predictions: 4 hit · 1 miss.
+  **Assumptions adjudicated by measurement:** `face-pure`'s structural scan catches a branch hidden in JSX
+  (`{x > 0 && <X/>}`, a ternary on raw data, a comparison in a template literal) while a condition on a
+  boolean field stays legal — **HELD, after the attack**: all three FAIL by name on every CI configuration;
+  the attackers found constructs the first cut missed, each now a pinned check, and the condition rule
+  was tightened from a name to a property read of fold's output. **ADR revisit triggers:** none met.
+  ADR-1320's (face-pure exempting more than 2 modules by name) — 0 exemptions exist; ADR-1321's (a served
+  room blank in a smoke, or an unserved folder no gate FAILed) — not met, the render verdict equals the
+  gate's; ADR-1327's (a registry-row ruling for story/factory) — no ruling yet, list EMPTY; ADR-1335's —
+  no windows Chrome launch miss this phase, the counter stays at one. No ADR DEFERRED.
+  **Decided in this phase, for the owner's read:** the face stage leaves the workroom in both moods (v0.7:
+  "the HQ is a clean room, the face belongs to the front door"); the dock ports text-only without v0.7's
+  room-keyed chips; the palette finds and opens and writes nothing until Phase 05; the header's day
+  player is the as-of scrub and the brain chip is NOT SERVED — each a debt row, none re-lays a room.
+  Evidence: `initiatives/face/evidence/phase-02/` (handoff, red-first, attacker reports, spec-fidelity,
+  ci-jobs) with its sha256 manifest from `arc-evidence.sh bundle 02 --lane face`.
+  amendments: 0 · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-17.jsonl`): `phase.closed` `01M2QWMG3CSBD1B4JFSAKWEXYX` ·
+  `approval.requested{gate: phase-done}` `01M2QWMGM3FBKW5BMBAVAMZGKE` — the second waits on the owner's stamp.
+
 ## Now
 
-**RESUME HERE (2026-09-17):** **Phase 01 is CLOSED** (done log, 2026-09-17). The next phase is
-**Phase 02 — shell + module frame** (`phases/phase-02-spec.md`, REQ-03, 2d appetite), and the owner
-asked for it to start in a fresh session. Its Preconditions line is satisfied by the Phase 01 row
-above once this close merges.
+**RESUME HERE (2026-09-17):** **Phase 02 is CLOSED** (done log, 2026-09-17), and with it Block A at 2d of
+6d. The next phase is **Phase 03 — the 36 modules read-side** (`phases/phase-03-spec.md`, REQ-01 +
+REQ-05, 7d appetite), in five ring PRs in order: `feat/face-v2-03-command` · `-kernel` · `-factory` ·
+`-money` · `-company`. Its Preconditions line is satisfied by the Phase 02 row above once this close merges.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
@@ -191,19 +248,23 @@ above once this close merges.
 every phase through to the end without waiting, push and merge per phase on green CI, run nothing
 locally, and ask only at owner-only gates.
 
-**Waiting on the owner, none of it blocking Phase 02:** the stamps on
-`approval.requested{gate: phase-done}` `01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01),
-`01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and `01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from
-the main clone, `node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`.
+**Waiting on the owner, none of it blocking Phase 03's first ring:** the stamps on
+`approval.requested{gate: phase-done}` `01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02),
+`01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01), `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and
+`01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the main clone,
+`node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13 items 4 and 5
+(the six flagship ops; story/factory registry rows vs exemption) are due by the Phase 04 close and are
+raised at the Block B reading.
 
-**What Phase 02 inherits:** the face stage's WebGL guard AND its place in both moods (owner ruling:
-dark-only until this phase decides); the typecheck joining the browser suite before any module is
-written; the ported shell living under a colour-literal-linted root, and the stage's particle palette
-behind tokens or named in the lint; `KpiStrip`, `PickRow`, `Meter` and `Empty` shipped with no reader
-yet; the owner's standing ruling on AA floor corrections (done log); ADR-1335's counter at one windows
-Chrome launch miss; debts in `debt-ledger.md`. The spec's setup line: the owner runs the git for
-`feat/face-v2-02` — under the standing instruction the session cuts it from `main`.
+**What Phase 03 inherits:** the module frame — `/arc-face-module RING/ID` scaffolds a green module in one
+command, and `face-pure` + face-coverage's module half FAIL from birth; the nine CARRIED modules (today,
+inbox, map, spine, board, ask-arc in command; council-chamber in factory; money, ventures in money) whose
+Views each ring replaces with the v0.7 port, deleting the Cycle 15 renderer it no longer mounts; the host
+handing `fold()` `{}` until the command ring loads declared routes (debt row, REQ-05); the shell's missing
+route to the ADR-1327 rows, due with the factory ring's first exemption (debt row); the render verdict
+already reading the gate's attachment, so each ring's module count is judged against its folders; the
+Cycle 15 findings F1–F3; the shot-review contract against Phase 00's baseline; debts in `debt-ledger.md`.
 
-**Next step:** in a new session, `/arc-resume --lane face`, then `/arc-develop start 02 --lane face`
-on `feat/face-v2-02` cut from `main` after this close merges. Tests first per the spec's Verification
-plan, on CI only.
+**Next step:** `/arc-develop start 03 --lane face` on `feat/face-v2-03-command` cut from `main` after this
+close merges — the command ring first (today · inbox · map · spine · board · ask-arc · chat-mcp generic).
+Tests first per the spec's Verification plan (the ring's module count RED before its modules exist), on CI only.
