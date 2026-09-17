@@ -521,6 +521,13 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   check("a report with no render block prints zero modules, so the verdict refuses it rather than skipping it",
     bare === "smoke: render mood=light module=0 generic=0 unmarked=0 generic-rooms=none", bare);
 
+  // The NOT SERVED line (face v2 Phase 03, REQ-05): how many panels named a route the door does not
+  // serve, and in which rooms -- the browser's count of the gap Phase 04 closes.
+  const gaps = typeof smoke.notServedLine === "function" ? smoke.notServedLine({ mood: "dark", notServed: { panels: 3, rooms: ["today", "board"] } }) : null;
+  check("the not-served line counts NOT SERVED panels and names their rooms", gaps === "smoke: not-served mood=dark panels=3 rooms=today,board", String(gaps));
+  const noGaps = typeof smoke.notServedLine === "function" ? smoke.notServedLine({ mood: "light" }) : null;
+  check("a report that measured no NOT SERVED panel prints zero, never a missing line", noGaps === "smoke: not-served mood=light panels=0 rooms=none", String(noGaps));
+
   // The attack on the mood verdict (face v2 Phase 01).
   check("a report that names no mood FAILS, however clean", !smoke.judge({ ...clean, moodMiss: [] }).ok
     && smoke.judge({ ...clean, moodMiss: [] }).reasons.some((r) => /no mood named/.test(r)));

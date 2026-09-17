@@ -94,15 +94,18 @@ load 'test_helper'
   # face/src/modules to lint them (face v2 Phase 01), so both name the path; nothing may IMPORT
   # from it. face v2 Phase 02 adds three more readers of the module tree: face-pure.mjs lints it,
   # face-coverage.mjs reconciles its folders with the served registry, and face-module.mjs writes a
-  # new module into it. Each exclusion is one named file with its reason, never a prefix.
+  # new module into it. face v2 Phase 03 adds face-facts.mjs, which walks face/src for a facts bundle.
+  # Each exclusion is one named file with its reason, never a prefix.
   # The exclusion is the FULL path of each file, so a same-named file elsewhere is not excused.
   local importers
   importers=$(printf '%s\n' "$output" | grep -v '/\.claude/scripts/core/face-tokens\.mjs$' | grep -v '/\.claude/scripts/core/face-colour-literal\.mjs$' \
-    | grep -v '/\.claude/scripts/core/face-pure\.mjs$' | grep -v '/\.claude/scripts/core/face-coverage\.mjs$' | grep -v '/\.claude/scripts/hq/face-module\.mjs$' | grep -v '^$' || true)
+    | grep -v '/\.claude/scripts/core/face-pure\.mjs$' | grep -v '/\.claude/scripts/core/face-coverage\.mjs$' | grep -v '/\.claude/scripts/hq/face-module\.mjs$' \
+    | grep -v '/\.claude/scripts/core/face-facts\.mjs$' | grep -v '^$' || true)
   [ -z "$importers" ] || { echo "an arc script depends on face/: $importers"; false; }
   # And an excused file is excused for NAMING the path, never for importing from it.
   local excused=("$ARC_ROOT/.claude/scripts/core/face-tokens.mjs" "$ARC_ROOT/.claude/scripts/core/face-colour-literal.mjs"
-    "$ARC_ROOT/.claude/scripts/core/face-pure.mjs" "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT/.claude/scripts/hq/face-module.mjs")
+    "$ARC_ROOT/.claude/scripts/core/face-pure.mjs" "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT/.claude/scripts/hq/face-module.mjs"
+    "$ARC_ROOT/.claude/scripts/core/face-facts.mjs")
   local f
   for f in "${excused[@]}"; do [ -f "$f" ] || { echo "an excused file is missing: $f"; false; }; done
   run grep -nE "(^|[^[:alnum:]])(import|require)[^;]*[\"'][^\"']*face/src" "${excused[@]}"
@@ -372,6 +375,43 @@ load 'test_helper'
   [ "$status" -eq 0 ]
 }
 
+# face v2 Phase 03 -- the facts-bundle lint (REQ-05, ADR-1324): structural arms FAIL from birth,
+# heuristic arms WARN-first, and the real tree carries no bundle. Asserted RAN before what it printed.
+@test "face v2: face-facts FAILs a planted facts bundle under face/src, WARNs its heuristics, and the tree is clean" {
+  run node "$ARC_ROOT/tests/face/face-facts.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 60 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "PLANTED: v0.7's arcFacts shape under face/src/lib FAILs (data-mass)" \
+             "PLANTED: v0.7's arcFacts shape -- the CLI exits 1 naming the file and the kind" \
+             "PLANTED: a JSON file under face/src FAILs (data-file)" \
+             "PLANTED: a ?raw import FAILs (asset-import)" \
+             "PLANTED: an import leaving face/src FAILs (import-outside)" \
+             "PLANTED: a glob asking for raw text FAILs (glob)" \
+             "PLANTED: a fetch of a static file FAILs (fetch-static)" \
+             "PLANTED: a 2048-character string FAILs (blob)" \
+             "PLANTED: a stylesheet literal carrying JSON members FAILs (blob)" \
+             "WARN: a count claim in a module warns and does not FAIL (fact-literal)" \
+             "passes: a fetch through the door's /api/ and a computed template" \
+             "lex: without the text tokens, the stream is the same one face-pure reads" \
+             "the real face/src carries no facts bundle: zero FAIL"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) ;;
+    *) [[ "$output" == *"face-facts: link-arm=ran"* ]] || { echo "the link arm did not run on $(uname -s): $output"; false; } ;;
+  esac
+  run node "$ARC_ROOT/.claude/scripts/core/face-facts.mjs"
+  [[ "$output" == *"face-facts: files="* ]] || { echo "the lint never reported (exit $status): $output"; false; }
+  local code
+  code="$(printf '%s\n' "$output" | grep '^face-facts: files=' | tail -1 | sed -n 's/^face-facts: files=[0-9]* code=\([0-9][0-9]*\) styles=[0-9]* leaves=[0-9]* fail=0 warn=[0-9]*$/\1/p')"
+  [ -n "$code" ] && [ "$code" -ge 30 ] || { echo "too few code files scanned, or a FAIL on the real tree: $output"; false; }
+  [ "$status" -eq 0 ]
+}
+
 @test "face v2: the module frame attaches both ways, agrees with face-coverage, and no shell file names a room" {
   run node "$ARC_ROOT/tests/face/module-frame.mjs"
   [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
@@ -385,7 +425,12 @@ load 'test_helper'
              "the generic rooms the gate REPORTS are exactly the ones the browser renders generic" \
              "the rail follows the served ring order, not a constant" \
              "MUTANT: a planted onOpen('money') is found" \
-             "no served room is named in face/src/App.tsx"; do
+             "no served room is named in face/src/App.tsx" \
+             "DOOR_ROUTES names exactly the routes arc-dash serves, method for method" \
+             "UNDECLARED: a payload for a route the manifest does not declare FAILs the fold (REQ-05)" \
+             "a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)" \
+             "SHIPPED RING command: its module folders are modules-v2.json's ids for the ring" \
+             "NOT SERVED LIST command: the list names exactly what the folds render NOT SERVED, both ways"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }
