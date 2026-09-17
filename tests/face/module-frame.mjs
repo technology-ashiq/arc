@@ -202,35 +202,6 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
 {
   const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
   const MODULES = join(SRC, "modules");
-  // The door's own page cap, read from the door rather than repeated here.
-  const dashText = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "utf8");
-  const capMatch = /PAGE_CAP\s*=\s*(\d+)/.exec(dashText);
-  const PAGE_CAP = capMatch ? Number(capMatch[1]) : 0;
-  check("the door's page cap was read, to compare a module's ask against (vacuous-pass guard)", PAGE_CAP > 0, String(PAGE_CAP));
-
-  /**
-   * One evidence list, read the way BOTH of its readers read it. `tests/face-browser.bats` counts its
-   * rows with grep, which breaks lines on \n alone; this file parses them with a /m regex, which also
-   * breaks on CR, U+2028 and U+2029 -- so a row hidden from one reader and kept for the other was a real
-   * mutant (Phase 03 attack). The file is held to ONE row shape: no stray line separator, no duplicate
-   * row, and every line that grep counts parses here.
-   */
-  const listCheck = (name, file, re, shape, derivedRows, label) => {
-    const raw = existsSync(file) ? readFileSync(file, "utf8") : null;
-    check(`${label} LIST: evidence/phase-03/${name} exists`, raw !== null);
-    if (raw === null) return;
-    check(`${label} LIST ${name}: every line break is a newline, so grep and this file read the same rows`,
-      !/[\r\u2028\u2029]/.test(raw), JSON.stringify((/[\r\u2028\u2029]/.exec(raw) || [])[0] || ""));
-    const grepped = raw.split("\n").filter((l) => l.startsWith("| `")).length;
-    const parsed = [...raw.matchAll(re)].map(shape);
-    check(`${label} LIST ${name}: every row grep counts parses here too`, grepped === parsed.length, `grep=${grepped} parsed=${parsed.length}`);
-    check(`${label} LIST ${name}: no row is listed twice`, new Set(parsed).size === parsed.length,
-      parsed.filter((r, i) => parsed.indexOf(r) !== i).join(" ; "));
-    const derived = [...new Set(derivedRows)].sort();
-    check(`${label} LIST ${name}: the list names exactly what the folds render, both ways`,
-      JSON.stringify([...new Set(parsed)].sort()) === JSON.stringify(derived),
-      `listed-only=${parsed.filter((r) => !derived.includes(r)).join(" ; ")} derived-only=${derived.filter((r) => !parsed.includes(r)).join(" ; ")}`);
-  };
   const found = {};
   let folders = 0;
   for (const ring of readdirSync(MODULES)) {
@@ -496,6 +467,35 @@ const SHIPPED_RINGS = ["command", "kernel"];
   const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
   const exemptions = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8")).exemptions.map((e) => e.id);
   const MODULES = join(SRC, "modules");
+  // The door's own page cap, read from the door rather than repeated here.
+  const dashText = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "utf8");
+  const capMatch = /PAGE_CAP\s*=\s*(\d+)/.exec(dashText);
+  const PAGE_CAP = capMatch ? Number(capMatch[1]) : 0;
+  check("the door's page cap was read, to compare a module's ask against (vacuous-pass guard)", PAGE_CAP > 0, String(PAGE_CAP));
+
+  /**
+   * One evidence list, read the way BOTH of its readers read it. `tests/face-browser.bats` counts its
+   * rows with grep, which breaks lines on \n alone; this file parses them with a /m regex, which also
+   * breaks on CR, U+2028 and U+2029 -- so a row hidden from one reader and kept for the other was a real
+   * mutant (Phase 03 attack). The file is held to ONE row shape: no stray line separator, no duplicate
+   * row, and every line that grep counts parses here.
+   */
+  const listCheck = (name, file, re, shape, derivedRows, label) => {
+    const raw = existsSync(file) ? readFileSync(file, "utf8") : null;
+    check(`${label} LIST: evidence/phase-03/${name} exists`, raw !== null);
+    if (raw === null) return;
+    check(`${label} LIST ${name}: every line break is a newline, so grep and this file read the same rows`,
+      !/[\r\u2028\u2029]/.test(raw), JSON.stringify((/[\r\u2028\u2029]/.exec(raw) || [])[0] || ""));
+    const grepped = raw.split("\n").filter((l) => l.startsWith("| `")).length;
+    const parsed = [...raw.matchAll(re)].map(shape);
+    check(`${label} LIST ${name}: every row grep counts parses here too`, grepped === parsed.length, `grep=${grepped} parsed=${parsed.length}`);
+    check(`${label} LIST ${name}: no row is listed twice`, new Set(parsed).size === parsed.length,
+      parsed.filter((r, i) => parsed.indexOf(r) !== i).join(" ; "));
+    const derived = [...new Set(derivedRows)].sort();
+    check(`${label} LIST ${name}: the list names exactly what the folds render, both ways`,
+      JSON.stringify([...new Set(parsed)].sort()) === JSON.stringify(derived),
+      `listed-only=${parsed.filter((r) => !derived.includes(r)).join(" ; ")} derived-only=${derived.filter((r) => !parsed.includes(r)).join(" ; ")}`);
+  };
   for (const ring of SHIPPED_RINGS) {
     const want = contract.modules.filter((m) => m.ring === ring && (m.class !== "extra" || exemptions.includes(m.id))).map((m) => m.id).sort();
     const ringDir = join(MODULES, ring);

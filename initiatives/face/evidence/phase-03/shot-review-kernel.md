@@ -123,3 +123,26 @@ widened to hold it.
 | absorb | light | WEAKNESS (new) | same as dark |
 
 RE-VERIFIED: VIOLATION: 0 · BELOW-BAR: 0
+
+## Resolution (this lane's answer to the review, 2026-09-18)
+
+- **The two WEAKNESS rows on the LIVE badge are resolved at the token, not by a change.** `statusFacet`
+  gives LIVE `var(--mode-live)`, which resolves to `--accent` (`#2dd4bf` dark, `#0e716a` light);
+  `--green` is `#3fb950` / `#177534` and is spent only on real money (ADR-1308, tokens.css collision 3).
+  The critic re-opened the shots and confirmed the badge reads as the accent family.
+- **The light-mood pill contrast WEAKNESS is measured, not estimated:** the pill label is `--text-2` on
+  `--bg-4`, 5.15:1 in light and 6.53:1 in dark — above the AA floor for small text either way.
+- **Both POLISH rows are fixed** (a phase title wraps at a word and stops at two lines; evolve's and
+  absorb's panels were moved so the trail sits last in the left column in all eight rooms), and the
+  re-verification confirmed both landed with nothing new broken.
+- **The WEAKNESS the re-verification found is fixed:** the provenance subtitles the adversarial pass
+  added were longer than their card, so they clipped mid-phrase. They are shorter now (`… · the page
+  the door sent`) and the instrument strip gives a subtitle two lines. Confirmed by eye on
+  `shots-kernel-6` (dark and light policy, evolve, scheduler, bench, absorb): no ellipsis on any
+  subtitle.
+- **Unconfirmed, and left unconfirmed:** whether the no-meter case (a lane whose header records no
+  measured burn) draws correctly — no kernel lane on the fixture tree is in that state, and memory's
+  lane block sits below the 1000px fold. The behaviour is pinned in `laneCard` (`hasMeter`) and the
+  kit draws no bar without it; the pixels wait for a lane that has no burn recorded.
+
+RE-VERIFIED AFTER RESOLUTION: VIOLATION: 0 · BELOW-BAR: 0 · the ring is clear to merge (ADR-0049).

@@ -311,14 +311,15 @@ export function hasKind(base, kind) {
 
 /**
  * What a figure counted from the trail is a figure OF: the page the door sent, and whether more lies
- * past it. Never "all time" -- the door pages from the oldest receipt.
+ * past it. Never "all time" -- the door pages from the oldest receipt. Kept short: the instrument strip
+ * gives a subtitle two lines, and a sentence longer than that clips (Phase 03 shot re-review).
  * @param {LaneRoom} base @param {string} what
  * @returns {string}
  */
 export function countedOn(base, what) {
   if (!base.trail.isHomed) return "the registry homes no such kind here";
   if (!base.trail.isDrawn) return "reading the page";
-  return base.trail.isPartial ? `${what}, on the oldest page the door sent` : `${what}, on the page the door sent`;
+  return base.trail.isPartial ? `${what} · oldest page, more past it` : `${what} · the page the door sent`;
 }
 
 /**

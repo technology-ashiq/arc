@@ -430,9 +430,12 @@ load 'test_helper'
              "UNDECLARED: a payload for a route the manifest does not declare FAILs the fold (REQ-05)" \
              "a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)" \
              "SHIPPED RING command: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST command: the list names exactly what the folds render NOT SERVED, both ways" \
+             "NOT SERVED LIST not-served-command.md: the list names exactly what the folds render, both ways" \
+             "VERBS PENDING LIST verbs-pending-command.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING kernel: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST kernel: the list names exactly what the folds render NOT SERVED, both ways" \
+             "NOT SERVED LIST not-served-kernel.md: the list names exactly what the folds render, both ways" \
+             "NOT SERVED LIST not-served-kernel.md: every row grep counts parses here too" \
+             "VERBS PENDING LIST verbs-pending-kernel.md: the list names exactly what the folds render, both ways" \
              "F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it" \
              "F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
