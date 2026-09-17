@@ -507,3 +507,30 @@ about 2 s; the dispatcher's capture is linear to multi-MB; no SIGPIPE through `p
     source (jq `-j`) or cap before.
 31. A fallback used only when the main check cannot run must be at least as wide as the check it
     replaces, never narrower.
+
+## Ninth pass, 2026-09-17 — the eighth-pass rewrite (`54170d8c`) — surface CLOSED
+
+Owner ruling for this pass: one narrow pass, then close if no REALISTIC High or Med remains.
+Every finding was classed REALISTIC (reachable with a payload the harness writes, or a command
+the composer chooses) or DEGRADED (a broken jq or script, a hand-written payload, a non-default
+environment). **Both attackers: no REALISTIC High or Med. The surface is closed.** No composer-chosen
+command other than its own render reached exit 0; jq's decoding matched Node's `JSON.stringify` on
+64,518 payloads; timing stayed linear to 4 MB.
+
+| # | Class | Finding | Disposition |
+|---|---|---|---|
+| N1 (Low, both) | REALISTIC | Parsing every escape-carrying payload made a lone surrogate in the main session's command, or an agent name outside the plain alphabet, refuse -- defects #19/#26 again, with a message naming the wrong cause (#22). | **FIXED**: an unreadable identity refuses only when the raw text or the decoded identity names the composer. Pinned. |
+| N2 (Info) | REALISTIC | `$( )` drops trailing newlines, so the checked command is not byte-identical to the run one. Nothing can follow a newline. | **ACCEPTED**. |
+| N3 (Med if reachable) | DEGRADED | The `--stream` count costs per JSON leaf; 1M leaves in `tool_input` took 42 s. Needs an unknown array key in a Bash tool call. | **FIXED anyway**: a payload over 64 KB whose raw text shows a composer identity refuses before it is parsed. |
+| N4 (Low) | DEGRADED | Payload bytes uncapped before `$(cat)`; 45 MB took 99 s on MSYS. | **ACCEPTED**: the read itself cannot be capped from inside the script; the 64 KB check follows it. |
+| N5 (Info) | DEGRADED | jq auto-loads `$HOME/.jq`; a redefined `length` waved a long command under the cap. | **FIXED**: jq runs with HOME pointed nowhere. Pinned. |
+| N6 (Info) | DEGRADED | A copy of the key holding an array or object was invisible to the leaf count; a null copy read as absent (M3). | **FIXED**: every leaf under the key counts. Pinned. |
+| N7 (Low) | DEGRADED | The broken-script fallback is still narrower than the script in forms the harness never writes (escaped letters, inner spaces, `\f`, `\/`). | **ACCEPTED**: the fallback runs only when the check script is missing or failing. |
+| N8, N9 (Info) | DEGRADED | An escaped NUL inside the identity is dropped by bash; the prefilter needs the name contiguous while `_field` strips inner spaces. | **ACCEPTED**. |
+| M13, M28, M12, M5 | mutants | The grep reader's own cap, a case-blind `NAMES_COMPOSER`, the fallback's newline branch, and the 400-byte boundary. | **Each has a case.** M20 (two-colon names), F4/F5 minor forms: accepted. |
+
+### Add to the running defect list for the next attacker
+32. Widening what gets parsed widens who can be refused: a refusal for "unreadable" must still ask
+    whether the caller could be the one being scoped.
+33. A tool that loads configuration from HOME can have its builtins redefined under you; run it with
+    HOME pointed nowhere when its answer is a security decision.

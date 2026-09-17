@@ -385,14 +385,29 @@ consumer projects — it carries the owner's approvals.
 
     Accepted: without jq, a payload that names the composer and carries an escape is refused.
     The defect list is at 31.
+    - Run **35197018731** at `54170d8c`, read per JOB: baseline, the refpack 14 alone red. Shard
+      placement moved; ubuntu ran all 33 Bash-boundary cases green, including the 500 KB
+      time-bounded one.
+  - **Owner ruling 2026-09-17: one narrow ninth pass, then close if no REALISTIC High or Med.**
+    - **Ninth pass: no REALISTIC High or Med, from either attacker. The composer Bash boundary
+      surface is CLOSED.**
+    - Fixed in the closing batch:
+      - the one REALISTIC Low, where a lone surrogate or an odd agent name scoped someone else's
+        call;
+      - a 64 KB pre-parse cap on composer-identified payloads;
+      - jq run with HOME pointed nowhere;
+      - every leaf under a key counted;
+      - four mutants pinned.
+    - The DEGRADED rest is accepted in writing (`adversarial-open.md` § Ninth pass). The defect
+      list is at 33.
 
 **Resume here, in order:**
 1. ~~**CI.** Read per JOB for `a16b189e` and `fd94e8f1`.~~ Done 2026-09-17, as expected.
 2. **Attack findings.** Done so far: BL-1/BS-1 built at `ee8d4707` (ADR-1418) and attacked (sixth
    pass, fixed); the rest of the fifth pass fixed or accepted (run 35189258213 at baseline); the
-   seventh and eighth passes fixed. Next: read the run for the eighth-pass fixes per JOB (expected red: the
-   refpack 14 only). Then the owner decides whether a ninth pass is owed or the surface is closed
-   (see the note to the owner, 2026-09-17).
+   seventh and eighth passes fixed; the ninth closed the surface under the owner's stop rule. Next:
+   read the run for the closing batch per JOB (expected red: the refpack 14 only), then step 3.
+
    BS-4 (the dispatcher fails open when it cannot capture the payload) is in `_dispatch.sh`, which
    is under the governance-denied `.claude/hooks/**`, so it is the owner's, and it affects every
    guard.

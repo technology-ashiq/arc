@@ -55,13 +55,25 @@ _refuse() {
 # (fifth attack pass, BL-3/BS-6). jq is used only once it has answered a probe correctly. `-j`
 # everywhere: no line terminator, so jq.exe's CRLF never reaches a value and nothing has to be
 # stripped from the command (eighth pass, A and H).
+# Every jq call runs with HOME pointed nowhere: jq loads `$HOME/.jq` on its own, and a file there
+# could redefine `length` and wave a long command under the cap (ninth attack pass).
+_jq() { HOME=/nonexistent-arc-jq-home jq "$@"; }
 JQ_OK=0
-if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | jq -j '.k' 2>/dev/null)" = "v" ]; then
+if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | _jq -j '.k' 2>/dev/null)" = "v" ]; then
   JQ_OK=1
 fi
 # Without jq, a payload that only carries an escape cannot be decoded, and the harness never
 # escapes the letters of an agent name, so it is not treated as a composer's.
 [ "$JQ_OK" -eq 1 ] || [ "$NAMES_COMPOSER" -eq 1 ] || exit 0
+
+# A payload whose raw text shows a composer identity and is larger than any render's call is
+# refused before it is parsed: a composer controls its command's size, and the jq stream count
+# grows with every JSON leaf (1M leaves: 42 s; the hook budget is 60 s -- ninth attack pass). A
+# render's whole call is under 2 KB. Anyone else's large call is parsed as before.
+if [ "${#PAYLOAD}" -gt 65536 ] \
+   && printf '%s' "$PAYLOAD" | grep -qE '"agent_type"[[:space:]]*:[[:space:]]*"[^"]*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]'; then
+  _refuse "the call is ${#PAYLOAD} bytes, longer than any render's; nothing over 65536 bytes is checked or run."
+fi
 
 # `_field <key> <stream path> <jq path> <max bytes> [name]` sets FIELD. Returns 0 read (possibly
 # absent: FIELD empty), 1 cannot be read EXACTLY, 3 longer than <max bytes>.
@@ -84,19 +96,19 @@ fi
 _field() {
   _fk="$1"; _fsp="$2"; _fp="$3"; _fmax="$4"; _fname="${5:-}"; FIELD=""
   if [ "$JQ_OK" -eq 1 ]; then
-    _fn="$(printf '%s' "$PAYLOAD" | jq -c --stream --argjson p "$_fsp" 'select(length == 2 and .[0] == $p)' 2>/dev/null | wc -l | tr -d ' ')" \
+    _fn="$(printf '%s' "$PAYLOAD" | _jq -c --stream --argjson p "$_fsp" 'select(length == 2 and .[0][0:($p | length)] == $p)' 2>/dev/null | wc -l | tr -d ' ')" \
       || return 1
-    _fs="$(printf '%s' "$PAYLOAD" | jq -j "$_fp"' | if . == null then "absent" elif type == "string" then "string" else "other" end' 2>/dev/null)" \
+    _fs="$(printf '%s' "$PAYLOAD" | _jq -j "$_fp"' | if . == null then "absent" elif type == "string" then "string" else "other" end' 2>/dev/null)" \
       || return 1
     case "$_fs:$_fn" in
       absent:0) return 0;;
       string:1) ;;
       *) return 1;;
     esac
-    _fl="$(printf '%s' "$PAYLOAD" | jq -j "$_fp"' | length' 2>/dev/null)" || return 1
+    _fl="$(printf '%s' "$PAYLOAD" | _jq -j "$_fp"' | length' 2>/dev/null)" || return 1
     case "$_fl" in ""|*[!0123456789]*) return 1;; esac
     [ "$_fl" -le "$_fmax" ] || return 3
-    FIELD="$(printf '%s' "$PAYLOAD" | jq -j "$_fp" 2>/dev/null)" || return 1
+    FIELD="$(printf '%s' "$PAYLOAD" | _jq -j "$_fp" 2>/dev/null)" || return 1
   else
     case "$PAYLOAD" in *'\u'*|*'
 '*) return 1;; esac
@@ -114,8 +126,18 @@ _field() {
   return 0
 }
 
-_field agent_type '["agent_type"]' '.agent_type' 256 name \
-  || _refuse "the calling agent cannot be identified exactly, and this call may be ui-composer's."
+# An identity that cannot be read refuses only when the call could be a composer's: the raw text
+# names it, or the decoded identity does. A payload that merely carries an escape jq rejects -- a
+# lone surrogate in the main session's command -- or an agent name outside the plain alphabet
+# is someone else's call, and refusing it scoped the main session again (ninth attack pass, both
+# attackers; running defects #19 and #26).
+if ! _field agent_type '["agent_type"]' '.agent_type' 256 name; then
+  case "$NAMES_COMPOSER:$FIELD" in
+    1:*|0:*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*)
+      _refuse "the calling agent cannot be identified exactly, and this call may be ui-composer's.";;
+  esac
+  exit 0
+fi
 # Normalised, so a namespaced install (`arc:ui-composer`) or a case change is still the composer
 # rather than silently nobody (BL-9). Letters spelled out: `tr '[:upper:]'` maps I to a dotless i
 # under tr_TR.
