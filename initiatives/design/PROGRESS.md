@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
-phase: 01
+phase: 02
 appetite: 12.5d
 burn: 5d
 blocked-on: —
@@ -21,7 +21,7 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Renderer proof + isolation — `--session` mandatory in explore mode, `(route, session)` duplicate discriminator, session-less meta refuses, stable-shutter re-proved, callers swept mechanically, and the route-keyed output path re-scoped so two renders of one route can coexist | 1.5d | ✅ 2026-08-23 |
-| 01 | Eyes + viewports + canvas gate — composer scoped-Bash render grant, iron-law read allowlist, ≤3 immutable iterations, platform-contract viewports, marker-based doc-surface gate, sibling-render negative control | 1.5d | pending |
+| 01 | Eyes + viewports + canvas gate — composer scoped-Bash render grant, iron-law read allowlist, ≤3 immutable iterations, platform-contract viewports, marker-based doc-surface gate, sibling-render negative control | 1.5d | ✅ 2026-09-17 |
 | 02 | Registry + curator — `design.sources.yaml` + lint, `design-curator` at balanced-workhorse, robots.txt preflight, real pack from the two permitted galleries, planted-PNG ignore assertion | 1.5d | pending |
 | 03 | Taste loop — jury amended FOUR→N, one juror at high-judgment, pack-anchored BELOW-BAR, controlled owner blind score. **Carries the taste tripwire that gates phases 05–07** | 2d | pending |
 | 04 | EXP-A1 — ADR-0070's paired harness in the new regime, prediction pre-registered, reference item present, zero writes into model-policy's sealed bundle | 0.5d | pending |
@@ -31,6 +31,29 @@ depends-on: —
 | 08 | Governance + retro — packager refuses non-arc renders and absent provenance, spend caps, manual-drop door, all three sealed predictions settled | 1d | pending |
 
 ## Done-log
+
+**Phase 01 — CLOSED 2026-09-17.** REQ-02 and REQ-03 validated.
+
+- **CI.** `arc-ci` run **35226423229**, head SHA `d7afadf3`, confirmed equal to the tip, read per
+  JOB: 14/19 green. The 5 red jobs fail on exactly the 14 named red-first cases of Phase 02 Slice B
+  and nothing else, with `declared = executed` on every leg. That is the gate as amended by owner
+  ruling. Phase 01's suites run 187 cases in five files, plus 9 dispatcher fixture cases, with zero
+  failures on any leg.
+- **Live demos.** `lexos-p02` (three composers) and `lexos-p03` (one composer under the installed
+  hooks), with iteration PNGs opened by hand. A negative-control transcript comes from the installed
+  hooks, and render confinement was proven on a real browser.
+- **Adversarial passes.** Nine passes on Phase 01's surfaces plus one on the BS-4 dispatcher, every
+  finding dispositioned in `evidence/phase-01/adversarial-open.md`. The composer Bash boundary closed
+  under the owner's stop rule.
+- **Owner edits.** Two installs: the composer Bash fragment and the BS-4 dispatcher.
+- **Evidence:** `initiatives/design/evidence/phase-01/bundle.md`.
+- **Metrics.** Actual ~4 build days against a 1.5d appetite. `amendments: 3` (`/arc-change`
+  2026-09-16, 2026-09-17 ×2) · **4 ADR amendments or notes** (ADR-1415 ×3, ADR-1401) plus
+  **ADR-1418** new · `reopened: n`.
+- **Carried forward.** "The critic judges every rendered viewport" moves to Phase 03. The
+  `phase.closed` receipt and its approval request go out from the main clone, together with the
+  kickoff pair. A truncated `_dispatch.sh` still reads as allow, and that check belongs in the
+  owner's dispatcher files.
 
 **Phase 00 — CLOSED 2026-08-23.** REQ-01 green on `arc-ci` run **32655931704**, head SHA
 `40bbc2be`, **19/19 jobs read per JOB** across ubuntu 18/20/22, macOS and Windows. Tests 490–509
@@ -90,7 +113,9 @@ count and panel before comparing.
 
 ## Now
 
-**Position:** **APPROVED by the owner 2026-08-23** and building. **Phase 00 is CLOSED**; Phase 01 is open. Working mode
+**Position:** **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
+(01 on 2026-09-17); **Phase 02 is open**, with Slice A in and Slice B's 14 red-first tests on the
+branch. Working mode
 set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-c16`, pushed
 freely, **one PR kept open and merged only when all nine phases are done**. No local test runs at
 all -- CI is the only gate. Multiple agents are authorised where they help.
@@ -444,10 +469,21 @@ consumer projects — it carries the owner's approvals.
 
    (4) is produced as a text transcript. Then read CI per JOB at the new head, and run
    `/arc-phase-done --lane design 01` again.
-6. **Decision queued for the owner.** The read and write boundaries can scope to `ui-composer` by
-   `agent_type` (ADR-1415 revisit trigger), which ends the operator lock and allows parallel
-   composition. Route it through `/arc-change` with a recommendation.
-7. Phase 02 Slice B.
+   **Done: Phase 01 CLOSED 2026-09-17** on run 35226423229 at `d7afadf3` (see the Done-log).
+
+**Resume here next (Phase 02), in order:**
+1. **Decision queued for the owner.** The read and write boundaries can scope to `ui-composer` by
+   `agent_type`, as the Bash boundary already does. That ends the operator lock (every Read, Grep,
+   Glob and Write refused while a composer is armed) and allows parallel composition. Route it
+   through `/arc-change` with a recommendation.
+2. **Phase 02 Slice B.** Turn `tests/design-refpack.bats`' 14 red-first cases green: the curator's
+   robots.txt preflight, the pack builder with provenance rows, and the registry's `status: off`
+   and `allowed_use` refusals. Then the real pack from the two permitted galleries.
+3. **Spine receipts from the main clone:** the kickoff pair, the 2026-09-16 decision, and Phase 01's
+   `phase.closed` plus its `approval.requested`.
+4. For the owner, not blocking: the dispatchers (`PreToolUse.sh` and its siblings) should refuse
+   when `_dispatch.sh` sources but defines no `arc_dispatch`. Today a truncated copy exits 127,
+   which reads as allow.
 
 Open findings and the running defect list for the next attacker prompt are in
 [`evidence/phase-01/adversarial-open.md`](evidence/phase-01/adversarial-open.md).

@@ -104,3 +104,13 @@ stays red until the installed copy matches it.
 `ui-composer` too, instead of refusing every caller while a marker exists. That would end the
 operator lock that started this cycle's `/arc-change`, and would allow parallel composition. It
 is a separate security-boundary change and needs its own owner decision.
+
+## Note 2026-09-17 — this ADR's revisit trigger fired, and where it went
+
+The trigger reads: *a composer is found reading something inside the allowlist that leaks another
+variant's work*. The fifth attack pass found exactly that (BL-1 = BS-1). A composer's own render,
+which this ADR admits, carried a sibling's pixels, because the composer's page framed the sibling
+and the renderer opened `file://`. Narrowing the allowlist, the response this ADR anticipated,
+would not have helped: the leak was inside the one render the composer must read. It was routed
+through `/arc-change` to [ADR-1418](1418-an-explore-render-is-confined-to-its-own-variant-directory.md),
+which confines the render to the variant directory. This ADR's allowlist is unchanged.
