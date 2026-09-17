@@ -280,9 +280,9 @@ commit: ca6e26b6
 title: `/arc-phase-done 00` from the main clone; PROGRESS row ✅ + done-log.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: verified-real — `/arc-phase-done 00` from the main clone: `main` re-verified by `workflow_dispatch` (run 35194579928, 19/19 jobs, head a0e8ee1f), the live demo through `node .claude/scripts/hq/arc-face.mjs`, `kickoff-lint` clean, assumptions and ADR triggers adjudicated, and both receipts found in the canonical spine file
+tier: verified-real
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: closed from the main clone after the merge, because receipts cannot be emitted from a worktree; the tracker change rides its own close branch and PR, never a commit on main; the evidence bundle script applies from Phase 02 (ADR-0002), so this phase's evidence is the lane pack
+result: `phase.closed` 01M2Q5HZ5REDYHQ0AY8T1PKJA4 and `approval.requested{gate: phase-done}` 01M2Q5HZJRBMN98HNR9YA5FR77 landed in `.claude/state/hq/events/2026-09-17.jsonl` · full suite `1..3400` · live demo 33/33 rooms opened with a heading and a non-empty body, 0 console errors · PROGRESS row 00 ✅, Now moved to Phase 01
+commit: a0e8ee1f
