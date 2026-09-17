@@ -11,7 +11,10 @@
 //     EQUAL it -- a door that regresses to one room is not a clean run;
 //   - "opened" means `section[data-room]` names the room asked for, polled with a hard cap; a
 //     room settles when 900 ms have passed since it rendered AND its network has been quiet
-//     for 300 ms. A room that never settles FAILS, and the last room gets the same drain.
+//     for 300 ms, inside a 10 s cap. A room that never settles FAILS, and the last room gets
+//     the same drain. v0.7 had no quiet rule at all -- it slept 900 ms -- so this one is ours,
+//     and a room that misses the cap reports what the network still held and whether it went
+//     quiet later. That late watch is evidence only; it never turns a FAIL into a pass.
 //
 // Usage:
 //   smoke.mjs --base URL --door URL --token T [--exclude id,id] [--room-timeout-ms N]
@@ -30,9 +33,99 @@ import {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const MIN_WATCH_MS = 900;
 export const QUIET_MS = 300;
+export const SETTLE_CAP_MS = 10000;
+export const LATE_WATCH_MS = 20000;
 export const THREE_CLOCK = /THREE\.Clock/;
 
 export class SetupError extends Error {}
+
+// A request's path only: a query or fragment can carry the dev token, and a data: URL is the
+// whole payload. The report lands in a public CI log.
+function pathOf(url) {
+  try {
+    const u = new URL(String(url));
+    return (u.protocol === "http:" || u.protocol === "https:" ? u.pathname : u.protocol).slice(0, 120);
+  } catch {
+    return "?";
+  }
+}
+
+/**
+ * The network half of "settled", with no Chrome in it, so its rules are proven by a fixture.
+ *
+ * Only the CURRENT document's requests count. A request cancelled by the next navigation does
+ * not always report loadingFailed (the windows runner, 2026-09-17: every room after the first
+ * "never settled"), so requests are keyed by the navigation's loaderId -- and the rule holds in
+ * BOTH directions: a finish for a request this document never sent does not reset the quiet
+ * clock either. Requests that arrive before Page.navigate has answered with its loaderId are
+ * held and adopted once it has, rather than dropped for arriving early.
+ */
+export class NetworkWatch {
+  constructor() {
+    this.loader = null;
+    this.navigating = false;
+    this.inflight = new Map();
+    this.early = new Map();
+    this.lastChange = 0;
+    this.events = 0;
+    this.untrackedFinishes = 0;
+  }
+
+  /** A navigation was sent; its loaderId is not known yet. */
+  navigate(now) {
+    this.loader = null;
+    this.navigating = true;
+    this.inflight.clear();
+    this.early.clear();
+    this.lastChange = now;
+    this.events = 0;
+    this.untrackedFinishes = 0;
+  }
+
+  /** Page.navigate answered. */
+  begin(loaderId, now) {
+    this.navigating = false;
+    this.loader = typeof loaderId === "string" && loaderId ? loaderId : null;
+    for (const [id, r] of this.early) {
+      if (this.loader !== null && r.loaderId === this.loader) { this.inflight.set(id, r); this.lastChange = now; }
+    }
+    this.early.clear();
+  }
+
+  sent(p, now) {
+    if (!p || p.requestId === undefined) return;
+    const r = { loaderId: p.loaderId, url: pathOf(p.request?.url), type: String(p.type ?? "?"), at: now };
+    if (this.navigating) { this.early.set(p.requestId, r); return; }
+    if (this.loader === null || p.loaderId !== this.loader) return;
+    // A redirect re-sends the same requestId: still one request, still in flight.
+    this.inflight.set(p.requestId, r);
+    this.lastChange = now;
+    this.events++;
+  }
+
+  finished(p, now) {
+    if (!p || p.requestId === undefined) return;
+    // Finished before its document was known: activity at navigation time, so the clock moves.
+    if (this.early.delete(p.requestId)) { this.lastChange = now; return; }
+    if (!this.inflight.delete(p.requestId)) { this.untrackedFinishes++; return; }
+    this.lastChange = now;
+    this.events++;
+  }
+
+  quiet(from, now) {
+    return !this.navigating && this.inflight.size === 0 && now - this.lastChange >= QUIET_MS && now - from >= MIN_WATCH_MS;
+  }
+
+  /** What the network held at `now` -- the evidence a "never settled" line carries. */
+  snapshot(now) {
+    return {
+      inflight: [...this.inflight.values()].map((r) => ({ type: r.type, url: r.url, ageMs: now - r.at })),
+      msSinceChange: now - this.lastChange,
+      events: this.events,
+      untrackedFinishes: this.untrackedFinishes,
+    };
+  }
+}
 
 export function parseArgs(argv) {
   const opts = { base: null, door: null, token: null, exclude: [], roomTimeoutMs: 15000, probeFile: null };
@@ -180,37 +273,26 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
     const errors = [];
     const current = { room: "boot" };
     collectErrors(page, errors, current);
-    const inflight = new Set();
-    let lastNetworkChange = Date.now();
-    // Only requests of the CURRENT document count. A request cancelled by the next navigation
-    // does not always report loadingFailed (the windows runner, 2026-09-17: every room after
-    // the first "never settled"), so tracking by the navigation's loaderId keeps a dead page's
-    // requests out of the quiet check.
-    let currentLoader = null;
-    page.on("Network.requestWillBeSent", (p) => {
-      if (currentLoader === null || p.loaderId !== currentLoader) return;
-      inflight.add(p.requestId); lastNetworkChange = Date.now();
-    });
-    const done = (p) => { inflight.delete(p.requestId); lastNetworkChange = Date.now(); };
-    page.on("Network.loadingFinished", done);
-    page.on("Network.loadingFailed", done);
+    const net = new NetworkWatch();
+    page.on("Network.requestWillBeSent", (p) => net.sent(p, Date.now()));
+    page.on("Network.loadingFinished", (p) => net.finished(p, Date.now()));
+    page.on("Network.loadingFailed", (p) => net.finished(p, Date.now()));
     await page.send("Page.enable");
     await page.send("Runtime.enable");
     await page.send("Log.enable");
     await page.send("Network.enable");
     await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
 
-    const quietSince = (from) => inflight.size === 0 && Date.now() - lastNetworkChange >= QUIET_MS && Date.now() - from >= MIN_WATCH_MS;
+    const quietSince = (from) => net.quiet(from, Date.now());
     const rooms = [];
     for (let i = 0; i < openable.length; i++) {
       const id = openable[i];
       current.room = id;
       const before = errors.length;
       const url = `${opts.base}?r=${i}#/${encodeURIComponent(id)}&token=${encodeURIComponent(opts.token)}`;
-      inflight.clear();
+      net.navigate(Date.now());
       const nav = await page.send("Page.navigate", { url });
-      currentLoader = nav.loaderId ?? null;
-      lastNetworkChange = Date.now();
+      net.begin(nav.loaderId, Date.now());
       const rendered = async () => {
         const r = await page.send("Runtime.evaluate", {
           expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.getAttribute("data-room") : null; })()`,
@@ -220,8 +302,16 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       };
       const opened = await until(rendered, opts.roomTimeoutMs);
       const renderedAt = Date.now();
-      const settled = opened && await until(() => quietSince(renderedAt), 10000);
-      rooms.push({ id, opened, settled, newErrors: 0, before });
+      const settled = opened && await until(() => quietSince(renderedAt), SETTLE_CAP_MS);
+      const room = { id, opened, settled, settleMs: settled ? Date.now() - renderedAt : null, newErrors: 0, before };
+      if (opened && !settled) {
+        // Evidence only -- `settled` is already final. What was still in flight at the cap, and
+        // whether the room went quiet later, is what tells a slow runner from a request that
+        // never ends.
+        room.atCap = net.snapshot(Date.now());
+        room.lateSettleMs = (await until(() => quietSince(renderedAt), LATE_WATCH_MS)) ? Date.now() - renderedAt : null;
+      }
+      rooms.push(room);
     }
     // The last room gets the same watch window every other room got before navigating away.
     const drainFrom = Date.now();
@@ -230,8 +320,10 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       const end = i + 1 < rooms.length ? rooms[i + 1].before : errors.length;
       rooms[i].newErrors = end - rooms[i].before;
       const r = rooms[i];
-      log(`${r.opened && r.settled && r.newErrors === 0 ? "ok" : "XX"} ${r.id}${r.opened ? "" : " (did not render)"}${r.opened && !r.settled ? " (never settled)" : ""}${r.newErrors ? ` errors=${r.newErrors}` : ""}`);
+      log(`${r.opened && r.settled && r.newErrors === 0 ? "ok" : "XX"} ${r.id}${r.opened ? "" : " (did not render)"}${r.settled ? ` settle-ms=${r.settleMs}` : ""}${r.opened && !r.settled ? ` (never settled; late-settle-ms=${r.lateSettleMs ?? "none"} at-cap=${JSON.stringify(r.atCap)})` : ""}${r.newErrors ? ` errors=${r.newErrors}` : ""}`);
     }
+    const settledRooms = rooms.filter((r) => r.settled);
+    const slowest = settledRooms.reduce((a, r) => (a === null || r.settleMs > a.settleMs ? r : a), null);
 
     const excluded = new Set(opts.exclude ?? []);
     const counted = errors.filter((e) => !excluded.has(e.room));
@@ -246,7 +338,10 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       consoleErrors: counted.filter((e) => e.type !== "exception").length,
       exceptions: counted.filter((e) => e.type === "exception").length,
       unsettled: rooms.filter((r) => r.opened && !r.settled).map((r) => r.id),
-      rooms: rooms.map(({ before, ...r }) => r),
+      // The headroom under SETTLE_CAP_MS on this runner, and the evidence for every miss.
+      slowestSettle: slowest ? { room: slowest.id, ms: slowest.settleMs } : null,
+      unsettledDetail: rooms.filter((r) => r.opened && !r.settled).map((r) => ({ id: r.id, lateSettleMs: r.lateSettleMs, atCap: r.atCap })),
+      rooms: rooms.map(({ before, atCap, ...r }) => r),
       errors: errors.slice(0, 50),
     };
     if (Array.isArray(opts.expected)) {

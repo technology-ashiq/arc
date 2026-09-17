@@ -11,10 +11,14 @@
 // The EXPECTED set comes from the parent, never from which siblings happen to be present: a
 // package entry whose `optionalDependencies` name platform binaries (`rolldown` lists
 // `@rolldown/binding-linux-x64-gnu`, ...) is one family, keyed by the parent's own lockfile
-// path so a nested copy cannot borrow a hoisted copy's binaries. For this machine, at least one
-// declared name whose platform token matches must be present in the lockfile where node would
-// resolve it -- a lockfile stripped down to the Windows binding fails here by name
-// (attack 2026-09-17, fixed-defects.md).
+// path. For this machine, at least one declared name whose platform token matches must be
+// present in the lockfile where node would resolve it -- a lockfile stripped down to the Windows
+// binding fails here by name (attack 2026-09-17, fixed-defects.md).
+//
+// Node walks UP the tree, so a nested copy really does load a hoisted binding. Presence is not
+// enough: the entry it resolves must carry a version that satisfies the parent's own declared
+// spec, or a nested `lightningcss@9.9.9` "passes" on a hoisted `-linux-x64-gnu@1.33.0` that will
+// not load for it (CI run 35150543730). A spec this file cannot read fails closed, by name.
 //
 // Usage: lockfile-platforms.mjs [--lock PATH]
 // Exit:  0 every family covered · 1 a family has no entry for this platform · 2 bad input.
@@ -51,6 +55,45 @@ function matches(target, claim) {
   return target.libc === null || claim.libc === null || claim.libc === target.libc;
 }
 
+const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+
+function parseVersion(text) {
+  const m = SEMVER.exec(text);
+  return m ? { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]), pre: m[4] ?? null } : null;
+}
+
+// Numeric, never lexical: 1.10.0 is above 1.9.0.
+function compareCore(a, b) {
+  return a.major - b.major || a.minor - b.minor || a.patch - b.patch;
+}
+
+/**
+ * Whether `version` satisfies an optionalDependencies `spec`. Native-binding families pin exact
+ * versions today; `^`, `~` and `*` are read too. Anything else -- `>=`, `||`, an npm alias, a
+ * prerelease under a range -- is `unsupported`, which the check treats as not satisfied.
+ * @returns {{ ok: boolean, why: string|null }}
+ */
+export function satisfiesSpec(version, spec) {
+  if (typeof version !== "string" || !version) return { ok: false, why: "no version" };
+  if (typeof spec !== "string") return { ok: false, why: `unsupported spec ${JSON.stringify(spec)}` };
+  const have = parseVersion(version.trim());
+  if (!have) return { ok: false, why: `unreadable version ${JSON.stringify(version)}` };
+  const s = spec.trim();
+  if (s === "" || s === "*" || s === "x") return { ok: true, why: null };
+  const op = s[0] === "^" || s[0] === "~" ? s[0] : s[0] === "=" ? "=" : "";
+  const want = parseVersion((op ? s.slice(1) : s).trim().replace(/^v/, ""));
+  if (!want) return { ok: false, why: `unsupported spec ${JSON.stringify(spec)}` };
+  if (op === "" || op === "=") {
+    const same = compareCore(have, want) === 0 && have.pre === want.pre;
+    return { ok: same, why: same ? null : `declared ${s}` };
+  }
+  if (have.pre !== null || want.pre !== null) return { ok: false, why: `unsupported prerelease range ${JSON.stringify(spec)}` };
+  let inRange = compareCore(have, want) >= 0 && have.major === want.major;
+  if (op === "~" || want.major === 0) inRange = inRange && have.minor === want.minor;
+  if (op === "^" && want.major === 0 && want.minor === 0) inRange = inRange && have.patch === want.patch;
+  return { ok: inRange, why: inRange ? null : `declared ${s}` };
+}
+
 /** Where node would resolve `name` from the package at lockfile path `parent`. */
 function resolvedEntry(packages, parent, name) {
   let dir = parent;
@@ -85,17 +128,21 @@ export function checkLockfile(lock, target) {
       missing.push(`${label} (declares no binary for this platform)`);
       continue;
     }
+    const refused = [];
     const present = forTarget.filter((n) => {
       const hit = resolvedEntry(packages, parent, n);
       if (!hit) return false;
       const e = hit.entry;
+      if (!e || typeof e !== "object") return false;
       // The entry's own os/cpu/libc fields, when npm wrote them, must agree with its name.
       if (Array.isArray(e.os) && !e.os.includes(target.platform)) return false;
       if (Array.isArray(e.cpu) && !e.cpu.includes(target.arch)) return false;
       if (Array.isArray(e.libc) && target.libc && !e.libc.includes(target.libc)) return false;
-      return true;
+      const fit = satisfiesSpec(e.version, entry.optionalDependencies[n]);
+      if (!fit.ok) refused.push(`${hit.key}@${e.version ?? "?"} ${fit.why}`);
+      return fit.ok;
     });
-    if (present.length === 0) missing.push(`${label} -> ${forTarget.join("|")}`);
+    if (present.length === 0) missing.push(`${label} -> ${forTarget.join("|")}${refused.length ? ` (resolves ${refused.join("; ")})` : ""}`);
   }
   return {
     ok: families > 0 && missing.length === 0,

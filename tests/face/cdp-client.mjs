@@ -236,6 +236,38 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   nested.packages["node_modules/other/node_modules/lightningcss-win32-x64-msvc"] = { os: ["win32"], cpu: ["x64"], optional: true };
   const n = lockMod.checkLockfile(nested, linux);
   check("a nested package with no linux binary is not covered by the hoisted copy", !n.ok && n.missing.some((f) => f.startsWith("node_modules/other/node_modules/lightningcss")), JSON.stringify(n));
+  check("the refusal names the hoisted entry it resolved and the version it declared", n.missing.some((f) => /node_modules\/lightningcss-linux-x64-gnu@\S+ declared 9\.9\.9/.test(f)), JSON.stringify(n));
+  // Positive controls, so "nested always fails" cannot pass the check above.
+  const ownBinding = structuredClone(nested);
+  ownBinding.packages["node_modules/other/node_modules/lightningcss-linux-x64-gnu"] = { version: "9.9.9", os: ["linux"], cpu: ["x64"], libc: ["glibc"], optional: true };
+  const ob = lockMod.checkLockfile(ownBinding, linux);
+  check("a nested package with its own matching linux binary passes", ob.ok && ob.families === n.families, JSON.stringify(ob));
+  const hoistedVersion = lock.packages["node_modules/lightningcss-linux-x64-gnu"]?.version;
+  check("the borrow fixture reads a real hoisted binding version", typeof hoistedVersion === "string" && hoistedVersion.length > 0, String(hoistedVersion));
+  const borrow = structuredClone(nested);
+  borrow.packages["node_modules/other/node_modules/lightningcss"] = { version: hoistedVersion, optionalDependencies: { "lightningcss-win32-x64-msvc": hoistedVersion, "lightningcss-linux-x64-gnu": hoistedVersion } };
+  const bo = lockMod.checkLockfile(borrow, linux);
+  check("a nested copy may resolve the hoisted binding when its version is the one declared", bo.ok, JSON.stringify(bo));
+  // The same drift with no nesting at all: the hoisted binding is not the version rolldown pins.
+  const drift = structuredClone(lock);
+  drift.packages["node_modules/@rolldown/binding-linux-x64-gnu"].version = "0.0.1";
+  const dr = lockMod.checkLockfile(drift, linux);
+  check("a top-level binding at a different version than its parent pins FAILS for that platform", !dr.ok && dr.missing.some((f) => f.startsWith("node_modules/rolldown ")), JSON.stringify(dr));
+  check("a top-level version drift leaves the other platforms passing", lockMod.checkLockfile(drift, { platform: "win32", arch: "x64", libc: null }).ok);
+  const noVersion = structuredClone(lock);
+  delete noVersion.packages["node_modules/@rolldown/binding-linux-x64-gnu"].version;
+  check("a binding entry with no version does not satisfy a pin", !lockMod.checkLockfile(noVersion, linux).ok);
+  const specCases = [
+    ["1.2.5", "1.2.5", true], ["1.2.6", "1.2.5", false], ["1.2.5", "=1.2.5", true], ["1.2.5+b7", "1.2.5", true],
+    ["1.2.5-rc.1", "1.2.5", false], ["1.2.5-rc.1", "1.2.5-rc.1", true],
+    ["1.4.0", "^1.2.5", true], ["1.10.0", "^1.9.0", true], ["1.2.4", "^1.2.5", false], ["2.0.0", "^1.2.5", false],
+    ["0.2.9", "^0.2.5", true], ["0.3.0", "^0.2.5", false], ["0.0.4", "^0.0.3", false], ["0.0.3", "^0.0.3", true],
+    ["1.2.9", "~1.2.5", true], ["1.3.0", "~1.2.5", false], ["1.9.9", "*", true],
+    ["1.2.5", ">=1.0.0", false], ["1.2.5", "^1.0.0 || ^2.0.0", false], ["1.2.5", "npm:other@1.2.5", false],
+    ["1.2.5-rc.1", "^1.2.0", false], ["1.2.5", 125, false], [undefined, "1.2.5", false], ["banana", "1.2.5", false],
+  ];
+  for (const [v, spec, want] of specCases) check(`version ${v} ${want ? "satisfies" : "does not satisfy"} spec ${JSON.stringify(spec)}`, lockMod.satisfiesSpec(v, spec).ok === want, JSON.stringify(lockMod.satisfiesSpec(v, spec)));
+  check("an unreadable spec is reported as unsupported, not as a plain mismatch", /unsupported/.test(lockMod.satisfiesSpec("1.2.5", ">=1.0.0").why));
   check("gnueabihf is one platform token, not gnu plus a remainder",
     JSON.stringify(lockMod.platformOfName("lightningcss-linux-arm-gnueabihf")) === JSON.stringify({ os: "linux", cpu: "arm", libc: "glibc" }));
   const none = lockMod.checkLockfile({ packages: { "node_modules/fsevents": { os: ["darwin"], cpu: [], optional: true } } }, linux);
@@ -267,8 +299,72 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     && throwsLike(() => smoke.openableRooms({ rooms: [{ id: 7, status: "built" }] }), /rooms\[0\]/)
     && throwsLike(() => smoke.openableRooms({ rooms: [{ id: "x" }] }), /no status/));
   check("a duplicate room id is a setup error", throwsLike(() => smoke.openableRooms({ rooms: [{ id: "a", status: "built" }, { id: "a", status: "built" }] }), /repeats/));
+}
 
-  const full = ["--base", "http://x/", "--door", "http://d", "--token", "t"];
+// ---- smoke network watch: what "settled" waits on ----
+{
+  const { NetworkWatch, MIN_WATCH_MS, QUIET_MS } = smoke;
+  check("the network watch is exported with its two thresholds", typeof NetworkWatch === "function" && MIN_WATCH_MS === 900 && QUIET_MS === 300);
+  const sent = (w, id, loaderId, t, url = "http://127.0.0.1:1/api/inbox?token=SECRET#x", type = "Fetch") => w.sent({ requestId: id, loaderId, type, request: { url } }, t);
+
+  const w = new NetworkWatch();
+  w.navigate(0); w.begin("L1", 0);
+  check("a fresh document with no requests is not quiet before the minimum watch", !w.quiet(0, MIN_WATCH_MS - 1) && w.quiet(0, MIN_WATCH_MS));
+  sent(w, "r1", "L1", 100);
+  check("a request of this document in flight keeps the room unsettled", !w.quiet(0, 5000) && w.inflight.size === 1);
+  w.finished({ requestId: "r1" }, 1000);
+  check("after it finishes, the room waits the full quiet window", !w.quiet(0, 1000 + QUIET_MS - 1) && w.quiet(0, 1000 + QUIET_MS));
+
+  const other = new NetworkWatch();
+  other.navigate(0); other.begin("L2", 0);
+  sent(other, "old", "L1", 50);
+  check("a request of another document is not tracked", other.inflight.size === 0 && other.quiet(0, MIN_WATCH_MS));
+  other.finished({ requestId: "dead-page-request" }, 890);
+  check("a finish for a request this document never sent does not reset the quiet clock", other.quiet(0, MIN_WATCH_MS) && other.untrackedFinishes === 1, JSON.stringify(other.snapshot(MIN_WATCH_MS)));
+
+  const early = new NetworkWatch();
+  early.navigate(0);
+  sent(early, "doc", "L3", 10, "http://127.0.0.1:1/?r=2", "Document");
+  sent(early, "stale", "L2", 12);
+  check("nothing counts as quiet while the navigation has not answered", !early.quiet(-10000, 5000));
+  early.begin("L3", 40);
+  check("a request that arrived before its loaderId was known is adopted, a stale one is not", early.inflight.size === 1 && early.inflight.has("doc"), JSON.stringify([...early.inflight.keys()]));
+  check("the adopted request keeps the room unsettled until it finishes", !early.quiet(0, 5000));
+  early.finished({ requestId: "doc" }, 60);
+  check("and releases it once it does", early.quiet(0, 60 + MIN_WATCH_MS));
+  const earlyDone = new NetworkWatch();
+  earlyDone.navigate(0);
+  sent(earlyDone, "quick", "L4", 5);
+  earlyDone.finished({ requestId: "quick" }, 700);
+  earlyDone.begin("L4", 710);
+  check("a request that finished before the loaderId arrived is not left in flight, and its finish moves the clock", earlyDone.inflight.size === 0 && !earlyDone.quiet(0, 700 + QUIET_MS - 1) && earlyDone.quiet(0, 700 + QUIET_MS));
+
+  const redirect = new NetworkWatch();
+  redirect.navigate(0); redirect.begin("L5", 0);
+  sent(redirect, "r", "L5", 10); sent(redirect, "r", "L5", 20);
+  redirect.finished({ requestId: "r" }, 30);
+  check("a redirect that re-sends one requestId is one request, cleared by one finish", redirect.inflight.size === 0 && redirect.quiet(0, MIN_WATCH_MS));
+
+  const noLoader = new NetworkWatch();
+  noLoader.navigate(0); noLoader.begin(undefined, 0);
+  sent(noLoader, "x", undefined, 10);
+  check("a navigation with no loaderId tracks nothing rather than everything", noLoader.inflight.size === 0);
+
+  const snap = new NetworkWatch();
+  snap.navigate(0); snap.begin("L6", 0);
+  sent(snap, "s1", "L6", 100, "http://127.0.0.1:1/api/inbox?token=SECRET#frag", "Fetch");
+  sent(snap, "s2", "L6", 150, "data:image/png;base64,AAAA", "Image");
+  const s = snap.snapshot(10100);
+  check("the at-cap evidence names each request in flight by type, path and age",
+    s.inflight.length === 2 && s.inflight[0].type === "Fetch" && s.inflight[0].url === "/api/inbox" && s.inflight[0].ageMs === 10000 && s.inflight[1].url === "data:" && s.msSinceChange === 9950 && s.events === 2,
+    JSON.stringify(s));
+  check("the at-cap evidence never carries a query, a fragment or the token", !/SECRET|token|frag|base64/.test(JSON.stringify(s)), JSON.stringify(s));
+  check("the settle cap is 10 s and the late watch never shortens it", smoke.SETTLE_CAP_MS === 10000 && smoke.LATE_WATCH_MS >= smoke.SETTLE_CAP_MS);
+}
+
+// ---- smoke + harness argument parsing ----
+{
+  const full =["--base", "http://x/", "--door", "http://d", "--token", "t"];
   check("smoke refuses an unknown flag", throwsLike(() => smoke.parseArgs(["--chek"]), /unknown argument/));
   check("smoke refuses a flag with no value", throwsLike(() => smoke.parseArgs(["--base", "--door", "x"]), /needs a value/));
   check("smoke refuses a repeated flag", throwsLike(() => smoke.parseArgs([...full, "--base", "http://y/"]), /twice/));
