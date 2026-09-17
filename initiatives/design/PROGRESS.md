@@ -422,8 +422,14 @@ consumer projects — it carries the owner's approvals.
    **Still open for the owner, not blocking:** a truncated installed `_dispatch.sh` makes every
    dispatcher exit 127, which reads as allow with no warning. The check belongs in the dispatchers
    (`PreToolUse.sh` and its siblings).
-4. **Re-verify one composer.** Run one live composer turn to prove the enforced scope does not
-   break the real loop (render, read the PNG, Write the manifest).
+4. ~~**Re-verify one composer.**~~ **Done 2026-09-17** (`evidence/phase-01/live-reverify-lexos-p03.md`,
+   text only). One `ui-composer` turn ran under the installed Bash fragment and dispatcher and
+   cleared `compose-done` with exit 0. It made six renders over 3 iterations at 2 viewports, every
+   one `confined-loopback`, with manifest rows chained by hash. The composer reported no refusal
+   hit. The three desktop PNGs were opened by hand: iteration 1's three claimed defects are
+   visibly fixed in iteration 2. An empty band remains in iteration 3, which is a critique input
+   for Phase 03. Not shown: a refusal firing live, because the composer's transcript was empty
+   when read.
 5. **`/arc-phase-done 01`.**
 6. **Decision queued for the owner.** The read and write boundaries can scope to `ui-composer` by
    `agent_type` (ADR-1415 revisit trigger), which ends the operator lock and allows parallel
