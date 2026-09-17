@@ -23,9 +23,20 @@ export function deathReason(child) {
   return "alive";
 }
 
-/** Resolve after `ms` without holding the event loop open. */
+/** Resolve after `ms`. */
+// An AWAITED timer must hold the process. `unref()` on one lets node exit with code 13 before the
+// await resumes, once nothing else is alive -- a dead Chrome, a finished child -- so a cleanup
+// retry or a verdict silently never happens (CI run 35183482747: the client suite stopped
+// mid-file). A race timer is cleared when the race settles instead; see settleWithin.
 export function delay(ms) {
-  return new Promise((r) => { const t = setTimeout(r, ms); t.unref?.(); });
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** `promise`, or `fallback` after `ms`, whichever settles first; the timer is always cleared. */
+export function settleWithin(promise, ms, fallback = undefined) {
+  let t;
+  const timer = new Promise((r) => { t = setTimeout(() => r(fallback), ms); });
+  return Promise.race([promise, timer]).finally(() => clearTimeout(t));
 }
 
 /** Resolve true when the child exits within `ms`, false otherwise; the timer is always cleared. */
@@ -34,7 +45,6 @@ export function waitExit(child, ms) {
   return new Promise((resolve) => {
     const onExit = () => { clearTimeout(t); resolve(true); };
     const t = setTimeout(() => { child.off("exit", onExit); resolve(false); }, ms);
-    t.unref?.();
     child.once("exit", onExit);
   });
 }

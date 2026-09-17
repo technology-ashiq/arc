@@ -10,6 +10,7 @@
 // VACUOUS-PASS GUARD: the first checks prove the modules loaded with real exports, and the last
 // line is "RAN: <n> checks, <f> failed"; the exit code also requires n to reach a floor.
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve, win32 } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -424,9 +425,15 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   const base = { id: "map", opened: true, settled: true, settleMs: 1200, newErrors: 0 };
   check("a room line is ok only when clean, and a CDP error alone makes it XX",
     smoke.roomLine(base) === "ok map settle-ms=1200" && smoke.roomLine({ ...base, cdpError: "socket closed" }).startsWith("XX map"));
-  const unsettledLine = smoke.roomLine({ ...base, settled: false, settleMs: null, lateSettleMs: null, atCap: { measured: true, inflight: [] } });
-  check("a never-settled line carries its evidence and cannot start a forged summary line",
-    /\(never settled; late-settle-ms=none at-cap=\{"measured":true,"inflight":\[\]\}\)/.test(unsettledLine) && !/^smoke: /.test(unsettledLine) && !unsettledLine.includes("\n"), unsettledLine);
+  const held = { measured: true, inflight: [{ type: "Font", url: "/s/anybody/v13/x.woff2", ageMs: 6377 }] };
+  const unsettledLine = smoke.roomLine({ ...base, settled: false, settleMs: null, atSlow: held, atCap: { measured: true, inflight: [] } });
+  check("a never-settled line is XX and carries its evidence at 10 s and at the cap, and cannot start a forged summary line",
+    unsettledLine.startsWith("XX map (never settled within 30000 ms; at-10000ms={")
+    && unsettledLine.includes("x.woff2") && unsettledLine.endsWith(`at-cap={"measured":true,"inflight":[]})`)
+    && !/^smoke: /.test(unsettledLine) && !unsettledLine.includes("\n"), unsettledLine);
+  const slowLine = smoke.roomLine({ ...base, settleMs: 11220, atSlow: held });
+  check("a room quiet between 10 s and the cap is ok, marked SLOW with what it held at 10 s",
+    slowLine.startsWith("ok map settle-ms=11220 SLOW at-10000ms={") && slowLine.includes("x.woff2"), slowLine);
   check("a room id that could forge a parsed field is a setup error",
     throwsLike(() => smoke.openableRooms({ rooms: [{ id: "t excluded-errors=0 unsettled=0", status: "template" }] }), /kebab-case/)
     && throwsLike(() => smoke.openableRooms({ rooms: [{ id: "a\nsmoke: opened=1", status: "built" }] }), /kebab-case/)
@@ -441,7 +448,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     s.inflight.length === 2 && s.inflight[0].type === "Fetch" && s.inflight[0].url === "/api/inbox" && s.inflight[0].ageMs === 10000 && s.inflight[1].url === "data:" && s.msSinceChange === 9950 && s.events === 2,
     JSON.stringify(s));
   check("the at-cap evidence never carries a query, a fragment or the token", !/SECRET|token|frag|base64/.test(JSON.stringify(s)), JSON.stringify(s));
-  check("the settle cap is 10 s and the late watch never shortens it", smoke.SETTLE_CAP_MS === 10000 && smoke.LATE_WATCH_MS >= smoke.SETTLE_CAP_MS);
+  check("a room is SLOW past 10 s and FAILS only past the 30 s cap", smoke.SLOW_SETTLE_MS === 10000 && smoke.SETTLE_CAP_MS === 30000);
 }
 
 // ---- smoke + harness argument parsing ----
@@ -485,6 +492,13 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   let deadAfter = proc.isDead(child);
   for (let i = 0; i < 20 && !deadAfter; i++) { await proc.delay(100); deadAfter = proc.isDead(child); }
   check("stopTree ends a child that ignores SIGTERM, within its escalation window", aliveBefore && deadAfter && stopMs < 6000, `alive=${aliveBefore} dead=${deadAfter} ${stopMs} ms ${proc.deathReason(child)}`);
+
+  // Proven in a CHILD with nothing else alive: in this process, a leftover handle would hide an
+  // unref()ed timer, and the failure mode is node exiting mid-file with no FAIL line at all.
+  const timers = spawnSync(process.execPath, [join(REPO, "tests", "fixtures", "face", "await-timers.mjs")], { encoding: "utf8", timeout: 20000 });
+  const timersSaw = `status=${timers.status} signal=${timers.signal} out=${JSON.stringify(timers.stdout)} err=${JSON.stringify(String(timers.stderr ?? "").slice(-300))}`;
+  check("an awaited delay and waitExit timeout hold a process that has nothing else alive", timers.status === 0 && /resumed exited=false/.test(timers.stdout ?? ""), timersSaw);
+  check("settleWithin returns the first result and clears its timer, so the process ends long before it", timers.signal === null && /settled=first/.test(timers.stdout ?? ""), timersSaw);
 
   const t1 = Date.now();
   const exited = await proc.waitExit({ exitCode: null, signalCode: null, once() {}, off() {} }, 150);

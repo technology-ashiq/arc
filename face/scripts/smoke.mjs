@@ -11,10 +11,16 @@
 //     EQUAL it -- a door that regresses to one room is not a clean run;
 //   - "opened" means `section[data-room]` names the room asked for, polled with a hard cap; a
 //     room settles when 900 ms have passed since it rendered AND its network has been quiet
-//     for 300 ms, inside a 10 s cap. A room that never settles FAILS, and the last room gets
-//     the same drain. v0.7 had no quiet rule at all -- it slept 900 ms -- so this one is ours,
-//     and a room that misses the cap reports what the network still held and whether it went
-//     quiet later. That late watch is evidence only; it never turns a FAIL into a pass.
+//     for 300 ms. v0.7 had no quiet rule at all -- it slept 900 ms -- so this one is ours, and
+//     it exists to catch a room whose network NEVER ends (a stuck request, a poll with no gap).
+//     A room not quiet within the 30 s cap FAILS; one quiet between 10 s and 30 s passes as
+//     SLOW, printed with what its network held at 10 s. The last room gets the same drain.
+//     WHAT THE 30 s CAP GIVES UP: a room that takes 10-30 s to go quiet is not a failure here.
+//     That is deliberate. A 10 s FAIL measured runner and CDN weather: on the macOS
+//     software-GL runner the first room's cold load held a Google Fonts download and
+//     late-arriving CDP events for 11.2 s (CI run 35183482747), and in run 35150543730 it was
+//     `map`. Every warm room there settled in about 0.9 s. Load time is not what this gate
+//     judges; SLOW keeps it visible.
 //
 // Usage:
 //   smoke.mjs --base URL --door URL --token T [--exclude id,id] [--room-timeout-ms N]
@@ -22,7 +28,7 @@
 // Exit: 0 every expected room opened, settled, with 0 counted errors · 1 a room failed, or the
 //       probe saw errors · 2 setup failure (bad argument, no Chrome, door unreachable).
 import { mkdtempSync, realpathSync } from "node:fs";
-import { stopTree, removeDir, delay } from "./proc.mjs";
+import { stopTree, removeDir, settleWithin } from "./proc.mjs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -33,8 +39,8 @@ import {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const MIN_WATCH_MS = 900;
 export const QUIET_MS = 300;
-export const SETTLE_CAP_MS = 10000;
-export const LATE_WATCH_MS = 20000;
+export const SLOW_SETTLE_MS = 10000;
+export const SETTLE_CAP_MS = 30000;
 export const THREE_CLOCK = /THREE\.Clock/;
 const ROOM_ID = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -56,7 +62,8 @@ export function roomLine(r) {
   return `${clean ? "ok" : "XX"} ${r.id}`
     + (r.opened ? "" : " (did not render)")
     + (r.settled ? ` settle-ms=${r.settleMs}` : "")
-    + (r.opened && !r.settled ? ` (never settled; late-settle-ms=${r.lateSettleMs ?? "none"} at-cap=${JSON.stringify(r.atCap ?? null)})` : "")
+    + (r.settled && r.atSlow ? ` SLOW at-${SLOW_SETTLE_MS}ms=${JSON.stringify(r.atSlow)}` : "")
+    + (r.opened && !r.settled ? ` (never settled within ${SETTLE_CAP_MS} ms; at-${SLOW_SETTLE_MS}ms=${JSON.stringify(r.atSlow ?? null)} at-cap=${JSON.stringify(r.atCap ?? null)})` : "")
     + (r.navError ? ` nav-error=${JSON.stringify(r.navError)}` : "")
     + (r.cdpError ? ` cdp-error=${JSON.stringify(r.cdpError)}` : "")
     + (r.newErrors ? ` errors=${r.newErrors}` : "");
@@ -268,7 +275,7 @@ async function withChrome(fn) {
     // Ask Chrome to close itself first (it takes its helpers with it), then stop the whole
     // process tree with escalation, then remove the profile -- loudly if it will not go.
     if (session && !session.closed) {
-      await Promise.race([session.send("Browser.close").catch(() => {}), delay(2000)]);
+      await settleWithin(session.send("Browser.close").catch(() => {}), 2000);
     }
     try { session?.close(); } catch { /* already closed */ }
     await stopTree(child);
@@ -359,14 +366,15 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
         };
         room.opened = await until(rendered, opts.roomTimeoutMs);
         const renderedAt = Date.now();
-        room.settled = room.opened && await until(() => quietSince(renderedAt), SETTLE_CAP_MS);
-        if (room.settled) room.settleMs = Date.now() - renderedAt;
-        if (room.opened && !room.settled) {
-          // Evidence only -- `settled` is already final. What was still in flight at the cap,
-          // and whether the room went quiet later, is what tells a slow runner from a request
-          // that never ends.
-          room.atCap = net.snapshot(Date.now());
-          room.lateSettleMs = (await until(() => quietSince(renderedAt), LATE_WATCH_MS)) ? Date.now() - renderedAt : null;
+        if (room.opened) {
+          room.settled = await until(() => quietSince(renderedAt), SLOW_SETTLE_MS);
+          if (!room.settled) {
+            // Past the slow mark: what the network holds NOW is the evidence either way.
+            room.atSlow = net.snapshot(Date.now());
+            room.settled = await until(() => quietSince(renderedAt), SETTLE_CAP_MS - (Date.now() - renderedAt));
+            if (!room.settled) room.atCap = net.snapshot(Date.now());
+          }
+          if (room.settled) room.settleMs = Date.now() - renderedAt;
         }
       } catch (e) {
         // This room's finding, never the end of the evidence: it is not opened or not settled,
@@ -394,17 +402,21 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       consoleErrors: counted.filter((e) => e.type !== "exception").length,
       exceptions: counted.filter((e) => e.type === "exception").length,
       unsettled: rooms.filter((r) => r.opened && !r.settled).map((r) => r.id),
-      // The headroom under SETTLE_CAP_MS on this runner, and the evidence for every miss.
+      // The headroom on this runner, and the evidence for every slow room and every miss.
       slowestSettle: slowest ? { room: slowest.id, ms: slowest.settleMs } : null,
-      unsettledDetail: rooms.filter((r) => r.opened && !r.settled).map((r) => ({ id: r.id, lateSettleMs: r.lateSettleMs ?? null, atCap: r.atCap ?? null, navError: r.navError, cdpError: r.cdpError })),
+      slowSettle: rooms.filter((r) => r.settled && r.atSlow).map((r) => ({ id: r.id, settleMs: r.settleMs, atSlow: r.atSlow })),
+      unsettledDetail: rooms.filter((r) => r.opened && !r.settled).map((r) => ({ id: r.id, atSlow: r.atSlow ?? null, atCap: r.atCap ?? null, navError: r.navError, cdpError: r.cdpError })),
       cdpErrors: rooms.filter((r) => r.cdpError).map((r) => ({ id: r.id, error: r.cdpError })),
-      rooms: rooms.map(({ before, atCap, ...r }) => r),
+      rooms: rooms.map(({ before, atSlow, atCap, ...r }) => r),
       errors: errors.slice(0, 50),
     };
     if (Array.isArray(opts.expected)) {
       report.expected = opts.expected.length;
       report.missingFromDoor = opts.expected.filter((id) => !openable.includes(id));
       report.unexpectedFromDoor = openable.filter((id) => !opts.expected.includes(id));
+    }
+    if (report.slowSettle.length) {
+      log(`smoke: WARN slow-settle ${report.slowSettle.map((r) => `${r.id}=${r.settleMs}ms`).join(",")} (quiet after ${SLOW_SETTLE_MS} ms, inside the ${SETTLE_CAP_MS} ms cap)`);
     }
     // The page's own URL carries the token in its fragment, so a page error can print it.
     for (const e of errors.slice(0, 20)) log(`  [${e.room}] ${e.type}: ${redactSecrets(e.text, [opts.token])}`);
