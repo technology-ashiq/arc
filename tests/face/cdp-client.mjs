@@ -9,7 +9,7 @@
 //
 // VACUOUS-PASS GUARD: the first checks prove the modules loaded with real exports, and the last
 // line is "RAN: <n> checks, <f> failed"; the exit code also requires n to reach a floor.
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, realpathSync, rmdirSync, unlinkSync, lstatSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve, win32 } from "node:path";
@@ -507,6 +507,54 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   const dir = mkdtempSync(join(tmpdir(), "proc-remove-"));
   writeFileSync(join(dir, "f.txt"), "x");
   check("removeDir removes a directory and says so", (await proc.removeDir(dir, "cdp-client")) === true);
+}
+
+// ---- main guards behind a link (retro-log 2026-08-19, the fourth recurrence) ----
+// Each CLI is started through a LINK to its directory with a flag it must refuse. A guard that
+// compares paths without realpath on both sides no-ops behind the link and exits 0 having done
+// nothing; the naive-guard control proves the link really defeats such a guard on this OS.
+{
+  // realpath the temp dir itself: macOS's tmpdir is already behind /var -> /private/var, which
+  // would put the CONTROL's direct run behind a link too.
+  const tmp = realpathSync(mkdtempSync(join(tmpdir(), "guard-link-")));
+  const links = [];
+  const link = (target, at) => { symlinkSync(target, at, process.platform === "win32" ? "junction" : "dir"); links.push(at); };
+  try {
+    const scriptsLink = join(tmp, "scripts");
+    let linked = true;
+    try { link(SCRIPTS, scriptsLink); } catch (e) { linked = false; check("the scripts link for the main-guard fixture can be made", false, String(e.message)); }
+    if (linked) {
+      check("the fixture path resolves through the link to the real scripts", realpathSync(join(scriptsLink, "smoke.mjs")) === realpathSync(join(SCRIPTS, "smoke.mjs")) && resolve(scriptsLink) !== realpathSync(scriptsLink));
+      for (const name of ["smoke", "harness-run", "lockfile-platforms", "node-floor"]) {
+        const r = spawnSync(process.execPath, [join(scriptsLink, `${name}.mjs`), "--no-such-flag"], { encoding: "utf8", timeout: 20000 });
+        check(`${name}.mjs run through a link still reaches main and refuses an unknown flag`, r.status === 2 && String(r.stderr).includes(`${name}:`), `status=${r.status} err=${JSON.stringify(String(r.stderr).slice(-200))}`);
+      }
+      const real = join(tmp, "real");
+      mkdirSync(real);
+      writeFileSync(join(real, "naive.mjs"), [
+        'import { fileURLToPath } from "node:url";',
+        "if (process.argv[1] === fileURLToPath(import.meta.url)) { console.error(\"naive: main ran\"); process.exitCode = 2; }",
+        "",
+      ].join("\n"));
+      const naiveLink = join(tmp, "naive-link");
+      link(real, naiveLink);
+      const direct = spawnSync(process.execPath, [join(real, "naive.mjs")], { encoding: "utf8", timeout: 20000 });
+      const viaLink = spawnSync(process.execPath, [join(naiveLink, "naive.mjs")], { encoding: "utf8", timeout: 20000 });
+      check("CONTROL: a naive guard runs when called directly but silently no-ops through the same link",
+        direct.status === 2 && viaLink.status === 0 && !String(viaLink.stderr).includes("main ran"),
+        `direct=${direct.status} viaLink=${viaLink.status}`);
+    }
+  } finally {
+    // The links go FIRST and on their own: a recursive delete must never walk through a link
+    // into face/scripts. rmdir removes a junction or dir link without touching its target.
+    for (const at of links) {
+      try { rmdirSync(at); } catch { try { unlinkSync(at); } catch { /* reported by the survivor check below */ } }
+    }
+    const survivors = links.filter((at) => { try { lstatSync(at); return true; } catch { return false; } });
+    check("every fixture link was removed before the temp dir", survivors.length === 0, survivors.join(","));
+    if (survivors.length === 0) rmSync(tmp, { recursive: true, force: true });
+  }
+  check("face/scripts is intact after the link fixture", existsSync(join(SCRIPTS, "smoke.mjs")) && existsSync(join(SCRIPTS, "proc.mjs")));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

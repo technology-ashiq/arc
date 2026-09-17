@@ -89,6 +89,9 @@ require_node_floor() {
   run node "$ARC_ROOT/face/scripts/harness-run.mjs" --face "$dst" 3>&-
   echo "$output"
   [[ "$output" == *"face-browser: RAN leg="* ]] || { echo "the harness never started (exit $status)"; false; }
+  # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
+  # per job -- which leg RAN, the summary, any SLOW room -- would never reach the log. fd 3 does.
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|smoke: opened=|smoke: WARN |face-browser: [0-9]+/[0-9]+ rooms)' | sed 's/^/# /' >&3 || true
   local line opened openable errors unsettled expected
   line="$(printf '%s\n' "$output" | grep '^smoke: opened=' | tail -1)"
   [ -n "$line" ] || { echo "no smoke summary line (exit $status)"; false; }
@@ -119,6 +122,15 @@ require_node_floor() {
   local runs
   runs="$(grep -cE '^[[:space:]]+run node ' "$BATS_TEST_FILENAME")"
   [ "$runs" -ge 5 ] || { echo "only $runs run-node lines -- this check proves nothing"; false; }
+  # The rule's automated half, tests/embedded-program-probe.mjs, walks only .sh files -- so this
+  # suite and the harness scripts are handed to it BY NAME, and the count it scanned must equal
+  # the count handed over, or a file was never looked at.
+  local files=("$BATS_TEST_FILENAME" "$ARC_ROOT"/face/scripts/*.mjs) scanned
+  run node "$ARC_ROOT/tests/embedded-program-probe.mjs" "${files[@]}"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"EMBEDDED_PROGRAMS_INTACT"* ]] || { echo "the probe did not reach its end: $output"; false; }
+  scanned="$(printf '%s\n' "$output" | sed -n 's/^scanned=\([0-9][0-9]*\)$/\1/p')"
+  [ -n "$scanned" ] && [ "$scanned" = "${#files[@]}" ] && [ "$scanned" -ge 7 ] || { echo "probe scanned=$scanned of ${#files[@]} files handed to it"; false; }
 }
 
 @test "face-browser: every test in this file registered (bats drops non-ASCII names silently)" {
