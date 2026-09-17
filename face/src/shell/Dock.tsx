@@ -14,6 +14,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowRight, X } from '@phosphor-icons/react'
 import { ASK_GRANTS, EXAMPLE_QUESTIONS, askThrough, askable, readAnswer, readOnly, refusalOf } from '../lib/ask.mjs'
+import { citationLine } from '../lib/registry.mjs'
 import type { Door } from '../lib/door.mjs'
 import { UI } from '../ui/kit'
 
@@ -84,7 +85,7 @@ export default function Dock({ door }: { door: Door }) {
               <>
                 <div className="text-[15px] sm:text-[17px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-1)' }}>{state.answer}</div>
                 <div className="mt-2.5 text-[11px] leading-[16px]" style={{ color: 'var(--text-3)' }}>
-                  {state.halfLabel.toLowerCase()} · {state.citations} receipt{state.citations === 1 ? '' : 's'} cited — the Ask arc room checks each one
+                  {citationLine(state.halfLabel, state.citations)}
                 </div>
               </>
             ) : null}

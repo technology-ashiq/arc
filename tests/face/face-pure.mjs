@@ -129,6 +129,12 @@ fails("KEYWORD PROPERTY: a call on a property spelled new", view("<p>{f.new(f.x)
 fails("HANDLER NAME: an onX method on fold data is a call, not a handler", view("<p>{f.onCompute(f.x)}</p>"), "view-call");
 passes("HANDLER NAME: an onX handler through ctx", view("<button type=\"button\" onClick={() => ctx.onOpen(f.id)}>x</button>"));
 fails("IIFE: an immediately invoked function", view("<p />", { body: "  const v = function () { return 1 }()" }), "view-call");
+// The spec-fidelity pass: "a boolean field fold() returns" was read by NAME alone, so a View could name
+// a boolean itself. Only a property read of fold's output (`f.isX`, `row.isX`) is a condition.
+fails("BY NAME: a boolean-named local holding a value", view("{isBig && <p>x</p>}", { body: "  const isBig = f.count" }), "view-condition");
+fails("BY NAME: a condition on context, not on fold's output", view("{ctx.room.hasTemplate && <p>x</p>}"), "view-condition");
+fails("BY NAME: a destructuring rename to a boolean name", view("{f.isA && <p>x</p>}", { body: "  const { count: isBig } = f" }), "view-condition");
+fails("BY NAME: a map parameter with a boolean name", view("<ul>{f.rows.map((isLate) => isLate && <li />)}</ul>"), "view-condition");
 
 // ── literal branches and operators ──
 fails("an if statement", view("<p />", { body: "  if (f.isA) return null" }), "view-keyword");

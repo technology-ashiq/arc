@@ -14,6 +14,7 @@ import { MoonStars, SunDim, Tray } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import type { Room } from '../lib/rooms.mjs'
 import { moodToggleLabel } from '../lib/mood.mjs'
+import { inboxChip } from '../lib/registry.mjs'
 import type { Mood } from '../lib/mood.mjs'
 import { UI } from '../ui/kit'
 import AsOf from './AsOf'
@@ -25,7 +26,7 @@ export default function Header({
   room, mode, inbox, onOpen, mood, onToggleMood, asOf, today, asOfSupported, onAsOf, groups, current,
 }: {
   room: Room | null
-  mode: { label: string; tone: 'live' | 'sim' | 'unknown'; title: string }
+  mode: { label: string; tone: 'live' | 'sim' | 'unknown'; dot: string; title: string }
   inbox: { open: number | null; room: string | null }
   onOpen: (id: string) => void
   mood: Mood
@@ -39,8 +40,9 @@ export default function Header({
 }) {
   const moodLabel = moodToggleLabel(mood)
   const inboxRoom = inbox.room
-  const waiting = inbox.open
-  const dot = mode.tone === 'live' ? 'var(--mode-live)' : mode.tone === 'sim' ? 'var(--sim-fg)' : 'var(--text-3)'
+  // Both decisions are registry.mjs's, where a node test holds them: the chip's words and weight,
+  // and the mode dot's token.
+  const chip = inboxChip(inbox.open)
   return (
     <>
       <header className="fixed top-0 right-0 left-0 lg:left-[240px] z-40" style={{ background: 'color-mix(in srgb, var(--bg-1) 88%, transparent)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid var(--line-1)' }}>
@@ -65,17 +67,17 @@ export default function Header({
           <div className="flex items-center gap-2">
             <span className="hidden lg:block">
               <BarChip title={mode.title}>
-                <span aria-hidden="true" className="inline-block w-[6px] h-[6px] rounded-full" style={{ background: dot }} />
+                <span aria-hidden="true" className="inline-block w-[6px] h-[6px] rounded-full" style={{ background: mode.dot }} />
                 {mode.label}
               </BarChip>
             </span>
             <BarChip
               onClick={inboxRoom ? () => onOpen(inboxRoom) : undefined}
-              strong={typeof waiting === 'number' && waiting > 0}
+              strong={chip.isWaiting}
               title={inboxRoom ? 'Open the room where approvals are decided' : 'no served room homes approval.requested'}
             >
-              <Tray size={14} weight={typeof waiting === 'number' && waiting > 0 ? 'fill' : 'regular'} aria-hidden="true" />
-              {waiting === null ? 'inbox unread' : waiting > 0 ? `${waiting} waiting` : 'Inbox zero'}
+              <Tray size={14} weight={chip.isWaiting ? 'fill' : 'regular'} aria-hidden="true" />
+              {chip.label}
             </BarChip>
             <button
               type="button"

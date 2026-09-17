@@ -646,13 +646,19 @@ export function isBooleanExpression(tokens, s, e) {
       return inner;
     }
     if (!t || t.k !== "name" || (KEYWORDS.has(t.v) && !VALUE_WORDS.has(t.v))) return false;
+    const root = t.v;
     let last = t.v;
+    let segments = 1;
     i++;
     while (i <= e && isP(tokens[i], ".") && tokens[i + 1] && tokens[i + 1].k === "name" && i + 1 <= e) {
       last = tokens[i + 1].v;
+      segments++;
       i += 2;
     }
-    return BOOLEAN_FIELD.test(last);
+    // A FIELD of what fold() returned (or of a row in it): at least `f.isX` / `row.isX`. A bare
+    // `isBig` is a local the View named itself, and `ctx.*` / `props.*` is context, not fold's output
+    // (face v2 Phase 02 spec-fidelity: `const isBig = f.count` passed on its name alone).
+    return segments >= 2 && root !== "ctx" && root !== "props" && BOOLEAN_FIELD.test(last);
   };
   if (s > e) return false;
   if (!term()) return false;
@@ -700,6 +706,13 @@ export function scanView(text, file) {
     if (t.k === "re") { add(t, "view-regex", "a regex is a decision; fold() makes it"); continue; }
 
     if (t.k === "name") {
+      // A boolean is fold's to compute AND to name. A View that binds its own boolean-named name -- a
+      // local, a parameter, a destructured or renamed key, an object key -- can make a boolean out of
+      // anything and branch on it by name; only a property read (`f.isX`, `row.isX`) is fold's.
+      if (!isP(p, ".") && !isP(p, "?.") && BOOLEAN_FIELD.test(t.v)) {
+        add(t, "view-condition", `\`${t.v}\` is a boolean-named binding the View made itself -- read the field fold() returns (f.${t.v})`);
+        continue;
+      }
       const property = isP(p, ".") || isP(p, "?.") || (n && isP(n, ":") && (isP(p, "{") || isP(p, ",")) && tokens[t.inside] && tokens[t.inside].kind === "object");
       if (property) continue;
       if (BANNED_KEYWORDS.has(t.v)) { add(t, "view-keyword", `\`${t.v}\` in a View -- the decision belongs in fold.mjs`); continue; }

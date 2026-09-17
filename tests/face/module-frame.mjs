@@ -179,6 +179,15 @@ for (const [label, over] of [
   check("the data-mode chip says simulated for sim", reg.modeChip("sim").tone === "sim");
   check("the data-mode chip says live for live", reg.modeChip("live").tone === "live");
   check("an unstated mode is drawn as unstated, never as live", reg.modeChip(undefined).tone === "unknown" && reg.modeChip("weird").tone === "unknown");
+  check("the mode dot is the non-real family's token for sim and the product's for live, never a reserved money hue",
+    reg.modeChip("sim").dot === "var(--sim-fg)" && reg.modeChip("live").dot === "var(--mode-live)" && reg.modeChip(undefined).dot === "var(--text-3)");
+  // The header's inbox chip and the dock's citation line are decisions, so they live here (spec-fidelity).
+  check("the inbox chip says unread for a failed read, never inbox zero", reg.inboxChip(null).label === "inbox unread" && reg.inboxChip(null).isWaiting === false && reg.inboxChip(Number.NaN).label === "inbox unread");
+  check("the inbox chip says inbox zero only for a measured zero", reg.inboxChip(0).label === "Inbox zero" && reg.inboxChip(0).isWaiting === false);
+  check("the inbox chip counts what is waiting, and weighs it", reg.inboxChip(3).label === "3 waiting" && reg.inboxChip(3).isWaiting === true);
+  check("the dock's citation line counts receipts, singular and plural, and says they were not checked here",
+    reg.citationLine("ANSWERED BY THE READER", 1) === "answered by the reader · 1 receipt cited -- not checked here; the room that answers questions checks each one"
+    && /· 4 receipts cited/.test(reg.citationLine("X", 4)) && /· 0 receipts cited/.test(reg.citationLine("X", -2)));
 }
 {
   const shell = await import(pathToFileURL(join(LIB, "shell.mjs")).href);

@@ -298,7 +298,7 @@ function NoSuchRoom({ id }: { id: string }) {
         There is no room called “{id}”.
       </h1>
       <p className="text-[13.5px] leading-[21px] mt-1.5" style={{ color: 'var(--text-2)' }}>
-        Every room arc has is in the rail, and all of them are on the Map.
+        Every room arc has is in the rail.
       </p>
     </div>
   )

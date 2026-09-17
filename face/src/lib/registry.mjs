@@ -270,10 +270,32 @@ export function foldContext(ctx) {
  * The header's data-mode chip. A sim spine is violet's (the non-real family), live is the product's
  * own colour, and a mode the door did not state is drawn as unstated -- never as live.
  * @param {string | undefined} mode
- * @returns {{ label: string, tone: "live" | "sim" | "unknown", title: string }}
+ * @returns {{ label: string, tone: "live" | "sim" | "unknown", dot: string, title: string }}
  */
 export function modeChip(mode) {
-  if (mode === "sim") return { label: "Simulated", tone: "sim", title: "a fixture spine: arc's real vocabulary, simulated events -- no number here is real" };
-  if (mode === "live") return { label: "Live spine", tone: "live", title: "reading the canonical spine" };
-  return { label: "Mode unstated", tone: "unknown", title: `the door named no data mode this shell knows (${JSON.stringify(mode ?? null)}), so nothing here is labelled live` };
+  if (mode === "sim") return { label: "Simulated", tone: "sim", dot: "var(--sim-fg)", title: "a fixture spine: arc's real vocabulary, simulated events -- no number here is real" };
+  if (mode === "live") return { label: "Live spine", tone: "live", dot: "var(--mode-live)", title: "reading the canonical spine" };
+  return { label: "Mode unstated", tone: "unknown", dot: "var(--text-3)", title: `the door named no data mode this shell knows (${JSON.stringify(mode ?? null)}), so nothing here is labelled live` };
+}
+
+/**
+ * The header's inbox chip, from how many approvals the door's inbox holds open. A read that failed
+ * (null) is "inbox unread" -- never "Inbox zero", which is a claim about the company made from nothing.
+ * @param {number | null | undefined} open
+ * @returns {{ label: string, isWaiting: boolean }}
+ */
+export function inboxChip(open) {
+  if (typeof open !== "number" || !Number.isInteger(open) || open < 0) return { label: "inbox unread", isWaiting: false };
+  if (open === 0) return { label: "Inbox zero", isWaiting: false };
+  return { label: `${open} waiting`, isWaiting: true };
+}
+
+/**
+ * The line under a dock answer: which half of the brain answered and how many receipts it cites. The
+ * dock does not check them, and says so.
+ * @param {string} halfLabel @param {number} citations
+ */
+export function citationLine(halfLabel, citations) {
+  const n = Number.isInteger(citations) && citations >= 0 ? citations : 0;
+  return `${String(halfLabel).toLowerCase()} · ${n} receipt${n === 1 ? "" : "s"} cited -- not checked here; the room that answers questions checks each one`;
 }

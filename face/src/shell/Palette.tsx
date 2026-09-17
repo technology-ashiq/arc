@@ -82,7 +82,7 @@ export default function Palette({
         {matches.length === 0 ? (
           // Not a blank panel: if the company has no word for what was typed, that is a fact about arc.
           <p className="px-4 py-4 text-[13px] leading-[20px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
-            Nothing in arc is called “{query}”. The Map draws every room; the Concepts room lists every word.
+            Nothing in arc is called “{query}”. Every room arc has is in the rail.
           </p>
         ) : (
           <ul className="max-h-[46vh] overflow-y-auto py-1.5">
