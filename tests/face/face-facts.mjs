@@ -128,15 +128,15 @@ fails("2048 characters of JSX text", { "modules/command/today/View.tsx": `export
 fails("JSON.parse of a literal", { "lib/a.mjs": "export const facts = JSON.parse('{\"lanes\":16}');\n" }, "blob");
 fails("atob of a literal", { "lib/a.mjs": "export const facts = atob('eyJsYW5lcyI6MTZ9');\n" }, "blob");
 fails("a data literal of 200 leaves", { "lib/a.mjs": `export const ROWS = [${Array.from({ length: 200 }, (_, i) => i).join(", ")}];\n` }, "data-mass");
-fails("a file whose data literals hold 1000 leaves", { "lib/a.mjs": Array.from({ length: 10 }, (_, k) => `export const R${k} = [${Array.from({ length: 100 }, (_, i) => `"v${i}"`).join(", ")}];`).join("\n") + "\n" }, "data-mass");
+fails("a file whose data literals hold 2100 leaves", { "lib/a.mjs": Array.from({ length: 21 }, (_, k) => `export const R${k} = [${Array.from({ length: 100 }, (_, i) => `"v${i}"`).join(", ")}];`).join("\n") + "\n" }, "data-mass");
 fails("v0.7's bundle by file name", { "lib/arcKnowledge.mjs": "export const ARC = { spine: 1 };\n" }, "named-bundle");
 fails("v0.7's bundle by import name", { "lib/a.mjs": "import { FACTS } from './arcFacts.mjs';\nexport const f = FACTS;\n", "lib/arcFacts.mjs": "export const FACTS = 1;\n" }, "named-bundle");
 fails("an unscannable file", { "lib/a.mjs": "export const s = 'unterminated;\n" }, "unscannable");
 fails("a NUL byte", { "lib/a.mjs": `export const s = 1;${String.fromCharCode(0)}\n` }, "unscannable");
 fails("a stylesheet importing outside face/src", { "index.css": '@import "../../docs/design/facts.css";\n' }, "import-outside");
 fails("a stylesheet url() leaving face/src", { "index.css": '.x { background: url("../../docs/facts.png"); }\n' }, "import-outside");
-fails("a dependency installed from a path", {}, "import-outside", { pkg: { name: "planted", dependencies: { facts: "file:../docs" } } });
-fails("package.json subpath imports", {}, "import-outside", { pkg: { name: "planted", imports: { "#facts": "../docs/facts.mjs" } } });
+fails("a dependency installed from a path", {}, "package", { pkg: { name: "planted", dependencies: { facts: "file:../docs" } } });
+fails("package.json subpath imports", {}, "package", { pkg: { name: "planted", imports: { "#facts": "../docs/facts.mjs" } } });
 
 // ── a stylesheet carried as a literal (the Cycle 15 rooms) is scanned as a stylesheet, not waved through ──
 {

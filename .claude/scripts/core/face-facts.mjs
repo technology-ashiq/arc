@@ -389,14 +389,14 @@ export function scanCode(text, file, { fromDir, rootReal, inModules, jsx }) {
 
     if (RAW_NETWORK.has(t.v) && (t.v === "sendBeacon" || !afterDot)) { add(t, "FAIL", "fetch-static", `${t.v} -- the face reads the door by fetch, and nothing else leaves the page`); continue; }
 
-    if (t.v === "require" && !afterDot && isP(n, "(")) { add(t, "FAIL", "import-outside", "require() -- the face is ES modules, and a require cannot be shown to stay inside face/src"); continue; }
+    if (t.v === "require" && !afterDot && isP(n, "(")) { add(t, "FAIL", "import-outside", "require() -- the face is ES modules, and a require cannot be shown to stay inside the app folder"); continue; }
 
     if (t.v === "import" && !afterDot && isP(n, "(")) {
       const a = tokens[i + 2];
       if (a && a.k === "str" && isP(tokens[i + 3], ")")) {
         const why = specifierProblem(a.v, fromDir, rootReal);
         if (why) add(a, "FAIL", why[0], why[1]);
-      } else add(t, "FAIL", "import-outside", "an import() of a computed specifier cannot be shown to stay inside face/src");
+      } else add(t, "FAIL", "import-outside", "an import() of a computed specifier cannot be shown to stay inside the app folder");
       continue;
     }
 
