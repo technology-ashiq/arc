@@ -14,6 +14,19 @@
 #   FAKE_AB_SETTLE  what `eval` prints (default: rules applied and painted)
 #   FAKE_AB_TEXT    what `get text body` prints (default: long enough to clear the blank guard)
 #   FAKE_AB_OPEN_FAIL  non-empty makes `open` fail
+#
+# ADR-1418 (explore renders are confined to their variant directory). The fake cannot run a
+# page, so it plays the page's REQUESTS against the loopback server the renderer opened:
+#   FAKE_AB_FETCH       space-separated paths requested from the opened origin on `open`, sent
+#                       with --path-as-is so raw `..` reaches the server. Bodies land in
+#                       $FAKE_AB_STATE/fetch-N.body, status codes in $FAKE_AB_STATE/fetch-codes
+#   FAKE_AB_CSP_REPORT  a JSON body POSTed to /__arc/csp-report, as a browser reports a
+#                       blocked load
+#   FAKE_AB_URL         what `get url` prints instead of the opened URL (a page that navigated)
+#   FAKE_AB_URL_APPEND  appended to the opened URL by `get url` (a same-page hash change)
+#   FAKE_AB_TABS        how many tabs `tab` lists (default 1)
+# Always recorded: the opened URL ($FAKE_AB_STATE/url), the served headers of an http page
+# ($FAKE_AB_STATE/headers), and every `set` command's arguments ($FAKE_AB_STATE/set).
 set -uo pipefail
 
 # Drop the global flags design-render.sh always passes.
@@ -37,11 +50,51 @@ done
 
 CMD="${1:-}"; shift 2>/dev/null || true
 
+_state_url() { [ -n "${FAKE_AB_STATE:-}" ] && [ -f "$FAKE_AB_STATE/url" ] && cat "$FAKE_AB_STATE/url"; }
+
 case "$CMD" in
-  set)    exit 0;;
+  set)
+    # Arguments recorded one command per line, so a stray token is observable: a literal `\n`
+    # inside design-render.sh once turned `set media light` into `set media light n`.
+    [ -n "${FAKE_AB_STATE:-}" ] && { mkdir -p "$FAKE_AB_STATE" 2>/dev/null || true; printf '%s\n' "$*" >> "$FAKE_AB_STATE/set"; }
+    exit 0;;
   close)  exit 0;;
   open)
     [ -n "${FAKE_AB_OPEN_FAIL:-}" ] && exit 1
+    URL="${1:-}"
+    [ -n "${FAKE_AB_STATE:-}" ] || exit 0
+    mkdir -p "$FAKE_AB_STATE" 2>/dev/null || true
+    printf '%s' "$URL" > "$FAKE_AB_STATE/url"
+    case "$URL" in
+      http://*)
+        rest="${URL#http://}"
+        ORIGIN="http://${rest%%/*}"
+        curl -s --max-time 10 -D "$FAKE_AB_STATE/headers" -o "$FAKE_AB_STATE/page.body" "$URL" >/dev/null 2>&1 || true
+        i=0
+        for p in ${FAKE_AB_FETCH:-}; do
+          i=$((i + 1))
+          curl -s --max-time 10 --path-as-is -o "$FAKE_AB_STATE/fetch-$i.body" -w '%{http_code}\n' \
+            "$ORIGIN$p" >> "$FAKE_AB_STATE/fetch-codes" 2>/dev/null || echo "000" >> "$FAKE_AB_STATE/fetch-codes"
+        done
+        if [ -n "${FAKE_AB_CSP_REPORT:-}" ]; then
+          curl -s --max-time 10 -o /dev/null -X POST -H 'Content-Type: application/csp-report' \
+            --data "$FAKE_AB_CSP_REPORT" "$ORIGIN/__arc/csp-report" >/dev/null 2>&1 || true
+        fi
+        ;;
+    esac
+    exit 0
+    ;;
+  tab)
+    # The real CLI's shape, measured 2026-09-17 on agent-browser 0.31.1: one line per tab, the
+    # active one marked with an arrow, e.g. `→ [t2]  - ` after a popup took focus.
+    n="${FAKE_AB_TABS:-1}"
+    u="$(_state_url)"
+    i=1
+    while [ "$i" -le "$n" ]; do
+      if [ "$i" -eq "$n" ]; then pre="→ "; else pre="  "; fi
+      printf '%s[t%s] page - %s\n' "$pre" "$i" "$u"
+      i=$((i + 1))
+    done
     exit 0
     ;;
   eval)
@@ -49,6 +102,14 @@ case "$CMD" in
     exit 0
     ;;
   get)
+    if [ "${1:-}" = "url" ]; then
+      if [ -n "${FAKE_AB_URL+x}" ]; then
+        printf '%s\n' "$FAKE_AB_URL"
+      else
+        printf '%s%s\n' "$(_state_url)" "${FAKE_AB_URL_APPEND:-}"
+      fi
+      exit 0
+    fi
     # design-render.sh calls: get text body. The default must clear its 200-char blank-page
     # guard. Built without `seq` (not POSIX) so the fixture has no tool dependency of its own.
     # Note the `-` (not `:-`): FAKE_AB_TEXT="" deliberately yields empty, which is how a test
