@@ -92,14 +92,19 @@ load 'test_helper'
   run bash -c "grep -rlE '(^|[^[:alnum:]_-])face/src' '$ARC_ROOT/.claude/scripts' 2>/dev/null || true"
   # face-tokens.mjs WRITES the copy and face-colour-literal.mjs READS face/src/ui and
   # face/src/modules to lint them (face v2 Phase 01), so both name the path; nothing may IMPORT
-  # from it. Each exclusion is one named file with its reason, never a prefix.
+  # from it. face v2 Phase 02 adds three more readers of the module tree: face-pure.mjs lints it,
+  # face-coverage.mjs reconciles its folders with the served registry, and face-module.mjs writes a
+  # new module into it. Each exclusion is one named file with its reason, never a prefix.
   # The exclusion is the FULL path of each file, so a same-named file elsewhere is not excused.
   local importers
-  importers=$(printf '%s\n' "$output" | grep -v '/\.claude/scripts/core/face-tokens\.mjs$' | grep -v '/\.claude/scripts/core/face-colour-literal\.mjs$' | grep -v '^$' || true)
+  importers=$(printf '%s\n' "$output" | grep -v '/\.claude/scripts/core/face-tokens\.mjs$' | grep -v '/\.claude/scripts/core/face-colour-literal\.mjs$' \
+    | grep -v '/\.claude/scripts/core/face-pure\.mjs$' | grep -v '/\.claude/scripts/core/face-coverage\.mjs$' | grep -v '/\.claude/scripts/hq/face-module\.mjs$' | grep -v '^$' || true)
   [ -z "$importers" ] || { echo "an arc script depends on face/: $importers"; false; }
   # And an excused file is excused for NAMING the path, never for importing from it.
-  local excused=("$ARC_ROOT/.claude/scripts/core/face-tokens.mjs" "$ARC_ROOT/.claude/scripts/core/face-colour-literal.mjs")
-  [ -f "${excused[0]}" ] && [ -f "${excused[1]}" ] || { echo "an excused file is missing: ${excused[*]}"; false; }
+  local excused=("$ARC_ROOT/.claude/scripts/core/face-tokens.mjs" "$ARC_ROOT/.claude/scripts/core/face-colour-literal.mjs"
+    "$ARC_ROOT/.claude/scripts/core/face-pure.mjs" "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT/.claude/scripts/hq/face-module.mjs")
+  local f
+  for f in "${excused[@]}"; do [ -f "$f" ] || { echo "an excused file is missing: $f"; false; }; done
   run grep -nE "(^|[^[:alnum:]])(import|require)[^;]*[\"'][^\"']*face/src" "${excused[@]}"
   [ "$status" -eq 1 ] || { echo "an excused file IMPORTS from face/src (grep exit $status): $output"; false; }
 }
@@ -327,6 +332,73 @@ load 'test_helper'
   [ "$status" -eq 2 ] && [[ "$output" == *"unknown argument"* ]] || { echo "--chek: $status $output"; false; }
   run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" "--root=$dst" --check
   [ "$status" -eq 2 ] && [[ "$output" == *"unknown argument"* ]] || { echo "--root=: $status $output"; false; }
+}
+
+# face v2 Phase 02 -- the module frame (REQ-03, ADR-1320, ADR-1321). Three suites, each asserting it
+# RAN before what it printed, and the lint run on the real tree directly, the way a reader would.
+@test "face v2: face-pure FAILs a planted branch in a View and a planted React import in a fold, and the tree is pure" {
+  run node "$ARC_ROOT/tests/face/face-pure.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 100 ] || { echo "only '$n' checks ran: $output"; false; }
+  # The spec's two mutants and the assumptions ledger's three hidden branches, BY NAME: a count
+  # would still pass the day one of them stopped firing.
+  local arm
+  for arm in "PLANTED: a branch in a View.tsx exits 1" "PLANTED: a React import in a fold.mjs exits 1" \
+             "View FAILs: a comparison hidden in a JSX condition (view-operator)" \
+             "View FAILs: a ternary on raw payload data (view-condition)" \
+             "View FAILs: a template literal holding a comparison (view-operator)" \
+             "View passes: a condition on a boolean field fold() returns" \
+             "every module folder imported (none skipped by a throw)"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+  run node "$ARC_ROOT/.claude/scripts/core/face-pure.mjs"
+  [[ "$output" == *"face-pure: modules="* ]] || { echo "the lint never reported (exit $status): $output"; false; }
+  local line modules files
+  line="$(printf '%s\n' "$output" | grep '^face-pure: modules=' | tail -1)"
+  modules="$(printf '%s\n' "$line" | sed -n 's/^face-pure: modules=\([0-9][0-9]*\) folds=[0-9]* views=[0-9]* files=[0-9]* findings=0$/\1/p')"
+  files="$(printf '%s\n' "$line" | sed -n 's/^face-pure: modules=[0-9]* folds=[0-9]* views=[0-9]* files=\([0-9][0-9]*\) findings=0$/\1/p')"
+  [ -n "$modules" ] && [ "$modules" -gt 0 ] || { echo "no module scanned, or findings on the real tree: $output"; false; }
+  [ "$files" -eq $((modules * 4)) ] || { echo "files=$files for modules=$modules -- a module is four files: $output"; false; }
+  [ "$status" -eq 0 ]
+}
+
+@test "face v2: the module frame attaches both ways, agrees with face-coverage, and no shell file names a room" {
+  run node "$ARC_ROOT/tests/face/module-frame.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 60 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "ORPHAN: a folder whose id is not served is named, and never attached" \
+             "MISPLACED: a folder in a ring the served room is not in is named -- the served ring wins" \
+             "the generic rooms the gate REPORTS are exactly the ones the browser renders generic" \
+             "the rail follows the served ring order, not a constant" \
+             "MUTANT: a planted onOpen('money') is found" \
+             "no served room is named in face/src/App.tsx"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: /arc-face-module scaffolds a module green on face-pure + face-coverage, and refuses what it must" {
+  run node "$ARC_ROOT/tests/face/face-module.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 45 ] || { echo "only '$n' checks ran: $output"; false; }
+  [[ "$output" == *"ends on the GREEN verdict line"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok and removes the module folder it wrote"* ]] || { echo "$output"; false; }
+  # The symlinked main guard is a counted skip only where the OS cannot make a symlink. On the
+  # POSIX legs it MUST have run: a skip there would hide the one mutant the spec names.
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) [[ "$output" == *"symlink-arm="* ]] || { echo "the symlink arm reported nothing: $output"; false; } ;;
+    *) [[ "$output" == *"symlink-arm=ran"* ]] || { echo "the symlink arm did not run on $(uname -s): $output"; false; } ;;
+  esac
+  printf '# face-module: %s\n' "$(printf '%s\n' "$output" | grep '^symlink-arm=' | tail -1)" >&3
 }
 
 @test "face v2: the browser harness client logic runs with no install and no Chrome" {
