@@ -97,6 +97,35 @@ were its design.
 CI's `agent-browser` is a fake and cannot show any of these, so the proof is a real re-render on the
 live-demo path plus the next two-surface adversarial pass.
 
+## Measured 2026-09-17 — the real browser, and one claim that did not hold as written
+
+Built at `ee8d4707` and run through the real renderer (agent-browser 0.31.1, Chrome) on a
+synthetic explore of twelve pages. Each published PNG was opened by hand.
+
+| Page shape | Outcome |
+|---|---|
+| clean page with its own `tokens.css` | rendered; the determinism rules landed under the policy |
+| `<iframe src="../variant-b/index.html">` | **refused**: `missing /variant-b/index.html` |
+| `<img src="../variant-b/secret.svg">` | **refused**: `missing` |
+| CSS `url(../variant-b/secret.svg)` | **refused**: `missing` |
+| `fetch("../matrix.md")` | **refused**: `missing /matrix.md` |
+| `<img src="https://example.com/…">` | **refused**: `violation img-src` reported by the browser |
+| a `<meta>` policy loosening to `*` and `file:` | **refused**: the header policy held |
+| `location.href = "http://127.0.0.1:9/…"` | **refused** (by the blank-page guard: the page left before capture) |
+| `<meta http-equiv="refresh">` to another origin | **refused** (same) |
+| `<iframe src="file:///…/variant-b/index.html">` | rendered; **the frame is empty**, no sibling pixel |
+| `location.href = "file:///…/variant-b/index.html"` | rendered; **the page never left**, no sibling pixel |
+| `window.open("clean.html")` | rendered; **the popup was blocked**, one tab, own page captured |
+
+**Amended claim.** The Decision said a page that reaches out is refused loudly. That holds for
+everything that reaches the network stack. It does not hold for a `file://` target: Chromium
+blocks a `file://` load from an `http://` page before any policy check and reports it nowhere —
+not to the report endpoint, the console, or agent-browser's network log (probed on both shapes).
+Those attempts are **prevented silently**. That is accepted: the guarantee this ADR exists for is
+that no pixel from outside the variant reaches the render, and the captured page shows exactly
+what the page renders, an empty frame included. A blocked popup is the same case. Detection
+from inside the page was rejected, because a page can lie about its own DOM.
+
 ## Consequences
 
 Easier: blindness becomes a property of the render, not only of the composer's tools. The same

@@ -69,6 +69,8 @@ _run_bounded() {
   st=0
   wait "$pid" || st=$?
   kill "$killer" 2>/dev/null || true
+  # Reaped quietly: an unreaped killer prints "Terminated: 15" into every failure's output.
+  wait "$killer" 2>/dev/null || true
   output="$(cat "$BATS_TEST_TMPDIR/bounded.out" 2>/dev/null || true)"
   status="$st"
   [ "$st" -ne 137 ] || { echo "TIMED OUT after ${secs}s" >&2; return 1; }
