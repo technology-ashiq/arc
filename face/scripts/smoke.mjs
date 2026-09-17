@@ -334,7 +334,7 @@ const isCount = (n) => Number.isInteger(n) && n >= 0;
  * sentence, and a room that renders blank without logging an error would otherwise count as opened.
  * Each ring PR adds its ring here.
  */
-export const SENTENCE_RINGS = Object.freeze(["command", "kernel"]);
+export const SENTENCE_RINGS = Object.freeze(["command", "kernel", "factory"]);
 
 /** The door's five text escapes, undone, so a served sentence compares to what the page shows. */
 export function doorText(s) {
@@ -439,7 +439,7 @@ export function summaryLines(report) {
   ];
 }
 
-async function withChrome(fn) {
+async function withChrome(fn, log = () => {}) {
   const found = findChrome();
   if (!found.path) throw new SetupError(`Chrome not found. Looked at:\n  ${found.tried.join("\n  ")}`);
   const userDataDir = mkdtempSync(join(tmpdir(), "face-smoke-"));
@@ -448,7 +448,16 @@ async function withChrome(fn) {
   try {
     let wsUrl;
     try { wsUrl = await waitForDevTools(userDataDir, child); }
-    catch (e) { throw new SetupError(`${e.message} (chrome=${found.path}, source=${found.source})`); }
+    catch (e) {
+      // Chrome failed to come up in ITS OWN profile -- on Windows this arrives as an EBUSY on
+      // DevToolsActivePort while another process still holds the directory. It is a launch fault, not a
+      // page fault, so it is retried ONCE in a fresh profile and the retry is printed. A second failure
+      // is a SETUP-FAIL, loudly (face v2 Phase 03).
+      await stopTree(child);
+      await removeDir(userDataDir, "smoke");
+      log(`smoke: WARN chrome did not start (${oneLine(String(e.message ?? e))}) -- one retry in a fresh profile`);
+      return await withChromeOnce(found, fn);
+    }
     session = new CdpSession(await openSocket(wsUrl));
     return await fn(session, found);
   } finally {
@@ -457,6 +466,28 @@ async function withChrome(fn) {
     if (session && !session.closed) {
       await settleWithin(session.send("Browser.close").catch(() => {}), 2000);
     }
+    try { session?.close(); } catch { /* already closed */ }
+    await stopTree(child);
+    await removeDir(userDataDir, "smoke");
+  }
+}
+
+/**
+ * One more launch, in a fresh profile, with no further retry: the second failure is the answer.
+ * @param {{ path: string, source: string }} found @param {(session: any, found: any) => Promise<any>} fn
+ */
+async function withChromeOnce(found, fn) {
+  const userDataDir = mkdtempSync(join(tmpdir(), "face-smoke-"));
+  const child = launchChrome(found.path, chromeArgs({ userDataDir }));
+  let session = null;
+  try {
+    let wsUrl;
+    try { wsUrl = await waitForDevTools(userDataDir, child); }
+    catch (e) { throw new SetupError(`${e.message} (chrome=${found.path}, source=${found.source}, second attempt)`); }
+    session = new CdpSession(await openSocket(wsUrl));
+    return await fn(session, found);
+  } finally {
+    if (session && !session.closed) await settleWithin(session.send("Browser.close").catch(() => {}), 2000);
     try { session?.close(); } catch { /* already closed */ }
     await stopTree(child);
     await removeDir(userDataDir, "smoke");
@@ -669,7 +700,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
     // The page's own URL carries the token in its fragment, so a page error can print it.
     for (const e of errors.slice(0, 20)) log(errorLine(e, [opts.token]));
     return report;
-  });
+  }, log);
 }
 
 export async function runProbe(file, log = (line) => process.stdout.write(line + "\n")) {

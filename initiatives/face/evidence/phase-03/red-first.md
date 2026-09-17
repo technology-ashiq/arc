@@ -45,3 +45,23 @@ What was red, read from the ubuntu Node 20 job's log (job 105301232425):
 The windows shard 1/12 and macOS shard 1/3 failures are the browser suite's legs; windows shard
 6/12 is the module-frame suite's. Node 18 counts the browser suite as its skip and failed on the
 module frame alone.
+
+# Red first — Phase 03, factory ring
+
+Commit `d208a561` listed `factory` as a shipped ring in `tests/face/module-frame.mjs` and in the
+smoke's `SENTENCE_RINGS`, raised the browser suite's heading floor to nineteen rooms across
+`command,kernel,factory`, and named the ring's three list checks in `tests/face-l3.bats` — with one
+factory module folder present (the Phase 02 `council-chamber` shim, which still mounted the Cycle 15
+renderer) and neither evidence list written. Draft PR #242 fired arc-ci run **35266298427**, which
+concluded `failure`, read per job with `gh run view 35266298427 --json jobs`.
+
+What was red, read from the windows shard 6/12 job's log (job 105347240958):
+
+| test | how it failed | the missing piece it names |
+|---|---|---|
+| `face v2: the module frame attaches both ways, agrees with face-coverage, and no shell file names a room` | `FAIL SHIPPED RING factory: its module folders are modules-v2.json's ids for the ring have=council-chamber want=council-chamber,design-studio,develop,review-ship,toolbelt` | the four missing modules |
+| (same suite) | `FAIL SHIPPED RING factory: council-chamber's View mounts no Cycle 15 renderer from face/src/rooms/` | the real council port, and the deletion of `face/src/rooms/CouncilRoom.tsx` |
+| (same suite) | `FAIL NOT SERVED LIST: evidence/phase-03/not-served-factory.md exists` and `FAIL VERBS PENDING LIST: evidence/phase-03/verbs-pending-factory.md exists` | the ring's two derived lists |
+
+The browser suite's heading floor (nineteen) failed on the same run for the four rooms that were
+still generic; macOS shard 1/3 and windows shard 1/12 are the legs that carry it.

@@ -91,7 +91,9 @@ const HOLDS_DRAWN_ELSEWHERE = Object.freeze(["kinds", "lanes", "adrs"]);
  * @property {string} sentence
  * @property {string} lede
  * @property {string} laneName
- * @property {PanelState & { isDrawn: boolean, card: LaneCard, note: string }} lane
+ * @property {boolean} hasLane     the served registry homes a lane in this room
+ * @property {string} laneAbsent   why there is no lane card, when there is none
+ * @property {PanelState & { isDrawn: boolean, card: LaneCard, note: string, absent: string }} lane
  * @property {Trail} trail
  * @property {ReceiptView} receipt
  * @property {Record<string, string[]>} held
@@ -105,6 +107,12 @@ const HOLDS_DRAWN_ELSEWHERE = Object.freeze(["kinds", "lanes", "adrs"]);
  */
 
 const NO_REFUSAL = Object.freeze({ code: "", human: "" });
+
+/** @param {unknown} v @returns {string | null} */
+const asText = (v) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
+
+/** @param {unknown} v @returns {unknown[]} */
+const asArrayOf = (v) => (Array.isArray(v) ? v : []);
 
 /** @param {unknown} v @returns {Record<string, unknown>} */
 const asObject = (v) => (v !== null && typeof v === "object" && !Array.isArray(v) ? /** @type {Record<string, unknown>} */ (v) : {});
@@ -140,7 +148,9 @@ export function heldBy(room) {
     const value = holds[key];
     if (!Array.isArray(value)) { unreadable.push(key); continue; }
     const list = [];
-    for (const item of value) if (typeof item === "string" && item !== "") list.push(unescapeDoorText(item));
+    // An entry that renders as nothing -- empty, or only spaces and zero-width characters -- is not a
+    // thing arc holds; counting it inflates every figure derived from this list (Phase 03 attack).
+    for (const item of value) if (typeof item === "string" && unescapeDoorText(item).trim() !== "") list.push(unescapeDoorText(item).trim());
     // A list that lost an element is kept -- the names that ARE readable are still worth drawing -- but the
     // key is marked, so its count reads as unread rather than as a short number nobody served (code review).
     if (list.length !== value.length) unreadable.push(key);
@@ -209,7 +219,9 @@ export function laneRoom(payloads, ctx, opts = {}) {
   const laneP = laneRead === null ? null : payloadOf(payloads, laneRead);
   const card = laneP !== null && laneP.state === "ok" ? laneCard(laneP.data) : LANE_UNREAD;
   const laneState = laneName === ""
-    ? refusedBy("NO_LANE", "the served registry names no lane for this room")
+    // Not a refusal: the council chamber and review-and-ship are rooms the registry gives no lane, and
+    // "there is no lane here" is a different sentence from "the lane could not be read" (factory ring).
+    ? { isReading: false, isRefused: false, refusal: NO_REFUSAL }
     : !laneUsable
       ? refusedBy("BAD_LANE_NAME", `the served registry names ${JSON.stringify(laneName)} as this room's lane, which is not a name the door will take`)
       : laneP === null
@@ -233,12 +245,20 @@ export function laneRoom(payloads, ctx, opts = {}) {
   // "empty because nothing happened" -- the reader coerces either into zero rows, so the shape is checked
   // before the count becomes a sentence about the spine (Phase 03 attack).
   const trailBadBody = trailP !== null && trailP.state === "ok" && !Array.isArray(asObject(trailP.data)["events"]);
-  const trail = trailP !== null && trailP.state === "ok" && !trailBadBody ? trailView(trailP.data, TRAIL_ROWS) : null;
+  // A page carrying a kind this room did not ask for is not this room's trail: WRONG_LANE and
+  // WRONG_FILE were built for the other two bodies, and the spine body -- the one that fills every
+  // ring room's trail -- had no equivalent (Phase 03 attack).
+  const foreign = trailP !== null && trailP.state === "ok" && !trailBadBody
+    ? [...new Set(asArrayOf(asObject(trailP.data)["events"]).map((w) => asText(asObject(asObject(w)["event"])["kind"]) ?? "").filter((k) => k !== "" && !kinds.includes(k)))]
+    : [];
+  const trail = trailP !== null && trailP.state === "ok" && !trailBadBody && foreign.length === 0 ? trailView(trailP.data, TRAIL_ROWS) : null;
   const trailState = trailP === null
     ? { isReading: false, isRefused: false, refusal: NO_REFUSAL }
     : trailBadBody
       ? refusedBy("BAD_BODY", "the door answered, but not with a page of receipts: no events list in the body it sent")
-      : panelState(trailP);
+      : foreign.length > 0
+        ? refusedBy("WRONG_KINDS", `this room asked for ${kinds.join(", ")} and the page it answered with carries ${foreign.join(", ")}`)
+        : panelState(trailP);
   const kindWord = kinds.join(", ");
 
   // ── the files ──────────────────────────────────────────────────────────────────────────────────
@@ -263,15 +283,22 @@ export function laneRoom(payloads, ctx, opts = {}) {
     sentence: String(room.sentence ?? ""),
     lede: String(room.lede ?? ""),
     laneName,
+    hasLane: laneName !== "",
+    laneAbsent: laneName === "" ? "the served registry homes no lane in this room" : "",
     lane: {
       ...laneState,
-      isDrawn: !laneState.isRefused,
+      isDrawn: laneName !== "" && !laneState.isRefused,
+      // A lane panel over a room the registry gives no lane says so, instead of a titled panel over
+      // nothing at all (Phase 03 attack).
+      absent: laneName === "" ? "the served registry homes no lane in this room" : "",
       card,
       note: lanes.length > 1 ? `the registry homes ${fmtInt(lanes.length)} lanes in this room (${lanes.join(", ")}); this card is the first` : "",
     },
     trail: {
       isHomed: tRead !== null,
-      isPartial: trail !== null && trail.more,
+      // A page whose count exceeds the receipts it carries is partial too: a door that truncates without
+      // setting `more` must not have its page called the whole truth (Phase 03 attack).
+      isPartial: trail !== null && (trail.more || trail.count > trail.events.length),
       isDrawn: tRead !== null && !trailState.isReading && !trailState.isRefused,
       showEmpty: tRead !== null && !trailState.isReading && !trailState.isRefused && (trail === null || trail.rows.length === 0),
       ...trailState,
@@ -413,8 +440,8 @@ function newer(a, b) {
  * @param {LaneRoom} base
  * @returns {string}
  */
-export function laneBadge(base) {
-  if (base.laneName === "") return "no lane in the registry";
+export function laneBadge(base, whenNoLane = "no lane of its own") {
+  if (base.laneName === "") return whenNoLane;
   if (base.lane.isRefused) return `${base.laneName} lane · not read`;
   return base.lane.card.isRead ? `${base.laneName} lane · ${base.lane.card.status}` : `${base.laneName} lane · reading`;
 }
@@ -425,12 +452,59 @@ export function laneBadge(base) {
  * @returns {{ key: string, v: string, l: string, sub: string }}
  */
 export function laneKpi(base) {
+  // isRefused FIRST, exactly as the badge asks it. A body the panel refused as WRONG_LANE still parses,
+  // so reading `card.isRead` first drew ANOTHER lane's status in the strip beside the refusal that named
+  // it -- two readers of one question, inside one file (Phase 03 attack).
+  const drawn = base.lane.isDrawn && !base.lane.isRefused && base.lane.card.isRead;
   return {
     key: "lane-status",
-    v: base.lane.card.isRead ? base.lane.card.status : "—",
+    v: drawn ? base.lane.card.status : "—",
     l: base.laneName === "" ? "Lane" : `The ${base.laneName} lane`,
-    sub: base.lane.card.isRead ? base.lane.card.phase : base.lane.isRefused ? base.lane.refusal.code : "reading its header",
+    sub: drawn
+      ? base.lane.card.phase
+      : base.lane.isRefused ? base.lane.refusal.code : base.laneName === "" ? base.laneAbsent : "reading its header",
   };
+}
+
+/**
+ * What every room in the served registry holds under one key, as rows a catalogue can draw: the thing
+ * itself, and the room that holds it. This is the registry the shell already read -- no route, no
+ * bundle -- and it is how the toolbelt indexes arc without naming a single room in a shell file.
+ * @param {FoldContext} ctx @param {string} key
+ * @returns {{ rows: { key: string, name: string, room: string, roomName: string, canOpen: boolean }[], unreadable: string[] }}
+ */
+export function heldAcrossRooms(ctx, key) {
+  const out = [];
+  const seen = new Set();
+  /** @type {string[]} */
+  const unreadable = [];
+  for (const room of ctx.rooms || []) {
+    // EVERY room, including the lane-room template and the planned ones: the template holds four real
+    // commands, and dropping it made the catalogue count four fewer than arc has. A row whose room
+    // cannot be opened says so through canOpen rather than being left out (factory ring).
+    if (!room) continue;
+    const id = asText(room.id);
+    // A row whose room this shell cannot name is DROPPED and counted, never drawn as "undefined" with a
+    // live click handler behind it (Phase 03 attack).
+    if (id === null) { unreadable.push("a room with no id"); continue; }
+    const { lists, unreadable: bad } = heldBy(room);
+    // What a room carried here unreadably is named, so a catalogue that shrank says why.
+    if (bad.includes(key)) unreadable.push(id);
+    for (const name of listOf(lists, key)) {
+      const rowKey = `${name}@${room.id}`;
+      if (seen.has(rowKey)) continue;
+      seen.add(rowKey);
+      const link = roomLink(ctx, id);
+      const roomName = asText(room.name) ?? id;
+      out.push({ key: rowKey, name, room: link.room, roomName, canOpen: link.canOpen });
+    }
+  }
+  // One alphabet: the find box folds case, so the list is ordered the same way rather than putting
+  // ARC-SHIP, Arc-Ship and arc-ship in three places (Phase 03 attack).
+  /** @param {string} s */
+  const fold = (s) => s.toLowerCase();
+  out.sort((a, b) => (fold(a.name) < fold(b.name) ? -1 : fold(a.name) > fold(b.name) ? 1 : a.roomName < b.roomName ? -1 : a.roomName > b.roomName ? 1 : 0));
+  return { rows: out, unreadable: [...new Set(unreadable)] };
 }
 
 /**

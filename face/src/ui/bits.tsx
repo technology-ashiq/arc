@@ -431,6 +431,7 @@ export function LanePanel({ lane, title = 'The lane', hint = 'its PROGRESS heade
     <HPanel title={title} hint={hint}>
       {lane.isRefused ? <DoorRefusal code={lane.refusal.code} human={lane.refusal.human} /> : null}
       {lane.isDrawn ? <LaneCard card={lane.card} /> : null}
+      {lane.absent ? <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{lane.absent}</p> : null}
       {lane.note ? <p className="text-[11.5px] leading-[17px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{lane.note}</p> : null}
     </HPanel>
   )
