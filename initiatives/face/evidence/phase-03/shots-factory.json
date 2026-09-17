@@ -1,0 +1,105 @@
+{
+  "comment": "Candidate shots for the factory ring shot review (face v2 Phase 03). PNGs are local, under the owner box scratch directory; this manifest pins them by sha256. Same contract as evidence/phase-00/baseline-shots.json.",
+  "capturedAt": "2026-09-17T20:04:31.909Z",
+  "capture": {
+    "script": "face/scripts/harness-run.mjs --shots",
+    "browser": "Chrome/152.0.7977.83",
+    "viewport": {
+      "width": 1440,
+      "height": 1000,
+      "deviceScaleFactor": 1
+    },
+    "waitMs": 900,
+    "moods": [
+      "dark",
+      "light"
+    ]
+  },
+  "ring": "factory",
+  "shots": [
+    {
+      "room": "council-chamber",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-council-chamber.png",
+      "bytes": 213673,
+      "sha256": "3a864951451ea004581850ca5518b695b973d4f2304ee7c81b4a53f44e157e76"
+    },
+    {
+      "room": "develop",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-develop.png",
+      "bytes": 253515,
+      "sha256": "16f11054183f3e2f4dba83054ac5eade693aae3831ab95a7b643149dc3bb2ebf"
+    },
+    {
+      "room": "review-ship",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-review-ship.png",
+      "bytes": 209966,
+      "sha256": "398cd2ca8b7fcc51bbfb2b2cdff2ad72c27bbbdf614a4979000945fe79467215"
+    },
+    {
+      "room": "design-studio",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-design-studio.png",
+      "bytes": 238211,
+      "sha256": "b5735b29121939892630ceb9719172814416244c696c60aeb90df973e30bf33b"
+    },
+    {
+      "room": "toolbelt",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-toolbelt.png",
+      "bytes": 215797,
+      "sha256": "2a4b5ed416930884cab146d125613bea2101491857fe53d3e2b46154daae1612"
+    },
+    {
+      "room": "council-chamber",
+      "mood": "light",
+      "render": "module",
+      "file": "light-council-chamber.png",
+      "bytes": 213223,
+      "sha256": "1a42a959ab745fc86507bf3b4eeb3d06569fee533ad7ecd4786250e0d402adb7"
+    },
+    {
+      "room": "develop",
+      "mood": "light",
+      "render": "module",
+      "file": "light-develop.png",
+      "bytes": 252499,
+      "sha256": "7044d667652a7629fa55f94192380f2038a7cf104ff02f6bdcb5ebf016faddfb"
+    },
+    {
+      "room": "review-ship",
+      "mood": "light",
+      "render": "module",
+      "file": "light-review-ship.png",
+      "bytes": 208507,
+      "sha256": "5096130166604a593e35ae29df1d9c69aa1516e9dcdd2df7da948aaec15d571d"
+    },
+    {
+      "room": "design-studio",
+      "mood": "light",
+      "render": "module",
+      "file": "light-design-studio.png",
+      "bytes": 238628,
+      "sha256": "5ab5dd3ba43131a1ec0af273a2f9c4dd5ca530f482b98e2cfe8ceaba246e1586"
+    },
+    {
+      "room": "toolbelt",
+      "mood": "light",
+      "render": "module",
+      "file": "light-toolbelt.png",
+      "bytes": 216010,
+      "sha256": "0019a30806667f0b5a8149c04cd52488787c7e35fe495b35c6591525ab2e815c"
+    }
+  ],
+  "counts": {
+    "modules": 5,
+    "shots": 10
+  }
+}

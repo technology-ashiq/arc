@@ -1,11 +1,10 @@
-// module.mjs -- factory/council-chamber: the manifest (face v2 Phase 02, ADR-1320, ADR-1321).
+// module.mjs -- factory/council-chamber: the manifest (face v2 Phase 03, ADR-1320, REQ-05).
 //
-// CARRIED: this module draws the Cycle 15 CouncilRoom renderer through the module frame until Phase 03's
-// factory ring ports v0.7's Council into this folder. It declares no route because the carried
-// renderer reads the door itself.
+// "Twelve seats. No rubber stamps." The council receipts the registry homes here. The registry gives
+// this room no lane: the council is a company organ, not a lane's work.
 export default Object.freeze({
   id: "council-chamber",
   ring: "factory",
-  routes: Object.freeze([]),
-  asOf: false,
+  routes: Object.freeze(["/api/spine"]),
+  asOf: true,
 });

@@ -91,6 +91,7 @@ const HOLDS_DRAWN_ELSEWHERE = Object.freeze(["kinds", "lanes", "adrs"]);
  * @property {string} sentence
  * @property {string} lede
  * @property {string} laneName
+ * @property {boolean} hasLane     the served registry homes a lane in this room
  * @property {PanelState & { isDrawn: boolean, card: LaneCard, note: string }} lane
  * @property {Trail} trail
  * @property {ReceiptView} receipt
@@ -209,7 +210,9 @@ export function laneRoom(payloads, ctx, opts = {}) {
   const laneP = laneRead === null ? null : payloadOf(payloads, laneRead);
   const card = laneP !== null && laneP.state === "ok" ? laneCard(laneP.data) : LANE_UNREAD;
   const laneState = laneName === ""
-    ? refusedBy("NO_LANE", "the served registry names no lane for this room")
+    // Not a refusal: the council chamber and review-and-ship are rooms the registry gives no lane, and
+    // "there is no lane here" is a different sentence from "the lane could not be read" (factory ring).
+    ? { isReading: false, isRefused: false, refusal: NO_REFUSAL }
     : !laneUsable
       ? refusedBy("BAD_LANE_NAME", `the served registry names ${JSON.stringify(laneName)} as this room's lane, which is not a name the door will take`)
       : laneP === null
@@ -263,9 +266,10 @@ export function laneRoom(payloads, ctx, opts = {}) {
     sentence: String(room.sentence ?? ""),
     lede: String(room.lede ?? ""),
     laneName,
+    hasLane: laneName !== "",
     lane: {
       ...laneState,
-      isDrawn: !laneState.isRefused,
+      isDrawn: laneName !== "" && !laneState.isRefused,
       card,
       note: lanes.length > 1 ? `the registry homes ${fmtInt(lanes.length)} lanes in this room (${lanes.join(", ")}); this card is the first` : "",
     },
@@ -413,8 +417,8 @@ function newer(a, b) {
  * @param {LaneRoom} base
  * @returns {string}
  */
-export function laneBadge(base) {
-  if (base.laneName === "") return "no lane in the registry";
+export function laneBadge(base, whenNoLane = "no lane of its own") {
+  if (base.laneName === "") return whenNoLane;
   if (base.lane.isRefused) return `${base.laneName} lane · not read`;
   return base.lane.card.isRead ? `${base.laneName} lane · ${base.lane.card.status}` : `${base.laneName} lane · reading`;
 }
@@ -431,6 +435,33 @@ export function laneKpi(base) {
     l: base.laneName === "" ? "Lane" : `The ${base.laneName} lane`,
     sub: base.lane.card.isRead ? base.lane.card.phase : base.lane.isRefused ? base.lane.refusal.code : "reading its header",
   };
+}
+
+/**
+ * What every room in the served registry holds under one key, as rows a catalogue can draw: the thing
+ * itself, and the room that holds it. This is the registry the shell already read -- no route, no
+ * bundle -- and it is how the toolbelt indexes arc without naming a single room in a shell file.
+ * @param {FoldContext} ctx @param {string} key
+ * @returns {{ key: string, name: string, room: string, roomName: string, canOpen: boolean }[]}
+ */
+export function heldAcrossRooms(ctx, key) {
+  const out = [];
+  const seen = new Set();
+  for (const room of ctx.rooms || []) {
+    // EVERY room, including the lane-room template and the planned ones: the template holds four real
+    // commands, and dropping it made the catalogue count four fewer than arc has. A row whose room
+    // cannot be opened says so through canOpen rather than being left out (factory ring).
+    if (!room) continue;
+    const { lists } = heldBy(room);
+    for (const name of listOf(lists, key)) {
+      const rowKey = `${name}@${room.id}`;
+      if (seen.has(rowKey)) continue;
+      seen.add(rowKey);
+      const link = roomLink(ctx, room.id);
+      out.push({ key: rowKey, name, room: link.room, roomName: String(room.name ?? room.id), canOpen: link.canOpen });
+    }
+  }
+  return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 /**
