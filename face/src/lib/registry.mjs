@@ -50,7 +50,7 @@ const KEY = /^\.\/modules\/([^/\\?#]+)\/([^/\\?#]+)\/(module\.mjs|fold\.mjs|ops\
  * @property {unknown} Icon
  *
  * @typedef {{ key: string, kind: "bad-key"|"incomplete"|"manifest"|"orphan"|"template"|"misplaced"|"duplicate", why: string }} ModuleProblem
- * @typedef {{ attached: Record<string, AttachedModule>, generic: string[], problems: ModuleProblem[] }} Attachment
+ * @typedef {{ attached: Record<string, AttachedModule>, generic: string[], problems: ModuleProblem[], extras?: string[] }} Attachment
  */
 
 /**
@@ -136,17 +136,25 @@ const isTemplate = (r) => r.template === true || r.status === "template";
  * Attach modules to the served registry, both ways (ADR-1321).
  * @param {{ rooms?: import("./rooms.mjs").Room[] }} registry
  * @param {{ modules: AttachedModule[], problems: ModuleProblem[] }} collected
+ * @param {string[]} [exempted]  ids an ADR-1327 exemption row names: an unserved folder with one of
+ *   these ids is an EXTRA -- kept, not drawn from the served rail, and not a problem -- exactly as
+ *   face-coverage's module half reads the same rows (face v2 Phase 02 attack: the two disagreed)
  * @returns {Attachment}
  */
-export function attachModules(registry, collected) {
+export function attachModules(registry, collected, exempted = []) {
   const rooms = registry && Array.isArray(registry.rooms) ? registry.rooms : [];
   const served = new Map(rooms.map((r) => [r.id, r]));
   /** @type {ModuleProblem[]} */
   const problems = [...((collected && collected.problems) || [])];
+  // No prototype: `attached[id]` for a served id such as `constructor` must be undefined, not
+  // Object's constructor -- which drew a room as a module with no module (face v2 Phase 02 attack).
   /** @type {Record<string, AttachedModule>} */
-  const attached = {};
+  const attached = Object.create(null);
   /** @type {Map<string, AttachedModule[]>} */
   const byId = new Map();
+  const exemptSet = new Set(Array.isArray(exempted) ? exempted : []);
+  /** @type {string[]} */
+  const extras = [];
   for (const m of (collected && collected.modules) || []) byId.set(m.id, [...(byId.get(m.id) || []), m]);
   for (const [id, list] of byId) {
     if (list.length > 1) {
@@ -155,13 +163,14 @@ export function attachModules(registry, collected) {
     }
     const m = /** @type {AttachedModule} */ (list[0]);
     const room = served.get(id);
+    if (!room && exemptSet.has(id)) { extras.push(m.key); continue; }
     if (!room) { problems.push({ key: m.key, kind: "orphan", why: `/api/rooms serves no room "${id}" -- an orphan module draws nothing` }); continue; }
     if (isTemplate(room)) { problems.push({ key: m.key, kind: "template", why: `"${id}" is the lane-room template, not a room` }); continue; }
     if (room.ring !== m.ring) { problems.push({ key: m.key, kind: "misplaced", why: `/api/rooms serves "${id}" in ring "${room.ring}" -- the served ring wins (ADR-1306)` }); continue; }
     attached[id] = m;
   }
-  const generic = rooms.filter((r) => !isTemplate(r) && !attached[r.id]).map((r) => r.id);
-  return { attached, generic, problems };
+  const generic = rooms.filter((r) => !isTemplate(r) && !Object.hasOwn(attached, r.id)).map((r) => r.id);
+  return { attached, generic, problems, extras };
 }
 
 /**
@@ -170,7 +179,7 @@ export function attachModules(registry, collected) {
  * @returns {{ kind: "module", key: string } | { kind: "generic" }}
  */
 export function renderFor(roomId, attachment) {
-  const m = attachment && attachment.attached ? attachment.attached[roomId] : undefined;
+  const m = attachment && attachment.attached && Object.hasOwn(attachment.attached, roomId) ? attachment.attached[roomId] : undefined;
   return m ? { kind: "module", key: m.key } : { kind: "generic" };
 }
 

@@ -141,6 +141,17 @@ for (const [label, over] of [
   const a = attach({});
   check("no modules at all: every openable served room is generic, nothing is a problem", a.generic.length === 7 && a.problems.length === 0, show(a));
 }
+{
+  // A served id that is also an Object.prototype key (face v2 Phase 02 attack): `attached[id]` on a
+  // plain object answered Object's own function, so the room drew as a module it does not have.
+  const protoServed = { rings: ["command"], rooms: ["constructor", "toString", "__proto__", "hasOwnProperty"].map((id) => room(id, "command")) };
+  const a = reg.attachModules(protoServed, reg.collectModules({}));
+  check("PROTOTYPE KEYS: served ids named constructor, toString, __proto__ and hasOwnProperty are generic, never modules",
+    a.generic.join(",") === "constructor,toString,__proto__,hasOwnProperty" && ["constructor", "toString", "__proto__", "hasOwnProperty"].every((id) => reg.renderFor(id, a).kind === "generic" && a.attached[id] === undefined),
+    show(a));
+  const groups = reg.railGroups({ rings: ["constructor"], rooms: [room("x", "constructor")] });
+  check("PROTOTYPE KEYS: a ring named constructor gets an empty lede, not a function", groups[0] && groups[0].lede === "", JSON.stringify(groups.map((g) => typeof g.lede)));
+}
 
 // ── the rail, home, and the other shell decisions read the SERVED registry ──
 {
@@ -213,33 +224,84 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
   check("the generic rooms the gate REPORTS are exactly the ones the browser renders generic",
     JSON.stringify(half.generic) === JSON.stringify(a.generic), `coverage=${half.generic.join(",")} frame=${a.generic.join(",")}`);
   check("the exemption list is EMPTY until the factory and company rings add their rows (ADR-1327)", half.exemptions === 0, `exemptions=${half.exemptions}`);
+
+  // The two readers AGREE on an exemption too (face v2 Phase 02 attack): a folder for an ADR-1327
+  // extra with its row is fine for the gate and an extra -- not an orphan -- for the browser, while
+  // the same folder with no row is an orphan for both. Built on the real contracts, one folder added.
+  const extra = (tree.extras || [])[0];
+  check("the real contracts name an ADR-1327 extra to test the agreement with (vacuous-pass guard)", Boolean(extra), JSON.stringify(tree.extras));
+  if (extra) {
+    const withFolder = { ...tree, folders: [...tree.folders, { ring: extra.ring, id: extra.id }] };
+    const withRow = { ...withFolder, exemptions: [{ id: extra.id, adr: "ADR-1327" }] };
+    const foundExtra = { ...found,
+      [`./modules/${extra.ring}/${extra.id}/module.mjs`]: { default: { id: extra.id, ring: extra.ring, routes: [], asOf: true } },
+      [`./modules/${extra.ring}/${extra.id}/fold.mjs`]: { fold: () => ({}) },
+      [`./modules/${extra.ring}/${extra.id}/ops.mjs`]: { ops: [] },
+      [`./modules/${extra.ring}/${extra.id}/View.tsx`]: { default: View, Icon } };
+    const gateRow = coverage.moduleFindings(withRow);
+    const pageRow = reg.attachModules(registry, reg.collectModules(foundExtra), gateRow.exempted);
+    check("EXEMPTION AGREEMENT: with its row, the gate finds nothing and the browser keeps the extra, not an orphan",
+      gateRow.findings.length === 0 && pageRow.problems.length === 0 && (pageRow.extras || []).includes(`${extra.ring}/${extra.id}`) && JSON.stringify(gateRow.generic) === JSON.stringify(pageRow.generic),
+      JSON.stringify({ gate: gateRow.findings, page: pageRow.problems, extras: pageRow.extras }));
+    const gateBare = coverage.moduleFindings(withFolder);
+    const pageBare = reg.attachModules(registry, reg.collectModules(foundExtra), gateBare.exempted);
+    check("EXEMPTION AGREEMENT: without its row, the gate and the browser both name the orphan",
+      gateBare.findings.some((f) => f.includes(`"${extra.id}"`) && f.includes("orphan")) && pageBare.problems.some((p) => p.kind === "orphan" && p.key === `${extra.ring}/${extra.id}`),
+      JSON.stringify({ gate: gateBare.findings, page: pageBare.problems }));
+  }
 }
 
 // ── the shell names no room ──
 const servedIds = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms.map((r) => r.id);
-/** Every quoted literal whose whole value is a served id, or a route to one (`/id`, `#/id`). */
+/** Every quoted literal whose whole value is a served id, or a route to one (`/id`, `#/id`, `#id`). */
 const namedRooms = (text) => {
   const hits = [];
-  const re = /(["'`])(#?\/)?([a-z][a-z0-9-]*)\1/g;
+  const re = /(["'`])(#?\/?)([a-z][a-z0-9-]*)\1/g;
   for (const m of text.matchAll(re)) if (servedIds.includes(m[3])) hits.push(m[0]);
   return hits;
 };
 {
   check("the served id list is there to scan for (vacuous-pass guard)", servedIds.length >= 30, `ids=${servedIds.length}`);
-  const shellDir = join(SRC, "shell");
-  const files = [join(SRC, "App.tsx"), join(SRC, "main.tsx"), join(LIB, "shell.mjs"), join(LIB, "registry.mjs"),
-    ...readdirSync(shellDir).filter((n) => /\.(tsx|ts|mjs)$/.test(n)).map((n) => join(shellDir, n))];
+  // DERIVED, not listed (face v2 Phase 02 attack): every source file under face/src is shell unless it
+  // belongs to a room, so a new router or nav file anywhere is scanned the day it lands. The room-owned
+  // parts are excluded BY NAME, each for the reason that makes it true:
+  const ROOM_OWNED = new Map([
+    ["modules", "a module names its own room: that is what a module is"],
+    ["rooms", "the Cycle 15 renderers the carried modules mount, each naming its own room (Phase 03 deletes them)"],
+    ["face", "the unmounted face stage"],
+    ["ui", "the kit's tone vocabulary shares words with room ids ('money' is a tone)"],
+    ["lib/rooms.mjs", "the Cycle 15 room decisions, which name the rooms they decide for"],
+    ["lib/map.mjs", "the Map room's own decisions"],
+    ["lib/ask.mjs", "the Ask arc and Council rooms' own decisions"],
+    ["lib/inbox.mjs", "the Inbox and Today rooms' own decisions"],
+    ["lib/money.mjs", "the Money and Ventures rooms' own decisions"],
+    ["lib/spine.mjs", "the Spine room's own decisions"],
+    ["lib/stage.mjs", "the face stage's decisions"],
+  ]);
+  const walk = (dir, rel, out) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (ROOM_OWNED.has(r)) continue;
+      if (e.isDirectory()) walk(join(dir, e.name), r, out);
+      else if (/\.(tsx|ts|mjs|js|jsx)$/.test(e.name)) out.push(join(dir, e.name));
+    }
+    return out;
+  };
+  const files = walk(SRC, "", []);
+  for (const must of [join(SRC, "App.tsx"), join(SRC, "main.tsx"), join(LIB, "shell.mjs"), join(LIB, "registry.mjs"), join(SRC, "shell", "Rail.tsx")]) {
+    check(`the derived shell scan includes ${relative(REPO, must).split(sep).join("/")}`, files.includes(must));
+  }
+  for (const [path] of ROOM_OWNED) check(`an excluded room-owned path still exists: face/src/${path}`, existsSync(join(SRC, ...path.split("/"))));
   let scanned = 0;
   for (const f of files) {
-    if (!existsSync(f)) { check(`shell file present: ${relative(REPO, f).split(sep).join("/")}`, false); continue; }
     scanned++;
     const hits = namedRooms(readFileSync(f, "utf8"));
     check(`no served room is named in ${relative(REPO, f).split(sep).join("/")}`, hits.length === 0, hits.join(" "));
   }
-  check("the shell scan read App, main, shell.mjs, registry.mjs and the shell folder", scanned >= 6, `scanned=${scanned}`);
+  check("the shell scan read every shell file (App, main, shell.mjs, registry.mjs, the shell folder, door and mood)", scanned >= 10, `scanned=${scanned}`);
   // The scan's own negative control: the same function FAILs planted names and passes prose.
   check("MUTANT: a planted onOpen('money') is found", namedRooms("onClick={() => onOpen('money')}").length === 1);
-  check("MUTANT: a planted route literal is found", namedRooms('href="#/inbox"').length === 1 && namedRooms("go(`/spine`)").length === 1);
+  check("MUTANT: a planted route literal is found", namedRooms('href="#/inbox"').length === 1 && namedRooms("go(`/spine`)").length === 1 && namedRooms("'#inbox'").length === 1);
   check("a room's name in prose, a ring word in a sentence, and a method named map are not names",
     namedRooms("the money ring holds eight rooms; rows.map((r) => r); 'moneyish'; \"inbox zero\"").length === 0);
 }

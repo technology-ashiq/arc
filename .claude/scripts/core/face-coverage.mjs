@@ -368,6 +368,17 @@ const MODULE_EXEMPTION_ADR = "ADR-1327";
 const MODULE_NAME = /^[a-z][a-z0-9-]*$/;
 
 /**
+ * A line for a log something parses: every line terminator made visible, so a folder name or a
+ * finding's text cannot forge a line (the one-line rule in fixed-defects). The twin of face-pure's.
+ */
+function oneLine(text) {
+  const breaks = new Set([10, 13, 0x2028, 0x2029]);
+  let out = "";
+  for (const c of String(text)) out += breaks.has(c.charCodeAt(0)) ? `<U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}>` : c;
+  return out;
+}
+
+/**
  * The module tree, the served registry it attaches to, the ADR-1327 extras and the exemption rows.
  * Unreadable -- never empty -- when any of the four sources cannot be read.
  * @param {string} repo
@@ -402,15 +413,22 @@ export function treeModules(repo) {
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) return { unreadable: "face/src/modules is not a directory" };
   const folders = [];
   const strays = [];
-  for (const ring of readdirSync(root).sort()) {
-    const rp = join(root, ring);
-    const rs = lstatSync(rp);
-    if (rs.isSymbolicLink() || !rs.isDirectory()) { strays.push({ path: ring, why: "is not a ring folder" }); continue; }
-    for (const id of readdirSync(rp).sort()) {
-      const ds = lstatSync(join(rp, id));
-      if (ds.isSymbolicLink() || !ds.isDirectory()) { strays.push({ path: `${ring}/${id}`, why: "is not a module folder" }); continue; }
-      folders.push({ ring, id });
+  // Every read of the walk is inside one try: a ring that cannot be listed, a name the OS cannot
+  // stat, a file that vanishes mid-walk -- each makes the tree UNREADABLE with its reason, never a
+  // throw that skips a caller's rollback (face v2 Phase 02 attack) and never a quietly shorter list.
+  try {
+    for (const ring of readdirSync(root).sort()) {
+      const rp = join(root, ring);
+      const rs = lstatSync(rp);
+      if (rs.isSymbolicLink() || !rs.isDirectory()) { strays.push({ path: ring, why: "is not a ring folder" }); continue; }
+      for (const id of readdirSync(rp).sort()) {
+        const ds = lstatSync(join(rp, id));
+        if (ds.isSymbolicLink() || !ds.isDirectory()) { strays.push({ path: `${ring}/${id}`, why: "is not a module folder" }); continue; }
+        folders.push({ ring, id });
+      }
     }
+  } catch (e) {
+    return { unreadable: `face/src/modules could not be walked (${e.code ?? e.message})` };
   }
   return { rings: reg.value.rings, served, extras, exemptions: ex.value.exemptions, folders, strays };
 }
@@ -423,7 +441,7 @@ export function moduleFindings(tree) {
   const findings = [];
   if (!tree || tree.unreadable) {
     findings.push(`[module] could not be read from the tree -- ${tree ? tree.unreadable : "no module tree was gathered"}. A source that cannot be read is not a source with nothing in it`);
-    return { findings, generic: [], folders: 0, served: 0, orphans: 0, exemptions: 0 };
+    return { findings, generic: [], folders: 0, served: 0, orphans: 0, exemptions: 0, exempted: [] };
   }
   const served = new Map(tree.served.map((r) => [r.id, r]));
   const extras = new Map(tree.extras.map((m) => [m.id, m]));
@@ -479,7 +497,9 @@ export function moduleFindings(tree) {
   }
   const openable = tree.served.filter((r) => !r.template);
   const generic = openable.filter((r) => !attached.has(r.id)).map((r) => r.id);
-  return { findings, generic, folders: tree.folders.length, served: openable.length, orphans, exemptions: tree.exemptions.length };
+  // `exempted`: the ids the valid rows name, which the browser's attachModules takes as its third
+  // argument so both readers classify an exempted extra the same way.
+  return { findings, generic, folders: tree.folders.length, served: openable.length, orphans, exemptions: tree.exemptions.length, exempted: [...exempt].sort() };
 }
 
 // ---------- the check (pure: tree facts + contract -> findings) ----------
@@ -793,14 +813,14 @@ async function run(repoOrData, quiet = false) {
   const data = typeof repoOrData === "string" ? await gather(repoOrData) : repoOrData;
   const { findings, warns } = coverageFindings(data);
   if (quiet) return findings.length ? 1 : 0;
-  for (const w of warns) process.stderr.write(`WARN  ${w}\n`);
+  for (const w of warns) process.stderr.write(`WARN  ${oneLine(w)}\n`);
   // What the module half REPORTS, by name, whether or not anything else failed (ADR-1321).
   const half = moduleFindings(data.modules);
   if (!data.modules?.unreadable) {
-    process.stdout.write(`face-coverage: module half folders=${half.folders} served=${half.served} generic=${half.generic.length} orphans=${half.orphans} exemptions=${half.exemptions} generic-rooms=${half.generic.join(",") || "none"} -- a served room with no module renders through the generic module (ADR-1321)\n`);
+    process.stdout.write(oneLine(`face-coverage: module half folders=${half.folders} served=${half.served} generic=${half.generic.length} orphans=${half.orphans} exemptions=${half.exemptions} generic-rooms=${half.generic.join(",") || "none"} -- a served room with no module renders through the generic module (ADR-1321)`) + "\n");
   }
   if (findings.length) {
-    for (const f of findings) process.stderr.write(`FAIL  ${f}\n`);
+    for (const f of findings) process.stderr.write(`FAIL  ${oneLine(f)}\n`);
     process.stderr.write(`face-coverage: ${findings.length} coverage gap(s) -- every part of arc needs a home (ADR-1311)\n`);
     return 1;
   }
@@ -1129,16 +1149,22 @@ function refuseUnknownFlags(argv, known) {
   if (bad.length) {
     process.stderr.write(`face-coverage: unknown flag(s) ${bad.join(", ")} -- known flags are ${known.join(", ")}. Refusing rather than silently taking the write path.
 `);
-    process.exit(2);
+    return false;
   }
+  return true;
 }
 
+// process.exitCode, never process.exit(): exit() races the pipe where stdout is asynchronous (macOS)
+// and can cut the module-half line a caller parses (fixed-defects: the libuv teardown race).
 if (isMainModule()) {
   const argv = process.argv.slice(2);
-  refuseUnknownFlags(argv, KNOWN_FLAGS);
-  const repo = argv.find((a) => !a.startsWith("--")) || REPO_DEFAULT;
-  const fn = argv.includes("--selftest") ? selftest : run;
-  fn(repo)
-    .then((code) => process.exit(code))
-    .catch((err) => { process.stderr.write(`face-coverage: ERROR -- ${err.message}\n`); process.exit(2); });
+  if (!refuseUnknownFlags(argv, KNOWN_FLAGS)) {
+    process.exitCode = 2;
+  } else {
+    const repo = argv.find((a) => !a.startsWith("--")) || REPO_DEFAULT;
+    const fn = argv.includes("--selftest") ? selftest : run;
+    fn(repo)
+      .then((code) => { process.exitCode = code; })
+      .catch((err) => { process.stderr.write(`face-coverage: ERROR -- ${oneLine(err.message)}\n`); process.exitCode = 2; });
+  }
 }

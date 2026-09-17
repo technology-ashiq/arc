@@ -351,9 +351,16 @@ load 'test_helper'
              "View FAILs: a ternary on raw payload data (view-condition)" \
              "View FAILs: a template literal holding a comparison (view-operator)" \
              "View passes: a condition on a boolean field fold() returns" \
-             "every module folder imported (none skipped by a throw)"; do
+             "every module folder imported (none skipped by a throw)" \
+             "LINE TERMINATOR: a // comment ends at U+2028, so the import after it in a fold FAILs" \
+             "UNICODE SPACE: import, an em space, then React is an import of react, not one name" \
+             "PERCENT: a percent-encoded relative specifier is refused (path.resolve and node's loader read it differently)"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) ;;
+    *) [[ "$output" == *"forged-line-arm=ran"* ]] || { echo "the forged-line arm did not run on $(uname -s): $output"; false; } ;;
+  esac
   run node "$ARC_ROOT/.claude/scripts/core/face-pure.mjs"
   [[ "$output" == *"face-pure: modules="* ]] || { echo "the lint never reported (exit $status): $output"; false; }
   local line modules files
@@ -396,9 +403,14 @@ load 'test_helper'
   # POSIX legs it MUST have run: a skip there would hide the one mutant the spec names.
   case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*) [[ "$output" == *"symlink-arm="* ]] || { echo "the symlink arm reported nothing: $output"; false; } ;;
-    *) [[ "$output" == *"symlink-arm=ran"* ]] || { echo "the symlink arm did not run on $(uname -s): $output"; false; } ;;
+    *) [[ "$output" == *"symlink-arm=ran"* ]] || { echo "the symlink arm did not run on $(uname -s): $output"; false; }
+       # The permission-bit arms (a module folder that cannot be read mid-proof, a rollback that cannot
+       # remove what it wrote) bite only where permission bits do.
+       [[ "$output" == *"posix-arms=ran"* ]] || { echo "the POSIX arms did not run on $(uname -s): $output"; false; } ;;
   esac
-  printf '# face-module: %s\n' "$(printf '%s\n' "$output" | grep '^symlink-arm=' | tail -1)" >&3
+  # A junction needs no privilege on Windows and a symlink none elsewhere: the link arm runs everywhere.
+  [[ "$output" == *"link-arm=ran"* ]] || { echo "the link arm did not run: $output"; false; }
+  printf '# face-module: %s\n' "$(printf '%s\n' "$output" | grep -E '^(symlink-arm|link-arm|posix-arms)=' | tr '\n' ' ')" >&3
 }
 
 @test "face v2: the browser harness client logic runs with no install and no Chrome" {

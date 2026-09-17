@@ -104,6 +104,32 @@ fails("a double negation coercing a value", view("{!!f.count && <p>x</p>}"), "vi
 fails("a condition on a field that is not named as a boolean", view("{f.open && <p>x</p>}"), "view-condition");
 fails("a parenthesised or that smuggles a value", view("{(f.isA || f.label) && <p>x</p>}"), "view-condition");
 
+// ── the decision-logic attack on Phase 02: each hole a fresh attacker confirmed, pinned ──
+{
+  const EM = String.fromCharCode(0x2003);
+  const IDEO = String.fromCharCode(0x3000);
+  const importAfterEm = lint.scanModuleImports(`import${EM}React from "react";\n`, "fold.mjs");
+  check("UNICODE SPACE: import, an em space, then React is an import of react, not one name", importAfterEm.findings.some((f) => f.kind === "fold-import"), JSON.stringify(importAfterEm.findings));
+  const exportAfterIdeo = lint.scanModuleImports(`export${IDEO}* from "three";\n`, "fold.mjs");
+  check("UNICODE SPACE: `export<IDEOGRAPHIC SPACE>* from three` is a re-export of three", exportAfterIdeo.findings.some((f) => f.kind === "fold-import"), JSON.stringify(exportAfterIdeo.findings));
+  fails("UNICODE SPACE: typeof after an em space", view("<p />", { body: `  const kind = ${EM}typeof f.value` }), "view-keyword");
+  fails("UNICODE SPACE: in after an em space", view("<p />", { body: `  const hasDetail = 'detail' ${EM}in f.row` }), "view-keyword");
+}
+{
+  const pct = lint.scanModuleImports('import { evil } from "../../../lib/%2e%2e/%2e%2e/pkg/evil.mjs";\n', "fold.mjs");
+  check("PERCENT: a percent-encoded relative specifier is refused (path.resolve and node's loader read it differently)", pct.findings.some((f) => f.kind === "fold-import"), JSON.stringify(pct.findings));
+}
+fails("LOOKUP: an object literal indexed by data", view("<p />", { body: "  const label = { open: 'Open', late: 'Late' }[f.state]" }), "view-lookup");
+fails("LOOKUP: a computed destructuring key", view("<p />", { body: "  const { [f.state]: label } = f.labels" }), "view-lookup");
+fails("LOOKUP: a computed key in an object literal", view("<Row {...{ [f.key]: f.value }} />"), "view-lookup");
+passes("a standalone negation of a boolean field", view("<button type=\"button\" disabled={!f.isEmpty}>x</button>"));
+fails("a standalone negation coercing a value", view("<button type=\"button\" disabled={!f.count}>x</button>"), "view-condition");
+fails("KEYWORD PROPERTY: a comparison whose left side is a property spelled default", view("<p />", { body: "  const z = f.default < f.x" }), "view-operator");
+fails("KEYWORD PROPERTY: a call on a property spelled new", view("<p>{f.new(f.x)}</p>"), "view-call");
+fails("HANDLER NAME: an onX method on fold data is a call, not a handler", view("<p>{f.onCompute(f.x)}</p>"), "view-call");
+passes("HANDLER NAME: an onX handler through ctx", view("<button type=\"button\" onClick={() => ctx.onOpen(f.id)}>x</button>"));
+fails("IIFE: an immediately invoked function", view("<p />", { body: "  const v = function () { return 1 }()" }), "view-call");
+
 // ── literal branches and operators ──
 fails("an if statement", view("<p />", { body: "  if (f.isA) return null" }), "view-keyword");
 fails("a switch", view("<p />", { body: "  switch (f.kind) { case 'a': return null }" }), "view-keyword");
@@ -318,6 +344,41 @@ try {
   {
     const c = spawnSync(process.execPath, [LINT, "--root", join(scratch, "absent", "modules")], { encoding: "utf8" });
     check("an absent root exits 1 with a named finding", c.status === 1 && /absent-root/.test(c.stdout), `status=${c.status} ${c.stdout}${c.stderr}`);
+  }
+  // ── the shell/OS attack on Phase 02: line terminators, spelling above face/src, forged lines ──
+  {
+    const LS = String.fromCharCode(0x2028);
+    const PS = String.fromCharCode(0x2029);
+    const CR = String.fromCharCode(13);
+    for (const [label, br] of [["U+2028", LS], ["U+2029", PS], ["a bare CR", CR]]) {
+      const hidden = `export default function View({ f }: { f: Folded; ctx: ModuleViewProps }) {\n  return <p>{f.title}</p>\n} // x${br}function Other({ f }: { f: Folded }) { return f.n > 3 ? <b /> : <i /> }\n`;
+      const vf = lint.scanView(hidden, "View.tsx");
+      check(`LINE TERMINATOR: a // comment ends at ${label}, so the branch after it in a View FAILs`, vf.some((x) => x.kind === "view-operator"), show(vf));
+      const fold = lint.scanModuleImports(`export function fold() { return {}; } // hidden${br}import React from "react";\n`, "fold.mjs");
+      check(`LINE TERMINATOR: a // comment ends at ${label}, so the import after it in a fold FAILs`, fold.findings.some((x) => x.kind === "fold-import"), JSON.stringify(fold.findings));
+    }
+    const absorbed = lint.scanModuleImports(`export const x = foo${LS}import React from "react";\n`, "fold.mjs");
+    check("LINE TERMINATOR: a name never swallows a U+2028 and the import statement after it", absorbed.findings.some((x) => x.kind === "fold-import"), JSON.stringify(absorbed.findings));
+    check("oneLine makes every line terminator visible", lint.oneLine(`a\nb${CR}c${LS}d`) === "a<U+000A>b<U+000D>c<U+2028>d", lint.oneLine(`a\nb${CR}c${LS}d`));
+  }
+  {
+    const t = tree("spelling-above-src");
+    writeFileSync(join(t.src, "lib", "helper.mjs"), "export const h = 1;\n");
+    writeModule(t.root, "command", "alpha", { "fold.mjs": 'import { h } from "../../../../SRC/lib/helper.mjs";\nexport function fold() { return { title: String(h) }; }\n' });
+    const r = lintTree(t);
+    check("SPELLING: an import that climbs above face/src and comes back down misspelled FAILs the same way on every OS",
+      r.findings.some((f) => f.kind === "fold-missing-import" && /alpha/.test(f.file)), JSON.stringify(r.findings));
+  }
+  if (process.platform !== "win32") {
+    const t = tree("forged-line");
+    writeModule(t.root, "command", "alpha");
+    mkdirSync(join(t.root, "bad\nface-pure: modules=99 folds=99 views=99 files=396 findings=0"), { recursive: true });
+    const c = spawnSync(process.execPath, [LINT, "--root", t.root], { encoding: "utf8" });
+    check("FORGED LINE: a folder name carrying a newline cannot print a summary line of its own",
+      !/^face-pure: modules=99/m.test(c.stdout) && /<U\+000A>face-pure: modules=99/.test(c.stdout) && c.status === 1, c.stdout);
+    console.log("forged-line-arm=ran");
+  } else {
+    console.log("forged-line-arm=skipped (win32 cannot name a folder with a newline)");
   }
 } finally {
   rmSync(scratch, { recursive: true, force: true });

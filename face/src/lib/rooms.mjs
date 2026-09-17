@@ -77,7 +77,8 @@ export function byRing(rooms, order = RING_ORDER) {
       if (Boolean(a.planned) !== Boolean(b.planned)) return a.planned ? 1 : -1;
       return 0; // otherwise the contract's own order, which is the owner's priority
     });
-    out.push({ ring, lede: RING_LEDE[ring] ?? "", rooms: inRing });
+    // Own keys only: a served ring called `constructor` has no lede, not Object's constructor.
+    out.push({ ring, lede: Object.hasOwn(RING_LEDE, ring) ? RING_LEDE[ring] ?? "" : "", rooms: inRing });
   }
   // A room whose ring is not one of the five would vanish silently. Surface it instead:
   // the registry is generated, so this can only mean the contract grew a ring nobody taught

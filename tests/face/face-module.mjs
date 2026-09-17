@@ -10,7 +10,7 @@
 // Every scaffold runs with --root pointing at a scratch copy: nothing here writes into the repo.
 // Before the script exists this suite fails its first check -- the red that comes first.
 // VACUOUS-PASS GUARD: the last line is "RAN: <n> checks, <f> failed".
-import { mkdtempSync, mkdirSync, cpSync, rmSync, existsSync, readFileSync, writeFileSync, symlinkSync, readdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, cpSync, rmSync, existsSync, readFileSync, writeFileSync, symlinkSync, readdirSync, chmodSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
@@ -146,6 +146,77 @@ try {
     check("and removes the module folder it wrote", !existsSync(join(root, "face", "src", "modules", target.ring, target.id)));
     check("and removes the ring folder it created for it", !existsSync(join(root, "face", "src", "modules", target.ring)));
     check("and leaves the modules root it did not create", existsSync(join(root, "face", "src", "modules")));
+  }
+
+  // ── the shell/OS attack on Phase 02, each confirmed hole pinned ──
+  if (target) {
+    // A ring folder that is a link (a junction on Windows, which needs no privilege; a symlink elsewhere).
+    const root = makeRoot("linked-ring", { rings: [] });
+    const outside = join(scratch, "outside-ring");
+    mkdirSync(outside, { recursive: true });
+    let linked = null;
+    try { symlinkSync(outside, join(root, "face", "src", "modules", target.ring), "junction"); linked = true; } catch (e) { linked = e.code ?? e.message; }
+    if (linked === true) {
+      const r = run(root, `${target.ring}/${target.id}`);
+      check("LINK: a ring folder that is a link is REFUSED before anything is written", r.status === 1 && /REFUSED/.test(r.stdout) && /is a link/.test(r.stdout), out(r));
+      check("LINK: nothing was written through the link, outside --root", readdirSync(outside).length === 0, readdirSync(outside).join(","));
+    }
+    // face/src itself a link: the attack's GREEN-outside-root case.
+    const root2 = join(scratch, "linked-src");
+    const realSrc = join(scratch, "linked-src-real");
+    mkdirSync(join(root2, "face"), { recursive: true });
+    mkdirSync(join(root2, "initiatives", "face", "contracts"), { recursive: true });
+    for (const f of ["rooms.generated.json", "modules-v2.json", "module-exemptions.json"]) cpSync(join(CONTRACTS, f), join(root2, "initiatives", "face", "contracts", f));
+    cpSync(join(REPO, "face", "src", "lib"), join(realSrc, "lib"), { recursive: true });
+    mkdirSync(join(realSrc, "modules"), { recursive: true });
+    let linked2 = null;
+    try { symlinkSync(realSrc, join(root2, "face", "src"), "junction"); linked2 = true; } catch (e) { linked2 = e.code ?? e.message; }
+    if (linked2 === true) {
+      const r = run(root2, `${target.ring}/${target.id}`);
+      check("LINK: a face/src that is a link is REFUSED, never GREEN with the module outside --root", r.status === 1 && /is a link/.test(r.stdout), out(r));
+      check("LINK: nothing landed in the linked source folder", readdirSync(join(realSrc, "modules")).length === 0);
+    }
+    console.log(`link-arm=${linked === true && linked2 === true ? "ran" : `skipped (${linked}, ${linked2})`}`);
+
+    // A modules root that is a file: exit 2, named, never an unhandled throw read as a refusal.
+    const root3 = makeRoot("modules-file", { rings: [] });
+    rmSync(join(root3, "face", "src", "modules"), { recursive: true, force: true });
+    writeFileSync(join(root3, "face", "src", "modules"), "not a folder");
+    const r3 = run(root3, `${target.ring}/${target.id}`);
+    check("FILE: a modules root that is a file is exit 2 with its reason, and nothing is written", r3.status === 2 && /is not a directory/.test(r3.stderr), out(r3));
+
+    // An exemption list that cannot be read is exit 2 naming the file, never a refusal for a missing row.
+    const extra = JSON.parse(readFileSync(join(CONTRACTS, "modules-v2.json"), "utf8")).modules.find((m) => m.class === "extra");
+    if (extra) {
+      const root4 = makeRoot("bom-exemptions", { rings: [] });
+      writeFileSync(join(root4, "initiatives", "face", "contracts", "module-exemptions.json"), String.fromCharCode(0xfeff) + JSON.stringify({ exemptions: [{ id: extra.id, adr: "ADR-1327" }] }));
+      const r4 = run(root4, `${extra.ring}/${extra.id}`);
+      check("UNREADABLE: an exemption list with a BOM is exit 2 naming module-exemptions.json, not a false refusal", r4.status === 2 && /module-exemptions\.json could not be read/.test(r4.stderr), out(r4));
+    }
+
+    // A module tree that throws in the middle of the proof: RED, rolled back -- never a crash past the rollback.
+    if (process.platform !== "win32" && !(typeof process.getuid === "function" && process.getuid() === 0)) {
+      const root5 = makeRoot("unreadable-module");
+      const locked = join(root5, "face", "src", "modules", "command", "today");
+      chmodSync(locked, 0o000);
+      let r5;
+      try { r5 = run(root5, `${target.ring}/${target.id}`); } finally { chmodSync(locked, 0o755); }
+      check("THROW: a module folder that cannot be read mid-proof is RED, and the scaffold is removed",
+        r5.status === 1 && /face-module: RED/.test(r5.stdout) && !existsSync(join(root5, "face", "src", "modules", target.ring, target.id)), out(r5));
+
+      // A rollback that cannot remove what it wrote NAMES it and does not throw.
+      const parent = join(scratch, "rollback-locked", "ring");
+      const dir = join(parent, "mod");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "module.mjs"), "x");
+      chmodSync(parent, 0o555);
+      let left;
+      try { left = mod.rollback([parent, dir], dir); } catch (e) { left = e; } finally { chmodSync(parent, 0o755); }
+      check("ROLLBACK: a folder that will not go is returned by name, not thrown past the verdict", Array.isArray(left) && left.some((l) => l.includes("mod")), String(left));
+      console.log("posix-arms=ran");
+    } else {
+      console.log("posix-arms=skipped (win32, or running as root: permission bits do not bite)");
+    }
   }
 
   // ── the main guard realpaths BOTH sides: run through a symlink, it still runs ──

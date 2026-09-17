@@ -84,14 +84,35 @@ const VALUE_WORDS = new Set(["this", "super", "null", "true", "false", "undefine
 const EXPR_PREFIX_WORDS = new Set(["return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw",
   "case", "do", "else", "yield", "await", "default", "export"]);
 const OPENERS = { ")": "(", "]": "[", "}": "{" };
-const NAME_START = /[A-Za-z_$ -￿]/;
-const NAME_PART = /[\w$ -￿]/;
+// Identifier characters are ECMAScript's own (ID_Start / ID_Continue, plus ZWNJ and ZWJ), and whitespace
+// is JavaScript's own `\s` class -- every Unicode space separator, not a hand-kept list. A lexer whose idea
+// of a space is narrower than node's read `import<EM SPACE>React` as one name and never saw the import
+// (face v2 Phase 02 attack; the twin of the ASCII-whitespace fix in fixed-defects).
+const NAME_START = /[\p{ID_Start}$_]/u;
+const NAME_PART = /[\p{ID_Continue}$]/u;
+const ZWNJ_ZWJ = new Set([0x200c, 0x200d]);
+const isNamePart = (c) => NAME_PART.test(c) || ZWNJ_ZWJ.has(c.charCodeAt(0));
+const isSpace = (c) => /\s/.test(c);
 const NUMBER = /^(?:0[xXoObB][0-9a-fA-F_]+n?|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d[\d_]*)?n?)/;
+// JavaScript's four line terminators. A `//` comment ends at ANY of them, and a string or a regex may
+// not span one (U+2028/U+2029 aside in strings). Reading only LF let a `// x<U+2028>import React`
+// hide a whole statement from the scan while node ran it (face v2 Phase 02 attack). Built from char
+// codes so no editor or tool can turn an escape into an invisible byte in this file.
+const LS = String.fromCharCode(0x2028);
+const PS = String.fromCharCode(0x2029);
+const isLineBreak = (c) => c === "\n" || c === "\r" || c === LS || c === PS;
+
+/** A line for a log anything parses: every line terminator in `text` made visible, so a name cannot forge a line. */
+export function oneLine(text) {
+  let out = "";
+  for (const c of String(text)) out += isLineBreak(c) ? `<U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}>` : c;
+  return out;
+}
 
 /** Whether a token can END an operand (so a following `/` divides and a following `<` compares). */
 function isEnder(t) {
   if (!t) return false;
-  if (t.k === "name") return !KEYWORDS.has(t.v) || VALUE_WORDS.has(t.v);
+  if (t.k === "name") return t.prop === true || !KEYWORDS.has(t.v) || VALUE_WORDS.has(t.v);
   if (t.k === "num" || t.k === "str" || t.k === "re") return true;
   return t.k === "p" && (t.v === ")" || t.v === "]" || t.v === "}" || t.v === "`end" || t.v === "jsx/>" || t.v === "jsx</>");
 }
@@ -157,14 +178,14 @@ export function lex(text, { jsx = false } = {}) {
     for (;;) {
       const c = src[i];
       if (c === undefined) return;
-      if (c === "\n") { nl = true; advance(1); continue; }
-      if (c === " " || c === "\t" || c === "\r" || c === "\f" || c === "\v" || c === " " || c === "﻿" || c === " " || c === " ") { advance(1); continue; }
-      if (c === "/" && src[i + 1] === "/") { while (i < src.length && src[i] !== "\n") advance(1); continue; }
+      if (isLineBreak(c)) { nl = true; advance(1); continue; }
+      if (isSpace(c)) { advance(1); continue; }
+      if (c === "/" && src[i + 1] === "/") { while (i < src.length && !isLineBreak(src[i])) advance(1); continue; }
       if (c === "/" && src[i + 1] === "*") {
         const at = here();
         const end = src.indexOf("*/", i + 2);
         if (end === -1) throw new LexError("an unterminated /* comment", at.line, at.col);
-        if (src.slice(i, end).includes("\n")) nl = true;
+        if ([...src.slice(i, end)].some(isLineBreak)) nl = true;
         advance(end + 2 - i);
         continue;
       }
@@ -178,7 +199,8 @@ export function lex(text, { jsx = false } = {}) {
     let v = "";
     for (;;) {
       const c = src[i];
-      if (c === undefined || c === "\n") throw new LexError("an unterminated string", at.line, at.col);
+      // A string may hold U+2028/U+2029 (ES2019) but not a CR or an LF.
+      if (c === undefined || c === "\n" || c === "\r") throw new LexError("an unterminated string", at.line, at.col);
       if (c === "\\") {
         // A line continuation may be CRLF: the escape covers both bytes.
         const n = src[i + 1] === undefined ? 1 : src[i + 1] === "\r" && src[i + 2] === "\n" ? 3 : 2;
@@ -199,8 +221,8 @@ export function lex(text, { jsx = false } = {}) {
     let inClass = false;
     for (;;) {
       const c = src[i];
-      if (c === undefined || c === "\n") throw new LexError("an unterminated regex", at.line, at.col);
-      if (c === "\\") { advance(src[i + 1] === undefined || src[i + 1] === "\n" ? 1 : 2); continue; }
+      if (c === undefined || isLineBreak(c)) throw new LexError("an unterminated regex", at.line, at.col);
+      if (c === "\\") { advance(src[i + 1] === undefined || isLineBreak(src[i + 1]) ? 1 : 2); continue; }
       if (c === "[") inClass = true;
       else if (c === "]") inClass = false;
       else if (c === "/" && !inClass) { advance(1); break; }
@@ -254,7 +276,7 @@ export function lex(text, { jsx = false } = {}) {
   const skipJsxSpace = () => {
     for (;;) {
       const c = src[i];
-      if (c === " " || c === "\t" || c === "\r" || c === "\n") { advance(1); continue; }
+      if (c !== undefined && isSpace(c)) { advance(1); continue; }
       if (c === "/" && src[i + 1] === "*") {
         const at = here();
         const end = src.indexOf("*/", i + 2);
@@ -262,7 +284,7 @@ export function lex(text, { jsx = false } = {}) {
         advance(end + 2 - i);
         continue;
       }
-      if (c === "/" && src[i + 1] === "/") { while (i < src.length && src[i] !== "\n") advance(1); continue; }
+      if (c === "/" && src[i + 1] === "/") { while (i < src.length && !isLineBreak(src[i])) advance(1); continue; }
       return;
     }
   };
@@ -328,7 +350,7 @@ export function lex(text, { jsx = false } = {}) {
       if (c === "{") { jsxContainer(); continue; }
       if (c === "<") {
         let j = i + 1;
-        while (src[j] === " " || src[j] === "\t" || src[j] === "\r" || src[j] === "\n") j++;
+        while (j < src.length && isSpace(src[j])) j++;
         if (src[j] === "/") {
           const e = here();
           advance(j + 1 - i);
@@ -375,14 +397,20 @@ export function lex(text, { jsx = false } = {}) {
       }
       if (NAME_START.test(c)) {
         let j = i + 1;
-        while (j < src.length && NAME_PART.test(src[j])) j++;
+        // A name never absorbs a line terminator or a space-like character: `foo<U+2028>import x from "react"`
+        // is a name, a line break and an import statement, and must lex as exactly that.
+        while (j < src.length && isNamePart(src[j])) j++;
         const v = src.slice(i, j);
         advance(j - i);
-        push("name", v, at);
+        const before = prev();
+        const ni = push("name", v, at);
+        // After `.` or `?.` a name is a PROPERTY, even one spelled like a keyword: `f.default < x` is a
+        // comparison, not a JSX element opened after the keyword `default` (face v2 Phase 02 attack).
+        tokens[ni].prop = Boolean(before) && before.k === "p" && (before.v === "." || before.v === "?.");
         continue;
       }
       const p = prev();
-      const operandPosition = !isEnder(p) || (p && p.k === "name" && EXPR_PREFIX_WORDS.has(p.v));
+      const operandPosition = !isEnder(p) || (p && p.k === "name" && p.prop !== true && EXPR_PREFIX_WORDS.has(p.v));
       if (c === "/" && src[i + 1] !== "/" && src[i + 1] !== "*" && operandPosition) { readRegex(); continue; }
       if (c === "<" && jsx && operandPosition) { jsxElement(); continue; }
       let v = null;
@@ -479,7 +507,9 @@ function importStatements(tokens) {
 export function classifySpec(spec) {
   const s = String(spec);
   if (s.startsWith("./") || s.startsWith("../")) {
-    if (s.includes("\\") || s.includes("?") || s.includes("#") || s.includes("//") || /(^|\/)\.(\/|$)/.test(s.replace(/^\.\.?\//, "")))
+    // `%` too: path.resolve reads `%2e%2e` as a folder name and node's loader decodes it to `..`, so the
+    // lint and node would resolve two different files (face v2 Phase 02 attack).
+    if (s.includes("%") || s.includes("\\") || s.includes("?") || s.includes("#") || s.includes("//") || /(^|\/)\.(\/|$)/.test(s.replace(/^\.\.?\//, "")))
       return { ok: false, kind: "fold-import", why: `the relative import ${JSON.stringify(s)} carries a query, a fragment, a backslash or an empty segment` };
     if (!/^(\.\.?\/)+([^/]+\/)*[^/]+\.mjs$/.test(s))
       return { ok: false, kind: "fold-import", why: `${JSON.stringify(s)} is a relative import of something that is not a .mjs file` };
@@ -760,25 +790,39 @@ export function scanView(text, file) {
     if (t.v === "(") {
       if (!p) continue;
       if (p.k === "name") {
-        if (KEYWORDS.has(p.v) && p.v !== "import") continue; // `function (`, `if (` (already a finding), `return (`
+        if (KEYWORDS.has(p.v) && p.prop !== true && p.v !== "import") continue; // `function (`, `if (` (already a finding), `return (`
         const before = tokens[i - 2];
         if (isName(before, "function")) continue; // a declaration names a function; it does not call one
         if (p.v === "import") { add(p, "view-call", "a dynamic import() in a View"); continue; }
         const member = isP(before, ".") || isP(before, "?.");
+        // A handler is called through the context or the props a View was handed -- `ctx.onOpen(id)` --
+        // never through data: `f.onCompute(x)` is a decision wearing a handler's name.
+        let rootIdx = i - 1;
+        while (rootIdx >= 2 && (isP(tokens[rootIdx - 1], ".") || isP(tokens[rootIdx - 1], "?.")) && tokens[rootIdx - 2].k === "name") rootIdx -= 2;
+        const root = tokens[rootIdx];
         const ok = member
-          ? MEMBER_CALLS.has(p.v) || /^on[A-Z]/.test(p.v)
+          ? MEMBER_CALLS.has(p.v) || (/^on[A-Z]/.test(p.v) && root && (root.v === "ctx" || root.v === "props"))
           : (/^use[A-Z]/.test(p.v) && imported.get(p.v) === "react") || (/^(on|set)[A-Z]/.test(p.v) && !imported.has(p.v));
         if (!ok) add(p, "view-call", `a call to \`${p.v}\` in a View -- a View calls .map, React's hooks, handlers and setters; fold() computes the rest`);
         continue;
       }
       if (isP(p, ")") || isP(p, "]") || isP(p, "`end")) { add(t, "view-call", "a call on the result of an expression in a View"); continue; }
+      // `function () { ... }()`: a body's closing brace followed by a call.
+      if (isP(p, "}") && p.pair > 0 && (isP(tokens[p.pair - 1], ")") || isP(tokens[p.pair - 1], "=>"))) { add(t, "view-call", "an immediately invoked function in a View"); continue; }
       continue;
     }
 
     if (t.v === "`" && p && (isP(p, ")") || isP(p, "]"))) { add(t, "view-call", "a tagged template on an expression is a call"); continue; }
 
     if (t.v === "[") {
-      const member = p && ((p.k === "name" && (!KEYWORDS.has(p.v) || VALUE_WORDS.has(p.v))) || isP(p, ")") || isP(p, "]") || p.k === "str" || isP(p, "`end"));
+      // A computed key -- `{ [f.state]: label }` or `const { [f.state]: x } = f.labels` -- is a lookup keyed by data.
+      const enclosing = tokens[t.inside];
+      if (p && (isP(p, "{") || isP(p, ",")) && enclosing && enclosing.v === "{" && enclosing.kind === "object") {
+        add(t, "view-lookup", "a computed key is a lookup keyed by data; fold() returns the resolved value");
+        continue;
+      }
+      // After `}` too: `{ open: 'Open', late: 'Late' }[f.state]` indexes an object literal.
+      const member = p && ((p.k === "name" && (p.prop === true || !KEYWORDS.has(p.v) || VALUE_WORDS.has(p.v))) || isP(p, ")") || isP(p, "]") || isP(p, "}") || p.k === "str" || isP(p, "`end"));
       if (!member) continue;
       const inner = t.pair - i - 1;
       if (inner === 0) continue; // `Row[]`, an array type
@@ -798,12 +842,19 @@ function sortedEntries(dir) {
   return readdirSync(dir).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
-/** Whether `abs` exists with exactly this spelling for every segment below `from`. */
-function exactCaseBelow(from, abs) {
-  const rel = relative(from, abs);
-  if (!rel || rel.startsWith("..") || isAbsolute(rel)) return false;
-  let dir = from;
-  for (const seg of rel.split(sep)) {
+/**
+ * Whether every folder and file an import NAMES exists with exactly that spelling, walked from the
+ * importing file's own folder. Every segment the specifier spells is checked -- including one reached
+ * after climbing above face/src and coming back down (`../../../../SRC/lib/x.mjs`), which a check of
+ * only the path below face/src passed on a case-insensitive disk (face v2 Phase 02 attack). The
+ * folders the importer already lives in are not re-spelled, so an 8.3 short name in a temp path
+ * cannot turn into a false finding.
+ */
+function specSpelledExactly(fromDir, spec) {
+  let dir = fromDir;
+  for (const seg of spec.split("/")) {
+    if (seg === "." || seg === "") continue;
+    if (seg === "..") { dir = dirname(dir); continue; }
     let names;
     try { names = readdirSync(dir); } catch { return false; }
     if (!names.includes(seg)) return false;
@@ -845,13 +896,15 @@ export function lintModules(root, { srcRoot = dirname(root), base = process.cwd(
       let st;
       try { st = lstatSync(target); } catch { finding(abs, "fold-missing-import", `${imp.spec} resolves to a file that does not exist`, imp.line, imp.col); continue; }
       if (st.isSymbolicLink()) { finding(abs, "symlink", `${imp.spec} is a symlink -- an import that points somewhere else is not followed`, imp.line, imp.col); continue; }
+      // Spelling before containment: a case-variant path must read the same on every OS, not as
+      // missing on ext4 and as leaving face/src on APFS.
+      if (!specSpelledExactly(dirname(abs), imp.spec)) { finding(abs, "fold-missing-import", `${imp.spec} matches a file only case-insensitively -- it would not resolve on a case-sensitive filesystem`, imp.line, imp.col); continue; }
       let targetReal;
       try { targetReal = realpathSync(target); } catch { targetReal = target; }
       const rel = relative(srcReal, targetReal);
       if (rel.startsWith("..") || isAbsolute(rel) || rel === "") { finding(abs, "fold-outside-src", `${imp.spec} leaves face/src -- a fold's imports stay inside the app`, imp.line, imp.col); continue; }
       if (rel.split(sep).includes("node_modules")) { finding(abs, "fold-import", `${imp.spec} reaches into node_modules`, imp.line, imp.col); continue; }
       if (!st.isFile()) { finding(abs, "fold-missing-import", `${imp.spec} is not a file`, imp.line, imp.col); continue; }
-      if (!exactCaseBelow(srcReal, targetReal)) { finding(abs, "fold-missing-import", `${imp.spec} matches a file only case-insensitively -- it would not resolve on a case-sensitive filesystem`, imp.line, imp.col); continue; }
       checkMjs(target);
     }
   };
@@ -937,7 +990,7 @@ function main(argv) {
   let report;
   try { report = lintModules(root, { srcRoot: dirname(root), base }); }
   catch (e) { console.error(`face-pure: ${e.message}`); return 2; }
-  for (const f of report.findings) console.log(`FAIL ${f.file}:${f.line}:${f.col} ${f.kind} ${f.detail}`);
+  for (const f of report.findings) console.log(oneLine(`FAIL ${f.file}:${f.line}:${f.col} ${f.kind} ${f.detail}`));
   if (report.modules === 0) console.log("FAIL nothing was scanned -- zero modules is not a pure tree");
   console.log(`face-pure: modules=${report.modules} folds=${report.folds} views=${report.views} files=${report.files} findings=${report.findings.length}`);
   return report.modules > 0 && report.folds > 0 && report.views > 0 && report.findings.length === 0 ? 0 : 1;
