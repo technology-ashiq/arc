@@ -439,3 +439,41 @@ affected; any future harness that prepends a Windows-form dir is.
     classification only it produces.
 24. A `C:/` directory prepended to `PATH` in Git Bash is split at the colon and silently not
     searched.
+
+## Seventh pass, 2026-09-17 — the fifth-pass fixes (`81a59499`)
+
+Two fresh agents, decision logic and shell / OS, in private scratch dirs, with the defect list at
+24. **Neither found a real composer call that runs anything but its own render.** The shell
+attacker found one way to make the check not answer at all, which reads as allow.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **S1 (High)** | **A command of ~180k words outlived the hook timeout.** The command was split into its words and `core/common.sh` was then sourced with all of them in `$@`, and the cost grows with the word count: 30k words 2.2 s, 120k 14.7 s, 240k 129 s. A timed-out hook is read as ALLOW. CONFIRMED. | **FIXED**: the command is refused above 400 bytes before anything whose cost depends on it; a real render is under 200. Pinned by the refusal MESSAGE, so a later refusal after the slow part does not pass. |
+| S1-esc (Med) | On that timeout, a padded sibling render would render the sibling into the composer's own session. PLAUSIBLE. | **Closed with S1.** |
+| S2 (Med) | The dispatcher fails open when it cannot capture the payload. CONFIRMED. | **= BS-4, the owner's `_dispatch.sh`.** Still open. |
+| F1 (Low-Med) | The escaped-control-character refusal ran before the identity check, so the MAIN session's own probes that mentioned UI-Composer were blocked. Running defect #19. CONFIRMED. | **FIXED**: it runs only once the caller is known to be a composer running Bash. |
+| F2 (Low-Med) | An empty or truncated check script exited 0 and allowed a composer; the fragment only caught a missing one. CONFIRMED. | **FIXED**: the script ends in a sentinel line. Without it, or with an exit other than 0 or 2, the fragment blocks a composer and nobody else. |
+| F3 (Low) | With the script missing, the fallback blocked any agent that only mentioned ui-composer. CONFIRMED. | **FIXED**: the fallback reads the `agent_type` value, case-blind, with an optional namespace. |
+| F4 (Info) | A key spelled with a JSON escape, or split from its colon by a line break, was invisible to the raw count and read as absent. CONFIRMED. | **FIXED**: with jq working, jq decides presence and must agree with the raw count; the grep reader treats any `\u` escape as unreadable. |
+| F5 (Info) | Every CR was stripped from the command, so the command checked was not the command run. CONFIRMED, no leak. | **FIXED**: one trailing CR (jq.exe's line end) is removed; any other CR stays, and the alphabet refuses it. |
+| F6 (Info) | Five of the renderer's refusal echoes were still uncapped. CONFIRMED. | **FIXED** and pinned. |
+| F7 (Info) | Only a `:` namespace is understood. PLAUSIBLE. | **ACCEPTED**: `plugin:agent` is the harness's real form (this session's agent list uses it); the others are not. |
+| SM1-SM9 | Surviving mutants: the grep reader's empty-value refusal, the viewport's upper width and lower height bounds, the four-digit first-digit class (in both the hook and the renderer), a duplicate `tool_name`, and a case-sensitive fallback. | **Each has a case now.** |
+| running #15 | The renderer's new cases grepped merged output. | **FIXED**: `run --separate-stderr`. |
+| running #17 | The marker count did not stop at 2. | **FIXED**. |
+| running #20 | Escaped quotes nested inside `"$( )"` in the jq reader. | **FIXED**: the jq programs are single-quoted and joined to the path. |
+
+**Clean, by execution:** identity normalisation under `C`, `tr_TR.UTF-8` and `en_US.UTF-8`; a broken
+jq; duplicate keys; a non-string identity; `CLAUDE_PROJECT_DIR` spelled with backslashes, `C:/`, a
+trailing slash, `..`, `.`, or a space and `&`; payloads up to 1.5 MB in 0.8-2.6 s.
+
+**Process note:** the Write tool decodes a `\uXXXX` sequence into the raw character. One attacker's
+payload generator and this session's own comment both landed a real NUL that way. Build escapes
+from a backslash variable.
+
+### Add to the running defect list for the next attacker
+25. Length before shape: a check whose cost grows with its input fails open on the hook timeout
+    unless the input is capped before any work that scales with it.
+26. A refusal that runs before the caller is known scopes everyone.
+27. "The script exists" is not "the script is whole": give it a sentinel and read the exit code.
+28. The Write tool turns a `\uXXXX` escape in its content into the character itself.

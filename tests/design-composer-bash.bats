@@ -211,7 +211,7 @@ teardown() { _arc_teardown; }
   cp "$BATS_TEST_TMPDIR/marker-b" "$SANDBOX/.claude/state/design/composer-session--lexos-v1--variant-b"
   _hook ui-composer Bash "$RENDER_B_INTO_B"
   [ "$status" -eq 2 ] || { echo "rendered variant-b with two boundaries armed: $stderr"; false; }
-  printf '%s' "$stderr" | grep -q '2 composer boundaries are armed'
+  printf '%s' "$stderr" | grep -q 'more than one composer boundary is armed'
 }
 
 @test "composer bash: a marker whose filename disagrees with its content is not a boundary" {
@@ -246,10 +246,51 @@ teardown() { _arc_teardown; }
   command -v jq | grep -q badbin || { echo "the broken jq is not the one found first"; false; }
   _hook ui-composer Bash "$CAT_B"
   [ "$status" -eq 2 ] || { echo "a broken jq let a composer read a sibling: $stderr"; false; }
+  # The grep reader's own refusals, which only this case drives: a value it cannot read exactly
+  # comes back empty, and empty must refuse (seventh attack pass, surviving mutant SM1).
+  _hook_raw '{"agent_type":["ui-composer"],"tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "grep reader: a non-string identity was allowed: $stderr"; false; }
+  _hook_raw '{"agent_type":"ui-composer\r","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "grep reader: an escaped identity was allowed: $stderr"; false; }
   _hook ui-composer Bash "$RENDER_A"
   [ "$status" -eq 0 ] || { echo "the grep reader could not read an ordinary composer render: $stderr"; false; }
   _hook "" Bash "$CAT_B"
   [ "$status" -eq 0 ] || { echo "the main session was scoped under a broken jq: $stderr"; false; }
+}
+
+@test "composer bash: a key the grep reader cannot see is still read, and a duplicate tool refuses" {
+  # Seventh attack pass. F4: a key spelled with a JSON escape, or split from its colon by a line
+  # break, was invisible to the raw count and read as ABSENT, so a composer went through. SM5: a
+  # tool_name given twice was never tested.
+  _bash_sandbox; _arm_a
+  local bs='\' nl='
+'
+  _hook_raw '{"agent'"${bs}"'u005ftype":"ui-composer","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "an escaped key name hid the composer: $stderr"; false; }
+  _hook_raw '{"agent_type"'"$nl"':"ui-composer","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "a line break before the colon hid the composer: $stderr"; false; }
+  _hook_raw '{"agent_type":"ui-composer","tool_name":"Bash","tool_name":"Read","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "a duplicate tool_name was allowed: $stderr"; false; }
+}
+
+@test "composer bash: a control-character escape scopes a composer only, never the main session" {
+  # F1, running defect #19: the escape check ran before the identity was known, so the MAIN
+  # session's own probe of this hook -- mentioning UI-Composer beside an escaped NUL -- was blocked.
+  _bash_sandbox; _arm_a
+  local bs='\'
+  _hook_raw '{"session_id":"s","tool_name":"Bash","tool_input":{"command":"bash .claude/hooks/PreToolUse.sh","description":"Probe the UI-Composer hook with an escaped NUL ('"${bs}"'u0000)"}}'
+  [ "$status" -eq 0 ] || { echo "the main session was blocked: $stderr"; false; }
+  _hook_raw '{"agent_type":"Explore","tool_name":"Bash","tool_input":{"command":"grep -rn ui-composer '"${bs}${bs}"'u001b tests"}}'
+  [ "$status" -eq 0 ] || { echo "another agent was blocked: $stderr"; false; }
+  _live
+}
+
+@test "composer bash: a carriage return inside a composer's command is refused, not stripped" {
+  # F5: every CR was stripped from the command, so the command checked was not the command run.
+  _bash_sandbox; _arm_a
+  _hook_raw '{"agent_type":"ui-composer","tool_name":"Bash","tool_input":{"command":"ba\rsh .claude/scripts/design/design-render.sh docs/design/explore/lexos-v1/variant-a/index.html --mode explore --session lexos-v1--variant-a"}}'
+  [ "$status" -eq 2 ] || { echo "a CR inside the command was stripped and allowed: $stderr"; false; }
+  printf '%s' "$stderr" | grep -qE 'outside the renderer|could not be read'
 }
 
 @test "composer bash: an identity or command that cannot be read exactly refuses" {
@@ -318,7 +359,7 @@ teardown() { _arc_teardown; }
   # BL-6: `0x0` hung the renderer for 32 s, and `01440x0900` never matches a declared viewport.
   _bash_sandbox; _arm_a
   local v
-  for v in 0x0 01440x900 1440x0900 99999999999999999999x800 199x900 1440x4097 1440x900x2 x900 1440x; do
+  for v in 0x0 01440x900 1440x0900 0900x900 99999999999999999999x800 199x900 1440x199 4097x900 1440x4097 1440x900x2 x900 1440x; do
     _hook ui-composer Bash "$RENDER_A_BARE --viewport $v"
     [ "$status" -eq 2 ] || { echo "allowed viewport $v"; false; }
   done
@@ -337,13 +378,30 @@ teardown() { _arc_teardown; }
   done
 }
 
-@test "composer bash: a refusal echoes a capped route, not the whole of a huge one" {
-  # BS-10, lane defect #14: a 20 KB route came back as 20 KB of stderr.
+@test "composer bash: a command longer than any render is refused by its length, before it is split" {
+  # Seventh attack pass, S1: the words were split and core/common.sh sourced with all of them in
+  # `$@`; 240k words took 129 s, past the hook timeout, which reads as ALLOW. The refusal must be
+  # the LENGTH cap -- a later refusal would come only after the expensive part.
   _bash_sandbox; _arm_a
-  _hook ui-composer Bash "bash .claude/scripts/design/design-render.sh docs/$(printf '%020000d' 0) --mode explore --session lexos-v1--variant-a"
+  local pad="" i=0
+  while [ "$i" -lt 3000 ]; do pad="$pad --pin-font"; i=$((i + 1)); done
+  _hook ui-composer Bash "$RENDER_A_BARE$pad"
+  [ "$status" -eq 2 ] || { echo "a 33 KB command was not refused: $stderr"; false; }
+  printf '%s' "$stderr" | grep -q 'longer than any render' || { echo "refused, but not by the length cap: $stderr"; false; }
+  # The cap is above every real render.
+  _hook ui-composer Bash "$RENDER_A"
+  [ "$status" -eq 0 ] || { echo "$stderr"; false; }
+}
+
+@test "composer bash: a refusal echoes a capped route, not the whole of a huge one" {
+  # BS-10, lane defect #14: a 20 KB route came back as 20 KB of stderr. The length cap now refuses
+  # a 20 KB command before the route is looked at, so the route here stays under that cap and the
+  # assertion is on the echo itself: no more than 120 of its characters come back.
+  _bash_sandbox; _arm_a
+  _hook ui-composer Bash "bash .claude/scripts/design/design-render.sh docs/$(printf '%0250d' 0) --mode explore --session lexos-v1--variant-a"
   [ "$status" -eq 2 ]
-  printf '%s' "$stderr" | grep -q 'is not inside your own variant'
-  [ "${#stderr}" -lt 2000 ] || { echo "stderr was ${#stderr} bytes"; false; }
+  printf '%s' "$stderr" | grep -q 'is not inside your own variant' || { echo "refused for another reason: $stderr"; false; }
+  case "$stderr" in *"$(printf '%0200d' 0)"*) echo "the route was echoed uncapped"; false;; esac
 }
 
 @test "composer bash: with the check script missing, a composer's Bash is blocked and nobody else's is" {
@@ -358,6 +416,36 @@ teardown() { _arc_teardown; }
   [ "$status" -eq 0 ] || { echo "the main session was blocked by a missing composer script: $stderr"; false; }
   _hook Explore Bash "node -e 1"
   [ "$status" -eq 0 ] || { echo "another subagent was blocked by a missing composer script: $stderr"; false; }
+  # The fallback reads the agent_type VALUE: a re-cased composer is still blocked (SM6), and an
+  # agent that only MENTIONS ui-composer is not (seventh attack pass, F3).
+  _hook UI-Composer Bash "$RENDER_A"
+  [ "$status" -eq 2 ] || { echo "a re-cased composer ran with the script gone: $stderr"; false; }
+  _hook Explore Bash "grep -rn ui-composer .claude/agents"
+  [ "$status" -eq 0 ] || { echo "an agent that mentions ui-composer was blocked: $stderr"; false; }
+}
+
+@test "composer bash: an empty, truncated or failing check script does not let a composer through" {
+  # F2: the fragment only blocked a MISSING script. An empty or truncated one ran to its end and
+  # exited 0, and any exit but 2 reads as allow. The script ends in a sentinel line; without it,
+  # or with an exit other than 0 or 2, a composer is blocked and nobody else is.
+  _bash_sandbox; _arm_a
+  local sc="$SANDBOX/.claude/scripts/design/composer-bash-check.sh"
+  tail -n 1 "$sc" | grep -qx '# composer-bash-check: end' || { echo "the real script has no sentinel, so this case proves nothing"; false; }
+  cp "$sc" "$BATS_TEST_TMPDIR/whole.sh"
+  : > "$sc"
+  _hook ui-composer Bash "$CAT_B"
+  [ "$status" -eq 2 ] || { echo "an EMPTY check script let a composer through: $stderr"; false; }
+  head -n 60 "$BATS_TEST_TMPDIR/whole.sh" > "$sc"
+  _hook ui-composer Bash "$CAT_B"
+  [ "$status" -eq 2 ] || { echo "a TRUNCATED check script let a composer through: $stderr"; false; }
+  printf 'exit 1\n# composer-bash-check: end\n' > "$sc"
+  _hook ui-composer Bash "$CAT_B"
+  [ "$status" -eq 2 ] || { echo "a check script exiting 1 let a composer through: $stderr"; false; }
+  _hook "" Bash "$CAT_B"
+  [ "$status" -eq 0 ] || { echo "the main session was blocked by a broken composer script: $stderr"; false; }
+  cp "$BATS_TEST_TMPDIR/whole.sh" "$sc"
+  _hook ui-composer Bash "$RENDER_A"
+  [ "$status" -eq 0 ] || { echo "the restored script did not allow the composer's own render: $stderr"; false; }
 }
 
 # ---------- the owner's half ----------

@@ -356,15 +356,27 @@ consumer projects — it carries the owner's approvals.
       manifest row.
     - Accepted: BL-8, marker not bound to `agent_id` (serial composition; revisit with resume
       step 6). Owner-side and open: BS-4, `_dispatch.sh` fails open on a failed payload capture.
-    - **These fixes owe their own two-surface attack pass (the seventh).**
+    - Run **35189258213** at `81a59499`, read per JOB: 14/19 green, the 5 red jobs failing on the
+      refpack 14 alone, `declared = executed` everywhere, the owner-fragment case a counted SKIP.
+      That is the pre-cycle baseline.
+  - **Seventh attack pass, on the fifth-pass fixes: one High, fixed.** A composer command of ~180k
+    words made the check source `core/common.sh` with every word in `$@` and outlive the hook
+    timeout, which reads as allow (S1). The command is now refused above 400 bytes before any
+    work that scales with it. Also fixed: the control-escape refusal scoping the main session
+    (F1), an empty or truncated check script allowing a composer (F2: sentinel line plus
+    exit-code check in the fragment), the fallback blocking agents that merely mention the
+    composer (F3), escaped or line-split keys read as absent (F4), CR stripped from the command
+    (F5), five uncapped renderer echoes (F6), nine surviving mutants, merged stderr in the new
+    renderer cases, and the marker count not stopping at 2. Accepted: only `:` namespaces (F7).
+    Open and the owner's: BS-4 / S2, `_dispatch.sh`. Defect list to 28.
 
 **Resume here, in order:**
 1. ~~**CI.** Read per JOB for `a16b189e` and `fd94e8f1`.~~ Done 2026-09-17, as expected.
-2. **Attack findings.** ~~BL-1/BS-1~~ built at `ee8d4707` (ADR-1418), attacked, and the sixth pass
-   fixed. ~~The rest of the fifth pass~~ fixed or accepted. Next: read the run for the fifth-pass
-   batch per JOB (expected red: the refpack 14 only, with the owner-fragment case now a counted
-   SKIP), then run the **seventh pass** (two surfaces, private scratch dirs, defect list to 24) on
-   the fifth-pass fixes and fix what it returns.
+2. **Attack findings.** Done so far: BL-1/BS-1 built at `ee8d4707` (ADR-1418) and attacked (sixth
+   pass, fixed); the rest of the fifth pass fixed or accepted (run 35189258213 at baseline); the
+   seventh pass fixed. Next: read the run for the seventh-pass fixes per JOB (expected red: the
+   refpack 14 only). Then decide whether the S1 length cap and the fragment rewrite owe an eighth
+   pass.
    BS-4 (the dispatcher fails open when it cannot capture the payload) is in `_dispatch.sh`, which
    is under the governance-denied `.claude/hooks/**`, so it is the owner's, and it affects every
    guard.

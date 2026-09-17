@@ -86,7 +86,7 @@ while [ "$#" -gt 0 ]; do
     # An unknown flag REFUSES rather than being swallowed. The old catch-all was `*) shift;;`,
     # which meant a typo like --sesion s1 vanished and the render silently proceeded in
     # critique mode under the default session -- an omitted --session wearing a flag's clothes.
-    *) echo "design-render: unknown argument '$1'" >&2
+    *) echo "design-render: unknown argument '${1:0:40}'" >&2
        echo "usage: design-render.sh <route> [--mode explore|critique] [--session ID] [--iter N] [--viewport WxH] [--media light|dark] [--pin-font]" >&2
        exit 1;;
   esac
@@ -94,7 +94,7 @@ done
 
 case "$MODE" in
   explore|critique) ;;
-  *) echo "design-render: --mode takes explore or critique, got '$MODE'" >&2; exit 1;;
+  *) echo "design-render: --mode takes explore or critique, got '${MODE:0:40}'" >&2; exit 1;;
 esac
 
 # Validate whenever the flag was GIVEN, never whenever the value is non-empty. `--iter ""`
@@ -103,13 +103,13 @@ esac
 if [ "$ITER_GIVEN" -eq 1 ]; then
   case "$ITER" in
     1|2|3) ;;
-    *) echo "design-render: --iter takes 1, 2 or 3, got '$ITER' (ADR-1401 caps the loop at three)" >&2; exit 1;;
+    *) echo "design-render: --iter takes 1, 2 or 3, got '${ITER:0:40}' (ADR-1401 caps the loop at three)" >&2; exit 1;;
   esac
 fi
 
 case "$MEDIA" in
   light|dark) ;;
-  *) echo "design-render: --media takes light or dark, got '$MEDIA'" >&2; exit 1;;
+  *) echo "design-render: --media takes light or dark, got '${MEDIA:0:40}'" >&2; exit 1;;
 esac
 
 if [ -z "$ROUTE" ]; then
@@ -146,7 +146,7 @@ fi
 # two files away from it. tests/portability.bats caught it on CI.
 case "$SESSION" in
   ""|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*)
-    echo "design-render: --session takes lowercase letters, digits and hyphens, got '$SESSION'" >&2; exit 1;;
+    echo "design-render: --session takes lowercase letters, digits and hyphens, got '${SESSION:0:40}'" >&2; exit 1;;
 esac
 
 # An explore render is confined to its own variant directory (ADR-1418). This used to open the

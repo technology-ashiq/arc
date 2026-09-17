@@ -50,32 +50,47 @@ if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | jq -r '.k' 2>/dev/
   JQ_OK=1
 fi
 
-# A JSON escape for a control character anywhere in a composer's Bash call refuses outright. jq
-# decodes the escape for NUL to a real NUL, which bash then drops without a word, so the checked
-# command and the run command could differ; the grep reader cannot decode escapes at all (BL-7).
-case "$PAYLOAD" in *'\u00'[01]*) _refuse "the call carries an escaped control character, and a command that cannot be read exactly is not run.";; esac
-
-# `_field <key> <jq path>` sets FIELD. Returns 1 when the field cannot be read EXACTLY: a jq that
-# fails on this payload, a value the grep reader would truncate, or the key given twice -- where
-# jq reads the last copy and grep the first, so the two readers disagreed on who was calling (BL-7).
-# A key that is simply absent reads as empty, which is not the same thing.
+# `_field <key> <jq path> [all-cr]` sets FIELD. Returns 1 when the field cannot be read EXACTLY; a
+# key that is simply absent reads as empty, which is not the same thing. Unreadable means:
+#   - the key given twice: jq reads the last copy and grep the first, so the two readers once
+#     disagreed on who was calling (BL-7);
+#   - with jq working, jq and the raw count disagree on whether the key is there. A key spelled
+#     with a JSON escape, or split from its colon by a line break, is invisible to grep, and read
+#     as absent it let a composer through (seventh attack pass, F4);
+#   - a value that is not a string, or one the grep reader would truncate.
+# The jq programs are single-quoted and joined to the path: escaped quotes nested inside `"$( )"`
+# have arrived malformed on one leg before (running defect #20).
 _field() {
-  _fk="$1"; _fp="$2"; FIELD=""
+  _fk="$1"; _fp="$2"; _fcr="${3:-}"; FIELD=""
   _fn="$(printf '%s' "$PAYLOAD" | grep -o "\"$_fk\"[[:space:]]*:" 2>/dev/null | wc -l | tr -d ' ')"
-  case "$_fn" in 0) return 0;; 1) ;; *) return 1;; esac
+  case "$_fn" in 0|1) ;; *) return 1;; esac
   if [ "$JQ_OK" -eq 1 ]; then
-    FIELD="$(printf '%s' "$PAYLOAD" | jq -r "$_fp | if type == \"string\" then . else error(\"not a string\") end" 2>/dev/null)" || return 1
+    _fs="$(printf '%s' "$PAYLOAD" | jq -r "$_fp"' | if . == null then "absent" elif type == "string" then "string" else "other" end' 2>/dev/null | tr -d '\r')" \
+      || return 1
+    case "$_fs:$_fn" in
+      absent:0) return 0;;
+      string:1) ;;
+      *) return 1;;
+    esac
+    FIELD="$(printf '%s' "$PAYLOAD" | jq -r "$_fp" 2>/dev/null)" || return 1
   else
+    # The grep reader cannot decode a JSON escape, so a payload carrying one cannot be read
+    # exactly by it at all: an escaped key name would read as absent (F4).
+    case "$PAYLOAD" in *'\u'*) return 1;; esac
+    [ "$_fn" -eq 1 ] || return 0
     FIELD="$(printf '%s' "$PAYLOAD" | grep -o "\"$_fk\"[[:space:]]*:[[:space:]]*\"[^\"\\\\]*\"" 2>/dev/null | head -1 \
       | sed 's/^[^:]*:[[:space:]]*"//; s/"$//')"
   fi
-  # jq.exe on Windows emits CRLF; a bash other than Git Bash keeps the CR (BS-11).
-  FIELD="$(printf '%s' "$FIELD" | tr -d '\r')"
+  # jq.exe on Windows ends its line with CRLF, so ONE trailing CR is the reader's, not the value's.
+  # Every CR is stripped only from the identity and the tool name (BS-11); a command keeps any
+  # other CR, so the command checked is the command run, and the alphabet refuses it (F5).
+  FIELD="${FIELD%$'\r'}"
+  [ -z "$_fcr" ] || FIELD="$(printf '%s' "$FIELD" | tr -d '\r')"
   [ -n "$FIELD" ] || return 1
   return 0
 }
 
-_field agent_type '.agent_type' || _refuse "the calling agent cannot be identified exactly, and this call names ui-composer."
+_field agent_type '.agent_type' all-cr || _refuse "the calling agent cannot be identified exactly, and this call names ui-composer."
 # Normalised, so a namespaced install (`arc:ui-composer`) or a case change is still the composer
 # rather than silently nobody (BL-9). Letters spelled out: `tr '[:upper:]'` maps I to a dotless i
 # under tr_TR.
@@ -83,12 +98,27 @@ AGENT="$(printf '%s' "$FIELD" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmno
 AGENT="${AGENT##*:}"
 AGENT="$(printf '%s' "$AGENT" | tr -d ' \t')"
 [ "$AGENT" = "ui-composer" ] || exit 0
-_field tool_name '.tool_name' || _refuse "the tool of a ui-composer call cannot be read exactly."
+_field tool_name '.tool_name' all-cr || _refuse "the tool of a ui-composer call cannot be read exactly."
 [ "$FIELD" = "Bash" ] || exit 0
+
+# Only now, with the caller known to be a composer running Bash: a JSON escape for a control
+# character refuses. jq decodes the escape for NUL to a real NUL, which bash then drops without a
+# word, so the checked command and the run command could differ; the grep reader cannot decode
+# escapes at all (BL-7). It ran before the identity check at first, and blocked the MAIN session's
+# own probes that mentioned ui-composer (seventh attack pass, F1; running defect #19).
+case "$PAYLOAD" in *'\u00'[01]*) _refuse "the call carries an escaped control character, and a command that cannot be read exactly is not run.";; esac
+
 _field command '.tool_input.command' \
   || _refuse "the command could not be read from the payload, and an unreadable composer command is not run."
 CMD="$FIELD"
 [ -n "$CMD" ] || _refuse "the call carries no command, and an unreadable composer command is not run."
+
+# Length before shape. A real render is under 200 bytes and a dozen words. An uncapped command was
+# split into its words and THEN core/common.sh was sourced with every word still in `$@`, which
+# grows with the word count: 240k words held this check for 129 s, past the hook timeout, and a
+# timed-out hook is read as ALLOW (seventh attack pass, S1; running defects #14 and #17). The cap
+# comes before anything whose cost depends on the command.
+[ "${#CMD}" -le 400 ] || _refuse "the command is ${#CMD} bytes, longer than any render; nothing longer than 400 is checked or run."
 
 # One line, one command, from a closed alphabet. Anything a shell treats as syntax -- ; & | > < $
 # backtick, quotes, backslash, parentheses, braces, globs, newlines -- is outside the alphabet, so a
@@ -130,8 +160,11 @@ _n=0; _mk=""
 for _m in "$ROOT/.claude/state/design"/composer-session--*; do
   [ -f "$_m" ] || continue
   _n=$((_n + 1)); _mk="$_m"
+  # Two is already a refusal, so the count stops there: a cap on the output must also cap the
+  # work (running defect #17).
+  [ "$_n" -lt 2 ] || break
 done
-[ "$_n" -eq 1 ] || _refuse "$_n composer boundaries are armed; a composer's render is judged against exactly one."
+[ "$_n" -eq 1 ] || _refuse "$([ "$_n" -eq 0 ] && echo "no composer boundary is" || echo "more than one composer boundary is") armed; a composer's render is judged against exactly one."
 arc_cm_load "$_mk" || _refuse "the armed composer marker is malformed."
 EX="$ARC_MF_EXPLORE"; VARIANT="$ARC_MF_VARIANT"
 
@@ -177,3 +210,4 @@ done
 [ "$MODE" = "explore" ] || _refuse "a composer renders with --mode explore."
 [ "$SESSION" = "$EX--$VARIANT" ] || _refuse "a composer renders into its own session, --session $EX--$VARIANT."
 exit 0
+# composer-bash-check: end

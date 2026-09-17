@@ -406,28 +406,44 @@ teardown() { _arc_teardown; }
 }
 
 # ---------- fifth attack pass, the renderer's twins of the Bash boundary's fixes ----------
+# Refusals are read from stderr alone, because merged output passes on a refusal printed to the
+# wrong stream (running defect #15, re-made here and caught by the seventh pass).
 
 @test "a degenerate or unbounded viewport is refused before the browser is touched" {
   _session_sandbox
   local v
-  for v in 0x0 01440x900 1440x0900 99999999999999999999x800 199x900 1440x4097; do
+  for v in 0x0 01440x900 1440x0900 0900x900 99999999999999999999x800 199x900 1440x199 4097x900 1440x4097; do
     rm -f "$SANDBOX/fakestate/set"
-    FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --viewport "$v"
+    FAKE_AB_SHOTS="A A" run --separate-stderr bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --viewport "$v"
     [ "$status" -eq 1 ] || { echo "admitted viewport $v"; false; }
-    echo "$output" | grep -q 'bad viewport' || { echo "refused for another reason: $output"; false; }
+    echo "$stderr" | grep -q 'bad viewport' || { echo "refused for another reason: $stderr"; false; }
     [ ! -e "$SANDBOX/fakestate/set" ] || { echo "viewport $v reached the browser"; false; }
   done
   # The bounds themselves render: the refusal is the bound, not a broken flag.
-  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --viewport 200x4096
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  FAKE_AB_SHOTS="A A" run --separate-stderr bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --viewport 200x4096
+  [ "$status" -eq 0 ] || { echo "$stderr"; false; }
 }
 
 @test "a repeated --viewport or --media with different values refuses" {
   _session_sandbox
-  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --viewport 1440x900 --viewport 390x844
+  FAKE_AB_SHOTS="A A" run --separate-stderr bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --viewport 1440x900 --viewport 390x844
   [ "$status" -eq 1 ]
-  echo "$output" | grep -q -- '--viewport given twice with different values'
-  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --media light --media dark
+  echo "$stderr" | grep -q -- '--viewport given twice with different values'
+  FAKE_AB_SHOTS="A A" run --separate-stderr bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --media light --media dark
   [ "$status" -eq 1 ]
-  echo "$output" | grep -q -- '--media given twice with different values'
+  echo "$stderr" | grep -q -- '--media given twice with different values'
+}
+
+@test "a refusal echoes a capped value, not the whole of a huge one" {
+  # Seventh attack pass, F6: five of the renderer's refusal echoes were uncapped, so a 20 KB value
+  # came back as 20 KB of stderr (lane defect #14).
+  _session_sandbox
+  local big; big="$(printf '%020000d' 0)"
+  local a
+  for a in "--mode $big" "--iter $big" "--media $big" "--session X$big" "--$big"; do
+    # shellcheck disable=SC2086
+    run --separate-stderr bash "$(_rs)" docs/design/explore/t/variant-a/one.html $a
+    [ "$status" -eq 1 ] || { echo "a huge ${a%% *} was not refused"; false; }
+    [ "${#stderr}" -lt 2000 ] || { echo "${a%% *}: stderr was ${#stderr} bytes"; false; }
+  done
 }
