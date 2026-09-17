@@ -512,6 +512,15 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   check("a room in the wrong mood is an XX line naming the class list it saw", missLine === 'XX map settle-ms=950 mood-miss(html-class="hq")', missLine);
   check("the harness writes the app's storage key", smoke.MOOD_KEY === "arc-hq-theme");
 
+  // The render line (face v2 Phase 02, ADR-1321): what drew each opened room, in the shape the bats
+  // render verdict anchors to. A report that measured nothing prints zeros, never a missing line.
+  const rendered = smoke.renderLine({ mood: "dark", render: { module: ["today", "map"], generic: ["bench"], unmarked: [] } });
+  check("the render line counts modules, generic rooms and unmarked rooms, and names the generic ones",
+    rendered === "smoke: render mood=dark module=2 generic=1 unmarked=0 generic-rooms=bench", rendered);
+  const bare = smoke.renderLine({ mood: "light" });
+  check("a report with no render block prints zero modules, so the verdict refuses it rather than skipping it",
+    bare === "smoke: render mood=light module=0 generic=0 unmarked=0 generic-rooms=none", bare);
+
   // The attack on the mood verdict (face v2 Phase 01).
   check("a report that names no mood FAILS, however clean", !smoke.judge({ ...clean, moodMiss: [] }).ok
     && smoke.judge({ ...clean, moodMiss: [] }).reasons.some((r) => /no mood named/.test(r)));

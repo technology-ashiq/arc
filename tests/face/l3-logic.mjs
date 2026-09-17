@@ -368,7 +368,9 @@ check("moving in an empty nav does not throw or invent a room",
 const ctx = { inTextField: false, paletteOpen: false };
 check("j moves forward", shell.keyAction({ key: "j" }, ctx).type === "room-move");
 check("k moves back", shell.keyAction({ key: "k" }, ctx).delta === -1);
-check("g goes home", shell.keyAction({ key: "g" }, ctx).room === "today");
+// Home is the served registry's first openable room (registry.mjs homeRoom), never a room id
+// spelled in the shell (face v2 Phase 02) -- so the key asks for home and names nothing.
+check("g goes home", shell.keyAction({ key: "g" }, ctx).type === "room-home");
 check("an unbound key is left alone for the browser", shell.keyAction({ key: "q" }, ctx) === null);
 check("a modified key is left alone", shell.keyAction({ key: "j", ctrlKey: true }, ctx) === null);
 check("NOTHING fires while the owner is typing",

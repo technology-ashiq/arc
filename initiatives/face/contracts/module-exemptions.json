@@ -1,0 +1,4 @@
+{
+  "$comment": "ADR-1327: the v0.7 rooms arc does not serve may keep a module under face/src/modules only when a row here names the room id and ADR-1327 -- face-coverage's module half reads this file (face v2 Phase 02). The ids a row may name are derived from modules-v2.json's extra class, never listed here, so a fifth, unnamed exemption FAILs. EMPTY until the factory ring (factory, executor, agents) and the company ring (story) add their rows in Phase 03, unless the owner's PLAN-face-v2 section 13 item 5 ruling gives a room a registry row instead. A row is an object with an id and an adr.",
+  "exemptions": []
+}

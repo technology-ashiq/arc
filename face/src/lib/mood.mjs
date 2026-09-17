@@ -69,7 +69,10 @@ export function applyMood(classList, mood) {
   else classList.remove("hq-light");
 }
 
-/** The words a toggle carries: what pressing it will do, not what the mood is. */
+/**
+ * The words a toggle carries: what pressing it will do, not what the mood is.
+ * @param {unknown} mood
+ */
 export function moodToggleLabel(mood) {
   return moodFrom(mood) === "light" ? "Switch to the dark mood" : "Switch to the light mood";
 }

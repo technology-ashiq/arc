@@ -140,6 +140,7 @@
 - `/arc-change <what> [--lane <name>]` — route a mid-build change/idea into the tracker (phase spec / ADR) before any code
 - `/arc-develop <mode> [phase] [--lane <name>]` — execution harness: turn an approved phase into proven slices (`start`/`next`/`status`/`checkpoint`/`handoff`)
 - `/arc-capability <need>` — scout a tool the harness lacks, then vet it (ADR-0110). Reports and refuses; **installs nothing**. `--vet <dir>` runs the gate, `--audit` reports stale pins.
+- `/arc-face-module <ring>/<id>` — scaffold a face module (four files) for a room `/api/rooms` serves, green on face-pure + face-coverage in one command, or refused.
 - `/arc-phase-done <n> [--lane <name>]` — close a phase against its Definition of Done (playbook §8)
 - `/arc-retro [n] [--lane <name>]` — end-of-phase retro: repeated corrections → permanent setup upgrades
 - `/arc-toolcheck`    — full toolchain status (installed/missing/stale) + one-command fixes
@@ -160,7 +161,7 @@
 - **GENERATED commands** → `.claude/commands/{arc-commit,arc-review,arc-kickoff}.md` are compiled
   from `processes/*.process.yaml` (engine Cycle 6, ADR-0201/0202). **Do not edit them** — the next
   regeneration deletes the edit. Change the process file, routed through `/arc-change`, then
-  `node .claude/scripts/engine/arc-compile.mjs --write --all --target claude-code`. The other 21
+  `node .claude/scripts/engine/arc-compile.mjs --write --all --target claude-code`. The other 24
   commands are still hand-written and unaffected.
 - Company board       → `PORTFOLIO.md` (every lane in priority order — a view, not the truth)
 - Lanes / workspaces  → `.claude/rules/lanes.md` (`--lane` is the ONLY way to name a lane)

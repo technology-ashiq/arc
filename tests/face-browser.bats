@@ -69,6 +69,36 @@ smoke_summary_verdict() {
   echo "summary verdict: mood=$mood opened=$opened openable=$openable expected=$expected unsettled=0 errors=0 mood-miss=0"
 }
 
+# The render verdict (face v2 Phase 02, ADR-1321): every room the smoke opened says whether a
+# MODULE or the GENERIC module drew it, and the browser's answer must EQUAL the gate's. The third
+# argument is face-coverage's own module-half line: the rooms it attaches (served - generic) must be
+# exactly the rooms that drew through a module, and its generic rooms, by name and in order, exactly
+# the ones that drew generic. A shell that attached nothing cannot pass, an exempted ADR-1327 folder
+# the door never serves is not miscounted as a module the browser should have drawn, and an unmarked
+# room is a room nobody can account for.
+render_verdict() {
+  local out="$1" mood="$2" half="$3" line modules generic unmarked openable rooms served gateGeneric gateRooms attached
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  served="$(printf '%s\n' "$half" | sed -n 's/^face-coverage: module half folders=[0-9]* served=\([0-9][0-9]*\) generic=[0-9]* orphans=[0-9]* exemptions=[0-9]* generic-rooms=.*/\1/p')"
+  gateGeneric="$(printf '%s\n' "$half" | sed -n 's/^face-coverage: module half folders=[0-9]* served=[0-9]* generic=\([0-9][0-9]*\) orphans=[0-9]* exemptions=[0-9]* generic-rooms=.*/\1/p')"
+  gateRooms="$(printf '%s\n' "$half" | sed -n 's/^face-coverage: module half folders=[0-9]* served=[0-9]* generic=[0-9]* orphans=[0-9]* exemptions=[0-9]* generic-rooms=\([^ ]*\) -- .*/\1/p')"
+  [ -n "$served" ] && [ -n "$gateGeneric" ] && [ -n "$gateRooms" ] || { echo "no module-half line from face-coverage to judge against: '$half'"; return 1; }
+  attached=$((served - gateGeneric))
+  [ "$attached" -gt 0 ] || { echo "face-coverage attaches $attached modules: nothing to judge the browser against"; return 1; }
+  line="$(printf '%s\n' "$out" | grep "^smoke: render mood=$mood module=[0-9]* generic=[0-9]* unmarked=[0-9]* generic-rooms=" | tail -1)"
+  [ -n "$line" ] || { echo "no render line for mood=$mood"; return 1; }
+  modules="$(printf '%s\n' "$line" | sed -n "s/^smoke: render mood=$mood module=\([0-9][0-9]*\) generic=[0-9]* unmarked=[0-9]* generic-rooms=.*/\1/p")"
+  generic="$(printf '%s\n' "$line" | sed -n "s/^smoke: render mood=$mood module=[0-9]* generic=\([0-9][0-9]*\) unmarked=[0-9]* generic-rooms=.*/\1/p")"
+  unmarked="$(printf '%s\n' "$line" | sed -n "s/^smoke: render mood=$mood module=[0-9]* generic=[0-9]* unmarked=\([0-9][0-9]*\) generic-rooms=.*/\1/p")"
+  rooms="$(printf '%s\n' "$line" | sed -n "s/^smoke: render mood=$mood module=[0-9]* generic=[0-9]* unmarked=[0-9]* generic-rooms=\([^ ]*\)\$/\1/p")"
+  openable="$(printf '%s\n' "$out" | grep "^smoke: opened=.* mood=$mood mood-miss=" | tail -1 | sed -n 's/^smoke: opened=[0-9]* openable=\([0-9][0-9]*\) .*/\1/p')"
+  [ "$unmarked" = "0" ] || { echo "mood=$mood: unmarked=$unmarked rooms rendered with no data-render"; return 1; }
+  [ "$modules" = "$attached" ] || { echo "mood=$mood: module=$modules rooms drew through a module, face-coverage attaches $attached"; return 1; }
+  [ -n "$openable" ] && [ "$((modules + generic))" -eq "$openable" ] || { echo "mood=$mood: module=$modules + generic=$generic != openable=$openable"; return 1; }
+  [ "$rooms" = "$gateRooms" ] || { echo "mood=$mood: the browser drew generic '$rooms', face-coverage reports generic '$gateRooms'"; return 1; }
+  echo "render verdict: mood=$mood module=$modules generic=$generic unmarked=0, equal to face-coverage's module half"
+}
+
 @test "face-browser: the node floor is reported, and only Node 18 may skip" {
   run node "$ARC_ROOT/face/scripts/node-floor.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -118,6 +148,12 @@ smoke_summary_verdict() {
   run npm --prefix "$dst" ci --include=optional --no-audit --no-fund 3>&-
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" | tail -40; false; }
   [ -f "$dst/node_modules/vite/package.json" ] || { echo "npm ci exited 0 but vite is not installed"; false; }
+  # The typecheck joins the build before any module is written (face v2 Phase 02, debt-ledger):
+  # `vite build` strips types without checking them, so a type error in face/src never failed CI.
+  [ -f "$dst/node_modules/typescript/bin/tsc" ] || { echo "npm ci exited 0 but typescript is not installed"; false; }
+  run node "$dst/node_modules/typescript/bin/tsc" -p "$dst" --noEmit 3>&-
+  [ "$status" -eq 0 ] || { echo "tsc --noEmit failed (exit $status):"; printf '%s\n' "$output" | tail -60; false; }
+  printf '# face-browser: tsc --noEmit exit 0 over %s\n' "$dst/src" >&3
   run node "$dst/node_modules/vite/bin/vite.js" build "$dst" 3>&-
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" | tail -40; false; }
   [ -f "$dst/dist/index.html" ] || { echo "vite build exited 0 but wrote no dist/index.html"; false; }
@@ -136,22 +172,57 @@ smoke_summary_verdict() {
   require_node_floor
   local dst="$BATS_FILE_TMPDIR/face"
   [ -f "$dst/dist/index.html" ] || { echo "no build from the previous test"; false; }
+  # The gate's own answer first: which rooms face-coverage attaches to a module and which it reports
+  # generic. The browser's render line is judged EQUAL to it below (ADR-1321). Read before the harness
+  # runs, because `run` replaces $output.
+  local half
+  run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT"
+  half="$(printf '%s\n' "$output" | grep '^face-coverage: module half ' | tail -1)"
+  [ -n "$half" ] || { echo "face-coverage printed no module-half line (exit $status): $output"; false; }
   run node "$ARC_ROOT/face/scripts/harness-run.mjs" --face "$dst" 3>&-
   echo "$output"
   [[ "$output" == *"face-browser: RAN leg="* ]] || { echo "the harness never started (exit $status)"; false; }
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
   # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
   # 10 s -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
   # Both moods are judged, each from its own line, before the exit status is trusted: a harness
   # that ran only dark must not pass on dark's line (ADR-1331).
   local mood verdicts=0
   for mood in dark light; do
     smoke_summary_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
+    render_verdict "$output" "$mood" "$half" || { echo "(harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done
   [ "$verdicts" -eq 2 ] || { echo "judged $verdicts of 2 moods"; false; }
   [ "$status" -eq 0 ]
+}
+
+@test "face-browser: MUTANT CONTROL -- the render verdict FAILS a shell that drew every room generic" {
+  # A clean smoke line whose render line says no room drew through a module: every Phase 01 number
+  # is perfect, and only the render verdict can refuse it. Needs no Chrome and no build.
+  local smokeLine="smoke: opened=33 openable=33 errors=0 excluded-errors=0 unsettled=0 expected=33 not-opened=lane mood=dark mood-miss=0"
+  local half="face-coverage: module half folders=10 served=33 generic=24 orphans=0 exemptions=1 generic-rooms=inbox,bench -- a served room with no module renders through the generic module (ADR-1321)"
+  local allGeneric="smoke: render mood=dark module=0 generic=33 unmarked=0 generic-rooms=inbox,bench"
+  run render_verdict "$smokeLine"$'\n'"$allGeneric" dark "$half"
+  [ "$status" -ne 0 ] || { echo "the render verdict passed a shell that attached no module: $output"; false; }
+  [[ "$output" == *"module=0 rooms drew through a module, face-coverage attaches 9"* ]] || { echo "refused for the wrong reason: $output"; false; }
+  # The same run with the modules attached must pass, or the refusal above proves nothing. The gate
+  # counts 10 folders with one ADR-1327 exemption: 9 attach, and 9 is the number the browser owes.
+  run render_verdict "$smokeLine"$'\n'"smoke: render mood=dark module=9 generic=24 unmarked=0 generic-rooms=inbox,bench" dark "$half"
+  [ "$status" -eq 0 ] || { echo "the render verdict refused a clean render line: $output"; false; }
+  # An unmarked room, a count that does not add up, other generic rooms, no render line and no gate
+  # line are each refused.
+  run render_verdict "$smokeLine"$'\n'"smoke: render mood=dark module=9 generic=23 unmarked=1 generic-rooms=inbox,bench" dark "$half"
+  [ "$status" -ne 0 ] && [[ "$output" == *"unmarked=1"* ]] || { echo "an unmarked room passed: $output"; false; }
+  run render_verdict "$smokeLine"$'\n'"smoke: render mood=dark module=9 generic=20 unmarked=0 generic-rooms=inbox,bench" dark "$half"
+  [ "$status" -ne 0 ] && [[ "$output" == *"!= openable=33"* ]] || { echo "a render count short of openable passed: $output"; false; }
+  run render_verdict "$smokeLine"$'\n'"smoke: render mood=dark module=9 generic=24 unmarked=0 generic-rooms=bench,inbox" dark "$half"
+  [ "$status" -ne 0 ] && [[ "$output" == *"face-coverage reports generic 'inbox,bench'"* ]] || { echo "generic rooms that differ from the gate's passed: $output"; false; }
+  run render_verdict "$smokeLine" dark "$half"
+  [ "$status" -ne 0 ] && [[ "$output" == *"no render line for mood=dark"* ]] || { echo "a smoke with no render line passed: $output"; false; }
+  run render_verdict "$smokeLine"$'\n'"smoke: render mood=dark module=9 generic=24 unmarked=0 generic-rooms=inbox,bench" dark ""
+  [ "$status" -ne 0 ] && [[ "$output" == *"no module-half line from face-coverage"* ]] || { echo "a verdict with no gate line passed: $output"; false; }
 }
 
 @test "face-browser: MUTANT CONTROL -- the summary verdict FAILS a stub smoke that never navigated" {
@@ -211,5 +282,5 @@ smoke_summary_verdict() {
   local declared
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared declared"; false; }
-  [ "$declared" -eq 9 ] || { echo "expected 9 @test lines, found $declared -- update this floor with the file"; false; }
+  [ "$declared" -eq 10 ] || { echo "expected 10 @test lines, found $declared -- update this floor with the file"; false; }
 }

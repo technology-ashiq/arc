@@ -5,8 +5,8 @@
 // the kind of thing that breaks quietly and is never noticed in a screenshot, so they live
 // here where a node test can hold them.
 
-/** The room the shell falls back to when a URL names nothing real. */
-export const HOME = "today";
+// There is no HOME constant here any more. The room the shell opens on is the served registry's
+// to say (registry.mjs homeRoom, face v2 Phase 02): the shell names no room.
 
 /**
  * A day, and only a day. The door's own `parseAsof` refuses anything else by name, so this
@@ -146,7 +146,7 @@ export function keyAction(ev, ctx) {
   switch (ev.key) {
     case "j": case "ArrowDown": return { type: "room-move", delta: 1 };
     case "k": case "ArrowUp": return { type: "room-move", delta: -1 };
-    case "g": return { type: "room-open", room: HOME };
+    case "g": return { type: "room-home" };
     case "?": return { type: "help-toggle" };
     case "Escape": return { type: "escape" };
     default: return null;

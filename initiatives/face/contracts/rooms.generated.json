@@ -693,7 +693,8 @@
         ],
         "commands": [
           "arc-design (legacy)",
-          "arc-design-critique"
+          "arc-design-critique",
+          "arc-face-module"
         ],
         "agents": [
           "design-critic",
@@ -718,7 +719,7 @@
           "design"
         ]
       },
-      "itemCount": 20
+      "itemCount": 21
     },
     {
       "id": "toolbelt",
