@@ -102,3 +102,65 @@ _run_dispatch() { run bash -c ". '$DISPATCH'; arc_dispatch $*"; }
   [ "$status" -eq 0 ]
   [[ "$output" == *"disarmed"* ]]
 }
+
+# ---- BS-4 (design lane, fifth attack pass): the payload must not depend on a writable TMPDIR ----
+# The installed dispatcher kept the payload only in a mktemp file. With TMPDIR missing or
+# unwritable every fragment's `< "$input"` redirect failed with exit 1, which blocking mode reads as
+# ALLOW, so one bad environment variable disarmed every PreToolUse guard. .claude/hooks/** is
+# edit-denied to agent sessions, so the fix is the canonical fixture below and the owner installs
+# it; these cases drive the fixture, and the last one holds the installed copy to it.
+DISPATCH_FIX="$ARC_ROOT/tests/fixtures/hooks/_dispatch.sh"
+_payload_file() { printf '%s' "$1" > "$BATS_TEST_TMPDIR/payload.in"; }
+# TMPDIR is broken INSIDE the dispatcher's shell only; the payload arrives from a file made before.
+_run_fix() { run bash -c "set -uo pipefail; $1 . '$DISPATCH_FIX'; arc_dispatch $2" < "$BATS_TEST_TMPDIR/payload.in"; }
+NO_TMP='TMPDIR=/nonexistent-arc-tmp/x; export TMPDIR;'
+
+@test "dispatch fixture: an unwritable TMPDIR does not disarm a blocking fragment (BS-4)" {
+  _frag pre 00-guard 'p="$(cat)"; case "$p" in *BLOCK-ME*) echo blocked >&2; exit 2;; esac; exit 0'
+  _payload_file '{"tool_input":{"command":"BLOCK-ME"}}'
+  _run_fix "$NO_TMP" "pre blocking --payload"
+  [ "$status" -eq 2 ] || { echo "the guard never saw the payload: $output"; false; }
+  _payload_file '{"tool_input":{"command":"ls"}}'
+  _run_fix "$NO_TMP" "pre blocking --payload"
+  [ "$status" -eq 0 ] || { echo "an ordinary payload was blocked: $output"; false; }
+}
+
+@test "dispatch fixture: ARC_HOOK_PAYLOAD is a copy when TMPDIR works, and unset when it does not" {
+  _frag post 00-show 'if [ -n "${ARC_HOOK_PAYLOAD:-}" ]; then echo "copy=$(cat "$ARC_HOOK_PAYLOAD")"; else echo "copy=unset"; fi'
+  _payload_file 'HELLO-COPY'
+  _run_fix "" "post advisory --payload"
+  [[ "$output" == *"copy=HELLO-COPY"* ]] || { echo "$output"; false; }
+  _run_fix "$NO_TMP" "post advisory --payload"
+  [[ "$output" == *"copy=unset"* ]] || { echo "ARC_HOOK_PAYLOAD pointed at a file that could not be written: $output"; false; }
+}
+
+@test "dispatch fixture: every fragment gets the whole payload, in order" {
+  _frag post 00-a 'echo "A:$(cat)"'
+  _frag post 10-b 'echo "B:$(cat)"'
+  _payload_file 'SAME-PAYLOAD'
+  _run_fix "" "post advisory --payload"
+  [ "${lines[0]}" = "A:SAME-PAYLOAD" ] || { echo "$output"; false; }
+  [ "${lines[1]}" = "B:SAME-PAYLOAD" ] || { echo "$output"; false; }
+}
+
+@test "dispatch fixture: a fragment's own exit counts, even when it never reads a large payload" {
+  # Piping means a fragment that exits without reading can kill the writer with SIGPIPE; under
+  # pipefail that status would have replaced the fragment's. Both directions are pinned.
+  _payload_file "$(printf '%0200000d' 0)"
+  _frag pre 00-noread 'exit 2'
+  _run_fix "" "pre blocking --payload"
+  [ "$status" -eq 2 ] || { echo "an exit 2 that ignored stdin was not a block: $output"; false; }
+  rm -f "$CPD/.claude/hooks/pre.d/00-noread.sh"
+  _frag pre 00-noread 'exit 0'
+  _run_fix "" "pre blocking --payload"
+  [ "$status" -eq 0 ] || { echo "an exit 0 that ignored stdin became status $status: $output"; false; }
+  [[ "$output" != *"Broken pipe"* ]]
+}
+
+@test "dispatch: the installed dispatcher, once replaced, is the canonical fixture" {
+  if grep -q 'cat > "$pf"' "$ARC_ROOT/.claude/hooks/_dispatch.sh"; then
+    skip "OWNER ACTION PENDING: cp tests/fixtures/hooks/_dispatch.sh .claude/hooks/_dispatch.sh (BS-4)"
+  fi
+  cmp -s "$ARC_ROOT/.claude/hooks/_dispatch.sh" "$DISPATCH_FIX" \
+    || { echo "the installed _dispatch.sh has the fix's shape but differs from the canonical fixture"; false; }
+}

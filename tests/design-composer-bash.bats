@@ -580,6 +580,22 @@ teardown() { _arc_teardown; }
   [ "$status" -eq 0 ] || { echo "the restored script did not allow the composer's own render: $stderr"; false; }
 }
 
+@test "composer bash: an unwritable TMPDIR does not disarm the boundary (the fixture dispatcher)" {
+  # BS-4: the installed dispatcher kept the payload only in a temp file, so with TMPDIR unwritable
+  # the fragment read nothing and a composer's `cat` of a sibling ran. The canonical dispatcher
+  # pipes the payload instead; until the owner installs it, this case drives the fixture copy.
+  _bash_sandbox; _arm_a
+  cp "$ARC_ROOT/tests/fixtures/hooks/_dispatch.sh" "$SANDBOX/.claude/hooks/_dispatch.sh"
+  _bp ui-composer Bash "$CAT_B" > "$BATS_TEST_TMPDIR/p.json"
+  run --separate-stderr bash -c 'TMPDIR=/nonexistent-arc-tmp/x; export TMPDIR; bash "$0" < "$1"' \
+    "$SANDBOX/.claude/hooks/PreToolUse.sh" "$BATS_TEST_TMPDIR/p.json"
+  [ "$status" -eq 2 ] || { echo "with TMPDIR unwritable a composer read a sibling: $stderr"; false; }
+  _bp ui-composer Bash "$RENDER_A" > "$BATS_TEST_TMPDIR/p.json"
+  run --separate-stderr bash -c 'TMPDIR=/nonexistent-arc-tmp/x; export TMPDIR; bash "$0" < "$1"' \
+    "$SANDBOX/.claude/hooks/PreToolUse.sh" "$BATS_TEST_TMPDIR/p.json"
+  [ "$status" -eq 0 ] || { echo "with TMPDIR unwritable the composer's own render was refused: $stderr"; false; }
+}
+
 # ---------- the owner's half ----------
 
 @test "composer bash: the real hook fragment, once installed, matches the canonical fixture and ships" {

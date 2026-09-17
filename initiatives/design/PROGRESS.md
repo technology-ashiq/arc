@@ -411,10 +411,15 @@ consumer projects — it carries the owner's approvals.
    BS-4 (the dispatcher fails open when it cannot capture the payload) is in `_dispatch.sh`, which
    is under the governance-denied `.claude/hooks/**`, so it is the owner's, and it affects every
    guard.
-3. **Owner edit.** Once the seventh pass is fixed, the owner runs
-   `cp tests/fixtures/hooks/PreToolUse.d/10-design-composer.sh .claude/hooks/PreToolUse.d/10-design-composer.sh`.
-   Then register that fragment in `products/design/manifest.json` → `files`, regenerate the sync
-   golden, push, and confirm the fragment case goes green.
+3. **Owner edits: two `cp` commands** (owner ruling 2026-09-17: install the fragment now; BS-4 by
+   the same canonical-fixture pattern).
+   - `cp tests/fixtures/hooks/PreToolUse.d/10-design-composer.sh .claude/hooks/PreToolUse.d/10-design-composer.sh`
+     -- then register it in `products/design/manifest.json` → `files`, regenerate the sync golden,
+     push, and confirm the fragment case runs instead of skipping.
+   - BS-4: `tests/fixtures/hooks/_dispatch.sh` pipes the payload instead of relying on a temp
+     file. It owes its own two-surface attack pass before the owner's
+     `cp tests/fixtures/hooks/_dispatch.sh .claude/hooks/_dispatch.sh`; then regenerate the golden
+     (`_dispatch.sh` ships with core) and confirm the install case runs instead of skipping.
 4. **Re-verify one composer.** Run one live composer turn to prove the enforced scope does not
    break the real loop (render, read the PNG, Write the manifest).
 5. **`/arc-phase-done 01`.**
