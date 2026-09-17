@@ -334,7 +334,7 @@ const isCount = (n) => Number.isInteger(n) && n >= 0;
  * sentence, and a room that renders blank without logging an error would otherwise count as opened.
  * Each ring PR adds its ring here.
  */
-export const SENTENCE_RINGS = Object.freeze(["command"]);
+export const SENTENCE_RINGS = Object.freeze(["command", "kernel"]);
 
 /** The door's five text escapes, undone, so a served sentence compares to what the page shows. */
 export function doorText(s) {

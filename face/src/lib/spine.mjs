@@ -44,7 +44,7 @@ import { unescapeDoorText } from "./door.mjs";
 import {
   fmtInt, readSpinePage, refusalOf, shortId, tail, timeOfDay, toneForKind,
 } from "./inbox.mjs";
-import { displayValue } from "./rooms.mjs";
+import { displayValue, lanePhases } from "./rooms.mjs";
 
 // Re-exported so the two rooms have ONE import and cannot reach past this module for a
 // formatter. `refusalOf` rather than rooms.mjs's `errorSentence` on purpose: both return
@@ -1504,4 +1504,115 @@ export function receiptView(events, id) {
     payload: prettyJson(e.payload),
     notes: ["read from the spine through the door, read-only · append-only: a correction supersedes, it never edits (ADR-0029)"],
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The lane card and the trail, as every ring room draws them (face v2 Phase 03, kernel ring onward).
+// A lane room reads its OWN lane's PROGRESS header through /api/lane/:id and its receipts through
+// /api/spine filtered to the kinds the served registry homes in it; both are the door's, never typed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @typedef {object} LaneCard
+ * @property {boolean} isRead
+ * @property {string} lane
+ * @property {string} status
+ * @property {string} statusInk
+ * @property {string} phase
+ * @property {string} note
+ * @property {string} burn
+ * @property {number} meter
+ * @property {string} distance
+ * @property {{ key: string, label: string, title: string }[]} phases
+ * @property {boolean} hasPhases
+ * @property {string} phasesNote
+ */
+
+/** @type {LaneCard} */
+export const LANE_UNREAD = Object.freeze({
+  isRead: false, lane: "", status: "", statusInk: "var(--text-3)", phase: "", note: "", burn: "", meter: 0, distance: "",
+  phases: [], hasPhases: false, phasesNote: "",
+});
+
+/**
+ * One lane's card from the door's `/api/lane/:id` body: its header read the way the board reads it,
+ * and its phase specs listed by number.
+ * @param {unknown} payload
+ * @returns {LaneCard}
+ */
+export function laneCard(payload) {
+  const body = asObject(payload);
+  const lane = asText(body["lane"]);
+  if (lane === null) return LANE_UNREAD;
+  const header = asObject(body["header"]);
+  const appetite = parseDays(header["appetite"]);
+  const burn = parseDays(header["burn"]);
+  const status = statusFacet(headerText(header, "status"));
+  const phase = parsePhase(header["phase"]);
+  const meter = burnMeter(appetite, burn);
+  const cycle = headerText(header, "cycle");
+  const listed = lanePhases(body);
+  return {
+    isRead: true,
+    lane,
+    status: status.label,
+    statusInk: status.ink,
+    phase: phase.number === null ? (cycle === null ? "no phase recorded" : unescapeDoorText(cycle)) : `phase ${phase.number}`,
+    note: phase.note === null ? "" : unescapeDoorText(phase.note),
+    burn: meter.state === "measured" ? `${fmtDays(burn.days ?? Number.NaN)} of ${fmtDays(appetite.days ?? Number.NaN)} spent` : meter.label.toLowerCase(),
+    meter: meter.fill ?? 0,
+    distance: meter.label,
+    phases: listed.phases.map((p) => ({
+      key: p.file,
+      label: p.phase === null ? "--" : String(p.phase).padStart(2, "0"),
+      title: p.title === null ? p.file : unescapeDoorText(p.title),
+    })),
+    hasPhases: listed.phases.length > 0,
+    phasesNote: listed.state === "absent" ? "the door did not send a phase list" : listed.state === "none" ? "no phase spec written yet" : listed.omitted > 0 ? `${fmtInt(listed.omitted)} more not sent` : "",
+  };
+}
+
+/**
+ * The read for a room's trail: its homed kinds, from the door. Null when the room homes no kind, so
+ * nothing is asked for and the trail says why.
+ * @param {string[]} kinds
+ * @returns {{ route: string, query: Record<string, string | number>, poll: boolean } | null}
+ */
+export function trailRead(kinds) {
+  const list = kinds.filter((k) => typeof k === "string" && k !== "");
+  return list.length === 0 ? null : { route: "/api/spine", query: { kind: [...list].sort().join(","), limit: 1000 }, poll: true };
+}
+
+/**
+ * The trail: the newest receipts of the room's kinds on the page the door served, newest first.
+ * @param {unknown} payload @param {number} rows
+ * @returns {{ rows: EventRowView[], events: import("./inbox.mjs").FeedEvent[], count: number, more: boolean, hint: string }}
+ */
+export function trailView(payload, rows) {
+  const page = readSpinePage(payload);
+  const shown = tail(page.events, rows).reverse();
+  const count = page.count ?? page.events.length;
+  return {
+    rows: shown.map(eventRowView),
+    events: page.events,
+    count,
+    more: page.more,
+    // The door pages from the oldest receipt, so a page with more past it is NOT the newest of the kinds:
+    // it says so rather than calling the tail of its first page the latest.
+    hint: page.more
+      ? `the oldest ${fmtInt(count)} receipts of its kinds, more past them — the last ${fmtInt(shown.length)} of that page here, not the newest`
+      : `${fmtInt(count)} receipt${count === 1 ? "" : "s"} of its kinds${shown.length < count ? `, the newest ${fmtInt(shown.length)} here` : ""}`,
+  };
+}
+
+/**
+ * The served registry's list of one kind of thing a room holds (its lints, jobs, processes, concepts).
+ * @param {{ holds?: Record<string, unknown> } | undefined} room @param {string} key
+ * @returns {string[]}
+ */
+export function holdsList(room, key) {
+  /** @type {Record<string, unknown>} */
+  const holds = room && room.holds && typeof room.holds === "object" ? room.holds : {};
+  const v = Object.hasOwn(holds, key) ? holds[key] : undefined;
+  return Array.isArray(v) ? v.filter((x) => typeof x === "string").map((x) => unescapeDoorText(x)) : [];
 }

@@ -620,6 +620,16 @@ export function notServed(panel, route, sentence) {
 }
 
 /**
+ * A verb v0.7 draws on this panel that the face does not yet perform: it arrives with the work door in
+ * Phase 05 (ADR-1326), and until then the panel says so rather than drawing a form that writes nothing.
+ * @param {string} verb  what the owner would do  @param {string} sentence  what it would write, and where
+ * @returns {{ isVerbPending: true, verb: string, sentence: string }}
+ */
+export function verbPending(verb, sentence) {
+  return Object.freeze({ isVerbPending: true, verb: String(verb), sentence: String(sentence) });
+}
+
+/**
  * Every NOT SERVED entry in a fold's output, nested anywhere, in document order.
  * @param {unknown} folded
  * @returns {NotServed[]}

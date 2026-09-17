@@ -500,5 +500,37 @@ const SHIPPED_RINGS = ["command", "kernel"];
   }
 }
 
+// ── F2 (Cycle 15 room sweep): the scheduler's lede promises only what the module shows ──
+// Four promises: jobs, their next fire, their last outcome, the heartbeat. Each is pinned to the place
+// that carries it -- a panel the fold fills, or a NOT SERVED entry naming the route that would fill it --
+// so a lede that grows a fifth promise, or a panel that quietly stops being drawn, fails here.
+{
+  const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
+  const room = registry.rooms.find((r) => r.id === "scheduler");
+  const dir = join(SRC, "modules", "kernel", "scheduler");
+  const lede = String((room && room.lede) || "").toLowerCase();
+  const promises = ["jobs", "next fire", "last outcome", "heartbeat"];
+  check("F2: the served scheduler lede promises exactly the four things this arm pins",
+    promises.every((p) => lede.includes(p)), `lede=${lede}`);
+  if (existsSync(join(dir, "fold.mjs"))) {
+    const ctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {} };
+    const folded = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold({}, ctx);
+    const ns = typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [];
+    const homed = (room && room.holds && Array.isArray(room.holds.jobs) ? room.holds.jobs : []).slice().sort();
+    const drawn = Array.isArray(folded.jobs) ? folded.jobs.map((j) => j.key).sort() : [];
+    check("F2: JOBS -- the fold draws a row per job the served registry homes here",
+      homed.length > 0 && JSON.stringify(drawn) === JSON.stringify(homed), `drawn=${drawn.join(",")} homed=${homed.join(",")}`);
+    check("F2: LAST OUTCOME -- every job row carries one, and says it is unread rather than inventing it",
+      Array.isArray(folded.jobs) && folded.jobs.every((j) => typeof j.last === "string" && j.last !== ""), JSON.stringify(drawn));
+    const nsFor = (re) => ns.filter((n) => re.test(n.panel) && n.route === "/api/jobs");
+    check("F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it",
+      nsFor(/next fire/i).length === 1, ns.map((n) => `${n.panel}=${n.route}`).join(" ; "));
+    check("F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat",
+      nsFor(/heartbeat/i).length === 1 && folded.lastFire !== undefined && typeof folded.lastFire.hasFire === "boolean"
+      && folded.lastFire.hasFire === false && !/heartbeat/i.test(String(folded.lastFire.line)),
+      `lastFire=${JSON.stringify(folded.lastFire)}`);
+  } else check("F2: the scheduler module exists to be folded", false, dir);
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;
