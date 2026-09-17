@@ -1,0 +1,28 @@
+{
+  "phase": "02",
+  "commit": "d76657d1f970b5d85e35d112e008648e0639650c",
+  "short": "d76657d1",
+  "generated": "2026-09-17T14:39:13Z",
+  "files": [
+    {
+      "name": "attacker-reports.md",
+      "sha256": "2297d4c1e30189360a57bab2f8f80dee473462ccbd5c943b956f499b11844abb"
+    },
+    {
+      "name": "ci-jobs.json",
+      "sha256": "5a68924baba4bf50806a8bb61c6005b5985fca9d9dd9804a899c719128a12990"
+    },
+    {
+      "name": "handoff.md",
+      "sha256": "45f8fed44192ef0bc75e1da8ab4e95634e9b5dde81b5e2926bdc36bc73fae741"
+    },
+    {
+      "name": "red-first.md",
+      "sha256": "4589383e79bd56387237e312a1d9fb394b233a97de4217626cf41d1daeeb8f3e"
+    },
+    {
+      "name": "spec-fidelity.md",
+      "sha256": "d3a1dcfab7060fa547b5f9a96455a300e1bcb9a70e849e9ef27bc7bb30a85dbe"
+    }
+  ]
+}
