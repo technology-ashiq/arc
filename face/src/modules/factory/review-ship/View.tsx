@@ -29,6 +29,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                   ))}
                 </div>
               ) : null}
+              {f.hasGates ? null : <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.gatesNote}</p>}
               <NotServed item={f.gateModes} />
             </div>
           </HPanel>
@@ -52,7 +53,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                 ))}
               </div>
             ) : (
-              <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>the served registry names no CI workflow in this room</p>
+              <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.workflowsNote}</p>
             )}
           </HPanel>
 

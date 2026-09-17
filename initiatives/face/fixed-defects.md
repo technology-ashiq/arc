@@ -217,3 +217,40 @@ this file. 20 holes; every one is fixed below or carries a debt row.
   pinned by a module-frame arm (this moved `board` and `ask-arc` too — the class, not the file).
 - Declared, with a debt row each: the page contract beyond the four marks CI counts, and kit
   decisions that `face-pure` cannot see.
+
+## Face v2 Phase 03 (factory ring) — 2026-09-18
+
+One fresh attacker on the ring's new decision logic, carrying this file. 18 findings; the ones that
+put a fact on screen the door did not serve are fixed here, three are debt rows with a named pay-down.
+
+- The lane FIGURE read `card.isRead` while the badge read `isRefused`, so a body the panel refused as
+  `WRONG_LANE` still drew ANOTHER lane's status in the instrument strip — two readers of one question
+  inside one file, the exact class this lane keeps paying for. Both ask `isRefused` first now.
+- The trail drew receipts of kinds the room never asked for: `WRONG_LANE` and `WRONG_FILE` were built
+  for the lane and file bodies, and the spine body — the one that fills every ring room's trail — had
+  no equivalent. `WRONG_KINDS` names it, with both kind lists in the sentence.
+- A page whose `count` exceeded the receipts it carried was called complete when `more` was false. A
+  count larger than its page is a partial page whatever the flag says.
+- `heldAcrossRooms` threw away `heldBy`'s `unreadable`, so the toolbelt's catalogue shrank silently —
+  in the room whose own copy says it cannot drift from arc. Every section and every figure it feeds
+  reads `—` when a room carried its list unreadably, and the room names which room.
+- The two lane-less rooms said the registry homes NO agent / NO gate / NO workflow when it had homed
+  one unreadably; the council's badge also bypassed `holdsCount` and `fmtInt`, printing a count the
+  strip beside it refused to print. Both say "unread" now, through the same helper.
+- A registry row with no id produced an ENABLED button labelled "undefined" that opened `undefined`.
+  A row whose room this shell cannot name is dropped and counted.
+- A name the registry listed twice was counted twice and drawn under a duplicate React key (the
+  catalogue already deduped, one file away); an entry that renders as nothing — spaces, a zero-width
+  character — was counted as a thing arc has. Both are gone.
+- A section nobody searched printed "nothing here matches": absent, unreadable and unmatched are three
+  sentences, and the section now picks the right one.
+- The catalogue sorted case-sensitively while the find box folds case, so one command appeared in
+  three places in one alphabetical list.
+- `hasLane:false` (new this ring, for the two rooms the registry gives no lane) made a MISSING lane
+  silent for lane rooms too: the panel drew its title and hint over nothing. It says why now.
+- The evidence list's "Routes named by this ring: 4" was prose nothing derived; the count is gone and
+  the table is the claim.
+- Debt rows, each with a named pay-down in the money ring's PR: `lane-room.mjs` has no unit suite
+  (seven mutants of one fold survived every gate); a fold can ask for a read its manifest does not
+  declare if the REGISTRY changes under it; the catalogue is rebuilt per keystroke and reads each
+  room's holds nine times per fold.

@@ -17,8 +17,9 @@ including the sentence. The smoke counts the same panels in the page per room, p
 | `develop` | The Definition of Done | `/api/slices` | The close condition computed rather than asserted: every slice proven, tests green on CI, evidence bundled -- and the refusal that names what is missing when it is not. |
 | `review-ship` | Gate modes and the profile | `/api/gates` | What each gate is set to today -- blocking, advisory or off -- the time budget it runs inside, and the strictness profile that switches the whole set as one, parsed from the gates file. |
 
-**Routes named by this ring: 4** — `/api/council` · `/api/slices` · `/api/gates` · `/api/design`;
-each is the route `initiatives/face/contracts/modules-v2.json` already plans for its module.
+Every route in the table above is the one `initiatives/face/contracts/modules-v2.json` already plans
+for that module. The count of distinct routes is deliberately not written here: `listCheck` parses the
+TABLE, so a number in this prose would be a claim nothing derives (Phase 03 attack).
 
 ## What the ring reads from routes the door already serves
 

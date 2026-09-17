@@ -34,10 +34,12 @@ import { countedOn, holdsCount, kindCount, laneBadge, laneRoom } from "../../../
  */
 export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx);
-  const seats = (base.held.agents ?? []).map((name) => ({ key: name, name }));
+  // Each seat once, and an unreadable list is not an empty one (Phase 03 attack).
+  const seatsUnread = base.unreadable.includes("agents");
+  const seats = [...new Set(base.held.agents ?? [])].map((name) => ({ key: name, name }));
   return {
     ...base,
-    badge: laneBadge(base, `${seats.length === 0 ? "no" : seats.length} seats · a company organ, not a lane`),
+    badge: laneBadge(base, `${seatsUnread ? "seats unread" : `${holdsCount(base, "agents")} seats`} · a company organ, not a lane`),
     kpis: [
       { key: "seats", v: holdsCount(base, "agents"), l: "Seats", sub: "the agents the registry homes here" },
       { key: "verdicts", v: kindCount(base, "council.verdict"), l: "Verdicts", sub: countedOn(base, "council.verdict") },
@@ -60,6 +62,8 @@ export function fold(payloads, ctx) {
     ),
     seats,
     hasSeats: seats.length > 0,
-    seatsNote: seats.length === 0 ? "the served registry homes no agent in this room" : "",
+    seatsNote: seatsUnread
+      ? "the served registry carried this room's agents in a shape this shell could not read"
+      : seats.length === 0 ? "the served registry homes no agent in this room" : "",
   };
 }

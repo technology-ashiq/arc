@@ -18,9 +18,11 @@ import { countedOn, holdsCount, kindCount, laneBadge, laneRoom } from "../../../
  *   kpis: { key: string, v: string, l: string, sub: string }[],
  *   gates: { key: string, name: string }[],
  *   hasGates: boolean,
+ *   gatesNote: string,
  *   gateModes: import("../../../lib/registry.mjs").NotServed,
  *   workflows: { key: string, name: string }[],
  *   hasWorkflows: boolean,
+ *   workflowsNote: string,
  *   reviewVerb: { isVerbPending: true, verb: string, sentence: string },
  *   shipVerb: { isVerbPending: true, verb: string, sentence: string },
  * }} Folded
@@ -33,8 +35,12 @@ import { countedOn, holdsCount, kindCount, laneBadge, laneRoom } from "../../../
  */
 export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx);
-  const gates = (base.held.gates ?? []).map((name) => ({ key: name, name }));
-  const workflows = (base.held.ci ?? []).map((name) => ({ key: name, name }));
+  // Each gate and each workflow once; a list the registry carried unreadably says so rather than
+  // reading as an absence (Phase 03 attack).
+  const gatesUnread = base.unreadable.includes("gates");
+  const ciUnread = base.unreadable.includes("ci");
+  const gates = [...new Set(base.held.gates ?? [])].map((name) => ({ key: name, name }));
+  const workflows = [...new Set(base.held.ci ?? [])].map((name) => ({ key: name, name }));
   return {
     ...base,
     badge: laneBadge(base, "every lane passes through here"),
@@ -47,6 +53,9 @@ export function fold(payloads, ctx) {
     ],
     gates,
     hasGates: gates.length > 0,
+    gatesNote: gatesUnread
+      ? "the served registry carried this room's gates in a shape this shell could not read"
+      : gates.length === 0 ? "the served registry names no gate in this room" : "",
     gateModes: notServed(
       "Gate modes and the profile",
       "/api/gates",
@@ -54,6 +63,9 @@ export function fold(payloads, ctx) {
     ),
     workflows,
     hasWorkflows: workflows.length > 0,
+    workflowsNote: ciUnread
+      ? "the served registry carried this room's workflows in a shape this shell could not read"
+      : workflows.length === 0 ? "the served registry names no CI workflow in this room" : "",
     reviewVerb: verbPending(
       "Review a commit, or run qa",
       "A review is keyed to the commit it read: a new commit is a new review. Running one from here arrives with the work door.",

@@ -37,7 +37,9 @@ const SECTIONS = Object.freeze([
  *   badge: string,
  *   kpis: { key: string, v: string, l: string, sub: string }[],
  *   find: string,
- *   sections: { key: string, label: string, count: string, rows: ToolRow[], hasRows: boolean }[],
+ *   sections: { key: string, label: string, count: string, rows: ToolRow[], hasRows: boolean, empty: string }[],
+ *   catalogueNote: string,
+ *   hasCatalogueNote: boolean,
  *   hasMatches: boolean,
  *   findNote: string,
  *   hasFindNote: boolean,
@@ -57,15 +59,32 @@ export function fold(payloads, ctx) {
   const picks = ctx.picks ?? {};
   const find = typeof picks.find === "string" ? picks.find : "";
   const needle = find.trim().toLowerCase();
-  const all = SECTIONS.map(([key, label]) => ({ key, label, rows: heldAcrossRooms(ctx, key) }));
+  const all = SECTIONS.map(([key, label]) => {
+    const read = heldAcrossRooms(ctx, key);
+    return { key, label, rows: read.rows, unreadable: read.unreadable };
+  });
+  // A room that carried one of these lists in a shape this shell could not read is NAMED: a catalogue
+  // that quietly shrank is the same lie as a count nobody served (Phase 03 attack).
+  const unreadable = [...new Set(all.flatMap((s) => s.unreadable))];
   const sections = all.map((s) => {
     const rows = needle === "" ? s.rows : s.rows.filter((r) => r.name.toLowerCase().includes(needle) || r.roomName.toLowerCase().includes(needle));
-    return { key: s.key, label: s.label, count: fmtInt(rows.length), rows, hasRows: rows.length > 0 };
+    return {
+      key: s.key,
+      label: s.label,
+      count: s.unreadable.length > 0 ? "—" : fmtInt(rows.length),
+      rows,
+      hasRows: rows.length > 0,
+      // "nothing matched your find" and "the registry homes none of these" are different sentences,
+      // and neither of them is "this list could not be read" (Phase 03 attack).
+      empty: s.unreadable.length > 0
+        ? `${s.unreadable.join(", ")} carried this list in a shape this shell could not read`
+        : needle === "" ? "the served registry homes none of these" : "nothing here matches",
+    };
   });
   const matches = sections.reduce((n, s) => n + s.rows.length, 0);
   const total = all.reduce((n, s) => n + s.rows.length, 0);
   /** @param {string} key */
-  const figure = (key) => fmtInt((all.find((s) => s.key === key) ?? { rows: [] }).rows.length);
+  const figure = (key) => (all.some((s) => s.key === key && s.unreadable.length > 0) ? "—" : fmtInt((all.find((s) => s.key === key) ?? { rows: [] }).rows.length));
 
   return {
     ...base,
@@ -80,6 +99,8 @@ export function fold(payloads, ctx) {
     ],
     find,
     sections,
+    catalogueNote: unreadable.length === 0 ? "" : `${unreadable.join(", ")} carried a list here in a shape this shell could not read, so the counts above leave it out`,
+    hasCatalogueNote: unreadable.length > 0,
     hasMatches: matches > 0,
     hasFindNote: needle !== "",
     findNote: needle === "" ? "" : matches === 0 ? `nothing in the catalogue matches ${JSON.stringify(find.trim())}` : `${fmtInt(matches)} of ${fmtInt(total)} match ${JSON.stringify(find.trim())}`,

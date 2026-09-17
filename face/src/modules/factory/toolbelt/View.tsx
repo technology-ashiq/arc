@@ -27,6 +27,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           >
             <TextInput value={f.find} onChange={(v) => ctx.onPick('find', v)} placeholder="a command, an agent, a rule, a room" mono />
             {f.hasFindNote ? <p className="text-[12px] leading-[18px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.findNote}</p> : null}
+            {f.hasCatalogueNote ? <p className="text-[12px] leading-[18px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.catalogueNote}</p> : null}
           </HPanel>
 
           <HPanel title="The catalogue" hint="every section is what the served registry homes, with the room that holds it">
@@ -45,7 +46,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[12px] leading-[18px] px-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>nothing here matches</p>
+                  <p className="text-[12px] leading-[18px] px-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{s.empty}</p>
                 )}
               </div>
             ))}
