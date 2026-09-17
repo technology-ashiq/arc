@@ -13,10 +13,10 @@
 // Both moods run by default, one after the other against the same door and preview (face v2
 // Phase 01, ADR-1331): light is never a later batch, so a light run is never optional here.
 //
-// Usage: harness-run.mjs [--face DIR] [--exclude id,id] [--moods dark,light]
+// Usage: harness-run.mjs [--face DIR] [--exclude id,id] [--moods dark,light] [--shots DIR]
 // Exit:  0 smoke passed in every mood · 1 a mood failed · 2 setup failed (no dist, door or preview never up).
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { spawnTracked, isDead, deathReason, stopTree, removeDir, delay } from "./proc.mjs";
 import { findChrome } from "./cdp.mjs";
 import { createServer } from "node:net";
@@ -30,12 +30,12 @@ const FACE_DEFAULT = resolve(HERE, "..");
 const REPO = resolve(FACE_DEFAULT, "..");
 
 export function parseArgs(argv) {
-  const opts = { exclude: [], face: FACE_DEFAULT, moods: [...MOODS] };
+  const opts = { exclude: [], face: FACE_DEFAULT, moods: [...MOODS], shots: null };
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const v = argv[i + 1];
-    if ((a === "--exclude" || a === "--face" || a === "--moods") && v !== undefined && !v.startsWith("--")) {
+    if ((a === "--exclude" || a === "--face" || a === "--moods" || a === "--shots") && v !== undefined && !v.startsWith("--")) {
       if (seen.has(a)) throw new SetupError(`${a} given twice -- which one is meant is not a guess`);
       if (v.trim() === "") throw new SetupError(`${a} has an empty value (an empty --face would resolve to the current directory)`);
       seen.add(a);
@@ -48,10 +48,11 @@ export function parseArgs(argv) {
         if (new Set(moods).size !== moods.length) throw new SetupError(`--moods names a mood twice: ${JSON.stringify(v)}`);
         opts.moods = moods;
       }
+      else if (a === "--shots") opts.shots = resolve(v);
       else opts.face = v;
       continue;
     }
-    throw new SetupError(`unknown or incomplete argument ${JSON.stringify(a)} (flags: --exclude id,id, --face DIR, --moods dark,light)`);
+    throw new SetupError(`unknown or incomplete argument ${JSON.stringify(a)} (flags: --exclude id,id, --face DIR, --moods dark,light, --shots DIR)`);
   }
   return opts;
 }
@@ -104,6 +105,9 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
   const chrome = findChrome();
   if (!chrome.path) throw new SetupError(`Chrome not found. Looked at: ${chrome.tried.join(" | ")}`);
   const expected = expectedOpenable();
+  // The frozen opening sentences the heading check holds each shipped module room to -- the contract, never
+  // the door under test.
+  const sentences = Object.fromEntries(Object.entries(JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "room-copy.json"), "utf8")).rooms ?? {}).map(([id, r]) => [id, String(r && r.sentence ? r.sentence : "")]));
 
   const tmp = mkdtempSync(join(tmpdir(), "face-browser-"));
   const spine = join(tmp, "spine");
@@ -135,6 +139,8 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     const moods = opts.moods ?? MOODS;
     let failedMoods = 0;
     let setupFailed = 0;
+    const shotFiles = [];
+    let shotChrome = null;
     for (const mood of moods) {
       log(`face-browser: mood=${mood}`);
       let report;
@@ -147,6 +153,8 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
           expected,
           roomTimeoutMs: 15000,
           mood,
+          sentences,
+          shots: opts.shots ?? undefined,
         }, log);
       } catch (e) {
         setupFailed++;
@@ -157,12 +165,18 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
       log(renderLine(report));
       log(notServedLine(report));
       log(headingLine(report));
-      log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined })}`);
+      if (report.shots) { shotFiles.push(...report.shots.files); shotChrome = shotChrome ?? report.shots.chrome; }
+      log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined, shots: undefined })}`);
       const verdict = judge(report);
       if (!verdict.ok) { failedMoods++; log(`smoke: FAIL mood=${mood} -- ${oneLine(verdict.reasons.join("; "))}`); }
     }
     // Light is never optional (ADR-1331): a run that left a mood out is not a pass, however clean.
     const missing = MOODS.filter((m) => !moods.includes(m));
+    if (opts.shots) {
+      writeFileSync(join(opts.shots, "shots.json"), `${JSON.stringify({ capturedAt: new Date().toISOString(), capture: { script: "face/scripts/harness-run.mjs --shots", browser: shotChrome, viewport: { width: 1440, height: 1000, deviceScaleFactor: 1 }, waitMs: 900, moods }, shots: shotFiles }, null, 2)}
+`);
+      log(`face-browser: shots=${shotFiles.length} chrome=${shotChrome ?? "unknown"} dir=${opts.shots}`);
+    }
     if (missing.length) log(`face-browser: PARTIAL -- mood(s) ${missing.join(",")} not run; a partial run never exits 0`);
     if (setupFailed) return 2;
     return failedMoods === 0 && missing.length === 0 ? 0 : 1;

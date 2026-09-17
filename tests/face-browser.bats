@@ -196,6 +196,14 @@ render_verdict() {
     # measured where the owner sees it, not only in the fold's output.
     printf '%s\n' "$output" | grep -qE "^smoke: not-served mood=$mood panels=[0-9]+ rooms=[a-z0-9,-]+\$" \
       || { echo "no not-served line for mood=$mood (harness exit $status)"; false; }
+    # ... and the count the browser drew EQUALS the rows the shipped rings' NOT SERVED lists name, which
+    # module-frame holds equal to the folds: a panel that vanished from the page, or a count read as zero
+    # because it could not be read, fails here (face v2 Phase 03 attack).
+    local nsPanels nsExpected
+    nsPanels="$(printf '%s\n' "$output" | grep "^smoke: not-served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: not-served mood=$mood panels=\([0-9][0-9]*\) rooms=.*/\1/p")"
+    nsExpected="$(cat "$ARC_ROOT"/initiatives/face/evidence/phase-03/not-served-*.md | grep -c '^| `')"
+    [ -n "$nsPanels" ] && [ "$nsExpected" -gt 0 ] && [ "$nsPanels" = "$nsExpected" ] \
+      || { echo "mood=$mood: the browser drew '$nsPanels' NOT SERVED panels, the shipped rings' lists name $nsExpected"; false; }
     # The shipped rings' module rooms open with the SERVED sentence as their heading: at least the six
     # command modules were checked and none missed (a blank room is not an opened one).
     printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command checked=([6-9]|[1-9][0-9]+) miss=0\$" \

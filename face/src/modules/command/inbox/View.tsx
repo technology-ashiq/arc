@@ -107,10 +107,10 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                   </div>
                 ) : (
                   <div className="flex gap-2 flex-wrap">
-                    <Btn small tone="green" onClick={() => { ctx.onPick('reason', ''); ctx.onPick('armed', `${c.id}|approve`) }}>
+                    <Btn small tone="primary" onClick={() => { ctx.onPick('reason', ''); ctx.onPick('armed', `${c.id}|approve`) }}>
                       Arm · approve
                     </Btn>
-                    <Btn small tone="danger" onClick={() => { ctx.onPick('reason', ''); ctx.onPick('armed', `${c.id}|reject`) }}>
+                    <Btn small onClick={() => { ctx.onPick('reason', ''); ctx.onPick('armed', `${c.id}|reject`) }}>
                       Arm · reject
                     </Btn>
                   </div>

@@ -409,6 +409,50 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
   try { reg.foldModule(mod, s1.loaded, fctx, {}); } catch (e) { actUndeclared = e; }
   check("UNDECLARED: an act log for an undeclared route FAILs the fold like a read does", actUndeclared !== null && String(actUndeclared.message).includes("/api/decide"));
 
+  // ── the Phase 03 attack on the read host: each confirmed hole, pinned ──
+  {
+    let calls = 0;
+    const tricky = { get route() { calls++; return calls <= 1 ? "/api/board" : "/api/pnl"; } };
+    const p = reg.plannedReads({ reads: [tricky] }, manifest);
+    check("R1: a getter route is read ONCE -- the read checked is the read keyed and pathed",
+      p.reads.length === 1 && p.reads[0].route === "/api/board" && p.reads[0].path === "/api/board" && JSON.parse(p.reads[0].key)[0] === "/api/board" && calls === 1, JSON.stringify({ p, calls }));
+  }
+  {
+    const loose = { id: "board", ring: "command", routes: ["/api/board"], asOf: true };
+    const got = reg.collectModules({ ...ns("command", "board"), "./modules/command/board/module.mjs": { default: loose } });
+    loose.routes.push("/api/pnl");
+    const attachedManifest = got.modules[0] ? got.modules[0].manifest : null;
+    check("R2: a module attaches a FROZEN copy of its manifest -- widening the original afterwards changes nothing",
+      attachedManifest !== null && Object.isFrozen(attachedManifest) && Object.isFrozen(attachedManifest.routes) && attachedManifest.routes.length === 1, JSON.stringify(attachedManifest));
+  }
+  {
+    const lone = `face${String.fromCharCode(0xd800)}`;
+    let threwPlan = null;
+    let planned = null;
+    try { planned = reg.plannedReads({ reads: [{ route: "/api/lane/:id", param: lone }] }, manifest); } catch (e) { threwPlan = e; }
+    check("R3: an id with an unpaired surrogate is refused by readProblem, and planning never throws",
+      threwPlan === null && typeof reg.readProblem({ route: "/api/lane/:id", param: lone }, manifest) === "string" && planned !== null && planned.reads.length === 0, String(threwPlan));
+    check("R5: an id that is a dot segment is refused", typeof reg.readProblem({ route: "/api/lane/:id", param: ".." }, manifest) === "string" && typeof reg.readProblem({ route: "/api/lane/:id", param: "." }, manifest) === "string");
+  }
+  {
+    const laneAct = reg.readKey({ route: "/api/lane/:id", param: "act" });
+    const started = reg.actStarted({ [laneAct]: { state: "ok", data: { stale: true } } }, "/api/decide", { id: "x" }).loaded;
+    const dropped = reg.dropReads(started);
+    check("R4: dropReads drops a read of a lane named act, and keeps the act log", !Object.hasOwn(dropped, laneAct) && Object.hasOwn(dropped, reg.readKey({ route: "/api/decide", act: true })), JSON.stringify(Object.keys(dropped)));
+  }
+  check("R6: the host can ask whether a route is declared before it stores an act", reg.routeDeclared(manifest, "/api/board") === true && reg.routeDeclared(manifest, "/api/pnl") === false && reg.routeDeclared(manifest, "__proto__") === false);
+  {
+    let getterCalls = 0;
+    const withGetter = { get panels() { getterCalls++; return { deep: reg.notServed("x", "/api/x", "y") }; } };
+    const inMap = reg.notServedOf({ m: new Map([["k", reg.notServed("Mapped", "/api/m", "s")]]), s: new Set([reg.notServed("Set", "/api/s", "s")]), withGetter });
+    check("R7: notServedOf finds entries in a Map and a Set, and never calls a getter", inMap.length === 2 && getterCalls === 0, JSON.stringify({ inMap, getterCalls }));
+  }
+  {
+    const p = reg.plannedReads({ reads: [{ route: "/api/board" }, { route: "/api/board", poll: true }] }, manifest);
+    check("R8: a repeated read keeps the poll flag of either copy", p.reads.length === 1 && p.reads[0].poll === true, JSON.stringify(p.reads));
+  }
+  check("the host knows which acts re-read everything", reg.actRereads("/api/decide") === true && reg.actRereads("/api/ask") === false && reg.actRereads("/api/board") === false);
+
   const ns1 = reg.notServed("Policy ladder", "/api/policy", "the ladder at a glance");
   check("notServed names its panel and the route it needs, and is marked for a View by a boolean field", ns1.isNotServed === true && ns1.panel === "Policy ladder" && ns1.route === "/api/policy" && typeof ns1.sentence === "string");
   const found2 = reg.notServedOf({ kpis: [ns1], panels: [{ title: "x", body: { deep: [reg.notServed("Learned", "/api/learn", "rules")] } }], plain: "text" });

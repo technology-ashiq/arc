@@ -96,7 +96,7 @@ const passes = (name, files) => {
   const body = `// GENERATED from the arc repo (READ-ONLY) on 2026-08-25 by scratchpad/trim-facts.mjs.\nexport const FACTS = {\n "meta": { "generated": "2026-08-25T07:04:56.539Z", "lanes": 16 },\n "lanes": [\n${lanes}\n ]\n}\n`;
   const src = fails("v0.7's arcFacts shape under face/src/lib", { "lib/facts.mjs": body }, "data-mass");
   const c = cli(src);
-  check("PLANTED: v0.7's arcFacts shape -- the CLI exits 1 naming the file and the kind", c.status === 1 && /FAIL lib\/facts\.mjs:\d+:\d+ data-mass/.test(c.stdout), `${c.status} ${c.stdout}${c.stderr}`);
+  check("PLANTED: v0.7's arcFacts shape -- the CLI exits 1 naming the file and the kind", c.status === 1 && /FAIL \S*lib\/facts\.mjs:\d+:\d+ data-mass/.test(c.stdout), `${c.status} ${c.stdout}${c.stderr}`);
   check("PLANTED: v0.7's arcFacts shape also carries its banner as a WARN", run(src).findings.some((f) => f.kind === "banner" && f.level === "WARN"), show(run(src)));
 }
 
@@ -149,11 +149,88 @@ fails("package.json subpath imports", {}, "import-outside", { pkg: { name: "plan
 }
 passes("a package's .js deep import is code (three's examples)", { "face/Stage.tsx": "import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'\nexport default function Stage() { return <p>{String(RenderPass)}</p> }\n" });
 
+// ── the Phase 03 attack: each confirmed hole, pinned ──
+{
+  const outside = "../../../docs/facts";
+  fails("an import on the line after x++ (the ASI blind spot)", { "lib/counter.mjs": `let hits = 0\nhits++\nimport facts from "${outside}.mjs"\nexport const f = facts\n` }, "import-outside");
+  fails("an export-from on the line after debugger", { "lib/dbg.mjs": `debugger\nexport * from "${outside}.mjs"\n` }, "import-outside");
+  fails("an import on the line after a TypeScript non-null x!", { "lib/bang.ts": `declare const maybe: number | undefined\nconst sure = maybe!\nimport facts from "${outside}.mjs"\nexport const f = [sure, facts]\n` }, "import-outside");
+  fails("3000 exported string constants outside any literal", { "lib/consts.mjs": Array.from({ length: 3000 }, (_, i) => `export const F${i} = "f87db${i}";`).join("\n") + "\n" }, "data-mass");
+  fails("2100 rows of JSX text", { "ui/Facts.tsx": `export default function Facts() { return <dl>${Array.from({ length: 1100 }, (_, i) => `<dt>lane-${i}</dt><dd>LIVE ${i}</dd>`).join("")}</dl> }\n` }, "data-mass");
+  fails("a + chain of short strings adding to a blob", { "lib/chain.mjs": `const RAW = ${Array.from({ length: 30 }, () => `"${"x".repeat(80)}"`).join(" + ")};\nexport const facts = RAW.length;\n` }, "blob");
+  fails("a template whose literal parts add to a blob around ${\"\"}", { "lib/tpl.mjs": `export const t = \`${Array.from({ length: 30 }, () => "y".repeat(80)).join("${\"\"}")}\`;\n` }, "blob");
+  fails("JSON.parse of a parenthesised literal", { "lib/p.mjs": "export const f = JSON.parse((\"{}\"));\n" }, "blob");
+  fails("globalThis.JSON.parse of a literal", { "lib/p.mjs": "export const f = globalThis.JSON.parse(\"{}\");\n" }, "blob");
+  fails("a 2100-character regex source", { "lib/re.mjs": `export const R = /${"a|".repeat(1050)}b/;\n` }, "blob");
+  fails("an EXPORTED stylesheet constant is text, not a stylesheet", { "ui/Theme.tsx": `export const THEME_CSS = \`${".x{color:var(--a)}".repeat(150)}\`\nexport default function Theme() { return <style>{THEME_CSS}</style> }\n` }, "blob");
+  fails("a stylesheet literal carrying single-quoted JSON members", { "rooms/Sheet.tsx": `export default function Sheet() { return <style>{SHEET}</style> }\nconst SHEET = \`.a{b:c} {'lanes': 16}\`\n` }, "blob");
+  fails("a package name that climbs through ..", { "lib/climb.mjs": "export { F } from \"pkg/../../docs/facts.mjs\";\n" }, "import-outside");
+  fails("a stylesheet url() through a package-style climb", { "index.css": ".x { background: url(x/../../../docs/facts.png); }\n" }, "import-outside");
+  fails("require() of anything", { "lib/req.ts": "declare const require: (s: string) => unknown\nexport const f = require(\"./x.mjs\")\n" }, "import-outside");
+  fails("a fetch of /api/../ that climbs out of the door", { "lib/f.mjs": "export const r = () => fetch(\"/api/../arc-facts.json\");\n" }, "fetch-static");
+  fails("window.fetch of a static file", { "lib/f.mjs": "export const r = () => window.fetch(\"/arc-facts.json\");\n" }, "fetch-static");
+  fails("a fetch of a parenthesised static literal", { "lib/f.mjs": "export const r = () => fetch((\"/arc-facts.json\"));\n" }, "fetch-static");
+  fails("a fetch of a template holding only a literal", { "lib/f.mjs": "export const r = () => fetch(`${\"/arc-facts.json\"}`);\n" }, "fetch-static");
+  fails("a fetch reached by a computed key", { "lib/f.mjs": "export const r = () => globalThis[\"fetch\"](\"/api/x\");\n" }, "fetch-static");
+  fails("XMLHttpRequest at all", { "lib/f.mjs": "export const r = () => new XMLHttpRequest();\n" }, "fetch-static");
+  fails("new Request of a static file", { "lib/f.mjs": "export const r = () => new Request(\"/arc-facts.json\");\n" }, "fetch-static");
+  fails("a .css file carrying a 2100-character string", { "facts.css": `:root { --arc-facts: '${"z".repeat(2100)}'; }\n` }, "blob");
+  fails("a .css file carrying a JSON member", { "facts.css": ":root { --arc-facts: '{\"lanes\": 16}'; }\n" }, "blob");
+  fails("a CSS @import with no space", { "index.css": "@import\"../../docs/facts.css\";\n" }, "import-outside");
+  fails("a CSS @import behind a comment", { "index.css": "@import/**/\"../../docs/facts.css\";\n" }, "import-outside");
+  fails("a Tailwind @plugin leaving face/src", { "index.css": "@plugin \"../../docs/facts-plugin.mjs\";\n" }, "import-outside");
+  fails("a colon in a relative specifier (an NTFS stream)", { "lib/a.mjs": "import x from \"./b.mjs:facts.mjs\";\nexport const y = x;\n" }, "import-outside");
+  fails("a relative specifier matching a folder only case-insensitively", { "lib/a.mjs": "import x from \"../LIB/b.mjs\";\nexport const y = x;\n", "lib/b.mjs": "export const b = 1;\n" }, "import-outside");
+  for (const [label, spec] of [["a tarball", "facts.tgz"], ["a drive path", "C:/facts"], ["a home path", "~/facts"], ["a dot folder", ".facts"], ["an upper-case FILE: protocol", "FILE:../facts"]]) {
+    fails(`a dependency installed from ${label}`, {}, "package", { pkg: { name: "planted", dependencies: { facts: spec } } });
+  }
+  for (const field of ["browser", "exports", "workspaces"]) {
+    fails(`package.json declaring ${field}`, {}, "package", { pkg: { name: "planted", [field]: field === "workspaces" ? ["../facts-pkg"] : { "./facts": "./vendor/facts.mjs" } } });
+  }
+  fails("an override that is a path", {}, "package", { pkg: { name: "planted", overrides: { react: "file:../facts" } } });
+  {
+    const src = plant({});
+    writeFileSync(join(dirname(src), "vite.config.ts"), "import { defineConfig } from 'vite'\nexport default defineConfig({ define: { __ARC_FACTS__: '{}' } })\n");
+    const r = run(src);
+    check("PLANTED: a vite config that defines a value FAILs (build-config)", kinds(r, "FAIL").includes("build-config"), show(r));
+    writeFileSync(join(dirname(src), "vite.config.ts"), "import { defineConfig } from 'vite'\nexport default defineConfig({ resolve: { alias: { 'arc-room-data': '../docs/facts.json' } } })\n");
+    const r2 = run(src);
+    check("PLANTED: a vite config with a resolve alias FAILs (build-config)", kinds(r2, "FAIL").includes("build-config"), show(r2));
+  }
+  passes("a TypeScript return type does not turn a function body into a data literal", { "lib/tones.ts": `export function tone(n: number): string {\n${Array.from({ length: 210 }, (_, i) => `  if (n === ${i}) return "t${i}"`).join("\n")}\n  return ""\n}\n` });
+  passes("a web worker by new URL and by ?worker, and a glob picking its import", { "lib/w.ts": "export const w = () => new Worker(new URL(\"./layout.worker.ts\", import.meta.url), { type: \"module\" })\n", "lib/layout.worker.ts": "export const x = 1\n", "lib/w2.ts": "import W from \"./layout.worker.ts?worker\"\nexport const make = () => new W()\n", "App.tsx": "const panels = import.meta.glob('./lib/*.ts', { eager: true, import: 'default' })\nexport default function App() { return <p>{Object.keys(panels).length}</p> }\n" });
+  check("oneLine makes an ESC visible, so a file name cannot repaint a verdict line", pure.oneLine(`a${String.fromCharCode(27)}[2Kb`) === "a<U+001B>[2Kb", pure.oneLine(`a${String.fromCharCode(27)}b`));
+}
+
+// a relative import climbing through a linked parent: resolved from the REAL folder, as node resolves it
+{
+  const baseDir = join(scratch, "linked");
+  const real = join(baseDir, "R", "deep");
+  mkdirSync(join(real, "face", "src"), { recursive: true });
+  mkdirSync(join(real, "x", "face", "src"), { recursive: true });
+  mkdirSync(join(baseDir, "L"), { recursive: true });
+  writeFileSync(join(real, "face", "src", "a.mjs"), "import { y } from \"../../x/face/src/y.mjs\";\nexport const a = y;\n");
+  writeFileSync(join(real, "x", "face", "src", "y.mjs"), "export const y = 1;\n");
+  let linked = false;
+  try {
+    symlinkSync(join(real, "face"), join(baseDir, "L", "face"), "junction");
+    symlinkSync(real, join(baseDir, "L", "x"), "junction");
+    linked = true;
+  } catch { /* no link on this OS for this user */ }
+  if (linked) {
+    const r = lint.lintFacts(join(baseDir, "L", "face", "src"), { base: baseDir, packageJson: null, configDir: null });
+    check("PLANTED: a climb through a linked parent is judged from the real folder and FAILs (import-outside)", kinds(r, "FAIL").includes("import-outside"), show(r));
+  }
+  console.log(`face-facts: linked-parent-arm=${linked ? "ran" : "skipped"}`);
+}
+
 // a link: counted skip only where the OS cannot make one
 {
   const src = plant({});
   let linked = false;
-  try { symlinkSync(join(REPO, "README.md"), join(src, "lib-facts.mjs")); linked = true; } catch { /* no symlink privilege */ }
+  try { symlinkSync(join(REPO, "README.md"), join(src, "lib-facts.mjs")); linked = true; } catch { /* no file-symlink privilege */ }
+  // A directory junction needs no privilege on Windows, so the arm runs there too (face v2 Phase 03 attack).
+  if (!linked) { try { symlinkSync(join(REPO, "docs"), join(src, "lib-docs"), "junction"); linked = true; } catch { /* no link at all */ } }
   if (linked) {
     const r = run(src);
     check("PLANTED: a symlink under face/src FAILs (link)", kinds(r, "FAIL").includes("link"), show(r));

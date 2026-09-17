@@ -24,7 +24,12 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
       <HPanel
         title="Lanes"
         hint="appetite bought vs spent · at the line the phase-done gate refuses and the lane stops"
-        actions={<PickRow small options={f.sorts} value={f.sort} onPick={(v) => ctx.onPick('sort', v)} label="sort the lanes" />}
+        actions={
+          <>
+            <PickRow small options={f.sorts} value={f.sort} onPick={(v) => ctx.onPick('sort', v)} label="sort the lanes" />
+            {f.canOpenOrg && <Btn small onClick={() => ctx.onOpen(f.orgRoom)}>The roster → org</Btn>}
+          </>
+        }
       >
         {f.lanes.isReading && <Reading what="the board" />}
         {f.lanes.isRefused && <DoorRefusal code={f.lanes.refusal.code} human={f.lanes.refusal.human} />}

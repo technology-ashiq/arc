@@ -117,7 +117,7 @@ export function fold(payloads, ctx) {
     return {
       id: e.id, short: e.id.slice(-6),
       label: verdict === "reject" ? "rejected" : verdict === "approve" ? "approved" : verdict || "decided",
-      ink: verdict === "reject" ? "var(--red)" : verdict === "approve" ? "var(--green)" : "var(--text-2)",
+      ink: verdict === "approve" ? "var(--accent)" : "var(--text-2)",
       title: eventRowView(e).text,
     };
   });

@@ -10,8 +10,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
 import {
-  actCall, actProblem, actSettled, actStarted, afterAct, dropReads, fallbackFor, foldModule, plannedReads,
-  POLL_MS, problemsFor, readsToLoad, refusedPayload, renderFor,
+  actCall, actProblem, actRereads, actSettled, actStarted, dropReads, fallbackFor, foldModule, plannedReads,
+  POLL_MS, problemsFor, readsToLoad, refusedPayload, renderFor, routeDeclared,
 } from '../lib/registry.mjs'
 import type { AttachedModule, Attachment, ModuleContext, ModuleProblem, ModuleViewContext, Payload } from '../lib/registry.mjs'
 import { laneForRoom } from '../lib/rooms.mjs'
@@ -36,27 +36,35 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
   const [loaded, setLoaded] = useState<Record<string, Payload>>({})
   const [picks, setPicks] = useState<Record<string, string>>({})
   const [pollTick, setPollTick] = useState(0)
-  // Bumped when the door or module changes, so the load effect runs again over the EMPTIED payloads
-  // even when the new fold asks for exactly the same reads as the old one did.
+  // Bumped whenever the reads are dropped (a new door, a stamp, a re-read), so the load effect runs again
+  // over the EMPTIED payloads even when the fold asks for exactly the same reads as before.
   const [generation, setGeneration] = useState(0)
+  const [hostProblems, setHostProblems] = useState<string[]>([])
   const loadedRef = useRef(loaded)
   loadedRef.current = loaded
   const inflight = useRef(new Set<string>())
+  // Every read carries the epoch it started in; one that answers after its reads were dropped is thrown
+  // away, so a poll that left before a stamp cannot bring the stamped approval back (face v2 Phase 03 attack).
+  const readEpoch = useRef(0)
   const polledAt = useRef(0)
   const actCount = useRef<Record<string, number>>({})
-  // One controller per door and module: a new door is a new as-of or token, so everything read through
-  // the old one is stale, and a read still in flight must not land on the new one.
+  // One controller per door: a new door is a new as-of or token, and a read still in flight must not land
+  // on it. Acts are NOT tied to it: a stamp that reached the door happened, whatever the scrub did since.
   const controller = useRef<AbortController | null>(null)
+
+  const dropAll = useCallback(() => {
+    readEpoch.current += 1
+    inflight.current = new Set()
+    setLoaded((prev) => dropReads(prev))
+    setGeneration((g) => g + 1)
+  }, [])
 
   useEffect(() => {
     const ac = new AbortController()
     controller.current = ac
-    inflight.current = new Set()
-    actCount.current = {}
-    setLoaded({})
-    setGeneration((g) => g + 1)
+    dropAll()
     return () => ac.abort()
-  }, [door, m])
+  }, [door, m, dropAll])
 
   // A fold that throws is this module's failure, named, and never a blank room or a dead shell.
   const folded = useMemo((): Folded => {
@@ -79,16 +87,18 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
     if (!ac || ac.signal.aborted) return
     const pollDue = pollTick !== polledAt.current
     polledAt.current = pollTick
+    const epoch = readEpoch.current
+    const landed = () => !ac.signal.aborted && epoch === readEpoch.current
     for (const r of readsToLoad(plan.reads, loadedRef.current, inflight.current, pollDue)) {
       const flight = inflight.current
       flight.add(r.key)
       door
         .call(r.path, { signal: ac.signal })
         .then((data: unknown) => {
-          if (!ac.signal.aborted) setLoaded((prev) => ({ ...prev, [r.key]: { state: 'ok', data } }))
+          if (landed()) setLoaded((prev) => ({ ...prev, [r.key]: { state: 'ok', data } }))
         })
         .catch((err: unknown) => {
-          if (!ac.signal.aborted) setLoaded((prev) => ({ ...prev, [r.key]: refusedPayload(err) }))
+          if (landed()) setLoaded((prev) => ({ ...prev, [r.key]: refusedPayload(err) }))
         })
         .finally(() => flight.delete(r.key))
     }
@@ -99,14 +109,17 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
     setPicks((prev) => ({ ...prev, [key]: value }))
   }, [])
 
-  const onReread = useCallback(() => {
-    setLoaded((prev) => dropReads(prev))
-  }, [])
+  const onReread = dropAll
 
   const onAct = useCallback(
     (route: string, body: Record<string, unknown>) => {
-      const ac = controller.current
-      if (!ac || ac.signal.aborted) return
+      // An act on a route the manifest does not declare is a module bug: named on the frame, and never stored
+      // under a key every later fold would refuse (face v2 Phase 03 attack).
+      if (!routeDeclared(m.manifest, route)) {
+        const said = `act refused: ${route} is not in ${m.key}'s routes`
+        setHostProblems((prev) => (prev.includes(said) ? prev : [...prev, said]))
+        return
+      }
       const why = actProblem(route, body, m.manifest)
       const n = actCount.current[route] ?? 0
       actCount.current = { ...actCount.current, [route]: n + 1 }
@@ -117,27 +130,28 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
       }
       actCall(door, route, body)
         .then((data: unknown) => {
-          if (ac.signal.aborted) return
-          setLoaded((prev) => afterAct(actSettled(prev, route, n, { state: 'ok', data }), route))
+          setLoaded((prev) => actSettled(prev, route, n, { state: 'ok', data }))
+          if (actRereads(route)) dropAll()
         })
         .catch((err: unknown) => {
-          if (!ac.signal.aborted) setLoaded((prev) => actSettled(prev, route, n, refusedPayload(err)))
+          setLoaded((prev) => actSettled(prev, route, n, refusedPayload(err)))
         })
     },
-    [door, m],
+    [door, m, dropAll],
   )
 
   const viewCtx = useMemo((): ModuleViewContext => ({ ...ctx, picks, onPick, onAct, onReread }), [ctx, picks, onPick, onAct, onReread])
 
   if (!folded.ok) return <Failure error={folded.error} what={`the ${m.key} module's fold`} />
   const View = m.View as ComponentType<ViewProps>
+  const problems = [...plan.problems.map((p) => `read refused: ${p}`), ...hostProblems]
   return (
     <>
-      {plan.problems.length > 0 && (
-        <p data-read-problem={plan.problems.length} className="mb-3 text-[12px] leading-[18px]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>
-          {plan.problems.map((p) => (
+      {problems.length > 0 && (
+        <p data-read-problem={problems.length} className="mb-3 text-[12px] leading-[18px]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>
+          {problems.map((p) => (
             <span key={p} className="block">
-              read refused: {p}
+              {p}
             </span>
           ))}
         </p>

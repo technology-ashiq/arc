@@ -63,29 +63,47 @@ export function fold(payloads, ctx) {
   const legend = legendRows(spineHealth);
 
   const today = health === null ? "" : dayOf(health.now);
-  const scope = picks.scope === "yesterday" || picks.scope === "start" ? picks.scope : "today";
   const family = TONE_ORDER.some((t) => t === picks.family) ? String(picks.family) : "all";
   const familyRow = legend.find((l) => l.tone === family) ?? null;
   const kinds = familyRow === null ? [] : familyRow.kinds;
+  const neverFired = health !== null && family !== "all" && kinds.length === 0;
 
-  /** @type {Record<string, string | number>} */
-  const query = { limit: PAGE };
-  if (scope === "today" && today !== "") query.date = today;
-  if (scope === "yesterday" && today !== "") query.date = dayBefore(today);
-  if (family !== "all") query.kind = kinds.join(",");
-  // A family whose kinds never fired has nothing to ask the door for; asking with an empty kind would
-  // read the whole log and call it filtered.
-  const canAsk = health !== null && (family === "all" || kinds.length > 0) && (scope === "start" || today !== "");
-  const logRead = canAsk ? { route: "/api/spine", query } : null;
-  if (logRead !== null) reads.push(logRead);
-  /** @type {Payload} */
-  const logP = logRead === null ? (healthP.state === "refused" ? healthP : { state: "loading" }) : payloadOf(payloads, logRead);
+  /**
+   * The read for one scope, or null when there is nothing to ask the door for: a family whose kinds never
+   * fired (an empty kind would read the whole log and call it filtered), or a day before the door's clock is read.
+   * @param {string} scope
+   */
+  const readFor = (scope) => {
+    if (health === null || neverFired || (scope !== "start" && today === "")) return null;
+    /** @type {Record<string, string | number>} */
+    const query = { limit: PAGE };
+    if (scope === "today") query.date = today;
+    if (scope === "yesterday") query.date = dayBefore(today);
+    if (family !== "all") query.kind = kinds.join(",");
+    return { route: "/api/spine", query };
+  };
+  /** @param {import("../../../lib/registry.mjs").Read | null} read @returns {Payload} */
+  const payloadFor = (read) => (read === null ? (healthP.state === "refused" ? healthP : { state: "loading" }) : payloadOf(payloads, read));
+
+  // A day the owner picked is the day shown. With no pick, today leads -- and a today with no receipt yet falls
+  // back to the log's first page, SAID in the hint, rather than opening the log on an empty screen.
+  const picked = picks.scope === "today" || picks.scope === "yesterday" || picks.scope === "start" ? picks.scope : null;
+  const firstRead = readFor(picked ?? "today");
+  if (firstRead !== null) reads.push(firstRead);
+  const firstP = payloadFor(firstRead);
+  const firstPage = firstP.state === "ok" ? readSpinePage(firstP.data) : null;
+  const fellBack = picked === null && firstPage !== null && firstPage.events.length === 0;
+  const scope = fellBack ? "start" : picked ?? "today";
+  const logRead = fellBack ? readFor("start") : firstRead;
+  if (fellBack && logRead !== null) reads.push(logRead);
+  const logP = fellBack ? payloadFor(logRead) : firstP;
   const page = logP.state === "ok" ? readSpinePage(logP.data) : null;
   const events = page === null ? [] : page.events;
-  const neverFired = health !== null && family !== "all" && kinds.length === 0;
   const rows = (scope === "start" ? events.slice(0, ROWS) : events.slice(-ROWS)).slice().reverse().map(eventRowView);
 
-  const scopeLabel = scope === "today" ? `today (${today})` : scope === "yesterday" ? `yesterday (${dayBefore(today)})` : "from the start of the log";
+  const scopeLabel = fellBack
+    ? `today (${today}) has no receipt yet, so the log's first page`
+    : scope === "today" ? `today (${today})` : scope === "yesterday" ? `yesterday (${dayBefore(today)})` : "from the start of the log";
   const quarantined = spineHealth === null ? null : spineHealth.quarantine.total;
   const torn = spineHealth === null || !spineHealth.tornRead ? null : spineHealth.tornLines.length;
 

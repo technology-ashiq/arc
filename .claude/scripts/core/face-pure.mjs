@@ -105,7 +105,12 @@ const isLineBreak = (c) => c === "\n" || c === "\r" || c === LS || c === PS;
 /** A line for a log anything parses: every line terminator in `text` made visible, so a name cannot forge a line. */
 export function oneLine(text) {
   let out = "";
-  for (const c of String(text)) out += isLineBreak(c) ? `<U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}>` : c;
+  // Every line terminator, and every other C0 or C1 control (ESC included), made visible: a file name that
+  // carries one cannot repaint the line a verdict is read from (face v2 Phase 03 attack).
+  for (const c of String(text)) {
+    const code = c.charCodeAt(0);
+    out += isLineBreak(c) || code < 0x20 || (code >= 0x7f && code <= 0x9f) ? `<U+${code.toString(16).toUpperCase().padStart(4, "0")}>` : c;
+  }
   return out;
 }
 
@@ -221,6 +226,7 @@ export function lex(text, { jsx = false, text: keepText = false } = {}) {
 
   const readRegex = () => {
     const at = here();
+    const from = i;
     advance(1);
     let inClass = false;
     for (;;) {
@@ -233,7 +239,8 @@ export function lex(text, { jsx = false, text: keepText = false } = {}) {
       advance(1);
     }
     while (i < src.length && /[a-z]/i.test(src[i])) advance(1);
-    push("re", "regex", at);
+    // The source rides on the token as a property, so a reader that judges text can measure a regex too.
+    tokens[push("re", "regex", at)].raw = src.slice(from, i);
   };
 
   const readTemplate = () => {
@@ -483,7 +490,12 @@ export function importStatements(tokens) {
   const out = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
-    if (!(isName(t, "import") || isName(t, "export")) || !statementStart(tokens, i)) continue;
+    // `import` and `export` are reserved: outside a property name they can only begin a statement, so the
+    // statement boundary is not asked. Asking it hid `hits++`, `debugger` or TypeScript's `x!` on the line
+    // before an import, whose end the ASI heuristic does not know (face v2 Phase 03 attack).
+    if (!(isName(t, "import") || isName(t, "export")) || t.prop === true || isP(tokens[i - 1], ".") || isP(tokens[i - 1], "?.")) continue;
+    // A reserved word used as an object key (`{ import: 1 }`) is not a statement either.
+    if (isP(tokens[i + 1], ":") || isP(tokens[i + 1], ",") || isP(tokens[i + 1], "}") || isP(tokens[i + 1], "=")) continue;
     if (isName(t, "import") && (isP(tokens[i + 1], "(") || isP(tokens[i + 1], "."))) continue;
     if (isName(t, "export") && !(isP(tokens[i + 1], "{") || isP(tokens[i + 1], "*") || (isName(tokens[i + 1], "type") && isP(tokens[i + 2], "{")))) continue;
     // Walk to the specifier: the string after `from`, or the string straight after `import`.

@@ -133,9 +133,12 @@ export function collectModules(found) {
     if (typeof foldNs.fold !== "function") { problems.push({ key: e.key, kind: "incomplete", why: "fold.mjs exports no fold()" }); continue; }
     if (!Array.isArray(opsNs.ops)) { problems.push({ key: e.key, kind: "incomplete", why: "ops.mjs exports no ops list" }); continue; }
     if (!isComponent(viewNs.default)) { problems.push({ key: e.key, kind: "incomplete", why: "View.tsx has no default component" }); continue; }
-    const manifest = e.parts["module.mjs"].default;
-    const why = manifestProblem(manifest, e.ring, e.id);
+    const declared = e.parts["module.mjs"].default;
+    const why = manifestProblem(declared, e.ring, e.id);
     if (why) { problems.push({ key: e.key, kind: "manifest", why }); continue; }
+    // A frozen COPY: routes are checked once, here, and a fold holding the module's own object cannot widen
+    // them afterwards (face v2 Phase 03 attack).
+    const manifest = Object.freeze({ ...declared, routes: Object.freeze([...declared.routes]) });
     modules.push({
       key: e.key, ring: e.ring, id: e.id, manifest, fold: foldNs.fold, ops: opsNs.ops,
       View: viewNs.default, Icon: isComponent(viewNs.Icon) ? viewNs.Icon : null,
@@ -301,7 +304,7 @@ const declaredRoutes = (manifest) => {
 };
 
 /** @param {string} route */
-const routeSpec = (route) => (typeof route === "string" && Object.hasOwn(DOOR_ROUTES, route) ? DOOR_ROUTES[/** @type {keyof typeof DOOR_ROUTES} */ (route)] : null);
+const routeSpec = (route) => (typeof route === "string" && Object.hasOwn(DOOR_ROUTES, route) ? DOOR_ROUTES[route] ?? null : null);
 
 /**
  * The one key a read is loaded and looked up under. A JSON tuple, so an id carrying any separator
@@ -356,6 +359,8 @@ export function readProblem(read, manifest) {
   if (spec.method !== "GET") return `${route} is an act, not a read -- only a View's handler reaches it, through ctx.onAct`;
   if (spec.param) {
     if (typeof r.param !== "string" || r.param === "" || r.param.length > 256) return `${route} needs an id: a non-empty string`;
+    if (r.param === "." || r.param === "..") return `${route} takes an id, not a dot segment -- ${JSON.stringify(r.param)} would climb out of its path`;
+    try { encodeURIComponent(r.param); } catch { return `${route}'s id is not well-formed text (an unpaired surrogate) and cannot be put in a path`; }
   } else if (r.param !== undefined) return `${route} takes no id`;
   if (r.query !== undefined) {
     if (!r.query || typeof r.query !== "object" || Array.isArray(r.query)) return `${route}'s query is an object`;
@@ -383,17 +388,53 @@ export function plannedReads(folded, manifest) {
   const problems = [];
   const asked = folded && typeof folded === "object" ? /** @type {{ reads?: unknown }} */ (folded).reads : null;
   if (!Array.isArray(asked)) return { reads, problems };
-  const seen = new Set();
+  /** @type {Map<string, PlannedRead>} */
+  const byKey = new Map();
   for (const r of asked) {
-    const why = readProblem(r, manifest);
-    if (why) { problems.push(why); continue; }
-    const read = /** @type {Read} */ (r);
-    const key = readKey(read);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    reads.push({ ...read, key, path: readPath(read) });
+    // One snapshot per read, taken once: a getter cannot show readProblem one route and readKey another
+    // ("validate one read, compare another", face v2 Phase 03 attack).
+    const snap = snapshotRead(r);
+    const why = snap === null ? "a read is an object naming a route" : readProblem(snap, manifest);
+    if (why !== null || snap === null) { problems.push(String(why)); continue; }
+    const key = readKey(snap);
+    const had = byKey.get(key);
+    // A repeat of a read keeps the poll flag of either copy.
+    if (had) { if (snap.poll === true) had.poll = true; continue; }
+    const planned = { ...snap, key, path: readPath(snap) };
+    byKey.set(key, planned);
+    reads.push(planned);
   }
   return { reads, problems };
+}
+
+/**
+ * A read copied into a plain object: every field read exactly once, the query copied the same way.
+ * @param {unknown} r
+ * @returns {Read | null}
+ */
+function snapshotRead(r) {
+  if (!r || typeof r !== "object" || Array.isArray(r)) return null;
+  const o = /** @type {Record<string, unknown>} */ (r);
+  const route = o.route;
+  const param = o.param;
+  const poll = o.poll;
+  const act = o.act;
+  const rawQuery = o.query;
+  /** @type {Record<string, unknown>} */
+  const snap = { route };
+  if (param !== undefined) snap.param = param;
+  if (poll !== undefined) snap.poll = poll;
+  if (act !== undefined) snap.act = act;
+  if (rawQuery !== undefined) {
+    if (!rawQuery || typeof rawQuery !== "object" || Array.isArray(rawQuery)) snap.query = rawQuery;
+    else {
+      /** @type {Record<string, unknown>} */
+      const q = {};
+      for (const k of Object.keys(rawQuery)) q[k] = /** @type {Record<string, unknown>} */ (rawQuery)[k];
+      snap.query = q;
+    }
+  }
+  return /** @type {Read} */ (/** @type {unknown} */ (snap));
 }
 
 /**
@@ -446,6 +487,15 @@ export function foldModule(module, loaded, ctx, picks) {
 }
 
 /**
+ * Whether the module's manifest declares a route -- how the host refuses an act on an undeclared route
+ * without storing a payload under a key every later fold would refuse.
+ * @param {unknown} manifest @param {unknown} route
+ */
+export function routeDeclared(manifest, route) {
+  return typeof route === "string" && declaredRoutes(manifest).includes(route);
+}
+
+/**
  * Why this module may not make this act, or null.
  * @param {unknown} route @param {unknown} body @param {unknown} manifest
  * @returns {string | null}
@@ -458,7 +508,8 @@ export function actProblem(route, body, manifest) {
   if (spec.method !== "POST") return `${route} is a read, not an act`;
   if (!body || typeof body !== "object" || Array.isArray(body)) return `${route}'s body is an object`;
   if (route === "/api/ask") {
-    const ok = askable(/** @type {Record<string, unknown>} */ (body).q);
+    const q = /** @type {Record<string, unknown>} */ (body).q;
+    const ok = askable(typeof q === "string" ? q : "");
     if (!ok.ok) return ok.why;
   }
   return null;
@@ -502,6 +553,15 @@ export function afterAct(loaded, route) {
 }
 
 /**
+ * Whether an act, once it lands, changes what every read shows -- the host reads everything again.
+ * @param {string} route
+ */
+export function actRereads(route) {
+  const spec = routeSpec(route);
+  return spec !== null && spec.rereads === true;
+}
+
+/**
  * Every read dropped and every act log kept -- what "read it all again" means (a stamp landing, or the
  * owner asking for a fresh read).
  * @param {Record<string, Payload>} loaded
@@ -513,7 +573,8 @@ export function dropReads(loaded) {
   for (const [key, payload] of Object.entries(loaded)) {
     let t = null;
     try { t = JSON.parse(key); } catch { /* not a read key; dropped with the reads */ }
-    if (Array.isArray(t) && t[1] === "act") kept[key] = payload;
+    // An act log's key is a TWO-tuple; a read of a lane whose id is "act" is a three-tuple and drops.
+    if (Array.isArray(t) && t.length === 2 && t[1] === "act") kept[key] = payload;
   }
   return kept;
 }
@@ -567,15 +628,23 @@ export function notServedOf(folded) {
   /** @type {NotServed[]} */
   const out = [];
   const seen = new Set();
-  /** @param {unknown} v */
-  const walk = (v) => {
-    if (!v || typeof v !== "object" || seen.has(v)) return;
+  /** @param {unknown} v @param {number} depth */
+  const walk = (v, depth) => {
+    if (!v || typeof v !== "object" || seen.has(v) || depth > 64) return;
     seen.add(v);
-    const o = /** @type {Record<string, unknown>} */ (v);
-    if (o.isNotServed === true && typeof o.route === "string" && typeof o.panel === "string") { out.push(/** @type {NotServed} */ (o)); return; }
-    for (const child of Array.isArray(v) ? v : Object.values(o)) walk(child);
+    if (v instanceof Map || v instanceof Set) { for (const child of v.values()) walk(child, depth + 1); return; }
+    // Data properties only: a getter is never called, so a value that builds a new object on each read cannot
+    // recurse forever (face v2 Phase 03 attack).
+    const props = Object.getOwnPropertyDescriptors(v);
+    /** @param {string} k @returns {unknown} */
+    const data = (k) => {
+      const d = Object.hasOwn(props, k) ? props[k] : undefined;
+      return d !== undefined && "value" in d ? d.value : undefined;
+    };
+    if (data("isNotServed") === true && typeof data("route") === "string" && typeof data("panel") === "string") { out.push(/** @type {NotServed} */ (/** @type {unknown} */ (v))); return; }
+    for (const d of Object.values(props)) if ("value" in d) walk(d.value, depth + 1);
   };
-  walk(folded);
+  walk(folded, 0);
   return out;
 }
 

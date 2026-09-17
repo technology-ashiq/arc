@@ -32,7 +32,8 @@
 //   smoke.mjs --probe-file PATH       open one local page; exit 1 if it logged any error
 // Exit: 0 every expected room opened, settled, with 0 counted errors · 1 a room failed, or the
 //       probe saw errors · 2 setup failure (bad argument, no Chrome, door unreachable).
-import { mkdtempSync, realpathSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, realpathSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { stopTree, removeDir, settleWithin } from "./proc.mjs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
@@ -43,6 +44,8 @@ import {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const MIN_WATCH_MS = 900;
+/** Phase 00's baseline shots waited 900 ms after load; the candidates wait the same after the room settles. */
+export const SHOT_WAIT_MS = 900;
 export const QUIET_MS = 300;
 export const SLOW_SETTLE_MS = 10000;
 export const SETTLE_CAP_MS = 30000;
@@ -105,7 +108,11 @@ export function errorLine(e, secrets) {
 }
 
 /** A setup failure's message as one line, for the same reason. */
-export const oneLine = (text) => String(text).replace(/\r?\n/g, "\\n");
+// Every line terminator -- CRLF, a lone CR, LF, U+2028, U+2029 -- becomes a visible \n, and every other control
+// character a visible code point, so a message cannot forge or repaint a line (face v2 Phase 03 attack).
+const LINE_BREAK = new RegExp(`\\r\\n|[\\n\\r${String.fromCharCode(0x2028, 0x2029)}]`, "g");
+export const oneLine = (text) => String(text).replace(LINE_BREAK, "\\n")
+  .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, (c) => `<U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}>`);
 
 /** The verdict's words for rooms in the wrong mood, by which class was wrong. */
 export function moodReasons(report) {
@@ -338,11 +345,16 @@ export function doorText(s) {
  * The heading verdict for one opened room: null when the room is not in a shipped ring or a module did not
  * draw it; otherwise what the page showed against what the registry serves.
  */
-export function headingCheck(served, room) {
+export function headingCheck(served, room, contractSentence) {
   if (!served || !SENTENCE_RINGS.includes(served.ring) || room.render !== "module") return null;
-  const expected = doorText(served.sentence).trim();
+  // The FROZEN sentence when the harness has the contract: judged against the door alone, the check could only
+  // ever agree with the door it is testing (face v2 Phase 03 attack). The door's own sentence must match it too.
+  const frozen = typeof contractSentence === "string" ? contractSentence.trim() : null;
+  const servedText = doorText(served.sentence).trim();
+  const expected = frozen ?? servedText;
   const got = typeof room.h1 === "string" ? room.h1.trim() : "";
-  return { id: room.id, expected, got, ok: expected !== "" && got === expected };
+  const doorAgrees = frozen === null || servedText === frozen;
+  return { id: room.id, expected, got, ok: expected !== "" && got === expected && doorAgrees };
 }
 
 /** The heading line per mood: how many shipped-ring module rooms were checked, and how many missed. */
@@ -365,6 +377,7 @@ export function judge(report) {
   if (Array.isArray(report.missingFromDoor) && report.missingFromDoor.length) reasons.push(`expected but not served: ${report.missingFromDoor.join(",")}`);
   if (Array.isArray(report.unexpectedFromDoor) && report.unexpectedFromDoor.length) reasons.push(`served but not expected: ${report.unexpectedFromDoor.join(",")}`);
   reasons.push(...moodReasons(report));
+  if (report.headings && report.headings.checked === 0 && SENTENCE_RINGS.length > 0) reasons.push(`no module room in a shipped ring (${SENTENCE_RINGS.join(",")}) had its heading checked`);
   if (report.headings && Array.isArray(report.headings.miss) && report.headings.miss.length)
     reasons.push(`heading miss: ${report.headings.miss.map((m) => `${m.id} showed ${JSON.stringify(m.got)} for ${JSON.stringify(m.expected)}`).join("; ")}`);
   return { ok: reasons.length === 0, reasons };
@@ -386,7 +399,8 @@ export function renderLine(report) {
  */
 export function notServedLine(report) {
   const n = report.notServed ?? { panels: 0, rooms: [] };
-  return `smoke: not-served mood=${report.mood ?? "unstated"} panels=${n.panels} rooms=${n.rooms.join(",") || "none"}`;
+  // A room whose count could not be read makes the whole count UNREAD, never a quiet zero.
+  return `smoke: not-served mood=${report.mood ?? "unstated"} panels=${n.panels === null ? "unread" : n.panels} rooms=${n.rooms.join(",") || "none"}`;
 }
 
 export function summaryLines(report) {
@@ -476,6 +490,11 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
     await page.send("Log.enable");
     await page.send("Network.enable");
     await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    // Shots (face v2 Phase 03): Phase 00's baseline contract -- 1440x1000 at scale 1, both moods, 900 ms
+    // after the room settles, the Chrome version recorded. Evidence for the shot review, never a verdict.
+    const shots = typeof opts.shots === "string" && opts.shots !== "" ? opts.shots : null;
+    if (shots !== null) mkdirSync(shots, { recursive: true });
+    const browserVersion = shots === null ? null : await session.send("Browser.getVersion").catch(() => null);
     // The mood reaches the app the way a person's choice does: in its storage, before any of its
     // scripts run. JSON.stringify builds the program's two string literals.
     const mood = opts.mood ?? "dark";
@@ -534,12 +553,20 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
             expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.querySelectorAll("[data-not-served]").length : 0; })()`,
             returnByValue: true,
           });
-          room.notServed = Number.isInteger(gaps.result?.value) ? gaps.result.value : 0;
+          room.notServed = Number.isInteger(gaps.result?.value) ? gaps.result.value : null;
           const heading = await page.send("Runtime.evaluate", {
             expression: `(function () { var h = document.querySelector("section[data-room] h1"); return h ? h.textContent : null; })()`,
             returnByValue: true,
           });
           room.h1 = typeof heading.result?.value === "string" ? heading.result.value : null;
+          if (shots !== null) {
+            await sleep(SHOT_WAIT_MS);
+            const shot = await page.send("Page.captureScreenshot", { format: "png" });
+            const buf = Buffer.from(String(shot.data ?? ""), "base64");
+            const file = `${mood}-${id}.png`;
+            writeFileSync(join(shots, file), buf);
+            room.shot = { file, bytes: buf.length, sha256: createHash("sha256").update(buf).digest("hex") };
+          }
         }
       } catch (e) {
         // This room's finding, never the end of the evidence: it is not opened or not settled,
@@ -572,7 +599,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       slowSettle: rooms.filter((r) => r.settled && r.atSlow).map((r) => ({ id: r.id, settleMs: r.settleMs, atSlow: r.atSlow })),
       unsettledDetail: rooms.filter((r) => r.opened && !r.settled).map((r) => ({ id: r.id, atSlow: r.atSlow ?? null, atCap: r.atCap ?? null, navError: r.navError, cdpError: r.cdpError })),
       cdpErrors: rooms.filter((r) => r.cdpError).map((r) => ({ id: r.id, error: r.cdpError })),
-      rooms: rooms.map(({ before, atSlow, atCap, h1, ...r }) => r),
+      rooms: rooms.map(({ before, atSlow, atCap, h1, shot, ...r }) => r),
       mood,
       // A room that opened but whose class list was never read (a CDP error after it settled) is a
       // miss too: an unmeasured mood is not a held one.
@@ -582,12 +609,19 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
         generic: rooms.filter((r) => r.opened && r.render === "generic").map((r) => r.id),
         unmarked: rooms.filter((r) => r.opened && r.render !== "module" && r.render !== "generic").map((r) => r.id),
       },
+      shots: shots === null ? null : {
+        chrome: browserVersion && typeof browserVersion.product === "string" ? browserVersion.product : null,
+        viewport: { width: 1440, height: 1000, deviceScaleFactor: 1 },
+        waitMs: SHOT_WAIT_MS,
+        files: rooms.filter((r) => r.shot).map((r) => ({ room: r.id, mood, render: r.render ?? null, ...r.shot })),
+      },
       headings: (() => {
-        const checks = rooms.filter((r) => r.opened).map((r) => headingCheck(servedById.get(r.id), r)).filter(Boolean);
+        const frozen = opts.sentences && typeof opts.sentences === "object" ? opts.sentences : null;
+        const checks = rooms.filter((r) => r.opened).map((r) => headingCheck(servedById.get(r.id), r, frozen && Object.hasOwn(frozen, r.id) ? frozen[r.id] : undefined)).filter(Boolean);
         return { checked: checks.length, miss: checks.filter((c) => !c.ok) };
       })(),
       notServed: {
-        panels: rooms.reduce((n, r) => n + (r.opened && Number.isInteger(r.notServed) ? r.notServed : 0), 0),
+        panels: rooms.some((r) => r.opened && !Number.isInteger(r.notServed)) ? null : rooms.reduce((n, r) => n + (r.opened ? r.notServed : 0), 0),
         rooms: rooms.filter((r) => r.opened && r.notServed > 0).map((r) => r.id),
       },
       errors: errors.slice(0, 50),

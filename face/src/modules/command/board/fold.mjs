@@ -50,6 +50,8 @@ const STAGES = Object.freeze([
  * @property {{ key: string, name: string, n: string, note: string }[]} pipeline
  * @property {string} pipelineHint
  * @property {import("../../../lib/registry.mjs").NotServed} ventures
+ * @property {boolean} canOpenOrg
+ * @property {string} orgRoom
  * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
 
@@ -140,6 +142,8 @@ export function fold(payloads, ctx) {
       note: s.note,
     })),
     pipelineHint: day === "" ? "idea → money · reading the door's day" : `idea → money · counted from ${day}'s receipts by kind`,
+    canOpenOrg: served.has("org"),
+    orgRoom: served.has("org") ? "org" : "",
     ventures: notServed("Ventures", "/api/ventures", "The kill-distance card for each venture: its stage, its criteria set at kickoff, and how far it is from its own kill line. The door serves no ventures route yet."),
     reads,
   };

@@ -34,7 +34,7 @@ const refusal = (p) => (p.state === "refused" ? { code: p.code, human: p.human }
  * @property {"approve" | "reject"} verdict
  * @property {string} armedLabel
  * @property {string} armedInk
- * @property {"green" | "danger"} stampTone
+ * @property {"primary" | "ghost"} stampTone
  * @property {string} edge
  *
  * @typedef {object} Folded
@@ -108,7 +108,8 @@ export function fold(payloads, ctx) {
     return {
       id: e.id, short: shortId(e.id), time: eventRowView(e).time,
       label: verdict === "approve" ? "approved" : verdict === "reject" ? "rejected" : verdict || "decided",
-      ink: verdict === "approve" ? "var(--green)" : verdict === "reject" ? "var(--red)" : "var(--text-2)",
+      // A verdict is neither money nor an incident: approve wears the product's own ink, reject plain ink (ADR-1308).
+      ink: verdict === "approve" ? "var(--accent)" : "var(--text-2)",
       reason: decodeDoorText(typeof e.payload.reason === "string" ? e.payload.reason : ""),
       decides: typeof e.payload.decides === "string" ? `decides ⌗ ${shortId(e.payload.decides)}` : "",
     };
@@ -153,9 +154,9 @@ export function fold(payloads, ctx) {
           isApproveArmed: approve,
           verdict: /** @type {"approve" | "reject"} */ (approve ? "approve" : "reject"),
           armedLabel: approve ? "Armed · approve" : "Armed · reject",
-          armedInk: approve ? "var(--green)" : "var(--red)",
-          stampTone: /** @type {"green" | "danger"} */ (approve ? "green" : "danger"),
-          edge: isArmed ? (approve ? "var(--green)" : "var(--red)") : "var(--line-1)",
+          armedInk: approve ? "var(--accent)" : "var(--text-1)",
+          stampTone: /** @type {"primary" | "ghost"} */ (approve ? "primary" : "ghost"),
+          edge: isArmed ? (approve ? "var(--accent)" : "var(--line-2)") : "var(--line-1)",
         };
       }),
     },
@@ -163,7 +164,7 @@ export function fold(payloads, ctx) {
       reason: picks.reason ?? "",
       placeholder: REASON_PLACEHOLDER,
       bytes: `${fmtInt(check.bytes)} / ${fmtInt(MAX_REASON_BYTES)} bytes`,
-      bytesInk: check.bytes > MAX_REASON_BYTES ? "var(--red)" : "var(--text-3)",
+      bytesInk: check.bytes > MAX_REASON_BYTES ? "var(--text-1)" : "var(--text-3)",
       isEmpty: check.value === "",
       canStamp: armedOpen && check.ok && !isStamping,
       isStamping,

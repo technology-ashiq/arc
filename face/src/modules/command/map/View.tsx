@@ -58,6 +58,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-[11.5px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>
           {f.legend.map((l) => (
             <span key={l.key} data-legend={l.key} className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="w-[8px] h-[8px] rounded-full" style={{ background: l.fill, border: l.border }} />
               {l.label}
             </span>
           ))}

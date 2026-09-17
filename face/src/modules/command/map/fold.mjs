@@ -42,7 +42,7 @@ const RING_INK = { command: "var(--accent)", kernel: "var(--blue)", factory: "va
  * @property {{ key: string, v: string, l: string, sub: string }[]} kpis
  * @property {string} viewBox
  * @property {{ ring: string, y: number, labelY: number, ink: string, x0: number, x1: number, stations: (Station & { y: number, nameY: number, stateY: number, countY: number })[] }[]} rows
- * @property {{ key: string, label: string }[]} legend
+ * @property {{ key: string, label: string, fill: string, border: string }[]} legend
  * @property {string} feedNote
  * @property {boolean} isFeedRefused
  * @property {{ lane: string, room: string, name: string, ink: string, state: string, stateInk: string, canOpen: boolean }[]} lanes
@@ -162,11 +162,11 @@ export function fold(payloads, ctx) {
     viewBox: `0 0 ${W} ${ROW_H * rings.length + 24}`,
     rows,
     legend: [
-      { key: "live", label: `live · a receipt fired here today (${fmtInt(counts.live)})` },
-      { key: "quiet", label: `quiet · fired before, not today (${fmtInt(counts.quiet)})` },
-      { key: "unexercised", label: `unexercised · never fired (${fmtInt(counts.unexercised)})` },
-      { key: "planned", label: `planned · lane not born (${fmtInt(counts.planned)})` },
-      { key: "index", label: `index · points at other rooms (${fmtInt(counts.index)})` },
+      { key: "live", label: `live · a receipt fired here today (${fmtInt(counts.live)})`, fill: "var(--accent)", border: "1px solid var(--accent)" },
+      { key: "quiet", label: `quiet · fired before, not today (${fmtInt(counts.quiet)})`, fill: "transparent", border: "1px solid var(--text-3)" },
+      { key: "unexercised", label: `unexercised · never fired (${fmtInt(counts.unexercised)})`, fill: "transparent", border: "1px dashed var(--text-3)" },
+      { key: "planned", label: `planned · lane not born (${fmtInt(counts.planned)})`, fill: "transparent", border: "1px dotted var(--violet)" },
+      { key: "index", label: `index · points at other rooms (${fmtInt(counts.index)})`, fill: "var(--bg-4)", border: "1px solid var(--line-2)" },
     ],
     feedNote: feedP === null ? "reading the door's day" : feedP.state === "refused" ? `${feedP.code}: ${feedP.human} -- no station is drawn live without today's receipts` : `today is ${day} on the door's clock`,
     isFeedRefused: feedP !== null && feedP.state === "refused",

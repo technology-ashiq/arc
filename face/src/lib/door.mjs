@@ -196,7 +196,10 @@ export const ASOF_ROUTES = Object.freeze(["/api/spine", "/api/brief", "/api/inbo
  * read may carry -- `asof` is never one of them, because the scrub is this client's (withAsOf).
  * `rereads` marks an act whose landing changes what every read shows.
  */
+/** @typedef {Readonly<{ method: "GET" | "POST", param: boolean, query: readonly string[], rereads: boolean }>} DoorRoute */
+/** @param {string[]} [query] @returns {DoorRoute} */
 const read = (query = []) => Object.freeze({ method: "GET", param: false, query: Object.freeze(query), rereads: false });
+/** @type {Readonly<Record<string, DoorRoute>>} */
 export const DOOR_ROUTES = Object.freeze({
   "/api/health": read(),
   "/api/spine": read(["since", "kind", "venture", "date", "limit"]),
