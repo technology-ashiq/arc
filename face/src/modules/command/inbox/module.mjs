@@ -1,11 +1,10 @@
-// module.mjs -- command/inbox: the manifest (face v2 Phase 02, ADR-1320, ADR-1321).
+// module.mjs -- command/inbox: the manifest (face v2 Phase 03, ADR-1320, REQ-05).
 //
-// CARRIED: this module draws the Cycle 15 Inbox renderer through the module frame until Phase 03's
-// command ring ports v0.7's Inbox into this folder. It declares no route because the carried
-// renderer reads the door itself.
+// "A machine may raise it. Only you may decide it." The one write path: `/api/decide` is declared as
+// an act, reached only through the host, and byte-parity with arc-inbox stays the door's (ADR-1302).
 export default Object.freeze({
   id: "inbox",
   ring: "command",
-  routes: Object.freeze([]),
+  routes: Object.freeze(["/api/health", "/api/inbox", "/api/spine", "/api/decide"]),
   asOf: true,
 });

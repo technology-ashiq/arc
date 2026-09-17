@@ -321,6 +321,36 @@ const isCount = (n) => Number.isInteger(n) && n >= 0;
  * a run in no mood proves nothing about either, and a door judged against its own room list
  * cannot tell a regression from a clean run.
  */
+/**
+ * The rings whose modules have shipped (face v2 Phase 03). A room in one of them that a module draws must
+ * open with the SERVED sentence as its heading: v0.7's smoke required a rendered `h1` matching its frozen
+ * sentence, and a room that renders blank without logging an error would otherwise count as opened.
+ * Each ring PR adds its ring here.
+ */
+export const SENTENCE_RINGS = Object.freeze(["command"]);
+
+/** The door's five text escapes, undone, so a served sentence compares to what the page shows. */
+export function doorText(s) {
+  return String(s ?? "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+}
+
+/**
+ * The heading verdict for one opened room: null when the room is not in a shipped ring or a module did not
+ * draw it; otherwise what the page showed against what the registry serves.
+ */
+export function headingCheck(served, room) {
+  if (!served || !SENTENCE_RINGS.includes(served.ring) || room.render !== "module") return null;
+  const expected = doorText(served.sentence).trim();
+  const got = typeof room.h1 === "string" ? room.h1.trim() : "";
+  return { id: room.id, expected, got, ok: expected !== "" && got === expected };
+}
+
+/** The heading line per mood: how many shipped-ring module rooms were checked, and how many missed. */
+export function headingLine(report) {
+  const h = report.headings ?? { checked: 0, miss: [] };
+  return `smoke: heading mood=${report.mood ?? "unstated"} rings=${SENTENCE_RINGS.join(",")} checked=${h.checked} miss=${h.miss.length}${h.miss.length ? ` missed=${h.miss.map((m) => m.id).join(",")}` : ""}`;
+}
+
 export function judge(report) {
   const reasons = [];
   if (report.mood === undefined) reasons.push("no mood named: a run in no mood measured neither");
@@ -335,6 +365,8 @@ export function judge(report) {
   if (Array.isArray(report.missingFromDoor) && report.missingFromDoor.length) reasons.push(`expected but not served: ${report.missingFromDoor.join(",")}`);
   if (Array.isArray(report.unexpectedFromDoor) && report.unexpectedFromDoor.length) reasons.push(`served but not expected: ${report.unexpectedFromDoor.join(",")}`);
   reasons.push(...moodReasons(report));
+  if (report.headings && Array.isArray(report.headings.miss) && report.headings.miss.length)
+    reasons.push(`heading miss: ${report.headings.miss.map((m) => `${m.id} showed ${JSON.stringify(m.got)} for ${JSON.stringify(m.expected)}`).join("; ")}`);
   return { ok: reasons.length === 0, reasons };
 }
 
@@ -346,6 +378,15 @@ export function judge(report) {
 export function renderLine(report) {
   const r = report.render ?? { module: [], generic: [], unmarked: [] };
   return `smoke: render mood=${report.mood ?? "unstated"} module=${r.module.length} generic=${r.generic.length} unmarked=${r.unmarked.length} generic-rooms=${r.generic.join(",") || "none"}`;
+}
+
+/**
+ * How many NOT SERVED panels the owner saw, and in which rooms (face v2 Phase 03, REQ-05): the gap
+ * Phase 04 closes, measured where it is drawn. A report that counted nothing prints zero, never no line.
+ */
+export function notServedLine(report) {
+  const n = report.notServed ?? { panels: 0, rooms: [] };
+  return `smoke: not-served mood=${report.mood ?? "unstated"} panels=${n.panels} rooms=${n.rooms.join(",") || "none"}`;
 }
 
 export function summaryLines(report) {
@@ -417,6 +458,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
     throw e instanceof SetupError ? e : new SetupError(`door unreachable at ${opts.door}: ${e.message}`);
   }
   const { openable, notOpened } = openableRooms(payload);
+  const servedById = new Map((Array.isArray(payload?.rooms) ? payload.rooms : []).map((r) => [r.id, r]));
   const unknownExcludes = (opts.exclude ?? []).filter((id) => !openable.includes(id));
   if (unknownExcludes.length) throw new SetupError(`--exclude names rooms the door does not serve as openable: ${unknownExcludes.join(",")}`);
 
@@ -487,6 +529,17 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
             returnByValue: true,
           });
           room.render = typeof drawn.result?.value === "string" ? drawn.result.value : null;
+          // REQ-05: the NOT SERVED panels the owner sees, counted in the page rather than taken from a fold.
+          const gaps = await page.send("Runtime.evaluate", {
+            expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.querySelectorAll("[data-not-served]").length : 0; })()`,
+            returnByValue: true,
+          });
+          room.notServed = Number.isInteger(gaps.result?.value) ? gaps.result.value : 0;
+          const heading = await page.send("Runtime.evaluate", {
+            expression: `(function () { var h = document.querySelector("section[data-room] h1"); return h ? h.textContent : null; })()`,
+            returnByValue: true,
+          });
+          room.h1 = typeof heading.result?.value === "string" ? heading.result.value : null;
         }
       } catch (e) {
         // This room's finding, never the end of the evidence: it is not opened or not settled,
@@ -519,7 +572,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       slowSettle: rooms.filter((r) => r.settled && r.atSlow).map((r) => ({ id: r.id, settleMs: r.settleMs, atSlow: r.atSlow })),
       unsettledDetail: rooms.filter((r) => r.opened && !r.settled).map((r) => ({ id: r.id, atSlow: r.atSlow ?? null, atCap: r.atCap ?? null, navError: r.navError, cdpError: r.cdpError })),
       cdpErrors: rooms.filter((r) => r.cdpError).map((r) => ({ id: r.id, error: r.cdpError })),
-      rooms: rooms.map(({ before, atSlow, atCap, ...r }) => r),
+      rooms: rooms.map(({ before, atSlow, atCap, h1, ...r }) => r),
       mood,
       // A room that opened but whose class list was never read (a CDP error after it settled) is a
       // miss too: an unmeasured mood is not a held one.
@@ -528,6 +581,14 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
         module: rooms.filter((r) => r.opened && r.render === "module").map((r) => r.id),
         generic: rooms.filter((r) => r.opened && r.render === "generic").map((r) => r.id),
         unmarked: rooms.filter((r) => r.opened && r.render !== "module" && r.render !== "generic").map((r) => r.id),
+      },
+      headings: (() => {
+        const checks = rooms.filter((r) => r.opened).map((r) => headingCheck(servedById.get(r.id), r)).filter(Boolean);
+        return { checked: checks.length, miss: checks.filter((c) => !c.ok) };
+      })(),
+      notServed: {
+        panels: rooms.reduce((n, r) => n + (r.opened && Number.isInteger(r.notServed) ? r.notServed : 0), 0),
+        rooms: rooms.filter((r) => r.opened && r.notServed > 0).map((r) => r.id),
       },
       errors: errors.slice(0, 50),
     };

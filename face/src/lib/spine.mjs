@@ -140,8 +140,8 @@ export function openingFor(id, room, overrides = {}) {
  * ASSERTED: a test can walk every ink this module hands out and prove no reserved hue was
  * spent on a meaning the brief never granted it -- which is exactly the check that would
  * have caught the three collisions tokens.css documents in the owner's own reference.
- * Today.tsx carries an inline copy of the tone half of this; it is not this phase's file
- * to edit, and when it is, it should import from here.
+ * The command ring's modules take their ink from here (face v2 Phase 03): the tape rows, the brief
+ * lines and the receipt drawer all read TONE_INK rather than carrying a copy.
  * ========================================================================== */
 
 /** @type {Record<Tone, string>} */
@@ -1419,4 +1419,89 @@ export function boardTotals(rows) {
  */
 export function boardProvenance(view) {
   return `Row order is PORTFOLIO.md's own, which is the owner's priority ordering. Every VALUE is read from that lane's machine header in initiatives/<lane>/PROGRESS.md — the board is a view and the lane files are the truth (ADR-0051), so where the two disagree, what you are reading here is the lane. ${view.updated === null ? "The board carries no Updated line." : `The board says it was updated ${view.updated}.`} This panel is ${view.badge}: it has no day-granular history and as-of does not apply to it.`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The tape and the receipt drawer, as the command ring's modules draw them (face v2 Phase 03).
+// A row carries only what the receipt says: its time, its kind, the ink that kind's meaning
+// earned, and a line read from its own fields -- never a sentence written about it here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The payload fields a receipt's line is read from, in the order a person reads them. */
+const LINE_FIELDS = Object.freeze(["subject", "what", "title", "summary", "reason", "verdict", "phase", "capability", "gate", "status"]);
+
+/**
+ * The line a receipt shows on the tape: its first readable payload field, then who and where.
+ * @param {import("./inbox.mjs").FeedEvent} e
+ * @returns {string}
+ */
+export function eventLine(e) {
+  const p = e.payload || {};
+  let lead = "";
+  for (const k of LINE_FIELDS) {
+    const v = p[k];
+    if (typeof v === "string" && v.trim() !== "") { lead = unescapeDoorText(v.trim()); break; }
+    if (typeof v === "number") { lead = `${k} ${v}`; break; }
+  }
+  const who = [e.venture, e.actor].filter((s) => typeof s === "string" && s !== "").join(" · ");
+  const outcome = e.outcome && e.outcome !== "ok" ? ` · ${e.outcome}` : "";
+  return lead === "" ? `${who}${outcome}` || e.kind : `${lead}${who === "" ? "" : ` — ${who}`}${outcome}`;
+}
+
+/**
+ * @typedef {object} EventRowView
+ * @property {string} id
+ * @property {string} short
+ * @property {string} time
+ * @property {string} kind
+ * @property {string} ink
+ * @property {string} text
+ * @property {string} tag
+ */
+
+/**
+ * @param {import("./inbox.mjs").FeedEvent} e
+ * @returns {EventRowView}
+ */
+export function eventRowView(e) {
+  return {
+    id: e.id, short: shortId(e.id), time: timeOfDay(e.ts), kind: e.kind,
+    ink: TONE_INK[toneForKind(e.kind)] ?? "var(--text-2)", text: eventLine(e), tag: e.venture,
+  };
+}
+
+/**
+ * @typedef {object} ReceiptView
+ * @property {boolean} isOpen
+ * @property {string} id
+ * @property {string} kind
+ * @property {string} ink
+ * @property {string} text
+ * @property {{ key: string, value: string }[]} fields
+ * @property {string} payload
+ * @property {string[]} notes
+ */
+
+/** @type {ReceiptView} */
+export const RECEIPT_CLOSED = Object.freeze({ isOpen: false, id: "", kind: "", ink: "var(--text-2)", text: "", fields: [], payload: "", notes: [] });
+
+/**
+ * The receipt drawer for the id the View picked, found among receipts this module already read.
+ * An id that is not among them closes the drawer rather than inventing a receipt.
+ * @param {import("./inbox.mjs").FeedEvent[]} events @param {string | undefined} id
+ * @returns {ReceiptView}
+ */
+export function receiptView(events, id) {
+  if (typeof id !== "string" || id === "") return RECEIPT_CLOSED;
+  const e = events.find((x) => x.id === id);
+  if (!e) return RECEIPT_CLOSED;
+  return {
+    isOpen: true, id: e.id, kind: e.kind, ink: TONE_INK[toneForKind(e.kind)] ?? "var(--text-2)", text: eventLine(e),
+    fields: [
+      { key: "ts", value: e.ts }, { key: "day", value: e.day }, { key: "venture", value: e.venture },
+      { key: "actor", value: e.actor }, { key: "outcome", value: e.outcome },
+    ].filter((f) => f.value !== ""),
+    payload: prettyJson(e.payload),
+    notes: ["read from the spine through the door, read-only · append-only: a correction supersedes, it never edits (ADR-0029)"],
+  };
 }

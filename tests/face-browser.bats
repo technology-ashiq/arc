@@ -185,7 +185,7 @@ render_verdict() {
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
   # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
   # 10 s -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
   # Both moods are judged, each from its own line, before the exit status is trusted: a harness
   # that ran only dark must not pass on dark's line (ADR-1331).
   local mood verdicts=0
@@ -196,6 +196,10 @@ render_verdict() {
     # measured where the owner sees it, not only in the fold's output.
     printf '%s\n' "$output" | grep -qE "^smoke: not-served mood=$mood panels=[0-9]+ rooms=[a-z0-9,-]+\$" \
       || { echo "no not-served line for mood=$mood (harness exit $status)"; false; }
+    # The shipped rings' module rooms open with the SERVED sentence as their heading: at least the six
+    # command modules were checked and none missed (a blank room is not an opened one).
+    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command checked=([6-9]|[1-9][0-9]+) miss=0\$" \
+      || { echo "heading check missing, too few checked, or a miss for mood=$mood (harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done
   [ "$verdicts" -eq 2 ] || { echo "judged $verdicts of 2 moods"; false; }

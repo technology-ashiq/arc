@@ -27,6 +27,7 @@
     ".claude/scripts/core/face-tokens.mjs",
     ".claude/scripts/core/face-colour-literal.mjs",
     ".claude/scripts/core/face-pure.mjs",
+    ".claude/scripts/core/face-facts.mjs",
     ".claude/scripts/core/freeze-check.sh",
     ".claude/scripts/core/json-strict.mjs",
     ".claude/scripts/core/lane-resolve.mjs",

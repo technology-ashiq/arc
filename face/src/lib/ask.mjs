@@ -1210,6 +1210,62 @@ export async function resolveClaims(handle, claims, signal) {
 }
 
 /**
+ * The door read that settles a claim, for a host that makes the reads itself (face v2 Phase 03): the
+ * same three routes `resolveClaim` asks, spelled as reads a module declares.
+ * @param {Claim} claim
+ * @returns {{ route: string, param?: string, query?: Record<string, string | number> }}
+ */
+export function claimRead(claim) {
+  if (claim.kind === "ulid") return { route: "/api/spine", query: { since: claim.key, limit: 1 } };
+  if (claim.kind === "lane") return { route: "/api/lane/:id", param: claim.key };
+  return { route: "/api/file/:id", param: claim.key };
+}
+
+/**
+ * What a claim's read settled, from the payload the host loaded -- the same verdicts `resolveClaim`
+ * reaches, and null while the read is still out, so `standingOf` says CHECKING rather than guessing.
+ * @param {Claim} claim
+ * @param {{ state: string, data?: unknown, code?: string, human?: string }} payload
+ * @returns {Resolution | null}
+ */
+export function resolutionOf(claim, payload) {
+  if (payload.state === "refused") {
+    const code = String(payload.code ?? "");
+    const absent = code === "CURSOR_NOT_FOUND" || code === "BAD_CURSOR" || code === "UNKNOWN_LANE" || code === "UNKNOWN_FILE_ID";
+    return {
+      key: claim.key,
+      state: absent ? "absent" : "unreadable",
+      how: absent ? "the door was asked and said no" : "the door could not be asked",
+      code,
+      line: absent
+        ? `The door has no record of this. It refused by name: ${code}.`
+        : `This claim was NOT checked — the read itself failed (${code}). An unchecked citation is not a verified one.`,
+      detail: typeof payload.human === "string" ? payload.human : null,
+    };
+  }
+  if (payload.state !== "ok") return null;
+  if (claim.kind === "ulid") {
+    return { key: claim.key, state: "resolved", code: null, how: "GET /api/spine?since=…", line: "On the spine. The door's own reader walked the log in append order and found this id.", detail: null };
+  }
+  const body = asObject(payload.data);
+  if (claim.kind === "lane") {
+    const header = body ? asObject(body.header) : null;
+    const status = header ? asText(header.status) : null;
+    const phase = header ? asText(header.phase) : null;
+    return {
+      key: claim.key, state: "resolved", code: null, how: "GET /api/lane/:id", line: "A lane the door serves.",
+      detail: status || phase ? `${status ?? "status MISSING"} · phase ${phase ?? "MISSING"}` : "file, not log — this lane is read from the tree",
+    };
+  }
+  const path = body ? asText(body.path) : null;
+  const sha = body ? asText(body.sha256) : null;
+  return {
+    key: claim.key, state: "resolved", code: null, how: "GET /api/file/:id", line: "An allow-listed file the door serves.",
+    detail: path ? `${path}${sha ? ` · sha256 ${sha.slice(0, 12)}…` : ""}` : null,
+  };
+}
+
+/**
  * @typedef {object} Standing
  * @property {"verified"|"unverified"|"absence"|"uncited"|"checking"} klass
  * @property {string} label     the word the page shows, large

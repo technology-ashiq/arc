@@ -336,7 +336,7 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
 
   const manifest = { id: "board", ring: "command", routes: ["/api/board", "/api/lane/:id", "/api/spine"], asOf: true };
   const mod = { key: "command/board", ring: "command", id: "board", manifest, ops: [], View, Icon, fold: (payloads, ctx) => ({ keys: Object.keys(payloads), picks: ctx.picks }) };
-  const fctx = { room: served.length ? { id: "board" } : null, rooms: [], door: null, onOpen: () => {}, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: null, laneMap: undefined };
+  const fctx = { room: { id: "board" }, rooms: [], door: null, onOpen: () => {}, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: null, laneMap: undefined };
   const board = reg.readKey({ route: "/api/board" });
   const undeclared = reg.readKey({ route: "/api/inbox" });
 
@@ -351,7 +351,7 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
   check("UNDECLARED: a payload under a key that is not a read key FAILs too", threwKey !== null);
 
   const bad = reg.collectModules({ ...ns("command", "policy"), "./modules/command/policy/module.mjs": { default: { id: "policy", ring: "command", routes: ["/api/policy"], asOf: true } } });
-  check("a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)", bad.modules.length === 0 && bad.problems.some((p) => p.kind === "manifest" && p.why.includes("/api/policy")), show(bad));
+  check("a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)", bad.modules.length === 0 && bad.problems.some((p) => p.kind === "manifest" && p.why.includes("/api/policy")), JSON.stringify(bad.problems));
 
   const refuse = (name, read, needle) => {
     const why = reg.readProblem(read, manifest);

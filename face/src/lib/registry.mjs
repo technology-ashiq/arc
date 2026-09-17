@@ -11,7 +11,9 @@
 // Dependency-free like every lib module: node imports it with no install, and a decision here is
 // a decision a test can hold. No room id is spelled in this file -- the shell names no room.
 import { byRing } from "./rooms.mjs";
-import { ASOF_ROUTES } from "./door.mjs";
+import { ASOF_ROUTES, DOOR_ROUTES, DoorError } from "./door.mjs";
+import { refusalOf, stamp } from "./inbox.mjs";
+import { ASK_GRANTS, askable, askThrough, readOnly } from "./ask.mjs";
 
 /** A module is these four files, and no fifth (ADR-1320). */
 export const MODULE_FILES = Object.freeze(["module.mjs", "fold.mjs", "ops.mjs", "View.tsx"]);
@@ -35,9 +37,21 @@ const KEY = /^\.\/modules\/([^/\\?#]+)\/([^/\\?#]+)\/(module\.mjs|fold\.mjs|ops\
  * @property {number} needsUnplaced
  * @property {Record<string, Record<string, string>> | null | undefined} inventories
  * @property {Record<string, string> | undefined} laneMap
+ * @property {Record<string, string>} [picks]  what the View picked (a lane, a filter, an open receipt), a copy
  *
- * @typedef {FoldContext & { door: import("./door.mjs").Door, onOpen: (id: string) => void }} ModuleContext
- *   what a View is handed beside fold()'s result
+ * @typedef {Omit<FoldContext, "picks"> & { door: import("./door.mjs").Door, onOpen: (id: string) => void }} ModuleContext
+ *   what the shell hands the frame for a room
+ *
+ * @typedef {ModuleContext & { picks: Record<string, string>, onPick: (key: string, value: string) => void,
+ *   onAct: (route: string, body: Record<string, unknown>) => void, onReread: () => void }} ModuleViewContext
+ *   what a View is handed beside fold()'s result: the door only through the host's three handlers
+ *
+ * @typedef {{ route: string, param?: string, query?: Record<string, string | number>, poll?: boolean, act?: boolean }} Read
+ *   one door read a fold asks for (or, with `act`, the log of one act route)
+ * @typedef {{ state: "loading" } | { state: "pending" } | { state: "ok", data: any } | { state: "refused", code: string, human: string }} Payload
+ * @typedef {Read & { key: string, path: string }} PlannedRead
+ * @typedef {{ n: number, body: Record<string, unknown>, result: Payload }} ActRecord
+ * @typedef {{ isNotServed: true, panel: string, route: string, sentence: string }} NotServed
  *
  * @typedef {object} AttachedModule
  * @property {string} key   "ring/id"
@@ -83,8 +97,9 @@ function manifestProblem(manifest, ring, id) {
   if (m.id !== id) return `module.mjs names id ${JSON.stringify(m.id)} inside the folder for ${JSON.stringify(id)}`;
   if (m.ring !== ring) return `module.mjs names ring ${JSON.stringify(m.ring)} inside the ${JSON.stringify(ring)} ring folder`;
   if (!Array.isArray(m.routes)) return "module.mjs declares no routes list";
-  const bad = m.routes.filter((r) => typeof r !== "string" || !r.startsWith("/api/"));
-  if (bad.length) return `module.mjs declares a route that is not a door path: ${JSON.stringify(bad[0])}`;
+  // A route the door does not serve is never declared: its panel is NOT SERVED (face v2 Phase 03, REQ-05).
+  const bad = m.routes.filter((r) => typeof r !== "string" || !Object.hasOwn(DOOR_ROUTES, r));
+  if (bad.length) return `module.mjs declares ${JSON.stringify(bad[0])}, which the door does not serve -- a panel that needs it renders NOT SERVED`;
   if (typeof m.asOf !== "boolean") return "module.mjs declares asOf as something other than true or false";
   return null;
 }
@@ -259,11 +274,309 @@ export function asOfReaches(room, manifest) {
  * @param {ModuleContext} ctx
  * @returns {FoldContext}
  */
-export function foldContext(ctx) {
+export function foldContext(ctx, picks = {}) {
   return {
     room: ctx.room, rooms: ctx.rooms, mode: ctx.mode, token: ctx.token,
     needs: ctx.needs, needsUnplaced: ctx.needsUnplaced, inventories: ctx.inventories, laneMap: ctx.laneMap,
+    picks: { ...picks },
   };
+}
+
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+// The read host (face v2 Phase 03, REQ-05, ADR-1324): a module DECLARES routes, its fold ASKS for
+// reads, and the host (shell/RoomFrame.tsx) loads exactly those and folds again. Every decision of
+// that loop is here, where node can hold it; the host only runs effects.
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+
+/** How often a read a fold marks `poll` is read again. The brief is not polled: it shells the CLI. */
+export const POLL_MS = 45_000;
+
+/** @type {Payload} */
+export const LOADING = Object.freeze({ state: "loading" });
+
+/** @param {unknown} manifest @returns {string[]} */
+const declaredRoutes = (manifest) => {
+  const routes = manifest && typeof manifest === "object" ? /** @type {{ routes?: unknown }} */ (manifest).routes : null;
+  return Array.isArray(routes) ? routes.filter((r) => typeof r === "string") : [];
+};
+
+/** @param {string} route */
+const routeSpec = (route) => (typeof route === "string" && Object.hasOwn(DOOR_ROUTES, route) ? DOOR_ROUTES[/** @type {keyof typeof DOOR_ROUTES} */ (route)] : null);
+
+/**
+ * The one key a read is loaded and looked up under. A JSON tuple, so an id carrying any separator
+ * cannot make two reads collide; the query sorted, so its order cannot make one read two.
+ * @param {Read} read
+ */
+export function readKey(read) {
+  if (read.act === true) return JSON.stringify([read.route, "act"]);
+  const q = read.query && typeof read.query === "object" ? read.query : {};
+  const pairs = Object.keys(q).sort().map((k) => [k, String(q[k])]);
+  return JSON.stringify([read.route, read.param ?? null, pairs]);
+}
+
+/**
+ * The route a key was made for, or null for a string that is not a read key.
+ * @param {string} key
+ */
+function routeOfKey(key) {
+  try {
+    const t = JSON.parse(key);
+    return Array.isArray(t) && typeof t[0] === "string" ? t[0] : null;
+  } catch { return null; }
+}
+
+/**
+ * The door path of a read: its id encoded into the route, its query sorted.
+ * @param {Read} read
+ */
+export function readPath(read) {
+  const spec = routeSpec(read.route);
+  const base = spec && spec.param ? read.route.replace(":id", encodeURIComponent(String(read.param))) : read.route;
+  const q = read.query && typeof read.query === "object" ? read.query : {};
+  const p = new URLSearchParams();
+  for (const k of Object.keys(q).sort()) p.set(k, String(q[k]));
+  const qs = p.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+/**
+ * Why this module may not make this read, or null.
+ * @param {unknown} read @param {unknown} manifest
+ * @returns {string | null}
+ */
+export function readProblem(read, manifest) {
+  if (!read || typeof read !== "object" || Array.isArray(read)) return "a read is an object naming a route";
+  const r = /** @type {Record<string, unknown>} */ (read);
+  const route = r.route;
+  if (typeof route !== "string") return "a read names its route as a string";
+  const spec = routeSpec(route);
+  if (!spec) return `${route} is not a route the door serves -- a panel that needs it renders NOT SERVED`;
+  if (!declaredRoutes(manifest).includes(route)) return `${route} is not in this module's routes (REQ-05)`;
+  if (spec.method !== "GET") return `${route} is an act, not a read -- only a View's handler reaches it, through ctx.onAct`;
+  if (spec.param) {
+    if (typeof r.param !== "string" || r.param === "" || r.param.length > 256) return `${route} needs an id: a non-empty string`;
+  } else if (r.param !== undefined) return `${route} takes no id`;
+  if (r.query !== undefined) {
+    if (!r.query || typeof r.query !== "object" || Array.isArray(r.query)) return `${route}'s query is an object`;
+    for (const [k, v] of Object.entries(r.query)) {
+      if (k === "asof") return `${route} is never asked for an asof by a module -- the door client applies the shell's scrub`;
+      if (!spec.query.includes(k)) return `${route} takes no ${JSON.stringify(k)} (it takes ${spec.query.join(", ") || "no query"})`;
+      if (!(typeof v === "string" || (typeof v === "number" && Number.isFinite(v)))) return `${route}'s ${k} is a string or a number`;
+    }
+  }
+  if (r.poll !== undefined && typeof r.poll !== "boolean") return `${route}'s poll is true or false`;
+  if (r.act !== undefined) return `${route}: a read is never an act log`;
+  return null;
+}
+
+/**
+ * The reads a fold asked for, each checked against the module's manifest: the ones the host makes (once
+ * each, with key and path), and a sentence for each it refuses.
+ * @param {unknown} folded @param {unknown} manifest
+ * @returns {{ reads: PlannedRead[], problems: string[] }}
+ */
+export function plannedReads(folded, manifest) {
+  /** @type {PlannedRead[]} */
+  const reads = [];
+  /** @type {string[]} */
+  const problems = [];
+  const asked = folded && typeof folded === "object" ? /** @type {{ reads?: unknown }} */ (folded).reads : null;
+  if (!Array.isArray(asked)) return { reads, problems };
+  const seen = new Set();
+  for (const r of asked) {
+    const why = readProblem(r, manifest);
+    if (why) { problems.push(why); continue; }
+    const read = /** @type {Read} */ (r);
+    const key = readKey(read);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    reads.push({ ...read, key, path: readPath(read) });
+  }
+  return { reads, problems };
+}
+
+/**
+ * Which planned reads the host starts now: every one neither loaded nor in flight, and -- when a poll is
+ * due -- every polled one again, keeping its last payload on screen while it reads.
+ * @param {PlannedRead[]} planned @param {Record<string, Payload>} loaded @param {Set<string>} inflight @param {boolean} pollDue
+ * @returns {PlannedRead[]}
+ */
+export function readsToLoad(planned, loaded, inflight, pollDue) {
+  return planned.filter((r) => !inflight.has(r.key) && (!Object.hasOwn(loaded, r.key) || (pollDue && r.poll === true)));
+}
+
+/**
+ * The payloads fold() may see: exactly the loaded reads and act logs whose route the manifest declares.
+ * Anything else THROWS -- a fold that could see an undeclared route would draw a fact its manifest does
+ * not cite (REQ-05), and the host only ever stores declared reads, so a throw here is a host bug named.
+ * @param {unknown} manifest @param {Record<string, Payload>} loaded
+ * @returns {Record<string, Payload>}
+ */
+export function payloadsFor(manifest, loaded) {
+  const routes = declaredRoutes(manifest);
+  /** @type {Record<string, Payload>} */
+  const out = Object.create(null);
+  for (const [key, payload] of Object.entries(loaded || {})) {
+    const route = routeOfKey(key);
+    if (route === null) throw new Error(`a payload under ${JSON.stringify(key)}, which is not a read key, cannot reach a fold`);
+    if (!routes.includes(route)) throw new Error(`a payload for ${route} cannot reach this fold: the module does not declare that route (REQ-05)`);
+    out[key] = payload;
+  }
+  return out;
+}
+
+/**
+ * A read's payload as a fold sees it: LOADING until the host has it, never absent.
+ * @param {Record<string, Payload>} payloads @param {Read} read
+ * @returns {Payload}
+ */
+export function payloadOf(payloads, read) {
+  const key = readKey(read);
+  const p = payloads && Object.hasOwn(payloads, key) ? payloads[key] : undefined;
+  return p ?? LOADING;
+}
+
+/**
+ * The one way the host folds a module: its declared payloads only, and the View's picks as a copy.
+ * @param {AttachedModule} module @param {Record<string, Payload>} loaded @param {ModuleContext} ctx @param {Record<string, string>} picks
+ */
+export function foldModule(module, loaded, ctx, picks) {
+  return module.fold(payloadsFor(module.manifest, loaded), foldContext(ctx, picks));
+}
+
+/**
+ * Why this module may not make this act, or null.
+ * @param {unknown} route @param {unknown} body @param {unknown} manifest
+ * @returns {string | null}
+ */
+export function actProblem(route, body, manifest) {
+  if (typeof route !== "string") return "an act names its route as a string";
+  const spec = routeSpec(route);
+  if (!spec) return `${route} is not a route the door serves`;
+  if (!declaredRoutes(manifest).includes(route)) return `${route} is not in this module's routes (REQ-05)`;
+  if (spec.method !== "POST") return `${route} is a read, not an act`;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return `${route}'s body is an object`;
+  if (route === "/api/ask") {
+    const ok = askable(/** @type {Record<string, unknown>} */ (body).q);
+    if (!ok.ok) return ok.why;
+  }
+  return null;
+}
+
+/**
+ * An act begins: its record joins the route's log as pending, numbered in order.
+ * @param {Record<string, Payload>} loaded @param {string} route @param {Record<string, unknown>} body
+ * @returns {{ loaded: Record<string, Payload>, n: number }}
+ */
+export function actStarted(loaded, route, body) {
+  const key = readKey({ route, act: true });
+  const cur = Object.hasOwn(loaded, key) ? loaded[key] : undefined;
+  const prev = cur !== undefined && cur.state === "ok" && Array.isArray(cur.data) ? /** @type {ActRecord[]} */ (cur.data) : [];
+  const n = prev.length;
+  return { loaded: { ...loaded, [key]: { state: "ok", data: [...prev, { n, body: { ...body }, result: { state: "pending" } }] } }, n };
+}
+
+/**
+ * An act lands: record `n` of the route's log takes its result.
+ * @param {Record<string, Payload>} loaded @param {string} route @param {number} n @param {Payload} result
+ * @returns {Record<string, Payload>}
+ */
+export function actSettled(loaded, route, n, result) {
+  const key = readKey({ route, act: true });
+  const cur = Object.hasOwn(loaded, key) ? loaded[key] : undefined;
+  if (cur === undefined || cur.state !== "ok" || !Array.isArray(cur.data)) return loaded;
+  const log = /** @type {ActRecord[]} */ (cur.data);
+  return { ...loaded, [key]: { state: "ok", data: log.map((rec) => (rec.n === n ? { ...rec, result } : rec)) } };
+}
+
+/**
+ * What the host keeps once an act lands: an act the door marks `rereads` (a stamp) changes what every
+ * read shows, so every read is dropped and read again; the act logs stay.
+ * @param {Record<string, Payload>} loaded @param {string} route
+ * @returns {Record<string, Payload>}
+ */
+export function afterAct(loaded, route) {
+  const spec = routeSpec(route);
+  return spec && spec.rereads ? dropReads(loaded) : loaded;
+}
+
+/**
+ * Every read dropped and every act log kept -- what "read it all again" means (a stamp landing, or the
+ * owner asking for a fresh read).
+ * @param {Record<string, Payload>} loaded
+ * @returns {Record<string, Payload>}
+ */
+export function dropReads(loaded) {
+  /** @type {Record<string, Payload>} */
+  const kept = {};
+  for (const [key, payload] of Object.entries(loaded)) {
+    let t = null;
+    try { t = JSON.parse(key); } catch { /* not a read key; dropped with the reads */ }
+    if (Array.isArray(t) && t[1] === "act") kept[key] = payload;
+  }
+  return kept;
+}
+
+/**
+ * The door client call an act makes. A stamp goes through `Door.decide`, which refuses a bad id, verdict
+ * or reason before the request leaves; an ask goes through a READ-ONLY handle granted ASK_GRANTS, so the
+ * brain has no hands on this path either (ADR-1325). Any other route is refused by name.
+ * @param {import("./door.mjs").Door} door @param {string} route @param {Record<string, unknown>} body
+ * @returns {Promise<unknown>}
+ */
+export function actCall(door, route, body) {
+  if (route === "/api/decide") {
+    // inbox.stamp refuses a bad id, verdict or reason by the spine's own rules before the request
+    // leaves, and speaks the door's wire field (`verdict`); it is passed exactly what the View sent.
+    const verdict = /** @type {"approve" | "reject"} */ (body.verdict);
+    try {
+      return stamp(door, { id: String(body.id), verdict, reason: typeof body.reason === "string" ? body.reason : "" });
+    } catch (e) { return Promise.reject(e); }
+  }
+  if (route === "/api/ask") return askThrough(readOnly(door, ASK_GRANTS), typeof body.q === "string" ? body.q : "");
+  return Promise.reject(new DoorError("UNKNOWN_ACT", `${route} is not an act this face makes`, 0));
+}
+
+/**
+ * A read that failed, as a payload a fold can word: the door's refusal code and a sentence a person reads.
+ * @param {unknown} err
+ * @returns {Payload}
+ */
+export function refusedPayload(err) {
+  const r = refusalOf(err);
+  return { state: "refused", code: r.code, human: r.human };
+}
+
+/**
+ * A panel the door cannot fill yet, named with the route it needs (ADR-1324). The View draws the kit's
+ * NotServed for it; the phase's NOT SERVED list is derived from these, never typed.
+ * @param {string} panel @param {string} route @param {string} sentence  what the panel would show
+ * @returns {NotServed}
+ */
+export function notServed(panel, route, sentence) {
+  return Object.freeze({ isNotServed: true, panel: String(panel), route: String(route), sentence: String(sentence) });
+}
+
+/**
+ * Every NOT SERVED entry in a fold's output, nested anywhere, in document order.
+ * @param {unknown} folded
+ * @returns {NotServed[]}
+ */
+export function notServedOf(folded) {
+  /** @type {NotServed[]} */
+  const out = [];
+  const seen = new Set();
+  /** @param {unknown} v */
+  const walk = (v) => {
+    if (!v || typeof v !== "object" || seen.has(v)) return;
+    seen.add(v);
+    const o = /** @type {Record<string, unknown>} */ (v);
+    if (o.isNotServed === true && typeof o.route === "string" && typeof o.panel === "string") { out.push(/** @type {NotServed} */ (o)); return; }
+    for (const child of Array.isArray(v) ? v : Object.values(o)) walk(child);
+  };
+  walk(folded);
+  return out;
 }
 
 /**
