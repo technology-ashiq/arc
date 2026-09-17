@@ -124,6 +124,44 @@ load 'test_helper'
   done
 }
 
+@test "face v2: both moods' contrast ratios are computed, above their floors, and match the header" {
+  # REQ-02 / ADR-1331. The numbers in tokens.css's header are this script's output; a typed or
+  # stale one FAILs here, and so does any text pair under 4.5:1 or UI pair under 3:1.
+  run node "$ARC_ROOT/tests/face/tokens-contrast.mjs"
+  [[ "$output" == *"tokens-contrast: moods=2 pairs="* ]] || { echo "the check never reported (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Floor the count: "findings=0" is also what a check that measured nothing prints.
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^tokens-contrast: moods=2 pairs=\([0-9][0-9]*\) findings=0$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 150 ] || { echo "only '$n' pairs measured: $output"; false; }
+}
+
+@test "face v2: tokens-contrast REFUSES a typed header, a low pair and a broken reserved meaning (mutant arms)" {
+  run node "$ARC_ROOT/tests/face/tokens-contrast.mjs" --selftest
+  [[ "$output" == *"tokens-contrast selftest:"* ]] || { echo "the selftest never reported (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  for arm in "the freshly written file checks clean" "a hand-typed number in the block FAILS" \
+             "a missing block FAILS" "a missing light mood FAILS by name" "a light --text-3 under 4.5:1 FAILS" \
+             "a -rgb triple that disagrees with its hex FAILS" "council repointed at violet FAILS the law" \
+             "live repointed at green FAILS the law" "a missing --blue FAILS by name" \
+             "an unbalanced file is refused, not half-read"; do
+    [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: the colour-literal lint finds 0 literals in ui/** and modules/**, and FAILs planted ones" {
+  run node "$ARC_ROOT/tests/face/colour-literal.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 35 ] || { echo "only '$n' checks ran: $output"; false; }
+  # The lint on the real tree, directly, the way a reader of this file would run it.
+  run node "$ARC_ROOT/.claude/scripts/core/face-colour-literal.mjs"
+  [[ "$output" == *"colour-literal: scanned="*" files findings=0"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 0 ]
+}
+
 @test "the L3 tree carries no build output and no vendored dependencies" {
   # node_modules and dist are gitignored; this asserts the ignore actually holds, because a
   # 197 MB directory arriving in the arc repo is the failure mode ADR-1316 was argued past.

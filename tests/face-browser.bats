@@ -38,12 +38,14 @@ require_node_floor() {
   return 1
 }
 
-# The summary verdict, shared by the real run and its mutant control, so the control exercises
+# The summary verdict, shared by the real run and its mutant controls, so the controls exercise
 # exactly the extraction and the ordering the real run relies on -- never a copy of them.
+# One call judges ONE mood's line (face v2 Phase 01, ADR-1331); the mood is a required argument.
 smoke_summary_verdict() {
-  local out="$1" line opened openable errors unsettled expected
-  line="$(printf '%s\n' "$out" | grep '^smoke: opened=' | tail -1)"
-  [ -n "$line" ] || { echo "no smoke summary line"; return 1; }
+  local out="$1" mood="$2" line opened openable errors unsettled expected miss
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  line="$(printf '%s\n' "$out" | grep "^smoke: opened=.* mood=$mood mood-miss=[0-9][0-9]*\$" | tail -1)"
+  [ -n "$line" ] || { echo "no smoke summary line for mood=$mood"; return 1; }
   # Anchored extractions: each value is read from its own position in the summary line, so a
   # later `not-opened=` or `excluded-errors=` can never supply the number.
   opened="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=\([0-9][0-9]*\) .*/\1/p')"
@@ -51,6 +53,9 @@ smoke_summary_verdict() {
   errors="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=\([0-9][0-9]*\) .*/\1/p')"
   unsettled="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=[0-9]* excluded-errors=[0-9]* unsettled=\([0-9][0-9]*\) .*/\1/p')"
   expected="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=[0-9]* excluded-errors=[0-9]* unsettled=[0-9]* expected=\([0-9][0-9]*\) .*/\1/p')"
+  # Anchored to the END of the line, where the mood pair is the last field: the greedy prefix can
+  # only stop at the one place the fixed suffix fits.
+  miss="$(printf '%s\n' "$line" | sed -n "s/^smoke: .* mood=$mood mood-miss=\\([0-9][0-9]*\\)\$/\\1/p")"
   # Asserted in this order on purpose: that something RAN, that the door served the contract's
   # rooms, that all of them opened and settled, and only then that it was clean. "errors=0" is
   # also what a smoke that opened nothing prints.
@@ -59,7 +64,9 @@ smoke_summary_verdict() {
   [ "$opened" = "$openable" ] || { echo "opened $opened of $openable"; return 1; }
   [ "$unsettled" = "0" ] || { echo "unsettled=$unsettled"; return 1; }
   [ "$errors" = "0" ] || { echo "errors=$errors"; return 1; }
-  echo "summary verdict: opened=$opened openable=$openable expected=$expected unsettled=0 errors=0"
+  [ -n "$miss" ] || { echo "mood=$mood: no mood-miss count on the line"; return 1; }
+  [ "$miss" = "0" ] || { echo "mood=$mood: mood-miss=$miss rooms rendered without the $mood classes on <html>"; return 1; }
+  echo "summary verdict: mood=$mood opened=$opened openable=$openable expected=$expected unsettled=0 errors=0 mood-miss=0"
 }
 
 @test "face-browser: the node floor is reported, and only Node 18 may skip" {
@@ -109,7 +116,7 @@ smoke_summary_verdict() {
   [ -f "$dst/dist/index.html" ] || { echo "vite build exited 0 but wrote no dist/index.html"; false; }
 }
 
-@test "face-browser: door + preview + smoke open every openable room with 0 errors" {
+@test "face-browser: door + preview + smoke open every openable room with 0 errors, in BOTH moods" {
   require_node_floor
   local dst="$BATS_FILE_TMPDIR/face"
   [ -f "$dst/dist/index.html" ] || { echo "no build from the previous test"; false; }
@@ -117,10 +124,17 @@ smoke_summary_verdict() {
   echo "$output"
   [[ "$output" == *"face-browser: RAN leg="* ]] || { echo "the harness never started (exit $status)"; false; }
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
-  # per job -- which leg RAN, the summary, any SLOW room and what its network held at 10 s --
-  # would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|smoke: opened=|smoke: WARN |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
-  smoke_summary_verdict "$output" || { echo "(harness exit $status)"; false; }
+  # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
+  # 10 s -- would never reach the log. fd 3 does.
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
+  # Both moods are judged, each from its own line, before the exit status is trusted: a harness
+  # that ran only dark must not pass on dark's line (ADR-1331).
+  local mood verdicts=0
+  for mood in dark light; do
+    smoke_summary_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
+    verdicts=$((verdicts + 1))
+  done
+  [ "$verdicts" -eq 2 ] || { echo "judged $verdicts of 2 moods"; false; }
   [ "$status" -eq 0 ]
 }
 
@@ -132,9 +146,27 @@ smoke_summary_verdict() {
   [ "$status" -eq 0 ] || { echo "the stub itself did not run: $output"; false; }
   [[ "$output" == *"smoke: opened=0 openable="* ]] || { echo "the stub printed no summary: $output"; false; }
   local stub="$output"
-  run smoke_summary_verdict "$stub"
+  run smoke_summary_verdict "$stub" dark
   [ "$status" -ne 0 ] || { echo "the summary verdict passed a smoke that opened nothing: $output"; false; }
   [[ "$output" == *"opened 0 of "* ]] || { echo "refused for the wrong reason: $output"; false; }
+}
+
+@test "face-browser: MUTANT CONTROL -- the verdict FAILS a mood run in the wrong mood, and a mood that never ran" {
+  # A full, clean, settled line whose rooms rendered without the light classes: every count the
+  # Phase 00 verdict read is perfect, and only the mood pair can refuse it.
+  local line="smoke: opened=33 openable=33 errors=0 excluded-errors=0 unsettled=0 expected=33 not-opened=lane mood=light mood-miss=33"
+  run smoke_summary_verdict "$line" light
+  [ "$status" -ne 0 ] || { echo "the verdict passed a light run whose rooms were not light: $output"; false; }
+  [[ "$output" == *"mood-miss=33"* ]] || { echo "refused for the wrong reason: $output"; false; }
+  # The same clean line with mood-miss=0 must pass, or the refusal above proves nothing.
+  run smoke_summary_verdict "${line% mood-miss=33} mood-miss=0" light
+  [ "$status" -eq 0 ] || { echo "the verdict refused a clean light line: $output"; false; }
+  # Only dark ran: light's verdict must not borrow dark's line.
+  run smoke_summary_verdict "${line/mood=light mood-miss=33/mood=dark mood-miss=0}" light
+  [ "$status" -ne 0 ] || { echo "light passed on a dark line: $output"; false; }
+  [[ "$output" == *"no smoke summary line for mood=light"* ]] || { echo "refused for the wrong reason: $output"; false; }
+  run smoke_summary_verdict "${line% mood-miss=33} mood-miss=0" ""
+  [ "$status" -ne 0 ] && [[ "$output" == *"no mood named"* ]] || { echo "a verdict with no mood named did not refuse: $output"; false; }
 }
 
 @test "face-browser: this file runs no inline program text" {
@@ -163,5 +195,5 @@ smoke_summary_verdict() {
   local declared
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared declared"; false; }
-  [ "$declared" -eq 8 ] || { echo "expected 8 @test lines, found $declared -- update this floor with the file"; false; }
+  [ "$declared" -eq 9 ] || { echo "expected 9 @test lines, found $declared -- update this floor with the file"; false; }
 }

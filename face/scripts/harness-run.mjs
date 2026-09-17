@@ -10,8 +10,11 @@
 // of face/ (so node_modules never lands in the repo tree other suites walk), passed as --face.
 // This script refuses to start without them rather than building quietly.
 //
-// Usage: harness-run.mjs [--face DIR] [--exclude id,id]
-// Exit:  0 smoke passed · 1 smoke failed · 2 setup failed (no dist, door or preview never up).
+// Both moods run by default, one after the other against the same door and preview (face v2
+// Phase 01, ADR-1331): light is never a later batch, so a light run is never optional here.
+//
+// Usage: harness-run.mjs [--face DIR] [--exclude id,id] [--moods dark,light]
+// Exit:  0 smoke passed in every mood · 1 a mood failed · 2 setup failed (no dist, door or preview never up).
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
 import { spawnTracked, isDead, deathReason, stopTree, removeDir, delay } from "./proc.mjs";
@@ -20,28 +23,35 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runSmoke, summaryLines, judge, openableRooms, redactSecrets, SetupError } from "./smoke.mjs";
+import { runSmoke, summaryLines, judge, openableRooms, redactSecrets, SetupError, MOODS } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FACE_DEFAULT = resolve(HERE, "..");
 const REPO = resolve(FACE_DEFAULT, "..");
 
 export function parseArgs(argv) {
-  const opts = { exclude: [], face: FACE_DEFAULT };
+  const opts = { exclude: [], face: FACE_DEFAULT, moods: [...MOODS] };
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const v = argv[i + 1];
-    if ((a === "--exclude" || a === "--face") && v !== undefined && !v.startsWith("--")) {
+    if ((a === "--exclude" || a === "--face" || a === "--moods") && v !== undefined && !v.startsWith("--")) {
       if (seen.has(a)) throw new SetupError(`${a} given twice -- which one is meant is not a guess`);
       if (v.trim() === "") throw new SetupError(`${a} has an empty value (an empty --face would resolve to the current directory)`);
       seen.add(a);
       i++;
       if (a === "--exclude") opts.exclude = v.split(",").map((s) => s.trim()).filter(Boolean);
+      else if (a === "--moods") {
+        const moods = v.split(",").map((s) => s.trim());
+        const bad = moods.filter((m) => !MOODS.includes(m));
+        if (bad.length || moods.length === 0) throw new SetupError(`--moods takes ${MOODS.join(",")}, got ${JSON.stringify(v)}`);
+        if (new Set(moods).size !== moods.length) throw new SetupError(`--moods names a mood twice: ${JSON.stringify(v)}`);
+        opts.moods = moods;
+      }
       else opts.face = v;
       continue;
     }
-    throw new SetupError(`unknown or incomplete argument ${JSON.stringify(a)} (flags: --exclude id,id, --face DIR)`);
+    throw new SetupError(`unknown or incomplete argument ${JSON.stringify(a)} (flags: --exclude id,id, --face DIR, --moods dark,light)`);
   }
   return opts;
 }
@@ -124,19 +134,25 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     await waitHttp(`http://127.0.0.1:${appPort}/api/health`, headers, preview, 30000, [token]);
     log(`preview: up on ${appPort}, /api/health answers 200 through its proxy`);
 
-    const report = await runSmoke({
-      base: `http://127.0.0.1:${appPort}/`,
-      door: `http://127.0.0.1:${doorPort}`,
-      token,
-      exclude: opts.exclude,
-      expected,
-      roomTimeoutMs: 15000,
-    }, log);
-    for (const line of summaryLines(report)) log(line);
-    log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined })}`);
-    const verdict = judge(report);
-    if (!verdict.ok) log(`smoke: FAIL -- ${verdict.reasons.join("; ")}`);
-    return verdict.ok ? 0 : 1;
+    // Every mood runs even after one fails: the second mood's evidence is still evidence.
+    let failedMoods = 0;
+    for (const mood of opts.moods ?? MOODS) {
+      log(`face-browser: mood=${mood}`);
+      const report = await runSmoke({
+        base: `http://127.0.0.1:${appPort}/`,
+        door: `http://127.0.0.1:${doorPort}`,
+        token,
+        exclude: opts.exclude,
+        expected,
+        roomTimeoutMs: 15000,
+        mood,
+      }, log);
+      for (const line of summaryLines(report)) log(line);
+      log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined })}`);
+      const verdict = judge(report);
+      if (!verdict.ok) { failedMoods++; log(`smoke: FAIL mood=${mood} -- ${verdict.reasons.join("; ")}`); }
+    }
+    return failedMoods === 0 ? 0 : 1;
   } finally {
     await stopTree(preview);
     await stopTree(door);
