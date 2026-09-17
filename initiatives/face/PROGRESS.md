@@ -92,6 +92,11 @@ counted SKIP on ubuntu Node 18. The docs commit after it (this tracker, the task
 delta report's measured-empty baseline, the SLOW room line on fd 3) needs its own green run on the
 new head before handoff.
 
+**Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
+`01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
+`approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP` on the main clone's spine; the
+kickoff merged as `c5dabfbc` (#232) before the first Phase 00 commit.
+
 What the 2026-09-17 session found and closed, each pinned in `fixed-defects.md` (68 lines):
 - **Run D's two failures:** the lockfile check now requires the resolved binding's VERSION to
   satisfy the parent's pin; the macOS settle miss was measured, not guessed — a Google Fonts
