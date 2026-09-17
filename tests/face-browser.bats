@@ -38,9 +38,36 @@ require_node_floor() {
   return 1
 }
 
+# The summary verdict, shared by the real run and its mutant control, so the control exercises
+# exactly the extraction and the ordering the real run relies on -- never a copy of them.
+smoke_summary_verdict() {
+  local out="$1" line opened openable errors unsettled expected
+  line="$(printf '%s\n' "$out" | grep '^smoke: opened=' | tail -1)"
+  [ -n "$line" ] || { echo "no smoke summary line"; return 1; }
+  # Anchored extractions: each value is read from its own position in the summary line, so a
+  # later `not-opened=` or `excluded-errors=` can never supply the number.
+  opened="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=\([0-9][0-9]*\) .*/\1/p')"
+  openable="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=\([0-9][0-9]*\) .*/\1/p')"
+  errors="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=\([0-9][0-9]*\) .*/\1/p')"
+  unsettled="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=[0-9]* excluded-errors=[0-9]* unsettled=\([0-9][0-9]*\) .*/\1/p')"
+  expected="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=[0-9]* excluded-errors=[0-9]* unsettled=[0-9]* expected=\([0-9][0-9]*\) .*/\1/p')"
+  # Asserted in this order on purpose: that something RAN, that the door served the contract's
+  # rooms, that all of them opened and settled, and only then that it was clean. "errors=0" is
+  # also what a smoke that opened nothing prints.
+  [ -n "$openable" ] && [ "$openable" -gt 0 ] || { echo "openable=$openable: nothing was checked"; return 1; }
+  [ "$expected" = "$openable" ] || { echo "the door served $openable openable rooms, the contract expects $expected"; return 1; }
+  [ "$opened" = "$openable" ] || { echo "opened $opened of $openable"; return 1; }
+  [ "$unsettled" = "0" ] || { echo "unsettled=$unsettled"; return 1; }
+  [ "$errors" = "0" ] || { echo "errors=$errors"; return 1; }
+  echo "summary verdict: opened=$opened openable=$openable expected=$expected unsettled=0 errors=0"
+}
+
 @test "face-browser: the node floor is reported, and only Node 18 may skip" {
   run node "$ARC_ROOT/face/scripts/node-floor.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Printed on every job, the skipping Node 18 job included: `-latest` labels move, and a skip
+  # that does not say which image skipped is not evidence of anything.
+  printf '# face-browser: %s image=%s%s\n' "$output" "${ImageOS:-local}" "${ImageVersion:+@$ImageVersion}" >&3
   [[ "$output" == "node=v"*" floor="*" major="* ]] || { echo "unexpected floor line: $output"; false; }
   require_node_floor
 }
@@ -93,25 +120,21 @@ require_node_floor() {
   # per job -- which leg RAN, the summary, any SLOW room and what its network held at 10 s --
   # would never reach the log. fd 3 does.
   printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|smoke: opened=|smoke: WARN |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
-  local line opened openable errors unsettled expected
-  line="$(printf '%s\n' "$output" | grep '^smoke: opened=' | tail -1)"
-  [ -n "$line" ] || { echo "no smoke summary line (exit $status)"; false; }
-  # Anchored extractions: each value is read from its own position in the summary line, so a
-  # later `not-opened=` or `excluded-errors=` can never supply the number.
-  opened="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=\([0-9][0-9]*\) .*/\1/p')"
-  openable="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=\([0-9][0-9]*\) .*/\1/p')"
-  errors="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=\([0-9][0-9]*\) .*/\1/p')"
-  unsettled="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=[0-9]* excluded-errors=[0-9]* unsettled=\([0-9][0-9]*\) .*/\1/p')"
-  expected="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=[0-9]* excluded-errors=[0-9]* unsettled=[0-9]* expected=\([0-9][0-9]*\) .*/\1/p')"
-  # Asserted in this order on purpose: that something RAN, that the door served the contract's
-  # rooms, that all of them opened and settled, and only then that it was clean. "errors=0" is
-  # also what a smoke that opened nothing prints.
-  [ -n "$openable" ] && [ "$openable" -gt 0 ] || { echo "openable=$openable: nothing was checked"; false; }
-  [ "$expected" = "$openable" ] || { echo "the door served $openable openable rooms, the contract expects $expected"; false; }
-  [ "$opened" = "$openable" ] || { echo "opened $opened of $openable"; false; }
-  [ "$unsettled" = "0" ] || { echo "unsettled=$unsettled"; false; }
-  [ "$errors" = "0" ] || { echo "errors=$errors"; false; }
+  smoke_summary_verdict "$output" || { echo "(harness exit $status)"; false; }
   [ "$status" -eq 0 ]
+}
+
+@test "face-browser: MUTANT CONTROL -- the summary verdict FAILS a stub smoke that never navigated" {
+  # The verification plan's control, at the layer that gates: the stub exits 0 having opened
+  # nothing, and the SAME function the real run uses must refuse its numbers. Needs no Chrome,
+  # no build and no Vite floor, so it runs on every configuration, Node 18 included.
+  run node "$ARC_ROOT/tests/fixtures/face/stub-smoke.mjs"
+  [ "$status" -eq 0 ] || { echo "the stub itself did not run: $output"; false; }
+  [[ "$output" == *"smoke: opened=0 openable="* ]] || { echo "the stub printed no summary: $output"; false; }
+  local stub="$output"
+  run smoke_summary_verdict "$stub"
+  [ "$status" -ne 0 ] || { echo "the summary verdict passed a smoke that opened nothing: $output"; false; }
+  [[ "$output" == *"opened 0 of "* ]] || { echo "refused for the wrong reason: $output"; false; }
 }
 
 @test "face-browser: this file runs no inline program text" {
@@ -140,5 +163,5 @@ require_node_floor() {
   local declared
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared declared"; false; }
-  [ "$declared" -eq 7 ] || { echo "expected 7 @test lines, found $declared -- update this floor with the file"; false; }
+  [ "$declared" -eq 8 ] || { echo "expected 8 @test lines, found $declared -- update this floor with the file"; false; }
 }

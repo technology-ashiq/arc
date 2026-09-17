@@ -37,6 +37,14 @@ riskiest-file: tests/face-browser.bats — three child processes (door, vite pre
 expected-blockers: Chrome launch failing on macos-latest (macOS 26 arm64) on the first CI run, and vite preview not forwarding /api to the door without an explicit preview.proxy
 expected-proof-failures: the first CI run of tests/face-browser.bats is red on at least one of the windows or macOS configurations
 
+### Prediction scores
+
+likely-failure-mode: miss — face/package-lock.json is unchanged on this branch (`git diff origin/main..HEAD -- face/package-lock.json` is empty) and the lockfile arm passed on ubuntu and macOS from its first run; what failed was the CHECK's own logic (presence without a version match, CI run 35150543730, fixed in f9805720) and, unforeseen, a settle gate measuring macOS runner weather (runs 35150543730 and 35183482747, fixed in 1af154f6)
+likely-regression-site: hit — face-browser.bats measured 350 s as the first file of windows shard 1/12 and 314 s on macOS shard 1/3 (run 35184948635), now the heaviest file in tests/shard-timings.json; weight and re-derived `_floor` in 65e6ec05
+riskiest-file: miss — tests/face-browser.bats carried real defects (the fd 3 guard and greedy extractions the attackers found, 78b65cb3 and ca6e26b6; no evidence on green jobs, 65e6ec05) but no Windows cleanup leak ever showed on CI; the file that took the most CI rounds was face/scripts/smoke.mjs (loaderId scoping 78b65cb3, twin filter and evidence f9805720, the 30 s cap 1af154f6), and face/scripts/proc.mjs's unref()ed awaited timers crashed the client suite (fixed 1af154f6)
+expected-blockers: miss — Chrome launched on macos-latest on the first run; the macOS blocker was no WebGL (THREE.WebGLRenderer context failure, 0 of 33 rooms opened, run 35147618663), answered with SwiftShader in 78b65cb3; the preview proxy already existed and /api/health answered through it from the first run — the preview blocker was its port not matching the origin allow-list, so every stamp got a 403 (fixed in 78b65cb3)
+expected-proof-failures: hit — the first CI runs of tests/face-browser.bats were red on macOS (no WebGL, 0 of 33 rooms opened) and on windows (every room after the first never settled), run 35147618663, fixed in 78b65cb3
+
 ### Slices
 
 #### slice: 01
