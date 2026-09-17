@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
 phase: 03
 appetite: 24d
-burn: 2d
+burn: 3d
 blocked-on: —
 depends-on: —
 
@@ -25,13 +25,13 @@ depends-on: —
 | 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
-| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | spec'd |
+| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | **2 of 5 rings merged** — command `81dcf814` (#239) · kernel `bee88cce` (#240); 14 modules green in both moods on every L3 leg |
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | spec'd |
 | 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — needs owner rulings §13 items 4, 5 |
 | 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 2d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 0/10d ·
+**Appetite burn: 3d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 1/10d ·
 C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
 35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
@@ -46,7 +46,23 @@ read of the 9 rooms × 2 moods is Phase 01's exit gate and is recorded at `/arc-
 the 36 modules is written (the precondition PLAN's pre-mortem row 4 rests on), and the 4 unspent days
 bank forward to Block B, whose day-5 reading after the command and kernel rings gates all work-door spend.
 
-**Usage trend (read at every Phase 03 ring close, never counted toward REQ-10):** — not started.
+**Usage trend (read at every Phase 03 ring close, never counted toward REQ-10):**
+**2026-09-17, command ring** — `face-dogfood`: 6 matched · 55 decisions recorded on the spine with no
+journal line (decided outside the face) · 1 of 5 days carried a decision through the face.
+**2026-09-18, kernel ring** — unchanged: 6 · 55 · 1 of 5. Nothing was decided through the face on
+either day, which is the number Phase 07's two-day bar has to move; it is a TREND here and is never
+counted toward REQ-10 (ADR-1329).
+
+**Block B tripwire (day 5 of 10), read on 2026-09-18 after the command and kernel rings: GREEN — no
+cut.** The clause is "if 14 modules are not green → cut the remaining bespoke folds to generic
+renders". 14 modules are green: the command ring's six (`today`, `inbox`, `map`, `spine`, `board`,
+`ask-arc`) and the kernel ring's eight (`engine-room`, `model-policy`, `policy`, `scheduler`,
+`memory`, `evolve`, `bench`, `absorb`), each rendering from door routes in both moods with 0 console
+errors on ubuntu Node 20 + 22, macOS and windows — run **35263610481** (19/19 jobs on `62e9ba44`,
+merged as `bee88cce`), carrying `smoke: heading rings=command,kernel checked=14 miss=0`,
+`not-served panels=18` and `verbs-pending cards=10`, each matched per room against the derived
+evidence lists. Block B has spent 1d of its 10d for two of five rings, so the remaining three rings
+stay bespoke folds.
 
 ## Inherited from Cycle 15
 
