@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 00
+phase: 01
 appetite: 24d
 burn: 1d
 blocked-on: —
@@ -22,7 +22,7 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | building — slices 01-19 proven, CI green per job on 65e6ec05; handoff next |
+| 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | spec'd |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | spec'd |
 | 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | spec'd |
@@ -31,9 +31,11 @@ depends-on: —
 | 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 0d of 24d.** Blocks: A · look (00–02) 0/6d · B · rooms + truth (03–04) 0/10d ·
+**Appetite burn: 1d of 24d.** Blocks: A · look (00–02) 1/6d · B · rooms + truth (03–04) 0/10d ·
 C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
-at 12d.
+at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
+35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
+Phase 01's exit.
 
 **Usage trend (read at every Phase 03 ring close, never counted toward REQ-10):** — not started.
 
@@ -80,45 +82,72 @@ at 12d.
   REJECTED: pre-existing ADRs appended into the Key decisions index — non-actionable
   Receipts (main clone spine): `kickoff.done` `01M2NS0A8Y7SPQW8NNJ19Y7AZZ` ·
   `approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP`.
+- **2026-09-17 — Phase 00 CLOSED (`/arc-phase-done 00` from the main clone).** Harness steel thread:
+  the v0.7 reference taken in (108 files, PII clean, v0.4 kept), `modules-v2.json` derived by script
+  (36 = 29 + 3 + 4), the delta report, the fixed-defects list (68 lines), 72 baseline shots by hash;
+  and the browser harness — a dependency-free CDP client, the v0.7 smoke ported, fixture spine → door
+  → `vite preview` → real Chrome — building L3 and opening **33/33 served rooms with 0 errors on
+  ubuntu Node 20 + 22, macOS and windows**, Node 18 a counted skip. Merged as `a0e8ee1f` (#233).
+  **Tests:** the merged tree re-verified by `workflow_dispatch` on `main`, run `35194579928`, 19/19
+  jobs read per job, head `a0e8ee1f`; full suite `1..3400` on the ubuntu Node 20 job.
+  **Live demo:** from the main clone, `node .claude/scripts/hq/arc-face.mjs` (live mode) — 34 served,
+  33 openable, 33 opened, every room with its opening sentence and a non-empty body, 0 console errors
+  (2 warnings, both v0.7's own THREE.Clock notice); the Map room opened and looked at by eye; the
+  launcher stopped and ports 8317/5180 confirmed free. The per-OS log lines the spec asks the owner
+  to read are in `evidence/phase-00/smoke-log-excerpts.md`.
+  **What the phase actually cost:** 1d of its 2d appetite; 11 CI runs on the branch (6 red, 5 green), plus the red-first run and the `main` verification. Four findings that mattered,
+  each pinned: a settle gate that measured macOS runner weather (a Google Fonts download on a cold
+  load, a different room each run) → FAIL only past 30 s, SLOW printed with its evidence; an
+  `unref()`ed awaited timer that crashed the client suite mid-file while a lockfile FAIL hid it; a
+  lockfile check that accepted a binding by presence rather than by version; and three exit items
+  claimed but unproven until a green run was READ (no RAN line on green jobs, a probe that never
+  scanned the new files, no symlinked main-guard fixture). Two attack passes: 32 holes and 7
+  surviving mutants, fixed and pinned. Spec-fidelity: **drift found**, every finding dispositioned
+  in `evidence/phase-00/handoff.md` (stub-smoke mutant control moved to the bats layer, per-job
+  evidence, image on every job, `.shots/` ignored; three new debt rows). Predictions: 2 hit · 3 miss.
+  **Assumptions adjudicated by measurement:** Chrome findable by ADR-1335's lookup — HELD (found on
+  all three images every run). `gen-spine.mjs` makes every room non-empty in sim mode — **NOT
+  EVALUABLE in Phase 00**: the smoke measures opened + errors, not panels, and the `NOT SERVED`
+  label the trigger names ships with REQ-05; carried to Phase 03, where each ring's module renders
+  panels or `NOT SERVED`. **ADR revisit triggers:** ADR-1335's condition (one OS leg red for a
+  reason outside the product in 2 consecutive runs) WAS met mid-phase on macOS (runs `35147618663` →
+  `35150543730` → `35183482747`: no WebGL, then runner-speed settle misses) and was answered in the
+  harness, not by dropping the leg; the leg has been green on every run since — raised to the owner
+  with this close, no ADR change proposed. ADR-1336 (2-day cap) not reached. No ADR DEFERRED.
+  Evidence bundle: `arc-evidence.sh` applies from Phase 02 (ADR-0002); this phase's evidence is the
+  lane pack `initiatives/face/evidence/phase-00/`.
+  amendments: 0 · reopened: n · t-to-phase0: 1d.
+  Receipts (main clone spine, landed in `2026-09-17.jsonl`): `phase.closed`
+  `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `approval.requested{gate: phase-done}` `01M2Q5HZJRBMN98HNR9YA5FR77`
+  — the second waits on the owner's stamp.
+
 
 ## Now
 
-**RESUME HERE (2026-09-17):** branch `feat/face-v2-00`, worktree `arc-face-v2`. Phase 00's slices
-01-19 are proven and written in `phases/phase-00-tasks.md` (develop-lint clean, three trial WARNs);
-slice 20 is the close. CI run `35186922293` on `65e6ec05` is **green on all 19 jobs**, with the
-browser arm EXECUTED and printing its `face-browser: RAN leg=` line on ubuntu Node 20 + 22,
-macos-latest and windows-latest (33/33 rooms, `errors=0 excluded-errors=0 unsettled=0`), and the
-counted SKIP on ubuntu Node 18. The docs commit after it (this tracker, the tasks ledger, the
-delta report's measured-empty baseline, the SLOW room line on fd 3) needs its own green run on the
-new head before handoff.
+**RESUME HERE (2026-09-17):** **Phase 00 is CLOSED** (done log, 2026-09-17). The next phase is
+**Phase 01 — tokens + kit** (`phases/phase-01-spec.md`, REQ-02, 2d appetite), and the owner has
+asked for it to start in a fresh session. Its Preconditions line is satisfied by the Phase 00 row
+above once this close merges.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
-`approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP` on the main clone's spine; the
-kickoff merged as `c5dabfbc` (#232) before the first Phase 00 commit.
+`approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP`; the kickoff merged as `c5dabfbc`
+(#232) before the first Phase 00 commit. Standing instruction from the owner (2026-09-17): build
+every phase through to the end without waiting, push and merge per phase on green CI, run nothing
+locally, and ask only at owner-only gates.
 
-What the 2026-09-17 session found and closed, each pinned in `fixed-defects.md` (68 lines):
-- **Run D's two failures:** the lockfile check now requires the resolved binding's VERSION to
-  satisfy the parent's pin; the macOS settle miss was measured, not guessed — a Google Fonts
-  download and late CDP events on a cold macOS load, a different room each run (map, today,
-  engine-room) while warm rooms settle in ~0.9 s — so a room FAILS only past a 30 s cap and the
-  10-30 s band prints SLOW with what it held at 10 s (`smoke.mjs` header says what that gives up).
-- **A crash hiding behind a FAIL:** `proc.mjs` unref()ed awaited timers, so the client suite exited
-  mid-file with code 13 and no `RAN:` line; awaited timers now hold the process, races clear
-  theirs, pinned by a child fixture.
-- **Attack pass 2** on `f9805720` (decision logic 7 holes + 7 surviving mutants; shell/OS 3 holes),
-  fixed in `ca6e26b6`.
-- **Exit items that were claimed but unproven:** green jobs printed no RAN line (fd 3 now); the
-  embedded-program probe never scanned this suite or `face/scripts` (handed by name, count
-  asserted); no symlinked main-guard fixture existed (added, with a naive-guard control).
-- **Shard weight:** `face-browser.bats` measured at 350 s on windows (first file of shard 1/12),
-  now the heaviest file; `_floor` re-derived.
+**Waiting on the owner, none of it blocking Phase 01:** the stamp on
+`approval.requested{gate: phase-done}` `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and on
+`01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the main clone,
+`node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`; and ADR-1335's trigger
+condition, met mid-Phase 00 on macOS and answered in the harness (done log).
 
-Open, not this phase's: `spine-concurrency.bats` hit LOCK_TIMEOUT once on windows shard 2/12 (run
-`35183482747`) and passed on the next two runs — another lane's suite, recorded here only.
-Google Fonts at runtime stays the Phase 01 intake finding (`delta-report.md`). Debts:
-`debt-ledger.md`.
+**What Phase 01 inherits:** the browser harness and its mood arm to add; the lockfile check, now
+version-strict, which the Tailwind and `@tailwindcss/oxide` install must pass on linux-x64,
+darwin-arm64 and win32-x64; Google Fonts at runtime (delta report, intake findings → Phase 01);
+the v0.7 light remap is a `--color-white` override in the reference, where ADR-1323 names
+`@custom-variant` — read both before choosing; debts in `debt-ledger.md` (rows 1-3, 5-7 open).
 
-**Next step:** dispatch arc-ci on the docs head and read it per job; green → `/arc-develop handoff
-00` (spec-fidelity check, open the PR); then `/arc-phase-done 00` from the main clone after merge
-(receipts cannot be emitted from a worktree).
+**Next step:** in a new session, `/arc-resume --lane face`, then `/arc-develop start 01 --lane face`
+on `feat/face-v2-01` cut from `main` after this close merges. Tests first per the spec's Verification
+plan (`tests/face/tokens-contrast.mjs` red on `missing selector html.hq.hq-light`), on CI only.
