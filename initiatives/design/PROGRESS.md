@@ -334,18 +334,41 @@ consumer projects — it carries the owner's approvals.
       unpinned `3>&-` (pinned statically, saying why), no Windows junction case, and merged
       stderr in the suite. Accepted: a late violation report loses detection only. The defect
       list grows to 24.
+    - Run **35188268655** at `6703edbe`: the concurrency cases went green. One new case went red on
+      Windows only, `confine: the server classifies what it refuses`: Windows curl upper-cases
+      percent-escapes, so the record held `/%2E%2E/matrix.md`. Every kind was right; the case
+      now compares the path without case.
+  - **The fifth pass on the composer Bash boundary, fixed** (`adversarial-open.md` § Fifth pass,
+    every row dispositioned).
+    - `composer-bash-check.sh` reads the identity only through a jq that answered a probe, and
+      refuses when a payload naming ui-composer cannot be read exactly: a key given twice, a
+      non-string value, an escaped control character. The identity is normalised for case, a
+      `*:` namespace and trailing CR or space. ROOT comes from `CLAUDE_PROJECT_DIR`. A repeated
+      flag refuses. The viewport is bounded to 200..4096 with no leading zero. Echoes are capped.
+    - The renderer takes the same viewport bound and refuses a repeated `--viewport` or
+      `--media`, so the hook and the renderer cannot disagree.
+    - The fragment's canonical copy now BLOCKS a ui-composer call when the check script is
+      missing, instead of failing open. This is not yet installed: the owner's `cp` is still
+      pending.
+    - Tests: each surviving mutant (M1-M5, M7, M9) has a case that fails on it; every allow case
+      proves a composer refusal in its own sandbox. The owner-fragment case SKIPS with the owner
+      action as its reason instead of holding its job red, and once installed it also requires the
+      manifest row.
+    - Accepted: BL-8, marker not bound to `agent_id` (serial composition; revisit with resume
+      step 6). Owner-side and open: BS-4, `_dispatch.sh` fails open on a failed payload capture.
+    - **These fixes owe their own two-surface attack pass (the seventh).**
 
 **Resume here, in order:**
 1. ~~**CI.** Read per JOB for `a16b189e` and `fd94e8f1`.~~ Done 2026-09-17, as expected.
 2. **Attack findings.** ~~BL-1/BS-1~~ built at `ee8d4707` (ADR-1418), attacked, and the sixth pass
-   fixed. Next: read the run for the sixth-pass fixes per JOB (expected: only the refpack 14 plus
-   the owner-fragment case red). Then the rest of the fifth pass, recorded OPEN in
-   `adversarial-open.md` § Fifth pass: 9 decision-logic findings and 11 shell findings, with
-   overlaps.
+   fixed. ~~The rest of the fifth pass~~ fixed or accepted. Next: read the run for the fifth-pass
+   batch per JOB (expected red: the refpack 14 only, with the owner-fragment case now a counted
+   SKIP), then run the **seventh pass** (two surfaces, private scratch dirs, defect list to 24) on
+   the fifth-pass fixes and fix what it returns.
    BS-4 (the dispatcher fails open when it cannot capture the payload) is in `_dispatch.sh`, which
    is under the governance-denied `.claude/hooks/**`, so it is the owner's, and it affects every
    guard.
-3. **Owner edit.** Once the pass is fixed, the owner runs
+3. **Owner edit.** Once the seventh pass is fixed, the owner runs
    `cp tests/fixtures/hooks/PreToolUse.d/10-design-composer.sh .claude/hooks/PreToolUse.d/10-design-composer.sh`.
    Then register that fragment in `products/design/manifest.json` → `files`, regenerate the sync
    golden, push, and confirm the fragment case goes green.

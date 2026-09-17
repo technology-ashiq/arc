@@ -54,6 +54,8 @@ ITER=""
 MODE_GIVEN=0
 SESSION_GIVEN=0
 ITER_GIVEN=0
+VIEWPORT_GIVEN=0
+MEDIA_GIVEN=0
 
 # A two-argument flag given as the LAST argument used to hang this script forever: `shift 2`
 # with one argument left FAILS and shifts nothing, `set -e` is off, so the loop re-read the
@@ -70,14 +72,14 @@ _need_value() {
 # this script's lane: the duplicate guard keys on it, so silently picking one of two is
 # precisely the "never guess" failure.
 _no_redefine() {
-  [ "$2" -eq 0 ] || [ "$3" = "$4" ] || { echo "design-render: $1 given twice with different values ('$4' then '$3')" >&2; exit 1; }
+  [ "$2" -eq 0 ] || [ "$3" = "$4" ] || { echo "design-render: $1 given twice with different values ('${4:0:40}' then '${3:0:40}')" >&2; exit 1; }
 }
 shift 2>/dev/null || true
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --viewport) _need_value --viewport "$#"; VIEWPORT="$2"; shift 2;;
+    --viewport) _need_value --viewport "$#"; _no_redefine --viewport "$VIEWPORT_GIVEN" "$2" "$VIEWPORT"; VIEWPORT="$2"; VIEWPORT_GIVEN=1; shift 2;;
     --pin-font) PIN_FONT=1; shift;;
-    --media) _need_value --media "$#"; MEDIA="$2"; shift 2;;
+    --media) _need_value --media "$#"; _no_redefine --media "$MEDIA_GIVEN" "$2" "$MEDIA"; MEDIA="$2"; MEDIA_GIVEN=1; shift 2;;
     --mode) _need_value --mode "$#"; _no_redefine --mode "$MODE_GIVEN" "$2" "$MODE"; MODE="$2"; MODE_GIVEN=1; shift 2;;
     --session) _need_value --session "$#"; _no_redefine --session "$SESSION_GIVEN" "$2" "$SESSION_ARG"; SESSION_ARG="$2"; SESSION_GIVEN=1; shift 2;;
     --iter) _need_value --iter "$#"; _no_redefine --iter "$ITER_GIVEN" "$2" "$ITER"; ITER="$2"; ITER_GIVEN=1; shift 2;;
@@ -199,8 +201,19 @@ fi
 
 VW="${VIEWPORT%x*}"
 VH="${VIEWPORT#*x}"
-case "$VW" in ''|*[!0-9]*) echo "design-render: bad viewport '$VIEWPORT' (want WxH)" >&2; exit 1;; esac
-case "$VH" in ''|*[!0-9]*) echo "design-render: bad viewport '$VIEWPORT' (want WxH)" >&2; exit 1;; esac
+case "$VW" in ''|*[!0-9]*) echo "design-render: bad viewport '$(printf '%s' "$VIEWPORT" | cut -c1-40)' (want WxH)" >&2; exit 1;; esac
+case "$VH" in ''|*[!0-9]*) echo "design-render: bad viewport '$(printf '%s' "$VIEWPORT" | cut -c1-40)' (want WxH)" >&2; exit 1;; esac
+# Bounded, no leading zero -- the same rule composer-bash-check.sh applies, so the hook and the
+# renderer cannot disagree on what a viewport is. `0x0` hung a render for 32 s, and `01440x0900`
+# can never match a declared viewport (fifth attack pass, BL-6). Length is checked before the
+# numbers so a 20-digit value never reaches `[ -ge ]`.
+case "$VW" in 0*) VW_BAD=1;; *) VW_BAD=0;; esac
+case "$VH" in 0*) VW_BAD=1;; esac
+if [ "$VW_BAD" -eq 1 ] || [ "${#VW}" -gt 4 ] || [ "${#VH}" -gt 4 ] \
+   || [ "$VW" -lt 200 ] || [ "$VW" -gt 4096 ] || [ "$VH" -lt 200 ] || [ "$VH" -gt 4096 ]; then
+  echo "design-render: bad viewport '$(printf '%s' "$VIEWPORT" | cut -c1-40)' (each side a whole number from 200 to 4096, no leading zero)" >&2
+  exit 1
+fi
 
 # Slug: the FULL repo-relative path, separators encoded. A basename slug collides the moment
 # two routes are both called page.tsx, and a collision here means one route's critique

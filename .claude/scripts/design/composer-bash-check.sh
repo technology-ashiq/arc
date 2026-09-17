@@ -30,24 +30,9 @@ set -uo pipefail
 [ -t 0 ] && exit 0
 PAYLOAD="$(cat)"
 
-# Cheap first: nearly every call is not a composer's, and they must not pay for the parse.
-case "$PAYLOAD" in *ui-composer*) ;; *) exit 0;; esac
-
-# A top-level string field. jq when present; otherwise a grep that only accepts a value with no
-# quote or backslash in it, so a value it cannot read exactly comes back EMPTY, never truncated.
-_top() {
-  if command -v jq >/dev/null 2>&1; then
-    printf '%s' "$PAYLOAD" | jq -r --arg k "$1" 'if type == "object" then (.[$k] // empty) else empty end | strings' 2>/dev/null | head -1
-  else
-    printf '%s' "$PAYLOAD" | grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"\\\\]*\"" 2>/dev/null | head -1 \
-      | sed 's/^[^:]*:[[:space:]]*"//; s/"$//'
-  fi
-}
-
-AGENT="$(_top agent_type)"
-[ "$AGENT" = "ui-composer" ] || exit 0
-TOOL="$(_top tool_name)"
-[ "$TOOL" = "Bash" ] || exit 0
+# Cheap first: nearly every call is not a composer's, and they must not pay for the parse. The
+# letters are matched without case, so `UI-Composer` still reaches the identity check.
+case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*) ;; *) exit 0;; esac
 
 _refuse() {
   echo "BLOCKED by ui-composer bash scope: $1" >&2
@@ -56,13 +41,54 @@ _refuse() {
   exit 2
 }
 
-if command -v jq >/dev/null 2>&1; then
-  CMD="$(printf '%s' "$PAYLOAD" | jq -r '.tool_input.command // empty | strings' 2>/dev/null)"
-else
-  CMD="$(printf '%s' "$PAYLOAD" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"\\]*"' 2>/dev/null | head -1 \
-    | sed 's/^[^:]*:[[:space:]]*"//; s/"$//')"
+# From here the payload NAMES ui-composer, so anything that stops this script from reading who is
+# calling refuses. It used to allow: the parser was picked by `command -v jq`, not by jq working,
+# so a broken jq read the identity as empty and let a composer's `cat` of a sibling through
+# (fifth attack pass, BL-3/BS-6). jq is used only once it has answered a probe correctly.
+JQ_OK=0
+if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | jq -r '.k' 2>/dev/null | tr -d '\r')" = "v" ]; then
+  JQ_OK=1
 fi
-[ -n "$CMD" ] || _refuse "the command could not be read from the payload, and an unreadable composer command is not run."
+
+# A JSON escape for a control character anywhere in a composer's Bash call refuses outright. jq
+# decodes the escape for NUL to a real NUL, which bash then drops without a word, so the checked
+# command and the run command could differ; the grep reader cannot decode escapes at all (BL-7).
+case "$PAYLOAD" in *'\u00'[01]*) _refuse "the call carries an escaped control character, and a command that cannot be read exactly is not run.";; esac
+
+# `_field <key> <jq path>` sets FIELD. Returns 1 when the field cannot be read EXACTLY: a jq that
+# fails on this payload, a value the grep reader would truncate, or the key given twice -- where
+# jq reads the last copy and grep the first, so the two readers disagreed on who was calling (BL-7).
+# A key that is simply absent reads as empty, which is not the same thing.
+_field() {
+  _fk="$1"; _fp="$2"; FIELD=""
+  _fn="$(printf '%s' "$PAYLOAD" | grep -o "\"$_fk\"[[:space:]]*:" 2>/dev/null | wc -l | tr -d ' ')"
+  case "$_fn" in 0) return 0;; 1) ;; *) return 1;; esac
+  if [ "$JQ_OK" -eq 1 ]; then
+    FIELD="$(printf '%s' "$PAYLOAD" | jq -r "$_fp | if type == \"string\" then . else error(\"not a string\") end" 2>/dev/null)" || return 1
+  else
+    FIELD="$(printf '%s' "$PAYLOAD" | grep -o "\"$_fk\"[[:space:]]*:[[:space:]]*\"[^\"\\\\]*\"" 2>/dev/null | head -1 \
+      | sed 's/^[^:]*:[[:space:]]*"//; s/"$//')"
+  fi
+  # jq.exe on Windows emits CRLF; a bash other than Git Bash keeps the CR (BS-11).
+  FIELD="$(printf '%s' "$FIELD" | tr -d '\r')"
+  [ -n "$FIELD" ] || return 1
+  return 0
+}
+
+_field agent_type '.agent_type' || _refuse "the calling agent cannot be identified exactly, and this call names ui-composer."
+# Normalised, so a namespaced install (`arc:ui-composer`) or a case change is still the composer
+# rather than silently nobody (BL-9). Letters spelled out: `tr '[:upper:]'` maps I to a dotless i
+# under tr_TR.
+AGENT="$(printf '%s' "$FIELD" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')"
+AGENT="${AGENT##*:}"
+AGENT="$(printf '%s' "$AGENT" | tr -d ' \t')"
+[ "$AGENT" = "ui-composer" ] || exit 0
+_field tool_name '.tool_name' || _refuse "the tool of a ui-composer call cannot be read exactly."
+[ "$FIELD" = "Bash" ] || exit 0
+_field command '.tool_input.command' \
+  || _refuse "the command could not be read from the payload, and an unreadable composer command is not run."
+CMD="$FIELD"
+[ -n "$CMD" ] || _refuse "the call carries no command, and an unreadable composer command is not run."
 
 # One line, one command, from a closed alphabet. Anything a shell treats as syntax -- ; & | > < $
 # backtick, quotes, backslash, parentheses, braces, globs, newlines -- is outside the alphabet, so a
@@ -93,7 +119,11 @@ shift 3 2>/dev/null || _refuse "the renderer was given no page."
 # The armed boundary names the variant this composer owns. Exactly one, valid, or nothing runs:
 # a composer outside an explore has nothing to render, and two armed is the serial-composition
 # refusal the read boundary makes.
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# The project the harness names, not whatever repo the hook's cwd is in: the fragment finds this
+# script through CLAUDE_PROJECT_DIR, and a marker read from another checkout allowed variant-b
+# (BL-4, lane defect #3).
+ROOT="${CLAUDE_PROJECT_DIR:-}"
+[ -n "$ROOT" ] || ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 . "$ROOT/.claude/scripts/core/common.sh" 2>/dev/null || true
 type arc_cm_load >/dev/null 2>&1 || _refuse "core/common.sh cannot be loaded, so the armed composer boundary cannot be read."
 _n=0; _mk=""
@@ -105,22 +135,43 @@ done
 arc_cm_load "$_mk" || _refuse "the armed composer marker is malformed."
 EX="$ARC_MF_EXPLORE"; VARIANT="$ARC_MF_VARIANT"
 
+# Every echoed value is capped: a 20KB route used to come back as 20KB of stderr (BS-10, lane
+# defect #14).
 case "$ROUTE" in
-  */../*|../*|*/..|..|*//*|/*) _refuse "the page '$ROUTE' is not a plain repo-relative path.";;
+  */../*|../*|*/..|..|*//*|/*) _refuse "the page '${ROUTE:0:120}' is not a plain repo-relative path.";;
   "docs/design/explore/$EX/$VARIANT/"?*) ;;
-  *) _refuse "the page '$ROUTE' is not inside your own variant, docs/design/explore/$EX/$VARIANT/.";;
+  *) _refuse "the page '${ROUTE:0:120}' is not inside your own variant, docs/design/explore/$EX/$VARIANT/.";;
 esac
 
-MODE=""; SESSION=""
+# A viewport the renderer can honour: two whole numbers, no leading zero, each 200 to 4096. `0x0`
+# hung the renderer for 32 s and a leading zero never matches a declared viewport (BL-6). The
+# renderer applies the same bound to itself.
+_viewport_ok() {
+  case "$1" in
+    [123456789][0123456789][0123456789]x[123456789][0123456789][0123456789]) ;;
+    [123456789][0123456789][0123456789]x[1234][0123456789][0123456789][0123456789]) ;;
+    [1234][0123456789][0123456789][0123456789]x[123456789][0123456789][0123456789]) ;;
+    [1234][0123456789][0123456789][0123456789]x[1234][0123456789][0123456789][0123456789]) ;;
+    *) return 1;;
+  esac
+  [ "${1%x*}" -ge 200 ] && [ "${1%x*}" -le 4096 ] && [ "${1#*x}" -ge 200 ] && [ "${1#*x}" -le 4096 ]
+}
+
+# Each flag at most once. Last-wins let `--session lexos-v1--variant-b --session lexos-v1--variant-a`
+# be judged on the second value while the renderer's own reading was never checked here (BL-5,
+# lane defect #13).
+MODE=""; SESSION=""; _seen=" "
 while [ "$#" -gt 0 ]; do
-  [ "$#" -ge 2 ] || _refuse "the flag '$1' has no value."
+  [ "$#" -ge 2 ] || _refuse "the flag '${1:0:40}' has no value."
+  case "$_seen" in *" $1 "*) _refuse "the flag '${1:0:40}' is given twice.";; esac
   case "$1" in
     --mode)     MODE="$2";;
     --session)  SESSION="$2";;
     --iter)     case "$2" in 1|2|3) ;; *) _refuse "--iter takes 1, 2 or 3.";; esac;;
-    --viewport) case "$2" in *[!0123456789x]*|x*|*x|*x*x*|"") _refuse "--viewport takes WxH.";; *x*) ;; *) _refuse "--viewport takes WxH.";; esac;;
-    *)          _refuse "the flag '$1' is not one a composer's render takes.";;
+    --viewport) _viewport_ok "$2" || _refuse "--viewport takes WxH, each a whole number from 200 to 4096 with no leading zero.";;
+    *)          _refuse "the flag '${1:0:40}' is not one a composer's render takes.";;
   esac
+  _seen="$_seen$1 "
   shift 2
 done
 [ "$MODE" = "explore" ] || _refuse "a composer renders with --mode explore."

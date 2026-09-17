@@ -380,7 +380,12 @@ teardown() {
     code="$(curl -s --max-time 5 --path-as-is -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$p")"
     [ "$code" = "404" ] || { echo "$p answered $code"; false; }
   done
-  _kind() { grep -qxF "$(printf '%s\tGET\t%s' "$1" "$2")" "$d/record" || { echo "expected '$1' for $2 in:"; cat "$d/record"; false; }; }
+  # The kind is compared exactly and the path without case: curl on the Windows leg upper-cases
+  # percent-escapes (`%2E%2E`) before sending, which is the same request (run 35188268655).
+  _kind() {
+    awk -F'\t' -v k="$1" -v p="$2" '$1 == k && $2 == "GET" && tolower($3) == tolower(p) { f = 1 } END { exit !f }' "$d/record" \
+      || { echo "expected '$1' for $2 in:"; cat "$d/record"; false; }
+  }
   _kind missing   '/variant-b/index.html'
   _kind outside   '/%2e%2e/matrix.md'
   _kind outside   '/..%5cmatrix.md'

@@ -404,3 +404,30 @@ teardown() { _arc_teardown; }
     echo "critique output moved: $(ls "$RENDERS/design-critic" 2>/dev/null)"; false; }
   [ -f "$RENDERS/design-critic/docs--design--explore--t--variant-a--one-html.png" ]
 }
+
+# ---------- fifth attack pass, the renderer's twins of the Bash boundary's fixes ----------
+
+@test "a degenerate or unbounded viewport is refused before the browser is touched" {
+  _session_sandbox
+  local v
+  for v in 0x0 01440x900 1440x0900 99999999999999999999x800 199x900 1440x4097; do
+    rm -f "$SANDBOX/fakestate/set"
+    FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --viewport "$v"
+    [ "$status" -eq 1 ] || { echo "admitted viewport $v"; false; }
+    echo "$output" | grep -q 'bad viewport' || { echo "refused for another reason: $output"; false; }
+    [ ! -e "$SANDBOX/fakestate/set" ] || { echo "viewport $v reached the browser"; false; }
+  done
+  # The bounds themselves render: the refusal is the bound, not a broken flag.
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --viewport 200x4096
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "a repeated --viewport or --media with different values refuses" {
+  _session_sandbox
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --viewport 1440x900 --viewport 390x844
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q -- '--viewport given twice with different values'
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1 --media light --media dark
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q -- '--media given twice with different values'
+}
