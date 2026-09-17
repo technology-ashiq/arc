@@ -23,6 +23,12 @@ that is comparable to every future run.
       [ADR-0070](../../../docs/adr/0070-composer-seat-stays-balanced-workhorse.md) had to log ends here
 - [ ] The critic receives the pack; every BELOW-BAR finding **cites ≥1 pack screen**
 - [ ] Ranking reasons cite visual observations, not contract compliance
+- [ ] **The critic judges every rendered viewport.** Moved here from Phase 01 on 2026-09-17 (owner
+      ruling, `/arc-change`). Phase 01 blocks PASS when a declared viewport was never rendered
+      (the `compose-done` coverage gate), but nothing showed the critic judging more than one
+      render meta: `design-critic.md` names a single `<slug>.json`. Done when a critique of a
+      variant with both viewports rendered produces findings attributed to each viewport, and a
+      critique handed only one of two declared viewports refuses to PASS.
 - [ ] Controlled owner ritual: seeded shuffle · short rubric · anchor examples · owner scores
       **0–100 blind before unblinding** · receipted as `note.logged {lens:design}`
 - [ ] The jury pack carries ≥1 non-arc item (the reference screen this phase)

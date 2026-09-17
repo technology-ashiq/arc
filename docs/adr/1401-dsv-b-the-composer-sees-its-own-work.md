@@ -49,3 +49,22 @@ Easier: a defect the composer can see is fixed before it reaches the critic. Har
 wall-clock and capture count roughly triple, and `ui-composer`'s iron law 1 — *"your directory
 only"* — no longer describes an agent that must read `.claude/state/design/renders/`; see
 [ADR-1415](1415-the-composer-iron-law-gains-a-read-path-allowlist.md).
+
+## Amendment 2026-09-17 — where the iteration receipts actually live
+
+The Decision names `self-review/iter-N/{render.png, meta.json}`. That layout was never built, and
+Phase 01 was about to close against a sentence that described nothing on disk. The receipts are
+split across two places, and the claim this ADR cares about — "iteration 2 fixed what iteration 1
+found" is provable from the receipts — holds across both:
+
+- **Renders and their metas** are session-scoped under
+  `.claude/state/design/renders/<id>--variant-<x>/…--<W>x<H>--iter-N.{png,json}`. The session path
+  is [ADR-1402](1402-dsv-c-the-renderer-is-session-safe-before-anything-runs-in-parallel.md)'s. The
+  viewport sits in the name because two viewports of one iteration otherwise overwrite each other
+  ([ADR-1403](1403-dsv-d-the-viewport-set-derives-from-the-briefs-platform-contract.md)). They stay
+  gitignored state, like every render.
+- **The hash chain** is `docs/design/explore/<id>/variant-<x>/self-review/manifest.md`. Each row
+  names its input and output hash, its defect and its revision. `design-explore.sh compose-done`
+  refuses unless every hash matches a meta at the viewport the row names.
+
+Owner ruling 2026-09-17, routed through `/arc-change`; the Phase 01 spec carries the same wording.

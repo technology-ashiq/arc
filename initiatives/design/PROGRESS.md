@@ -430,7 +430,20 @@ consumer projects — it carries the owner's approvals.
    visibly fixed in iteration 2. An empty band remains in iteration 3, which is a critique input
    for Phase 03. Not shown: a refusal firing live, because the composer's transcript was empty
    when read.
-5. **`/arc-phase-done 01`.**
+5. **`/arc-phase-done 01`.** The first run, on 2026-09-17, **REFUSED** with four gaps:
+   1. CI was not green at the head: the 14 refpack tests, Phase 02 Slice B's red-first set.
+   2. The DoD named `self-review/iter-N/`, which was never built.
+   3. Nothing showed "the critic judges every rendered viewport".
+   4. The sibling-read refusal transcript the verification plan expects was missing.
+
+   **Owner ruling 2026-09-17 ("both recommendations sari"), routed through `/arc-change`:**
+   - (1) the CI gate is Phase 01's own suites green on every leg; the only red allowed is a later
+     phase's named red-first set;
+   - (2) the DoD and ADR-1401 are amended to where the receipts actually live;
+   - (3) "the critic judges every rendered viewport" moves to Phase 03's exit criteria.
+
+   (4) is produced as a text transcript. Then read CI per JOB at the new head, and run
+   `/arc-phase-done --lane design 01` again.
 6. **Decision queued for the owner.** The read and write boundaries can scope to `ui-composer` by
    `agent_type` (ADR-1415 revisit trigger), which ends the operator lock and allows parallel
    composition. Route it through `/arc-change` with a recommendation.

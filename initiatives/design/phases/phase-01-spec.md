@@ -33,8 +33,19 @@ rendered and correctly classified as product canvas or documentation.
       a 4th refuses. An `unchanged: true` iteration **still consumes a slot** — stated, not left
       implicit, because a composer that no-ops once has 2 real attempts left and the assumptions
       ledger's catch-rate trigger must be read against that reduced budget
-- [ ] Iteration outputs are immutable at `self-review/iter-N/{render.png, meta.json}`, with a
-      per-variant manifest carrying input sha · output sha · defect claim · revision reason
+- [ ] Iteration outputs are immutable, with a per-variant manifest carrying input sha · output
+      sha · defect claim · revision reason. **Amended 2026-09-17 (owner ruling, `/arc-change`)**
+      to where they are actually built, instead of the `self-review/iter-N/{render.png, meta.json}`
+      this line first named:
+      - the renders and their metas are session-scoped, at
+        `.claude/state/design/renders/<id>--variant-<x>/…--<W>x<H>--iter-N.{png,json}` (ADR-1402's
+        path, with the viewport in the name so two viewports of one iteration cannot overwrite each
+        other);
+      - the hash chain lives in `docs/design/explore/<id>/variant-<x>/self-review/manifest.md`, whose
+        every row names its input and output hash, and which `compose-done` refuses unless the hashes
+        match those metas.
+
+      ADR-1401 carries the same amendment.
 - [ ] ≥1 self-caught defect is visibly fixed across iteration receipts on a real run — provable
       from the shas, not narrated
 - [ ] A no-op revision records `unchanged: true` (Phase 00's discriminator) rather than refusing
@@ -43,7 +54,11 @@ rendered and correctly classified as product canvas or documentation.
 
 - [ ] Viewport set derives from the brief's platform contract: desktop 1440×900 always, mobile
       390×844 when the contract declares mobile `yes`
-- [ ] The critic judges every rendered viewport; a **declared-but-unrendered surface blocks PASS**
+- [ ] A **declared-but-unrendered surface blocks PASS**: `design-explore.sh compose-done … --brief`
+      runs the coverage gate, which refuses unless every viewport the brief declares was rendered.
+      **Amended 2026-09-17 (owner ruling, `/arc-change`):** the other half of this line, "the
+      critic judges every rendered viewport", moved to Phase 03, where the critic and the jury are
+      reworked. Nothing in Phase 01 showed the critic judging more than one render meta.
 - [ ] Per-explore surface manifest + `data-arc-doc-surface` markers classify each surface
 - [ ] A planted docs-on-canvas page (state matrix + keyboard tables) returns a deterministic ERR
 - [ ] A legitimate product page containing the word "Reference" **passes** — the ₹-entity
@@ -111,7 +126,12 @@ rendered and correctly classified as product canvas or documentation.
       `ui-composer.md` says which viewport's hashes to copy
 - [ ] Two-surface adversarial pass by fresh agents on the doc-surface gate and the allowlist,
       holes fixed and pinned as fixtures
-- [ ] tests added & green **on CI, read per JOB at the branch head SHA**
+- [ ] tests added & green **on CI, read per JOB at the branch head SHA**. **Amended 2026-09-17
+      (owner ruling, `/arc-change`):** Phase 01's own suites are green on every leg, and the only
+      red allowed is a LATER phase's named red-first set. Today that set is Phase 02 Slice B's 14
+      cases in `tests/design-refpack.bats` (`refpack:`, `registry:` and `preflight:`), each red for
+      the reason it names, with `declared = executed` on every leg. Any other red, or a red
+      outside that named set, blocks the close.
 - [ ] live demo run + output checked
 - [ ] contract tests green against fakes
 - [ ] tracker updated (PROGRESS.md row ✅ + done-log)
@@ -132,7 +152,10 @@ rendered and correctly classified as product canvas or documentation.
   Open iteration-1 and iteration-2 PNGs **by hand** and confirm the named defect is visibly
   fixed — the verdict is not taken from the manifest's own prose.
 - **Real-system check:** confirm `.claude/state/design/renders/` holds one session per variant,
-  and that `self-review/iter-2/meta.json` references `iter-1`'s output sha as its input.
+  and that the manifest row for iteration 2 in `self-review/manifest.md` names `iter-1`'s output
+  sha as its input. That row's output sha must equal the `screenshot_sha256` of the iteration-2
+  meta at the same viewport. (Amended 2026-09-17 from a `self-review/iter-2/meta.json` path that
+  was never built; see the iteration-outputs exit criterion.)
 - **Expected evidence:** CI bats output per JOB, the iteration manifests, the two hand-opened
   PNGs, and the refused sibling-read transcript, to `initiatives/design/evidence/phase-01/`.
 
