@@ -369,14 +369,30 @@ consumer projects — it carries the owner's approvals.
     (F5), five uncapped renderer echoes (F6), nine surviving mutants, merged stderr in the new
     renderer cases, and the marker count not stopping at 2. Accepted: only `:` namespaces (F7).
     Open and the owner's: BS-4 / S2, `_dispatch.sh`. Defect list to 28.
+    - Run **35193314217** at `23a8a0bf`, read per JOB: 14/19 green, the refpack 14 alone red.
+  - **Eighth attack pass: the seventh pass's own fix re-opened its High.** Both attackers
+    independently found that the new trailing-CR strip, `${FIELD%$'\r'}`, cost more than its
+    length under UTF-8 and ran before the cap: 600 KB, 69 s, past the hook timeout. The reader
+    now uses `jq -j` (so there is no CR to strip), reads the length from jq and caps before the
+    value is read, and runs under `LC_ALL=C`. That is pinned by a time-bounded 500 KB case. Also
+    fixed:
+    - the no-jq reader refuses escapes and line breaks it cannot read;
+    - identity and tool names are restricted to a plain alphabet;
+    - duplicates are counted with `jq --stream`;
+    - payloads carrying escapes are parsed;
+    - the broken-script fallback is widened;
+    - seven mutants are pinned.
+
+    Accepted: without jq, a payload that names the composer and carries an escape is refused.
+    The defect list is at 31.
 
 **Resume here, in order:**
 1. ~~**CI.** Read per JOB for `a16b189e` and `fd94e8f1`.~~ Done 2026-09-17, as expected.
 2. **Attack findings.** Done so far: BL-1/BS-1 built at `ee8d4707` (ADR-1418) and attacked (sixth
    pass, fixed); the rest of the fifth pass fixed or accepted (run 35189258213 at baseline); the
-   seventh pass fixed. Next: read the run for the seventh-pass fixes per JOB (expected red: the
-   refpack 14 only). Then decide whether the S1 length cap and the fragment rewrite owe an eighth
-   pass.
+   seventh and eighth passes fixed. Next: read the run for the eighth-pass fixes per JOB (expected red: the
+   refpack 14 only). Then the owner decides whether a ninth pass is owed or the surface is closed
+   (see the note to the owner, 2026-09-17).
    BS-4 (the dispatcher fails open when it cannot capture the payload) is in `_dispatch.sh`, which
    is under the governance-denied `.claude/hooks/**`, so it is the owner's, and it affects every
    guard.

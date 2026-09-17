@@ -477,3 +477,33 @@ from a backslash variable.
 26. A refusal that runs before the caller is known scopes everyone.
 27. "The script exists" is not "the script is whole": give it a sentinel and read the exit code.
 28. The Write tool turns a `\uXXXX` escape in its content into the character itself.
+
+## Eighth pass, 2026-09-17 — the seventh-pass fixes (`23a8a0bf`)
+
+Two fresh agents, narrow scope, defect list at 28. **Both found the same High independently: the
+seventh pass's own fix re-opened S1.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| **A = SH8-1 (High)** | The seventh pass replaced `tr -d '\r'` with `${FIELD%$'\r'}`, whose cost grows faster than the value under a UTF-8 locale, and it ran inside the reader BEFORE the 400-byte cap: 600 KB held the check 69 s (300 KB 22 s), past the hook timeout, which reads as allow. CONFIRMED by both. | **FIXED**: jq reads with `-j` (no line terminator, so no CR to strip from the command at all); the length is taken from jq and checked before the value is read; the grep reader checks length before any work; the script runs under `LC_ALL=C`. Pinned by a 500 KB, 250k-word case with a 20 s bound, which also pins S1 (a cap moved after the split). |
+| B (Low) | Without jq, a key split from its colon by a line break was read as absent. CONFIRMED. | **FIXED**: without jq, a payload with any escape or line break cannot be read exactly by grep. |
+| C (Low-Med) | Without jq, the `\u` refusal ran before the caller was known and blocked the main session on a Windows path like `\ui-composer`. CONFIRMED. | **ACCEPTED, narrowed**: with jq nothing here happens. Without jq, a payload that only carries an escape and does not name the composer is let go; one that names the composer and carries an escape or a line break is refused, because grep cannot tell an escaped backslash from an escape. A broken jq is a degraded install, and it leans closed only for payloads that name the composer. |
+| D (Low) | A control character inside the identity or tool name read as "someone else". CONFIRMED. | **FIXED**: identity and tool must be letters, digits and `:_.-` once whitespace and CR are trimmed. |
+| E (Low) | With the script broken, the fragment's composer test was stricter than the script's own normalisation. CONFIRMED. | **FIXED**: the fallback allows surrounding whitespace, an escaped CR or tab, and a namespace, and also blocks a payload that names the composer and carries an escape or a line break. |
+| F (Info) | A second identity spelled with an escape dodged the duplicate count. CONFIRMED. | **FIXED**: with jq, the count comes from `jq --stream`, which sees every copy before the parser merges them. |
+| G (Info) | An identity spelled with an escape skipped the prefilter. CONFIRMED. | **FIXED** with jq: a payload carrying any escape is parsed. |
+| H (Info) | One trailing CR was dropped from the command. CONFIRMED, no leak. | **FIXED** by `-j`: nothing is stripped from the command. |
+| I (Info) | Headroom under the cap is 9 bytes at maximum id lengths. | **ACCEPTED**: page names are `index.html`; noted. |
+| MU1, MU3-MU5, MU7, MU9, MU10 | Surviving mutants: no-jq duplicate and escape refusals, a main-session mention without jq, the CR trim on the identity, the cap moved after the source, the fallback's namespace and whitespace groups. | **Each has a case.** MU2 and MU8 are equivalent and not findings. |
+
+**Clean, by execution:** missing, empty, `exit 1`, truncated and FIFO scripts all block a composer in
+0.4-0.9 s even with a 200 KB payload; 200k `"agent_type"` keys (3.4 MB) and 1M-deep nesting refuse in
+about 2 s; the dispatcher's capture is linear to multi-MB; no SIGPIPE through `printf | bash`.
+
+### Add to the running defect list for the next attacker
+29. A fix is not attacked until the attack runs on the fix: the seventh pass's own replacement line
+    re-opened the High it closed.
+30. `${var%pattern}` on a long string under a UTF-8 locale costs more than its length; strip at the
+    source (jq `-j`) or cap before.
+31. A fallback used only when the main check cannot run must be at least as wide as the check it
+    replaces, never narrower.

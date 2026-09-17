@@ -26,13 +26,21 @@
 #
 # Exit: 0 allow | 2 BLOCK. Never any other code. bash-3.2 / POSIX-safe.
 set -uo pipefail
+# Byte semantics for every string operation below: under a UTF-8 locale bash counts and strips
+# characters, which is slower and made a long string's cost grow faster than its length (eighth
+# attack pass, SH8-1). Every character class in this file is spelled out, so nothing depends on it.
+LC_ALL=C; export LC_ALL
 
 [ -t 0 ] && exit 0
 PAYLOAD="$(cat)"
 
 # Cheap first: nearly every call is not a composer's, and they must not pay for the parse. The
-# letters are matched without case, so `UI-Composer` still reaches the identity check.
-case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*) ;; *) exit 0;; esac
+# letters are matched without case, so `UI-Composer` still reaches the identity check. A payload
+# carrying any JSON escape is parsed too, because an identity spelled with one never shows the
+# word (eighth attack pass, G); without a working jq that case is let go below, not refused.
+case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*'\u'*) ;; *) exit 0;; esac
+NAMES_COMPOSER=0
+case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*) NAMES_COMPOSER=1;; esac
 
 _refuse() {
   echo "BLOCKED by ui-composer bash scope: $1" >&2
@@ -41,84 +49,102 @@ _refuse() {
   exit 2
 }
 
-# From here the payload NAMES ui-composer, so anything that stops this script from reading who is
+# From here the payload may be a composer's, so anything that stops this script from reading who is
 # calling refuses. It used to allow: the parser was picked by `command -v jq`, not by jq working,
 # so a broken jq read the identity as empty and let a composer's `cat` of a sibling through
-# (fifth attack pass, BL-3/BS-6). jq is used only once it has answered a probe correctly.
+# (fifth attack pass, BL-3/BS-6). jq is used only once it has answered a probe correctly. `-j`
+# everywhere: no line terminator, so jq.exe's CRLF never reaches a value and nothing has to be
+# stripped from the command (eighth pass, A and H).
 JQ_OK=0
-if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | jq -r '.k' 2>/dev/null | tr -d '\r')" = "v" ]; then
+if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | jq -j '.k' 2>/dev/null)" = "v" ]; then
   JQ_OK=1
 fi
+# Without jq, a payload that only carries an escape cannot be decoded, and the harness never
+# escapes the letters of an agent name, so it is not treated as a composer's.
+[ "$JQ_OK" -eq 1 ] || [ "$NAMES_COMPOSER" -eq 1 ] || exit 0
 
-# `_field <key> <jq path> [all-cr]` sets FIELD. Returns 1 when the field cannot be read EXACTLY; a
-# key that is simply absent reads as empty, which is not the same thing. Unreadable means:
-#   - the key given twice: jq reads the last copy and grep the first, so the two readers once
-#     disagreed on who was calling (BL-7);
-#   - with jq working, jq and the raw count disagree on whether the key is there. A key spelled
-#     with a JSON escape, or split from its colon by a line break, is invisible to grep, and read
-#     as absent it let a composer through (seventh attack pass, F4);
-#   - a value that is not a string, or one the grep reader would truncate.
-# The jq programs are single-quoted and joined to the path: escaped quotes nested inside `"$( )"`
-# have arrived malformed on one leg before (running defect #20).
+# `_field <key> <stream path> <jq path> <max bytes> [name]` sets FIELD. Returns 0 read (possibly
+# absent: FIELD empty), 1 cannot be read EXACTLY, 3 longer than <max bytes>.
+#
+# With jq, jq decides everything. `--stream` counts every occurrence of the key BEFORE the parser
+# merges duplicates, so a second copy spelled with an escape is still a second copy (eighth pass,
+# F; BL-7 was the plain-spelling version). A key present once must hold a string; any other shape
+# is unreadable.
+#
+# Without jq, the grep reader is exact only on a payload with no escapes and no line breaks: an
+# escaped key name or one split from its colon was read as absent (seventh pass F4; eighth pass B).
+# Anything else it cannot read exactly, and a composer's call it cannot read refuses.
+#
+# A `name` field (the identity and the tool) must also be spelled from letters, digits and `:_.-`
+# once whitespace is trimmed: a control character inside one read as "someone else" (eighth pass, D).
+#
+# The length is checked BEFORE any string work on the value: a strip that grew faster than the
+# value held the check past the hook timeout at 600 KB, and a timed-out hook reads as allow (eighth
+# pass, A; running defect #25 re-made by its own fix).
 _field() {
-  _fk="$1"; _fp="$2"; _fcr="${3:-}"; FIELD=""
-  _fn="$(printf '%s' "$PAYLOAD" | grep -o "\"$_fk\"[[:space:]]*:" 2>/dev/null | wc -l | tr -d ' ')"
-  case "$_fn" in 0|1) ;; *) return 1;; esac
+  _fk="$1"; _fsp="$2"; _fp="$3"; _fmax="$4"; _fname="${5:-}"; FIELD=""
   if [ "$JQ_OK" -eq 1 ]; then
-    _fs="$(printf '%s' "$PAYLOAD" | jq -r "$_fp"' | if . == null then "absent" elif type == "string" then "string" else "other" end' 2>/dev/null | tr -d '\r')" \
+    _fn="$(printf '%s' "$PAYLOAD" | jq -c --stream --argjson p "$_fsp" 'select(length == 2 and .[0] == $p)' 2>/dev/null | wc -l | tr -d ' ')" \
+      || return 1
+    _fs="$(printf '%s' "$PAYLOAD" | jq -j "$_fp"' | if . == null then "absent" elif type == "string" then "string" else "other" end' 2>/dev/null)" \
       || return 1
     case "$_fs:$_fn" in
       absent:0) return 0;;
       string:1) ;;
       *) return 1;;
     esac
-    FIELD="$(printf '%s' "$PAYLOAD" | jq -r "$_fp" 2>/dev/null)" || return 1
+    _fl="$(printf '%s' "$PAYLOAD" | jq -j "$_fp"' | length' 2>/dev/null)" || return 1
+    case "$_fl" in ""|*[!0123456789]*) return 1;; esac
+    [ "$_fl" -le "$_fmax" ] || return 3
+    FIELD="$(printf '%s' "$PAYLOAD" | jq -j "$_fp" 2>/dev/null)" || return 1
   else
-    # The grep reader cannot decode a JSON escape, so a payload carrying one cannot be read
-    # exactly by it at all: an escaped key name would read as absent (F4).
-    case "$PAYLOAD" in *'\u'*) return 1;; esac
-    [ "$_fn" -eq 1 ] || return 0
-    FIELD="$(printf '%s' "$PAYLOAD" | grep -o "\"$_fk\"[[:space:]]*:[[:space:]]*\"[^\"\\\\]*\"" 2>/dev/null | head -1 \
+    case "$PAYLOAD" in *'\u'*|*'
+'*) return 1;; esac
+    _fn="$(printf '%s' "$PAYLOAD" | grep -o "\"$_fk\"[[:space:]]*:" 2>/dev/null | wc -l | tr -d ' ')"
+    case "$_fn" in 0) return 0;; 1) ;; *) return 1;; esac
+    FIELD="$(printf '%s' "$PAYLOAD" | grep -o "\"$_fk\"[[:space:]]*:[[:space:]]*\"[^\"\\]*\"" 2>/dev/null | head -1 \
       | sed 's/^[^:]*:[[:space:]]*"//; s/"$//')"
+    [ "${#FIELD}" -le "$_fmax" ] || return 3
   fi
-  # jq.exe on Windows ends its line with CRLF, so ONE trailing CR is the reader's, not the value's.
-  # Every CR is stripped only from the identity and the tool name (BS-11); a command keeps any
-  # other CR, so the command checked is the command run, and the alphabet refuses it (F5).
-  FIELD="${FIELD%$'\r'}"
-  [ -z "$_fcr" ] || FIELD="$(printf '%s' "$FIELD" | tr -d '\r')"
+  if [ -n "$_fname" ]; then
+    FIELD="$(printf '%s' "$FIELD" | tr -d ' \t\r')"
+    case "$FIELD" in *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:_.-]*) return 1;; esac
+  fi
   [ -n "$FIELD" ] || return 1
   return 0
 }
 
-_field agent_type '.agent_type' all-cr || _refuse "the calling agent cannot be identified exactly, and this call names ui-composer."
+_field agent_type '["agent_type"]' '.agent_type' 256 name \
+  || _refuse "the calling agent cannot be identified exactly, and this call may be ui-composer's."
 # Normalised, so a namespaced install (`arc:ui-composer`) or a case change is still the composer
 # rather than silently nobody (BL-9). Letters spelled out: `tr '[:upper:]'` maps I to a dotless i
 # under tr_TR.
 AGENT="$(printf '%s' "$FIELD" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')"
 AGENT="${AGENT##*:}"
-AGENT="$(printf '%s' "$AGENT" | tr -d ' \t')"
 [ "$AGENT" = "ui-composer" ] || exit 0
-_field tool_name '.tool_name' all-cr || _refuse "the tool of a ui-composer call cannot be read exactly."
+_field tool_name '["tool_name"]' '.tool_name' 64 name || _refuse "the tool of a ui-composer call cannot be read exactly."
 [ "$FIELD" = "Bash" ] || exit 0
 
 # Only now, with the caller known to be a composer running Bash: a JSON escape for a control
 # character refuses. jq decodes the escape for NUL to a real NUL, which bash then drops without a
-# word, so the checked command and the run command could differ; the grep reader cannot decode
-# escapes at all (BL-7). It ran before the identity check at first, and blocked the MAIN session's
-# own probes that mentioned ui-composer (seventh attack pass, F1; running defect #19).
+# word, so the checked command and the run command could differ (BL-7). It ran before the identity
+# check at first, and blocked the MAIN session's own probes that mentioned ui-composer (seventh
+# attack pass, F1; running defect #19).
 case "$PAYLOAD" in *'\u00'[01]*) _refuse "the call carries an escaped control character, and a command that cannot be read exactly is not run.";; esac
-
-_field command '.tool_input.command' \
-  || _refuse "the command could not be read from the payload, and an unreadable composer command is not run."
-CMD="$FIELD"
-[ -n "$CMD" ] || _refuse "the call carries no command, and an unreadable composer command is not run."
 
 # Length before shape. A real render is under 200 bytes and a dozen words. An uncapped command was
 # split into its words and THEN core/common.sh was sourced with every word still in `$@`, which
 # grows with the word count: 240k words held this check for 129 s, past the hook timeout, and a
-# timed-out hook is read as ALLOW (seventh attack pass, S1; running defects #14 and #17). The cap
-# comes before anything whose cost depends on the command.
-[ "${#CMD}" -le 400 ] || _refuse "the command is ${#CMD} bytes, longer than any render; nothing longer than 400 is checked or run."
+# timed-out hook is read as ALLOW (seventh attack pass, S1; running defects #14 and #17). The cap is
+# applied inside `_field`, before its own string work (eighth pass, SH8-1).
+_field command '["tool_input","command"]' '.tool_input.command' 400
+case $? in
+  0) ;;
+  3) _refuse "the command is longer than any render; nothing longer than 400 bytes is checked or run.";;
+  *) _refuse "the command could not be read from the payload, and an unreadable composer command is not run.";;
+esac
+CMD="$FIELD"
+[ -n "$CMD" ] || _refuse "the call carries no command, and an unreadable composer command is not run."
 
 # One line, one command, from a closed alphabet. Anything a shell treats as syntax -- ; & | > < $
 # backtick, quotes, backslash, parentheses, braces, globs, newlines -- is outside the alphabet, so a

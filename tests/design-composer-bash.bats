@@ -256,6 +256,43 @@ teardown() { _arc_teardown; }
   [ "$status" -eq 0 ] || { echo "the grep reader could not read an ordinary composer render: $stderr"; false; }
   _hook "" Bash "$CAT_B"
   [ "$status" -eq 0 ] || { echo "the main session was scoped under a broken jq: $stderr"; false; }
+  # Eighth attack pass, all without jq. A main-session command that NAMES the composer still runs
+  # (mutant MU4); a duplicate identity refuses in both orders (MU1); an escaped key or a key split
+  # from its colon cannot be read by grep, and refuses (MU3, B).
+  _hook "" Bash "grep -rn ui-composer .claude/agents"
+  [ "$status" -eq 0 ] || { echo "no jq: a main-session mention was scoped: $stderr"; false; }
+  _hook_raw '{"agent_type":"Explore","agent_type":"ui-composer","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "no jq: duplicate identity, composer last: $stderr"; false; }
+  _hook_raw '{"agent_type":"ui-composer","agent_type":"Explore","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "no jq: duplicate identity, composer first: $stderr"; false; }
+  local bs='\' nl='
+'
+  _hook_raw '{"agent'"${bs}"'u005ftype":"ui-composer","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "no jq: an escaped key hid the composer: $stderr"; false; }
+  _hook_raw '{"agent_type"'"$nl"':"ui-composer","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "no jq: a key split from its colon hid the composer: $stderr"; false; }
+}
+
+@test "composer bash: an identity jq can decode but a filter cannot see is still the composer" {
+  # Eighth attack pass. F: a second identity spelled with an escape dodged the duplicate count, so
+  # it is counted from jq's stream. G: an identity spelled with an escape never showed the word the
+  # prefilter looks for. D: a control character inside the identity read as "someone else". MU5:
+  # extra CRs around the identity.
+  _bash_sandbox; _arm_a
+  local bs='\'
+  _hook_raw '{"agent'"${bs}"'u005ftype":"ui-composer","agent_type":"Explore","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "an escaped duplicate identity was allowed: $stderr"; false; }
+  _hook_raw '{"agent_type":"ui-compos'"${bs}"'u0065r","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "an escaped identity skipped the prefilter: $stderr"; false; }
+  _hook_raw '{"agent_type":"ui-composer'"${bs}"'u000b","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "a control character in the identity was read as someone else: $stderr"; false; }
+  _hook_raw '{"agent_type":"ui-composer","tool_name":"Bash'"${bs}"'u000b","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "a control character in the tool name was read as another tool: $stderr"; false; }
+  _hook_raw '{"agent_type":"ui-composer\r\r","tool_name":"Bash\r","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "CRs around the identity hid the composer: $stderr"; false; }
+  # And an ordinary escape in someone else's payload is still not scoped.
+  _hook_raw '{"agent_type":"Explore","tool_name":"Bash","tool_input":{"command":"echo caf'"${bs}"'u00e9"}}'
+  [ "$status" -eq 0 ] || { echo "an escape in another agent's command was scoped: $stderr"; false; }
 }
 
 @test "composer bash: a key the grep reader cannot see is still read, and a duplicate tool refuses" {
@@ -378,6 +415,26 @@ teardown() { _arc_teardown; }
   done
 }
 
+@test "composer bash: a half-megabyte command is refused within seconds, not after the hook timeout" {
+  # Eighth attack pass, A: the seventh pass capped the command AFTER its reader had already run a
+  # strip whose cost grew faster than the value -- 600 KB held the check 69 s, and a timed-out hook
+  # reads as allow. Only a time bound pins "the cap comes first"; a message does not. The payload
+  # goes through a file because one argv string over 128 KB is refused by Linux itself. 250k words
+  # also pin the seventh pass's own S1 (the cap before the split, mutant MU7).
+  _bash_sandbox; _arm_a
+  local words
+  words="$(yes ' a' 2>/dev/null | head -n 250000 | tr -d '\n')"
+  [ "${#words}" -ge 500000 ] || { echo "the padding was not built (${#words} bytes), so this case proves nothing"; false; }
+  printf '{"agent_type":"ui-composer","tool_name":"Bash","tool_input":{"command":"%s%s"}}' "$RENDER_A_BARE" "$words" \
+    > "$BATS_TEST_TMPDIR/big.json"
+  SECONDS=0
+  run --separate-stderr bash -c 'bash "$0" < "$1"' "$SANDBOX/.claude/hooks/PreToolUse.sh" "$BATS_TEST_TMPDIR/big.json"
+  local took="$SECONDS"
+  [ "$status" -eq 2 ] || { echo "a 500 KB command was not refused: $stderr"; false; }
+  printf '%s' "$stderr" | grep -q 'longer than any render' || { echo "refused, but not by the length cap: $stderr"; false; }
+  [ "$took" -lt 20 ] || { echo "the refusal took ${took}s; the hook budget is 60s and the cap must come before the work"; false; }
+}
+
 @test "composer bash: a command longer than any render is refused by its length, before it is split" {
   # Seventh attack pass, S1: the words were split and core/common.sh sourced with all of them in
   # `$@`; 240k words took 129 s, past the hook timeout, which reads as ALLOW. The refusal must be
@@ -443,6 +500,17 @@ teardown() { _arc_teardown; }
   [ "$status" -eq 2 ] || { echo "a check script exiting 1 let a composer through: $stderr"; false; }
   _hook "" Bash "$CAT_B"
   [ "$status" -eq 0 ] || { echo "the main session was blocked by a broken composer script: $stderr"; false; }
+  # The fallback leans closed, matching what the script itself normalises (eighth attack pass: E,
+  # and the namespace and whitespace mutants MU9 and MU10).
+  local bs='\' a
+  for a in 'arc:ui-composer' 'ui-composer ' ' ui-composer' 'ui-composer\t' 'ui-composer\r'; do
+    _hook_raw '{"agent_type":"'"$a"'","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+    [ "$status" -eq 2 ] || { echo "a failing script let agent_type '$a' through: $stderr"; false; }
+  done
+  _hook_raw '{"agent'"${bs}"'u005ftype":"ui-composer","tool_name":"Bash","tool_input":{"command":"'"$CAT_B"'"}}'
+  [ "$status" -eq 2 ] || { echo "a failing script let an escaped key through: $stderr"; false; }
+  _hook Explore Bash "grep -rn ui-composer .claude/agents"
+  [ "$status" -eq 0 ] || { echo "a failing script blocked an agent that only mentions the composer: $stderr"; false; }
   cp "$BATS_TEST_TMPDIR/whole.sh" "$sc"
   _hook ui-composer Bash "$RENDER_A"
   [ "$status" -eq 0 ] || { echo "the restored script did not allow the composer's own render: $stderr"; false; }

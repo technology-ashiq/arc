@@ -24,9 +24,21 @@ set -uo pipefail
 SC="${CLAUDE_PROJECT_DIR:-.}/.claude/scripts/design/composer-bash-check.sh"
 PAYLOAD="$(cat)"
 
+# Used only when the check cannot run, so it leans closed: the agent_type value, case-blind, with
+# an optional namespace and surrounding whitespace or an escaped CR or tab -- the forms the script
+# itself normalises. A payload that also carries a JSON escape or a line break, and names the
+# composer anywhere, is blocked too: without the script nothing here can decode an escaped key or
+# identity (eighth attack pass, E).
 _is_composer() {
   printf '%s' "$PAYLOAD" \
-    | grep -qE '"agent_type"[[:space:]]*:[[:space:]]*"([^"]*:)?[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr][[:space:]]*"'
+    | grep -qE '"agent_type"[[:space:]]*:[[:space:]]*"[[:space:]]*([^"]*:)?[[:space:]]*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]([[:space:]]|\\[rt])*"' \
+    && return 0
+  case "$PAYLOAD" in
+    *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*)
+      case "$PAYLOAD" in *'\u'*|*'
+'*) return 0;; esac;;
+  esac
+  return 1
 }
 
 if [ -f "$SC" ] && [ "$(tail -n 1 "$SC" 2>/dev/null | tr -d '\r')" = "# composer-bash-check: end" ]; then
