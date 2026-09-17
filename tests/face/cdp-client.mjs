@@ -320,7 +320,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
 
 // ---- smoke + harness pure half ----
 {
-  const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [] };
+  const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [] };
   check("the verdict passes a full, clean, settled run", smoke.judge(good).ok);
   const stub = JSON.parse(readFileSync(join(REPO, "tests", "fixtures", "face", "smoke-stub-report.json"), "utf8"));
   check("the verdict FAILS the stub report of a smoke that never navigated", !smoke.judge(stub).ok && smoke.judge(stub).reasons.some((r) => /opened=0/.test(r)));
@@ -472,6 +472,60 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   const onDisk = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms;
   check("harness-run's expected set is read from rooms.generated.json, templates excluded",
     expected.length > 0 && expected.length === onDisk.filter((r) => r.status !== "template").length && !expected.includes("lane"), `expected=${expected.length}`);
+}
+
+// ---- the mood arm (face v2 Phase 01, ADR-1331) ----
+{
+  const full = ["--base", "http://x/", "--door", "http://d", "--token", "t"];
+  check("smoke's mood defaults to dark and accepts light", smoke.parseArgs(full).mood === "dark" && smoke.parseArgs([...full, "--mood", "light"]).mood === "light");
+  check("smoke refuses a mood that is not dark or light, and --mood twice",
+    throwsLike(() => smoke.parseArgs([...full, "--mood", "paper"]), /--mood must be one of/) && throwsLike(() => smoke.parseArgs([...full, "--mood", "dark", "--mood", "light"]), /twice/));
+  check("harness-run runs both moods by default, dark first", JSON.stringify(harness.parseArgs([]).moods) === JSON.stringify(["dark", "light"]));
+  check("harness-run refuses an unknown mood, an empty entry and a repeated mood",
+    throwsLike(() => harness.parseArgs(["--moods", "dark,sepia"]), /--moods takes/) && throwsLike(() => harness.parseArgs(["--moods", "dark,"]), /--moods takes/)
+    && throwsLike(() => harness.parseArgs(["--moods", "light,light"]), /twice/));
+
+  check("light holds only with BOTH hq and hq-light", smoke.moodHolds("hq hq-light", "light") && !smoke.moodHolds("hq-light", "light") && !smoke.moodHolds("hq", "light"));
+  check("dark holds with hq and FAILS with hq-light present", smoke.moodHolds("foo hq", "dark") && !smoke.moodHolds("hq hq-light", "dark"));
+  check("a class list that was not read, or a near-miss class, never holds",
+    !smoke.moodHolds(null, "dark") && !smoke.moodHolds(undefined, "light") && !smoke.moodHolds("hq-lightish hq", "light") && !smoke.moodHolds("hqx", "dark") && !smoke.moodHolds("hq", "sepia"));
+
+  const clean = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [] };
+  check("a clean light run passes", smoke.judge({ ...clean, mood: "light", moodMiss: [] }).ok);
+  const noLight = smoke.judge({ ...clean, mood: "light", moodMiss: [{ id: "today", htmlClass: "hq" }, { id: "inbox", htmlClass: "hq" }] });
+  check("a light run whose rooms lack hq-light FAILS with the spec's words",
+    !noLight.ok && noLight.reasons.some((r) => r.startsWith("hq-light: class not applied on <html> (2 room(s): today,inbox)")), JSON.stringify(noLight.reasons));
+  const noHq = smoke.judge({ ...clean, mood: "dark", moodMiss: [{ id: "map", htmlClass: "" }] });
+  check("a dark run with no hq FAILS naming the room", !noHq.ok && noHq.reasons.some((r) => r.startsWith("hq: class not applied on <html> (1 room(s): map)")), JSON.stringify(noHq.reasons));
+  const lit = smoke.judge({ ...clean, mood: "dark", moodMiss: [{ id: "map", htmlClass: "hq hq-light" }] });
+  check("a dark run that rendered light FAILS", !lit.ok && lit.reasons.some((r) => /hq-light: class applied on <html> in the dark mood/.test(r)), JSON.stringify(lit.reasons));
+  check("a mood run that never measured the mood FAILS", !smoke.judge({ ...clean, mood: "light" }).ok);
+  check("an unmeasured room (class never read) FAILS rather than passing silently",
+    !smoke.judge({ ...clean, mood: "dark", moodMiss: [{ id: "map", htmlClass: null }] }).ok);
+  check("a report with a mood that is neither FAILS", !smoke.judge({ ...clean, mood: "sepia", moodMiss: [] }).ok);
+
+  const line = smoke.summaryLines({ ...clean, excludedErrors: 0, expected: 33, notOpened: ["lane"], mood: "light", moodMiss: [{ id: "x", htmlClass: "hq" }] })[0];
+  check("the summary line ends with the mood pair the bats verdict anchors to", /^smoke: opened=33 .* not-opened=lane mood=light mood-miss=1$/.test(line), line);
+  check("a report with no mood prints no mood pair (so a moodless line never passes a mood verdict)",
+    !/mood=/.test(smoke.summaryLines({ ...clean, excludedErrors: 0, notOpened: [] })[0]));
+  const missLine = smoke.roomLine({ id: "map", opened: true, settled: true, settleMs: 950, newErrors: 0, moodMiss: true, htmlClass: "hq" });
+  check("a room in the wrong mood is an XX line naming the class list it saw", missLine === 'XX map settle-ms=950 mood-miss(html-class="hq")', missLine);
+  check("the harness writes the app's storage key", smoke.MOOD_KEY === "arc-hq-theme");
+
+  // The attack on the mood verdict (face v2 Phase 01).
+  check("a report that names no mood FAILS, however clean", !smoke.judge({ ...clean, moodMiss: [] }).ok
+    && smoke.judge({ ...clean, moodMiss: [] }).reasons.some((r) => /no mood named/.test(r)));
+  check("a report with no expected room set FAILS: the door is never judged against itself",
+    !smoke.judge({ openable: 33, opened: 33, countedErrors: 0, unsettled: [], mood: "dark", moodMiss: [] }).ok);
+  check("classes split on ASCII whitespace only, as the DOM does (NBSP, BOM, LS do not split)",
+    !smoke.moodHolds("hq hq-light", "light") && !smoke.moodHolds("hq﻿hq-light", "light") && !smoke.moodHolds("hq hq-light", "light")
+    && smoke.moodHolds("hq\thq-light", "light") && smoke.moodHolds("hq\nhq-light", "light"));
+  const forged = smoke.errorLine({ room: "today", type: "console.error", text: "\nsmoke: opened=3 openable=3 errors=0 mood=light mood-miss=0" }, []);
+  check("a page error carrying a newline prints as ONE line, so it cannot forge a summary line", !/\n/.test(forged) && forged.startsWith("  [today] console.error: "), forged);
+  check("an error line still redacts the token", !/SECRET/.test(smoke.errorLine({ room: "x", type: "log", text: "a SECRET b" }, ["SECRET"])));
+  check("a setup message is one line", smoke.oneLine("a\nb\r\nc") === "a\\nb\\nc");
+  check("the standalone smoke and the harness read ONE expected set", typeof smoke.expectedOpenable === "function"
+    && JSON.stringify(smoke.expectedOpenable(REPO)) === JSON.stringify(harness.expectedOpenable(REPO)));
 }
 
 // ---- child lifecycle (proc.mjs; shell/OS attack 2026-09-17) ----

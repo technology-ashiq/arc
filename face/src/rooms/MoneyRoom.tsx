@@ -36,6 +36,7 @@ import {
 import type {
   PnlView, KillView, GreenGate, Figure, CostTally, RevenuePanel, CostLine, RevenueRow,
 } from "../lib/money.mjs";
+import { HPanel, RoomHead } from "../ui/bits";
 
 /* -------------------------------------------------------------------------- */
 
@@ -164,19 +165,19 @@ export function MoneyRoom({ door, room, sentence, lede }: MoneyRoomProps) {
     <section className="m-room" aria-label="Money">
       <style>{CSS}</style>
 
-      <header className="m-head">
-        <div className="m-headtext">
-          <h1 className="m-sentence">{opening.sentence}</h1>
-          <p className="m-lede">{opening.lede}</p>
-        </div>
-        <div className="m-chrome">
-          <ModeChip mode={realData === null ? null : realData.doorMode} />
-          <span className="m-clock" title="the door's own clock, in the company's timezone">
-            {readAt === "" ? "reading…" : readAt}
-          </span>
-          <button type="button" className="m-btn" onClick={reread}>re-read the door</button>
-        </div>
-      </header>
+      <RoomHead
+        title={opening.sentence}
+        hint={opening.lede}
+        right={
+          <>
+            <ModeChip mode={realData === null ? null : realData.doorMode} />
+            <span className="m-clock" title="the door's own clock, in the company's timezone">
+              {readAt === "" ? "reading…" : readAt}
+            </span>
+            <button type="button" className="m-btn" onClick={reread}>re-read the door</button>
+          </>
+        }
+      />
 
       {/* ── THE GREEN GATE, STATED. This strip is the room's thesis and it is above every
              number on the page: it says whether the colour of real money is spent or unspent,
@@ -223,11 +224,7 @@ export function MoneyRoom({ door, room, sentence, lede }: MoneyRoomProps) {
       </div>
 
       {/* ── the return ── */}
-      <div className="m-panel m-return">
-        <div className="m-panel-head">
-          <span className="m-panel-title">the return</span>
-          <span className="m-panel-hint">{ret.code}</span>
-        </div>
+      <HPanel title="the return" hint={ret.code} className="m-return mb-0!">
         <p className="m-return-human">{ret.human}</p>
         <div className="m-return-parts">
           {ret.parts.map((p) => (
@@ -242,18 +239,14 @@ export function MoneyRoom({ door, room, sentence, lede }: MoneyRoomProps) {
           The derived P&amp;L, totalled by the money brain rather than by this screen:{" "}
           <code className="m-code">{ret.command}</code>
         </p>
-      </div>
+      </HPanel>
 
       {/* ── kill distance, and the ONE badge on this page that says "file, not log" ── */}
       <KillPanel state={kill} kill={killData} />
 
       {/* ── what needs a person, from the money brain's own flags ── */}
       {flags.length === 0 ? null : (
-        <div className="m-panel">
-          <div className="m-panel-head">
-            <span className="m-panel-title">needs you</span>
-            <span className="m-panel-hint">{fmtInt(flags.length)}</span>
-          </div>
+        <HPanel title="needs you" hint={fmtInt(flags.length)} className="mb-0!">
           <ul className="m-flags">
             {flags.map((f) => (
               <li key={`${f.substance}-${f.type}-${f.detail}`} className={f.substance === "simulated" ? "m-flag m-hatch" : "m-flag"}>
@@ -263,16 +256,12 @@ export function MoneyRoom({ door, room, sentence, lede }: MoneyRoomProps) {
               </li>
             ))}
           </ul>
-        </div>
+        </HPanel>
       )}
 
       {/* ── the gaps, said out loud. A gap the reader cannot see is a gap the reader
              assumes is not there. ── */}
-      <div className="m-panel m-gaps">
-        <div className="m-panel-head">
-          <span className="m-panel-title">what this route does not serve</span>
-          <span className="m-panel-hint">{fmtInt(gaps.length)}</span>
-        </div>
+      <HPanel title="what this route does not serve" hint={fmtInt(gaps.length)} className="m-gaps mb-0!">
         <dl className="m-gaplist">
           {gaps.map((g) => (
             <div key={g.what} className="m-gap">
@@ -294,7 +283,7 @@ export function MoneyRoom({ door, room, sentence, lede }: MoneyRoomProps) {
         <p className="m-asof">
           <b className="m-code">{asof.code}</b> — {asof.offer}
         </p>
-      </div>
+      </HPanel>
     </section>
   );
 }
@@ -370,12 +359,14 @@ function Substance({
 }) {
   const sim = panel.substance === "simulated";
   return (
-    <section className={sim ? "m-panel m-sub m-sub-sim" : "m-panel m-sub"} aria-label={panel.title}>
-      <div className="m-panel-head">
-        <span className={sim ? "m-panel-title m-title-sim" : "m-panel-title"}>{panel.title}</span>
-        {panel.watermark === "" ? null : <span className="m-watermark">{panel.watermark}</span>}
-        <span className="m-panel-hint">{panel.kind}</span>
-      </div>
+    <HPanel
+      title={sim ? <span className="m-title-sim">{panel.title}</span> : panel.title}
+      hint={panel.kind}
+      actions={panel.watermark === "" ? null : <span className="m-watermark">{panel.watermark}</span>}
+      ariaLabel={panel.title}
+      tone={sim ? "violet" : undefined}
+      className={sim ? "m-sub m-sub-sim mb-0!" : "m-sub mb-0!"}
+    >
       <p className="m-sub-lede">{panel.lede}</p>
 
       {state.phase === "loading" ? (
@@ -428,7 +419,7 @@ function Substance({
           )}
         </>
       )}
-    </section>
+    </HPanel>
   );
 }
 
@@ -469,11 +460,12 @@ function CostPanel({
   what: string;
 }) {
   return (
-    <section className="m-panel" aria-label={title}>
-      <div className="m-panel-head">
-        <span className="m-panel-title">{title}</span>
-        <span className="m-panel-hint">{fmtInt(tally.lines.length)} line{tally.lines.length === 1 ? "" : "s"}</span>
-      </div>
+    <HPanel
+      title={title}
+      hint={<>{fmtInt(tally.lines.length)} line{tally.lines.length === 1 ? "" : "s"}</>}
+      ariaLabel={title}
+      className="mb-0!"
+    >
       <p className="m-sub-lede">{lede}</p>
 
       {state.phase === "loading" ? (
@@ -506,7 +498,7 @@ function CostPanel({
           </ul>
         </>
       )}
-    </section>
+    </HPanel>
   );
 }
 
@@ -539,17 +531,15 @@ function CostRow({ line }: { line: CostLine }) {
 function KillPanel({ state, kill }: { state: Panel<KillView>; kill: KillView | null }) {
   if (state.phase === "loading")
     return (
-      <div className="m-panel">
-        <div className="m-panel-head"><span className="m-panel-title">kill lines</span></div>
+      <HPanel title="kill lines" className="mb-0!">
         <p className="m-reading">waiting for the kill panel from the door…</p>
-      </div>
+      </HPanel>
     );
   if (state.phase === "error")
     return (
-      <div className="m-panel">
-        <div className="m-panel-head"><span className="m-panel-title">kill lines</span></div>
+      <HPanel title="kill lines" className="mb-0!">
         <Refusal code={state.code} human={state.human} what="the kill panel" />
-      </div>
+      </HPanel>
     );
   if (kill === null) return null;
 
@@ -557,14 +547,18 @@ function KillPanel({ state, kill }: { state: Panel<KillView>; kill: KillView | n
   const loud = kill.state === "unreceipted";
 
   return (
-    <section className={loud ? "m-panel m-kill m-kill-loud" : "m-panel m-kill"} aria-label="kill lines">
-      <div className="m-panel-head">
-        <span className="m-panel-title">kill lines</span>
+    <HPanel
+      title="kill lines"
+      hint={kill.asOf === null ? null : <>as of {kill.asOf}</>}
+      actions={
         <span className="m-badge-file" title="this half of the route reads ventures.yaml on the tree; a file has no day-granular history to scrub to">
           {kill.badge}
         </span>
-        {kill.asOf === null ? null : <span className="m-panel-hint">as of {kill.asOf}</span>}
-      </div>
+      }
+      ariaLabel="kill lines"
+      tone={loud ? "amber" : undefined}
+      className={loud ? "m-kill m-kill-loud mb-0!" : "m-kill mb-0!"}
+    >
 
       {kill.refusal === null ? null : (
         <div className={loud ? "m-refused m-refused-loud" : "m-refused"}>
@@ -605,7 +599,7 @@ function KillPanel({ state, kill }: { state: Panel<KillView>; kill: KillView | n
           <span className="m-receipt" title={kill.path ?? "path not served"}>⌗ criteria {kill.digest ?? "digest not served"}</span>
         </>
       )}
-    </section>
+    </HPanel>
   );
 }
 
@@ -637,17 +631,12 @@ function ModeChip({ mode }: { mode: string | null }) {
 
 const CSS = `
 .m-room{font-family:var(--font-display);color:var(--prose);padding:calc(var(--grid)*3) calc(var(--grid)*3) calc(var(--grid)*6);max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:calc(var(--grid)*2);}
-.m-head{display:flex;align-items:flex-start;gap:calc(var(--grid)*2);flex-wrap:wrap;}
-.m-headtext{flex:1 1 420px;min-width:0;}
-.m-sentence{font-size:clamp(24px,3.6vw,var(--step-room));line-height:1.04;letter-spacing:-0.02em;font-weight:600;margin:0 0 var(--grid) 0;color:var(--prose);}
-.m-lede{font-size:var(--step-lede);line-height:1.5;font-weight:300;color:var(--meta);margin:0;max-width:64ch;}
-.m-chrome{display:flex;align-items:center;gap:var(--grid);flex-wrap:wrap;margin-left:auto;}
 .m-mode,.m-clock{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-tight);text-transform:uppercase;padding:calc(var(--grid-in)*1) calc(var(--grid-in)*2);border-radius:var(--radius-pill);}
 .m-mode{color:var(--mode-live);background:var(--mode-bg);}
 .m-mode-sim{color:var(--mode-sim);background:var(--sim-hatch);}
 .m-mode-unknown{color:var(--faint);background:var(--mode-bg);}
 .m-clock{color:var(--meta);text-transform:none;}
-.m-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.04);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
+.m-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:var(--mode-bg);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
 .m-btn:hover{border-color:var(--accent-line);background:var(--accent-wash);}
 
 /* the green gate — the room's thesis, above every number */
@@ -659,16 +648,14 @@ const CSS = `
 
 .m-substances{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:var(--grid);align-items:start;}
 .m-split{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:var(--grid);align-items:start;}
-.m-panel{border:1px solid var(--panel-border);border-radius:var(--radius-panel);background:var(--panel);backdrop-filter:blur(var(--panel-blur));-webkit-backdrop-filter:blur(var(--panel-blur));padding:var(--pad-panel);min-width:0;}
-.m-panel-head{display:flex;align-items:baseline;gap:var(--grid);flex-wrap:wrap;margin-bottom:var(--grid);}
-.m-panel-title{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-wide);text-transform:uppercase;color:var(--accent);}
 .m-title-sim{color:var(--sim-fg);}
-.m-panel-hint{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--faint);margin-left:auto;}
 .m-sub-lede{font-size:var(--step-body);line-height:1.5;font-weight:300;color:var(--meta);margin:0 0 calc(var(--grid)*2);max-width:60ch;}
 
 /* the non-real family: the texture covers the REGION, not a badge in its corner. Hue alone
-   is not enough — a reader who cannot see the violet still gets the hatch. */
-.m-sub-sim{border-color:var(--sim-line);background-image:var(--sim-hatch);background-blend-mode:normal;}
+   is not enough — a reader who cannot see the violet still gets the hatch. HPanel paints its
+   card background inline, and an inline background clears any class rule, so the hatch is
+   layered over the card colour with !important; the violet edge comes from tone="violet". */
+.m-sub-sim{background-image:var(--sim-hatch) !important;background-blend-mode:normal;}
 .m-watermark{font-family:var(--font-mono);font-size:var(--step-micro);letter-spacing:var(--track-wide);color:var(--sim-fg);border:1px solid var(--sim-line);border-radius:var(--radius-pill);padding:2px 8px;}
 .m-hatch{background-image:var(--sim-hatch);}
 
@@ -732,7 +719,6 @@ const CSS = `
 .m-part-w{font-family:var(--font-mono);font-size:var(--step-micro);color:var(--accent-dim);overflow-wrap:anywhere;}
 .m-cmd{font-size:var(--step-body);line-height:1.5;font-weight:300;color:var(--meta);margin:calc(var(--grid)*2) 0 0;}
 
-.m-kill-loud{border-color:var(--amber);}
 .m-kill-sum{font-size:var(--step-lede);line-height:1.45;color:var(--meta);margin:0 0 calc(var(--grid)*2);}
 .m-loud{color:var(--amber);}
 .m-critrow{display:flex;align-items:baseline;gap:var(--grid);min-height:var(--row-h);padding:var(--grid-in) 0;border-bottom:1px solid var(--hairline);flex-wrap:wrap;}

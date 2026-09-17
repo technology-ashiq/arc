@@ -29,6 +29,7 @@ import {
 import type { BoardRow, BoardView, Meter } from "../lib/spine.mjs";
 import type { Refused } from "../lib/inbox.mjs";
 import { adrBandMap } from "../lib/rooms.mjs";
+import { HPanel, RoomHead } from "../ui/bits";
 
 export type BoardRoomProps = {
   door: Door;
@@ -85,21 +86,21 @@ export function BoardRoom({ door, room, sentence, lede, adrBands, rooms }: Board
     <section className="b-room" aria-label="Board">
       <style>{CSS}</style>
 
-      <header className="b-head">
-        <div className="b-headtext">
-          <h1 className="b-sentence">{opening.sentence}</h1>
-          <p className="b-lede">{opening.lede}</p>
-        </div>
-        <div className="b-chrome">
-          <ModeChip mode={view?.mode ?? null} />
-          <span className="b-badge" title="this room reads the tree and the contract; the spine has nothing to say about it, so as-of does not apply here">
-            {view?.badge ?? "file, not log"}
-          </span>
-          <button type="button" className="b-btn" onClick={reread}>
-            re-read the board
-          </button>
-        </div>
-      </header>
+      <RoomHead
+        title={opening.sentence}
+        hint={opening.lede}
+        right={
+          <>
+            <ModeChip mode={view?.mode ?? null} />
+            <span className="b-badge" title="this room reads the tree and the contract; the spine has nothing to say about it, so as-of does not apply here">
+              {view?.badge ?? "file, not log"}
+            </span>
+            <button type="button" className="b-btn" onClick={reread}>
+              re-read the board
+            </button>
+          </>
+        }
+      />
 
       {panel.phase === "error" ? <Refusal said={panel.said} what="the lane board" /> : null}
       {panel.phase === "loading" ? <p className="b-waiting">reading the board from the door…</p> : null}
@@ -125,20 +126,20 @@ export function BoardRoom({ door, room, sentence, lede, adrBands, rooms }: Board
             />
           </div>
 
-          <div className="b-panel">
+          <HPanel className="mb-0!">
             <p className="b-say">{totals.sentence}</p>
             <p className="b-prov">{boardProvenance(view)}</p>
-          </div>
+          </HPanel>
 
           {/* ── the lanes, in the board's own order ────────────────────────── */}
           {view.rows.length === 0 ? (
-            <div className="b-panel">
+            <HPanel className="mb-0!">
               <p className="b-say">
                 The door answered with an empty lane list. That is a read that succeeded and found
                 no lanes — which is not the same fact as a company with no lanes, and this room will
                 not draw the second from the first.
               </p>
-            </div>
+            </HPanel>
           ) : (
             <ol className="b-lanes">
               {view.rows.map((row, i) => (
@@ -420,18 +421,12 @@ const CSS = `
 .b-adr-foot{margin-top:var(--space-s);font-size:var(--step-micro);color:var(--faint);max-width:72ch;}
 
 .b-room{font-family:var(--font-display);color:var(--prose);padding:calc(var(--grid)*3) calc(var(--grid)*3) calc(var(--grid)*6);max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:calc(var(--grid)*2);}
-.b-head{display:flex;align-items:flex-start;gap:calc(var(--grid)*2);flex-wrap:wrap;}
-.b-headtext{flex:1 1 420px;min-width:0;}
-.b-sentence{font-size:clamp(24px,3.6vw,var(--step-room));line-height:1.04;letter-spacing:-0.02em;font-weight:600;margin:0 0 var(--grid) 0;color:var(--prose);}
-.b-lede{font-size:var(--step-lede);line-height:1.5;font-weight:300;color:var(--meta);margin:0;max-width:66ch;}
-.b-chrome{display:flex;align-items:center;gap:var(--grid);flex-wrap:wrap;margin-left:auto;}
 .b-mode,.b-badge{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-tight);text-transform:uppercase;padding:calc(var(--grid-in)*1) calc(var(--grid-in)*2);border-radius:var(--radius-pill);}
 .b-mode{color:var(--mode-live);background:var(--mode-bg);}
 .b-mode-sim{color:var(--mode-sim);background:var(--sim-hatch);}
 .b-badge{color:var(--meta);border:1px solid var(--hairline-strong);text-transform:none;}
-.b-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.04);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
+.b-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:var(--mode-bg);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
 .b-btn:hover{border-color:var(--accent-line);background:var(--accent-wash);}
-.b-panel{border:1px solid var(--panel-border);border-radius:var(--radius-panel);background:var(--panel);backdrop-filter:blur(var(--panel-blur));-webkit-backdrop-filter:blur(var(--panel-blur));padding:var(--pad-panel);min-width:0;}
 .b-say{font-size:var(--step-body);line-height:1.6;font-weight:300;color:var(--prose);margin:0;max-width:88ch;}
 .b-prov{font-family:var(--font-mono);font-size:var(--step-meta);line-height:1.65;color:var(--faint);margin:calc(var(--grid)*2) 0 0;max-width:96ch;}
 .b-waiting{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--faint);margin:0;}
@@ -496,7 +491,7 @@ const CSS = `
 .b-codeword{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-tight);color:var(--accent);}
 .b-foot{display:flex;justify-content:space-between;gap:var(--grid);flex-wrap:wrap;font-family:var(--font-mono);font-size:var(--step-meta);color:var(--faint);padding-top:var(--grid);border-top:1px solid var(--hairline);}
 .b-foot-nums{color:var(--meta);}
-@media (max-width:640px){.b-room{padding:calc(var(--grid)*2) var(--grid) calc(var(--grid)*4);}.b-chrome{margin-left:0;}.b-cycle{margin-left:0;}.b-line-label{margin-left:0;}}
+@media (max-width:640px){.b-room{padding:calc(var(--grid)*2) var(--grid) calc(var(--grid)*4);}.b-cycle{margin-left:0;}.b-line-label{margin-left:0;}}
 `;
 
 export default BoardRoom;

@@ -90,10 +90,18 @@ load 'test_helper'
   local arcScripts; arcScripts=$(find "$ARC_ROOT/.claude/scripts" -name '*.mjs' | wc -l | tr -d " ")
   [ "$arcScripts" -ge 20 ] || { echo "only $arcScripts scripts to scan; too few for this to mean anything"; false; }
   run bash -c "grep -rlE '(^|[^[:alnum:]_-])face/src' '$ARC_ROOT/.claude/scripts' 2>/dev/null || true"
-  # face-tokens.mjs WRITES the copy, so it names the path; nothing may IMPORT from it.
+  # face-tokens.mjs WRITES the copy and face-colour-literal.mjs READS face/src/ui and
+  # face/src/modules to lint them (face v2 Phase 01), so both name the path; nothing may IMPORT
+  # from it. Each exclusion is one named file with its reason, never a prefix.
+  # The exclusion is the FULL path of each file, so a same-named file elsewhere is not excused.
   local importers
-  importers=$(printf '%s\n' "$output" | grep -v 'face-tokens.mjs' | grep -v '^$' || true)
+  importers=$(printf '%s\n' "$output" | grep -v '/\.claude/scripts/core/face-tokens\.mjs$' | grep -v '/\.claude/scripts/core/face-colour-literal\.mjs$' | grep -v '^$' || true)
   [ -z "$importers" ] || { echo "an arc script depends on face/: $importers"; false; }
+  # And an excused file is excused for NAMING the path, never for importing from it.
+  local excused=("$ARC_ROOT/.claude/scripts/core/face-tokens.mjs" "$ARC_ROOT/.claude/scripts/core/face-colour-literal.mjs")
+  [ -f "${excused[0]}" ] && [ -f "${excused[1]}" ] || { echo "an excused file is missing: ${excused[*]}"; false; }
+  run grep -nE "(^|[^[:alnum:]])(import|require)[^;]*[\"'][^\"']*face/src" "${excused[@]}"
+  [ "$status" -eq 1 ] || { echo "an excused file IMPORTS from face/src (grep exit $status): $output"; false; }
 }
 
 @test "the L3 token copy is in sync with the canonical design tokens" {
@@ -119,9 +127,48 @@ load 'test_helper'
              "copy carries the product accent" "a hand-edited copy exits 1" \
              "a length-preserving hand-edit exits 1" "a missing copy exits 1" \
              "a source that EXISTS but is not the token file is refused" \
-             "an absent source is refused, not copied"; do
+             "an absent source is refused, not copied" \
+             "a copy linked onto the source is refused, source untouched"; do
     [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
   done
+}
+
+@test "face v2: both moods' contrast ratios are computed, above their floors, and match the header" {
+  # REQ-02 / ADR-1331. The numbers in tokens.css's header are this script's output; a typed or
+  # stale one FAILs here, and so does any text pair under 4.5:1 or UI pair under 3:1.
+  run node "$ARC_ROOT/tests/face/tokens-contrast.mjs"
+  [[ "$output" == *"tokens-contrast: moods=2 pairs="* ]] || { echo "the check never reported (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Floor the count: "findings=0" is also what a check that measured nothing prints.
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^tokens-contrast: moods=2 pairs=\([0-9][0-9]*\) findings=0$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 150 ] || { echo "only '$n' pairs measured: $output"; false; }
+}
+
+@test "face v2: tokens-contrast REFUSES a typed header, a low pair and a broken reserved meaning (mutant arms)" {
+  run node "$ARC_ROOT/tests/face/tokens-contrast.mjs" --selftest
+  [[ "$output" == *"tokens-contrast selftest:"* ]] || { echo "the selftest never reported (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  for arm in "the freshly written file checks clean" "a hand-typed number in the block FAILS" \
+             "a missing block FAILS" "a missing light mood FAILS by name" "a light --text-3 under 4.5:1 FAILS" \
+             "a -rgb triple that disagrees with its hex FAILS" "council repointed at violet FAILS the law" \
+             "live repointed at green FAILS the law" "a missing --blue FAILS by name" \
+             "an unbalanced file is refused, not half-read"; do
+    [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: the colour-literal lint finds 0 literals in ui/** and modules/**, and FAILs planted ones" {
+  run node "$ARC_ROOT/tests/face/colour-literal.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 35 ] || { echo "only '$n' checks ran: $output"; false; }
+  # The lint on the real tree, directly, the way a reader of this file would run it.
+  run node "$ARC_ROOT/.claude/scripts/core/face-colour-literal.mjs"
+  [[ "$output" == *"colour-literal: scanned="*" files findings=0"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 0 ]
 }
 
 @test "the L3 tree carries no build output and no vendored dependencies" {

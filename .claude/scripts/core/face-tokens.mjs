@@ -13,9 +13,9 @@
 //
 // Exit: 0 in sync / written | 1 drift (with --check) | 2 could not read the inputs.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync, mkdtempSync, rmSync, lstatSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** "Was this file RUN, or imported?" -- realpath BOTH sides; the endsWith form no-ops behind a symlink. */
@@ -40,23 +40,46 @@ const BANNER = `/* GENERATED FILE -- do not edit.
    the generator. \`--check\` fails CI on any drift, including a hand-edit here. */
 `;
 
-/** @returns {{ want: string, have: string | null, srcPath: string, dstPath: string }} */
+/**
+ * Why the copy is not a real, separate file, or null when it is. A copy reached through a link --
+ * the file itself a symlink, or a linked directory on its path landing it on the source -- would
+ * make the writer prepend its banner to the SOURCE of truth, once per run, forever.
+ */
+function linkedCopy(srcPath, dstPath) {
+  try {
+    if (lstatSync(dstPath).isSymbolicLink()) return "is a symlink";
+  } catch { /* absent: checked through its directory below */ }
+  try {
+    const realSrc = realpathSync(srcPath);
+    const realDst = existsSync(dstPath) ? realpathSync(dstPath) : join(realpathSync(dirname(dstPath)), basename(dstPath));
+    if (realDst === realSrc) return `resolves to the source itself (${realSrc})`;
+  } catch { /* a directory that cannot be resolved is not a link onto the source */ }
+  return null;
+}
+
+/** @returns {{ want: string, have: string | null, srcPath: string, dstPath: string, linked: string | null }} */
 export function tokenState(repo) {
   const srcPath = join(repo, ...SRC);
   const dstPath = join(repo, ...DST);
   if (!existsSync(srcPath)) throw new Error(`tokens source not found at ${srcPath}`);
   const source = readFileSync(srcPath, "utf8");
   if (!source.includes("--accent")) throw new Error(`${srcPath} does not look like the token file (no --accent) -- refusing to copy something else over the app's tokens`);
+  const linked = linkedCopy(srcPath, dstPath);
   return {
     want: BANNER + source,
-    have: existsSync(dstPath) ? readFileSync(dstPath, "utf8") : null,
+    have: !linked && existsSync(dstPath) ? readFileSync(dstPath, "utf8") : null,
     srcPath,
     dstPath,
+    linked,
   };
 }
 
 function run(repo, check, quiet = false) {
-  const { want, have, dstPath } = tokenState(repo);
+  const { want, have, dstPath, linked } = tokenState(repo);
+  if (linked) {
+    if (!quiet) process.stderr.write(`FAIL  [face-tokens-linked] face/src/tokens.css ${linked} -- the copy must be a real file; refusing to ${check ? "call it in sync" : "write through it"}\n`);
+    return 1;
+  }
   if (have === want) {
     if (quiet) return 0;
     process.stdout.write(`face-tokens: face/src/tokens.css matches docs/design/system/tokens.css (${want.length} bytes)\n`);
@@ -118,6 +141,23 @@ function selftest(repo) {
   rmSync(tmpDst);
   armed("a missing copy exits 1", run(tmp, true, true) === 1);
 
+  // A LINKED copy (face v2 Phase 01 attack): face/src as a directory link onto the source's own
+  // folder, so face/src/tokens.css IS docs/design/system/tokens.css. The writer used to prepend
+  // its banner to the source on every run. A junction needs no privilege on Windows and is a
+  // directory symlink elsewhere; if the link cannot be made, the arm FAILS rather than skipping.
+  const linkTree = mkdtempSync(join(tmpdir(), "face-tokens-linked-"));
+  const linkSrc = join(linkTree, ...SRC);
+  mkdirSync(dirname(linkSrc), { recursive: true });
+  const sourceBytes = readFileSync(join(repo, ...SRC), "utf8");
+  writeFileSync(linkSrc, sourceBytes);
+  mkdirSync(join(linkTree, "face"), { recursive: true });
+  let linkMade = false;
+  try { symlinkSync(dirname(linkSrc), join(linkTree, "face", "src"), "junction"); linkMade = true; } catch { /* reported by the arm */ }
+  armed("a copy linked onto the source is refused, source untouched",
+    linkMade && run(linkTree, false, true) === 1 && run(linkTree, true, true) === 1 && readFileSync(linkSrc, "utf8") === sourceBytes,
+    linkMade ? "" : "(could not create the directory link)");
+  rmSync(linkTree, { recursive: true, force: true });
+
   // A source that is not the token file must be REFUSED rather than copied over the app's
   // styles. The cheap version of this generator would happily blank the product.
   //
@@ -163,21 +203,31 @@ const KNOWN_FLAGS = ["--check", "--selftest"];
  */
 function refuseUnknownFlags(argv, known) {
   const bad = argv.filter((a) => a.startsWith("--") && !known.includes(a));
-  if (bad.length) {
-    process.stderr.write(`face-tokens: unknown flag(s) ${bad.join(", ")} -- known flags are ${known.join(", ")}. Refusing rather than silently taking the write path.
-`);
-    process.exit(2);
-  }
+  if (bad.length) return `unknown flag(s) ${bad.join(", ")} -- known flags are ${known.join(", ")}. Refusing rather than silently taking the write path.`;
+  // A repeated flag, an empty repo argument (which silently meant "this script's own repo") and a
+  // second repo argument (which was silently ignored) are refused by name, never guessed at.
+  const repeated = known.filter((f) => argv.filter((a) => a === f).length > 1);
+  if (repeated.length) return `flag(s) given twice: ${repeated.join(", ")}`;
+  const positional = argv.filter((a) => !a.startsWith("--"));
+  if (positional.some((a) => a.trim() === "")) return "an empty repo-root argument is not a repo";
+  if (positional.length > 1) return `one repo-root at most, got ${positional.length}: ${positional.join(" ")}`;
+  return null;
 }
 
 if (isMainModule()) {
   const argv = process.argv.slice(2);
-  refuseUnknownFlags(argv, KNOWN_FLAGS);
-  const repo = argv.find((a) => !a.startsWith("--")) || REPO_DEFAULT;
-  try {
-    process.exit(argv.includes("--selftest") ? selftest(repo) : run(repo, argv.includes("--check")));
-  } catch (err) {
-    process.stderr.write(`face-tokens: ERROR -- ${err.message}\n`);
-    process.exit(2);
+  const refusal = refuseUnknownFlags(argv, KNOWN_FLAGS);
+  if (refusal) {
+    process.stderr.write(`face-tokens: ${refusal}\n`);
+    process.exitCode = 2;
+  } else {
+    const repo = argv.find((a) => !a.startsWith("--")) || REPO_DEFAULT;
+    try {
+      // exitCode, never process.exit(): exit() can race libuv teardown on Windows and lose output.
+      process.exitCode = argv.includes("--selftest") ? selftest(repo) : run(repo, argv.includes("--check"));
+    } catch (err) {
+      process.stderr.write(`face-tokens: ERROR -- ${err.message}\n`);
+      process.exitCode = 2;
+    }
   }
 }

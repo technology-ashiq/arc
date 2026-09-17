@@ -17,6 +17,7 @@ import { buildMap, flightDots, legendGeometry, readout,
 } from "../lib/map.mjs";
 import type { DrawOp, MapRoomInput, MapStation } from "../lib/map.mjs";
 import { buildHash, parseHash } from "../lib/shell.mjs";
+import { HPanel, RoomHead } from "../ui/bits";
 
 export type MapRoomProps = {
   /** the registry exactly as `GET /api/rooms` served it -- all 33 rows, template included */
@@ -155,19 +156,21 @@ export default function MapRoom({ rooms, room, mode, token = null, onOpen, needs
     <section className="arc-map" aria-labelledby="map-sentence">
       <style>{CSS}</style>
 
-      <header className="head">
-        <div className="eyebrow">
-          <span>command · map</span>
-          <span
-            className="mode"
-            style={{ color: `var(${model.mode.token})`, backgroundImage: model.mode.background }}
-          >
-            {model.mode.label}
-          </span>
-        </div>
-        <h1 id="map-sentence">{model.opening.sentence}</h1>
-        <p className="lede">{model.opening.lede}</p>
-      </header>
+      <RoomHead
+        eyebrow="command · map"
+        title={<span id="map-sentence">{model.opening.sentence}</span>}
+        hint={model.opening.lede}
+        right={
+          <>
+            <span
+              className="mode"
+              style={{ color: `var(${model.mode.token})`, backgroundImage: model.mode.background }}
+            >
+              {model.mode.label}
+            </span>
+          </>
+        }
+      />
 
       <div className="frame" style={{ borderColor: `var(${model.mode.token})` }}>
         <div className="scroll">
@@ -227,19 +230,21 @@ export default function MapRoom({ rooms, room, mode, token = null, onOpen, needs
         </p>
       ) : null}
 
+      {/* The live region stays on its own wrapper: HPanel has no aria-live, and trading it for
+          role="status" would also make every announcement atomic. The sub-line is a sentence,
+          so it is body copy rather than a hint that truncates and hides on a narrow screen. */}
       <div className="readout" aria-live="polite">
-        <div className="readout-head">
-          <h2>{strip.title}</h2>
+        <HPanel title={strip.title}>
           <p>{strip.sub}</p>
-        </div>
-        <dl>
-          {strip.rows.map((row) => (
-            <div key={row.label} className="row">
-              <dt>{row.label}</dt>
-              <dd>{row.value}</dd>
-            </div>
-          ))}
-        </dl>
+          <dl>
+            {strip.rows.map((row) => (
+              <div key={row.label} className="row">
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </HPanel>
       </div>
 
       <section className="legend" aria-label="What every mark on this map means">
@@ -267,22 +272,13 @@ export default function MapRoom({ rooms, room, mode, token = null, onOpen, needs
 // reserved meaning, and reserved meanings are law rather than style.
 const CSS = `
 .arc-map { font-family: var(--font-display); color: var(--prose); }
-.arc-map .head { max-width: 68ch; margin-bottom: calc(var(--grid) * 3); }
-.arc-map .eyebrow {
-  display: flex; align-items: center; gap: var(--grid);
-  font-family: var(--font-mono); font-size: var(--step-meta);
-  text-transform: uppercase; letter-spacing: var(--track-wide); color: var(--accent-dim);
-  margin-bottom: calc(var(--grid) * 1.5);
-}
+/* The mode chip used to inherit its mono caps from the eyebrow row; in the head right slot it
+   carries them itself. */
 .arc-map .mode {
+  font-family: var(--font-mono); text-transform: uppercase;
   border: 1px solid currentColor; border-radius: var(--radius-pill);
   padding: 2px var(--grid); font-size: var(--step-micro); letter-spacing: var(--track-tight);
 }
-.arc-map h1 {
-  font-size: var(--step-room); line-height: 1.04; letter-spacing: -0.01em;
-  font-weight: 600; color: var(--prose); margin: 0 0 calc(var(--grid) * 1.5);
-}
-.arc-map .lede { font-size: var(--step-lede); line-height: 1.7; font-weight: 300; color: var(--meta); margin: 0; }
 
 .arc-map .frame {
   background: var(--panel); backdrop-filter: blur(var(--panel-blur));
@@ -340,15 +336,8 @@ const CSS = `
   font: 400 12px/1.5 var(--font-mono, monospace);
   max-width: 72ch;
 }
-.arc-map .readout {
-  margin-top: calc(var(--grid) * 2);
-  border: 1px solid var(--hairline-strong); border-radius: var(--radius-panel);
-  background: var(--panel); padding: var(--pad-panel);
-}
-.arc-map .readout-head h2 {
-  margin: 0 0 var(--grid-in); font-size: var(--step-lede); font-weight: 600; color: var(--accent);
-}
-.arc-map .readout-head p { margin: 0 0 calc(var(--grid) * 2); font-size: var(--step-body); line-height: 1.6; color: var(--meta); max-width: 82ch; }
+.arc-map .readout { margin-top: calc(var(--grid) * 2); }
+.arc-map .readout p { margin: 0 0 calc(var(--grid) * 2); font-size: var(--step-body); line-height: 1.6; color: var(--meta); max-width: 82ch; }
 .arc-map .readout dl { margin: 0; display: grid; gap: var(--grid-in); }
 .arc-map .readout .row { display: grid; grid-template-columns: 15ch 1fr; gap: var(--grid); align-items: baseline; }
 .arc-map .readout dt {

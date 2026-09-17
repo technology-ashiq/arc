@@ -21,16 +21,21 @@
 //     late-arriving CDP events for 11.2 s (CI run 35183482747), and in run 35150543730 it was
 //     `map`. Every warm room there settled in about 0.9 s. Load time is not what this gate
 //     judges; SLOW keeps it visible.
+//   - MOODS (face v2 Phase 01, ADR-1331): a run is in one mood, dark or light. The mood is written
+//     to the app's own storage key before any page script runs, and every room that opened must
+//     carry `hq` on <html>, plus `hq-light` exactly when the mood is light -- read after the room
+//     settles, so a class set by an effect is not raced. A room in the wrong mood FAILS: a light
+//     run that rendered dark proves nothing about the light tokens.
 //
 // Usage:
-//   smoke.mjs --base URL --door URL --token T [--exclude id,id] [--room-timeout-ms N]
+//   smoke.mjs --base URL --door URL --token T [--mood dark|light] [--exclude id,id] [--room-timeout-ms N]
 //   smoke.mjs --probe-file PATH       open one local page; exit 1 if it logged any error
 // Exit: 0 every expected room opened, settled, with 0 counted errors · 1 a room failed, or the
 //       probe saw errors · 2 setup failure (bad argument, no Chrome, door unreachable).
-import { mkdtempSync, realpathSync } from "node:fs";
+import { mkdtempSync, realpathSync, readFileSync } from "node:fs";
 import { stopTree, removeDir, settleWithin } from "./proc.mjs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   findChrome, chromeArgs, launchChrome, waitForDevTools, openSocket, CdpSession, openPage,
@@ -43,6 +48,11 @@ export const SLOW_SETTLE_MS = 10000;
 export const SETTLE_CAP_MS = 30000;
 export const THREE_CLOCK = /THREE\.Clock/;
 const ROOM_ID = /^[a-z0-9][a-z0-9-]*$/;
+export const MOODS = ["dark", "light"];
+// The app's storage key for the mood (face/src/lib/mood.mjs MOOD_KEY, v0.7's `arc-hq-theme`).
+// Written here as well, not imported, so this harness still loads on a tree whose app has no mood
+// yet -- tests/face/l3-logic.mjs asserts the two spellings are equal.
+export const MOOD_KEY = "arc-hq-theme";
 
 export class SetupError extends Error {}
 
@@ -58,7 +68,7 @@ export function redactSecrets(text, secrets) {
 
 /** One room's result line. `ok` only for a room that opened, settled, logged nothing and hit no CDP error. */
 export function roomLine(r) {
-  const clean = r.opened && r.settled && r.newErrors === 0 && !r.cdpError;
+  const clean = r.opened && r.settled && r.newErrors === 0 && !r.cdpError && !r.moodMiss;
   return `${clean ? "ok" : "XX"} ${r.id}`
     + (r.opened ? "" : " (did not render)")
     + (r.settled ? ` settle-ms=${r.settleMs}` : "")
@@ -66,7 +76,55 @@ export function roomLine(r) {
     + (r.opened && !r.settled ? ` (never settled within ${SETTLE_CAP_MS} ms; at-${SLOW_SETTLE_MS}ms=${JSON.stringify(r.atSlow ?? null)} at-cap=${JSON.stringify(r.atCap ?? null)})` : "")
     + (r.navError ? ` nav-error=${JSON.stringify(r.navError)}` : "")
     + (r.cdpError ? ` cdp-error=${JSON.stringify(r.cdpError)}` : "")
-    + (r.newErrors ? ` errors=${r.newErrors}` : "");
+    + (r.newErrors ? ` errors=${r.newErrors}` : "")
+    + (r.moodMiss ? ` mood-miss(html-class=${JSON.stringify(r.htmlClass ?? null)})` : "");
+}
+
+/**
+ * Whether <html>'s class list is the one `mood` requires: `hq` always, `hq-light` exactly in light.
+ * A class list that could not be read is a miss, never a pass.
+ */
+export function moodHolds(htmlClass, mood) {
+  if (typeof htmlClass !== "string" || !MOODS.includes(mood)) return false;
+  const classes = classSet(htmlClass);
+  return classes.has("hq") && classes.has("hq-light") === (mood === "light");
+}
+
+/**
+ * A class attribute's tokens, split exactly as the DOM's classList splits them: on ASCII
+ * whitespace only. JS `\s` also splits on U+00A0, U+FEFF and U+2028, which the browser does not,
+ * so "hq<NBSP>hq-light" would read as two classes here and one (unknown) class on the page.
+ */
+export function classSet(htmlClass) {
+  return new Set(String(htmlClass ?? "").split(/[\t\n\f\r ]+/).filter(Boolean));
+}
+
+/** One error as one line: a page's text can carry newlines, and a line of it must never forge a summary. */
+export function errorLine(e, secrets) {
+  return `  [${e.room}] ${e.type}: ${JSON.stringify(redactSecrets(e.text, secrets))}`;
+}
+
+/** A setup failure's message as one line, for the same reason. */
+export const oneLine = (text) => String(text).replace(/\r?\n/g, "\\n");
+
+/** The verdict's words for rooms in the wrong mood, by which class was wrong. */
+export function moodReasons(report) {
+  if (report.mood === undefined) return [];
+  if (!MOODS.includes(report.mood)) return [`mood=${JSON.stringify(report.mood)} is not one of ${MOODS.join(",")}`];
+  if (!Array.isArray(report.moodMiss)) return ["the mood was not measured"];
+  const reasons = [];
+  const classesOf = (m) => classSet(m.htmlClass);
+  const noHq = report.moodMiss.filter((m) => !classesOf(m).has("hq")).map((m) => m.id);
+  if (noHq.length) reasons.push(`hq: class not applied on <html> (${noHq.length} room(s): ${noHq.join(",")})`);
+  if (report.mood === "light") {
+    const noLight = report.moodMiss.filter((m) => !classesOf(m).has("hq-light")).map((m) => m.id);
+    if (noLight.length) reasons.push(`hq-light: class not applied on <html> (${noLight.length} room(s): ${noLight.join(",")})`);
+  } else {
+    const lit = report.moodMiss.filter((m) => classesOf(m).has("hq-light")).map((m) => m.id);
+    if (lit.length) reasons.push(`hq-light: class applied on <html> in the dark mood (${lit.length} room(s): ${lit.join(",")})`);
+  }
+  if (report.moodMiss.length && reasons.length === 0) reasons.push(`the mood was not readable in ${report.moodMiss.length} room(s)`);
+  return reasons;
 }
 
 // A request's path only: a query, fragment or `;param` can carry the dev token, and any other
@@ -171,8 +229,8 @@ export class NetworkWatch {
 }
 
 export function parseArgs(argv) {
-  const opts = { base: null, door: null, token: null, exclude: [], roomTimeoutMs: 15000, probeFile: null };
-  const VALUE = new Set(["--base", "--door", "--token", "--exclude", "--room-timeout-ms", "--probe-file"]);
+  const opts = { base: null, door: null, token: null, exclude: [], roomTimeoutMs: 15000, probeFile: null, mood: "dark" };
+  const VALUE = new Set(["--base", "--door", "--token", "--exclude", "--room-timeout-ms", "--probe-file", "--mood"]);
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -197,6 +255,10 @@ export function parseArgs(argv) {
     else if (a === "--token") opts.token = v;
     else if (a === "--exclude") opts.exclude = v.split(",").map((s) => s.trim()).filter(Boolean);
     else if (a === "--probe-file") opts.probeFile = v;
+    else if (a === "--mood") {
+      if (!MOODS.includes(v)) throw new SetupError(`--mood must be one of ${MOODS.join(", ")}, got ${JSON.stringify(v)}`);
+      opts.mood = v;
+    }
     else if (a === "--room-timeout-ms") {
       const n = Number(v);
       if (!Number.isInteger(n) || n < 1000) throw new SetupError(`--room-timeout-ms must be an integer >= 1000, got ${v}`);
@@ -237,11 +299,34 @@ export function openableRooms(payload) {
   return { openable, notOpened };
 }
 
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+/**
+ * The rooms the door SHOULD serve as openable, read from the contract file, never from the door.
+ * Lives here, not only in harness-run, so a standalone smoke is judged against the contract too.
+ */
+export function expectedOpenable(repo = REPO) {
+  const file = join(repo, "initiatives", "face", "contracts", "rooms.generated.json");
+  let payload;
+  try { payload = JSON.parse(readFileSync(file, "utf8")); }
+  catch (e) { throw new SetupError(`cannot read the expected room set at ${file}: ${e.message}`); }
+  return openableRooms(payload).openable;
+}
+
 const isCount = (n) => Number.isInteger(n) && n >= 0;
 
-/** The verdict, from the report alone -- so a stub report is judged by the same rule. */
+/**
+ * The verdict, from the report alone -- so a stub report is judged by the same rule. A report
+ * that names no mood, or carries no expected room set, measured less than a run must measure:
+ * a run in no mood proves nothing about either, and a door judged against its own room list
+ * cannot tell a regression from a clean run.
+ */
 export function judge(report) {
   const reasons = [];
+  if (report.mood === undefined) reasons.push("no mood named: a run in no mood measured neither");
+  if (!isCount(report.expected) || !Array.isArray(report.missingFromDoor) || !Array.isArray(report.unexpectedFromDoor)) {
+    reasons.push("no expected room set: the door's room list was judged against itself");
+  }
   if (!isCount(report.openable) || report.openable === 0) reasons.push(`openable=${report.openable}: nothing was checked`);
   if (!isCount(report.opened) || report.opened !== report.openable) reasons.push(`opened=${report.opened} of openable=${report.openable}`);
   if (!isCount(report.countedErrors) || report.countedErrors !== 0) reasons.push(`countedErrors=${report.countedErrors}`);
@@ -249,12 +334,14 @@ export function judge(report) {
   else if (report.unsettled.length) reasons.push(`never settled: ${report.unsettled.join(",")}`);
   if (Array.isArray(report.missingFromDoor) && report.missingFromDoor.length) reasons.push(`expected but not served: ${report.missingFromDoor.join(",")}`);
   if (Array.isArray(report.unexpectedFromDoor) && report.unexpectedFromDoor.length) reasons.push(`served but not expected: ${report.unexpectedFromDoor.join(",")}`);
+  reasons.push(...moodReasons(report));
   return { ok: reasons.length === 0, reasons };
 }
 
 export function summaryLines(report) {
   return [
-    `smoke: opened=${report.opened} openable=${report.openable} errors=${report.countedErrors} excluded-errors=${report.excludedErrors} unsettled=${report.unsettled.length} expected=${report.expected ?? "not-given"} not-opened=${report.notOpened.join(",") || "none"}`,
+    `smoke: opened=${report.opened} openable=${report.openable} errors=${report.countedErrors} excluded-errors=${report.excludedErrors} unsettled=${report.unsettled.length} expected=${report.expected ?? "not-given"} not-opened=${report.notOpened.join(",") || "none"}`
+      + (report.mood === undefined ? "" : ` mood=${report.mood} mood-miss=${Array.isArray(report.moodMiss) ? report.moodMiss.length : "unmeasured"}`),
     `face-browser: ${report.opened}/${report.openable} rooms · ${report.consoleErrors} console errors · ${report.exceptions} exceptions · chrome=${report.chrome}`,
   ];
 }
@@ -337,6 +424,13 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
     await page.send("Log.enable");
     await page.send("Network.enable");
     await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    // The mood reaches the app the way a person's choice does: in its storage, before any of its
+    // scripts run. JSON.stringify builds the program's two string literals.
+    const mood = opts.mood ?? "dark";
+    if (!MOODS.includes(mood)) throw new SetupError(`mood must be one of ${MOODS.join(", ")}, got ${JSON.stringify(mood)}`);
+    await page.send("Page.addScriptToEvaluateOnNewDocument", {
+      source: `try { window.localStorage.setItem(${JSON.stringify(MOOD_KEY)}, ${JSON.stringify(mood)}); } catch (e) { /* storage refused: the class check reports the miss */ }`,
+    });
 
     const quietSince = (from) => net.quiet(from, Date.now());
     const rooms = [];
@@ -375,6 +469,9 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
             if (!room.settled) room.atCap = net.snapshot(Date.now());
           }
           if (room.settled) room.settleMs = Date.now() - renderedAt;
+          const cls = await page.send("Runtime.evaluate", { expression: "document.documentElement.className", returnByValue: true });
+          room.htmlClass = typeof cls.result?.value === "string" ? cls.result.value : null;
+          room.moodMiss = !moodHolds(room.htmlClass, mood);
         }
       } catch (e) {
         // This room's finding, never the end of the evidence: it is not opened or not settled,
@@ -408,6 +505,10 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       unsettledDetail: rooms.filter((r) => r.opened && !r.settled).map((r) => ({ id: r.id, atSlow: r.atSlow ?? null, atCap: r.atCap ?? null, navError: r.navError, cdpError: r.cdpError })),
       cdpErrors: rooms.filter((r) => r.cdpError).map((r) => ({ id: r.id, error: r.cdpError })),
       rooms: rooms.map(({ before, atSlow, atCap, ...r }) => r),
+      mood,
+      // A room that opened but whose class list was never read (a CDP error after it settled) is a
+      // miss too: an unmeasured mood is not a held one.
+      moodMiss: rooms.filter((r) => r.opened && r.moodMiss !== false).map((r) => ({ id: r.id, htmlClass: r.htmlClass ?? null })),
       errors: errors.slice(0, 50),
     };
     if (Array.isArray(opts.expected)) {
@@ -419,7 +520,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       log(`smoke: WARN slow-settle ${report.slowSettle.map((r) => `${r.id}=${r.settleMs}ms`).join(",")} (quiet after ${SLOW_SETTLE_MS} ms, inside the ${SETTLE_CAP_MS} ms cap)`);
     }
     // The page's own URL carries the token in its fragment, so a page error can print it.
-    for (const e of errors.slice(0, 20)) log(`  [${e.room}] ${e.type}: ${redactSecrets(e.text, [opts.token])}`);
+    for (const e of errors.slice(0, 20)) log(errorLine(e, [opts.token]));
     return report;
   });
 }
@@ -437,7 +538,7 @@ export async function runProbe(file, log = (line) => process.stdout.write(line +
     // The planted page logs synchronously and throws on a 50 ms timer: wait for the first error,
     // then give the second one a bounded chance to arrive so both paths are reported.
     if (await until(() => errors.length > 0, 8000)) await until(() => errors.length > 1, 2000);
-    for (const e of errors) log(`  [probe] ${e.type}: ${e.text}`);
+    for (const e of errors) log(errorLine(e, []));
     log(`probe: errors=${errors.length} chrome=${found.path}`);
     return errors.length;
   });
@@ -445,17 +546,17 @@ export async function runProbe(file, log = (line) => process.stdout.write(line +
 
 async function main(argv) {
   let opts;
-  try { opts = parseArgs(argv); } catch (e) { console.error(`smoke: ${e.message}`); return 2; }
+  try { opts = parseArgs(argv); } catch (e) { console.error(`smoke: ${oneLine(e.message)}`); return 2; }
   try {
     if (opts.probeFile !== null) return (await runProbe(opts.probeFile)) > 0 ? 1 : 0;
-    const report = await runSmoke(opts);
+    const report = await runSmoke({ ...opts, expected: expectedOpenable() });
     for (const line of summaryLines(report)) console.log(line);
     console.log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined })}`);
     const verdict = judge(report);
     if (!verdict.ok) console.log(`smoke: FAIL -- ${verdict.reasons.join("; ")}`);
     return verdict.ok ? 0 : 1;
   } catch (e) {
-    console.error(`smoke: ${e instanceof SetupError ? "" : "unexpected: "}${e.message}`);
+    console.error(`smoke: ${e instanceof SetupError ? "" : "unexpected: "}${oneLine(e.message)}`);
     return 2;
   }
 }

@@ -19,6 +19,7 @@ import {
   isUlid, dayOf, timeOfDay, shortId, fmtInt, tail, toneForKind,
 } from "../lib/inbox.mjs";
 import type { BriefView, HealthView, InboxView, SpinePage, Tone } from "../lib/inbox.mjs";
+import { HPanel, RoomHead } from "../ui/bits";
 
 /* -------------------------------------------------------------------------- */
 
@@ -177,20 +178,19 @@ export function Today({ door, room, sentence, lede }: TodayProps) {
     <section className="t-room" aria-label="Today">
       <style>{CSS}</style>
 
-      <header className="t-head">
-        <ArcMark />
-        <div className="t-headtext">
-          <h1 className="t-sentence">{opening.sentence}</h1>
-          <p className="t-lede">{opening.lede}</p>
-        </div>
-        <div className="t-chrome">
-          <ModeChip mode={healthData?.mode ?? null} />
-          <span className="t-clock" title="the door's own clock, in the company's timezone">
-            {readAt === "" ? "reading…" : readAt}
-          </span>
-          <button type="button" className="t-btn" onClick={reread}>re-read the door</button>
-        </div>
-      </header>
+      <RoomHead
+        title={opening.sentence}
+        hint={opening.lede}
+        right={
+          <>
+            <ModeChip mode={healthData?.mode ?? null} />
+            <span className="t-clock" title="the door's own clock, in the company's timezone">
+              {readAt === "" ? "reading…" : readAt}
+            </span>
+            <button type="button" className="t-btn" onClick={reread}>re-read the door</button>
+          </>
+        }
+      />
 
       {/* cursor diff -- since you left */}
       <div className={`t-since${cursorDiff.known ? "" : " t-since-unset"}`}>
@@ -246,34 +246,30 @@ export function Today({ door, room, sentence, lede }: TodayProps) {
 
       <div className="t-split">
         {/* the brief */}
-        <div className="t-panel">
-          <div className="t-panel-head">
-            <span className="t-panel-title">the brief</span>
-            <span className="t-panel-hint">
-              {brief.phase === "ok"
-                ? `${brief.data.asof === null ? "today" : `as of ${brief.data.asof}`} · noise budget ${BRIEF_BUDGET} lines${briefAt === "" ? "" : ` · assembled ${briefAt}`}`
-                : `noise budget ${BRIEF_BUDGET} lines`}
-            </span>
-          </div>
+        <HPanel
+          title="the brief"
+          hint={brief.phase === "ok"
+            ? `${brief.data.asof === null ? "today" : `as of ${brief.data.asof}`} · noise budget ${BRIEF_BUDGET} lines${briefAt === "" ? "" : ` · assembled ${briefAt}`}`
+            : `noise budget ${BRIEF_BUDGET} lines`}
+          className="mb-0!"
+        >
           {brief.phase === "loading" ? <Waiting what="the brief" /> : null}
           {brief.phase === "error" ? <Refusal code={brief.code} human={brief.human} what="the brief" /> : null}
           {brief.phase === "ok" ? <Brief view={brief.data} /> : null}
-        </div>
+        </HPanel>
 
         {/* the live timeline */}
-        <div className="t-panel">
-          <div className="t-panel-head">
-            <span className="t-panel-title">everything the company did</span>
-            <span className="t-panel-hint">
-              {feed.phase === "ok"
-                ? `${feed.data.more ? "the first " : ""}${fmtInt(feed.data.count ?? 0)} receipt${feed.data.count === 1 ? "" : "s"} today · newest last`
-                : "today, from the log"}
-            </span>
-          </div>
+        <HPanel
+          title="everything the company did"
+          hint={feed.phase === "ok"
+            ? `${feed.data.more ? "the first " : ""}${fmtInt(feed.data.count ?? 0)} receipt${feed.data.count === 1 ? "" : "s"} today · newest last`
+            : "today, from the log"}
+          className="mb-0!"
+        >
           {feed.phase === "loading" ? <Waiting what="today's receipts" /> : null}
           {feed.phase === "error" ? <Refusal code={feed.code} human={feed.human} what="the timeline" /> : null}
           {feed.phase === "ok" ? <Feed page={feed.data} /> : null}
-        </div>
+        </HPanel>
       </div>
 
       <footer className="t-foot">
@@ -295,18 +291,6 @@ export function Today({ door, room, sentence, lede }: TodayProps) {
 /* -------------------------------------------------------------------------- *
  * pieces
  * -------------------------------------------------------------------------- */
-
-/** The mark: the arc ring. Chrome, in the product's own colour, carrying no meaning. */
-function ArcMark() {
-  return (
-    <svg className="t-mark" viewBox="0 0 44 44" aria-hidden="true" focusable="false">
-      <circle cx="22" cy="22" r="18" fill="none" stroke="var(--accent-line)" strokeWidth="1" />
-      <circle cx="22" cy="22" r="18" fill="none" stroke="var(--accent)" strokeWidth="1.5"
-        strokeDasharray="30 83" strokeLinecap="round" transform="rotate(-90 22 22)" />
-      <circle cx="22" cy="22" r="4.5" fill="var(--accent)" />
-    </svg>
-  );
-}
 
 function ModeChip({ mode }: { mode: string | null }) {
   if (mode === null) return <span className="t-mode">mode unread</span>;
@@ -418,17 +402,11 @@ function Feed({ page }: { page: SpinePage }) {
 
 const CSS = `
 .t-room{font-family:var(--font-display);color:var(--prose);padding:calc(var(--grid)*3) calc(var(--grid)*3) calc(var(--grid)*6);max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:calc(var(--grid)*2);}
-.t-head{display:flex;align-items:flex-start;gap:calc(var(--grid)*2);flex-wrap:wrap;}
-.t-mark{width:44px;height:44px;flex:0 0 auto;margin-top:calc(var(--grid-in)*1);}
-.t-headtext{flex:1 1 420px;min-width:0;}
-.t-sentence{font-size:clamp(24px,3.6vw,var(--step-room));line-height:1.04;letter-spacing:-0.02em;font-weight:600;margin:0 0 var(--grid) 0;color:var(--prose);}
-.t-lede{font-size:var(--step-lede);line-height:1.5;font-weight:300;color:var(--meta);margin:0;max-width:64ch;}
-.t-chrome{display:flex;align-items:center;gap:var(--grid);flex-wrap:wrap;margin-left:auto;}
 .t-mode,.t-clock{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-tight);text-transform:uppercase;padding:calc(var(--grid-in)*1) calc(var(--grid-in)*2);border-radius:var(--radius-pill);}
 .t-mode{color:var(--mode-live);background:var(--mode-bg);}
 .t-mode-sim{color:var(--mode-sim);background:var(--sim-hatch);}
 .t-clock{color:var(--meta);text-transform:none;}
-.t-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.04);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
+.t-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:var(--mode-bg);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
 .t-btn:hover:not(:disabled){border-color:var(--accent-line);background:var(--accent-wash);}
 .t-btn:disabled{opacity:0.45;cursor:not-allowed;}
 .t-btn-quiet{color:var(--meta);}
@@ -453,10 +431,6 @@ const CSS = `
 .t-why-note{font-size:var(--step-body);line-height:1.45;color:var(--meta);font-weight:300;margin:var(--grid) 0 calc(var(--grid-in)*1);}
 .t-why-src{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--accent-dim);margin:0;overflow-wrap:anywhere;}
 .t-split{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:var(--grid);align-items:start;}
-.t-panel{border:1px solid var(--panel-border);border-radius:var(--radius-panel);background:var(--panel);backdrop-filter:blur(var(--panel-blur));-webkit-backdrop-filter:blur(var(--panel-blur));padding:var(--pad-panel);min-width:0;}
-.t-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--grid);flex-wrap:wrap;margin-bottom:calc(var(--grid)*2);}
-.t-panel-title{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-wide);text-transform:uppercase;color:var(--accent);}
-.t-panel-hint{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--faint);}
 .t-brief{font-family:var(--font-mono);font-size:var(--step-data);line-height:1.65;}
 .t-brief-day{color:var(--faint);margin-bottom:var(--grid);}
 .t-group{margin-bottom:calc(var(--grid)*1.5);}
@@ -488,7 +462,7 @@ const CSS = `
 .t-code{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-tight);color:var(--amber);}
 .t-foot{display:flex;justify-content:space-between;gap:var(--grid);flex-wrap:wrap;font-family:var(--font-mono);font-size:var(--step-meta);color:var(--faint);padding-top:var(--grid);border-top:1px solid var(--hairline);}
 .t-foot-nums{color:var(--meta);}
-@media (max-width:640px){.t-room{padding:calc(var(--grid)*2) var(--grid) calc(var(--grid)*4);}.t-chrome{margin-left:0;}}
+@media (max-width:640px){.t-room{padding:calc(var(--grid)*2) var(--grid) calc(var(--grid)*4);}}
 `;
 
 // Named and default both: the shell that mounts this room is written by another hand, and
