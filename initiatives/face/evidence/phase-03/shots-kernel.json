@@ -1,6 +1,6 @@
 {
   "comment": "Candidate shots for the kernel ring shot review (face v2 Phase 03). PNGs are local, under the owner box scratch directory; this manifest pins them by sha256. Same contract as evidence/phase-00/baseline-shots.json.",
-  "capturedAt": "2026-09-17T19:03:17.623Z",
+  "capturedAt": "2026-09-17T19:12:45.894Z",
   "capture": {
     "script": "face/scripts/harness-run.mjs --shots",
     "browser": "Chrome/152.0.7977.83",

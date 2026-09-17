@@ -106,7 +106,7 @@ list_distribution() {
   local dir="$1" glob="$2" rows total dist
   rows="$(cat "$dir"/$glob 2>/dev/null | grep '^| `' || true)"
   total="$(printf '%s' "$rows" | grep -c '^| `' || true)"
-  dist="$(printf '%s\n' "$rows" | sed -E 's/^\| `([a-z0-9-]+)`.*/\1/' | sort | uniq -c \
+  dist="$(printf '%s\n' "$rows" | grep '^| `' | sed -E 's/^\| `([a-z0-9-]+)`.*/\1/' | sort | uniq -c \
     | awk '{ printf "%s:%s\n", $2, $1 }' | LC_ALL=C sort | tr '\n' ',' | sed 's/,$//')"
   printf '%s\n%s\n' "$total" "${dist:-none}"
 }

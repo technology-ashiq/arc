@@ -75,6 +75,7 @@ const HOLDS_DRAWN_ELSEWHERE = Object.freeze(["kinds", "lanes", "adrs"]);
  * @property {boolean} isHomed      the registry homes at least one kind this shell can ask for
  * @property {boolean} isPartial    the door said there are receipts past the page it sent
  * @property {boolean} isDrawn      the rows below are what the door sent, and may be drawn
+ * @property {boolean} showEmpty    the door answered and the page held no receipt of these kinds
  * @property {boolean} isReading
  * @property {boolean} isRefused
  * @property {{ code: string, human: string }} refusal
@@ -96,6 +97,8 @@ const HOLDS_DRAWN_ELSEWHERE = Object.freeze(["kinds", "lanes", "adrs"]);
  * @property {Record<string, string[]>} held
  * @property {{ key: string, label: string, items: string }[]} holds
  * @property {boolean} hasHolds
+ * @property {string} holdsNote    what the registry carried here that this shell could not read
+ * @property {string[]} unreadable the keys behind that note
  * @property {string} century
  * @property {SourceFile[]} sources
  * @property {Read[]} reads
@@ -132,10 +135,14 @@ export function heldBy(room) {
   /** @type {string[]} */
   const unreadable = [];
   for (const key of Object.keys(holds)) {
+    // A key named after an object's own machinery is not a kind of thing a room holds.
+    if (key === "__proto__" || key === "constructor" || key === "prototype") { unreadable.push(key); continue; }
     const value = holds[key];
     if (!Array.isArray(value)) { unreadable.push(key); continue; }
     const list = [];
     for (const item of value) if (typeof item === "string" && item !== "") list.push(unescapeDoorText(item));
+    // A list that lost an element is kept -- the names that ARE readable are still worth drawing -- but the
+    // key is marked, so its count reads as unread rather than as a short number nobody served (code review).
     if (list.length !== value.length) unreadable.push(key);
     lists[key] = list;
   }
@@ -194,7 +201,10 @@ export function laneRoom(payloads, ctx, opts = {}) {
   const lanes = listOf(lists, "lanes");
   const laneName = lanes[0] ?? "";
   const laneUsable = LANE_NAME.test(laneName);
-  const laneRead = laneUsable ? { route: "/api/lane/:id", param: laneName, poll: true } : null;
+  // NOT polled: the door answers this route with PROGRESS.md, PLAN.md and every phase spec's text --
+  // hundreds of kilobytes for a header and a list of titles. The trail is what moves; the header is read
+  // once per open, and the shell's re-read control takes it again (code review).
+  const laneRead = laneUsable ? { route: "/api/lane/:id", param: laneName } : null;
   if (laneRead !== null) reads.push(laneRead);
   const laneP = laneRead === null ? null : payloadOf(payloads, laneRead);
   const card = laneP !== null && laneP.state === "ok" ? laneCard(laneP.data) : LANE_UNREAD;
@@ -263,6 +273,7 @@ export function laneRoom(payloads, ctx, opts = {}) {
       isHomed: tRead !== null,
       isPartial: trail !== null && trail.more,
       isDrawn: tRead !== null && !trailState.isReading && !trailState.isRefused,
+      showEmpty: tRead !== null && !trailState.isReading && !trailState.isRefused && (trail === null || trail.rows.length === 0),
       ...trailState,
       rows: trail === null ? [] : trail.rows,
       events,
@@ -281,6 +292,10 @@ export function laneRoom(payloads, ctx, opts = {}) {
     held: lists,
     holds: holdKeys.map((key) => ({ key, label: key, items: listOf(lists, key).join(" · ") })),
     hasHolds: holdKeys.length > 0,
+    holdsNote: unreadable.length === 0
+      ? ""
+      : `the registry carried ${unreadable.length === 1 ? "one list" : `${fmtInt(unreadable.length)} lists`} here this shell could not read in full: ${unreadable.join(", ")}`,
+    unreadable,
     century: bands.join(" · "),
     sources,
     reads,
@@ -318,6 +333,7 @@ export function hasKind(base, kind) {
  */
 export function countedOn(base, what) {
   if (!base.trail.isHomed) return "the registry homes no such kind here";
+  if (base.trail.isRefused) return `${what} · the door refused its receipts`;
   if (!base.trail.isDrawn) return "reading the page";
   return base.trail.isPartial ? `${what} · oldest page, more past it` : `${what} · the page the door sent`;
 }
@@ -423,6 +439,7 @@ export function laneKpi(base) {
  * @returns {string}
  */
 export function holdsCount(base, key) {
+  if (base.unreadable.includes(key)) return "—";
   return fmtInt(listOf(base.held, key).length);
 }
 

@@ -496,6 +496,8 @@ const SHIPPED_RINGS = ["command", "kernel"];
       JSON.stringify([...new Set(parsed)].sort()) === JSON.stringify(derived),
       `listed-only=${parsed.filter((r) => !derived.includes(r)).join(" ; ")} derived-only=${derived.filter((r) => !parsed.includes(r)).join(" ; ")}`);
   };
+  const allRows = [];
+  const allVerbRows = [];
   for (const ring of SHIPPED_RINGS) {
     const want = contract.modules.filter((m) => m.ring === ring && (m.class !== "extra" || exemptions.includes(m.id))).map((m) => m.id).sort();
     const ringDir = join(MODULES, ring);
@@ -539,7 +541,13 @@ const SHIPPED_RINGS = ["command", "kernel"];
     listCheck(`verbs-pending-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `verbs-pending-${ring}.md`),
       /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm,
       (m) => `${m[1]} | ${m[2]} | ${m[3]}`, verbRows, "VERBS PENDING");
+    allRows.push(...rows);
+    allVerbRows.push(...verbRows);
   }
+  // Two empty lists agree with each other. A ring may legitimately render no verb-pending card (the
+  // command ring does not), so the floor is across the shipped rings, not per file (code review).
+  check("DERIVED LISTS: the shipped rings render NOT SERVED panels and work-door cards at all (vacuous-pass guard)",
+    allRows.length > 0 && allVerbRows.length > 0, `notServed=${allRows.length} verbsPending=${allVerbRows.length}`);
 }
 
 // ── F2 (Cycle 15 room sweep): the scheduler's lede promises only what the module shows ──
@@ -571,6 +579,30 @@ const SHIPPED_RINGS = ["command", "kernel"];
       nsFor(/heartbeat/i).length === 1 && folded.lastFire !== undefined && typeof folded.lastFire.hasFire === "boolean"
       && folded.lastFire.hasFire === false && !/heartbeat/i.test(String(folded.lastFire.line)),
       `lastFire=${JSON.stringify(folded.lastFire)}`);
+    // ... and with a page that HAS a fire on it, so the arm asserts the sentence a person reads rather
+    // than blessing the loading state (code review). The door pages oldest-first, so a page with more
+    // past it must not call its newest receipt the newest fire.
+    {
+      const fire = (id, job, ts, outcome) => ({ day: ts.slice(0, 10), seq: 1, event: { id, ts, kind: "run.completed", venture: "arc", actor: `scheduler:${job}`, outcome, payload: { job, outcome, duration_ms: 12 } } });
+      const page = (more) => ({ count: 2, more, events: [fire("01K00000000000000000000001", "day-close-roll", "2026-09-16T23:59:00+05:30", "ok"), fire("01K00000000000000000000002", "brief-materialize", "2026-09-17T06:00:00+05:30", "failed")] });
+      const manifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
+      const loadedWith = (body) => {
+        const planned = reg.plannedReads(folded, manifest).reads.filter((r) => r.route === "/api/spine");
+        const out = Object.create(null);
+        for (const r of planned) out[r.key] = { state: "ok", data: body };
+        return out;
+      };
+      const foldFile = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold;
+      const whole = foldFile(loadedWith(page(false)), ctx);
+      check("F2: LAST OUTCOME -- a page with a fire on it draws the job, its time and how it ended",
+        whole.lastFire.hasFire === true && /brief-materialize/.test(whole.lastFire.line) && /failed/.test(whole.lastFire.line)
+        && !/heartbeat/i.test(whole.lastFire.line) && whole.jobs.some((j) => j.key === "day-close-roll" && /1 run/.test(j.runs)),
+        JSON.stringify({ line: whole.lastFire.line, jobs: whole.jobs.map((j) => `${j.key}=${j.runs}/${j.last}`) }));
+      const partial = foldFile(loadedWith(page(true)), ctx);
+      check("F2: a page with more past it is never called the newest fire",
+        /more past it/.test(partial.lastFire.line) && partial.kpis.some((k) => k.l === "Last fire on that page"),
+        JSON.stringify({ line: partial.lastFire.line, labels: partial.kpis.map((k) => k.l) }));
+    }
   } else check("F2: the scheduler module exists to be folded", false, dir);
 }
 

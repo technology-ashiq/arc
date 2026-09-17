@@ -49,12 +49,16 @@ export function fold(payloads, ctx) {
     key: name,
     name,
     runs: "0 runs",
-    last: isRead ? "none on the page the door sent" : runsHomed ? "reading its runs" : "the registry homes no run receipt here",
+    last: isRead
+      ? "none on the page the door sent"
+      : base.trail.isRefused
+        ? "the door refused this room's receipts"
+        : runsHomed ? "reading its runs" : "the registry homes no run receipt here",
     when: "",
     detail: "",
   });
   // A job a receipt names that the registry does not is shown, and says so, rather than dropped.
-  for (const r of ran) if (!registered.includes(r.key)) jobs.push({ ...r, detail: `not in the served registry · ${r.detail}` });
+  for (const r of ran) if (!registered.includes(r.key)) jobs.push({ ...r, detail: ["not in the served registry", r.detail].filter((s) => s !== "").join(" · ") });
   const runTotal = base.trail.events.filter((e) => e.kind === "run.completed" && typeof e.payload["job"] === "string" && e.payload["job"] !== "").length;
   const newest = ran[0];
 
@@ -92,7 +96,11 @@ export function fold(payloads, ctx) {
     lastFire: {
       hasFire: newest !== undefined,
       line: newest === undefined
-        ? (isRead ? "No job run on the page the door sent." : runsHomed ? "" : "The served registry homes no run receipt in this room.")
+        ? (isRead
+          ? "No job run on the page the door sent."
+          : base.trail.isRefused
+            ? "The door refused this room's receipts, so no fire can be read."
+            : runsHomed ? "" : "The served registry homes no run receipt in this room.")
         : `${newest.name} fired at ${newest.when} · ${newest.last}${base.trail.isPartial ? " — the newest on the page the door sent, which has more past it" : ""}`,
       detail: newest === undefined ? "" : newest.detail,
     },

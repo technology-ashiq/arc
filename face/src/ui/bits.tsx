@@ -429,7 +429,8 @@ export function Holds({ groups, century }: { groups: { key: string; label: strin
 export function LanePanel({ lane, title = 'The lane', hint = 'its PROGRESS header and phase specs, through the door' }: { lane: LaneRoom['lane']; title?: string; hint?: string }) {
   return (
     <HPanel title={title} hint={hint}>
-      {lane.isRefused ? <DoorRefusal code={lane.refusal.code} human={lane.refusal.human} /> : <LaneCard card={lane.card} />}
+      {lane.isRefused ? <DoorRefusal code={lane.refusal.code} human={lane.refusal.human} /> : null}
+      {lane.isDrawn ? <LaneCard card={lane.card} /> : null}
       {lane.note ? <p className="text-[11.5px] leading-[17px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{lane.note}</p> : null}
     </HPanel>
   )
@@ -441,7 +442,7 @@ export function TrailPanel({ trail, onReceipt, title = 'The trail' }: { trail: L
     <HPanel title={title} hint={trail.hint}>
       {trail.isReading ? <Reading what="the trail" /> : null}
       {trail.isRefused ? <DoorRefusal code={trail.refusal.code} human={trail.refusal.human} /> : null}
-      {trail.isDrawn ? <Trail rows={trail.rows} empty={trail.empty} isEmpty={trail.rows.length === 0} onReceipt={onReceipt} /> : null}
+      {trail.isDrawn ? <Trail rows={trail.rows} empty={trail.empty} isEmpty={trail.showEmpty} onReceipt={onReceipt} /> : null}
       {trail.isHomed ? null : <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{trail.empty}</p>}
       {trail.note ? <p className="text-[11.5px] leading-[17px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{trail.note}</p> : null}
     </HPanel>
@@ -460,11 +461,12 @@ export function SourcesPanel({ sources, title = 'Source on disk', hint }: { sour
 }
 
 /** What the served registry homes in a room. */
-export function HoldsPanel({ holds, century, hasHolds }: { holds: LaneRoom['holds']; century: string; hasHolds: boolean }) {
-  if (!hasHolds && !century) return null
+export function HoldsPanel({ holds, century, hasHolds, note = '' }: { holds: LaneRoom['holds']; century: string; hasHolds: boolean; note?: string }) {
+  if (!hasHolds && !century && !note) return null
   return (
     <HPanel title="What this room holds" hint="from the served registry">
       <Holds groups={holds} century={century} />
+      {note ? <p className="text-[11.5px] leading-[17px] mt-2.5" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{note}</p> : null}
     </HPanel>
   )
 }
