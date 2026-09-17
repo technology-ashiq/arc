@@ -70,7 +70,9 @@ function splitActions(full) {
 
 // answer(text, {onDelta}) → { say, actions, executed, engine }
 // onDelta receives ONLY speakable text (never the actions tail).
-export async function answer(text, { onDelta } = {}) {
+// hands:false → the Ask arc room: a brain with NO hands (ADR-1307). It
+// may open a room, but approve/reject/promote/speed are dropped unexecuted.
+export async function answer(text, { onDelta, hands = true } = {}) {
   if (!engineReady()) {
     const say = localThink(text)
     return { say, actions: [], executed: [], engine: 'offline' }
@@ -115,6 +117,9 @@ export async function answer(text, { onDelta } = {}) {
   }
   const { say, actions } = splitActions(full)
   history.push({ role: 'assistant', content: say })
-  const executed = executeActions(actions)
+  const allowed = hands ? actions : actions.filter((a) => a.type === 'open_room' || a.type === 'enter_hq')
+  const executed = executeActions(allowed)
+  const dropped = actions.length - allowed.length
+  if (dropped) executed.push(`${dropped} action${dropped === 1 ? '' : 's'} refused — no hands in this room`)
   return { say: say || '…', actions, executed, engine: 'llm' }
 }

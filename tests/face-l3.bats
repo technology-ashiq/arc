@@ -89,7 +89,7 @@ load 'test_helper'
   [ -d "$ARC_ROOT/.claude/scripts" ] || { echo ".claude/scripts is not there; this half proves nothing"; false; }
   local arcScripts; arcScripts=$(find "$ARC_ROOT/.claude/scripts" -name '*.mjs' | wc -l | tr -d " ")
   [ "$arcScripts" -ge 20 ] || { echo "only $arcScripts scripts to scan; too few for this to mean anything"; false; }
-  run bash -c "grep -rl 'face/src' '$ARC_ROOT/.claude/scripts' 2>/dev/null || true"
+  run bash -c "grep -rlE '(^|[^[:alnum:]_-])face/src' '$ARC_ROOT/.claude/scripts' 2>/dev/null || true"
   # face-tokens.mjs WRITES the copy, so it names the path; nothing may IMPORT from it.
   local importers
   importers=$(printf '%s\n' "$output" | grep -v 'face-tokens.mjs' | grep -v '^$' || true)
@@ -229,4 +229,75 @@ load 'test_helper'
   run node "$ARC_ROOT/.claude/scripts/hq/arc-face.mjs" --no_open
   [ "$status" -eq 2 ] || { echo "expected exit 2; got $status: $output"; false; }
   [[ "$output" == *"unknown flag"* ]] || { echo "$output"; false; }
+}
+
+# face v2 Phase 00: initiatives/face/contracts/modules-v2.json is DERIVED, never typed. The two
+# tests below are the pair the vacuous-pass rule asks for: one proves the committed contract
+# matches its sources, the other proves the derivation can fail -- for a hand edit and for a
+# v0.7 room that is neither served, aliased to a served id, nor marked extra (ADR-1321).
+@test "face v2: the modules contract is generated from its sources and in sync" {
+  run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" --root "$ARC_ROOT" --check
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"in sync -- "*" modules = "*" same-id + "*" renamed + "*" extra"* ]] || { echo "$output"; false; }
+  local n; n=$(printf '%s\n' "$output" | sed -n 's/.*in sync -- \([0-9]\{1,\}\) modules.*/\1/p')
+  [ -n "$n" ] && [ "$n" -gt 0 ] || { echo "no module count in: $output"; false; }
+}
+
+@test "face v2: the modules contract derivation FAILs a hand-edited contract and an orphan room" {
+  local src="$ARC_ROOT" dst="$BATS_TEST_TMPDIR/mc"
+  local reg="docs/design/reference/face-hq/assets/arcface/src/hq/roomRegistry.js"
+  local served="initiatives/face/contracts/rooms.generated.json"
+  local plan="docs/strategy/plans/PLAN-face-v2.md"
+  local contract="initiatives/face/contracts/modules-v2.json"
+  local f
+  for f in "$reg" "$served" "$plan" "$contract"; do
+    mkdir -p "$dst/$(dirname "$f")"
+    cp "$src/$f" "$dst/$f"
+  done
+
+  # Control first: an untouched copy is in sync, so each mutant below fails for its own reason.
+  run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" --root "$dst" --check
+  [ "$status" -eq 0 ] || { echo "control copy not in sync: $output"; false; }
+
+  # Mutant 1: a hand edit to the contract.
+  awk '!done && /"ring": "command"/ { sub(/"command"/, "\"money\""); done = 1 } { print }' \
+    "$src/$contract" > "$dst/$contract"
+  run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" --root "$dst" --check
+  [ "$status" -eq 1 ] || { echo "hand-edited contract: expected exit 1, got $status: $output"; false; }
+  [[ "$output" == *"DRIFT"* ]] || { echo "$output"; false; }
+  cp "$src/$contract" "$dst/$contract"
+
+  # Mutant 2: a v0.7 room with no served id, no alias and no extra flag.
+  local at; at=$(grep -n "^export const ROOM_META" "$src/$reg" | cut -d: -f1)
+  [ -n "$at" ] || { echo "ROOM_META not found in the registry"; false; }
+  { head -n "$at" "$src/$reg"; printf "  { id: 'ghost-room', name: 'ghost', ring: 'money' },\n"; tail -n +"$((at + 1))" "$src/$reg"; } > "$dst/$reg"
+  run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" --root "$dst" --check
+  [ "$status" -eq 1 ] || { echo "orphan room: expected exit 1, got $status: $output"; false; }
+  [[ "$output" == *"ORPHAN"*"ghost-room"* ]] || { echo "$output"; false; }
+
+  # Near-miss flags are refused by name, never read as a write or as the current directory.
+  run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" --chek
+  [ "$status" -eq 2 ] && [[ "$output" == *"unknown argument"* ]] || { echo "--chek: $status $output"; false; }
+  run node "$ARC_ROOT/.claude/scripts/hq/face-modules-contract.mjs" "--root=$dst" --check
+  [ "$status" -eq 2 ] && [[ "$output" == *"unknown argument"* ]] || { echo "--root=: $status $output"; false; }
+}
+
+@test "face v2: the browser harness client logic runs with no install and no Chrome" {
+  # face/scripts/cdp.mjs, node-floor, lockfile-platforms and the pure half of smoke/harness-run,
+  # exercised against a scripted fake on every configuration, Node 18 included.
+  run node "$ARC_ROOT/tests/face/cdp-client.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
+  local n; n=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks.*/\1/p')
+  [ -n "$n" ] && [ "$n" -ge 60 ] || { echo "only $n checks ran: $output"; false; }
+}
+
+@test "face v2: the modules contract derivation refuses every confirmed breaking input" {
+  # Multi-line rows, strings that look like keys, duplicates, alias fan-in and malformed 5.2
+  # rows each used to derive a contract that still read "in sync" (attack 2026-09-17).
+  run node "$ARC_ROOT/tests/face/modules-contract.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
+  local n; n=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks.*/\1/p')
+  [ -n "$n" ] && [ "$n" -ge 18 ] || { echo "only $n checks ran: $output"; false; }
 }

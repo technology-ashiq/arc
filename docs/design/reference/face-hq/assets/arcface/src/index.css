@@ -1,22 +1,141 @@
 @import "tailwindcss";
 
-/* Page base — the face stage owns the background; chapters draw over it. */
+/* ──────────────────────────────────────────────────────────────────────
+   arc — design tokens.
+   :root        = the landing (dark neon, the face). Legacy values, untouched.
+   html.hq      = the HQ workroom, dark. A calmer, neutral-cool scale.
+   html.hq-light= the HQ workroom, light. Paper white, ink text.
+   Every HQ surface reads a token; nothing in the workroom hard-codes a hue.
+   ────────────────────────────────────────────────────────────────────── */
+:root {
+  --ease-out-heavy: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* surfaces */
+  --bg-0: #0b0e11;              /* canvas */
+  --bg-1: #0d1114;              /* rails, header */
+  --bg-2: #12181c;              /* card */
+  --bg-3: #171e23;              /* nested / hover */
+  --bg-4: #1e262c;              /* active control */
+  --well: rgba(0, 0, 0, 0.4);   /* an item inside a card */
+  --input-bg: rgba(255, 255, 255, 0.025);
+  --line-1: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.13);
+  --track: rgba(255, 255, 255, 0.08);
+  --shadow-card: none;
+  --shadow-pop: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.6);
+
+  /* ink */
+  --ink: 255, 255, 255;         /* rgb triple for rgba(var(--ink), a) */
+  --text-1: rgba(255, 255, 255, 0.92);
+  --text-2: rgba(255, 255, 255, 0.62);
+  --text-3: rgba(255, 255, 255, 0.42);
+  --on-fill: #031311;           /* text on a solid accent/green fill */
+
+  /* the accent and the four reserved meanings */
+  --accent: #2dd4bf;  --accent-rgb: 45, 212, 191;
+  --green: #4ade80;   --green-rgb: 74, 222, 128;
+  --amber: #fbbf5d;   --amber-rgb: 251, 191, 93;
+  --red: #f87171;     --red-rgb: 248, 113, 113;
+  --violet: #a99ae6;  --violet-rgb: 169, 154, 230;
+  --blue: #7dd3fc;    --blue-rgb: 125, 211, 252;
+
+  /* shape law: chips are pills · controls 8 · cards 12 · dialogs 16 */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --btn-radius: var(--r-md);
+}
+
+/* ── HQ, dark: the workroom. Neutral-cool, one accent, no glow. ── */
+html.hq {
+  color-scheme: dark;
+  --bg-0: #0b0d10;
+  --bg-1: #0f1114;
+  --bg-2: #14171b;
+  --bg-3: #191d22;
+  --bg-4: #20252b;
+  --well: #191d22;
+  --input-bg: #0f1114;
+  --line-1: rgba(255, 255, 255, 0.075);
+  --line-2: rgba(255, 255, 255, 0.13);
+  --track: rgba(255, 255, 255, 0.09);
+  --shadow-card: none;
+  --shadow-pop: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.6);
+
+  --ink: 255, 255, 255;
+  --text-1: #e8eaed;
+  --text-2: #a3a9b3;
+  --text-3: #7a8290;
+  --on-fill: #062e29;
+
+  --accent: #2dd4bf;  --accent-rgb: 45, 212, 191;
+  --green: #3fb950;   --green-rgb: 63, 185, 80;
+  --amber: #e3b341;   --amber-rgb: 227, 179, 65;
+  --red: #f85149;     --red-rgb: 248, 81, 73;
+  --violet: #a78bfa;  --violet-rgb: 167, 139, 250;
+  --blue: #58a6ff;    --blue-rgb: 88, 166, 255;
+}
+
+/* ── HQ, light: paper and ink. Tailwind's white becomes ink so every
+   text-white/NN · bg-white/NN · border-white/NN utility in the rooms
+   flips with it (a room never has to know which mood it is in). ── */
+html.hq.hq-light {
+  color-scheme: light;
+  --color-white: #14161a;
+  --bg-0: #f4f5f7;
+  --bg-1: #ffffff;
+  --bg-2: #ffffff;
+  --bg-3: #f6f7f9;
+  --bg-4: #eceef2;
+  --well: #f6f7f9;
+  --input-bg: #ffffff;
+  --line-1: rgba(20, 22, 26, 0.08);
+  --line-2: rgba(20, 22, 26, 0.14);
+  --track: rgba(20, 22, 26, 0.08);
+  --shadow-card: 0 1px 2px rgba(20, 22, 26, 0.04);
+  --shadow-pop: 0 24px 64px rgba(20, 22, 26, 0.18);
+  --scrim: rgba(20, 22, 26, 0.35);
+
+  --ink: 20, 22, 26;
+  --text-1: #14161a;
+  --text-2: #5c6470;
+  --text-3: #7b8491;
+  --on-fill: #ffffff;
+
+  --accent: #0f766e;  --accent-rgb: 15, 118, 110;
+  --green: #1a7f37;   --green-rgb: 26, 127, 55;
+  --amber: #9a6700;   --amber-rgb: 154, 103, 0;
+  --red: #cf222e;     --red-rgb: 207, 34, 46;
+  --violet: #6e40c9;  --violet-rgb: 110, 64, 201;
+  --blue: #0969da;    --blue-rgb: 9, 105, 218;
+}
+
+/* Page base. Never pure black; the canvas token keeps depth. */
 html,
 body {
   margin: 0;
   padding: 0;
-  background: #000000;
+  background: var(--bg-0);
   scroll-behavior: smooth;
+}
+html.hq body {
+  color: var(--text-1);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: rgba(0, 255, 209, 0.28);
-  color: #ffffff;
+  background: rgba(var(--accent-rgb), 0.28);
+  color: var(--text-1);
 }
 
 /* visible focus everywhere — a11y floor from arc's own design brief */
 :focus-visible {
-  outline: 2px solid #00ffd1;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -34,7 +153,55 @@ body {
   }
 }
 
-/* thin scrollbars for the horizontal tapes */
+/* thin, quiet scrollbars */
 * {
-  scrollbar-color: rgba(0, 255, 209, 0.35) rgba(255, 255, 255, 0.06);
+  scrollbar-color: rgba(var(--ink), 0.18) transparent;
+  scrollbar-width: thin;
 }
+html.hq ::-webkit-scrollbar { width: 10px; height: 10px; }
+html.hq ::-webkit-scrollbar-thumb { background: rgba(var(--ink), 0.16); border: 3px solid transparent; background-clip: padding-box; border-radius: 8px; }
+html.hq ::-webkit-scrollbar-track { background: transparent; }
+
+/* the room rail scrolls without a visible bar (wheel + keyboard still work) */
+.rail-scroll { scrollbar-width: none; }
+.rail-scroll::-webkit-scrollbar { display: none; }
+
+/* ── HQ typography helpers ── */
+html.hq {
+  font-feature-settings: "cv11", "ss01", "ss03", "calt";
+}
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* ── room + council choreography (all collapse under reduced motion) ── */
+@keyframes room-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+/* fill-mode backwards, not both: a retained transform (even the identity one)
+   would make the room the containing block for its fixed drawers, and the
+   receipt scrim would stop at the room's edge instead of covering the rail */
+.room-enter { animation: room-enter 0.32s var(--ease-out-heavy) backwards; }
+
+@keyframes debate-enter {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: none; }
+}
+.debate-enter { animation: debate-enter 0.4s var(--ease-out-heavy) both; }
+
+@keyframes chip-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* the verdict lands like a stamp: heavy in, tiny recoil, settle */
+@keyframes stamp-in {
+  0% { opacity: 0; transform: scale(1.35) rotate(-5deg); }
+  55% { opacity: 1; transform: scale(0.97) rotate(0.6deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+.stamp-in { animation: stamp-in 0.55s var(--ease-out-heavy) both; }
+
+/* ── HQ light mode: the few things the rooms hard-code that must flip ──
+   Inline `rgba(0,0,0,…)` wells inside cards read as a step of the canvas
+   in light; the token sweep maps them to var(--well). Anything left over
+   is an overlay (scrims, receipt drawers) and stays dark on purpose. */

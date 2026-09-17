@@ -224,7 +224,9 @@ export default function App() {
 
       <div style={frameStyle}>
         <Rings groups={groups} current={room ? room.id : HOME} onOpen={open} />
-        <section ref={roomScrollRef} style={roomStyle} aria-live="polite">
+        {/* data-room names the room actually rendered, so the browser harness can tell "opened
+            the room I asked for" from "fell back to the default room" (face v2 Phase 00). */}
+        <section ref={roomScrollRef} style={roomStyle} aria-live="polite" data-room={room ? room.id : ''}>
           <AsOf
             asOf={asOf}
             today={today}

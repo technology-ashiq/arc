@@ -95,7 +95,7 @@ export default function C02_OS() {
         <div
           aria-hidden="true"
           className="absolute left-[7px] top-2 bottom-2 w-px hidden md:block"
-          style={{ background: 'linear-gradient(to bottom, rgba(0,255,209,0.55), rgba(0,255,209,0.14), rgba(0,255,209,0.55))' }}
+          style={{ background: 'linear-gradient(to bottom, rgba(45,212,191,0.55), rgba(45,212,191,0.14), rgba(45,212,191,0.55))' }}
         />
 
         <div className="space-y-6">
@@ -105,7 +105,7 @@ export default function C02_OS() {
                 <div
                   aria-hidden="true"
                   className="absolute left-[3px] top-7 w-[9px] h-[9px] rounded-full hidden md:block"
-                  style={{ background: COLOR.cyan, boxShadow: '0 0 10px rgba(0,255,209,0.7)' }}
+                  style={{ background: COLOR.cyan, boxShadow: '0 0 10px rgba(45,212,191,0.7)' }}
                 />
                 <Panel>
                   <div className="flex items-baseline justify-between flex-wrap gap-2 mb-5">

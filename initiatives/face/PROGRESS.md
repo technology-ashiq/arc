@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
 phase: 00
 appetite: 24d
-burn: 0d
+burn: 1d
 blocked-on: —
 depends-on: —
 
@@ -22,7 +22,7 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | spec'd — waits on kickoff approval |
+| 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | building — slices 01-19 proven, CI green per job on 65e6ec05; handoff next |
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | spec'd |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | spec'd |
 | 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | spec'd |
@@ -83,13 +83,42 @@ at 12d.
 
 ## Now
 
-**Position (2026-09-17):** Cycle 16 is **APPROVED** — the owner's `decision.recorded`
-`01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved") answers
-`approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP` on the main clone's spine. The
-approval was given with the simulation gate's two non-zero rounds on the table (round-2 blockers
-fixed, not re-run). No product code exists for this cycle yet. The kickoff docs ride
-`feat/face-v2-kickoff` to `main`.
+**RESUME HERE (2026-09-17):** branch `feat/face-v2-00`, worktree `arc-face-v2`. Phase 00's slices
+01-19 are proven and written in `phases/phase-00-tasks.md` (develop-lint clean, three trial WARNs);
+slice 20 is the close. CI run `35186922293` on `65e6ec05` is **green on all 19 jobs**, with the
+browser arm EXECUTED and printing its `face-browser: RAN leg=` line on ubuntu Node 20 + 22,
+macos-latest and windows-latest (33/33 rooms, `errors=0 excluded-errors=0 unsettled=0`), and the
+counted SKIP on ubuntu Node 18. The docs commit after it (this tracker, the tasks ledger, the
+delta report's measured-empty baseline, the SLOW room line on fd 3) needs its own green run on the
+new head before handoff.
 
-**Next step:** the kickoff PR goes green on CI per job and merges; then open `feat/face-v2-00` and
-start Phase 00 (intake + harness steel thread) — its Preconditions line is satisfied by the
-decision above plus that merge.
+**Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
+`01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
+`approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP` on the main clone's spine; the
+kickoff merged as `c5dabfbc` (#232) before the first Phase 00 commit.
+
+What the 2026-09-17 session found and closed, each pinned in `fixed-defects.md` (68 lines):
+- **Run D's two failures:** the lockfile check now requires the resolved binding's VERSION to
+  satisfy the parent's pin; the macOS settle miss was measured, not guessed — a Google Fonts
+  download and late CDP events on a cold macOS load, a different room each run (map, today,
+  engine-room) while warm rooms settle in ~0.9 s — so a room FAILS only past a 30 s cap and the
+  10-30 s band prints SLOW with what it held at 10 s (`smoke.mjs` header says what that gives up).
+- **A crash hiding behind a FAIL:** `proc.mjs` unref()ed awaited timers, so the client suite exited
+  mid-file with code 13 and no `RAN:` line; awaited timers now hold the process, races clear
+  theirs, pinned by a child fixture.
+- **Attack pass 2** on `f9805720` (decision logic 7 holes + 7 surviving mutants; shell/OS 3 holes),
+  fixed in `ca6e26b6`.
+- **Exit items that were claimed but unproven:** green jobs printed no RAN line (fd 3 now); the
+  embedded-program probe never scanned this suite or `face/scripts` (handed by name, count
+  asserted); no symlinked main-guard fixture existed (added, with a naive-guard control).
+- **Shard weight:** `face-browser.bats` measured at 350 s on windows (first file of shard 1/12),
+  now the heaviest file; `_floor` re-derived.
+
+Open, not this phase's: `spine-concurrency.bats` hit LOCK_TIMEOUT once on windows shard 2/12 (run
+`35183482747`) and passed on the next two runs — another lane's suite, recorded here only.
+Google Fonts at runtime stays the Phase 01 intake finding (`delta-report.md`). Debts:
+`debt-ledger.md`.
+
+**Next step:** dispatch arc-ci on the docs head and read it per job; green → `/arc-develop handoff
+00` (spec-fidelity check, open the PR); then `/arc-phase-done 00` from the main clone after merge
+(receipts cannot be emitted from a worktree).

@@ -71,10 +71,13 @@ async function fail(res) {
 }
 
 // chat(messages,{system,onDelta}) → full text. messages: [{role:'user'|'assistant', content}]
-export async function chat({ system, messages, onDelta, maxTokens = 700 }) {
+// modelOverride lets the bench score a DIFFERENT model on the same key
+// (a cross-provider id fails loudly — that is a driver fault, reported honestly)
+export async function chat({ system, messages, onDelta, maxTokens = 700, modelOverride }) {
   const cfg = loadEngine()
   if (!cfg || !cfg.apiKey) throw new Error('no-engine')
   const p = cfg.provider
+  const model = modelOverride || cfg.model
   let full = ''
   const push = (d) => {
     if (!d) return
@@ -92,7 +95,7 @@ export async function chat({ system, messages, onDelta, maxTokens = 700 }) {
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: cfg.model,
+        model,
         max_tokens: maxTokens,
         system,
         stream: true,
@@ -107,7 +110,7 @@ export async function chat({ system, messages, onDelta, maxTokens = 700 }) {
   }
 
   if (p === 'gemini') {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(cfg.apiKey)}`
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(cfg.apiKey)}`
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -140,7 +143,7 @@ export async function chat({ system, messages, onDelta, maxTokens = 700 }) {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      model: cfg.model,
+      model,
       stream: true,
       max_tokens: maxTokens,
       messages: [{ role: 'system', content: system }, ...messages],

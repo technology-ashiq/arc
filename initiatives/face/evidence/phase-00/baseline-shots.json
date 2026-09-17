@@ -1,0 +1,675 @@
+{
+  "$comment": "v0.7 baseline shots for REQ-01 (face v2 Phase 00). PNGs are local and gitignored; this manifest pins them by sha256. Candidate shots in Phase 03 use the same capture contract.",
+  "capturedAt": "2026-09-17",
+  "capture": {
+    "script": "docs/design/reference/face-hq/assets/arcface/scripts/shots.mjs (run from the owner's design app, E:/Work_Hub/01_Automemory/arc-face-hq2/assets/arcface)",
+    "server": "npx vite preview --port 4173 --strictPort over that app's dist/ (no source file newer than dist/index.html)",
+    "env": "THEMES=dark,light SIZES=desktop ROOMS=<the 36 v0.7 room ids from modules-v2.json>",
+    "viewport": {
+      "width": 1440,
+      "height": 1000,
+      "deviceScaleFactor": 1
+    },
+    "waitMs": 900,
+    "browser": "Google Chrome 152.0.7977.83 --headless=new (Windows)",
+    "localPath": "E:/Work_Hub/01_Automemory/arc/.playwright-mcp/face-v2-baseline-2026-09-17/.shots/"
+  },
+  "counts": {
+    "modules": 36,
+    "shots": 72,
+    "missing": 0,
+    "unexpected": 0
+  },
+  "missing": [],
+  "unexpected": [],
+  "shots": [
+    {
+      "module": "today",
+      "v07Room": "overview",
+      "ring": "command",
+      "mood": "dark",
+      "file": "dark-overview.png",
+      "bytes": 204657,
+      "sha256": "b2d0a32419c2407f8c1693969a6c8102c5c651100e850a8570b53b3770892973"
+    },
+    {
+      "module": "today",
+      "v07Room": "overview",
+      "ring": "command",
+      "mood": "light",
+      "file": "light-overview.png",
+      "bytes": 206224,
+      "sha256": "079befcbd53755c7261aeb044142a398797643de7a4ef91a6f63730d3c99592b"
+    },
+    {
+      "module": "inbox",
+      "v07Room": "inbox",
+      "ring": "command",
+      "mood": "dark",
+      "file": "dark-inbox.png",
+      "bytes": 193798,
+      "sha256": "0ca454cd5c2646396c4619496c474a0c5ccdb9e67905053e9ae0a66691193466"
+    },
+    {
+      "module": "inbox",
+      "v07Room": "inbox",
+      "ring": "command",
+      "mood": "light",
+      "file": "light-inbox.png",
+      "bytes": 193411,
+      "sha256": "095dfed128fd05ef16fd792b5fa0236f308158b5f96497786af401e19802e122"
+    },
+    {
+      "module": "map",
+      "v07Room": "map",
+      "ring": "command",
+      "mood": "dark",
+      "file": "dark-map.png",
+      "bytes": 162707,
+      "sha256": "0638b701e9c507c7b743f880a7ed679c4bf60b6bb7eac19fd01e5e69217d7ced"
+    },
+    {
+      "module": "map",
+      "v07Room": "map",
+      "ring": "command",
+      "mood": "light",
+      "file": "light-map.png",
+      "bytes": 162020,
+      "sha256": "3b347f29ca4498dfee22ef45e40baf69d83bedd1c7a54c94eed63e955f4c6697"
+    },
+    {
+      "module": "spine",
+      "v07Room": "spine",
+      "ring": "command",
+      "mood": "dark",
+      "file": "dark-spine.png",
+      "bytes": 195856,
+      "sha256": "a7cfcd534c37f40c3498bd2fe03ecf37c3c29227de0eec207017dada2ca1723e"
+    },
+    {
+      "module": "spine",
+      "v07Room": "spine",
+      "ring": "command",
+      "mood": "light",
+      "file": "light-spine.png",
+      "bytes": 192766,
+      "sha256": "98f94c32cf131f2c35da8959a200bb24f8161968b6f13724f02e4b3c0aa94720"
+    },
+    {
+      "module": "board",
+      "v07Room": "board",
+      "ring": "command",
+      "mood": "dark",
+      "file": "dark-board.png",
+      "bytes": 217655,
+      "sha256": "d9780ef690db25f00af745e2c3f099df61540362b66fe744777bdaf39449c5e3"
+    },
+    {
+      "module": "board",
+      "v07Room": "board",
+      "ring": "command",
+      "mood": "light",
+      "file": "light-board.png",
+      "bytes": 217713,
+      "sha256": "8917abbf4d88c0dc7dc99f7aa3b22d88334b66ebf613447f0cfeaed27a6dfb8b"
+    },
+    {
+      "module": "ask-arc",
+      "v07Room": "ask-arc",
+      "ring": "command",
+      "mood": "dark",
+      "file": "dark-ask-arc.png",
+      "bytes": 192582,
+      "sha256": "38b0e8221e32f641268be3ce53b76681f07d85ad76713d28dd07ce50b1fcc50e"
+    },
+    {
+      "module": "ask-arc",
+      "v07Room": "ask-arc",
+      "ring": "command",
+      "mood": "light",
+      "file": "light-ask-arc.png",
+      "bytes": 193299,
+      "sha256": "b39c1d6571401bb4b0a82482c01876baf3e7517d2023a9408a8d3288ffdf8df4"
+    },
+    {
+      "module": "engine-room",
+      "v07Room": "engine",
+      "ring": "kernel",
+      "mood": "dark",
+      "file": "dark-engine.png",
+      "bytes": 238150,
+      "sha256": "9a427e1641a83e859a33627fe4e0d753b5b6ce3d521dd906bc7803101a1f6fa0"
+    },
+    {
+      "module": "engine-room",
+      "v07Room": "engine",
+      "ring": "kernel",
+      "mood": "light",
+      "file": "light-engine.png",
+      "bytes": 236752,
+      "sha256": "ad20fcafee723030215c249c0055814c6f8786ddaac2816b470d2a6d260ba090"
+    },
+    {
+      "module": "model-policy",
+      "v07Room": "model-policy",
+      "ring": "kernel",
+      "mood": "dark",
+      "file": "dark-model-policy.png",
+      "bytes": 245704,
+      "sha256": "9c82cade9d357dc56ee6c59cb9eaba14b8892f7916f6fc20ef0bb8783e63ac25"
+    },
+    {
+      "module": "model-policy",
+      "v07Room": "model-policy",
+      "ring": "kernel",
+      "mood": "light",
+      "file": "light-model-policy.png",
+      "bytes": 244359,
+      "sha256": "cfd24dfc4eeff0310dda36b58733b6046586211d30d26fa085cb2ffa793ce4f6"
+    },
+    {
+      "module": "policy",
+      "v07Room": "policy",
+      "ring": "kernel",
+      "mood": "dark",
+      "file": "dark-policy.png",
+      "bytes": 246318,
+      "sha256": "269fc0267a3ccf589044130ea91fb091ae447c58b92c304c240aeebffca7feb0"
+    },
+    {
+      "module": "policy",
+      "v07Room": "policy",
+      "ring": "kernel",
+      "mood": "light",
+      "file": "light-policy.png",
+      "bytes": 242295,
+      "sha256": "2a4711c3c3a42848b27108a7055ee48e4a6e2de6e07e3a8d9f2bd3f46233b0a7"
+    },
+    {
+      "module": "scheduler",
+      "v07Room": "scheduler",
+      "ring": "kernel",
+      "mood": "dark",
+      "file": "dark-scheduler.png",
+      "bytes": 239840,
+      "sha256": "a16dd2b4cc4fc3f86aa031dc822f9377279435244e0af28059120693c695e914"
+    },
+    {
+      "module": "scheduler",
+      "v07Room": "scheduler",
+      "ring": "kernel",
+      "mood": "light",
+      "file": "light-scheduler.png",
+      "bytes": 240229,
+      "sha256": "f6d5b94cf09db6cbbc731dcdcd2edb2d2000e2b8a85c2566d5935095fbd474de"
+    },
+    {
+      "module": "memory",
+      "v07Room": "memory",
+      "ring": "kernel",
+      "mood": "dark",
+      "file": "dark-memory.png",
+      "bytes": 187889,
+      "sha256": "641efa2df22437165700c6d19d25d1b98b5492581c3f1d064f48aca5c205ed2d"
+    },
+    {
+      "module": "memory",
+      "v07Room": "memory",
+      "ring": "kernel",
+      "mood": "light",
+      "file": "light-memory.png",
+      "bytes": 187430,
+      "sha256": "e261de393e5e3e50ac4e02b4e6aea6593b6231ecee103a4eab98599b1c111072"
+    },
+    {
+      "module": "evolve",
+      "v07Room": "evolve",
+      "ring": "kernel",
+      "mood": "dark",
+      "file": "dark-evolve.png",
+      "bytes": 225956,
+      "sha256": "a86d5b599690334a221be0540b288a42507bf65fff25fd34a3140b2bcadeb3a6"
+    },
+    {
+      "module": "evolve",
+      "v07Room": "evolve",
+      "ring": "kernel",
+      "mood": "light",
+      "file": "light-evolve.png",
+      "bytes": 225221,
+      "sha256": "29ac51af473018db03365a1301c266af39e5318eaa98b460c93d876dba20db8e"
+    },
+    {
+      "module": "bench",
+      "v07Room": "bench",
+      "ring": "kernel",
+      "mood": "dark",
+      "file": "dark-bench.png",
+      "bytes": 231489,
+      "sha256": "b7ca434b203252996f6592d2f50c2e3576064ab07cff6e82d0d3ee6ce3a3af2b"
+    },
+    {
+      "module": "bench",
+      "v07Room": "bench",
+      "ring": "kernel",
+      "mood": "light",
+      "file": "light-bench.png",
+      "bytes": 231387,
+      "sha256": "c5d0e66e7906326986067d26335121a68a47b97203fed2571f24c26134ba96af"
+    },
+    {
+      "module": "absorb",
+      "v07Room": "absorb",
+      "ring": "kernel",
+      "mood": "dark",
+      "file": "dark-absorb.png",
+      "bytes": 190703,
+      "sha256": "88eababe4d19192672d70a7050d1e7cf4b1c4c007c2bb0f451e6fb582db6303d"
+    },
+    {
+      "module": "absorb",
+      "v07Room": "absorb",
+      "ring": "kernel",
+      "mood": "light",
+      "file": "light-absorb.png",
+      "bytes": 190957,
+      "sha256": "2a81b9c9c1e6c26a133aaa4435800f6b5e31a487b46af480e68a7554f329c486"
+    },
+    {
+      "module": "council-chamber",
+      "v07Room": "council",
+      "ring": "factory",
+      "mood": "dark",
+      "file": "dark-council.png",
+      "bytes": 196971,
+      "sha256": "31ced93f6f63a8b6717c8742d85f19ca32aa07407d7d843bcc86938d2b3027e0"
+    },
+    {
+      "module": "council-chamber",
+      "v07Room": "council",
+      "ring": "factory",
+      "mood": "light",
+      "file": "light-council.png",
+      "bytes": 196479,
+      "sha256": "9b72e886cbcdd151c8e97cb38974fc7f3da4b940bda09b6e82c5eea3533c1e73"
+    },
+    {
+      "module": "develop",
+      "v07Room": "develop",
+      "ring": "factory",
+      "mood": "dark",
+      "file": "dark-develop.png",
+      "bytes": 276906,
+      "sha256": "28eec48dddfda07e7d83096e17fad29fadd09ed88c606e303b67ea406ac1f684"
+    },
+    {
+      "module": "develop",
+      "v07Room": "develop",
+      "ring": "factory",
+      "mood": "light",
+      "file": "light-develop.png",
+      "bytes": 274503,
+      "sha256": "c61724ec430f5c0cb4d74d78618413b3ee1d404b33475f61a82f1771c778ea49"
+    },
+    {
+      "module": "review-ship",
+      "v07Room": "review-ship",
+      "ring": "factory",
+      "mood": "dark",
+      "file": "dark-review-ship.png",
+      "bytes": 250433,
+      "sha256": "7748bbf935afdf6ef9ffe2312934739082eb6a1a12f3f8e2faa98cc1023cd6bd"
+    },
+    {
+      "module": "review-ship",
+      "v07Room": "review-ship",
+      "ring": "factory",
+      "mood": "light",
+      "file": "light-review-ship.png",
+      "bytes": 245788,
+      "sha256": "dc8aad5f42d84e8a0127fd36cb926b90017d23e21e82d2d6a3782712db4c0a55"
+    },
+    {
+      "module": "design-studio",
+      "v07Room": "design-studio",
+      "ring": "factory",
+      "mood": "dark",
+      "file": "dark-design-studio.png",
+      "bytes": 169813,
+      "sha256": "971d0a050f8f8eded7e2fedc8cd14d397f98eda3a2f437c0571b970fa7661965"
+    },
+    {
+      "module": "design-studio",
+      "v07Room": "design-studio",
+      "ring": "factory",
+      "mood": "light",
+      "file": "light-design-studio.png",
+      "bytes": 168923,
+      "sha256": "36089cb014ea9f6a821cd0b5eafa626a1dc95c2f60a1f9137009913e9a94213b"
+    },
+    {
+      "module": "toolbelt",
+      "v07Room": "toolbelt",
+      "ring": "factory",
+      "mood": "dark",
+      "file": "dark-toolbelt.png",
+      "bytes": 172680,
+      "sha256": "a89d5d9efe91ce3bde9e3b6dcecaf6c0b626549fe4091f558523857c9e312089"
+    },
+    {
+      "module": "toolbelt",
+      "v07Room": "toolbelt",
+      "ring": "factory",
+      "mood": "light",
+      "file": "light-toolbelt.png",
+      "bytes": 173896,
+      "sha256": "b6404baf6967da90f721b8d321487a5326165bb37fc79b498eb7d23459e7b0ea"
+    },
+    {
+      "module": "factory",
+      "v07Room": "factory",
+      "ring": "factory",
+      "mood": "dark",
+      "file": "dark-factory.png",
+      "bytes": 246486,
+      "sha256": "123693629c9d6f93d573a10479c77b88ab218ea45cc4a3a86b8f233bd78bfe48"
+    },
+    {
+      "module": "factory",
+      "v07Room": "factory",
+      "ring": "factory",
+      "mood": "light",
+      "file": "light-factory.png",
+      "bytes": 243248,
+      "sha256": "892f1917d6ce68e57a53a1f4085ec252bf98fa8cfbd34fef96fa900fe4677b75"
+    },
+    {
+      "module": "executor",
+      "v07Room": "executor",
+      "ring": "factory",
+      "mood": "dark",
+      "file": "dark-executor.png",
+      "bytes": 196907,
+      "sha256": "7a3b268e51f6ce957891658cd92e8354fe291006c5b24ed7d7e150604c135d5d"
+    },
+    {
+      "module": "executor",
+      "v07Room": "executor",
+      "ring": "factory",
+      "mood": "light",
+      "file": "light-executor.png",
+      "bytes": 195318,
+      "sha256": "066dc0861db09609a1f7f5d1ea32e4679acfc72a1dec42c6e1201678faeb2670"
+    },
+    {
+      "module": "agents",
+      "v07Room": "agents",
+      "ring": "factory",
+      "mood": "dark",
+      "file": "dark-agents.png",
+      "bytes": 188546,
+      "sha256": "bc3388a28415efaddddf904419a0dbf14f39fe0ee529b0a6627ed4a45f3c7717"
+    },
+    {
+      "module": "agents",
+      "v07Room": "agents",
+      "ring": "factory",
+      "mood": "light",
+      "file": "light-agents.png",
+      "bytes": 185982,
+      "sha256": "15caca88063a24ff3a534c8fe168132aa7b7bb8d9d47e76a2e438390bdcca3ca"
+    },
+    {
+      "module": "money",
+      "v07Room": "money",
+      "ring": "money",
+      "mood": "dark",
+      "file": "dark-money.png",
+      "bytes": 225597,
+      "sha256": "89c9c39d96310360d9e305a2bb1496d4a2ecaafd54d73c6fcc45d90069044d70"
+    },
+    {
+      "module": "money",
+      "v07Room": "money",
+      "ring": "money",
+      "mood": "light",
+      "file": "light-money.png",
+      "bytes": 225247,
+      "sha256": "ba08a8b230eceaa3990cc76253fd19a3c196088b5f8af436d77e0be51dab40a1"
+    },
+    {
+      "module": "growth",
+      "v07Room": "growth",
+      "ring": "money",
+      "mood": "dark",
+      "file": "dark-growth.png",
+      "bytes": 168418,
+      "sha256": "90cf034c9d26550b633d75cd87c6b3b6ab1e8c513e19a79c1f7a2ea4d0f9bf6b"
+    },
+    {
+      "module": "growth",
+      "v07Room": "growth",
+      "ring": "money",
+      "mood": "light",
+      "file": "light-growth.png",
+      "bytes": 168667,
+      "sha256": "84f26f00ccd25548cb723ad00ea90e5f45b675915e5723253d36a39e22440ba1"
+    },
+    {
+      "module": "leads",
+      "v07Room": "leads",
+      "ring": "money",
+      "mood": "dark",
+      "file": "dark-leads.png",
+      "bytes": 154510,
+      "sha256": "f4f2c0733bff6956d5b2e6ffa0b5ade989e00fe9bffe3f0c600630a1acaaf409"
+    },
+    {
+      "module": "leads",
+      "v07Room": "leads",
+      "ring": "money",
+      "mood": "light",
+      "file": "light-leads.png",
+      "bytes": 155016,
+      "sha256": "01893e79c399388749efccce15f9108e1d31398770ebe4ae9364b767a3d5a255"
+    },
+    {
+      "module": "legal",
+      "v07Room": "legal",
+      "ring": "money",
+      "mood": "dark",
+      "file": "dark-legal.png",
+      "bytes": 218045,
+      "sha256": "b681d1090ebe1b5f67f07f0169acbd0bdc9ee096839ff71e9765b73ccbd60951"
+    },
+    {
+      "module": "legal",
+      "v07Room": "legal",
+      "ring": "money",
+      "mood": "light",
+      "file": "light-legal.png",
+      "bytes": 218081,
+      "sha256": "3f42fb4dd6e5055dc62395577c17165a2ecf649f6d8f51529a96157b877313a6"
+    },
+    {
+      "module": "ventures",
+      "v07Room": "ventures",
+      "ring": "money",
+      "mood": "dark",
+      "file": "dark-ventures.png",
+      "bytes": 263601,
+      "sha256": "4025ab72c25995227b27a48688384a196ccb083dcb538d05eecdb0522e3d8e61"
+    },
+    {
+      "module": "ventures",
+      "v07Room": "ventures",
+      "ring": "money",
+      "mood": "light",
+      "file": "light-ventures.png",
+      "bytes": 261561,
+      "sha256": "cbf86666fd805acf82c1b38287e9ae7e1532d1ddb7b02e8e2cb13a4f84144548"
+    },
+    {
+      "module": "ops",
+      "v07Room": "ops",
+      "ring": "money",
+      "mood": "dark",
+      "file": "dark-ops.png",
+      "bytes": 201736,
+      "sha256": "162420b1227737e6baf63cb223c81fe8598db3950880539568f864a770d6e2e7"
+    },
+    {
+      "module": "ops",
+      "v07Room": "ops",
+      "ring": "money",
+      "mood": "light",
+      "file": "light-ops.png",
+      "bytes": 201000,
+      "sha256": "a3d46fe9c9fefbe2b4d9881ed0dfc19fa2c875794b880f2100a4277a95eaed24"
+    },
+    {
+      "module": "trader",
+      "v07Room": "trader",
+      "ring": "money",
+      "mood": "dark",
+      "file": "dark-trader.png",
+      "bytes": 216522,
+      "sha256": "6ce76a1a48d76954cd74621067cf4f21cd5968e4e9b111f17aff361a040901e7"
+    },
+    {
+      "module": "trader",
+      "v07Room": "trader",
+      "ring": "money",
+      "mood": "light",
+      "file": "light-trader.png",
+      "bytes": 215506,
+      "sha256": "c9698df857bf938a37c8b0f928bac8ff946098b76b73028136f5a6757b269ed0"
+    },
+    {
+      "module": "discover",
+      "v07Room": "discover",
+      "ring": "money",
+      "mood": "dark",
+      "file": "dark-discover.png",
+      "bytes": 205249,
+      "sha256": "5ad7e6bf1d3d32b3aa5a5b4cf3a373b094eb2794fb6f55aa03d16af2f4cf319e"
+    },
+    {
+      "module": "discover",
+      "v07Room": "discover",
+      "ring": "money",
+      "mood": "light",
+      "file": "light-discover.png",
+      "bytes": 205690,
+      "sha256": "8500af6f5bf2604a09da7d8f5af9119e994cc925e7427f218e81f12da8f75015"
+    },
+    {
+      "module": "law",
+      "v07Room": "law",
+      "ring": "company",
+      "mood": "dark",
+      "file": "dark-law.png",
+      "bytes": 268003,
+      "sha256": "f421d08ef5c1c9b892884ead32677d1c3aaf798c18492e65c8f745ff1eb5fe84"
+    },
+    {
+      "module": "law",
+      "v07Room": "law",
+      "ring": "company",
+      "mood": "light",
+      "file": "light-law.png",
+      "bytes": 264062,
+      "sha256": "57ca853d1419d5362aa62420f3de9866eccb1ad45e10dc17a2f8aea382a6275d"
+    },
+    {
+      "module": "learn",
+      "v07Room": "learn",
+      "ring": "company",
+      "mood": "dark",
+      "file": "dark-learn.png",
+      "bytes": 249051,
+      "sha256": "1703e15ae188c531f51d105b58dece84d6cdaad25436649cdde4172e0c03e505"
+    },
+    {
+      "module": "learn",
+      "v07Room": "learn",
+      "ring": "company",
+      "mood": "light",
+      "file": "light-learn.png",
+      "bytes": 248614,
+      "sha256": "2bd414c53628dc9fe391d6a0f87849b1d27de50b8fa196f49cb01b0faf99240b"
+    },
+    {
+      "module": "strategy",
+      "v07Room": "strategy",
+      "ring": "company",
+      "mood": "dark",
+      "file": "dark-strategy.png",
+      "bytes": 247095,
+      "sha256": "7e348eb713e81b42b29d883aad07294b66be2cd2da8c7a38037a2a8558ee8b4e"
+    },
+    {
+      "module": "strategy",
+      "v07Room": "strategy",
+      "ring": "company",
+      "mood": "light",
+      "file": "light-strategy.png",
+      "bytes": 244340,
+      "sha256": "6680d0cf9dafe641ad3aa159f744a9428405e9294a584a22608904f7308e5eb2"
+    },
+    {
+      "module": "org",
+      "v07Room": "org",
+      "ring": "company",
+      "mood": "dark",
+      "file": "dark-org.png",
+      "bytes": 240722,
+      "sha256": "43e5f0e5dd871ad916bfed47d6cf862d0f7063ede2b4552b62314e98e6677a2d"
+    },
+    {
+      "module": "org",
+      "v07Room": "org",
+      "ring": "company",
+      "mood": "light",
+      "file": "light-org.png",
+      "bytes": 238835,
+      "sha256": "8cde21950d652c9e46a10daa63c6b914cec68343405f7fb91f8dba0919df62b0"
+    },
+    {
+      "module": "concepts",
+      "v07Room": "concepts",
+      "ring": "company",
+      "mood": "dark",
+      "file": "dark-concepts.png",
+      "bytes": 186256,
+      "sha256": "cd4ac74ee8cb565451b1e00fb1fd9a142a7afa83f5ce94d9e9c4ea4df8f5d5e8"
+    },
+    {
+      "module": "concepts",
+      "v07Room": "concepts",
+      "ring": "company",
+      "mood": "light",
+      "file": "light-concepts.png",
+      "bytes": 185538,
+      "sha256": "874f0aa0f4627ea8a43ec664bee7bfab81274ca20a4a13166a93a6f03f316bd3"
+    },
+    {
+      "module": "story",
+      "v07Room": "story",
+      "ring": "company",
+      "mood": "dark",
+      "file": "dark-story.png",
+      "bytes": 183847,
+      "sha256": "905bb1e767a13691122ab9bf7b3db0850050c9af957d73a16f9c1e68f4ffecda"
+    },
+    {
+      "module": "story",
+      "v07Room": "story",
+      "ring": "company",
+      "mood": "light",
+      "file": "light-story.png",
+      "bytes": 204397,
+      "sha256": "a6f2877796906a30ec0bc5920475b42dbef4c13101dbf734dd3f8240457fc6d4"
+    }
+  ]
+}

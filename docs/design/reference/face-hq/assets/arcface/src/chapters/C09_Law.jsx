@@ -116,7 +116,7 @@ export default function C09_Law() {
       <section className="relative w-full min-h-[92vh] flex flex-col justify-center" style={{ fontFamily: "'Anybody', sans-serif" }}>
         <div className="max-w-[1180px] mx-auto px-6 sm:px-10 w-full text-center pb-40 pt-24">
           <Reveal>
-            <div className="text-[11px] uppercase tracking-[0.34em] mb-6" style={{ fontFamily: MONO, color: 'rgba(0,255,209,0.85)' }}>
+            <div className="text-[11px] uppercase tracking-[0.34em] mb-6" style={{ fontFamily: MONO, color: 'rgba(45,212,191,0.85)' }}>
               the company is listening
             </div>
             <h2 className="text-[42px] sm:text-[64px] md:text-[80px] leading-[1.0] tracking-tight text-white mb-7" style={{ fontWeight: 600 }}>
@@ -131,7 +131,7 @@ export default function C09_Law() {
                 <button
                   key={q}
                   onClick={() => ask(q)}
-                  className="text-[11px] uppercase tracking-[0.14em] text-white/78 border border-white/18 rounded-full px-5 min-h-[44px] hover:text-[#00ffd1] hover:border-[#00ffd1]/60 transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#00ffd1]"
+                  className="text-[11px] uppercase tracking-[0.14em] text-white/78 border border-white/18 rounded-full px-5 min-h-[44px] hover:text-[#2dd4bf] hover:border-[#2dd4bf]/60 transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#2dd4bf]"
                   style={{ background: 'rgba(0,0,0,0.5)', fontFamily: MONO }}
                 >
                   {q}
@@ -140,8 +140,8 @@ export default function C09_Law() {
             </div>
             <button
               onClick={focusAsk}
-              className="text-[12px] uppercase tracking-[0.22em] text-black rounded-full px-8 min-h-[48px] cursor-pointer transition-transform hover:scale-[1.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00ffd1]"
-              style={{ fontFamily: MONO, background: '#00ffd1', fontWeight: 700 }}
+              className="text-[12px] uppercase tracking-[0.22em] text-black rounded-full px-8 min-h-[48px] cursor-pointer transition-transform hover:scale-[1.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2dd4bf]"
+              style={{ fontFamily: MONO, background: '#2dd4bf', fontWeight: 700 }}
             >
               or type your own ↓
             </button>

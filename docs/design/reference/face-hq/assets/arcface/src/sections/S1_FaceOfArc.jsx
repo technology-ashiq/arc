@@ -226,7 +226,7 @@ export default function S1_FaceOfArc() {
           lc.set('#00d4ba')
         } else {
           const blend = Math.random()
-          if (blend < 0.35) c.set('#00ffd1')
+          if (blend < 0.35) c.set('#2dd4bf')
           else if (blend < 0.7) c.set('#00ffff')
           else c.set('#00aaff')
           // listening state — the whole face leans brighter / icier
@@ -657,7 +657,7 @@ export default function S1_FaceOfArc() {
               >
                 Arc
               </div>
-              <div className="mt-2 text-[11px] uppercase tracking-[0.28em] text-[#00ffd1]/70">
+              <div className="mt-2 text-[11px] uppercase tracking-[0.28em] text-[#2dd4bf]/70">
                 The factory that ships with receipts
               </div>
             </div>
@@ -676,7 +676,7 @@ export default function S1_FaceOfArc() {
                 <a
                   key={item}
                   href={href}
-                  className="flex items-center space-x-2 md:space-x-3 justify-end hover:text-[#00ffd1] transition-colors cursor-pointer pointer-events-auto no-underline text-inherit"
+                  className="flex items-center space-x-2 md:space-x-3 justify-end hover:text-[#2dd4bf] transition-colors cursor-pointer pointer-events-auto no-underline text-inherit"
                 >
                   <span>{item}</span>
                   <span className="text-[#00ffff] font-bold">•</span>
@@ -707,7 +707,7 @@ export default function S1_FaceOfArc() {
                   This is Arc — six products, twenty-two commands, twenty-three agents, and every decision kept as a
                   receipt. Ask the face anything about this system. It answers out loud.
                 </p>
-                <p className="mt-3 text-[11px] uppercase tracking-[0.25em] text-[#00ffd1]/60 pointer-events-auto">
+                <p className="mt-3 text-[11px] uppercase tracking-[0.25em] text-[#2dd4bf]/60 pointer-events-auto">
                   v0.2.0 · built by Ashiq · concept design
                 </p>
               </div>
@@ -732,7 +732,7 @@ export default function S1_FaceOfArc() {
                   </div>
                 )}
                 {voice.state === 'listening' && !voice.transcript && (
-                  <div className="text-[15px] text-[#00ffd1]/80 animate-pulse">I'm listening…</div>
+                  <div className="text-[15px] text-[#2dd4bf]/80 animate-pulse">I'm listening…</div>
                 )}
                 {voice.state === 'thinking' && (
                   <div className="text-[14px] text-white/50 animate-pulse">checking the receipts…</div>
@@ -752,7 +752,7 @@ export default function S1_FaceOfArc() {
                 <button
                   key={c}
                   onClick={() => ask(c)}
-                  className="pointer-events-auto text-[10.5px] sm:text-[11.5px] uppercase tracking-[0.12em] text-white/50 border border-white/15 rounded-full px-3 py-1 hover:text-[#00ffd1] hover:border-[#00ffd1]/60 transition-colors bg-black/40 backdrop-blur-sm cursor-pointer"
+                  className="pointer-events-auto text-[10.5px] sm:text-[11.5px] uppercase tracking-[0.12em] text-white/50 border border-white/15 rounded-full px-3 py-1 hover:text-[#2dd4bf] hover:border-[#2dd4bf]/60 transition-colors bg-black/40 backdrop-blur-sm cursor-pointer"
                 >
                   {c}
                 </button>
@@ -760,21 +760,21 @@ export default function S1_FaceOfArc() {
             </div>
 
             {/* mic + input row */}
-            <div className="pointer-events-auto flex items-center gap-3 bg-black/50 backdrop-blur-md border border-white/12 rounded-full pl-2 pr-2 py-2 shadow-[0_0_40px_rgba(0,255,209,0.08)]">
+            <div className="pointer-events-auto flex items-center gap-3 bg-black/50 backdrop-blur-md border border-white/12 rounded-full pl-2 pr-2 py-2 shadow-[0_0_40px_rgba(45,212,191,0.08)]">
               <button
                 onClick={listen}
                 aria-label="Talk to Arc"
                 className="relative w-11 h-11 rounded-full flex items-center justify-center cursor-pointer transition-all duration-300"
                 style={{
-                  background: voice.state === 'listening' ? 'rgba(0,255,209,0.18)' : 'rgba(255,255,255,0.06)',
-                  border: `1px solid ${voice.state === 'listening' ? '#00ffd1' : 'rgba(255,255,255,0.25)'}`,
-                  boxShadow: voice.state === 'listening' ? '0 0 24px rgba(0,255,209,0.45)' : 'none',
+                  background: voice.state === 'listening' ? 'rgba(45,212,191,0.18)' : 'rgba(255,255,255,0.06)',
+                  border: `1px solid ${voice.state === 'listening' ? '#2dd4bf' : 'rgba(255,255,255,0.25)'}`,
+                  boxShadow: voice.state === 'listening' ? '0 0 24px rgba(45,212,191,0.45)' : 'none',
                 }}
               >
                 {voice.state === 'listening' && (
-                  <span className="absolute inset-0 rounded-full border border-[#00ffd1]/60 animate-ping" />
+                  <span className="absolute inset-0 rounded-full border border-[#2dd4bf]/60 animate-ping" />
                 )}
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={voice.state === 'listening' ? '#00ffd1' : '#ffffff'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={voice.state === 'listening' ? '#2dd4bf' : '#ffffff'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
                   <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
                   <line x1="12" y1="18" x2="12" y2="22" />
@@ -792,7 +792,7 @@ export default function S1_FaceOfArc() {
                 <button
                   type="submit"
                   aria-label="Ask Arc"
-                  className="w-9 h-9 rounded-full border border-white/20 flex items-center justify-center hover:border-[#00ffd1] hover:text-[#00ffd1] text-white/70 transition-colors cursor-pointer"
+                  className="w-9 h-9 rounded-full border border-white/20 flex items-center justify-center hover:border-[#2dd4bf] hover:text-[#2dd4bf] text-white/70 transition-colors cursor-pointer"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12" />

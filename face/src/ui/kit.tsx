@@ -1,7 +1,7 @@
 // kit.tsx -- the one surface vocabulary every non-bespoke room is built out of.
 //
 // The visual language is the OWNER'S REFERENCE, read from
-// docs/design/reference/face-hq/assets/arcface/src/ui/kit.jsx: a near-black ground, a
+// docs/design/reference/face-hq/assets/arcface-v0.4/src/ui/kit.jsx: a near-black ground, a
 // translucent slab floating over the particle face, mono for anything the machine wrote
 // and the display face for anything a human wrote, and the receipt chip as the signature
 // -- every claim carries its source.
