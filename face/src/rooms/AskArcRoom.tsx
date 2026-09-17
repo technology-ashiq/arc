@@ -32,6 +32,7 @@ import {
 } from "../lib/ask.mjs";
 import type { Asked, Claim, Resolution, Standing } from "../lib/ask.mjs";
 import { buildHash, parseHash } from "../lib/shell.mjs";
+import { HPanel, RoomHead } from "../ui/bits";
 
 /* -------------------------------------------------------------------------- */
 
@@ -127,22 +128,20 @@ export function AskArcRoom({ door, room, sentence, lede, mode, onOpen }: AskArcR
     <div className="aa-room">
       <style>{CSS}</style>
 
-      <header className="aa-head">
-        <div className="aa-eyebrow">
-          <span>command · ask-arc</span>
-          <span className="aa-rule" aria-hidden="true" />
-          {mode === "sim" ? <span className="aa-sim" title="fixture data: every number in an answer comes from the fixture spine named on the door's command line">SIMULATED</span> : null}
-        </div>
-        <h1 className="aa-sentence">{opening.sentence}</h1>
-        <p className="aa-lede">{opening.lede}</p>
-      </header>
+      <RoomHead
+        eyebrow="command · ask-arc"
+        title={opening.sentence}
+        hint={opening.lede}
+        right={mode === "sim" ? <span className="aa-sim" title="fixture data: every number in an answer comes from the fixture spine named on the door's command line">SIMULATED</span> : null}
+      />
 
       {/* ── the boundary, computed rather than promised ─────────────────── */}
-      <section className={hands.clean ? "aa-panel aa-hands" : "aa-panel aa-hands aa-hands-broken"} aria-labelledby="aa-hands">
-        <div className="aa-panel-head">
-          <h2 className="aa-panel-title" id="aa-hands">{hands.clean ? "This room has no hands" : "The boundary is broken"}</h2>
-          <span className="aa-panel-hint">enumerated from the handle this page is holding, not asserted</span>
-        </div>
+      <HPanel
+        title={hands.clean ? "This room has no hands" : "The boundary is broken"}
+        hint="enumerated from the handle this page is holding, not asserted"
+        titleId="aa-hands"
+        className={hands.clean ? "aa-hands mb-0!" : "aa-hands aa-hands-broken mb-0!"}
+      >
         <p className="aa-panel-note">
           Asking is a <em>read</em>. There is no approve here, no reject, no “do it for me”, and
           that is structural rather than a setting: this page is handed a frozen handle carrying
@@ -175,14 +174,15 @@ export function AskArcRoom({ door, room, sentence, lede, mode, onOpen }: AskArcR
             moment someone added a write.
           </p>
         ) : null}
-      </section>
+      </HPanel>
 
       {/* ── the question ────────────────────────────────────────────────── */}
-      <section className="aa-panel" aria-labelledby="aa-ask">
-        <div className="aa-panel-head">
-          <h2 className="aa-panel-title" id="aa-ask">Ask</h2>
-          <span className="aa-panel-hint">plain words · answered from live L2</span>
-        </div>
+      <HPanel
+        title="Ask"
+        hint="plain words · answered from live L2"
+        titleId="aa-ask"
+        className="mb-0!"
+      >
         <form className="aa-form" onSubmit={onSubmit}>
           <label className="aa-label" htmlFor="aa-q">your question</label>
           <textarea
@@ -227,25 +227,26 @@ export function AskArcRoom({ door, room, sentence, lede, mode, onOpen }: AskArcR
             </div>
           </div>
         ) : null}
-      </section>
+      </HPanel>
 
       {asking && !session ? (
-        <section className="aa-panel"><p className="aa-waiting">reading the live state through the door…</p></section>
+        <HPanel className="mb-0!"><p className="aa-waiting">reading the live state through the door…</p></HPanel>
       ) : null}
 
       {refusal ? (
-        <section className="aa-panel aa-refusal" role="status">
-          <div className="aa-panel-head">
-            <h2 className="aa-panel-title">the door refused the question</h2>
-            <span className="aa-code">{refusal.code}</span>
-          </div>
+        <HPanel
+          title="the door refused the question"
+          actions={<span className="aa-code">{refusal.code}</span>}
+          role="status"
+          className="aa-refusal mb-0!"
+        >
           <p className="aa-refusal-line">{refusal.human}</p>
           <p className="aa-panel-note">
             No answer is shown and none has been assembled from what this page happens to know.
             A room that filled a refused read with its own guess would be the exact thing the
             citation check below exists to catch, one layer earlier.
           </p>
-        </section>
+        </HPanel>
       ) : null}
 
       {session && standing ? (
@@ -276,94 +277,98 @@ function Answer({
 }) {
   const { asked, claims, resolutions } = session;
   return (
-    <section className="aa-panel aa-answer" aria-labelledby="aa-answer" aria-live="polite">
-      {/* THE VERDICT IS THE FIRST THING ON THE ANSWER, and it is the biggest.
-          Not a tooltip, not a footnote, not a small grey word beside the text. */}
-      <div className={`aa-standing aa-standing-${standing.klass}`}>
-        <span className="aa-standing-label">{standing.label}</span>
-        <span className="aa-standing-line">{standing.line}</span>
-      </div>
-
-      <h2 className="aa-panel-title aa-question" id="aa-answer">{session.question}</h2>
-
-      <p className="aa-body"><Prose text={asked.answer} /></p>
-
-      <div className="aa-half">
-        <span className="aa-half-label">{asked.halfLabel}</span>
-        <span className="aa-half-line">{asked.halfLine}</span>
-      </div>
-
-      {standing.broken.length ? (
-        <div className="aa-broken">
-          <p className="aa-broken-head">
-            {standing.broken.length} claim{standing.broken.length === 1 ? "" : "s"} could not be
-            resolved through the door
-          </p>
-          <ul className="aa-broken-list">
-            {standing.broken.map((key) => <li key={key}><code>{key}</code></li>)}
-          </ul>
-          <p className="aa-panel-note">
-            The answer above is kept exactly as it was written — deleting it would hide the
-            failure rather than fix it. What it has lost is its standing: nothing in it has been
-            proven against the log.
-          </p>
+    // No HPanel title: the verdict must come before the question, and a card title truncates.
+    // The question h2 below keeps its id; ariaLabel gives the card the same name it had.
+    <HPanel ariaLabel={session.question} className="mb-0!">
+      <div className="aa-answer" aria-live="polite">
+        {/* THE VERDICT IS THE FIRST THING ON THE ANSWER, and it is the biggest.
+            Not a tooltip, not a footnote, not a small grey word beside the text. */}
+        <div className={`aa-standing aa-standing-${standing.klass}`}>
+          <span className="aa-standing-label">{standing.label}</span>
+          <span className="aa-standing-line">{standing.line}</span>
         </div>
-      ) : null}
 
-      <div className="aa-cites">
-        <div className="aa-panel-head">
-          <h3 className="aa-panel-title">Citations</h3>
-          <span className="aa-panel-hint">
-            {claims.length === 0
-              ? "none named"
-              : `${standing.checked} of ${standing.total} put to the door`}
-            {asked.selfVerified === null ? "" : ` · the brain marked itself ${asked.selfVerified ? "verified" : "UNVERIFIED"}`}
-            {asked.shape === "text" ? " · the governed answer arrived as prose, so any id in it was read out of the sentence" : ""}
-          </span>
+        <h2 className="aa-panel-title aa-question" id="aa-answer">{session.question}</h2>
+
+        <p className="aa-body"><Prose text={asked.answer} /></p>
+
+        <div className="aa-half">
+          <span className="aa-half-label">{asked.halfLabel}</span>
+          <span className="aa-half-line">{asked.halfLine}</span>
         </div>
-        {claims.length === 0 ? (
-          <p className="aa-panel-note aa-no-cites">
-            Nothing was cited. Whether that is honest or hollow is the verdict at the top of this
-            answer, and the two cases are not drawn the same way.
-          </p>
-        ) : (
-          <ul className="aa-cite-list">
-            {claims.map((claim) => <CiteRow key={claim.key} claim={claim} resolution={resolutions[claim.key]} />)}
-          </ul>
-        )}
-      </div>
 
-      {commands.length ? (
-        <div className="aa-commands">
-          <div className="aa-panel-head">
-            <h3 className="aa-panel-title">What the answer says to run</h3>
-            <span className="aa-panel-hint">text, not a button — you run it, from the main clone</span>
+        {standing.broken.length ? (
+          <div className="aa-broken">
+            <p className="aa-broken-head">
+              {standing.broken.length} claim{standing.broken.length === 1 ? "" : "s"} could not be
+              resolved through the door
+            </p>
+            <ul className="aa-broken-list">
+              {standing.broken.map((key) => <li key={key}><code>{key}</code></li>)}
+            </ul>
+            <p className="aa-panel-note">
+              The answer above is kept exactly as it was written — deleting it would hide the
+              failure rather than fix it. What it has lost is its standing: nothing in it has been
+              proven against the log.
+            </p>
           </div>
-          <ul className="aa-command-list">
-            {commands.map((c) => <li key={c}><code>{c}</code></li>)}
-          </ul>
-          <p className="aa-panel-note">
-            These are printed so you can read them and type them. There is no control here that
-            runs one: the acts arc reserves for you — approving, rejecting, merging, publishing,
-            promoting, killing, sending — are forever-human, and a button that ran a command would
-            be that rule with a bow on it.
-          </p>
-        </div>
-      ) : null}
+        ) : null}
 
-      {handoff ? (
-        <div className="aa-handoff">
-          <a
-            className="aa-handoff-link"
-            href={inboxHref}
-            onClick={(ev) => { if (onOpen) { ev.preventDefault(); onOpen(handoff.room); } }}
-          >
-            {handoff.label} →
-          </a>
-          <span className="aa-handoff-line">{handoff.line}</span>
+        <div className="aa-cites">
+          <div className="aa-panel-head">
+            <h3 className="aa-panel-title">Citations</h3>
+            <span className="aa-panel-hint">
+              {claims.length === 0
+                ? "none named"
+                : `${standing.checked} of ${standing.total} put to the door`}
+              {asked.selfVerified === null ? "" : ` · the brain marked itself ${asked.selfVerified ? "verified" : "UNVERIFIED"}`}
+              {asked.shape === "text" ? " · the governed answer arrived as prose, so any id in it was read out of the sentence" : ""}
+            </span>
+          </div>
+          {claims.length === 0 ? (
+            <p className="aa-panel-note aa-no-cites">
+              Nothing was cited. Whether that is honest or hollow is the verdict at the top of this
+              answer, and the two cases are not drawn the same way.
+            </p>
+          ) : (
+            <ul className="aa-cite-list">
+              {claims.map((claim) => <CiteRow key={claim.key} claim={claim} resolution={resolutions[claim.key]} />)}
+            </ul>
+          )}
         </div>
-      ) : null}
-    </section>
+
+        {commands.length ? (
+          <div className="aa-commands">
+            <div className="aa-panel-head">
+              <h3 className="aa-panel-title">What the answer says to run</h3>
+              <span className="aa-panel-hint">text, not a button — you run it, from the main clone</span>
+            </div>
+            <ul className="aa-command-list">
+              {commands.map((c) => <li key={c}><code>{c}</code></li>)}
+            </ul>
+            <p className="aa-panel-note">
+              These are printed so you can read them and type them. There is no control here that
+              runs one: the acts arc reserves for you — approving, rejecting, merging, publishing,
+              promoting, killing, sending — are forever-human, and a button that ran a command would
+              be that rule with a bow on it.
+            </p>
+          </div>
+        ) : null}
+
+        {handoff ? (
+          <div className="aa-handoff">
+            <a
+              className="aa-handoff-link"
+              href={inboxHref}
+              onClick={(ev) => { if (onOpen) { ev.preventDefault(); onOpen(handoff.room); } }}
+            >
+              {handoff.label} →
+            </a>
+            <span className="aa-handoff-line">{handoff.line}</span>
+          </div>
+        ) : null}
+      </div>
+    </HPanel>
   );
 }
 
@@ -444,14 +449,8 @@ export default AskArcRoom;
 const CSS = `
 .aa-room{font-family:var(--font-display);color:var(--prose);padding:calc(var(--grid)*3) calc(var(--grid)*3) calc(var(--grid)*8);max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:calc(var(--grid)*3);}
 
-.aa-head{margin-bottom:var(--grid);}
-.aa-eyebrow{display:flex;align-items:center;gap:calc(var(--grid)*1.5);font-family:var(--font-mono);font-size:var(--step-meta);text-transform:uppercase;letter-spacing:var(--track-wide);color:var(--accent-dim);margin-bottom:calc(var(--grid)*2);}
-.aa-rule{height:1px;flex:1 1 40px;max-width:160px;background:var(--accent-line);}
 .aa-sim{font-family:var(--font-mono);font-size:var(--step-micro);letter-spacing:var(--track-tight);color:var(--sim-fg);border:1px solid var(--sim-line);border-radius:var(--radius-pill);padding:4px 10px;background-image:var(--sim-hatch);}
-.aa-sentence{font-size:clamp(28px,4vw,var(--step-room));line-height:1.04;letter-spacing:-0.02em;font-weight:600;margin:0 0 calc(var(--grid)*1.5) 0;max-width:20ch;}
-.aa-lede{font-size:var(--step-lede);font-weight:300;line-height:1.6;color:var(--meta);margin:0;max-width:66ch;}
 
-.aa-panel{position:relative;background:var(--panel);backdrop-filter:blur(var(--panel-blur));-webkit-backdrop-filter:blur(var(--panel-blur));border:1px solid var(--panel-border);border-radius:var(--radius-panel);padding:var(--pad-panel);min-width:0;}
 .aa-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--grid);flex-wrap:wrap;margin-bottom:calc(var(--grid)*1.5);}
 .aa-panel-title{font-family:var(--font-mono);font-size:var(--step-meta);text-transform:uppercase;letter-spacing:var(--track-wide);color:var(--accent);margin:0;font-weight:400;}
 .aa-panel-hint{font-family:var(--font-mono);font-size:var(--step-micro);color:var(--faint);overflow-wrap:anywhere;}
@@ -463,7 +462,6 @@ const CSS = `
 .aa-code{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--prose);border:1px solid var(--hairline-strong);border-radius:var(--radius-chip);padding:3px 9px;}
 
 /* ── the boundary ─────────────────────────────────────────────────────── */
-.aa-hands{border-color:var(--accent-line);}
 .aa-routes{list-style:none;margin:0 0 calc(var(--grid)*2) 0;padding:0;display:flex;flex-direction:column;}
 .aa-route{display:flex;align-items:baseline;gap:var(--grid);flex-wrap:wrap;padding:var(--grid) 0;border-bottom:1px solid var(--hairline);min-height:var(--row-h);}
 .aa-route-name{font-family:var(--font-mono);font-size:var(--step-data);color:var(--prose);flex:0 0 auto;}
@@ -473,7 +471,8 @@ const CSS = `
 .aa-verdict-tag{text-transform:uppercase;letter-spacing:var(--track-mid);color:var(--accent);font-size:var(--step-micro);}
 .aa-verdict-broken{border-color:var(--prose);color:var(--prose);background-image:repeating-linear-gradient(135deg,var(--hairline-strong) 0,var(--hairline-strong) 2px,transparent 2px,transparent 11px);}
 .aa-verdict-broken .aa-verdict-tag{color:var(--prose);}
-.aa-hands-broken{border-color:var(--prose);}
+/* HPanel draws its border inline, so a state mark has to be important to show at all. */
+.aa-hands-broken{border-color:var(--prose) !important;}
 
 /* ── the question ─────────────────────────────────────────────────────── */
 .aa-form{display:flex;flex-direction:column;gap:var(--grid);margin-bottom:calc(var(--grid)*2);}
@@ -547,7 +546,7 @@ const CSS = `
 .aa-handoff-link{min-height:var(--row-h-live);display:inline-flex;align-items:center;padding:0 calc(var(--grid)*2);font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);color:var(--accent);text-decoration:none;border:1px solid var(--accent-line);border-radius:var(--radius-chip);}
 .aa-handoff-line{font-size:var(--step-body);font-weight:300;line-height:1.6;color:var(--meta);flex:1 1 320px;min-width:0;max-width:74ch;}
 
-.aa-refusal{border-left:3px solid var(--hairline-strong);}
+.aa-refusal{border-color:var(--hairline-strong) !important;}
 .aa-refusal-line{font-size:var(--step-body);font-weight:300;line-height:1.6;color:var(--prose);margin:0 0 var(--grid) 0;max-width:70ch;}
 
 @media (max-width:640px){

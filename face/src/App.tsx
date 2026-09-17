@@ -6,7 +6,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
-import './tokens.css'
+// Tailwind v4 and the generated token copy both enter through index.css (ADR-1323).
+import './index.css'
 
 import { ASOF_ROUTES, Door, DoorError, decodeRegistry, tokenFromHash, unescapeDoorText } from './lib/door.mjs'
 import { byRing, findRoom, defaultRoom, errorSentence, laneForRoom } from './lib/rooms.mjs'
@@ -30,7 +31,9 @@ import MoneyRoom from './rooms/MoneyRoom'
 import VenturesRoom from './rooms/VenturesRoom'
 import MapRoom from './rooms/MapRoom'
 import { needsYouByRoom } from './lib/map.mjs'
-import { Failure, Loading } from './ui/kit'
+import { Failure, Loading } from './ui/legacy'
+import { applyMood, nextMood, readMood, storeMood } from './lib/mood.mjs'
+import type { Mood } from './lib/mood.mjs'
 
 // `inventories` is nullable, not optional-with-a-default. A door serving a registry generated
 // before ADR-1317 sends null, and a room must be able to say "the registry carried no band map"
@@ -42,6 +45,14 @@ export default function App() {
   const [error, setError] = useState<unknown>(null)
   const [roomId, setRoomId] = useState<string>(() => parseHash(window.location.hash).room ?? HOME)
   const [talking] = useState(false)
+  // The workroom's mood. main.tsx already put the stored one on <html> before the first render;
+  // this state only follows it, and a toggle writes both the classes and the preference.
+  const [mood, setMood] = useState<Mood>(() => readMood(storage()))
+  const toggleMood = useCallback(() => setMood((m) => nextMood(m)), [])
+  useEffect(() => {
+    applyMood(document.documentElement.classList, mood)
+    storeMood(storage(), mood)
+  }, [mood])
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [asOf, setAsOf] = useState<string | null>(() => parseHash(window.location.hash).asOf)
   const [today, setToday] = useState<string | null>(null)
@@ -210,9 +221,14 @@ export default function App() {
       {/* The face persists behind every room at reduced presence. It is the one element of
           the design the owner required unchanged, and it is the shell rather than a hero
           image -- which is what stops this reading as a dashboard template. */}
-      <div style={faceLayerStyle} aria-hidden="true">
-        <FaceStage presence={0.28} state={talking ? 'talking' : 'idle'} />
-      </div>
+      {/* Dark mood only. Its glow reads against a dark ground and washes out on paper, and v0.7's
+          workroom carries no face behind its rooms at all; where the stage lives in the v2 shell
+          is Phase 02's to decide. Keyed on the mood so the stage re-reads its tokens. */}
+      {mood === 'dark' ? (
+        <div key={mood} style={faceLayerStyle} aria-hidden="true">
+          <FaceStage presence={0.28} state={talking ? 'talking' : 'idle'} />
+        </div>
+      ) : null}
 
       {paletteOpen && (
         <Palette
@@ -223,7 +239,7 @@ export default function App() {
       )}
 
       <div style={frameStyle}>
-        <Rings groups={groups} current={room ? room.id : HOME} onOpen={open} />
+        <Rings groups={groups} current={room ? room.id : HOME} onOpen={open} mood={mood} onToggleMood={toggleMood} />
         {/* data-room names the room actually rendered, so the browser harness can tell "opened
             the room I asked for" from "fell back to the default room" (face v2 Phase 00). */}
         <section ref={roomScrollRef} style={roomStyle} aria-live="polite" data-room={room ? room.id : ''}>
@@ -298,9 +314,9 @@ function NoSuchRoom({ id }: { id: string }) {
 const pageStyle: CSSProperties = {
   position: 'relative',
   minHeight: '100vh',
-  background: 'var(--ground)',
-  color: 'var(--prose)',
-  font: `400 var(--step-body)/1.5 var(--font-display)`,
+  background: 'var(--bg-0)',
+  color: 'var(--text-1)',
+  font: `400 var(--step-body)/1.5 var(--font-ui)`,
 }
 
 const faceLayerStyle: CSSProperties = {
@@ -334,11 +350,22 @@ const roomStyle: CSSProperties = {
   // the largest text on the page. This keeps the face visible while giving every headline a
   // ground to sit on -- the alternative, an opaque column, deletes the one element the owner
   // said must not change.
-  background: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.55))',
+  // The canvas token at most of its strength, so it follows the mood; in the light mood there is
+  // no face behind it and the column simply reads as paper.
+  background: 'color-mix(in srgb, var(--bg-0) 80%, transparent)',
 }
 
 const hintStyle: CSSProperties = {
   font: `400 var(--step-meta)/1.6 var(--font-mono)`,
   color: 'var(--meta)',
   maxWidth: '60ch',
+}
+
+/** `window.localStorage` can throw on access under a storage policy; the mood then lives for this visit only. */
+function storage(): Storage | null {
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
 }

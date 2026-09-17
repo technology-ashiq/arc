@@ -62,6 +62,8 @@ check("#/map (a hash route) is not a hex literal", kinds(`href="#/map"`).length 
 check("WHITE in upper case is a named literal", kinds(`color: WHITE`).includes("named"));
 check("text-black/40 is a named literal", kinds(`className="text-black/40"`).includes("named"));
 check("whitespace-nowrap is not a colour", kinds(`className="whitespace-nowrap"`).length === 0);
+check("the CSS property white-space is not a colour, in any case", kinds(`.x{white-space:nowrap} .y{WHITE-SPACE: pre}`).length === 0);
+check("but white-spaced prose and text-white-spacer are still the word white", kinds(`a white-spacer`).includes("named") && kinds(`bg-white-space2`).includes("named"));
 check("an identifier containing a colour word is not a colour", kinds(`const isWhite = blackList;`).length === 0);
 check("rgba(0,0,0,.5) is a function literal", kinds(`background: rgba(0,0,0,.5)`).includes("function"));
 check("hsl( 210 20% 10% ) is a function literal", kinds(`c = "hsl( 210 20% 10% )"`).includes("function"));

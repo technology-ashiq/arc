@@ -90,9 +90,11 @@ load 'test_helper'
   local arcScripts; arcScripts=$(find "$ARC_ROOT/.claude/scripts" -name '*.mjs' | wc -l | tr -d " ")
   [ "$arcScripts" -ge 20 ] || { echo "only $arcScripts scripts to scan; too few for this to mean anything"; false; }
   run bash -c "grep -rlE '(^|[^[:alnum:]_-])face/src' '$ARC_ROOT/.claude/scripts' 2>/dev/null || true"
-  # face-tokens.mjs WRITES the copy, so it names the path; nothing may IMPORT from it.
+  # face-tokens.mjs WRITES the copy and face-colour-literal.mjs READS face/src/ui and
+  # face/src/modules to lint them (face v2 Phase 01), so both name the path; nothing may IMPORT
+  # from it. Each exclusion is one named file with its reason, never a prefix.
   local importers
-  importers=$(printf '%s\n' "$output" | grep -v 'face-tokens.mjs' | grep -v '^$' || true)
+  importers=$(printf '%s\n' "$output" | grep -v '/face-tokens\.mjs$' | grep -v '/face-colour-literal\.mjs$' | grep -v '^$' || true)
   [ -z "$importers" ] || { echo "an arc script depends on face/: $importers"; false; }
 }
 

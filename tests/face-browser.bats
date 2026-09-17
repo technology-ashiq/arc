@@ -114,6 +114,14 @@ smoke_summary_verdict() {
   run node "$dst/node_modules/vite/bin/vite.js" build "$dst" 3>&-
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" | tail -40; false; }
   [ -f "$dst/dist/index.html" ] || { echo "vite build exited 0 but wrote no dist/index.html"; false; }
+  # Tailwind compiled the kit's classes from face/src, not from whichever directory the build
+  # started in (face v2 Phase 01): a utility only the kit uses must be in the emitted stylesheet,
+  # and so must the light mood. A build that styles nothing logs no error for the smoke to see.
+  local css
+  css="$(cat "$dst"/dist/assets/*.css 2>/dev/null || true)"
+  [ -n "$css" ] || { echo "vite build wrote no stylesheet under dist/assets"; false; }
+  [[ "$css" == *'.text-\[22px\]'* ]] || { echo "the built CSS carries none of the kit's utilities -- Tailwind scanned the wrong tree"; false; }
+  [[ "$css" == *'hq-light'* ]] || { echo "the built CSS carries no light mood"; false; }
 }
 
 @test "face-browser: door + preview + smoke open every openable room with 0 errors, in BOTH moods" {

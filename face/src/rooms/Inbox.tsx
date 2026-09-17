@@ -30,6 +30,7 @@ import {
   validateReason, stamp, approvalBody, ageSentence, timeOfDay, shortId, fmtInt, tail, toneForKind,
 } from "../lib/inbox.mjs";
 import type { Approval, InboxView, SpinePage, Tone, Refused } from "../lib/inbox.mjs";
+import { HPanel, RoomHead } from "../ui/bits";
 
 /* -------------------------------------------------------------------------- */
 
@@ -205,27 +206,23 @@ export function Inbox({ door, room, sentence, lede }: InboxProps) {
     <section className="ib-room" aria-label="Inbox">
       <style>{CSS}</style>
 
-      <header className="ib-head">
-        <div className="ib-headtext">
-          <h1 className="ib-sentence">{opening.sentence}</h1>
-          <p className="ib-lede">{opening.lede}</p>
-        </div>
-        <div className="ib-chrome">
-          {counts === null ? null : (
-            <>
-              <span className="ib-count" style={{ color: (counts.openCount ?? 0) > 0 ? "var(--amber)" : "var(--meta)" }}>
-                {counts.openCount === null ? "—" : fmtInt(counts.openCount)} open
-              </span>
-              <span className="ib-count ib-count-quiet">
-                {counts.decidedCount === null ? "—" : fmtInt(counts.decidedCount)} decided
-              </span>
-              {counts.mode === "sim"
-                ? <span className="ib-sim" title="fixture data: a stamp here writes to the fixture spine named on the door's command line">SIMULATED</span>
-                : null}
-            </>
-          )}
-        </div>
-      </header>
+      <RoomHead
+        title={opening.sentence}
+        hint={opening.lede}
+        right={counts === null ? null : (
+          <>
+            <span className="ib-count" style={{ color: (counts.openCount ?? 0) > 0 ? "var(--amber)" : "var(--meta)" }}>
+              {counts.openCount === null ? "—" : fmtInt(counts.openCount)} open
+            </span>
+            <span className="ib-count ib-count-quiet">
+              {counts.decidedCount === null ? "—" : fmtInt(counts.decidedCount)} decided
+            </span>
+            {counts.mode === "sim"
+              ? <span className="ib-sim" title="fixture data: a stamp here writes to the fixture spine named on the door's command line">SIMULATED</span>
+              : null}
+          </>
+        )}
+      />
 
       <p className="ib-law">
         A machine raised every card below and no machine may close one. The stamp writes
@@ -282,11 +279,7 @@ export function Inbox({ door, room, sentence, lede }: InboxProps) {
 
       {/* what this session stamped. Kept on screen after the fold removes the card. */}
       {stamped.length === 0 ? null : (
-        <div className="ib-panel">
-          <div className="ib-panel-head">
-            <span className="ib-panel-title">decided by you, this session</span>
-            <span className="ib-panel-hint">decision.recorded · final</span>
-          </div>
+        <HPanel title="decided by you, this session" hint="decision.recorded · final" className="mb-0!">
           <ul className="ib-raised">
             {stamped.map((s) => (
               <li className="ib-raised-row" key={s.id}>
@@ -302,15 +295,11 @@ export function Inbox({ door, room, sentence, lede }: InboxProps) {
             Each is on the spine under the words you typed. There is no undo: a decision
             that must change is superseded on a new day, and both remain in the record.
           </p>
-        </div>
+        </HPanel>
       )}
 
       {/* needs-you kinds that are NOT approvals: cards with chips, never stamps */}
-      <div className="ib-panel">
-        <div className="ib-panel-head">
-          <span className="ib-panel-title">also raised, and not stampable</span>
-          <span className="ib-panel-hint">{RAISED_KINDS.join(" · ")}</span>
-        </div>
+      <HPanel title="also raised, and not stampable" hint={RAISED_KINDS.join(" · ")} className="mb-0!">
         <p className="ib-panel-note">
           These kinds need a human and no button in this product decides one. The spine
           records that each was <b>raised</b>; nothing on it records that one was handled,
@@ -341,7 +330,7 @@ export function Inbox({ door, room, sentence, lede }: InboxProps) {
             ))}
           </ul>
         ) : null}
-      </div>
+      </HPanel>
     </section>
   );
 }
@@ -495,11 +484,6 @@ function ApprovalCard(p: CardProps) {
 
 const CSS = `
 .ib-room{font-family:var(--font-display);color:var(--prose);padding:calc(var(--grid)*3) calc(var(--grid)*3) calc(var(--grid)*6);max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:calc(var(--grid)*2);}
-.ib-head{display:flex;align-items:flex-start;gap:calc(var(--grid)*2);flex-wrap:wrap;}
-.ib-headtext{flex:1 1 380px;min-width:0;}
-.ib-sentence{font-size:clamp(24px,3.6vw,var(--step-room));line-height:1.04;letter-spacing:-0.02em;font-weight:600;margin:0 0 var(--grid) 0;color:var(--prose);}
-.ib-lede{font-size:var(--step-lede);line-height:1.5;font-weight:300;color:var(--meta);margin:0;max-width:64ch;}
-.ib-chrome{display:flex;align-items:center;gap:var(--grid);flex-wrap:wrap;margin-left:auto;}
 .ib-count{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;font-variant-numeric:var(--numeric);}
 .ib-count-quiet{color:var(--meta);}
 .ib-sim{font-family:var(--font-mono);font-size:var(--step-micro);letter-spacing:var(--track-mid);color:var(--sim-fg);background:var(--sim-hatch);border-radius:var(--radius-pill);padding:calc(var(--grid-in)*1) calc(var(--grid-in)*2);}
@@ -524,7 +508,7 @@ const CSS = `
 .ib-body-empty,.ib-waiting{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--faint);line-height:1.6;}
 .ib-decide{display:flex;flex-direction:column;gap:var(--grid);}
 .ib-reason-label{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-mid);text-transform:uppercase;color:var(--amber);}
-.ib-reason{font-family:var(--font-mono);font-size:var(--step-body);line-height:1.5;color:var(--prose);background:rgba(0,0,0,0.45);border:1px solid var(--hairline-strong);border-radius:var(--radius-chip);padding:var(--grid);resize:vertical;min-height:var(--row-h-live);width:100%;box-sizing:border-box;}
+.ib-reason{font-family:var(--font-mono);font-size:var(--step-body);line-height:1.5;color:var(--prose);background:var(--well);border:1px solid var(--hairline-strong);border-radius:var(--radius-chip);padding:var(--grid);resize:vertical;min-height:var(--row-h-live);width:100%;box-sizing:border-box;}
 .ib-reason::placeholder{color:var(--faint);}
 .ib-reason:focus-visible{border-color:var(--accent);}
 .ib-reason:disabled{opacity:0.5;}
@@ -549,16 +533,12 @@ const CSS = `
 .ib-refusal{border:1px solid var(--hairline-strong);border-left:2px solid var(--amber);border-radius:var(--radius-chip);padding:calc(var(--grid)*2);}
 .ib-refusal p{margin:var(--grid) 0 0;font-size:var(--step-body);line-height:1.5;color:var(--prose);font-weight:300;}
 .ib-refusal-what{color:var(--meta) !important;font-size:var(--step-meta) !important;}
-.ib-panel{border:1px solid var(--panel-border);border-radius:var(--radius-panel);background:var(--panel);backdrop-filter:blur(var(--panel-blur));-webkit-backdrop-filter:blur(var(--panel-blur));padding:var(--pad-panel);}
-.ib-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--grid);flex-wrap:wrap;margin-bottom:var(--grid);}
-.ib-panel-title{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-wide);text-transform:uppercase;color:var(--accent);}
-.ib-panel-hint{font-family:var(--font-mono);font-size:var(--step-micro);color:var(--faint);overflow-wrap:anywhere;}
 .ib-panel-note{font-size:var(--step-body);line-height:1.6;font-weight:300;color:var(--meta);margin:0 0 var(--grid);}
 .ib-raised{list-style:none;margin:0;padding:0;}
 .ib-raised-row{display:flex;align-items:center;gap:var(--grid);flex-wrap:wrap;min-height:var(--row-h);padding:calc(var(--grid-in)*1) 0;border-bottom:1px solid var(--hairline);}
 .ib-raised-when,.ib-raised-v{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--meta);}
 .ib-done-what{font-size:var(--step-body);font-weight:300;color:var(--meta);min-width:0;overflow-wrap:anywhere;}
-@media (max-width:640px){.ib-room{padding:calc(var(--grid)*2) var(--grid) calc(var(--grid)*4);}.ib-chrome{margin-left:0;}.ib-body-row{flex-direction:column;gap:0;}.ib-body-row dt{flex:0 0 auto;}}
+@media (max-width:640px){.ib-room{padding:calc(var(--grid)*2) var(--grid) calc(var(--grid)*4);}.ib-body-row{flex-direction:column;gap:0;}.ib-body-row dt{flex:0 0 auto;}}
 `;
 
 // Named and default both, for the same reason Today gives.

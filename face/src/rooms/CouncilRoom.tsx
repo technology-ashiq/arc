@@ -28,6 +28,7 @@ import {
 } from "../lib/ask.mjs";
 import type { CouncilSession, CouncilState, Seat } from "../lib/ask.mjs";
 import { displayValue } from "../lib/rooms.mjs";
+import { HPanel, RoomHead } from "../ui/bits";
 
 /* -------------------------------------------------------------------------- */
 
@@ -101,22 +102,20 @@ export function CouncilRoom({ door, room, sentence, lede, mode }: CouncilRoomPro
     <div className="cc-room">
       <style>{CSS}</style>
 
-      <header className="cc-head">
-        <div className="cc-eyebrow">
-          <span>factory · council-chamber</span>
-          <span className="cc-rule" aria-hidden="true" />
-          {mode === "sim" ? <span className="cc-sim" title="fixture data: every count on this page comes from the fixture spine named on the door's command line">SIMULATED</span> : null}
-        </div>
-        <h1 className="cc-sentence">{opening.sentence}</h1>
-        <p className="cc-lede">{opening.lede}</p>
-      </header>
+      <RoomHead
+        eyebrow="factory · council-chamber"
+        title={opening.sentence}
+        hint={opening.lede}
+        right={mode === "sim" ? <span className="cc-sim" title="fixture data: every count on this page comes from the fixture spine named on the door's command line">SIMULATED</span> : null}
+      />
 
       {/* ── the method, which is the room ───────────────────────────────── */}
-      <section className="cc-panel" aria-labelledby="cc-method">
-        <div className="cc-panel-head">
-          <h2 className="cc-panel-title" id="cc-method">How a verdict is earned</h2>
-          <span className="cc-panel-hint">{COUNCIL_STAGES.length} stages · fixed order · no step is optional on a deep run</span>
-        </div>
+      <HPanel
+        title="How a verdict is earned"
+        hint={<>{COUNCIL_STAGES.length} stages · fixed order · no step is optional on a deep run</>}
+        titleId="cc-method"
+        className="mb-0!"
+      >
         <p className="cc-panel-note">
           A rubber stamp is what you get when the members see each other, when nobody grades the
           evidence, and when the losing argument is thrown away instead of printed. Every stage
@@ -134,14 +133,15 @@ export function CouncilRoom({ door, room, sentence, lede, mode }: CouncilRoomPro
             </li>
           ))}
         </ol>
-      </section>
+      </HPanel>
 
       {/* ── the grading vocabulary ──────────────────────────────────────── */}
-      <section className="cc-panel" aria-labelledby="cc-grades">
-        <div className="cc-panel-head">
-          <h2 className="cc-panel-title" id="cc-grades">What a grade costs a point</h2>
-          <span className="cc-panel-hint">the verifier rates the EVIDENCE, never the conclusion</span>
-        </div>
+      <HPanel
+        title="What a grade costs a point"
+        hint="the verifier rates the EVIDENCE, never the conclusion"
+        titleId="cc-grades"
+        className="mb-0!"
+      >
         <p className="cc-panel-note">
           These four words are the mechanism, not a mood. <em>Weak</em> is not a hedge — it is a
           deletion, and a reader who takes it for a hedge reads the whole verdict wrong.
@@ -157,17 +157,20 @@ export function CouncilRoom({ door, room, sentence, lede, mode }: CouncilRoomPro
             </div>
           ))}
         </dl>
-      </section>
+      </HPanel>
 
       {/* ── the twelve seats ────────────────────────────────────────────── */}
-      <section className="cc-panel" aria-labelledby="cc-seats">
-        <div className="cc-panel-head">
-          <h2 className="cc-panel-title" id="cc-seats">The seats</h2>
-          <span className="cc-panel-hint">
+      <HPanel
+        title="The seats"
+        hint={
+          <>
             {displayValue(roster.counted).text} homed in this room by the contract
             {roster.counted === roster.expected ? "" : ` · this shell names ${displayValue(roster.expected).text}`}
-          </span>
-        </div>
+          </>
+        }
+        titleId="cc-seats"
+        className="mb-0!"
+      >
         {roster.counted === 0 ? (
           <div className="cc-absence">
             <p className="cc-absence-label">SEATS NOT READ</p>
@@ -200,25 +203,26 @@ export function CouncilRoom({ door, room, sentence, lede, mode }: CouncilRoomPro
             ) : null}
           </>
         )}
-      </section>
+      </HPanel>
 
       {/* ── sessions and calibration, from the log ──────────────────────── */}
       {state.phase === "loading" ? (
-        <section className="cc-panel"><p className="cc-waiting">reading the council's receipts from the door…</p></section>
+        <HPanel className="mb-0!"><p className="cc-waiting">reading the council's receipts from the door…</p></HPanel>
       ) : null}
 
       {state.phase === "error" ? (
-        <section className="cc-panel cc-refusal" role="status">
-          <div className="cc-panel-head">
-            <h2 className="cc-panel-title">could not read the council's receipts</h2>
-            <span className="cc-code">{state.code}</span>
-          </div>
+        <HPanel
+          title="could not read the council's receipts"
+          actions={<span className="cc-code">{state.code}</span>}
+          role="status"
+          className="cc-refusal mb-0!"
+        >
           <p className="cc-refusal-line">{state.human}</p>
           <p className="cc-panel-note">
             No session list is shown and none has been invented. The method above is read from the
             contract and stands; everything below it is the log's to say.
           </p>
-        </section>
+        </HPanel>
       ) : null}
 
       {state.phase === "ok" ? <Sessions state={state.data} /> : null}
@@ -241,7 +245,7 @@ function SeatCard({ seat }: { seat: Seat }) {
     <li className={seat.standing ? "cc-seat cc-seat-standing" : "cc-seat"}>
       <div className="cc-seat-top">
         <span className="cc-seat-name">{seat.seat}</span>
-        {seat.prefix ? <span className="cc-seat-prefix" title="the prefix every point this seat makes is labelled with">{seat.prefix}1…</span> : null}
+        {seat.prefix ? <span className="cc-seat-prefix whitespace-nowrap" title="the prefix every point this seat makes is labelled with">{seat.prefix}1…</span> : null}
       </div>
       <code className="cc-seat-agent">{seat.agent}</code>
       <span className="cc-seat-when">{seat.when}</span>
@@ -253,15 +257,17 @@ function SeatCard({ seat }: { seat: Seat }) {
 function Sessions({ state }: { state: CouncilState }) {
   const { sessions } = state;
   return (
-    <section className="cc-panel" aria-labelledby="cc-sessions">
-      <div className="cc-panel-head">
-        <h2 className="cc-panel-title" id="cc-sessions">Past sessions, and what happened next</h2>
-        <span className="cc-panel-hint">
+    <HPanel
+      title="Past sessions, and what happened next"
+      hint={
+        <>
           {displayValue(sessions.length).text} session{sessions.length === 1 ? "" : "s"} on the spine
           {state.page.ok && state.page.more ? " · more receipts exist than this page carries" : ""}
-        </span>
-      </div>
-
+        </>
+      }
+      titleId="cc-sessions"
+      className="mb-0!"
+    >
       {sessions.length === 0 ? (
         <div className="cc-absence">
           <p className="cc-absence-label">NEVER CONVENED ON THE RECORD</p>
@@ -286,7 +292,7 @@ function Sessions({ state }: { state: CouncilState }) {
         hash. A room that printed a question here would be reading it from somewhere the receipt
         does not go.
       </p>
-    </section>
+    </HPanel>
   );
 }
 
@@ -327,11 +333,12 @@ function Calibration({ state }: { state: CouncilState }) {
   const c = state.calibration;
   const scored = c.brier !== null;
   return (
-    <section className="cc-panel" aria-labelledby="cc-cal">
-      <div className="cc-panel-head">
-        <h2 className="cc-panel-title" id="cc-cal">Juror calibration</h2>
-        <span className="cc-panel-hint">is the council's confidence worth anything?</span>
-      </div>
+    <HPanel
+      title="Juror calibration"
+      hint="is the council's confidence worth anything?"
+      titleId="cc-cal"
+      className="mb-0!"
+    >
       <p className="cc-panel-note">
         A council that says <em>High confidence</em> and is right 55 % of the time is not a council
         with a good record. It is a council whose confidence label means nothing. That is measurable,
@@ -388,17 +395,18 @@ function Calibration({ state }: { state: CouncilState }) {
         {c.scored === 1 ? "" : "s"} would yield a Brier score to four decimal places, and it would
         mean nothing.
       </p>
-    </section>
+    </HPanel>
   );
 }
 
 function Kinds({ state }: { state: CouncilState }) {
   return (
-    <section className="cc-panel" aria-labelledby="cc-kinds">
-      <div className="cc-panel-head">
-        <h2 className="cc-panel-title" id="cc-kinds">What this room records</h2>
-        <span className="cc-panel-hint">{COUNCIL_KINDS.length} kinds homed here by the contract</span>
-      </div>
+    <HPanel
+      title="What this room records"
+      hint={<>{COUNCIL_KINDS.length} kinds homed here by the contract</>}
+      titleId="cc-kinds"
+      className="mb-0!"
+    >
       <ul className="cc-kinds">
         {state.kindRows.map((row) => (
           <li key={row.kind} className={row.state === "live" ? "cc-kind cc-kind-live" : "cc-kind"}>
@@ -413,7 +421,7 @@ function Kinds({ state }: { state: CouncilState }) {
         owner's stamp, made in the Inbox, in his own words. The chamber counts it and never renders
         it as though a panel had decided anything.
       </p>
-    </section>
+    </HPanel>
   );
 }
 
@@ -464,17 +472,8 @@ export default CouncilRoom;
 const CSS = `
 .cc-room{font-family:var(--font-display);color:var(--prose);padding:calc(var(--grid)*3) calc(var(--grid)*3) calc(var(--grid)*8);max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:calc(var(--grid)*3);}
 
-.cc-head{margin-bottom:var(--grid);}
-.cc-eyebrow{display:flex;align-items:center;gap:calc(var(--grid)*1.5);font-family:var(--font-mono);font-size:var(--step-meta);text-transform:uppercase;letter-spacing:var(--track-wide);color:var(--accent-dim);margin-bottom:calc(var(--grid)*2);}
-.cc-rule{height:1px;flex:1 1 40px;max-width:160px;background:var(--accent-line);}
 .cc-sim{font-family:var(--font-mono);font-size:var(--step-micro);letter-spacing:var(--track-tight);color:var(--sim-fg);border:1px solid var(--sim-line);border-radius:var(--radius-pill);padding:4px 10px;background-image:var(--sim-hatch);}
-.cc-sentence{font-size:clamp(28px,4vw,var(--step-room));line-height:1.04;letter-spacing:-0.02em;font-weight:600;margin:0 0 calc(var(--grid)*1.5) 0;max-width:18ch;}
-.cc-lede{font-size:var(--step-lede);font-weight:300;line-height:1.6;color:var(--meta);margin:0;max-width:66ch;}
 
-.cc-panel{position:relative;background:var(--panel);backdrop-filter:blur(var(--panel-blur));-webkit-backdrop-filter:blur(var(--panel-blur));border:1px solid var(--panel-border);border-radius:var(--radius-panel);padding:var(--pad-panel);min-width:0;}
-.cc-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--grid);flex-wrap:wrap;margin-bottom:calc(var(--grid)*1.5);}
-.cc-panel-title{font-family:var(--font-mono);font-size:var(--step-meta);text-transform:uppercase;letter-spacing:var(--track-wide);color:var(--accent);margin:0;font-weight:400;}
-.cc-panel-hint{font-family:var(--font-mono);font-size:var(--step-micro);color:var(--faint);overflow-wrap:anywhere;}
 .cc-panel-note{font-size:var(--step-body);font-weight:300;line-height:1.65;color:var(--meta);margin:0 0 calc(var(--grid)*2) 0;max-width:74ch;}
 .cc-panel-foot{margin:calc(var(--grid)*2) 0 0 0;padding-top:calc(var(--grid)*2);border-top:1px solid var(--hairline);}
 .cc-panel-note code,.cc-absence-note code,.cc-note-warn code{font-family:var(--font-mono);font-size:var(--step-data);color:var(--prose);}
@@ -503,7 +502,7 @@ const CSS = `
 .cc-seat-standing{border-color:var(--accent-line);}
 .cc-seat-top{display:flex;align-items:baseline;justify-content:space-between;gap:var(--grid);}
 .cc-seat-name{font-size:var(--step-body);font-weight:500;color:var(--prose);}
-.cc-seat-prefix{font-family:var(--font-mono);font-size:var(--step-micro);color:var(--accent-dim);border:1px solid var(--accent-line);border-radius:var(--radius-pill);padding:2px 7px;white-space:nowrap;}
+.cc-seat-prefix{font-family:var(--font-mono);font-size:var(--step-micro);color:var(--accent-dim);border:1px solid var(--accent-line);border-radius:var(--radius-pill);padding:2px 7px;}
 .cc-seat-agent{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--meta);overflow-wrap:anywhere;}
 .cc-seat-when{font-family:var(--font-mono);font-size:var(--step-micro);line-height:1.5;color:var(--faint);}
 .cc-seat-unmapped{font-family:var(--font-mono);font-size:var(--step-micro);letter-spacing:var(--track-tight);color:var(--prose);border-top:1px solid var(--hairline-strong);padding-top:var(--grid-in);margin-top:var(--grid-in);}
@@ -513,7 +512,8 @@ const CSS = `
 .cc-absence-note{font-size:var(--step-body);font-weight:300;line-height:1.65;color:var(--meta);margin:0;max-width:74ch;}
 .cc-note-warn{font-family:var(--font-mono);font-size:var(--step-meta);line-height:1.6;color:var(--prose);margin:calc(var(--grid)*2) 0 0 0;padding:var(--grid) calc(var(--grid)*1.5);border:1px solid var(--hairline-strong);border-radius:var(--radius-chip);max-width:80ch;}
 
-.cc-refusal{border-left:3px solid var(--hairline-strong);}
+/* HPanel draws its border inline, so a state mark has to be important to show at all. */
+.cc-refusal{border-color:var(--hairline-strong) !important;}
 .cc-refusal-line{font-size:var(--step-body);font-weight:300;line-height:1.6;color:var(--prose);margin:0 0 var(--grid) 0;max-width:70ch;}
 .cc-code{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--prose);border:1px solid var(--hairline-strong);border-radius:var(--radius-chip);padding:3px 9px;}
 

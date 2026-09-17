@@ -29,6 +29,7 @@ import {
 } from "../lib/spine.mjs";
 import type { LogRecord, SeekState, SpineHealth } from "../lib/spine.mjs";
 import type { Refused } from "../lib/inbox.mjs";
+import { HPanel, RoomHead } from "../ui/bits";
 
 export type SpineRoomProps = {
   /** The L2 client. The shell owns the token; this room only reads through it. */
@@ -183,23 +184,23 @@ export function SpineRoom({ door, room, sentence, lede }: SpineRoomProps) {
     <section className="s-room" aria-label="Spine">
       <style>{CSS}</style>
 
-      <header className="s-head">
-        <div className="s-headtext">
-          <h1 className="s-sentence">{opening.sentence}</h1>
-          <p className="s-lede">{opening.lede}</p>
-        </div>
-        <div className="s-chrome">
-          <ModeChip mode={health?.mode ?? null} />
-          <span className="s-clock" title="the door's own clock, in the company's timezone">
-            {health === null ? "reading…" : health.now}
-          </span>
-          {health?.cursor === undefined || health.cursor === null ? null : (
-            <span className="s-receipt" title={`the newest receipt on the spine — ${health.cursor}`}>
-              ⌗ {shortId(health.cursor)}
+      <RoomHead
+        title={opening.sentence}
+        hint={opening.lede}
+        right={
+          <>
+            <ModeChip mode={health?.mode ?? null} />
+            <span className="s-clock" title="the door's own clock, in the company's timezone">
+              {health === null ? "reading…" : health.now}
             </span>
-          )}
-        </div>
-      </header>
+            {health?.cursor === undefined || health.cursor === null ? null : (
+              <span className="s-receipt" title={`the newest receipt on the spine — ${health.cursor}`}>
+                ⌗ {shortId(health.cursor)}
+              </span>
+            )}
+          </>
+        }
+      />
 
       {healthError === null ? null : <Refusal said={healthError} what="the spine's own health" />}
 
@@ -235,13 +236,11 @@ export function SpineRoom({ door, room, sentence, lede }: SpineRoomProps) {
       </div>
 
       {/* ── quarantine, by refusal code ───────────────────────────────────── */}
-      <div className="s-panel">
-        <div className="s-panel-head">
-          <span className="s-panel-title">refused and held separately</span>
-          <span className="s-panel-hint">
-            grouped by the door's own refusal code · {quarantine.measured ? "measured" : "not served"}
-          </span>
-        </div>
+      <HPanel
+        title="refused and held separately"
+        hint={<>grouped by the door's own refusal code · {quarantine.measured ? "measured" : "not served"}</>}
+        className="mb-0!"
+      >
         <p className="s-say">{quarantine.headline}</p>
         {quarantine.families.length === 0 ? null : (
           <ul className="s-fams">
@@ -283,18 +282,16 @@ export function SpineRoom({ door, room, sentence, lede }: SpineRoomProps) {
             ? ""
             : ` ${fmtInt(quarantine.unreadable)} quarantine record${quarantine.unreadable === 1 ? " was" : "s were"} themselves unreadable.`}
         </p>
-      </div>
+      </HPanel>
 
       {/* ── filters ───────────────────────────────────────────────────────── */}
-      <div className="s-panel">
-        <div className="s-panel-head">
-          <span className="s-panel-title">filter the log</span>
-          <span className="s-panel-hint">
-            {menu.length === 0
-              ? "waiting for the kinds that have fired"
-              : `${fmtInt(menu.length)} kind${menu.length === 1 ? "" : "s"} have ever fired · a kind that never fired is not offered, because it would filter to nothing`}
-          </span>
-        </div>
+      <HPanel
+        title="filter the log"
+        hint={menu.length === 0
+          ? "waiting for the kinds that have fired"
+          : `${fmtInt(menu.length)} kind${menu.length === 1 ? "" : "s"} have ever fired · a kind that never fired is not offered, because it would filter to nothing`}
+        className="mb-0!"
+      >
         <div className="s-kinds">
           {menu.map((k) => {
             const on = kinds.indexOf(k.kind) !== -1;
@@ -360,17 +357,14 @@ export function SpineRoom({ door, room, sentence, lede }: SpineRoomProps) {
             empty page, which reads as “nothing happened” instead of “that is not a day”.
           </p>
         ) : null}
-      </div>
+      </HPanel>
 
       {/* ── the log ───────────────────────────────────────────────────────── */}
-      <div className="s-panel">
-        <div className="s-panel-head">
-          <span className="s-panel-title">the log</span>
-          <span className="s-panel-hint">
-            {window_ === null ? "walking" : `${window_.label} · newest first`}
-          </span>
-        </div>
-
+      <HPanel
+        title="the log"
+        hint={window_ === null ? "walking" : `${window_.label} · newest first`}
+        className="mb-0!"
+      >
         <p className="s-say">{seek === null ? "Starting the walk…" : seekSentence(seek)}</p>
 
         {seekError !== null ? <Refusal said={seekError} what="the log" /> : null}
@@ -464,14 +458,14 @@ export function SpineRoom({ door, room, sentence, lede }: SpineRoomProps) {
             })}
           </ol>
         )}
-      </div>
+      </HPanel>
 
       {/* ── the legend ────────────────────────────────────────────────────── */}
-      <div className="s-panel">
-        <div className="s-panel-head">
-          <span className="s-panel-title">what the colours mean</span>
-          <span className="s-panel-hint">four reserved hues, and one that carries no meaning at all</span>
-        </div>
+      <HPanel
+        title="what the colours mean"
+        hint="four reserved hues, and one that carries no meaning at all"
+        className="mb-0!"
+      >
         <ul className="s-legend">
           {legend.map((row) => (
             <li className="s-leg" key={row.tone} data-state={row.state}>
@@ -507,14 +501,14 @@ export function SpineRoom({ door, room, sentence, lede }: SpineRoomProps) {
             </li>
           ))}
         </ul>
-      </div>
+      </HPanel>
 
       {/* ── the eight laws ────────────────────────────────────────────────── */}
-      <div className="s-panel">
-        <div className="s-panel-head">
-          <span className="s-panel-title">the eight laws of this log</span>
-          <span className="s-panel-hint">ADR-0024 … ADR-0031 · the reason anything above is worth believing</span>
-        </div>
+      <HPanel
+        title="the eight laws of this log"
+        hint="ADR-0024 … ADR-0031 · the reason anything above is worth believing"
+        className="mb-0!"
+      >
         <ol className="s-laws">
           {SPINE_LAWS.map((l) => (
             <li className="s-law" key={l.adr}>
@@ -529,7 +523,7 @@ export function SpineRoom({ door, room, sentence, lede }: SpineRoomProps) {
             </li>
           ))}
         </ol>
-      </div>
+      </HPanel>
 
       <footer className="s-foot">
         <span>read-only room · the one write in this product is a stamp in the Inbox</span>
@@ -662,22 +656,15 @@ function Refusal({ said, what }: { said: Refused; what: string }) {
 
 const CSS = `
 .s-room{font-family:var(--font-display);color:var(--prose);padding:calc(var(--grid)*3) calc(var(--grid)*3) calc(var(--grid)*6);max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:calc(var(--grid)*2);}
-.s-head{display:flex;align-items:flex-start;gap:calc(var(--grid)*2);flex-wrap:wrap;}
-.s-headtext{flex:1 1 420px;min-width:0;}
-.s-sentence{font-size:clamp(24px,3.6vw,var(--step-room));line-height:1.04;letter-spacing:-0.02em;font-weight:600;margin:0 0 var(--grid) 0;color:var(--prose);}
-.s-lede{font-size:var(--step-lede);line-height:1.5;font-weight:300;color:var(--meta);margin:0;max-width:66ch;}
-.s-chrome{display:flex;align-items:center;gap:var(--grid);flex-wrap:wrap;margin-left:auto;}
 .s-mode,.s-clock{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-tight);text-transform:uppercase;padding:calc(var(--grid-in)*1) calc(var(--grid-in)*2);border-radius:var(--radius-pill);}
 .s-mode{color:var(--mode-live);background:var(--mode-bg);}
 .s-mode-sim{color:var(--mode-sim);background:var(--sim-hatch);}
 .s-clock{color:var(--meta);text-transform:none;}
 .s-receipt{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--accent-dim);border:1px solid var(--accent-line);border-radius:var(--radius-chip);padding:calc(var(--grid-in)*0.5) calc(var(--grid-in)*1.5);flex:0 0 auto;white-space:nowrap;}
-.s-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.04);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
+.s-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:var(--mode-bg);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
 .s-btn:hover:not(:disabled){border-color:var(--accent-line);background:var(--accent-wash);}
 .s-btn:disabled{opacity:0.4;cursor:not-allowed;}
 .s-btn-quiet{color:var(--meta);}
-.s-panel{border:1px solid var(--panel-border);border-radius:var(--radius-panel);background:var(--panel);backdrop-filter:blur(var(--panel-blur));-webkit-backdrop-filter:blur(var(--panel-blur));padding:var(--pad-panel);min-width:0;}
-.s-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--grid);flex-wrap:wrap;margin-bottom:calc(var(--grid)*2);}
 .s-panel-title{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-wide);text-transform:uppercase;color:var(--accent);}
 .s-panel-hint{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--faint);}
 .s-say{font-size:var(--step-body);line-height:1.6;font-weight:300;color:var(--prose);margin:0 0 calc(var(--grid)*2);max-width:84ch;}
@@ -720,16 +707,16 @@ const CSS = `
 .s-kind-on{opacity:1;border-color:var(--accent);background:var(--mode-bg);}
 .s-filterbar{display:flex;align-items:center;gap:var(--grid);flex-wrap:wrap;}
 .s-daylabel{font-family:var(--font-mono);font-size:var(--step-meta);text-transform:uppercase;letter-spacing:var(--track-mid);color:var(--faint);}
-.s-dayinput{font-family:var(--font-mono);font-size:var(--step-data);min-height:var(--row-h-live);width:13ch;padding:0 var(--grid);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.03);color:var(--prose);}
+.s-dayinput{font-family:var(--font-mono);font-size:var(--step-data);min-height:var(--row-h-live);width:13ch;padding:0 var(--grid);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:var(--mode-bg);color:var(--prose);}
 .s-dayinput-bad{border-color:var(--accent-line);}
 .s-pager{display:flex;align-items:center;gap:var(--grid);flex-wrap:wrap;margin-bottom:calc(var(--grid)*2);}
 .s-pagerlabel{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--meta);display:flex;flex-direction:column;line-height:1.35;}
 .s-pagerlabel em{font-style:normal;color:var(--faint);font-size:var(--step-micro);}
 .s-log{list-style:none;margin:0;padding:0;border-top:1px solid var(--hairline);}
 .s-item{border-bottom:1px solid var(--hairline);}
-.s-item-open{background:rgba(255,255,255,0.03);}
+.s-item-open{background:var(--mode-bg);}
 .s-row{display:flex;align-items:baseline;gap:var(--grid);width:100%;text-align:left;background:transparent;border:0;cursor:pointer;font-family:var(--font-mono);font-size:var(--step-data);min-height:var(--row-h-live);padding:var(--grid-in) var(--grid-in);color:var(--prose);}
-.s-row:hover{background:rgba(255,255,255,0.04);}
+.s-row:hover{background:var(--mode-bg);}
 .s-row-caret{color:var(--accent-dim);flex:0 0 auto;}
 .s-row-day{color:var(--faint);flex:0 0 auto;}
 .s-row-t{color:var(--meta);font-variant-numeric:var(--numeric);flex:0 0 auto;}
@@ -746,7 +733,7 @@ const CSS = `
 .s-field[data-missing="yes"] dd{color:var(--faint);}
 .s-payhead{display:flex;align-items:baseline;gap:var(--grid);flex-wrap:wrap;margin-bottom:var(--grid);}
 .s-payhead .s-panel-hint{margin-right:auto;}
-.s-json{font-family:var(--font-mono);font-size:var(--step-data);line-height:1.55;color:var(--prose);background:rgba(0,0,0,0.45);border:1px solid var(--hairline);border-radius:var(--radius-chip);padding:calc(var(--grid)*1.5);margin:0;max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin;}
+.s-json{font-family:var(--font-mono);font-size:var(--step-data);line-height:1.55;color:var(--prose);background:var(--well);border:1px solid var(--hairline);border-radius:var(--radius-chip);padding:calc(var(--grid)*1.5);margin:0;max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;scrollbar-width:thin;}
 .s-legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:calc(var(--grid)*2);}
 .s-leg{display:flex;gap:var(--grid);align-items:flex-start;}
 .s-leg[data-state="never-fired"]{opacity:0.86;}
@@ -771,7 +758,7 @@ const CSS = `
 .s-codeword{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-tight);color:var(--accent);}
 .s-foot{display:flex;justify-content:space-between;gap:var(--grid);flex-wrap:wrap;font-family:var(--font-mono);font-size:var(--step-meta);color:var(--faint);padding-top:var(--grid);border-top:1px solid var(--hairline);}
 .s-foot-nums{color:var(--meta);overflow-wrap:anywhere;}
-@media (max-width:640px){.s-room{padding:calc(var(--grid)*2) var(--grid) calc(var(--grid)*4);}.s-chrome{margin-left:0;}.s-row-day{display:none;}}
+@media (max-width:640px){.s-room{padding:calc(var(--grid)*2) var(--grid) calc(var(--grid)*4);}.s-row-day{display:none;}}
 `;
 
 // Named and default both: the shell that mounts this room is written by another hand, and

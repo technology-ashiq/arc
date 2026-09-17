@@ -47,7 +47,7 @@ risk: high
 proof: contract -- tests/face/tokens-contrast.mjs on CI reads html.hq and html.hq.hq-light with 0 missing tokens (--blue, --accent-dim, every -rgb triple present) and the three reserved-meaning laws hold per mood (council = --accent-dim, simulated = violet, live = accent never green); red first on `missing selector html.hq.hq-light` and `missing token --blue`; face-tokens --check exit 0 on the copy
 tier: contract
 sources: phase-01-spec.md
-decision: (empty until proven)
+decision: :root kept byte-identical as the landing; html.hq and html.hq.hq-light carry v0.7's values with five AA adjustments (dark --text-3 #868d9a; light --text-3 #636b77, --green #187835, --amber #906000, --blue #0866d4), --accent-dim added per mood (dark rgba(var(--accent-rgb),0.74), light #3a6a6d), --kind-council/--mode-live/--sim-* re-pointed inside html.hq, and the legacy names (--prose, --panel, --hairline, ...) aliased to the workroom scale so the v1 rooms flip with the mood (debt row)
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -59,7 +59,7 @@ risk: medium
 proof: unit -- tokens-contrast.mjs check mode exit 0 with moods=2 pairs>=150 findings=0 on every CI leg, and its --selftest arms PASS by name (typed number, missing block, missing light mood, light --text-3 under 4.5:1, -rgb triple disagreeing with its hex, council->violet, live->green, missing --blue, unbalanced file)
 tier: unit
 sources: phase-01-spec.md
-decision: (empty until proven)
+decision: the pair set is declared in the script header and is every ink/hue token on every surface token (not a curated where-used list), plus each hue on its own 10% chip tint built from its -rgb triple (so a triple that disagrees with its hex is its own finding), three fills and UI 3:1 meters and focus ring; cells are truncated to two decimals so a cell never displays a floor it misses; the block is rendered with no trailing whitespace
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -71,7 +71,7 @@ risk: medium
 proof: contract -- tests/face-l3.bats runs face-tokens.mjs --check (exit 0, "matches") and --selftest (a hand-edited, a length-preserving and a missing copy each exit 1) against the regenerated copy on CI
 tier: contract
 sources: phase-01-spec.md
-decision: (empty until proven)
+decision: face-tokens.mjs needed no change: its --check and selftest already FAIL a hand-edited, a length-preserving and a missing copy; the copy was regenerated after the header was written
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -83,7 +83,7 @@ risk: medium
 proof: integration -- on CI the Phase 00 lockfile arm exits 0 on ubuntu, macOS and windows with tailwindcss + @tailwindcss/vite ^4.3 and @phosphor-icons/react ^2.1 in face/package.json, and npm ci + vite build in a copy of face/ exit 0 with dist/index.html written
 tier: integration
 sources: phase-01-spec.md
-decision: (empty until proven)
+decision: tailwindcss and @tailwindcss/vite ^4.3.3 as devDependencies, @phosphor-icons/react ^2.1.10 as a dependency; installed in a scratch copy of face/ with npm 11.16 on Windows, and the lockfile read before copying back: @tailwindcss/oxide and both lightningcss families (1.33.0 hoisted, 1.32.0 nested under @tailwindcss/node) carry linux-x64-gnu, darwin-arm64 and win32-x64-msvc entries at the declared versions
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -95,7 +95,7 @@ risk: medium
 proof: e2e-visual -- the kit exports RoomHead, KpiStrip, HPanel, PickRow, Meter, Chip, Empty and SectionLabel (asserted statically in tests/face/l3-logic.mjs), no `filter: invert` anywhere under face/src, @custom-variant hq-light declared over html.hq.hq-light in face/src/index.css, and the browser smoke opens every room in both moods on CI
 tier: e2e-visual
 sources: phase-01-spec.md
-decision: (empty until proven)
+decision: kit.tsx + bits.tsx port v0.7 with three declared deltas (no colour spelled out, council = --kind-council, live = --mode-live); the v1 renderers keep their props through ui/legacy.tsx (debt row); index.css imports Tailwind with source(".") because the default scan base is the cwd and the browser suite builds a copy of face/ from the repo root, then the token copy, then @custom-variant hq-light with the --color-white remap applied through @variant; the mood goes on <html> in main.tsx before the first render, the toggle lives in the rail, and the face stage renders in the dark mood only (debt row); Inter added to the Google Fonts link (debt row)
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -107,7 +107,7 @@ risk: medium
 proof: unit -- tests/face/colour-literal.mjs on CI: the real tree prints scanned>0 findings=0; planted hex, white and black fixtures each exit 1 naming the literal and its line; near-misses (entity, whitespace-nowrap, rgba(var())) pass; red first with ERR_MODULE_NOT_FOUND before the lint exists
 tier: unit
 sources: phase-01-spec.md
-decision: (empty until proven)
+decision: the lint reads every byte of every file, comments included, rather than lexing TSX (a guessing lexer goes quiet); four kinds -- hex (not an &# entity), named white/black (not the white-space property), numeric-argument colour functions, Tailwind default-palette utilities; NUL bytes, symlinks and special files are named findings; scanned=0 FAILs; lives at .claude/scripts/core/ (ADR-1319), so the sync-golden manifest gains one row and face-l3.bats's face/src mention check names it as its second exclusion
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -119,7 +119,7 @@ risk: medium
 proof: e2e-visual -- tests/face-browser.bats on every Node >=20.19 leg prints `smoke: opened=33 openable=33 errors=0 ... mood=dark mood-miss=0` AND the same line with `mood=light mood-miss=0`; red first with `hq-light: class not applied on <html>`; a mood mutant control FAILS a clean line carrying mood-miss>0
 tier: e2e-visual
 sources: phase-01-spec.md
-decision: (empty until proven)
+decision: one harness process runs dark then light against one door and preview; smoke writes the mood with Page.addScriptToEvaluateOnNewDocument under the app's own key (arc-hq-theme, v0.7's) and reads <html>'s class list after the room settles; a room whose class list was never read counts as a miss; the bats verdict is called once per mood and each reads only its own line; the 9 bespoke rooms moved their headers to RoomHead and their titled cards to HPanel (three parallel agents, diffs reviewed: handler, data-* and role attributes unchanged, ids moved to titleId) and every colour literal in them became a token; the build test now also asserts the emitted CSS carries a kit utility and the light mood
 result: (empty until proven)
 commit: (empty until proven)
 
