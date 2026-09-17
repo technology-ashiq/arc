@@ -90,8 +90,9 @@ require_node_floor() {
   echo "$output"
   [[ "$output" == *"face-browser: RAN leg="* ]] || { echo "the harness never started (exit $status)"; false; }
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
-  # per job -- which leg RAN, the summary, any SLOW room -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|smoke: opened=|smoke: WARN |face-browser: [0-9]+/[0-9]+ rooms)' | sed 's/^/# /' >&3 || true
+  # per job -- which leg RAN, the summary, any SLOW room and what its network held at 10 s --
+  # would never reach the log. fd 3 does.
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|smoke: opened=|smoke: WARN |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
   local line opened openable errors unsettled expected
   line="$(printf '%s\n' "$output" | grep '^smoke: opened=' | tail -1)"
   [ -n "$line" ] || { echo "no smoke summary line (exit $status)"; false; }

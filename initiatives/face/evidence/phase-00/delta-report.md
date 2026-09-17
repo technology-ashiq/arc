@@ -69,11 +69,17 @@ The Phase 00 exit criterion says a v1 room that throws is fixed only when the fi
 otherwise listed here by name; the browser suite's 0-exceptions assertion excludes exactly these
 ids, and each id's Phase 03 module must empty it.
 
-**Status: filled from the first CI run of `tests/face-browser.bats`.** Until that run exists this
-list is not "empty" — it is unmeasured, and the suite does not yet exist to measure it.
+**Status: MEASURED EMPTY** — arc-ci run `35186922293` on `65e6ec05`, every configuration that
+builds L3 printed `smoke: opened=33 openable=33 errors=0 excluded-errors=0 unsettled=0
+expected=33 not-opened=lane` (ubuntu Node 20 and 22, macos-latest, windows-latest; ubuntu Node 18
+is the counted skip). `harness-run.mjs` passes no `--exclude`, so the 0-exceptions assertion
+excludes nothing. The only throwing path any run saw — the stage with no WebGL on the macOS runner
+(run `35147618663`) — was the runner, answered in the harness (SwiftShader), and its product guard
+is a debt row, not a baseline entry.
 
 | served id | configuration(s) | first exception line | disposition |
 |---|---|---|---|
+| — none — | all four that build L3 | — | nothing to shrink |
 
 ## Intake findings carried to later phases
 

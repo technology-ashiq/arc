@@ -17,7 +17,7 @@ blast-radius-dropped: 37
 - Zero new spine kinds: every op emits a kind already in `validate.mjs` KINDS, and an op that would need a new one does not ship (ADR-0026, ADR-1334).
 - Branch-only writes: a file-touching op writes to a `feat/face-*` branch, shows the diff and stops; `main` is untouchable and merge never exists in the face (ADR-1326).
 - The WORK door has no logic of its own: each op shells the same script a hand-run calls, proven per op by a no-second-path fixture; an op without a green fixture ships read-only with an honest badge (ADR-1326).
-- The SESSION door starts `arc-run --driver …`, never a harness binary (ADR-1326).
+- The SESSION door starts `arc-run --driver ...`, never a harness binary (ADR-1326).
 - No provider key in the browser; Ask keeps zero write tools and `ASK_ACTIONS` = `open_room` · `set_speed` · `enter_hq` (ADR-1325).
 - No facts bundle under `face/src/**`: a module cites a door route or renders `NOT SERVED` (ADR-1324).
 - No new surface outside `.claude/scripts/` this cycle; the layout move belongs to the distribute lane, in one atomic PR (ADR-1319).
@@ -44,11 +44,11 @@ expected-proof-failures: the first CI run of tests/face-browser.bats is red on a
 title: v0.7 source copied from `E:/Work_Hub/01_Automemory/arc-face-hq2/assets/arcface` to `docs/design/reference/face-hq/assets/arcface/`, **excluding** `node_modules/`, `dist/`, `.shots/`; the v0.4 tree moves to `docs/design/reference/face-hq/assets/arcface-v0.4/` with a `SUPERSEDED.md`; `docs/design/explore/face-hq-v{1,2}/` gain a superseded note — nothing deleted.
 kind: logic
 risk: high
-proof: scratchpad verify-intake.mjs hashes every file of the owner's v0.7 source (minus node_modules, dist, .shots, .gstack) against the copy — missing, extra and differing counts must all be 0 with source files > 0; git ls-files counts 70 files under arcface-v0.4 and 108 under arcface
+proof: static — scratchpad verify-intake.mjs hashes every file of the owner's v0.7 source (minus node_modules, dist, .shots, .gstack) against the copy — missing, extra and differing counts must all be 0 with source files > 0; git ls-files counts 70 files under arcface-v0.4 and 108 under arcface
 tier: static
 sources: phase-00-spec.md, code:grep-fallback(1368; no .codegraph/), adrs(37), learning(3), retro(22), churn(352)
 decision: v0.4 moved with git mv, v0.7 copied with tar excluding four directories — `.gstack/` (a tool-state dir the spec did not name) excluded too; the three code comments and the tokens.css provenance line that cited the v0.4 path now cite arcface-v0.4, the token copy regenerated (face-tokens --check exit 0); SUPERSEDED.md in arcface-v0.4 and both explore rounds
-result: `source files=108 copied files=108 missing=0 extra=0 differ=0 excluded-dirs-present=0` (exit 0) · `git ls-files …/arcface-v0.4 | wc -l` = 70 · `git ls-files …/arcface | wc -l` = 108 · `face-tokens: face/src/tokens.css matches docs/design/system/tokens.css (14282 bytes)`
+result: `source files=108 copied files=108 missing=0 extra=0 differ=0 excluded-dirs-present=0` (exit 0) · `git ls-files .../arcface-v0.4 | wc -l` = 70 · `git ls-files .../arcface | wc -l` = 108 · `face-tokens: face/src/tokens.css matches docs/design/system/tokens.css (14282 bytes)`
 commit: 7e428de6
 
 #### slice: 02
@@ -56,11 +56,11 @@ commit: 7e428de6
 title: PII grep of the whole intake (owner email, phone numbers, LexOS contact values held in `~/.arc-private/legal/lexos`) is clean; any file that carries them is excluded and named in `SOURCE.md`. The arc repo is public.
 kind: logic
 risk: medium
-proof: scratchpad pii-scan.mjs over the 108 intake files — the owner email, every contact-shaped value in ~/.arc-private/legal/lexos/*.yaml, any email, any Indian mobile number and common secret-key shapes must all count 0, with files scanned > 0 and private values loaded > 0; a planted-PII mutant must exit 1; gitleaks dir over the same tree must report no leaks
+proof: static — scratchpad pii-scan.mjs over the 108 intake files — the owner email, every contact-shaped value in ~/.arc-private/legal/lexos/*.yaml, any email, any Indian mobile number and common secret-key shapes must all count 0, with files scanned > 0 and private values loaded > 0; a planted-PII mutant must exit 1; gitleaks dir over the same tree must report no leaks
 tier: static
 sources: phase-00-spec.md, code:grep-fallback(1481; no .codegraph/), adrs(37), learning(3), retro(20), churn(461)
 decision: counts and file names only, never a matched value, so the proof itself cannot leak; nothing needed excluding — SOURCE.md (slice 03) records the clean result
-result: `scanned files=108 private contact values loaded=8` · `literal: 0 file(s)` · `email: 0 file(s)` · `indianPhone: 0 file(s)` · `secret: 0 file(s)` (exit 0) · mutant: `literal: 1 … email: 1 … indianPhone: 1 … secret: 1` MUTANT_EXIT=1 · gitleaks: `scanned ~1337810 bytes (1.34 MB)` `no leaks found` (exit 0)
+result: `scanned files=108 private contact values loaded=8` · `literal: 0 file(s)` · `email: 0 file(s)` · `indianPhone: 0 file(s)` · `secret: 0 file(s)` (exit 0) · mutant: `literal: 1 ... email: 1 ... indianPhone: 1 ... secret: 1` MUTANT_EXIT=1 · gitleaks: `scanned ~1337810 bytes (1.34 MB)` `no leaks found` (exit 0)
 commit: e0b61682
 
 #### slice: 03
@@ -68,7 +68,7 @@ commit: e0b61682
 title: `docs/design/reference/face-hq/SOURCE.md` rewritten against v0.7 — form · where · what — and the four corrections on record (PLAN-face-v2 §1): **(1)** v0.7 renders violet for council AND simulated; the token law keeps council `--accent-dim` (ADR-1322) · **(2)** v0.7's `--blue` (neutral progress) is adopted · **(3)** `src/data/arcFacts.js` (137 KB facts snapshot) never enters the product (ADR-1324) · **(4)** v0.7's browser-side brain with a pasted key and `approve`/`reject` actions is not the product's Ask (ADR-1325).
 kind: logic
 risk: medium
-proof: grep counts over the new SOURCE.md for each required element (v0.7, 108 files, ADR-1322, --blue, ADR-1324, ADR-1325, PII scan: clean, SOURCE-v0.4.md, Google Fonts) must each be >= 1, and assets/arcface-v0.4/SOURCE-v0.4.md must exist and still hold the Decided 2026-08-24 ruling
+proof: static — grep counts over the new SOURCE.md for each required element (v0.7, 108 files, ADR-1322, --blue, ADR-1324, ADR-1325, PII scan: clean, SOURCE-v0.4.md, Google Fonts) must each be >= 1, and assets/arcface-v0.4/SOURCE-v0.4.md must exist and still hold the Decided 2026-08-24 ruling
 tier: static
 sources: phase-00-spec.md, code:grep-fallback(1482; no .codegraph/), adrs(37), learning(3), retro(22), churn(462)
 decision: the v0.4 SOURCE.md moves to assets/arcface-v0.4/SOURCE-v0.4.md with git mv instead of being overwritten, so its drop history, collision table and the 2026-08-24 brain ruling (cited by ADR-1325) survive; two intake findings recorded for later phases: Google Fonts fetched at runtime (Phase 01 vs ADR-1312) and the v0.4 collision table needing a re-check against the retuned v0.7 palette (Phase 01)
@@ -80,7 +80,7 @@ commit: 9c1a52de
 title: `docs/design/system/hq-design-system-v0.7.md` copied from `E:/Work_Hub/01_Automemory/arc-face-hq2/docs/superpowers/specs/2026-09-15-hq-design-system.md`. **Contract**
 kind: logic
 risk: medium
-proof: sha256 of the owner's E:/Work_Hub/01_Automemory/arc-face-hq2/docs/superpowers/specs/2026-09-15-hq-design-system.md and of docs/design/system/hq-design-system-v0.7.md must be one unique value (uniq count 1), and the copy must be non-empty
+proof: static — sha256 of the owner's E:/Work_Hub/01_Automemory/arc-face-hq2/docs/superpowers/specs/2026-09-15-hq-design-system.md and of docs/design/system/hq-design-system-v0.7.md must be one unique value (uniq count 1), and the copy must be non-empty
 tier: static
 sources: phase-00-spec.md
 decision: copied byte-for-byte, not rewritten; its first line already names itself v0.7 and says rooms are polished against it, which is the role ADR-1318 gives it
@@ -96,7 +96,7 @@ proof: `node .claude/scripts/hq/face-modules-contract.mjs` writes the contract a
 tier: contract
 sources: phase-00-spec.md, code:grep-fallback(1485; no .codegraph/), adrs(37), learning(3), retro(21), churn(463)
 decision: the derivation lives at .claude/scripts/hq/face-modules-contract.mjs (ADR-1319: no new surface outside .claude/scripts); it reads roomRegistry.js as TEXT because the file imports phosphor icons and node cannot import it with no install; renames come from the registry's own ROOM_ALIASES (an alias key that is a served id), not a hand list; reads come from PLAN-face-v2 section 5.2's tables; output is deterministic (no timestamp) so --check can compare bytes, CRLF-normalised for the windows checkout; the main-guard realpaths both sides
-result: `wrote initiatives/face/contracts/modules-v2.json -- 36 modules = 29 same-id + 3 renamed + 4 extra (3 served-planned) · 34 served, 2 without a module · 0 ring conflict(s)` · renames `today<-overview engine-room<-engine council-chamber<-council` · extras `factory executor agents story` · no module `chat-mcp:generic module, reported lane:not a room module` · hand replay: control exit=0 · drift exit=1 (DRIFT) · orphan exit=1 (`ORPHAN … ghost-room`) · bad-root exit=2 · missing-inputs exit=2 · face-coverage all covered · embedded-program probe failures=0
+result: `wrote initiatives/face/contracts/modules-v2.json -- 36 modules = 29 same-id + 3 renamed + 4 extra (3 served-planned) · 34 served, 2 without a module · 0 ring conflict(s)` · renames `today<-overview engine-room<-engine council-chamber<-council` · extras `factory executor agents story` · no module `chat-mcp:generic module, reported lane:not a room module` · hand replay: control exit=0 · drift exit=1 (DRIFT) · orphan exit=1 (`ORPHAN ... ghost-room`) · bad-root exit=2 · missing-inputs exit=2 · face-coverage all covered · embedded-program probe failures=0
 commit: 62e25b6d
 
 #### slice: 06
@@ -140,132 +140,132 @@ commit: b77d27fb
 title: `face/scripts/cdp.mjs` — dependency-free RFC 6455 client (text frames, client masking) + CDP calls (launch, navigate, evaluate, console + exception stream). No `WebSocket` global.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: contract — `node tests/face/cdp-client.mjs` drives cdp.mjs against the scripted `tests/face/fake-cdp.mjs` (frames of 0/125/126/65535/65536 bytes, client masking on the wire, one-byte feeds, the RFC 6455 accept key, CDP errors and close) on all 5 CI configurations; the same client then drives real Chrome in `tests/face-browser.bats`
+tier: contract
 sources: phase-00-spec.md, code:grep-fallback(1491; no .codegraph/), adrs(37), learning(3), retro(26), churn(468)
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: its own RFC 6455 client over node:http — no `WebSocket` global, no dependency — so it runs on Node 18 with no install; Chrome found in ADR-1335's order with every place tried named on a miss; cdp.mjs is a library with no CLI, so slice 15's main-guard item applies to the four scripts that have a main
+result: run 35184948635 (1af154f6): `face v2: the browser harness client logic runs with no install and no Chrome` ok on every configuration; in run 35186922293 the same client opened 33/33 rooms over real Chrome on linux/v20.20.2, linux/v22.23.2, darwin/v20.20.2 and win32/v20.20.2
+commit: 1af154f6
 
 #### slice: 10
 
 title: `tests/face/fake-cdp.mjs` + `tests/face/cdp-client.mjs` — the client proven against a scripted fake on all 5 CI configurations (no Chrome, no install).
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: contract — `node tests/face/cdp-client.mjs`, run by `tests/face-l3.bats` on every CI configuration including Node 18; it prints `RAN: <n> checks, <f> failed` and exits non-zero below 60 checks
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: the fake answers the protocol, never the verdict (retro-log 2026-08-17); the suite also holds the pure halves of smoke, harness-run, lockfile-platforms and proc so every decision rule is proven with no Chrome. A crashed suite read like a failing one: proc.mjs unref()ed an awaited timer, node exited mid-file with code 13 and no `RAN:` line, hidden behind run D's lockfile FAIL — now pinned from outside by the child fixture `tests/fixtures/face/await-timers.mjs`
+result: run 35183482747 (f9805720): output stops after the stopTree check on every configuration, no `RAN:` · run 35184948635 (1af154f6): ok on all 19 jobs · run 35186922293 (65e6ec05): ok on ubuntu 18/20/22, macOS and windows
+commit: 1af154f6
 
 #### slice: 11
 
 title: `face/scripts/smoke.mjs` ported from v0.7: Chrome discovery per ADR-1335 (`CHROME_BIN` only if set · Windows `App Paths` registry key then `%ProgramFiles%` · macOS `/Applications` · Linux `command -v google-chrome`) → FAIL naming every place tried; prints the runner image name; `--no-sandbox` on Linux; room ids read from `/api/rooms`, never a hand list; per-room console errors + exceptions; a JSON report printed to stdout.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: integration — `tests/face-browser.bats` runs `face/scripts/harness-run.mjs` (fixture spine → `arc-dash --spine` → `vite preview` over a built copy → `smoke.mjs`) over real Chrome on ubuntu Node 20 + 22, macos-latest and windows-latest, asserting opened == openable == expected and unsettled == 0 before errors == 0
+tier: integration
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: ported, not reinvented (ADR-1330): v0.7's three error sources, its THREE.Clock filter verbatim, a fresh navigation per room; what the environment forced is declared in the header. The settle rule is ours (v0.7 slept 900 ms) and took three CI rounds: loaderId scoping (windows), evidence at the cap, then — from that evidence, a Google Fonts download and late CDP events on a macOS cold load while warm rooms settle in ~0.9 s, and a different room each run (map, today, engine-room) — FAIL only past 30 s, the 10–30 s band printed SLOW with what the network held at 10 s
+result: run 35183482747 macOS: `XX today (never settled; late-settle-ms=11220 at-cap={... Font /s/anybody/v13/....woff2 ageMs 6377 ...})`, every other room settle-ms 912–936 · run 35186922293 (65e6ec05): `smoke: opened=33 openable=33 errors=0 excluded-errors=0 unsettled=0 expected=33 not-opened=lane` on all four L3 legs; macOS `smoke: WARN slow-settle engine-room=12662ms`
+commit: 65e6ec05
 
 #### slice: 12
 
 title: `tests/face-browser.bats`: (1) prints `node -v` and the runner image; Node <20.19 → prints `SKIP: Vite 8 and @tailwindcss/oxide require Node >=20.19` and the skip is asserted as a skip — and a SKIP on any leg other than the Node 18 leg FAILs, so a Node-20 leg pinned below 20.19 can never pass silently; (2) offline lockfile platform check FAILs if `face/package-lock.json` lacks the native optional entries this OS needs for what the lockfile holds TODAY (Vite 8's native bindings) — Phase 01 extends the same check to `@tailwindcss/oxide-*`; (3) `npm ci --include=optional` in `face/`; (4) `vite build`; (5) door started `--spine` over a fixture from `tests/fixtures/face/gen-spine.mjs` (exists — `tests/face/dash-doors.mjs` uses it); (6) `vite preview` with `ARC_DASH_ORIGIN` and a check that `/api/health` answers through the preview proxy; (7) smoke opens every OPENABLE room `/api/rooms` serves — 34 entries today, 33 openable; each `template` entry (today only `lane`) is printed by name as not opened, never silently dropped; (8) every executing job prints `face-browser: RAN leg=OS/NODE` — the file is picked up by the CI sharder (`shard-tests.mjs` refuses a file that lands in no shard), and the evidence lists that line per job, so "added a bats file" is never mistaken for "the gate ran".
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: integration — `bats tests/face-browser.bats` in arc-ci: node floor (only Node 18 may skip), offline lockfile arm, planted error over real Chrome, `npm ci --include=optional` + `vite build` in a copy, door + preview + smoke, no inline program text, every test registered
+tier: integration
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: cheap checks gate the install; fd 3 closed on every long-lived child; the build runs in a copy under BATS_FILE_TMPDIR; every extraction anchored at its position in the line (two greedy ones found by the shell/OS attacker); bats prints `$output` only on failure, so a green job writes its RAN, summary and SLOW lines to fd 3 (found reading run 35184948635, which was green and showed none of them)
+result: run 35186922293 (65e6ec05): `face-browser: RAN leg=linux/v20.20.2 image=ubuntu24@20260907.300.1` · `leg=linux/v22.23.2 image=ubuntu24@20260907.300.1` · `leg=darwin/v20.20.2 image=macos26@20260907.0351.1` · `leg=win32/v20.20.2 image=win25-vs2026@20260907.229.1`, each with 7/7 tests ok; ubuntu Node 18: tests 1, 4, 5 `# skip SKIP: Vite 8 and @tailwindcss/oxide require Node >=20.19`, lockfile + planted-error + registration ok
+commit: 65e6ec05
 
 #### slice: 13
 
 title: Vacuous-pass guard, BOTH directions: the suite asserts `opened == openable > 0` (openable = `/api/rooms` entries whose `status` is not `template` — 33 today; PLAN § Module inventory) BEFORE asserting 0 console errors and 0 exceptions (a stub smoke that never navigates is kept as the mutant control and FAILs); AND a planted page that throws a real console error is opened over REAL Chrome — not `fake-cdp.mjs` — and the suite FAILs on it, proving the real socket path detects an error (retro-log 2026-08-17: a fake whose right answer equals the failure's answer proves nothing).
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: integration — the suite asserts openable > 0, expected == openable, opened == openable and unsettled == 0 BEFORE errors == 0; `smoke.judge` FAILs the committed stub `tests/fixtures/face/smoke-stub-report.json` in `tests/face/cdp-client.mjs`; `smoke.mjs --probe-file tests/fixtures/face/planted-error.html` must report the planted console error and exception over REAL Chrome
+tier: integration
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: both directions, as the spec asks: the stub control proves the verdict can FAIL with no browser, and the planted page proves the real socket path detects an error — a fake whose right answer equals the failure's answer proves nothing (retro-log 2026-08-17)
+result: run 35186922293 (65e6ec05): `a planted console error and exception are seen over REAL Chrome` ok on all 5 configurations, Node 18 included; `the verdict FAILS the stub report of a smoke that never navigated` ok in the client suite on every configuration
+commit: 65e6ec05
 
 #### slice: 14
 
 title: No inline program strings: `tests/face-browser.bats` and `face/scripts/*` run no `node -e` / `bash -c` program text; every program is its own file (CLAUDE.md shell-string rule), and `tests/embedded-program-probe.mjs` — the existing automated half of that rule — scans the new files (its `scanned=` count rises), extended if it does not already reach them.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — face-browser.bats test 6 greps the suite for `node|bash|sh|python -e/--eval/-c`, then runs `node tests/embedded-program-probe.mjs` over the suite and `face/scripts/*.mjs` handed BY NAME; `scanned=` must equal the files handed over (7) and the run must end `EMBEDDED_PROGRAMS_INTACT`
+tier: static
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: the probe's walk takes only .sh, so it never reached a .bats or .mjs; rather than widen that walk for every lane — a new .mjs scan of .claude/scripts could red another lane's guard — the face files are passed by name and the scanned count is asserted, so a file that was never looked at cannot pass
+result: run 35186922293 (65e6ec05): `face-browser: this file runs no inline program text` ok on all 5 configurations
+commit: 65e6ec05
 
 #### slice: 15
 
 title: `cdp.mjs` and `smoke.mjs` main-guards realpath BOTH `argv[1]` and `import.meta.url`; a symlinked-tmpdir mutant is the fixture (retro-log 2026-08-19, the fourth recurrence).
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: contract — `tests/face/cdp-client.mjs` runs smoke, harness-run, lockfile-platforms and node-floor through a LINKED scripts dir (a junction on windows) with `--no-such-flag`; each must exit 2 naming itself. CONTROL: a naive `argv[1] === fileURLToPath(import.meta.url)` guard exits 2 when called directly and 0 through the same link
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: cdp.mjs is a library with no main; the four CLIs that have one realpath both sides. The control is what makes the fixture a mutant test: it proves the link defeats a guard without realpath on that OS. The temp dir is realpathed (macOS tmpdir sits behind /var) and every link is removed before the recursive delete, with a check that face/scripts is intact
+result: run 35186922293 (65e6ec05): the client suite, which carries these checks and fails below its `RAN:` floor, ok on ubuntu 18/20/22, macOS and windows
+commit: 65e6ec05
 
 #### slice: 16
 
 title: A v1 room that throws is fixed only if the fix is one line; otherwise it goes on a named baseline list in the delta report that can only shrink, its Phase 03 module must empty it, and the suite's 0-exceptions assertion excludes exactly the ids on that list — never a global relaxation.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: integration — the smoke's errors == 0 assertion over 33/33 rooms on ubuntu Node 20 + 22, macOS and windows, with `harness-run.mjs` passing no `--exclude`, read from the `smoke: ... excluded-errors=` field each job prints
+tier: integration
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: measured, not assumed: the baseline list is EMPTY, so the suite excludes nothing and there is nothing for a Phase 03 module to shrink; the one throwing path seen (the stage with no WebGL on macOS, run 35147618663) was the runner, answered in the harness with SwiftShader, and its product guard is a Phase 02 debt row — recorded in delta-report.md
+result: run 35186922293 (65e6ec05): `errors=0 excluded-errors=0` on all four L3 legs · delta-report.md baseline table: `— none —`
+commit: 65e6ec05
 
 #### slice: 17
 
 title: A measured shard weight for `tests/face-browser.bats` is committed to `tests/shard-timings.json`, the table the CI sharder reads — never the 16 s default; before editing that shared table, `git log origin/main --oneline -5 -- tests/shard-timings.json` runs per `.claude/rules/lanes.md` § Shared files, and a collision is resolved by re-measuring on the merged tree, never by keeping the earlier number. **Close**
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: integration — `git log origin/main --oneline -5 -- tests/shard-timings.json` (last touched 833ae45e, #223 — no collision), then the windows-latest shard 1/12 log of run 35184948635, where face-browser.bats is the FIRST file: `shard-timing: files tests/face-browser.bats ...` at 05:28:08, `ok 7 face-browser:` at 05:33:58
+tier: integration
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: 350 replaces the provisional 200 and makes face-browser.bats the heaviest file in the table, so `_floor` is re-derived in the same commit (face-browser 350, sync 195, portfolio-board 139) and `_known_gap` restated; 169 of 169 discovered .bats files carry an entry
+result: `"face-browser.bats": 350` · windows 350 s, macOS 314 s · run 35186922293 (65e6ec05): the sharder's own suite ok and all 12 windows shards green
+commit: 65e6ec05
 
 #### slice: 18
 
 title: CI green per job on the PR head SHA (`gh run view <id> --json jobs`, head SHA = local HEAD): the browser arm EXECUTED on ubuntu Node 20 + 22, macOS and windows; the counted SKIP on ubuntu Node 18.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: integration — `gh run view 35186922293 --json headSha,conclusion,jobs`: headSha 65e6ec05 = local HEAD at dispatch, conclusion success, every job's conclusion read one by one
+tier: integration
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: the branch has no PR yet, so the run is a workflow_dispatch on the branch head (arc-ci runs on PR and dispatch only); per-job conclusions read, never the watcher's exit code; the browser arm counted as EXECUTED only where its fd 3 RAN line appears in that job's log
+result: 19/19 jobs success on 65e6ec05; browser arm EXECUTED on ubuntu Node 20 (1279 ok) and 22 (1279 ok), macos shard 1/3 (5 ok) and windows shard 1/12 (5 ok), each with its `face-browser: RAN leg=` line; counted SKIP on ubuntu Node 18
+commit: 65e6ec05
 
 #### slice: 19
 
 title: Two fresh attackers — one on the smoke/CDP decision logic, one on the bats suite's shell/OS boundary — each carrying the lane's fixed-defect list; holes fixed and pinned as fixtures.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: contract — two passes, each two fresh general-purpose agents with different surfaces (decision logic; shell/OS boundary), each handed `initiatives/face/fixed-defects.md`; every hole reproduced by a probe or a surviving mutant, fixed, and pinned in `tests/face/cdp-client.mjs` or `tests/face-browser.bats`
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: pass 1 attacked the first harness (22 holes, 78b65cb3); pass 2 attacked the fixes for run D (f9805720) and attacked the TESTS as well as the rules: 7 mutants survived the checks and each now dies to a named check. The two surfaces shared no findings, as the rule predicts
+result: pass 1: decision logic 12 + shell/OS 10 holes, fixed in 78b65cb3 · pass 2: decision logic 7 holes + 7 surviving mutants, shell/OS 3 holes, fixed in ca6e26b6 · fixed-defects.md 68 lines · run 35184948635 and run 35186922293 green on all 19 jobs with every pin in place
+commit: ca6e26b6
 
 #### slice: 20
 
