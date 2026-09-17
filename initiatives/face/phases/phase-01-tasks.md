@@ -139,9 +139,9 @@ risk: medium
 proof: verified-real -- PROGRESS.md carries the Block A day-3 reading, and the owner's by-eye read of the 9 rooms x 2 moods is recorded in evidence/phase-01/owner-read-9-rooms-2-moods.md in his words
 tier: verified-real
 sources: phase-01-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: the Block A reading was taken from CI rather than asserted: clause 2 read GREEN on run 35207463369 before the owner was asked; the owner was shown the live HQ from the main clone plus 18 screenshots, and asked the two rulings spec-fidelity raised in the same question set
+result: PROGRESS.md carries the Block A reading (clause 2 GREEN, run 35207463369); evidence/phase-01/owner-read-9-rooms-2-moods.md records the owner's answers verbatim, 2026-09-17: "Render aagudhu -- close pannu" (no STOP), "AA-adjusted values vechukko", "Dark-la mattum, Phase 02 decide"
+commit: efcd4def
 
 #### slice: 09
 
@@ -164,5 +164,5 @@ proof: verified-real -- gh run view --json jobs on the PR head SHA reads every j
 tier: verified-real
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: PR #235 run 35209617606 on head efcd4def, 19/19 jobs read per job; merged as 4fcb53db; main re-verified by workflow_dispatch run 35211136090 -- attempt 1 18/19 (windows shard 1/12: Chrome wrote no DevToolsActivePort within 30000 ms on its first launch, same image and tree green in three earlier runs), attempt 2 re-ran that job: 19/19, windows smoke opened=33 in both moods; full suite 1..3404 on ubuntu Node 20; saved as evidence/phase-01/ci-jobs.json. /arc-phase-done 01 from the main clone: receipts phase.closed 01M2QGWHBAX0329SNCX8Q2CPAX and approval.requested 01M2QGWHNYEBPAC97EEMV55JDH in the canonical spine
+commit: 4fcb53db

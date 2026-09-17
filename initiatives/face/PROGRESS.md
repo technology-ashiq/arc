@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 01
+phase: 02
 appetite: 24d
-burn: 1d
+burn: 1.5d
 blocked-on: —
 depends-on: —
 
@@ -23,7 +23,7 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
-| 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | 🔨 **built on `feat/face-v2-01`** — 8/10 slices proven; CI 19/19 (run 35207463369, both moods on every L3 leg); two attackers' 23 findings dispositioned; owes the owner's by-eye read and `/arc-phase-done 01` |
+| 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | spec'd |
 | 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | spec'd |
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | spec'd |
@@ -31,7 +31,7 @@ depends-on: —
 | 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 1d of 24d.** Blocks: A · look (00–02) 1/6d · B · rooms + truth (03–04) 0/10d ·
+**Appetite burn: 1.5d of 24d.** Blocks: A · look (00–02) 1.5/6d · B · rooms + truth (03–04) 0/10d ·
 C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
 35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
@@ -40,6 +40,8 @@ clause 1 still GREEN; clause 2 — the 9 bespoke rooms render on the new kit in 
 on CI** (run 35207463369 on `0b51ea17`, 19/19 jobs: `opened=33 ... mood=dark mood-miss=0` and
 `mood=light mood-miss=0` on ubuntu Node 20 + 22, macOS and windows) — no STOP. The owner's by-eye
 read of the 9 rooms × 2 moods is Phase 01's exit gate and is recorded at `/arc-phase-done 01`.
+**Block A, Phase 01 exit clause: GREEN** — the owner read the 9 rooms in both moods on 2026-09-17:
+"Render aagudhu — close pannu". No STOP; the kit port is not re-scoped.
 
 **Usage trend (read at every Phase 03 ring close, never counted toward REQ-10):** — not started.
 
@@ -124,17 +126,63 @@ read of the 9 rooms × 2 moods is Phase 01's exit gate and is recorded at `/arc-
   Receipts (main clone spine, landed in `2026-09-17.jsonl`): `phase.closed`
   `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `approval.requested{gate: phase-done}` `01M2Q5HZJRBMN98HNR9YA5FR77`
   — the second waits on the owner's stamp.
-
+- **2026-09-17 — Phase 01 CLOSED (`/arc-phase-done 01` from the main clone).** Tokens + kit:
+  `docs/design/system/tokens.css` keeps `:root` byte-identical and adds `html.hq` and
+  `html.hq.hq-light` with v0.7's values; every text/surface, chip, fill and UI ratio is computed by
+  `tests/face/tokens-contrast.mjs` and written into the header by it; the generated copy; Tailwind v4 +
+  phosphor in L3 only (lockfile carries linux-x64-gnu, darwin-arm64 and win32-x64-msvc bindings of
+  oxide, both lightningcss families and rolldown); the v0.7 kit (`ui/kit.tsx`, `ui/bits.tsx`) with
+  `ui/legacy.tsx` keeping the v1 renderers' props; the 9 bespoke rooms opening with `RoomHead` and
+  drawing their cards with `HPanel`; a mood toggle, the mood on `<html>` before the first render;
+  the colour-literal lint FAIL from birth; the browser harness judging every room in dark AND light.
+  Merged as `4fcb53db` (#235).
+  **Tests:** red first on run `35201425258` (the spec's four expected messages, nothing else red);
+  the PR's run `35209617606` 19/19 read per job on head `efcd4def`; the merged tree re-verified by
+  `workflow_dispatch` on `main`, run `35211136090`: attempt 1 18/19 — windows shard 1/12's first
+  Chrome launch wrote no DevToolsActivePort within 30 s, same runner image and tree green in three
+  earlier runs — attempt 2 re-ran that job, 19/19; full suite `1..3404` on ubuntu Node 20
+  (`evidence/phase-01/ci-jobs.json`).
+  **Live demo:** from the main clone, `npm ci` then `node .claude/scripts/hq/arc-face.mjs --no-open`
+  on the canonical spine; 9 rooms × 2 moods navigated at 1440×1000 with the mood confirmed on
+  `<html>`, 18 screenshots (git-ignored, the live spine is on them), **0 console errors** (only v0.7's
+  THREE.Clock notice); five opened by eye before asking; launcher stopped, ports 8317/5180 free.
+  **Owner's by-eye read (2026-09-17), verbatim:** "Render aagudhu — close pannu"; on the AA
+  adjustments to v0.7's colours, "AA-adjusted values vechukko"; on the face stage in the dark mood
+  only, "Dark-la mattum, Phase 02 decide" (`evidence/phase-01/owner-read-9-rooms-2-moods.md`).
+  **Standing ruling this sets for later phases:** a v0.7 value under the computed AA floor moves along
+  its own hue to the first step that clears, and is listed in the tokens.css header — a permitted
+  delta alongside ADR-1322's council rule.
+  **What the phase actually cost:** 0.5d of its 2d appetite; 6 CI runs on the branch (the red-first,
+  one stopped at product-lint before any test for an unregistered synced script, three green) plus the
+  PR run and the `main` verification. Two fresh attackers found 23 holes — 9 HIGH in the contrast gate
+  and the lint (a token re-declared outside the three exact mood selectors applied in Chrome and
+  passed; laws compared against the file under test; aliases, fills and the focus ring never measured;
+  Tailwind's `_` separator hid literals; a newline in a page error forged a mood summary line) and a
+  generator that wrote through a directory link onto its own source; 20 fixed and pinned, 3 to debt.
+  Measuring the full pair set moved five light hues one more step and dark `--on-red` to `--bg-0`.
+  Spec-fidelity: **drift found**, every finding dispositioned in `evidence/phase-01/handoff.md`.
+  Predictions: 2 hit · 3 miss. `face-browser.bats` re-measured at 470 s (two moods).
+  **Assumptions adjudicated by measurement:** the generated `tokens.css` copy feeds Tailwind v4 with
+  no `@import`/`@theme` ordering failure — HELD (the build passed on ubuntu, macOS and windows from
+  the first implementation run, `35204281571`). **ADR revisit triggers:** none met. ADR-1323's
+  (`npm ci` failing twice for a missing binding) — not met, `npm ci` green on every run; ADR-1331's
+  (a batch unable to reach 0 errors in `hq-light`) — not met; ADR-1322's (owner scores council below
+  the reference on colour) — not met, the owner read it and closed; ADR-1335's (one leg red for a
+  reason outside the product in 2 consecutive runs) — one occurrence (the windows Chrome launch
+  miss above), not two; counted here so the next one is. No ADR DEFERRED. Evidence bundle:
+  `arc-evidence.sh` applies from Phase 02 (ADR-0002); this phase's evidence is the lane pack
+  `initiatives/face/evidence/phase-01/`.
+  amendments: 0 · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-17.jsonl`): `phase.closed`
+  `01M2QGWHBAX0329SNCX8Q2CPAX` · `approval.requested{gate: phase-done}` `01M2QGWHNYEBPAC97EEMV55JDH`
+  — the second waits on the owner's stamp.
 
 ## Now
 
-**RESUME HERE (2026-09-17):** **Phase 01 — tokens + kit — is BUILT on `feat/face-v2-01`** (8/10
-slices proven, handoff pack at `evidence/phase-01/handoff.md`, CI 19/19 on `0b51ea17`, run
-35207463369). What it still owes, in order: the PR's own CI read per job (`gh pr list --head
-feat/face-v2-01`), the merge, the live demo from the main clone, **the owner's by-eye read of the 9
-rooms × 2 moods** — which also rules on the five light-hue AA adjustments and on the face stage
-being dark-mood-only (handoff.md, spec-fidelity dispositions (b) and "scope") — and then
-`/arc-phase-done 01` from the main clone. Phase 02's branch does not open before that close.
+**RESUME HERE (2026-09-17):** **Phase 01 is CLOSED** (done log, 2026-09-17). The next phase is
+**Phase 02 — shell + module frame** (`phases/phase-02-spec.md`, REQ-03, 2d appetite), and the owner
+asked for it to start in a fresh session. Its Preconditions line is satisfied by the Phase 01 row
+above once this close merges.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
@@ -143,18 +191,19 @@ being dark-mood-only (handoff.md, spec-fidelity dispositions (b) and "scope") �
 every phase through to the end without waiting, push and merge per phase on green CI, run nothing
 locally, and ask only at owner-only gates.
 
-**Waiting on the owner, none of it blocking Phase 01:** the stamp on
-`approval.requested{gate: phase-done}` `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and on
-`01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the main clone,
-`node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`; and ADR-1335's trigger
-condition, met mid-Phase 00 on macOS and answered in the harness (done log).
+**Waiting on the owner, none of it blocking Phase 02:** the stamps on
+`approval.requested{gate: phase-done}` `01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01),
+`01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and `01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from
+the main clone, `node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`.
 
-**What Phase 01 inherits:** the browser harness and its mood arm to add; the lockfile check, now
-version-strict, which the Tailwind and `@tailwindcss/oxide` install must pass on linux-x64,
-darwin-arm64 and win32-x64; Google Fonts at runtime (delta report, intake findings → Phase 01);
-the v0.7 light remap is a `--color-white` override in the reference, where ADR-1323 names
-`@custom-variant` — read both before choosing; debts in `debt-ledger.md` (rows 1-3, 5-7 open).
+**What Phase 02 inherits:** the face stage's WebGL guard AND its place in both moods (owner ruling:
+dark-only until this phase decides); the typecheck joining the browser suite before any module is
+written; the ported shell living under a colour-literal-linted root, and the stage's particle palette
+behind tokens or named in the lint; `KpiStrip`, `PickRow`, `Meter` and `Empty` shipped with no reader
+yet; the owner's standing ruling on AA floor corrections (done log); ADR-1335's counter at one windows
+Chrome launch miss; debts in `debt-ledger.md`. The spec's setup line: the owner runs the git for
+`feat/face-v2-02` — under the standing instruction the session cuts it from `main`.
 
-**Next step:** in a new session, `/arc-resume --lane face`, then `/arc-develop start 01 --lane face`
-on `feat/face-v2-01` cut from `main` after this close merges. Tests first per the spec's Verification
-plan (`tests/face/tokens-contrast.mjs` red on `missing selector html.hq.hq-light`), on CI only.
+**Next step:** in a new session, `/arc-resume --lane face`, then `/arc-develop start 02 --lane face`
+on `feat/face-v2-02` cut from `main` after this close merges. Tests first per the spec's Verification
+plan, on CI only.
