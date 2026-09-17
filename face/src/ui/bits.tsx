@@ -15,8 +15,9 @@
 import type { ReactNode } from 'react'
 import { Tray } from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
-import { EASE, FONT, MONO, UI, toneColor } from './kit'
+import { EASE, FONT, MONO, Meter, UI, toneColor } from './kit'
 import type { Tone } from './kit'
+import type { LaneRoom } from '../lib/lane-room.mjs'
 
 /** A room's head: the sentence leads, the lede explains, the right slot labels. */
 export function RoomHead({ title, hint, right, eyebrow }: { title: ReactNode; hint?: ReactNode; right?: ReactNode; eyebrow?: ReactNode }) {
@@ -118,7 +119,7 @@ export function KpiStrip({ items, cols, className = '' }: { items: Kpi[]; cols?:
           <div key={s.key ?? i} className="px-5 py-4 min-w-0" style={{ boxShadow: 'inset 1px 0 0 var(--line-1), inset 0 1px 0 var(--line-1)' }}>
             <div className="leading-[28px] tracking-[-0.01em] truncate tnum" style={{ fontFamily: FONT, fontWeight: 600, fontSize: size, color: c }}>{s.v}</div>
             <div className="text-[12px] leading-[16px] mt-1 line-clamp-2" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{s.l}</div>
-            {s.sub ? <div className="text-[11px] leading-[14px] mt-0.5 truncate" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{s.sub}</div> : null}
+            {s.sub ? <div className="text-[11px] leading-[14px] mt-0.5 line-clamp-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{s.sub}</div> : null}
           </div>
         )
       })}
@@ -161,6 +162,7 @@ export function NotServed({ item }: { item: { panel: string; route: string; sent
           not served
         </span>
         <span className="text-[11.5px] truncate" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>GET {item.route}</span>
+        <span className="text-[12.5px]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{item.panel}</span>
       </div>
       <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
         {item.sentence}
@@ -267,5 +269,204 @@ export function ReceiptDrawer({ receipt, onClose }: { receipt: ReceiptView; onCl
         </div>
       </div>
     </div>
+  )
+}
+
+
+/**
+ * A verb the reference draws here that the face does not perform yet: it arrives with the work door
+ * (Phase 05, ADR-1326). Drawn as a dashed card and marked `data-verb-pending`, never as a form that
+ * writes nothing.
+ */
+export function VerbPending({ item }: { item: { verb: string; sentence: string } }) {
+  return (
+    <div data-verb-pending={item.verb} className="px-4 py-3.5 min-w-0" style={{ background: 'var(--well)', border: '1px dashed var(--line-2)', borderRadius: 'var(--r-md)' }}>
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        <span className="inline-flex items-center h-[20px] px-2 rounded-full text-[10.5px] uppercase tracking-[0.06em]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-2)', background: 'var(--bg-4)', border: '1px solid var(--line-1)' }}>
+          work door · phase 05
+        </span>
+        <span className="text-[12.5px]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{item.verb}</span>
+      </div>
+      <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{item.sentence}</p>
+    </div>
+  )
+}
+
+export type LaneCardView = {
+  isRead: boolean
+  lane: string
+  status: string
+  statusInk: string
+  phase: string
+  note: string
+  burn: string
+  hasMeter: boolean
+  meter: number
+  distance: string
+  phases: { key: string; label: string; title: string }[]
+  hasPhases: boolean
+  phasesNote: string
+}
+
+/** A lane's own card: its header's status, phase and burn, and its phase specs by number. */
+export function LaneCard({ card }: { card: LaneCardView }) {
+  if (!card.isRead) return <Reading what="the lane" />
+  return (
+    <div className="min-w-0" data-lane-card={card.lane}>
+      <div className="flex items-baseline gap-2 flex-wrap mb-1">
+        <span className="text-[13px]" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-1)' }}>{card.lane}</span>
+        <span className="text-[11.5px]" style={{ fontFamily: MONO, fontWeight: 600, color: card.statusInk }}>{card.status}</span>
+        <span className="text-[12.5px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{card.phase}</span>
+      </div>
+      {card.note ? <div className="text-[12px] leading-[18px] mb-2 break-words" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.note}</div> : null}
+      <div className="flex items-center gap-2 mt-2">
+        {card.hasMeter ? (
+          <span className="flex-1 min-w-0">
+            <Meter value={card.meter} label={`${card.lane} burn`} />
+          </span>
+        ) : null}
+        <span className="text-[11.5px] shrink-0 tnum" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-2)' }}>{card.distance}</span>
+      </div>
+      <div className="text-[12px] mt-1 mb-3" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.burn}</div>
+      {card.hasPhases ? (
+        <div className="-mx-2">
+          {card.phases.map((p) => (
+            <div key={p.key} className="grid grid-cols-[30px_minmax(0,1fr)] items-baseline gap-2 px-2 py-[5px] text-[12.5px]" style={{ borderTop: '1px solid var(--line-1)' }}>
+              <span className="tnum" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{p.label}</span>
+              {/* A phase title wraps at a word and stops at two lines: the reference clipped mid-word, which
+                  reads as cut off rather than summarized (Phase 03 kernel shot review). */}
+              <span className="min-w-0 leading-[17px] line-clamp-2 break-words" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{p.title}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {card.phasesNote ? <div className="text-[11.5px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.phasesNote}</div> : null}
+    </div>
+  )
+}
+
+/** A room's trail: the receipts of the kinds it homes, each opening its receipt. */
+export function Trail({ rows, empty, isEmpty, onReceipt }: { rows: EventRowView[]; empty: string; isEmpty: boolean; onReceipt: (id: string) => void }) {
+  if (isEmpty) return <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{empty}</p>
+  return (
+    <div className="-mx-2">
+      {rows.map((row) => (
+        <EventRow key={row.id} row={row} onReceipt={onReceipt} />
+      ))}
+    </div>
+  )
+}
+
+export type SourceFileView = {
+  id: string
+  isReading: boolean
+  isRefused: boolean
+  isRead: boolean
+  refusal: { code: string; human: string }
+  path: string
+  sha: string
+  size: string
+}
+
+/**
+ * The allow-listed file a room's tables will be parsed from, as the door served it: its path, hash and
+ * size. Provenance only -- the table itself is NOT SERVED until its route exists (ADR-1324).
+ */
+export function SourceFile({ file }: { file: SourceFileView }) {
+  if (file.isReading) return <Reading what={`the ${file.id} file`} />
+  if (file.isRefused) return <DoorRefusal code={file.refusal.code} human={file.refusal.human} />
+  return (
+    <div data-source-file={file.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 py-[6px]" style={{ borderTop: '1px solid var(--line-1)' }}>
+      <span className="text-[12.5px] truncate" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{file.path}</span>
+      <span className="text-[11.5px] tnum" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{file.size}</span>
+      <span className="col-span-2 text-[11px] truncate" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{file.sha}</span>
+    </div>
+  )
+}
+
+export type RunRowView = { key: string; name: string; runs: string; last: string; when: string; detail: string }
+
+/** Runs grouped by what ran: the name, how many, how the last one ended and when. */
+export function RunRows({ rows, empty, isEmpty }: { rows: RunRowView[]; empty: string; isEmpty: boolean }) {
+  if (isEmpty) return <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{empty}</p>
+  return (
+    <div className="-mx-2">
+      {rows.map((r) => (
+        <div key={r.key} data-run-group={r.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 px-2 py-[8px] transition-colors duration-200 hover:bg-(--bg-3)" style={{ borderBottom: '1px solid var(--line-1)', borderRadius: 'var(--r-sm)' }}>
+          <span className="text-[12.5px] truncate" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-1)' }}>{r.name}</span>
+          <span className="text-[11.5px] tnum" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{r.when}</span>
+          <span className="text-[12px] min-w-0 truncate" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
+            {r.runs} · {r.last}
+          </span>
+          <span className="text-[11px] truncate max-w-[40ch]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{r.detail}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** What the served registry says a room holds, one line per kind of thing. */
+export function Holds({ groups, century }: { groups: { key: string; label: string; items: string }[]; century: string }) {
+  return (
+    <div className="space-y-2.5">
+      {groups.map((g) => (
+        <div key={g.key} className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.08em] mb-0.5" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-3)' }}>{g.label}</div>
+          <div className="text-[12.5px] leading-[19px] break-words" style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{g.items}</div>
+        </div>
+      ))}
+      {century ? (
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.08em] mb-0.5" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-3)' }}>its ADR century</div>
+          <div className="text-[12.5px] leading-[19px]" style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{century}</div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** A lane room's lane panel: the header card, or the door's refusal of it. */
+export function LanePanel({ lane, title = 'The lane', hint = 'its PROGRESS header and phase specs, through the door' }: { lane: LaneRoom['lane']; title?: string; hint?: string }) {
+  return (
+    <HPanel title={title} hint={hint}>
+      {lane.isRefused ? <DoorRefusal code={lane.refusal.code} human={lane.refusal.human} /> : null}
+      {lane.isDrawn ? <LaneCard card={lane.card} /> : null}
+      {lane.note ? <p className="text-[11.5px] leading-[17px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{lane.note}</p> : null}
+    </HPanel>
+  )
+}
+
+/** A lane room's trail panel: the receipts of its homed kinds, each opening its receipt. */
+export function TrailPanel({ trail, onReceipt, title = 'The trail' }: { trail: LaneRoom['trail']; onReceipt: (id: string) => void; title?: string }) {
+  return (
+    <HPanel title={title} hint={trail.hint}>
+      {trail.isReading ? <Reading what="the trail" /> : null}
+      {trail.isRefused ? <DoorRefusal code={trail.refusal.code} human={trail.refusal.human} /> : null}
+      {trail.isDrawn ? <Trail rows={trail.rows} empty={trail.empty} isEmpty={trail.showEmpty} onReceipt={onReceipt} /> : null}
+      {trail.isHomed ? null : <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{trail.empty}</p>}
+      {trail.note ? <p className="text-[11.5px] leading-[17px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{trail.note}</p> : null}
+    </HPanel>
+  )
+}
+
+/** The allow-listed files a room's tables will be parsed from. */
+export function SourcesPanel({ sources, title = 'Source on disk', hint }: { sources: SourceFileView[]; title?: string; hint: string }) {
+  return (
+    <HPanel title={title} hint={hint}>
+      {sources.map((s) => (
+        <SourceFile key={s.id} file={s} />
+      ))}
+    </HPanel>
+  )
+}
+
+/** What the served registry homes in a room. */
+export function HoldsPanel({ holds, century, hasHolds, note = '' }: { holds: LaneRoom['holds']; century: string; hasHolds: boolean; note?: string }) {
+  if (!hasHolds && !century && !note) return null
+  return (
+    <HPanel title="What this room holds" hint="from the served registry">
+      <Holds groups={holds} century={century} />
+      {note ? <p className="text-[11.5px] leading-[17px] mt-2.5" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{note}</p> : null}
+    </HPanel>
   )
 }

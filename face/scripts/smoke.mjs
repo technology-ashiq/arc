@@ -334,7 +334,7 @@ const isCount = (n) => Number.isInteger(n) && n >= 0;
  * sentence, and a room that renders blank without logging an error would otherwise count as opened.
  * Each ring PR adds its ring here.
  */
-export const SENTENCE_RINGS = Object.freeze(["command"]);
+export const SENTENCE_RINGS = Object.freeze(["command", "kernel"]);
 
 /** The door's five text escapes, undone, so a served sentence compares to what the page shows. */
 export function doorText(s) {
@@ -378,6 +378,9 @@ export function judge(report) {
   if (Array.isArray(report.unexpectedFromDoor) && report.unexpectedFromDoor.length) reasons.push(`served but not expected: ${report.unexpectedFromDoor.join(",")}`);
   reasons.push(...moodReasons(report));
   if (report.headings && report.headings.checked === 0 && SENTENCE_RINGS.length > 0) reasons.push(`no module room in a shipped ring (${SENTENCE_RINGS.join(",")}) had its heading checked`);
+  // A count that could not be read is not a clean run: REQ-05's browser half rests on these two numbers.
+  if (report.notServed && report.notServed.panels === null) reasons.push("the NOT SERVED panel count could not be read in every opened room");
+  if (report.verbsPending && report.verbsPending.panels === null) reasons.push("the verb-pending card count could not be read in every opened room");
   if (report.headings && Array.isArray(report.headings.miss) && report.headings.miss.length)
     reasons.push(`heading miss: ${report.headings.miss.map((m) => `${m.id} showed ${JSON.stringify(m.got)} for ${JSON.stringify(m.expected)}`).join("; ")}`);
   return { ok: reasons.length === 0, reasons };
@@ -394,13 +397,38 @@ export function renderLine(report) {
 }
 
 /**
- * How many NOT SERVED panels the owner saw, and in which rooms (face v2 Phase 03, REQ-05): the gap
- * Phase 04 closes, measured where it is drawn. A report that counted nothing prints zero, never no line.
+ * One marked card counted in every room that drew it (face v2 Phase 03). The TOTAL alone cannot see a
+ * panel deleted in one room and duplicated in another -- the Phase 03 attacker shipped exactly that
+ * mutant past the sum -- so the rooms travel with their counts, and the suite compares the distribution
+ * against the derived evidence list.
+ * @param {{ id: string, opened: boolean }[]} rooms @param {string} field
+ */
+function countedPerRoom(rooms, field) {
+  const drew = rooms.filter((r) => r.opened);
+  return {
+    panels: drew.some((r) => !Number.isInteger(r[field])) ? null : drew.reduce((n, r) => n + r[field], 0),
+    rooms: drew.filter((r) => Number.isInteger(r[field]) && r[field] > 0).map((r) => `${r.id}:${r[field]}`).sort(),
+  };
+}
+
+/**
+ * How many NOT SERVED panels the owner saw, and in which rooms, each with its own count (face v2
+ * Phase 03, REQ-05): the gap Phase 04 closes, measured where it is drawn. A report that counted nothing
+ * prints zero, never no line.
  */
 export function notServedLine(report) {
   const n = report.notServed ?? { panels: 0, rooms: [] };
   // A room whose count could not be read makes the whole count UNREAD, never a quiet zero.
   return `smoke: not-served mood=${report.mood ?? "unstated"} panels=${n.panels === null ? "unread" : n.panels} rooms=${n.rooms.join(",") || "none"}`;
+}
+
+/**
+ * The verbs that are drawn as pending the work door, per room (ADR-1326): what Phase 05 builds, counted
+ * where a person would look for a button and find a card saying why there is none.
+ */
+export function verbsPendingLine(report) {
+  const n = report.verbsPending ?? { panels: 0, rooms: [] };
+  return `smoke: verbs-pending mood=${report.mood ?? "unstated"} cards=${n.panels === null ? "unread" : n.panels} rooms=${n.rooms.join(",") || "none"}`;
 }
 
 export function summaryLines(report) {
@@ -554,6 +582,12 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
             returnByValue: true,
           });
           room.notServed = Number.isInteger(gaps.result?.value) ? gaps.result.value : null;
+          // ADR-1326: the verbs this face does not perform yet, counted where they are drawn.
+          const verbs = await page.send("Runtime.evaluate", {
+            expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.querySelectorAll("[data-verb-pending]").length : 0; })()`,
+            returnByValue: true,
+          });
+          room.verbsPending = Number.isInteger(verbs.result?.value) ? verbs.result.value : null;
           const heading = await page.send("Runtime.evaluate", {
             expression: `(function () { var h = document.querySelector("section[data-room] h1"); return h ? h.textContent : null; })()`,
             returnByValue: true,
@@ -620,10 +654,8 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
         const checks = rooms.filter((r) => r.opened).map((r) => headingCheck(servedById.get(r.id), r, frozen && Object.hasOwn(frozen, r.id) ? frozen[r.id] : undefined)).filter(Boolean);
         return { checked: checks.length, miss: checks.filter((c) => !c.ok) };
       })(),
-      notServed: {
-        panels: rooms.some((r) => r.opened && !Number.isInteger(r.notServed)) ? null : rooms.reduce((n, r) => n + (r.opened ? r.notServed : 0), 0),
-        rooms: rooms.filter((r) => r.opened && r.notServed > 0).map((r) => r.id),
-      },
+      notServed: countedPerRoom(rooms, "notServed"),
+      verbsPending: countedPerRoom(rooms, "verbsPending"),
       errors: errors.slice(0, 50),
     };
     if (Array.isArray(opts.expected)) {

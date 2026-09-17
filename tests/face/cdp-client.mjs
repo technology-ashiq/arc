@@ -523,15 +523,34 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
 
   // The NOT SERVED line (face v2 Phase 03, REQ-05): how many panels named a route the door does not
   // serve, and in which rooms -- the browser's count of the gap Phase 04 closes.
-  const gaps = typeof smoke.notServedLine === "function" ? smoke.notServedLine({ mood: "dark", notServed: { panels: 3, rooms: ["today", "board"] } }) : null;
-  check("the not-served line counts NOT SERVED panels and names their rooms", gaps === "smoke: not-served mood=dark panels=3 rooms=today,board", String(gaps));
+  const gaps = typeof smoke.notServedLine === "function" ? smoke.notServedLine({ mood: "dark", notServed: { panels: 3, rooms: ["board:1", "today:2"] } }) : null;
+  check("the not-served line counts NOT SERVED panels and names each room WITH its own count", gaps === "smoke: not-served mood=dark panels=3 rooms=board:1,today:2", String(gaps));
   const noGaps = typeof smoke.notServedLine === "function" ? smoke.notServedLine({ mood: "light" }) : null;
   check("a report that measured no NOT SERVED panel prints zero, never a missing line", noGaps === "smoke: not-served mood=light panels=0 rooms=none", String(noGaps));
+
+  // ADR-1326's counterpart: the verbs drawn as pending the work door, counted per room. Both lists are
+  // derived from the folds and compared to the page per room, because a total cannot see a card deleted
+  // in one room and duplicated in another (face v2 Phase 03 attack).
+  const verbs = typeof smoke.verbsPendingLine === "function" ? smoke.verbsPendingLine({ mood: "dark", verbsPending: { panels: 4, rooms: ["policy:2", "scheduler:2"] } }) : null;
+  check("the verbs-pending line counts the work-door cards and names each room with its own count",
+    verbs === "smoke: verbs-pending mood=dark cards=4 rooms=policy:2,scheduler:2", String(verbs));
+  const noVerbs = typeof smoke.verbsPendingLine === "function" ? smoke.verbsPendingLine({ mood: "light", verbsPending: { panels: null, rooms: [] } }) : null;
+  check("a verb-pending count that could not be read prints unread, never zero", noVerbs === "smoke: verbs-pending mood=light cards=unread rooms=none", String(noVerbs));
+  // MUTANT: a run whose derived counts could not be read is not a clean run -- the verdict had no clause
+  // for either count, so a page that drew none of them exited 0 (face v2 Phase 03 attack).
+  const unreadNs = smoke.judge({ ...clean, mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], headings: { checked: 14, miss: [] }, notServed: { panels: null, rooms: [] } });
+  check("MUTANT: the verdict refuses a run whose NOT SERVED count could not be read",
+    !unreadNs.ok && unreadNs.reasons.some((r) => /NOT SERVED panel count/.test(r)), JSON.stringify(unreadNs.reasons));
+  const unreadVerbs = smoke.judge({ ...clean, mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], headings: { checked: 14, miss: [] }, verbsPending: { panels: null, rooms: [] } });
+  check("MUTANT: the verdict refuses a run whose verb-pending count could not be read",
+    !unreadVerbs.ok && unreadVerbs.reasons.some((r) => /verb-pending card count/.test(r)), JSON.stringify(unreadVerbs.reasons));
 
   // The heading check (face v2 Phase 03, the debt row on "opened"): a shipped ring's module room opens with
   // the served sentence, entities undone; a blank or wrong heading is a miss the verdict refuses.
   const hasHeading = typeof smoke.headingCheck === "function" && typeof smoke.headingLine === "function";
-  check("the smoke exports the heading check and line", hasHeading && Array.isArray(smoke.SENTENCE_RINGS) && smoke.SENTENCE_RINGS.includes("command"));
+  check("the smoke exports the heading check and line, and names every ring shipped so far",
+    hasHeading && Array.isArray(smoke.SENTENCE_RINGS) && smoke.SENTENCE_RINGS.includes("command") && smoke.SENTENCE_RINGS.includes("kernel"),
+    JSON.stringify(smoke.SENTENCE_RINGS));
   if (hasHeading) {
     const served = { id: "inbox", ring: "command", sentence: "A machine may raise it. Only you &amp; nobody else may decide it." };
     const good = smoke.headingCheck(served, { id: "inbox", render: "module", h1: "A machine may raise it. Only you & nobody else may decide it." });
@@ -541,7 +560,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     const absent = smoke.headingCheck(served, { id: "inbox", render: "module", h1: null });
     check("MUTANT: no h1 at all is a miss, not a skip", absent !== null && absent.ok === false, JSON.stringify(absent));
     check("a generic room and a room outside the shipped rings are not heading-checked",
-      smoke.headingCheck(served, { id: "inbox", render: "generic", h1: "x" }) === null && smoke.headingCheck({ ...served, ring: "kernel" }, { id: "inbox", render: "module", h1: "x" }) === null);
+      smoke.headingCheck(served, { id: "inbox", render: "generic", h1: "x" }) === null && smoke.headingCheck({ ...served, ring: "a-ring-no-module-has-shipped-in" }, { id: "inbox", render: "module", h1: "x" }) === null);
     const missed = smoke.judge({ ...clean, mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], headings: { checked: 6, miss: [blank] } });
     check("MUTANT: the verdict refuses a run with a heading miss, however clean", !missed.ok && missed.reasons.some((r) => /heading miss/.test(r)), JSON.stringify(missed.reasons));
     const drifted = smoke.headingCheck({ ...served, sentence: "Nothing happened overnight." }, { id: "inbox", render: "module", h1: "Nothing happened overnight." }, "A machine may raise it. Only you & nobody else may decide it.");
@@ -553,7 +572,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     check("a NOT SERVED count that could not be read prints unread, never zero",
       smoke.notServedLine({ mood: "dark", notServed: { panels: null, rooms: [] } }) === "smoke: not-served mood=dark panels=unread rooms=none");
     check("the heading line counts what was checked and what missed",
-      smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }) === "smoke: heading mood=dark rings=command checked=6 miss=0", smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }));
+      smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }) === "smoke: heading mood=dark rings=command,kernel checked=6 miss=0", smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }));
   }
 
   // The attack on the mood verdict (face v2 Phase 01).

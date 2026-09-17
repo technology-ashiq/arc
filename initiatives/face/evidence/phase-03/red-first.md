@@ -24,3 +24,24 @@ macOS and windows shard failures are the shards those suites land on.
 One assertion was added with the implementation rather than before it, and is recorded here rather
 than hidden: the heading check (`smoke: heading mood=M rings=command checked=N miss=0`, the "opened"
 debt row's pay-down) and its mutant controls in `tests/face/cdp-client.mjs` arrived in `f87db315`.
+
+# Red first — Phase 03, kernel ring
+
+Commit `46b876ce` listed `kernel` as a shipped ring in `tests/face/module-frame.mjs`, raised the
+browser suite's heading floor to fourteen checked rooms across `command,kernel`, and named the
+kernel arms in `tests/face-l3.bats` — with no kernel module, no list and the smoke still checking one
+ring. Draft PR #240 fired arc-ci run **35250457456**, which concluded `failure`: 5 jobs failed
+(ubuntu Node 18, 20 and 22, macOS shard 1/3, windows shards 1/12 and 6/12), 14 succeeded, read per
+job with `gh run view 35250457456 --json jobs`.
+
+What was red, read from the ubuntu Node 20 job's log (job 105301232425):
+
+| test | how it failed | the missing piece it names |
+|---|---|---|
+| `face v2: the module frame attaches both ways, agrees with face-coverage, and no shell file names a room` | `FAIL SHIPPED RING kernel: its module folders are modules-v2.json's ids for the ring have= want=absorb,bench,engine-room,evolve,memory,model-policy,policy,scheduler` | the eight kernel modules |
+| (same suite) | `FAIL NOT SERVED LIST kernel: evidence/phase-03/not-served-kernel.md exists`, and the list-equals-folds check | the derived kernel NOT SERVED list |
+| `face-browser: door + preview + smoke open every openable room with 0 errors, in BOTH moods` | `heading check missing, too few checked, or a miss` on `smoke: heading mood=dark rings=command checked=6 miss=0` — every kernel room opened (`ok engine-room`, `ok scheduler`, ...) through the generic module, so the smoke was green and the floor was what failed | the kernel ports drawing their served sentence, and `SENTENCE_RINGS` naming the ring |
+
+The windows shard 1/12 and macOS shard 1/3 failures are the browser suite's legs; windows shard
+6/12 is the module-frame suite's. Node 18 counts the browser suite as its skip and failed on the
+module frame alone.

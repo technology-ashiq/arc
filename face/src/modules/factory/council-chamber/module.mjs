@@ -7,5 +7,5 @@ export default Object.freeze({
   id: "council-chamber",
   ring: "factory",
   routes: Object.freeze([]),
-  asOf: true,
+  asOf: false,
 });
