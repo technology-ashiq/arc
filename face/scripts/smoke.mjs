@@ -36,18 +36,44 @@ export const QUIET_MS = 300;
 export const SETTLE_CAP_MS = 10000;
 export const LATE_WATCH_MS = 20000;
 export const THREE_CLOCK = /THREE\.Clock/;
+const ROOM_ID = /^[a-z0-9][a-z0-9-]*$/;
 
 export class SetupError extends Error {}
 
-// A request's path only: a query or fragment can carry the dev token, and a data: URL is the
-// whole payload. The report lands in a public CI log.
-function pathOf(url) {
-  try {
-    const u = new URL(String(url));
-    return (u.protocol === "http:" || u.protocol === "https:" ? u.pathname : u.protocol).slice(0, 120);
-  } catch {
-    return "?";
+/** `text` with every known secret, raw or percent-encoded, replaced -- for anything bound for a public log. */
+export function redactSecrets(text, secrets) {
+  let out = String(text);
+  for (const s of secrets) {
+    if (typeof s !== "string" || s.length === 0) continue;
+    for (const form of new Set([s, encodeURIComponent(s)])) out = out.split(form).join("<redacted>");
   }
+  return out;
+}
+
+/** One room's result line. `ok` only for a room that opened, settled, logged nothing and hit no CDP error. */
+export function roomLine(r) {
+  const clean = r.opened && r.settled && r.newErrors === 0 && !r.cdpError;
+  return `${clean ? "ok" : "XX"} ${r.id}`
+    + (r.opened ? "" : " (did not render)")
+    + (r.settled ? ` settle-ms=${r.settleMs}` : "")
+    + (r.opened && !r.settled ? ` (never settled; late-settle-ms=${r.lateSettleMs ?? "none"} at-cap=${JSON.stringify(r.atCap ?? null)})` : "")
+    + (r.navError ? ` nav-error=${JSON.stringify(r.navError)}` : "")
+    + (r.cdpError ? ` cdp-error=${JSON.stringify(r.cdpError)}` : "")
+    + (r.newErrors ? ` errors=${r.newErrors}` : "");
+}
+
+// A request's path only: a query, fragment or `;param` can carry the dev token, and any other
+// scheme (data:, blob:, ws:) is reduced to its name. A path that still holds a known secret, raw
+// or percent-encoded, is withheld whole. The report lands in a public CI log.
+function pathOf(url, secrets) {
+  let u;
+  try { u = new URL(String(url)); } catch { return "?"; }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return u.protocol.slice(0, 20);
+  const path = u.pathname.split(";")[0];
+  let decoded = path;
+  try { decoded = decodeURIComponent(path); } catch { /* an undecodable path is checked raw */ }
+  if (secrets.some((s) => path.includes(s) || decoded.includes(s))) return "[withheld: holds a secret]";
+  return path.slice(0, 120);
 }
 
 /**
@@ -58,10 +84,13 @@ function pathOf(url) {
  * "never settled"), so requests are keyed by the navigation's loaderId -- and the rule holds in
  * BOTH directions: a finish for a request this document never sent does not reset the quiet
  * clock either. Requests that arrive before Page.navigate has answered with its loaderId are
- * held and adopted once it has, rather than dropped for arriving early.
+ * held -- with their finish, if it came first -- and count only once that loaderId proves them
+ * this document's. A navigation with no loaderId (CDP omits it for a same-document navigation)
+ * watched nothing, so it is never quiet: a measurement over nothing is not a pass.
  */
 export class NetworkWatch {
-  constructor() {
+  constructor({ secrets = [] } = {}) {
+    this.secrets = secrets.filter((s) => typeof s === "string" && s.length > 0);
     this.loader = null;
     this.navigating = false;
     this.inflight = new Map();
@@ -87,14 +116,17 @@ export class NetworkWatch {
     this.navigating = false;
     this.loader = typeof loaderId === "string" && loaderId ? loaderId : null;
     for (const [id, r] of this.early) {
-      if (this.loader !== null && r.loaderId === this.loader) { this.inflight.set(id, r); this.lastChange = now; }
+      if (this.loader === null || r.loaderId !== this.loader) continue;
+      this.events++;
+      if (r.finishedAt === undefined) { this.inflight.set(id, r); this.lastChange = Math.max(this.lastChange, now); }
+      else this.lastChange = Math.max(this.lastChange, r.finishedAt);
     }
     this.early.clear();
   }
 
   sent(p, now) {
     if (!p || p.requestId === undefined) return;
-    const r = { loaderId: p.loaderId, url: pathOf(p.request?.url), type: String(p.type ?? "?"), at: now };
+    const r = { loaderId: p.loaderId, url: pathOf(p.request?.url, this.secrets), type: String(p.type ?? "?").slice(0, 40), at: now };
     if (this.navigating) { this.early.set(p.requestId, r); return; }
     if (this.loader === null || p.loaderId !== this.loader) return;
     // A redirect re-sends the same requestId: still one request, still in flight.
@@ -105,20 +137,24 @@ export class NetworkWatch {
 
   finished(p, now) {
     if (!p || p.requestId === undefined) return;
-    // Finished before its document was known: activity at navigation time, so the clock moves.
-    if (this.early.delete(p.requestId)) { this.lastChange = now; return; }
+    // Finished before its document was known: remembered, and it moves the clock only if begin()
+    // adopts it -- the same rule a finish after begin() obeys.
+    const held = this.early.get(p.requestId);
+    if (held) { held.finishedAt = now; return; }
     if (!this.inflight.delete(p.requestId)) { this.untrackedFinishes++; return; }
     this.lastChange = now;
     this.events++;
   }
 
   quiet(from, now) {
-    return !this.navigating && this.inflight.size === 0 && now - this.lastChange >= QUIET_MS && now - from >= MIN_WATCH_MS;
+    return this.loader !== null && !this.navigating && this.inflight.size === 0
+      && now - this.lastChange >= QUIET_MS && now - from >= MIN_WATCH_MS;
   }
 
   /** What the network held at `now` -- the evidence a "never settled" line carries. */
   snapshot(now) {
     return {
+      measured: this.loader !== null,
       inflight: [...this.inflight.values()].map((r) => ({ type: r.type, url: r.url, ageMs: now - r.at })),
       msSinceChange: now - this.lastChange,
       events: this.events,
@@ -140,7 +176,16 @@ export function parseArgs(argv) {
     if (v === undefined || v.startsWith("--")) throw new SetupError(`${a} needs a value`);
     if (v.trim() === "") throw new SetupError(`${a} has an empty value`);
     i++;
-    if (a === "--base") opts.base = v;
+    if (a === "--base") {
+      // The smoke appends its own `?r=N#/room`; a base that already has either would turn every
+      // room into a same-document navigation that CDP gives no loaderId, i.e. an unwatched room.
+      let u = null;
+      try { u = new URL(v); } catch { /* reported below */ }
+      if (!u || (u.protocol !== "http:" && u.protocol !== "https:") || v.includes("?") || v.includes("#")) {
+        throw new SetupError(`--base must be an http(s) URL with no query or fragment, got ${JSON.stringify(v)}`);
+      }
+      opts.base = v;
+    }
     else if (a === "--door") opts.door = v;
     else if (a === "--token") opts.token = v;
     else if (a === "--exclude") opts.exclude = v.split(",").map((s) => s.trim()).filter(Boolean);
@@ -174,6 +219,9 @@ export function openableRooms(payload) {
   rooms.forEach((r, i) => {
     if (!r || typeof r !== "object") throw new SetupError(`rooms[${i}] is not an object`);
     if (typeof r.id !== "string" || r.id.trim() === "") throw new SetupError(`rooms[${i}] has no string id`);
+    // Ids are printed into the lines the bats suite parses; a space or newline in one could forge
+    // a field there, so an id is the kebab grammar every served room already uses.
+    if (!ROOM_ID.test(r.id)) throw new SetupError(`rooms[${i}] id ${JSON.stringify(r.id)} is not a kebab-case room id`);
     if (typeof r.status !== "string" || r.status === "") throw new SetupError(`rooms[${i}] (${r.id}) has no status`);
     if (seen.has(r.id)) throw new SetupError(`rooms[${i}] repeats id ${JSON.stringify(r.id)}`);
     seen.add(r.id);
@@ -273,7 +321,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
     const errors = [];
     const current = { room: "boot" };
     collectErrors(page, errors, current);
-    const net = new NetworkWatch();
+    const net = new NetworkWatch({ secrets: [opts.token] });
     page.on("Network.requestWillBeSent", (p) => net.sent(p, Date.now()));
     page.on("Network.loadingFinished", (p) => net.finished(p, Date.now()));
     page.on("Network.loadingFailed", (p) => net.finished(p, Date.now()));
@@ -285,43 +333,51 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
 
     const quietSince = (from) => net.quiet(from, Date.now());
     const rooms = [];
+    // A room's error count is final once the next room starts, so its line is printed THEN --
+    // as the run goes, so a CDP failure part-way never throws away the rooms already measured.
+    const printRoom = (r, end) => { r.newErrors = end - r.before; log(roomLine(r)); };
     for (let i = 0; i < openable.length; i++) {
       const id = openable[i];
-      current.room = id;
       const before = errors.length;
-      const url = `${opts.base}?r=${i}#/${encodeURIComponent(id)}&token=${encodeURIComponent(opts.token)}`;
-      net.navigate(Date.now());
-      const nav = await page.send("Page.navigate", { url });
-      net.begin(nav.loaderId, Date.now());
-      const rendered = async () => {
-        const r = await page.send("Runtime.evaluate", {
-          expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.getAttribute("data-room") : null; })()`,
-          returnByValue: true,
-        });
-        return r.result?.value === id;
-      };
-      const opened = await until(rendered, opts.roomTimeoutMs);
-      const renderedAt = Date.now();
-      const settled = opened && await until(() => quietSince(renderedAt), SETTLE_CAP_MS);
-      const room = { id, opened, settled, settleMs: settled ? Date.now() - renderedAt : null, newErrors: 0, before };
-      if (opened && !settled) {
-        // Evidence only -- `settled` is already final. What was still in flight at the cap, and
-        // whether the room went quiet later, is what tells a slow runner from a request that
-        // never ends.
-        room.atCap = net.snapshot(Date.now());
-        room.lateSettleMs = (await until(() => quietSince(renderedAt), LATE_WATCH_MS)) ? Date.now() - renderedAt : null;
-      }
+      if (i > 0) printRoom(rooms[i - 1], before);
+      current.room = id;
+      const room = { id, opened: false, settled: false, settleMs: null, newErrors: 0, before };
       rooms.push(room);
+      if (session.closed) { room.cdpError = "the DevTools socket is closed"; continue; }
+      try {
+        const url = `${opts.base}?r=${i}#/${encodeURIComponent(id)}&token=${encodeURIComponent(opts.token)}`;
+        net.navigate(Date.now());
+        const nav = await page.send("Page.navigate", { url });
+        net.begin(nav.loaderId, Date.now());
+        if (nav.errorText) room.navError = redactSecrets(nav.errorText, [opts.token]).slice(0, 120);
+        const rendered = async () => {
+          const r = await page.send("Runtime.evaluate", {
+            expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.getAttribute("data-room") : null; })()`,
+            returnByValue: true,
+          });
+          return r.result?.value === id;
+        };
+        room.opened = await until(rendered, opts.roomTimeoutMs);
+        const renderedAt = Date.now();
+        room.settled = room.opened && await until(() => quietSince(renderedAt), SETTLE_CAP_MS);
+        if (room.settled) room.settleMs = Date.now() - renderedAt;
+        if (room.opened && !room.settled) {
+          // Evidence only -- `settled` is already final. What was still in flight at the cap,
+          // and whether the room went quiet later, is what tells a slow runner from a request
+          // that never ends.
+          room.atCap = net.snapshot(Date.now());
+          room.lateSettleMs = (await until(() => quietSince(renderedAt), LATE_WATCH_MS)) ? Date.now() - renderedAt : null;
+        }
+      } catch (e) {
+        // This room's finding, never the end of the evidence: it is not opened or not settled,
+        // so the verdict still FAILS it.
+        room.cdpError = redactSecrets(e?.message ?? e, [opts.token]).slice(0, 200);
+      }
     }
     // The last room gets the same watch window every other room got before navigating away.
     const drainFrom = Date.now();
     await until(() => quietSince(drainFrom), 5000);
-    for (let i = 0; i < rooms.length; i++) {
-      const end = i + 1 < rooms.length ? rooms[i + 1].before : errors.length;
-      rooms[i].newErrors = end - rooms[i].before;
-      const r = rooms[i];
-      log(`${r.opened && r.settled && r.newErrors === 0 ? "ok" : "XX"} ${r.id}${r.opened ? "" : " (did not render)"}${r.settled ? ` settle-ms=${r.settleMs}` : ""}${r.opened && !r.settled ? ` (never settled; late-settle-ms=${r.lateSettleMs ?? "none"} at-cap=${JSON.stringify(r.atCap)})` : ""}${r.newErrors ? ` errors=${r.newErrors}` : ""}`);
-    }
+    if (rooms.length) printRoom(rooms[rooms.length - 1], errors.length);
     const settledRooms = rooms.filter((r) => r.settled);
     const slowest = settledRooms.reduce((a, r) => (a === null || r.settleMs > a.settleMs ? r : a), null);
 
@@ -340,7 +396,8 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       unsettled: rooms.filter((r) => r.opened && !r.settled).map((r) => r.id),
       // The headroom under SETTLE_CAP_MS on this runner, and the evidence for every miss.
       slowestSettle: slowest ? { room: slowest.id, ms: slowest.settleMs } : null,
-      unsettledDetail: rooms.filter((r) => r.opened && !r.settled).map((r) => ({ id: r.id, lateSettleMs: r.lateSettleMs, atCap: r.atCap })),
+      unsettledDetail: rooms.filter((r) => r.opened && !r.settled).map((r) => ({ id: r.id, lateSettleMs: r.lateSettleMs ?? null, atCap: r.atCap ?? null, navError: r.navError, cdpError: r.cdpError })),
+      cdpErrors: rooms.filter((r) => r.cdpError).map((r) => ({ id: r.id, error: r.cdpError })),
       rooms: rooms.map(({ before, atCap, ...r }) => r),
       errors: errors.slice(0, 50),
     };
@@ -349,7 +406,8 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       report.missingFromDoor = opts.expected.filter((id) => !openable.includes(id));
       report.unexpectedFromDoor = openable.filter((id) => !opts.expected.includes(id));
     }
-    for (const e of errors.slice(0, 20)) log(`  [${e.room}] ${e.type}: ${e.text}`);
+    // The page's own URL carries the token in its fragment, so a page error can print it.
+    for (const e of errors.slice(0, 20)) log(`  [${e.room}] ${e.type}: ${redactSecrets(e.text, [opts.token])}`);
     return report;
   });
 }

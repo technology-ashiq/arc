@@ -97,8 +97,8 @@ require_node_floor() {
   opened="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=\([0-9][0-9]*\) .*/\1/p')"
   openable="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=\([0-9][0-9]*\) .*/\1/p')"
   errors="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=\([0-9][0-9]*\) .*/\1/p')"
-  unsettled="$(printf '%s\n' "$line" | sed -n 's/.* excluded-errors=[0-9]* unsettled=\([0-9][0-9]*\) .*/\1/p')"
-  expected="$(printf '%s\n' "$line" | sed -n 's/.* unsettled=[0-9]* expected=\([0-9][0-9]*\) .*/\1/p')"
+  unsettled="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=[0-9]* excluded-errors=[0-9]* unsettled=\([0-9][0-9]*\) .*/\1/p')"
+  expected="$(printf '%s\n' "$line" | sed -n 's/^smoke: opened=[0-9]* openable=[0-9]* errors=[0-9]* excluded-errors=[0-9]* unsettled=[0-9]* expected=\([0-9][0-9]*\) .*/\1/p')"
   # Asserted in this order on purpose: that something RAN, that the door served the contract's
   # rooms, that all of them opened and settled, and only then that it was clean. "errors=0" is
   # also what a smoke that opened nothing prints.

@@ -26,9 +26,13 @@ import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
-// Longest alternatives first: `gnueabihf` must win over `gnu`, or linux-arm reads as two
-// families that are both missing.
-const PLATFORM_TOKEN = /(android|darwin|freebsd|linux|openharmony|win32|sunos|aix|netbsd|openbsd)-(arm64|arm|x64|ia32|ppc64|s390x|riscv64|loong64|wasm32)(?:-(gnueabihf|gnu|musl|msvc|eabi))?(?![a-z0-9])/;
+// Anchored at the END of the name, so whatever follows the cpu IS the ABI, read whole:
+// `gnueabihf` is one token, not `gnu` plus a remainder. An ABI this file does not know is kept
+// as unknown and never matches a host -- `musleabihf` once read as "no ABI", i.e. any libc, and
+// passed a glibc host (attack 2026-09-17).
+const PLATFORM_TOKEN = /(?:^|[/-])(android|darwin|freebsd|linuxmusl|linux|openharmony|win32|sunos|aix|netbsd|openbsd)-(arm64|arm|x64|ia32|ppc64|s390x|riscv64|loong64|wasm32)(?:-([a-z0-9]+))?$/;
+const LIBC_OF_ABI = { gnu: "glibc", gnueabihf: "glibc", glibc: "glibc", musl: "musl", musleabihf: "musl" };
+const ABI_WITHOUT_LIBC = new Set(["msvc", "eabi"]);
 
 export function currentLibc(platform = process.platform) {
   if (platform !== "linux") return null;
@@ -40,26 +44,38 @@ export function currentLibc(platform = process.platform) {
   }
 }
 
-/** The platform a package NAME claims, e.g. `linux x64 glibc` for `...-linux-x64-gnu`. */
+/**
+ * The platform a package NAME claims, e.g. `linux x64 glibc` for `...-linux-x64-gnu`. An ABI
+ * suffix this file cannot read comes back as `unknownAbi`, which matches no host.
+ */
 export function platformOfName(name) {
   const m = String(name).match(PLATFORM_TOKEN);
   if (!m) return null;
+  const os = m[1] === "linuxmusl" ? "linux" : m[1];
+  const osLibc = m[1] === "linuxmusl" ? "musl" : null;
   const abi = m[3] ?? null;
-  const libc = abi === "musl" ? "musl" : abi === "gnu" || abi === "gnueabihf" ? "glibc" : null;
-  return { os: m[1], cpu: m[2], libc };
+  if (abi === null) return { os, cpu: m[2], libc: osLibc };
+  if (ABI_WITHOUT_LIBC.has(abi) && osLibc === null) return { os, cpu: m[2], libc: null };
+  const abiLibc = Object.hasOwn(LIBC_OF_ABI, abi) ? LIBC_OF_ABI[abi] : null;
+  if (abiLibc !== null && (osLibc === null || osLibc === abiLibc)) return { os, cpu: m[2], libc: abiLibc };
+  return { os, cpu: m[2], libc: null, unknownAbi: abi };
 }
 
 function matches(target, claim) {
-  if (!claim) return false;
+  if (!claim || claim.unknownAbi) return false;
   if (claim.os !== target.platform || claim.cpu !== target.arch) return false;
   return target.libc === null || claim.libc === null || claim.libc === target.libc;
 }
 
-const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+// semver's own grammar: no leading zeros, and no part too large to compare exactly.
+const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function parseVersion(text) {
   const m = SEMVER.exec(text);
-  return m ? { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]), pre: m[4] ?? null } : null;
+  if (!m) return null;
+  const [major, minor, patch] = [m[1], m[2], m[3]].map(Number);
+  if (![major, minor, patch].every(Number.isSafeInteger)) return null;
+  return { major, minor, patch, pre: m[4] ?? null };
 }
 
 // Numeric, never lexical: 1.10.0 is above 1.9.0.
@@ -79,7 +95,9 @@ export function satisfiesSpec(version, spec) {
   const have = parseVersion(version.trim());
   if (!have) return { ok: false, why: `unreadable version ${JSON.stringify(version)}` };
   const s = spec.trim();
-  if (s === "" || s === "*" || s === "x") return { ok: true, why: null };
+  if (s === "" || s === "*" || s === "x") {
+    return have.pre === null ? { ok: true, why: null } : { ok: false, why: `unsupported prerelease range ${JSON.stringify(spec)}` };
+  }
   const op = s[0] === "^" || s[0] === "~" ? s[0] : s[0] === "=" ? "=" : "";
   const want = parseVersion((op ? s.slice(1) : s).trim().replace(/^v/, ""));
   if (!want) return { ok: false, why: `unsupported spec ${JSON.stringify(spec)}` };
@@ -118,14 +136,22 @@ export function checkLockfile(lock, target) {
   const missing = [];
   let families = 0;
   for (const [parent, entry] of Object.entries(packages)) {
-    if (!entry || typeof entry !== "object" || !entry.optionalDependencies || typeof entry.optionalDependencies !== "object") continue;
-    const declared = Object.keys(entry.optionalDependencies).filter((n) => platformOfName(n) !== null);
+    const label = parent || "(root)";
+    // Malformed is a named finding, never a family that quietly drops out of the check.
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) { missing.push(`${label} (malformed entry)`); continue; }
+    if (entry.optionalDependencies === undefined) continue;
+    const declaredMap = entry.optionalDependencies;
+    if (!declaredMap || typeof declaredMap !== "object" || Array.isArray(declaredMap)) { missing.push(`${label} (malformed optionalDependencies)`); continue; }
+    const declared = Object.keys(declaredMap).filter((n) => platformOfName(n) !== null);
     if (declared.length === 0) continue;
     families++;
-    const label = parent || "(root)";
     const forTarget = declared.filter((n) => matches(target, platformOfName(n)));
     if (forTarget.length === 0) {
-      missing.push(`${label} (declares no binary for this platform)`);
+      const unread = declared.filter((n) => {
+        const c = platformOfName(n);
+        return c.unknownAbi && c.os === target.platform && c.cpu === target.arch;
+      });
+      missing.push(`${label} (declares no binary for this platform${unread.length ? `; unread ABI: ${unread.join("|")}` : ""})`);
       continue;
     }
     const refused = [];
@@ -138,7 +164,7 @@ export function checkLockfile(lock, target) {
       if (Array.isArray(e.os) && !e.os.includes(target.platform)) return false;
       if (Array.isArray(e.cpu) && !e.cpu.includes(target.arch)) return false;
       if (Array.isArray(e.libc) && target.libc && !e.libc.includes(target.libc)) return false;
-      const fit = satisfiesSpec(e.version, entry.optionalDependencies[n]);
+      const fit = satisfiesSpec(e.version, declaredMap[n]);
       if (!fit.ok) refused.push(`${hit.key}@${e.version ?? "?"} ${fit.why}`);
       return fit.ok;
     });

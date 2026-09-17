@@ -20,7 +20,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runSmoke, summaryLines, judge, openableRooms, SetupError } from "./smoke.mjs";
+import { runSmoke, summaryLines, judge, openableRooms, redactSecrets, SetupError } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FACE_DEFAULT = resolve(HERE, "..");
@@ -70,10 +70,12 @@ function start(label, args, opts) {
   return child;
 }
 
-async function waitHttp(url, headers, child, capMs) {
+// The door prints its own open URL and token to stderr, so a tail bound for the error -- and the
+// public CI log -- has the token taken out first.
+async function waitHttp(url, headers, child, capMs, secrets) {
   const started = Date.now();
   while (Date.now() - started < capMs) {
-    if (isDead(child)) throw new SetupError(`${child.label} ${deathReason(child)} before answering ${url}: ${child.stderrTail().slice(-600)}`);
+    if (isDead(child)) throw new SetupError(`${child.label} ${deathReason(child)} before answering ${url}: ${redactSecrets(child.stderrTail(), secrets).slice(-600)}`);
     try {
       const r = await fetch(url, { headers });
       if (r.status === 200) { await r.arrayBuffer(); return; }
@@ -81,7 +83,7 @@ async function waitHttp(url, headers, child, capMs) {
     } catch { /* not up yet */ }
     await delay(200);
   }
-  throw new SetupError(`${child.label} did not answer ${url} with 200 within ${capMs} ms: ${child.stderrTail().slice(-600)}`);
+  throw new SetupError(`${child.label} did not answer ${url} with 200 within ${capMs} ms: ${redactSecrets(child.stderrTail(), secrets).slice(-600)}`);
 }
 
 export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n")) {
@@ -113,13 +115,13 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     door = start("arc-dash", [join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "--spine", spine, "--port", String(doorPort)],
       { cwd: REPO, env: { ...process.env, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal") } });
     const headers = { Authorization: `Bearer ${token}` };
-    await waitHttp(`http://127.0.0.1:${doorPort}/api/health`, headers, door, 20000);
+    await waitHttp(`http://127.0.0.1:${doorPort}/api/health`, headers, door, 20000, [token]);
     log(`door: up on ${doorPort}`);
 
     const appPort = await freePort();
     preview = start("vite preview", [viteBin, "preview", "--port", String(appPort), "--strictPort", "--host", "127.0.0.1"],
       { cwd: FACE, env: { ...process.env, ARC_DASH_ORIGIN: `http://127.0.0.1:${doorPort}`, ARC_FACE_APP_PORT: String(appPort) } });
-    await waitHttp(`http://127.0.0.1:${appPort}/api/health`, headers, preview, 30000);
+    await waitHttp(`http://127.0.0.1:${appPort}/api/health`, headers, preview, 30000, [token]);
     log(`preview: up on ${appPort}, /api/health answers 200 through its proxy`);
 
     const report = await runSmoke({

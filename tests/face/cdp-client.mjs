@@ -268,6 +268,48 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   ];
   for (const [v, spec, want] of specCases) check(`version ${v} ${want ? "satisfies" : "does not satisfy"} spec ${JSON.stringify(spec)}`, lockMod.satisfiesSpec(v, spec).ok === want, JSON.stringify(lockMod.satisfiesSpec(v, spec)));
   check("an unreadable spec is reported as unsupported, not as a plain mismatch", /unsupported/.test(lockMod.satisfiesSpec("1.2.5", ">=1.0.0").why));
+  // Decision-logic attack 2026-09-17: each case below killed a mutant the checks above let live.
+  const moreSpecCases = [
+    ["1.2.5-rc.1", "*", false], ["1.2.5-rc.1", "", false], ["1.2.5-rc.1", "~1.2.0", false],
+    ["1.2.9007199254740993", "1.2.9007199254740992", false], ["01.2.5", "1.2.5", false],
+    ["1.2.5", ">1.0.0", false], ["1.2.5", "<2.0.0", false], ["1.2.5", "1.2", false], ["1.2.5", "1.x", false],
+  ];
+  for (const [v, spec, want] of moreSpecCases) check(`version ${v} ${want ? "satisfies" : "does not satisfy"} spec ${JSON.stringify(spec)}`, lockMod.satisfiesSpec(v, spec).ok === want, JSON.stringify(lockMod.satisfiesSpec(v, spec)));
+
+  const armGlibc = { platform: "linux", arch: "arm", libc: "glibc" };
+  const rollup = (extra) => ({ packages: { "node_modules/rollup": { version: "4.0.0", optionalDependencies: { "@rollup/rollup-linux-arm-gnueabihf": "4.0.0", "@rollup/rollup-linux-arm-musleabihf": "4.0.0" } }, "node_modules/@rollup/rollup-linux-arm-musleabihf": { version: "4.0.0", optional: true }, ...extra } });
+  check("a musleabihf binding with no libc field does not satisfy a glibc arm host", !lockMod.checkLockfile(rollup({}), armGlibc).ok, JSON.stringify(lockMod.checkLockfile(rollup({}), armGlibc)));
+  check("and the gnueabihf binding beside it does",
+    lockMod.checkLockfile(rollup({ "node_modules/@rollup/rollup-linux-arm-gnueabihf": { version: "4.0.0", optional: true } }), armGlibc).ok);
+  check("musleabihf reads as musl, sharp's linuxmusl as linux musl, and an unknown ABI as unknown",
+    lockMod.platformOfName("@rollup/rollup-linux-arm-musleabihf").libc === "musl"
+    && JSON.stringify(lockMod.platformOfName("@img/sharp-linuxmusl-x64")) === JSON.stringify({ os: "linux", cpu: "x64", libc: "musl" })
+    && lockMod.platformOfName("@rolldown/binding-linux-arm64-ohos").unknownAbi === "ohos");
+  const unread = lockMod.checkLockfile({ packages: { "node_modules/p": { version: "1.0.0", optionalDependencies: { "p-linux-x64-gnux32": "1.0.0" } }, "node_modules/p-linux-x64-gnux32": { version: "1.0.0" } } }, linux);
+  check("a family whose only binding for this platform has an unread ABI FAILS and names it", !unread.ok && unread.missing.some((f) => /unread ABI: p-linux-x64-gnux32/.test(f)), JSON.stringify(unread));
+
+  const malformed = structuredClone(lock);
+  delete malformed.packages["node_modules/@rolldown/binding-linux-x64-gnu"];
+  malformed.packages["node_modules/rolldown"].optionalDependencies = Object.keys(malformed.packages["node_modules/rolldown"].optionalDependencies);
+  const ma = lockMod.checkLockfile(malformed, linux);
+  check("optionalDependencies written as an array is a named finding, not a family that drops out", !ma.ok && ma.missing.some((f) => /node_modules\/rolldown \(malformed optionalDependencies\)/.test(f)), JSON.stringify(ma));
+  const nullEntry = structuredClone(lock);
+  nullEntry.packages["node_modules/ghost"] = null;
+  check("a null package entry is a named finding", lockMod.checkLockfile(nullEntry, linux).missing.some((f) => /ghost \(malformed entry\)/.test(f)));
+
+  const wrongOs = structuredClone(lock);
+  wrongOs.packages["node_modules/@rolldown/binding-linux-x64-gnu"].os = ["darwin"];
+  check("a binding whose own os field contradicts its name does not satisfy the host", !lockMod.checkLockfile(wrongOs, linux).ok);
+  const wrongLibc = structuredClone(lock);
+  wrongLibc.packages["node_modules/@rolldown/binding-linux-x64-gnu"].libc = ["musl"];
+  check("a binding whose own libc field contradicts the host does not satisfy it", !lockMod.checkLockfile(wrongLibc, linux).ok);
+  const sunos = lockMod.checkLockfile(lock, { platform: "sunos", arch: "x64", libc: null });
+  check("a platform the lockfile ships nothing for FAILS by name", !sunos.ok && sunos.missing.some((f) => /declares no binary for this platform/.test(f)), JSON.stringify(sunos));
+  const shadow = structuredClone(lock);
+  shadow.packages["node_modules/rolldown/node_modules/@rolldown/binding-linux-x64-gnu"] = { version: "0.0.1", os: ["linux"], cpu: ["x64"], libc: ["glibc"], optional: true };
+  const sh = lockMod.checkLockfile(shadow, linux);
+  check("a wrong-version binding in the parent's OWN node_modules shadows the right hoisted one and FAILS",
+    !sh.ok && sh.missing.some((f) => f.includes("node_modules/rolldown/node_modules/@rolldown/binding-linux-x64-gnu@0.0.1")), JSON.stringify(sh));
   check("gnueabihf is one platform token, not gnu plus a remainder",
     JSON.stringify(lockMod.platformOfName("lightningcss-linux-arm-gnueabihf")) === JSON.stringify({ os: "linux", cpu: "arm", libc: "glibc" }));
   const none = lockMod.checkLockfile({ packages: { "node_modules/fsevents": { os: ["darwin"], cpu: [], optional: true } } }, linux);
@@ -348,7 +390,47 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   const noLoader = new NetworkWatch();
   noLoader.navigate(0); noLoader.begin(undefined, 0);
   sent(noLoader, "x", undefined, 10);
-  check("a navigation with no loaderId tracks nothing rather than everything", noLoader.inflight.size === 0);
+  check("a navigation with no loaderId watched nothing, so it is never quiet and says so",
+    noLoader.inflight.size === 0 && !noLoader.quiet(0, 100000) && noLoader.snapshot(100000).measured === false);
+
+  const oldEarly = new NetworkWatch();
+  oldEarly.navigate(0);
+  sent(oldEarly, "old", "L-OLD", 10);
+  oldEarly.finished({ requestId: "old" }, 800);
+  oldEarly.begin("L-NEW", 810);
+  check("an old document's request held during navigation moves no clock when its finish comes before begin", oldEarly.quiet(0, MIN_WATCH_MS) && oldEarly.inflight.size === 0, JSON.stringify(oldEarly.snapshot(MIN_WATCH_MS)));
+
+  const reused = new NetworkWatch();
+  reused.navigate(0); reused.begin("L1", 0);
+  sent(reused, "abandoned", "L1", 10);
+  reused.navigate(2000); reused.begin("L2", 2000);
+  check("one watch across two rooms: a request abandoned by room 1 never holds room 2 open", reused.inflight.size === 0 && reused.quiet(2000, 2000 + MIN_WATCH_MS));
+
+  const secret = new NetworkWatch({ secrets: ["SECRET"] });
+  secret.navigate(0); secret.begin("LS", 0);
+  const urls = [
+    "http://127.0.0.1:1/api/inbox;token=SECRET", "http://127.0.0.1:1/a%3Ftoken=SECRET", "http://127.0.0.1:1/x/S%45CRET",
+    "https://h.example/p?token=SECRET", "blob:http://127.0.0.1:1/x?token=SECRET", "ws://127.0.0.1:1/x?token=SECRET",
+  ];
+  urls.forEach((u, i) => sent(secret, `u${i}`, "LS", 10, u));
+  const ss = secret.snapshot(20);
+  check("the at-cap evidence withholds a secret in a ;param, an encoded ?, an encoded byte, and every non-http scheme",
+    ss.inflight.length === urls.length && !/SECRET|token/.test(JSON.stringify(ss))
+    && JSON.stringify(ss.inflight.map((r) => r.url)) === JSON.stringify(["/api/inbox", "[withheld: holds a secret]", "[withheld: holds a secret]", "/p", "blob:", "ws:"]),
+    JSON.stringify(ss.inflight.map((r) => r.url)));
+
+  check("redactSecrets replaces a secret raw and percent-encoded, and ignores an empty one",
+    smoke.redactSecrets("open http://h/#token=a b&x=a%20b", ["a b", ""]) === "open http://h/#token=<redacted>&x=<redacted>");
+  const base = { id: "map", opened: true, settled: true, settleMs: 1200, newErrors: 0 };
+  check("a room line is ok only when clean, and a CDP error alone makes it XX",
+    smoke.roomLine(base) === "ok map settle-ms=1200" && smoke.roomLine({ ...base, cdpError: "socket closed" }).startsWith("XX map"));
+  const unsettledLine = smoke.roomLine({ ...base, settled: false, settleMs: null, lateSettleMs: null, atCap: { measured: true, inflight: [] } });
+  check("a never-settled line carries its evidence and cannot start a forged summary line",
+    /\(never settled; late-settle-ms=none at-cap=\{"measured":true,"inflight":\[\]\}\)/.test(unsettledLine) && !/^smoke: /.test(unsettledLine) && !unsettledLine.includes("\n"), unsettledLine);
+  check("a room id that could forge a parsed field is a setup error",
+    throwsLike(() => smoke.openableRooms({ rooms: [{ id: "t excluded-errors=0 unsettled=0", status: "template" }] }), /kebab-case/)
+    && throwsLike(() => smoke.openableRooms({ rooms: [{ id: "a\nsmoke: opened=1", status: "built" }] }), /kebab-case/)
+    && smoke.openableRooms({ rooms: [{ id: "engine-room", status: "built" }] }).openable.length === 1);
 
   const snap = new NetworkWatch();
   snap.navigate(0); snap.begin("L6", 0);
@@ -372,7 +454,9 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   check("smoke refuses a room timeout under a second", throwsLike(() => smoke.parseArgs([...full, "--room-timeout-ms", "5"]), /1000/));
   check("smoke requires base, door and token outside probe mode", throwsLike(() => smoke.parseArgs(["--base", "http://x/"]), /required/));
   check("smoke refuses --probe-file mixed with flags it would ignore", throwsLike(() => smoke.parseArgs(["--probe-file", "p", "--base", "http://x/"]), /runs alone/));
-  check("smoke parses an exclude list", JSON.stringify(smoke.parseArgs([...full, "--exclude", "a, b,"]).exclude) === JSON.stringify(["a", "b"]));
+  check("smoke refuses a --base that is not http(s) or already has a query or fragment",
+    ["http://x/#", "http://x/?a=1", "file:///x/", "not a url"].every((b) => throwsLike(() => smoke.parseArgs(["--base", b, "--door", "http://d", "--token", "t"]), /--base must be/)));
+  check("smoke parses an exclude list",JSON.stringify(smoke.parseArgs([...full, "--exclude", "a, b,"]).exclude) === JSON.stringify(["a", "b"]));
   check("harness-run refuses an unknown flag and the --flag=value form",
     throwsLike(() => harness.parseArgs(["--exclude=a"]), /unknown/) && throwsLike(() => harness.parseArgs(["--keep"]), /unknown/));
   check("harness-run refuses an empty --face and a repeated flag",
