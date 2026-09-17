@@ -411,20 +411,17 @@ consumer projects — it carries the owner's approvals.
    BS-4 (the dispatcher fails open when it cannot capture the payload) is in `_dispatch.sh`, which
    is under the governance-denied `.claude/hooks/**`, so it is the owner's, and it affects every
    guard.
-3. **Owner edits: two `cp` commands** (owner ruling 2026-09-17: install the fragment now; BS-4 by
-   the same canonical-fixture pattern).
-   - `cp tests/fixtures/hooks/PreToolUse.d/10-design-composer.sh .claude/hooks/PreToolUse.d/10-design-composer.sh`
-     -- then register it in `products/design/manifest.json` → `files`, regenerate the sync golden,
-     push, and confirm the fragment case runs instead of skipping.
-   - BS-4: `tests/fixtures/hooks/_dispatch.sh` keeps the temp-file path and falls back to piping
-     the payload from memory when no temp file can be made. Its two-surface attack pass ran
-     (`adversarial-open.md` § BS-4 attack pass) and found no REALISTIC High or Med. The one real
-     regression it did find, a quadratic `$(cat)` capture, is fixed by that file-first design.
-     Once CI on the rewrite is at baseline, the owner runs
-     `cp tests/fixtures/hooks/_dispatch.sh .claude/hooks/_dispatch.sh`. Then regenerate the golden
-     (`_dispatch.sh` ships with core) and confirm the install case runs instead of skipping.
-     Noted for the owner: a truncated installed `_dispatch.sh` makes every dispatcher exit 127,
-     which reads as allow with no warning. That check belongs in the dispatchers themselves.
+3. ~~**Owner edits: two `cp` commands.**~~ **Done 2026-09-17: the owner ran both.** Both installed
+   files are byte-identical to their fixtures:
+   - the composer Bash fragment (`.claude/hooks/PreToolUse.d/10-design-composer.sh`);
+   - the BS-4 dispatcher (`.claude/hooks/_dispatch.sh`, attacked: no REALISTIC High or Med).
+
+   The fragment is registered in `products/design/manifest.json` → `files`, and the sync golden
+   is regenerated: 354 → 355 rows, only those two files moved. Next: read that run per JOB. Both
+   install cases must now RUN and pass instead of skipping.
+   **Still open for the owner, not blocking:** a truncated installed `_dispatch.sh` makes every
+   dispatcher exit 127, which reads as allow with no warning. The check belongs in the dispatchers
+   (`PreToolUse.sh` and its siblings).
 4. **Re-verify one composer.** Run one live composer turn to prove the enforced scope does not
    break the real loop (render, read the PNG, Write the manifest).
 5. **`/arc-phase-done 01`.**

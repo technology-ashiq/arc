@@ -21,6 +21,10 @@
 # found ..." instead of running -- it is on PATH, so a python-first extractor silently
 # returns garbage and disarms the destructive/deploy guards. We detect + drop that
 # noise and return "" so the caller can fail safe (scan the raw payload).
+#
+# Canonical copy: tests/fixtures/hooks/_dispatch.sh. .claude/hooks/** is edit-denied to agent
+# sessions, so a change lands here first and the owner installs it; tests/hooks-dispatch.bats
+# checks the installed file is byte-identical once it is there.
 arc_hook_field() {
   # NOTE: <key> MUST be a literal identifier -- callers pass "command"/"file_path".
   # It is interpolated into the jq filter and the python -c program, so a key bearing
@@ -43,14 +47,48 @@ arc_dispatch() {
   local root="${CLAUDE_PROJECT_DIR:-.}"
   local dir="$root/.claude/hooks/${event}.d"
 
-  local input="/dev/null" pf=""
+  # The payload goes to a temp file when one can be made, and is held in memory only when it cannot.
+  #   - The file is the normal path: `cat > file` is linear and byte-exact, and ARC_HOOK_PAYLOAD
+  #     points at it, as the policy lane documents. Holding every payload in a shell variable cost
+  #     time that grew with the square of its size on Windows, so a 36 MB call that used to be
+  #     blocked in 55 s timed out instead, which reads as ALLOW (BS-4 attack pass, shell half).
+  #   - Memory is the fallback. The old dispatcher had no fallback at all: when TMPDIR was missing
+  #     or unwritable every fragment's `< "$input"` failed with exit 1, which blocking mode reads
+  #     as ALLOW, disarming every PreToolUse guard (design lane, fifth attack pass, BS-4). In that
+  #     case the payload is piped to each fragment and ARC_HOOK_PAYLOAD is unset, never left
+  #     pointing at a stale or empty file.
+  #   - A capture that fails part-way has already consumed stdin and cannot be recovered, so a
+  #     blocking event refuses rather than letting unguarded calls through.
+  local payload="" have_file=0
+  ARC_DISPATCH_PF=""
   if [ "$payload_flag" = "--payload" ]; then
-    # mktemp gives a private high-entropy path; the templated + predictable forms are
-    # last-resort fallbacks only if mktemp is entirely unavailable (review N1).
-    pf="$(mktemp 2>/dev/null || mktemp "${TMPDIR:-/tmp}/arc-hook.XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-hook.$$.$RANDOM")"
-    cat > "$pf"
-    input="$pf"
-    export ARC_HOOK_PAYLOAD="$pf"
+    ARC_DISPATCH_PF="$(mktemp 2>/dev/null || true)"
+    if [ -n "$ARC_DISPATCH_PF" ] && [ -f "$ARC_DISPATCH_PF" ]; then
+      # A hook killed by its timeout must not leave a copy of the call behind in TMPDIR.
+      trap 'rm -f "$ARC_DISPATCH_PF" 2>/dev/null; exit 143' TERM
+      trap 'rm -f "$ARC_DISPATCH_PF" 2>/dev/null; exit 130' INT
+      if cat > "$ARC_DISPATCH_PF"; then
+        have_file=1
+        export ARC_HOOK_PAYLOAD="$ARC_DISPATCH_PF"
+      else
+        rm -f "$ARC_DISPATCH_PF" 2>/dev/null
+        ARC_DISPATCH_PF=""
+        unset ARC_HOOK_PAYLOAD
+        trap - TERM INT
+        if [ "$mode" = "blocking" ]; then
+          echo "arc: the hook payload could not be captured, so no guard could see this call; blocking it." >&2
+          return 2
+        fi
+        return 0
+      fi
+    else
+      ARC_DISPATCH_PF=""
+      unset ARC_HOOK_PAYLOAD
+      payload="$(cat)"
+      # Never into a fragment's environment, even if the caller's shell exported a `payload`:
+      # a large one would make `bash "$f"` fail to start on Linux, and that exit reads as ALLOW.
+      export -n payload 2>/dev/null || true
+    fi
   fi
 
   local rc=0 f frc
@@ -58,14 +96,31 @@ arc_dispatch() {
     for f in "$dir"/[0-9]*.sh; do
       [ -f "$f" ] || continue                 # no-match glob stays literal -> skip
       if [ "$mode" = "blocking" ]; then
-        bash "$f" < "$input"; frc=$?
+        if [ "$have_file" -eq 1 ]; then
+          bash "$f" < "$ARC_DISPATCH_PF"; frc=$?
+        elif [ "$payload_flag" = "--payload" ]; then
+          # `builtin`: an exported function named printf must not stand between a guard and its
+          # payload. PIPESTATUS[1] is the fragment's own status, whatever happened to the writer.
+          builtin printf '%s' "$payload" 2>/dev/null | bash "$f"; frc=${PIPESTATUS[1]}
+        else
+          bash "$f" < /dev/null; frc=$?
+        fi
         if [ "$frc" -eq 2 ]; then rc=2; break; fi
       else
-        bash "$f" < "$input" || true          # advisory: isolate fragment failures
+        if [ "$have_file" -eq 1 ]; then
+          bash "$f" < "$ARC_DISPATCH_PF" || true   # advisory: isolate fragment failures
+        elif [ "$payload_flag" = "--payload" ]; then
+          builtin printf '%s' "$payload" 2>/dev/null | bash "$f" || true
+        else
+          bash "$f" < /dev/null || true
+        fi
       fi
     done
   fi
 
-  [ -n "$pf" ] && rm -f "$pf" 2>/dev/null
+  if [ -n "$ARC_DISPATCH_PF" ]; then
+    rm -f "$ARC_DISPATCH_PF" 2>/dev/null
+    trap - TERM INT
+  fi
   return "$rc"
 }
