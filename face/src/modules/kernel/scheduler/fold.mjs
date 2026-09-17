@@ -5,12 +5,12 @@
 // named NOT SERVED (Cycle 15 finding F2): the JOBS are the registry's, and every job a run receipt names;
 // the LAST OUTCOME is each job's newest run.completed on the page the door sent; the NEXT FIRE needs the
 // cadence parsed from hq.jobs.yaml, and the HEARTBEAT needs the clock's own judgement of overdue -- both
-// arrive with /api/jobs. What the door does hold is the last fire any job recorded, and the room shows it
-// as exactly that, never as a heartbeat. Firing, pausing and registering are work-door verbs (Phase 05).
+// arrive with /api/jobs. What the door does hold is the last fire ON THE PAGE IT SENT, and the room says
+// exactly that: the door pages from the oldest receipt, so a page with more past it is never called the
+// newest (Phase 03 attack). Firing, pausing and registering are work-door verbs (Phase 05).
 import { notServed, verbPending } from "../../../lib/registry.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
-import { holdsList } from "../../../lib/spine.mjs";
-import { kindCount, laneBadge, laneKpi, laneRoom, runsBy } from "../../../lib/lane-room.mjs";
+import { countedOn, hasKind, kindCount, laneBadge, laneKpi, laneRoom, runsBy } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 /** @typedef {import("../../../lib/lane-room.mjs").RunRow} RunRow */
@@ -37,12 +37,21 @@ import { kindCount, laneBadge, laneKpi, laneRoom, runsBy } from "../../../lib/la
  */
 export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx, { files: ["hq-jobs"] });
-  const ran = runsBy(base.trail.events, "job", ["exit_code", "duration_ms", "scheduled_for"]);
-  const registered = holdsList(ctx.room, "jobs");
+  const runsHomed = hasKind(base, "run.completed");
+  const isRead = runsHomed && base.trail.isDrawn;
+  const ran = runsBy(base.trail.events, "job", ["exit_code", "duration_ms", "scheduled_for"], base.trail.isPartial);
+  // The registry's list, read from the copy the fold already took, each name once: a name listed twice
+  // would draw the same job twice, once with its runs and once without (Phase 03 attack).
+  const registered = [...new Set(base.held.jobs ?? [])];
   const byName = new Map(ran.map((r) => [r.key, r]));
   /** @type {RunRow[]} */
   const jobs = registered.map((name) => byName.get(name) ?? {
-    key: name, name, runs: "0 runs", last: base.trail.isDrawn ? "none on the page the door sent" : "reading its runs", when: "", detail: "",
+    key: name,
+    name,
+    runs: "0 runs",
+    last: isRead ? "none on the page the door sent" : runsHomed ? "reading its runs" : "the registry homes no run receipt here",
+    when: "",
+    detail: "",
   });
   // A job a receipt names that the registry does not is shown, and says so, rather than dropped.
   for (const r of ran) if (!registered.includes(r.key)) jobs.push({ ...r, detail: `not in the served registry · ${r.detail}` });
@@ -55,9 +64,14 @@ export function fold(payloads, ctx) {
     kpis: [
       laneKpi(base),
       { key: "jobs", v: fmtInt(registered.length), l: "Jobs on the clock", sub: "in the served registry" },
-      { key: "runs", v: base.trail.isDrawn ? `${fmtInt(runTotal)}${base.trail.isPartial ? "+" : ""}` : "—", l: "Job runs recorded", sub: "run.completed naming a job" },
-      { key: "last", v: newest === undefined ? "—" : newest.when, l: "Last fire recorded", sub: newest === undefined ? "no job run on the page" : newest.name },
-      { key: "incidents", v: kindCount(base, "incident.raised"), l: "Incidents raised", sub: "incident.raised, all time" },
+      { key: "runs", v: isRead ? `${fmtInt(runTotal)}${base.trail.isPartial ? "+" : ""}` : "—", l: "Job runs recorded", sub: runsHomed ? countedOn(base, "run.completed naming a job") : "the registry homes no run receipt here" },
+      {
+        key: "last",
+        v: newest === undefined ? "—" : newest.when,
+        l: base.trail.isPartial ? "Last fire on that page" : "Last fire recorded",
+        sub: newest === undefined ? (isRead ? "no job run on the page the door sent" : "reading the page") : newest.name,
+      },
+      { key: "incidents", v: kindCount(base, "incident.raised"), l: "Incidents raised", sub: countedOn(base, "incident.raised") },
     ],
     jobs,
     jobsTitle: `The jobs — ${fmtInt(jobs.length)} on the clock`,
@@ -78,8 +92,8 @@ export function fold(payloads, ctx) {
     lastFire: {
       hasFire: newest !== undefined,
       line: newest === undefined
-        ? (base.trail.isDrawn ? "No job run on the page the door sent." : "")
-        : `${newest.name} fired at ${newest.when} · ${newest.last}`,
+        ? (isRead ? "No job run on the page the door sent." : runsHomed ? "" : "The served registry homes no run receipt in this room.")
+        : `${newest.name} fired at ${newest.when} · ${newest.last}${base.trail.isPartial ? " — the newest on the page the door sent, which has more past it" : ""}`,
       detail: newest === undefined ? "" : newest.detail,
     },
     heartbeat: notServed(

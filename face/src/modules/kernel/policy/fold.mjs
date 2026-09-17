@@ -6,7 +6,7 @@
 // the subject table and the capability ladder, which /api/policy will parse from hq.policy.yaml. Proposing
 // a cap, demoting a pair and declaring a subject are verbs of the work door (Phase 05).
 import { notServed, verbPending } from "../../../lib/registry.mjs";
-import { kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib/lane-room.mjs";
+import { countedOn, kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 
@@ -33,11 +33,11 @@ export function fold(payloads, ctx) {
     badge: laneBadge(base),
     kpis: [
       laneKpi(base),
-      { key: "changed", v: kindCount(base, "policy.level.changed"), l: "Level changes", sub: "policy.level.changed" },
-      { key: "demoted", v: kindCount(base, "policy.demoted"), l: "Demotions", sub: "policy.demoted · never needs a key" },
-      { key: "reserved", v: kindCount(base, "spend.reserved"), l: "Spend reserved", sub: "spend.reserved" },
-      { key: "released", v: kindCount(base, "spend.released"), l: "Spend released", sub: "spend.released" },
-      { key: "incidents", v: kindCount(base, "incident.raised"), l: "Incidents raised", sub: "incident.raised, all time" },
+      { key: "changed", v: kindCount(base, "policy.level.changed"), l: "Level changes", sub: countedOn(base, "policy.level.changed") },
+      { key: "demoted", v: kindCount(base, "policy.demoted"), l: "Demotions", sub: countedOn(base, "policy.demoted") },
+      { key: "reserved", v: kindCount(base, "spend.reserved"), l: "Spend reserved", sub: countedOn(base, "spend.reserved") },
+      { key: "released", v: kindCount(base, "spend.released"), l: "Spend released", sub: countedOn(base, "spend.released") },
+      { key: "incidents", v: kindCount(base, "incident.raised"), l: "Incidents raised", sub: countedOn(base, "incident.raised") },
     ],
     subjects: notServed(
       "The subject table",

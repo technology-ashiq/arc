@@ -202,6 +202,35 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
 {
   const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
   const MODULES = join(SRC, "modules");
+  // The door's own page cap, read from the door rather than repeated here.
+  const dashText = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "utf8");
+  const capMatch = /PAGE_CAP\s*=\s*(\d+)/.exec(dashText);
+  const PAGE_CAP = capMatch ? Number(capMatch[1]) : 0;
+  check("the door's page cap was read, to compare a module's ask against (vacuous-pass guard)", PAGE_CAP > 0, String(PAGE_CAP));
+
+  /**
+   * One evidence list, read the way BOTH of its readers read it. `tests/face-browser.bats` counts its
+   * rows with grep, which breaks lines on \n alone; this file parses them with a /m regex, which also
+   * breaks on CR, U+2028 and U+2029 -- so a row hidden from one reader and kept for the other was a real
+   * mutant (Phase 03 attack). The file is held to ONE row shape: no stray line separator, no duplicate
+   * row, and every line that grep counts parses here.
+   */
+  const listCheck = (name, file, re, shape, derivedRows, label) => {
+    const raw = existsSync(file) ? readFileSync(file, "utf8") : null;
+    check(`${label} LIST: evidence/phase-03/${name} exists`, raw !== null);
+    if (raw === null) return;
+    check(`${label} LIST ${name}: every line break is a newline, so grep and this file read the same rows`,
+      !/[\r\u2028\u2029]/.test(raw), JSON.stringify((/[\r\u2028\u2029]/.exec(raw) || [])[0] || ""));
+    const grepped = raw.split("\n").filter((l) => l.startsWith("| `")).length;
+    const parsed = [...raw.matchAll(re)].map(shape);
+    check(`${label} LIST ${name}: every row grep counts parses here too`, grepped === parsed.length, `grep=${grepped} parsed=${parsed.length}`);
+    check(`${label} LIST ${name}: no row is listed twice`, new Set(parsed).size === parsed.length,
+      parsed.filter((r, i) => parsed.indexOf(r) !== i).join(" ; "));
+    const derived = [...new Set(derivedRows)].sort();
+    check(`${label} LIST ${name}: the list names exactly what the folds render, both ways`,
+      JSON.stringify([...new Set(parsed)].sort()) === JSON.stringify(derived),
+      `listed-only=${parsed.filter((r) => !derived.includes(r)).join(" ; ")} derived-only=${derived.filter((r) => !parsed.includes(r)).join(" ; ")}`);
+  };
   const found = {};
   let folders = 0;
   for (const ring of readdirSync(MODULES)) {
@@ -473,6 +502,7 @@ const SHIPPED_RINGS = ["command", "kernel"];
     const have = existsSync(ringDir) ? readdirSync(ringDir).filter((id) => statSync(join(ringDir, id)).isDirectory()).sort() : [];
     check(`SHIPPED RING ${ring}: its module folders are modules-v2.json's ids for the ring`, want.length > 0 && JSON.stringify(have) === JSON.stringify(want), `have=${have.join(",")} want=${want.join(",")}`);
     const rows = [];
+    const verbRows = [];
     for (const id of have) {
       const dir = join(ringDir, id);
       const viewText = existsSync(join(dir, "View.tsx")) ? readFileSync(join(dir, "View.tsx"), "utf8") : "";
@@ -485,18 +515,30 @@ const SHIPPED_RINGS = ["command", "kernel"];
       let folded = null;
       try { folded = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold({}, fctx); } catch (e) { check(`SHIPPED RING ${ring}: ${id}'s fold runs with nothing loaded yet`, false, e.message); continue; }
       check(`SHIPPED RING ${ring}: ${id}'s fold runs with nothing loaded yet`, folded !== null && typeof folded === "object");
-      for (const ns of (typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [])) rows.push(`${id} | ${ns.panel} | ${ns.route}`);
+      // The reads a fold asks for are the reads its manifest declares: a read the host would refuse
+      // leaves its panel reading "…" for ever, and nothing else notices (Phase 03 attack).
+      const planned = reg.plannedReads(folded, manifest);
+      check(`SHIPPED RING ${ring}: ${id} asks only for reads its manifest declares`, planned.problems.length === 0, planned.problems.join(" ; "));
+      // The trail's page cap is the door's page cap: one lowered by one turns every lane room's trail
+      // into a 400 that only a browser console would show.
+      const overCap = planned.reads.filter((r) => typeof (r.query || {}).limit === "number" && Number(r.query.limit) > PAGE_CAP);
+      check(`SHIPPED RING ${ring}: ${id} asks for no page larger than the door's cap (${PAGE_CAP})`, overCap.length === 0, overCap.map((r) => r.path).join(" "));
+      // A module claims the shell's as-of scrub reaches it, or does not; the door applies that scrub to
+      // /api/spine, /api/brief and /api/inbox whatever the claim says, so the claim must match the routes.
+      const reachable = (manifest.routes || []).some((r) => (door.ASOF_ROUTES || []).includes(r));
+      check(`SHIPPED RING ${ring}: ${id}'s asOf claim matches whether the scrub reaches its routes`,
+        (manifest.asOf === true) === reachable, `asOf=${String(manifest.asOf)} reachable=${reachable}`);
+      for (const ns of (typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [])) rows.push(`${id} | ${ns.panel} | ${ns.route} | ${ns.sentence}`);
+      for (const v of (typeof reg.verbPendingOf === "function" ? reg.verbPendingOf(folded) : [])) verbRows.push(`${id} | ${v.verb} | ${v.sentence}`);
     }
-    // The evidence list is what Phase 04 builds; it must be what the folds actually render, both ways.
-    const listFile = join(REPO, "initiatives", "face", "evidence", "phase-03", `not-served-${ring}.md`);
-    const listed = existsSync(listFile)
-      ? [...readFileSync(listFile, "utf8").matchAll(/^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \|/gm)].map((m) => `${m[1]} | ${m[2]} | ${m[3]}`)
-      : null;
-    check(`NOT SERVED LIST ${ring}: evidence/phase-03/not-served-${ring}.md exists`, listed !== null);
-    const derived = [...new Set(rows)].sort();
-    check(`NOT SERVED LIST ${ring}: the list names exactly what the folds render NOT SERVED, both ways`,
-      listed !== null && JSON.stringify([...new Set(listed)].sort()) === JSON.stringify(derived),
-      `listed-only=${(listed || []).filter((r) => !derived.includes(r)).join(" ; ")} derived-only=${derived.filter((r) => !(listed || []).includes(r)).join(" ; ")}`);
+    // The evidence lists are what Phase 04 and Phase 05 build; each must be what the folds actually
+    // render, both ways, INCLUDING the sentence the file promises -- a typed column drifts (it already had).
+    listCheck(`not-served-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `not-served-${ring}.md`),
+      /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm,
+      (m) => `${m[1]} | ${m[2]} | ${m[3]} | ${m[4]}`, rows, "NOT SERVED");
+    listCheck(`verbs-pending-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `verbs-pending-${ring}.md`),
+      /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm,
+      (m) => `${m[1]} | ${m[2]} | ${m[3]}`, verbRows, "VERBS PENDING");
   }
 }
 

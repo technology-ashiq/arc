@@ -49,7 +49,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
           <LanePanel lane={f.lane} title="Memory lane phases" />
 
-          <HoldsPanel holds={f.holds} century={f.century} />
+          <HoldsPanel holds={f.holds} century={f.century} hasHolds={f.hasHolds} />
         </div>
       </div>
 

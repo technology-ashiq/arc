@@ -60,7 +60,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
           <SourcesPanel sources={f.sources} title="State on disk" hint="the file the cadences will be parsed from" />
 
-          <HoldsPanel holds={f.holds} century={f.century} />
+          <HoldsPanel holds={f.holds} century={f.century} hasHolds={f.hasHolds} />
         </div>
       </div>
 

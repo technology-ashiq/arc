@@ -6,5 +6,5 @@ export default Object.freeze({
   id: "scheduler",
   ring: "kernel",
   routes: Object.freeze(["/api/lane/:id", "/api/spine", "/api/file/:id"]),
-  asOf: false,
+  asOf: true,
 });

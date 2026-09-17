@@ -7,7 +7,7 @@
 // model, running a scorecard and proposing a promotion are verbs of the work door (Phase 05).
 import { notServed, verbPending } from "../../../lib/registry.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
-import { kindCount, laneBadge, laneKpi, laneRoom, roomLink, runsBy } from "../../../lib/lane-room.mjs";
+import { countedOn, hasKind, kindCount, laneBadge, laneKpi, laneRoom, roomLink, runsBy } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 
@@ -30,15 +30,16 @@ import { kindCount, laneBadge, laneKpi, laneRoom, roomLink, runsBy } from "../..
  */
 export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx);
-  const drivers = runsBy(base.trail.events, "driver", ["process", "model", "duration_ms"]);
+  const runsHomed = hasKind(base, "run.completed");
+  const drivers = runsHomed ? runsBy(base.trail.events, "driver", ["process", "model", "duration_ms"], base.trail.isPartial) : [];
   return {
     ...base,
     badge: laneBadge(base),
     kpis: [
       laneKpi(base),
-      { key: "runs", v: kindCount(base, "run.completed"), l: "Runs completed", sub: "run.completed on the spine" },
-      { key: "drivers", v: base.trail.isDrawn ? fmtInt(drivers.length) : "—", l: "Drivers seen", sub: "named by a run receipt" },
-      { key: "proposed", v: kindCount(base, "promotion.proposed"), l: "Promotions proposed", sub: "a machine raises, you decide" },
+      { key: "runs", v: kindCount(base, "run.completed"), l: "Runs completed", sub: countedOn(base, "run.completed") },
+      { key: "drivers", v: runsHomed && base.trail.isDrawn ? `${fmtInt(drivers.length)}${base.trail.isPartial ? "+" : ""}` : "—", l: "Drivers seen", sub: runsHomed ? countedOn(base, "a driver named by a run receipt") : "the registry homes no run receipt here" },
+      { key: "proposed", v: kindCount(base, "promotion.proposed"), l: "Promotions proposed", sub: countedOn(base, "promotion.proposed") },
     ],
     scorecards: notServed(
       "The bench",
@@ -46,7 +47,7 @@ export function fold(payloads, ctx) {
       "Champion and challenger scorecards per driver over the fixtures, every number derived from scored runs, with NO PROPOSAL as a first-class result.",
     ),
     drivers,
-    showDriversEmpty: base.trail.isDrawn && drivers.length === 0,
+    showDriversEmpty: runsHomed && base.trail.isDrawn && drivers.length === 0,
     addVerb: verbPending(
       "Add a model to the bench",
       "A model joins as a challenger, runs its scorecard, and a win becomes a promotion proposal in your inbox. Every step arrives with the work door.",

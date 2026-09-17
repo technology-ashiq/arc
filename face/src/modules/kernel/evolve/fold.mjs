@@ -7,7 +7,7 @@
 // /api/evolve will fold. Opening, measuring and concluding are work-door verbs (Phase 05). The reference's
 // batches were simulated; none is drawn here, simulated or otherwise.
 import { notServed, verbPending } from "../../../lib/registry.mjs";
-import { kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib/lane-room.mjs";
+import { countedOn, kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 
@@ -33,10 +33,10 @@ export function fold(payloads, ctx) {
     badge: laneBadge(base),
     kpis: [
       laneKpi(base),
-      { key: "opened", v: kindCount(base, "experiment.opened"), l: "Experiments opened", sub: "experiment.opened" },
-      { key: "measured", v: kindCount(base, "experiment.measured"), l: "Batches measured", sub: "experiment.measured" },
-      { key: "promoted", v: kindCount(base, "experiment.promoted"), l: "Promoted", sub: "landed on your stamp" },
-      { key: "rolled", v: kindCount(base, "experiment.rolled_back"), l: "Rolled back", sub: "experiment.rolled_back" },
+      { key: "opened", v: kindCount(base, "experiment.opened"), l: "Experiments opened", sub: countedOn(base, "experiment.opened") },
+      { key: "measured", v: kindCount(base, "experiment.measured"), l: "Batches measured", sub: countedOn(base, "experiment.measured") },
+      { key: "promoted", v: kindCount(base, "experiment.promoted"), l: "Promoted", sub: countedOn(base, "experiment.promoted") },
+      { key: "rolled", v: kindCount(base, "experiment.rolled_back"), l: "Rolled back", sub: countedOn(base, "experiment.rolled_back") },
     ],
     experiments: notServed(
       "Experiments",

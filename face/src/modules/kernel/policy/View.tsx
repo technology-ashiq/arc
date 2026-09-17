@@ -55,7 +55,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
           <SourcesPanel sources={f.sources} hint="the file the subject table will be parsed from" />
 
-          <HoldsPanel holds={f.holds} century={f.century} />
+          <HoldsPanel holds={f.holds} century={f.century} hasHolds={f.hasHolds} />
         </div>
       </div>
 

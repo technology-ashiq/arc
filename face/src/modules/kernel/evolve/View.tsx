@@ -27,6 +27,10 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             <NotServed item={f.experiments} />
           </HPanel>
 
+          <HPanel title="Experiment contract" hint="the evolve section of a manifest">
+            <NotServed item={f.contract} />
+          </HPanel>
+
           <TrailPanel trail={f.trail} onReceipt={(id) => ctx.onPick('receipt', id)} />
         </div>
 
@@ -37,13 +41,9 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             </p>
           </HPanel>
 
-          <HPanel title="Experiment contract" hint="the evolve section of a manifest">
-            <NotServed item={f.contract} />
-          </HPanel>
-
           <LanePanel lane={f.lane} />
 
-          <HoldsPanel holds={f.holds} century={f.century} />
+          <HoldsPanel holds={f.holds} century={f.century} hasHolds={f.hasHolds} />
         </div>
       </div>
 

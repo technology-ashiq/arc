@@ -45,7 +45,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
           <LanePanel lane={f.lane} />
 
-          <HoldsPanel holds={f.holds} century={f.century} />
+          <HoldsPanel holds={f.holds} century={f.century} hasHolds={f.hasHolds} />
         </div>
       </div>
 

@@ -630,12 +630,15 @@ export function verbPending(verb, sentence) {
 }
 
 /**
- * Every NOT SERVED entry in a fold's output, nested anywhere, in document order.
- * @param {unknown} folded
- * @returns {NotServed[]}
+ * Every marked entry of one shape in a fold's output, nested anywhere, in document order. The two lists
+ * this shell derives -- NOT SERVED panels and verbs pending the work door -- are the same walk over the
+ * same rules: data properties only (a getter is never called), Maps and Sets by value, a depth cap, and
+ * each object visited once.
+ * @param {unknown} folded @param {string} mark @param {string[]} fields
+ * @returns {Record<string, string>[]}
  */
-export function notServedOf(folded) {
-  /** @type {NotServed[]} */
+function markedIn(folded, mark, fields) {
+  /** @type {Record<string, string>[]} */
   const out = [];
   const seen = new Set();
   /** @param {unknown} v @param {number} depth */
@@ -643,19 +646,36 @@ export function notServedOf(folded) {
     if (!v || typeof v !== "object" || seen.has(v) || depth > 64) return;
     seen.add(v);
     if (v instanceof Map || v instanceof Set) { for (const child of v.values()) walk(child, depth + 1); return; }
-    // Data properties only: a getter is never called, so a value that builds a new object on each read cannot
-    // recurse forever (face v2 Phase 03 attack).
     const props = Object.getOwnPropertyDescriptors(v);
     /** @param {string} k @returns {unknown} */
     const data = (k) => {
       const d = Object.hasOwn(props, k) ? props[k] : undefined;
       return d !== undefined && "value" in d ? d.value : undefined;
     };
-    if (data("isNotServed") === true && typeof data("route") === "string" && typeof data("panel") === "string") { out.push(/** @type {NotServed} */ (/** @type {unknown} */ (v))); return; }
+    if (data(mark) === true && fields.every((f) => typeof data(f) === "string")) { out.push(/** @type {Record<string, string>} */ (/** @type {unknown} */ (v))); return; }
     for (const d of Object.values(props)) if ("value" in d) walk(d.value, depth + 1);
   };
   walk(folded, 0);
   return out;
+}
+
+/**
+ * Every verb a fold marks as pending the work door, nested anywhere, in document order. Derived by the
+ * same walk as the NOT SERVED list, so Phase 05 builds from a list nobody typed.
+ * @param {unknown} folded
+ * @returns {{ isVerbPending: true, verb: string, sentence: string }[]}
+ */
+export function verbPendingOf(folded) {
+  return /** @type {{ isVerbPending: true, verb: string, sentence: string }[]} */ (/** @type {unknown} */ (markedIn(folded, "isVerbPending", ["verb", "sentence"])));
+}
+
+/**
+ * Every NOT SERVED entry in a fold's output, nested anywhere, in document order.
+ * @param {unknown} folded
+ * @returns {NotServed[]}
+ */
+export function notServedOf(folded) {
+  return /** @type {NotServed[]} */ (/** @type {unknown} */ (markedIn(folded, "isNotServed", ["route", "panel", "sentence"])));
 }
 
 /**

@@ -1521,6 +1521,7 @@ export function receiptView(events, id) {
  * @property {string} phase
  * @property {string} note
  * @property {string} burn
+ * @property {boolean} hasMeter
  * @property {number} meter
  * @property {string} distance
  * @property {{ key: string, label: string, title: string }[]} phases
@@ -1530,7 +1531,7 @@ export function receiptView(events, id) {
 
 /** @type {LaneCard} */
 export const LANE_UNREAD = Object.freeze({
-  isRead: false, lane: "", status: "", statusInk: "var(--text-3)", phase: "", note: "", burn: "", meter: 0, distance: "",
+  isRead: false, lane: "", status: "", statusInk: "var(--text-3)", phase: "", note: "", burn: "", hasMeter: false, meter: 0, distance: "",
   phases: [], hasPhases: false, phasesNote: "",
 });
 
@@ -1552,23 +1553,47 @@ export function laneCard(payload) {
   const meter = burnMeter(appetite, burn);
   const cycle = headerText(header, "cycle");
   const listed = lanePhases(body);
+  // `lanePhases` type-asserts the array it found and checks no element, so a malformed row arrives here
+  // as anything at all. A row this shell cannot read is DROPPED and counted, never drawn as "undefined"
+  // and never left to throw the whole room into a Failure (Phase 03 attack).
+  const rows = [];
+  let dropped = 0;
+  for (const p of listed.phases) {
+    const row = p !== null && typeof p === "object" ? /** @type {Record<string, unknown>} */ (p) : null;
+    const file = row === null ? null : asText(row["file"]);
+    if (file === null) { dropped += 1; continue; }
+    const n = row === null ? null : row["phase"];
+    const title = row === null ? null : asText(row["title"]);
+    rows.push({
+      key: unescapeDoorText(file),
+      label: typeof n === "number" && Number.isFinite(n) ? String(n).padStart(2, "0") : typeof n === "string" && n !== "" ? unescapeDoorText(n) : "--",
+      title: title === null ? unescapeDoorText(file) : unescapeDoorText(title),
+    });
+  }
+  const notSent = listed.omitted > 0 ? `${fmtInt(listed.omitted)} more not sent` : "";
+  const notRead = dropped > 0 ? `${fmtInt(dropped)} the door sent in a shape this shell cannot read` : "";
   return {
     isRead: true,
-    lane,
+    lane: unescapeDoorText(lane),
     status: status.label,
     statusInk: status.ink,
-    phase: phase.number === null ? (cycle === null ? "no phase recorded" : unescapeDoorText(cycle)) : `phase ${phase.number}`,
-    note: phase.note === null ? "" : unescapeDoorText(phase.note),
+    // `headerText` already undid the door's escapes; undoing them twice would manufacture a `<` out of a
+    // header that only ever held `&lt;` (Phase 03 attack).
+    phase: phase.number === null ? (cycle === null ? "no phase recorded" : cycle) : `phase ${phase.number}`,
+    note: phase.note === null ? "" : phase.note,
     burn: meter.state === "measured" ? `${fmtDays(burn.days ?? Number.NaN)} of ${fmtDays(appetite.days ?? Number.NaN)} spent` : meter.label.toLowerCase(),
+    // A meter is drawn ONLY for a measured burn: a lane with none is not a lane burning zero, and a bar
+    // at 0% tells a screen reader exactly the thing this module refuses to say (spine.mjs, burnMeter).
+    hasMeter: meter.state === "measured",
     meter: meter.fill ?? 0,
     distance: meter.label,
-    phases: listed.phases.map((p) => ({
-      key: p.file,
-      label: p.phase === null ? "--" : String(p.phase).padStart(2, "0"),
-      title: p.title === null ? p.file : unescapeDoorText(p.title),
-    })),
-    hasPhases: listed.phases.length > 0,
-    phasesNote: listed.state === "absent" ? "the door did not send a phase list" : listed.state === "none" ? "no phase spec written yet" : listed.omitted > 0 ? `${fmtInt(listed.omitted)} more not sent` : "",
+    phases: rows,
+    hasPhases: rows.length > 0,
+    phasesNote: listed.state === "absent"
+      ? "the door did not send a phase list"
+      : rows.length === 0 && dropped === 0
+        ? "no phase spec written yet"
+        : [notSent, notRead].filter((s) => s !== "").join(" · "),
   };
 }
 

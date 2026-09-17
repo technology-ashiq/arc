@@ -28,6 +28,10 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             <NotServed item={f.registry} />
           </HPanel>
 
+          <HPanel title="Adopted per lane">
+            <NotServed item={f.adopted} />
+          </HPanel>
+
           <TrailPanel trail={f.trail} onReceipt={(id) => ctx.onPick('receipt', id)} />
         </div>
 
@@ -38,13 +42,9 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             </p>
           </HPanel>
 
-          <HPanel title="Adopted per lane">
-            <NotServed item={f.adopted} />
-          </HPanel>
-
           <LanePanel lane={f.lane} />
 
-          <HoldsPanel holds={f.holds} century={f.century} />
+          <HoldsPanel holds={f.holds} century={f.century} hasHolds={f.hasHolds} />
         </div>
       </div>
 

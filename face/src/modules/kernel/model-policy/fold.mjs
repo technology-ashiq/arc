@@ -37,7 +37,7 @@ export function fold(payloads, ctx) {
     badge: laneBadge(base),
     kpis: [
       laneKpi(base),
-      { key: "concepts", v: holdsCount(ctx, "concepts"), l: "Concepts", sub: "homed here by the registry" },
+      { key: "concepts", v: holdsCount(base, "concepts"), l: "Concepts", sub: "homed here by the registry" },
       { key: "tiers", v: "—", l: "Tiers", sub: "not served yet" },
       { key: "routes", v: "—", l: "Process routes", sub: "not served yet" },
     ],

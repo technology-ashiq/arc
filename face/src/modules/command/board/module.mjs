@@ -6,5 +6,5 @@ export default Object.freeze({
   id: "board",
   ring: "command",
   routes: Object.freeze(["/api/board", "/api/health", "/api/spine"]),
-  asOf: false,
+  asOf: true,
 });

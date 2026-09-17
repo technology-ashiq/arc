@@ -1,6 +1,6 @@
 {
   "comment": "Candidate shots for the kernel ring shot review (face v2 Phase 03). PNGs are local, under the owner box scratch directory; this manifest pins them by sha256. Same contract as evidence/phase-00/baseline-shots.json.",
-  "capturedAt": "2026-09-17T17:40:07.937Z",
+  "capturedAt": "2026-09-17T18:40:36.897Z",
   "capture": {
     "script": "face/scripts/harness-run.mjs --shots",
     "browser": "Chrome/152.0.7977.83",
@@ -22,128 +22,128 @@
       "mood": "dark",
       "render": "module",
       "file": "dark-engine-room.png",
-      "bytes": 232604,
-      "sha256": "85a63f0ae65a6df8d78914da5dcd3cc3db424f2d9977ed5d240039963ff87c4e"
+      "bytes": 224608,
+      "sha256": "b1e8e05a790d6c747ee008e1adab3c57724edaa515eaaf282afc6472d7f42d23"
     },
     {
       "room": "model-policy",
       "mood": "dark",
       "render": "module",
       "file": "dark-model-policy.png",
-      "bytes": 233166,
-      "sha256": "8a2b8db6cd14bfbcd95133c81b57469eb9ab862d154c932c586fb9513a97e41e"
+      "bytes": 231214,
+      "sha256": "65e12fd78bcf05a3b24077b015b95462c531102c72f1ca77ce8ffe4ccb0eb1eb"
     },
     {
       "room": "policy",
       "mood": "dark",
       "render": "module",
       "file": "dark-policy.png",
-      "bytes": 243863,
-      "sha256": "75cd2f2432a0bea7fe232aaf563b48843cac04e38cc460fdf44caac5e8ca723d"
+      "bytes": 241572,
+      "sha256": "6cd416abca2a6f828b59792196b24f9da7b36d03a58bd178545af429c1837935"
     },
     {
       "room": "scheduler",
       "mood": "dark",
       "render": "module",
       "file": "dark-scheduler.png",
-      "bytes": 223923,
-      "sha256": "05c172200a71b478cf5bc92a8cdbf68e41e51cc32ef59f787f16147b25bb12ab"
+      "bytes": 225097,
+      "sha256": "64609da2ecfd635cdfcdf092e0a2d385614d6d16d3a32d47cde5d123759e7047"
     },
     {
       "room": "memory",
       "mood": "dark",
       "render": "module",
       "file": "dark-memory.png",
-      "bytes": 216493,
-      "sha256": "0889f1e50aa090f0df6ab582a58ea8f5abf1c9736baeb0c0899e4e962a10c4cb"
+      "bytes": 218480,
+      "sha256": "437ac99092642d609d04d62fbf86898989e4dea0df65bd186874abf637fbc88f"
     },
     {
       "room": "evolve",
       "mood": "dark",
       "render": "module",
       "file": "dark-evolve.png",
-      "bytes": 233977,
-      "sha256": "97abee4f3809201b24d9f1599450140850328bb554deebdf79912505fcd94a79"
+      "bytes": 235835,
+      "sha256": "3021c596f91b0269b7cc229d7be5c23fc9b804ca06ae48aa73b65a27f8b953d1"
     },
     {
       "room": "bench",
       "mood": "dark",
       "render": "module",
       "file": "dark-bench.png",
-      "bytes": 207927,
-      "sha256": "5ad1feeae8f6e7512ad6988579bddffcac89c45b8447ebc8e9fac0b636da4c09"
+      "bytes": 207776,
+      "sha256": "80e0d475604b05579233212cdb018b8a3cb960bbe01dbf0ca68b6e7a2c447076"
     },
     {
       "room": "absorb",
       "mood": "dark",
       "render": "module",
       "file": "dark-absorb.png",
-      "bytes": 236845,
-      "sha256": "203ab4ac861b39450063ff962e7c5b81a7b8894daa0cb5b973ba12750e770c7a"
+      "bytes": 225459,
+      "sha256": "aec1c24bf5ea474df85191f4c29905e1e2bcbc5555f11bd32c2abc0d1c9e4113"
     },
     {
       "room": "engine-room",
       "mood": "light",
       "render": "module",
       "file": "light-engine-room.png",
-      "bytes": 231844,
-      "sha256": "a73daf2435a30ad24efe188d33406277e8cf11ca7c29700c563a35c8c1ca0169"
+      "bytes": 225428,
+      "sha256": "243337f4759387953a454351d425ed99a78b3f78406a74ffde66c6508ae26962"
     },
     {
       "room": "model-policy",
       "mood": "light",
       "render": "module",
       "file": "light-model-policy.png",
-      "bytes": 233679,
-      "sha256": "1c843c01e11d6ac7a6423afd04bdeeaed4b1d4fd90ab07c285a25013f5e5ca8b"
+      "bytes": 232324,
+      "sha256": "16197060f5c1bb8b0abb7932b1b9d59e8e9972cf36679f50e55efc0a25a511b1"
     },
     {
       "room": "policy",
       "mood": "light",
       "render": "module",
       "file": "light-policy.png",
-      "bytes": 242792,
-      "sha256": "802191eac01e084a446d14788c3f8512161a1736bbd1eecfaebd6c78d537cbf2"
+      "bytes": 240726,
+      "sha256": "e89c8c5d580092fdd095d5567376219be3cc8942047a6acdff1eaac02eee44f4"
     },
     {
       "room": "scheduler",
       "mood": "light",
       "render": "module",
       "file": "light-scheduler.png",
-      "bytes": 224133,
-      "sha256": "38027c8727ed27b8f414b631f54701f81e2d988098c412b2810cad9c437bed47"
+      "bytes": 225125,
+      "sha256": "71cbacdd66049d24ef411680687a06bab667ee1958d90abdf7a63da3582a8a85"
     },
     {
       "room": "memory",
       "mood": "light",
       "render": "module",
       "file": "light-memory.png",
-      "bytes": 217944,
-      "sha256": "acb0be0fd575da7a695f819ad5d096bfe8cb9a8f25326301e274185317aba1bf"
+      "bytes": 219816,
+      "sha256": "71feec0654af17074cd042b86cddc7ca1927629e1f48271a918b1089d4d9447d"
     },
     {
       "room": "evolve",
       "mood": "light",
       "render": "module",
       "file": "light-evolve.png",
-      "bytes": 234624,
-      "sha256": "42848987d37d23314eba502dce0ab212059268632121430855775cc5ba1cf592"
+      "bytes": 236395,
+      "sha256": "e188bb3095b4f5b6cea2cec092e71351e12427f7a3418b9bd64f3b731ae87762"
     },
     {
       "room": "bench",
       "mood": "light",
       "render": "module",
       "file": "light-bench.png",
-      "bytes": 209318,
-      "sha256": "c3fb0a8ba44c3a5e7cc27ad7dbbd0bbbf18c02b61e9c62ff525768249bc85604"
+      "bytes": 209217,
+      "sha256": "e9919a0b679ad5f71a7c4875798350fe91b34447048710fc0cd452e735bc5a4b"
     },
     {
       "room": "absorb",
       "mood": "light",
       "render": "module",
       "file": "light-absorb.png",
-      "bytes": 237221,
-      "sha256": "1d788d67ac349fe76c1a07e2369da339f7306ea370433a6981268e4c0e272e6b"
+      "bytes": 226237,
+      "sha256": "2c7291c52f6fd4d3b37b88279c52054e888c21057f1f414e7e62f25f60e27a34"
     }
   ],
   "counts": {

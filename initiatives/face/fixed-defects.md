@@ -165,3 +165,55 @@ arc-face rows of `docs/retro-log.md`.
 - **The heading check compared the door with itself, a run that checked zero rooms passed, and an unreadable NOT SERVED count became 0** — `face/scripts/smoke.mjs` (the contract's frozen sentence, a zero floor in `judge`, `panels=unread`), `face/scripts/harness-run.mjs`, `tests/face-browser.bats` (the browser's count EQUAL to the shipped rings' lists) — *a smoke judged against the door it tests is the Phase 00 defect again.*
 - **The smoke's `oneLine` and face-pure's left ESC and other controls in a printed line** — `face-pure.mjs`, `smoke.mjs` — *one-line means no terminal control either.*
 - **Typecheck errors pushed to CI** (`door.mjs` untyped default, a `never[]` union, an `unknown` argument) — found on CI run 35241805573 — *a typecheck is run over a changed lib before the push that relies on it.*
+
+## Face v2 Phase 03 (kernel ring) — 2026-09-18
+
+Two fresh attackers, one on the decision logic and one on the shell/OS and browser boundary, carrying
+this file. 20 holes; every one is fixed below or carries a debt row.
+
+- A 200 that is not a lane, or is a body about ANOTHER lane, drew "reading the lane…" for ever →
+  `BAD_BODY` / `WRONG_LANE` refusals with codes (`lane-room.mjs`). The twin of the `BAD_BODY` fix made
+  twenty lines above it in the same file: a fix is not applied until it is attacked where it was not made.
+- A spine body with no `events` list read as an EMPTY spine ("No receipt of … on the spine") → the
+  shape is checked before the count becomes a sentence; `BAD_BODY` names it.
+- A file body about another id drew under the requested id's card → `WRONG_FILE`; an empty file read
+  as "1 line" → 0 lines.
+- A partial page (`more: true`, and the door pages from the OLDEST receipt) was drawn as complete: a
+  "last fire", run counts, "drivers seen" and "all time" subtitles → every figure derived from a page
+  now says which page it is a figure of, counts carry `+`, and the last fire says it is the newest on
+  that page, which has more past it.
+- A kind the registry does not home here was counted as `0` → unread (`—`), and the three rooms that
+  group run receipts gate on the kind being homed.
+- `sourceFile` read `sha256` three times (validate one read, display another) → every field read once
+  into a copy, then judged and drawn from the copy. `room.holds` was read 21 times per fold → once.
+- A malformed ADR band vanished; a kind carrying a comma WIDENED what the room asked the door for; a
+  kind list of the wrong shape was indistinguishable from "homes no kind"; a second lane was dropped
+  silently → each is named on screen now, and a kind that is not a kind is never sent.
+- `laneCard` threw on `phases: [null]`, taking the whole room to a Failure → unreadable rows are
+  dropped and counted in the panel's note.
+- A job name escaped in a receipt and decoded in the registry drew the same job twice → names are
+  decoded once, on both sides; a job listed twice in the registry is listed once.
+- `runsBy` took the last ARRAY ENTRY as the newest run and sliced an unreadable timestamp into a
+  clock → newest by timestamp, and a timestamp this shell cannot read prints "time unreadable".
+- The lane meter drew 0% for a lane with no measured burn (a progressbar telling a screen reader the
+  one thing `burnMeter` refuses to say) → `hasMeter`, and no bar without a measurement.
+- `roomLink` counted planned and template rooms as openable, the fourth reader of that question and
+  the only one without the filter → same predicate as the rail.
+- `laneCard` and the folds unescaped text the shell had already decoded (`&amp;lt;` became `<`) →
+  decoded once, where the door's escapes are undone.
+- The NOT SERVED list checked three of its four columns, and the fourth had already drifted → the
+  sentence is compared too; `verbPending` had no gate at all → `verbPendingOf`, a derived
+  `verbs-pending-kernel.md`, a module-frame arm and a per-room browser count.
+- The browser compared only the TOTAL number of NOT SERVED panels: a panel deleted in one room and
+  duplicated in another passed → both derived lists are compared PER ROOM, in both directions.
+- The two readers of an evidence list disagreed by construction (grep breaks on `\n`; a /m regex also
+  breaks on CR, U+2028, U+2029) and duplicates were invisible → one reader, held to one row shape.
+- `tests/face/cdp-client.mjs` pinned `rings=command` and asserted a kernel room is NOT heading-checked
+  → updated, with the negative control re-pointed at a ring no module has shipped in.
+- `judge()` had no clause for either derived count, so a page drawing none of them exited 0 → a count
+  that could not be read is a refusal.
+- A module declaring `/api/spine` while claiming `asOf: false` had its numbers cut by a scrub the
+  shell then greyed out → every manifest's `asOf` now matches whether the scrub reaches its routes,
+  pinned by a module-frame arm (this moved `board` and `ask-arc` too — the class, not the file).
+- Declared, with a debt row each: the page contract beyond the four marks CI counts, and kit
+  decisions that `face-pure` cannot see.

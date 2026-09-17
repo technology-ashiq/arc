@@ -38,7 +38,7 @@ export function fold(payloads, ctx) {
     kpis: [
       laneKpi(base),
       { key: "retro", v: logged !== undefined && logged.isRead ? logged.size : "—", l: "The retro log", sub: "its size, as the door serves it" },
-      { key: "concepts", v: holdsCount(ctx, "concepts"), l: "Concepts", sub: "homed here by the registry" },
+      { key: "concepts", v: holdsCount(base, "concepts"), l: "Concepts", sub: "homed here by the registry" },
       { key: "cost", v: "—", l: "Recall cost", sub: "not served yet" },
     ],
     lessons: notServed(

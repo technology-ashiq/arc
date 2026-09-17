@@ -162,6 +162,7 @@ export function NotServed({ item }: { item: { panel: string; route: string; sent
           not served
         </span>
         <span className="text-[11.5px] truncate" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>GET {item.route}</span>
+        <span className="text-[12.5px]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{item.panel}</span>
       </div>
       <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
         {item.sentence}
@@ -299,6 +300,7 @@ export type LaneCardView = {
   phase: string
   note: string
   burn: string
+  hasMeter: boolean
   meter: number
   distance: string
   phases: { key: string; label: string; title: string }[]
@@ -318,9 +320,11 @@ export function LaneCard({ card }: { card: LaneCardView }) {
       </div>
       {card.note ? <div className="text-[12px] leading-[18px] mb-2 break-words" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.note}</div> : null}
       <div className="flex items-center gap-2 mt-2">
-        <span className="flex-1 min-w-0">
-          <Meter value={card.meter} label={`${card.lane} burn`} />
-        </span>
+        {card.hasMeter ? (
+          <span className="flex-1 min-w-0">
+            <Meter value={card.meter} label={`${card.lane} burn`} />
+          </span>
+        ) : null}
         <span className="text-[11.5px] shrink-0 tnum" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-2)' }}>{card.distance}</span>
       </div>
       <div className="text-[12px] mt-1 mb-3" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.burn}</div>
@@ -329,7 +333,9 @@ export function LaneCard({ card }: { card: LaneCardView }) {
           {card.phases.map((p) => (
             <div key={p.key} className="grid grid-cols-[30px_minmax(0,1fr)] items-baseline gap-2 px-2 py-[5px] text-[12.5px]" style={{ borderTop: '1px solid var(--line-1)' }}>
               <span className="tnum" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{p.label}</span>
-              <span className="min-w-0 truncate" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{p.title}</span>
+              {/* A phase title wraps at a word and stops at two lines: the reference clipped mid-word, which
+                  reads as cut off rather than summarized (Phase 03 kernel shot review). */}
+              <span className="min-w-0 leading-[17px] line-clamp-2 break-words" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{p.title}</span>
             </div>
           ))}
         </div>
@@ -340,8 +346,8 @@ export function LaneCard({ card }: { card: LaneCardView }) {
 }
 
 /** A room's trail: the receipts of the kinds it homes, each opening its receipt. */
-export function Trail({ rows, empty, onReceipt }: { rows: EventRowView[]; empty: string; onReceipt: (id: string) => void }) {
-  if (rows.length === 0) return <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{empty}</p>
+export function Trail({ rows, empty, isEmpty, onReceipt }: { rows: EventRowView[]; empty: string; isEmpty: boolean; onReceipt: (id: string) => void }) {
+  if (isEmpty) return <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{empty}</p>
   return (
     <div className="-mx-2">
       {rows.map((row) => (
@@ -424,6 +430,7 @@ export function LanePanel({ lane, title = 'The lane', hint = 'its PROGRESS heade
   return (
     <HPanel title={title} hint={hint}>
       {lane.isRefused ? <DoorRefusal code={lane.refusal.code} human={lane.refusal.human} /> : <LaneCard card={lane.card} />}
+      {lane.note ? <p className="text-[11.5px] leading-[17px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{lane.note}</p> : null}
     </HPanel>
   )
 }
@@ -434,7 +441,9 @@ export function TrailPanel({ trail, onReceipt, title = 'The trail' }: { trail: L
     <HPanel title={title} hint={trail.hint}>
       {trail.isReading ? <Reading what="the trail" /> : null}
       {trail.isRefused ? <DoorRefusal code={trail.refusal.code} human={trail.refusal.human} /> : null}
-      {trail.isDrawn ? <Trail rows={trail.rows} empty={trail.empty} onReceipt={onReceipt} /> : null}
+      {trail.isDrawn ? <Trail rows={trail.rows} empty={trail.empty} isEmpty={trail.rows.length === 0} onReceipt={onReceipt} /> : null}
+      {trail.isHomed ? null : <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{trail.empty}</p>}
+      {trail.note ? <p className="text-[11.5px] leading-[17px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{trail.note}</p> : null}
     </HPanel>
   )
 }
@@ -451,7 +460,8 @@ export function SourcesPanel({ sources, title = 'Source on disk', hint }: { sour
 }
 
 /** What the served registry homes in a room. */
-export function HoldsPanel({ holds, century }: { holds: LaneRoom['holds']; century: string }) {
+export function HoldsPanel({ holds, century, hasHolds }: { holds: LaneRoom['holds']; century: string; hasHolds: boolean }) {
+  if (!hasHolds && !century) return null
   return (
     <HPanel title="What this room holds" hint="from the served registry">
       <Holds groups={holds} century={century} />

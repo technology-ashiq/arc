@@ -7,5 +7,5 @@ export default Object.freeze({
   id: "ask-arc",
   ring: "command",
   routes: Object.freeze(["/api/ask", "/api/spine", "/api/lane/:id", "/api/file/:id"]),
-  asOf: false,
+  asOf: true,
 });

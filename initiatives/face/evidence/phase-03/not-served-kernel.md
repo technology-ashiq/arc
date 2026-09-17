@@ -21,9 +21,9 @@ The smoke counts the same panels in the page per mood, summed with the command r
 | `model-policy` | The tier table | `/api/model-policy` | Each tier as a job description first and the model that implements it second, parsed from the tier block of engine/router.yaml. |
 | `model-policy` | Process routes | `/api/model-policy` | Every process class with its tier, its driver and fallback chain, and a contractor's cap, judge and review-by date, parsed from engine/router.yaml. |
 | `model-policy` | Egress allowlist | `/api/model-policy` | The exact host and port each driver may reach, parsed from the router file's egress block. |
-| `policy` | The subject table | `/api/policy` | One row per subject -- each process, and the interactive session -- with every capability pair's ceiling, cap and effective level, parsed from hq.policy.yaml. |
+| `policy` | The subject table | `/api/policy` | One row per subject — each process, and the interactive session — with every capability pair's ceiling, cap and effective level, parsed from hq.policy.yaml. |
 | `policy` | The ladder | `/api/policy` | Each capability's rung, from observe to acting with a weekly digest, with the trial-ledger evidence that earned it. |
-| `scheduler` | Next fire and cadence | `/api/jobs` | Each job's cadence -- daily or weekdays at a time, in IST -- its next fire, and its overdue mark at twice the cadence, parsed from hq.jobs.yaml. |
+| `scheduler` | Next fire and cadence | `/api/jobs` | Each job's cadence — daily or weekdays at a time, in IST — its next fire, and its overdue mark at twice the cadence, parsed from hq.jobs.yaml. |
 | `scheduler` | The heartbeat | `/api/jobs` | The clock's own proof of life: each job judged against its cadence, and a silent clock raised as an incident rather than inferred from the newest receipt. |
 
 **Routes named by this ring: 8** — `/api/engine` · `/api/model-policy` · `/api/policy` · `/api/jobs` ·

@@ -6,5 +6,5 @@ export default Object.freeze({
   id: "bench",
   ring: "kernel",
   routes: Object.freeze(["/api/lane/:id", "/api/spine"]),
-  asOf: false,
+  asOf: true,
 });
