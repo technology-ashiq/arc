@@ -204,9 +204,9 @@ render_verdict() {
     nsExpected="$(cat "$ARC_ROOT"/initiatives/face/evidence/phase-03/not-served-*.md | grep -c '^| `')"
     [ -n "$nsPanels" ] && [ "$nsExpected" -gt 0 ] && [ "$nsPanels" = "$nsExpected" ] \
       || { echo "mood=$mood: the browser drew '$nsPanels' NOT SERVED panels, the shipped rings' lists name $nsExpected"; false; }
-    # The shipped rings' module rooms open with the SERVED sentence as their heading: at least the six
-    # command modules were checked and none missed (a blank room is not an opened one).
-    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command checked=([6-9]|[1-9][0-9]+) miss=0\$" \
+    # The shipped rings' module rooms open with the contract's frozen sentence as their heading: at least the
+    # six command and eight kernel modules were checked and none missed (a blank room is not an opened one).
+    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command,kernel checked=(1[4-9]|[2-9][0-9]|[1-9][0-9][0-9]+) miss=0\$" \
       || { echo "heading check missing, too few checked, or a miss for mood=$mood (harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done

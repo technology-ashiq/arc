@@ -430,7 +430,7 @@ load 'test_helper'
              "UNDECLARED: a payload for a route the manifest does not declare FAILs the fold (REQ-05)" \
              "a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)" \
              "SHIPPED RING command: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST command: the list names exactly what the folds render NOT SERVED, both ways"; do
+             "NOT SERVED LIST command: the list names exactly what the folds render NOT SERVED, both ways" \n             "SHIPPED RING kernel: its module folders are modules-v2.json's ids for the ring" \n             "NOT SERVED LIST kernel: the list names exactly what the folds render NOT SERVED, both ways"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }
