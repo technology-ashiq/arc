@@ -140,14 +140,16 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-// Decides what a request path names. The raw path is checked BEFORE decoding and the decoded one
-// after, and decoding happens exactly once: `%252e%252e` is a directory literally named `%2e%2e`,
-// which does not exist, never a second traversal.
+// Decides what a request path names. Decoding happens exactly once: `%252e%252e` is a directory
+// literally named `%2e%2e`, which does not exist, never a second traversal. The checks run on the
+// DECODED path only -- decoding is the identity on every raw `..`, `.` and `\`, so a raw pass
+// first was a second copy no test could tell apart from the first (attack pass, 2026-09-17).
+// `inside()` is the containment; the checks before it classify, so the record says what a page
+// tried, and keep hostile names away from the filesystem.
 function resolve(rawUrl) {
   const cut = rawUrl.search(/[?#]/);
   const raw = cut === -1 ? rawUrl : rawUrl.slice(0, cut);
   if (!raw.startsWith('/')) return { kind: 'malformed' };
-  if (raw.includes('\\') || raw.split('/').some((s) => s === '..' || s === '.')) return { kind: 'outside' };
   let decoded;
   try {
     decoded = decodeURIComponent(raw);

@@ -393,3 +393,49 @@ now also needs the RENDER to be confined to the variant directory, for example b
 that directory over loopback or by blocking every request outside it and refusing a capture whose
 frames left it. That is a renderer change and a design decision, so route it through `/arc-change`
 before Phase 01 closes.
+
+## Sixth pass, 2026-09-17 — the render confinement (ADR-1418, `a9f35240`)
+
+Two fresh agents, one on the decision logic and one on the shell / OS boundary, each in a private
+scratch dir, each prompt carrying the running defect list. **Neither found a way to get a byte from
+outside the variant into a render.** The decision attacker built the one mutant that matters,
+`inside()` deleted, and it leaked through a junction; the symlink and junction cases catch it. Real
+renders used: 0 and 1, the second by accident (below).
+
+| # | Finding | Disposition |
+|---|---|---|
+| CD-1 (Med-low) | **Over-refusal worded as an accusation.** A broken link to the page's own asset refused as "the page left its variant directory". The browser turns `../variant-b` into `/variant-b` before asking, so the server sees a sibling reference and a typo'd stylesheet link as the same `missing` request. CONFIRMED. | **FIXED**: both still refuse; the refusal now says "asked for something that is not one of its own files" and explains only the kinds the record holds, `missing` naming the broken-link reading. New case pins it. |
+| CD-2 (Low, tests) | The colon check (NTFS `::$DATA` stream, drive letter) had no case; deleting it served `/tokens.css::$DATA` with a 200 on Windows. CONFIRMED. | **FIXED**: both paths join the traversal loop, and a new server case asserts each check's kind (`missing` / `outside` / `malformed` / `violation`), which moves on every leg when a check is deleted. |
+| CD-3 (Low) | The raw pre-decode check was fully subsumed by the decoded one and unpinnable. CONFIRMED. | **REMOVED**, with the reason in the comment. The decoded backslash check is now pinned by kind. |
+| CD-4 (info) | A violation report arriving after the record is read loses detection only; the load is still blocked. PLAUSIBLE. | **ACCEPTED**: the same class ADR-1418 already accepts for `file://`. |
+| CS-1 (Low, tests) | `3>&-` on the server spawn was a surviving mutant: every exit bats can see runs the trap that kills the server first. CONFIRMED mechanism. | **PINNED statically**, saying so: a dynamic case needs a SIGKILLed renderer and an orphan this suite cannot reap on Windows. |
+| CS-2 (Low, tests) | No Windows junction case; the symlink case skips on Git Bash. CONFIRMED (the junction escape itself was refused). | **FIXED**: a junction case, guarded to Windows, requiring the junction to exist before it asserts. |
+| running #15 | The suite's merged `$output` could not tell a stderr refusal from a stdout one. | **FIXED**: `_run_bounded` keeps `stderr` apart; every refusal assertion reads it. |
+
+**Found by CI, not by either attacker:** the two concurrency cases in `design-render-session.bats`
+went red on four legs of run 35186056146, because the fake browser kept ONE `url` file. Three
+concurrent explore renders read each other's loopback port and refused one another as "navigated
+away". A real agent-browser session answers `get url` for itself, so the fake now keys the URL by
+session.
+
+**Clean, by execution:** raw, encoded, double-encoded, backslash and overlong traversal; trailing
+dots and spaces; 8.3 names; device names (`/NUL`, `/CON`, `/AUX.html`, `/COM1.txt`: 404, no
+hang); UNC; a broken `node` shim and an unwritable `TMPDIR` (both refuse, neither falls back to
+`file://`); the lifetime cap; `kill $!` stopping native node under Git Bash; the tab regex under
+`C`, `C.UTF-8`, `en_US` and `tr_TR`; a slow report body; 40KB and forged reports (self-refusal
+only); three concurrent renders on three ports; a repo path with a space and `&`.
+
+**Process note, both attackers:** a `C:/...` entry prepended to `PATH` in Git Bash is split at the
+drive colon, so a fake binary placed there is never found and the REAL one runs. One real render
+fired this way before it was caught. `tests/` sandboxes use `mktemp -d` (`/tmp/...`) and are not
+affected; any future harness that prepends a Windows-form dir is.
+
+### Add to the running defect list for the next attacker
+21. A fake that keeps one state file for what a real system keeps per session makes concurrent
+    callers read each other's state.
+22. When a normaliser upstream erases the difference between two causes, a refusal may not name
+    the worse one.
+23. A check that a later check always repeats cannot be pinned; delete it, or pin it by the
+    classification only it produces.
+24. A `C:/` directory prepended to `PATH` in Git Bash is split at the colon and silently not
+    searched.

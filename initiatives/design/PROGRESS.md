@@ -308,17 +308,40 @@ consumer projects — it carries the owner's approvals.
     criterion. Two things the real browser must still prove are written in the ADR, because CI's
     browser is a fake.
   - **Burn re-counted to 5d (40%).** See Appetite burn.
+  - **ADR-1418 built, red-first.**
+    - `257d0bbb`: 15 cases in `tests/design-render-confine.bats`, and the session suite moved into
+      a variant directory. Run **35185025298**, macOS shard 1/3: all 15 red for the reasons they
+      name (a `file://` URL opened, `media light n`, no server file), and the session suite green.
+      macOS shard 3/3 on the same run failed on dozens of unrelated bench, policy and jobs cases,
+      every one `EIO: i/o error, fsync`: a runner disk fault, not this change.
+    - `ee8d4707`: `design-render-serve.mjs` plus the renderer changes, the composer contract line,
+      the manifest row, the portability allowlist lines and the sync golden (exactly three rows
+      moved, 353 -> 354).
+    - **Real browser, twelve synthetic pages** (`evidence/phase-01/render-confinement-real-browser.md`,
+      no LexOS content). Refused: relative iframe, img, CSS `url()`, fetch, a remote image, a looser
+      `<meta>` policy, and navigation away. Prevented but NOT detected: a `file://` iframe, a
+      `file://` navigation and a popup. Each of those three PNGs was opened by hand and holds only
+      the page's own pixels, because Chromium blocks `file://` from an http page and reports it
+      nowhere. ADR-1418 is amended to say so, rather than keep its "refused loudly" claim.
+    - `a9f35240` pushed with that evidence. Run **35186056146**, read per JOB on all 19: the
+      confine suite green on every leg (Windows 14 plus the symlink skip, macOS and ubuntu 15), and
+      `declared = executed` everywhere. The reds were the refpack 14, the owner-fragment case, and
+      the two session-suite concurrency cases. Those two were a defect in my own fake browser: one
+      shared `url` file let three concurrent renders refuse each other.
+    - **Sixth attack pass, on the confinement, two surfaces: no leak found.** Findings and
+      dispositions are in `adversarial-open.md` § Sixth pass. Fixed: an over-refusal worded as an
+      accusation, the unpinned colon and backslash checks, a redundant raw check (removed), the
+      unpinned `3>&-` (pinned statically, saying why), no Windows junction case, and merged
+      stderr in the suite. Accepted: a late violation report loses detection only. The defect
+      list grows to 24.
 
 **Resume here, in order:**
 1. ~~**CI.** Read per JOB for `a16b189e` and `fd94e8f1`.~~ Done 2026-09-17, as expected.
-2. **Attack findings.** BL-1 now has its home in ADR-1418 and the Phase 01 spec; build it
-   red-first; the owner approved the ADR and the new `design-render-serve.mjs` file 2026-09-17. The pass came back: 9 decision-logic findings and 11 shell findings, with
-   overlaps, all recorded OPEN in `adversarial-open.md` § Fifth pass. **Start with BL-1/BS-1, which
-   both attackers found independently: the composer's OWN page can iframe a sibling or the matrix,
-   and the `file://` render delivers those pixels into its readable session.** Pinning the Bash
-   command does not stop that. Confining the render to the variant directory is a renderer design
-   change, so route it through `/arc-change` with a recommendation first. Then fix the rest,
-   red-first where it is a behaviour, push, and read CI.
+2. **Attack findings.** ~~BL-1/BS-1~~ built at `ee8d4707` (ADR-1418), attacked, and the sixth pass
+   fixed. Next: read the run for the sixth-pass fixes per JOB (expected: only the refpack 14 plus
+   the owner-fragment case red). Then the rest of the fifth pass, recorded OPEN in
+   `adversarial-open.md` § Fifth pass: 9 decision-logic findings and 11 shell findings, with
+   overlaps.
    BS-4 (the dispatcher fails open when it cannot capture the payload) is in `_dispatch.sh`, which
    is under the governance-denied `.claude/hooks/**`, so it is the owner's, and it affects every
    guard.

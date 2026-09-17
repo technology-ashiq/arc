@@ -599,7 +599,7 @@ if [ "$MODE" = "explore" ]; then
   _confine_refuse() {
     echo "design-render: REFUSED -- $1" >&2
     shift
-    for _l in "$@"; do echo "  $_l" >&2; done
+    for _l in "$@"; do printf '%s\n' "$_l" | sed 's/^/  /' >&2; done
     rm -f "$PNG" "$META" 2>/dev/null || true
     exit 1
   }
@@ -611,10 +611,31 @@ if [ "$MODE" = "explore" ]; then
     _confine_refuse "the loopback server for $EXPLORE_ROOT/ stopped mid-render:" \
       "$(grep -E '^(lifetime|error)' "$SRV_DIR/record" | head -n 3 | cut -c1-240)"
   fi
+  # A refusal says what is KNOWN, not the worst reading of it. The browser resolves
+  # `../variant-b/index.html` to `/variant-b/index.html` before it asks, so a sibling reference and a
+  # typo in a link to the page's own stylesheet reach the server as the same `missing` request.
+  # Both refuse; only the kinds the record actually holds get explained (attack pass, 2026-09-17).
   if [ -s "$SRV_DIR/record" ]; then
-    _confine_refuse "the page left its variant directory, $EXPLORE_ROOT/ (ADR-1418). What it asked for that is not a file inside it:" \
-      "$(head -n 10 "$SRV_DIR/record" | cut -c1-240)" \
-      "A render may show only its own variant. Nothing was published."
+    _cr_legend=""
+    if grep -q '^missing' "$SRV_DIR/record"; then
+      _cr_legend="missing: no such file inside the variant -- a reference to a sibling or the matrix, or a broken link to one of the page's own assets."
+    fi
+    if grep -q '^outside' "$SRV_DIR/record"; then
+      _cr_legend="${_cr_legend:+$_cr_legend
+}outside: the path resolves outside the variant directory."
+    fi
+    if grep -q '^violation' "$SRV_DIR/record"; then
+      _cr_legend="${_cr_legend:+$_cr_legend
+}violation: the browser blocked a load from another origin or scheme."
+    fi
+    if grep -qE '^(malformed|method)' "$SRV_DIR/record"; then
+      _cr_legend="${_cr_legend:+$_cr_legend
+}malformed or method: a request no page in a variant needs to make."
+    fi
+    _confine_refuse "the page asked for something that is not one of its own files in $EXPLORE_ROOT/ (ADR-1418):" \
+      "$(head -n 10 "$SRV_DIR/record" | cut -c1-240 | sed 's/^/  /')" \
+      "$_cr_legend" \
+      "A render may show only its own variant's files. Fix the reference, or put the asset beside the page. Nothing was published."
   fi
   case "$FINAL_URL" in
     "http://127.0.0.1:$PORT/"*) ;;

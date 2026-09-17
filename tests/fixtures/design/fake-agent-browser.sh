@@ -43,6 +43,7 @@ while [ "$#" -gt 0 ]; do
       # point of ADR-1402 was gone. A headline acceptance that cannot fail is not one.
       [ -n "${FAKE_AB_STATE:-}" ] && { mkdir -p "$FAKE_AB_STATE" 2>/dev/null || true; printf '%s
 ' "$2" >> "$FAKE_AB_STATE/sessions"; }
+      FAKE_SESSION="$2"
       shift 2;;
     *) break;;
   esac
@@ -50,7 +51,12 @@ done
 
 CMD="${1:-}"; shift 2>/dev/null || true
 
-_state_url() { [ -n "${FAKE_AB_STATE:-}" ] && [ -f "$FAKE_AB_STATE/url" ] && cat "$FAKE_AB_STATE/url"; }
+# The opened URL is kept PER SESSION as well, because a real browser session answers `get url`
+# for itself. One shared file let three concurrent explore renders read each other's loopback
+# port and refuse one another as "navigated away" (macOS leg, run 35186056146). `url` stays as
+# the last URL opened in any session, for single-render cases to read.
+_url_file() { printf '%s/url.%s' "$FAKE_AB_STATE" "${FAKE_SESSION:-default}"; }
+_state_url() { [ -n "${FAKE_AB_STATE:-}" ] && [ -f "$(_url_file)" ] && cat "$(_url_file)"; }
 
 case "$CMD" in
   set)
@@ -65,6 +71,7 @@ case "$CMD" in
     [ -n "${FAKE_AB_STATE:-}" ] || exit 0
     mkdir -p "$FAKE_AB_STATE" 2>/dev/null || true
     printf '%s' "$URL" > "$FAKE_AB_STATE/url"
+    printf '%s' "$URL" > "$(_url_file)"
     case "$URL" in
       http://*)
         rest="${URL#http://}"
