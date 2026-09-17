@@ -54,6 +54,12 @@ directories), and read your renders and their meta JSON with the Read tool. The 
 this file's frontmatter documents the grant; it does not enforce it, because a subagent's `tools:`
 field takes tool names only.
 
+**Your page is served from your variant directory, and from nothing else.** The renderer opens it
+at `http://127.0.0.1:<port>/`, rooted at `variant-<x>/`, under a policy that admits only that
+origin. A page that loads anything outside the directory — a sibling, the matrix, a CDN font, a
+remote image — or opens a popup or navigates away is **refused and not recorded**. Keep every
+asset beside `index.html`. A refusal names what the page asked for.
+
 `--iter` is 1, 2 or 3. A fourth refuses — the loop is capped on purpose. Each iteration writes
 its own immutable receipt, so `iter-2` never overwrites `iter-1` and "iteration 2 fixed what
 iteration 1 found" is provable from the hashes instead of narrated in prose.

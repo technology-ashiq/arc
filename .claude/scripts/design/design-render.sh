@@ -146,6 +146,57 @@ case "$SESSION" in
   ""|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*)
     echo "design-render: --session takes lowercase letters, digits and hyphens, got '$SESSION'" >&2; exit 1;;
 esac
+
+# An explore render is confined to its own variant directory (ADR-1418). This used to open the
+# page as file://, and a file:// page loads any file on disk: a composer framed its sibling from
+# its OWN page, every tool boundary allowed it, and the sibling's pixels landed in the one render
+# the composer may read. So explore mode takes exactly one route shape -- a page inside
+# docs/design/explore/<id>/variant-<x>/ -- and serves that directory over loopback further down.
+# A URL route is refused rather than passed through: the render is served from the variant, not
+# opened wherever the route points. Characters are spelled out, never ranged (portability.bats).
+EXPLORE_ROOT=""
+EXPLORE_PAGE=""
+if [ "$MODE" = "explore" ]; then
+  _explore_route_refuse() {
+    echo "design-render: REFUSED -- explore mode renders only a page inside docs/design/explore/<id>/variant-<x>/, got '$(printf '%s' "$ROUTE" | cut -c1-200)'." >&2
+    echo "  $1" >&2
+    exit 1
+  }
+  case "$ROUTE" in
+    *:*) _explore_route_refuse "A URL or a drive path is never an explore page.";;
+    docs/design/explore/*/variant-?/?*) ;;
+    *) _explore_route_refuse "The route is not a page inside a variant directory.";;
+  esac
+  # `*` in a case pattern crosses `/`, so each part is taken apart and checked on its own.
+  _er_rest="${ROUTE#docs/design/explore/}"
+  _er_id="${_er_rest%%/*}"
+  _er_rest="${_er_rest#*/}"
+  _er_variant="${_er_rest%%/*}"
+  EXPLORE_PAGE="${_er_rest#*/}"
+  case "$_er_id" in
+    ""|-*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _explore_route_refuse "The explore id must be lowercase kebab.";;
+  esac
+  case "$_er_variant" in
+    variant-[abcdefghijklmnopqrstuvwxyz]) ;;
+    *) _explore_route_refuse "The variant directory must be variant-<one lowercase letter>.";;
+  esac
+  case "/$EXPLORE_PAGE/" in
+    *//*|*/./*|*/../*) _explore_route_refuse "The page is not a plain path inside the variant.";;
+  esac
+  # Every character left is one a URL path carries unescaped, so the page is served at exactly the
+  # path it was named by.
+  case "$EXPLORE_PAGE" in
+    *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/-]*)
+      _explore_route_refuse "The page path carries a character a URL would have to escape.";;
+  esac
+  EXPLORE_ROOT="docs/design/explore/$_er_id/$_er_variant"
+  if ! command -v node >/dev/null 2>&1; then
+    echo "design-render: REFUSED -- explore mode serves the page from its variant directory with node, and node is not on PATH." >&2
+    echo "  Falling back to file:// would reopen the sibling leak ADR-1418 closes." >&2
+    exit 1
+  fi
+fi
+
 VW="${VIEWPORT%x*}"
 VH="${VIEWPORT#*x}"
 case "$VW" in ''|*[!0-9]*) echo "design-render: bad viewport '$VIEWPORT' (want WxH)" >&2; exit 1;; esac
@@ -262,7 +313,8 @@ if [ -f "$META" ]; then
 fi
 
 # A repo-relative file becomes a file:// URL; anything already a URL is used as-is (Phase 2
-# variants run on a dev server).
+# variants run on a dev server). Critique mode only: explore mode refused URL routes above, and
+# its URL is the loopback server's, known once that server is listening.
 case "$ROUTE" in
   http://*|https://*|file://*) URL="$ROUTE";;
   *)
@@ -270,9 +322,12 @@ case "$ROUTE" in
       echo "design-render: no such route '$ROUTE' (looked for $ROOT/$ROUTE)" >&2
       exit 1
     fi
-    ABS="$ROOT/$ROUTE"
-    if command -v cygpath >/dev/null 2>&1; then ABS="$(cygpath -m "$ABS" 2>/dev/null || printf '%s' "$ABS")"; fi
-    URL="file:///$(printf '%s' "$ABS" | sed 's#^/##')"
+    URL=""
+    if [ "$MODE" != "explore" ]; then
+      ABS="$ROOT/$ROUTE"
+      if command -v cygpath >/dev/null 2>&1; then ABS="$(cygpath -m "$ABS" 2>/dev/null || printf '%s' "$ABS")"; fi
+      URL="file:///$(printf '%s' "$ABS" | sed 's#^/##')"
+    fi
     ;;
 esac
 
@@ -287,6 +342,49 @@ if ! command -v agent-browser >/dev/null 2>&1; then
 fi
 
 _ab() { agent-browser --session "$SESSION" "$@"; }
+
+# The loopback server an explore page is served from (ADR-1418, design-render-serve.mjs). Stopping
+# it is a plain `kill`: the signal handlers below must not shell out to node, and the server's own
+# lifetime cap is the backstop for a kill that never lands.
+SRV_DIR=""
+SRV_PID=""
+PORT=""
+_confine_stop() { if [ -n "$SRV_PID" ]; then kill "$SRV_PID" 2>/dev/null || true; fi; return 0; }
+_confine_cleanup() { _confine_stop; if [ -n "$SRV_DIR" ]; then rm -rf "$SRV_DIR" 2>/dev/null || true; fi; return 0; }
+if [ "$MODE" = "explore" ]; then
+  SRV_DIR="$(mktemp -d 2>/dev/null)" || SRV_DIR=""
+  if [ -z "$SRV_DIR" ] || [ ! -d "$SRV_DIR" ]; then
+    echo "design-render: REFUSED -- cannot create a private directory for the loopback server; refusing to fall back to file:// (ADR-1418)." >&2
+    exit 1
+  fi
+  _native() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; else printf '%s' "$1"; fi
+  }
+  trap '_confine_cleanup' EXIT
+  trap '_confine_stop; exit 130' INT
+  trap '_confine_stop; exit 143' TERM
+  # No inherited descriptors: a server holding the caller's stdout or bats' fd 3 would keep a
+  # `run` or a CI job open until its cap.
+  node "$ROOT/.claude/scripts/design/design-render-serve.mjs" \
+    --root "$(_native "$ROOT/$EXPLORE_ROOT")" --dir "$(_native "$SRV_DIR")" --max-seconds 300 \
+    </dev/null >/dev/null 2>&1 3>&- &
+  SRV_PID=$!
+  _i=0
+  while [ "$_i" -lt 150 ]; do
+    if [ -s "$SRV_DIR/port" ]; then PORT="$(cat "$SRV_DIR/port" 2>/dev/null)"; break; fi
+    kill -0 "$SRV_PID" 2>/dev/null || break
+    sleep 0.1
+    _i=$((_i + 1))
+  done
+  case "$PORT" in
+    ""|*[!0123456789]*)
+      echo "design-render: REFUSED -- the loopback server for $EXPLORE_ROOT/ did not start; refusing to fall back to file:// (ADR-1418)." >&2
+      if [ -s "$SRV_DIR/record" ]; then head -n 3 "$SRV_DIR/record" | cut -c1-240 | sed 's/^/  /' >&2; fi
+      exit 1
+      ;;
+  esac
+  URL="http://127.0.0.1:$PORT/$EXPLORE_PAGE"
+fi
 
 # One hasher, used for both the stability probe and the published hash -- two hashers would
 # make "the captures agree" mean something different from "this is the recorded number".
@@ -331,6 +429,9 @@ else
   RECIPE_FONT='font-true;aa-on'
 fi
 RECIPE="viewport-fixed;full-page;media-$MEDIA;animations-off;$RECIPE_FONT;settle-paint"
+# The transport is part of the recipe: the same page served from its variant directory and opened
+# as file:// are different renders the moment the page reaches outside (ADR-1418).
+[ "$MODE" = "explore" ] && RECIPE="$RECIPE;confined-loopback"
 # The marker is read back below: an injection that silently failed used to leave the render
 # running with NO determinism rules at all, and nothing said so.
 # `applied` is MEASURED, never asserted, and it took two goes to measure the right thing.
@@ -380,7 +481,8 @@ _ab set viewport "$VW" "$VH" >/dev/null 2>&1 \
 # render whose browser silently ignored the command was sealed as "judged in dark". A gate
 # that transforms what it measures must declare what the transform destroys, and this one
 # was asserting a transform it never checked had happened.
-_ab set media "$MEDIA" >/dev/null 2>&1 \n  || { echo "design-render: could not set media '$MEDIA'; refusing to record it in the recipe as if it had applied" >&2; exit 1; }
+_ab set media "$MEDIA" >/dev/null 2>&1 \
+  || { echo "design-render: could not set media '$MEDIA'; refusing to record it in the recipe as if it had applied" >&2; exit 1; }
 if ! _ab open "$URL" --max-output 200 >/dev/null 2>&1; then
   echo "design-render: failed to open $URL" >&2
   _ab close >/dev/null 2>&1 || true
@@ -455,9 +557,10 @@ PROBE="${PNG%.png}.probe.png"
 # so this is not a regression. It does mean an interrupted render can leave the design-critic
 # session parked on the old page -- which is the state the stale-duplicate guard below exists
 # to catch, so it fails loudly rather than silently.
-trap 'rm -f "$PROBE" 2>/dev/null || true' EXIT
-trap 'rm -f "$PROBE" 2>/dev/null; exit 130' INT
-trap 'rm -f "$PROBE" 2>/dev/null; exit 143' TERM
+# These replace the loopback server's traps set above, so they carry its cleanup too.
+trap 'rm -f "$PROBE" 2>/dev/null || true; _confine_cleanup' EXIT
+trap 'rm -f "$PROBE" 2>/dev/null; _confine_stop; exit 130' INT
+trap 'rm -f "$PROBE" 2>/dev/null; _confine_stop; exit 143' TERM
 SHA=""
 NOHASH=""
 ATTEMPT=1
@@ -480,7 +583,47 @@ while [ "$ATTEMPT" -le 3 ]; do
   ATTEMPT=$((ATTEMPT + 1))
 done
 rm -f "$PROBE" 2>/dev/null || true
+# Read from OUTSIDE the page, before the browser closes: where the page ended up, and how many tabs
+# it left. A page can lie through `eval`; it cannot answer for agent-browser.
+FINAL_URL=""
+TAB_LINES=""
+if [ "$MODE" = "explore" ]; then
+  FINAL_URL="$(_ab get url 2>/dev/null | tr -d '\r' | head -n 1)"
+  TAB_LINES="$(_ab tab 2>/dev/null | tr -d '\r' | grep -cE '^.{0,6}\[t[0-9]+\] ' || true)"
+fi
 _ab close >/dev/null 2>&1 || true
+
+# The confinement verdict (ADR-1418), ahead of every other refusal, so a page that reached out is
+# named for that and not for a side effect of it. Every refusal removes the PNG and the meta.
+if [ "$MODE" = "explore" ]; then
+  _confine_refuse() {
+    echo "design-render: REFUSED -- $1" >&2
+    shift
+    for _l in "$@"; do echo "  $_l" >&2; done
+    rm -f "$PNG" "$META" 2>/dev/null || true
+    exit 1
+  }
+  # The server creates its record before it reports a port, so a missing one is a server that could
+  # not keep evidence -- and an empty record from nowhere proves nothing.
+  [ -f "$SRV_DIR/record" ] \
+    || _confine_refuse "the loopback server kept no record, so nothing proves the page stayed inside $EXPLORE_ROOT/."
+  if grep -qE '^(lifetime|error)' "$SRV_DIR/record" 2>/dev/null; then
+    _confine_refuse "the loopback server for $EXPLORE_ROOT/ stopped mid-render:" \
+      "$(grep -E '^(lifetime|error)' "$SRV_DIR/record" | head -n 3 | cut -c1-240)"
+  fi
+  if [ -s "$SRV_DIR/record" ]; then
+    _confine_refuse "the page left its variant directory, $EXPLORE_ROOT/ (ADR-1418). What it asked for that is not a file inside it:" \
+      "$(head -n 10 "$SRV_DIR/record" | cut -c1-240)" \
+      "A render may show only its own variant. Nothing was published."
+  fi
+  case "$FINAL_URL" in
+    "http://127.0.0.1:$PORT/"*) ;;
+    *) _confine_refuse "the page navigated away from http://127.0.0.1:$PORT/ and ended at '$(printf '%s' "$FINAL_URL" | cut -c1-200)'." \
+         "What was captured is not the page that was served.";;
+  esac
+  [ "$TAB_LINES" = "1" ] \
+    || _confine_refuse "the render ended with ${TAB_LINES:-no} tabs open; a page that opens another cannot prove which one was captured."
+fi
 
 if [ -n "$NOHASH" ]; then
   echo "design-render: could not hash $PNG -- no sha256 tool resolved on this box." >&2
