@@ -23,7 +23,7 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
-| 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | spec'd |
+| 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | 🔨 **built on `feat/face-v2-01`** — 8/10 slices proven; CI 19/19 (run 35207463369, both moods on every L3 leg); two attackers' 23 findings dispositioned; owes the owner's by-eye read and `/arc-phase-done 01` |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | spec'd |
 | 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | spec'd |
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | spec'd |
@@ -35,7 +35,11 @@ depends-on: —
 C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
 35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
-Phase 01's exit.
+Phase 01's exit. **Block A, read on 2026-09-17 during Phase 01 (burn 1d, before the day-3 mark):
+clause 1 still GREEN; clause 2 — the 9 bespoke rooms render on the new kit in both moods — is GREEN
+on CI** (run 35207463369 on `0b51ea17`, 19/19 jobs: `opened=33 ... mood=dark mood-miss=0` and
+`mood=light mood-miss=0` on ubuntu Node 20 + 22, macOS and windows) — no STOP. The owner's by-eye
+read of the 9 rooms × 2 moods is Phase 01's exit gate and is recorded at `/arc-phase-done 01`.
 
 **Usage trend (read at every Phase 03 ring close, never counted toward REQ-10):** — not started.
 
@@ -124,10 +128,13 @@ Phase 01's exit.
 
 ## Now
 
-**RESUME HERE (2026-09-17):** **Phase 00 is CLOSED** (done log, 2026-09-17). The next phase is
-**Phase 01 — tokens + kit** (`phases/phase-01-spec.md`, REQ-02, 2d appetite), and the owner has
-asked for it to start in a fresh session. Its Preconditions line is satisfied by the Phase 00 row
-above once this close merges.
+**RESUME HERE (2026-09-17):** **Phase 01 — tokens + kit — is BUILT on `feat/face-v2-01`** (8/10
+slices proven, handoff pack at `evidence/phase-01/handoff.md`, CI 19/19 on `0b51ea17`, run
+35207463369). What it still owes, in order: the PR's own CI read per job (`gh pr list --head
+feat/face-v2-01`), the merge, the live demo from the main clone, **the owner's by-eye read of the 9
+rooms × 2 moods** — which also rules on the five light-hue AA adjustments and on the face stage
+being dark-mood-only (handoff.md, spec-fidelity dispositions (b) and "scope") — and then
+`/arc-phase-done 01` from the main clone. Phase 02's branch does not open before that close.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
