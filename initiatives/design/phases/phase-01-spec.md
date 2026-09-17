@@ -53,6 +53,30 @@ rendered and correctly classified as product canvas or documentation.
 **Both**
 
 - [ ] Negative control: a composer attempting to read a **sibling** variant's render is refused
+- [ ] **An explore render is confined to its own variant directory**
+      ([ADR-1418](../../../docs/adr/1418-an-explore-render-is-confined-to-its-own-variant-directory.md),
+      `/arc-change` 2026-09-17). Found by the fifth pass, both attackers independently (BL-1 =
+      BS-1): the composer's own page framed `../variant-b/index.html` and `../matrix.md`, the
+      `file://` render delivered those pixels into its own session, and the composer may read that
+      PNG. Contract:
+      - explore mode renders only a file inside `docs/design/explore/<id>/variant-<x>/`, over a
+        loopback server rooted at that directory, and refuses URL routes;
+      - every response carries a same-origin CSP, and the server refuses and records any request
+        that resolves outside the root (encoded, `..`, absolute and symlinked forms included);
+      - the capture is refused, PNG and meta removed, on a recorded out-of-root request or policy
+        violation, a final top-level URL that is not the served page, more than one tab, or no
+        node;
+      - the server has a hard lifetime cap and inherits no descriptors;
+      - the recipe carries `confined-loopback`.
+
+      CI proves the contract with the real server and the fake browser: the request shapes a
+      leaking page makes (relative `..`, percent-encoded, absolute, symlinked) are refused and
+      recorded by the server; a render whose record holds one, or whose final URL moved, is
+      refused; a clean page renders. The fake cannot run a page, so **the real-browser proof is
+      separate and required:** one real re-render of a planted leak page on the live-demo path, refused,
+      and the two-surface attack pass carrying the running defect list.
+      **Fixed in passing:** `design-render.sh:383` has a literal `\n` before `||`, so the
+      fail-closed media check ran `set media light n`. Pinned by a case
 - [ ] **An abandoned boundary is diagnosable and never fails open** (`/arc-change` 2026-09-16).
       A compose that died without `compose-done` left `lexos-p01/variant-a` armed from 08-25 to
       09-16 and refused every Read, Grep, Glob and Write in the worktree, operator included — the
@@ -120,6 +144,13 @@ rendered and correctly classified as product canvas or documentation.
   first real explore report what is missing.
 - **Letting the manifest narrate the fix.** A prose claim is not evidence. Detour: input sha,
   output sha, and a human opening both images.
+- **The confinement server outliving its render.** A background process that inherits bats'
+  fd 3 keeps a CI job open until the leg times out, and killing a node child from Git Bash on
+  Windows is not the same act as on Linux. Detour: close every inherited descriptor at spawn, a
+  hard lifetime cap inside the server itself, and a test that asserts the port is closed after
+  both a clean exit and a refusal.
+- **Trying to enumerate leak shapes in the renderer.** Detour: the browser's origin model does the
+  refusing (ADR-1418); the renderer only reads the server's record and the final URL.
 
 ## Out of scope for this phase
 

@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
 phase: 01
 appetite: 12.5d
-burn: 3d
+burn: 5d
 blocked-on: —
 depends-on: —
 
@@ -12,7 +12,7 @@ depends-on: —
 > (tests green on CI read per JOB + live demo + exit criteria + evidence). Evidence over
 > assertion. Evidence is lane-scoped at `initiatives/design/evidence/phase-NN/` (ADR-0055).
 > ADRs, the retro-log, HISTORY and the trial-ledger stay at repo root (ADR-0053). This lane
-> holds ADR century **1400–1499**; ADR-1400..1417 are written there.
+> holds ADR century **1400–1499**; ADR-1400..1418 are written there.
 > Cycle 3's frozen history: [`HISTORY-INDEX.md`](HISTORY-INDEX.md). The pre-v2 idle tracker is
 > archived at [`archive/PROGRESS-idle-2026-08-23.md`](archive/PROGRESS-idle-2026-08-23.md).
 
@@ -73,8 +73,12 @@ the engine lane recorded at 18 -> 6. A third round would be patching against the
 
 ## Appetite burn
 
-**3 of 12.5 days used (24%)** — corrected 2026-09-16 from a `1.5d` that stopped moving when Phase
-00 closed; the branch carries commits on three build days (08-23, 08-24, 08-25). **The 50%
+**5 of 12.5 days used (40%)** — re-counted 2026-09-17 by the same rule as the 09-16 correction,
+calendar days carrying lane commits: 08-23, 08-24, 08-25, 09-16, 09-17. What is left is 7.5d
+against 9.5d of appetite for phases 02–08 plus Phase 01's remainder, so the cycle already runs
+about 2.5d past its appetite with no cut. That is a forecast, not a new tripwire: the owner's
+09-16 ruling stands, and the next gate is the taste tripwire after Phase 03. (The 09-16
+correction: from a `1.5d` that stopped moving when Phase 00 closed; three build days then.) **The 50%
 tripwire is CROSSED:** day 3 ended with Phase 01 open. Its stated purpose is to reassess the
 renderer approach, and the renderer phase (00) closed green on day 1 — the overrun is Phase 01's
 two adversarial passes (42 findings), not the renderer. **Owner ruled 2026-09-16: no scope cut,
@@ -289,11 +293,26 @@ consumer projects — it carries the owner's approvals.
       `evidence/phase-01/adversarial-open.md` § Fifth pass, if they arrived before the session
       closed. If that section is missing, re-run the pass.
 
+- **2026-09-17, resumed.**
+  - **CI read per JOB, both as expected.** `a16b189e` (run 35150906946): the six composer-bash
+    refusal cases plus the fragment case red on all five legs. `fd94e8f1` (35152749314) and HEAD
+    `10d9d136` (35153702335): 12/19 green, and the 7 red jobs fail on exactly 15 tests — the
+    refpack 14 plus the owner-fragment case — with `declared = executed` on every leg. The red
+    job count rose from 5 to 7 only because the fragment case lands on two more shards.
+  - **BL-1 routed through `/arc-change`, owner "sari pannu".** The allowlist assumption FIRED a
+    second time: tools-level scoping cannot stop a page the composer wrote from framing its
+    sibling. Filed as [ADR-1418](../../docs/adr/1418-an-explore-render-is-confined-to-its-own-variant-directory.md)
+    (**accepted** by the owner 2026-09-17, "ok"): explore renders served over loopback
+    from the variant directory only, with a same-origin CSP header, and refused on any
+    out-of-root request, policy violation, moved URL or extra tab. Phase 01 gains the exit
+    criterion. Two things the real browser must still prove are written in the ADR, because CI's
+    browser is a fake.
+  - **Burn re-counted to 5d (40%).** See Appetite burn.
+
 **Resume here, in order:**
-1. **CI.** Read per JOB for `a16b189e` and `fd94e8f1`.
-   - Expected at `a16b189e`: the composer-bash refusal cases red.
-   - Expected at `fd94e8f1`: only the owner-fragment case red, plus the refpack 14.
-2. **Attack findings.** The pass came back: 9 decision-logic findings and 11 shell findings, with
+1. ~~**CI.** Read per JOB for `a16b189e` and `fd94e8f1`.~~ Done 2026-09-17, as expected.
+2. **Attack findings.** BL-1 now has its home in ADR-1418 and the Phase 01 spec; build it
+   red-first; the owner approved the ADR and the new `design-render-serve.mjs` file 2026-09-17. The pass came back: 9 decision-logic findings and 11 shell findings, with
    overlaps, all recorded OPEN in `adversarial-open.md` § Fifth pass. **Start with BL-1/BS-1, which
    both attackers found independently: the composer's OWN page can iframe a sibling or the matrix,
    and the `file://` render delivers those pixels into its readable session.** Pinning the Bash

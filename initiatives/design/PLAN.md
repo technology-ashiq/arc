@@ -171,6 +171,7 @@ flowchart TB
 | 1415 | The composer's iron law gains an explicit read-path allowlist | accepted |
 | 1416 | The EXP-A1 prediction is session-authored on the owner's delegation, and says so | accepted |
 | 1417 | The stale-duplicate guard must tell an iteration from a stale page | accepted |
+| 1418 | An explore render is confined to its own variant directory | accepted |
 
 ## Non-negotiables
 
@@ -234,7 +235,7 @@ flowchart TB
 |---|---|---|
 | Lapa Ninja and SaaSFrame stay fetchable, giving REQ-04 its two sources | The curator's robots.txt preflight returns `Disallow`, or either host returns non-200, on a real pack build — REQ-04's "≥2 sources" is then unmeetable with zero margin | 02 |
 | A meta written without a `session` field refuses, rather than falling through to the old route-only comparison | The Phase 00 negative control feeding a session-less meta exits 0 instead of refusing — [ADR-1417](../../docs/adr/1417-the-stale-duplicate-guard-must-tell-iteration-from-stale-page.md) has then silently reverted in code while reading as correct | 00 |
-| The composer's read allowlist admits its own render and the pack, and nothing else | The Phase 01 negative control — a composer reading a *sibling* variant's render — returns content instead of being refused — **FIRED 2026-08-24**: `Grep` and `Glob` returned sibling content (adversarial-open `L2`). Fixed by `5e33f34b` + the `Read\|Grep\|Glob` matcher, pinned by `design-composer-eyes.bats`; routed 2026-09-16 | 01 |
+| The composer's read allowlist admits its own render and the pack, and nothing else | The Phase 01 negative control — a composer reading a *sibling* variant's render — returns content instead of being refused — **FIRED 2026-08-24**: `Grep` and `Glob` returned sibling content (adversarial-open `L2`). Fixed by `5e33f34b` + the `Read\|Grep\|Glob` matcher, pinned by `design-composer-eyes.bats`; routed 2026-09-16 — **FIRED again 2026-09-17**: the composer's OWN render carried a sibling's pixels, because its page framed `../variant-b` and the renderer opens `file://` (adversarial-open `BL-1`/`BS-1`). Tools-level scoping cannot close it; routed to [ADR-1418](../../docs/adr/1418-an-explore-render-is-confined-to-its-own-variant-directory.md). Also load-bearing for REQ-09's blind jury and ADR-1410's authorship rule | 01 |
 | Stitch's exported HTML is self-contained enough to render deterministically offline | The same fixture rendered with the network blocked produces a different hash than with it open, i.e. the file depends on a CDN | 06 |
 | v0's and Stitch's terms permit an internal, unpublished comparison | The owner rules against it, or a provider answers denying permission — that rival leaves the jury rather than gaining a workaround | 06 |
 | ≤3 self-review iterations is enough for the composer to catch a real defect | Three full explores complete with a self-review catch rate of 0 — the loop is then buying captures and nothing else | 03 |
