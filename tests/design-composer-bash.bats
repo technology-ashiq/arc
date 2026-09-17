@@ -586,13 +586,18 @@ teardown() { _arc_teardown; }
   # pipes the payload instead; until the owner installs it, this case drives the fixture copy.
   _bash_sandbox; _arm_a
   cp "$ARC_ROOT/tests/fixtures/hooks/_dispatch.sh" "$SANDBOX/.claude/hooks/_dispatch.sh"
+  # TMPDIR broken AND a mktemp that fails: macOS mktemp ignores TMPDIR, so TMPDIR alone left that
+  # leg on the temp-file path and proved nothing there.
+  mkdir -p "$BATS_TEST_TMPDIR/nomktemp"
+  printf '#!/bin/sh\nexit 1\n' > "$BATS_TEST_TMPDIR/nomktemp/mktemp"
+  chmod +x "$BATS_TEST_TMPDIR/nomktemp/mktemp"
   _bp ui-composer Bash "$CAT_B" > "$BATS_TEST_TMPDIR/p.json"
-  run --separate-stderr bash -c 'TMPDIR=/nonexistent-arc-tmp/x; export TMPDIR; bash "$0" < "$1"' \
-    "$SANDBOX/.claude/hooks/PreToolUse.sh" "$BATS_TEST_TMPDIR/p.json"
+  run --separate-stderr bash -c 'TMPDIR=/nonexistent-arc-tmp/x; export TMPDIR; PATH="$2:$PATH"; export PATH; bash "$0" < "$1"' \
+    "$SANDBOX/.claude/hooks/PreToolUse.sh" "$BATS_TEST_TMPDIR/p.json" "$BATS_TEST_TMPDIR/nomktemp"
   [ "$status" -eq 2 ] || { echo "with TMPDIR unwritable a composer read a sibling: $stderr"; false; }
   _bp ui-composer Bash "$RENDER_A" > "$BATS_TEST_TMPDIR/p.json"
-  run --separate-stderr bash -c 'TMPDIR=/nonexistent-arc-tmp/x; export TMPDIR; bash "$0" < "$1"' \
-    "$SANDBOX/.claude/hooks/PreToolUse.sh" "$BATS_TEST_TMPDIR/p.json"
+  run --separate-stderr bash -c 'TMPDIR=/nonexistent-arc-tmp/x; export TMPDIR; PATH="$2:$PATH"; export PATH; bash "$0" < "$1"' \
+    "$SANDBOX/.claude/hooks/PreToolUse.sh" "$BATS_TEST_TMPDIR/p.json" "$BATS_TEST_TMPDIR/nomktemp"
   [ "$status" -eq 0 ] || { echo "with TMPDIR unwritable the composer's own render was refused: $stderr"; false; }
 }
 

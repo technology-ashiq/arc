@@ -534,3 +534,26 @@ command other than its own render reached exit 0; jq's decoding matched Node's `
     whether the caller could be the one being scoped.
 33. A tool that loads configuration from HOME can have its builtins redefined under you; run it with
     HOME pointed nowhere when its answer is a security decision.
+
+## BS-4 attack pass, 2026-09-17 — the dispatcher fixture (`611bc180`)
+
+Two fresh agents, decision logic and shell / OS, same REALISTIC / DEGRADED classes. **Neither found
+a REALISTIC High or Med; the decision half found no REALISTIC finding at all.** The fixture made the
+same allow-or-block call as the installed dispatcher on every real payload, driven through a node
+child the way Claude Code feeds stdin, and closed BS-4: with TMPDIR broken the installed copy
+allowed the destructive guard's payload and the fixture blocked it.
+
+| # | Class | Finding | Disposition |
+|---|---|---|---|
+| D-F1 = S-F1 (Low; Med if reachable) | DEGRADED (size) | `payload="$(cat)"` before every fragment cost time that grew with the square of the payload on MSYS: 25 MB 10.8 s, 50 MB 48.9 s. A composer call at 36 MB went from blocked in 55 s to a timeout, which reads as allow. Defect #25 again. | **FIXED**: the temp file is the normal path again (`cat > file`, linear, byte-exact, `ARC_HOOK_PAYLOAD` intact); memory is only the fallback when no temp file can be made. That also removes S-F2 (PostToolUse stalls), S-F3 (the documented variable), S-F4 (a background child holding the pipe) and S-F5 (byte changes) on the normal path. |
+| S-F6 (Info) | DEGRADED | A copy was left in TMPDIR on SIGTERM or timeout; the second `mktemp` fallback reused the same TMPDIR. | **FIXED**: TERM and INT traps remove the copy; the useless fallback is gone. A clean-exit case pins cleanup. |
+| D-F1 (Low) | DEGRADED | An exported `payload` (or allexport) kept the capture exported into every fragment's environment; above 128 KB `bash "$f"` would fail to start on Linux. | **FIXED**: `export -n payload`. Pinned. |
+| D-F2 (Low) | DEGRADED | An exported function named `printf` swallowed the payload on the memory path. | **FIXED**: `builtin printf`. Pinned. |
+| D-F4 = S-F7 (Info) | DEGRADED | A truncated or empty installed `_dispatch.sh` makes the dispatcher exit 127, which reads as allow with no warning. Pre-existing. | **ACCEPTED, noted for the owner**: the check belongs in the dispatchers (`PreToolUse.sh` and its siblings), which are separate owner files. |
+| D-F5 (Info) | REALISTIC | The fixture's comment misdescribed the copy. | **FIXED** with the rewrite. |
+| M04, M05/M06, M07, M08, M12, M13 | mutants | A stale `ARC_HOOK_PAYLOAD`, temp cleanup, SIGPIPE noise, a silent 64 KB cap, the no-payload blocking branch, no-payload stdin. | **Each has a case**, on both paths. |
+| CI, run 35209968093 | found by CI | macOS `mktemp` ignores TMPDIR, so "TMPDIR unwritable" never reached the memory path there. | **FIXED**: the cases also put a failing `mktemp` first on PATH. |
+
+### Add to the running defect list for the next attacker
+34. `$(cat)` of a large payload costs more than its length on MSYS; keep big inputs in files.
+35. macOS `mktemp` ignores TMPDIR, so "TMPDIR is broken" is not a portable way to make it fail.
