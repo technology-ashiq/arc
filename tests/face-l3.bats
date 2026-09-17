@@ -93,9 +93,15 @@ load 'test_helper'
   # face-tokens.mjs WRITES the copy and face-colour-literal.mjs READS face/src/ui and
   # face/src/modules to lint them (face v2 Phase 01), so both name the path; nothing may IMPORT
   # from it. Each exclusion is one named file with its reason, never a prefix.
+  # The exclusion is the FULL path of each file, so a same-named file elsewhere is not excused.
   local importers
-  importers=$(printf '%s\n' "$output" | grep -v '/face-tokens\.mjs$' | grep -v '/face-colour-literal\.mjs$' | grep -v '^$' || true)
+  importers=$(printf '%s\n' "$output" | grep -v '/\.claude/scripts/core/face-tokens\.mjs$' | grep -v '/\.claude/scripts/core/face-colour-literal\.mjs$' | grep -v '^$' || true)
   [ -z "$importers" ] || { echo "an arc script depends on face/: $importers"; false; }
+  # And an excused file is excused for NAMING the path, never for importing from it.
+  local excused=("$ARC_ROOT/.claude/scripts/core/face-tokens.mjs" "$ARC_ROOT/.claude/scripts/core/face-colour-literal.mjs")
+  [ -f "${excused[0]}" ] && [ -f "${excused[1]}" ] || { echo "an excused file is missing: ${excused[*]}"; false; }
+  run grep -nE "(^|[^[:alnum:]])(import|require)[^;]*[\"'][^\"']*face/src" "${excused[@]}"
+  [ "$status" -eq 1 ] || { echo "an excused file IMPORTS from face/src (grep exit $status): $output"; false; }
 }
 
 @test "the L3 token copy is in sync with the canonical design tokens" {
@@ -121,7 +127,8 @@ load 'test_helper'
              "copy carries the product accent" "a hand-edited copy exits 1" \
              "a length-preserving hand-edit exits 1" "a missing copy exits 1" \
              "a source that EXISTS but is not the token file is refused" \
-             "an absent source is refused, not copied"; do
+             "an absent source is refused, not copied" \
+             "a copy linked onto the source is refused, source untouched"; do
     [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
   done
 }

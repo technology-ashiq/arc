@@ -72,6 +72,24 @@ check("rgba(var(--ink), 0.04) is a token, not a literal", kinds(`boxShadow: "ins
 check("bg-slate-900 (a Tailwind palette class) is a palette literal", kinds(`className="bg-slate-900"`).includes("palette"));
 check("text-(--accent) is a token utility, not a palette literal", kinds(`className="text-(--accent)"`).length === 0);
 check("a literal inside a comment is still a literal (the lint does not guess at comments)", kinds(`// never #000 here`).includes("hex"));
+
+// The attack on the rules (face v2 Phase 01): Tailwind reads `_` as a space, so a literal built
+// out of underscores is a literal; the palette is every palette under every prefix.
+check("shadow-[0_0_0_1px_#fff] is a hex literal", kinds(`className="shadow-[0_0_0_1px_#fff]"`).includes("hex"));
+check("shadow-[inset_0_0_0_1px_white] is a named literal", kinds(`className="shadow-[inset_0_0_0_1px_white]"`).includes("named"));
+check("shadow-[0_1px_2px_rgba(0,0,0,.5)] is a function literal", kinds(`className="shadow-[0_1px_2px_rgba(0,0,0,.5)]"`).includes("function"));
+check("bg-mauve-900 and text-olive-500 are palette literals", kinds(`"bg-mauve-900 text-olive-500"`).filter((k) => k === "palette").length === 2);
+check("inset-ring-red-500 and text-shadow-sky-400 are palette literals", kinds(`"inset-ring-red-500 text-shadow-sky-400"`).filter((k) => k === "palette").length === 2);
+check("var(--color-rose-600) and theme(colors.red.500) are palette literals", kinds(`a: var(--color-rose-600); b: theme(colors.red.500)`).filter((k) => k === "palette").length === 2);
+check("an HTML entity spelling a hash (&#35;ffffff) is an escaped literal", kinds(`<path fill="&#35;ffffff"/>`).includes("escaped-hex"));
+check("a JS escape spelling a hash is an escaped literal", kinds(`const c = "\\x23ffffff"; const d = "\\u0023000000";`).filter((k) => k === "escaped-hex").length === 2);
+check("a CSS escape inside a hex is an escaped literal", kinds(`.x{color:#\\66 ff}`).includes("escaped-hex"));
+check("rgb(none 0 0) and rgb(calc(255) 255 255) are function literals", kinds(`a: rgb(none 0 0); b: rgb(calc(255) 255 255)`).filter((k) => k === "function").length === 2);
+check("a relative colour with literal channels is a literal", kinds(`c: rgb(from var(--accent) 255 255 255)`).includes("function"));
+check("a relative colour from a token with an alpha is a token", kinds(`c: rgb(from var(--accent) r g b / 0.5)`).length === 0);
+check("a comment inside a colour function hides no number", kinds(`c: rgb(/**/255,255,255)`).includes("function"));
+check("hsl(var(--h) var(--s) var(--l)) is a token", kinds(`c: hsl(var(--h) var(--s) var(--l))`).length === 0);
+check("an unclosed colour function is a finding, never skipped", kinds(`c: rgb(var(--x)`).includes("function"));
 {
   const f = lint.scanText(`ok\n  x = "#0b0d10"`, "a.tsx");
   check("a finding carries line and column", f.length === 1 && f[0].line === 2 && f[0].col === 8, JSON.stringify(f));
@@ -87,7 +105,30 @@ try {
 
   const absent = join(tmp, "nope");
   const r1 = cli("--root", absent, "--root", join(FIX, "clean"));
-  check("an absent root is reported absent while another root is scanned", r1.status === 0 && /absent/.test(r1.stdout) && /scanned=1 files/.test(r1.stdout), r1.stdout + r1.stderr);
+  check("an explicit root that is absent is a named FAIL, even while another root is scanned",
+    r1.status === 1 && /absent-root/.test(r1.stdout) && /scanned=1 files/.test(r1.stdout), r1.stdout + r1.stderr);
+
+  // The attack on the walk (face v2 Phase 01): two spellings of one root, or a root inside
+  // another, counted one literal four times.
+  const dup = join(tmp, "dup");
+  mkdirSync(join(dup, "inner"), { recursive: true });
+  writeFileSync(join(dup, "inner", "a.tsx"), `const c = "#123456";\n`);
+  check("the same root spelled twice is refused (exit 2), never double-counted", cli("--root", dup, "--root", `${dup}/`).status === 2);
+  check("a root inside another root is refused (exit 2)", cli("--root", dup, "--root", join(dup, "inner")).status === 2);
+
+  // A re-cased folder: found on a case-insensitive disk, absent on a case-sensitive one -- a
+  // FAIL on both, never a pass on one leg.
+  mkdirSync(join(tmp, "Cased"));
+  writeFileSync(join(tmp, "Cased", "ok.tsx"), `const c = "var(--accent)";\n`);
+  const rc = cli("--root", join(tmp, "cased"));
+  check("a root spelled in the wrong case FAILS on every filesystem", rc.status === 1 && /(absent-root|root-case)/.test(rc.stdout), rc.stdout + rc.stderr);
+
+  if (process.platform !== "win32") {
+    const rd = cli("--root", "/dev/null", "--root", join(FIX, "clean"));
+    check("a device as a root is a named finding, never read as a clean file", rd.status === 1 && /special/.test(rd.stdout), rd.stdout + rd.stderr);
+  } else {
+    console.log("note: device-root arm runs on the POSIX legs only (/dev/null)");
+  }
 
   const nested = join(tmp, "nested", "deep", "deeper");
   mkdirSync(nested, { recursive: true });

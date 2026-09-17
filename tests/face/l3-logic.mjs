@@ -1049,8 +1049,10 @@ check("a dead handle SAYS it is dead rather than reporting a clean boundary",
   const tw = css.indexOf('@import "tailwindcss" source(".");');
   const tok = css.indexOf('@import "./tokens.css"');
   check("index.css imports Tailwind, then the generated token copy", tw !== -1 && tok > tw);
-  // The default scan base is the cwd; the browser suite builds a copy of face/ from elsewhere.
-  check("Tailwind scans face/src by an explicit source, never the cwd it happens to start in", tw !== -1);
+  check("Tailwind scans face/src by an explicit source, whichever default base the plugin uses", tw !== -1);
+  // index.css adds no colour of its own: the one custom property it declares is the light remap.
+  const declared = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(--[a-zA-Z0-9-]+)\s*:/g)].map((m) => m[1]);
+  check("index.css declares no token but the --color-white remap", declared.length === 1 && declared[0] === "--color-white", declared.join(","));
   check("the light remap is a @custom-variant over html.hq.hq-light", /@custom-variant hq-light \(&:where\(html\.hq\.hq-light, html\.hq\.hq-light \*\)\);/.test(css));
   check("the remap uses that variant", /@variant hq-light\s*\{\s*--color-white:\s*var\(--text-1\);/.test(css));
   const app = readFileSync(join(SRC, "App.tsx"), "utf8");

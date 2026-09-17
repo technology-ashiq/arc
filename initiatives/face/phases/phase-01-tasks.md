@@ -143,7 +143,7 @@ risk: medium
 proof: verified-real -- two fresh attacker agents (decision logic: tokens-contrast + colour-literal; shell/OS boundary: face-tokens generator, harness mood arm, lint walk) given fixed-defects.md; every confirmed hole fixed, pinned as a check and appended to fixed-defects.md; reports in evidence/phase-01/attacker-reports.md
 tier: verified-real
 sources: phase-01-spec.md
-decision: (empty until proven)
+decision: two general-purpose agents launched together on 47ad5476, each in a private scratch directory, each with fixed-defects.md; decision logic found 13 (9 HIGH), shell/OS found 10 (1 MEDIUM). Every HIGH and MEDIUM fixed and pinned (22 lines appended to fixed-defects.md, dispositions in evidence/phase-01/attacker-reports.md); two scoped as debt (lint roots, harness signal handling). Fixing the pair set moved five light hues a further step and dark --on-red to --bg-0, all recorded in the tokens.css header
 result: (empty until proven)
 commit: (empty until proven)
 

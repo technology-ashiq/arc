@@ -2,10 +2,10 @@
    Tailwind v4 enters here and stops at L3: nothing under face/src/lib imports it.
    The tokens are the generated copy of docs/design/system/tokens.css; this file adds no
    colour of its own, only what Tailwind and the workroom's motion need. */
-/* source("."): scan THIS folder for class names, whatever directory the build is started from.
-   Tailwind's default base is the current working directory, and the browser suite builds a copy
-   of face/ from the repo root -- a default scan there reads the wrong tree, finds none of the
-   kit's classes, and ships a stylesheet that logs no error and styles nothing. */
+/* source("."): scan exactly THIS folder for class names. Tailwind's docs name the working
+   directory as the default base; @tailwindcss/vite 4.3.3 actually uses Vite's root (face/, or the
+   copy the browser suite builds). Naming the folder keeps the scan to face/src whichever default
+   applies, and keeps face/scripts and the reference trees out of it. */
 @import "tailwindcss" source(".");
 @import "./tokens.css";
 

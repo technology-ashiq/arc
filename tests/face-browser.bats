@@ -86,6 +86,13 @@ smoke_summary_verdict() {
   local n
   n="$(printf '%s\n' "$output" | sed -n 's/^lockfile: families=\([0-9][0-9]*\) .*/\1/p')"
   [ -n "$n" ] && [ "$n" -ge 1 ] || { echo "no platform family was checked"; false; }
+  # The families the build's own dependencies need, BY NAME (face v2 Phase 01): a lockfile whose
+  # oxide family was stripped whole still reported "families=3 missing=none" to a count floor.
+  local names family
+  names="$(printf '%s\n' "$output" | sed -n 's/^lockfile: family-names=\(.*\)$/\1/p')"
+  for family in "@tailwindcss/oxide" "lightningcss" "rolldown"; do
+    [[ ",$names," == *",$family,"* ]] || { echo "the lockfile declares no $family platform family: $names"; false; }
+  done
   [ "$status" -eq 0 ]
   touch "$BATS_FILE_TMPDIR/lockfile.ok"
 }
@@ -114,14 +121,15 @@ smoke_summary_verdict() {
   run node "$dst/node_modules/vite/bin/vite.js" build "$dst" 3>&-
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" | tail -40; false; }
   [ -f "$dst/dist/index.html" ] || { echo "vite build exited 0 but wrote no dist/index.html"; false; }
-  # Tailwind compiled the kit's classes from face/src, not from whichever directory the build
-  # started in (face v2 Phase 01): a utility only the kit uses must be in the emitted stylesheet,
-  # and so must the light mood. A build that styles nothing logs no error for the smoke to see.
+  # Tailwind compiled (face v2 Phase 01): a utility only the kit uses must be in the emitted
+  # stylesheet, and so must the light remap -- `--color-white` is emitted by the @variant hq-light
+  # block alone, never by the token copy, so it proves the custom variant compiled. A build that
+  # styles nothing logs no error for the smoke to see.
   local css
   css="$(cat "$dst"/dist/assets/*.css 2>/dev/null || true)"
   [ -n "$css" ] || { echo "vite build wrote no stylesheet under dist/assets"; false; }
-  [[ "$css" == *'.text-\[22px\]'* ]] || { echo "the built CSS carries none of the kit's utilities -- Tailwind scanned the wrong tree"; false; }
-  [[ "$css" == *'hq-light'* ]] || { echo "the built CSS carries no light mood"; false; }
+  [[ "$css" == *'.text-\[22px\]'* ]] || { echo "the built CSS carries none of the kit's utilities -- Tailwind did not compile the kit"; false; }
+  [[ "$css" == *'--color-white'* ]] || { echo "the built CSS carries no light remap -- the @variant hq-light block did not compile"; false; }
 }
 
 @test "face-browser: door + preview + smoke open every openable room with 0 errors, in BOTH moods" {

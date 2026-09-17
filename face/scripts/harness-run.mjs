@@ -23,7 +23,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runSmoke, summaryLines, judge, openableRooms, redactSecrets, SetupError, MOODS } from "./smoke.mjs";
+import { runSmoke, summaryLines, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FACE_DEFAULT = resolve(HERE, "..");
@@ -56,13 +56,9 @@ export function parseArgs(argv) {
   return opts;
 }
 
-/** The rooms the door SHOULD serve as openable, read from the contract file, not the door. */
+/** The rooms the door SHOULD serve as openable -- the one implementation, in smoke.mjs. */
 export function expectedOpenable(repo = REPO) {
-  const file = join(repo, "initiatives", "face", "contracts", "rooms.generated.json");
-  let payload;
-  try { payload = JSON.parse(readFileSync(file, "utf8")); }
-  catch (e) { throw new SetupError(`cannot read the expected room set at ${file}: ${e.message}`); }
-  return openableRooms(payload).openable;
+  return smokeExpectedOpenable(repo);
 }
 
 function freePort() {
@@ -134,25 +130,39 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     await waitHttp(`http://127.0.0.1:${appPort}/api/health`, headers, preview, 30000, [token]);
     log(`preview: up on ${appPort}, /api/health answers 200 through its proxy`);
 
-    // Every mood runs even after one fails: the second mood's evidence is still evidence.
+    // Every mood runs even after one fails OR throws: the second mood's evidence is still evidence,
+    // and a crash in the first (a DevTools timeout, a CDP error) must not silently skip the second.
+    const moods = opts.moods ?? MOODS;
     let failedMoods = 0;
-    for (const mood of opts.moods ?? MOODS) {
+    let setupFailed = 0;
+    for (const mood of moods) {
       log(`face-browser: mood=${mood}`);
-      const report = await runSmoke({
-        base: `http://127.0.0.1:${appPort}/`,
-        door: `http://127.0.0.1:${doorPort}`,
-        token,
-        exclude: opts.exclude,
-        expected,
-        roomTimeoutMs: 15000,
-        mood,
-      }, log);
+      let report;
+      try {
+        report = await runSmoke({
+          base: `http://127.0.0.1:${appPort}/`,
+          door: `http://127.0.0.1:${doorPort}`,
+          token,
+          exclude: opts.exclude,
+          expected,
+          roomTimeoutMs: 15000,
+          mood,
+        }, log);
+      } catch (e) {
+        setupFailed++;
+        log(`smoke: SETUP-FAIL mood=${mood} -- ${oneLine(redactSecrets(e?.message ?? e, [token]))}`);
+        continue;
+      }
       for (const line of summaryLines(report)) log(line);
       log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined })}`);
       const verdict = judge(report);
-      if (!verdict.ok) { failedMoods++; log(`smoke: FAIL mood=${mood} -- ${verdict.reasons.join("; ")}`); }
+      if (!verdict.ok) { failedMoods++; log(`smoke: FAIL mood=${mood} -- ${oneLine(verdict.reasons.join("; "))}`); }
     }
-    return failedMoods === 0 ? 0 : 1;
+    // Light is never optional (ADR-1331): a run that left a mood out is not a pass, however clean.
+    const missing = MOODS.filter((m) => !moods.includes(m));
+    if (missing.length) log(`face-browser: PARTIAL -- mood(s) ${missing.join(",")} not run; a partial run never exits 0`);
+    if (setupFailed) return 2;
+    return failedMoods === 0 && missing.length === 0 ? 0 : 1;
   } finally {
     await stopTree(preview);
     await stopTree(door);
@@ -171,7 +181,7 @@ if (invokedDirectly()) {
     try {
       process.exitCode = await runHarness(parseArgs(process.argv.slice(2)));
     } catch (e) {
-      console.error(`harness-run: ${e instanceof SetupError ? "" : "unexpected: "}${e.message}`);
+      console.error(`harness-run: ${e instanceof SetupError ? "" : "unexpected: "}${oneLine(e.message)}`);
       process.exitCode = 2;
     }
   })();

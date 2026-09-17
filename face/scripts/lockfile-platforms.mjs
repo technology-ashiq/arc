@@ -134,6 +134,7 @@ export function checkLockfile(lock, target) {
   }
   const packages = lock.packages;
   const missing = [];
+  const familyNames = [];
   let families = 0;
   for (const [parent, entry] of Object.entries(packages)) {
     const label = parent || "(root)";
@@ -145,6 +146,7 @@ export function checkLockfile(lock, target) {
     const declared = Object.keys(declaredMap).filter((n) => platformOfName(n) !== null);
     if (declared.length === 0) continue;
     families++;
+    familyNames.push(parent.replace(/^.*node_modules\//, ""));
     const forTarget = declared.filter((n) => matches(target, platformOfName(n)));
     if (forTarget.length === 0) {
       const unread = declared.filter((n) => {
@@ -174,6 +176,9 @@ export function checkLockfile(lock, target) {
     ok: families > 0 && missing.length === 0,
     error: families === 0 ? "no package declares platform binaries -- nothing was checked" : null,
     families,
+    // By name, so a caller can require the families its dependencies need: a lockfile stripped of
+    // a whole family's declaration reports one family fewer, and a count floor cannot see which.
+    familyNames: [...new Set(familyNames)].sort(),
     missing,
   };
 }
@@ -206,6 +211,7 @@ if (invokedDirectly()) {
       const r = checkLockfile(lock, target);
       const label = [target.platform, target.arch, target.libc].filter(Boolean).join("-");
       console.log(`lockfile: families=${r.families} platform=${label} missing=${r.missing.length ? r.missing.join(", ") : "none"}${r.error ? ` error=${r.error}` : ""}`);
+      console.log(`lockfile: family-names=${(r.familyNames ?? []).join(",") || "none"}`);
       process.exitCode = r.ok ? 0 : r.error ? 2 : 1;
     }
   }

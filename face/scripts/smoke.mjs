@@ -32,10 +32,10 @@
 //   smoke.mjs --probe-file PATH       open one local page; exit 1 if it logged any error
 // Exit: 0 every expected room opened, settled, with 0 counted errors · 1 a room failed, or the
 //       probe saw errors · 2 setup failure (bad argument, no Chrome, door unreachable).
-import { mkdtempSync, realpathSync } from "node:fs";
+import { mkdtempSync, realpathSync, readFileSync } from "node:fs";
 import { stopTree, removeDir, settleWithin } from "./proc.mjs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   findChrome, chromeArgs, launchChrome, waitForDevTools, openSocket, CdpSession, openPage,
@@ -86,9 +86,26 @@ export function roomLine(r) {
  */
 export function moodHolds(htmlClass, mood) {
   if (typeof htmlClass !== "string" || !MOODS.includes(mood)) return false;
-  const classes = new Set(htmlClass.split(/\s+/).filter(Boolean));
+  const classes = classSet(htmlClass);
   return classes.has("hq") && classes.has("hq-light") === (mood === "light");
 }
+
+/**
+ * A class attribute's tokens, split exactly as the DOM's classList splits them: on ASCII
+ * whitespace only. JS `\s` also splits on U+00A0, U+FEFF and U+2028, which the browser does not,
+ * so "hq<NBSP>hq-light" would read as two classes here and one (unknown) class on the page.
+ */
+export function classSet(htmlClass) {
+  return new Set(String(htmlClass ?? "").split(/[\t\n\f\r ]+/).filter(Boolean));
+}
+
+/** One error as one line: a page's text can carry newlines, and a line of it must never forge a summary. */
+export function errorLine(e, secrets) {
+  return `  [${e.room}] ${e.type}: ${JSON.stringify(redactSecrets(e.text, secrets))}`;
+}
+
+/** A setup failure's message as one line, for the same reason. */
+export const oneLine = (text) => String(text).replace(/\r?\n/g, "\\n");
 
 /** The verdict's words for rooms in the wrong mood, by which class was wrong. */
 export function moodReasons(report) {
@@ -96,7 +113,7 @@ export function moodReasons(report) {
   if (!MOODS.includes(report.mood)) return [`mood=${JSON.stringify(report.mood)} is not one of ${MOODS.join(",")}`];
   if (!Array.isArray(report.moodMiss)) return ["the mood was not measured"];
   const reasons = [];
-  const classesOf = (m) => new Set(String(m.htmlClass ?? "").split(/\s+/).filter(Boolean));
+  const classesOf = (m) => classSet(m.htmlClass);
   const noHq = report.moodMiss.filter((m) => !classesOf(m).has("hq")).map((m) => m.id);
   if (noHq.length) reasons.push(`hq: class not applied on <html> (${noHq.length} room(s): ${noHq.join(",")})`);
   if (report.mood === "light") {
@@ -282,11 +299,34 @@ export function openableRooms(payload) {
   return { openable, notOpened };
 }
 
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+/**
+ * The rooms the door SHOULD serve as openable, read from the contract file, never from the door.
+ * Lives here, not only in harness-run, so a standalone smoke is judged against the contract too.
+ */
+export function expectedOpenable(repo = REPO) {
+  const file = join(repo, "initiatives", "face", "contracts", "rooms.generated.json");
+  let payload;
+  try { payload = JSON.parse(readFileSync(file, "utf8")); }
+  catch (e) { throw new SetupError(`cannot read the expected room set at ${file}: ${e.message}`); }
+  return openableRooms(payload).openable;
+}
+
 const isCount = (n) => Number.isInteger(n) && n >= 0;
 
-/** The verdict, from the report alone -- so a stub report is judged by the same rule. */
+/**
+ * The verdict, from the report alone -- so a stub report is judged by the same rule. A report
+ * that names no mood, or carries no expected room set, measured less than a run must measure:
+ * a run in no mood proves nothing about either, and a door judged against its own room list
+ * cannot tell a regression from a clean run.
+ */
 export function judge(report) {
   const reasons = [];
+  if (report.mood === undefined) reasons.push("no mood named: a run in no mood measured neither");
+  if (!isCount(report.expected) || !Array.isArray(report.missingFromDoor) || !Array.isArray(report.unexpectedFromDoor)) {
+    reasons.push("no expected room set: the door's room list was judged against itself");
+  }
   if (!isCount(report.openable) || report.openable === 0) reasons.push(`openable=${report.openable}: nothing was checked`);
   if (!isCount(report.opened) || report.opened !== report.openable) reasons.push(`opened=${report.opened} of openable=${report.openable}`);
   if (!isCount(report.countedErrors) || report.countedErrors !== 0) reasons.push(`countedErrors=${report.countedErrors}`);
@@ -480,7 +520,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       log(`smoke: WARN slow-settle ${report.slowSettle.map((r) => `${r.id}=${r.settleMs}ms`).join(",")} (quiet after ${SLOW_SETTLE_MS} ms, inside the ${SETTLE_CAP_MS} ms cap)`);
     }
     // The page's own URL carries the token in its fragment, so a page error can print it.
-    for (const e of errors.slice(0, 20)) log(`  [${e.room}] ${e.type}: ${redactSecrets(e.text, [opts.token])}`);
+    for (const e of errors.slice(0, 20)) log(errorLine(e, [opts.token]));
     return report;
   });
 }
@@ -498,7 +538,7 @@ export async function runProbe(file, log = (line) => process.stdout.write(line +
     // The planted page logs synchronously and throws on a 50 ms timer: wait for the first error,
     // then give the second one a bounded chance to arrive so both paths are reported.
     if (await until(() => errors.length > 0, 8000)) await until(() => errors.length > 1, 2000);
-    for (const e of errors) log(`  [probe] ${e.type}: ${e.text}`);
+    for (const e of errors) log(errorLine(e, []));
     log(`probe: errors=${errors.length} chrome=${found.path}`);
     return errors.length;
   });
@@ -506,17 +546,17 @@ export async function runProbe(file, log = (line) => process.stdout.write(line +
 
 async function main(argv) {
   let opts;
-  try { opts = parseArgs(argv); } catch (e) { console.error(`smoke: ${e.message}`); return 2; }
+  try { opts = parseArgs(argv); } catch (e) { console.error(`smoke: ${oneLine(e.message)}`); return 2; }
   try {
     if (opts.probeFile !== null) return (await runProbe(opts.probeFile)) > 0 ? 1 : 0;
-    const report = await runSmoke(opts);
+    const report = await runSmoke({ ...opts, expected: expectedOpenable() });
     for (const line of summaryLines(report)) console.log(line);
     console.log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined })}`);
     const verdict = judge(report);
     if (!verdict.ok) console.log(`smoke: FAIL -- ${verdict.reasons.join("; ")}`);
     return verdict.ok ? 0 : 1;
   } catch (e) {
-    console.error(`smoke: ${e instanceof SetupError ? "" : "unexpected: "}${e.message}`);
+    console.error(`smoke: ${e instanceof SetupError ? "" : "unexpected: "}${oneLine(e.message)}`);
     return 2;
   }
 }
