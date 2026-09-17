@@ -235,7 +235,7 @@ list_distribution() {
       || { echo "mood=$mood: verb-pending cards per room read '$vpRooms', the lists name '$vpRoomsExpected'"; false; }
     # The shipped rings' module rooms open with the contract's frozen sentence as their heading: at least the
     # six command and eight kernel modules were checked and none missed (a blank room is not an opened one).
-    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command,kernel checked=(1[4-9]|[2-9][0-9]|[1-9][0-9][0-9]+) miss=0\$" \
+    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command,kernel,factory checked=(19|[2-9][0-9]|[1-9][0-9][0-9]+) miss=0\$" \
       || { echo "heading check missing, too few checked, or a miss for mood=$mood (harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done

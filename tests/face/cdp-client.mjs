@@ -549,7 +549,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   // the served sentence, entities undone; a blank or wrong heading is a miss the verdict refuses.
   const hasHeading = typeof smoke.headingCheck === "function" && typeof smoke.headingLine === "function";
   check("the smoke exports the heading check and line, and names every ring shipped so far",
-    hasHeading && Array.isArray(smoke.SENTENCE_RINGS) && smoke.SENTENCE_RINGS.includes("command") && smoke.SENTENCE_RINGS.includes("kernel"),
+    hasHeading && Array.isArray(smoke.SENTENCE_RINGS) && ["command", "kernel", "factory"].every((r) => smoke.SENTENCE_RINGS.includes(r)),
     JSON.stringify(smoke.SENTENCE_RINGS));
   if (hasHeading) {
     const served = { id: "inbox", ring: "command", sentence: "A machine may raise it. Only you &amp; nobody else may decide it." };
@@ -572,7 +572,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     check("a NOT SERVED count that could not be read prints unread, never zero",
       smoke.notServedLine({ mood: "dark", notServed: { panels: null, rooms: [] } }) === "smoke: not-served mood=dark panels=unread rooms=none");
     check("the heading line counts what was checked and what missed",
-      smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }) === "smoke: heading mood=dark rings=command,kernel checked=6 miss=0", smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }));
+      smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }) === "smoke: heading mood=dark rings=command,kernel,factory checked=6 miss=0", smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }));
   }
 
   // The attack on the mood verdict (face v2 Phase 01).

@@ -436,6 +436,9 @@ load 'test_helper'
              "NOT SERVED LIST not-served-kernel.md: the list names exactly what the folds render, both ways" \
              "NOT SERVED LIST not-served-kernel.md: every row grep counts parses here too" \
              "VERBS PENDING LIST verbs-pending-kernel.md: the list names exactly what the folds render, both ways" \
+             "SHIPPED RING factory: its module folders are modules-v2.json's ids for the ring" \
+             "NOT SERVED LIST not-served-factory.md: the list names exactly what the folds render, both ways" \
+             "VERBS PENDING LIST verbs-pending-factory.md: the list names exactly what the folds render, both ways" \
              "F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it" \
              "F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }

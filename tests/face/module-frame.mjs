@@ -461,7 +461,7 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
 }
 
 // ── shipped rings (face v2 Phase 03): a ring listed here is PORTED, and its NOT SERVED list is derived ──
-const SHIPPED_RINGS = ["command", "kernel"];
+const SHIPPED_RINGS = ["command", "kernel", "factory"];
 {
   const contract = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "modules-v2.json"), "utf8"));
   const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
