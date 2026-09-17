@@ -338,6 +338,16 @@ export function judge(report) {
   return { ok: reasons.length === 0, reasons };
 }
 
+/**
+ * What drew each room that opened (face v2 Phase 02, ADR-1321): a module, or the generic module.
+ * Read off `section[data-room]`'s `data-render`; a room that opened with neither value is UNMARKED,
+ * which the bats verdict fails -- a room nobody can account for is not a rendered room.
+ */
+export function renderLine(report) {
+  const r = report.render ?? { module: [], generic: [], unmarked: [] };
+  return `smoke: render mood=${report.mood ?? "unstated"} module=${r.module.length} generic=${r.generic.length} unmarked=${r.unmarked.length} generic-rooms=${r.generic.join(",") || "none"}`;
+}
+
 export function summaryLines(report) {
   return [
     `smoke: opened=${report.opened} openable=${report.openable} errors=${report.countedErrors} excluded-errors=${report.excludedErrors} unsettled=${report.unsettled.length} expected=${report.expected ?? "not-given"} not-opened=${report.notOpened.join(",") || "none"}`
@@ -472,6 +482,11 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
           const cls = await page.send("Runtime.evaluate", { expression: "document.documentElement.className", returnByValue: true });
           room.htmlClass = typeof cls.result?.value === "string" ? cls.result.value : null;
           room.moodMiss = !moodHolds(room.htmlClass, mood);
+          const drawn = await page.send("Runtime.evaluate", {
+            expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.getAttribute("data-render") : null; })()`,
+            returnByValue: true,
+          });
+          room.render = typeof drawn.result?.value === "string" ? drawn.result.value : null;
         }
       } catch (e) {
         // This room's finding, never the end of the evidence: it is not opened or not settled,
@@ -509,6 +524,11 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       // A room that opened but whose class list was never read (a CDP error after it settled) is a
       // miss too: an unmeasured mood is not a held one.
       moodMiss: rooms.filter((r) => r.opened && r.moodMiss !== false).map((r) => ({ id: r.id, htmlClass: r.htmlClass ?? null })),
+      render: {
+        module: rooms.filter((r) => r.opened && r.render === "module").map((r) => r.id),
+        generic: rooms.filter((r) => r.opened && r.render === "generic").map((r) => r.id),
+        unmarked: rooms.filter((r) => r.opened && r.render !== "module" && r.render !== "generic").map((r) => r.id),
+      },
       errors: errors.slice(0, 50),
     };
     if (Array.isArray(opts.expected)) {

@@ -4,12 +4,15 @@
   "requires": [
     "core"
   ],
-  "commands": [],
+  "commands": [
+    ".claude/commands/arc-face-module.md"
+  ],
   "agents": [],
   "scripts": [
     ".claude/scripts/hq/arc-brief.mjs",
     ".claude/scripts/hq/arc-dash.mjs",
     ".claude/scripts/hq/arc-face.mjs",
+    ".claude/scripts/hq/face-module.mjs",
     ".claude/scripts/hq/face-modules-contract.mjs",
     ".claude/scripts/hq/arc-event.mjs",
     ".claude/scripts/hq/arc-event.sh",

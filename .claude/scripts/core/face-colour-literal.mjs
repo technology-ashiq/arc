@@ -28,11 +28,13 @@
 // What it does NOT see, declared: CSS named colours other than white and black (red, teal, ...),
 // which are ordinary English words in a room's copy; system colours (Canvas, CanvasText); colours
 // built at runtime from numbers or by string concatenation; and anything outside its roots --
-// today that includes the v1 renderers under face/src/rooms and face/src/shell, which Phase 03
-// replaces with modules under face/src/modules.
+// today that is the v1 renderers under face/src/rooms, which Phase 03 replaces with modules, and
+// the unmounted face stage under face/src/face, whose particle palette joins a root when a room
+// draws the stage again. The v0.7 shell ported in Phase 02 lives under face/src/shell and
+// face/src/App.tsx, and both are read.
 //
-// Usage: face-colour-literal.mjs [--root PATH]...  (default: face/src/ui, which must exist, and
-//        face/src/modules, which Phase 02 creates and which is reported absent until then)
+// Usage: face-colour-literal.mjs [--root PATH]...  (default: face/src/ui, face/src/modules,
+//        face/src/shell and face/src/App.tsx, every one of which must exist)
 // Exit:  0 scanned more than zero files and found nothing · 1 a finding, or nothing scanned
 //        2 could not run (bad argument, a root given twice or inside another, unreadable root)
 import { readdirSync, readFileSync, lstatSync, realpathSync } from "node:fs";
@@ -41,9 +43,9 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
-export const DEFAULT_ROOTS = ["face/src/ui", "face/src/modules"];
+export const DEFAULT_ROOTS = ["face/src/ui", "face/src/modules", "face/src/shell", "face/src/App.tsx"];
 /** A default root that must exist: a renamed or re-cased folder is a finding, not a clean tree. */
-export const REQUIRED_DEFAULT_ROOTS = ["face/src/ui"];
+export const REQUIRED_DEFAULT_ROOTS = ["face/src/ui", "face/src/modules", "face/src/shell", "face/src/App.tsx"];
 
 // Letters and digits only: `_` and `$` are separators here, because Tailwind reads `_` as a space
 // inside an arbitrary value and a literal assembled that way is still a literal.

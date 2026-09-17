@@ -18,7 +18,7 @@
 //
 // Exit: 0 all covered | 1 a gap (named) | 2 the contract or the tree could not be read.
 
-import { readFileSync, existsSync, readdirSync, statSync, realpathSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync, lstatSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -349,11 +349,147 @@ export function treePlannedRooms(repo) {
   } catch (e) { return { unreadable: `planned-rooms.json did not parse: ${e.message}`, names: [] }; }
 }
 
+// ---------- the module half (face v2 Phase 02, ADR-1321, ADR-1327) ----------
+//
+// Rooms are served (ADR-1306); modules ATTACH to them. A module folder is a list of ids too, so it
+// is reconciled with the served registry both ways: a folder whose id /api/rooms does not serve is
+// an ORPHAN and FAILs, and a served room with no folder is REPORTED by name -- it draws through the
+// generic module (REQ-04 turns that report into a FAIL in Phase 05). face/src/lib/registry.mjs asks
+// the same question in the browser; tests/face/module-frame.mjs holds the two answers EQUAL on the
+// real tree, so the gate and the page cannot disagree about which rooms are generic.
+//
+// The four v0.7 rooms arc does not serve (ADR-1327) may keep a module only by NAME: a row in
+// initiatives/face/contracts/module-exemptions.json naming the id and ADR-1327. The ids a row may
+// name are DERIVED from modules-v2.json's `extra` class -- never listed here -- so a fifth, unnamed
+// exemption has nothing to point at and FAILs. The list is EMPTY until the factory and company rings
+// add their rows.
+
+const MODULE_EXEMPTION_ADR = "ADR-1327";
+const MODULE_NAME = /^[a-z][a-z0-9-]*$/;
+
+/**
+ * The module tree, the served registry it attaches to, the ADR-1327 extras and the exemption rows.
+ * Unreadable -- never empty -- when any of the four sources cannot be read.
+ * @param {string} repo
+ */
+export function treeModules(repo) {
+  const contracts = join(repo, "initiatives", "face", "contracts");
+  const readJson = (name) => {
+    const p = join(contracts, name);
+    if (!existsSync(p)) return { error: `${name} is not on this tree` };
+    try { return { value: JSON.parse(readFileSync(p, "utf8")) }; }
+    catch (e) { return { error: `${name} did not parse: ${e.message}` }; }
+  };
+  const reg = readJson("rooms.generated.json");
+  if (reg.error) return { unreadable: `the served registry (what /api/rooms serves) could not be read -- ${reg.error}` };
+  if (!Array.isArray(reg.value?.rooms) || !Array.isArray(reg.value?.rings)) return { unreadable: "rooms.generated.json carries no rooms and rings lists" };
+  const served = [];
+  for (const r of reg.value.rooms) {
+    if (!r || typeof r.id !== "string" || typeof r.ring !== "string") return { unreadable: "rooms.generated.json carries a room with no id or ring" };
+    served.push({ id: r.id, ring: r.ring, template: r.template === true || r.status === "template" });
+  }
+  const contract = readJson("modules-v2.json");
+  if (contract.error) return { unreadable: `the extra rooms could not be read -- ${contract.error}` };
+  if (!Array.isArray(contract.value?.modules)) return { unreadable: "modules-v2.json carries no modules list" };
+  const extras = contract.value.modules.filter((m) => m && m.class === "extra").map((m) => ({ id: m.id, ring: m.ring }));
+  const ex = readJson("module-exemptions.json");
+  if (ex.error) return { unreadable: `the ADR-1327 exemption list could not be read -- ${ex.error}` };
+  if (!Array.isArray(ex.value?.exemptions)) return { unreadable: "module-exemptions.json carries no exemptions list" };
+
+  const root = join(repo, "face", "src", "modules");
+  let rootStat;
+  try { rootStat = lstatSync(root); } catch { return { unreadable: "face/src/modules is not on this tree" }; }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) return { unreadable: "face/src/modules is not a directory" };
+  const folders = [];
+  const strays = [];
+  for (const ring of readdirSync(root).sort()) {
+    const rp = join(root, ring);
+    const rs = lstatSync(rp);
+    if (rs.isSymbolicLink() || !rs.isDirectory()) { strays.push({ path: ring, why: "is not a ring folder" }); continue; }
+    for (const id of readdirSync(rp).sort()) {
+      const ds = lstatSync(join(rp, id));
+      if (ds.isSymbolicLink() || !ds.isDirectory()) { strays.push({ path: `${ring}/${id}`, why: "is not a module folder" }); continue; }
+      folders.push({ ring, id });
+    }
+  }
+  return { rings: reg.value.rings, served, extras, exemptions: ex.value.exemptions, folders, strays };
+}
+
+/**
+ * The module half's findings, and what it REPORTS: the generic rooms, by id, in served order.
+ * @param {ReturnType<typeof treeModules> | undefined} tree
+ */
+export function moduleFindings(tree) {
+  const findings = [];
+  if (!tree || tree.unreadable) {
+    findings.push(`[module] could not be read from the tree -- ${tree ? tree.unreadable : "no module tree was gathered"}. A source that cannot be read is not a source with nothing in it`);
+    return { findings, generic: [], folders: 0, served: 0, orphans: 0, exemptions: 0 };
+  }
+  const served = new Map(tree.served.map((r) => [r.id, r]));
+  const extras = new Map(tree.extras.map((m) => [m.id, m]));
+  const rings = new Set(tree.rings);
+
+  for (const s of tree.strays) findings.push(`[module] face/src/modules/${s.path} ${s.why} -- only RING/ID folders live under the module root`);
+
+  // The exemption rows first: which extras may keep a folder.
+  const exempt = new Set();
+  const seen = new Set();
+  for (const row of tree.exemptions) {
+    if (!row || typeof row !== "object" || typeof row.id !== "string" || !row.id) { findings.push(`[module-exemption] a row with no id -- an exemption names the room it exempts (${MODULE_EXEMPTION_ADR})`); continue; }
+    if (seen.has(row.id)) { findings.push(`[module-exemption] "${row.id}" is listed twice`); continue; }
+    seen.add(row.id);
+    let ok = true;
+    if (row.adr !== MODULE_EXEMPTION_ADR) { findings.push(`[module-exemption] "${row.id}" cites ${JSON.stringify(row.adr ?? null)}, not ${MODULE_EXEMPTION_ADR}`); ok = false; }
+    if (served.has(row.id)) { findings.push(`[module-exemption] "${row.id}" is served by /api/rooms, so it needs no exemption`); ok = false; }
+    else if (!extras.has(row.id)) { findings.push(`[module-exemption] "${row.id}" is not one of the ${MODULE_EXEMPTION_ADR} extra rooms (${[...extras.keys()].join(", ")}) -- a fifth, unnamed exemption`); ok = false; }
+    if (!tree.folders.some((f) => f.id === row.id)) { findings.push(`[module-exemption] "${row.id}" exempts a module folder that does not exist`); ok = false; }
+    if (ok) exempt.add(row.id);
+  }
+
+  const count = new Map();
+  for (const f of tree.folders) count.set(f.id, (count.get(f.id) || 0) + 1);
+  const attached = new Set();
+  let orphans = 0;
+  const reportedDupes = new Set();
+  for (const f of tree.folders) {
+    const where = `face/src/modules/${f.ring}/${f.id}`;
+    if (!MODULE_NAME.test(f.ring) || !MODULE_NAME.test(f.id)) { findings.push(`[module] ${where} is not a kebab-case RING/ID folder`); continue; }
+    if (count.get(f.id) > 1) {
+      if (!reportedDupes.has(f.id)) {
+        reportedDupes.add(f.id);
+        findings.push(`[module] "${f.id}" has module folders in ${count.get(f.id)} rings (${tree.folders.filter((x) => x.id === f.id).map((x) => x.ring).join(", ")}) -- a room draws through one module`);
+      }
+      continue;
+    }
+    const room = served.get(f.id);
+    if (!room) {
+      if (exempt.has(f.id)) {
+        const extra = extras.get(f.id);
+        if (extra && extra.ring !== f.ring) findings.push(`[module] ${where}: the ${MODULE_EXEMPTION_ADR} extra "${f.id}" belongs to ring "${extra.ring}"`);
+        continue;
+      }
+      orphans++;
+      findings.push(`[module] ${where} is a module folder for "${f.id}", which /api/rooms does not serve and no ${MODULE_EXEMPTION_ADR} exemption names -- an orphan module (ADR-1321)`);
+      continue;
+    }
+    if (room.template) { findings.push(`[module] ${where}: "${f.id}" is the lane-room TEMPLATE, not a room -- it has no module`); continue; }
+    if (room.ring !== f.ring) { findings.push(`[module] ${where}: /api/rooms serves "${f.id}" in ring "${room.ring}" -- the served ring wins (ADR-1306)`); continue; }
+    if (!rings.has(f.ring)) { findings.push(`[module] ${where}: "${f.ring}" is not a ring /api/rooms serves`); continue; }
+    attached.add(f.id);
+  }
+  const openable = tree.served.filter((r) => !r.template);
+  const generic = openable.filter((r) => !attached.has(r.id)).map((r) => r.id);
+  return { findings, generic, folders: tree.folders.length, served: openable.length, orphans, exemptions: tree.exemptions.length };
+}
+
 // ---------- the check (pure: tree facts + contract -> findings) ----------
 export function coverageFindings({ kinds, lanes, commands, agents, products, rules, processes, contract,
   // ADR-1317: seven inventories derived from the WORLD rather than from the contract.
-  gates, jobs, ventures, adrBands, plans, capabilities, plannedRooms, ci, hooks, lints }) {
+  gates, jobs, ventures, adrBands, plans, capabilities, plannedRooms, ci, hooks, lints,
+  // face v2 Phase 02: module folders reconciled with the served registry (ADR-1321, ADR-1327).
+  modules }) {
   const findings = [];
+  findings.push(...moduleFindings(modules).findings);
   const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
   // The room ids are the vocabulary everything else points at, so they are validated FIRST
@@ -648,6 +784,7 @@ async function gather(repo) {
     // than eight hand-written lines nothing can see. A mutant that disconnected any one of
     // them printed "0 plans ... all covered" past every control this gate had.
     ...Object.fromEntries(await Promise.all(WORLD_READERS.map(async ([key, read]) => [key, await read(repo)]))),
+    modules: treeModules(repo),
   };
 }
 
@@ -657,6 +794,11 @@ async function run(repoOrData, quiet = false) {
   const { findings, warns } = coverageFindings(data);
   if (quiet) return findings.length ? 1 : 0;
   for (const w of warns) process.stderr.write(`WARN  ${w}\n`);
+  // What the module half REPORTS, by name, whether or not anything else failed (ADR-1321).
+  const half = moduleFindings(data.modules);
+  if (!data.modules?.unreadable) {
+    process.stdout.write(`face-coverage: module half folders=${half.folders} served=${half.served} generic=${half.generic.length} orphans=${half.orphans} exemptions=${half.exemptions} generic-rooms=${half.generic.join(",") || "none"} -- a served room with no module renders through the generic module (ADR-1321)\n`);
+  }
   if (findings.length) {
     for (const f of findings) process.stderr.write(`FAIL  ${f}\n`);
     process.stderr.write(`face-coverage: ${findings.length} coverage gap(s) -- every part of arc needs a home (ADR-1311)\n`);
@@ -739,6 +881,26 @@ async function selftest(repo) {
       [`${label} row in a ghost room`, withMapRoom(clean, contractKey, "ghost-room-xyz"), "ghost-room-xyz"],
       [`${label} source unreadable`, withUnreadable(clean, treeKey), "not a source with nothing in it"],
     ]),
+
+    // ---- the module half (face v2 Phase 02, ADR-1321, ADR-1327) --------------------------
+    //
+    // Each arm mutates what treeModules RETURNED, the way the arms above mutate gather's output;
+    // the wiring arm below crosses gather itself. The one PASS arm carries its own control: the
+    // same extra folder is named as an orphan without its row, so the pass cannot be a gate that
+    // stopped reading.
+    ["an orphan module folder", withModuleFolder(clean, firstServedRing(clean), "ghost-module"), "ghost-module"],
+    ["a module folder in the wrong ring", withMisplacedFolder(clean), "the served ring wins"],
+    ["a module folder for the template", withTemplateFolder(clean), "lane-room TEMPLATE"],
+    ["an ADR-1327 extra exempted by name passes", withExemptedExtra(clean, "ADR-1327"), null, (findings) => {
+      const extra = clean.modules?.extras?.[0];
+      if (!extra) return false;
+      const bare = coverageFindings(withModuleFolder(clean, extra.ring, extra.id)).findings.some((f) => f.includes(`"${extra.id}"`) && f.includes("orphan"));
+      return bare && !findings.some((f) => f.includes(`"${extra.id}"`));
+    }],
+    ["an exemption for a room that is not an extra", withExemptionRow(withModuleFolder(clean, firstServedRing(clean), "ghost-extra"), { id: "ghost-extra", adr: "ADR-1327" }), "a fifth, unnamed exemption"],
+    ["an exemption citing another ADR", withExemptedExtra(clean, "ADR-9999"), "not ADR-1327"],
+    ["an exemption for a served room", withExemptionRow(clean, { id: clean.modules?.served?.find((r) => !r.template)?.id ?? "?", adr: "ADR-1327" }), "needs no exemption"],
+    ["an unreadable module tree", { ...clean, modules: { unreadable: "the selftest made it unreadable" } }, "[module] could not be read"],
   ];
 
   let allArmsWiring = true;
@@ -769,10 +931,21 @@ async function selftest(repo) {
     if (!populated) allArmsWiring = false;
     lines.push(`wiring ${key.padEnd(26)} reads something: ${populated ? "PASS" : "FAIL (read nothing on a tree that has some)"}`);
   }
+  // The module reader crosses gather the same way (face v2 Phase 02): what gather produced must be
+  // what treeModules reads directly, and on this tree it must have read folders.
+  {
+    const direct = treeModules(repo);
+    const same = JSON.stringify(clean.modules) === JSON.stringify(direct);
+    if (!same) allArmsWiring = false;
+    lines.push(`wiring ${"modules".padEnd(26)} gather==reader: ${same ? "PASS" : "FAIL (gather and treeModules disagree)"}`);
+    const populated = Boolean(direct?.unreadable) || (direct?.folders?.length ?? 0) > 0;
+    if (!populated) allArmsWiring = false;
+    lines.push(`wiring ${"modules".padEnd(26)} reads something: ${populated ? "PASS" : "FAIL (read no module folder on a tree that has some)"}`);
+  }
   let allArms = allArmsWiring;
-  for (const [label, mutant, needle] of arms) {
+  for (const [label, mutant, needle, judgeArm] of arms) {
     const { findings } = coverageFindings(mutant);
-    const named = findings.some((f) => f.includes(needle));
+    const named = judgeArm ? judgeArm(findings) : findings.some((f) => f.includes(needle));
     if (!named) allArms = false;
     lines.push(`mutant ${label.padEnd(24)} named: ${named ? "PASS" : "FAIL"}`);
   }
@@ -816,6 +989,7 @@ async function selftest(repo) {
     // And the class that has no equivalent above: a source that could not be read at all.
     ["an unreadable inventory source", withUnreadable(clean, "gates")],
     ["a contract inventory nothing derives", withUnderivedInventory(clean)],
+    ["orphan module folder", withModuleFolder(clean, firstServedRing(clean), "ghost-module")],
   ];
   let allExits = true;
   for (const [label, mutant] of exitArms) {
@@ -876,6 +1050,40 @@ function withUnderivedInventory(data) {
   const contract = JSON.parse(JSON.stringify(data.contract));
   contract.somethingNobodyReads = { map: { alpha: "toolbelt" } };
   return { ...data, contract };
+}
+
+/** The first ring the served registry declares, or a placeholder the arm will then fail on honestly. */
+function firstServedRing(data) {
+  return data.modules?.rings?.[0] ?? "command";
+}
+/** A module folder added to the tree the gather read. */
+function withModuleFolder(data, ring, id) {
+  const m = data.modules || {};
+  return { ...data, modules: { ...m, folders: [...(m.folders || []), { ring, id }] } };
+}
+/** An exemption row added to module-exemptions.json as gathered. */
+function withExemptionRow(data, row) {
+  const m = data.modules || {};
+  return { ...data, modules: { ...m, exemptions: [...(m.exemptions || []), row] } };
+}
+/** The first ADR-1327 extra given a folder in its own ring AND a row citing `adr`. */
+function withExemptedExtra(data, adr) {
+  const extra = data.modules?.extras?.[0];
+  if (!extra) return data;
+  return withExemptionRow(withModuleFolder(data, extra.ring, extra.id), { id: extra.id, adr });
+}
+/** The first real module folder moved to another served ring. */
+function withMisplacedFolder(data) {
+  const m = data.modules || {};
+  const first = m.folders?.[0];
+  const other = (m.rings || []).find((r) => first && r !== first.ring);
+  if (!first || !other) return data;
+  return { ...data, modules: { ...m, folders: [{ ring: other, id: first.id }, ...m.folders.slice(1)] } };
+}
+/** A module folder for the lane-room template, in its served ring. */
+function withTemplateFolder(data) {
+  const tpl = data.modules?.served?.find((r) => r.template);
+  return tpl ? withModuleFolder(data, tpl.ring, tpl.id) : data;
 }
 
 function withMapRoom(data, inv, room) {

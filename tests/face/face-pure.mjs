@@ -306,7 +306,7 @@ try {
   }
   {
     const t = tree("binary");
-    writeModule(t.root, "command", "alpha", { "View.tsx": "export default function View() {\n  return <p>a b</p>\n}\n" });
+    writeModule(t.root, "command", "alpha", { "View.tsx": "export default function View() {\n  return <p>a" + String.fromCharCode(0) + "b</p>\n}\n" });
     const r = lintTree(t);
     check("a NUL byte in a module file is a named finding, not a skipped file", kindsIn(r).includes("binary"), JSON.stringify(r.findings));
   }

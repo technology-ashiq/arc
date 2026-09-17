@@ -60,12 +60,17 @@ export const RING_LEDE = {
  *
  * A ring the registry does not use is omitted rather than rendered empty -- an empty ring
  * heading is the nav-shaped version of the empty-room lie.
+ *
+ * `order` is the ring order to read in. The shell hands in the SERVED registry's own `rings`
+ * (registry.mjs railGroups, face v2 Phase 02), so the rail follows /api/rooms and not this file's
+ * constant; the constant stays the default for the readers that predate it.
  * @param {Room[]} rooms
+ * @param {string[]} [order]
  * @returns {{ ring: string, lede: string, rooms: Room[] }[]}
  */
-export function byRing(rooms) {
+export function byRing(rooms, order = RING_ORDER) {
   const out = [];
-  for (const ring of RING_ORDER) {
+  for (const ring of order) {
     const inRing = rooms.filter((r) => r.ring === ring && !r.template);
     if (!inRing.length) continue;
     inRing.sort((a, b) => {
@@ -77,7 +82,9 @@ export function byRing(rooms) {
   // A room whose ring is not one of the five would vanish silently. Surface it instead:
   // the registry is generated, so this can only mean the contract grew a ring nobody taught
   // the shell about, and a missing room is exactly what this product exists not to have.
-  const known = new Set(RING_ORDER);
+  // The SAME order the loop above read, never the constant: a room in a ring the served order
+  // leaves out would otherwise be in neither list.
+  const known = new Set(order);
   const orphans = rooms.filter((r) => !r.template && !known.has(r.ring));
   if (orphans.length) out.push({ ring: "unplaced", lede: "rooms in a ring this shell does not know", rooms: orphans });
   return out;

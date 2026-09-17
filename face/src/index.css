@@ -44,6 +44,15 @@ html.hq * {
   font-variant-numeric: tabular-nums;
 }
 
+/* The rail scrolls without a scrollbar, v0.7's (face v2 Phase 02). Scoped under html.hq so it
+   outranks the quiet-scrollbar rule above instead of losing to it. */
+html.hq .rail-scroll {
+  scrollbar-width: none;
+}
+html.hq .rail-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* Room entry, v0.7's. fill-mode backwards, not both: a retained transform would make the room
    the containing block for its fixed drawers. */
 @keyframes room-enter {

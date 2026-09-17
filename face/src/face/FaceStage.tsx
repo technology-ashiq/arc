@@ -109,7 +109,15 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
     const camera = new THREE.PerspectiveCamera(CAMERA.fov, width / height, CAMERA.near, CAMERA.far)
     camera.position.z = CAMERA.z
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    // The WebGL guard (face v2 Phase 02, debt-ledger): where WebGL is unavailable the renderer's
+    // constructor throws, and a throw here took the room around the stage down with it. The stage
+    // is decoration; with no WebGL it draws nothing and the room stands.
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    } catch {
+      return
+    }
     renderer.setSize(width, height)
     container.appendChild(renderer.domElement)
 
