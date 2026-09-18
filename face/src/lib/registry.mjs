@@ -38,8 +38,10 @@ const KEY = /^\.\/modules\/([^/\\?#]+)\/([^/\\?#]+)\/(module\.mjs|fold\.mjs|ops\
  * @property {Record<string, Record<string, string>> | null | undefined} inventories
  * @property {Record<string, string> | undefined} laneMap
  * @property {Record<string, string>} [picks]  what the View picked (a lane, a filter, an open receipt), a copy
+ * @property {ModuleManifest} [manifest]  the manifest the host checks this module's reads against, handed to
+ *   the fold so a shared fold refuses a read the manifest cannot make instead of planning one the host drops
  *
- * @typedef {Omit<FoldContext, "picks"> & { door: import("./door.mjs").Door, onOpen: (id: string) => void }} ModuleContext
+ * @typedef {Omit<FoldContext, "picks" | "manifest"> & { door: import("./door.mjs").Door, onOpen: (id: string) => void }} ModuleContext
  *   what the shell hands the frame for a room
  *
  * @typedef {ModuleContext & { picks: Record<string, string>, onPick: (key: string, value: string) => void,
@@ -273,16 +275,21 @@ export function asOfReaches(room, manifest) {
 
 /**
  * What fold() is handed: the context's data, and never the door or a handler -- a fold that could
- * call the door would not be a fold.
- * @param {ModuleContext} ctx
+ * call the door would not be a fold. The manifest is the one the host checks every read against, so a
+ * shared fold judges a read by the same rule and the same routes the host will (money ring, the factory
+ * ring's debt row).
+ * @param {ModuleContext} ctx @param {Record<string, string>} [picks] @param {ModuleManifest} [manifest]
  * @returns {FoldContext}
  */
-export function foldContext(ctx, picks = {}) {
-  return {
+export function foldContext(ctx, picks = {}, manifest = undefined) {
+  /** @type {FoldContext} */
+  const out = {
     room: ctx.room, rooms: ctx.rooms, mode: ctx.mode, token: ctx.token,
     needs: ctx.needs, needsUnplaced: ctx.needsUnplaced, inventories: ctx.inventories, laneMap: ctx.laneMap,
     picks: { ...picks },
   };
+  if (manifest !== undefined) out.manifest = manifest;
+  return out;
 }
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -483,7 +490,7 @@ export function payloadOf(payloads, read) {
  * @param {AttachedModule} module @param {Record<string, Payload>} loaded @param {ModuleContext} ctx @param {Record<string, string>} picks
  */
 export function foldModule(module, loaded, ctx, picks) {
-  return module.fold(payloadsFor(module.manifest, loaded), foldContext(ctx, picks));
+  return module.fold(payloadsFor(module.manifest, loaded), foldContext(ctx, picks, module.manifest));
 }
 
 /**
@@ -630,6 +637,17 @@ export function verbPending(verb, sentence) {
 }
 
 /**
+ * A flow a PLANNED room rehearses (ADR-1328): v0.7 drew it as a working form, the lane is not born, so the
+ * face draws the flow and says REHEARSAL -- it is never a work-door verb, because nothing here will ever send
+ * it anywhere until `/arc-kickoff --lane` births the lane and its manifest takes over.
+ * @param {string} verb  the flow, as the owner would run it  @param {string} sentence  what it rehearses, and why it writes nothing
+ * @returns {{ isRehearsal: true, verb: string, sentence: string }}
+ */
+export function rehearsal(verb, sentence) {
+  return Object.freeze({ isRehearsal: true, verb: String(verb), sentence: String(sentence) });
+}
+
+/**
  * Every marked entry of one shape in a fold's output, nested anywhere, in document order. The two lists
  * this shell derives -- NOT SERVED panels and verbs pending the work door -- are the same walk over the
  * same rules: data properties only (a getter is never called), Maps and Sets by value, a depth cap, and
@@ -667,6 +685,16 @@ function markedIn(folded, mark, fields) {
  */
 export function verbPendingOf(folded) {
   return /** @type {{ isVerbPending: true, verb: string, sentence: string }[]} */ (/** @type {unknown} */ (markedIn(folded, "isVerbPending", ["verb", "sentence"])));
+}
+
+/**
+ * Every flow a fold marks as a planned room's REHEARSAL, nested anywhere, in document order -- the list the
+ * REHEARSAL evidence file is held equal to, by the same walk as the other two.
+ * @param {unknown} folded
+ * @returns {{ isRehearsal: true, verb: string, sentence: string }[]}
+ */
+export function rehearsalOf(folded) {
+  return /** @type {{ isRehearsal: true, verb: string, sentence: string }[]} */ (/** @type {unknown} */ (markedIn(folded, "isRehearsal", ["verb", "sentence"])));
 }
 
 /**

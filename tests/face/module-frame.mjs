@@ -276,7 +276,7 @@ const namedRooms = (text) => {
   // parts are excluded BY NAME, each for the reason that makes it true:
   const ROOM_OWNED = new Map([
     ["modules", "a module names its own room: that is what a module is"],
-    ["rooms", "the Cycle 15 renderers the carried modules mount, each naming its own room (Phase 03 deletes them)"],
+    ["rooms", "the generic and index renderers the generic module draws through (Phase 03 deleted the carried room renderers)"],
     ["face", "the unmounted face stage"],
     ["ui", "the kit's tone vocabulary shares words with room ids ('money' is a tone)"],
     ["lib/rooms.mjs", "the Cycle 15 room decisions, which name the rooms they decide for"],

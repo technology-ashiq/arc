@@ -23,12 +23,22 @@ export default function AsOf({
   onChange: (day: string | null) => void
 }) {
   const state = asOfState(asOf, today)
+  // The header has room for a few words, not a sentence: each note is short enough never to be cut by an
+  // ellipsis (the factory ring's shot review read "not this room — its numbers are …"), and the whole
+  // sentence rides on its title.
   const note = !supported
-    ? 'not this room — its numbers are not day-scoped'
+    ? 'not day-scoped here'
     : state.scrubbed && !state.replayIdentical
-      ? 'open day — a snapshot, not a replay'
+      ? 'open day · a snapshot'
       : state.scrubbed
-        ? 'sealed day — replays to the same bytes'
+        ? 'sealed day · exact replay'
+        : ''
+  const said = !supported
+    ? 'not this room: its numbers are not day-scoped, so there is no day to scrub to'
+    : state.scrubbed && !state.replayIdentical
+      ? 'an open day: a snapshot of what the spine holds so far, not a replay'
+      : state.scrubbed
+        ? 'a sealed day: it replays to the same bytes every time'
         : ''
   return (
     <span className="inline-flex items-center gap-2 text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>
@@ -67,7 +77,7 @@ export default function AsOf({
       ) : (
         <span className="text-[10.5px] uppercase tracking-[0.06em]" style={{ fontWeight: 600, color: 'var(--mode-live)' }}>live</span>
       )}
-      {note ? <span className="hidden xl:inline truncate max-w-[26ch]">{note}</span> : null}
+      {note ? <span className="hidden xl:inline whitespace-nowrap" title={said}>{note}</span> : null}
     </span>
   )
 }

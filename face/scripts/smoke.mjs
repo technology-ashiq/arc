@@ -170,6 +170,7 @@ export class NetworkWatch {
     this.lastChange = 0;
     this.events = 0;
     this.untrackedFinishes = 0;
+    this.largest = null;
   }
 
   /** A navigation was sent; its loaderId is not known yet. */
@@ -181,6 +182,19 @@ export class NetworkWatch {
     this.lastChange = now;
     this.events = 0;
     this.untrackedFinishes = 0;
+    this.largest = null;
+  }
+
+  /**
+   * The largest response this document received, by the bytes Chrome says it took off the wire -- the
+   * measurement the windows runner's socket-buffer error was never given (face v2 Phase 03 debt row): the
+   * door's lane route answers with every phase spec's text, and it is the first suspect.
+   * @param {{ url: string }} r @param {unknown} bytes
+   */
+  weigh(r, bytes) {
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n < 0) return;
+    if (this.largest === null || n > this.largest.bytes) this.largest = { url: r.url, bytes: n };
   }
 
   /** Page.navigate answered. */
@@ -191,7 +205,7 @@ export class NetworkWatch {
       if (this.loader === null || r.loaderId !== this.loader) continue;
       this.events++;
       if (r.finishedAt === undefined) { this.inflight.set(id, r); this.lastChange = Math.max(this.lastChange, now); }
-      else this.lastChange = Math.max(this.lastChange, r.finishedAt);
+      else { this.lastChange = Math.max(this.lastChange, r.finishedAt); this.weigh(r, r.bytes); }
     }
     this.early.clear();
   }
@@ -212,8 +226,11 @@ export class NetworkWatch {
     // Finished before its document was known: remembered, and it moves the clock only if begin()
     // adopts it -- the same rule a finish after begin() obeys.
     const held = this.early.get(p.requestId);
-    if (held) { held.finishedAt = now; return; }
-    if (!this.inflight.delete(p.requestId)) { this.untrackedFinishes++; return; }
+    if (held) { held.finishedAt = now; held.bytes = p.encodedDataLength; return; }
+    const r = this.inflight.get(p.requestId);
+    if (r === undefined) { this.untrackedFinishes++; return; }
+    this.inflight.delete(p.requestId);
+    this.weigh(r, p.encodedDataLength);
     this.lastChange = now;
     this.events++;
   }
@@ -320,6 +337,20 @@ export function expectedOpenable(repo = REPO) {
   return openableRooms(payload).openable;
 }
 
+/**
+ * How many planned rooms the CONTRACT names (ADR-1306, ADR-1328), read from the contract file, never from
+ * the door: the F3 check holds the page's planned rooms to this number, so a door that stopped serving one
+ * cannot shrink the bar it is measured against.
+ */
+export function expectedPlanned(repo = REPO) {
+  const file = join(repo, "initiatives", "face", "contracts", "rooms.generated.json");
+  let payload;
+  try { payload = JSON.parse(readFileSync(file, "utf8")); }
+  catch (e) { throw new SetupError(`cannot read the expected room set at ${file}: ${e.message}`); }
+  const rooms = payload && Array.isArray(payload.rooms) ? payload.rooms : [];
+  return rooms.filter((r) => r && r.status !== "template" && (r.planned === true || r.status === "planned")).length;
+}
+
 const isCount = (n) => Number.isInteger(n) && n >= 0;
 
 /**
@@ -381,6 +412,17 @@ export function judge(report) {
   // A count that could not be read is not a clean run: REQ-05's browser half rests on these two numbers.
   if (report.notServed && report.notServed.panels === null) reasons.push("the NOT SERVED panel count could not be read in every opened room");
   if (report.verbsPending && report.verbsPending.panels === null) reasons.push("the verb-pending card count could not be read in every opened room");
+  if (report.rehearsal && report.rehearsal.panels === null) reasons.push("the rehearsal card count could not be read in every opened room");
+  // F3 (ADR-1328): every planned room the contract names opened marked planned, and none of them drew LIVE.
+  if (report.planned) {
+    const p = report.planned;
+    if (!Array.isArray(p.rooms)) reasons.push("which rooms are planned could not be read in every opened room: the planned rooms could not be read");
+    else {
+      if (Number.isInteger(p.expected) && p.rooms.length !== p.expected) reasons.push(`planned rooms drawn ${p.rooms.length}, the contract names ${p.expected}`);
+      if (!Array.isArray(p.live)) reasons.push("whether a planned room drew LIVE could not be read");
+      else if (p.live.length) reasons.push(`a planned room wears LIVE: ${p.live.join(",")}`);
+    }
+  }
   if (report.headings && Array.isArray(report.headings.miss) && report.headings.miss.length)
     reasons.push(`heading miss: ${report.headings.miss.map((m) => `${m.id} showed ${JSON.stringify(m.got)} for ${JSON.stringify(m.expected)}`).join("; ")}`);
   return { ok: reasons.length === 0, reasons };
@@ -429,6 +471,58 @@ export function notServedLine(report) {
 export function verbsPendingLine(report) {
   const n = report.verbsPending ?? { panels: 0, rooms: [] };
   return `smoke: verbs-pending mood=${report.mood ?? "unstated"} cards=${n.panels === null ? "unread" : n.panels} rooms=${n.rooms.join(",") || "none"}`;
+}
+
+/**
+ * A planned room's REHEARSAL cards, per room (ADR-1328): its v0.7 flows, drawn and said to write nothing,
+ * counted where they are drawn and held against the derived list the same way the work-door cards are.
+ */
+export function rehearsalLine(report) {
+  const n = report.rehearsal ?? { panels: 0, rooms: [] };
+  return `smoke: rehearsal mood=${report.mood ?? "unstated"} cards=${n.panels === null ? "unread" : n.panels} rooms=${n.rooms.join(",") || "none"}`;
+}
+
+/**
+ * F3 where the owner sees it (Cycle 15 room sweep, ADR-1328): how many rooms opened marked planned, how many
+ * the CONTRACT names -- read from the contract file, never from the door under test -- and which of them
+ * drew the word LIVE. Cycle 15's trader wore `● LIVE` while its own lede said "planned, drawn dotted".
+ */
+export function plannedLine(report) {
+  const p = report.planned ?? { rooms: [], live: [], expected: null };
+  const rooms = Array.isArray(p.rooms) ? p.rooms : null;
+  return `smoke: planned mood=${report.mood ?? "unstated"} rooms=${rooms === null ? "unread" : rooms.length} expected=${Number.isInteger(p.expected) ? p.expected : "unread"} live=${Array.isArray(p.live) ? p.live.length : "unread"} planned-rooms=${rooms === null || rooms.length === 0 ? "none" : [...rooms].sort().join(",")}`;
+}
+
+/**
+ * The ONE error class the windows runner raises on its own, named and counted rather than silently skipped
+ * (face v2 Phase 03 debt row, measured first): Chrome's socket-buffer exhaustion, `net::ERR_NO_BUFFER_SPACE`,
+ * reported as a failed resource on the windows leg while every other number in the run is correct. It is the
+ * runner's only there, only as that exact network error, and never as an exception or a console call the
+ * page made: the same text on linux or macOS is the page's and is counted.
+ * @param {{ type?: string, text?: string }} e @param {string} platform
+ */
+export function runnerError(e, platform) {
+  if (platform !== "win32" || !e || (e.type !== "log" && e.type !== "console.error")) return false;
+  return RUNNER_ERROR.test(String(e.text ?? ""));
+}
+const RUNNER_ERROR = /(^|[^A-Z_])net::ERR_NO_BUFFER_SPACE\b/;
+
+/** The runner-class errors per room: counted on their own line, so they are never folded into a clean zero. */
+export function runnerLine(report) {
+  const list = Array.isArray(report.runner) ? report.runner : [];
+  /** @type {Map<string, number>} */
+  const per = new Map();
+  for (const e of list) per.set(String(e.room), (per.get(String(e.room)) ?? 0) + 1);
+  const rooms = [...per.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).map(([id, n]) => `${id}:${n}`);
+  return `smoke: runner-errors mood=${report.mood ?? "unstated"} count=${list.length} rooms=${rooms.join(",") || "none"}`;
+}
+
+/** The largest response each run's rooms received, by room -- the measurement behind the runner class above. */
+export function largestBodyLine(report) {
+  const b = report.largestBody ?? null;
+  return b === null
+    ? `smoke: largest-body mood=${report.mood ?? "unstated"} room=none bytes=0 path=none`
+    : `smoke: largest-body mood=${report.mood ?? "unstated"} room=${b.room} bytes=${b.bytes} path=${b.url}`;
 }
 
 export function summaryLines(report) {
@@ -619,6 +713,19 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
             returnByValue: true,
           });
           room.verbsPending = Number.isInteger(verbs.result?.value) ? verbs.result.value : null;
+          // ADR-1328: a planned room's REHEARSAL cards, whether the room is marked planned, and -- in a planned
+          // room only -- how many times it drew LIVE as a word of its own (F3). Read from innerText, so a chip
+          // uppercased by CSS is read as the owner sees it; "paper-live" is a word with a hyphen, not a pill.
+          const plan = await page.send("Runtime.evaluate", {
+            expression: `(function () { var s = document.querySelector("section[data-room]"); if (!s) return null; var planned = s.querySelector("[data-planned]") !== null; var text = planned ? String(s.innerText || "") : ""; var live = (text.match(/(^|[^A-Za-z0-9_-])LIVE(?![A-Za-z0-9_-])/g) || []).length; return JSON.stringify({ rehearsal: s.querySelectorAll("[data-rehearsal]").length, planned: planned, live: live }); })()`,
+            returnByValue: true,
+          });
+          let planRead = null;
+          try { planRead = typeof plan.result?.value === "string" ? JSON.parse(plan.result.value) : null; } catch { planRead = null; }
+          room.rehearsal = planRead !== null && Number.isInteger(planRead.rehearsal) ? planRead.rehearsal : null;
+          room.planned = planRead !== null && typeof planRead.planned === "boolean" ? planRead.planned : null;
+          room.liveWords = planRead !== null && Number.isInteger(planRead.live) ? planRead.live : null;
+          room.largest = net.largest === null ? null : { ...net.largest };
           const heading = await page.send("Runtime.evaluate", {
             expression: `(function () { var h = document.querySelector("section[data-room] h1"); return h ? h.textContent : null; })()`,
             returnByValue: true,
@@ -647,7 +754,13 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
     const slowest = settledRooms.reduce((a, r) => (a === null || r.settleMs > a.settleMs ? r : a), null);
 
     const excluded = new Set(opts.exclude ?? []);
-    const counted = errors.filter((e) => !excluded.has(e.room));
+    // The windows runner's one error class is named and counted on its own line, never counted as the
+    // page's and never silently dropped (face v2 Phase 03 debt row).
+    const platform = typeof opts.platform === "string" ? opts.platform : process.platform;
+    const runner = errors.filter((e) => runnerError(e, platform));
+    const counted = errors.filter((e) => !excluded.has(e.room) && !runnerError(e, platform));
+    const opened = rooms.filter((r) => r.opened);
+    const heaviest = opened.filter((r) => r.largest).reduce((a, r) => (a === null || r.largest.bytes > a.bytes ? { room: r.id, ...r.largest } : a), null);
     const report = {
       chrome: found.path,
       chromeSource: found.source,
@@ -655,7 +768,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       opened: rooms.filter((r) => r.opened).length,
       notOpened,
       countedErrors: counted.length,
-      excludedErrors: errors.length - counted.length,
+      excludedErrors: errors.filter((e) => excluded.has(e.room)).length,
       consoleErrors: counted.filter((e) => e.type !== "exception").length,
       exceptions: counted.filter((e) => e.type === "exception").length,
       unsettled: rooms.filter((r) => r.opened && !r.settled).map((r) => r.id),
@@ -687,6 +800,15 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       })(),
       notServed: countedPerRoom(rooms, "notServed"),
       verbsPending: countedPerRoom(rooms, "verbsPending"),
+      rehearsal: countedPerRoom(rooms, "rehearsal"),
+      planned: {
+        // A room whose planned mark could not be read makes the whole answer unread, never a quiet "none".
+        rooms: opened.some((r) => typeof r.planned !== "boolean") ? null : opened.filter((r) => r.planned === true).map((r) => r.id),
+        live: opened.some((r) => r.planned === true && !Number.isInteger(r.liveWords)) ? null : opened.filter((r) => r.planned === true && r.liveWords > 0).map((r) => r.id),
+        expected: Number.isInteger(opts.expectedPlanned) ? opts.expectedPlanned : null,
+      },
+      runner: runner.map((e) => ({ room: e.room, text: e.text })),
+      largestBody: heaviest,
       errors: errors.slice(0, 50),
     };
     if (Array.isArray(opts.expected)) {
@@ -699,6 +821,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
     }
     // The page's own URL carries the token in its fragment, so a page error can print it.
     for (const e of errors.slice(0, 20)) log(errorLine(e, [opts.token]));
+    for (const e of runner.slice(0, 20)) log(`smoke: WARN runner-error room=${e.room} mood=${mood} -- ${oneLine(redactSecrets(e.text, [opts.token]))} (the windows runner's socket-buffer class, counted, not the page's)`);
     return report;
   }, log);
 }
@@ -727,7 +850,7 @@ async function main(argv) {
   try { opts = parseArgs(argv); } catch (e) { console.error(`smoke: ${oneLine(e.message)}`); return 2; }
   try {
     if (opts.probeFile !== null) return (await runProbe(opts.probeFile)) > 0 ? 1 : 0;
-    const report = await runSmoke({ ...opts, expected: expectedOpenable() });
+    const report = await runSmoke({ ...opts, expected: expectedOpenable(), expectedPlanned: expectedPlanned() });
     for (const line of summaryLines(report)) console.log(line);
     console.log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined })}`);
     const verdict = judge(report);

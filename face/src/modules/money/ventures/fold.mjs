@@ -1,23 +1,220 @@
-// fold.mjs -- money/ventures: every decision this module makes, where node can import it with no install
-// (face v2 Phase 02, ADR-1320). CARRIED: the Cycle 15 renderer still decides inside its own lib file;
-// this fold hands it what the shell used to hand it, and nothing else.
+// fold.mjs -- money/ventures: every decision the ventures room makes, where node can import it with no install
+// (face v2 Phase 03, ADR-1320, ADR-1324, ADR-1326).
+//
+// The port of v0.7's Ventures onto the door, replacing the carried Cycle 15 renderer (VenturesRoom.tsx,
+// deleted). "The factory is not the product": every venture with its own money and its own kill lines, joined
+// from two authorities and trusting neither alone -- ventures.yaml (through the kill panel) says which ventures
+// exist, /api/pnl says what each one earned, and the roster is their union (money.mjs ventureRoster), so a venture
+// spending money with no kill line is a finding rather than a missing row. What is not served: each venture's
+// passport -- its status, stage and repo -- and the file's own rules, which /api/ventures will parse. Registering,
+// staging and proposing a kill are verbs of the work door (Phase 05).
+import { notServed, readProblem, payloadOf, verbPending } from "../../../lib/registry.mjs";
+import {
+  KILL_BADGE, OVERHEAD_VENTURE, REAL_KIND, SIM_KIND, asOfSupport, costTally, criterionSentence, fmtInt, killSummary,
+  rosterSummary, ventureMoney, ventureRoster,
+} from "../../../lib/money.mjs";
+import { costView, gateView, moneyReads, substanceView } from "../../../lib/money-room.mjs";
+import { roomLink, sourceFile } from "../../../lib/lane-room.mjs";
+
+/** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
+/** @typedef {import("../../../lib/money.mjs").Figure} Figure */
+/** @typedef {import("../../../lib/money-room.mjs").CostView} CostView */
+
+/**
+ * @typedef {object} VentureCard
+ * @property {string} key
+ * @property {string} venture
+ * @property {boolean} isDeclared
+ * @property {string} badge
+ * @property {string} badgeTitle
+ * @property {boolean} hasWorst
+ * @property {string} worst
+ * @property {boolean} isWorstLoud
+ * @property {boolean} isDanger
+ * @property {string} earned
+ * @property {Figure} real
+ * @property {Figure} mrr
+ * @property {Figure} sim
+ * @property {(Figure & { label: string })[]} components
+ * @property {boolean} hasComponents
+ * @property {boolean} hasKill
+ * @property {{ key: string, criterion: string, headline: string, ink: string, detail: string, isAbsent: boolean }[]} criteria
+ * @property {string} noKill
+ * @property {string} absentNote
+ * @property {boolean} hasAbsentNote
+ * @property {boolean} hasFinding
+ * @property {{ code: string, human: string }} finding
+ * @property {CostView} cost
+ */
 
 /**
  * @typedef {object} Folded
  * @property {string} sentence
  * @property {string} lede
- * @property {Record<string, string> | undefined} declared
+ * @property {boolean} isRealFired
+ * @property {string} badge
+ * @property {ReturnType<typeof gateView>} gate
+ * @property {{ key: string, label: string, sub: string, figure: Figure }[]} figures
+ * @property {{ key: string, v: string, l: string, sub: string }[]} counts
+ * @property {{ headline: string, detail: string, badge: string }} summary
+ * @property {{ isReading: boolean, isRefused: boolean, refusal: { code: string, human: string } }} roster
+ * @property {boolean} hasKillNote
+ * @property {boolean} isKillLoud
+ * @property {{ code: string, human: string }} killNote
+ * @property {VentureCard[]} cards
+ * @property {boolean} hasCards
+ * @property {string} neverMix
+ * @property {CostView} overhead
+ * @property {string} overheadLede
+ * @property {string} declared
+ * @property {import("../../../lib/lane-room.mjs").SourceFile} file
+ * @property {import("../../../lib/registry.mjs").NotServed} passports
+ * @property {import("../../../lib/registry.mjs").NotServed} rules
+ * @property {{ isVerbPending: true, verb: string, sentence: string }} registerVerb
+ * @property {{ isVerbPending: true, verb: string, sentence: string }} stageVerb
+ * @property {{ isVerbPending: true, verb: string, sentence: string }} killVerb
+ * @property {string} trailNote
+ * @property {string} oneInFour
+ * @property {string} shipWith
+ * @property {{ canOpen: boolean, room: string }} board
+ * @property {{ canOpen: boolean, room: string }} money
+ * @property {{ code: string, offer: string }} asof
+ * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
 
 /**
- * @param {Record<string, unknown>} payloads  the declared routes' payloads -- this module declares none
+ * @param {Record<string, Payload>} payloads
  * @param {import("../../../lib/registry.mjs").FoldContext} ctx
  * @returns {Folded}
  */
 export function fold(payloads, ctx) {
+  const m = moneyReads(payloads, ctx);
+  const reads = [...m.reads];
+  // ventures.yaml's provenance -- the file the passports and the rules will be parsed from once their route
+  // exists. Asked for only if the manifest allows it, like every read.
+  const fileRead = { route: "/api/file/:id", param: "ventures" };
+  const fileWhy = readProblem(fileRead, ctx.manifest);
+  if (fileWhy === null) reads.push(fileRead);
+  const file = fileWhy === null
+    ? sourceFile("ventures", payloadOf(payloads, fileRead))
+    : { id: "ventures", isReading: false, isRefused: true, isRead: false, refusal: { code: "READ_REFUSED", human: fileWhy }, path: "", sha: "", size: "" };
+
+  const kill = m.killView;
+  // The roster needs the kill panel to know which ventures are DECLARED. Until it arrives there is no roster --
+  // and an empty roster is not drawn in its place: "the company has no ventures" and "the read has not
+  // finished" are different claims.
+  const rows = kill === null ? [] : ventureRoster({ real: m.realView, sim: m.simView, kill });
+  const summary = kill === null ? { headline: "reading", detail: "" } : rosterSummary(rows, kill);
+  const counts = kill === null ? null : killSummary(kill).counts;
+  const served = { real: m.real.isRead, sim: m.sim.isRead };
+  /** @type {VentureCard[]} */
+  const cards = rows.map((row) => {
+    const money = ventureMoney(row, m.gate, served);
+    const worst = row.kill === null ? null : row.kill.worst;
+    const absent = row.kill === null ? null : row.kill.absentCount;
+    return {
+      key: row.venture,
+      venture: row.venture,
+      isDeclared: row.declared,
+      badge: row.declared ? "declared" : "no kill lines",
+      badgeTitle: row.declared
+        ? "named in ventures.yaml, whose criteria have an approved receipt on the spine"
+        : "money is booked to this venture and ventures.yaml declares no kill line for it",
+      hasWorst: worst !== null,
+      worst: worst ?? "",
+      isWorstLoud: worst === "CROSSED",
+      isDanger: worst === "CROSSED" || worst === "WARNING" || !row.declared,
+      earned: money.earnedSentence,
+      real: money.real,
+      mrr: money.mrr,
+      sim: money.sim,
+      components: money.components,
+      hasComponents: money.components.length > 0,
+      hasKill: row.kill !== null,
+      criteria: row.kill === null ? [] : row.kill.criteria.map((c) => {
+        const said = criterionSentence(c);
+        return { key: c.criterion, criterion: c.criterion, headline: said.headline, ink: said.ink, detail: said.detail, isAbsent: said.state === "absent" };
+      }),
+      noKill: `ventures.yaml declares no kill line for ${row.venture}. There is no line to measure a distance to, so no distance is drawn -- and nothing here reads that absence as safety.`,
+      absentNote: absent === null || absent === 0
+        ? ""
+        : `${fmtInt(absent)} criteri${absent === 1 ? "on" : "a"} could not be evaluated. They are listed above with the reason rather than dropped: a shorter list is a greener one, and indistinguishable from a healthy venture.`,
+      hasAbsentNote: absent !== null && absent > 0,
+      hasFinding: row.finding !== null,
+      finding: row.finding ?? { code: "", human: "" },
+      cost: costView("what it cost", `every cost receipt booked to ${row.venture}, counted and never summed`, money.cost, m.real),
+    };
+  });
+  const realPanel = substanceView(m, "real");
+  /** @type {Record<string, string> | null | undefined} */
+  const declaredIds = ctx.inventories ? ctx.inventories.ventures : undefined;
+  const names = declaredIds ? Object.keys(declaredIds).sort() : null;
+  const asof = asOfSupport();
+
   return {
-    sentence: ctx.room.sentence,
-    lede: ctx.room.lede,
-    declared: ctx.inventories ? ctx.inventories.ventures : undefined,
+    // The shell decoded the served registry once; decoding it again would manufacture a `<` (Phase 03 attack).
+    sentence: String(ctx.room.sentence ?? ""),
+    lede: String(ctx.room.lede ?? ""),
+    isRealFired: m.gate.spendable,
+    badge: `${KILL_BADGE} — the venture set`,
+    gate: gateView(m),
+    figures: [
+      { key: "real", label: "Real ₹ to date", sub: `${REAL_KIND} · per venture below, never summed here`, figure: realPanel.cashIn },
+    ],
+    counts: [
+      { key: "ventures", v: kill === null ? "—" : fmtInt(rows.length), l: "Ventures in the roster", sub: kill === null ? (m.real.isRefused ? m.real.refusal.code : "reading the kill panel") : "declared or carrying money" },
+      { key: "crossed", v: counts === null ? "—" : fmtInt(counts.crossed), l: "Kill lines crossed", sub: counts === null ? "reading the kill panel" : `${fmtInt(counts.warning)} inside the warning band` },
+      { key: "undeclared", v: kill === null ? "—" : fmtInt(rows.filter((r) => !r.declared).length), l: "Money with no kill line", sub: "a finding, never a quiet row" },
+    ],
+    summary: { headline: summary.headline, detail: summary.detail, badge: `${KILL_BADGE} — the venture set` },
+    roster: { isReading: m.real.isReading, isRefused: m.real.isRefused, refusal: m.real.refusal },
+    hasKillNote: kill !== null && kill.refusal !== null,
+    isKillLoud: kill !== null && kill.state === "unreceipted",
+    killNote: kill !== null && kill.refusal !== null ? kill.refusal : { code: "", human: "" },
+    cards,
+    hasCards: cards.length > 0,
+    neverMix: `The real figure and the simulated one come from two separate reads of two separate kinds, ${REAL_KIND} and ${SIM_KIND}. They are never added, never averaged, and the simulated one never wears the colour of the real one.`,
+    overhead: costView(
+      `the factory · venture: ${OVERHEAD_VENTURE}`,
+      `building the factory is not a cost of any product made in it, so venture: ${OVERHEAD_VENTURE} is overhead and never appears as a venture above. It is shown so its spend is not invisible -- not so it can be counted against a product.`,
+      costTally(m.realView === null ? [] : m.realView.overhead.lines, "GET /api/pnl → model.overhead.lines[]"),
+      m.real,
+    ),
+    overheadLede: "",
+    declared: names === null
+      ? "The registry served no venture roster, so this room cannot say which ventures are declared. That is a fact about this read, not about the company."
+      : names.length === 0
+        ? "ventures.yaml declares no ventures. That is a measured zero, not a missing read: the file was there and it was empty."
+        : `Declared in ventures.yaml: ${names.join(", ")} -- ${names.length === 1 ? "one venture, carrying a kill line" : `${fmtInt(names.length)} ventures, each carrying a kill line`}. A venture appears here the moment it is declared, whether or not it has earned anything.`,
+    file,
+    passports: notServed(
+      "Passports",
+      "/api/ventures",
+      "Each venture's passport -- live, candidate or attic, its stage and its own repo -- as ventures.yaml records it, with a row that leaves only by your stamp and never by deletion.",
+    ),
+    rules: notServed(
+      "The rules of the file",
+      "/api/ventures",
+      "ventures.yaml's own rules, read from the file rather than typed here: criteria only, money never lives in it, and the digest is over parsed values so it cannot be edited silently.",
+    ),
+    registerVerb: verbPending(
+      "Register a venture",
+      "venture.registered makes a candidate, and its kill line is written before its first launch. It arrives with the work door.",
+    ),
+    stageVerb: verbPending(
+      "Stage a venture",
+      "Kickoff, building, launched, live -- each move a receipt, and the venture track wins every tie. It arrives with the work door.",
+    ),
+    killVerb: verbPending(
+      "Propose a kill review",
+      "A kill is a stamped decision: the attic with a retro, components harvested, the lesson pinned -- never a deletion. The proposal lands in your inbox with the work door.",
+    ),
+    trailNote: "The spine records no venture.* kind yet: registering, staging and killing a venture are work-door verbs, and their receipts land here the day they exist.",
+    oneInFour: "One in four ventures is expected to live -- written before the first launch, so a death is a data point, not a surprise. Kill-distance exists because the criteria were set at kickoff, in writing.",
+    shipWith: "A venture without a distribution plan does not ship. Launch week is a written playbook -- one channel a day, personal and honest -- and growth wakes as a module only when a live venture pulls it.",
+    board: roomLink(ctx, "board"),
+    money: roomLink(ctx, "money"),
+    asof: { code: asof.code, offer: asof.offer },
+    reads,
   };
 }

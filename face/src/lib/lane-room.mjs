@@ -17,8 +17,12 @@
 //     complete -- not a count, not a last fire, not "all time";
 //   - a registry value this shell cannot use is NAMED, never silently dropped: a kind it cannot ask
 //     for, a lane name it cannot request, an ADR band it cannot read, a second lane it did not draw;
-//   - what the registry never carried and what it carried unreadably are different sentences.
-import { payloadOf } from "./registry.mjs";
+//   - what the registry never carried and what it carried unreadably are different sentences;
+//   - a read the module's MANIFEST cannot make is refused HERE, by the host's own rule (readProblem) and
+//     against the manifest the host hands the fold -- a registry that grows a lane or a kind under a shipped
+//     manifest must turn a panel into a named refusal, never a "reading…" nothing is in flight for (money
+//     ring, the factory ring's debt row). A fold handed no manifest fails closed: it may read nothing.
+import { payloadOf, readProblem } from "./registry.mjs";
 import { unescapeDoorText } from "./door.mjs";
 import { fmtInt, timeOfDay } from "./inbox.mjs";
 import { LANE_UNREAD, RECEIPT_CLOSED, laneCard, receiptView, trailRead, trailView } from "./spine.mjs";
@@ -206,6 +210,16 @@ export function laneRoom(payloads, ctx, opts = {}) {
   /** @type {Read[]} */
   const reads = [];
   const { lists, unreadable } = heldBy(room);
+  /**
+   * Plan a read the manifest may make, or say why it may not -- the host's own sentence, so the panel and
+   * the host can never disagree about a read (money ring).
+   * @param {Read} read @returns {string | null}
+   */
+  const ask = (read) => {
+    const why = readProblem(read, ctx.manifest);
+    if (why === null) reads.push(read);
+    return why;
+  };
 
   // ── the lane ───────────────────────────────────────────────────────────────────────────────────
   const lanes = listOf(lists, "lanes");
@@ -215,8 +229,8 @@ export function laneRoom(payloads, ctx, opts = {}) {
   // hundreds of kilobytes for a header and a list of titles. The trail is what moves; the header is read
   // once per open, and the shell's re-read control takes it again (code review).
   const laneRead = laneUsable ? { route: "/api/lane/:id", param: laneName } : null;
-  if (laneRead !== null) reads.push(laneRead);
-  const laneP = laneRead === null ? null : payloadOf(payloads, laneRead);
+  const laneRefused = laneRead === null ? null : ask(laneRead);
+  const laneP = laneRead === null || laneRefused !== null ? null : payloadOf(payloads, laneRead);
   const card = laneP !== null && laneP.state === "ok" ? laneCard(laneP.data) : LANE_UNREAD;
   const laneState = laneName === ""
     // Not a refusal: the council chamber and review-and-ship are rooms the registry gives no lane, and
@@ -224,6 +238,8 @@ export function laneRoom(payloads, ctx, opts = {}) {
     ? { isReading: false, isRefused: false, refusal: NO_REFUSAL }
     : !laneUsable
       ? refusedBy("BAD_LANE_NAME", `the served registry names ${JSON.stringify(laneName)} as this room's lane, which is not a name the door will take`)
+      : laneRefused !== null
+        ? refusedBy("READ_REFUSED", laneRefused)
       : laneP === null
         ? refusedBy("NO_LANE", "the served registry names no lane for this room")
         // A 200 that is not a lane, or is another lane, is a refusal with a code -- not a card that
@@ -239,8 +255,8 @@ export function laneRoom(payloads, ctx, opts = {}) {
   const kinds = homedKinds.filter((k) => KIND_NAME.test(k));
   const rejectedKinds = homedKinds.filter((k) => !KIND_NAME.test(k));
   const tRead = trailRead(kinds);
-  if (tRead !== null) reads.push(tRead);
-  const trailP = tRead === null ? null : payloadOf(payloads, tRead);
+  const trailRefused = tRead === null ? null : ask(tRead);
+  const trailP = tRead === null || trailRefused !== null ? null : payloadOf(payloads, tRead);
   // A body with no events ARRAY is a page this shell cannot read, and "empty because unreadable" is not
   // "empty because nothing happened" -- the reader coerces either into zero rows, so the shape is checked
   // before the count becomes a sentence about the spine (Phase 03 attack).
@@ -252,7 +268,9 @@ export function laneRoom(payloads, ctx, opts = {}) {
     ? [...new Set(asArrayOf(asObject(trailP.data)["events"]).map((w) => asText(asObject(asObject(w)["event"])["kind"]) ?? "").filter((k) => k !== "" && !kinds.includes(k)))]
     : [];
   const trail = trailP !== null && trailP.state === "ok" && !trailBadBody && foreign.length === 0 ? trailView(trailP.data, TRAIL_ROWS) : null;
-  const trailState = trailP === null
+  const trailState = trailRefused !== null
+    ? refusedBy("READ_REFUSED", trailRefused)
+    : trailP === null
     ? { isReading: false, isRefused: false, refusal: NO_REFUSAL }
     : trailBadBody
       ? refusedBy("BAD_BODY", "the door answered, but not with a page of receipts: no events list in the body it sent")
@@ -266,7 +284,8 @@ export function laneRoom(payloads, ctx, opts = {}) {
   /** @type {SourceFile[]} */
   const sources = files.map((id) => {
     const read = { route: "/api/file/:id", param: id };
-    reads.push(read);
+    const why = ask(read);
+    if (why !== null) return { id, ...refusedBy("READ_REFUSED", why), isRead: false, path: "", sha: "", size: "" };
     return sourceFile(id, payloadOf(payloads, read));
   });
 
@@ -420,6 +439,44 @@ export function runsBy(events, field, detailFields, isPartial = false) {
 }
 
 /**
+ * @typedef {object} CountRow
+ * @property {string} key
+ * @property {string} name
+ * @property {string} count
+ * @property {string} when
+ */
+
+/**
+ * Receipts of ONE kind among a trail's, counted by one payload field (a channel, a gate, a stage) -- most first,
+ * then by name. The same rules as runsBy: a receipt without the field is not guessed into a group, the name is
+ * decoded once so the registry's spelling and the receipt's compare as one, a partial page says the count is that
+ * page's, and the newest receipt of a group is newest by timestamp, never by position (money ring).
+ * @param {FeedEvent[]} events @param {string} kind @param {string} field @param {boolean} [isPartial]
+ * @returns {CountRow[]}
+ */
+export function countedBy(events, kind, field, isPartial = false) {
+  /** @type {Map<string, { n: number, last: FeedEvent }>} */
+  const groups = new Map();
+  for (const e of events) {
+    if (e.kind !== kind) continue;
+    const v = e.payload[field];
+    if (typeof v !== "string" || v.trim() === "") continue;
+    const name = unescapeDoorText(v).trim();
+    const had = groups.get(name);
+    const last = had === undefined || newer(e.ts, had.last.ts) ? e : had.last;
+    groups.set(name, { n: (had === undefined ? 0 : had.n) + 1, last });
+  }
+  return [...groups.entries()]
+    .sort((a, b) => b[1].n - a[1].n || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([name, g]) => ({
+      key: name,
+      name,
+      count: `${fmtInt(g.n)}${isPartial ? " on that page" : ""}`,
+      when: TS_HEAD.test(g.last.ts) ? `last ${`${g.last.day} ${timeOfDay(g.last.ts)}`.trim()}` : "time unreadable",
+    }));
+}
+
+/**
  * Is `a` a later timestamp than `b`? Both are compared as the spine writes them, and a timestamp this
  * shell cannot read is never "later" -- it sorts last rather than winning by string order.
  * @param {string} a @param {string} b
@@ -467,44 +524,79 @@ export function laneKpi(base) {
 }
 
 /**
- * What every room in the served registry holds under one key, as rows a catalogue can draw: the thing
- * itself, and the room that holds it. This is the registry the shell already read -- no route, no
- * bundle -- and it is how the toolbelt indexes arc without naming a single room in a shell file.
- * @param {FoldContext} ctx @param {string} key
- * @returns {{ rows: { key: string, name: string, room: string, roomName: string, canOpen: boolean }[], unreadable: string[] }}
+ * @typedef {{ key: string, name: string, room: string, roomName: string, canOpen: boolean }} CatalogueRow
+ * @typedef {{ rows: CatalogueRow[], unreadable: string[] }} CatalogueSection
  */
-export function heldAcrossRooms(ctx, key) {
-  const out = [];
-  const seen = new Set();
-  /** @type {string[]} */
-  const unreadable = [];
-  for (const room of ctx.rooms || []) {
+
+/**
+ * What every room in the served registry holds under each of `keys`, as rows a catalogue can draw: the
+ * thing itself, and the room that holds it. This is the registry the shell already read -- no route, no
+ * bundle -- and it is how the toolbelt indexes arc without naming a single room in a shell file.
+ *
+ * Built in ONE pass: each room's holds are read once for every section at once, and a row's room link is
+ * answered from a map built once, never by searching the rooms again per row. Nine passes and a search per
+ * row made the find box quadratic in the registry -- 1.6 s a keystroke at 3,000 rooms (money ring, the
+ * factory ring's debt row).
+ * @param {FoldContext | { rooms?: unknown[] }} ctx @param {string[]} keys
+ * @returns {Record<string, CatalogueSection>}
+ */
+export function catalogueOf(ctx, keys) {
+  const wanted = [...new Set(keys.filter((k) => typeof k === "string" && k !== ""))];
+  /** @type {Record<string, CatalogueSection>} */
+  const out = Object.create(null);
+  /** @type {Record<string, Set<string>>} */
+  const seen = Object.create(null);
+  for (const k of wanted) { out[k] = { rows: [], unreadable: [] }; seen[k] = new Set(); }
+  const rooms = Array.isArray(ctx.rooms) ? ctx.rooms : [];
+  const links = linkMap(rooms);
+  for (const room of rooms) {
     // EVERY room, including the lane-room template and the planned ones: the template holds four real
     // commands, and dropping it made the catalogue count four fewer than arc has. A row whose room
     // cannot be opened says so through canOpen rather than being left out (factory ring).
-    if (!room) continue;
-    const id = asText(room.id);
+    if (!room || typeof room !== "object") continue;
+    const r = /** @type {Record<string, unknown>} */ (room);
+    // Read ONCE, then used: a getter cannot name a room one thing in the key and another in the row.
+    const id = asText(r["id"]);
     // A row whose room this shell cannot name is DROPPED and counted, never drawn as "undefined" with a
     // live click handler behind it (Phase 03 attack).
-    if (id === null) { unreadable.push("a room with no id"); continue; }
+    if (id === null) { for (const k of wanted) out[k]?.unreadable.push("a room with no id"); continue; }
     const { lists, unreadable: bad } = heldBy(room);
-    // What a room carried here unreadably is named, so a catalogue that shrank says why.
-    if (bad.includes(key)) unreadable.push(id);
-    for (const name of listOf(lists, key)) {
-      const rowKey = `${name}@${room.id}`;
-      if (seen.has(rowKey)) continue;
-      seen.add(rowKey);
-      const link = roomLink(ctx, id);
-      const roomName = asText(room.name) ?? id;
-      out.push({ key: rowKey, name, room: link.room, roomName, canOpen: link.canOpen });
+    const link = links.get(id) ?? { canOpen: false, room: "" };
+    const roomName = asText(r["name"]) ?? id;
+    for (const k of wanted) {
+      const section = out[k];
+      const seenKeys = seen[k];
+      if (section === undefined || seenKeys === undefined) continue;
+      // What a room carried here unreadably is named, so a catalogue that shrank says why.
+      if (bad.includes(k)) section.unreadable.push(id);
+      for (const name of listOf(lists, k)) {
+        const rowKey = `${name}@${id}`;
+        if (seenKeys.has(rowKey)) continue;
+        seenKeys.add(rowKey);
+        section.rows.push({ key: rowKey, name, room: link.room, roomName, canOpen: link.canOpen });
+      }
     }
   }
   // One alphabet: the find box folds case, so the list is ordered the same way rather than putting
   // ARC-SHIP, Arc-Ship and arc-ship in three places (Phase 03 attack).
   /** @param {string} s */
   const fold = (s) => s.toLowerCase();
-  out.sort((a, b) => (fold(a.name) < fold(b.name) ? -1 : fold(a.name) > fold(b.name) ? 1 : a.roomName < b.roomName ? -1 : a.roomName > b.roomName ? 1 : 0));
-  return { rows: out, unreadable: [...new Set(unreadable)] };
+  for (const k of wanted) {
+    const section = out[k];
+    if (section === undefined) continue;
+    section.rows.sort((a, b) => (fold(a.name) < fold(b.name) ? -1 : fold(a.name) > fold(b.name) ? 1 : a.roomName < b.roomName ? -1 : a.roomName > b.roomName ? 1 : 0));
+    section.unreadable = [...new Set(section.unreadable)];
+  }
+  return out;
+}
+
+/**
+ * One section of the catalogue: the same one-pass build, asked for a single key.
+ * @param {FoldContext | { rooms?: unknown[] }} ctx @param {string} key
+ * @returns {CatalogueSection}
+ */
+export function heldAcrossRooms(ctx, key) {
+  return catalogueOf(ctx, [key])[key] ?? { rows: [], unreadable: [] };
 }
 
 /**
@@ -525,6 +617,35 @@ export function holdsCount(base, key) {
  */
 export function roomLink(ctx, id) {
   const hit = (ctx.rooms || []).find((r) => r && r.id === id);
-  const openable = hit !== undefined && hit.planned !== true && hit.status !== "planned" && hit.template !== true && hit.status !== "template";
+  const openable = hit !== undefined && isOpenable(hit);
   return { canOpen: openable, room: openable ? id : "" };
+}
+
+/**
+ * The one answer to "can the rail open this room": served, built, not the lane-room template.
+ * @param {unknown} r
+ */
+function isOpenable(r) {
+  if (!r || typeof r !== "object") return false;
+  const o = /** @type {Record<string, unknown>} */ (r);
+  return o["planned"] !== true && o["status"] !== "planned" && o["template"] !== true && o["status"] !== "template";
+}
+
+/**
+ * Every room's link, keyed by id, built once: the FIRST room with an id answers for it, exactly as
+ * roomLink's search does, so the catalogue and a single link cannot disagree.
+ * @param {unknown[]} rooms
+ * @returns {Map<string, { canOpen: boolean, room: string }>}
+ */
+function linkMap(rooms) {
+  /** @type {Map<string, { canOpen: boolean, room: string }>} */
+  const map = new Map();
+  for (const r of rooms) {
+    if (!r || typeof r !== "object") continue;
+    const id = /** @type {Record<string, unknown>} */ (r)["id"];
+    if (typeof id !== "string" || map.has(id)) continue;
+    const openable = isOpenable(r);
+    map.set(id, { canOpen: openable, room: openable ? id : "" });
+  }
+  return map;
 }

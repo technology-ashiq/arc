@@ -1,13 +1,12 @@
-// module.mjs -- money/ventures: the manifest (face v2 Phase 02, ADR-1320, ADR-1321).
+// module.mjs -- money/ventures: the manifest (face v2 Phase 03, ADR-1320, ADR-1321, REQ-05).
 //
-// CARRIED: this module draws the Cycle 15 VenturesRoom renderer through the module frame until Phase 03's
-// money ring ports v0.7's Ventures into this folder. It declares no route because the carried
-// renderer reads the door itself.
-// asOf is false: this room's numbers are not day-scoped, and the door refuses a day as-of for them by
-// name -- the shell's scrub says so here instead of silently doing nothing.
+// "The factory is not the product." The kinds that have ever fired (/api/health), the real and simulated P&Ls
+// with the kill panel (/api/pnl), and ventures.yaml's provenance (/api/file/:id) -- the file the passports will
+// be parsed from once /api/ventures exists.
+// asOf is false: which ventures exist comes from a file, and what each earned scopes by month, never by day.
 export default Object.freeze({
   id: "ventures",
   ring: "money",
-  routes: Object.freeze([]),
+  routes: Object.freeze(["/api/health", "/api/pnl", "/api/file/:id"]),
   asOf: false,
 });

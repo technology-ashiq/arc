@@ -10,7 +10,7 @@
 // work door (Phase 05), and "explain" is a link to the ask room rather than a second asking surface.
 import { verbPending } from "../../../lib/registry.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
-import { heldAcrossRooms, laneBadge, laneRoom, roomLink } from "../../../lib/lane-room.mjs";
+import { catalogueOf, laneBadge, laneRoom, roomLink } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 
@@ -59,8 +59,12 @@ export function fold(payloads, ctx) {
   const picks = ctx.picks ?? {};
   const find = typeof picks.find === "string" ? picks.find : "";
   const needle = find.trim().toLowerCase();
+  // The catalogue is built ONCE per fold, in one pass over the rooms, and the find box filters what was
+  // built -- never nine passes and a room search per row on every keystroke (money ring, the factory
+  // ring's debt row).
+  const built = catalogueOf(ctx, SECTIONS.map(([key]) => key));
   const all = SECTIONS.map(([key, label]) => {
-    const read = heldAcrossRooms(ctx, key);
+    const read = built[key] ?? { rows: [], unreadable: [] };
     return { key, label, rows: read.rows, unreadable: read.unreadable };
   });
   // A room that carried one of these lists in a shape this shell could not read is NAMED: a catalogue
