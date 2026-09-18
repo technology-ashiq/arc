@@ -49,50 +49,52 @@ export function fold(payloads, ctx) {
   const router = fileText(payloads, ctx, "router", reads).source;
   const st = servedRead(payloads, ctx, reads, "/api/roster");
   const today = field(st.body, "today");
+  const hiresTable = servedTable(st, {
+    panel: "Hires on the books",
+    route: "/api/roster",
+    columns: ["hired for", "cap · hosted", "judge", "tenure"],
+    listKey: "hires",
+    empty: "engine/router.yaml hires no contractor: no row routes to the runtime or carries tenure terms.",
+    row: (h) => {
+      const name = field(h, "name");
+      return name === "" ? null : { key: name, cells: [`${name} · ${field(h, "driver")}`, `${field(h, "cap") || "no cap"} · ${field(h, "hosted") || "hosting unstated"}`, field(h, "judge") || "no judge", `review by ${field(h, "review_by") || "—"}${h["expired"] === true ? " · PAST IT: refused by name" : ""}`] };
+    },
+    note: [
+      today !== "" ? `tenure judged against ${today}` : "",
+      "the decision that hired each row is cited in the router file's comments, which its parser does not keep",
+    ].filter((n) => n !== "").join(" · "),
+  });
+  const runsTable = servedTable(st, {
+    panel: "Runs",
+    route: "/api/roster",
+    columns: ["dispatched", "process", "outcome", "receipt"],
+    listKey: "runs",
+    empty: "No dispatch through the runtime is on this spine.",
+    row: (r) => {
+      const id = field(r, "id");
+      const ms = typeof r["duration_ms"] === "number" ? ` · ${cell(r["duration_ms"])} ms` : "";
+      return id === "" ? null : { key: id, cells: [field(r, "ts").slice(0, 16), `${field(r, "process")} · ${field(r, "driver")}`, `${field(r, "outcome") || "unstated"}${ms}`, id] };
+    },
+    note: "the judge's verdict on a draft is not carried by the run receipt, so it is not drawn",
+  });
   return {
     sentence: String(ctx.room.sentence ?? ""),
     lede: String(ctx.room.lede ?? ""),
     badge: "not in arc's registry · ADR-1327",
     kpis: [
       { key: "employees", v: held.unreadable.length > 0 ? "—" : fmtInt(new Set(held.rows.map((r) => r.name)).size), l: "Employees", sub: "agents, spawned in-house per task" },
-      { key: "contractors", v: st.isRead ? fmtInt(asArray(st.body["hires"]).length) : "—", l: "Contractors on tenure", sub: st.isRead ? "hired in engine/router.yaml" : "reading /api/roster" },
+      { key: "contractors", v: hiresTable.isDrawn ? fmtInt(hiresTable.rows.length) : "—", l: "Contractors on tenure", sub: st.isRead ? "hired in engine/router.yaml" : "reading /api/roster" },
       { key: "certified", v: "—", l: "Certified", sub: "not served · no parser reads the certification evidence" },
-      { key: "runs", v: st.isRead ? fmtInt(asArray(st.body["runs"]).length) : "—", l: "Runs dispatched", sub: st.isRead ? "through the runtime, on this spine" : "reading /api/roster" },
+      { key: "runs", v: runsTable.isDrawn ? fmtInt(runsTable.rows.length) : "—", l: "Runs dispatched", sub: st.isRead ? "through the runtime, on this spine" : "reading /api/roster" },
     ],
     router,
-    hires: servedTable(st, {
-      panel: "Hires on the books",
-      route: "/api/roster",
-      columns: ["hired for", "cap · hosted", "judge", "tenure"],
-      listKey: "hires",
-      empty: "engine/router.yaml hires no contractor: no row routes to the runtime or carries tenure terms.",
-      row: (h) => {
-        const name = field(h, "name");
-        return name === "" ? null : { key: name, cells: [`${name} · ${field(h, "driver")}`, `${field(h, "cap") || "no cap"} · ${field(h, "hosted") || "hosting unstated"}`, field(h, "judge") || "no judge", `review by ${field(h, "review_by") || "—"}${h["expired"] === true ? " · PAST IT: refused by name" : ""}`] };
-      },
-      note: [
-        today !== "" ? `tenure judged against ${today}` : "",
-        "the decision that hired each row is cited in the router file's comments, which its parser does not keep",
-      ].filter((n) => n !== "").join(" · "),
-    }),
+    hires: hiresTable,
     certification: notServed(
       "Certification",
       "/api/roster",
       "The certification each hire passes before it is dispatched anything, fixture by fixture, and which fixture a failed one missed. The engine lane writes it as Markdown evidence, and no parser reads that into a table yet -- filed to the engine lane.",
     ),
-    runs: servedTable(st, {
-      panel: "Runs",
-      route: "/api/roster",
-      columns: ["dispatched", "process", "outcome", "receipt"],
-      listKey: "runs",
-      empty: "No dispatch through the runtime is on this spine.",
-      row: (r) => {
-        const id = field(r, "id");
-        const ms = typeof r["duration_ms"] === "number" ? ` · ${cell(r["duration_ms"])} ms` : "";
-        return id === "" ? null : { key: id, cells: [field(r, "ts").slice(0, 16), `${field(r, "process")} · ${field(r, "driver")}`, `${field(r, "outcome") || "unstated"}${ms}`, id] };
-      },
-      note: "the judge's verdict on a draft is not carried by the run receipt, so it is not drawn",
-    }),
+    runs: runsTable,
     hireVerb: verbPending(
       "Hire someone",
       "A hire is a session: the four tenure terms are mandatory, the certification runs, and the row lands only on your approval. The work door starts it; the session itself runs through the session door.",

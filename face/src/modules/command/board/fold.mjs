@@ -8,7 +8,7 @@
 // (Phase 04): each venture's kill criteria, evaluated by the ledger's own kill panel. v0.7 drew them from a
 // simulated portfolio. The base rate is still NOT SERVED: no file the door can parse states it.
 import { notServed, payloadOf } from "../../../lib/registry.mjs";
-import { servedRead, venturesKill } from "../../../lib/served.mjs";
+import { asArray, asObject, cell, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
 import { dayOf, decodeDoorText, fmtInt, readHealth, readSpinePage } from "../../../lib/inbox.mjs";
 import { boardProvenance, boardRows, boardTotals, fmtDays, sharePct } from "../../../lib/spine.mjs";
 
@@ -57,6 +57,43 @@ const STAGES = Object.freeze([
  * @property {string} orgRoom
  * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
+
+// The kill-distance card, from the ledger's kill panel through /api/ventures (Phase 04). It lives in this fold, not in
+// lib/served.mjs: it reads the body's venture list by name, and a shell file names no room (module-frame's scan).
+/**
+ * Each venture's distance from its kill lines, one row per criterion, as the ledger's kill panel evaluated them
+ * (/api/ventures). A criteria file whose digest no receipt pins is NOT evaluated -- the panel says the kill lines
+ * are unarmed rather than drawing distances the ledger refused to compute.
+ * @param {import("../../../lib/served.mjs").ServedState} st @param {string} panel
+ * @returns {import("../../../lib/served.mjs").ServedTable}
+ */
+function venturesKill(st, panel) {
+  const kill = asObject(st.body["kill"]);
+  const armed = kill["present"] === true && kill["receipted"] === true;
+  return servedTable(projected(st, "rows", (b) => {
+    const k = asObject(b["kill"]);
+    if (!Array.isArray(k["ventures"])) return undefined;
+    return k["ventures"].flatMap((v) => asArray(asObject(v)["criteria"]).map((c) => ({ ...asObject(c), venture: asObject(v)["venture"] })));
+  }), {
+    panel,
+    route: "/api/ventures",
+    columns: ["venture", "kill criterion", "status", "distance to the line"],
+    listKey: "rows",
+    empty: kill["present"] !== true
+      ? "ventures.yaml is not on this tree, so no venture has a kill line."
+      : kill["receipted"] !== true
+        ? "The criteria file's digest is pinned by no receipt, so the ledger arms no kill line and computes no distance."
+        : "The criteria file names no venture.",
+    row: (c) => {
+      const venture = field(c, "venture");
+      const criterion = field(c, "criterion");
+      const unit = field(c, "unit");
+      const distance = c["distance"] === null || c["distance"] === undefined ? (field(c, "reason") || "not measured") : `${cell(c["distance"])}${unit ? ` ${unit}` : ""}`;
+      return venture === "" || criterion === "" ? null : { key: `${venture}/${criterion}`, cells: [venture, `${criterion} ${cell(c["threshold"])}`, field(c, "status"), distance] };
+    },
+    note: armed ? `evaluated on ${field(kill, "asOf")} from ${field(kill, "path")} by the ledger's kill panel` : "",
+  });
+}
 
 /**
  * @param {Record<string, Payload>} payloads

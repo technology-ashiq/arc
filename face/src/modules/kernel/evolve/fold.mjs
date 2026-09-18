@@ -32,6 +32,8 @@ export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx);
   const st = servedRead(payloads, ctx, base.reads, "/api/evolve");
   const superseded = typeof st.body["superseded"] === "number" ? st.body["superseded"] : 0;
+  // Receipts the evolve lane's own screen (admit) set aside as damage: counted, never folded, and said.
+  const damaged = typeof st.body["damaged"] === "number" ? st.body["damaged"] : 0;
   const manifests = typeof st.body["manifestsRead"] === "number" ? st.body["manifestsRead"] : null;
   return {
     ...base,
@@ -59,10 +61,20 @@ export function fold(payloads, ctx) {
         const verdict = asObject(x["verdict"]);
         const closed = asObject(x["closed"]);
         const state = field(verdict, "outcome") !== "" ? field(verdict, "outcome") : field(closed, "ts") !== "" ? "closed" : "open";
-        return id === "" ? null : { key: id, cells: [id, field(x, "surface"), arms.length > 0 ? arms.join(" · ") : "no measurement yet", state] };
+        // Units set aside -- one measured under an arm it was not assigned, or under an arm the experiment never declared --
+        // are said on the row, so a thin count is never read as the whole of what was measured (Phase 04 attack).
+        const conflicts = typeof x["conflicts"] === "number" ? x["conflicts"] : 0;
+        const stray = asArray(x["strayArms"]).map(cell).filter((a) => a !== "");
+        const aside = [
+          conflicts > 0 ? `${conflicts} unit${conflicts === 1 ? "" : "s"} measured under an arm it was not assigned, set aside` : "",
+          stray.length > 0 ? `measurements under undeclared arm${stray.length === 1 ? "" : "s"} ${stray.join(", ")}, set aside` : "",
+        ].filter((a) => a !== "").join(" · ");
+        const measured = arms.length > 0 ? arms.join(" · ") : "no measurement yet";
+        return id === "" ? null : { key: id, cells: [id, field(x, "surface"), aside !== "" ? `${measured} -- ${aside}` : measured, state] };
       },
       note: [
         superseded > 0 ? `${superseded} superseded receipt${superseded === 1 ? "" : "s"} set aside by the board's own supersede rule` : "",
+        damaged > 0 ? `${damaged} experiment receipt${damaged === 1 ? "" : "s"} the evolve lane's own screen refused as damaged, not folded` : "",
         "a hypothesis is not drawn: the experiment.opened grammar does not carry one",
       ].filter((n) => n !== "").join(" · "),
     }),

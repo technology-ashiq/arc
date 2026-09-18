@@ -507,6 +507,34 @@ load 'test_helper'
   done
 }
 
+@test "face v2: Phase 04 served panels answer every loaded branch, and the door refuses a hostile tree by name" {
+  # The Phase 04 attackers' surviving mutants, each pinned by a check that fails when its decision is removed: an
+  # empty table for a body with no list, a sum across substances or currencies, the overdue flag ignored, a seal drawn
+  # as quoted, a Definition of Done blind to refused slices -- and at the door, a wrong-shaped file read as empty, a
+  # junction off the tree, an address where a lead id belongs, a null spine line, an env var swapping a file.
+  run node "$ARC_ROOT/tests/face/phase04-folds.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 55 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "SERVED: a body with no list where the rows live is BAD_BODY -- never an empty table" \
+             "SERVED: unreadable, blank and repeated entries are COUNTED in the note, and never drawn" \
+             "MONEY DAY: the real cell holds the real amount alone -- never real + simulated" \
+             "MONEY DAY: cost lines counted per currency and never totalled, the unmeasurable one counted on its day" \
+             "SCHEDULER: a job whose overdue flag is set reads overdue, whatever its state string says" \
+             "LEGAL: a seal the policy file does not quote is drawn as drifted, never as quoted" \
+             "DEVELOP: a task file with a heading the parser refused does NOT prove its close" \
+             "DAILY: the day's cash-in equals the month model's rows recorded that day" \
+             "DOOR: a directory that resolves off the tree is SOURCE_OUTSIDE -- no off-tree ADR is served" \
+             "DOOR: a lead_id that is not an HMAC id never reaches the wire, and is counted as withheld" \
+             "DOOR: a null line on the spine is torn -- counted, never a 500" \
+             "SERIALIZER: a payload nested past the cap is served as a sentence, never a stack overflow"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
 @test "face v2: the company ring reads its files -- F1 names lanes, the constitution and logbook are read, the extras drawn" {
   # The company ring and the four extra rooms the owner's section 13 item 5 ruling unblocked (ADR-1337): the folds
   # answer over the door's real bodies and over mutants of them; F1's arm FAILs Cycle 15's band -> room map.

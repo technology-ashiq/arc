@@ -7,7 +7,7 @@
 // gate measures (the golden gate measures hits, not cost). Logging a correction, running a recall and proposing a
 // rule are verbs of the work door (Phase 05).
 import { notServed, verbPending } from "../../../lib/registry.mjs";
-import { asArray, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
+import { asArray, asObject, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
 
 /** How many lessons the panel draws, newest first; the note says how many there are in all. */
 const LESSON_ROWS = 15;
@@ -38,7 +38,7 @@ export function fold(payloads, ctx) {
   });
   const logged = base.sources.find((s) => s.id === "retro-log");
   const st = servedRead(payloads, ctx, base.reads, "/api/memory");
-  const all = asArray(st.body["lessons"]).length;
+  const all = asArray(st.body["lessons"]).filter((l) => field(asObject(l), "id") !== "").length;
   const malformed = typeof st.body["malformed"] === "number" ? st.body["malformed"] : 0;
   return {
     ...base,

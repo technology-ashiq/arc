@@ -30,6 +30,8 @@ import { countedOn, holdsCount, kindCount, laneBadge, laneKpi, laneRoom } from "
 export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx);
   const st = servedRead(payloads, ctx, base.reads, "/api/absorb");
+  // A body with no warnings LIST is the lint's verdict unread, never "no warning" (Phase 04 attack).
+  const warningsRead = Array.isArray(st.body["warnings"]);
   const warnings = asArray(st.body["warnings"]).map(cell).filter((w) => w !== "");
   const cap = cell(st.body["cap"]);
   return {
@@ -54,10 +56,15 @@ export function fold(payloads, ctx) {
       row: (t) => {
         const id = field(t, "id");
         const decided = field(t, "adopt") || field(t, "retire");
-        return id === "" ? null : { key: id, cells: [`${id} · ${field(t, "name")}`, `${field(t, "status")} · ${field(t, "lane")}`, field(t, "source") || "no source named", `${field(t, "classification") || "no report"} · ${cell(t["evidence"])} evidence file${t["evidence"] === 1 ? "" : "s"}${decided !== "" ? ` · decided ${decided.slice(-6)}` : ""}`] };
+        // A ULID is shortened to its tail; a decision named by a path is shown whole, never cut to `s/x.md`.
+        const decidedBy = /^[0-9A-HJKMNP-TV-Z]{26}$/.test(decided) ? decided.slice(-6) : decided;
+        const evidence = asArray(t["evidence"]).map(cell).filter((e) => e !== "").length;
+        return id === "" ? null : { key: id, cells: [`${id} · ${field(t, "name")}`, `${field(t, "status")} · ${field(t, "lane")}`, field(t, "source") || "no source named", `${field(t, "classification") || "no report"} · ${evidence} evidence file${evidence === 1 ? "" : "s"}${decidedBy !== "" ? ` · decided ${decidedBy}` : ""}`] };
       },
-      note: warnings.length === 0
-        ? (st.isRead ? "absorb's registry lint reports no warning on it" : "")
+      note: !warningsRead
+        ? (st.isRead ? "the body carried no warnings list, so the registry lint's verdict is unread" : "")
+        : warnings.length === 0
+        ? "absorb's registry lint reports no warning on it"
         : `absorb's registry lint warns ${warnings.length} time${warnings.length === 1 ? "" : "s"}: ${warnings.join(" · ")}`,
     }),
     adopted: servedTable(st, {

@@ -66,6 +66,13 @@ export function scanAll(root) {
         torn.push({ day, line: i + 1 });
         continue;
       }
+      // A line that parses to something that is not an object -- `null`, a number, a string, an array -- is not an
+      // event either. It used to be kept as one, and every consumer that read `.kind` off it threw: one such line
+      // turned /api/health, /api/spine and ten Phase 04 door routes into 500s (face v2 Phase 04 attack). It is torn.
+      if (event === null || typeof event !== "object" || Array.isArray(event)) {
+        torn.push({ day, line: i + 1 });
+        continue;
+      }
       events.push({ event, day, seq: seq++, line });
     }
   }
@@ -95,8 +102,11 @@ export async function readAll(root, engine) {
         const torn = db.prepare("SELECT day, line FROM torn ORDER BY day, line").all()
           .map((t) => ({ day: t.day, line: t.line }));
         for (const r of rows) {
-          try { events.push({ event: JSON.parse(r.line), day: r.day, seq: r.seq, line: r.line }); }
-          catch { torn.push({ day: r.day, line: r.seq }); }
+          let event;
+          try { event = JSON.parse(r.line); } catch { torn.push({ day: r.day, line: r.seq }); continue; }
+          // The canonical scan's rule, applied here too, so the two engines tell the same story about a non-object line.
+          if (event === null || typeof event !== "object" || Array.isArray(event)) { torn.push({ day: r.day, line: r.seq }); continue; }
+          events.push({ event, day: r.day, seq: r.seq, line: r.line });
         }
         return { events, torn, engine: "sqlite" };
       } finally { db.close(); }

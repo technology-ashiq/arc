@@ -87,10 +87,10 @@ function phase04Block(day) {
     // a scheduled job's fire.
     { kind: "run.completed", actor: "scheduler:brief-materialize", payload: { job: "brief-materialize", outcome: "ok", duration_ms: 40 } },
     // leads: two sends to one lead, one to another, and a suppression -- HMAC-shaped ids, never a contact.
-    { kind: "outreach.sent", payload: ({ ts }) => ({ lead_id: "lh-fixture-a", campaign: "fixture", submitted_at: ts, rehearsal: true }) },
-    { kind: "outreach.sent", payload: ({ ts }) => ({ lead_id: "lh-fixture-a", campaign: "fixture", submitted_at: ts, rehearsal: true }) },
-    { kind: "outreach.sent", payload: ({ ts }) => ({ lead_id: "lh-fixture-b", campaign: "fixture", submitted_at: ts, rehearsal: true }) },
-    { kind: "lead.suppressed", payload: ({ ts }) => ({ lead_id: "lh-fixture-b", reason: "unsubscribe", suppressed_at: ts }) },
+    { kind: "outreach.sent", payload: ({ ts }) => ({ lead_id: "lead_hmac_v1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", campaign: "fixture", submitted_at: ts, rehearsal: true }) },
+    { kind: "outreach.sent", payload: ({ ts }) => ({ lead_id: "lead_hmac_v1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", campaign: "fixture", submitted_at: ts, rehearsal: true }) },
+    { kind: "outreach.sent", payload: ({ ts }) => ({ lead_id: "lead_hmac_v1_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", campaign: "fixture", submitted_at: ts, rehearsal: true }) },
+    { kind: "lead.suppressed", payload: ({ ts }) => ({ lead_id: "lead_hmac_v1_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", reason: "unsubscribe", suppressed_at: ts }) },
     // growth: a piece published, then corrected -- the chain's head is the correction.
     { kind: "content.published", payload: ({ hex }) => ({ site: "fixture.example", slug: "fixture-piece", url: "https://fixture.example/fixture-piece", title: "Fixture piece", template_id: "t-fixture", cluster_id: "k-fixture", content_sha: hex("piece-v1"), pr_ref: "fixture#1" }) },
     { kind: "content.published", supersedes: 10, payload: ({ hex }) => ({ site: "fixture.example", slug: "fixture-piece", url: "https://fixture.example/fixture-piece", title: "Fixture piece, corrected", template_id: "t-fixture", cluster_id: "k-fixture", content_sha: hex("piece-v2"), pr_ref: "fixture#2" }) },
@@ -99,11 +99,18 @@ function phase04Block(day) {
     { kind: "approval.requested", payload: ({ hex }) => ({ what: "fixture terms page", gate: "legal", subject: "legal.publish", sha: hex("terms") }) },
     { kind: "decision.recorded", payload: ({ ids }) => ({ decides: ids[13], reason: "fixture legal approval", verdict: "approve" }) },
     // evolve: one experiment, two arms, one measured window.
-    { kind: "experiment.opened", payload: { experiment_id: "x-fixture", module: "fixture", surface: "fixture-surface", target_path: "docs/fixture.md", base_sha: "0".repeat(40), split: 50, ttl_days: 14, arms: ["a", "b"] } },
-    { kind: "experiment.measured", payload: { experiment_id: "x-fixture", arm: "a", unit_id: "u1", unit_count: 3, metric: "fixture.metric", window_start: day, window_end: day } },
-    { kind: "experiment.measured", payload: { experiment_id: "x-fixture", arm: "b", unit_id: "u2", unit_count: 2, metric: "fixture.metric", window_start: day, window_end: day } },
+    { kind: "experiment.opened", payload: { experiment_id: "x-fixture", module: "fixture", surface: "fixture-surface", target_path: "docs/fixture.md", base_sha: "0".repeat(64), split: 50, ttl_days: 14, arms: ["+a", "+b"] } },
+    { kind: "experiment.measured", payload: { experiment_id: "x-fixture", arm: "+a", unit_id: "u1", unit_count: 3, metric: "fixture_metric", window_start: day, window_end: day } },
+    { kind: "experiment.measured", payload: { experiment_id: "x-fixture", arm: "+b", unit_id: "u2", unit_count: 2, metric: "fixture_metric", window_start: day, window_end: day } },
     // policy: one earned rung, folded under the ceiling.
     { kind: "policy.level.changed", payload: { action_kind: "process:review-diff", capability: "read", to_level: "L2", from_level: "L1", evidence: "docs/trial-ledger.md#fixture" } },
+    // money: one real and one simulated receipt on the day, and three cost lines -- two currencies, one unmeasurable --
+    // so the day series has both substances and two currencies on ONE day, which is where a sum would hide.
+    { kind: "revenue.received", venture: "lexos", payload: { amount: 250000, currency: "INR", venture: "lexos", provider: "fixture", provider_payment_id: "pay_fixture_real_1" } },
+    { kind: "revenue.simulated", venture: "lexos", payload: { amount: 99900, currency: "INR", venture: "lexos", provider: "fixture", provider_payment_id: "pay_fixture_sim_1" } },
+    { kind: "cost.incurred", payload: { amount: 12345, currency: "INR", source: "measured", label: "fixture api" } },
+    { kind: "cost.incurred", payload: { amount: 500, currency: "USD", source: "estimated", label: "fixture gpu" } },
+    { kind: "cost.incurred", payload: { amount: 1.5, currency: "INR", source: "estimated", label: "fixture unmeasurable" } },
   ];
 }
 let phase04Written = 0;

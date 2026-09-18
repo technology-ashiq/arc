@@ -71,9 +71,17 @@ export function fold(payloads, ctx) {
         const lane = field(l, "lane");
         const total = typeof l["total"] === "number" ? l["total"] : 0;
         const proven = typeof l["proven"] === "number" ? l["proven"] : 0;
+        // A heading the ledger parser REFUSED is a slice nobody can see: while there is one, the file does not prove
+        // its close, and "every slice proven" would be a claim over the slices that parsed (Phase 04 attack).
+        const errors = typeof l["errors"] === "number" ? l["errors"] : 0;
+        const present = l["present"] === true;
+        const next = !present ? "—"
+          : errors > 0 ? `${errors} slice heading${errors === 1 ? "" : "s"} the parser refused -- the file does not prove its close`
+            : field(l, "next") !== "" ? field(l, "next")
+              : total > 0 ? "none -- every slice proven" : "no slice";
         return lane === "" ? null : {
           key: lane,
-          cells: [`${lane} · ${field(l, "phase")}`, l["present"] === true ? `${proven} of ${total}` : "—", l["present"] === true ? (field(l, "next") || (total > 0 ? "none -- every slice proven" : "no slice")) : "—", l["present"] === true ? field(l, "file") : `no task file${field(l, "file") !== "" ? ` at ${field(l, "file")}` : ""}`],
+          cells: [`${lane} · ${field(l, "phase")}`, present ? `${proven} of ${total}${errors > 0 ? ` (+${errors} unread)` : ""}` : "—", next, present ? field(l, "file") : (field(l, "why") || "no task file")],
         };
       },
       note: "every slice proven is computed here; tests green on CI per job and the evidence bundle are checked by /arc-phase-done from the main clone, not by the door",

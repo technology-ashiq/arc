@@ -105,12 +105,19 @@ function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-function escapeDeep(v) {
+// Two holes a Phase 04 attacker walked through, closed here because every route shares this serializer:
+//   - a receipt nesting 20,000 levels deep blew the stack and answered 500 -- past MAX_DEPTH a value is replaced by a
+//     sentence saying so, never truncated silently and never a crash;
+//   - a key named "__proto__" was ASSIGNED onto a plain object, which sets the prototype and drops the key -- keys are
+//     DEFINED instead, so what the payload said is what the wire says.
+const MAX_DEPTH = 256;
+function escapeDeep(v, depth = 0) {
   if (typeof v === "string") return escapeHtml(v);
-  if (Array.isArray(v)) return v.map(escapeDeep);
+  if (depth >= MAX_DEPTH && v && typeof v === "object") return `[nested deeper than ${MAX_DEPTH} levels -- not served]`;
+  if (Array.isArray(v)) return v.map((x) => escapeDeep(x, depth + 1));
   if (v && typeof v === "object") {
     const out = {};
-    for (const k of Object.keys(v)) out[escapeHtml(k)] = escapeDeep(v[k]);
+    for (const k of Object.keys(v)) Object.defineProperty(out, escapeHtml(k), { value: escapeDeep(v[k], depth + 1), enumerable: true, writable: true, configurable: true });
     return out;
   }
   return v;
@@ -142,6 +149,9 @@ const STATUS = Object.freeze({
   // file the owning lane's parser refuses is unprocessable, not an internal fault; a lane module that will not load
   // refuses its own route and nothing else.
   SOURCE_ABSENT: 503, SOURCE_INVALID: 422, PARSER_UNAVAILABLE: 503,
+  // A source that resolves off the tree is refused like PHASES_OUTSIDE; one that changed while it was being read is
+  // retryable, which is a 503, not a client mistake.
+  SOURCE_OUTSIDE: 403, SOURCE_CHANGING: 503,
 });
 
 class DashError extends Error {
@@ -330,8 +340,14 @@ async function apiPnl(ctx, url) {
   if (url.searchParams.get("asof") !== null)
     throw new DashError("ASOF_UNSUPPORTED",
       "pnl's native as-of is ?month=YYYY-MM (a month IS a time scope); day-granular as-of needs an asof seam in the money brain's derivePnl and is deliberately not re-derived here (ADR-1301: the door never re-implements the money core)");
-  for (const k of new Set(url.searchParams.keys()))
+  for (const k of new Set(url.searchParams.keys())) {
     if (!PNL_KEYS.includes(k)) throw new DashError("BAD_ARGS", `/api/pnl takes ${PNL_KEYS.filter((x) => x !== "asof").join(", ")}; "${k}" is not one of them`);
+    // A key given twice is two answers to one question, and the door would silently pick one (face v2 Phase 04 attack).
+    if (url.searchParams.getAll(k).length > 1) throw new DashError("BAD_ARGS", `/api/pnl takes each key once; "${k}" came ${url.searchParams.getAll(k).length} times`);
+  }
+  // `simulated` is a switch with ONE on-value; "true" used to answer with the REAL model, the opposite of what was asked.
+  const sim = url.searchParams.get("simulated");
+  if (sim !== null && sim !== "1") throw new DashError("BAD_ARGS", `simulated takes the value 1, got "${sim}" -- any other value would be read as the real model`);
   const by = url.searchParams.get("by");
   if (by !== null) {
     // The DAY series (face v2 Phase 04): the money brain's own deriveDaily, once per substance -- two series side by
@@ -352,9 +368,11 @@ async function apiPnl(ctx, url) {
         realMinor: d.cashInInr, realRows: d.rows,
         simulatedMinor: simulated.days[i].cashInInr, simulatedRows: simulated.days[i].rows,
         costLines: d.costLines,
+        unmeasuredCostLines: d.unmeasuredCostLines,
       })),
-      unmeasuredCosts: real.unmeasuredCosts,
-      needsYou: real.needsYou + simulated.needsYou,
+      unplaceable: { real: real.unplaceable, simulated: simulated.unplaceable },
+      // Per substance, never summed: the cost flags are the same flags in both reads, and adding them counted each twice.
+      needsYou: { real: real.needsYou, simulated: simulated.needsYou },
     };
   }
   const month = url.searchParams.get("month");
@@ -856,7 +874,11 @@ function boot(argv) {
         })
         .catch((err) => {
           const code = (err instanceof SpineError || err instanceof DashError || err instanceof reads.ReadError) ? err.code : "INTERNAL";
-          fail(code, err.message);
+          // An UNTYPED error's message is never sent: it carries whatever the throwing code put in it -- an OS path
+          // with the account name, a stack fragment (face v2 Phase 04 attack). The operator reads it on stderr.
+          if (code === "INTERNAL") process.stderr.write(`arc-dash: WARN internal error on ${req.method} ${path} -- ${err && err.message}
+`);
+          fail(code, code === "INTERNAL" ? "the door hit an error it has no name for while serving this route; the detail is on the door's stderr" : err.message);
         });
     };
 

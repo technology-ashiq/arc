@@ -102,10 +102,19 @@ export function fold(payloads, ctx) {
       empty: "No lead has been touched, replied or suppressed on this spine.",
       row: (l) => {
         const id = field(l, "lead_id");
-        const stands = l["suppressed"] === true ? "suppressed" : l["replied"] === true ? "replied" : "sent to";
+        const after = typeof l["afterNow"] === "number" ? l["afterNow"] : 0;
+        const unreadable = typeof l["unreadable"] === "number" ? l["unreadable"] : 0;
+        // Suppressed outranks everything, then a reply; a touch stamped after the door's clock is what the guard refuses
+        // as clock skew, and is said so -- never counted as a touch outside the window (Phase 04 attack).
+        const stands = l["suppressed"] === true ? "suppressed" : l["replied"] === true ? "replied"
+          : after > 0 ? `refused by the guard: ${after} touch${after === 1 ? "" : "es"} stamped after the door's clock`
+            : unreadable > 0 ? `refused by the guard: ${unreadable} touch${unreadable === 1 ? "" : "es"} with no readable time` : "sent to";
         return id === "" ? null : { key: id, cells: [id, stands, `${cell(l["inWindow"])} of ${cell(capsBody["touches_per_lead"]) || "?"} · ${cell(l["touches"])} in all`, field(l, "last").slice(0, 16) || "never touched"] };
       },
-      note: `the window is the last ${cell(capsBody["rolling_window_days"]) || "?"} days; the lane's own fold records sent, replied and suppressed, and no later stage`,
+      note: [
+        `the window is the last ${cell(capsBody["rolling_window_days"]) || "?"} days; the lane's own fold records sent, replied and suppressed, and no later stage`,
+        typeof st.body["idsWithheld"] === "number" && st.body["idsWithheld"] > 0 ? `${cell(st.body["idsWithheld"])} receipt id${st.body["idsWithheld"] === 1 ? "" : "s"} that are not an HMAC lead id withheld -- a lead is never shown by anything else` : "",
+      ].filter((n) => n !== "").join(" · "),
     }),
     caps: servedTable(projected(st, "rows", (b) => {
       const c = asObject(b["caps"]);
@@ -123,7 +132,11 @@ export function fold(payloads, ctx) {
       listKey: "rows",
       empty: "The leads config carries no cap.",
       row: (r) => (field(r, "cap") === "" ? null : { key: field(r, "cap"), cells: [field(r, "cap"), cell(r["value"]), field(r, "today") || "—"] }),
-      note: st.isRead ? `today is ${field(st.body, "today")} in IST; ${cell(sends["unmarked"])} send${sends["unmarked"] === 1 ? "" : "s"} carried no rehearsal mark and counted as real` : "",
+      note: st.isRead ? [
+        `today is ${field(st.body, "today")} in IST; the caps come from ${field(st.body, "capsFrom") || "an unnamed source"}`,
+        `${cell(sends["unmarked"])} send${sends["unmarked"] === 1 ? "" : "s"} carried no rehearsal mark and counted as real`,
+        typeof sends["unplaceable"] === "number" && sends["unplaceable"] > 0 ? `${cell(sends["unplaceable"])} send${sends["unplaceable"] === 1 ? "" : "s"} with no placeable time, which the lane cannot put on a day` : "",
+      ].filter((n) => n !== "").join(" · ") : "",
     }),
     ledger: servedTable(projected(st, "rows", (b) => (Array.isArray(b["suppressed"]) ? b["suppressed"].map((id) => ({ lead_id: id })) : undefined)), {
       panel: "Suppression ledger",

@@ -137,6 +137,10 @@ export function fold(payloads, ctx) {
     chartCost: dayTable("Fourteen days, cost lines", "cost", `${COST_KIND} · lines, by currency`, "cost lines counted by the currency each was recorded in, never summed",
       (d) => {
         const lines = asArray(d["costLines"]).map((c) => `${cell(asObject(c)["lines"])} in ${field(asObject(c), "currency")}`);
+        // A line whose size nobody can read is still a cost that day: counted on its day, apart from the currencies,
+        // so the day agrees with the room's own "cost lines served" (Phase 04 attack).
+        const unmeasured = typeof d["unmeasuredCostLines"] === "number" ? d["unmeasuredCostLines"] : 0;
+        if (unmeasured > 0) lines.push(`${unmeasured} with no readable amount`);
         return lines.length > 0 ? lines.join(" · ") : "no cost line";
       }),
     milestones: notServed(

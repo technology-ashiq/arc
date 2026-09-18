@@ -394,3 +394,22 @@ controls); none is ledgered.
 - **Found while writing the fixes:** two edit scripts lost a regex backslash (a quoted heredoc and an inline
   program), and one inserted `$'` into a replacement string, which `String.replace` expands. Every edit since
   goes through a script written with the file tool, with function replacements.
+
+## Face v2 Phase 04 (door read routes) — two fresh attackers (decision logic · HTTP/OS boundary) + the first CI run, 2026-09-18
+
+- **A shared lib helper indexed a door body by a served room id** (`k["ventures"]`) — the first CI run's one red, all five legs, `face/src/lib/served.mjs` — *no room id literal in a shell or lib file, even as a data key; a room's own projection lives in its module's fold.*
+- **Validate one read, serve another, at the door**: `fileAt` hashed a file, then the lane parser re-read it by path (`loadJobs`, `loadCaps`, `readCeilings`, the kill panel); 722 of 4,100 polls served one version's sha beside another's data — `reads.mjs` — *parse the text you hashed; where a lane parser takes only a path, read before and after the call and refuse (SOURCE_CHANGING) when the bytes moved; compare the kill panel's digest with the parsed file's.*
+- **Lane and loader messages forwarded verbatim** carried `C:\Users\<account>\...` into 503 and 200 bodies; an untyped error answered 500 with its message — `reads.mjs` (`lib`, `invalid`, `budgetsRefused`), `arc-dash.mjs` INTERNAL — *never forward a message you did not write: scrub it or name the code; INTERNAL answers a fixed sentence and logs the detail.*
+- **Directory walks with no containment and no type check**: a junction at `docs/adr` or `phases/` served off-tree content; a file where a directory belongs was a 500 — `reads.mjs` (`contained`, `dirAt`) — *every file AND directory a route reads is realpath-contained and type-checked, exactly as `lanePhases` is.*
+- **A spine line that parses to a non-object (`null`) was kept as an event** — every consumer reading `.kind` threw; 12 routes answered 500 — `spine.mjs` scan and the sqlite read path — *a JSON line that is not an object is torn, in every engine.*
+- **An address written where a lead id belongs, and paths in free-text receipt fields, reached the wire** — `reads.mjs` — *serve an id only when it matches its lane's own grammar (`LEAD_ID_RE`); scrub every free-text receipt field.*
+- **A test-only env door swapped the file a server served** (`ARC_BENCH_CEILINGS`, `ARC_VENTURES_FILE`) while `sources` named the tree's file — `reads.mjs` — *a server refuses an env override of its sources by name.*
+- **A repeated query key or an off-set value was silently resolved**: `?simulated=true` answered the REAL model — `arc-dash.mjs` apiPnl — *a key given twice, or a value outside its set, is BAD_ARGS.*
+- **The serializer recursed without a cap and ASSIGNED keys** (`__proto__` dropped) — `arc-dash.mjs` escapeDeep — *cap depth with a sentence; define keys, never assign them.*
+- **A wrong-shaped source read as empty**: jobs as a mapping, a misspelt `gates:`, a router with no tiers drew "declares no …" — `reads.mjs` — *a required list or mapping that is absent is SOURCE_INVALID, never `[]` (twin of the Phase 03 gates/jobs defect).*
+- **A fold ignored a count the door served about what it could not read** (`errors`, `conflicts`, `strayArms`, `damaged`, unmeasured cost lines, torn spine lines) — develop, evolve, money folds and `served.mjs` — *every count a body carries about what was not read is drawn.*
+- **A KPI counted the raw list beside a table that refused or dropped entries** — model-policy, executor, learn — *a figure beside a table counts what the table drew.*
+- **The door folded receipts the owning lane screens first** (evolve's `admit`) — `reads.mjs` — *where a lane screens receipts before folding, the door screens with the same function.*
+- **The door re-decided a guard's call** (a touch after the clock read as outside the window) — `reads.mjs` leads — *surface the lane's refusal classes; never re-decide them.*
+- **V8 rolls 2026-09-31 into October 1** — `deriveDaily`, `/api/learn` — *a date is real only if it round-trips.*
+- **The tests: 20 of 21 decision mutants survived**, a panel could sit in both derived lists, and the by-day arm asserted a window holding no data — `tests/face/phase04-folds.mjs` (new), module-frame, dash-doors — *pin each decision with a body shaped to kill its mutant; check derived list pairs disjoint; a series test puts fixture data inside the window it reads.*

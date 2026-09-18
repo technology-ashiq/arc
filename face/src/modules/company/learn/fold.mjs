@@ -10,7 +10,7 @@
 // council chamber), and the sleeping queue, which is prose in the plans index that no parser reads.
 // v0.7's champion/challenger preview was a simulated experiment; the real ones are the evolve room's.
 import { notServed } from "../../../lib/registry.mjs";
-import { asArray, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
+import { asArray, asObject, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
 
 /** How many rules the panel draws, newest first; the note says how many there are in all. */
 const RULE_ROWS = 20;
@@ -44,7 +44,24 @@ export function fold(payloads, ctx) {
   };
   const evolve = roomLink(ctx, "evolve");
   const st = servedRead(payloads, ctx, base.reads, "/api/learn");
-  const all = asArray(st.body["rules"]).length;
+  // The rules a reader can use: entries with an id, counted the way the table reads them -- never the raw length of a
+  // list that may hold entries the table refuses (Phase 04 attack).
+  const all = asArray(st.body["rules"]).filter((r) => field(asObject(r), "id") !== "").length;
+  const rulesTable = servedTable(projected(st, "rules", (b) => (Array.isArray(b["rules"]) ? b["rules"].slice(-RULE_ROWS).reverse() : undefined)), {
+    panel: "Playbook rules",
+    route: "/api/learn",
+    columns: ["logged", "the pattern", "the rule it became"],
+    listKey: "rules",
+    empty: "The retro log holds no rule yet.",
+    row: (r) => {
+      const id = field(r, "id");
+      return id === "" ? null : { key: id, cells: [field(r, "date"), field(r, "pattern"), field(r, "prevention")] };
+    },
+    note: [
+      st.isRead ? `the newest ${Math.min(RULE_ROWS, all)} of ${all}` : "",
+      "recall over them is a search, and a search is a verb of the work door",
+    ].filter((n) => n !== "").join(" · "),
+  });
   return {
     ...base,
     badge: "the learning loop · files, not log",
@@ -52,23 +69,9 @@ export function fold(payloads, ctx) {
       { key: "retro", v: size("retro-log"), l: "The retro log", sub: "one line per pattern · its size, as served" },
       { key: "trial", v: size("trial-ledger"), l: "The trial ledger", sub: "the evidence a gate is promoted on" },
       { key: "concepts", v: holdsCount(base, "concepts"), l: "Concepts", sub: "homed here by the registry" },
-      { key: "rules", v: st.isRead ? String(all) : "—", l: "Playbook rules", sub: st.isRead ? "lessons in the retro log" : "reading /api/learn" },
+      { key: "rules", v: rulesTable.isDrawn ? String(all) : "—", l: "Playbook rules", sub: st.isRead ? "lessons in the retro log" : "reading /api/learn" },
     ],
-    rules: servedTable(projected(st, "rules", (b) => (Array.isArray(b["rules"]) ? b["rules"].slice(-RULE_ROWS).reverse() : undefined)), {
-      panel: "Playbook rules",
-      route: "/api/learn",
-      columns: ["logged", "the pattern", "the rule it became"],
-      listKey: "rules",
-      empty: "The retro log holds no rule yet.",
-      row: (r) => {
-        const id = field(r, "id");
-        return id === "" ? null : { key: id, cells: [field(r, "date"), field(r, "pattern"), field(r, "prevention")] };
-      },
-      note: [
-        st.isRead ? `the newest ${Math.min(RULE_ROWS, all)} of ${all}` : "",
-        "recall over them is a search, and a search is a verb of the work door",
-      ].filter((n) => n !== "").join(" · "),
-    }),
+    rules: rulesTable,
     calibration: notServed(
       "Juror calibration",
       "/api/learn",

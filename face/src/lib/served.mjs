@@ -81,8 +81,17 @@ const refused = (code, human) => ({ isReading: false, isRefused: true, refusal: 
 function sourceLine(body) {
   const parser = field(body, "parser");
   const files = asArray(body["sources"]).map((s) => field(asObject(s), "path")).filter((p) => p !== "");
-  if (parser === "" && files.length === 0) return "";
-  return [parser !== "" ? `parsed by ${parser}` : "", files.length > 0 ? `from ${files.join(", ")}` : ""].filter((s) => s !== "").join(" ");
+  // A log route says how much of the spine it could NOT read -- a torn line, an envelope that is not a receipt --
+  // so a table over the rest is never presented as the whole log (face v2 Phase 04 attack).
+  const spine = asObject(body["spine"]);
+  const torn = typeof spine["torn"] === "number" ? spine["torn"] : 0;
+  const skipped = typeof spine["skipped"] === "number" ? spine["skipped"] : 0;
+  const unread = torn + skipped;
+  return [
+    parser !== "" ? `parsed by ${parser}` : "",
+    files.length > 0 ? `from ${files.join(", ")}` : "",
+    unread > 0 ? `-- ${unread} spine line${unread === 1 ? "" : "s"} the reader could not read, not counted here` : "",
+  ].filter((s) => s !== "").join(" ");
 }
 
 /**
@@ -197,56 +206,28 @@ export function refusedPart(st, code, human) {
  */
 export function gateModes(st, panel, extraNote = "") {
   const profile = field(st.body, "profile");
-  const resolver = field(st.body, "profileResolver");
+  const refused = field(st.body, "profileRefused");
+  const resolver = field(st.body, "profileResolver") || "arc-profile.sh";
   return servedTable(st, {
     panel,
     route: "/api/gates",
-    columns: ["gate", "mode, as declared", "tier", "evidence"],
+    columns: ["gate", "mode", "tier", "evidence"],
     listKey: "gates",
     empty: "arc.gates.yaml declares no gate.",
     row: (g) => {
       const name = field(g, "name");
-      return name === "" ? null : { key: name, cells: [name, field(g, "mode"), field(g, "tier"), field(g, "evidence")] };
+      const mode = field(g, "mode");
+      const resolved = field(g, "resolved");
+      // A "profile" gate shows what the resolver made of it -- or says it was not resolved, never a guessed mode.
+      const shown = mode !== "profile" ? mode : resolved !== "" ? `${resolved} (by the profile)` : "profile -- not resolved";
+      return name === "" ? null : { key: name, cells: [name, shown, field(g, "tier"), field(g, "evidence")] };
     },
     note: [
-      st.isRead ? `the strictness profile is ${profile === "" ? "unset, so the default applies" : profile}; a gate declared "profile" takes its mode from it, resolved by ${resolver || "arc-profile.sh"}` : "",
+      st.isRead
+        ? (profile !== "" ? `the strictness profile is ${profile}, as ${resolver} resolves it in the door's environment` : `no profile is claimed: ${refused || `${resolver} gave no profile name`}`)
+        : "",
       extraNote,
     ].filter((n) => n !== "").join(" · "),
-  });
-}
-
-/**
- * Each venture's distance from its kill lines, one row per criterion, as the ledger's kill panel evaluated them
- * (/api/ventures). A criteria file whose digest no receipt pins is NOT evaluated -- the panel says the kill lines
- * are unarmed rather than drawing distances the ledger refused to compute.
- * @param {ServedState} st @param {string} panel
- * @returns {ServedTable}
- */
-export function venturesKill(st, panel) {
-  const kill = asObject(st.body["kill"]);
-  const armed = kill["present"] === true && kill["receipted"] === true;
-  return servedTable(projected(st, "rows", (b) => {
-    const k = asObject(b["kill"]);
-    if (!Array.isArray(k["ventures"])) return undefined;
-    return k["ventures"].flatMap((v) => asArray(asObject(v)["criteria"]).map((c) => ({ ...asObject(c), venture: asObject(v)["venture"] })));
-  }), {
-    panel,
-    route: "/api/ventures",
-    columns: ["venture", "kill criterion", "status", "distance to the line"],
-    listKey: "rows",
-    empty: kill["present"] !== true
-      ? "ventures.yaml is not on this tree, so no venture has a kill line."
-      : kill["receipted"] !== true
-        ? "The criteria file's digest is pinned by no receipt, so the ledger arms no kill line and computes no distance."
-        : "The criteria file names no venture.",
-    row: (c) => {
-      const venture = field(c, "venture");
-      const criterion = field(c, "criterion");
-      const unit = field(c, "unit");
-      const distance = c["distance"] === null || c["distance"] === undefined ? (field(c, "reason") || "not measured") : `${cell(c["distance"])}${unit ? ` ${unit}` : ""}`;
-      return venture === "" || criterion === "" ? null : { key: `${venture}/${criterion}`, cells: [venture, `${criterion} ${cell(c["threshold"])}`, field(c, "status"), distance] };
-    },
-    note: armed ? `evaluated on ${field(kill, "asOf")} from ${field(kill, "path")} by the ledger's kill panel` : "",
   });
 }
 

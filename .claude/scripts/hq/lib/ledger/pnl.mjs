@@ -308,31 +308,42 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * @param {{ mode?: "real" | "simulated", days?: number, today: string, engine?: unknown }} opts
  */
 export async function deriveDaily(root, { mode = "real", days = 14, today, engine } = {}) {
-  if (typeof today !== "string" || !DAY_RE.test(today) || !Number.isFinite(Date.parse(`${today}T00:00:00Z`)))
+  // A REAL day: V8 parses 2026-09-31 as October 1, so the shape and a finite parse are not enough -- the day must
+  // round-trip to itself (face v2 Phase 04 attack).
+  if (typeof today !== "string" || !DAY_RE.test(today) || !Number.isFinite(Date.parse(`${today}T00:00:00Z`))
+    || new Date(`${today}T00:00:00Z`).toISOString().slice(0, 10) !== today)
     throw new TypeError(`deriveDaily: today must be a YYYY-MM-DD day, got ${JSON.stringify(today)}`);
   if (!Number.isInteger(days) || days < 1 || days > 62)
     throw new RangeError(`deriveDaily: days must be an integer from 1 to 62, got ${JSON.stringify(days)}`);
   const end = Date.parse(`${today}T00:00:00Z`);
   const window = [];
   for (let i = days - 1; i >= 0; i--) window.push(new Date(end - i * DAY_MS).toISOString().slice(0, 10));
-  const byDay = new Map(window.map((day) => [day, { day, cashInInr: 0, rows: 0, costLines: new Map() }]));
+  const byDay = new Map(window.map((day) => [day, { day, cashInInr: 0, rows: 0, costLines: new Map(), unmeasuredCostLines: 0 }]));
+  // A row or line whose ts is not a string cannot be placed on a day. It is COUNTED, never allowed to throw: a
+  // receipt with no ts is on the spine, and the month view renders it (face v2 Phase 04 attack).
+  const dayOf = (ts) => (typeof ts === "string" ? ts.slice(0, 10) : null);
+  let unplaceable = 0;
 
   const model = await derivePnl(root, { mode, engine });
   for (const v of model.ventures) {
     for (const r of v.rows) {
-      const b = byDay.get(r.ts.slice(0, 10));
+      const d = dayOf(r.ts);
+      if (d === null) { unplaceable += 1; continue; }
+      const b = byDay.get(d);
       if (!b) continue;
       b.cashInInr += r.amountInr;
       b.rows += 1;
     }
   }
   const costLines = [...model.overhead.lines, ...model.ventures.flatMap((v) => v.costs)];
-  let unmeasuredCosts = 0;
   for (const line of costLines) {
-    const b = byDay.get(line.ts.slice(0, 10));
+    const d = dayOf(line.ts);
+    if (d === null) { unplaceable += 1; continue; }
+    const b = byDay.get(d);
     if (!b) continue;
-    // A line with no integer amount or no currency is counted apart: it is a cost nobody can read the size of.
-    if (line.amount === null || line.currency === null) { unmeasuredCosts += 1; continue; }
+    // A line with no integer amount or no currency is counted ON ITS DAY, apart from the currencies: it is a cost
+    // nobody can read the size of, and still a cost that day -- never dropped from the day's count.
+    if (line.amount === null || line.currency === null) { b.unmeasuredCostLines += 1; continue; }
     b.costLines.set(line.currency, (b.costLines.get(line.currency) || 0) + 1);
   }
   return {
@@ -340,9 +351,13 @@ export async function deriveDaily(root, { mode = "real", days = 14, today, engin
     today,
     days: window.map((day) => {
       const b = byDay.get(day);
-      return { day, cashInInr: b.cashInInr, rows: b.rows, costLines: [...b.costLines.entries()].sort().map(([currency, lines]) => ({ currency, lines })) };
+      return {
+        day, cashInInr: b.cashInInr, rows: b.rows,
+        costLines: [...b.costLines.entries()].sort().map(([currency, lines]) => ({ currency, lines })),
+        unmeasuredCostLines: b.unmeasuredCostLines,
+      };
     }),
-    unmeasuredCosts,
+    unplaceable,
     needsYou: model.needsYou.length,
   };
 }

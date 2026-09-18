@@ -43,7 +43,7 @@ const check = (name, cond, detail = "") => {
   else console.log(`ok ${name}`);
 };
 
-check("fixture loaded (vacuous-pass guard)", gen.base === 2000 && gen.phase04 === 19 && gen.events === 2019 && gen.openApproval, `events=${gen.events} base=${gen.base} phase04=${gen.phase04}`);
+check("fixture loaded (vacuous-pass guard)", gen.base === 2000 && gen.phase04 === 24 && gen.events === 2024 && gen.openApproval, `events=${gen.events} base=${gen.base} phase04=${gen.phase04}`);
 
 const dash = spawn(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--spine", SPINE, "--port", String(PORT)],
   { env: { ...process.env, ARC_DASH_TOKEN: TOKEN, ARC_DASH_JOURNAL_DIR: JOURNAL }, stdio: ["ignore", "ignore", "pipe"] });
@@ -327,6 +327,8 @@ try {
     };
     const sourced = (res, rel) => res.body.sources.some((s) => s.path === rel && s.sha256 === sha(rel));
     const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+    const LEAD_A = `lead_hmac_v1_${"a".repeat(32)}`;
+    const LEAD_B = `lead_hmac_v1_${"b".repeat(32)}`;
 
     // /api/engine -- the router file, parsed; the bench's ceilings; the drivers on disk.
     {
@@ -379,7 +381,7 @@ try {
     {
       const ev = await route("/api/evolve");
       const x = (ev.body.experiments || []).find((e) => e.id === "x-fixture");
-      check("P04 evolve: named, and the fixture's experiment is folded with both arms", ev.named && x && x.arms.join(",") === "a,b", JSON.stringify(ev.body.experiments));
+      check("P04 evolve: named, and the fixture's experiment is folded with both arms", ev.named && x && x.arms.join(",") === "+a,+b", JSON.stringify(ev.body.experiments));
       check("P04 evolve: its one window is complete and each arm counts one unit", x && x.metrics.length === 1 && x.metrics[0].complete === 1 && x.metrics[0].arms.every((a) => a.units === 1), JSON.stringify(x && x.metrics));
       check("P04 evolve: the manifests were read for a contract", typeof ev.body.manifestsRead === "number" && ev.body.manifestsRead >= 1 && Array.isArray(ev.body.contracts));
     }
@@ -399,6 +401,7 @@ try {
     // /api/bench, /api/council, /api/roster -- receipts only the fixture's Phase 04 block wrote.
     {
       const b = await route("/api/bench");
+      check("P04 spine: a log route counts the torn line the fixture carries, as /api/health does", b.body.spine && b.body.spine.torn === 1 && b.body.spine.skipped === 0, JSON.stringify(b.body.spine));
       check("P04 bench: named, and the one scored run is served with NO PROPOSAL as its class's result",
         b.named && Array.isArray(b.body.runs) && b.body.runs.length === 1 && /NO PROPOSAL/.test(b.body.runs[0].classes[0].reason), JSON.stringify(b.body.runs));
       const c = await route("/api/council");
@@ -423,8 +426,13 @@ try {
       const g = await route("/api/gates");
       check("P04 gates: named, parsed from THIS gates file, every gate by name", g.named && sourced(g, "arc.gates.yaml") && gatesOnDisk.length >= 3
         && JSON.stringify(g.body.gates.map((x) => x.name)) === JSON.stringify(gatesOnDisk), JSON.stringify(g.body.gates && g.body.gates.map((x) => x.name)));
-      const profile = JSON.parse(disk(".claude/settings.json")).arc.profile;
-      check("P04 gates: the profile is the one settings.json names", typeof profile === "string" && g.body.profile === profile, `${g.body.profile} vs ${profile}`);
+      // The profile is what arc-profile.sh itself answers in this environment -- the door runs the resolver, it does not
+      // re-read its precedence -- and a "profile" gate carries the mode the resolver gave it.
+      const profile = execFileSync("bash", [join(REPO, ".claude/scripts/core/arc-profile.sh"), "name"], { cwd: REPO }).toString().trim();
+      check("P04 gates: the profile is the one arc-profile.sh resolves", profile.length > 0 && g.body.profile === profile && g.body.profileRefused === "", `${g.body.profile} vs ${profile} (${g.body.profileRefused})`);
+      const scan = g.body.gates.find((x) => x.name === "scan");
+      const scanMode = execFileSync("bash", [join(REPO, ".claude/scripts/core/arc-profile.sh"), "mode", "scan"], { cwd: REPO }).toString().trim();
+      check("P04 gates: a profile-mode gate carries the mode the resolver gives it", scan && scan.mode === "profile" && scan.resolved === scanMode && /^(warn|block)$/.test(scanMode), JSON.stringify(scan));
     }
     // /api/adrs -- every ADR file, by the memory lane's ADR adapter.
     {
@@ -444,7 +452,7 @@ try {
     {
       const ld = await route("/api/leads");
       check("P04 leads: named, both fixture leads by their HMAC id, the suppressed one listed", ld.named
-        && JSON.stringify(ld.body.leads.map((l) => l.lead_id)) === JSON.stringify(["lh-fixture-a", "lh-fixture-b"]) && JSON.stringify(ld.body.suppressed) === JSON.stringify(["lh-fixture-b"]), JSON.stringify(ld.body.leads));
+        && JSON.stringify(ld.body.leads.map((l) => l.lead_id)) === JSON.stringify([LEAD_A, LEAD_B]) && JSON.stringify(ld.body.suppressed) === JSON.stringify([LEAD_B]) && ld.body.idsWithheld === 0, JSON.stringify(ld.body.leads));
       check("P04 leads: touches counted from the receipts -- two to one lead, one to the other", ld.body.leads[0].touches === 2 && ld.body.leads[1].touches === 1);
       check("P04 leads: the caps are numbers from config, and no email-shaped string is on the wire",
         typeof ld.body.caps.per_ist_day === "number" && !/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(JSON.stringify(ld.body)), JSON.stringify(ld.body.caps));
@@ -476,10 +484,13 @@ try {
     // /api/pnl?by=day -- the money brain's day series; an unread key is refused, not ignored.
     {
       const d = await j("/api/pnl?by=day", { headers: H });
+      // The door's day series is today's window; WHAT it buckets is proven against the fixture's own day in
+      // tests/face/phase04-folds.mjs, where deriveDaily is handed that day. Here: the wire shape, and nothing summed.
       check("P04 pnl by=day: fourteen IST days ending today, each substance its own field, never a total",
         d.status === 200 && d.body.route === "/api/pnl" && d.body.by === "day" && d.body.series.length === 14 && d.body.series[13].day === today
-        && d.body.series.every((x) => typeof x.realMinor === "number" && typeof x.simulatedMinor === "number" && Array.isArray(x.costLines) && !("total" in x)), JSON.stringify(d.body.series && d.body.series[13]));
-      for (const q of ["by=week", "by=day&month=2026-07", "bogus=1"]) {
+        && d.body.series.every((x) => typeof x.realMinor === "number" && typeof x.simulatedMinor === "number" && Array.isArray(x.costLines) && typeof x.unmeasuredCostLines === "number" && !("total" in x))
+        && typeof d.body.needsYou === "object" && typeof d.body.needsYou.real === "number" && typeof d.body.needsYou.simulated === "number", JSON.stringify(d.body.series && d.body.series[13]));
+      for (const q of ["by=week", "by=day&month=2026-07", "bogus=1", "by=day&by=week", "month=2026-07&month=2026-08", "simulated=true"]) {
         const bad = await j(`/api/pnl?${q}`, { headers: H });
         check(`P04 pnl: ?${q} is REFUSED by name, never answered with the month model`, bad.status === 400 && bad.body.error === "BAD_ARGS", `${bad.status} ${bad.body.error}`);
       }
@@ -574,4 +585,4 @@ check("both sources were actually read (journal pin)", dashSrc.length > 5000 && 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // The floor moves with the suite. A count that stays at an old number is how a block that
 // stopped registering reads green: the assertions still pass, there are simply fewer of them.
-process.exitCode = failed === 0 && ran >= 126 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 131 ? 0 : 1;

@@ -55,7 +55,7 @@ export function fold(payloads, ctx) {
         const classes = asArray(r["classes"]).map((c) => {
           const k = asObject(c);
           // NO PROPOSAL is a result, drawn in the bench's own words -- never an empty cell.
-          return `${field(k, "task_class")}: ${k["eligible"] === true ? (field(k, "proposal") !== "" ? "proposes" : "eligible") : field(k, "reason") || "not eligible"}`;
+          return `${field(k, "task_class")}: ${k["eligible"] === true ? (k["proposes"] === true ? "proposes" : "eligible") : field(k, "reason") || "not eligible"}`;
         });
         return id === "" ? null : { key: id, cells: [`${field(r, "ts").slice(0, 16)} · ${id.slice(-6)}`, `${field(r, "subject")}${field(r, "model") !== "" ? ` (${field(r, "model")})` : ""}`, field(r, "outcome"), classes.join(" · ") || "no class scored"] };
       },

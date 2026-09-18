@@ -35,43 +35,43 @@ export function fold(payloads, ctx) {
     trailEmpty: "The registry homes no receipt kind here. A tier change is a reviewed diff to the router file, and the merge that lands it is its record.",
   });
   const st = servedRead(payloads, ctx, base.reads, "/api/model-policy");
-  const tierCount = st.isRead ? String(asArray(st.body["tiers"]).length) : "—";
-  const routeCount = st.isRead ? String(asArray(st.body["classes"]).length) : "—";
+  const tiersTable = servedTable(st, {
+    panel: "The tier table",
+    route: "/api/model-policy",
+    columns: ["tier", "implemented by"],
+    listKey: "tiers",
+    empty: "engine/router.yaml declares no tier.",
+    row: (t) => {
+      const tier = field(t, "tier");
+      const models = asArray(t["models"]).map((m) => `${field(asObject(m), "driver")}: ${field(asObject(m), "model")}`);
+      return tier === "" ? null : { key: tier, cells: [tier, models.length > 0 ? models.join(" · ") : "no model pinned -- a driver runs it unpinned and says so"] };
+    },
+    note: "each tier's job description is ADR-0069's prose; the router file names only the model that implements it today",
+  });
+  const processRoutes = servedTable(st, {
+    panel: "Process routes",
+    route: "/api/model-policy",
+    columns: ["process class", "tier", "driver, then fallback", "cap · judge · review by"],
+    listKey: "classes",
+    empty: "engine/router.yaml routes no process class.",
+    row: (c) => {
+      const name = field(c, "name");
+      const chain = [field(c, "driver"), ...asArray(c["fallback"]).map(cell)].filter((d) => d !== "").join(" → ");
+      const terms = field(c, "cap") === "" ? "—" : `${field(c, "cap")} · ${field(c, "judge")} · ${field(c, "review_by")}${c["expired"] === true ? " (past it)" : ""}`;
+      return name === "" ? null : { key: name, cells: [name, field(c, "tier"), chain, terms] };
+    },
+  });
   return {
     ...base,
     badge: laneBadge(base),
     kpis: [
       laneKpi(base),
       { key: "concepts", v: holdsCount(base, "concepts"), l: "Concepts", sub: "homed here by the registry" },
-      { key: "tiers", v: tierCount, l: "Tiers", sub: st.isRead ? "in the router file's tier block" : "reading the router" },
-      { key: "routes", v: routeCount, l: "Process routes", sub: st.isRead ? "task classes, and the default row" : "reading the router" },
+      { key: "tiers", v: tiersTable.isDrawn ? String(tiersTable.rows.length) : "—", l: "Tiers", sub: st.isRead ? "in the router file's tier block" : "reading the router" },
+      { key: "routes", v: processRoutes.isDrawn ? String(processRoutes.rows.length) : "—", l: "Process routes", sub: st.isRead ? "task classes, and the default row" : "reading the router" },
     ],
-    tiers: servedTable(st, {
-      panel: "The tier table",
-      route: "/api/model-policy",
-      columns: ["tier", "implemented by"],
-      listKey: "tiers",
-      empty: "engine/router.yaml declares no tier.",
-      row: (t) => {
-        const tier = field(t, "tier");
-        const models = asArray(t["models"]).map((m) => `${field(asObject(m), "driver")}: ${field(asObject(m), "model")}`);
-        return tier === "" ? null : { key: tier, cells: [tier, models.length > 0 ? models.join(" · ") : "no model pinned -- a driver runs it unpinned and says so"] };
-      },
-      note: "each tier's job description is ADR-0069's prose; the router file names only the model that implements it today",
-    }),
-    routesTable: servedTable(st, {
-      panel: "Process routes",
-      route: "/api/model-policy",
-      columns: ["process class", "tier", "driver, then fallback", "cap · judge · review by"],
-      listKey: "classes",
-      empty: "engine/router.yaml routes no process class.",
-      row: (c) => {
-        const name = field(c, "name");
-        const chain = [field(c, "driver"), ...asArray(c["fallback"]).map(cell)].filter((d) => d !== "").join(" → ");
-        const terms = field(c, "cap") === "" ? "—" : `${field(c, "cap")} · ${field(c, "judge")} · ${field(c, "review_by")}${c["expired"] === true ? " (past it)" : ""}`;
-        return name === "" ? null : { key: name, cells: [name, field(c, "tier"), chain, terms] };
-      },
-    }),
+    tiers: tiersTable,
+    routesTable: processRoutes,
     propose: verbPending(
       "Propose a tier change",
       "A tier change is a reviewed diff to the router file citing ADR-0069, raised to your inbox for a stamp; the route keeps its tier until you stamp. The face raises it once the work door exists.",

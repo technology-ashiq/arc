@@ -616,6 +616,14 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
   listCheck("served.md", join(P04, "served.md"),
     /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \|$/gm,
     (m) => `${m[1]} | ${m[2]} | ${m[3]}`, allServedRows, "SERVED");
+  // A panel is in EXACTLY one of the two lists: drawn both as a served table and as NOT SERVED, the list pair would
+  // agree with the folds while the room contradicted itself (Phase 04 attack: engine-room "Budgets" in both passed).
+  {
+    const panelOf = (r) => r.split(" | ").slice(0, 2).join(" | ");
+    const residuePanels = new Set(allRows.map(panelOf));
+    const both = allServedRows.map(panelOf).filter((k) => residuePanels.has(k));
+    check("PHASE 04: no panel is both served and NOT SERVED", allServedRows.length > 0 && both.length === 0, both.join(" ; "));
+  }
   // Every route a served panel names is a route the door serves; a panel naming one it does not would read "…" for ever.
   const servedRoutes = [...new Set(allServedRows.map((r) => r.split(" | ")[2]))];
   const unrouted = servedRoutes.filter((r) => !Object.hasOwn(door.DOOR_ROUTES || {}, r));
