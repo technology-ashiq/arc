@@ -1,13 +1,12 @@
-// module.mjs -- money/money: the manifest (face v2 Phase 02, ADR-1320, ADR-1321).
+// module.mjs -- money/money: the manifest (face v2 Phase 03, ADR-1320, ADR-1321, REQ-05).
 //
-// CARRIED: this module draws the Cycle 15 MoneyRoom renderer through the module frame until Phase 03's
-// money ring ports v0.7's Money into this folder. It declares no route because the carried
-// renderer reads the door itself.
-// asOf is false: this room's numbers are not day-scoped, and the door refuses a day as-of for them by
-// name -- the shell's scrub says so here instead of silently doing nothing.
+// "Real and simulated are different substances." The kinds that have ever fired (/api/health, the only thing
+// that can unspend real money's colour), the real P&L and its kill panel (/api/pnl), and the simulated P&L
+// (/api/pnl?simulated=1) -- two reads, never merged.
+// asOf is false: the money brain scopes by month, and the door refuses a day as-of on this route by name.
 export default Object.freeze({
   id: "money",
   ring: "money",
-  routes: Object.freeze([]),
+  routes: Object.freeze(["/api/health", "/api/pnl"]),
   asOf: false,
 });

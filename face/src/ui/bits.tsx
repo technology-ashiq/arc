@@ -15,7 +15,7 @@
 import type { ReactNode } from 'react'
 import { Tray } from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
-import { EASE, FONT, MONO, Meter, UI, toneColor } from './kit'
+import { EASE, FONT, MONO, Meter, SimBadge, UI, toneColor } from './kit'
 import type { Tone } from './kit'
 import type { LaneRoom } from '../lib/lane-room.mjs'
 
@@ -80,10 +80,12 @@ export function HPanel({
     >
       {title || actions ? (
         <div className={`flex items-center justify-between gap-3 ${pad ? 'mb-4' : 'px-5 pt-4 pb-3'}`}>
-          <h2 className="flex items-baseline gap-2 min-w-0 flex-1">
+          {/* The hint WRAPS under the title rather than truncating: a hint cut mid-sentence by an ellipsis
+              loses the half that says what the panel's numbers are measured against (factory ring shot review). */}
+          <h2 className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5 min-w-0 flex-1">
             {accent ? <span aria-hidden="true" className="w-[6px] h-[6px] rounded-full shrink-0 self-center" style={{ background: accent }} /> : null}
             <span id={titleId} className="text-[14px] leading-[20px] shrink-0 max-w-full truncate" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)', letterSpacing: '-0.005em' }}>{title}</span>
-            {hint ? <span className="hidden sm:inline text-[12px] leading-[20px] truncate min-w-0" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{hint}</span> : null}
+            {hint ? <span className="hidden sm:inline text-[12px] leading-[18px] min-w-0 break-words" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{hint}</span> : null}
           </h2>
           {actions ? <div className="flex items-center gap-2 shrink-0">{actions}</div> : null}
         </div>
@@ -184,8 +186,10 @@ export function Reading({ what }: { what: string }) {
 export function DoorRefusal({ code, human }: { code: string; human: string }) {
   return (
     <div role="status" className="px-4 py-3 min-w-0" style={{ background: 'var(--well)', border: '1px solid var(--line-2)', borderRadius: 'var(--r-md)' }}>
-      <span className="text-[11.5px]" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-1)' }}>{code}</span>
-      <p className="text-[12.5px] leading-[19px] mt-0.5" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{human}</p>
+      <span className="text-[11.5px] [overflow-wrap:anywhere]" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-1)' }}>{code}</span>
+      {/* A door sentence can carry a digest or a path with no space in it; it wraps inside the card rather than
+          running out of it (money ring shots: a criteria digest crossed the kill-lines panel's edge). */}
+      <p className="text-[12.5px] leading-[19px] mt-0.5 [overflow-wrap:anywhere]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{human}</p>
     </div>
   )
 }
@@ -303,7 +307,7 @@ export type LaneCardView = {
   hasMeter: boolean
   meter: number
   distance: string
-  phases: { key: string; label: string; title: string }[]
+  phases: { key: string; label: string; title: string; also: string }[]
   hasPhases: boolean
   phasesNote: string
 }
@@ -319,23 +323,30 @@ export function LaneCard({ card }: { card: LaneCardView }) {
         <span className="text-[12.5px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{card.phase}</span>
       </div>
       {card.note ? <div className="text-[12px] leading-[18px] mb-2 break-words" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.note}</div> : null}
-      <div className="flex items-center gap-2 mt-2">
-        {card.hasMeter ? (
-          <span className="flex-1 min-w-0">
-            <Meter value={card.meter} label={`${card.lane} burn`} />
-          </span>
-        ) : null}
-        <span className="text-[11.5px] shrink-0 tnum" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-2)' }}>{card.distance}</span>
+      <div className="mb-3">
+        <div className="flex items-center gap-2 mt-2">
+          {card.hasMeter ? (
+            <span className="flex-1 min-w-0">
+              <Meter value={card.meter} label={`${card.lane} burn`} />
+            </span>
+          ) : null}
+          <span className="text-[11.5px] shrink-0 tnum" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-2)' }}>{card.distance}</span>
+        </div>
+        {/* Only a measured burn has its own line; for every other state the label above already says it. */}
+        {card.burn ? <div className="text-[12px] mt-1" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.burn}</div> : null}
       </div>
-      <div className="text-[12px] mt-1 mb-3" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.burn}</div>
       {card.hasPhases ? (
         <div className="-mx-2">
           {card.phases.map((p) => (
             <div key={p.key} className="grid grid-cols-[30px_minmax(0,1fr)] items-baseline gap-2 px-2 py-[5px] text-[12.5px]" style={{ borderTop: '1px solid var(--line-1)' }}>
               <span className="tnum" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{p.label}</span>
               {/* A phase title wraps at a word and stops at two lines: the reference clipped mid-word, which
-                  reads as cut off rather than summarized (Phase 03 kernel shot review). */}
-              <span className="min-w-0 leading-[17px] line-clamp-2 break-words" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{p.title}</span>
+                  reads as cut off rather than summarized (Phase 03 kernel shot review). The phase's other files
+                  -- its Build Brief -- are named beside the title, never drawn as a second copy of it. */}
+              <span className="min-w-0 leading-[17px] line-clamp-2 break-words" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
+                {p.title}
+                {p.also ? <span className="ml-1.5 text-[11px]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>+ {p.also}</span> : null}
+              </span>
             </div>
           ))}
         </div>
@@ -469,5 +480,148 @@ export function HoldsPanel({ holds, century, hasHolds, note = '' }: { holds: Lan
       <Holds groups={holds} century={century} />
       {note ? <p className="text-[11.5px] leading-[17px] mt-2.5" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{note}</p> : null}
     </HPanel>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Planned rooms (face v2 Phase 03, money ring, ADR-1306, ADR-1328). A planned room is drawn from the
+// planned-rooms registry, dotted, and every flow it rehearses says REHEARSAL: the lane is not born, a manifest
+// is never invented for it, and nothing here sends anything anywhere. None of these fragments can say LIVE.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A planned room's banner: a dotted hairline and the honest badge, no wash (v0.7's Banner). */
+export function PlannedBanner({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-3 flex-wrap px-4 py-3 mb-4 text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)', background: 'var(--bg-2)', border: '1px dotted var(--line-2)', borderRadius: 'var(--r-lg)' }}>
+      <SimBadge>rehearsal</SimBadge>
+      <span className="min-w-0">{text}</span>
+    </div>
+  )
+}
+
+/**
+ * A flow a planned room rehearses: drawn as a dotted card and marked `data-rehearsal`, never as a form. It is
+ * not a work-door verb either -- nothing will ever send it until the lane is born and its manifest takes over.
+ */
+export function Rehearsal({ item }: { item: { verb: string; sentence: string } }) {
+  return (
+    <div data-rehearsal={item.verb} className="px-4 py-3.5 min-w-0" style={{ background: 'var(--well)', border: '1px dotted var(--line-2)', borderRadius: 'var(--r-md)' }}>
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        <SimBadge>rehearsal</SimBadge>
+        <span className="text-[12.5px]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{item.verb}</span>
+      </div>
+      <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{item.sentence}</p>
+    </div>
+  )
+}
+
+export type PlannedView = {
+  isReading: boolean
+  isRefused: boolean
+  isRead: boolean
+  refusal: { code: string; human: string }
+  line: { key: string; name: string }[]
+  hasLine: boolean
+  showsToday: string[]
+  hasShowsToday: boolean
+  seals: string[]
+  hasSeals: boolean
+  source: string
+  takesOver: string
+  note: string
+  hasNote: boolean
+  provenance: string
+}
+
+/** The planned line, station by station, every one dotted: nothing on it has run, because the lane is not born. */
+export function PlannedLinePanel({ room }: { room: PlannedView }) {
+  return (
+    <HPanel title="The planned line" hint="from the planned-rooms registry · every station dotted until the lane is born">
+      {room.isReading ? <Reading what="the planned-rooms registry" /> : null}
+      {room.isRefused ? <DoorRefusal code={room.refusal.code} human={room.refusal.human} /> : null}
+      {room.hasLine ? (
+        <div className="flex flex-wrap items-center gap-y-2" data-planned-line={room.line.length}>
+          {room.line.map((s, i) => (
+            <span key={s.key} className="inline-flex items-center">
+              {i > 0 ? <span aria-hidden="true" className="mx-1.5 text-[11px]" style={{ color: 'var(--text-3)' }}>→</span> : null}
+              <span className="inline-flex items-center h-[22px] px-2 text-[11.5px] whitespace-nowrap" style={{ fontFamily: UI, fontWeight: 500, borderRadius: 'var(--r-sm)', color: 'var(--text-2)', border: '1px dotted var(--line-2)' }}>
+                {s.name}
+              </span>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {room.hasNote ? <p className="text-[11.5px] leading-[17px] mt-2.5" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{room.note}</p> : null}
+    </HPanel>
+  )
+}
+
+/** What the unborn lane can already point at in the repo, what takes the room over, and where the plan lives. */
+export function PlannedFactsPanel({ room }: { room: PlannedView }) {
+  return (
+    <HPanel title="What exists for it today" hint="the planned row, as the registry records it">
+      {room.hasShowsToday ? (
+        <div className="text-[12.5px] leading-[19px] space-y-1 mb-3" style={{ fontFamily: MONO, color: 'var(--text-2)' }}>
+          {room.showsToday.map((s) => (
+            <div key={s} className="break-all">· {s}</div>
+          ))}
+        </div>
+      ) : null}
+      {room.hasSeals ? (
+        <div className="mb-3">
+          <SectionLabel>sealed on this page — no control exists for these</SectionLabel>
+          <div className="flex flex-wrap gap-2">
+            {room.seals.map((s) => (
+              <span key={s} className="inline-flex items-center h-[22px] px-2 rounded-full text-[11px] line-through whitespace-nowrap" style={{ fontFamily: UI, fontWeight: 500, color: 'var(--text-3)', background: 'var(--bg-4)', border: '1px solid var(--line-1)' }}>{s}</span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="space-y-1.5 text-[12px] leading-[18px]" style={{ fontFamily: UI, borderTop: '1px solid var(--line-1)', paddingTop: 10 }}>
+        <div className="grid grid-cols-[84px_1fr] gap-2 min-w-0">
+          <span style={{ color: 'var(--text-3)' }}>takes over</span>
+          <span className="min-w-0 break-words" style={{ color: 'var(--text-2)' }}>{room.takesOver}</span>
+        </div>
+        <div className="grid grid-cols-[84px_1fr] gap-2 min-w-0">
+          <span style={{ color: 'var(--text-3)' }}>the plan</span>
+          <span className="min-w-0 break-all" style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{room.source}</span>
+        </div>
+        <div className="grid grid-cols-[84px_1fr] gap-2 min-w-0">
+          <span style={{ color: 'var(--text-3)' }}>read from</span>
+          <span className="min-w-0 break-all" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{room.provenance}</span>
+        </div>
+      </div>
+    </HPanel>
+  )
+}
+
+export type CountRowView = { key: string; name: string; count: string; when: string }
+
+/** Receipts of one kind counted by a field: the name, how many on the page the door sent, and the newest's time. */
+export function CountRows({ rows, empty, isEmpty }: { rows: CountRowView[]; empty: string; isEmpty: boolean }) {
+  if (isEmpty) return <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{empty}</p>
+  return (
+    <div className="-mx-2">
+      {rows.map((r) => (
+        <div key={r.key} data-count-group={r.key} className="flex items-center justify-between gap-3 px-2 py-[7px] text-[13px] transition-colors duration-200 hover:bg-(--bg-3)" style={{ borderBottom: '1px solid var(--line-1)', borderRadius: 'var(--r-sm)' }}>
+          <span className="truncate min-w-0" style={{ fontFamily: UI, color: 'var(--text-1)' }}>{r.name}</span>
+          <span className="text-[12px] tnum shrink-0" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
+            {r.count} <span style={{ color: 'var(--text-3)' }}>· {r.when}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** A list of names the served registry holds, one per line: a lane's lints, its concepts. */
+export function NameList({ names, empty, isEmpty }: { names: string[]; empty: string; isEmpty: boolean }) {
+  if (isEmpty) return <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{empty}</p>
+  return (
+    <ul className="space-y-1.5 text-[12.5px] leading-[19px]" style={{ fontFamily: MONO, color: 'var(--text-2)' }}>
+      {names.map((n) => (
+        <li key={n} className="break-words">· {n}</li>
+      ))}
+    </ul>
   )
 }

@@ -99,6 +99,16 @@ export function byRing(rooms, order = RING_ORDER) {
  * @returns {{ label: string, tone: "live"|"sim"|"file"|"index", title: string }}
  */
 export function stateBadge(room) {
+  // A PLANNED room is not a liveness reading, whatever its homed kinds did. Cycle 15's trader wore `● LIVE`
+  // here because day.closed -- a kind it homes and the whole company fires -- had fired (F3, ADR-1328). The
+  // room's state is that it is planned, and that is the only badge it wears, in the rail and in its head.
+  if (room.planned === true || room.status === "planned") {
+    return {
+      label: "planned",
+      tone: "sim",
+      title: "planned, drawn dotted: the lane is not born, so nothing that fires across the company is counted as this room's",
+    };
+  }
   switch (room.live.state) {
     case "live":
       return {

@@ -276,7 +276,7 @@ const namedRooms = (text) => {
   // parts are excluded BY NAME, each for the reason that makes it true:
   const ROOM_OWNED = new Map([
     ["modules", "a module names its own room: that is what a module is"],
-    ["rooms", "the Cycle 15 renderers the carried modules mount, each naming its own room (Phase 03 deletes them)"],
+    ["rooms", "the generic and index renderers the generic module draws through (Phase 03 deleted the carried room renderers)"],
     ["face", "the unmounted face stage"],
     ["ui", "the kit's tone vocabulary shares words with room ids ('money' is a tone)"],
     ["lib/rooms.mjs", "the Cycle 15 room decisions, which name the rooms they decide for"],
@@ -461,7 +461,7 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
 }
 
 // ── shipped rings (face v2 Phase 03): a ring listed here is PORTED, and its NOT SERVED list is derived ──
-const SHIPPED_RINGS = ["command", "kernel", "factory"];
+const SHIPPED_RINGS = ["command", "kernel", "factory", "money"];
 {
   const contract = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "modules-v2.json"), "utf8"));
   const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
@@ -486,18 +486,26 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
     if (raw === null) return;
     check(`${label} LIST ${name}: every line break is a newline, so grep and this file read the same rows`,
       !/[\r\u2028\u2029]/.test(raw), JSON.stringify((/[\r\u2028\u2029]/.exec(raw) || [])[0] || ""));
+    // The browser suite reads every list of a kind in ONE stream (cat), so a file that does not end in a newline
+    // glues its last line to the next file's first row, and that row disappears there alone (money ring attack).
+    check(`${label} LIST ${name}: the file ends with a newline, so no row of the next list is glued to its last line`, raw.endsWith("\n"));
     const grepped = raw.split("\n").filter((l) => l.startsWith("| `")).length;
     const parsed = [...raw.matchAll(re)].map(shape);
     check(`${label} LIST ${name}: every row grep counts parses here too`, grepped === parsed.length, `grep=${grepped} parsed=${parsed.length}`);
     check(`${label} LIST ${name}: no row is listed twice`, new Set(parsed).size === parsed.length,
       parsed.filter((r, i) => parsed.indexOf(r) !== i).join(" ; "));
-    const derived = [...new Set(derivedRows)].sort();
+    // A MULTISET, not a set: a card a fold returns twice is drawn twice, and a de-duplicated comparison could not
+    // see it (money ring attack). The list itself may not repeat a row (the check above), so a repeat in the
+    // folds is a mismatch here.
+    const derived = derivedRows.slice().sort();
     check(`${label} LIST ${name}: the list names exactly what the folds render, both ways`,
-      JSON.stringify([...new Set(parsed)].sort()) === JSON.stringify(derived),
+      JSON.stringify(parsed.slice().sort()) === JSON.stringify(derived),
       `listed-only=${parsed.filter((r) => !derived.includes(r)).join(" ; ")} derived-only=${derived.filter((r) => !parsed.includes(r)).join(" ; ")}`);
   };
   const allRows = [];
   const allVerbRows = [];
+  /** @type {string[]} */
+  const ringsWithPlanned = [];
   for (const ring of SHIPPED_RINGS) {
     const want = contract.modules.filter((m) => m.ring === ring && (m.class !== "extra" || exemptions.includes(m.id))).map((m) => m.id).sort();
     const ringDir = join(MODULES, ring);
@@ -505,6 +513,7 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
     check(`SHIPPED RING ${ring}: its module folders are modules-v2.json's ids for the ring`, want.length > 0 && JSON.stringify(have) === JSON.stringify(want), `have=${have.join(",")} want=${want.join(",")}`);
     const rows = [];
     const verbRows = [];
+    const rehearsalRows = [];
     for (const id of have) {
       const dir = join(ringDir, id);
       const viewText = existsSync(join(dir, "View.tsx")) ? readFileSync(join(dir, "View.tsx"), "utf8") : "";
@@ -513,7 +522,9 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
       const notDoor = (manifest.routes || []).filter((r) => !Object.hasOwn(door.DOOR_ROUTES || {}, r));
       check(`SHIPPED RING ${ring}: ${id} declares only door routes`, Array.isArray(manifest.routes) && notDoor.length === 0, notDoor.join(","));
       const room = registry.rooms.find((r) => r.id === id) || { id, ring, name: id, sentence: "", lede: "", holds: { kinds: [] } };
-      const fctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {} };
+      // The host hands a fold the manifest it checks reads against (registry.foldContext), so a shared fold
+      // refuses a read the manifest cannot make instead of planning one the host then drops (money ring).
+      const fctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {}, manifest };
       let folded = null;
       try { folded = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold({}, fctx); } catch (e) { check(`SHIPPED RING ${ring}: ${id}'s fold runs with nothing loaded yet`, false, e.message); continue; }
       check(`SHIPPED RING ${ring}: ${id}'s fold runs with nothing loaded yet`, folded !== null && typeof folded === "object");
@@ -532,6 +543,7 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
         (manifest.asOf === true) === reachable, `asOf=${String(manifest.asOf)} reachable=${reachable}`);
       for (const ns of (typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [])) rows.push(`${id} | ${ns.panel} | ${ns.route} | ${ns.sentence}`);
       for (const v of (typeof reg.verbPendingOf === "function" ? reg.verbPendingOf(folded) : [])) verbRows.push(`${id} | ${v.verb} | ${v.sentence}`);
+      for (const v of (typeof reg.rehearsalOf === "function" ? reg.rehearsalOf(folded) : [])) rehearsalRows.push(`${id} | ${v.verb} | ${v.sentence}`);
     }
     // The evidence lists are what Phase 04 and Phase 05 build; each must be what the folds actually
     // render, both ways, INCLUDING the sentence the file promises -- a typed column drifts (it already had).
@@ -541,11 +553,38 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
     listCheck(`verbs-pending-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `verbs-pending-${ring}.md`),
       /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm,
       (m) => `${m[1]} | ${m[2]} | ${m[3]}`, verbRows, "VERBS PENDING");
+    // A planned room's flows are REHEARSAL and never reach the work door (ADR-1328), so they are a list of
+    // their own rather than rows among the verbs Phase 05 builds -- derived from the folds the same way, and
+    // required for exactly the rings whose MODULES include a planned room. A planned room the ring leaves to the
+    // generic module (command's chat-mcp) has no fold to rehearse anything, and is held by F3's badge arm instead.
+    const plannedHere = registry.rooms.some((r) => r.ring === ring && (r.planned === true || r.status === "planned") && have.includes(r.id));
+    if (plannedHere) ringsWithPlanned.push(ring);
+    if (plannedHere || rehearsalRows.length > 0) {
+      listCheck(`rehearsal-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `rehearsal-${ring}.md`),
+        /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm,
+        (m) => `${m[1]} | ${m[2]} | ${m[3]}`, rehearsalRows, "REHEARSAL");
+      check(`REHEARSAL LIST rehearsal-${ring}.md: the ring's planned rooms rehearse at least one flow (vacuous-pass guard)`, rehearsalRows.length > 0, `rows=${rehearsalRows.length}`);
+    }
     allRows.push(...rows);
     allVerbRows.push(...verbRows);
   }
   // Two empty lists agree with each other. A ring may legitimately render no verb-pending card (the
   // command ring does not), so the floor is across the shipped rings, not per file (code review).
+  // The browser suite globs every list of a kind; module-frame reads only the shipped rings'. A stray list -- a ring
+  // not shipped, or a rehearsal list for a ring with no planned module -- would widen what the browser is judged
+  // against without any fold behind its rows (money ring attack).
+  {
+    const listDir = join(REPO, "initiatives", "face", "evidence", "phase-03");
+    const files = readdirSync(listDir).filter((n) => /^(not-served|verbs-pending|rehearsal)-.+\.md$/.test(n));
+    const stray = files.filter((n) => {
+      const m = /^(not-served|verbs-pending|rehearsal)-(.+)\.md$/.exec(n);
+      if (!m) return true;
+      if (!SHIPPED_RINGS.includes(m[2] ?? "")) return true;
+      return m[1] === "rehearsal" && !ringsWithPlanned.includes(m[2] ?? "");
+    });
+    check("LISTS: every derived list names a shipped ring, and a rehearsal list a ring with planned modules -- no stray file widens the browser's judgement",
+      files.length > 0 && stray.length === 0, `files=${files.join(",")} stray=${stray.join(",")}`);
+  }
   check("DERIVED LISTS: the shipped rings render NOT SERVED panels and work-door cards at all (vacuous-pass guard)",
     allRows.length > 0 && allVerbRows.length > 0, `notServed=${allRows.length} verbsPending=${allVerbRows.length}`);
 }
@@ -563,7 +602,8 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
   check("F2: the served scheduler lede promises exactly the four things this arm pins",
     promises.every((p) => lede.includes(p)), `lede=${lede}`);
   if (existsSync(join(dir, "fold.mjs"))) {
-    const ctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {} };
+    const schedulerManifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
+    const ctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {}, manifest: schedulerManifest };
     const folded = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold({}, ctx);
     const ns = typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [];
     const homed = (room && room.holds && Array.isArray(room.holds.jobs) ? room.holds.jobs : []).slice().sort();
@@ -585,9 +625,10 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
     {
       const fire = (id, job, ts, outcome) => ({ day: ts.slice(0, 10), seq: 1, event: { id, ts, kind: "run.completed", venture: "arc", actor: `scheduler:${job}`, outcome, payload: { job, outcome, duration_ms: 12 } } });
       const page = (more) => ({ count: 2, more, events: [fire("01K00000000000000000000001", "day-close-roll", "2026-09-16T23:59:00+05:30", "ok"), fire("01K00000000000000000000002", "brief-materialize", "2026-09-17T06:00:00+05:30", "failed")] });
-      const manifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
       const loadedWith = (body) => {
-        const planned = reg.plannedReads(folded, manifest).reads.filter((r) => r.route === "/api/spine");
+        const planned = reg.plannedReads(folded, schedulerManifest).reads.filter((r) => r.route === "/api/spine");
+        // The loaded fold below is only a test of the sentence if the fold ASKED for its page at all.
+        check("F2: the scheduler fold, handed its manifest, asks the door for its trail (vacuous-pass guard)", planned.length === 1, JSON.stringify(planned));
         const out = Object.create(null);
         for (const r of planned) out[r.key] = { state: "ok", data: body };
         return out;
@@ -604,6 +645,84 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
         JSON.stringify({ line: partial.lastFire.line, labels: partial.kpis.map((k) => k.l) }));
     }
   } else check("F2: the scheduler module exists to be folded", false, dir);
+}
+
+// ── F3 (Cycle 15 room sweep, ADR-1328): a planned room never wears LIVE ──
+// Cycle 15's trader showed `● LIVE` because a company-wide kind it homes had fired: the pill measured the
+// kinds, not whether the room exists. A planned room is drawn dotted and says REHEARSAL, whatever the door
+// sends -- so each is folded twice, with nothing loaded and with every read it asks for FILLED, including a
+// page of receipts of the very kinds it homes, which is the state that lit the pill.
+{
+  const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
+  const plannedText = readFileSync(join(REPO, "initiatives", "face", "contracts", "planned-rooms.json"), "utf8");
+  /** Every string a fold returned, nested anywhere: what the View could ever print. */
+  const stringsIn = (v, out = [], seen = new Set()) => {
+    if (typeof v === "string") { out.push(v); return out; }
+    if (!v || typeof v !== "object" || seen.has(v)) return out;
+    seen.add(v);
+    for (const child of Object.values(v)) stringsIn(child, out, seen);
+    return out;
+  };
+  // The same rule the smoke holds the page to (livePill): a SHORT text -- a badge, a chip, a label -- saying live as a
+  // word of its own, in ANY case. A case-sensitive LIVE let "● Live" and "● live" through (money ring attack); prose
+  // may still say "once two ventures are live". A boolean named for liveness is a pill waiting for a View to draw it.
+  const smokeRules = await import(pathToFileURL(join(REPO, "face", "scripts", "smoke.mjs")).href);
+  const liveKeys = (v, out = [], seen = new Set()) => {
+    if (!v || typeof v !== "object" || seen.has(v)) return out;
+    seen.add(v);
+    for (const [k, x] of Object.entries(v)) { if (/live/i.test(k) && x === true) out.push(k); liveKeys(x, out, seen); }
+    return out;
+  };
+  const wearsLive = (folded) => [...stringsIn(folded).filter((t) => smokeRules.livePill(t)), ...liveKeys(folded)];
+  check("F3: MUTANT -- a fold that returns a LIVE pill anywhere in its output is caught",
+    wearsLive({ head: { badge: "● LIVE" } }).length === 1 && wearsLive({ badge: "paper-live · planned" }).length === 0);
+  check("F3: MUTANT -- a Live pill in any case, and a boolean named isLive, are caught; prose that says live is not",
+    wearsLive({ b: "● Live" }).length === 1 && wearsLive({ b: "live" }).length === 1 && wearsLive({ isLive: true }).length === 1
+    && wearsLive({ p: "once two ventures are live, support stops being one person" }).length === 0);
+  const planned = registry.rooms.filter((r) => (r.planned === true || r.status === "planned") && SHIPPED_RINGS.includes(r.ring));
+  check("F3: the shipped rings hold planned rooms to fold (vacuous-pass guard)", planned.length >= 3, planned.map((r) => r.id).join(","));
+  // The badge every room wears in the rail and in a generic room's head: for a planned room it is never a liveness
+  // reading, even when the door reports its homed kinds as fired -- the exact state Cycle 15's trader was in.
+  const roomsLib = await import(pathToFileURL(join(LIB, "rooms.mjs")).href);
+  const lit = { state: "live", kindsHomed: 1, kindsFired: 1, receipts: 39 };
+  for (const room of registry.rooms.filter((r) => r.planned === true || r.status === "planned")) {
+    const badge = roomsLib.stateBadge({ ...room, live: lit });
+    check(`F3: ${room.id}'s rail and head badge says planned, never live, whatever its kinds did`,
+      badge.label === "planned" && badge.tone !== "live" && wearsLive(badge).length === 0 && !/\blive\b/i.test(badge.label), JSON.stringify(badge));
+  }
+  check("F3: MUTANT -- a built room whose kinds fired still reads live, so the planned badge is not a blanket",
+    roomsLib.stateBadge({ ...registry.rooms.find((r) => !r.planned && r.status !== "planned" && r.status !== "template"), live: lit }).label === "live");
+  for (const room of planned) {
+    const dir = join(SRC, "modules", room.ring, room.id);
+    // A planned room with no module draws through the generic module, held by the badge check above and by the
+    // smoke's planned line; only a module has a fold to put through the arms below.
+    if (!existsSync(join(dir, "fold.mjs"))) continue;
+    const manifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
+    const foldFile = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold;
+    const ctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {}, manifest };
+    const bare = foldFile({}, ctx);
+    // Every read the fold asks for, answered: the planned-rooms file with its real text, and a page carrying a
+    // receipt of each kind the registry homes here -- the Cycle 15 trigger.
+    const kinds = room.holds && Array.isArray(room.holds.kinds) ? room.holds.kinds : [];
+    const page = { count: kinds.length, more: false, events: kinds.map((kind, i) => ({ day: "2026-09-18", seq: i + 1, event: { id: `01K0000000000000000000000${i}`, ts: "2026-09-18T09:00:00+05:30", kind, venture: "arc", actor: "sim", payload: {} } })) };
+    const loaded = Object.create(null);
+    for (const r of reg.plannedReads(bare, manifest).reads) {
+      loaded[r.key] = r.route === "/api/file/:id"
+        ? { state: "ok", data: { id: r.param, path: "initiatives/face/contracts/planned-rooms.json", sha256: "0".repeat(64), text: plannedText } }
+        : r.route === "/api/spine" ? { state: "ok", data: page } : { state: "ok", data: {} };
+    }
+    const full = foldFile(loaded, ctx);
+    for (const [label, f] of [["with nothing loaded", bare], ["with every read it asks for answered", full]]) {
+      check(`F3: ${room.id} ${label} is PLANNED and DOTTED, and says REHEARSAL`,
+        f.isPlanned === true && f.isDotted === true && f.showRehearsal === true, JSON.stringify({ isPlanned: f.isPlanned, isDotted: f.isDotted, showRehearsal: f.showRehearsal }));
+      check(`F3: ${room.id} ${label} wears no LIVE pill anywhere in what it returns`, wearsLive(f).length === 0, wearsLive(f).join(" ; "));
+    }
+    check(`F3: ${room.id} draws its planned line from planned-rooms.json once the file is read`,
+      Array.isArray(full.line) && full.line.length > 0 && full.line.every((s) => typeof s.name === "string" && s.name !== ""), JSON.stringify(full.line));
+    const viewText = existsSync(join(dir, "View.tsx")) ? readFileSync(join(dir, "View.tsx"), "utf8") : "";
+    check(`F3: ${room.id}'s View marks the room data-planned and draws no live tone`,
+      /data-planned/.test(viewText) && !/tone=["'{]+live/i.test(viewText) && !/['"]live['"]/i.test(viewText) && !/>\s*[●•]?\s*live\s*</i.test(viewText), dir);
+  }
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

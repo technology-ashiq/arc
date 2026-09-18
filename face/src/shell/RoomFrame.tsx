@@ -163,8 +163,11 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
 
 function GenericModule({ room, ctx, problems }: { room: Room; ctx: ModuleContext; problems: ModuleProblem[] }) {
   const which = fallbackFor(room)
+  // A planned room drawn through the generic module is marked exactly as a planned module is, so the smoke
+  // holds it to the same F3 rule: planned, and never a LIVE word on it (ADR-1328).
+  const planned = room.planned === true || room.status === 'planned'
   return (
-    <>
+    <div data-planned={planned ? room.id : undefined}>
       <p className="mb-3 flex flex-wrap items-center gap-2 text-[12px] leading-[18px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>
         <span className="inline-flex items-center h-[20px] px-2 rounded-full text-[10.5px] uppercase tracking-[0.06em]" style={{ fontWeight: 600, color: 'var(--text-2)', background: 'var(--bg-4)', border: '1px solid var(--line-1)' }}>
           generic module
@@ -183,6 +186,6 @@ function GenericModule({ room, ctx, problems }: { room: Room; ctx: ModuleContext
       ) : (
         <GenericRoom room={room} door={ctx.door} lane={laneForRoom(room.id, ctx.laneMap)} />
       )}
-    </>
+    </div>
   )
 }

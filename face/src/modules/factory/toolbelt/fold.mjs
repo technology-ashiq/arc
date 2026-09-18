@@ -10,7 +10,7 @@
 // work door (Phase 05), and "explain" is a link to the ask room rather than a second asking surface.
 import { verbPending } from "../../../lib/registry.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
-import { heldAcrossRooms, laneBadge, laneRoom, roomLink } from "../../../lib/lane-room.mjs";
+import { catalogueOf, laneBadge, laneRoom, roomLink } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 
@@ -59,8 +59,12 @@ export function fold(payloads, ctx) {
   const picks = ctx.picks ?? {};
   const find = typeof picks.find === "string" ? picks.find : "";
   const needle = find.trim().toLowerCase();
+  // The catalogue is built ONCE per fold, in one pass over the rooms, and the find box filters what was
+  // built -- never nine passes and a room search per row on every keystroke (money ring, the factory
+  // ring's debt row).
+  const built = catalogueOf(ctx, SECTIONS.map(([key]) => key));
   const all = SECTIONS.map(([key, label]) => {
-    const read = heldAcrossRooms(ctx, key);
+    const read = built[key] ?? { rows: [], unreadable: [] };
     return { key, label, rows: read.rows, unreadable: read.unreadable };
   });
   // A room that carried one of these lists in a shape this shell could not read is NAMED: a catalogue
@@ -83,6 +87,9 @@ export function fold(payloads, ctx) {
   });
   const matches = sections.reduce((n, s) => n + s.rows.length, 0);
   const total = all.reduce((n, s) => n + s.rows.length, 0);
+  // A catalogue with a section read unreadably has no honest total: the rows that could be read are a floor, and
+  // every figure built on them says so, instead of a short number beside a section that reads unread (money ring).
+  const anyUnread = unreadable.length > 0;
   /** @param {string} key */
   const figure = (key) => (all.some((s) => s.key === key && s.unreadable.length > 0) ? "—" : fmtInt((all.find((s) => s.key === key) ?? { rows: [] }).rows.length));
 
@@ -95,7 +102,7 @@ export function fold(payloads, ctx) {
       { key: "hooks", v: figure("hooks"), l: "Hooks", sub: "across every served room" },
       { key: "lints", v: figure("lints"), l: "Lints", sub: "across every served room" },
       { key: "rules", v: figure("rules"), l: "Rules", sub: "across every served room" },
-      { key: "total", v: fmtInt(total), l: "In the catalogue", sub: needle === "" ? "every section" : `${fmtInt(matches)} match the find box` },
+      { key: "total", v: anyUnread ? "—" : fmtInt(total), l: "In the catalogue", sub: anyUnread ? "a section was not read in full" : needle === "" ? "every section" : `${fmtInt(matches)} match the find box` },
     ],
     find,
     sections,
@@ -103,7 +110,7 @@ export function fold(payloads, ctx) {
     hasCatalogueNote: unreadable.length > 0,
     hasMatches: matches > 0,
     hasFindNote: needle !== "",
-    findNote: needle === "" ? "" : matches === 0 ? `nothing in the catalogue matches ${JSON.stringify(find.trim())}` : `${fmtInt(matches)} of ${fmtInt(total)} match ${JSON.stringify(find.trim())}`,
+    findNote: needle === "" ? "" : matches === 0 ? `nothing in the catalogue matches ${JSON.stringify(find.trim())}${anyUnread ? " -- in the sections that could be read" : ""}` : `${fmtInt(matches)} of ${anyUnread ? "the readable" : fmtInt(total)} match ${JSON.stringify(find.trim())}`,
     pinVerb: verbPending(
       "Pin a tool to the top of this room",
       "A pin is a receipt, so the room remembers what the owner reaches for most. It arrives with the work door.",

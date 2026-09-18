@@ -1524,7 +1524,7 @@ export function receiptView(events, id) {
  * @property {boolean} hasMeter
  * @property {number} meter
  * @property {string} distance
- * @property {{ key: string, label: string, title: string }[]} phases
+ * @property {{ key: string, label: string, title: string, also: string }[]} phases
  * @property {boolean} hasPhases
  * @property {string} phasesNote
  */
@@ -1556,7 +1556,13 @@ export function laneCard(payload) {
   // `lanePhases` type-asserts the array it found and checks no element, so a malformed row arrives here
   // as anything at all. A row this shell cannot read is DROPPED and counted, never drawn as "undefined"
   // and never left to throw the whole room into a Failure (Phase 03 attack).
+  /** @type {{ key: string, label: string, title: string, also: string }[]} */
   const rows = [];
+  // A phase's spec and its Build Brief (the tasks file) carry the same sentence, so drawing both put one
+  // title on the card twice, back to back (factory ring shot review). One row per numbered phase: the spec's
+  // title when the phase has one, and every other file of that phase named beside it rather than repeated.
+  /** @type {Map<string, { row: { key: string, label: string, title: string, also: string }, kind: string, others: string[] }>} */
+  const byPhase = new Map();
   let dropped = 0;
   for (const p of listed.phases) {
     const row = p !== null && typeof p === "object" ? /** @type {Record<string, unknown>} */ (p) : null;
@@ -1564,11 +1570,34 @@ export function laneCard(payload) {
     if (file === null) { dropped += 1; continue; }
     const n = row === null ? null : row["phase"];
     const title = row === null ? null : asText(row["title"]);
-    rows.push({
+    const kindText = row === null ? null : asText(row["kind"]);
+    const kind = kindText === null ? "" : unescapeDoorText(kindText);
+    const numbered = typeof n === "number" && Number.isFinite(n);
+    const drawn = {
       key: unescapeDoorText(file),
-      label: typeof n === "number" && Number.isFinite(n) ? String(n).padStart(2, "0") : typeof n === "string" && n !== "" ? unescapeDoorText(n) : "--",
+      label: numbered ? String(n).padStart(2, "0") : typeof n === "string" && n !== "" ? unescapeDoorText(n) : "--",
       title: title === null ? unescapeDoorText(file) : unescapeDoorText(title),
-    });
+      also: "",
+    };
+    if (!numbered) { rows.push(drawn); continue; }
+    const group = byPhase.get(drawn.label);
+    if (group === undefined) {
+      byPhase.set(drawn.label, { row: drawn, kind, others: [] });
+      rows.push(drawn);
+      continue;
+    }
+    // The spec wins the row wherever it sorts; the file it displaces is named beside it instead.
+    if (kind === "spec" && group.kind !== "spec") {
+      group.others.push(group.kind === "" ? group.row.key : group.kind);
+      group.row.key = drawn.key;
+      group.row.title = drawn.title;
+      group.kind = kind;
+    } else group.others.push(kind === "" ? drawn.key : kind);
+    // Two files of ONE kind for one phase (two task files) are named by file, so the second is not folded away
+    // into the first's word (money ring attack).
+    const counts = new Map();
+    for (const o of group.others) counts.set(o, (counts.get(o) ?? 0) + 1);
+    group.row.also = [...new Set(group.others)].map((o) => ((counts.get(o) ?? 0) > 1 ? `${fmtInt(counts.get(o) ?? 0)} ${o} files` : o)).join(" · ");
   }
   const notSent = listed.omitted > 0 ? `${fmtInt(listed.omitted)} more not sent` : "";
   const notRead = dropped > 0 ? `${fmtInt(dropped)} the door sent in a shape this shell cannot read` : "";
@@ -1581,7 +1610,10 @@ export function laneCard(payload) {
     // header that only ever held `&lt;` (Phase 03 attack).
     phase: phase.number === null ? (cycle === null ? "no phase recorded" : cycle) : `phase ${phase.number}`,
     note: phase.note === null ? "" : phase.note,
-    burn: meter.state === "measured" ? `${fmtDays(burn.days ?? Number.NaN)} of ${fmtDays(appetite.days ?? Number.NaN)} spent` : meter.label.toLowerCase(),
+    // Only a MEASURED burn has a line of its own. For every other state the distance label already says it
+    // -- "NO APPETITE BOUGHT" -- and a lowercased copy under it was the same fact twice (factory ring shot
+    // review); an empty line is drawn as no line.
+    burn: meter.state === "measured" ? `${fmtDays(burn.days ?? Number.NaN)} of ${fmtDays(appetite.days ?? Number.NaN)} spent` : "",
     // A meter is drawn ONLY for a measured burn: a lane with none is not a lane burning zero, and a bar
     // at 0% tells a screen reader exactly the thing this module refuses to say (spine.mjs, burnMeter).
     hasMeter: meter.state === "measured",
@@ -1589,9 +1621,11 @@ export function laneCard(payload) {
     distance: meter.label,
     phases: rows,
     hasPhases: rows.length > 0,
+    // "No phase spec written yet" is a claim about the lane; a list the door capped to nothing is a claim about
+    // the read, and says so (money ring attack).
     phasesNote: listed.state === "absent"
       ? "the door did not send a phase list"
-      : rows.length === 0 && dropped === 0
+      : rows.length === 0 && dropped === 0 && listed.omitted === 0
         ? "no phase spec written yet"
         : [notSent, notRead].filter((s) => s !== "").join(" · "),
   };

@@ -549,7 +549,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   // the served sentence, entities undone; a blank or wrong heading is a miss the verdict refuses.
   const hasHeading = typeof smoke.headingCheck === "function" && typeof smoke.headingLine === "function";
   check("the smoke exports the heading check and line, and names every ring shipped so far",
-    hasHeading && Array.isArray(smoke.SENTENCE_RINGS) && ["command", "kernel", "factory"].every((r) => smoke.SENTENCE_RINGS.includes(r)),
+    hasHeading && Array.isArray(smoke.SENTENCE_RINGS) && ["command", "kernel", "factory", "money"].every((r) => smoke.SENTENCE_RINGS.includes(r)),
     JSON.stringify(smoke.SENTENCE_RINGS));
   if (hasHeading) {
     const served = { id: "inbox", ring: "command", sentence: "A machine may raise it. Only you &amp; nobody else may decide it." };
@@ -572,7 +572,90 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     check("a NOT SERVED count that could not be read prints unread, never zero",
       smoke.notServedLine({ mood: "dark", notServed: { panels: null, rooms: [] } }) === "smoke: not-served mood=dark panels=unread rooms=none");
     check("the heading line counts what was checked and what missed",
-      smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }) === "smoke: heading mood=dark rings=command,kernel,factory checked=6 miss=0", smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }));
+      smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }) === "smoke: heading mood=dark rings=command,kernel,factory,money checked=6 miss=0", smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }));
+  }
+
+  // The money ring (face v2 Phase 03): the planned rooms (F3, ADR-1328), their REHEARSAL cards, and the one
+  // error class the windows runner raises on its own (the debt-ledger row, measured before it was named).
+  const hasMoney = typeof smoke.plannedLine === "function" && typeof smoke.rehearsalLine === "function" && typeof smoke.runnerError === "function" && typeof smoke.runnerLine === "function";
+  check("the smoke exports the planned, rehearsal and runner-error lines (money ring)", hasMoney, Object.keys(smoke).join(","));
+  if (hasMoney) {
+    const base = { ...clean, mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], headings: { checked: 6, miss: [] } };
+    check("a rehearsal count that could not be read prints unread, never zero",
+      smoke.rehearsalLine({ mood: "dark", rehearsal: { panels: null, rooms: [] } }) === "smoke: rehearsal mood=dark cards=unread rooms=none", smoke.rehearsalLine({ mood: "dark", rehearsal: { panels: null, rooms: [] } }));
+    const planned2 = { rooms: ["ops", "trader"], live: [], expected: 3 };
+    check("the planned line counts the planned rooms drawn, the contract's count, and the rooms that drew a LIVE word",
+      smoke.plannedLine({ mood: "light", planned: planned2 }) === "smoke: planned mood=light rooms=2 expected=3 live=0 planned-rooms=ops,trader", smoke.plannedLine({ mood: "light", planned: planned2 }));
+    const lit = smoke.judge({ ...base, planned: { rooms: ["trader"], live: ["trader"], expected: 1 } });
+    check("MUTANT (F3): the verdict refuses a run in which a planned room wears LIVE", !lit.ok && lit.reasons.some((r) => /planned room wears LIVE: trader/.test(r)), JSON.stringify(lit.reasons));
+    const short = smoke.judge({ ...base, planned: planned2 });
+    check("MUTANT: the verdict refuses a run that drew fewer planned rooms than the contract names", !short.ok && short.reasons.some((r) => /planned rooms drawn 2, the contract names 3/.test(r)), JSON.stringify(short.reasons));
+    const unreadR = smoke.judge({ ...base, rehearsal: { panels: null, rooms: [] } });
+    check("MUTANT: the verdict refuses a run whose rehearsal card count could not be read", !unreadR.ok && unreadR.reasons.some((r) => /rehearsal card count/.test(r)), JSON.stringify(unreadR.reasons));
+    const unreadP = smoke.judge({ ...base, planned: { rooms: null, live: [], expected: 3 } });
+    check("MUTANT: the verdict refuses a run that could not tell which rooms were planned", !unreadP.ok && unreadP.reasons.some((r) => /planned rooms could not be read/.test(r)), JSON.stringify(unreadP.reasons));
+    check("RUNNER: a socket-buffer exhaustion on the windows runner is the runner's, and named",
+      smoke.runnerError({ type: "log", text: "Failed to load resource: net::ERR_NO_BUFFER_SPACE" }, "win32") === true);
+    const exact = "Failed to load resource: net::ERR_NO_BUFFER_SPACE";
+    check("RUNNER: the same error on linux, macOS or any other platform is the page's, and counted",
+      ["linux", "darwin", "freebsd", "aix", ""].every((p) => smoke.runnerError({ type: "log", text: exact }, p) === false));
+    // The money ring attacker's mutants of this rule, each one a text or a type the rule must refuse.
+    check("RUNNER: MUTANT -- only Chrome's log line, never a console call the page made, even with the exact words",
+      smoke.runnerError({ type: "console.error", text: exact }, "win32") === false && smoke.runnerError({ type: "console.warning", text: exact }, "win32") === false);
+    check("RUNNER: MUTANT -- the whole line exactly: a longer, prefixed or merely similar text is the page's",
+      [`${exact}_X`, `x ${exact}`, "Failed to load resource: subnet::ERR_NO_BUFFER_SPACE", "no_buffer", "net::ERR_NO_BUFFER_SPACE", exact.toLowerCase()]
+        .every((t) => smoke.runnerError({ type: "log", text: t }, "win32") === false));
+    const errs = [
+      { room: "engine-room", type: "log", text: exact },
+      { room: "engine-room", type: "exception", text: "TypeError: boom" },
+      { room: "skip-me", type: "log", text: exact },
+      { room: "today", type: "console.error", text: exact },
+    ];
+    const onWin = smoke.classifyErrors(errs, ["skip-me"], "win32");
+    const onLinux = smoke.classifyErrors(errs, ["skip-me"], "linux");
+    check("RUNNER: classifyErrors is the filter the run applies -- on windows the one log line is the runner's, the rest counted",
+      onWin.runner.length === 1 && onWin.counted.length === 2 && onWin.excludedCount === 1, JSON.stringify(onWin));
+    check("RUNNER: on linux the same line is COUNTED -- it never vanishes from both the count and the runner line",
+      onLinux.runner.length === 0 && onLinux.counted.length === 3 && onLinux.excludedCount === 1, JSON.stringify(onLinux));
+    const one = smoke.judge({ ...base, runner: [{ room: "engine-room", text: exact }, { room: "engine-room", text: exact }] });
+    const three = smoke.judge({ ...base, runner: [1, 2, 3].map(() => ({ room: "engine-room", text: exact })) });
+    const spread = smoke.judge({ ...base, runner: [{ room: "engine-room", text: exact }, { room: "memory", text: exact }] });
+    check("RUNNER: the class has a ceiling -- two in one room pass, three or two rooms' worth fail the run",
+      one.ok && !three.ok && three.reasons.some((r) => /beyond the ceiling/.test(r)) && !spread.ok && spread.reasons.some((r) => /beyond the ceiling/.test(r)), JSON.stringify({ one: one.reasons, three: three.reasons, spread: spread.reasons }));
+    check("LINES: the runner and planned lines are sorted, so a mutant that stops sorting is seen",
+      smoke.runnerLine({ mood: "dark", runner: [{ room: "memory", text: exact }, { room: "bench", text: exact }] }) === "smoke: runner-errors mood=dark count=2 rooms=bench:1,memory:1"
+      && smoke.plannedLine({ mood: "dark", planned: { rooms: ["trader", "ops"], live: [], expected: 2 } }) === "smoke: planned mood=dark rooms=2 expected=2 live=0 planned-rooms=ops,trader");
+    check("LINES: a report that measured nothing prints UNREAD, never a zero",
+      smoke.plannedLine({ mood: "dark" }) === "smoke: planned mood=dark rooms=unread expected=unread live=unread planned-rooms=none"
+      && smoke.runnerLine({ mood: "dark" }) === "smoke: runner-errors mood=dark count=unread rooms=none"
+      && smoke.largestBodyLine({ mood: "dark", largestBody: null }) === "smoke: largest-body mood=dark room=none bytes=unread path=none",
+      smoke.plannedLine({ mood: "dark" }));
+    const swapped = smoke.judge({ ...base, planned: { rooms: ["discover", "ops", "ventures"], live: [], expected: 3, expectedIds: ["discover", "ops", "trader"] } });
+    check("PLANNED: the planned rooms are held to the contract BY ID -- one losing its mark while another gains one fails",
+      !swapped.ok && swapped.reasons.some((r) => /drew no planned mark: trader/.test(r)) && swapped.reasons.some((r) => /does not plan drew a planned mark: ventures/.test(r)), JSON.stringify(swapped.reasons));
+    const ids = typeof smoke.expectedPlannedIds === "function" ? smoke.expectedPlannedIds() : [];
+    check("PLANNED: the expected planned rooms are read from the contract, sorted, by id", ["chat-mcp", "discover", "ops", "trader"].every((id) => ids.includes(id)) && JSON.stringify(ids) === JSON.stringify([...ids].sort()), JSON.stringify(ids));
+    const net = new smoke.NetworkWatch();
+    net.navigate(0);
+    net.begin("L1", 0);
+    net.sent({ requestId: "r1", loaderId: "L1", request: { url: "http://127.0.0.1/api/lane/engine" } }, 1);
+    net.data({ requestId: "r1", encodedDataLength: 5000 });
+    net.data({ requestId: "r1", encodedDataLength: 2000 });
+    net.finished({ requestId: "r1", errorText: "net::ERR_NO_BUFFER_SPACE" }, 2);
+    net.sent({ requestId: "r2", loaderId: "L1", request: { url: "http://127.0.0.1/api/rooms" } }, 3);
+    net.finished({ requestId: "r2", encodedDataLength: "999999" }, 4);
+    check("WEIGH: a FAILED load is weighed by the bytes that did arrive, marked failed; a size that is not a number is no size",
+      net.largest !== null && net.largest.bytes === 7000 && net.largest.failed === true && net.largest.url === "/api/lane/engine", JSON.stringify(net.largest));
+    check("PILL: the rule reads a pill in any case and lets prose say live",
+      smoke.livePill("● Live") && smoke.livePill("LIVE") && !smoke.livePill("once two ventures are live, support stops being one person") && !smoke.livePill("paper-live"));
+    check("RUNNER: an exception, another console error or another network error is never the runner's",
+      smoke.runnerError({ type: "exception", text: "net::ERR_NO_BUFFER_SPACE" }, "win32") === false
+      && smoke.runnerError({ type: "console.error", text: "TypeError: x is undefined" }, "win32") === false
+      && smoke.runnerError({ type: "log", text: "net::ERR_CONNECTION_REFUSED" }, "win32") === false);
+    check("RUNNER: the runner line counts them per room, so they are never folded into a clean zero",
+      smoke.runnerLine({ mood: "dark", runner: [{ room: "engine-room", text: "net::ERR_NO_BUFFER_SPACE" }, { room: "engine-room", text: "net::ERR_NO_BUFFER_SPACE" }] }) === "smoke: runner-errors mood=dark count=2 rooms=engine-room:2",
+      smoke.runnerLine({ mood: "dark", runner: [{ room: "engine-room", text: "net::ERR_NO_BUFFER_SPACE" }, { room: "engine-room", text: "net::ERR_NO_BUFFER_SPACE" }] }));
+    check("RUNNER: a run with none prints count=0, never no line", smoke.runnerLine({ mood: "light", runner: [] }) === "smoke: runner-errors mood=light count=0 rooms=none");
   }
 
   // The attack on the mood verdict (face v2 Phase 01).

@@ -65,3 +65,35 @@ What was red, read from the windows shard 6/12 job's log (job 105347240958):
 
 The browser suite's heading floor (nineteen) failed on the same run for the four rooms that were
 still generic; macOS shard 1/3 and windows shard 1/12 are the legs that carry it.
+
+# Red first — Phase 03, money ring
+
+Commit `8691cc88` listed `money` as a shipped ring in `tests/face/module-frame.mjs` and in the smoke's
+`SENTENCE_RINGS`, raised the browser suite's heading floor to twenty-seven rooms across
+`command,kernel,factory,money`, added the REHEARSAL list check, the F3 arm (every planned room folded with
+nothing loaded and with every read it asks for answered, and required to carry no LIVE word), the new
+`tests/face/lane-room.mjs` suite (the factory ring's debt row) and the smoke checks for the planned,
+rehearsal and runner-error lines -- with only the two carried money folders present (`money`, `ventures`,
+still mounting their Cycle 15 renderers) and no list written. Draft PR #244 fired arc-ci run
+**35311533655**, which concluded `failure`, read per job with `gh run view 35311533655 --json jobs`: six
+jobs red (ubuntu Node 18, 20 and 22, macOS shard 1/3, windows shards 1/12 and 6/12), thirteen green.
+
+What was red, read from the ubuntu Node 20 job's log (job 105494415502) and the windows shard 6/12 job's
+(105494415484), which print the same FAIL lines:
+
+| test | how it failed | the missing piece it names |
+|---|---|---|
+| `face v2: the module frame attaches both ways, agrees with face-coverage, and no shell file names a room` | `FAIL SHIPPED RING money: its module folders are modules-v2.json's ids for the ring have=money,ventures want=discover,growth,leads,legal,money,ops,trader,ventures` | the six money modules not yet ported |
+| (same suite) | `FAIL SHIPPED RING money: money's View mounts no Cycle 15 renderer from face/src/rooms/` (and ventures') | the two real ports, and the deletion of `MoneyRoom.tsx` and `VenturesRoom.tsx` |
+| (same suite) | `FAIL NOT SERVED LIST: evidence/phase-03/not-served-money.md exists`, the same for `verbs-pending-money.md` and `rehearsal-money.md`, and `rows=0` on the rehearsal vacuous-pass guard | the ring's three derived lists |
+| (same suite) | `FAIL F3: ops has a module to fold` (and trader, discover) | the three planned modules |
+| `face v2: the shared lane-room fold answers every loaded-page branch, and its seven toolbelt mutants FAIL` | the load guard (`catalogueOf` absent) and six `MANIFEST:` arms, e.g. `FAIL MANIFEST: a fold handed NO manifest fails closed -- every read refused, none planned` with both reads still planned | the manifest-bound shared fold and the one-pass catalogue |
+| `face v2: the browser harness client logic runs with no install and no Chrome` | `FAIL the smoke exports the planned, rehearsal and runner-error lines (money ring)` | the smoke's new lines and the runner class |
+| `face-browser: door + preview + smoke open every openable room with 0 errors, in BOTH moods` | `mood=dark: the browser drew '' rehearsal cards, the lists name 0` (windows shard 1/12, macOS shard 1/3, ubuntu Node 20 and 22) | the rehearsal line, and the list it is judged against |
+
+The red run also caught one wrong expectation in the red commit itself: `FAIL REHEARSAL LIST:
+evidence/phase-03/rehearsal-command.md exists` and `FAIL F3: chat-mcp has a module to fold`. The command
+ring's `chat-mcp` is a planned room the ring left to the generic module, so it has no fold to rehearse or
+put through the module arm. The rehearsal list is now required only for a ring whose MODULES include a planned
+room, and a generic planned room is held instead by its badge (`stateBadge` says planned whatever its kinds
+did, in the rail and in the generic head) and by the smoke's planned line, which marks it `data-planned` too.

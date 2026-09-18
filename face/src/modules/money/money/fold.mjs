@@ -1,21 +1,141 @@
-// fold.mjs -- money/money: every decision this module makes, where node can import it with no install
-// (face v2 Phase 02, ADR-1320). CARRIED: the Cycle 15 renderer still decides inside its own lib file;
-// this fold hands it what the shell used to hand it, and nothing else.
+// fold.mjs -- money/money: every decision the money room makes, where node can import it with no install
+// (face v2 Phase 03, ADR-1320, ADR-1324, ADR-1326).
+//
+// The port of v0.7's Money onto the door, replacing the carried Cycle 15 renderer (MoneyRoom.tsx, deleted).
+// "Real and simulated are different substances": the real P&L and the simulated one are two reads of two
+// kinds, never summed, never averaged, never in one row, and real money's colour stays unspent until
+// revenue.received has fired (money.mjs's green gate, which fails closed). What is real: both P&Ls, the cost
+// lines counted by currency, the kill lines from ventures.yaml, the money brain's own flags. What is not
+// served: v0.7's fourteen-day chart, which needs a daily series the money brain does not serve; its milestone
+// line and its account of where money comes from, which were facts typed into the reference. Recording real
+// revenue, setting criteria and closing a month are verbs of the work door (Phase 05).
+import { notServed, verbPending } from "../../../lib/registry.mjs";
+import {
+  COST_KIND, OVERHEAD_VENTURE, REAL_KIND, SIM_KIND, asOfSupport, costTally, fileBorneNote, fmtInt, moneyFlags,
+  notServed as routeGaps, returnStatement,
+} from "../../../lib/money.mjs";
+import { costView, gateView, killLinesView, moneyReads, substanceView } from "../../../lib/money-room.mjs";
+
+/** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
+/** @typedef {import("../../../lib/money.mjs").Figure} Figure */
 
 /**
  * @typedef {object} Folded
  * @property {string} sentence
  * @property {string} lede
+ * @property {boolean} isRealFired
+ * @property {string} badge
+ * @property {string} mode
+ * @property {string} readAt
+ * @property {ReturnType<typeof gateView>} gate
+ * @property {{ key: string, label: string, sub: string, figure: Figure }[]} figures
+ * @property {{ key: string, v: string, l: string, sub: string }[]} counts
+ * @property {import("../../../lib/money-room.mjs").SubstanceView} realPanel
+ * @property {import("../../../lib/money-room.mjs").SubstanceView} simPanel
+ * @property {string} neverAdded
+ * @property {import("../../../lib/money-room.mjs").CostView} productCost
+ * @property {import("../../../lib/money-room.mjs").CostView} overheadCost
+ * @property {{ code: string, human: string, parts: { label: string, value: string, why: string }[], command: string }} ret
+ * @property {import("../../../lib/money-room.mjs").KillLinesView} kill
+ * @property {{ key: string, type: string, venture: string, detail: string, isSim: boolean, hatch: string }[]} flags
+ * @property {boolean} hasFlags
+ * @property {{ what: string, why: string }[]} gaps
+ * @property {{ half: string, source: string, badge: string, hasBadge: boolean, asof: string }[]} provenance
+ * @property {{ code: string, offer: string }} asof
+ * @property {import("../../../lib/registry.mjs").NotServed} chart
+ * @property {import("../../../lib/registry.mjs").NotServed} milestones
+ * @property {import("../../../lib/registry.mjs").NotServed} sources
+ * @property {{ isVerbPending: true, verb: string, sentence: string }} recordVerb
+ * @property {{ isVerbPending: true, verb: string, sentence: string }} criteriaVerb
+ * @property {{ isVerbPending: true, verb: string, sentence: string }} closeVerb
+ * @property {string[]} northStar
+ * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
 
 /**
- * @param {Record<string, unknown>} payloads  the declared routes' payloads -- this module declares none
+ * @param {Record<string, Payload>} payloads
  * @param {import("../../../lib/registry.mjs").FoldContext} ctx
  * @returns {Folded}
  */
 export function fold(payloads, ctx) {
+  const m = moneyReads(payloads, ctx);
+  const realPanel = substanceView(m, "real");
+  const simPanel = substanceView(m, "simulated");
+  const real = m.realView;
+  const ventureCosts = real === null ? [] : real.ventures.flatMap((v) => v.costs);
+  const overheadLines = real === null ? [] : real.overhead.lines;
+  const productTally = costTally(ventureCosts, "GET /api/pnl → model.ventures[].costs[]");
+  const overheadTally = costTally(overheadLines, "GET /api/pnl → model.overhead.lines[]");
+  const allTally = costTally([...ventureCosts, ...overheadLines], "GET /api/pnl → every cost line served");
+  const ret = returnStatement({ gate: m.gate, real, cost: allTally });
+  /** @type {import("../../../lib/money.mjs").PnlView[]} */
+  const views = [];
+  if (m.realView !== null) views.push(m.realView);
+  if (m.simView !== null) views.push(m.simView);
+  const flags = moneyFlags(views);
+  const asof = asOfSupport();
+  const costFigure = m.real.isRead ? fmtInt(allTally.lines.length) : "—";
   return {
-    sentence: ctx.room.sentence,
-    lede: ctx.room.lede,
+    // The shell decoded the served registry once; decoding it again would manufacture a `<` (Phase 03 attack).
+    sentence: String(ctx.room.sentence ?? ""),
+    lede: String(ctx.room.lede ?? ""),
+    isRealFired: m.gate.spendable,
+    badge: m.gate.spendable ? "real ₹ on the log" : "every ₹ below is labelled",
+    mode: m.mode,
+    readAt: m.readAt,
+    gate: gateView(m),
+    figures: [
+      { key: "real", label: "Real revenue", sub: `${REAL_KIND} · the only substance here that is money`, figure: realPanel.cashIn },
+      { key: "sim", label: "Simulated revenue", sub: `${SIM_KIND} · never added to the real`, figure: simPanel.cashIn },
+    ],
+    counts: [
+      { key: "costs", v: costFigure, l: "Cost lines served", sub: m.real.isRead ? `${COST_KIND} · counted, never summed` : m.real.isRefused ? m.real.refusal.code : "reading the P&L" },
+      { key: "return", v: "—", l: "Return", sub: ret.code },
+    ],
+    realPanel,
+    simPanel,
+    neverAdded: `These two panels are never added, never averaged, and never placed in one row. They come from two separate reads of two separate kinds, ${REAL_KIND} and ${SIM_KIND}, and the money brain selects one kind at the top and never reads the other. Nothing on this screen combines them, because there is no quantity a combination of them would be.`,
+    productCost: costView(`${COST_KIND} — attributed to a product`, "what a venture cost. Every line is one receipt, in the currency it was recorded in.", productTally, m.real),
+    overheadCost: costView(`${COST_KIND} — overhead (venture: ${OVERHEAD_VENTURE})`, "building the factory is not a cost of any product made in it, so these are never attributed to a venture.", overheadTally, m.real),
+    ret: { code: ret.code, human: ret.human, parts: ret.parts, command: ret.command },
+    kill: killLinesView(m),
+    // A simulated flag wears the non-real texture, decided here so the View draws one value.
+    flags: flags.map((f) => ({ key: `${f.substance}:${f.type}:${f.venture}:${f.detail}`, type: f.type, venture: f.venture, detail: f.detail, isSim: f.substance === "simulated", hatch: f.substance === "simulated" ? "var(--sim-hatch)" : "" })),
+    hasFlags: flags.length > 0,
+    gaps: routeGaps({ real: m.realView, sim: m.simView, health: m.healthView }),
+    provenance: fileBorneNote().map((n) => ({ half: n.half, source: n.source, badge: n.badge ?? "", hasBadge: n.badge !== null, asof: n.asof })),
+    asof: { code: asof.code, offer: asof.offer },
+    chart: notServed(
+      "Fourteen days",
+      "/api/pnl?by=day",
+      "Simulated revenue, cost and real revenue by day on one axis -- three substances, three marks, never one line -- each point derived by the money brain, which serves months today and no daily series.",
+    ),
+    milestones: notServed(
+      "The milestone line",
+      "/api/strategy",
+      "The honest ranges the company has written down for when money arrives, read from its strategy documents rather than typed into this screen.",
+    ),
+    sources: notServed(
+      "Where money comes from",
+      "/api/ventures",
+      "Each venture's revenue model and price, and what the factory itself may earn, from each venture's own record -- never a sentence typed into this room.",
+    ),
+    recordVerb: verbPending(
+      "Record real revenue",
+      "revenue.received is recorded by a person's hand only, through the ledger's ingest; the first one opens the green gate and resets the kill clock. It arrives with the work door.",
+    ),
+    criteriaVerb: verbPending(
+      "Set a venture's kill criteria",
+      "Criteria are written at kickoff into ventures.yaml and approved by your stamp; a change is a reviewed diff, never an edit on a screen. It arrives with the work door.",
+    ),
+    closeVerb: verbPending(
+      "Close the month",
+      "month.closed seals a month's P&L so it replays to the same figures for ever. It arrives with the work door.",
+    ),
+    northStar: [
+      "Rupees a month of revenue, per hour of the owner's week.",
+      "The only number arc optimises. A feature that adds human hours is a regression, however impressive it looks.",
+    ],
+    reads: m.reads,
   };
 }
