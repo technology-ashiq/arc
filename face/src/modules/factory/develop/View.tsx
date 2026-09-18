@@ -1,14 +1,14 @@
 // View.tsx -- factory/develop: v0.7's Develop, drawing what fold() returned and deciding nothing (face
 // v2 Phase 03, ADR-1320).
 //
-// Declared deltas from the reference: the slice table and the computed Definition of Done are NOT
-// SERVED panels until /api/slices (ADR-1324); Open a slice, Record proof and Close on evidence are
+// Declared deltas from the reference: the slice table and the computed half of the Definition of Done are read
+// from /api/slices (Phase 04); Open a slice, Record proof and Close on evidence are
 // work-door cards (ADR-1326); the phases are the develop lane's own phase specs through the door, and
 // the figures count the slice receipts the registry homes here.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, ReceiptDrawer, RoomHead, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, LanePanel, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
 export { Wrench as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -25,12 +25,12 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Slices" hint="proven = tests green on CI AND the owner saw it run">
-            <NotServed item={f.slices} />
+            <ServedTable item={f.slices} />
           </HPanel>
 
           <HPanel title="Close a phase" hint="the DoD is computed, never asserted">
             <div className="space-y-2.5">
-              <NotServed item={f.dod} />
+              <ServedTable item={f.dod} />
               <VerbPending item={f.closeVerb} />
             </div>
           </HPanel>

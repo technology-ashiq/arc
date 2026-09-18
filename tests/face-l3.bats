@@ -430,17 +430,12 @@ load 'test_helper'
              "UNDECLARED: a payload for a route the manifest does not declare FAILs the fold (REQ-05)" \
              "a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)" \
              "SHIPPED RING command: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-command.md: the list names exactly what the folds render, both ways" \
              "VERBS PENDING LIST verbs-pending-command.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING kernel: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-kernel.md: the list names exactly what the folds render, both ways" \
-             "NOT SERVED LIST not-served-kernel.md: every row grep counts parses here too" \
              "VERBS PENDING LIST verbs-pending-kernel.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING factory: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-factory.md: the list names exactly what the folds render, both ways" \
              "VERBS PENDING LIST verbs-pending-factory.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING money: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-money.md: the list names exactly what the folds render, both ways" \
              "VERBS PENDING LIST verbs-pending-money.md: the list names exactly what the folds render, both ways" \
              "REHEARSAL LIST rehearsal-money.md: the list names exactly what the folds render, both ways" \
              "F3: MUTANT -- a fold that returns a LIVE pill anywhere in its output is caught" \
@@ -449,8 +444,14 @@ load 'test_helper'
              "F3: chat-mcp's rail and head badge says planned, never live, whatever its kinds did" \
              "F3: MUTANT -- a built room whose kinds fired still reads live, so the planned badge is not a blanket" \
              "F2: the scheduler fold, handed its manifest, asks the door for its trail (vacuous-pass guard)" \
-             "F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it" \
-             "F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat"; do
+             "F2: NEXT FIRE -- served by /api/jobs, and no longer named NOT SERVED" \
+             "F2: HEARTBEAT -- served by /api/jobs, and the trail's last fire is still drawn as a fire, not as a beat" \
+             "F2: a body answering another route is WRONG_ROUTE, never a table" \
+             "NOT SERVED LIST residue.md: the list names exactly what the folds render, both ways" \
+             "NOT SERVED LIST residue.md: every row grep counts parses here too" \
+             "SERVED LIST served.md: the list names exactly what the folds render, both ways" \
+             "SERVED: every route a served panel names is a door route" \
+             "PHASE 04 INPUT: every panel Phase 03 named NOT SERVED is now served or in the residue, none dropped"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }
@@ -501,7 +502,7 @@ load 'test_helper'
              "VENTURES: an unreceipted criteria file measures nothing -- no roster, every count unread, never 0" \
              "PLANNED: two rows for one room are refused -- choosing one would be a guess" \
              "PLANNED: the file's text is un-escaped ONCE -- a literal entity in it stays literal" \
-             "F3: trader with its file read returns no LIVE pill in any case"; do
+             "F3: trader with its file read returns no LIVE pill in any case"              "MONEY: a day read answered with the month model is refused, never drawn"              "MONEY: fourteen days per substance, each in its own table -- real, simulated, and cost lines counted, never summed"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }

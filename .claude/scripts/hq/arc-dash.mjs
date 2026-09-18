@@ -54,12 +54,14 @@ import { fileURLToPath } from "node:url";
 import { query, applyFilters, readAll, spineHealth, spineRoot } from "./spine.mjs";
 import { decide, loadApprovals, cutToDay } from "./arc-inbox.mjs";
 import { render as renderBrief } from "./arc-brief.mjs";
-import { derivePnl } from "./lib/ledger/pnl.mjs";
+import { derivePnl, deriveDaily } from "./lib/ledger/pnl.mjs";
 import { deriveKillPanel } from "./lib/ledger/kill-panel.mjs";
 import { repoRoot } from "./lib/spine-io.mjs";
 import { SpineError, ULID_RE, sha256Hex, formatIst, nowMs } from "./lib/canonical.mjs";
 import { laneHeader, validLaneName } from "../core/lane-resolve.mjs";
 import { askOffline } from "./lib/face/ask-offline.mjs";
+// Phase 04's read routes (REQ-06). The handlers live beside the door; THIS file keeps the one route table.
+import * as reads from "./lib/face/reads.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_BRIEF = join(HERE, "arc-brief.mjs");
@@ -136,6 +138,10 @@ const STATUS = Object.freeze({
   // client mistake -- 500 would be right and unhelpful; 403 says "I will not serve that".
   PHASES_OUTSIDE: 403,
   DECISION_REFUSED: 502,
+  // Phase 04 (REQ-06). A file a route parses that is not on this tree is a precondition, like REGISTRY_ABSENT; a
+  // file the owning lane's parser refuses is unprocessable, not an internal fault; a lane module that will not load
+  // refuses its own route and nothing else.
+  SOURCE_ABSENT: 503, SOURCE_INVALID: 422, PARSER_UNAVAILABLE: 503,
 });
 
 class DashError extends Error {
@@ -314,10 +320,43 @@ async function apiInbox(ctx, url) {
   };
 }
 
+// The keys /api/pnl reads. Anything else is REFUSED (face v2 Phase 04): this route used to answer 200 to any query it
+// did not read, so a client asking for `?by=day` from a door that had no day series got the monthly model back and
+// could not tell. A key the door does not read is a question it is not answering, and it says so.
+const PNL_KEYS = Object.freeze(["asof", "simulated", "venture", "month", "by"]);
+const PNL_DAYS = 14;
+
 async function apiPnl(ctx, url) {
   if (url.searchParams.get("asof") !== null)
     throw new DashError("ASOF_UNSUPPORTED",
       "pnl's native as-of is ?month=YYYY-MM (a month IS a time scope); day-granular as-of needs an asof seam in the money brain's derivePnl and is deliberately not re-derived here (ADR-1301: the door never re-implements the money core)");
+  for (const k of new Set(url.searchParams.keys()))
+    if (!PNL_KEYS.includes(k)) throw new DashError("BAD_ARGS", `/api/pnl takes ${PNL_KEYS.filter((x) => x !== "asof").join(", ")}; "${k}" is not one of them`);
+  const by = url.searchParams.get("by");
+  if (by !== null) {
+    // The DAY series (face v2 Phase 04): the money brain's own deriveDaily, once per substance -- two series side by
+    // side, never summed -- over the fourteen IST days ending today. It takes no other key: a day series of one month
+    // or one venture is a question this route does not answer yet, and a silently ignored filter is the lie above.
+    if (by !== "day") throw new DashError("BAD_ARGS", `by "${by}" is not a series /api/pnl serves (it serves by=day)`);
+    const extra = [...new Set(url.searchParams.keys())].filter((k) => k !== "by");
+    if (extra.length) throw new DashError("BAD_ARGS", `/api/pnl?by=day takes no other key; "${extra[0]}" would be silently ignored`);
+    const today = formatIst(nowMs()).slice(0, 10);
+    const real = await deriveDaily(ctx.root, { mode: "real", days: PNL_DAYS, today });
+    const simulated = await deriveDaily(ctx.root, { mode: "simulated", days: PNL_DAYS, today });
+    return {
+      mode: ctx.mode, route: "/api/pnl", by: "day", badge: "log",
+      parser: "hq/lib/ledger/pnl.mjs#deriveDaily (real, then simulated)", sources: [],
+      today, days: PNL_DAYS,
+      series: real.days.map((d, i) => ({
+        day: d.day,
+        realMinor: d.cashInInr, realRows: d.rows,
+        simulatedMinor: simulated.days[i].cashInInr, simulatedRows: simulated.days[i].rows,
+        costLines: d.costLines,
+      })),
+      unmeasuredCosts: real.unmeasuredCosts,
+      needsYou: real.needsYou + simulated.needsYou,
+    };
+  }
   const month = url.searchParams.get("month");
   if (month !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new DashError("BAD_ARGS", `month "${month}" is not YYYY-MM`);
   const model = await derivePnl(ctx.root, {
@@ -588,6 +627,26 @@ const ROUTES = Object.freeze([
   { method: "GET", path: "/api/rooms", mutates: false, spineEffect: "none", handler: (ctx) => apiRooms(ctx) },
   { method: "GET", prefix: "/api/lane/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => apiLane(ctx, tail) },
   { method: "GET", prefix: "/api/file/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => apiFile(ctx, tail) },
+  // Phase 04 (REQ-06): the union of Phase 03's five NOT SERVED lists, each GET-only and read-only, each parsing
+  // with the function the lane that owns the file already uses (lib/face/reads.mjs).
+  { method: "GET", path: "/api/engine", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiEngine(ctx, url) },
+  { method: "GET", path: "/api/model-policy", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiModelPolicy(ctx, url) },
+  { method: "GET", path: "/api/policy", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiPolicy(ctx, url) },
+  { method: "GET", path: "/api/jobs", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiJobs(ctx, url) },
+  { method: "GET", path: "/api/evolve", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiEvolve(ctx, url) },
+  { method: "GET", path: "/api/memory", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiMemory(ctx, url) },
+  { method: "GET", path: "/api/bench", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiBench(ctx, url) },
+  { method: "GET", path: "/api/roster", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiRoster(ctx, url) },
+  { method: "GET", path: "/api/council", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiCouncil(ctx, url) },
+  { method: "GET", path: "/api/slices", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiSlices(ctx, url) },
+  { method: "GET", path: "/api/gates", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiGates(ctx, url) },
+  { method: "GET", path: "/api/learn", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiLearn(ctx, url) },
+  { method: "GET", path: "/api/adrs", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiAdrs(ctx, url) },
+  { method: "GET", path: "/api/growth", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiGrowth(ctx, url) },
+  { method: "GET", path: "/api/leads", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiLeads(ctx, url) },
+  { method: "GET", path: "/api/legal", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiLegal(ctx, url) },
+  { method: "GET", path: "/api/ventures", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiVentures(ctx, url) },
+  { method: "GET", path: "/api/absorb", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiAbsorb(ctx, url) },
   { method: "POST", path: "/api/decide", mutates: true, spineEffect: "write", handler: (ctx, url, tail, body) => apiDecide(ctx, body) },
   { method: "POST", path: "/api/ask", mutates: false, spineEffect: "receipt", proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiAsk(ctx, body) },
 ]);
@@ -796,7 +855,7 @@ function boot(argv) {
           send(res, 200, out);
         })
         .catch((err) => {
-          const code = (err instanceof SpineError || err instanceof DashError) ? err.code : "INTERNAL";
+          const code = (err instanceof SpineError || err instanceof DashError || err instanceof reads.ReadError) ? err.code : "INTERNAL";
           fail(code, err.message);
         });
     };

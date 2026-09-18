@@ -5,6 +5,6 @@
 export default Object.freeze({
   id: "review-ship",
   ring: "factory",
-  routes: Object.freeze(["/api/spine"]),
+  routes: Object.freeze(["/api/spine", "/api/gates"]),
   asOf: true,
 });

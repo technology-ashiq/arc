@@ -126,7 +126,7 @@ export function fold(payloads, ctx) {
     today: notServed(
       "Receipts per lane today",
       "/api/lanes",
-      "Which lanes fired a receipt today, counted per lane -- so a lane whose header says IDLE and that emitted today reads awake, and one whose header says LIVE and fired nothing reads quiet.",
+      "Which lanes fired a receipt today, counted per lane -- so a lane whose header says IDLE and that emitted today reads awake, and one whose header says LIVE and fired nothing reads quiet. A receipt carries no lane: the spine's envelope has no lane field and only three develop kinds name one in their payload, so no count per lane can be derived -- filed to the spine lane.",
     ),
     statusVerb: verbPending(
       "Set a lane's status",

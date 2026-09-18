@@ -1,14 +1,14 @@
 // View.tsx -- factory/review-ship: v0.7's Review · Ship, drawing what fold() returned and deciding
 // nothing (face v2 Phase 03, ADR-1320).
 //
-// Declared deltas from the reference: the gate MODES, their budgets and the strictness profile are a
-// NOT SERVED panel until /api/gates (ADR-1324) -- the gate NAMES are the served registry's and are
+// Declared deltas from the reference: the gate MODES and the strictness profile are read from /api/gates (Phase 04), and their
+// budgets are not drawn, being comments no parser keeps -- the gate NAMES are the served registry's and are
 // drawn; Review, Run qa and Ship are work-door cards (ADR-1326); the run ledger v0.7 kept in its own
 // store is the door's receipts, counted by kind and drawn as the trail.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { MONO, UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, NotServed, ReceiptDrawer, RoomHead, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
 export { ShieldCheck as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -30,7 +30,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                 </div>
               ) : null}
               {f.hasGates ? null : <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.gatesNote}</p>}
-              <NotServed item={f.gateModes} />
+              <ServedTable item={f.gateModes} />
             </div>
           </HPanel>
 

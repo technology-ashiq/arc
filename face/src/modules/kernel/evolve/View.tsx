@@ -1,13 +1,13 @@
 // View.tsx -- kernel/evolve: v0.7's Evolve, drawing what fold() returned and deciding nothing (face v2
 // Phase 03, ADR-1320).
 //
-// Declared deltas from the reference: the experiment list and the experiment contract are NOT SERVED
-// panels until /api/evolve (ADR-1324); Open, Measure a batch and Conclude are verb-pending cards
+// Declared deltas from the reference: the experiment list and the experiment contract are read from
+// /api/evolve, folded by the evolve lane's own board (Phase 04); Open, Measure a batch and Conclude are verb-pending cards
 // (ADR-1326); the reference's simulated batches are gone -- the figures count real receipts by kind.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, ReceiptDrawer, RoomHead, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, LanePanel, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
 export { Flask as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -24,11 +24,11 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Experiments" hint="open, concluded, landed · status moves only on receipts and your stamp">
-            <NotServed item={f.experiments} />
+            <ServedTable item={f.experiments} />
           </HPanel>
 
           <HPanel title="Experiment contract" hint="the evolve section of a manifest">
-            <NotServed item={f.contract} />
+            <ServedTable item={f.contract} />
           </HPanel>
 
           <TrailPanel trail={f.trail} onReceipt={(id) => ctx.onPick('receipt', id)} />

@@ -3,11 +3,12 @@
 //
 // The port of v0.7's Review · Ship onto the door. What is real: the review, qa, commit and ship receipts
 // the registry homes here, counted by kind and drawn as a trail, and the gates and CI workflows the
-// served registry names. What is not served: each gate's MODE -- blocking, advisory or off -- its budget
-// and the profile that switches the whole set as one, which /api/gates will parse from arc.gates.yaml.
+// served registry names, and -- through /api/gates (Phase 04) -- each gate's declared MODE and the profile that
+// switches the whole set as one. A gate's time budget is a comment in arc.gates.yaml, which no parser keeps.
 // Reviewing, running qa and shipping are work-door verbs (Phase 05); the face never claims a gate's
 // state it did not read.
-import { notServed, verbPending } from "../../../lib/registry.mjs";
+import { verbPending } from "../../../lib/registry.mjs";
+import { gateModes, servedRead } from "../../../lib/served.mjs";
 import { countedOn, holdsCount, kindCount, laneBadge, laneRoom } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
@@ -19,7 +20,7 @@ import { countedOn, holdsCount, kindCount, laneBadge, laneRoom } from "../../../
  *   gates: { key: string, name: string }[],
  *   hasGates: boolean,
  *   gatesNote: string,
- *   gateModes: import("../../../lib/registry.mjs").NotServed,
+ *   gateModes: import("../../../lib/served.mjs").ServedTable,
  *   workflows: { key: string, name: string }[],
  *   hasWorkflows: boolean,
  *   workflowsNote: string,
@@ -35,6 +36,7 @@ import { countedOn, holdsCount, kindCount, laneBadge, laneRoom } from "../../../
  */
 export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx);
+  const gatesSt = servedRead(payloads, ctx, base.reads, "/api/gates");
   // Each gate and each workflow once; a list the registry carried unreadably says so rather than
   // reading as an absence (Phase 03 attack).
   const gatesUnread = base.unreadable.includes("gates");
@@ -56,11 +58,7 @@ export function fold(payloads, ctx) {
     gatesNote: gatesUnread
       ? "the served registry carried this room's gates in a shape this shell could not read"
       : gates.length === 0 ? "the served registry names no gate in this room" : "",
-    gateModes: notServed(
-      "Gate modes and the profile",
-      "/api/gates",
-      "What each gate is set to today -- blocking, advisory or off -- the time budget it runs inside, and the strictness profile that switches the whole set as one, parsed from the gates file.",
-    ),
+    gateModes: gateModes(gatesSt, "Gate modes and the profile", "a gate's time budget is written as a comment in arc.gates.yaml, which its parser does not keep, so no budget is drawn"),
     workflows,
     hasWorkflows: workflows.length > 0,
     workflowsNote: ciUnread

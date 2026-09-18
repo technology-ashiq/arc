@@ -5,6 +5,6 @@
 export default Object.freeze({
   id: "leads",
   ring: "money",
-  routes: Object.freeze(["/api/lane/:id", "/api/spine"]),
+  routes: Object.freeze(["/api/lane/:id", "/api/spine", "/api/leads"]),
   asOf: true,
 });

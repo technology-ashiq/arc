@@ -1,14 +1,14 @@
 // View.tsx -- kernel/absorb: v0.7's Absorb, drawing what fold() returned and deciding nothing (face v2
 // Phase 03, ADR-1320).
 //
-// Declared deltas from the reference: the registry and adopted-per-lane panels are NOT SERVED until
-// /api/absorb (ADR-1324); Absorb, Advance, Propose adoption and Retire are verb-pending cards (ADR-1326);
+// Declared deltas from the reference: the registry and adopted-per-lane panels are read from
+// /api/absorb, judged by absorb's own lint (Phase 04); Absorb, Advance, Propose adoption and Retire are verb-pending cards (ADR-1326);
 // the trail is the decision receipts the served registry homes here, and it says those are every
 // decision, not intake's alone.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, ReceiptDrawer, RoomHead, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, LanePanel, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
 export { Funnel as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -25,11 +25,11 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="The registry" hint="candidate · trial · adopted · retired">
-            <NotServed item={f.registry} />
+            <ServedTable item={f.registry} />
           </HPanel>
 
           <HPanel title="Adopted per lane">
-            <NotServed item={f.adopted} />
+            <ServedTable item={f.adopted} />
           </HPanel>
 
           <TrailPanel trail={f.trail} onReceipt={(id) => ctx.onPick('receipt', id)} />

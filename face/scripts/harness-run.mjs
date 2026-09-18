@@ -23,7 +23,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runSmoke, summaryLines, renderLine, notServedLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, extrasLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds, expectedExtras } from "./smoke.mjs";
+import { runSmoke, summaryLines, renderLine, notServedLine, servedLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, extrasLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds, expectedExtras } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FACE_DEFAULT = resolve(HERE, "..");
@@ -170,6 +170,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
       for (const line of summaryLines(report)) log(line);
       log(renderLine(report));
       log(notServedLine(report));
+      log(servedLine(report));
       log(verbsPendingLine(report));
       log(rehearsalLine(report));
       log(plannedLine(report));

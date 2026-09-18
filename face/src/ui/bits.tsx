@@ -173,6 +173,45 @@ export function NotServed({ item }: { item: { panel: string; route: string; sent
   )
 }
 
+export type ServedTableView = {
+  panel: string; route: string; isReading: boolean; isRefused: boolean; refusal: { code: string; human: string }
+  isDrawn: boolean; showEmpty: boolean; columns: string[]; rows: { key: string; cells: string[] }[]; empty: string; note: string; source: string
+}
+
+/**
+ * A panel one of Phase 04's door routes fills (REQ-06): the rows the route served under the fold's columns,
+ * or the state that stands in for them. `data-served` names the route, as `data-not-served` did before it.
+ */
+export function ServedTable({ item }: { item: ServedTableView }) {
+  return (
+    <div data-served={item.route} className="min-w-0">
+      {item.isReading ? <Reading what={item.panel.toLowerCase()} /> : null}
+      {item.isRefused ? <DoorRefusal code={item.refusal.code} human={item.refusal.human} /> : null}
+      {item.showEmpty ? <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{item.empty}</p> : null}
+      {item.isDrawn && item.columns.length > 0 && item.rows.length > 0 ? (
+        <div className="grid gap-x-3 px-2 pb-1.5 text-[10.5px] uppercase tracking-[0.06em]" style={{ gridTemplateColumns: `repeat(${item.columns.length}, minmax(0, 1fr))`, fontFamily: UI, fontWeight: 600, color: 'var(--text-3)' }}>
+          {item.columns.map((c) => (
+            <span key={c} className="truncate">{c}</span>
+          ))}
+        </div>
+      ) : null}
+      {item.isDrawn ? (
+        <div>
+          {item.rows.map((r) => (
+            <div key={r.key} data-served-row={r.key} className="grid gap-x-3 px-2 py-[7px] text-[12.5px] leading-[19px] transition-colors duration-200 hover:bg-(--bg-3)" style={{ gridTemplateColumns: `repeat(${Math.max(1, r.cells.length)}, minmax(0, 1fr))`, borderBottom: '1px solid var(--line-1)', borderRadius: 'var(--r-sm)' }}>
+              {r.cells.map((c, i) => (
+                <span key={`${r.key}-${i}`} className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: i === 0 ? MONO : UI, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? 'var(--text-1)' : 'var(--text-2)' }}>{c}</span>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {item.note ? <p className="text-[11.5px] leading-[17px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{item.note}</p> : null}
+      {item.source ? <p className="text-[11px] leading-[16px] mt-1.5 [overflow-wrap:anywhere]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>GET {item.route} · {item.source}</p> : null}
+    </div>
+  )
+}
+
 /** A door read that has not answered yet. A number never shows a spinner: it says what it waits for. */
 export function Reading({ what }: { what: string }) {
   return (

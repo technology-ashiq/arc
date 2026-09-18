@@ -1,14 +1,14 @@
 // View.tsx -- factory/executor: v0.7's Executor, drawing what fold() returned and deciding nothing (face v2 Phase 03,
 // ADR-1320, ADR-1327).
 //
-// Declared deltas from the reference: the hires, their certification and their runs are NOT SERVED until
-// /api/roster (ADR-1324) -- the reference drew a simulated team and a run log; hiring, dispatching and terminating are
+// Declared deltas from the reference: the hires and their runs are read from /api/roster (Phase 04) and their certification is NOT SERVED
+// (ADR-1324) -- the reference drew a simulated team and a run log; hiring, dispatching and terminating are
 // work-door cards, not wizards (ADR-1326); the employees are the served registry's agents, counted and linked to the
 // agents room; the file the hires are written in is drawn by its provenance. The room wears its not-in-registry label.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Chip, UI } from '../../../ui/kit'
-import { HPanel, KpiStrip, NotServed, RoomHead, SourceFile, VerbPending } from '../../../ui/bits'
+import { HPanel, KpiStrip, NotServed, RoomHead, ServedTable, SourceFile, VerbPending } from '../../../ui/bits'
 import { Rows } from '../../../ui/company'
 export { UsersFour as Icon } from '@phosphor-icons/react'
 
@@ -26,7 +26,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Hires on the books" hint="contractors, on tenure">
-            <NotServed item={f.hires} />
+            <ServedTable item={f.hires} />
             <div className="mt-3 space-y-2.5">
               <VerbPending item={f.hireVerb} />
               <VerbPending item={f.dispatchVerb} />
@@ -61,7 +61,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Runs">
-            <NotServed item={f.runs} />
+            <ServedTable item={f.runs} />
           </HPanel>
         </div>
       </div>

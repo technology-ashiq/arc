@@ -4,9 +4,11 @@
 // The port of v0.7's Board onto the door. Every lane VALUE is its own PROGRESS header, parsed by
 // spine.mjs's board readers (the board is a view; the lane files are the truth, ADR-0051); the totals
 // leave out and COUNT a lane whose header records no appetite or burn, never summing it as zero. The
-// pipeline counts today's receipts by the kind each stage names. The venture cards are NOT SERVED: v0.7
-// drew them from a simulated portfolio, and the door has no ventures route yet.
+// pipeline counts today's receipts by the kind each stage names. The venture cards are read from /api/ventures
+// (Phase 04): each venture's kill criteria, evaluated by the ledger's own kill panel. v0.7 drew them from a
+// simulated portfolio. The base rate is still NOT SERVED: no file the door can parse states it.
 import { notServed, payloadOf } from "../../../lib/registry.mjs";
+import { servedRead, venturesKill } from "../../../lib/served.mjs";
 import { dayOf, decodeDoorText, fmtInt, readHealth, readSpinePage } from "../../../lib/inbox.mjs";
 import { boardProvenance, boardRows, boardTotals, fmtDays, sharePct } from "../../../lib/spine.mjs";
 
@@ -49,7 +51,7 @@ const STAGES = Object.freeze([
  * @property {string} sort
  * @property {{ key: string, name: string, n: string, note: string }[]} pipeline
  * @property {string} pipelineHint
- * @property {import("../../../lib/registry.mjs").NotServed} ventures
+ * @property {import("../../../lib/served.mjs").ServedTable} ventures
  * @property {import("../../../lib/registry.mjs").NotServed} baseRate
  * @property {boolean} canOpenOrg
  * @property {string} orgRoom
@@ -78,6 +80,7 @@ export function fold(payloads, ctx) {
   const day = health === null ? "" : dayOf(health.now);
   const feedRead = day === "" ? null : { route: "/api/spine", query: { date: day, limit: FEED_LIMIT }, poll: true };
   if (feedRead !== null) reads.push(feedRead);
+  const venturesSt = servedRead(payloads, ctx, reads, "/api/ventures");
   const feedP = feedRead === null ? null : payloadOf(payloads, feedRead);
   const events = feedP !== null && feedP.state === "ok" ? readSpinePage(feedP.data).events : [];
 
@@ -149,9 +152,9 @@ export function fold(payloads, ctx) {
     baseRate: notServed(
       "The base rate",
       "/api/ventures",
-      "How many ventures the kill criteria were planned to expect to live, as the criteria file states it, written before the first launch -- so a death is a data point, not a surprise.",
+      "How many ventures the kill criteria were planned to expect to live, written before the first launch -- so a death is a data point, not a surprise. The criteria file does not state it: the figure is prose in the master execution plan, which no parser reads -- filed to the ledger lane.",
     ),
-    ventures: notServed("Ventures", "/api/ventures", "The kill-distance card for each venture: its stage, its criteria set at kickoff, and how far it is from its own kill line. The door serves no ventures route yet."),
+    ventures: venturesKill(venturesSt, "Ventures"),
     reads,
   };
 }

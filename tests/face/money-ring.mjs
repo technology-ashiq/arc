@@ -138,7 +138,26 @@ const readsWith = (h, real, sim) => {
   const { full } = loaded(fold, ctxFor("money", manifest), answerMoney(ok(health("live", ["revenue.received", "revenue.simulated"])), ok(pnl("real")), ok(pnl("simulated"))));
   check("MONEY: the fired badge, the figures and both substances come from the reads", full.isRealFired === true && full.realPanel.isDrawn === true && full.simPanel.isDrawn === true && full.figures.length === 2, JSON.stringify({ badge: full.badge }));
   check("MONEY: the kill lines are a panel with one venture's criterion", full.kill.isPanel === true && full.kill.rows.length === 1 && full.kill.rows[0].criterion === "days_without_revenue", JSON.stringify(full.kill.rows));
-  check("MONEY: three NOT SERVED panels and three work-door cards", reg.notServedOf(full).length === 3 && reg.verbPendingOf(full).length === 3);
+  // Phase 04: the fourteen days are the money brain's day series through /api/pnl?by=day -- three SERVED tables, one
+  // per substance -- and the milestone line and "where money comes from" stay NOT SERVED.
+  check("MONEY: two NOT SERVED panels, three served day tables and three work-door cards",
+    reg.notServedOf(full).length === 2 && reg.servedOf(full).length === 3 && reg.verbPendingOf(full).length === 3,
+    JSON.stringify({ ns: reg.notServedOf(full).map((n) => n.panel), sv: reg.servedOf(full).map((s) => s.panel) }));
+  // The day read answered with the MONTH model -- what an older door gives a key it does not read -- is refused, never
+  // drawn as fourteen days.
+  check("MONEY: a day read answered with the month model is refused, never drawn", full.chart.isRefused === true && full.chart.isDrawn === false, JSON.stringify(full.chart.refusal));
+  const series = Array.from({ length: 14 }, (_, i) => ({ day: `2026-09-${String(5 + i).padStart(2, "0")}`, realMinor: i === 13 ? 250000 : 0, realRows: i === 13 ? 1 : 0, simulatedMinor: i === 12 ? 99900 : 0, simulatedRows: i === 12 ? 1 : 0, costLines: i === 13 ? [{ currency: "USD", lines: 2 }] : [] }));
+  const dayAnswer = (read) => (read.query && read.query.by === "day"
+    ? ok({ mode: "live", route: "/api/pnl", by: "day", badge: "log", parser: "hq/lib/ledger/pnl.mjs#deriveDaily", sources: [], series })
+    : answerMoney(ok(health("live", ["revenue.received", "revenue.simulated"])), ok(pnl("real")), ok(pnl("simulated")))(read));
+  const days = loaded(fold, ctxFor("money", manifest), dayAnswer).full;
+  check("MONEY: the day read is planned against /api/pnl with by=day, and nothing else", loaded(fold, ctxFor("money", manifest), dayAnswer).first.reads.filter((r) => r.route === "/api/pnl" && r.query && r.query.by === "day").length === 1);
+  check("MONEY: fourteen days per substance, each in its own table -- real, simulated, and cost lines counted, never summed",
+    days.chart.rows.length === 14 && days.chartSim.rows.length === 14 && days.chartCost.rows.length === 14
+    && days.chart.rows[13].cells[1] === "₹2,500.00 · 1 receipt" && days.chartSim.rows[12].cells[1] === "₹999.00 simulated · 1 receipt"
+    && days.chartCost.rows[13].cells[1] === "2 in USD" && days.chart.rows[12].cells[1] === "no receipt",
+    JSON.stringify({ real: days.chart.rows[13], sim: days.chartSim.rows[12], cost: days.chartCost.rows[13] }));
+  check("MONEY: no row of any day table holds two substances", days.chart.rows.every((r) => !/simulated/.test(r.cells[1])) && days.chartSim.rows.every((r) => r.cells[1] === "no receipt" || /simulated/.test(r.cells[1])));
 }
 
 // ── the ventures fold, over each state of the kill panel ─────────────────────────────────────────────────

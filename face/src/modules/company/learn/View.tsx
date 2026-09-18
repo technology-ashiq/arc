@@ -1,14 +1,14 @@
 // View.tsx -- company/learn: v0.7's Learn, drawing what fold() returned and deciding nothing (face v2 Phase 03,
 // company ring, ADR-1320).
 //
-// Declared deltas from the reference: the playbook rules, the jurors' calibration and the sleeping queue are NOT
-// SERVED panels until /api/learn folds them (ADR-1324) -- the reference drew them from a local store and a typed list;
+// Declared deltas from the reference: the playbook rules are read from /api/learn (Phase 04); the jurors' calibration and the sleeping queue are NOT
+// SERVED, because no lane records either in a form a parser reads (ADR-1324) -- the reference drew them from a local store and a typed list;
 // v0.7's champion/challenger preview was a simulated experiment, and the real experiments live in the evolve room,
 // which this room links to rather than imitates.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, NotServed, RoomHead, SourcesPanel } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, NotServed, RoomHead, ServedTable, SourcesPanel } from '../../../ui/bits'
 import { Rows } from '../../../ui/company'
 export { Lightbulb as Icon } from '@phosphor-icons/react'
 
@@ -26,7 +26,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Playbook rules" hint="the company's memory · recall search">
-            <NotServed item={f.rules} />
+            <ServedTable item={f.rules} />
           </HPanel>
 
           <HPanel title="Evolve" hint="the generalised retro">

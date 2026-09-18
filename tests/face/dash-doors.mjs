@@ -9,6 +9,7 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { connect } from "node:net";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
@@ -29,8 +30,10 @@ const tmp = mkdtempSync(join(tmpdir(), "face-doors-"));
 const SPINE = join(tmp, "spine");
 const JOURNAL = join(tmp, "journal");
 
+// `--phase04 1`: one block of the receipts face v2 Phase 04's read routes fold, so each route's arm below asserts a
+// payload that came from a receipt, never an empty list that would pass on a door reading nothing.
 const gen = JSON.parse(execFileSync(process.execPath,
-  [join(REPO, "tests/fixtures/face/gen-spine.mjs"), "--out", SPINE, "--count", "2000", "--days", "10", "--seed", "doors-1"],
+  [join(REPO, "tests/fixtures/face/gen-spine.mjs"), "--out", SPINE, "--count", "2000", "--days", "10", "--seed", "doors-1", "--phase04", "1"],
   { stdio: ["ignore", "pipe", "inherit"] }).toString());
 
 let ran = 0, failed = 0;
@@ -40,7 +43,7 @@ const check = (name, cond, detail = "") => {
   else console.log(`ok ${name}`);
 };
 
-check("fixture loaded (vacuous-pass guard)", gen.events === 2000 && gen.openApproval, `events=${gen.events}`);
+check("fixture loaded (vacuous-pass guard)", gen.base === 2000 && gen.phase04 === 19 && gen.events === 2019 && gen.openApproval, `events=${gen.events} base=${gen.base} phase04=${gen.phase04}`);
 
 const dash = spawn(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--spine", SPINE, "--port", String(PORT)],
   { env: { ...process.env, ARC_DASH_TOKEN: TOKEN, ARC_DASH_JOURNAL_DIR: JOURNAL }, stdio: ["ignore", "ignore", "pipe"] });
@@ -62,7 +65,7 @@ for (let i = 0; i < 50 && !up; i++) {
 try {
   check("server up", up);
   let r = await j("/api/health", { headers: H });
-  check("door sees the whole fixture", r.body.spine && r.body.spine.events === 2000, `saw=${r.body.spine && r.body.spine.events}`);
+  check("door sees the whole fixture", r.body.spine && r.body.spine.events === gen.events, `saw=${r.body.spine && r.body.spine.events}`);
   check("torn line reported not dropped", r.body.spine && r.body.spine.torn.length === 1);
   check("sealed days counted", r.body.spine && r.body.spine.daysClosed === 9);
 
@@ -309,6 +312,197 @@ try {
     check("no room lost its holds block in transit", lostHolds.length === 0, lostHolds.map((x) => x.id).join(","));
   }
 
+  // ---- face v2 Phase 04 (REQ-06): the read routes Phase 03's NOT SERVED lists named ----
+  // One arm per route, and every arm proves its INPUT first -- the file on this tree, or the receipts the fixture's
+  // Phase 04 block wrote -- before it asserts what the door served from it. A route answering 200 with an empty list
+  // would pass a shape check on a door that read nothing; each arm names a row that can only come from the input.
+  {
+    const disk = (rel) => readFileSync(join(REPO, rel), "utf8");
+    const sha = (rel) => createHash("sha256").update(disk(rel)).digest("hex");
+    const route = async (path) => {
+      const res = await j(path, { headers: H });
+      // Every Phase 04 route names itself, its parser and the files it parsed (with the file's own sha256).
+      const named = res.status === 200 && res.body.route === path.split("?")[0] && typeof res.body.parser === "string" && res.body.parser.length > 0 && Array.isArray(res.body.sources);
+      return { ...res, named };
+    };
+    const sourced = (res, rel) => res.body.sources.some((s) => s.path === rel && s.sha256 === sha(rel));
+    const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+
+    // /api/engine -- the router file, parsed; the bench's ceilings; the drivers on disk.
+    {
+      // The class keys of the `classes:` block alone -- `models:` has two-space keys too, and they are tiers, not classes.
+      const routerText = disk("engine/router.yaml");
+      const classesBlock = routerText.slice(routerText.indexOf("\nclasses:\n"), routerText.indexOf("\ndefault:\n"));
+      const classesOnDisk = [...classesBlock.matchAll(/^ {2}([a-z][a-z0-9-]*):\s*$/gm)].map((m) => m[1]);
+      const driversOnDisk = readdirSync(join(REPO, ".claude/scripts/engine/drivers")).filter((f) => f.endsWith(".sh")).map((f) => f.slice(0, -3)).sort();
+      check("P04 engine: positive control -- the router routes classes and ships drivers", classesOnDisk.length >= 3 && driversOnDisk.length >= 2, `classes=${classesOnDisk.length} drivers=${driversOnDisk.length}`);
+      const e = await route("/api/engine");
+      check("P04 engine: named, and parsed from THIS router file (sha)", e.named && sourced(e, "engine/router.yaml"), JSON.stringify(e.body.sources));
+      check("P04 engine: every class row the router file names is served, plus the default row",
+        Array.isArray(e.body.classes) && classesOnDisk.every((c) => e.body.classes.some((x) => x.name === c)) && e.body.classes.some((x) => x.name === "default"), JSON.stringify((e.body.classes || []).map((x) => x.name)));
+      check("P04 engine: the drivers are the scripts on disk", JSON.stringify(e.body.drivers) === JSON.stringify(driversOnDisk), JSON.stringify(e.body.drivers));
+      check("P04 engine: the budgets come from the bench's ceiling file", e.body.budgets && Array.isArray(e.body.budgets.rows) && e.body.budgets.rows.length >= 1 && sourced(e, "initiatives/bench/ceilings.json"), JSON.stringify(e.body.budgets));
+    }
+    // /api/model-policy -- the tier block and the process routes, from the same file.
+    {
+      const m = await route("/api/model-policy");
+      check("P04 model-policy: named, parsed from THIS router file", m.named && sourced(m, "engine/router.yaml"));
+      check("P04 model-policy: the four ADR-0069 tiers, each with its implementation where one is pinned",
+        Array.isArray(m.body.tiers) && m.body.tiers.map((t) => t.tier).join(",") === "cheap-scan,balanced-workhorse,high-judgment,independent-family-verifier"
+        && m.body.tiers[0].models.some((x) => x.driver === "claude-code" && x.model === "haiku"), JSON.stringify(m.body.tiers));
+      check("P04 model-policy: a hire's four terms reach the wire, judged against today", (m.body.classes || []).some((c) => c.runtime === true && c.cap !== "" && c.review_by !== "" && typeof c.expired === "boolean") && m.body.today === today, JSON.stringify(m.body.today));
+    }
+    // /api/policy -- the ceilings in the file, the cap folded from the fixture's one level-change receipt.
+    {
+      const subjectsOnDisk = [...disk("hq.policy.yaml").matchAll(/^ {2}"([a-z]+:[a-z0-9:-]+)":\s*$/gm)].map((m) => m[1]);
+      check("P04 policy: positive control -- the policy file declares subjects", subjectsOnDisk.length >= 3, String(subjectsOnDisk.length));
+      const p = await route("/api/policy");
+      check("P04 policy: named, parsed from THIS policy file", p.named && sourced(p, "hq.policy.yaml"));
+      check("P04 policy: one row per subject the file declares", Array.isArray(p.body.subjects) && JSON.stringify(p.body.subjects.map((s) => s.subject).sort()) === JSON.stringify(subjectsOnDisk.slice().sort()), JSON.stringify((p.body.subjects || []).map((s) => s.subject)));
+      const rd = (p.body.subjects || []).find((s) => s.subject === "process:review-diff");
+      const readCell = rd && rd.cells.find((c) => c.capability === "read");
+      check("P04 policy: the fixture's level change is FOLDED -- read on review-diff is L2 under an L3 ceiling, from exactly 1 transition",
+        p.body.transitions === 1 && readCell && readCell.ceiling === "L3" && readCell.cap === "L2" && readCell.effective === "L2", JSON.stringify(readCell));
+    }
+    // /api/jobs -- the schedule file, judged against the fixture's one fire.
+    {
+      const jobsOnDisk = [...disk("hq.jobs.yaml").matchAll(/^ {2}- name: ([a-z][a-z0-9-]*)\s*$/gm)].map((m) => m[1]);
+      check("P04 jobs: positive control -- the schedule registers jobs", jobsOnDisk.length >= 1, String(jobsOnDisk.length));
+      const jb = await route("/api/jobs");
+      check("P04 jobs: named, parsed from THIS schedule", jb.named && sourced(jb, "hq.jobs.yaml"));
+      check("P04 jobs: every registered job is judged", Array.isArray(jb.body.jobs) && JSON.stringify(jb.body.jobs.map((x) => x.name).sort()) === JSON.stringify(jobsOnDisk.slice().sort()));
+      const bm = (jb.body.jobs || []).find((x) => x.name === "brief-materialize");
+      check("P04 jobs: the fixture's fire is the job's last run, and its next fire is an IST timestamp",
+        bm && typeof bm.lastRun === "string" && bm.lastRun.startsWith("2026-07-20T") && /\+05:30$/.test(bm.nextExpected || "") && typeof bm.overdue === "boolean", JSON.stringify(bm));
+    }
+    // /api/evolve -- the fixture's experiment, folded by the evolve lane's board.
+    {
+      const ev = await route("/api/evolve");
+      const x = (ev.body.experiments || []).find((e) => e.id === "x-fixture");
+      check("P04 evolve: named, and the fixture's experiment is folded with both arms", ev.named && x && x.arms.join(",") === "a,b", JSON.stringify(ev.body.experiments));
+      check("P04 evolve: its one window is complete and each arm counts one unit", x && x.metrics.length === 1 && x.metrics[0].complete === 1 && x.metrics[0].arms.every((a) => a.units === 1), JSON.stringify(x && x.metrics));
+      check("P04 evolve: the manifests were read for a contract", typeof ev.body.manifestsRead === "number" && ev.body.manifestsRead >= 1 && Array.isArray(ev.body.contracts));
+    }
+    // /api/memory and /api/learn -- the retro log, by the memory lane's adapter.
+    {
+      const rows = disk("docs/retro-log.md").split("\n").filter((l) => /^\d{4}-\d{2}-\d{2}\s*\|/.test(l));
+      check("P04 memory: positive control -- the retro log has dated rows", rows.length >= 10, String(rows.length));
+      const me = await route("/api/memory");
+      check("P04 memory: named, parsed from THIS retro log", me.named && sourced(me, "docs/retro-log.md"));
+      check("P04 memory: every lesson row the adapter keeps is served (scoreboard and malformed rows aside)",
+        Array.isArray(me.body.lessons) && me.body.lessons.length >= 10 && me.body.lessons.length + me.body.malformed <= rows.length, `lessons=${(me.body.lessons || []).length} rows=${rows.length}`);
+      const le = await route("/api/learn");
+      check("P04 learn: named, the same rules, and this week's are a subset dated inside the week",
+        le.named && Array.isArray(le.body.rules) && le.body.rules.length === me.body.lessons.length && Array.isArray(le.body.thisWeek)
+        && le.body.thisWeek.every((l) => l.date >= le.body.weekFrom && l.date <= le.body.today), `rules=${(le.body.rules || []).length} week=${(le.body.thisWeek || []).length}`);
+    }
+    // /api/bench, /api/council, /api/roster -- receipts only the fixture's Phase 04 block wrote.
+    {
+      const b = await route("/api/bench");
+      check("P04 bench: named, and the one scored run is served with NO PROPOSAL as its class's result",
+        b.named && Array.isArray(b.body.runs) && b.body.runs.length === 1 && /NO PROPOSAL/.test(b.body.runs[0].classes[0].reason), JSON.stringify(b.body.runs));
+      const c = await route("/api/council");
+      const scored = (c.body.verdicts || []).find((v) => v.session === "c-fixture-1");
+      check("P04 council: named, two verdicts, the scored one carries its outcome", c.named && c.body.verdicts.length === 2 && scored && scored.outcome === "happened", JSON.stringify(c.body.verdicts));
+      check("P04 council: calibration below the floor reports NO figure", c.body.calibration && c.body.calibration.scored === 1 && c.body.calibration.brier === null && c.body.calibration.floor === 20, JSON.stringify(c.body.calibration));
+      const ro = await route("/api/roster");
+      check("P04 roster: named, the runtime hire is on the books, and its dispatch is served", ro.named && sourced(ro, "engine/router.yaml")
+        && ro.body.hires.some((h) => h.name === "build-in-public-draft" && h.driver === "hermes") && ro.body.runs.length === 1 && ro.body.runs[0].driver === "hermes", JSON.stringify(ro.body.runs));
+    }
+    // /api/slices -- every LIVE lane's current phase, by develop's ledger parser.
+    {
+      const sl = await route("/api/slices");
+      check("P04 slices: named, and every lane it lists reads LIVE with a phase", sl.named && Array.isArray(sl.body.lanes) && sl.body.lanes.length >= 1 && sl.body.lanes.every((l) => typeof l.phase === "string"), JSON.stringify((sl.body.lanes || []).map((l) => `${l.lane}:${l.phase}:${l.present}`)));
+      const present = (sl.body.lanes || []).filter((l) => l.present);
+      check("P04 slices: a lane with a task file has its slices counted, proven never above total",
+        present.every((l) => l.slices.length === l.total && l.proven <= l.total && sourced(sl, l.file)), JSON.stringify(present.map((l) => `${l.lane}:${l.proven}/${l.total}`)));
+    }
+    // /api/gates -- the gates file, and the profile name where arc-profile.sh reads it.
+    {
+      const gatesOnDisk = [...disk("arc.gates.yaml").matchAll(/^ {2}- name: ([a-z][a-z0-9-]*)\s*$/gm)].map((m) => m[1]);
+      const g = await route("/api/gates");
+      check("P04 gates: named, parsed from THIS gates file, every gate by name", g.named && sourced(g, "arc.gates.yaml") && gatesOnDisk.length >= 3
+        && JSON.stringify(g.body.gates.map((x) => x.name)) === JSON.stringify(gatesOnDisk), JSON.stringify(g.body.gates && g.body.gates.map((x) => x.name)));
+      const profile = JSON.parse(disk(".claude/settings.json")).arc.profile;
+      check("P04 gates: the profile is the one settings.json names", typeof profile === "string" && g.body.profile === profile, `${g.body.profile} vs ${profile}`);
+    }
+    // /api/adrs -- every ADR file, by the memory lane's ADR adapter.
+    {
+      const files = readdirSync(join(REPO, "docs/adr")).filter((n) => /^\d{4}-.+\.md$/.test(n));
+      const a = await route("/api/adrs");
+      check("P04 adrs: named, and one record per ADR file", a.named && files.length >= 100 && a.body.files === files.length && a.body.adrs.length === files.length, `files=${files.length} served=${(a.body.adrs || []).length}`);
+      check("P04 adrs: each record carries its number and century", a.body.adrs.every((x) => /^\d{4}$/.test(x.number) && x.century === `${x.number.slice(0, 2)}00`));
+    }
+    // /api/growth -- the fixture's piece and its correction: the head of the chain is the correction.
+    {
+      const gr = await route("/api/growth");
+      check("P04 growth: named, ONE published piece -- the correction at the chain's head -- and the one it superseded",
+        gr.named && gr.body.published.length === 1 && gr.body.published[0].title === "Fixture piece, corrected" && gr.body.superseded === 1, JSON.stringify(gr.body.published));
+      check("P04 growth: the cluster plan is served with its approval still open", gr.body.clusters.length === 1 && gr.body.clusters[0].verdict === "open", JSON.stringify(gr.body.clusters));
+    }
+    // /api/leads -- HMAC ids only, never a contact.
+    {
+      const ld = await route("/api/leads");
+      check("P04 leads: named, both fixture leads by their HMAC id, the suppressed one listed", ld.named
+        && JSON.stringify(ld.body.leads.map((l) => l.lead_id)) === JSON.stringify(["lh-fixture-a", "lh-fixture-b"]) && JSON.stringify(ld.body.suppressed) === JSON.stringify(["lh-fixture-b"]), JSON.stringify(ld.body.leads));
+      check("P04 leads: touches counted from the receipts -- two to one lead, one to the other", ld.body.leads[0].touches === 2 && ld.body.leads[1].touches === 1);
+      check("P04 leads: the caps are numbers from config, and no email-shaped string is on the wire",
+        typeof ld.body.caps.per_ist_day === "number" && !/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(JSON.stringify(ld.body)), JSON.stringify(ld.body.caps));
+    }
+    // /api/legal -- the seals by the constitution's own parser, the publish gate from the fixture's decided approval.
+    {
+      const lg = await route("/api/legal");
+      check("P04 legal: named, parsed from THIS constitution and policy file", lg.named && sourced(lg, "CONSTITUTION.md") && sourced(lg, "hq.policy.yaml"));
+      check("P04 legal: five seals, each quoted element for element", lg.body.seals.length === 5 && lg.body.seals.every((s) => s.quoted === true) && lg.body.quoteHolds === true, JSON.stringify(lg.body.seals));
+      check("P04 legal: the fixture's held piece is served with the stamp that decided it", lg.body.publishGate.length === 1 && lg.body.publishGate[0].state === "approve", JSON.stringify(lg.body.publishGate));
+    }
+    // /api/ventures -- the criteria file by the ledger's parser, the kill panel, and no OS path on the wire.
+    {
+      const namesOnDisk = [...disk("ventures.yaml").matchAll(/^ {2}([a-z][a-z0-9-]*):\s*$/gm)].map((m) => m[1]);
+      const v = await route("/api/ventures");
+      check("P04 ventures: named, parsed from THIS criteria file, every venture it declares", v.named && sourced(v, "ventures.yaml") && namesOnDisk.length >= 1
+        && JSON.stringify(v.body.ventures.map((x) => x.name)) === JSON.stringify(namesOnDisk), JSON.stringify(v.body.ventures));
+      check("P04 ventures: the closed set of criteria, and a digest", v.body.criteria.join(",") === "days_without_revenue,traffic_floor_monthly" && /^[0-9a-f]{64}$/.test(v.body.digest));
+      check("P04 ventures: the kill panel's path is repo-relative -- no drive, no home directory", !/^([A-Za-z]:|\/)/.test(v.body.kill.path) && !/Users|home/.test(v.body.kill.path), v.body.kill.path);
+    }
+    // /api/absorb -- the registry by absorb's own lint.
+    {
+      const reg = JSON.parse(disk("products/absorb/registry.json"));
+      const ab = await route("/api/absorb");
+      check("P04 absorb: named, every technique in the registry, the cap the lint enforces", ab.named && sourced(ab, "products/absorb/registry.json")
+        && ab.body.techniques.length === reg.techniques.length && reg.techniques.length >= 1 && ab.body.cap === 12, `served=${(ab.body.techniques || []).length}`);
+      check("P04 absorb: the adopted count per lane is the lint's", ab.body.adoptedPerLane.reduce((n, x) => n + x.adopted, 0) === reg.techniques.filter((t) => t.status === "adopted").length);
+    }
+    // /api/pnl?by=day -- the money brain's day series; an unread key is refused, not ignored.
+    {
+      const d = await j("/api/pnl?by=day", { headers: H });
+      check("P04 pnl by=day: fourteen IST days ending today, each substance its own field, never a total",
+        d.status === 200 && d.body.route === "/api/pnl" && d.body.by === "day" && d.body.series.length === 14 && d.body.series[13].day === today
+        && d.body.series.every((x) => typeof x.realMinor === "number" && typeof x.simulatedMinor === "number" && Array.isArray(x.costLines) && !("total" in x)), JSON.stringify(d.body.series && d.body.series[13]));
+      for (const q of ["by=week", "by=day&month=2026-07", "bogus=1"]) {
+        const bad = await j(`/api/pnl?${q}`, { headers: H });
+        check(`P04 pnl: ?${q} is REFUSED by name, never answered with the month model`, bad.status === 400 && bad.body.error === "BAD_ARGS", `${bad.status} ${bad.body.error}`);
+      }
+      const mo = await j("/api/pnl?month=2026-07", { headers: H });
+      check("P04 pnl: the month model still answers", mo.status === 200 && mo.body.month === "2026-07" && mo.body.model);
+    }
+    // Every Phase 04 route refuses a query it does not read, and none of them writes.
+    {
+      const q = await j("/api/jobs?x=1", { headers: H });
+      check("P04: a query key a route does not read is BAD_ARGS", q.status === 400 && q.body.error === "BAD_ARGS", `${q.status} ${q.body.error}`);
+      const table = JSON.parse(execFileSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--routes"], { stdio: ["ignore", "pipe", "inherit"] }).toString());
+      const P04 = ["/api/engine", "/api/model-policy", "/api/policy", "/api/jobs", "/api/evolve", "/api/memory", "/api/bench", "/api/roster", "/api/council", "/api/slices", "/api/gates", "/api/learn", "/api/adrs", "/api/growth", "/api/leads", "/api/legal", "/api/ventures", "/api/absorb"];
+      const rows = P04.map((p) => table.filter((t) => t.path === p));
+      check("P04 route table: each route is on it EXACTLY once, GET, mutates:false, spineEffect none",
+        rows.every((r) => r.length === 1 && r[0].method === "GET" && r[0].mutates === false && r[0].spineEffect === "none"), JSON.stringify(rows.map((r) => r.length)));
+      // The list above is the union of Phase 03's NOT SERVED lists' SERVED routes: a route on the table that is on
+      // none of them was not asked for (the spec's first exit criterion).
+      const input = readdirSync(join(REPO, "initiatives/face/evidence/phase-03")).filter((n) => /^not-served-.+\.md$/.test(n))
+        .flatMap((n) => [...disk(`initiatives/face/evidence/phase-03/${n}`).matchAll(/\| `(\/api\/[a-z-]+)[^`]*` \|/g)].map((m) => m[1]));
+      check("P04 route list: every Phase 04 route is one a Phase 03 NOT SERVED list named", input.length >= 40 && P04.every((p) => input.includes(p)), P04.filter((p) => !input.includes(p)).join(","));
+    }
+  }
+
   // journal wrote real entries
   const jf = readdirSync(JOURNAL).filter((f) => f.startsWith("journal-"));
   const jlines = jf.length ? readFileSync(join(JOURNAL, jf[0]), "utf8").trim().split("\n") : [];
@@ -380,4 +574,4 @@ check("both sources were actually read (journal pin)", dashSrc.length > 5000 && 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // The floor moves with the suite. A count that stays at an old number is how a block that
 // stopped registering reads green: the assertions still pass, there are simply fewer of them.
-process.exitCode = failed === 0 && ran >= 72 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 126 ? 0 : 1;

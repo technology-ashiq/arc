@@ -5,6 +5,6 @@
 export default Object.freeze({
   id: "executor",
   ring: "factory",
-  routes: Object.freeze(["/api/file/:id"]),
+  routes: Object.freeze(["/api/file/:id", "/api/roster"]),
   asOf: false,
 });

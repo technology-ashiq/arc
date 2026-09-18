@@ -287,6 +287,66 @@ export async function derivePnl(root, { mode = "real", venture = null, month = n
   };
 }
 
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * ONE substance by IST day over the `days` days ending `today` -- the daily series the face's money room draws
+ * (face v2 Phase 04, REQ-06). It is derivePnl's own rows, bucketed by the day each was RECORDED: the same amounts,
+ * the same refund links, the same currency exclusions, so the day series and the month can never disagree about a
+ * payment. One mode per call, exactly as derivePnl: a caller that wants both substances asks twice and gets two
+ * series, which it may draw side by side and must never sum.
+ *
+ * Cash-in is in the reporting currency's minor units, exactly as derivePnl's cashIn. Costs are COUNTED per day, by the
+ * currency each was recorded in, and never summed: a cost line carries no rate, so derivePnl never converts one, and a
+ * day's costs in two currencies have no total -- the face's money room counts cost lines and never totals them.
+ *
+ * Day bucketing is exact for the reason month bucketing is: every `ts` carries the +05:30 offset, so its first ten
+ * characters ARE the IST day. The window's days are calendar arithmetic on `today` alone, never the host clock.
+ *
+ * @param {string} root
+ * @param {{ mode?: "real" | "simulated", days?: number, today: string, engine?: unknown }} opts
+ */
+export async function deriveDaily(root, { mode = "real", days = 14, today, engine } = {}) {
+  if (typeof today !== "string" || !DAY_RE.test(today) || !Number.isFinite(Date.parse(`${today}T00:00:00Z`)))
+    throw new TypeError(`deriveDaily: today must be a YYYY-MM-DD day, got ${JSON.stringify(today)}`);
+  if (!Number.isInteger(days) || days < 1 || days > 62)
+    throw new RangeError(`deriveDaily: days must be an integer from 1 to 62, got ${JSON.stringify(days)}`);
+  const end = Date.parse(`${today}T00:00:00Z`);
+  const window = [];
+  for (let i = days - 1; i >= 0; i--) window.push(new Date(end - i * DAY_MS).toISOString().slice(0, 10));
+  const byDay = new Map(window.map((day) => [day, { day, cashInInr: 0, rows: 0, costLines: new Map() }]));
+
+  const model = await derivePnl(root, { mode, engine });
+  for (const v of model.ventures) {
+    for (const r of v.rows) {
+      const b = byDay.get(r.ts.slice(0, 10));
+      if (!b) continue;
+      b.cashInInr += r.amountInr;
+      b.rows += 1;
+    }
+  }
+  const costLines = [...model.overhead.lines, ...model.ventures.flatMap((v) => v.costs)];
+  let unmeasuredCosts = 0;
+  for (const line of costLines) {
+    const b = byDay.get(line.ts.slice(0, 10));
+    if (!b) continue;
+    // A line with no integer amount or no currency is counted apart: it is a cost nobody can read the size of.
+    if (line.amount === null || line.currency === null) { unmeasuredCosts += 1; continue; }
+    b.costLines.set(line.currency, (b.costLines.get(line.currency) || 0) + 1);
+  }
+  return {
+    mode: model.mode,
+    today,
+    days: window.map((day) => {
+      const b = byDay.get(day);
+      return { day, cashInInr: b.cashInInr, rows: b.rows, costLines: [...b.costLines.entries()].sort().map(([currency, lines]) => ({ currency, lines })) };
+    }),
+    unmeasuredCosts,
+    needsYou: model.needsYou.length,
+  };
+}
+
 // Transitions are computed over the whole history, then reported for the requested month: a
 // reactivation is only visible if you can see the gap before it, and a churn only from the absence
 // that follows.
