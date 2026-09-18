@@ -233,9 +233,41 @@ list_distribution() {
       || { echo "mood=$mood: the browser drew '$vpCards' verb-pending cards, the shipped rings' lists name $vpExpected"; false; }
     [ "$vpRooms" = "$vpRoomsExpected" ] \
       || { echo "mood=$mood: verb-pending cards per room read '$vpRooms', the lists name '$vpRoomsExpected'"; false; }
-    # The shipped rings' module rooms open with the contract's frozen sentence as their heading: at least the
-    # six command and eight kernel modules were checked and none missed (a blank room is not an opened one).
-    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command,kernel,factory checked=(19|[2-9][0-9]|[1-9][0-9][0-9]+) miss=0\$" \
+    # The planned rooms' REHEARSAL cards (ADR-1328): what the browser drew EQUALS the derived list, per room,
+    # exactly as the work-door cards above -- a planned room's flows are rehearsed, never sent to the door.
+    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-03" "rehearsal-*.md" > "$BATS_TEST_TMPDIR/rh-expected"
+    local rhCards rhRooms rhExpected rhRoomsExpected
+    rhCards="$(printf '%s\n' "$output" | grep "^smoke: rehearsal mood=$mood cards=" | tail -1 | sed -n "s/^smoke: rehearsal mood=$mood cards=\([0-9][0-9]*\) rooms=.*/\1/p")"
+    rhRooms="$(printf '%s\n' "$output" | grep "^smoke: rehearsal mood=$mood cards=" | tail -1 | sed -n "s/^smoke: rehearsal mood=$mood cards=[0-9]* rooms=\(.*\)\$/\1/p")"
+    rhExpected="$(head -1 "$BATS_TEST_TMPDIR/rh-expected")"
+    rhRoomsExpected="$(tail -1 "$BATS_TEST_TMPDIR/rh-expected")"
+    [ -n "$rhCards" ] && [ "$rhExpected" -gt 0 ] && [ "$rhCards" = "$rhExpected" ] \
+      || { echo "mood=$mood: the browser drew '$rhCards' rehearsal cards, the lists name $rhExpected"; false; }
+    [ "$rhRooms" = "$rhRoomsExpected" ] \
+      || { echo "mood=$mood: rehearsal cards per room read '$rhRooms', the lists name '$rhRoomsExpected'"; false; }
+    # F3 where the owner sees it (Cycle 15 room sweep, ADR-1328): every planned room the CONTRACT names opened
+    # marked data-planned, and not one of them drew the word LIVE. The smoke reads the expected count from the
+    # contract file, never from the door it is judging.
+    local plannedLine plannedRooms plannedExpected plannedLive
+    plannedLine="$(printf '%s\n' "$output" | grep "^smoke: planned mood=$mood rooms=" | tail -1)"
+    plannedRooms="$(printf '%s\n' "$plannedLine" | sed -n "s/^smoke: planned mood=$mood rooms=\([0-9][0-9]*\) expected=[0-9]* live=[0-9]* planned-rooms=.*/\1/p")"
+    plannedExpected="$(printf '%s\n' "$plannedLine" | sed -n "s/^smoke: planned mood=$mood rooms=[0-9]* expected=\([0-9][0-9]*\) live=[0-9]* planned-rooms=.*/\1/p")"
+    plannedLive="$(printf '%s\n' "$plannedLine" | sed -n "s/^smoke: planned mood=$mood rooms=[0-9]* expected=[0-9]* live=\([0-9][0-9]*\) planned-rooms=.*/\1/p")"
+    [ -n "$plannedExpected" ] && [ "$plannedExpected" -ge 3 ] && [ "$plannedRooms" = "$plannedExpected" ] \
+      || { echo "mood=$mood: planned rooms drawn '$plannedRooms', the contract names '$plannedExpected': $plannedLine"; false; }
+    [ "$plannedLive" = "0" ] || { echo "mood=$mood: a planned room drew LIVE: $plannedLine"; false; }
+    # The one error class the windows runner raises on its own is COUNTED on its own line, never folded into a
+    # clean zero -- and it may be non-zero on the windows leg alone (debt-ledger, face v2 Phase 03).
+    local runnerCount
+    runnerCount="$(printf '%s\n' "$output" | grep "^smoke: runner-errors mood=$mood count=" | tail -1 | sed -n "s/^smoke: runner-errors mood=$mood count=\([0-9][0-9]*\) rooms=.*/\1/p")"
+    [ -n "$runnerCount" ] || { echo "mood=$mood: no runner-errors line (harness exit $status)"; false; }
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*) ;;
+      *) [ "$runnerCount" = "0" ] || { echo "mood=$mood: $runnerCount runner-class errors on $(uname -s), where the class does not apply"; false; } ;;
+    esac
+    # The shipped rings' module rooms open with the contract's frozen sentence as their heading: every module
+    # of the four shipped rings was checked and none missed (a blank room is not an opened one).
+    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command,kernel,factory,money checked=(27|[3-9][0-9]|[1-9][0-9][0-9]+) miss=0\$" \
       || { echo "heading check missing, too few checked, or a miss for mood=$mood (harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done

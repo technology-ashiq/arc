@@ -439,9 +439,45 @@ load 'test_helper'
              "SHIPPED RING factory: its module folders are modules-v2.json's ids for the ring" \
              "NOT SERVED LIST not-served-factory.md: the list names exactly what the folds render, both ways" \
              "VERBS PENDING LIST verbs-pending-factory.md: the list names exactly what the folds render, both ways" \
+             "SHIPPED RING money: its module folders are modules-v2.json's ids for the ring" \
+             "NOT SERVED LIST not-served-money.md: the list names exactly what the folds render, both ways" \
+             "VERBS PENDING LIST verbs-pending-money.md: the list names exactly what the folds render, both ways" \
+             "REHEARSAL LIST rehearsal-money.md: the list names exactly what the folds render, both ways" \
+             "F3: MUTANT -- a fold that returns a LIVE pill anywhere in its output is caught" \
+             "F3: trader with every read it asks for answered wears no LIVE pill anywhere in what it returns" \
+             "F3: trader's View marks the room data-planned and draws no live tone" \
+             "F2: the scheduler fold, handed its manifest, asks the door for its trail (vacuous-pass guard)" \
              "F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it" \
              "F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: the shared lane-room fold answers every loaded-page branch, and its seven toolbelt mutants FAIL" {
+  # The factory ring's debt row, paid in the money ring: module-frame folds with nothing loaded, so what a
+  # fold ANSWERS over a served page had no negative control until this suite (face v2 Phase 03).
+  run node "$ARC_ROOT/tests/face/lane-room.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 50 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm i
+  for arm in "LANE WRONG_LANE: the strip asks isRefused FIRST and never draws the other lane's status" \
+             "TRAIL WRONG_KINDS: a page carrying a kind this room never asked for is not its trail" \
+             "TRAIL PARTIAL: a count larger than the page it came with is partial even when more is false" \
+             "RUNS: a timestamp this shell cannot read says so rather than being sliced into a clock" \
+             "FILE WRONG_FILE: another file's body under this id is refused by name" \
+             "MANIFEST: a trail the manifest cannot read is REFUSED by the shared fold, with the host's own rule" \
+             "MANIFEST: a fold handed NO manifest fails closed -- every read refused, none planned" \
+             "CATALOGUE: every section is built from one pass -- each room's holds read ONCE, not once per section" \
+             "KIT: a phase's spec and its Build Brief are ONE row, the spec's title, the brief named beside it" \
+             "TOOLBELT: the real fold passes every catalogue check" \
+             "all seven mutants were built and run"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+  for i in 1 2 3 4 5 6 7; do
+    [[ "$output" == *"ok MUTANT $i ("*") is FAILED by the catalogue checks"* ]] || { echo "mutant $i survived or never ran"; echo "$output"; false; }
   done
 }
 
