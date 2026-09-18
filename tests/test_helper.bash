@@ -85,6 +85,24 @@ _arc_design_sandbox() {
   cp "$ARC_CORE_SRC"/*.json                       "$SANDBOX/.claude/scripts/core/" 2>/dev/null
   cp "$ARC_ROOT"/.claude/hooks/PreToolUse-edit.d/10-design-critic.sh \
      "$SANDBOX/.claude/hooks/PreToolUse-edit.d/" 2>/dev/null
+  # The composer WRITE boundary and the edit dispatcher that runs it. Both, or the write cases
+  # drive an absent fragment and pass on nothing at all -- the vacuous shape the testing rules
+  # name, and the reason this sandbox mirrors production's layout rather than approximating it.
+  cp "$ARC_ROOT"/.claude/hooks/PreToolUse-edit.d/11-design-composer.sh \
+     "$SANDBOX/.claude/hooks/PreToolUse-edit.d/" 2>/dev/null
+  cp "$ARC_ROOT"/.claude/hooks/PreToolUse-edit.sh "$SANDBOX/.claude/hooks/" 2>/dev/null
+  # ADR-1415's read boundary. Without this copy every composer-scope hook case would run
+  # against an absent fragment and pass on nothing at all -- the vacuous shape the testing
+  # rules name, and the reason this sandbox mirrors the layout rather than approximating it.
+  mkdir -p "$SANDBOX/.claude/hooks/PreToolUse-read.d"
+  cp "$ARC_ROOT"/.claude/hooks/PreToolUse-read.d/10-design-composer.sh      "$SANDBOX/.claude/hooks/PreToolUse-read.d/" 2>/dev/null
+  # The DISPATCHER and its shared runner, not only the fragment. Production never passes the
+  # path as argv: _dispatch.sh runs `bash "$f" < "$input"` with no arguments, so the path
+  # arrives as JSON on stdin. A sandbox holding the fragment alone can only be driven the
+  # argv way -- which is how fifteen green cases came to cover a branch production never
+  # takes, and deleting the stdin branch would have left every one of them passing.
+  cp "$ARC_ROOT"/.claude/hooks/PreToolUse-read.sh                          "$SANDBOX/.claude/hooks/" 2>/dev/null
+  cp "$ARC_ROOT"/.claude/hooks/_dispatch.sh                                "$SANDBOX/.claude/hooks/" 2>/dev/null
   cd "$SANDBOX" || return 1
   git init -q
   # Repo-local identity, not GIT_AUTHOR_* env: the design scripts shell out to git in

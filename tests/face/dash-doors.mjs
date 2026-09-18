@@ -9,7 +9,7 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { connect } from "node:net";
-import { mkdtempSync, readdirSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +22,10 @@ import { escapeDeep } from "../../.claude/scripts/hq/arc-dash.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");
 const PORT = 8410;
+// One port per file across the face suite (parity 8411, perf 8412), so two files in one
+// shard never race for a listener. This suite needs a SECOND door -- rooted at a fixture
+// repo rather than at this one -- so it takes the next free number rather than PORT+1.
+const BARE_PORT = 8413;
 const TOKEN = "doors-token";
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
@@ -147,18 +151,70 @@ try {
     check("the BODY comes back, not just the title",
       Boolean(spec) && typeof spec.text === "string" && spec.text.length > 200 && spec.bytes > 200, `len=${spec && spec.text.length} bytes=${spec && spec.bytes}`);
 
-    // A lane with NO phases/ dir. Discovered from the tree rather than named, so this cannot
-    // pass by pointing at a lane that quietly grew a phases dir -- and the discovery is
-    // itself a check, because "found none to ask about" is a dead fixture, not a pass.
-    const laneDirs = readdirSync(join(REPO, "initiatives"), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
-    const bare = laneDirs.filter((l) => existsSync(join(REPO, "initiatives", l, "PROGRESS.md")) && !existsSync(join(REPO, "initiatives", l, "phases")));
-    check("fixture control: this tree has a lane with no phases dir to ask about", bare.length >= 1, `lanes=${laneDirs.length}`);
-    const nr = await j(`/api/lane/${bare[0]}`, { headers: H });
-    check("lane WITHOUT a phases dir still answers 200", nr.status === 200, `${bare[0]} -> ${nr.status}`);
-    // The two facts that must not wear each other's clothes: "no phases" is an empty array,
-    // "this door does not report phases" is an absent key. Assert the KEY, then the length.
-    check("no phases dir -> the KEY IS PRESENT", Object.hasOwn(nr.body, "phases"), Object.keys(nr.body).join(","));
-    check("no phases dir -> an EXPLICIT empty array", Array.isArray(nr.body.phases) && nr.body.phases.length === 0, JSON.stringify(nr.body.phases));
+    // A lane with NO phases/ dir -- served by a SECOND door rooted at a fixture repo this
+    // suite OWNS, because a bare lane discovered from the live tree is a fixture that expires.
+    //
+    // It expired on 2026-08-24. This block used to scan initiatives/ for a lane holding a
+    // PROGRESS.md and no phases/, on the reasoning that discovering one beats naming one.
+    // That defends against the named lane growing a phases dir; it does not defend against
+    // the LAST bare lane in the tree growing one. `design` was that last lane on main, its
+    // Cycle 16 kickoff gave it phases/, and five CI legs went red on the fixture control --
+    // correctly, because "found none to ask about" is a dead fixture, not a pass. The control
+    // did its job. What was wrong is that the fixture belonged to the company board rather
+    // than to this suite: a door contract must not depend on which lanes exist that week,
+    // and no lane should have to keep a directory absent to keep another lane's tests green.
+    //
+    // repoRoot() walks up from cwd for .claude + .git, so a temp dir holding both -- plus one
+    // bare lane -- IS a repo root to this door. Nothing here reads or writes the real tree.
+    const bareRepo = join(tmp, "bare-repo");
+    const BARE_LANE = "fixture-lane";
+    mkdirSync(join(bareRepo, ".claude"), { recursive: true });
+    mkdirSync(join(bareRepo, ".git"), { recursive: true });
+    mkdirSync(join(bareRepo, "initiatives", BARE_LANE), { recursive: true });
+    writeFileSync(join(bareRepo, "initiatives", BARE_LANE, "PROGRESS.md"),
+      "# PROGRESS.md -- bare-lane fixture for the door contract\n\nstatus: IDLE\nphase: 00\n");
+    check("fixture control: the bare lane exists and has NO phases dir",
+      existsSync(join(bareRepo, "initiatives", BARE_LANE, "PROGRESS.md"))
+        && !existsSync(join(bareRepo, "initiatives", BARE_LANE, "phases")), bareRepo);
+
+    const bareDash = spawn(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--spine", SPINE, "--port", String(BARE_PORT)],
+      // Its OWN journal dir. Sharing JOURNAL would fold this door's requests into the count
+      // the main door is measured by at the bottom of the file -- harmless against today's
+      // floor, and exactly the kind of borrowed evidence that stops being harmless the day
+      // someone tightens that floor into an equality.
+      { cwd: bareRepo, env: { ...process.env, ARC_DASH_TOKEN: TOKEN, ARC_DASH_JOURNAL_DIR: join(tmp, "journal-bare") }, stdio: ["ignore", "ignore", "pipe"] });
+    try {
+      const bj = async (path) => {
+        const rb = await fetch(`http://127.0.0.1:${BARE_PORT}${path}`, { headers: H });
+        let body; try { body = await rb.json(); } catch { body = {}; }
+        return { status: rb.status, body };
+      };
+      let bareUp = false;
+      for (let i = 0; i < 50 && !bareUp; i++) {
+        await new Promise((res2) => setTimeout(res2, 200));
+        try { bareUp = (await bj("/api/health")).status === 200; } catch { /* not yet */ }
+      }
+      check("fixture door up", bareUp, `port=${BARE_PORT}`);
+      // ISOLATION CONTROL. If cwd were ignored and this door resolved the real repo, the
+      // three checks below would fail rather than pass -- but they would fail for a reason
+      // nobody could read off the output. Asking for a lane that exists HERE and must not
+      // exist THERE names the failure as "wrong root" the moment it happens.
+      const known = await bj("/api/lane/face");
+      check("the fixture door is rooted at the FIXTURE, not at this repo",
+        known.status === 404 && known.body.error === "UNKNOWN_LANE", `face -> ${known.status}`);
+      const nr = await bj(`/api/lane/${BARE_LANE}`);
+      check("lane WITHOUT a phases dir still answers 200", nr.status === 200, `${BARE_LANE} -> ${nr.status}`);
+      // The two facts that must not wear each other's clothes: "no phases" is an empty array,
+      // "this door does not report phases" is an absent key. Assert the KEY, then the length.
+      check("no phases dir -> the KEY IS PRESENT", Object.hasOwn(nr.body, "phases"), Object.keys(nr.body).join(","));
+      check("no phases dir -> an EXPLICIT empty array", Array.isArray(nr.body.phases) && nr.body.phases.length === 0, JSON.stringify(nr.body.phases));
+    } finally {
+      // The same graceful shape the main door gets at the bottom of this file, not a bare
+      // kill(): on Windows, killing a listening server and moving on immediately trips a
+      // libuv handle assertion in the PARENT (measured while writing this block). Awaiting
+      // the exit, with a timeout so a wedged child cannot hang the suite, is what works.
+      await new Promise((res2) => { bareDash.on("exit", res2); bareDash.kill(); setTimeout(res2, 1500); });
+    }
 
     // Traversal in the lane NAME. The guard is validLaneName -- the same one the handler
     // already used for a bad lane -- so the refusal must be that SAME status, not a sibling
@@ -380,4 +436,4 @@ check("both sources were actually read (journal pin)", dashSrc.length > 5000 && 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // The floor moves with the suite. A count that stays at an old number is how a block that
 // stopped registering reads green: the assertions still pass, there are simply fewer of them.
-process.exitCode = failed === 0 && ran >= 72 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 84 ? 0 : 1;

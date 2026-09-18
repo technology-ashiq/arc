@@ -1,0 +1,154 @@
+# design.sources.yaml -- the one source registry for the design lane (ADR-1408).
+#
+# WHAT THIS IS. "Which sources may we use, for what, at what cost" lived in prose across three
+# files in Cycle 3, so no gate could read it and no run could be held to it. This file is that
+# answer in a typed form, and `design-sources-lint.mjs` makes it a permission surface rather
+# than a note.
+#
+# ONLY THE OWNER ADDS ENTRIES. Same reasoning as lane birth: a machine that can add its own
+# permitted sources has no permission model at all. `approved_by` is linted against the owner,
+# and an entry approved by anyone else is refused.
+#
+# STATUS vs AVAILABILITY are separate on purpose and must stay that way. `status` is what the
+# owner INTENDS (active / trial / off). `availability` is what the last run OBSERVED, and it is
+# written by the runner, never by hand -- collapsing them would let a network failure look like
+# a policy decision.
+#
+# BLOCK STYLE ONLY. Flow collections (`kind: [inspiration]`) are outside the frozen YAML subset
+# this repo parses with (ADR-0200); written that way the file parses to a differently-shaped
+# document, or not at all.
+#
+# THE ROWS BELOW ARE ADR-1412's, and they were decided by reading each site's robots.txt and
+# terms -- not by how good the gallery looks. Four of the prettiest sources here are off, and
+# that is the decision working rather than failing.
+
+sources:
+  # ---- active: fetchable, server-rendered, robots permits ----
+  - id: lapa-ninja
+    kind:
+      - inspiration
+    access: fetch
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: none
+    cost: free
+    status: active
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-08-23
+    # robots.txt: `Allow: /`, only `/api/` disallowed. Server-rendered, so a plain fetch
+    # returns real HTML rather than a JS shell.
+
+  - id: saasframe
+    kind:
+      - inspiration
+    access: fetch
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: none
+    cost: free
+    status: active
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-08-23
+    # robots.txt: the generic `*` group disallows only query URLs. Server-rendered, no JS
+    # needed for the screens we read.
+
+  # ---- active, but citation only: permitted to link, never to cache ----
+  - id: awwwards
+    kind:
+      - inspiration
+    access: fetch
+    allowed_use:
+      - provenance
+      - link-only
+    auth: none
+    cost: free
+    status: active
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-08-23
+    # Terms forbid reproduction of its material. So: a provenance link is permitted and a local
+    # image cache is not, which is an allowed_use fact rather than a status one -- ADR-1408
+    # freezes the status enum, and `link-only` as a status would be a schema change smuggled in
+    # as a value. `reference-pack` is deliberately absent: that is the use this source may not
+    # serve, and the curator reads this list rather than a comment.
+
+  # ---- off: excluded on permission grounds, not on taste ----
+  - id: godly
+    kind:
+      - inspiration
+    access: fetch
+    allowed_use:
+      - provenance
+    auth: none
+    cost: free
+    status: off
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-08-23
+    # robots.txt sets `ai-train=no` and names ClaudeBot under `Disallow: /`. Also a JS-only
+    # shell, so even if permission existed a plain fetch would return nothing to read.
+
+  - id: dribbble
+    kind:
+      - inspiration
+    access: fetch
+    allowed_use:
+      - provenance
+    auth: none
+    cost: free
+    status: off
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-08-23
+    # Developer terms, verbatim: "Scraping, copying, saving, or storing our data is strictly
+    # prohibited." An explicit anti-storage clause cannot sit inside an automated fetch path.
+
+  - id: behance
+    kind:
+      - inspiration
+    access: fetch
+    allowed_use:
+      - provenance
+    auth: none
+    cost: free
+    status: off
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-08-23
+    # robots.txt names ClaudeBot `Disallow: /`, and its edge infrastructure rate-limited a
+    # single automated GET.
+
+  - id: land-book
+    kind:
+      - inspiration
+    access: fetch
+    allowed_use:
+      - provenance
+    auth: none
+    cost: free
+    status: off
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-08-23
+    # A Cloudflare bot challenge returns 403 for robots.txt ITSELF. Permission is therefore
+    # unreadable, and unreadable permission is not permission.
+
+  - id: page-collective
+    kind:
+      - inspiration
+    access: fetch
+    allowed_use:
+      - provenance
+    auth: none
+    cost: free
+    status: off
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-08-23
+    # TLS handshake failed on two independent fetchers. This one is UNVERIFIED rather than
+    # disallowed -- the distinction is kept because it may move to `trial` after a
+    # headless-browser probe, and "we could not check" must not harden into "they said no".
