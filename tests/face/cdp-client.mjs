@@ -320,7 +320,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
 
 // ---- smoke + harness pure half ----
 {
-  const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [] };
+  const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
   check("the verdict passes a full, clean, settled run", smoke.judge(good).ok);
   const stub = JSON.parse(readFileSync(join(REPO, "tests", "fixtures", "face", "smoke-stub-report.json"), "utf8"));
   check("the verdict FAILS the stub report of a smoke that never navigated", !smoke.judge(stub).ok && smoke.judge(stub).reasons.some((r) => /opened=0/.test(r)));
@@ -490,7 +490,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   check("a class list that was not read, or a near-miss class, never holds",
     !smoke.moodHolds(null, "dark") && !smoke.moodHolds(undefined, "light") && !smoke.moodHolds("hq-lightish hq", "light") && !smoke.moodHolds("hqx", "dark") && !smoke.moodHolds("hq", "sepia"));
 
-  const clean = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [] };
+  const clean = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
   check("a clean light run passes", smoke.judge({ ...clean, mood: "light", moodMiss: [] }).ok);
   const noLight = smoke.judge({ ...clean, mood: "light", moodMiss: [{ id: "today", htmlClass: "hq" }, { id: "inbox", htmlClass: "hq" }] });
   check("a light run whose rooms lack hq-light FAILS with the spec's words",
@@ -572,7 +572,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     check("a NOT SERVED count that could not be read prints unread, never zero",
       smoke.notServedLine({ mood: "dark", notServed: { panels: null, rooms: [] } }) === "smoke: not-served mood=dark panels=unread rooms=none");
     check("the heading line counts what was checked and what missed",
-      smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }) === "smoke: heading mood=dark rings=command,kernel,factory,money checked=6 miss=0", smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }));
+      smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }) === "smoke: heading mood=dark rings=command,kernel,factory,money,company checked=6 miss=0", smoke.headingLine({ mood: "dark", headings: { checked: 6, miss: [] } }));
   }
 
   // The money ring (face v2 Phase 03): the planned rooms (F3, ADR-1328), their REHEARSAL cards, and the one
@@ -671,12 +671,22 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
       smoke.extrasLine({ mood: "dark", extras: { expected: ["executor", "agents"], opened: ["executor", "agents"], errors: 0 } }));
     check("EXTRAS: a report that measured nothing prints UNREAD, never a zero",
       smoke.extrasLine({ mood: "dark" }) === "smoke: extras mood=dark expected=unread opened=unread errors=unread rooms=none", smoke.extrasLine({ mood: "dark" }));
-    const extrasBase = { ...clean, mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], headings: { checked: 6, miss: [] } };
+    const extrasBase = { ...clean, mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], headings: { checked: 6, miss: [] }, extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
     const missed = smoke.judge({ ...extrasBase, extras: { expected: ["agents", "executor"], opened: ["agents"], errors: 0 } });
     check("EXTRAS: an extra the file lists and the smoke never opened FAILS the run, by id",
       !missed.ok && missed.reasons.some((r) => /extra room.*not opened.*executor/.test(r)), JSON.stringify(missed.reasons));
     const noisy = smoke.judge({ ...extrasBase, extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 2 } });
     check("EXTRAS: an extra that logged an error FAILS the run", !noisy.ok && noisy.reasons.some((r) => /extra room.*error/.test(r)), JSON.stringify(noisy.reasons));
+    // The company ring attacker's mutants of the extras verdict: an absent block, a stray room, a repeated id.
+    const { extras: _drop, ...noExtras } = extrasBase;
+    const absent = smoke.judge(noExtras);
+    check("EXTRAS: a report with no extras block FAILS -- the extra rooms were never judged", !absent.ok && absent.reasons.some((r) => /no extras block/.test(r)), JSON.stringify(absent.reasons));
+    const stray = smoke.judge({ ...extrasBase, extras: { expected: ["agents", "executor"], opened: ["agents", "executor", "story"], errors: 0 } });
+    check("EXTRAS: an opened room the file does not list FAILS", !stray.ok && stray.reasons.some((r) => /does not list: story/.test(r)), JSON.stringify(stray.reasons));
+    const twice = smoke.judge({ ...extrasBase, extras: { expected: ["agents", "agents"], opened: ["agents", "agents"], errors: 0 } });
+    check("EXTRAS: an id listed twice FAILS, and the line counts it once", !twice.ok && twice.reasons.some((r) => /listed twice: agents/.test(r))
+      && smoke.extrasLine({ mood: "dark", extras: { expected: ["agents", "agents"], opened: ["agents", "x"], errors: 0 } }) === "smoke: extras mood=dark expected=1 opened=2 errors=0 rooms=agents,x", JSON.stringify(twice.reasons));
+    check("EXTRAS: the clean report with both extras opened passes", smoke.judge(extrasBase).ok, JSON.stringify(smoke.judge(extrasBase).reasons));
   }
 
   // The attack on the mood verdict (face v2 Phase 01).

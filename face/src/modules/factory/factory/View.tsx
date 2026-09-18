@@ -24,6 +24,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             {f.board.isReading ? <Reading what="the board" /> : null}
             {f.board.isRefused ? <DoorRefusal code={f.board.refusal.code} human={f.board.refusal.human} /> : null}
             {f.isFloorEmpty ? <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.floorEmpty}</p> : null}
+            {f.hasDropped ? <p className="text-[12.5px] leading-[19px] mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.dropped}</p> : null}
             <div className="-mx-2">
               {f.floor.map((c) => (
                 <div key={c.key} data-floor={c.lane} className="px-2 py-[10px] min-w-0" style={{ borderBottom: '1px solid var(--line-1)' }}>

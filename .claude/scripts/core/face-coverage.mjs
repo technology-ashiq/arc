@@ -465,8 +465,10 @@ export function moduleFindings(tree) {
     // so a row is also the room's facts: its ring, which must be the ring its module lives in, a name and a sentence.
     const extra = extras.get(row.id);
     if (extra && row.ring !== extra.ring) { findings.push(`[module-exemption] "${row.id}" says ring ${JSON.stringify(row.ring ?? null)}, and its module lives in "${extra.ring}" -- the shell would draw it in a ring its folder is not in`); ok = false; }
-    if (typeof row.name !== "string" || row.name.trim() === "") { findings.push(`[module-exemption] "${row.id}" carries no name -- the rail draws the room by it`); ok = false; }
-    if (typeof row.sentence !== "string" || row.sentence.trim() === "") { findings.push(`[module-exemption] "${row.id}" carries no sentence -- every room opens with one, and this row is the only place it can come from`); ok = false; }
+    // Invisible characters are no name: a row of them passed both this gate and the shell (company ring attack).
+    const visible = (v) => (typeof v === "string" ? v.replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "").trim() : "");
+    if (visible(row.name) === "") { findings.push(`[module-exemption] "${row.id}" carries no name -- the rail draws the room by it`); ok = false; }
+    if (visible(row.sentence) === "") { findings.push(`[module-exemption] "${row.id}" carries no sentence -- every room opens with one, and this row is the only place it can come from`); ok = false; }
     if (row.lede !== undefined && typeof row.lede !== "string") { findings.push(`[module-exemption] "${row.id}" carries a lede that is not text`); ok = false; }
     if (ok) exempt.add(row.id);
   }

@@ -198,8 +198,11 @@ const EXEMPTION_ADR = "ADR-1327";
 /** The allow-listed file the door serves the exemption rows as. */
 export const EXEMPTION_FILE = "module-exemptions";
 
+/** Characters a person cannot see: a name made only of them is no name (money ring attack, company ring twin). */
+const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;
+
 /**
- * @typedef {{ rooms: import("./rooms.mjs").Room[], ids: string[], problem: string }} ExtraRooms
+ * @typedef {{ rooms: import("./rooms.mjs").Room[], ids: string[], problem: string, isLoading: boolean, isRead: boolean }} ExtraRooms
  */
 
 /**
@@ -211,17 +214,20 @@ export const EXEMPTION_FILE = "module-exemptions";
  * @returns {ExtraRooms}
  */
 export function extraRooms(p) {
-  /** @param {string} problem @returns {ExtraRooms} */
-  const none = (problem) => ({ rooms: [], ids: [], problem });
-  if (!p || p.state === "loading" || p.state === "pending") return none("the exemption rows have not been read yet");
+  /** @param {string} problem @param {boolean} [isLoading] @returns {ExtraRooms} */
+  const none = (problem, isLoading = false) => ({ rooms: [], ids: [], problem, isLoading, isRead: false });
+  if (!p || p.state === "loading" || p.state === "pending") return none("the exemption rows have not been read yet", true);
   if (p.state === "refused") return none(`the door refused the exemption rows (${p.code})`);
   if (p.state !== "ok") return none("the exemption rows could not be read");
   const body = p.data !== null && typeof p.data === "object" && !Array.isArray(p.data) ? p.data : {};
-  if (body.id !== EXEMPTION_FILE) return none(`the door answered with ${JSON.stringify(body.id ?? null)}, not the exemption rows`);
-  if (typeof body.text !== "string") return none("the door answered without the file's text");
+  // Every field read ONCE into a copy, and the file held to what the door always sends: its id, path, hash and text.
+  const copy = { id: body.id, path: body.path, sha256: body.sha256, text: body.text };
+  if (copy.id !== EXEMPTION_FILE) return none(`the door answered with ${JSON.stringify(copy.id ?? null)}, not the exemption rows`);
+  if (typeof copy.path !== "string" || copy.path === "" || typeof copy.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(copy.sha256)) return none("the door answered without the file's path or hash");
+  if (typeof copy.text !== "string") return none("the door answered without the file's text");
   /** @type {unknown} */
   let parsed;
-  try { parsed = JSON.parse(unescapeDoorText(body.text)); } catch { return none("the exemption file does not parse"); }
+  try { parsed = JSON.parse(unescapeDoorText(copy.text)); } catch { return none("the exemption file does not parse"); }
   const list = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? /** @type {Record<string, unknown>} */ (parsed)["exemptions"] : undefined;
   if (!Array.isArray(list)) return none("the exemption file carries no exemptions list");
   /** @type {import("./rooms.mjs").Room[]} */
@@ -236,8 +242,8 @@ export function extraRooms(p) {
     if (seen.has(id)) { problems.push(`"${id}" is listed twice`); continue; }
     seen.add(id);
     const ring = row["ring"];
-    const name = typeof row["name"] === "string" ? row["name"].trim() : "";
-    const sentence = typeof row["sentence"] === "string" ? row["sentence"].trim() : "";
+    const name = typeof row["name"] === "string" ? row["name"].replace(INVISIBLE, "").trim() : "";
+    const sentence = typeof row["sentence"] === "string" ? row["sentence"].replace(INVISIBLE, "").trim() : "";
     const lede = row["lede"];
     if (row["adr"] !== EXEMPTION_ADR) { problems.push(`"${id}" cites ${JSON.stringify(row["adr"] ?? null)}, not ${EXEMPTION_ADR}`); continue; }
     if (typeof ring !== "string" || !RING_ORDER.includes(ring)) { problems.push(`"${id}" names no ring the shell draws`); continue; }
@@ -249,21 +255,31 @@ export function extraRooms(p) {
       live: { kindsHomed: 0, kindsFired: 0, receipts: 0, state: "file-borne" },
     });
   }
-  return { rooms, ids: rooms.map((r) => r.id), problem: problems.join("; ") };
+  return { rooms, ids: rooms.map((r) => r.id), problem: problems.join("; "), isLoading: false, isRead: true };
 }
 
 /**
  * The room list the shell draws: the served registry, then each exempted extra in its ring. A row naming a room the
- * registry serves never replaces it -- the served registry is the only room list for what it serves (ADR-1306).
+ * registry serves never replaces it -- the served registry is the only room list for what it serves (ADR-1306). With
+ * the modules the bundle found, an extra is drawn only where its module lives: a row with no module, or naming another
+ * ring than its module's, is the row face-coverage refuses, and the shell refuses it too rather than drawing an
+ * invented room (company ring attack: two readers of one question). Every row left out is named.
  * @template {{ rooms?: import("./rooms.mjs").Room[] }} R
  * @param {R} registry @param {ExtraRooms} extras
- * @returns {R & { rooms: import("./rooms.mjs").Room[] }}
+ * @param {readonly { id: string, ring: string }[] | null} [modules]
+ * @returns {R & { rooms: import("./rooms.mjs").Room[], extrasDropped: string[] }}
  */
-export function withExtras(registry, extras) {
+export function withExtras(registry, extras, modules = null) {
   const rooms = registry && Array.isArray(registry.rooms) ? registry.rooms : [];
   const served = new Set(rooms.map((r) => r.id));
-  const add = (extras && Array.isArray(extras.rooms) ? extras.rooms : []).filter((r) => !served.has(r.id));
-  return { ...registry, rooms: [...rooms, ...add] };
+  /** @type {string[]} */
+  const extrasDropped = [];
+  const add = (extras && Array.isArray(extras.rooms) ? extras.rooms : []).filter((r) => {
+    if (served.has(r.id)) { extrasDropped.push(`${r.id} (a room the registry serves)`); return false; }
+    if (modules !== null && !modules.some((m) => m.id === r.id && m.ring === r.ring)) { extrasDropped.push(`${r.id} (no module in the ${r.ring} ring)`); return false; }
+    return true;
+  });
+  return { ...registry, rooms: [...rooms, ...add], extrasDropped };
 }
 
 /**

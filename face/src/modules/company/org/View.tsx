@@ -50,6 +50,9 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
           <HPanel title="ADR bands" hint="each lane owns a century · PORTFOLIO.md's band table">
             {f.bands.isEmpty ? <p className="text-[12.5px] leading-[19px] mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.bands.empty}</p> : null}
+            {f.bands.notes.map((n) => (
+              <p key={n} className="text-[12.5px] leading-[19px] mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{n}</p>
+            ))}
             <BandRows rows={f.bands.rows} onOpen={ctx.onOpen} />
             <div className="mt-3">
               <SourceFile file={f.portfolio} />

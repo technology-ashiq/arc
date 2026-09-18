@@ -20,7 +20,7 @@ export const RAIL_W = 240
 export const HEAD_H = 56
 
 export default function Rail({
-  groups, current, onOpen, onPalette, attachment, ringCount,
+  groups, current, onOpen, onPalette, attachment, ringCount, extrasNote = '',
 }: {
   groups: Group[]
   current: string | null
@@ -28,6 +28,8 @@ export default function Rail({
   onPalette: () => void
   attachment: Attachment
   ringCount: number
+  /** why some exempted extra rooms are not drawn, or empty when every row was */
+  extrasNote?: string
 }) {
   const roomCount = groups.reduce((n, g) => n + g.rooms.length, 0)
   const moduleCount = Object.keys(attachment.attached).length
@@ -94,6 +96,7 @@ export default function Rail({
           <span className="truncate">{roomCount} rooms · {ringCount} rings</span>
           <span className="shrink-0" style={{ fontFamily: MONO }}>{moduleCount} modules</span>
         </div>
+        {extrasNote ? <div className="mt-0.5 truncate" title={extrasNote} data-extras-note="">extra rooms not all drawn</div> : null}
         <div className="mt-0.5">j k move · g home · ⌘K find</div>
       </div>
     </nav>

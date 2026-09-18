@@ -9,7 +9,8 @@
 import { notServed, payloadOf, readProblem, verbPending } from "../../../lib/registry.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { boardRows } from "../../../lib/spine.mjs";
-import { holdsCount, laneRoom, roomLink } from "../../../lib/lane-room.mjs";
+import { holdsCount, laneRoom } from "../../../lib/lane-room.mjs";
+import { boardLanes, laneLinks } from "../../../lib/company-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 /** @typedef {import("../../../lib/registry.mjs").Read} Read */
@@ -19,9 +20,11 @@ import { holdsCount, laneRoom, roomLink } from "../../../lib/lane-room.mjs";
  *   badge: string,
  *   kpis: { key: string, v: string, l: string, sub: string }[],
  *   board: { isReading: boolean, isRefused: boolean, refusal: { code: string, human: string } },
- *   live: { key: string, lane: string, cycle: string, phase: string, path: string, canOpen: boolean }[],
+ *   live: { key: string, lane: string, cycle: string, phase: string, path: string, canOpen: boolean, room: string }[],
  *   isLiveEmpty: boolean,
  *   liveEmpty: string,
+ *   dropped: string,
+ *   hasDropped: boolean,
  *   shelf: { key: string, id: string, path: string }[],
  *   isShelfEmpty: boolean,
  *   shelfEmpty: string,
@@ -53,14 +56,17 @@ export function fold(payloads, ctx) {
   const boardP = boardWhy === null ? payloadOf(payloads, boardRead) : { state: "refused", code: "READ_REFUSED", human: boardWhy };
   const view = boardP.state === "ok" ? boardRows(boardP.data) : null;
   const isBoardRead = view !== null && "rows" in view;
-  const rows = isBoardRead ? view.rows : [];
+  const board_ = boardLanes(isBoardRead ? view.rows : []);
+  const rows = board_.rows;
+  const linkOf = laneLinks(ctx);
   const live = rows.filter((r) => r.status.tone === "live").map((r, i) => ({
     key: `${i}-${r.lane}`,
     lane: r.lane,
     cycle: r.cycle ?? "no cycle line in its header",
     phase: r.phase.number === null ? "no phase" : `phase ${r.phase.number}`,
     path: `initiatives/${r.lane}/PLAN.md`,
-    canOpen: roomLink(ctx, r.lane).canOpen,
+    canOpen: linkOf(r.lane).canOpen,
+    room: linkOf(r.lane).room,
   }));
   const plans = base.unreadable.includes("plans") ? null : [...(base.held["plans"] ?? [])].sort();
   const shelf = (plans ?? []).map((id) => ({ key: id, id, path: `docs/strategy/plans/${id}.md` }));
@@ -82,6 +88,8 @@ export function fold(payloads, ctx) {
     live,
     isLiveEmpty: live.length === 0,
     liveEmpty: isBoardRead ? "No lane's header reads LIVE, so no plan is live." : "",
+    dropped: board_.dropped === 0 ? "" : `${fmtInt(board_.dropped)} board row${board_.dropped === 1 ? " carries" : "s carry"} no readable lane name or repeat${board_.dropped === 1 ? "s" : ""} one already listed -- left out and counted.`,
+    hasDropped: board_.dropped > 0,
     shelf,
     isShelfEmpty: shelf.length === 0,
     shelfEmpty: plans === null ? "The served registry carried this room's plans in a shape this shell could not read -- none is drawn, and none is claimed absent." : "The served registry homes no plan here.",

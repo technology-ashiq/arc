@@ -49,7 +49,7 @@ export function fold(payloads, ctx) {
     lede: String(ctx.room.lede ?? ""),
     badge: "not in arc's registry · ADR-1327",
     kpis: [
-      { key: "employees", v: held.unreadable.length > 0 ? "—" : fmtInt(held.rows.length), l: "Employees", sub: "agents, spawned in-house per task" },
+      { key: "employees", v: held.unreadable.length > 0 ? "—" : fmtInt(new Set(held.rows.map((r) => r.name)).size), l: "Employees", sub: "agents, spawned in-house per task" },
       { key: "contractors", v: "—", l: "Contractors on tenure", sub: "not served yet · /api/roster" },
       { key: "certified", v: "—", l: "Certified", sub: "twelve fixtures · not served yet" },
       { key: "runs", v: "—", l: "Runs dispatched", sub: "not served yet · /api/roster" },

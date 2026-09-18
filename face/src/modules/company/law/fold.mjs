@@ -40,6 +40,7 @@ import { countedOn, kindCount, laneRoom } from "../../../lib/lane-room.mjs";
  */
 
 const UNREAD = "the file the door served carries no such section, so none is drawn -- and none is claimed absent";
+const UNREADABLE = "the file carries this section in a shape this reader cannot read, so none is drawn -- and none is claimed absent";
 
 /**
  * @param {Record<string, Payload>} payloads
@@ -54,9 +55,9 @@ export function fold(payloads, ctx) {
   const law = constitutionOf(file.text);
   const isLawRead = file.source.isRead && law.isRead;
   /** @param {unknown[]} list @param {string} key */
-  const count = (list, key) => (isLawRead && !law.unread.includes(key) ? fmtInt(list.length) : "—");
+  const count = (list, key) => (isLawRead && !law.unread.includes(key) && !law.unreadable.includes(key) ? fmtInt(list.length) : "—");
   /** @param {string} key @param {string} what */
-  const note = (key, what) => (!isLawRead ? "" : law.unread.includes(key) ? `${what}: ${UNREAD}.` : "");
+  const note = (key, what) => (!isLawRead ? "" : law.unread.includes(key) ? `${what}: ${UNREAD}.` : law.unreadable.includes(key) ? `${what}: ${UNREADABLE}.` : "");
   return {
     ...base,
     reads: [...base.reads, ...reads],

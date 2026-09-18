@@ -21,6 +21,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
         <div className="min-w-0">
           <HPanel title="The roster" hint="every agent the served registry homes, by the room it works in">
             {f.isRosterEmpty ? <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.rosterEmpty}</p> : null}
+            {f.isRosterPartial ? <p className="text-[12.5px] leading-[19px] mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.partial}</p> : null}
             {f.byRoom.map((g) => (
               <div key={g.key} data-agent-room={g.room} className="py-3 min-w-0" style={{ borderTop: '1px solid var(--line-1)' }}>
                 {g.canOpen ? (

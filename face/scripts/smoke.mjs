@@ -395,8 +395,13 @@ export function expectedExtras(repo = REPO) {
   try { payload = JSON.parse(readFileSync(file, "utf8")); }
   catch (e) { throw new SetupError(`cannot read the exemption rows at ${file}: ${e.message}`); }
   if (!payload || !Array.isArray(payload.exemptions)) throw new SetupError(`${file} carries no exemptions list`);
+  const seen = new Set();
   return payload.exemptions.map((r, i) => {
     if (!r || typeof r.id !== "string" || !/^[a-z][a-z0-9-]*$/.test(r.id)) throw new SetupError(`${file}: exemption row ${i} has no room id`);
+    // Listed twice is a setup error, exactly as openableRooms treats a repeated served id: the smoke and the shell
+    // would each keep a different copy (company ring attack).
+    if (seen.has(r.id)) throw new SetupError(`${file}: exemption row ${i} lists "${r.id}" a second time`);
+    seen.add(r.id);
     return { id: r.id, ring: typeof r.ring === "string" ? r.ring : "", sentence: typeof r.sentence === "string" ? r.sentence : "" };
   }).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
@@ -494,12 +499,18 @@ export function judge(report) {
     reasons.push(`heading miss: ${report.headings.miss.map((m) => `${m.id} showed ${JSON.stringify(m.got)} for ${JSON.stringify(m.expected)}`).join("; ")}`);
   // The exempted extras (ADR-1327): every room the exemption file lists opened, by id, and none of them logged an
   // error. They are not in the door's openable count, so this is the only place a blank or broken one is caught.
-  if (report.extras) {
+  if (!report.extras) reasons.push("no extras block: the extra rooms were never judged");
+  else {
     const x = report.extras;
     if (!Array.isArray(x.expected) || !Array.isArray(x.opened)) reasons.push("which extra rooms opened could not be read");
     else {
       const missing = x.expected.filter((id) => !x.opened.includes(id));
       if (missing.length) reasons.push(`extra rooms the exemption file lists were not opened: ${missing.join(",")}`);
+      const stray = x.opened.filter((id) => !x.expected.includes(id));
+      if (stray.length) reasons.push(`extra rooms opened that the exemption file does not list: ${stray.join(",")}`);
+      const repeats = (list) => list.filter((id, i) => list.indexOf(id) !== i);
+      const twice = [...new Set([...repeats(x.expected), ...repeats(x.opened)])];
+      if (twice.length) reasons.push(`extra rooms listed twice: ${twice.join(",")}`);
     }
     if (!isCount(x.errors)) reasons.push("the extra rooms' error count could not be read");
     else if (x.errors !== 0) reasons.push(`extra rooms logged ${x.errors} error(s)`);
@@ -569,8 +580,9 @@ export function rehearsalLine(report) {
 /** The extras line per mood: what the exemption file lists, what opened, and their errors (company ring). */
 export function extrasLine(report) {
   const x = report.extras ?? null;
-  const expected = x && Array.isArray(x.expected) ? x.expected : null;
-  const opened = x && Array.isArray(x.opened) ? x.opened : null;
+  // DISTINCT ids: a repeated id is one room, and the line's counts are what the browser verdict reads.
+  const expected = x && Array.isArray(x.expected) ? [...new Set(x.expected)] : null;
+  const opened = x && Array.isArray(x.opened) ? [...new Set(x.opened)] : null;
   return `smoke: extras mood=${report.mood ?? "unstated"} expected=${expected === null ? "unread" : expected.length} opened=${opened === null ? "unread" : opened.length} errors=${x && isCount(x.errors) ? x.errors : "unread"} rooms=${opened === null || opened.length === 0 ? "none" : [...opened].sort().join(",")}`;
 }
 
@@ -777,8 +789,9 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
   // The exempted extras, from the contract (never the door), opened after the served rooms and judged on their own
   // line; each carries the sentence its heading must show (company ring, ADR-1327).
   const extraRows = Array.isArray(opts.extras) ? opts.extras : expectedExtras();
-  const extraSet = new Set(extraRows.map((r) => r.id).filter((id) => !openable.includes(id)));
-  for (const r of extraRows) if (extraSet.has(r.id)) servedById.set(r.id, { id: r.id, ring: r.ring, sentence: r.sentence });
+  const extraSet = new Set(extraRows.map((r) => r.id).filter((id) => !servedById.has(id)));
+  const escapeLikeDoor = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  for (const r of extraRows) if (extraSet.has(r.id)) servedById.set(r.id, { id: r.id, ring: r.ring, sentence: escapeLikeDoor(r.sentence) });
   const targets = [...openable, ...[...extraSet]];
 
   return withChrome(async (session, found) => {

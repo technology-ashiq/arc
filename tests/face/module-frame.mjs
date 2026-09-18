@@ -223,8 +223,10 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
   // The exemption rows, as the shell receives them: the door serves the file, and the shell draws each row as a
   // room arc does not serve (ADR-1327, company ring). The gate and the browser read the SAME file.
   const exemptFile = readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8");
+  // As the shell receives it: the door escapes every string once (company ring attack: the raw text skipped that step).
+  const doorEscaped = exemptFile.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   const extrasServed = typeof reg.extraRooms === "function"
-    ? reg.extraRooms({ state: "ok", data: { id: "module-exemptions", path: "initiatives/face/contracts/module-exemptions.json", sha256: "e".repeat(64), text: exemptFile } })
+    ? reg.extraRooms({ state: "ok", data: { id: "module-exemptions", path: "initiatives/face/contracts/module-exemptions.json", sha256: "e".repeat(64), text: doorEscaped } })
     : { rooms: [], ids: [], problem: "registry.mjs exports no extraRooms" };
   check("the shell reads the exemption rows the door serves, with no problem (company ring)", extrasServed.problem === "" && extrasServed.ids.length > 0, JSON.stringify({ problem: extrasServed.problem, ids: extrasServed.ids }));
   const shellRegistry = typeof reg.withExtras === "function" ? reg.withExtras(registry, extrasServed) : registry;
@@ -263,8 +265,11 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
   const extra = (tree.extras || [])[0];
   check("the real contracts name an ADR-1327 extra to test the agreement with (vacuous-pass guard)", Boolean(extra), JSON.stringify(tree.extras));
   if (extra) {
-    const withFolder = { ...tree, folders: [...tree.folders, { ring: extra.ring, id: extra.id }] };
-    const withRow = { ...withFolder, exemptions: [{ id: extra.id, adr: "ADR-1327" }] };
+    // The real tree carries this extra's row and folder since the ruling (ADR-1337): the agreement is tested from a tree
+    // without either, then with a whole row -- the facts the shell draws the room from -- and the folder.
+    const bare = { ...tree, folders: tree.folders.filter((f) => f.id !== extra.id), exemptions: (tree.exemptions || []).filter((e) => !e || e.id !== extra.id) };
+    const withFolder = { ...bare, folders: [...bare.folders, { ring: extra.ring, id: extra.id }] };
+    const withRow = { ...withFolder, exemptions: [...bare.exemptions, { id: extra.id, adr: "ADR-1327", name: extra.id, ring: extra.ring, sentence: "a sentence", lede: "" }] };
     const foundExtra = { ...found,
       [`./modules/${extra.ring}/${extra.id}/module.mjs`]: { default: { id: extra.id, ring: extra.ring, routes: [], asOf: true } },
       [`./modules/${extra.ring}/${extra.id}/fold.mjs`]: { fold: () => ({}) },
@@ -284,7 +289,12 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
 }
 
 // ── the shell names no room ──
-const servedIds = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms.map((r) => r.id);
+// The rooms the shell draws: every served id, and the exempted extras the shell draws from their rows (company ring
+// attack: a shell file calling onOpen('executor') named a room the scan did not know).
+const servedIds = [
+  ...JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms.map((r) => r.id),
+  ...(JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8")).exemptions || []).map((e) => e.id),
+];
 /** Every quoted literal whose whole value is a served id, or a route to one (`/id`, `#/id`, `#id`). */
 const namedRooms = (text) => {
   const hits = [];

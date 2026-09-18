@@ -165,16 +165,38 @@ runner_verdict() {
 # from the door it judges, opens each, and prints what it opened against what the file lists. Every one opened with
 # no error, and at least the two the owner's ruling left exempt (ADR-1337: executor, agents) -- in both moods.
 extras_verdict() {
-  local out="$1" mood="$2" line expected opened errors
+  local out="$1" mood="$2" line expected opened errors rooms named
   case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
   line="$(printf '%s\n' "$out" | grep "^smoke: extras mood=$mood expected=" | tail -1)"
-  expected="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=\([0-9][0-9]*\) opened=[0-9]* errors=[0-9]* rooms=.*/\1/p")"
-  opened="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=[0-9]* opened=\([0-9][0-9]*\) errors=[0-9]* rooms=.*/\1/p")"
+  # Counts carry no leading zero, and the rooms field names exactly as many rooms as were opened (company ring attack).
+  expected="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=\([1-9][0-9]*\) opened=[0-9]* errors=[0-9]* rooms=.*/\1/p")"
+  opened="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=[0-9]* opened=\([1-9][0-9]*\) errors=[0-9]* rooms=.*/\1/p")"
   errors="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=[0-9]* opened=[0-9]* errors=\([0-9][0-9]*\) rooms=.*/\1/p")"
+  rooms="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=[0-9]* opened=[0-9]* errors=[0-9]* rooms=\([a-z][a-z0-9,-]*\)$/\1/p")"
+  named="$(printf '%s\n' "$rooms" | tr ',' '\n' | grep -c '^[a-z][a-z0-9-]*$')"
   [ -n "$expected" ] && [ "$expected" -ge 2 ] && [ "$opened" = "$expected" ] \
     || { echo "mood=$mood: extras opened '$opened', the exemption file lists '$expected': $line"; return 1; }
   [ "$errors" = "0" ] || { echo "mood=$mood: an extra room logged errors: $line"; return 1; }
-  echo "extras verdict: mood=$mood opened=$opened errors=0"
+  [ -n "$rooms" ] && [ "$rooms" != "none" ] && [ "$named" = "$opened" ] || { echo "mood=$mood: the rooms field names '$rooms', not the $opened rooms opened: $line"; return 1; }
+  echo "extras verdict: mood=$mood opened=$opened errors=0 rooms=$rooms"
+}
+
+# The heading verdict: the LAST heading line for the mood decides, as every other verdict's last line does, and every
+# ring's module rooms were checked with none missed -- thirty-six and up (29 served, 3 renamed, 2 extras given
+# registry rows and 2 exempt, ADR-1337). A line carrying a carriage return is refused on every OS: Git Bash's grep
+# accepted one that Linux grep rejected (company ring attack).
+heading_verdict() {
+  # Pure bash, no grep and no command substitution: Git Bash strips a carriage return in both, Linux keeps it, and
+  # the same forged line must fail on every leg (company ring attack).
+  local out="$1" mood="$2" l line="" re
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  while IFS= read -r l || [ -n "$l" ]; do
+    case "$l" in "smoke: heading mood=$mood "*) line="$l" ;; esac
+  done <<< "$out"
+  case "$line" in *$'\r'*) echo "mood=$mood: the heading line carries a carriage return"; return 1 ;; esac
+  re="^smoke: heading mood=$mood rings=command,kernel,factory,money,company checked=(3[6-9]|[4-9][0-9]|[1-9][0-9][0-9]+) miss=0\$"
+  [[ "$line" =~ $re ]] || { echo "mood=$mood: heading check missing, too few checked, or a miss: '$line'"; return 1; }
+  echo "heading verdict: mood=$mood"
 }
 
 @test "face-browser: the node floor is reported, and only Node 18 may skip" {
@@ -263,7 +285,7 @@ extras_verdict() {
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
   # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
   # 10 s -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: verbs-pending |smoke: rehearsal |smoke: planned |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: verbs-pending |smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
   # Both moods are judged, each from its own line, before the exit status is trusted: a harness
   # that ran only dark must not pass on dark's line (ADR-1331).
   local mood verdicts=0
@@ -304,10 +326,8 @@ extras_verdict() {
     runner_verdict "$output" "$mood" "$(uname -s)" || { echo "(harness exit $status)"; false; }
     extras_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
     # Every ring has shipped, so every module room opens with the contract's frozen sentence as its heading -- an
-    # exempted extra with its exemption row's -- and none missed (a blank room is not an opened one). Thirty-six and
-    # up: 29 served modules, 3 renamed, 2 extras given registry rows and 2 exempt (ADR-1337).
-    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command,kernel,factory,money,company checked=(3[6-9]|[4-9][0-9]|[1-9][0-9][0-9]+) miss=0\$" \
-      || { echo "heading check missing, too few checked, or a miss for mood=$mood (harness exit $status)"; false; }
+    # exempted extra with its exemption row's -- and none missed (a blank room is not an opened one).
+    heading_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done
   [ "$verdicts" -eq 2 ] || { echo "judged $verdicts of 2 moods"; false; }
@@ -360,6 +380,25 @@ extras_verdict() {
   [ "$status" -ne 0 ] || { echo "an exemption file listing nothing passed: $output"; false; }
   run extras_verdict "smoke: extras mood=light expected=2 opened=2 errors=0 rooms=agents,executor" dark
   [ "$status" -ne 0 ] || { echo "the other mood's line passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=2 opened=2 errors=0 rooms=none" dark
+  [ "$status" -ne 0 ] || { echo "a rooms field naming none passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=02 opened=02 errors=0 rooms=agents,executor" dark
+  [ "$status" -ne 0 ] || { echo "zero-padded counts passed: $output"; false; }
+  local head="smoke: heading mood=dark rings=command,kernel,factory,money,company checked=36 miss=0"
+  run heading_verdict "$head" dark
+  [ "$status" -eq 0 ] || { echo "the real heading line failed: $output"; false; }
+  run heading_verdict "${head/checked=36/checked=35}" dark
+  [ "$status" -ne 0 ] || { echo "35 headings checked passed a floor of 36: $output"; false; }
+  run heading_verdict "${head/miss=0/miss=1}" dark
+  [ "$status" -ne 0 ] || { echo "a heading miss passed: $output"; false; }
+  run heading_verdict "$(printf '%s\n%s' "$head" "${head/miss=0/miss=1}")" dark
+  [ "$status" -ne 0 ] || { echo "a clean line followed by a miss passed: the last line must decide: $output"; false; }
+  run heading_verdict "$head"$'\r' dark
+  [ "$status" -ne 0 ] || { echo "a heading line carrying a carriage return passed: $output"; false; }
+  run heading_verdict "${head/mood=dark/mood=light}" dark
+  [ "$status" -ne 0 ] || { echo "the other mood's heading line passed: $output"; false; }
+  run heading_verdict "${head/,company/}" dark
+  [ "$status" -ne 0 ] || { echo "a heading line naming four rings passed: $output"; false; }
 }
 
 @test "face-browser: MUTANT CONTROL -- the render verdict FAILS a shell that drew every room generic" {

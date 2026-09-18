@@ -91,6 +91,15 @@ try {
   {
     const root = makeRoot("refusals");
     const extras = JSON.parse(readFileSync(join(CONTRACTS, "modules-v2.json"), "utf8")).modules.filter((m) => m.class === "extra");
+    // The real tree carries the extras' rows and folders since the owner's section 13 item 5 ruling (ADR-1337); the
+    // refusal is tested on a copy with the first extra's row and folder taken out, so it has neither.
+    if (extras[0]) {
+      const exFile = join(root, "initiatives", "face", "contracts", "module-exemptions.json");
+      const ex = JSON.parse(readFileSync(exFile, "utf8"));
+      ex.exemptions = (ex.exemptions || []).filter((e) => e.id !== extras[0].id);
+      writeFileSync(exFile, JSON.stringify(ex, null, 2) + "\n");
+      rmSync(join(root, "face", "src", "modules", extras[0].ring, extras[0].id), { recursive: true, force: true });
+    }
     const template = registry.rooms.find((r) => r.status === "template");
     const planned = registry.rooms.find((r) => r.status !== "template" && !hasModule(r.id));
     const wrongRing = planned ? registry.rings.find((g) => g !== planned.ring) : null;

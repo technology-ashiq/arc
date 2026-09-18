@@ -1,0 +1,165 @@
+{
+  "comment": "Candidate shots for the company ring shot review (and the factory ring extras) (face v2 Phase 03). PNGs are local, under the owner box scratch directory; this manifest pins them by sha256. Same contract as evidence/phase-00/baseline-shots.json.",
+  "capturedAt": "2026-09-18T10:17:02.737Z",
+  "capture": {
+    "script": "face/scripts/harness-run.mjs --shots",
+    "browser": "Chrome/153.0.8010.48",
+    "viewport": {
+      "width": 1440,
+      "height": 1000,
+      "deviceScaleFactor": 1
+    },
+    "waitMs": 900,
+    "moods": [
+      "dark",
+      "light"
+    ]
+  },
+  "ring": "company",
+  "shots": [
+    {
+      "room": "law",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-law.png",
+      "bytes": 279744,
+      "sha256": "c1f2fdafc915cc18dc3013b7713b428051090aae6328f77ce51041d0114cb94f"
+    },
+    {
+      "room": "learn",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-learn.png",
+      "bytes": 213419,
+      "sha256": "5add594964f88d3bbc47e91c1cac43c4f4786f646009982efe46a4d6d32534a6"
+    },
+    {
+      "room": "strategy",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-strategy.png",
+      "bytes": 228316,
+      "sha256": "b03ccd66fd97e28fbcd182f391187f0028e87bdc7ce72a709d7098d2ec69ad14"
+    },
+    {
+      "room": "org",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-org.png",
+      "bytes": 238526,
+      "sha256": "2c90e3993f0e1982b2c5645f4f5c2b5ce8629dc87dafe3161542cb61f4c54c9d"
+    },
+    {
+      "room": "concepts",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-concepts.png",
+      "bytes": 209740,
+      "sha256": "4cd504278aa7f57f192108078dfeb91c39d2573e0e88926e23be1b27c4c490bf"
+    },
+    {
+      "room": "story",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-story.png",
+      "bytes": 338872,
+      "sha256": "bc4c7a024921e2fe0ce33f8aeb2358e216478e5450771e586d6fe8eb6f94f122"
+    },
+    {
+      "room": "factory",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-factory.png",
+      "bytes": 233334,
+      "sha256": "d55bf5c30b01a88cb5db977a247d2fd2c0294fcf7083cb30fef3c857084178e8"
+    },
+    {
+      "room": "executor",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-executor.png",
+      "bytes": 229367,
+      "sha256": "3c056f9a1229d3689757a5c7b971deb6e272d8191ae4f2962e0329df19aca4e3"
+    },
+    {
+      "room": "agents",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-agents.png",
+      "bytes": 192198,
+      "sha256": "fe3e0bd3e1ca501e39b1c3f8fab83ea9bf8ff2cb6d5986c2ff5e72c6b6a9497c"
+    },
+    {
+      "room": "law",
+      "mood": "light",
+      "render": "module",
+      "file": "light-law.png",
+      "bytes": 276059,
+      "sha256": "701c2aff819881fb93f0f0d418afda98165cfea35189c83265a704025161b583"
+    },
+    {
+      "room": "learn",
+      "mood": "light",
+      "render": "module",
+      "file": "light-learn.png",
+      "bytes": 214497,
+      "sha256": "ca4a4048c45870b1debf64fc24b3c5f380e3b7c239336a247749b7bb228f9229"
+    },
+    {
+      "room": "strategy",
+      "mood": "light",
+      "render": "module",
+      "file": "light-strategy.png",
+      "bytes": 229190,
+      "sha256": "bfdc2b5c987ea3f61fad2d768fecd754b8aab720af8e28cb6a75ec49d0eb320c"
+    },
+    {
+      "room": "org",
+      "mood": "light",
+      "render": "module",
+      "file": "light-org.png",
+      "bytes": 238752,
+      "sha256": "5f935924ff87d5de4401e45a8081850ed6495b056db62e211f7ca320135f6155"
+    },
+    {
+      "room": "concepts",
+      "mood": "light",
+      "render": "module",
+      "file": "light-concepts.png",
+      "bytes": 208962,
+      "sha256": "1c587135a50016af485f3590cc0cf52e92ae68921a8e24d56084a4095df573af"
+    },
+    {
+      "room": "story",
+      "mood": "light",
+      "render": "module",
+      "file": "light-story.png",
+      "bytes": 335745,
+      "sha256": "0205626535ce1544e0a326dd8ca35538634a87954b2cb592cdfa5a759e259f84"
+    },
+    {
+      "room": "factory",
+      "mood": "light",
+      "render": "module",
+      "file": "light-factory.png",
+      "bytes": 232308,
+      "sha256": "06a4d431e6d9a04698958ab124d21bceda57690867f4ef08bc1cdb3dc21050f6"
+    },
+    {
+      "room": "executor",
+      "mood": "light",
+      "render": "module",
+      "file": "light-executor.png",
+      "bytes": 229581,
+      "sha256": "e2b6bc71cba21f15261fc9e5cb89bbb88c4e4967db74690cfa567143e8cf93e6"
+    },
+    {
+      "room": "agents",
+      "mood": "light",
+      "render": "module",
+      "file": "light-agents.png",
+      "bytes": 193891,
+      "sha256": "5fbac1a98b2d35f1525fc358777907a3a242275c4ff81461e63843828692b0dd"
+    }
+  ]
+}

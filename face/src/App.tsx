@@ -124,14 +124,22 @@ export default function App() {
     return () => ac.abort()
   }, [door])
 
-  // The room list the shell draws: the served registry, then each exempted extra in its ring (ADR-1327).
-  const shell = useMemo(() => (registry ? withExtras(registry, extras) : null), [registry, extras])
+  // What the bundle found is fixed at build time: read once, and handed to both questions asked of it.
+  const collected = useMemo(() => collectModules(FOUND_MODULES), [])
+  // The room list the shell draws: the served registry, then each exempted extra in its ring, where its module lives
+  // (ADR-1327). What could not be drawn is said, in the rail and on a deep link -- never a silent absence.
+  const shell = useMemo(() => (registry ? withExtras(registry, extras, collected.modules) : null), [registry, extras, collected])
+  const extrasNote = useMemo(() => {
+    const dropped = shell ? shell.extrasDropped : []
+    const parts = [extras.isLoading ? '' : extras.problem, dropped.length ? `rows left out: ${dropped.join(', ')}` : ''].filter((x) => x !== '')
+    return parts.join('; ')
+  }, [shell, extras])
   const groups = useMemo(() => (shell ? railGroups(shell) : []), [shell])
   const order = useMemo(() => navOrder(groups), [groups])
   const home = useMemo(() => (registry ? homeRoom(registry) : null), [registry])
   // Modules attach to the SERVED rooms, both ways (ADR-1321), and to an exempted extra through its row. What the
   // glob found is fixed at build time; what it attaches to is whatever the door serves today.
-  const attachment = useMemo(() => attachModules(shell ?? { rooms: [] }, collectModules(FOUND_MODULES)), [shell])
+  const attachment = useMemo(() => attachModules(shell ?? { rooms: [] }, collected), [shell, collected])
 
   const open = useCallback(
     (id: string) => {
@@ -247,6 +255,7 @@ export default function App() {
         onPalette={() => setPaletteOpen(true)}
         attachment={attachment}
         ringCount={registry.rings.length}
+        extrasNote={extras.isLoading ? '' : extrasNote}
       />
 
       <Header
@@ -285,7 +294,7 @@ export default function App() {
                 <RoomFrame room={openable} attachment={attachment} ctx={ctx} />
               </div>
             ) : (
-              <NoSuchRoom id={shownId ?? ''} />
+              <NoSuchRoom id={shownId ?? ''} extrasNote={extras.isLoading ? 'the exemption rows are still being read' : extrasNote} />
             )}
           </section>
         </div>
@@ -300,14 +309,19 @@ export default function App() {
  * An unknown room id is a thing a person can type. It gets a named answer, never a blank screen --
  * the product exists so nothing goes missing, and its own router must not be where something does.
  */
-function NoSuchRoom({ id }: { id: string }) {
+/**
+ * A room id nothing draws. While the rooms arc does not serve are unread -- or could not be read -- the answer is not
+ * "there is no such room": that would be a claim made from a failed read (company ring attack).
+ */
+function NoSuchRoom({ id, extrasNote }: { id: string; extrasNote: string }) {
+  const unsure = extrasNote !== ''
   return (
     <div className="py-10">
       <h1 className="text-[22px] sm:text-[26px] leading-[1.15] tracking-[-0.01em]" style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-1)' }}>
-        There is no room called “{id}”.
+        {unsure ? <>No room called “{id}” is drawn yet.</> : <>There is no room called “{id}”.</>}
       </h1>
       <p className="text-[13.5px] leading-[21px] mt-1.5" style={{ color: 'var(--text-2)' }}>
-        Every room arc has is in the rail.
+        {unsure ? <>The rooms arc does not serve are drawn from a file the door serves, and {extrasNote}.</> : <>Every room arc has is in the rail.</>}
       </p>
     </div>
   )

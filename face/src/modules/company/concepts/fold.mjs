@@ -62,7 +62,7 @@ export function fold(payloads, ctx) {
     .filter((t) => t.term.toLowerCase().includes(needle) || t.room.includes(needle))
     .slice(0, HITS)
     .map((t) => ({ key: t.term, term: t.term, room: t.room, roomName: nameOf.get(t.room) ?? t.room, station: t.station, canOpen: roomLink(ctx, t.room).canOpen }));
-  const stations = new Set(glossary.terms.map((t) => `${t.room}/${t.station}`)).size;
+  const stations = new Set(glossary.terms.filter((t) => t.station !== "").map((t) => `${t.room}/${t.station}`)).size;
   return {
     sentence: String(ctx.room.sentence ?? ""),
     lede: String(ctx.room.lede ?? ""),
@@ -71,7 +71,7 @@ export function fold(payloads, ctx) {
       { key: "terms", v: isRead ? fmtInt(glossary.count) : "—", l: "Terms", sub: "expected-set.json, the palette's store" },
       { key: "rooms", v: isRead ? fmtInt(groups.length) : "—", l: "Rooms that hold them", sub: "each term anchored to one" },
       { key: "stations", v: isRead ? fmtInt(stations) : "—", l: "Stations", sub: "where on a room's line a term sits" },
-      { key: "unhomed", v: isRead ? fmtInt(glossary.unhomed.length) : "—", l: "Unhomed", sub: "a term whose room is not served" },
+      { key: "unhomed", v: isRead ? fmtInt(glossary.unhomed.length) : "—", l: "Unhomed", sub: glossary.unreadable > 0 ? `${fmtInt(glossary.unreadable)} entr${glossary.unreadable === 1 ? "y" : "ies"} this reader could not read` : "a term whose room this face does not draw" },
     ],
     contract: file.source,
     glossary,

@@ -9,8 +9,7 @@
 import { notServed, payloadOf, readProblem, verbPending } from "../../../lib/registry.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { boardRows, boardTotals } from "../../../lib/spine.mjs";
-import { bandsOf, fileText } from "../../../lib/company-room.mjs";
-import { roomLink } from "../../../lib/lane-room.mjs";
+import { bandsOf, boardLanes, fileText, laneLinks } from "../../../lib/company-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 /** @typedef {import("../../../lib/registry.mjs").Read} Read */
@@ -27,7 +26,7 @@ import { roomLink } from "../../../lib/lane-room.mjs";
  * @property {{ key: string, lane: string, on: string }[]} waiting
  * @property {boolean} isWaitingEmpty
  * @property {string} waitingEmpty
- * @property {{ rows: (import("../../../ui/company").BandView & { lane: string })[], isRead: boolean, isEmpty: boolean, empty: string }} bands
+ * @property {{ rows: (import("../../../ui/company").BandView & { lane: string })[], isRead: boolean, isEmpty: boolean, empty: string, notes: string[], hasNotes: boolean }} bands
  * @property {import("../../../lib/lane-room.mjs").SourceFile} portfolio
  * @property {import("../../../lib/registry.mjs").NotServed} today
  * @property {{ isVerbPending: true, verb: string, sentence: string }} statusVerb
@@ -52,8 +51,10 @@ export function fold(payloads, ctx) {
   /** @type {Payload} */
   const boardP = boardWhy === null ? payloadOf(payloads, boardRead) : { state: "refused", code: "READ_REFUSED", human: boardWhy };
   const view = boardP.state === "ok" ? boardRows(boardP.data) : null;
-  const rows = view !== null && "rows" in view ? view.rows : [];
   const isBoardRead = view !== null && "rows" in view;
+  const board_ = boardLanes(isBoardRead ? view.rows : []);
+  const rows = board_.rows;
+  const linkOf = laneLinks(ctx);
   const totals = boardTotals(rows);
   const board = {
     isReading: boardP.state === "loading" || boardP.state === "pending",
@@ -62,7 +63,7 @@ export function fold(payloads, ctx) {
   };
 
   const roster = rows.map((r, i) => {
-    const link = roomLink(ctx, r.lane);
+    const link = linkOf(r.lane);
     return {
       key: `${i}-${r.lane}`,
       lane: r.lane,
@@ -78,14 +79,24 @@ export function fold(payloads, ctx) {
   });
   const waiting = rows.filter((r) => r.blockedOn !== null).map((r, i) => ({ key: `${i}-${r.lane}`, lane: r.lane, on: r.blockedOn ?? "" }));
 
-  // F1: the band map names the lane that owns each century, from the portfolio's band table.
+  // F1: the band map names the lane that owns each century, from the portfolio's band table -- held against the
+  // lanes the board carries, so a backticked word that is no lane is never drawn as one (company ring attack). Until
+  // the board answers, no band's lane is confirmed and the map says so.
   const file = fileText(payloads, ctx, "portfolio", reads);
-  const b = bandsOf(file.text);
+  const b = bandsOf(file.text, isBoardRead ? new Set(rows.map((r) => r.lane)) : new Set());
   const bandRows = b.rows.map((row, i) => {
-    const link = row.isLane ? roomLink(ctx, row.lane) : { canOpen: false, room: "" };
+    const link = row.isLane ? linkOf(row.lane) : { canOpen: false, room: "" };
     return { key: `${i}-${row.band}`, band: row.band, lane: row.lane, who: row.isLane ? row.lane : row.owner, note: row.brief, title: row.note, isLane: row.isLane, canOpen: link.canOpen, room: link.room };
   });
   const bandsRead = file.source.isRead && b.isRead && !b.unread;
+  const claimed = new Set(b.rows.filter((r) => r.isLane).map((r) => r.band)).size;
+  /** @type {string[]} */
+  const bandNotes = [];
+  if (bandsRead && !isBoardRead) bandNotes.push("The board has not answered, so no band's lane is confirmed yet.");
+  if (b.malformed.length > 0) bandNotes.push(`${fmtInt(b.malformed.length)} row${b.malformed.length === 1 ? "" : "s"} of the table this reader could not read: ${b.malformed.join(" · ")}`);
+  if (b.duplicates.length > 0) bandNotes.push(`Claimed on more than one row: ${b.duplicates.join(", ")}.`);
+  if (isBoardRead && b.unverified.length > 0) bandNotes.push(`Named as owners and not lanes on the board: ${b.unverified.join(", ")}.`);
+  if (board_.dropped > 0) bandNotes.push(`${fmtInt(board_.dropped)} board row${board_.dropped === 1 ? " carries" : "s carry"} no readable lane name or repeat${board_.dropped === 1 ? "s" : ""} one already listed -- left out and counted.`);
 
   return {
     sentence: String(ctx.room.sentence ?? ""),
@@ -95,7 +106,7 @@ export function fold(payloads, ctx) {
       { key: "live", v: isBoardRead ? fmtInt(totals.live) : "—", l: "Awake", sub: "header reads LIVE" },
       { key: "idle", v: isBoardRead ? fmtInt(totals.idle) : "—", l: "Idle", sub: "no cycle running" },
       { key: "waiting", v: isBoardRead ? fmtInt(waiting.length) : "—", l: "Waiting on something", sub: "a blocked-on line in the header" },
-      { key: "bands", v: bandsRead ? fmtInt(b.rows.filter((r) => r.isLane).length) : "—", l: "ADR centuries claimed", sub: "one per lane, PORTFOLIO.md" },
+      { key: "bands", v: bandsRead && isBoardRead && b.malformed.length === 0 ? fmtInt(claimed) : "—", l: "ADR centuries claimed", sub: b.duplicates.length > 0 ? "a century is claimed twice -- see the map" : "one per lane, PORTFOLIO.md" },
     ],
     board,
     roster,
@@ -107,7 +118,9 @@ export function fold(payloads, ctx) {
       rows: bandsRead ? bandRows : [],
       isRead: bandsRead,
       isEmpty: !bandsRead,
-      empty: !file.source.isRead ? "" : "The portfolio the door served carries no ADR band table, so no century is drawn -- and none is claimed unowned.",
+      empty: !file.source.isRead ? "" : "The portfolio the door served carries no ADR band table this reader can read, so no century is drawn -- and none is claimed unowned.",
+      notes: bandNotes,
+      hasNotes: bandNotes.length > 0,
     },
     portfolio: file.source,
     today: notServed(

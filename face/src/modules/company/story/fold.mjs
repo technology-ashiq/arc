@@ -20,6 +20,7 @@ import { laneRoom } from "../../../lib/lane-room.mjs";
  *   isBookRead: boolean,
  *   chapters: import("../../../ui/company").ChapterView[],
  *   newest: string,
+ *   newestCode: string,
  *   cycles: { key: string, code: string, name: string, dates: string, result: string, burn: string, shipped: string, hasCode: boolean }[],
  *   milestones: { key: string, milestone: string, status: string, isDone: boolean, isPending: boolean }[],
  *   isCyclesEmpty: boolean,
@@ -34,6 +35,8 @@ import { laneRoom } from "../../../lib/lane-room.mjs";
 
 /** @param {string} what */
 const NOT_CARRIED = (what) => `The logbook the door served carries no ${what}, so none is drawn here -- and none is claimed absent.`;
+/** @param {string} what */
+const NOT_READ = (what) => `The logbook carries a ${what} in a shape this reader cannot read, so none is drawn here -- and none is claimed absent.`;
 
 /**
  * @param {Record<string, Payload>} payloads
@@ -58,35 +61,38 @@ export function fold(payloads, ctx) {
   const cycles = isBookRead ? h.cycles.map((c, i) => ({ key: `${i}-${c.code || c.name}`, ...c, hasCode: c.code !== "" })) : [];
   const milestones = isBookRead ? h.milestones.map((m, i) => ({ key: `${i}-${m.milestone}`, ...m })) : [];
   const done = milestones.filter((m) => m.isDone).length;
-  // How far the book lags: the newest cycle in the glance table against the newest chapter -- both the file's own.
-  const newestCycle = cycles.find((c) => c.hasCode);
-  const newestChapter = chapters.find((c) => c.hasCode);
-  const lag = !isBookRead ? ""
-    : newestCycle !== undefined && newestChapter !== undefined && newestCycle.code !== newestChapter.code
-      ? `The glance table runs to ${newestCycle.code}; the newest chapter written is ${newestChapter.code}, ${h.newest}. The cycles between have a row and no chapter yet.`
-      : h.newest === "" ? "" : `The newest chapter is ${h.newest}.`;
+  // How far the book lags: the glance rows with no chapter, matched by code AND name (the book carries two C6s and two
+  // C7s), and the newest chapter named with its OWN date -- never one entry's code beside another's date (attack).
+  const unwritten = h.cycles.filter((c) => !h.entries.some((e) => e.code === c.code && e.title === c.name)).length;
+  const ne = h.newestEntry;
+  const newestName = ne === null ? "" : `${ne.code === "" ? "" : `${ne.code} `}${ne.title}, closed ${ne.date}`;
+  const lag = !isBookRead || ne === null ? ""
+    : unwritten > 0 && !h.cyclesUnread
+      ? `The newest chapter written is ${newestName}. ${fmtInt(unwritten)} initiative${unwritten === 1 ? "" : "s"} in the glance table ${unwritten === 1 ? "has" : "have"} a row and no chapter yet.`
+      : `The newest chapter written is ${newestName}.`;
   return {
     ...base,
     reads: [...base.reads, ...reads],
     badge: isBookRead ? "the logbook · docs/HISTORY.md" : "the logbook · not read",
     kpis: [
-      { key: "cycles", v: isBookRead && !h.cyclesUnread ? fmtInt(cycles.length) : "—", l: "Initiatives in the book", sub: "the glance table, closed or parked" },
-      { key: "chapters", v: isBookRead && !h.unread ? fmtInt(chapters.length) : "—", l: "Chapters written", sub: "one entry per closed cycle" },
-      { key: "milestones", v: isBookRead && !h.milestonesUnread ? `${fmtInt(done)} of ${fmtInt(milestones.length)}` : "—", l: "Milestones reached", sub: "the book's own tracker" },
+      { key: "cycles", v: isBookRead && !h.cyclesUnread && h.cyclesMalformed === 0 ? fmtInt(cycles.length) : "—", l: "Initiatives in the book", sub: h.cyclesMalformed > 0 ? `${fmtInt(h.cyclesMalformed)} row${h.cyclesMalformed === 1 ? "" : "s"} this reader could not read` : "the glance table, closed or parked" },
+      { key: "chapters", v: isBookRead && h.entriesState === "read" ? fmtInt(chapters.length) : "—", l: "Chapters written", sub: "one entry per closed cycle" },
+      { key: "milestones", v: isBookRead && !h.milestonesUnread && h.milestonesUnmarked === 0 ? `${fmtInt(done)} of ${fmtInt(milestones.length)}` : "—", l: "Milestones reached", sub: h.milestonesUnmarked > 0 ? "a status carries no ✅ or ⏳ this count reads" : "the book's own tracker" },
       { key: "newest", v: isBookRead && h.newest !== "" ? h.newest : "—", l: "Newest chapter", sub: "the date its cycle closed" },
     ],
     doc: file.source,
     isBookRead,
     chapters,
     newest: isBookRead ? h.newest : "",
+    newestCode: isBookRead && ne !== null ? ne.code : "",
     cycles,
     milestones,
     isCyclesEmpty: cycles.length === 0,
     isMilestonesEmpty: milestones.length === 0,
     isChaptersEmpty: chapters.length === 0,
-    cyclesEmpty: !isBookRead ? "" : NOT_CARRIED("glance table"),
-    milestonesEmpty: !isBookRead ? "" : NOT_CARRIED("milestone tracker"),
-    chaptersEmpty: !isBookRead ? "" : NOT_CARRIED("Entries section"),
+    cyclesEmpty: !isBookRead ? "" : h.cyclesState === "absent" ? NOT_CARRIED("glance table") : NOT_READ("glance table"),
+    milestonesEmpty: !isBookRead ? "" : h.milestonesState === "absent" ? NOT_CARRIED("milestone tracker") : NOT_READ("milestone tracker"),
+    chaptersEmpty: !isBookRead ? "" : h.entriesState === "absent" ? NOT_CARRIED("Entries section") : NOT_READ("Entries section"),
     lag,
   };
 }

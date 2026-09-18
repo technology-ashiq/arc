@@ -11,7 +11,8 @@
 // VACUOUS-PASS GUARD: the first check proves the modules loaded; the last line is
 // "RAN: <n> checks, <f> failed", and the suite FAILs below its own floor.
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -33,7 +34,7 @@ const smoke = await import(pathToFileURL(join(REPO, "face", "scripts", "smoke.mj
 const foldOf = async (ring, id) => (await import(pathToFileURL(join(MODULES, ring, id, "fold.mjs")).href)).fold;
 const manifestOf = async (ring, id) => (await import(pathToFileURL(join(MODULES, ring, id, "module.mjs")).href)).default;
 check("company-room.mjs, the extras reader and the smoke's extras line loaded (vacuous-pass guard)",
-  ["constitutionOf", "historyOf", "bandsOf", "glossaryOf", "fileText"].every((k) => typeof cr[k] === "function")
+  ["constitutionOf", "historyOf", "bandsOf", "glossaryOf", "fileText", "boardLanes", "laneLinks", "realDate"].every((k) => typeof cr[k] === "function")
   && typeof reg.extraRooms === "function" && typeof reg.withExtras === "function" && typeof smoke.extrasLine === "function",
   `${Object.keys(cr).join(",")} | extraRooms=${typeof reg.extraRooms} | extrasLine=${typeof smoke.extrasLine}`);
 
@@ -192,7 +193,7 @@ const byFile = (files, extra = () => undefined) => (read) => (read.route === "/a
   const extraRoom = (id) => shell.rooms.find((r) => r.id === id);
   const agentsHeld = registry.rooms.reduce((n, r) => n + ((r.holds && Array.isArray(r.holds.agents)) ? r.holds.agents.length : 0), 0);
   const agents = loaded(await foldOf("factory", "agents"), ctxFor(extraRoom("agents"), await manifestOf("factory", "agents"), { rooms: shell.rooms }), () => undefined).full;
-  check("AGENTS FOLD: the roster is every agent the registry homes, each with its room", agents.roster.length === agentsHeld && agentsHeld > 0 && agents.roster.every((a) => a.room !== ""), `${agents.roster.length} vs ${agentsHeld}`);
+  check("AGENTS FOLD: the roster is every agent the registry homes, each with the room it is homed in", agents.roster.length === agentsHeld && agentsHeld > 0 && agents.roster.every((a) => a.roomName !== ""), `${agents.roster.length} vs ${agentsHeld}`);
   const executor = loaded(await foldOf("factory", "executor"), ctxFor(extraRoom("executor"), await manifestOf("factory", "executor"), { rooms: shell.rooms }), () => undefined).full;
   check("EXECUTOR FOLD: its employees are the registry's agents, and the contractors' roster is NOT SERVED until /api/roster",
     executor.kpis.find((k) => k.key === "employees")?.v === String(agentsHeld) && reg.notServedOf(executor).some((n) => n.route === "/api/roster"), JSON.stringify(executor.kpis));
@@ -209,7 +210,106 @@ const byFile = (files, extra = () => undefined) => (read) => (read.route === "/a
   check("STRATEGY FOLD: the shelf is every plan the registry homes here", strategy.shelf.length === (roomOf("strategy").holds.plans || []).length && strategy.shelf.length > 0, `${strategy.shelf.length}`);
 }
 
+// ── the company ring attack: every hole the two attackers demonstrated, pinned so removing its fix fails here ──
+{
+  // A section carried in a shape the reader cannot read is UNREADABLE -- "—" with its own sentence -- never "0".
+  const dashed = cr.constitutionOf(CONSTITUTION.replace(/\*\*(E\d) · /g, "**$1 — "));
+  check("ATTACK LAW: eternal articles written with a dash are still read", dashed.eternal.map((a) => a.id).join(",") === "E1,E2,E3", JSON.stringify(dashed.eternal.map((a) => a.id)));
+  const headed = cr.constitutionOf(CONSTITUTION.replace(/^\*\*(A\d+) · (.+?)\*\*$/gm, "### $1 · $2"));
+  check("ATTACK LAW: working articles as headings are UNREADABLE, never zero", headed.working.length === 0 && headed.unreadable.includes("working") && !headed.unread.includes("working"), JSON.stringify({ unread: headed.unread, unreadable: headed.unreadable }));
+  const lawFold = await foldOf("company", "law");
+  const lawCtx = ctxFor(roomOf("law"), await manifestOf("company", "law"));
+  const headedFold = loaded(lawFold, lawCtx, byFile({ constitution: served("constitution", "CONSTITUTION.md", CONSTITUTION.replace(/^\*\*(A\d+) · (.+?)\*\*$/gm, "### $1 · $2")) })).full;
+  check("ATTACK LAW FOLD: an unreadable section prints — and says why", (headedFold.kpis.find((k) => k.key === "working") || {}).v === "—" && /cannot read/.test(headedFold.workingNote), headedFold.workingNote);
+  const prose = cr.constitutionOf(CONSTITUTION.replace(/## Amendment process\n\n[\s\S]*?\n## /, "## Amendment process\n\nAn amendment is proposed in writing. It cools for seven days.\n\n## "));
+  check("ATTACK LAW: an amendment section written as prose is read as its paragraphs", prose.amendment.length === 1 && /cools for seven days/.test(prose.amendment[0] ?? ""), JSON.stringify(prose.amendment));
+  const glued = cr.constitutionOf(CONSTITUTION + "\n> An aside that is not the adoption line.\n");
+  check("ATTACK LAW: a later quote is never glued onto the adoption line", !/An aside/.test(glued.adoption) && /ADOPTED v1\.0/.test(glued.adoption), glued.adoption);
+  check("ATTACK LAW: the version is the document's own title, not a later heading", cr.constitutionOf("# Notes\n\n# Appendix (v9)\n").version === "" && cr.constitutionOf(CONSTITUTION).version === "v1.0");
+
+  // The logbook: an unreadable table or Entries section is never read as none; a code travels with its own date.
+  const noColText = HISTORY.replace(/^(\| C\d+ \|[^\n]*?)\| [^|\n]*\|\s*$/gm, "$1|");
+  const noCol = cr.historyOf(noColText);
+  check("ATTACK STORY: glance rows with a column removed are COUNTED as unreadable, never dropped", noCol.cyclesMalformed === 14 && noCol.cycles.length === 1, JSON.stringify({ state: noCol.cyclesState, bad: noCol.cyclesMalformed, read: noCol.cycles.length }));
+  const noColFold = loaded(await foldOf("company", "story"), ctxFor(roomOf("story"), await manifestOf("company", "story")), byFile({ history: served("history", "docs/HISTORY.md", noColText) })).full;
+  const cyclesKpi = noColFold.kpis.find((k) => k.key === "cycles") || { v: "?", sub: "" };
+  check("ATTACK STORY FOLD: a glance table with unreadable rows prints — and counts them, never the short number", cyclesKpi.v === "—" && /14 rows this reader could not read/.test(cyclesKpi.sub), JSON.stringify(cyclesKpi));
+  const noRule = cr.historyOf(HISTORY.replace(/^\|---\|[-|]*\|\s*$/m, ""));
+  check("ATTACK STORY: a glance table with no separator row is UNREADABLE", noRule.cyclesState === "unreadable", noRule.cyclesState);
+  const deep = cr.historyOf(HISTORY.replace(/^### /gm, "#### "));
+  check("ATTACK STORY: entries written as #### are UNREADABLE, never a company with no history", deep.entries.length === 0 && deep.entriesState === "unreadable" && deep.unread === false, deep.entriesState);
+  const moved = HISTORY.replace(/(### C1 · Orchestrator[^\n]*)/, "### C13 · arc-ledger \"the money brain\" — CLOSED 2026-08-13 · lane `ledger`\n\nA chapter filed low.\n\n$1");
+  const mh = cr.historyOf(moved);
+  check("ATTACK STORY: the newest chapter is the one with the latest date, and its code travels with it", mh.newestEntry !== null && mh.newestEntry.code === "C13" && mh.newest === "2026-08-13", JSON.stringify(mh.newestEntry && { code: mh.newestEntry.code, date: mh.newestEntry.date }));
+  const storyFold = await foldOf("company", "story");
+  const sf = loaded(storyFold, ctxFor(roomOf("story"), await manifestOf("company", "story")), byFile({ history: served("history", "docs/HISTORY.md", moved) })).full;
+  check("ATTACK STORY FOLD: the lag names the newest chapter with ITS date, and counts the rows with no chapter", /C13 arc-ledger "the money brain", closed 2026-08-13/.test(sf.lag) && /have a row and no chapter yet/.test(sf.lag), sf.lag);
+  check("ATTACK STORY: a date that is no calendar day is no date", cr.realDate("2026-19-45") === "" && cr.realDate("2026-02-30") === "" && cr.realDate("closed 2026-08-12 ·") === "2026-08-12");
+
+  // F1's band map: a backticked word is a lane only where it stands as the owner, is a lane name, and is on the board.
+  const bandText = (rows) => `## ADR number bands\n\n| Band | Owner |\n|---|---|\n${rows.join("\n")}\n\n## Next\n`;
+  const lanes = new Set(["develop", "face"]);
+  const odd = cr.bandsOf(bandText(["| 0001–0099 | `model-policy`'s Cycle 5 holds 0063–0071 |", "| 0100–0199 | `develop` |", "| 1300–1399 | `face` — claimed at birth, 2026-08-19 |", "| 1400–1499 | `law` — a room, not a lane |", "| 1500–1599 | `con` |"]), lanes);
+  const row = (b) => odd.rows.find((r) => r.band === b);
+  check("ATTACK F1: a backticked word followed by prose is not a lane claim", row("0001–0099")?.isLane === false, JSON.stringify(row("0001–0099")));
+  check("ATTACK F1: a room id the board does not carry as a lane is never drawn as one, and is named", row("1400–1499")?.isLane === false && odd.unverified.includes("law"), JSON.stringify({ row: row("1400–1499"), unverified: odd.unverified }));
+  check("ATTACK F1: a reserved device name is never a lane", row("1500–1599")?.isLane === false, JSON.stringify(row("1500–1599")));
+  check("ATTACK F1: real lanes on the board stay lanes", row("0100–0199")?.lane === "develop" && row("1300–1399")?.lane === "face");
+  const messy = cr.bandsOf(bandText(["| 0100—0199 | `develop` |", "| 0500–599 | `policy` |", "| 1300–1399 | `face` |", "| 1300–1399 | `face` |"]) + "\n| 9900–9999 | `ghost` |\n");
+  check("ATTACK F1: a band written with an em dash is read; a malformed row is NAMED; a century claimed twice is NAMED",
+    messy.rows.some((r) => r.band === "0100–0199") && messy.malformed.length === 1 && /0500–599/.test(messy.malformed[0] ?? "") && messy.duplicates.includes("1300–1399"), JSON.stringify({ malformed: messy.malformed, dup: messy.duplicates }));
+  check("ATTACK F1: a second table in the section is never merged into the map", !messy.rows.some((r) => r.band === "9900–9999"));
+
+  // The board: each lane once, each a lane name.
+  const kept = cr.boardLanes([{ lane: "face" }, { lane: "" }, { lane: "../../docs" }, { lane: "face" }, { lane: "bench" }]);
+  check("ATTACK BOARD: a nameless, path-like or repeated lane is left out and counted", kept.rows.map((r) => r.lane).join(",") === "face,bench" && kept.dropped === 3, JSON.stringify(kept));
+  const stratFold = await foldOf("company", "strategy");
+  const dirty = { state: "ok", data: { mode: "sim", badge: "file, not log", updated: null, lanes: [
+    { lane: "face", header: { status: "LIVE", cycle: "c", phase: "03" } }, { header: { status: "LIVE", cycle: "c", phase: "01" } },
+    { lane: "../../docs", header: { status: "LIVE", cycle: "c", phase: "01" } }, { lane: "face", header: { status: "LIVE", cycle: "c", phase: "03" } },
+  ] } };
+  const st = loaded(stratFold, ctxFor(roomOf("strategy"), await manifestOf("company", "strategy")), (r) => (r.route === "/api/board" ? dirty : undefined)).full;
+  check("ATTACK STRATEGY FOLD: one live plan per lane, no path from a lane that is no name, the rest counted", st.live.length === 1 && st.live.every((p) => !p.path.includes("..") && !p.path.includes("//")) && st.hasDropped === true, JSON.stringify(st.live.map((p) => p.path)));
+
+  // The extras: the shell draws a row only where its module lives, and never a row made of invisible characters.
+  const file = (rows) => ({ state: "ok", data: { id: "module-exemptions", path: "initiatives/face/contracts/module-exemptions.json", sha256: "e".repeat(64), text: JSON.stringify({ exemptions: rows }) } });
+  const mods = [{ id: "executor", ring: "factory" }, { id: "agents", ring: "factory" }];
+  const moved2 = reg.withExtras(registry, reg.extraRooms(file([{ id: "executor", adr: "ADR-1327", name: "Executor", ring: "company", sentence: "s" }, { id: "ghost", adr: "ADR-1327", name: "Ghost", ring: "money", sentence: "s" }])), mods);
+  check("ATTACK EXTRAS: a row in a ring its module is not in, or with no module, is never drawn -- and is named",
+    !moved2.rooms.some((r) => r.id === "executor" || r.id === "ghost") && moved2.extrasDropped.length === 2, JSON.stringify(moved2.extrasDropped));
+  const invisible = reg.extraRooms(file([{ id: "executor", adr: "ADR-1327", name: "\u200b", ring: "factory", sentence: "\u2060\u00ad" }]));
+  check("ATTACK EXTRAS: a name or sentence made of invisible characters is refused", invisible.rooms.length === 0 && invisible.problem !== "", invisible.problem);
+  const noSha = reg.extraRooms({ state: "ok", data: { id: "module-exemptions", text: exemptText } });
+  check("ATTACK EXTRAS: a body with no path or hash is not the file", noSha.rooms.length === 0 && /path or hash/.test(noSha.problem), noSha.problem);
+
+  // The agents roster: a partial roster says so beside what it draws.
+  const broken = registry.rooms.map((r) => (r.id === "council-chamber" ? { ...r, holds: { ...r.holds, agents: "not a list" } } : r));
+  const shell2 = reg.withExtras({ ...registry, rooms: broken }, reg.extraRooms({ state: "ok", data: { id: "module-exemptions", path: "p", sha256: "e".repeat(64), text: exemptText } }));
+  const ag = loaded(await foldOf("factory", "agents"), ctxFor(shell2.rooms.find((r) => r.id === "agents"), await manifestOf("factory", "agents"), { rooms: shell2.rooms }), () => undefined).full;
+  check("ATTACK AGENTS FOLD: a roster missing a room's agents is PARTIAL, says so, and counts nothing", ag.isRosterPartial === true && /council-chamber/.test(ag.partial) && ag.kpis[0].v === "—", JSON.stringify({ partial: ag.partial, v: ag.kpis[0].v }));
+
+  // fileText copies the body ONCE: a getter cannot pass as one file and draw another's text.
+  let reads = 0;
+  const shifty = { state: "ok", get data() { reads++; return reads === 1 ? { id: "constitution", path: "CONSTITUTION.md", sha256: "a".repeat(64), text: "# The arc Constitution (v1.0)\n" } : { id: "portfolio", path: "PORTFOLIO.md", sha256: "b".repeat(64), text: PORTFOLIO }; } };
+  const ft = cr.fileText({ [reg.readKey({ route: "/api/file/:id", param: "constitution" })]: shifty }, lawCtx, "constitution", []);
+  check("ATTACK FILETEXT: the body is read once, and its provenance and text come from that one read", ft.source.isRead && ft.text === "# The arc Constitution (v1.0)\n", JSON.stringify({ isRead: ft.source.isRead, text: String(ft.text).slice(0, 30) }));
+
+  // The glossary: a non-object entry is no term; the template is no home; an empty station is no station.
+  const g2 = cr.glossaryOf(JSON.stringify({ concepts: { map: { "a word": { room: "law", station: "" }, broken: "x", nope: null, "in the template": { room: "lane", station: "s" } } } }), registry.rooms);
+  check("ATTACK GLOSSARY: entries that are not objects are counted unreadable, and a term homed in the template is unhomed",
+    g2.count === 2 && g2.unreadable === 2 && g2.unhomed.some((t) => t.term === "in the template"), JSON.stringify({ count: g2.count, unreadable: g2.unreadable, unhomed: g2.unhomed.map((t) => t.term) }));
+
+  // The smoke's contract reader: a repeated extra id is a setup error, as a repeated served id is.
+  const tmp = mkdtempSync(join(tmpdir(), "company-ring-"));
+  mkdirSync(join(tmp, "initiatives", "face", "contracts"), { recursive: true });
+  writeFileSync(join(tmp, "initiatives", "face", "contracts", "module-exemptions.json"), JSON.stringify({ exemptions: [{ id: "executor", ring: "factory", sentence: "a" }, { id: "executor", ring: "money", sentence: "b" }] }));
+  let threw = "";
+  try { smoke.expectedExtras(tmp); } catch (e) { threw = String(e && e.message); }
+  check("ATTACK SMOKE: an exemption file listing an id twice is a setup error, never two readers keeping different copies", /a second time/.test(threw), threw);
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-const FLOOR = 40;
-if (ran < FLOOR) { console.log(`FAIL the suite ran ${ran} checks, below its floor of ${FLOOR}`); process.exit(1); }
-process.exit(failed === 0 ? 0 : 1);
+const FLOOR = 65;
+if (ran < FLOOR) { console.log(`FAIL the suite ran ${ran} checks, below its floor of ${FLOOR}`); failed++; }
+// exitCode, never exit(): exit() races stdout where the pipe is asynchronous (macOS), and the RAN line is the proof.
+process.exitCode = failed === 0 ? 0 : 1;

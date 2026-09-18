@@ -22,6 +22,8 @@ import { heldAcrossRooms } from "../../../lib/lane-room.mjs";
  * @property {{ key: string, name: string, room: string, roomName: string, canOpen: boolean }[]} roster
  * @property {{ key: string, room: string, roomName: string, canOpen: boolean, names: string[] }[]} byRoom
  * @property {boolean} isRosterEmpty
+ * @property {boolean} isRosterPartial
+ * @property {string} partial
  * @property {string} rosterEmpty
  * @property {import("../../../lib/registry.mjs").NotServed} tiers
  * @property {{ isVerbPending: true, verb: string, sentence: string }} addVerb
@@ -37,6 +39,8 @@ import { heldAcrossRooms } from "../../../lib/lane-room.mjs";
 export function fold(_payloads, ctx) {
   const held = heldAcrossRooms(ctx, "agents");
   const roster = held.rows.map((r) => ({ key: r.key, name: r.name, room: r.room, roomName: r.roomName, canOpen: r.canOpen }));
+  // An agent the registry homes in two rooms is one agent (company ring attack).
+  const agentsCount = new Set(roster.map((r) => r.name)).size;
   /** @type {Map<string, { key: string, room: string, roomName: string, canOpen: boolean, names: string[] }>} */
   const groups = new Map();
   for (const r of roster) {
@@ -50,14 +54,17 @@ export function fold(_payloads, ctx) {
     lede: String(ctx.room.lede ?? ""),
     badge: "not in arc's registry · ADR-1327",
     kpis: [
-      { key: "agents", v: isUnread ? "—" : fmtInt(roster.length), l: "Agents on the roster", sub: "homed by the served registry" },
-      { key: "rooms", v: isUnread ? "—" : fmtInt(groups.size), l: "Rooms they work in", sub: "each agent in one" },
+      { key: "agents", v: isUnread ? "—" : fmtInt(agentsCount), l: "Agents on the roster", sub: "homed by the served registry" },
+      { key: "rooms", v: isUnread ? "—" : fmtInt(groups.size), l: "Rooms they work in", sub: agentsCount < roster.length ? "an agent is homed in more than one" : "each agent in one" },
       { key: "tiers", v: "—", l: "High-judgment tier", sub: "not served yet · /api/roster" },
       { key: "on", v: "—", l: "Switched on", sub: "not served yet · /api/roster" },
     ],
     roster,
     byRoom: [...groups.values()],
     isRosterEmpty: roster.length === 0,
+    // A roster with rooms the registry carried unreadably is PARTIAL, and says so beside the part it draws.
+    isRosterPartial: isUnread && roster.length > 0,
+    partial: isUnread ? `Partial: the served registry carried agents unreadably in ${held.unreadable.join(", ")}, so their agents are not drawn and none of the counts above is given.` : "",
     rosterEmpty: isUnread
       ? `The served registry carried agents unreadably in ${held.unreadable.join(", ")} -- none is drawn, and none is claimed absent.`
       : "The served registry homes no agent in any room.",

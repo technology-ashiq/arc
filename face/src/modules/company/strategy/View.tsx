@@ -23,6 +23,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             {f.board.isReading ? <Reading what="the board" /> : null}
             {f.board.isRefused ? <DoorRefusal code={f.board.refusal.code} human={f.board.refusal.human} /> : null}
             {f.isLiveEmpty ? <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.liveEmpty}</p> : null}
+            {f.hasDropped ? <p className="text-[12.5px] leading-[19px] mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.dropped}</p> : null}
             <div className="-mx-2">
               {f.live.map((p) => (
                 <div key={p.key} data-live-plan={p.lane} className="px-2 py-[9px] min-w-0" style={{ borderBottom: '1px solid var(--line-1)' }}>
