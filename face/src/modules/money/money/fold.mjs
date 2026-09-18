@@ -82,8 +82,20 @@ export function fold(payloads, ctx) {
     listKey: key,
     empty: "The day series came back with no day in it.",
     row: (r) => (field(r, "day") === "" ? null : { key: field(r, "day"), cells: [field(r, "day"), cell(r["value"])] }),
-    note,
+    note: [note, unplacedNote(key)].filter((n) => n !== "").join(" · "),
   });
+  // A receipt whose time names no real day is in the month model and on no day of the series. The door counts
+  // them per series; each table says its own count, so fourteen days that sum short of the month are explained,
+  // never a silent gap (Phase 04 re-attack).
+  const unplaced = asObject(daySt.body["unplaceable"]);
+  /** @param {string} key */
+  function unplacedNote(key) {
+    const n = unplaced[key === "cost" ? "costLines" : key];
+    const what = key === "cost" ? "cost line" : "receipt";
+    return typeof n === "number" && Number.isInteger(n) && n > 0
+      ? `${n} ${what}${n === 1 ? "" : "s"} with a time that names no real day ${n === 1 ? "is" : "are"} counted in the month and placed on no day here`
+      : "";
+  }
   const realPanel = substanceView(m, "real");
   const simPanel = substanceView(m, "simulated");
   const real = m.realView;

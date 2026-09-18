@@ -43,7 +43,7 @@ const check = (name, cond, detail = "") => {
   else console.log(`ok ${name}`);
 };
 
-check("fixture loaded (vacuous-pass guard)", gen.base === 2000 && gen.phase04 === 24 && gen.events === 2024 && gen.openApproval, `events=${gen.events} base=${gen.base} phase04=${gen.phase04}`);
+check("fixture loaded (vacuous-pass guard)", gen.base === 2000 && gen.phase04 === 25 && gen.events === 2025 && gen.openApproval, `events=${gen.events} base=${gen.base} phase04=${gen.phase04}`);
 
 const dash = spawn(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--spine", SPINE, "--port", String(PORT)],
   { env: { ...process.env, ARC_DASH_TOKEN: TOKEN, ARC_DASH_JOURNAL_DIR: JOURNAL }, stdio: ["ignore", "ignore", "pipe"] });
@@ -401,7 +401,7 @@ try {
     // /api/bench, /api/council, /api/roster -- receipts only the fixture's Phase 04 block wrote.
     {
       const b = await route("/api/bench");
-      check("P04 spine: a log route counts the torn line the fixture carries, as /api/health does", b.body.spine && b.body.spine.torn === 1 && b.body.spine.skipped === 0, JSON.stringify(b.body.spine));
+      check("P04 spine: a log route counts the torn line the fixture carries, as /api/health does", b.body.unreadLines && b.body.unreadLines.torn === 1 && b.body.unreadLines.skipped === 0, JSON.stringify(b.body.unreadLines));
       check("P04 bench: named, and the one scored run is served with NO PROPOSAL as its class's result",
         b.named && Array.isArray(b.body.runs) && b.body.runs.length === 1 && /NO PROPOSAL/.test(b.body.runs[0].classes[0].reason), JSON.stringify(b.body.runs));
       const c = await route("/api/council");
@@ -496,6 +496,12 @@ try {
       }
       const mo = await j("/api/pnl?month=2026-07", { headers: H });
       check("P04 pnl: the month model still answers", mo.status === 200 && mo.body.month === "2026-07" && mo.body.model);
+      // The kill panel's path is the machine's own until the door makes it repo-relative; an absolute one names the
+      // account the door runs as (Phase 04 re-attack, the twin of what /api/ventures already refused).
+      const killPath = mo.body.kill && typeof mo.body.kill.path === "string" ? mo.body.kill.path : null;
+      check("P04 pnl: the kill panel's path is repo-relative -- never the machine's absolute path",
+        (killPath !== null && !/^([A-Za-z]:|[\\/])/.test(killPath) && !JSON.stringify(mo.body).includes(REPO.split("\\").join("\\\\")))
+        || (mo.body.kill === null && typeof mo.body.killRefused === "string" && mo.body.killRefused !== ""), JSON.stringify(mo.body.kill && mo.body.kill.path));
     }
     // Every Phase 04 route refuses a query it does not read, and none of them writes.
     {

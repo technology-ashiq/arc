@@ -47,7 +47,7 @@
 import { createServer } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, mkdirSync, appendFileSync, realpathSync } from "node:fs";
-import { join, dirname, resolve, sep } from "node:path";
+import { join, dirname, resolve, sep, relative as relativePath } from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -336,6 +336,19 @@ async function apiInbox(ctx, url) {
 const PNL_KEYS = Object.freeze(["asof", "simulated", "venture", "month", "by"]);
 const PNL_DAYS = 14;
 
+/**
+ * The money brain's own derivation, run -- and a receipt it cannot read (a payload missing the field it folds) refused
+ * by NAME with its own sentence, scrubbed, rather than answering 500 with an internal message (Phase 04 re-attack). A
+ * typed refusal it raises itself (a SpineError) keeps its code.
+ * @template T @param {{ repo: string }} ctx @param {() => Promise<T>} run
+ */
+async function moneyBrain(ctx, run) {
+  try { return await run(); } catch (e) {
+    if (e instanceof SpineError || e instanceof DashError) throw e;
+    throw new DashError("SOURCE_INVALID", reads.scrub(`the money brain refused a receipt on the spine: ${String(e && e.message).split("\n")[0]}`, ctx.repo).slice(0, 500));
+  }
+}
+
 async function apiPnl(ctx, url) {
   if (url.searchParams.get("asof") !== null)
     throw new DashError("ASOF_UNSUPPORTED",
@@ -357,8 +370,8 @@ async function apiPnl(ctx, url) {
     const extra = [...new Set(url.searchParams.keys())].filter((k) => k !== "by");
     if (extra.length) throw new DashError("BAD_ARGS", `/api/pnl?by=day takes no other key; "${extra[0]}" would be silently ignored`);
     const today = formatIst(nowMs()).slice(0, 10);
-    const real = await deriveDaily(ctx.root, { mode: "real", days: PNL_DAYS, today });
-    const simulated = await deriveDaily(ctx.root, { mode: "simulated", days: PNL_DAYS, today });
+    const real = await moneyBrain(ctx, () => deriveDaily(ctx.root, { mode: "real", days: PNL_DAYS, today }));
+    const simulated = await moneyBrain(ctx, () => deriveDaily(ctx.root, { mode: "simulated", days: PNL_DAYS, today }));
     return {
       mode: ctx.mode, route: "/api/pnl", by: "day", badge: "log",
       parser: "hq/lib/ledger/pnl.mjs#deriveDaily (real, then simulated)", sources: [],
@@ -370,19 +383,35 @@ async function apiPnl(ctx, url) {
         costLines: d.costLines,
         unmeasuredCostLines: d.unmeasuredCostLines,
       })),
-      unplaceable: { real: real.unplaceable, simulated: simulated.unplaceable },
+      // A ts-less revenue row per substance; a ts-less cost line once -- it is the same line in both reads.
+      unplaceable: { real: real.unplaceableRows, simulated: simulated.unplaceableRows, costLines: real.unplaceableCostLines },
       // Per substance, never summed: the cost flags are the same flags in both reads, and adding them counted each twice.
       needsYou: { real: real.needsYou, simulated: simulated.needsYou },
     };
   }
   const month = url.searchParams.get("month");
   if (month !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new DashError("BAD_ARGS", `month "${month}" is not YYYY-MM`);
-  const model = await derivePnl(ctx.root, {
+  const model = await moneyBrain(ctx, () => derivePnl(ctx.root, {
     mode: url.searchParams.get("simulated") === "1" ? "simulated" : "real",
     venture: url.searchParams.get("venture"),
     month,
-  });
-  const panel = await deriveKillPanel(ctx.root, {});
+  }));
+  // The kill panel's own path is the machine's (C:\Users\<account>\...), and ARC_VENTURES_FILE points it at another
+  // criteria file under this tree's name -- the twin of what /api/ventures already refuses (Phase 04 re-attack). The
+  // panel goes out with its path repo-relative, or not at all, with the reason beside it.
+  if ("ARC_VENTURES_FILE" in process.env)
+    return { mode: ctx.mode, month, model, kill: null, killRefused: "ARC_VENTURES_FILE is set in the door's environment, which points the kill panel at another criteria file -- the door serves only the tree's" };
+  const panel = await moneyBrain(ctx, () => deriveKillPanel(ctx.root, {}));
+  if (panel && typeof panel.path === "string" && panel.path !== "") {
+    let rel = null;
+    try {
+      const real = realpathSync(panel.path);
+      const root = realpathSync(ctx.repo);
+      if (real === root || real.startsWith(root + sep)) rel = relativePath(root, real).split(sep).join("/");
+    } catch { rel = null; }
+    if (rel === null) return { mode: ctx.mode, month, model, kill: null, killRefused: "the kill panel read a criteria file that is not this tree's ventures.yaml" };
+    return { mode: ctx.mode, month, model, kill: { ...panel, path: rel } };
+  }
   return { mode: ctx.mode, month, model, kill: panel };
 }
 

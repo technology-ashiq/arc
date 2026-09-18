@@ -135,7 +135,9 @@ export function fold(payloads, ctx) {
       note: st.isRead ? [
         `today is ${field(st.body, "today")} in IST; the caps come from ${field(st.body, "capsFrom") || "an unnamed source"}`,
         `${cell(sends["unmarked"])} send${sends["unmarked"] === 1 ? "" : "s"} carried no rehearsal mark and counted as real`,
-        typeof sends["unplaceable"] === "number" && sends["unplaceable"] > 0 ? `${cell(sends["unplaceable"])} send${sends["unplaceable"] === 1 ? "" : "s"} with no placeable time, which the lane cannot put on a day` : "",
+        // The lane counts an unplaceable send in EVERY window, today's included, so an unreadable time never escapes a
+        // cap (guard.mjs foldSends); the note says it is IN today's figures, not beside them (Phase 04 re-attack).
+        typeof sends["unplaceable"] === "number" && sends["unplaceable"] > 0 ? `${cell(sends["unplaceable"])} of today's sends ha${sends["unplaceable"] === 1 ? "s" : "ve"} no placeable time: the lane counts ${sends["unplaceable"] === 1 ? "it" : "them"} in every window, today's included, so no unreadable time escapes a cap` : "",
       ].filter((n) => n !== "").join(" · ") : "",
     }),
     ledger: servedTable(projected(st, "rows", (b) => (Array.isArray(b["suppressed"]) ? b["suppressed"].map((id) => ({ lead_id: id })) : undefined)), {

@@ -111,6 +111,9 @@ function phase04Block(day) {
     { kind: "cost.incurred", payload: { amount: 12345, currency: "INR", source: "measured", label: "fixture api" } },
     { kind: "cost.incurred", payload: { amount: 500, currency: "USD", source: "estimated", label: "fixture gpu" } },
     { kind: "cost.incurred", payload: { amount: 1.5, currency: "INR", source: "estimated", label: "fixture unmeasurable" } },
+    // A part refund of the real charge, later the same day: the month model nets it, so the day must too -- a day
+    // series that summed charges alone would read 2,500.00 against a month of 2,000.00 (Phase 04 re-attack).
+    { kind: "revenue.received", venture: "lexos", payload: { amount: 50000, currency: "INR", venture: "lexos", provider: "fixture", provider_payment_id: "pay_fixture_refund_1", refund_of: "pay_fixture_real_1" } },
   ];
 }
 let phase04Written = 0;

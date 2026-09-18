@@ -37,7 +37,7 @@ const reads = await import(u(join(REPO, ".claude/scripts/hq/lib/face/reads.mjs")
 const pnl = await import(u(join(REPO, ".claude/scripts/hq/lib/ledger/pnl.mjs")));
 const spine = await import(u(join(REPO, ".claude/scripts/hq/spine.mjs")));
 const canonical = await import(u(join(REPO, ".claude/scripts/hq/lib/canonical.mjs")));
-const { escapeDeep } = await import(u(join(REPO, ".claude/scripts/hq/arc-dash.mjs")));
+const { escapeDeep, ROUTES } = await import(u(join(REPO, ".claude/scripts/hq/arc-dash.mjs")));
 check("served.mjs, reads.mjs, pnl.mjs and the door's serializer loaded (vacuous-pass guard)",
   ["servedRead", "servedTable", "projected", "refusedPart", "gateModes"].every((k) => typeof sv[k] === "function")
   && typeof reads.apiJobs === "function" && typeof reads.scrub === "function" && typeof pnl.deriveDaily === "function" && typeof escapeDeep === "function",
@@ -86,7 +86,7 @@ const only = (route, data, query = null) => (r) => (r.route === route && (query 
   check("SERVED: a projection never turns a read in flight into data", loading.isRead === false && loading.isReading === true && !("rows" in loading.body));
   const refusedByManifest = sv.servedRead({}, { manifest: { routes: [] } }, [], "/api/jobs");
   check("SERVED: a route the manifest does not declare is READ_REFUSED by the host's own rule", refusedByManifest.isRefused === true && refusedByManifest.refusal.code === "READ_REFUSED");
-  const torn = read({ route: "/api/jobs", rows: [], parser: "p", sources: [], spine: { torn: 2, skipped: 1 } });
+  const torn = read({ route: "/api/jobs", rows: [], parser: "p", sources: [], unreadLines: { torn: 2, skipped: 1 } });
   check("SERVED: a log route's unread spine lines are named under the table", /3 spine lines the reader could not read/.test(torn.source), torn.source);
   const gates = sv.gateModes({ isReading: false, isRefused: false, refusal: { code: "", human: "" }, isRead: true, source: "", body: {
     route: "/api/gates", profile: "standard", profileRefused: "", profileResolver: "arc-profile.sh",
@@ -178,7 +178,10 @@ const only = (route, data, query = null) => (r) => (r.route === route && (query 
   const stands = leads.byLead.rows.map((r) => r.cells[1]);
   check("LEADS: suppressed outranks replied, replied outranks sent", stands[0] === "suppressed" && stands[1] === "replied", JSON.stringify(stands));
   check("LEADS: touches stamped after the door's clock are the guard's clock-skew refusal, never a quiet zero", /refused by the guard: 3 touches stamped after the door's clock/.test(stands[2]), stands[2]);
-  check("LEADS: withheld ids and unplaceable sends are named, never silent", /1 receipt id that are not an HMAC lead id withheld/.test(leads.byLead.note) && /1 send with no placeable time/.test(leads.caps.note), `${leads.byLead.note} || ${leads.caps.note}`);
+  check("LEADS: withheld ids and unplaceable sends are named, never silent", /1 receipt id that are not an HMAC lead id withheld/.test(leads.byLead.note) && /1 of today's sends has no placeable time/.test(leads.caps.note), `${leads.byLead.note} || ${leads.caps.note}`);
+  // The lane counts an unplaceable send IN every window (guard.mjs foldSends); a note that set it beside today's
+  // figures told the owner the opposite of the cap's arithmetic (Phase 04 re-attack).
+  check("LEADS: an unplaceable send is said to be IN today's figures, as the lane counts it -- never beside them", /counts it in every window, today's included/.test(leads.caps.note), leads.caps.note);
 
   // evolve: units set aside and damaged receipts are said, so a thin count is never the whole measurement.
   const evo = await foldWith("kernel", "evolve", only("/api/evolve", { route: "/api/evolve", superseded: 0, damaged: 2, manifestsRead: 1, contracts: [],
@@ -204,7 +207,7 @@ const only = (route, data, query = null) => (r) => (r.route === route && (query 
 const tmp = mkdtempSync(join(tmpdir(), "face-p04-"));
 const SPINE = join(tmp, "spine");
 const gen = JSON.parse(execFileSync(process.execPath, [join(REPO, "tests/fixtures/face/gen-spine.mjs"), "--out", SPINE, "--count", "60", "--days", "2", "--seed", "p04-folds", "--phase04", "1"], { stdio: ["ignore", "pipe", "inherit"] }).toString());
-check("fixture loaded with its Phase 04 block (vacuous-pass guard)", gen.phase04 === 24 && gen.events === 84, JSON.stringify({ events: gen.events, phase04: gen.phase04 }));
+check("fixture loaded with its Phase 04 block (vacuous-pass guard)", gen.phase04 === 25 && gen.events === 85, JSON.stringify({ events: gen.events, phase04: gen.phase04 }));
 {
   const day = "2026-07-20";
   const real = await pnl.deriveDaily(SPINE, { mode: "real", days: 14, today: day });
@@ -212,7 +215,8 @@ check("fixture loaded with its Phase 04 block (vacuous-pass guard)", gen.phase04
   const r = real.days[13];
   const s = sim.days[13];
   check("DAILY: fourteen days ending the day asked for", real.days.length === 14 && r.day === day && real.days[0].day === "2026-07-07", JSON.stringify(real.days.map((d) => d.day).slice(0, 2)));
-  check("DAILY: the real receipt lands on its day, the simulated one on its own series", r.cashInInr === 250000 && r.rows === 1 && s.cashInInr === 99900 && s.rows >= 1, JSON.stringify({ r, s }));
+  check("DAILY: the real receipt lands on its day, the simulated one on its own series", r.rows === 2 && s.cashInInr === 99900 && s.rows >= 1, JSON.stringify({ r, s }));
+  check("DAILY: a refund nets on its own day, as the month model nets it -- 2,500.00 less 500.00", r.cashInInr === 200000, JSON.stringify(r));
   check("DAILY: cost lines are counted per currency and the unmeasurable one on its day -- none summed",
     JSON.stringify(r.costLines) === JSON.stringify([{ currency: "INR", lines: 1 }, { currency: "USD", lines: 1 }]) && r.unmeasuredCostLines === 1, JSON.stringify(r));
   // The day agrees with the month: the same derivePnl rows, bucketed by day rather than by month.
@@ -287,7 +291,7 @@ check("fixture loaded with its Phase 04 block (vacuous-pass guard)", gen.phase04
   writeFileSync(join(S3, "2026-07-20.jsonl"), [
     line(0, "outreach.sent", { lead_id: "alice@example.com", campaign: "c", submitted_at: "2026-07-20T09:30:00+05:30", rehearsal: true }),
     line(1, "outreach.sent", { lead_id: `lead_hmac_v1_${"d".repeat(32)}`, campaign: "c", submitted_at: "2026-07-20T09:31:00+05:30", rehearsal: true }),
-    line(2, "run.completed", { process: "build-in-public-draft", driver: "hermes", outcome: "failed", reason: `see C:${BS}Users${BS}bob${BS}secret.txt and bob@example.com`, duration_ms: 5 }),
+    line(2, "run.completed", { process: "build-in-public-draft", driver: "hermes", outcome: "failed", reason: `write to bob@example.com, then see C:${BS}Users${BS}bob${BS}secret.txt`, duration_ms: 5 }),
   ].join("\n") + "\nnull\n");
   const ctx3 = { mode: "sim", root: join(tmp, "spine3"), repo: T3 };
   const ld = await reads.apiLeads(ctx3, url("/api/leads"));
@@ -295,7 +299,7 @@ check("fixture loaded with its Phase 04 block (vacuous-pass guard)", gen.phase04
     ld.leads.length === 1 && ld.leads[0].lead_id === `lead_hmac_v1_${"d".repeat(32)}` && ld.idsWithheld === 1 && !JSON.stringify(ld).includes("@"), JSON.stringify(ld.leads));
   const ro = await reads.apiRoster(ctx3, url("/api/roster"));
   check("DOOR: a path and an address in a run's reason are withheld", ro.runs.length === 1 && !/bob/.test(ro.runs[0].reason) && /\[path withheld\]/.test(ro.runs[0].reason) && /\[address withheld\]/.test(ro.runs[0].reason), ro.runs[0] && ro.runs[0].reason);
-  check("DOOR: a null line on the spine is torn -- counted, never a 500", ro.spine && ro.spine.torn === 1, JSON.stringify(ro.spine));
+  check("DOOR: a null line on the spine is torn -- counted, never a 500", ro.unreadLines && ro.unreadLines.torn === 1, JSON.stringify(ro.unreadLines));
   const all3 = await spine.readAll(join(tmp, "spine3"));
   check("SPINE: the reader counts a non-object line as torn and hands over only objects", all3.torn.length === 1 && all3.events.every((w) => w.event && typeof w.event === "object"), JSON.stringify(all3.torn));
 
@@ -315,9 +319,20 @@ check("fixture loaded with its Phase 04 block (vacuous-pass guard)", gen.phase04
   const repo = REPO;
   const BS = String.fromCharCode(92);
   check("SCRUB: the repo's own path becomes repo-relative", reads.scrub(`in ${join(repo, "docs", "x.md")}`, repo).replace(BS, "/") === "in docs/x.md", reads.scrub(`in ${join(repo, "docs", "x.md")}`, repo));
-  check("SCRUB: another absolute path and an address are withheld; a URL is kept",
-    reads.scrub(`C:${BS}Users${BS}bob /home/bob/x mail bob@example.com https://example.com/home/x`, repo) === "[path withheld] [path withheld] mail [address withheld] https://example.com/home/x",
-    reads.scrub(`C:${BS}Users${BS}bob /home/bob/x mail bob@example.com https://example.com/home/x`, repo));
+  check("SCRUB: an address is withheld and a URL is kept -- a URL's path is not a machine's path",
+    reads.scrub("mail bob@example.com at https://example.com/home/x", repo) === "mail [address withheld] at https://example.com/home/x",
+    reads.scrub("mail bob@example.com at https://example.com/home/x", repo));
+  // From the first absolute-path start to the END: a path may hold spaces, and stopping at the first one served the
+  // rest of it (Phase 04 re-attack). Each shape a path starts with is withheld with everything after it.
+  const scrubbed = [
+    [`open C:${BS}Users${BS}John Smith${BS}notes.txt now`, "open [path withheld]"],
+    ["see /home/bob/x then", "see [path withheld]"],
+    ["at file:///C:/Users/bob/x", "at [path withheld]"],
+    [`on ${BS}${BS}server${BS}share${BS}x`, "on [path withheld]"],
+    ["in ~bob/notes", "in [path withheld]"],
+  ].map(([input, want]) => [reads.scrub(input, repo), want]);
+  check("SCRUB: a path with a space, a POSIX home, a file URL, a UNC share and a home shorthand are each withheld to the end",
+    scrubbed.every(([got, want]) => got === want), JSON.stringify(scrubbed));
   check("DAY: a date with the shape and no day behind it is not a day", reads.isRealDay("2026-09-31") === false && reads.isRealDay("2026-09-99") === false && reads.isRealDay("2026-02-28") === true);
   let deep = {};
   const top = deep;
@@ -329,5 +344,152 @@ check("fixture loaded with its Phase 04 block (vacuous-pass guard)", gen.phase04
   check("SERIALIZER: a key named __proto__ is kept as a key, never assigned as the prototype", Object.keys(proto).includes("__proto__") && JSON.stringify(proto).includes("__proto__"), JSON.stringify(proto));
 }
 
+// ── the re-attack (round 2): each surviving mutant and each boundary hole, pinned where it was fixed ─────────────────
+{
+  const url = (p) => new URL(`http://127.0.0.1${p}`);
+  const at = (iso) => String(Date.parse(iso));
+  /** A spine holding exactly these receipts, one IST day. `over` replaces envelope fields before the sha is taken. */
+  const spineOf = (name, specs) => {
+    const dir = join(tmp, name, "events");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "2026-07-20.jsonl"), specs.map(([kind, payload, over], i) => {
+      const e = { actor: "p04r2", cost: null, evidence: null, id: canonical.newUlid(Date.parse("2026-07-20T04:00:00Z") + i * 1000, `p04r2-${name}-${i}`), idem: canonical.sha256Hex(`p04r2-${name}-${i}`), kind, model: null, outcome: "ok", payload, process: "p04@1", run_id: "r-p04r2", supersedes: null, ts: `2026-07-20T09:${String(10 + i).padStart(2, "0")}:00+05:30`, v: 1, venture: "arc", ...(over || {}) };
+      e.sha = canonical.eventSha(e);
+      return canonical.canonicalize(e);
+    }).join("\n") + "\n");
+    return join(tmp, name);
+  };
+  /** A scratch tree holding exactly these files. */
+  const treeOf = (name, files) => {
+    const T = join(tmp, name);
+    mkdirSync(T, { recursive: true });
+    for (const [rel, body] of Object.entries(files)) { mkdirSync(dirname(join(T, rel)), { recursive: true }); writeFileSync(join(T, rel), body); }
+    return T;
+  };
+  /** Run with these env vars set (a value of undefined unsets one), and restore them after. */
+  const withEnv = async (vars, fn) => {
+    const before = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
+    const put = (k, v) => { if (v === undefined) delete process.env[k]; else process.env[k] = v; };
+    for (const [k, v] of Object.entries(vars)) put(k, v);
+    try { return await fn(); } finally { for (const [k, v] of Object.entries(before)) put(k, v); }
+  };
+  const caught = async (fn) => { try { await fn(); return null; } catch (e) { return e; } };
+
+  // evolve: the lane's own admit() screen runs before the fold -- the mutant that folded without it survived round 1.
+  const opened = { experiment_id: "x-fixture", module: "fixture", surface: "fixture-surface", target_path: "docs/fixture.md", base_sha: "0".repeat(64), split: 50, ttl_days: 14, arms: ["+a", "+b"] };
+  const evoSpine = spineOf("r2-evolve", [["experiment.opened", opened], ["experiment.opened", { ...opened, experiment_id: "x-damaged", arms: "ab" }]]);
+  const evoDoor = await reads.apiEvolve({ mode: "sim", root: evoSpine, repo: treeOf("r2-evolve-tree", {}) }, url("/api/evolve"));
+  check("EVOLVE DOOR: a receipt the lane's own screen refuses is counted damaged and never folded -- arms \"ab\" is not two arms",
+    evoDoor.damaged === 1 && evoDoor.experiments.length === 1 && evoDoor.experiments[0].id === "x-fixture", JSON.stringify({ damaged: evoDoor.damaged, ids: evoDoor.experiments.map((x) => x.id) }));
+
+  // leads: the door's clock decides what is after now -- the same touch before and after it.
+  const lead = `lead_hmac_v1_${"e".repeat(32)}`;
+  const leadCtx = { mode: "sim", root: spineOf("r2-leads", [["outreach.sent", { lead_id: lead, campaign: "c", submitted_at: "2026-07-20T09:30:00+05:30", rehearsal: true }]]), repo: treeOf("r2-leads-tree", {}) };
+  const early = await withEnv({ ARC_SPINE_NOW: at("2026-07-20T08:00:00+05:30") }, () => reads.apiLeads(leadCtx, url("/api/leads")));
+  const later = await withEnv({ ARC_SPINE_NOW: at("2026-07-21T12:00:00+05:30") }, () => reads.apiLeads(leadCtx, url("/api/leads")));
+  check("LEADS DOOR: a touch stamped after the door's clock is counted as that -- never in the window, never dropped",
+    early.leads.length === 1 && early.leads[0].afterNow === 1 && early.leads[0].inWindow === 0 && later.leads[0].afterNow === 0 && later.leads[0].inWindow === 1, JSON.stringify([early.leads[0], later.leads[0]]));
+
+  // learn: this week holds REAL days -- "2026-09-31" parses as a row, sorts inside the week, and is no day at all.
+  const retro = ["# Retro log", "", "2026-09-31 | fixture | a row dated a day that does not exist | one | t", "2026-09-30 | fixture | a row dated a real day this week | two | t", "not a row at all | x", ""].join("\n");
+  const learnDoor = await withEnv({ ARC_SPINE_NOW: at("2026-10-02T12:00:00+05:30") }, () => reads.apiLearn({ mode: "sim", root: SPINE, repo: treeOf("r2-learn", { "docs/retro-log.md": retro }) }, url("/api/learn")));
+  check("LEARN DOOR: a row dated 2026-09-31 is a rule and never this week's; the malformed row is counted",
+    learnDoor.today === "2026-10-02" && learnDoor.rules.length === 2 && learnDoor.thisWeek.length === 1 && learnDoor.thisWeek[0].date === "2026-09-30" && learnDoor.malformed === 1,
+    JSON.stringify({ today: learnDoor.today, rules: learnDoor.rules.length, week: learnDoor.thisWeek.map((l) => l.date), malformed: learnDoor.malformed }));
+
+  // legal: the quote is element for element -- two seals swapped are two drifted seals, not a quote that holds.
+  const policyText = readFileSync(join(REPO, "hq.policy.yaml"), "utf8");
+  const swapped = policyText.replace("\"moving money\"", "\"__seal__\"").replace("\"killing a venture\"", "\"moving money\"").replace("\"__seal__\"", "\"killing a venture\"");
+  const legalDoor = await reads.apiLegal({ mode: "sim", root: SPINE, repo: treeOf("r2-legal", { "CONSTITUTION.md": readFileSync(join(REPO, "CONSTITUTION.md"), "utf8"), "hq.policy.yaml": swapped }) }, url("/api/legal"));
+  check("LEGAL DOOR: two seals quoted in the wrong order are two drifted seals, and the quote does not hold",
+    swapped !== policyText && legalDoor.quoteHolds === false && legalDoor.seals[0].quoted === false && legalDoor.seals[1].quoted === false && legalDoor.seals[2].quoted === true, JSON.stringify(legalDoor.seals));
+
+  // policy: the parser accepts a misspelt key, so the door's own check is the only thing between it and an empty ladder.
+  const noLevels = policyText.replace(/^levels:/m, "level_names:");
+  const polErr = await caught(() => reads.apiPolicy({ mode: "sim", root: SPINE, repo: treeOf("r2-policy", { "hq.policy.yaml": noLevels }) }, url("/api/policy")));
+  check("POLICY DOOR: a policy file whose levels key is misspelt is SOURCE_INVALID, never a ladder with no rung",
+    noLevels !== policyText && polErr !== null && polErr.code === "SOURCE_INVALID" && /levels/.test(polErr.message), String(polErr && polErr.message));
+
+  // gates: the resolver's answer is a MODE or nothing; a name that is not a name claims no profile; env overrides are named.
+  const gatesYaml = "gates:\n  - name: scan\n    mode: profile\n    tier: hook\n    evidence: e1\n";
+  const stub = (nameOut, modeOut) => `#!/usr/bin/env bash\nif [ "$1" = name ]; then printf '%s\\n' '${nameOut}'; else printf '%s\\n' '${modeOut}'; fi\n`;
+  const gateTree = (name, nameOut, modeOut) => treeOf(name, { "arc.gates.yaml": gatesYaml, ".claude/scripts/core/arc-profile.sh": stub(nameOut, modeOut) });
+  const gatesOf = (repo, env) => withEnv({ ARC_SETTINGS: undefined, ARC_PROFILE: undefined, ...env }, () => reads.apiGates({ mode: "sim", root: SPINE, repo }, url("/api/gates")));
+  const okTree = gateTree("r2-gates-ok", "standard", "block");
+  const gOk = await gatesOf(okTree, {});
+  check("GATES DOOR (positive control): a resolver answering block resolves the gate to block, under the profile it named",
+    gOk.profile === "standard" && gOk.gates[0].resolved === "block" && gOk.profileForced === false, JSON.stringify({ profile: gOk.profile, resolved: gOk.gates[0].resolved, refused: gOk.profileRefused }));
+  const gJunk = await gatesOf(gateTree("r2-gates-junk", "standard", "bob@example.com"), {});
+  check("GATES DOOR: a resolver echoing anything but warn or block leaves the gate unresolved -- an address never reaches the wire",
+    gJunk.profile === "standard" && gJunk.gates[0].resolved === "" && !JSON.stringify(gJunk).includes("@"), JSON.stringify({ resolved: gJunk.gates[0].resolved }));
+  const gName = await gatesOf(gateTree("r2-gates-name", "x y; z", "block"), {});
+  check("GATES DOOR: a profile name that is not a name claims no profile, and resolves no gate",
+    gName.profile === "" && /not a profile name/.test(gName.profileRefused) && gName.gates[0].resolved === "", JSON.stringify({ profile: gName.profile, refused: gName.profileRefused }));
+  const gSettings = await gatesOf(okTree, { ARC_SETTINGS: join(tmp, "elsewhere-settings.json") });
+  check("GATES DOOR: ARC_SETTINGS in the door's env is refused by name -- another settings file never resolves this tree's gates",
+    gSettings.profile === "" && /ARC_SETTINGS is set/.test(gSettings.profileRefused) && gSettings.gates[0].resolved === "", gSettings.profileRefused);
+  const gForced = await gatesOf(okTree, { ARC_PROFILE: "standard" });
+  check("GATES DOOR: a profile ARC_PROFILE forced is served AND said to be forced", gForced.profile === "standard" && gForced.profileForced === true, JSON.stringify({ profile: gForced.profile, forced: gForced.profileForced }));
+
+  // slices: a lane directory that is a junction or symlink off the tree is named, never read and never dropped.
+  const sliceTree = treeOf("r2-slices", { "initiatives/.keep": "" });
+  const offLane = join(tmp, "r2-outside-lane");
+  mkdirSync(join(offLane, "phases"), { recursive: true });
+  writeFileSync(join(offLane, "PROGRESS.md"), "status: LIVE\n");
+  let laneLinked = false;
+  try { symlinkSync(offLane, join(sliceTree, "initiatives", "offlane"), process.platform === "win32" ? "junction" : "dir"); laneLinked = true; } catch { laneLinked = false; }
+  const slices = await reads.apiSlices({ mode: "sim", root: SPINE, repo: sliceTree }, url("/api/slices"));
+  const offRow = slices.lanes.find((l) => l.lane === "offlane");
+  check("SLICES DOOR: a lane whose directory resolves off the tree is NAMED in the table, not read and not dropped",
+    laneLinked === true && offRow !== undefined && offRow.present === false && /resolves outside the repo/.test(offRow.why), JSON.stringify(slices.lanes));
+
+  // council: a receipt with no payload object is skipped and counted; an envelope id that is not a ULID is served empty.
+  const councilDoor = await reads.apiCouncil({ mode: "sim", root: spineOf("r2-council", [
+    ["council.verdict", { session_id: "c-ok", question_hash: "a".repeat(64), call: "proceed", confidence: "High" }],
+    ["council.verdict", null],
+    ["council.verdict", { session_id: "c-badid", question_hash: "b".repeat(64), call: "hold", confidence: "Low" }, { id: "not-a-ulid" }],
+  ]), repo: treeOf("r2-council-tree", {}) }, url("/api/council"));
+  const verdictOf = (s) => councilDoor.verdicts.find((v) => v.session === s) || { id: "?" };
+  check("COUNCIL DOOR: a receipt with no payload object is skipped and counted, never read into a 500",
+    councilDoor.unreadLines && councilDoor.unreadLines.skipped === 1 && councilDoor.verdicts.length === 2, JSON.stringify({ unread: councilDoor.unreadLines, n: councilDoor.verdicts.length }));
+  check("COUNCIL DOOR: an envelope id that is not a ULID is served empty, and a ULID is served whole",
+    verdictOf("c-badid").id === "" && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(verdictOf("c-ok").id), JSON.stringify(councilDoor.verdicts.map((v) => v.id)));
+
+  // pnl, through the door's own route table: two reads for two substances, and a kill panel with no machine path.
+  const pnlRoute = ROUTES.find((r) => r.method === "GET" && r.path === "/api/pnl");
+  const doorCtx = { mode: "sim", root: SPINE, repo: REPO };
+  const dayBody = await withEnv({ ARC_SPINE_NOW: at("2026-07-20T12:00:00+05:30") }, () => pnlRoute.handler(doorCtx, url("/api/pnl?by=day")));
+  const d13 = dayBody.series[13];
+  check("PNL DOOR: the day's real and simulated cells come from two reads -- 2,000.00 real after its refund, 999.00 simulated",
+    d13.day === "2026-07-20" && d13.realMinor === 200000 && d13.realRows === 2 && d13.simulatedMinor === 99900 && d13.simulatedRows >= 1, JSON.stringify(d13));
+  const repoOnWire = JSON.stringify(REPO).slice(1, -1);
+  const month = await pnlRoute.handler(doorCtx, url("/api/pnl?month=2026-07"));
+  const killPath = month.kill && typeof month.kill.path === "string" ? month.kill.path : null;
+  check("PNL DOOR: the month model's kill panel is repo-relative, or withheld by name -- never the machine's absolute path",
+    ((killPath !== null && !/^([A-Za-z]:|[\\/])/.test(killPath)) || (month.kill === null && month.killRefused !== "")) && !JSON.stringify(month).includes(repoOnWire), JSON.stringify(month.kill && month.kill.path));
+  const monthEnv = await withEnv({ ARC_VENTURES_FILE: join(tmp, "elsewhere-ventures.yaml") }, () => pnlRoute.handler(doorCtx, url("/api/pnl?month=2026-07")));
+  check("PNL DOOR: ARC_VENTURES_FILE in the door's env withholds the kill panel by name", monthEnv.kill === null && /ARC_VENTURES_FILE is set/.test(monthEnv.killRefused), JSON.stringify({ kill: monthEnv.kill, refused: monthEnv.killRefused }));
+
+  // The folds that draw what the round-2 door now sends.
+  const boardRefused = await foldWith("command", "board", only("/api/ventures", { route: "/api/ventures", criteria: [], kill: { present: false, receipted: false, path: "", asOf: "", ventures: [], refused: "the kill panel read a criteria file that is not this tree's ventures.yaml" } }));
+  check("BOARD: a kill panel the door withheld is drawn as that refusal -- never as \"ventures.yaml is not on this tree\"",
+    boardRefused.ventures.isRefused === true && boardRefused.ventures.refusal.code === "KILL_REFUSED" && /not this tree/.test(boardRefused.ventures.refusal.human), JSON.stringify(boardRefused.ventures.refusal));
+  const boardArmed = await foldWith("command", "board", only("/api/ventures", { route: "/api/ventures", criteria: [], kill: { present: true, receipted: true, path: "ventures.yaml", asOf: "2026-09-18", refused: "", ventures: [{ venture: "lexos", criteria: [
+    { criterion: "days_without_revenue", threshold: 90, status: "unevaluable", distance: null, reason: "no revenue receipt yet", unit: "days" },
+    { criterion: "traffic_floor_monthly", threshold: 100, status: "ok", distance: 20, unit: "visits" },
+  ] }] } }));
+  check("BOARD: a distance nobody could measure says why, and a measured one carries its unit",
+    boardArmed.ventures.rows.length === 2 && boardArmed.ventures.rows[0].cells[3] === "no revenue receipt yet" && boardArmed.ventures.rows[1].cells[3] === "20 visits", JSON.stringify(boardArmed.ventures.rows.map((r) => r.cells[3])));
+  const daySeries = Array.from({ length: 14 }, (_, i) => ({ day: `2026-09-${String(5 + i).padStart(2, "0")}`, realMinor: 0, realRows: 0, simulatedMinor: 0, simulatedRows: 0, costLines: [], unmeasuredCostLines: 0 }));
+  const moneyPlaced = await foldWith("money", "money", only("/api/pnl", { route: "/api/pnl", by: "day", series: daySeries, unplaceable: { real: 1, simulated: 0, costLines: 2 } }, { by: "day" }));
+  check("MONEY DAY: receipts and cost lines with no readable day are counted under their own series, never a silent gap",
+    /1 receipt with a time that names no real day is counted in the month/.test(moneyPlaced.chart.note) && /2 cost lines with a time that names no real day are counted/.test(moneyPlaced.chartCost.note) && !/names no real day/.test(moneyPlaced.chartSim.note),
+    JSON.stringify([moneyPlaced.chart.note, moneyPlaced.chartSim.note, moneyPlaced.chartCost.note]));
+  const learnMal = await foldWith("company", "learn", only("/api/learn", { route: "/api/learn", today: "2026-09-18", weekFrom: "2026-09-12", rules: [{ id: "r1", date: "2026-09-18", pattern: "p", prevention: "v" }], thisWeek: [], malformed: 2 }));
+  check("LEARN: rows the adapter refused are counted beside the rules, so a short table is never read as a short log", /2 rows the adapter refused as malformed/.test(learnMal.rules.note), learnMal.rules.note);
+  const todayMal = await foldWith("command", "today", only("/api/learn", { route: "/api/learn", today: "2026-09-18", weekFrom: "2026-09-12", rules: [], thisWeek: [], malformed: 1 }));
+  check("TODAY: the week's lessons say a malformed row may be missing from them", /1 retro-log row the adapter refused as malformed/.test(todayMal.learned.note), todayMal.learned.note);
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 55 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 86 ? 0 : 1;

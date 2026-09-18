@@ -322,13 +322,16 @@ export async function deriveDaily(root, { mode = "real", days = 14, today, engin
   // A row or line whose ts is not a string cannot be placed on a day. It is COUNTED, never allowed to throw: a
   // receipt with no ts is on the spine, and the month view renders it (face v2 Phase 04 attack).
   const dayOf = (ts) => (typeof ts === "string" ? ts.slice(0, 10) : null);
-  let unplaceable = 0;
+  // Counted apart: a revenue row belongs to this call's substance, a cost line to every call -- summing the two made
+  // the door report one ts-less cost under both substances (Phase 04 re-attack).
+  let unplaceableRows = 0;
+  let unplaceableCostLines = 0;
 
   const model = await derivePnl(root, { mode, engine });
   for (const v of model.ventures) {
     for (const r of v.rows) {
       const d = dayOf(r.ts);
-      if (d === null) { unplaceable += 1; continue; }
+      if (d === null) { unplaceableRows += 1; continue; }
       const b = byDay.get(d);
       if (!b) continue;
       b.cashInInr += r.amountInr;
@@ -338,7 +341,7 @@ export async function deriveDaily(root, { mode = "real", days = 14, today, engin
   const costLines = [...model.overhead.lines, ...model.ventures.flatMap((v) => v.costs)];
   for (const line of costLines) {
     const d = dayOf(line.ts);
-    if (d === null) { unplaceable += 1; continue; }
+    if (d === null) { unplaceableCostLines += 1; continue; }
     const b = byDay.get(d);
     if (!b) continue;
     // A line with no integer amount or no currency is counted ON ITS DAY, apart from the currencies: it is a cost
@@ -357,7 +360,8 @@ export async function deriveDaily(root, { mode = "real", days = 14, today, engin
         unmeasuredCostLines: b.unmeasuredCostLines,
       };
     }),
-    unplaceable,
+    unplaceableRows,
+    unplaceableCostLines,
     needsYou: model.needsYou.length,
   };
 }

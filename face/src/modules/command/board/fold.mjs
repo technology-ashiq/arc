@@ -8,7 +8,7 @@
 // (Phase 04): each venture's kill criteria, evaluated by the ledger's own kill panel. v0.7 drew them from a
 // simulated portfolio. The base rate is still NOT SERVED: no file the door can parse states it.
 import { notServed, payloadOf } from "../../../lib/registry.mjs";
-import { asArray, asObject, cell, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
+import { asArray, asObject, cell, field, projected, refusedPart, servedRead, servedTable } from "../../../lib/served.mjs";
 import { dayOf, decodeDoorText, fmtInt, readHealth, readSpinePage } from "../../../lib/inbox.mjs";
 import { boardProvenance, boardRows, boardTotals, fmtDays, sharePct } from "../../../lib/spine.mjs";
 
@@ -70,7 +70,11 @@ const STAGES = Object.freeze([
 function venturesKill(st, panel) {
   const kill = asObject(st.body["kill"]);
   const armed = kill["present"] === true && kill["receipted"] === true;
-  return servedTable(projected(st, "rows", (b) => {
+  // A panel the door withheld by name (a criteria file off this tree, an env var swapping one in) is that refusal --
+  // never the "ventures.yaml is not on this tree" empty state its present:false would otherwise read as.
+  const withheld = field(kill, "refused");
+  const answered = withheld !== "" ? refusedPart(st, "KILL_REFUSED", `the door withheld the kill panel: ${withheld}`) : st;
+  return servedTable(projected(answered, "rows", (b) => {
     const k = asObject(b["kill"]);
     if (!Array.isArray(k["ventures"])) return undefined;
     return k["ventures"].flatMap((v) => asArray(asObject(v)["criteria"]).map((c) => ({ ...asObject(c), venture: asObject(v)["venture"] })));

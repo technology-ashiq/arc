@@ -47,6 +47,7 @@ export function fold(payloads, ctx) {
   // The rules a reader can use: entries with an id, counted the way the table reads them -- never the raw length of a
   // list that may hold entries the table refuses (Phase 04 attack).
   const all = asArray(st.body["rules"]).filter((r) => field(asObject(r), "id") !== "").length;
+  const malformed = typeof st.body["malformed"] === "number" && Number.isInteger(st.body["malformed"]) ? st.body["malformed"] : 0;
   const rulesTable = servedTable(projected(st, "rules", (b) => (Array.isArray(b["rules"]) ? b["rules"].slice(-RULE_ROWS).reverse() : undefined)), {
     panel: "Playbook rules",
     route: "/api/learn",
@@ -59,6 +60,9 @@ export function fold(payloads, ctx) {
     },
     note: [
       st.isRead ? `the newest ${Math.min(RULE_ROWS, all)} of ${all}` : "",
+      // A row the adapter refused is a lesson this table cannot show; its count stands beside the rules, so a short
+      // table is never read as a short log (Phase 04 re-attack).
+      malformed > 0 ? `${malformed} row${malformed === 1 ? "" : "s"} the adapter refused as malformed, not drawn` : "",
       "recall over them is a search, and a search is a verb of the work door",
     ].filter((n) => n !== "").join(" · "),
   });

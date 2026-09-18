@@ -81,11 +81,12 @@ const refused = (code, human) => ({ isReading: false, isRefused: true, refusal: 
 function sourceLine(body) {
   const parser = field(body, "parser");
   const files = asArray(body["sources"]).map((s) => field(asObject(s), "path")).filter((p) => p !== "");
-  // A log route says how much of the spine it could NOT read -- a torn line, an envelope that is not a receipt --
-  // so a table over the rest is never presented as the whole log (face v2 Phase 04 attack).
-  const spine = asObject(body["spine"]);
-  const torn = typeof spine["torn"] === "number" ? spine["torn"] : 0;
-  const skipped = typeof spine["skipped"] === "number" ? spine["skipped"] : 0;
+  // A log route says how much of the log it could NOT read -- a torn line, an envelope that is not a receipt --
+  // so a table over the rest is never presented as the whole log (face v2 Phase 04 attack). The key is
+  // `unreadLines`: a shell file names no served room, even as a data key (module-frame's scan).
+  const unreadLines = asObject(body["unreadLines"]);
+  const torn = typeof unreadLines["torn"] === "number" ? unreadLines["torn"] : 0;
+  const skipped = typeof unreadLines["skipped"] === "number" ? unreadLines["skipped"] : 0;
   const unread = torn + skipped;
   return [
     parser !== "" ? `parsed by ${parser}` : "",
@@ -224,7 +225,9 @@ export function gateModes(st, panel, extraNote = "") {
     },
     note: [
       st.isRead
-        ? (profile !== "" ? `the strictness profile is ${profile}, as ${resolver} resolves it in the door's environment` : `no profile is claimed: ${refused || `${resolver} gave no profile name`}`)
+        ? (profile !== ""
+          ? `the strictness profile is ${profile}, as ${resolver} resolves it in the door's environment${st.body["profileForced"] === true ? " -- forced there by ARC_PROFILE, not read from settings" : ""}`
+          : `no profile is claimed: ${refused || `${resolver} gave no profile name`}`)
         : "",
       extraNote,
     ].filter((n) => n !== "").join(" · "),

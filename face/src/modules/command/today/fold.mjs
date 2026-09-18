@@ -84,6 +84,8 @@ export function fold(payloads, ctx) {
   if (feedRead !== null) reads.push(feedRead);
   const policySt = servedRead(payloads, ctx, reads, "/api/policy");
   const learnSt = servedRead(payloads, ctx, reads, "/api/learn");
+  const learnMalformedRaw = learnSt.body["malformed"];
+  const learnMalformed = typeof learnMalformedRaw === "number" && Number.isInteger(learnMalformedRaw) ? learnMalformedRaw : 0;
   /** @type {import("../../../lib/registry.mjs").Payload} */
   const feedP = feedRead === null ? (healthP.state === "refused" ? healthP : LOADING) : payloadOf(payloads, feedRead);
   const page = feedP.state === "ok" ? readSpinePage(feedP.data) : null;
@@ -215,7 +217,15 @@ export function fold(payloads, ctx) {
         const id = field(l, "id");
         return id === "" ? null : { key: id, cells: [field(l, "date"), field(l, "pattern"), field(l, "prevention")] };
       },
-      note: learnSt.isRead ? `the retro log's rows dated ${field(learnSt.body, "weekFrom")} to ${field(learnSt.body, "today")} -- a file, so it does not move with the as-of scrub` : "",
+      note: learnSt.isRead
+        ? [
+          `the retro log's rows dated ${field(learnSt.body, "weekFrom")} to ${field(learnSt.body, "today")} -- a file, so it does not move with the as-of scrub`,
+          // A malformed row may be this week's; the count says the week may be longer than drawn (Phase 04 re-attack).
+          learnMalformed > 0
+            ? `${learnMalformed} retro-log row${learnMalformed === 1 ? "" : "s"} the adapter refused as malformed, of any week, not drawn`
+            : "",
+        ].filter((n) => n !== "").join(" · ")
+        : "",
     }),
     receipt: receiptView(events, picks.receipt),
     reads,

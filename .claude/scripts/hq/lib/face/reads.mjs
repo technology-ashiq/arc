@@ -13,9 +13,9 @@
 //
 // THE RULES THE PHASE 04 ATTACKERS WROTE INTO THIS FILE, each applied everywhere, not only where it was found:
 //   - ONE READ. A file is read once and parsed from that text. Where the owning lane's parser can only take a path
-//     (the bench's ceilings, the leads caps, the ventures kill panel), the door reads the file on both sides of the
-//     call and refuses (SOURCE_CHANGING) if the bytes moved -- a sha from one version beside data from another was
-//     the lane's most repeated defect ("validate one read, serve another").
+//     (the bench's ceilings, the leads caps), it parses a private copy of those exact bytes; the kill panel, which
+//     reads the criteria file on its own, is held to the parsed file's digest (SOURCE_CHANGING) -- a sha from one
+//     version beside data from another was the lane's most repeated defect ("validate one read, serve another").
 //   - CONTAINED. Every file and directory is resolved with realpath and must sit inside the repo, as the lane
 //     route's phases already must (PHASES_OUTSIDE): a junction or symlink cannot make the door serve off the tree.
 //   - A WRONG SHAPE IS REFUSED, NOT EMPTY. A file that parses into the wrong shape -- jobs as a mapping, a gates key
@@ -28,10 +28,11 @@
 //     (PARSER_UNAVAILABLE) with the loader's error CODE, never its message (which carries the account's path).
 //   - A query key a route does not read is refused (BAD_ARGS), never ignored.
 //   - Only plain JSON leaves a handler; a Set, a Map or a raw nested payload never does.
-//   - Receipts the spine reader could not read are COUNTED on every log route (`spine.torn`, `spine.skipped`), never
-//     silently absent from a table.
-import { existsSync, readFileSync, readdirSync, statSync, realpathSync } from "node:fs";
-import { join, relative, sep, isAbsolute } from "node:path";
+//   - Receipts the spine reader could not read are COUNTED on every log route (`unreadLines.torn`, `.skipped`), never
+//     silently absent from a table. (The key is not "spine": a face lib file may not name a served room, even as a key.)
+import { existsSync, readFileSync, readdirSync, statSync, realpathSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative, sep, dirname } from "node:path";
 import { execFile } from "node:child_process";
 
 import { readAll } from "../../spine.mjs";
@@ -44,12 +45,13 @@ export class ReadError extends Error {
 }
 
 // ---------- what may never reach the wire ----------
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-// An absolute path: a Windows drive path, a UNC path, or a POSIX path under a root that carries an account or a
-// machine's layout. Repo-relative paths ("docs/adr/0001-x.md") are not matched and stay readable.
+// An address, including one whose domain is not ASCII (`alice@exämple.com`).
+const EMAIL = /[^\s@<>"'`,;()]+@[^\s@<>"'`,;()]+\.[^\s@<>"'`,;()]+/gu;
+// The START of an absolute path: a Windows drive, a UNC share, a backslash root, a file:// URL, a home shorthand, or a
+// POSIX root that carries an account or a machine's layout. Repo-relative paths ("docs/adr/0001-x.md") are not matched.
 // Each alternative is anchored so a URL is not a path: a drive letter may not follow a letter or digit (`https:/`), a
-// UNC or POSIX root may not follow a host or a path segment (`example.com/home/`).
-const ABS_PATH = /(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s'"`,;)]*|(?<![A-Za-z0-9._~%:/\\-])\\\\[^\s'"`,;)]+|(?<![A-Za-z0-9._~%:/-])\/(?:home|Users|root|tmp|var|private|mnt|opt|etc|usr)\/[^\s'"`,;)]*/g;
+// root may not follow a host or a path segment (`example.com/home/`).
+const ABS_START = /(?<![A-Za-z0-9])[A-Za-z]:[\\/]|(?<![A-Za-z0-9._~%:/\\-])\\\\|(?<![A-Za-z0-9._~%:/\\-])\\(?:Users|home|Documents and Settings)\\|file:\/\/|(?<![A-Za-z0-9._~%:/-])~[A-Za-z0-9._-]*\/|(?<![A-Za-z0-9._~%:/-])\/(?:home|Users|root|tmp|var|private|mnt|opt|etc|usr|Volumes|srv|media|run|snap)\//;
 
 /**
  * A sentence made safe for the wire: the repo's own path becomes repo-relative, any other absolute path and any
@@ -66,11 +68,41 @@ export function scrub(text, repo) {
       s = s.replace(new RegExp(`${esc}[\\\\/]?`, "gi"), "");
     }
   }
-  return s.replace(ABS_PATH, "[path withheld]").replace(EMAIL, "[address withheld]");
+  s = s.replace(EMAIL, "[address withheld]");
+  // From the first absolute-path start to the END of the text: a path may hold spaces ("C:\Users\John Smith\...") and
+  // stopping at the first one served the rest of it (Phase 04 re-attack). What follows a path in a receipt's free text
+  // is withheld with it -- over-withholding a sentence tail is the recoverable direction.
+  const at = s.search(ABS_START);
+  return at < 0 ? s : `${s.slice(0, at)}[path withheld]`;
 }
+
+/** A receipt's envelope id, served only when it is a ULID. @param {unknown} v */
+const idOf = (v) => (typeof v === "string" && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(v) ? v : "");
+/** A receipt's envelope ts, served only in the spine's IST shape. @param {unknown} v */
+const tsOf = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?\+05:30$/.test(v) ? v : "");
 
 /** @param {{ repo: string }} ctx @param {string} code @param {string} message */
 const refusal = (ctx, code, message) => new ReadError(code, scrub(message, ctx.repo).slice(0, 500));
+
+/**
+ * A lane's fold threw on the RECEIPTS it was handed -- a payload missing the field it reads, a timestamp it cannot place.
+ * Named, scrubbed, and never INTERNAL: the lane's own sentence is the reason, and one bad receipt is its problem to name.
+ * @template T @param {{ repo: string }} ctx @param {string} lane @param {() => T} run
+ * @returns {T}
+ */
+function laneFold(ctx, lane, run) {
+  try { return run(); } catch (e) {
+    if (e instanceof ReadError) throw e;
+    throw refusal(ctx, "SOURCE_INVALID", `the ${lane} refused a receipt on the spine: ${String(/** @type {Error} */ (e).message).split("\n")[0]}`);
+  }
+}
+/** The async twin of laneFold. @template T @param {{ repo: string }} ctx @param {string} lane @param {() => Promise<T>} run */
+async function laneFoldAsync(ctx, lane, run) {
+  try { return await run(); } catch (e) {
+    if (e instanceof ReadError) throw e;
+    throw refusal(ctx, "SOURCE_INVALID", `the ${lane} refused a receipt on the spine: ${String(/** @type {Error} */ (e).message).split("\n")[0]}`);
+  }
+}
 
 /** A lane's parser threw on a file it owns: a named refusal carrying the parser's own sentence, scrubbed. */
 const invalid = (ctx, rel, e) => refusal(ctx, "SOURCE_INVALID", `${rel} did not parse: ${String(e && /** @type {Error} */ (e).message).split("\n")[0]}`);
@@ -87,7 +119,9 @@ async function lib(rel) {
   if (!loaded.has(rel)) loaded.set(rel, import(new URL(rel, import.meta.url).href).then((m) => ({ m }), (e) => ({ e })));
   const got = await loaded.get(rel);
   if (got.e) {
-    const code = String((got.e && (got.e.code || got.e.name)) || "Error").replace(/[^A-Za-z0-9_]/g, "");
+    // A POSITIVE whitelist: a negated letter range is locale-collation dependent (tests/portability.bats).
+    const raw = String((got.e && (got.e.code || got.e.name)) || "Error");
+    const code = /^[A-Za-z0-9_]{1,64}$/.test(raw) ? raw : "Error";
     throw new ReadError("PARSER_UNAVAILABLE", `the parser this route imports (${rel.replace(/^(\.\.\/)+/, "")}) did not load (${code})`);
   }
   return got.m;
@@ -155,17 +189,29 @@ function dirAt(ctx, rel) {
 }
 
 /**
- * Run a lane parser that reads a file BY PATH, with the file read on both sides of the call: if the bytes moved, the
- * answer is SOURCE_CHANGING rather than a sha from one version beside data from another.
- * @template T @param {{ repo: string }} ctx @param {string} rel @param {() => T} parse
+ * Run a lane parser that reads a file BY PATH over a private copy of the EXACT bytes this route hashed: the file is read
+ * once, written to a scratch directory laid out as the parser expects (`rel` under that root), parsed there, and the
+ * copy removed. A before-and-after read missed a file that changed and changed back while the parser read it (Phase 04
+ * re-attack: 242 answers carried an empty file's sha beside full caps); a copy cannot change under the parser.
+ * @template T @param {{ repo: string }} ctx @param {string} rel @param {(root: string, path: string) => T} parse
  * @returns {{ f: { path: string, text: string, sha256: string }, value: T }}
  */
-function readStable(ctx, rel, parse) {
-  const before = fileAt(ctx, rel);
-  const value = parse();
-  const after = fileAt(ctx, rel);
-  if (before.sha256 !== after.sha256) throw new ReadError("SOURCE_CHANGING", `${rel} changed while it was being read -- ask again`);
-  return { f: before, value };
+function readCopy(ctx, rel, parse) {
+  const f = fileAt(ctx, rel);
+  const root = mkdtempSync(join(tmpdir(), "arc-door-"));
+  try {
+    const path = join(root, rel);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, f.text);
+    try { return { f, value: parse(root, path) }; } catch (e) {
+      // The parser names the file it read -- the scratch copy. Its path is the door's, not the tree's, so it is cut
+      // back to the tree's name before the message goes anywhere.
+      if (e && typeof (/** @type {Error} */ (e).message) === "string") /** @type {Error} */ (e).message = /** @type {Error} */ (e).message.split(root).join("").split(root.split(sep).join("/")).join("");
+      throw e;
+    }
+  } finally {
+    try { rmSync(root, { recursive: true, force: true }); } catch { /* a scratch copy that will not delete is the OS's to clean */ }
+  }
 }
 
 /**
@@ -174,13 +220,13 @@ function readStable(ctx, rel, parse) {
  * not be read.
  * @param {{ mode: string }} ctx @param {string} route @param {"file, not log" | "log" | "file and log"} badge
  * @param {string} parser @param {{ path: string, sha256: string }[]} sources @param {Record<string, unknown>} body
- * @param {{ torn: number, skipped: number } | null} [spine]
+ * @param {{ torn: number, skipped: number } | null} [unread]
  */
-function answer(ctx, route, badge, parser, sources, body, spine = null) {
+function answer(ctx, route, badge, parser, sources, body, unread = null) {
   return {
     mode: ctx.mode, route, badge, parser,
     sources: sources.map((s) => ({ path: s.path, sha256: s.sha256 })),
-    ...(spine ? { spine } : {}),
+    ...(unread ? { unreadLines: unread } : {}),
     ...body,
   };
 }
@@ -196,7 +242,11 @@ async function spineRead(ctx) {
   let skipped = 0;
   for (const w of all.events) {
     const e = w && w.event;
-    if (e === null || typeof e !== "object" || Array.isArray(e) || typeof e.kind !== "string") { skipped += 1; continue; }
+    // A receipt is an object with a kind AND a payload object: one without a payload reached the lanes' own folds, which
+    // read its fields and threw (Phase 04 re-attack). It is skipped and counted, like a torn line.
+    const payload = e && typeof e === "object" ? e.payload : undefined;
+    if (e === null || typeof e !== "object" || Array.isArray(e) || typeof e.kind !== "string"
+      || payload === null || typeof payload !== "object" || Array.isArray(payload)) { skipped += 1; continue; }
     events.push(e);
   }
   return { events, counts: { torn: Array.isArray(all.torn) ? all.torn.length : 0, skipped } };
@@ -278,7 +328,7 @@ export async function apiEngine(ctx, url) {
   } else if (!existsSync(join(ctx.repo, CEIL))) budgetsRefused = `${CEIL} is not on this tree`;
   else {
     try {
-      const got = readStable(ctx, CEIL, () => readCeilings(ctx.repo));
+      const got = readCopy(ctx, CEIL, (root) => readCeilings(root));
       sources.push(got.f);
       const c = got.value;
       budgets = {
@@ -329,7 +379,7 @@ export async function apiRoster(ctx, url) {
     .filter((e) => e.kind === "run.completed" && RUNTIME_DRIVERS.has(str(obj(e.payload).driver)))
     .map((e) => {
       const p = obj(e.payload);
-      return { id: str(e.id), ts: str(e.ts), process: text(ctx, p.process), driver: text(ctx, p.driver), outcome: text(ctx, p.outcome) || text(ctx, e.outcome), reason: text(ctx, p.reason), duration_ms: num(p.duration_ms) };
+      return { id: idOf(e.id), ts: tsOf(e.ts), process: text(ctx, p.process), driver: text(ctx, p.driver), outcome: text(ctx, p.outcome) || text(ctx, e.outcome), reason: text(ctx, p.reason), duration_ms: num(p.duration_ms) };
     });
   return answer(ctx, "/api/roster", "file and log", "engine/yaml-subset.mjs#parseYamlSubset · engine/router-row.mjs#isExpired,RUNTIME_DRIVERS · spine.mjs#readAll", [r.f], {
     today: r.today,
@@ -368,6 +418,8 @@ export async function apiPolicy(ctx, url) {
     });
   } catch (e) { throw refusal(ctx, "SOURCE_INVALID", `the policy reducer refused a transition on the spine: ${String(/** @type {Error} */ (e).message).split("\n")[0]}`); }
   const levels = Object.entries(obj(obj(policy).levels)).map(([level, meaning]) => ({ level, meaning: String(meaning) }));
+  // The ladder's rungs are REQUIRED: a misspelt `levels:` is a refusal, never "declares no level" (Phase 04 re-attack).
+  if (levels.length === 0) throw refusal(ctx, "SOURCE_INVALID", "hq.policy.yaml has no `levels` mapping with a rung in it");
   return answer(ctx, "/api/policy", "file and log", "hq/lib/policy/yaml.mjs#parsePolicyYaml · hq/lib/policy/reduce.mjs#resolveVector", [f], {
     capabilities: [...CAPABILITIES],
     levels,
@@ -391,8 +443,8 @@ export async function apiJobs(ctx, url) {
   const jobs = obj(parsed.value).jobs;
   if (!Array.isArray(jobs)) throw refusal(ctx, "SOURCE_INVALID", "hq.jobs.yaml has no `jobs` list -- a schedule in another shape is not an empty schedule");
   const day = todayIst();
-  const { events, observedFrom } = await loadPanelInputs(ctx.root, day);
-  const rows = derivePanel({ day, jobs, events, observedFrom });
+  const { events, observedFrom } = await laneFoldAsync(ctx, "jobs panel", () => loadPanelInputs(ctx.root, day));
+  const rows = laneFold(ctx, "jobs panel", () => derivePanel({ day, jobs, events, observedFrom }));
   const { counts } = await spineRead(ctx);
   return answer(ctx, "/api/jobs", "file and log", "engine/yaml-subset.mjs#parseYamlSubset · hq/lib/jobs/panel.mjs#loadPanelInputs,derivePanel", [f], {
     day,
@@ -528,7 +580,7 @@ export async function apiBench(ctx, url) {
     .map((e) => {
       const p = obj(e.payload);
       return {
-        id: str(e.id), ts: str(e.ts),
+        id: idOf(e.id), ts: tsOf(e.ts),
         subject: text(ctx, p.subject),
         model: text(ctx, p.model_applied),
         outcome: text(ctx, p.outcome),
@@ -554,7 +606,7 @@ export async function apiCouncil(ctx, url) {
   const verdicts = events.filter((e) => e.kind === "council.verdict").map((e) => {
     const p = obj(e.payload);
     const o = outcomes.get(str(p.session_id));
-    return { id: str(e.id), ts: str(e.ts), session: text(ctx, p.session_id), call: text(ctx, p.call), confidence: text(ctx, p.confidence), outcome: o ? text(ctx, obj(o.payload).outcome) : "", observed: o ? text(ctx, obj(o.payload).observed_at) : "" };
+    return { id: idOf(e.id), ts: tsOf(e.ts), session: text(ctx, p.session_id), call: text(ctx, p.call), confidence: text(ctx, p.confidence), outcome: o ? text(ctx, obj(o.payload).outcome) : "", observed: o ? text(ctx, obj(o.payload).observed_at) : "" };
   });
   const c = calibrate(events);
   return answer(ctx, "/api/council", "log", "evolve/calibrate.mjs#calibrate · spine.mjs#readAll", [], {
@@ -573,12 +625,21 @@ export async function apiSlices(ctx, url) {
   const { parseLedger, progress, isProven } = await lib("../../../develop/ledger.mjs");
   const { laneHeader, validLaneName } = await lib("../../../core/lane-resolve.mjs");
   // A repo with no initiatives/ is root-mode (.claude/rules/lanes.md): it has no lanes, which is an answer, not a refusal.
-  const names = existsSync(join(ctx.repo, "initiatives")) ? dirAt(ctx, "initiatives").filter((d) => d.isDirectory() && validLaneName(d.name)).map((d) => d.name).sort() : [];
+  // A lane directory that is a LINK is kept in the list and checked, never filtered out: a junction is not a directory
+  // to Dirent.isDirectory(), and filtering on it made an off-tree lane vanish from the table (Phase 04 re-attack).
+  const names = existsSync(join(ctx.repo, "initiatives"))
+    ? dirAt(ctx, "initiatives").filter((d) => (d.isDirectory() || d.isSymbolicLink()) && validLaneName(d.name)).map((d) => d.name).sort()
+    : [];
   const sources = [];
   const lanes = [];
   /** @param {string} lane @param {string} phase @param {string} file @param {string} why */
   const absent = (lane, phase, file, why) => ({ lane, phase, file, present: false, why, proven: 0, total: 0, next: "", slices: [], errors: 0 });
   for (const lane of names) {
+    try { contained(ctx, `initiatives/${lane}`, "dir"); } catch (e) {
+      // A lane that resolves off the tree, or is not a directory, is NAMED in the table, not read and not dropped.
+      lanes.push(absent(lane, "", "", e instanceof ReadError && e.code === "SOURCE_OUTSIDE" ? "its directory resolves outside the repo -- not read" : "its entry is not a lane directory -- not read"));
+      continue;
+    }
     const progressRel = `initiatives/${lane}/PROGRESS.md`;
     if (!existsSync(join(ctx.repo, progressRel))) continue;
     let header;
@@ -641,23 +702,37 @@ export async function apiGates(ctx, url) {
   let profile = "";
   let profileRefused = "";
   const RESOLVER = ".claude/scripts/core/arc-profile.sh";
-  try {
-    contained(ctx, RESOLVER, "file");
-    profile = await profileSays(ctx, ["name"]);
-    for (const g of gates) {
-      if (g.mode !== "profile") continue;
-      // The resolver knows the modes of the gates the profile table names; a profile gate it cannot resolve is drawn
-      // unresolved, never guessed.
-      try { g.resolved = await profileSays(ctx, ["mode", g.name]); } catch { g.resolved = ""; }
+  const PROFILE_NAME = /^[a-z][a-z0-9-]{0,31}$/;
+  if ("ARC_SETTINGS" in process.env) {
+    // The resolver's own override of its SOURCE: it would resolve from another settings file under this tree's name.
+    // Refused by name, as every env override of a source is (Phase 04 re-attack).
+    profileRefused = "ARC_SETTINGS is set in the door's environment, which points arc-profile.sh at another settings file -- the door resolves only the tree's";
+  } else {
+    try {
+      contained(ctx, RESOLVER, "file");
+      const said = await profileSays(ctx, ["name"]);
+      if (!PROFILE_NAME.test(said)) profileRefused = "arc-profile.sh answered with something that is not a profile name, so no profile is claimed";
+      else {
+        profile = said;
+        for (const g of gates) {
+          if (g.mode !== "profile") continue;
+          // Only a MODE is served: the resolver echoes a settings value it does not validate, and anything but `warn`
+          // or `block` -- an address, a path, a line break -- is drawn unresolved, never passed through (re-attack).
+          let mode = "";
+          try { mode = await profileSays(ctx, ["mode", g.name]); } catch { mode = ""; }
+          g.resolved = mode === "warn" || mode === "block" ? mode : "";
+        }
+      }
+    } catch (e) {
+      profileRefused = e instanceof ReadError ? e.message : `${RESOLVER} did not answer in the door's environment (${String(/** @type {NodeJS.ErrnoException} */ (e).code || "error")}), so no profile is claimed`;
     }
-  } catch (e) {
-    profile = "";
-    profileRefused = e instanceof ReadError ? e.message : `${RESOLVER} did not answer in the door's environment (${String(/** @type {NodeJS.ErrnoException} */ (e).code || "error")}), so no profile is claimed`;
   }
   return answer(ctx, "/api/gates", "file, not log", "engine/yaml-subset.mjs#parseYamlSubset (as face-coverage reads arc.gates.yaml) · core/arc-profile.sh name|mode", [f], {
     gates,
-    profile: /^[a-z][a-z0-9-]{0,31}$/.test(profile) ? profile : "",
-    profileRefused: profile !== "" && !/^[a-z][a-z0-9-]{0,31}$/.test(profile) ? "arc-profile.sh answered with something that is not a profile name" : profileRefused,
+    profile,
+    // ARC_PROFILE is the resolver's documented first precedence; a profile it forced is served, and SAID to be forced.
+    profileForced: profile !== "" && "ARC_PROFILE" in process.env,
+    profileRefused,
     profileResolver: RESOLVER,
   });
 }
@@ -702,13 +777,13 @@ export async function apiGrowth(ctx, url) {
   const decided = new Map();
   for (const e of events) if (e.kind === "decision.recorded") decided.set(str(obj(e.payload).decides), str(obj(e.payload).verdict));
   const clusters = events.filter((e) => e.kind === "approval.requested" && str(obj(e.payload).gate) === "cluster").map((e) => ({
-    id: str(e.id), ts: str(e.ts), what: text(ctx, obj(e.payload).what) || text(ctx, obj(e.payload).cluster_id), verdict: decided.get(str(e.id)) || "open",
+    id: idOf(e.id), ts: tsOf(e.ts), what: text(ctx, obj(e.payload).what) || text(ctx, obj(e.payload).cluster_id), verdict: ["approve", "reject"].includes(decided.get(str(e.id)) || "") ? decided.get(str(e.id)) : "open",
   }));
   const headIds = new Set((Array.isArray(heads) ? heads : []).map((h) => str(obj(h).id)));
   return answer(ctx, "/api/growth", "log", "growth/lib/cutover.mjs#assertChainIntegrity · spine.mjs#readAll", [], {
     published: published.filter((e) => headIds.has(e.id)).map((e) => {
       const p = obj(e.payload);
-      return { id: str(e.id), ts: str(e.ts), site: text(ctx, p.site), slug: text(ctx, p.slug), title: text(ctx, p.title), url: text(ctx, p.url), cluster: text(ctx, p.cluster_id), content_sha: /^[0-9a-f]{64}$/.test(str(p.content_sha)) ? str(p.content_sha) : "", pr: text(ctx, p.pr_ref) };
+      return { id: idOf(e.id), ts: tsOf(e.ts), site: text(ctx, p.site), slug: text(ctx, p.slug), title: text(ctx, p.title), url: text(ctx, p.url), cluster: text(ctx, p.cluster_id), content_sha: /^[0-9a-f]{64}$/.test(str(p.content_sha)) ? str(p.content_sha) : "", pr: text(ctx, p.pr_ref) };
     }),
     superseded: published.length - headIds.size,
     clusters,
@@ -734,7 +809,7 @@ export async function apiLeads(ctx, url) {
   let capsFrom = "the leads lane's code defaults -- no config file on this tree";
   try {
     if (existsSync(join(ctx.repo, cfgRel))) {
-      const got = readStable(ctx, cfgRel, () => loadCaps(join(ctx.repo, cfgRel)));
+      const got = readCopy(ctx, cfgRel, (_root, path) => loadCaps(path));
       caps = got.value;
       sources = [got.f];
       capsFrom = cfgRel;
@@ -742,10 +817,10 @@ export async function apiLeads(ctx, url) {
   } catch (e) { if (e instanceof ReadError) throw e; throw invalid(ctx, cfgRel, e); }
   const { events: all, counts } = await spineRead(ctx);
   const events = all.filter((e) => LEADS_KINDS.has(e.kind));
-  const state = deriveState(events, { campaign: null });
+  const state = laneFold(ctx, "leads lane's fold", () => deriveState(events, { campaign: null }));
   const now = formatIst(nowMs());
   const today = now.slice(0, 10);
-  const sends = foldSends(events, { from: `${today}T00:00:00+05:30`, to: `${today}T23:59:59+05:30` }).counts;
+  const sends = laneFold(ctx, "leads lane's fold", () => foldSends(events, { from: `${today}T00:00:00+05:30`, to: `${today}T23:59:59+05:30` }).counts);
   const window = Number(caps.rolling_window_days);
   const every = [...new Set([...state.touches.keys(), ...state.suppressed, ...state.replied])];
   const ids = every.filter((id) => typeof id === "string" && LEAD_ID_RE.test(id)).sort();
@@ -795,12 +870,12 @@ export async function apiLegal(ctx, url) {
   try { checkE2Quote(quoted, seals); } catch (e) { quoteHolds = false; quoteProblem = scrub(String(/** @type {Error} */ (e).message).split("\n")[0], ctx.repo); }
   const { events, counts } = await spineRead(ctx);
   const decided = new Map();
-  for (const e of events) if (e.kind === "decision.recorded") decided.set(str(obj(e.payload).decides), { verdict: str(obj(e.payload).verdict), ts: str(e.ts) });
+  for (const e of events) if (e.kind === "decision.recorded") decided.set(str(obj(e.payload).decides), { verdict: str(obj(e.payload).verdict), ts: tsOf(e.ts) });
   const gate = events.filter((e) => e.kind === "approval.requested" && str(obj(e.payload).subject) === "legal.publish").map((e) => {
     const x = obj(e.payload);
     const d = decided.get(str(e.id));
     const sha = str(x.sha) || str(x.sha256);
-    return { id: str(e.id), ts: str(e.ts), what: text(ctx, x.what) || text(ctx, x.venture) || text(ctx, e.venture), sha: /^[0-9a-f]{64}$/.test(sha) ? sha : "", state: d ? d.verdict : "open" };
+    return { id: idOf(e.id), ts: tsOf(e.ts), what: text(ctx, x.what) || text(ctx, x.venture) || text(ctx, e.venture), sha: /^[0-9a-f]{64}$/.test(sha) ? sha : "", state: d && ["approve", "reject"].includes(d.verdict) ? d.verdict : "open" };
   });
   return answer(ctx, "/api/legal", "file and log", "hq/lib/policy/constitution.mjs#parseE2,checkE2Quote · hq/lib/policy/yaml.mjs#parsePolicyYaml", [c, p], {
     // Each seal against the policy's quote AT ITS POSITION -- the element-for-element rule checkE2Quote enforces.

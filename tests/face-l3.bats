@@ -517,7 +517,7 @@ load 'test_helper'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   local n
   n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
-  [ -n "$n" ] && [ "$n" -ge 55 ] || { echo "only '$n' checks ran: $output"; false; }
+  [ -n "$n" ] && [ "$n" -ge 86 ] || { echo "only '$n' checks ran: $output"; false; }
   local arm
   for arm in "SERVED: a body with no list where the rows live is BAD_BODY -- never an empty table" \
              "SERVED: unreadable, blank and repeated entries are COUNTED in the note, and never drawn" \
@@ -530,7 +530,11 @@ load 'test_helper'
              "DOOR: a directory that resolves off the tree is SOURCE_OUTSIDE -- no off-tree ADR is served" \
              "DOOR: a lead_id that is not an HMAC id never reaches the wire, and is counted as withheld" \
              "DOOR: a null line on the spine is torn -- counted, never a 500" \
-             "SERIALIZER: a payload nested past the cap is served as a sentence, never a stack overflow"; do
+             "SERIALIZER: a payload nested past the cap is served as a sentence, never a stack overflow" \
+             "PNL DOOR: ARC_VENTURES_FILE in the door's env withholds the kill panel by name" \
+             "GATES DOOR: a resolver echoing anything but warn or block leaves the gate unresolved -- an address never reaches the wire" \
+             "SLICES DOOR: a lane whose directory resolves off the tree is NAMED in the table, not read and not dropped" \
+             "LEARN DOOR: a row dated 2026-09-31 is a rule and never this week's; the malformed row is counted"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }
