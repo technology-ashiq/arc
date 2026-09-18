@@ -25,7 +25,7 @@ depends-on: —
 | 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
-| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | **3 of 5 rings merged** — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242); 19 modules green in both moods on every L3 leg |
+| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | **4 of 5 rings merged** — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242) · money `969d9634` (#244); 27 modules green in both moods on every L3 leg |
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | spec'd |
 | 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — needs owner rulings §13 items 4, 5 |
 | 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
@@ -55,6 +55,8 @@ counted toward REQ-10 (ADR-1329).
 **2026-09-18, factory ring** — unchanged: 6 · 55 · 1 of 5, read from the main clone at `98f405f5`
 (the only day through the face is still 2026-08-24). Three rings in, the surface has not yet been the
 place a decision was made; the trend stays flat until the owner decides from it.
+**2026-09-18, money ring** — unchanged: 6 · 55 · 1 of 5, read from the main clone at `969d9634`. The
+money rooms are now on the door, and still no decision has gone through them.
 
 **Block B tripwire (day 5 of 10), read on 2026-09-18 after the command and kernel rings: GREEN — no
 cut.** The clause is "if 14 modules are not green → cut the remaining bespoke folds to generic
@@ -256,11 +258,13 @@ stay bespoke folds.
 ## Now
 
 **RESUME HERE (2026-09-18):** **Phase 03 — the 36 modules read-side** is running (`phases/phase-03-spec.md`,
-REQ-01 + REQ-05, 7d appetite). **3 of 5 rings are merged**: command `81dcf814` (#239), kernel `bee88cce`
-(#240), factory `98f405f5` (#242) — 19 modules green in both moods on every L3 leg (run 35272310975,
-19/19 on `09090743`: `heading rings=command,kernel,factory checked=19 miss=0`, `not-served panels=24`,
-`verbs-pending cards=18`), and `main` re-verified by dispatch (run 35275053756, 19/19). The Block B
-tripwire read GREEN after the kernel ring, so the last two rings stay bespoke folds. Where the phase
+REQ-01 + REQ-05, 7d appetite). **4 of 5 rings are merged**: command `81dcf814` (#239), kernel `bee88cce`
+(#240), factory `98f405f5` (#242), money `969d9634` (#244) — 27 modules green in both moods on every L3
+leg (run 35323854485, 19/19 on `e562bed7`: `heading rings=command,kernel,factory,money checked=27 miss=0`,
+`not-served panels=37`, `verbs-pending cards=34`, `rehearsal cards=10`, `planned rooms=4 expected=4
+live=0`), and `main` re-verified by dispatch (run 35325186981, 19/19 on `969d9634`). F3 is closed: a planned room never wears LIVE,
+checked by room id in both moods. The Block B tripwire read GREEN after the kernel ring, so the last ring
+stays bespoke folds. Where the phase
 stands ring by ring is `evidence/phase-03/handoff-2026-09-18.md`.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
@@ -276,14 +280,19 @@ ledger says.
 `01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02), `01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01),
 `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and `01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the
 main clone, `node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13
-item 5 (`story` and `factory`: a registry row or an exemption) now gates Phase 03's 36/36 as well as
-Phase 05 — the four extra rooms (factory, executor, agents, story) are not built until it is ruled, and
-it is asked before the company ring; item 4 (the six flagship ops) is due by the Phase 04 close.
+item 4 (the six flagship ops) is due by the Phase 04 close.
 
-**Next step:** the **money ring** on `feat/face-v2-03-money`, cut from `main` — five served (money, growth,
-leads, legal, ventures) and three served-planned (ops, trader, discover). It owes, beyond the ports:
-**F3** (a planned room never wears LIVE — dotted, REHEARSAL, ADR-1328, with a module-frame arm); the
-deletion of the last two carried Cycle 15 renderers, `MoneyRoom.tsx` and `VenturesRoom.tsx`; and the four
-debt rows whose pay-down is this PR — the `lane-room.mjs` unit suite as its first slice, `laneRoom`
-refusing a read its manifest does not declare, the toolbelt catalogue built in one pass, and one kit pass
-for the factory ring's hint truncation and repeated line. Red first on CI, as every ring.
+**Owner ruling, 2026-09-18 — PLAN-face-v2 §13 item 5: "Both registry row".** Asked before the company ring,
+as this file required. `story` and `factory` earn rows in the served registry instead of ADR-1327
+exemptions; `executor` and `agents` were not in the question and stay labelled exemptions. ADR-1337 records
+it and lands with the change that executes it: both rows written through `face-sections.mjs`, their two
+exemptions never written, served rooms 34 → 36 and openable 33 → 35, and every count pinned against the
+old numbers moved in the same PR.
+
+**Next step:** the **company ring** on `feat/face-v2-03-company`, cut from `main`, and with it the four extra
+rooms the ruling unblocked — the last Phase 03 PR. Five served (law, learn, strategy, org, concepts); `story`
+and `factory` with their new registry rows (ADR-1337); `executor` and `agents` as ADR-1327 exemptions, whose
+rows reach the shell through an allow-listed file route so each gets a rail entry with the not-in-registry
+badge (the debt row that has waited on this since Phase 02). It owes **F1** — the ADR band map in `org`
+names LANES, read from PORTFOLIO's band table, not the rooms `expected-set.json` homes each band to. Red
+first on CI, as every ring; then `/arc-phase-done 03 --lane face` from the main clone.
