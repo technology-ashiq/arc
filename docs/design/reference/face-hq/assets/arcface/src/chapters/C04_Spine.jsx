@@ -35,7 +35,7 @@ function TapeRow({ row, i, lit }) {
   return (
     <div
       className="grid grid-cols-[46px_1fr] sm:grid-cols-[52px_190px_1fr_92px] items-baseline gap-x-4 px-4 py-[9px] rounded-lg transition-colors duration-500"
-      style={{ background: lit ? 'rgba(0,255,209,0.06)' : 'transparent', fontFamily: MONO }}
+      style={{ background: lit ? 'rgba(45,212,191,0.06)' : 'transparent', fontFamily: MONO }}
     >
       <span className="text-[10.5px] text-white/48" style={{ fontVariantNumeric: 'tabular-nums' }}>
         {row.t}
@@ -44,7 +44,7 @@ function TapeRow({ row, i, lit }) {
         <Kind family={row.family}>{row.kind}</Kind>
       </span>
       <span className="hidden sm:block text-[10.5px] text-white/48 truncate">{row.payload}</span>
-      <span className="hidden sm:block text-[9.5px] text-right" style={{ color: 'rgba(0,255,209,0.55)' }}>
+      <span className="hidden sm:block text-[9.5px] text-right" style={{ color: 'rgba(45,212,191,0.55)' }}>
         ⌗ {ulid(i)}
       </span>
     </div>

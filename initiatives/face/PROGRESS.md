@@ -1,286 +1,286 @@
-# PROGRESS.md — Cycle 15 · arc-face "The Working HQ"
+# PROGRESS.md — Cycle 16 · arc-face v2 "The Workroom"
 
 status: LIVE
-cycle: arc-face (Cycle 15, opened 2026-08-19)
-phase: 09
-appetite: 32d
-burn: 14d
-blocked-on: nothing structural — the design gate is DISCHARGED. The owner supplied the design himself rather than picking from the explore rounds, so the PICK is moot and block A can no longer take its second BELOW-BAR strike. Two items remain and neither blocks the build: one `hq.policy.yaml` row for face-ask (edit-denied to the machine by design, and not useful until the engine-lane empty-allowlist seam exists), and one owner ruling on the reference brain’s approve/reject action (see `docs/design/reference/face-hq/SOURCE.md`).
-depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersedes ADR-1300 on placement). A new repo could not be given CI from this session, and an ungated layer is not a layer that ships.
+cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
+phase: 03
+appetite: 24d
+burn: 3d
+blocked-on: —
+depends-on: —
 
-> Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
-> (tests green on CI per job + live demo + exit criteria + evidence). Evidence over
-> assertion. This cycle claims **ADR 1300–1399** (1300–1315 written at kickoff; the claim
-> was checked across all 18 sibling worktrees on 2026-08-19 — none holds an ADR ≥1300).
-> Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`) stay
-> at root (ADR-0053); evidence is lane-scoped at `initiatives/face/evidence/phase-NN/`
-> (ADR-0055). Design source: `docs/strategy/plans/PLAN-face.md` v1.0 (frozen — the
-> decision record, not the cycle). Naming note: the git **worktree** named `arc-face` is
-> the arc repo (this tree); the L3 **repo** `arc-face` is separate and not yet created
-> (ADR-1300) — do not conflate them.
+> Tracker for the cycle planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done` from the
+> main clone (tests green on CI per job + live demo + exit criteria + evidence). This cycle claims
+> **ADR 1318–1336** from the face band 1300–1399; before writing them the claim was swept across
+> all 25 sibling worktrees and every `origin/*` branch on 2026-09-16 — none held an ADR ≥1318.
+> Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`) stay at root
+> (ADR-0053); evidence is lane-scoped at `initiatives/face/evidence/phase-NN/` (ADR-0055).
+> **Cycle 15's record** — PLAN, PROGRESS, its nine phase specs and its evidence bundles — lives at
+> `initiatives/face/archive/*-cycle15-2026-09-16` (ADR-1332). Design source:
+> `docs/strategy/plans/PLAN-face-v2.md` v1.0 (the decision record, not the cycle).
 
 ## Phase table
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Brief + coverage contract — four contracts pass `design-lint`; Coverage map frozen as the `face:` schema draft + planned-rooms registry; 8 signature screens named | 1d | built; owner "purinjathu" read outstanding |
-| 01 | Explore ×3 + design system — **superseded by the owner’s reference**: he supplied a running eleven-room HQ instead of picking from the rounds, and `tokens.css` is now extracted from it | 5d | **tokens CANONICALISED** from `docs/design/reference/face-hq/`; explore rounds kept for the record, no longer an input; PICK moot |
-| 03 | L2 `arc dash` — read door + spine-health reader + `arc-inbox` function extraction + decision door (parity fixture) + ask proxy + sim/replay + request journal; two fresh attackers | 4d | built, attacked twice, local green; CI verdict pending |
-| 04 | Shell — `face/` L3 born IN-REPO (ADR-1316); Today · Inbox on the live L2 doors; five-ring shell; keyboard model | 4d | **BUILT and proven — a real `decision.recorded` written from the face** |
-| 05 | Map + template + birth-rule + coverage — `face:` ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | **BUILT** — 33 stations, gate squares, coverage gate now watches 11 inventories |
-| 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | **BUILT** — all rooms render (33 at the time, **34** since ADR-1317 generated `chat-mcp`): 22 generic · 2 index · 9 bespoke · 1 planned; re-swept 2026-08-24, 0 crashed |
-| 07 | Ask arc — `face-ask` process + router row + `hq.policy.yaml` row + 20 golden questions + drafts-to-stamp; zero write tools | 3d | deterministic half BUILT and proven through the face (VERIFIED, citations resolved); model half waits on the engine seam |
-| 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | **EVIDENCE HARNESS BUILT + ONE-COMMAND START.** `node .claude/scripts/hq/arc-face.mjs` from the MAIN clone starts the door and the app, installs once from the tracked lockfile, and prints one URL with the token in it — the three-step morning (two terminals plus hand-copying a 32-char token) is what ends dogfoods, not the product. `face-dogfood.mjs` then settles the requirement by matching L2’s journal against `decision.recorded`; today it reads **NOT MET: 1 matched, 59 decided outside the face, 1 of 5 days**. The five days are calendar, not code |
-| 09 | Nothing missing — the completeness sweep: **nine** inventories derived from the WORLD (gates · jobs · ventures · adrs-by-band · plans · capabilities · planned-rooms · ci · **hooks + lints**), `chat-mcp` generated, four empty stations filled, `/api/lane/:name` carries phases, zones can no longer hide a hold | 3d | **BUILT + ATTACKED, CI verdict pending** — all nine audit gaps closed, then two fresh attackers found **20** more holes (13 derivation · 7 shell/OS, zero overlap) and every one is fixed. The exemption list is now EMPTY: the `hooks`/`lints` exclusion was re-measured and was itself false, hiding an uncovered `policy-decide.sh`. 220 homed rows; coverage selftest 93 arms; l3-logic 262 · dash-doors 78 · readers 31 |
+| 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
+| 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
+| 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
+| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | **2 of 5 rings merged** — command `81dcf814` (#239) · kernel `bee88cce` (#240); 14 modules green in both moods on every L3 leg |
+| 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | spec'd |
+| 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — needs owner rulings §13 items 4, 5 |
+| 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
+| 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: the machine header above (`burn: 14d` of 32d) is the operative figure — it is what `PORTFOLIO.md` reads, and ADR-0051 makes this file the truth the board derives from. The block accounting below is NARRATIVE and it has fallen behind: it stops at the Phase 07 deterministic half and counts nothing for Phases 04, 06, 08 or 09, so its “7 days” is a floor over an incomplete list, not a second total. It is left standing rather than patched with a number nobody measured — a burn figure invented to make two paragraphs agree is exactly the kind of unmeasured entry this lane spent a cycle removing from generated tables.** Block A (6d): Phase 00
-1d + Phase 01 v1 ~2d + the v2 open-brief round ~1d + reference intake and token extraction
-~1d = **5d of 6d (83%)**. It closes INSIDE its appetite and its kill condition can no
-longer fire: that kill needed two BELOW-BAR owner scores, and the owner ended the round by
-supplying the design instead of scoring a third one. Block A is spent, not blown. Block B (8d): Phase 03 built
-in ~1d of its 4, both adversarial passes included. Block C (13d): the Phase 05 birth-rule
-+ coverage law and the Phase 07 deterministic half cost ~1d between them. Each block carries its own 50 % tripwire and kill
-(PLAN § Appetite); a block that finishes early banks its remainder forward, never silently
-extends. Cut order if squeezed: brain LLM → Toolbelt bespoke → Strategy/Org rooms to
-generic → Map animation → Tape play (keep as-of).
+**Appetite burn: 3d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 1/10d ·
+C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
+at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
+35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
+Phase 01's exit. **Block A, read on 2026-09-17 during Phase 01 (burn 1d, before the day-3 mark):
+clause 1 still GREEN; clause 2 — the 9 bespoke rooms render on the new kit in both moods — is GREEN
+on CI** (run 35207463369 on `0b51ea17`, 19/19 jobs: `opened=33 ... mood=dark mood-miss=0` and
+`mood=light mood-miss=0` on ubuntu Node 20 + 22, macOS and windows) — no STOP. The owner's by-eye
+read of the 9 rooms × 2 moods is Phase 01's exit gate and is recorded at `/arc-phase-done 01`.
+**Block A, Phase 01 exit clause: GREEN** — the owner read the 9 rooms in both moods on 2026-09-17:
+"Render aagudhu — close pannu". No STOP; the kit port is not re-scoped.
+**Block A closed at Phase 02 (2026-09-17): 2d of its 6d.** `face-pure` FAILs from birth before any of
+the 36 modules is written (the precondition PLAN's pre-mortem row 4 rests on), and the 4 unspent days
+bank forward to Block B, whose day-5 reading after the command and kernel rings gates all work-door spend.
 
-## Done-log
+**Usage trend (read at every Phase 03 ring close, never counted toward REQ-10):**
+**2026-09-17, command ring** — `face-dogfood`: 6 matched · 55 decisions recorded on the spine with no
+journal line (decided outside the face) · 1 of 5 days carried a decision through the face.
+**2026-09-18, kernel ring** — unchanged: 6 · 55 · 1 of 5. Nothing was decided through the face on
+either day, which is the number Phase 07's two-day bar has to move; it is a TREND here and is never
+counted toward REQ-10 (ADR-1329).
 
-- 2026-08-19 — **kickoff**: lane born (`/arc-kickoff --lane face`), century 1300 claimed
-  (18-worktree sweep clean), ADR-1300..1315 written, PLAN + 8 phase specs + this tracker
-  created. Three attackers returned 21 findings (20 applied, 1 rejected `already-covered`);
-  the simulation gate went 5 → 1 blockers; the codex second opinion returned
-  DISAGREE-CRITICAL and all 7 of its findings were routed into the specs. Structure note:
-  the design source's Phase 02 folded into Phase 01 (kickoff-lint law — every phase serves
-  ≥1 REQ at the 10-REQ cap); numbering 03–08 preserved.
-- 2026-08-19 — **plan APPROVED**: `arc-inbox approve 01M0B8T5F81RC6V06MRY289B6D --reason
-  "pannu; WIP 6 vs guideline 2 acknowledged"` run from the main clone and verified landed
-  in `2026-08-19.jsonl` — "he ran it" and "it landed" checked as separate facts. Owner's
-  standing mandate for this cycle: build all phases; mid-build decisions are delegated to
-  the session in writing; human-only structural gates are batched and surfaced, never
-  silently self-approved.
-- 2026-08-19 — **Phase 00 built (1d).** `docs/design/briefs/face-hq/brief.md` passes
-  `design-lint` — the RED transcript was captured before authoring and the green after,
-  both in `evidence/phase-00/`. Contract frozen as JSON under `contracts/`:
-  `expected-set.json` (32 rooms · **46 kinds imported from the live `validate.mjs` export,
-  never copied** · 26 commands · 30 agents · 7 gates · **7 rules counted on disk, where the
-  design source said 6 — the tree wins** · 107 concepts), `face-schema.json` (the ADR-1306
-  field set), `planned-rooms.json` (ops · trader · discover · chat-mcp).
-  OPEN for close: the owner's "purinjathu" read, bound to the brief's commit SHA.
-- 2026-08-19 — **Phase 01 explore done; PICK pending (owner gate).** Three isolated
-  variants of the 8 signature screens — own dir, own `tokens.css`, same base SHA, zero
-  colour literals outside tokens — rendered deterministically to distinct hashes.
-  `design-explore check` GREEN. Director's post-composition call: **5 of 7 IA dimensions ·
-  4 of 4 art axes**, no reassignment ordered. A shared `fact-pack.md` freezes the real
-  company data so the jury compares design, not content. OPEN: the reference item, three
-  blind rankings, then the owner's PICK + falsifiable PREDICTION as `decision.recorded`.
-- 2026-08-19 — **Phase 03 built — L2 `arc dash`.** One read door + one decision door, zero
-  deps. `/api/decide` IS `arc-inbox`'s own `decide()`, so byte-parity holds by
-  construction, proven on the live **16-key** envelope: only `id`/`ts`/`sha` differ,
-  `actor` asserted identical by name, and normalising id+ts makes the two shas COINCIDE.
-  Full auth/origin/Host matrix, HTML-escape at the serializer, cursor contract with named
-  refusals, `?asof=` replay, sim/replay modes, request journal (REQ-10's evidence).
-  `spineHealth()` added to `spine.mjs` — quarantine by refusal code, idem size, torn
-  lines, `kindsSeen` — so no consumer opens `_quarantine/`. Suites: doors 41 · parity 11 ·
-  perf 4 (10k events walked, p95 72 ms) · health 6, all vacuous-pass guarded.
-- 2026-08-19 — **two fresh adversarial passes on Phase 03, 9 findings, all fixed + pinned.**
-  The confidentiality contract held under every attack; the gaps were structural. The two
-  that matter: **`arc-event.mjs` was the fifth sibling with no unguarded-main guard — and
-  the only one whose `main()` writes** (guarded with realpath on both sides, the cheap
-  `endsWith` form being what silently no-ops behind a symlink); and **the route-enumeration
-  gate was circular**, reading back the flag it asserted on, with a live instance
-  (`/api/ask` proxies `arc-run`, which emits `run.completed`). Every route now declares an
-  explicit `spineEffect` and the fixture fails closed on one that declares none.
-- 2026-08-19 — **Phase 05 birth-rule + coverage law landed.** `face-coverage` validates the
-  frozen contract against the live tree and **fails closed on a mutant naming both the
-  ghost lane and the ghost kind**. All 16 manifests carry a `face:` section GENERATED from
-  the contract — `face-sections.mjs --check` turns a hand-edit into a named CI failure —
-  and `product-lint` `KNOWN_FIELDS` was extended in the same change, discharging
-  assumption row 3 (the `evolve:` precedent held).
-- 2026-08-19 — **CI red a second time, and my row was breaking OTHER lanes.** The face-ask
-  router row carried `hosted: local` alone. `cap`/`hosted`/`judge`/`review_by` are one
-  group — carry any, carry all four — so the router refused to load with 3 faults and
-  `arc-run` was dead for every lane; five engine-suite jobs failed on my row, not their own
-  code. The fix was to DROP the field, not complete it: those four describe a HIRED external
-  runtime under tenure (ADR-0216/0217), and face-ask runs in-house, so inventing a judge and
-  a review date would fabricate a hire. Local-only still holds — ADR-1307 plus the driver
-  choice — and `data-boundary.mjs` only special-cases `hosted: cloud`.
-- 2026-08-19 — **Phase 07 capability gap, found by running it rather than reviewing it.**
-  `face-ask` declares `tools: []` (the brain has no hands). The `claude-code` driver
-  refuses it: an absent `--allowedTools` means UNRESTRICTED, so an empty grant fails closed
-  — ADR-0223 working as designed. There is no way yet to say "zero tools" explicitly. The
-  wrong fix is to give the brain a token tool to get a green run; the right one is an
-  engine-lane seam for an explicit empty allowlist. Recorded in the phase spec, raised
-  cross-lane, and Phase 07's bar is met on the offline deterministic path meanwhile.
-- 2026-08-19 — **CI red once, on the Windows leg only**, exactly as the no-local-tests rule
-  predicts: a bats test built an import path by interpolating `$ARC_ROOT` through `sed` and
-  produced `D:\d\a\arc\arc`. Moved to a real `.mjs` resolving from `import.meta.url`. That
-  rewrite then caught a genuine gap — `spineHealth` exposed no `kindsSeen`, so the face's
-  headline honesty number would have been copied from a doc rather than derived.
-- 2026-08-21 — **CI GREEN per JOB at head SHA `eb760ae`.** All 19 jobs of `arc-ci` report
-  success (ci-tier · 3 ubuntu node legs · 12 windows shards · 3 macos shards), and the run
-  head SHA was confirmed equal to the local HEAD before this line was written. That was the
-  one gate Phases 03, 05-birth-rule and 07-deterministic were still waiting on; each is now
-  green-on-CI and eligible for `/arc-phase-done`, which is separately gated on evidence
-  being emitted from the MAIN clone (a worktree cannot write spine receipts).
-- 2026-08-21 — **the v1 design round was REJECTED by the owner at 18/100** — "very basic,
-  LKG design, boring tech". The cause was the BRIEF, not the composers: it spent its words
-  specifying the look (cold ink monochrome, dense, one surface, these tokens, this 6-zone
-  template) and skimped on meaning, so four composers rendered one person's taste
-  faithfully. That is arc's own ADR-0049 BELOW-BAR failure inside the design lane: a gate
-  that only asks "did anyone break a rule" cannot detect mediocrity, and `design-lint` did
-  exactly that — every v1 variant passed it. **This is BELOW-BAR strike 1 of the 2 that
-  kill block A.** The delegated v1 PICK (`docs/design/explore/face-hq-v1/PICK.md`,
-  variant-a + two grafts) is superseded in practice by that score and must not be treated
-  as the canonical tokens input.
-- 2026-08-21 — **v2 round on an open brief: six directions, deliberately NO pick.**
-  `docs/design/briefs/face-hq/BRIEF-v2-open.md` constrains only what carries MEANING (a
-  machine may never decide · real and simulated are different substances · no number
-  without a receipt · never a bare 0 that could mean two things · arc vocabulary verbatim ·
-  four signals unmistakable) and hands over the metaphor, the structure, light-or-dark, and
-  whether a dashboard is the right answer at all. Six directions came back — subtraction ·
-  editorial · sovereign instrument · paper record · operations deck · cockpit — laid out in
-  `docs/design/explore/face-hq-v2/COMPARE.html`. The evidence the open brief worked: **two
-  designers independently invented "green stays unspent until the first real rupee"** from
-  a brief that never mentions it, which a prescriptive brief cannot produce. No pick is
-  recorded because the owner is making this one himself after the v1 delegation failed.
-- 2026-08-23 — **housekeeping**: six iteration screenshots that landed in the repo ROOT with
-  the v2 commit moved under `docs/design/explore/face-hq-v2/shots/iterations/`; this tracker
-  recomputed against what is actually built (burn, block A tripwire, strike count).
-- 2026-08-23 — **the owner supplied the design, and the explore loop stepped aside.** After
-  scoring v1 18/100 and finding the v2 round no better, he brought his own: a running
-  Vite + React app — `arc — Speak To The Company (v0.4)` — with a persistent particle face
-  and **eleven rooms**, every panel a derived view over an in-browser event spine, and
-  `GET /api/spine` already reading a real spine directory read-only. Landed at
-  `docs/design/reference/face-hq/` (a new tier: not a candidate, not judged, not gated —
-  the target). 70 source files committed; the 197 MB of `node_modules`, the prebuilt
-  `dist/` and two superseded rounds stayed out. `.env.local` was read BEFORE staging: a
-  filesystem path, no key. Two generations had been copied together with Windows `(2)`
-  suffixes; the `(2)` set is the NEWER eleven-room HQ and was promoted to canonical names
-  after reading BOTH entry points — the older six-section landing is archived beside it.
-- 2026-08-23 — **`tokens.css` re-canonicalised from the reference; v1 variant-a is out.**
-  Reading `src/ui/kit.jsx` found **three reserved-hue collisions where reading the
-  screenshots had found one**, two of them invisible in a render because they only appear
-  on a screen carrying both meanings at once: `SimBadge` wore **amber** (needs-you),
-  `KIND_FAMILY.council` wore **violet** (the non-real family), and both the live status dot
-  and the Money room's simulated-revenue stat wore **green** (real money, which is still 0).
-  All three are corrected in the token file, not in the owner's drop. A fourth defect no
-  eye can catch: `COLOR.faint` carries real text at **3.94:1**, below arc's own 4.5:1 floor
-  — raised to the first alpha that clears it (4.56:1). Every ratio in the file is computed,
-  none asserted. The structural finding is that the reference's fifth hue — cyan, carrying
-  no meaning — is what lets the four reserved hues survive untouched.
-- 2026-08-23 — **Phase 04 opened; L3 flipped in-repo (ADR-1316).** ADR-1300 put L3 in its own
-  `arc-face` repo. That is now wrong for one narrow reason: this session cannot author
-  `.github/workflows/**`, so a new repo would be the ONE layer of the product with no CI at
-  all — the layer with the most code, the only build step, and the only place a rendering
-  bug can hide. The owner's rule for this cycle is that nothing is proven locally, so
-  "complete all phases" and "everything on CI" cannot both be true through a repo whose CI
-  cannot be written. FACE-A's cons for the in-repo option were re-measured rather than
-  assumed: `sync-to-project.sh` is an ALLOWLIST, so `face/` is excluded by construction
-  (the byte-identity golden moved by exactly one row, the new generator, 342 → 343), and
-  `ci.yml` never runs `npm install` at the repo root.
-- 2026-08-23 — **L3 scaffolded with the split kept cheap.** `face/` holds its own
-  `package.json`, Vite config and strict-TS setup, and imports NOTHING from `.claude/**` —
-  its only contract with arc is the L2 door's HTTP routes. The architecture rule that makes
-  the CI mandate real: **every decision lives in `face/src/lib/*.mjs`, dependency-free ESM,
-  and the `.tsx` files carry no branch worth asserting.** CI cannot install packages, so a
-  branch inside a component is a branch nobody tests. `tests/face/l3-logic.mjs` imports the
-  app's own modules directly and runs **39 checks with no install and no build**, in the
-  same three-OS matrix as everything else. Two bats tests assert the rule mechanically: no
-  `face/src/lib` module may import a package, and no arc script may import from `face/`.
-  `face-tokens.mjs` copies the canonical tokens into the app with a `--check` drift gate and
-  five mutant arms (a copy with no gate is drift with extra steps).
-- 2026-08-23 — **Phase 04 built, and the write path is PROVEN, not asserted.** The app runs:
-  five-ring shell over the persistent particle face, Today, Inbox, the Map, the generic and
-  index renderers. Opened it against a 2,000-event fixture, typed a reason, pressed approve,
-  and read the log back — `decision.recorded 01M0Q01KDCARYDDD0B6XSA0GFC` with the reason
-  verbatim. An empty reason first surfaced `BAD_REASON` with the door's own sentence. That
-  is REQ-03 end to end, through `/api/decide`, which IS `arc-inbox`'s own `decide()`.
-  Four agents built the layers in parallel; **every defect that mattered was found by
-  integrating and by opening the page**, never by a green suite:
-  the door client was dead on arrival in a browser (`fetch` stored unbound — Node does not
-  care, `window` does); the dev proxy sent the wrong Host and would have sent the wrong
-  Origin, which would have left every READ working and every STAMP refused; `modeChip`
-  claimed `real: true` for a mode nobody stated, directly under a comment saying that is the
-  mistake; and `Review & Ship` rendered as `Review &amp; Ship` in the rail, the Map labels
-  and all 33 accessible names. Two agents had each written their own decoder — 26 call sites
-  — and each left a comment saying a twin existed and must not drift. Folded to one, and the
-  registry is now decoded ONCE where it enters. Suites: L3 **123 checks**, doors **50**, both
-  with no install and no build.
-- 2026-08-23 — **Phases 05 and 06 built; all 32 openable rooms swept and looked at.** Zero
-  failures. The generic renderer earns its keep: Bench is built entirely from derivation —
-  stations, what it records, lanes, vocabulary — and closes with its own receipt
-  (`rooms.generated.json · 5 declared · 3 zones drawn · status built`), which is the
-  no-number-without-a-receipt rule turned on the room itself. Ask arc answered a real
-  question through the deterministic reader with no model, no key and no spend, and came
-  back **VERIFIED**: "every one of 3 citations was put to the door and resolved". Its
-  no-hands panel COMPUTES its verdict from the handle the page holds — "0 write routes ·
-  call, decide withheld" — and the audit walks the prototype chain, because
-  `Object.keys(door)` returns no methods at all and an own-keys audit would clear a
-  fully-armed client.
-- 2026-08-23 — **two defects only looking could find, and one vacuous fix.** The non-real
-  hatch rendered at full violet over body text and made the Money room's simulated panel
-  unreadable — fixed in the TOKEN so it holds everywhere, at a measured opacity rather than
-  a guessed one. And a room opened at the scroll position of the last one, so leaving Money
-  half-read and opening Bench showed Bench's footer: every room here leads with a sentence
-  that is the point of the screen, and arriving from the bottom loses it. **The first fix
-  for that was a no-op whose check passed vacuously** — I reset the room column, but nothing
-  constrains its height so the WINDOW scrolls, and 0 === 0 read as success. Asserting the
-  precondition (that something had actually been parked away from the top) is what caught
-  it; the fix is now measured at 3388px of page overflow, parked at 700, zero after.
+**Block B tripwire (day 5 of 10), read on 2026-09-18 after the command and kernel rings: GREEN — no
+cut.** The clause is "if 14 modules are not green → cut the remaining bespoke folds to generic
+renders". 14 modules are green: the command ring's six (`today`, `inbox`, `map`, `spine`, `board`,
+`ask-arc`) and the kernel ring's eight (`engine-room`, `model-policy`, `policy`, `scheduler`,
+`memory`, `evolve`, `bench`, `absorb`), each rendering from door routes in both moods with 0 console
+errors on ubuntu Node 20 + 22, macOS and windows — run **35263610481** (19/19 jobs on `62e9ba44`,
+merged as `bee88cce`), carrying `smoke: heading rings=command,kernel checked=14 miss=0`,
+`not-served panels=18` and `verbs-pending cards=10`, each matched per room against the derived
+evidence lists. Block B has spent 1d of its 10d for two of five rings, so the remaining three rings
+stay bespoke folds.
 
-## Assumptions ledger — adjudicated by running the measurement, not by opinion
+## Inherited from Cycle 15
 
-Four of seven now have a result. A trigger is scored by executing what it names; the three
-without one are named NOT YET EVALUABLE rather than quietly counted as holding.
+- REQ-10 (dogfood) → this cycle's Phase 07 at a two-day bar (ADR-1329).
+- Room sweep findings F1 (ADR band map names rooms, not lanes) · F2 (scheduler lede over-promises) · F3 (planned `trader` wears LIVE) → Phase 03 rings (`initiatives/face/archive/evidence-cycle15-2026-09-16/phase-09/room-sweep-by-eye.md`).
+- ADR-1315's voice trigger — the v0.7 dock ports text-only; the question is asked at the Phase 07 retro.
+- Cycle 15 assumption row 5 (timing vs Inbox shape) → PLAN assumptions ledger row 7.
+- `approval.requested{gate: phase-done}` `01M2NJ5F736X7PNRD68H5DVYPG` for Cycle 15's Phase 09 close is still waiting on the owner's stamp.
+- Not this lane's work, recorded so it is not lost: the approved `[phase-orphan]` kickoff-lint group (its own `/arc-change` PR, `docs/trial-ledger.md` 2026-09-16) · the vacuous `tests/portfolio-board.bats` archive assertion (portfolio lane, ADR-1332).
 
-| # | assumption | verdict | the measurement |
-|---|---|---|---|
-| 1 | `spine.mjs` serves the read door <1 s p95 on a 10k-event fixture | **HELD** | walked all 10,000 events through the cursor in 20 pages: p50 56 ms, **p95 72 ms**, max 441 ms. The sqlite accelerator path stays unbuilt, correctly. |
-| 2 | `/api/decide` can emit a `decision.recorded` byte-identical to the CLI's | **HELD** | same approval, same reason, two doors, two spines: all 16 envelope keys identical except `id`/`ts`/`sha`, `actor` identical by name, and normalising id+ts makes the two shas coincide. The extraction was mechanical, as re-verification predicted. |
-| 3 | a `face:` section passes `product-lint` once `KNOWN_FIELDS` is extended | **HELD** | 16 of 16 manifests carry one; `product-lint: all manifests valid`. The `evolve:` precedent held exactly. |
-| 4 | three theses can differ ≥3/7 IA dimensions and ≥3/4 art axes | **HELD** | director's post-composition call on the rendered pages: **5 of 7** and **4 of 4**, no reassignment. The 20-line Map legibility half is NOT YET EVALUABLE — the Map needs L3. |
-| 5 | the owner will decide through the face on real days | **NOT YET EVALUABLE** | needs Phase 08 and a built L3. Nothing about it is knowable now, and calling it "on track" would be the fiction this column exists to prevent. |
-| 6 | `/arc-phase-done` accepts cross-repo evidence | **NOT YET EVALUABLE** | needs the `arc-face` repo, which is Phase 04's entry gate. |
-| 7 | file-borne truths have no usable history, so as-of applies to spine views only | **HOLDS, UNFALSIFIED** | no sanctioned file-history source appeared. The door enforces it: file-borne panels carry the `file, not log` badge, and `/api/pnl` refuses a day-granular `asof` with a named 501 rather than inventing one. |
+## Done log
+
+- **2026-09-16 — Cycle 16 kickoff (`/arc-kickoff --lane face`).** Cycle 15 archived in-lane
+  (ADR-1332). 19 ADRs written: 1318–1331 record FV2-A…N as LOCKED; 1332–1336 are the kickoff's own
+  forks. Owner rulings at kickoff: appetite **24 days → Tier L**; **P06 kept** (REQ-08 "stamp
+  survives" becomes a Non-negotiable + Phase 05 exit, the freed REQ measures the session door);
+  **browser tests on every Node ≥20.19 leg**, Node 18 a counted skip. Found while planning: v0.7's
+  flows assert 29 event kinds arc does not have (ADR-1334); CI has never built L3 and Node 18 cannot
+  (ADR-1335) — so the harness moved into Phase 00 as the steel thread (ADR-1336); ADR-1308's text
+  does not contain the generated-token rule the cycle cites it for (noted in ADR-1318).
+  **Gates.** `kickoff-lint` passes (one honest WARN: phase appetites = 100% of 24d). Attack panel ×3
+  returned 19 findings: A 7 · B 5 · C 7 — applied (several reworded to fit): real-Chrome error
+  control, a named throwing-room baseline, a Node-20-below-20.19 skip that FAILs, concurrent
+  idempotent `apply`, REQ-01 BELOW-BAR, attacker time inside phase days, a Phase 05 day-1 CLI probe,
+  the shard-table collision protocol, REQ-08 covering all three sessions, the CLAUDE.md command count,
+  Preconditions lines in every spec, facts-bundle attackers bound to the shipping ring PR, a
+  `face-pure` JSX-branch assumption, realpath main-guards, and a Standing-decisions list.
+  Re-verification: Vite 8 and Node `WebSocket` claims VERIFIED; the Chrome claim PARTLY WRONG
+  (`windows-latest` = Server 2025, `macos-latest` = macOS 26 arm64, `CHROME_BIN` contested) —
+  ADR-1335's lookup no longer depends on it. Second opinion (Codex CLI 0.147.0): **DISAGREE** on a
+  36-vs-41 room count; resolved by measuring the inventory (PLAN § Module inventory) and all 10
+  findings applied (`docs/reviews/2026-09-17-second-opinion-face-v2-kickoff.md`). **Simulation gate:
+  round 1 = 5 blockers, round 2 = 2 blockers** (smoke compared against served incl. the `lane`
+  template; no id→ring source). Both fixed from measured data — ring from the served registry,
+  "openable" = non-template entries (33) — but **not re-verified by a third run**: two non-zero rounds
+  make this the owner's call, raised with the approval.
+  REJECTED: exempt `--accent-dim` from the Phase 01 contrast gate — unsupported
+  REJECTED: a new quoting lint for the harness scripts — already-covered
+  REJECTED: the Node-patch check as a replacement for assumptions row 7 — already-covered
+  REJECTED: cut absorb read and hire certification from Phase 06 — already-covered
+  REJECTED: other lanes' CLIs as an External-dependencies row — already-covered
+  REJECTED: pre-existing ADRs appended into the Key decisions index — non-actionable
+  Receipts (main clone spine): `kickoff.done` `01M2NS0A8Y7SPQW8NNJ19Y7AZZ` ·
+  `approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP`.
+- **2026-09-17 — Phase 00 CLOSED (`/arc-phase-done 00` from the main clone).** Harness steel thread:
+  the v0.7 reference taken in (108 files, PII clean, v0.4 kept), `modules-v2.json` derived by script
+  (36 = 29 + 3 + 4), the delta report, the fixed-defects list (68 lines), 72 baseline shots by hash;
+  and the browser harness — a dependency-free CDP client, the v0.7 smoke ported, fixture spine → door
+  → `vite preview` → real Chrome — building L3 and opening **33/33 served rooms with 0 errors on
+  ubuntu Node 20 + 22, macOS and windows**, Node 18 a counted skip. Merged as `a0e8ee1f` (#233).
+  **Tests:** the merged tree re-verified by `workflow_dispatch` on `main`, run `35194579928`, 19/19
+  jobs read per job, head `a0e8ee1f`; full suite `1..3400` on the ubuntu Node 20 job.
+  **Live demo:** from the main clone, `node .claude/scripts/hq/arc-face.mjs` (live mode) — 34 served,
+  33 openable, 33 opened, every room with its opening sentence and a non-empty body, 0 console errors
+  (2 warnings, both v0.7's own THREE.Clock notice); the Map room opened and looked at by eye; the
+  launcher stopped and ports 8317/5180 confirmed free. The per-OS log lines the spec asks the owner
+  to read are in `evidence/phase-00/smoke-log-excerpts.md`.
+  **What the phase actually cost:** 1d of its 2d appetite; 11 CI runs on the branch (6 red, 5 green), plus the red-first run and the `main` verification. Four findings that mattered,
+  each pinned: a settle gate that measured macOS runner weather (a Google Fonts download on a cold
+  load, a different room each run) → FAIL only past 30 s, SLOW printed with its evidence; an
+  `unref()`ed awaited timer that crashed the client suite mid-file while a lockfile FAIL hid it; a
+  lockfile check that accepted a binding by presence rather than by version; and three exit items
+  claimed but unproven until a green run was READ (no RAN line on green jobs, a probe that never
+  scanned the new files, no symlinked main-guard fixture). Two attack passes: 32 holes and 7
+  surviving mutants, fixed and pinned. Spec-fidelity: **drift found**, every finding dispositioned
+  in `evidence/phase-00/handoff.md` (stub-smoke mutant control moved to the bats layer, per-job
+  evidence, image on every job, `.shots/` ignored; three new debt rows). Predictions: 2 hit · 3 miss.
+  **Assumptions adjudicated by measurement:** Chrome findable by ADR-1335's lookup — HELD (found on
+  all three images every run). `gen-spine.mjs` makes every room non-empty in sim mode — **NOT
+  EVALUABLE in Phase 00**: the smoke measures opened + errors, not panels, and the `NOT SERVED`
+  label the trigger names ships with REQ-05; carried to Phase 03, where each ring's module renders
+  panels or `NOT SERVED`. **ADR revisit triggers:** ADR-1335's condition (one OS leg red for a
+  reason outside the product in 2 consecutive runs) WAS met mid-phase on macOS (runs `35147618663` →
+  `35150543730` → `35183482747`: no WebGL, then runner-speed settle misses) and was answered in the
+  harness, not by dropping the leg; the leg has been green on every run since — raised to the owner
+  with this close, no ADR change proposed. ADR-1336 (2-day cap) not reached. No ADR DEFERRED.
+  Evidence bundle: `arc-evidence.sh` applies from Phase 02 (ADR-0002); this phase's evidence is the
+  lane pack `initiatives/face/evidence/phase-00/`.
+  amendments: 0 · reopened: n · t-to-phase0: 1d.
+  Receipts (main clone spine, landed in `2026-09-17.jsonl`): `phase.closed`
+  `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `approval.requested{gate: phase-done}` `01M2Q5HZJRBMN98HNR9YA5FR77`
+  — the second waits on the owner's stamp.
+- **2026-09-17 — Phase 01 CLOSED (`/arc-phase-done 01` from the main clone).** Tokens + kit:
+  `docs/design/system/tokens.css` keeps `:root` byte-identical and adds `html.hq` and
+  `html.hq.hq-light` with v0.7's values; every text/surface, chip, fill and UI ratio is computed by
+  `tests/face/tokens-contrast.mjs` and written into the header by it; the generated copy; Tailwind v4 +
+  phosphor in L3 only (lockfile carries linux-x64-gnu, darwin-arm64 and win32-x64-msvc bindings of
+  oxide, both lightningcss families and rolldown); the v0.7 kit (`ui/kit.tsx`, `ui/bits.tsx`) with
+  `ui/legacy.tsx` keeping the v1 renderers' props; the 9 bespoke rooms opening with `RoomHead` and
+  drawing their cards with `HPanel`; a mood toggle, the mood on `<html>` before the first render;
+  the colour-literal lint FAIL from birth; the browser harness judging every room in dark AND light.
+  Merged as `4fcb53db` (#235).
+  **Tests:** red first on run `35201425258` (the spec's four expected messages, nothing else red);
+  the PR's run `35209617606` 19/19 read per job on head `efcd4def`; the merged tree re-verified by
+  `workflow_dispatch` on `main`, run `35211136090`: attempt 1 18/19 — windows shard 1/12's first
+  Chrome launch wrote no DevToolsActivePort within 30 s, same runner image and tree green in three
+  earlier runs — attempt 2 re-ran that job, 19/19; full suite `1..3404` on ubuntu Node 20
+  (`evidence/phase-01/ci-jobs.json`).
+  **Live demo:** from the main clone, `npm ci` then `node .claude/scripts/hq/arc-face.mjs --no-open`
+  on the canonical spine; 9 rooms × 2 moods navigated at 1440×1000 with the mood confirmed on
+  `<html>`, 18 screenshots (git-ignored, the live spine is on them), **0 console errors** (only v0.7's
+  THREE.Clock notice); five opened by eye before asking; launcher stopped, ports 8317/5180 free.
+  **Owner's by-eye read (2026-09-17), verbatim:** "Render aagudhu — close pannu"; on the AA
+  adjustments to v0.7's colours, "AA-adjusted values vechukko"; on the face stage in the dark mood
+  only, "Dark-la mattum, Phase 02 decide" (`evidence/phase-01/owner-read-9-rooms-2-moods.md`).
+  **Standing ruling this sets for later phases:** a v0.7 value under the computed AA floor moves along
+  its own hue to the first step that clears, and is listed in the tokens.css header — a permitted
+  delta alongside ADR-1322's council rule.
+  **What the phase actually cost:** 0.5d of its 2d appetite; 6 CI runs on the branch (the red-first,
+  one stopped at product-lint before any test for an unregistered synced script, three green) plus the
+  PR run and the `main` verification. Two fresh attackers found 23 holes — 9 HIGH in the contrast gate
+  and the lint (a token re-declared outside the three exact mood selectors applied in Chrome and
+  passed; laws compared against the file under test; aliases, fills and the focus ring never measured;
+  Tailwind's `_` separator hid literals; a newline in a page error forged a mood summary line) and a
+  generator that wrote through a directory link onto its own source; 20 fixed and pinned, 3 to debt.
+  Measuring the full pair set moved five light hues one more step and dark `--on-red` to `--bg-0`.
+  Spec-fidelity: **drift found**, every finding dispositioned in `evidence/phase-01/handoff.md`.
+  Predictions: 2 hit · 3 miss. `face-browser.bats` re-measured at 470 s (two moods).
+  **Assumptions adjudicated by measurement:** the generated `tokens.css` copy feeds Tailwind v4 with
+  no `@import`/`@theme` ordering failure — HELD (the build passed on ubuntu, macOS and windows from
+  the first implementation run, `35204281571`). **ADR revisit triggers:** none met. ADR-1323's
+  (`npm ci` failing twice for a missing binding) — not met, `npm ci` green on every run; ADR-1331's
+  (a batch unable to reach 0 errors in `hq-light`) — not met; ADR-1322's (owner scores council below
+  the reference on colour) — not met, the owner read it and closed; ADR-1335's (one leg red for a
+  reason outside the product in 2 consecutive runs) — one occurrence (the windows Chrome launch
+  miss above), not two; counted here so the next one is. No ADR DEFERRED. Evidence bundle:
+  `arc-evidence.sh` applies from Phase 02 (ADR-0002); this phase's evidence is the lane pack
+  `initiatives/face/evidence/phase-01/`.
+  amendments: 0 · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-17.jsonl`): `phase.closed`
+  `01M2QGWHBAX0329SNCX8Q2CPAX` · `approval.requested{gate: phase-done}` `01M2QGWHNYEBPAC97EEMV55JDH`
+  — the second waits on the owner's stamp.
+
+- **2026-09-17 — Phase 02 CLOSED (`/arc-phase-done 02` from the main clone).** Shell + module frame:
+  v0.7's 240 px rail, 56 px header, ⌘K palette and a text-only dock (ADR-1315) in `face/src/App.tsx` and
+  `face/src/shell/`; rings, order and home read from `/api/rooms` and no shell file names a room (a
+  scan derived over every non-room file under face/src, with its own mutant); `face/src/modules/RING/ID/`
+  four files each, the nine bespoke rooms attached as CARRIED modules and the other 24 served rooms drawn
+  through the generic module with a report line naming the id; `face/src/lib/registry.mjs` attaching
+  folders to served rooms both ways; `face-pure` (FAIL from birth) over the four-file shape, fold/module/
+  ops imports followed transitively and every branch in a View; face-coverage's module half with the
+  EMPTY ADR-1327 exemption list; `/arc-face-module` scaffolding a module and proving it green in one
+  command or rolling back; the smoke's render line judged EQUAL to the gate's; `tsc --noEmit` in the build.
+  The face stage left the workroom in both moods, as v0.7 has it, WebGL-guarded and unmounted.
+  Merged as `d76657d1` (#237).
+  **Tests:** red first on run `35221247877` (every new suite red for its missing module, plus two reds
+  nobody planned: the typecheck's first run found an implicit any in `mood.mjs`, and the binary-byte
+  guard caught a literal NUL in the red-first suite itself — `evidence/phase-02/red-first.md`); the PR's
+  run `35230101361` 19/19 read per job on head `7718ae00`; the merged tree re-verified by
+  `workflow_dispatch` on `main`, run `35232834235`, 19/19, full suite `1..3409` with 0 not ok on ubuntu
+  Node 20 (`evidence/phase-02/ci-jobs.json`). Every L3 leg: `smoke: opened=33 openable=33 errors=0` and
+  `smoke: render mood=M module=9 generic=24 unmarked=0` in dark and in light.
+  **Live demo:** from the main clone at `d76657d1`, `node .claude/scripts/hq/arc-face.mjs --no-open` on the
+  canonical spine: all 33 openable rooms opened in the browser, 9 through their module and 24 through the
+  generic module, both moods, `<html>` classes confirmed, **0 console errors**; the Map and Today looked at
+  by eye; launcher stopped, ports 8317/5180 free. The scaffold from the main clone into a scratch copy:
+  `face-module.mjs kernel/engine-room` → `face-module: GREEN on face-pure and face-coverage` in one command.
+  **What the phase actually cost:** 0.5d of its 2d appetite; 5 CI runs (the red-first, the implementation
+  run red only on the untyped `ops` lists under the new typecheck, the attacker-fix run red only on
+  `spine-concurrency` — a spine lock timeout on windows shard 7 in files this phase never touched, green
+  on the next run — and two green) plus the `main` verification. Two fresh attackers found 21 holes —
+  7 HIGH: the lint's whitespace and line terminators narrower than node's (`import<EM SPACE>React`,
+  `// x<U+2028>import`), a percent-encoded specifier node and the lint resolved to different files, a
+  lookup after an object literal, the gate and the browser disagreeing on an exempted extra, a throw that
+  skipped the scaffold's rollback, a rollback that crashed on a locked file; all fixed and pinned, 21
+  lines in fixed-defects.md (`evidence/phase-02/attacker-reports.md`). Spec-fidelity: **drift found**, every
+  finding dispositioned (`evidence/phase-02/spec-fidelity.md`), the naming loophole in "a boolean field
+  fold() returns" and three shell decisions fixed. Predictions: 4 hit · 1 miss.
+  **Assumptions adjudicated by measurement:** `face-pure`'s structural scan catches a branch hidden in JSX
+  (`{x > 0 && <X/>}`, a ternary on raw data, a comparison in a template literal) while a condition on a
+  boolean field stays legal — **HELD, after the attack**: all three FAIL by name on every CI configuration;
+  the attackers found constructs the first cut missed, each now a pinned check, and the condition rule
+  was tightened from a name to a property read of fold's output. **ADR revisit triggers:** none met.
+  ADR-1320's (face-pure exempting more than 2 modules by name) — 0 exemptions exist; ADR-1321's (a served
+  room blank in a smoke, or an unserved folder no gate FAILed) — not met, the render verdict equals the
+  gate's; ADR-1327's (a registry-row ruling for story/factory) — no ruling yet, list EMPTY; ADR-1335's —
+  no windows Chrome launch miss this phase, the counter stays at one. No ADR DEFERRED.
+  **Decided in this phase, for the owner's read:** the face stage leaves the workroom in both moods (v0.7:
+  "the HQ is a clean room, the face belongs to the front door"); the dock ports text-only without v0.7's
+  room-keyed chips; the palette finds and opens and writes nothing until Phase 05; the header's day
+  player is the as-of scrub and the brain chip is NOT SERVED — each a debt row, none re-lays a room.
+  Evidence: `initiatives/face/evidence/phase-02/` (handoff, red-first, attacker reports, spec-fidelity,
+  ci-jobs) with its sha256 manifest from `arc-evidence.sh bundle 02 --lane face`.
+  amendments: 0 · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-17.jsonl`): `phase.closed` `01M2QWMG3CSBD1B4JFSAKWEXYX` ·
+  `approval.requested{gate: phase-done}` `01M2QWMGM3FBKW5BMBAVAMZGKE` — the second waits on the owner's stamp.
 
 ## Now
 
-**Position:** the design gate is **discharged** — not by a pick, but because the owner
-supplied the design. `tokens.css` is canonical and derived from a product that already
-runs. Phase 03, the Phase 05 birth-rule + coverage law and the Phase 07 deterministic half
-are built and **green on CI per job** (`8274f65`, 19/19). Phase 00 waits only on the owner
-read. Nothing is closed via `/arc-phase-done` yet.
+**RESUME HERE (2026-09-17):** **Phase 02 is CLOSED** (done log, 2026-09-17), and with it Block A at 2d of
+6d. The next phase is **Phase 03 — the 36 modules read-side** (`phases/phase-03-spec.md`, REQ-01 +
+REQ-05, 7d appetite), in five ring PRs in order: `feat/face-v2-03-command` · `-kernel` · `-factory` ·
+`-money` · `-company`. Its Preconditions line is satisfied by the Phase 02 row above once this close merges.
 
-**What the reference changes about the plan.** Phase 04 was "design and build the shell";
-it is now "wire an existing shell to L2's real doors" — the reference already reads a spine
-over an HTTP endpoint, so the seam exists and the work is substitution, not construction.
-Phase 06's bespoke wave-1 rooms (Council · Money · Portfolio · Engine · Spine · Law ·
-Learn) are **designed already**. What the reference does NOT contain is **REQ-04's Map** —
-there is no transit map in it, and that is still to be built. Recording that now so it is
-not a surprise at Phase 05.
+**Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
+`01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
+`approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP`; the kickoff merged as `c5dabfbc`
+(#232) before the first Phase 00 commit. Standing instruction from the owner (2026-09-17): build
+every phase through to the end without waiting, push and merge per phase on green CI, run nothing
+locally, and ask only at owner-only gates.
 
-**Next step (mine):** extract the core components from the reference the way the tokens
-were extracted, then Phase 04 — point the shell at L2's `/api/inbox` and `/api/decide`
-instead of the in-browser simulator. Phase closing stays queued behind a merge to main: a
-worktree cannot emit the spine receipts `/arc-phase-done` requires.
+**Waiting on the owner, none of it blocking Phase 03's first ring:** the stamps on
+`approval.requested{gate: phase-done}` `01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02),
+`01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01), `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and
+`01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the main clone,
+`node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13 items 4 and 5
+(the six flagship ops; story/factory registry rows vs exemption) are due by the Phase 04 close and are
+raised at the Block B reading.
 
-**Phase 07 status:** unchanged and correctly parked. The deterministic half is BUILT and
-answers live-state questions with citations, needing no driver, no key and no spend (36
-golden checks, proven non-vacuous by mutation). The model half is blocked on TWO things:
-the owner's `hq.policy.yaml` row, and an engine-lane seam for an explicit empty tool
-allowlist (`tools: []` is refused by the `claude-code` driver, because an absent
-`--allowedTools` means UNRESTRICTED and an empty grant fails closed — ADR-0223 working as
-designed). The policy row alone would not make it runnable, so it is not urgent.
+**What Phase 03 inherits:** the module frame — `/arc-face-module RING/ID` scaffolds a green module in one
+command, and `face-pure` + face-coverage's module half FAIL from birth; the nine CARRIED modules (today,
+inbox, map, spine, board, ask-arc in command; council-chamber in factory; money, ventures in money) whose
+Views each ring replaces with the v0.7 port, deleting the Cycle 15 renderer it no longer mounts; the host
+handing `fold()` `{}` until the command ring loads declared routes (debt row, REQ-05); the shell's missing
+route to the ADR-1327 rows, due with the factory ring's first exemption (debt row); the render verdict
+already reading the gate's attachment, so each ring's module count is judged against its folders; the
+Cycle 15 findings F1–F3; the shot-review contract against Phase 00's baseline; debts in `debt-ledger.md`.
 
-**That ruling is DECIDED (2026-08-24), and it did not need the owner.** The reference brain's
-action protocol lets the model emit `approve` / `reject` on a real inbox id, restrained only
-by a prompt — which is not a tool contract, and REQ-07 requires ZERO write tools proven by a
-fixture. Both actions are out; `open_room` / `set_speed` / `enter_hq` stay. It is not a design
-call and the owner kept only the design, so asking would have been asking him to re-derive an
-answer E2 and REQ-07 already give. Enforced, not stated: `ASK_ACTIONS` + `actionAudit` in
-`face/src/lib/ask.mjs`, the action-side twin of `ROUTE_EFFECT` / `noHandsAudit`, with a write
-action, an UNCLASSIFIED action and an empty vocabulary each failing it. Reasoning in
-`docs/design/reference/face-hq/SOURCE.md`.
-
-**The owner's column is now ONE item:** the brief's "purinjathu" read for Phase 00.
+**Next step:** `/arc-develop start 03 --lane face` on `feat/face-v2-03-command` cut from `main` after this
+close merges — the command ring first (today · inbox · map · spine · board · ask-arc · chat-mcp generic).
+Tests first per the spec's Verification plan (the ring's module count RED before its modules exist), on CI only.

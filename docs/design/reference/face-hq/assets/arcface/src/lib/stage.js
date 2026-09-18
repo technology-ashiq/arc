@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────
 export const stage = {
   presence: 1, // 1 = hero/finale (face fully forward) · ~0.3 = reading chapters
+  shiftX: 0, // horizontal seat in world units — landing parks the face right
   chapter: 0, // active chapter index 0..9
   // landing ⇄ HQ crossing: dir +1 = into the HQ (face flies past the
   // camera), -1 = back to the landing (face swoops back in). `id`

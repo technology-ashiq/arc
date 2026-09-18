@@ -1,6 +1,6 @@
 // inbox.mjs -- every decision the two daily rooms make, in one dependency-free file.
 //
-// Today.tsx and Inbox.tsx are markup. THIS is where the branches live, for the reason
+// The today and inbox modules draw what their folds return; THIS is where the branches live, for the reason
 // README.md gives: CI never runs `npm install`, so a branch inside a .tsx is a branch
 // nobody tests. The keyboard model, the reason rules, the "since you left" arithmetic,
 // the brief's collapse rules and every read of the door's response shape are here.

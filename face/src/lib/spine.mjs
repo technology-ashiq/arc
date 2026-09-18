@@ -44,7 +44,7 @@ import { unescapeDoorText } from "./door.mjs";
 import {
   fmtInt, readSpinePage, refusalOf, shortId, tail, timeOfDay, toneForKind,
 } from "./inbox.mjs";
-import { displayValue } from "./rooms.mjs";
+import { displayValue, lanePhases } from "./rooms.mjs";
 
 // Re-exported so the two rooms have ONE import and cannot reach past this module for a
 // formatter. `refusalOf` rather than rooms.mjs's `errorSentence` on purpose: both return
@@ -140,8 +140,8 @@ export function openingFor(id, room, overrides = {}) {
  * ASSERTED: a test can walk every ink this module hands out and prove no reserved hue was
  * spent on a meaning the brief never granted it -- which is exactly the check that would
  * have caught the three collisions tokens.css documents in the owner's own reference.
- * Today.tsx carries an inline copy of the tone half of this; it is not this phase's file
- * to edit, and when it is, it should import from here.
+ * The command ring's modules take their ink from here (face v2 Phase 03): the tape rows, the brief
+ * lines and the receipt drawer all read TONE_INK rather than carrying a copy.
  * ========================================================================== */
 
 /** @type {Record<Tone, string>} */
@@ -1419,4 +1419,225 @@ export function boardTotals(rows) {
  */
 export function boardProvenance(view) {
   return `Row order is PORTFOLIO.md's own, which is the owner's priority ordering. Every VALUE is read from that lane's machine header in initiatives/<lane>/PROGRESS.md — the board is a view and the lane files are the truth (ADR-0051), so where the two disagree, what you are reading here is the lane. ${view.updated === null ? "The board carries no Updated line." : `The board says it was updated ${view.updated}.`} This panel is ${view.badge}: it has no day-granular history and as-of does not apply to it.`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The tape and the receipt drawer, as the command ring's modules draw them (face v2 Phase 03).
+// A row carries only what the receipt says: its time, its kind, the ink that kind's meaning
+// earned, and a line read from its own fields -- never a sentence written about it here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The payload fields a receipt's line is read from, in the order a person reads them. */
+const LINE_FIELDS = Object.freeze(["subject", "what", "title", "summary", "reason", "verdict", "phase", "capability", "gate", "status"]);
+
+/**
+ * The line a receipt shows on the tape: its first readable payload field, then who and where.
+ * @param {import("./inbox.mjs").FeedEvent} e
+ * @returns {string}
+ */
+export function eventLine(e) {
+  const p = e.payload || {};
+  let lead = "";
+  for (const k of LINE_FIELDS) {
+    const v = p[k];
+    if (typeof v === "string" && v.trim() !== "") { lead = unescapeDoorText(v.trim()); break; }
+    if (typeof v === "number") { lead = `${k} ${v}`; break; }
+  }
+  const who = [e.venture, e.actor].filter((s) => typeof s === "string" && s !== "").join(" · ");
+  const outcome = e.outcome && e.outcome !== "ok" ? ` · ${e.outcome}` : "";
+  return lead === "" ? `${who}${outcome}` || e.kind : `${lead}${who === "" ? "" : ` — ${who}`}${outcome}`;
+}
+
+/**
+ * @typedef {object} EventRowView
+ * @property {string} id
+ * @property {string} short
+ * @property {string} time
+ * @property {string} kind
+ * @property {string} ink
+ * @property {string} text
+ * @property {string} tag
+ */
+
+/**
+ * @param {import("./inbox.mjs").FeedEvent} e
+ * @returns {EventRowView}
+ */
+export function eventRowView(e) {
+  return {
+    id: e.id, short: shortId(e.id), time: timeOfDay(e.ts), kind: e.kind,
+    ink: TONE_INK[toneForKind(e.kind)] ?? "var(--text-2)", text: eventLine(e), tag: e.venture,
+  };
+}
+
+/**
+ * @typedef {object} ReceiptView
+ * @property {boolean} isOpen
+ * @property {string} id
+ * @property {string} kind
+ * @property {string} ink
+ * @property {string} text
+ * @property {{ key: string, value: string }[]} fields
+ * @property {string} payload
+ * @property {string[]} notes
+ */
+
+/** @type {ReceiptView} */
+export const RECEIPT_CLOSED = Object.freeze({ isOpen: false, id: "", kind: "", ink: "var(--text-2)", text: "", fields: [], payload: "", notes: [] });
+
+/**
+ * The receipt drawer for the id the View picked, found among receipts this module already read.
+ * An id that is not among them closes the drawer rather than inventing a receipt.
+ * @param {import("./inbox.mjs").FeedEvent[]} events @param {string | undefined} id
+ * @returns {ReceiptView}
+ */
+export function receiptView(events, id) {
+  if (typeof id !== "string" || id === "") return RECEIPT_CLOSED;
+  const e = events.find((x) => x.id === id);
+  if (!e) return RECEIPT_CLOSED;
+  return {
+    isOpen: true, id: e.id, kind: e.kind, ink: TONE_INK[toneForKind(e.kind)] ?? "var(--text-2)", text: eventLine(e),
+    fields: [
+      { key: "ts", value: e.ts }, { key: "day", value: e.day }, { key: "venture", value: e.venture },
+      { key: "actor", value: e.actor }, { key: "outcome", value: e.outcome },
+    ].filter((f) => f.value !== ""),
+    payload: prettyJson(e.payload),
+    notes: ["read from the spine through the door, read-only · append-only: a correction supersedes, it never edits (ADR-0029)"],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The lane card and the trail, as every ring room draws them (face v2 Phase 03, kernel ring onward).
+// A lane room reads its OWN lane's PROGRESS header through /api/lane/:id and its receipts through
+// /api/spine filtered to the kinds the served registry homes in it; both are the door's, never typed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @typedef {object} LaneCard
+ * @property {boolean} isRead
+ * @property {string} lane
+ * @property {string} status
+ * @property {string} statusInk
+ * @property {string} phase
+ * @property {string} note
+ * @property {string} burn
+ * @property {boolean} hasMeter
+ * @property {number} meter
+ * @property {string} distance
+ * @property {{ key: string, label: string, title: string }[]} phases
+ * @property {boolean} hasPhases
+ * @property {string} phasesNote
+ */
+
+/** @type {LaneCard} */
+export const LANE_UNREAD = Object.freeze({
+  isRead: false, lane: "", status: "", statusInk: "var(--text-3)", phase: "", note: "", burn: "", hasMeter: false, meter: 0, distance: "",
+  phases: [], hasPhases: false, phasesNote: "",
+});
+
+/**
+ * One lane's card from the door's `/api/lane/:id` body: its header read the way the board reads it,
+ * and its phase specs listed by number.
+ * @param {unknown} payload
+ * @returns {LaneCard}
+ */
+export function laneCard(payload) {
+  const body = asObject(payload);
+  const lane = asText(body["lane"]);
+  if (lane === null) return LANE_UNREAD;
+  const header = asObject(body["header"]);
+  const appetite = parseDays(header["appetite"]);
+  const burn = parseDays(header["burn"]);
+  const status = statusFacet(headerText(header, "status"));
+  const phase = parsePhase(header["phase"]);
+  const meter = burnMeter(appetite, burn);
+  const cycle = headerText(header, "cycle");
+  const listed = lanePhases(body);
+  // `lanePhases` type-asserts the array it found and checks no element, so a malformed row arrives here
+  // as anything at all. A row this shell cannot read is DROPPED and counted, never drawn as "undefined"
+  // and never left to throw the whole room into a Failure (Phase 03 attack).
+  const rows = [];
+  let dropped = 0;
+  for (const p of listed.phases) {
+    const row = p !== null && typeof p === "object" ? /** @type {Record<string, unknown>} */ (p) : null;
+    const file = row === null ? null : asText(row["file"]);
+    if (file === null) { dropped += 1; continue; }
+    const n = row === null ? null : row["phase"];
+    const title = row === null ? null : asText(row["title"]);
+    rows.push({
+      key: unescapeDoorText(file),
+      label: typeof n === "number" && Number.isFinite(n) ? String(n).padStart(2, "0") : typeof n === "string" && n !== "" ? unescapeDoorText(n) : "--",
+      title: title === null ? unescapeDoorText(file) : unescapeDoorText(title),
+    });
+  }
+  const notSent = listed.omitted > 0 ? `${fmtInt(listed.omitted)} more not sent` : "";
+  const notRead = dropped > 0 ? `${fmtInt(dropped)} the door sent in a shape this shell cannot read` : "";
+  return {
+    isRead: true,
+    lane: unescapeDoorText(lane),
+    status: status.label,
+    statusInk: status.ink,
+    // `headerText` already undid the door's escapes; undoing them twice would manufacture a `<` out of a
+    // header that only ever held `&lt;` (Phase 03 attack).
+    phase: phase.number === null ? (cycle === null ? "no phase recorded" : cycle) : `phase ${phase.number}`,
+    note: phase.note === null ? "" : phase.note,
+    burn: meter.state === "measured" ? `${fmtDays(burn.days ?? Number.NaN)} of ${fmtDays(appetite.days ?? Number.NaN)} spent` : meter.label.toLowerCase(),
+    // A meter is drawn ONLY for a measured burn: a lane with none is not a lane burning zero, and a bar
+    // at 0% tells a screen reader exactly the thing this module refuses to say (spine.mjs, burnMeter).
+    hasMeter: meter.state === "measured",
+    meter: meter.fill ?? 0,
+    distance: meter.label,
+    phases: rows,
+    hasPhases: rows.length > 0,
+    phasesNote: listed.state === "absent"
+      ? "the door did not send a phase list"
+      : rows.length === 0 && dropped === 0
+        ? "no phase spec written yet"
+        : [notSent, notRead].filter((s) => s !== "").join(" · "),
+  };
+}
+
+/**
+ * The read for a room's trail: its homed kinds, from the door. Null when the room homes no kind, so
+ * nothing is asked for and the trail says why.
+ * @param {string[]} kinds
+ * @returns {{ route: string, query: Record<string, string | number>, poll: boolean } | null}
+ */
+export function trailRead(kinds) {
+  const list = kinds.filter((k) => typeof k === "string" && k !== "");
+  return list.length === 0 ? null : { route: "/api/spine", query: { kind: [...list].sort().join(","), limit: 1000 }, poll: true };
+}
+
+/**
+ * The trail: the newest receipts of the room's kinds on the page the door served, newest first.
+ * @param {unknown} payload @param {number} rows
+ * @returns {{ rows: EventRowView[], events: import("./inbox.mjs").FeedEvent[], count: number, more: boolean, hint: string }}
+ */
+export function trailView(payload, rows) {
+  const page = readSpinePage(payload);
+  const shown = tail(page.events, rows).reverse();
+  const count = page.count ?? page.events.length;
+  return {
+    rows: shown.map(eventRowView),
+    events: page.events,
+    count,
+    more: page.more,
+    // The door pages from the oldest receipt, so a page with more past it is NOT the newest of the kinds:
+    // it says so rather than calling the tail of its first page the latest.
+    hint: page.more
+      ? `the oldest ${fmtInt(count)} receipts of its kinds, more past them — the last ${fmtInt(shown.length)} of that page here, not the newest`
+      : `${fmtInt(count)} receipt${count === 1 ? "" : "s"} of its kinds${shown.length < count ? `, the newest ${fmtInt(shown.length)} here` : ""}`,
+  };
+}
+
+/**
+ * The served registry's list of one kind of thing a room holds (its lints, jobs, processes, concepts).
+ * @param {{ holds?: Record<string, unknown> } | undefined} room @param {string} key
+ * @returns {string[]}
+ */
+export function holdsList(room, key) {
+  /** @type {Record<string, unknown>} */
+  const holds = room && room.holds && typeof room.holds === "object" ? room.holds : {};
+  const v = Object.hasOwn(holds, key) ? holds[key] : undefined;
+  return Array.isArray(v) ? v.filter((x) => typeof x === "string").map((x) => unescapeDoorText(x)) : [];
 }

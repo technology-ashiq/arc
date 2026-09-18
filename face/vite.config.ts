@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 // The door is localhost + bearer token with ZERO CORS (ADR-1312), so the browser must never
 // make a cross-origin request to it. Proxying /api through the dev server keeps every call
@@ -40,7 +41,8 @@ const SELF_ORIGINS = new Set([
 ])
 
 export default defineConfig({
-  plugins: [react()],
+  // Tailwind v4 enters L3 here and nowhere else (ADR-1323); face/src/lib stays install-free.
+  plugins: [react(), tailwindcss()],
   server: {
     port: APP_PORT,
     strictPort: true,
@@ -97,5 +99,9 @@ export default defineConfig({
       },
     },
   },
+  // `vite preview` defaults to port 4173 while SELF_ORIGINS follow APP_PORT, so a plain
+  // `npm run preview` answered reads and 403'd every stamp: its Origin was never rewritten.
+  // Preview takes the same port as dev (preview.proxy already inherits server.proxy).
+  preview: { port: APP_PORT, strictPort: true },
   build: { outDir: 'dist', sourcemap: true },
 })

@@ -1,0 +1,121 @@
+{
+  "comment": "Candidate shots for the command ring shot review (face v2 Phase 03). PNGs are local, under the owner box scratch directory; this manifest pins them by sha256. Same contract as evidence/phase-00/baseline-shots.json.",
+  "capturedAt": "2026-09-17T16:20:14.342Z",
+  "capture": {
+    "script": "face/scripts/harness-run.mjs --shots",
+    "browser": "Chrome/152.0.7977.83",
+    "viewport": {
+      "width": 1440,
+      "height": 1000,
+      "deviceScaleFactor": 1
+    },
+    "waitMs": 900,
+    "moods": [
+      "dark",
+      "light"
+    ]
+  },
+  "ring": "command",
+  "shots": [
+    {
+      "room": "today",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-today.png",
+      "bytes": 220511,
+      "sha256": "a92578d515c0c46ebfcadf68937de8aac0951b59cbb39a22abd1100d8476a6b6"
+    },
+    {
+      "room": "inbox",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-inbox.png",
+      "bytes": 194498,
+      "sha256": "14b5ce08f967cac5589e5dd2ab9c3fa8c936708b3ccf7763a8cca90cc2971cfd"
+    },
+    {
+      "room": "map",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-map.png",
+      "bytes": 167618,
+      "sha256": "fbc5b0626658b0be790e2c1292f6b71042153dc1e1ffdb9cf38087f93860ef49"
+    },
+    {
+      "room": "spine",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-spine.png",
+      "bytes": 268051,
+      "sha256": "b0bc739e1a0f8060061ea29b72a86bdbd3ea99dafb99536024dc0a7ba40942cc"
+    },
+    {
+      "room": "board",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-board.png",
+      "bytes": 197828,
+      "sha256": "4166eece7a2a2c37205e7adcc57891babb587a0ff207a2513b1d7f4632e4288a"
+    },
+    {
+      "room": "ask-arc",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-ask-arc.png",
+      "bytes": 196521,
+      "sha256": "9f119138fc716cb8546e2100a68fe8d2b93747a121d51741f01f18bccdd89c91"
+    },
+    {
+      "room": "today",
+      "mood": "light",
+      "render": "module",
+      "file": "light-today.png",
+      "bytes": 218613,
+      "sha256": "cfee349a3c32704b3e383917f09b2e8477a9d7e175a840519d356488d45d54a6"
+    },
+    {
+      "room": "inbox",
+      "mood": "light",
+      "render": "module",
+      "file": "light-inbox.png",
+      "bytes": 195721,
+      "sha256": "8991aed09ed43ab2654f8fcdea80eadc035f794c490887f8fcbbd8cd8f323702"
+    },
+    {
+      "room": "map",
+      "mood": "light",
+      "render": "module",
+      "file": "light-map.png",
+      "bytes": 168059,
+      "sha256": "830edf6f3c3b84769f32dfcd96454967c07ace8b44e45f0023567a657e415c54"
+    },
+    {
+      "room": "spine",
+      "mood": "light",
+      "render": "module",
+      "file": "light-spine.png",
+      "bytes": 265679,
+      "sha256": "259b2d4a3059d35a15fedbd9637c1d0b7dc770d88ebf3f242be475a1506cc217"
+    },
+    {
+      "room": "board",
+      "mood": "light",
+      "render": "module",
+      "file": "light-board.png",
+      "bytes": 198370,
+      "sha256": "6c7fd8749c33ac12ea4bd213be6ab9971286bfe36c58f401179f458a412b6c35"
+    },
+    {
+      "room": "ask-arc",
+      "mood": "light",
+      "render": "module",
+      "file": "light-ask-arc.png",
+      "bytes": 198730,
+      "sha256": "62c7be4796af7a51bc1749ebaa774599bb8f8515fdf6bd9c438512a8ce41fd79"
+    }
+  ],
+  "counts": {
+    "modules": 6,
+    "shots": 12
+  }
+}

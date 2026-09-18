@@ -1,24 +1,15 @@
-import type { CSSProperties } from 'react'
+// AsOf.tsx -- the as-of scrub, in the header where v0.7 keeps its day control (face v2 Phase 02).
+//
+// A date, not a slider. A slider implies every point between two days is a place you can stand, and
+// it is not: the spine is a sequence of DAYS, sealed one at a time. What it says matters more than
+// what it does -- a sealed day replays to the same bytes, TODAY is still being written, and live is
+// not a time at all. `asOfState` holds that distinction where a test can reach it.
+//
+// It is not offered on every room: a room whose numbers are not day-scoped (its module says
+// `asOf: false`, or it is file-borne) disables the control and says why, rather than 501ing.
 import { asOfState } from '../lib/shell.mjs'
+import { MONO, UI } from '../ui/kit'
 
-/**
- * The as-of scrub (REQ-05).
- *
- * A date, not a slider. A slider implies every point between two days is a place you can
- * stand, and it is not: the spine is a sequence of DAYS, sealed one at a time, and a control
- * that suggests otherwise is a nicer lie than a plainer one.
- *
- * What it says matters more than what it does. Three states, and they are three different
- * promises: a sealed day replays to the same bytes; TODAY is still being written, so a read
- * of it is a snapshot and must not borrow the stronger guarantee; and live is not a time at
- * all. `asOfState` holds that distinction where a test can reach it.
- *
- * It is deliberately not offered on every room. The P&L refuses a day-granular as-of by name
- * because its native scope is a month, and the door will not re-derive the money core to fake
- * one -- so the scrub reaches the three routes that take it and the Money room says why it
- * does not reach there. A control that silently 501s a room looks broken; a boundary a room
- * can explain is a fact.
- */
 export default function AsOf({
   asOf,
   today,
@@ -32,10 +23,16 @@ export default function AsOf({
   onChange: (day: string | null) => void
 }) {
   const state = asOfState(asOf, today)
-
+  const note = !supported
+    ? 'not this room — its numbers are not day-scoped'
+    : state.scrubbed && !state.replayIdentical
+      ? 'open day — a snapshot, not a replay'
+      : state.scrubbed
+        ? 'sealed day — replays to the same bytes'
+        : ''
   return (
-    <div style={wrapStyle}>
-      <label style={labelStyle} htmlFor="asof-day">
+    <span className="inline-flex items-center gap-2 text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>
+      <label htmlFor="asof-day" className="uppercase tracking-[0.06em] text-[10.5px]" style={{ fontWeight: 600 }}>
         as of
       </label>
       <input
@@ -45,81 +42,32 @@ export default function AsOf({
         max={today ?? undefined}
         disabled={!supported}
         onChange={(e) => onChange(e.target.value || null)}
-        style={inputStyle(state.scrubbed, supported)}
         title={supported ? state.note : 'this room reads no day-granular history, so there is nothing to scrub'}
+        className="h-[28px] px-2 text-[12px] tnum outline-none transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent) disabled:cursor-not-allowed"
+        style={{
+          fontFamily: MONO,
+          background: 'var(--bg-3)',
+          // Scrubbing is a DATA-MODE statement, not a meaning, so it takes the product's colour and
+          // never a reserved hue.
+          color: supported ? (state.scrubbed ? 'var(--accent)' : 'var(--text-1)') : 'var(--text-3)',
+          border: `1px solid ${state.scrubbed ? 'rgba(var(--accent-rgb), 0.45)' : 'var(--line-1)'}`,
+          borderRadius: 'var(--r-md)',
+          colorScheme: 'dark light',
+        }}
       />
       {state.scrubbed ? (
-        <button type="button" onClick={() => onChange(null)} style={liveBtnStyle}>
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="h-[24px] px-2 text-[10.5px] uppercase tracking-[0.06em] cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)"
+          style={{ fontFamily: UI, fontWeight: 600, color: 'var(--accent)', background: 'transparent', border: '1px solid rgba(var(--accent-rgb), 0.45)', borderRadius: 'var(--r-sm)' }}
+        >
           back to live
         </button>
       ) : (
-        <span style={liveTagStyle}>live</span>
+        <span className="text-[10.5px] uppercase tracking-[0.06em]" style={{ fontWeight: 600, color: 'var(--mode-live)' }}>live</span>
       )}
-      <span style={noteStyle}>
-        {!supported
-          ? 'not this room — its numbers are not day-scoped'
-          : state.scrubbed && !state.replayIdentical
-            ? 'open day — a snapshot, not a replay'
-            : state.scrubbed
-              ? 'sealed day — replays to the same bytes'
-              : ''}
-      </span>
-    </div>
+      {note ? <span className="hidden xl:inline truncate max-w-[26ch]">{note}</span> : null}
+    </span>
   )
-}
-
-const wrapStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 'var(--grid-in)',
-  minHeight: 'var(--row-h-live)',
-  font: `400 var(--step-meta)/1.2 var(--font-mono)`,
-  color: 'var(--meta)',
-}
-
-const labelStyle: CSSProperties = {
-  textTransform: 'uppercase',
-  letterSpacing: 'var(--track-tight)',
-  color: 'var(--faint)',
-}
-
-function inputStyle(scrubbed: boolean, supported: boolean): CSSProperties {
-  return {
-    // Scrubbing is a DATA-MODE statement, not a meaning, so it takes the product's own
-    // colour and never one of the four reserved hues (ADR-1310).
-    background: 'transparent',
-    color: supported ? (scrubbed ? 'var(--accent)' : 'var(--prose)') : 'var(--faint)',
-    border: `1px solid ${scrubbed ? 'var(--accent-line)' : 'var(--hairline-strong)'}`,
-    borderRadius: 'var(--radius-chip)',
-    padding: '0 var(--grid-in)',
-    minHeight: '30px',
-    font: `400 var(--step-meta)/1 var(--font-mono)`,
-    colorScheme: 'dark',
-    cursor: supported ? 'pointer' : 'not-allowed',
-  }
-}
-
-const liveBtnStyle: CSSProperties = {
-  minHeight: '30px',
-  padding: '0 var(--grid-in)',
-  background: 'transparent',
-  color: 'var(--accent)',
-  border: '1px solid var(--accent-line)',
-  borderRadius: 'var(--radius-chip)',
-  cursor: 'pointer',
-  font: `400 var(--step-micro)/1 var(--font-mono)`,
-  textTransform: 'uppercase',
-  letterSpacing: 'var(--track-tight)',
-}
-
-const liveTagStyle: CSSProperties = {
-  color: 'var(--mode-live)',
-  textTransform: 'uppercase',
-  letterSpacing: 'var(--track-tight)',
-  font: `400 var(--step-micro)/1 var(--font-mono)`,
-}
-
-const noteStyle: CSSProperties = {
-  color: 'var(--faint)',
-  font: `400 var(--step-micro)/1.2 var(--font-mono)`,
 }

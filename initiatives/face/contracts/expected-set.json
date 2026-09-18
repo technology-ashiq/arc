@@ -711,7 +711,7 @@
     }
   },
   "commands": {
-    "$comment": "26; (G) = generated from a process file, never hand-edited",
+    "$comment": "27; (G) = generated from a process file, never hand-edited",
     "map": {
       "arc": "toolbelt",
       "arc-toolcheck": "toolbelt",
@@ -738,6 +738,7 @@
       "arc-develop": "develop",
       "arc-capability": "develop",
       "arc-design-critique": "design-studio",
+      "arc-face-module": "design-studio",
       "arc-absorb": "absorb"
     }
   },

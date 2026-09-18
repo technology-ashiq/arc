@@ -1,75 +1,58 @@
-# Phase 04 — Shell (Today · Inbox · Spine/Tape on live L2)
+# Phase 04 — Door read routes: serve what Phase 03 named
 
-**Goal (one line):** the L3 app is born (`arc-face` repo, ADR-1300) and the owner can read
-Today, stamp the Inbox, and scrub the Tape against the real spine.
-**Appetite:** 4 days
-**Depends on:** phase-01, phase-03
+**Goal (one line):** REQ-06 — the routes named by the union of Phase 03's five `NOT SERVED` lists are served read-only, allow-listed, with parsers imported from the lints that own them.
+**Appetite:** 3 days
+**Depends on:** phase-03
+**Serves:** REQ-06
+**Branch:** `feat/face-v2-04`
+**Preconditions (STOP if absent):** Phase 03's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 03` from the main clone.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] `arc-face` repo created (React + TS strict + Vite + `tokens.css` from Phase 01,
-      ADR-1309) with a root-mode arc install; CI runs there; cross-repo evidence ref
-      (repo + SHA + CI run id) accepted into this lane's bundle (assumption row 6)
-- [ ] Today: the brief's four groups from the reader, 40-line collapse rules honoured,
-      needs-you never collapses, KPI row with *Why?* precedents, "since you left" from a
-      cursor (REQ-02)
-- [ ] Inbox: every `approval.requested` profile renders its detail body; APPROVE/REJECT
-      stamps with mandatory reason through `/api/decide`; refusal codes verbatim; other
-      needs-you kinds are cards with chips, never stamps (REQ-03, ADR-1303)
-- [ ] Spine/Tape: as-of scrub re-renders spine-derived views (ADR-1305); replay-identical
-      fixture green; file-borne panels badged "file, not log" (REQ-05, assumption row 7);
-      dated obligations flagged from the tree
-- [ ] end-to-end hostile-payload RENDER fixture (second-opinion finding 5): the Phase 03
-      hostile spine rows rendered in a real browser (Playwright) — script does not
-      execute, bidi does not reorder chrome, the 64 KB body is capped in the DOM;
-      escaping responsibility (L2 serializer vs L3 render) asserted end-to-end, not per
-      layer alone
-- [ ] keyboard model (`j/k` · `a/r` · `w` · `t` · `/`) + ⌘K jump; data modes live ·
-      replay · sim visible in the chrome (ADR-1310) — the `m` (map) binding lands in
-      Phase 05 with the Map room itself; Phase 04 must not register `m` against a route
-      that does not exist yet
-- [ ] tests green on CI per job in BOTH repos, verified by `gh run view --json jobs`
-      against each repo's own head SHA (never a watcher exit code — bench 2026-08-13:
-      `gh run watch --exit-status` exited 0 on a `failure` conclusion); the lane's
-      PROGRESS.md/done-log and the arc-face repo's own merge land in the same close
-      action, never a follow-up (engine 2026-08-03: PR merged while PROGRESS stayed
-      stale, twice in one cycle)
+- [ ] The route list is derived from `initiatives/face/evidence/phase-03/not-served-*.md`; a route not on those lists is not built.
+- [ ] Each route: GET only, on the door's allow-list, inside the existing token + origin + bind posture (ADR-1312); its parser imported from the lint that already reads that file (scheduler, memory, evolve, bench, absorb … PLAN-face-v2 §11), never re-implemented.
+- [ ] Reader-only lint green; route-enumeration fixture proves no write verb appeared.
+- [ ] `tests/face/dash-doors.mjs` gains ≥1 arm per route, each asserting the fixture LOADED before asserting the payload.
+- [ ] Modules flip from `NOT SERVED` to live; the residue is 0 or a named, labelled list in `initiatives/face/evidence/phase-04/residue.md`.
+- [ ] If the union exceeded 22 routes, the Block B reading re-scoped this phase first (assumptions ledger row 5).
+- [ ] Two fresh attackers (route decision logic · HTTP boundary); CI green per job; `/arc-phase-done 04` from the main clone.
 
 ## Verification plan
 
-One coarse line, refined at phase start via `/arc-change`: REQ-02/03/05 fixtures green on
-CI; live demo on the real spine from the main clone; qa-tester evidence for the stamp
-flow.
+Coarse (refined via `/arc-change` when the phase starts): per route, a `dash-doors` arm RED against the door before the route exists, then green per job; the `NOT SERVED` count read from the browser suite before and after.
 
 ## Rabbit holes in this phase
 
-Animation systems (motion only on state change, 200 ms) · bespoke room panels (Phase 06)
-· mobile app (no-go — mobile is read+stamp only, later).
+- **A route with no importable parser** — the module keeps `NOT SERVED`; the parser gap is filed to its lane.
+- **Bulk "facts" routes** — one route per need, never a dump of repo facts (ADR-1324).
 
 ## Out of scope for this phase
 
-Map + coverage lint (Phase 05) · bespoke rooms (Phase 06) · Ask arc (Phase 07).
+Write routes of any kind → Phase 05 · streaming → Phase 06.
 
 ## Your-setup / pending
 
-Owner: create/authorize the `arc-face` GitHub repo (private) at phase entry; the FIRST
-push confirms a CI run exists whose headSha matches HEAD (`gh run list` in that repo)
-before any phase evidence relies on "CI runs there" — memory 2026-08-12: a push created
-no CI run at all, and waiting on a run never created is indistinguishable from waiting
-on a slow one; ledger 2026-08-13: a draft/conflicting PR silently produced zero runs for
-five pushes.
+The owner runs the git for `feat/face-v2-04`.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- One write path, mandatory reason, byte-parity with the CLI (E2, E1, ADR-1302).
-- Reader-only over the spine; no second truth in the UI (SPINE-G/ADR-0030, A5, ADR-1301).
-- Every number has *Why?* precedents; no invented numbers, ETAs, health emoji (A1, E3).
-- Real vs simulated/rehearsal/drill never mixed or summed; MISSING ≠ 0; ABSENT with reason (E3, ADR-1313, ADR-1018, ADR-0416).
-- Kinds, gates, lanes, ADR ids verbatim (A5); unknown kinds/profiles render generically — nothing dropped silently (E1, ADR-1306).
-- Seals for every forever-human action; no button ever exists for them (E2, ADR-1303, ADR-0069 b1, ADR-0305, ADR-0110, ADR-1203).
-- Localhost + token; no PII; escaped serializer (ADR-1312, ADR-0410, LED-C, SPINE-E).
-- Design lane law: three theses, blind jury with reference, owner pick + prediction, two critique rounds max (ADR-1308, ADR-0034…0049).
-- Every new face lint starts WARN-first in the TRIAL set and earns FAIL through the trial ledger (A1) — `face-coverage` excepted (a validator over the tree, FAIL from birth like policy-lint, ADR-1311).
-- The Engine room's unlock-ladder rung indicator reads evidence only — the rung is never a control (E2).
-- Tests green on CI per job; two fresh attackers per gate (decision logic + shell/HTTP boundary); attacker prompt carries the lane's fixed-defect list; vacuous-pass rule (assert it RAN before asserting what it printed).
-- Zero product-code writes before explicit owner approval of this plan; L3 stack never enters the arc repo (ADR-1300, ADR-1309).
+<!-- Generated from PLAN.md at kickoff; resynced by /arc-change. Never hand-edited. -->
+
+- The served registry is the only room list: modules attach to served ids, orphans are checked both ways, and the four extra rooms are exempted by name only (ADR-1306, ADR-1321, ADR-1327).
+- Tokens have one source, `docs/design/system/tokens.css`; `face/src/tokens.css` is generated and never hand-edited, as `.claude/scripts/core/face-tokens.mjs --check` enforces; no colour literal under `face/src/modules/**`; council renders `--accent-dim` and violet is the non-real family alone (ADR-1308, ADR-1322).
+- Every decision lives in a `.mjs` that node imports with no install: `fold.mjs` imports nothing from React, Vite or three, `View.tsx` carries no branch worth asserting, and Tailwind stops at L3 (ADR-1320, ADR-1323).
+- `POST /api/decide` stays byte-parity with `arc-inbox`: the parity fixture is green on every PR of this cycle and is a Phase 05 exit criterion (ADR-1302, ADR-1333).
+- Zero new spine kinds: every op emits a kind already in `validate.mjs` KINDS, and an op that would need a new one does not ship (ADR-0026, ADR-1334).
+- Branch-only writes: a file-touching op writes to a `feat/face-*` branch, shows the diff and stops; `main` is untouchable and merge never exists in the face (ADR-1326).
+- The WORK door has no logic of its own: each op shells the same script a hand-run calls, proven per op by a no-second-path fixture; an op without a green fixture ships read-only with an honest badge (ADR-1326).
+- The SESSION door starts `arc-run --driver …`, never a harness binary (ADR-1326).
+- No provider key in the browser; Ask keeps zero write tools and `ASK_ACTIONS` = `open_room` · `set_speed` · `enter_hq` (ADR-1325).
+- No facts bundle under `face/src/**`: a module cites a door route or renders `NOT SERVED` (ADR-1324).
+- No new surface outside `.claude/scripts/` this cycle; the layout move belongs to the distribute lane, in one atomic PR (ADR-1319).
+- Real vs simulated / rehearsal / planned are never mixed or summed; planned rooms render dotted and every write inside them says REHEARSAL (ADR-1313, ADR-1328).
+- Both moods ship together from Phase 01; light is never deferred to a later batch (ADR-1331).
+- The reference is the target: v0.7 is the canonical design and the ported harness's frozen strings are the bar (ADR-1318, ADR-1330).
+- REQ-10 claims the surface is operable over two real days and never claims the habit holds (ADR-1329).
+- Localhost + token; no PII in git, the door or the intake; escaped serializer (ADR-1312).
+- Zero product-code writes before explicit owner approval of this plan; each phase lands as its own feat branch + PR, and a phase closes through `/arc-phase-done` from the main clone before the next phase's branch opens (ADR-1332).
+- Tests green on CI per job, never run on this box; the browser harness runs on every leg with Node ≥20.19 and Node 18 is a named, counted skip; structural face lints (`face-pure`, colour-literal, facts-bundle) FAIL from birth, heuristic arms start WARN-first; two fresh attackers per new gate (decision logic + shell/OS boundary) carrying the lane's fixed-defect list; assert it RAN before asserting what it printed (ADR-1335, ADR-1336).

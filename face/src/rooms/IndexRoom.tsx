@@ -18,7 +18,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { Door } from "../lib/door.mjs";
 import type { Room } from "../lib/rooms.mjs";
 import { conceptGroups, displayValue, indexSource, laneRoster, unescapeDoorText } from "../lib/rooms.mjs";
-import { Chip, Failure, Field, Hairline, Loading, Panel, PanelTitle, Receipt, RoomHead } from "../ui/kit";
+import { Chip, Failure, Field, Hairline, Loading, Panel, PanelTitle, Receipt, RoomHead } from "../ui/legacy";
 
 type Read =
   | { phase: "loading" }

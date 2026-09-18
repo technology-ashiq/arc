@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
 import type { Room } from "../lib/rooms.mjs";
 import { absence, displayValue, lanePhases, unescapeDoorText, zonesFor } from "../lib/rooms.mjs";
 import type { Door } from "../lib/door.mjs";
-import { Chip, Hairline, Panel, PanelTitle, Receipt, RoomHead, Zone } from "../ui/kit";
+import { Chip, Hairline, Panel, PanelTitle, Receipt, RoomHead, Zone } from "../ui/legacy";
 
 export function GenericRoom({ room, door, lane }: { room: Room; door?: Door; lane?: string | null }) {
   const zones = zonesFor(room);

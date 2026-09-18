@@ -27,7 +27,7 @@ export default function C07_Ventures() {
                 </span>
               </div>
               <h3 className="text-[38px] sm:text-[48px] tracking-tight text-white mb-3" style={{ fontWeight: 600 }}>
-                LexOS<span className="text-[#00ffd1]">.</span>
+                LexOS<span className="text-[#2dd4bf]">.</span>
               </h3>
               <p className="text-[14px] leading-[24px] text-white/68 mb-5 max-w-xl" style={{ fontWeight: 300 }}>
                 Legal practice management for India — solo advocates and 2–10-lawyer firms. Clients, cases, hearing
@@ -128,7 +128,7 @@ export default function C07_Ventures() {
             </div>
             <div>
               <div className="text-[26px] tracking-tight text-white mb-1" style={{ fontWeight: 600 }}>
-                ship <span className="text-[#00ffd1]">with</span> distribution
+                ship <span className="text-[#2dd4bf]">with</span> distribution
               </div>
               <p className="text-[12px] leading-[19px] text-white/58" style={{ fontWeight: 300 }}>
                 A venture without a distribution plan does not ship. Launch week is a written playbook, one channel per day.

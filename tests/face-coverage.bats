@@ -288,6 +288,38 @@ load 'test_helper'
   done
 }
 
+@test "face v2: face-coverage's module half FAILs an orphan and an unnamed exemption, and the exemption list is EMPTY" {
+  # ADR-1321 (orphans both ways) and ADR-1327 (the four extras, by name only). Every arm BY NAME:
+  # the arms that carry the Phase 02 exit criteria, and the exit arm, so a mutant that narrows the
+  # exit to another finding class is visible here.
+  run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" --selftest
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local arm
+  for arm in "an orphan module folder" "a module folder in the wrong ring" "a module folder for the template" \
+             "an ADR-1327 extra exempted by name passes" "an exemption for a room that is not an extra" \
+             "an exemption citing another ADR" "an exemption for a served room" "an unreadable module tree"; do
+    [[ "$output" == *"mutant $arm"*"PASS"* ]] || { echo "module arm missing or failed: $arm"; echo "$output"; false; }
+  done
+  [[ "$output" == *"exit 1 on a orphan module folder"*"PASS"* ]] || { echo "no exit arm for an orphan module folder: $output"; false; }
+  [[ "$output" == *"wiring modules"*"gather==reader: PASS"* ]] || { echo "the module reader is not crossed by the wiring arm: $output"; false; }
+  # The real tree: the folder count is DERIVED here, in shell, so a reader that returns nothing
+  # cannot print a matching number.
+  run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local line folders served generic
+  line="$(printf '%s\n' "$output" | grep '^face-coverage: module half ' | tail -1)"
+  [ -n "$line" ] || { echo "no module-half line: $output"; false; }
+  folders="$(find "$ARC_ROOT/face/src/modules" -mindepth 2 -maxdepth 2 -type d | wc -l | tr -d ' ')"
+  [ "$folders" -gt 0 ] || { echo "no module folders on the tree to reconcile"; false; }
+  [[ "$line" == "face-coverage: module half folders=$folders "* ]] || { echo "expected folders=$folders: $line"; false; }
+  [[ "$line" == *" orphans=0 exemptions=0 "* ]] || { echo "the exemption list must be EMPTY in Phase 02 and nothing orphaned: $line"; false; }
+  served="$(printf '%s\n' "$line" | sed -n 's/^face-coverage: module half folders=[0-9]* served=\([0-9][0-9]*\) generic=[0-9]* .*/\1/p')"
+  generic="$(printf '%s\n' "$line" | sed -n 's/^face-coverage: module half folders=[0-9]* served=[0-9]* generic=\([0-9][0-9]*\) .*/\1/p')"
+  [ -n "$served" ] && [ -n "$generic" ] && [ "$((folders + generic))" -eq "$served" ] || { echo "folders=$folders + generic=$generic != served=$served: $line"; false; }
+  # REPORTED by name (ADR-1321): the generic rooms are listed, not only counted.
+  [[ "$line" == *" generic-rooms="*"-- a served room with no module renders through the generic module (ADR-1321)" ]] || { echo "$line"; false; }
+}
+
 @test "every world-derived inventory has its own exit arm, so deleting one loop is visible" {
   # Eleven arms were not enough once: a mutant narrowing `if (findings.length)` to a single
   # class passed all seventeen arms of the previous version, because every arm produced a

@@ -11,7 +11,7 @@ function CouncilRing() {
   return (
     <div className="relative w-[320px] h-[320px] sm:w-[440px] sm:h-[440px] shrink-0 mx-auto">
       <svg viewBox="0 0 440 440" className="absolute inset-0 w-full h-full" aria-hidden="true">
-        <circle cx="220" cy="220" r={R * (440 / 440) * 0.78} fill="none" stroke="rgba(185,162,255,0.2)" strokeWidth="1" strokeDasharray="3 6" />
+        <circle cx="220" cy="220" r={R * (440 / 440) * 0.78} fill="none" stroke="rgba(169,154,230,0.2)" strokeWidth="1" strokeDasharray="3 6" />
         <circle cx="220" cy="220" r="104" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="1" />
         {council.map((a, i) => {
           const ang = (i / council.length) * Math.PI * 2 - Math.PI / 2
@@ -25,7 +25,7 @@ function CouncilRing() {
               cx={x}
               cy={y}
               r={verifier ? 5 : 3.5}
-              fill={verifier ? '#ffffff' : stance ? COLOR.violet : 'rgba(185,162,255,0.62)'}
+              fill={verifier ? '#ffffff' : stance ? COLOR.violet : 'rgba(169,154,230,0.62)'}
             />
           )
         })}

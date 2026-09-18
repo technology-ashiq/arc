@@ -1,0 +1,256 @@
+# Fixed defects — the face lane's running list
+
+Every attacker prompt this cycle carries this file, with one instruction: **check each line in
+every OTHER file you are shown, not only the file it was fixed in.** A defect fixed in one place
+and left in its twin is the lane's most repeated failure (CLAUDE.md, retro-log 2026-08-19,
+2026-08-24). Every attacker pass appends its fixed holes here, one line each.
+
+Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
+
+Seeded 2026-09-17 (face v2 Phase 00) from Cycle 15's fix commits (`3cb02359`, `a2dec4d8`,
+`d107f3e7`, `d77b7e42`, `b0f3a4ef`, `9ea04e48`, `f93a8f84`, `fd5be897`, `846cd95a`, `292f0ce5`, `182d155c`, `60ee2ef6`, `8ea1e09a`) and the
+arc-face rows of `docs/retro-log.md`.
+
+## Process lifecycle and CLI
+
+- **Main guard compared `argv[1].endsWith(...)`** and no-opped behind a rename or symlink — `arc-event.mjs` and two gates (`a2dec4d8`, retro 2026-08-19) — *every new script with a `main()`: realpath BOTH `argv[1]` and `import.meta.url`.*
+- **No unknown-flag guard; near-miss flags fell through to the worst default** — `arc-dash.mjs` (`b0f3a4ef`) — *every CLI refuses an unknown flag by name with exit 2.*
+- **`--flag=VALUE` accepted and silently ignored** — `face-dogfood --journal=DIR` (`b0f3a4ef`) — *a flag form the parser does not read is an error, never a no-op.*
+- **A flag consumed the NEXT flag as its value** — `--transcript-dir --dry-run` (retro 2026-08-23, engine) — *a value that starts with `--` is refused.*
+- **The door exited 0 when it failed to BIND**; an uncaughtException backstop swallowed it (`b0f3a4ef`) — *a server that cannot listen exits non-zero and says why.*
+- **`process.exit()` raced libuv teardown on Windows** (retro 2026-07-16, reintroduced 2026-08-24) — *set `process.exitCode` and let the loop drain.*
+- **Pre-flighted the APP port and not the DOOR port** (`b0f3a4ef`) — *any twin resource (two ports, two children, two temp dirs) gets the same check twice.*
+- **An inline `node -e` path mangled by sed on the Windows leg** (`f93a8f84`) — *no program text inside a shell string; a path is passed as argv, never interpolated into code.*
+- **`npm` spawned through its `.cmd` shim without a shell** on Windows; install ran before discovering the door could not start (`9ea04e48`, `tests/face-l3.bats`) — *spawn npm the way Node permits per OS, and check cheap preconditions before an expensive install.*
+
+## HTTP door
+
+- **Host header never validated (only Origin)** → a DNS-rebinding page reached the door (`3cb02359`) — *every local HTTP surface validates Host AND Origin.*
+- **`FILE_ALLOW[id]` resolved inherited keys** (`constructor`, `__proto__`) → 500 with a TypeError echoed (`3cb02359`) — *allow-list lookups use `Object.hasOwn`.*
+- **Malformed percent-encoding → generic 500** (`3cb02359`) — *decode errors are a named 400.*
+- **`send()` could double-write after a partial response** → `ERR_HTTP_HEADERS_SENT` (`3cb02359`) — *one response per request, guarded.*
+- **A sync-throw fix with an un-twinned async sibling** (`3cb02359`) — *fix the async body callbacks too.*
+- **`--app-port` silently killed `/api/decide`**: the app's origin allow-list was hardcoded (`b0f3a4ef`) — *a port or origin that is configurable in one place is configurable in every place that checks it.*
+
+## Gates, parsers and selftests
+
+- **A coverage gate checked KEYS, not values; its FAIL message named "regenerate" as the fix**, so regenerating made corruption green (`292f0ce5`, retro 2026-08-19) — *when a generator mirrors a contract, the gate validates values independently of the mirror, and a count pins key-count, never truth.*
+- **The route-enumeration gate was circular** — it read back the `mutates` flag it was meant to check (`a2dec4d8`) — *a gate never derives its expectation from the thing under test.*
+- **A parity "recompute check" never recomputed**; it asserted two values were equal (`a2dec4d8`) — *a recompute arm calls the computation.*
+- **The same day-cut logic lived twice, byte-identical** (`arc-inbox` + `arc-dash`, `a2dec4d8`) — *import the one implementation; never copy it.*
+- **A completeness gate's expected set was its own contract keys**, blind to nine surfaces (retro 2026-08-24) — *derive the expected set from the source on disk.*
+- **`gather()` was an untested seam** — selftests mutated its output, reader suites drove readers directly (`b0f3a4ef`, retro 2026-08-24) — *one test arm crosses every wiring layer end to end.*
+- **A text scanner's comment stripper read `/*` inside a path, a `//` comment and a string**, silently blanking 99 lines (`fd5be897`, retro 2026-08-24) — *a parser reports when it stops scanning; it never goes quiet.*
+- **A fixed list of 17 where a derived list belonged** (`roomRegistry` `byRoom`, `b0f3a4ef`), fixed in the renderer and left in the generator (retro 2026-08-24) — *grep the pattern forward into the generator and every consumer.*
+- **An exclusion by PREFIX where the stated reason was one file** (`treePlans`, `b0f3a4ef`); exclusion sentences that decayed twice (retro 2026-08-24) — *an exclusion names the file or criterion that makes it true, and its numbers are grepped across docs AND comments when retired.*
+- **A malformed id dropped silently** (`adrBandMap`, `b0f3a4ef`) — *malformed input is a named finding, never an omission.*
+- **A wrong-shaped source returned an empty inventory** (gates/jobs, `b0f3a4ef`) — *empty because absent and empty because unreadable are different results.*
+- **Selftests printed FAIL while passing**, turning CI red on its own controls (`182d155c`) — *a selftest's expected failures are labelled as expected.*
+- **A selftest left a bogus registry behind on a tree that had none** (`face-sections`, `b0f3a4ef`) — *a mutant runs in a scratch copy and cleans up.*
+- **A torn SPINE line was a footnote while a torn JOURNAL line was a reason**, so five clean days read MET (`b0f3a4ef`) — *the same corruption is handled the same way on both inputs.*
+- **`face-dogfood --days abc` read MET over an empty journal and an empty spine** (`b0f3a4ef`) — *a measurement over nothing is UNMEASURED, never MET.*
+- **The dogfood harness read a journal directory the door never writes to** (`846cd95a`) — *a reader's default path is asserted against the writer's.*
+- **A `phases/` containment check used `isFile()`**, which a symlink passes (`b0f3a4ef`) — *containment resolves realpaths first.*
+
+## Fixtures and numbers
+
+- **A fixture quoted three numbers that could not all be true** (49 / 41 / "the only two") (retro 2026-08-19) — *derive every figure through the owning reader when it is written down.*
+- **The coverage suite pinned a summary line that was later widened** (`60ee2ef6`); a third hard-coded count (`8ea1e09a`) — *assert a marker and a floor, not an exact prose line.*
+
+## Face v2 Phase 00 — two fresh attackers + the first CI runs (2026-09-17)
+
+- **A lockfile check inferred the expected set from the siblings present**, so a lockfile stripped to the one Windows binding passed — `face/scripts/lockfile-platforms.mjs` — *the expected set comes from the parent's declaration (`optionalDependencies`), keyed by the parent's own path.*
+- **A smoke judged the door's room list against itself** — `face/scripts/smoke.mjs`, `harness-run.mjs` — *the expected set is read from the contract file (`rooms.generated.json`), never from the service under test.*
+- **"Settled" could mean 0 ms of watching, and an unsettled room passed** — `smoke.mjs` — *a minimum observation window, a drain after the last item, and "never settled" is a failure.*
+- **A test's timeout message matched the close-rejection it claimed to prove** — `tests/face/cdp-client.mjs` — *assert elapsed time and the specific reason, not only the method name.*
+- **Round-trip tests ran a codec against itself** — `cdp-client.mjs` — *every length path crosses the independent implementation.*
+- **A host `path.join` was used for another platform's lookup** — `face/scripts/cdp.mjs` findChrome — *use `path.posix` / `path.win32` for the platform being asked about.*
+- **`existsSync` accepted a directory as an executable, and a spawn error was an unhandled `'error'` event** — `cdp.mjs` — *require `isFile()`, and every spawned child gets an `'error'` listener before anything else.*
+- **A registry parser read one line per row, so a wrapped row vanished; `extra: true` inside a string counted as a key** — `.claude/scripts/hq/face-modules-contract.mjs` — *count declarations independently and refuse a mismatch; read keys as tokens, not substrings.*
+- **An unparseable plan row became `null` and an unknown mark became "served"** — same file — *every table row parses or is a named error; unknown is never a default.*
+- **Repeated flags were last-wins and an empty value resolved to the cwd** — `smoke.mjs`, `harness-run.mjs`, `lockfile-platforms.mjs` — *a repeated or empty flag is refused by name.*
+- **A child killed by a signal has `exitCode === null` and was waited out** — `cdp.mjs`, `harness-run.mjs`, `smoke.mjs` — *death is `exitCode !== null || signalCode !== null` (`face/scripts/proc.mjs isDead`).*
+- **One SIGTERM, no escalation, and a bats `run` that let children inherit fd 3** — `face/scripts/*`, `tests/face-browser.bats` — *kill the process tree with escalation, destroy the child's pipes, and `3>&-` on every `run` that starts a long-lived child.*
+- **A `sleep(5000)` raced against `'exit'` was never cleared** — `harness-run.mjs`, `smoke.mjs` — *a race timer is cleared or `unref()`ed.*
+- **A temp directory that would not delete was dropped silently** — same files — *a surviving directory is a WARN naming the path and error.*
+- **The door was started from the caller's cwd while the harness read its own repo** — `harness-run.mjs` — *every child that resolves a repo gets `cwd` set explicitly.*
+- **`vite preview` listened on 4173 while the origin allow-list followed APP_PORT**, so every stamp 403'd — `face/vite.config.ts` — *a port that is configurable is configured in every server block that checks it.*
+- **A greedy `sed 's/.*opened=…'` could read `not-opened=`** — `tests/face-browser.bats` — *anchor each extraction to its position in the line.*
+- **A `grep 'face/src'` matched `arcface/src` inside a reference path** — `tests/face-l3.bats` — *a path grep is bounded on the left.*
+- **The smoke port dropped the reference's own `THREE.Clock` exclusion** — `smoke.mjs` — *a port keeps the reference's frozen filters verbatim.*
+- **A request cancelled by the next navigation reported no `loadingFailed` on Windows**, so no later room ever settled — `smoke.mjs` — *track only the current navigation's `loaderId`.*
+- **A lockfile check accepted a binding by PRESENCE where node resolves it**, so a nested `lightningcss@9.9.9` passed on the hoisted `-linux-x64-gnu@1.33.0` it cannot load (CI run `35150543730`) — `face/scripts/lockfile-platforms.mjs` — *what a resolution finds must also be the VERSION the parent declared; a spec the check cannot read fails closed, by name.*
+- **The loaderId filter guarded `requestWillBeSent` but not `loadingFinished`/`loadingFailed`**, so a dead page's straggling finish reset the current room's quiet clock — `face/scripts/smoke.mjs` (`NetworkWatch`) — *a filter on one event of a pair applies to its twin; "validate one read, compare another" again.*
+- **Requests sent before `Page.navigate` answered with its loaderId were dropped**, so the new document's earliest requests never counted as in flight — `face/scripts/smoke.mjs` (`NetworkWatch`) — *an event that can arrive before the id it is keyed by is held and adopted, never discarded.*
+- **"never settled" carried no evidence**, so one red macOS leg could only be guessed at — `face/scripts/smoke.mjs` — *a timeout verdict reports what it was still waiting on and whether it ended later, without changing the verdict.*
+- **An ABI suffix the platform regex did not list (`musleabihf`, `ohos`) read as "no ABI", i.e. any libc**, so a musl arm binding satisfied a glibc arm host — `face/scripts/lockfile-platforms.mjs` — *a token parsed from a name is read whole and anchored; an unknown value matches nothing and is named, never a wildcard.*
+- **`optionalDependencies` written as an array made its family silently drop out** — `lockfile-platforms.mjs` — *a malformed container is a named finding in the result, never a `continue`.*
+- **`*` accepted a prerelease and a 17-digit version compared equal to its neighbour** — `satisfiesSpec` — *a shortcut branch obeys the guards the long branch obeys; a number past MAX_SAFE_INTEGER is unreadable, not rounded.*
+- **A finish held during navigation moved the clock even when its request belonged to the old document** — `smoke.mjs` `NetworkWatch` — *a held event is judged by the SAME filter once its key is known, never by arrival time.*
+- **A navigation with no loaderId watched nothing and reported quiet** — `smoke.mjs` — *a measurement over nothing is UNMEASURED and fails; `--base` with `?`/`#` is refused so it cannot happen by argument.*
+- **The two later `sed` extractions in `face-browser.bats` were still greedy `.*`**, the twin of the anchored three beside them — `tests/face-browser.bats` — *every extraction from one line is anchored the same way; and ids printed into a parsed line are grammar-checked (`openableRooms`).*
+- **The door's stderr tail, carrying `#token=`, went into a SetupError and the public CI log** — `harness-run.mjs` `waitHttp` — *every child stderr bound for an error passes through `redactSecrets`; so do page error texts.*
+- **One CDP error mid-run threw away every room already measured; room lines printed only after the loop** — `smoke.mjs` — *print each finding when it is final, and catch per item so one failure is a finding, not the end of the evidence.*
+- **An awaited `delay()` and `waitExit()` timeout were `unref()`ed**, so with nothing else alive node exited with code 13 before the await resumed — the client suite stopped mid-file with no FAIL line and no `RAN:`, hidden behind run D's lockfile FAIL; `removeDir`'s retry after a dead Chrome had the same exit (CI run `35183482747`) — `face/scripts/proc.mjs` — *an AWAITED timer holds the process; a RACE timer is cleared when the race settles (`settleWithin`); a suite whose output stops before its `RAN:` line is a crash, never read as the FAIL above it.*
+- **A 10 s settle FAIL measured runner and CDN weather, not a stuck room**: the macOS first cold load held a Google Fonts download and late CDP events for 11.2 s while every warm room settled in ~0.9 s (runs `35150543730`, `35183482747`) — `face/scripts/smoke.mjs` — *a timing gate FAILS only on what it exists to catch (network that never ends: 30 s cap) and prints the slow middle band as SLOW with its evidence; a threshold is set from measured evidence, never raised blind.*
+
+## Face v2 Phase 01 — two fresh attackers (decision logic · shell/OS boundary), 2026-09-17
+
+- **A gate read only the three exact mood selectors**, so a token re-declared under `html.hq-light.hq`, `HTML.hq.hq-light`, `@supports`, `@media all`, a nested rule, or with `!important` applied in Chrome and passed at 1.46:1 — `tests/face/tokens-contrast.mjs` (`scopes`) — *a gate that reads part of a file refuses, by name, what it does not read.*
+- **A comment stripper read `/*` inside an unquoted `url()` as a comment**, hiding the declaration between two urls — `tokens-contrast.mjs` (`stripComments`) — *a CSS scanner honours url() the way it honours strings; the 99-line blanking twin.*
+- **A law compared exact RGBA values taken from the file under test**, so a council one step off violet "never renders violet" — `tokens-contrast.mjs` (laws) — *a meaning is checked by the reference it is spelled through AND by an independent property (a hue band), never by equality with the thing under test.*
+- **The colour parser accepted `rgb(255 255, 255)`, which Chrome rejects**, and the header claimed 5.47:1 for a pair Chrome drew at 3.30:1 — `tokens-contrast.mjs` (`parseColor`) — *a parser for a browser-read value is exactly as strict as the browser.*
+- **The measured pairs came from fixed lists**, so `--focus-ring`, the legacy aliases (`--faint`) and every `--on-X` fill were never measured — `tokens-contrast.mjs` — *every value of a kind carries a declared role, and a value with no role is a finding (the fixed-list-of-17 twin).*
+- **Chips were measured over one surface and translucent surfaces composited over bg-0 only** — `tokens-contrast.mjs` — *measure over every backdrop a value is drawn on; a surface is opaque or refused.*
+- **Check and `--write` disagreed on CRLF and on markers outside a comment**, and the writer produced a file its own reader refused — `tokens-contrast.mjs` — *a writer re-reads what it wrote before writing it, and both modes normalise the same way.*
+- **`face-tokens.mjs` wrote through a symlink or junction onto its own source**, prepending a banner to the source of truth on every run — `.claude/scripts/core/face-tokens.mjs` — *a writer realpaths its destination and refuses its source (the containment-realpath twin).*
+- **`face-tokens.mjs` took an empty or a second repo argument and a repeated flag silently, and called `process.exit()`** — same file — *the flag rules above apply to positionals too; exitCode, never exit().*
+- **`_` counted as a word character**, so `shadow-[0_0_0_1px_#fff]`, `shadow-[inset_0_0_0_1px_white]` and `shadow-[0_1px_2px_rgba(0,0,0,.5)]` evaded the colour lint — `.claude/scripts/core/face-colour-literal.mjs` — *a boundary class follows the tokenizer of the language read: Tailwind reads `_` as a space.*
+- **The palette rule missed Tailwind 4.3's mauve/olive/mist/taupe and any prefix after a hyphen** (`inset-ring-red-500`, `var(--color-rose-600)`, `theme(colors.red.500)`) — same file — *a list copied from a dependency is re-derived from the pinned version, and a pattern matches the family, not a list of prefixes.*
+- **Escaped spellings evaded the lint** (`&#35;ffffff`, `\x23ffffff`, `#\66 ff`) — same file — *scan the decoded text as well as the raw.*
+- **The function rule judged only the first character of the arguments**, so `rgb(none 0 0)`, `rgb(calc(255) ...)`, `rgb(/**/255,...)` and `rgb(from var(--x) 255 255 255)` passed — same file — *judge a call by every number its arguments carry, alphas excepted.*
+- **A missing or re-cased default root, two spellings of one root, a root inside another, and a device as a root all passed or double-counted** — same file — *a root is required, exact-case, distinct, and a real directory; anything else is a named finding or a refusal.*
+- **The CSS property `white-space` matched the word white** — same file — *a word rule names its non-colour exceptions and pins them with a near-miss.*
+- **`moodHolds` split classes on JS `\s`**, so `hq<NBSP>hq-light` held while Chrome applied no mood — `face/scripts/smoke.mjs` — *parse a browser value with the browser's grammar (ASCII whitespace).*
+- **A page error carrying a newline printed a forged `smoke: opened=... mood=light mood-miss=0` line** that the bats verdict passed — `smoke.mjs` (`errorLine`), `harness-run.mjs` — *every free text bound for a parsed log is one line (JSON-escaped); the ids-are-grammar-checked twin.*
+- **`judge` passed a report naming no mood, or carrying no expected room set**, and the standalone smoke judged the door against itself — `smoke.mjs` — *a verdict refuses a report that omits what it must measure (a measurement over nothing is UNMEASURED).*
+- **One mood's throw skipped the other mood, and `--moods dark` exited 0** — `face/scripts/harness-run.mjs` — *catch per item; a partial run is never a pass.*
+- **The build test's "Tailwind scanned the wrong tree" check could not fail for that reason, and `hq-light` was satisfied by the token copy's selector** — `tests/face-browser.bats` — *a failure message names only what its failure proves, and a marker is one only the thing under test emits (`--color-white`).*
+- **The face/src mention exclusion matched a basename anywhere, and excused an excused file importing from face/src** — `tests/face-l3.bats` — *an exclusion names the full path and excuses only the reason it states.*
+- **The lockfile check's floor was a family COUNT**, so a lockfile stripped of the whole oxide family passed — `tests/face-browser.bats`, `face/scripts/lockfile-platforms.mjs` — *require the families the dependencies need, by name.*
+
+## Face v2 Phase 02 — two fresh attackers (decision logic · shell/OS boundary), 2026-09-17
+
+- **A lexer's idea of whitespace was narrower than node's**, so `import<EM SPACE>React` and `<EM SPACE>typeof` read as one identifier and the import or keyword vanished from the scan — `.claude/scripts/core/face-pure.mjs` (`isSpace`, `NAME_START`/`NAME_PART` as ECMAScript ID_Start/ID_Continue) — *a scanner of a language uses that language's own character classes; the ASCII-whitespace twin, now in a lexer.*
+- **A `//` comment ended only at LF**, so `// x<U+2028>import React` (or a CR) hid a whole statement node runs, and a name could swallow a U+2028 — `face-pure.mjs` (`isLineBreak` in `skipTrivia`, `skipJsxSpace`, strings, regexes) — *every line terminator the language has ends what a line ends.*
+- **A percent-encoded relative specifier resolved to one file in the lint and another in node** (`path.resolve` keeps `%2e%2e`, the ESM loader decodes it) — `face-pure.mjs` (`classifySpec`) — *a path checked by one resolver and loaded by another is refused when the two can disagree.*
+- **A lookup keyed by data after `}` and a computed key were not lookups** (`{...}[f.state]`, `{ [f.state]: x }`) — `face-pure.mjs` (`scanView`, the `[` rule) — *a rule about indexing covers every token an index can follow, and every way a key can be computed.*
+- **A property spelled like a keyword was read as the keyword** (`f.default < x` opened a JSX element, `f.new(x)` skipped the call rule) — `face-pure.mjs` (`prop` on name tokens) — *after `.` a name is a property, whatever it spells.*
+- **An `onX` method on any receiver passed as a handler, and an IIFE was not a call** — `face-pure.mjs` (the call rule) — *a permission granted by name is scoped to the receiver it was meant for.*
+- **The standalone `!` rule had no test of its own**: deleting it left the suite green — `tests/face/face-pure.mjs` — *every rule has a case only it decides (the vacuous-pass rule, one rule down).*
+- **An import path's spelling was checked only below face/src**, so `../../../../SRC/lib/x.mjs` passed on a case-insensitive disk and read as "outside" on APFS — `face-pure.mjs` (`specSpelledExactly`, before containment) — *check every segment the specifier names, and check spelling before containment so every OS gives one answer.*
+- **Attaching modules used a plain object**, so a served id `constructor` drew as a module it did not have — `face/src/lib/registry.mjs` (`Object.create(null)`, `Object.hasOwn`); the twin in `rooms.mjs` `byRing` (`RING_LEDE`) — *the `FILE_ALLOW[id]` twin: a lookup by an id from outside uses own keys only.*
+- **The browser and the gate classified an exempted ADR-1327 extra differently** (gate: fine; browser: orphan) — `registry.mjs` `attachModules` (third argument), `face-coverage.mjs` `moduleFindings` (`exempted`) — *two readers of one question are crossed on every input the contract allows, not only on today's tree.*
+- **The "no shell file names a room" scan read a hand-kept file list** — `tests/face/module-frame.mjs` — *derive what is scanned; exclude by name, with the reason, what is not.*
+- **The render verdict counted every module folder**, so an exempted extra the door never serves would turn the browser red while the gate stayed green — `tests/face-browser.bats` (`render_verdict` now takes face-coverage's module-half line) — *a verdict about agreement reads the other reader's answer, not a proxy for it.*
+- **A throw inside the proof skipped the scaffold's rollback**, leaving a half-module (an unreadable ring, a name the OS cannot stat) — `.claude/scripts/hq/face-module.mjs` (the proof in try/catch), `.claude/scripts/core/face-coverage.mjs` (`treeModules` walk → UNREADABLE) — *every step after a write is inside the path that undoes the write.*
+- **A rollback crashed on a locked file and named nothing** — `face-module.mjs` (`rollback` retries and returns what would not go) — *cleanup reports what it could not clean; it never throws past the verdict.*
+- **The scaffold wrote through a linked `face/src`, modules or ring folder**, GREEN with the module outside `--root` — `face-module.mjs` (lstat + realpath containment before writing) — *the writer-realpaths-its-destination twin (face-tokens), for a scaffold.*
+- **An unreadable exemption or extras list became "not exempt"**, a refusal for the wrong reason; a modules root that is a file was an unhandled throw read as exit 1 — `face-module.mjs` — *unreadable is exit 2 naming the file, never a default.*
+- **A folder name or finding carrying a newline could print a verdict line of its own** — `face-pure.mjs` (`oneLine`), `face-coverage.mjs`, `face-module.mjs` — *the one-line rule applies to names read off a disk, not only to page errors.*
+- **`face-coverage` still called `process.exit()`**, racing the pipe that carries the line a caller parses — `face-coverage.mjs` — *`process.exitCode`, as fixed-defects already says.*
+- **Nine `ops.mjs` exported `Object.freeze([])` untyped**, and the first `tsc --noEmit` on CI refused them — `face/src/modules/*/*/ops.mjs`, the scaffold template — *a new gate is run over the code written in the same change before it is pushed as green-bound.*
+- **A literal NUL written into a test source** made grep call the suite binary; **`\u` escapes written through the editor tool became invisible literal characters** in the lint — `tests/face/face-pure.mjs`, `face-pure.mjs` — *build control and invisible characters from char codes in the source.*
+
+## Face v2 Phase 03 (command ring) — two fresh attackers (decision logic · shell/OS boundary) + the first CI run, 2026-09-17
+
+- **An import on the line after `x++`, `debugger` or TypeScript's `x!` was invisible**, because the import scan asked the ASI heuristic whether a statement began there — `.claude/scripts/core/face-pure.mjs` (`importStatements`: a reserved `import`/`export` outside a property always begins a statement) — *a keyword that can only start a statement needs no statement-boundary guess; the lane's "parser that goes quiet" class, in the shared lexer both lints read.*
+- **Literal values outside an object or array literal were never counted** (3,600 exported constants, 1,200 rows of JSX text, calls holding literals) — `.claude/scripts/core/face-facts.mjs` (file totals of leaves and characters) — *a size rule measures every literal the file carries, not only the ones in the shape the author pictured.*
+- **"JSON.parse or atob of a literal" saw only a string directly inside the call** (a `+` chain, a template split by `${""}`, parentheses, `globalThis.JSON.parse`) — `face-facts.mjs` — *a text rule judges the text, however it is spelled or reached.*
+- **A regex literal could carry any amount of text** (the lexer stored only `v: "regex"`) — `face-pure.mjs` (`raw` on the regex token), `face-facts.mjs` — *every literal kind the language has is a literal.*
+- **The stylesheet exception counted uses inside one file** and could be read through an export, a namespace import or single-quoted JSON — `face-facts.mjs` (`styleLiterals`, `JSON_MEMBER`) — *an exemption is scoped to what the scanner can see all of.*
+- **A package-style specifier climbed out of face/src through a `..` segment** (`pkg/../../docs/facts.mjs`, in an import, an export-from, an `import()` and a CSS `url()`) — `face-facts.mjs` (`climbs`) — *a containment check applies to every specifier form, not only the relative one.*
+- **`require()` and `import x = require()` had no rule** — `face-facts.mjs` — *a loader the rule does not name is a loader the rule does not check.*
+- **The fetch rule read only a literal's text** (`/api/../x`, `%2e%2e`, `window.fetch`, a computed `["fetch"]`, `new Request`, `XMLHttpRequest`) — `face-facts.mjs` (`plainApi`, `literalHead`, global bases) — *a network rule covers every way the page can reach the network.*
+- **A `.css` file had no blob or JSON rule** while the same text in a style constant FAILed; `@import"x"` with no space and `@import/**/"x"` passed; Tailwind `@plugin`/`@config` were unread — `face-facts.mjs` (`scanStyle`) — *two carriers of one text get one rule.*
+- **`face/package.json` fields that map a name to a file were unread** (`browser`, `exports`, `workspaces`, `overrides`, a tarball, a drive or home path, `FILE:` in capitals) and **the lockfile was unread** — `face-facts.mjs` (`checkPackage`, `pathSpec`, `checkLockfile`) — *a resolver's inputs are the lint's inputs.*
+- **`vite.config` `define` and `resolve.alias` inlined facts from outside face/src** — `face-facts.mjs` (`checkViteConfig`) — *the build config is part of the bundle's provenance.*
+- **A TypeScript return type turned a function body into an "object" literal** and a `?worker` import, a worker `new URL` and a glob `import` option FAILed — `face-facts.mjs` (`isDataBracket`, worker and glob allowances) — *a false FAIL on the platform's standard pattern is a defect too.*
+- **A specifier holding a colon (an NTFS stream) and one matching a folder only case-insensitively passed, and `..` resolved from the link path, not the real one** — `face-facts.mjs` (`relativeProblem`, `caseProblem`, real `fromDir`) — *the twin of face-pure's Phase 02 spelling fix, which had not been made here: a fix is applied in every file that resolves paths.*
+- **An extensionless import under macOS's `/var` → `/private/var` read as leaving face/src** (CI run 35241805573) — `face-facts.mjs` (`realish`) — *compare a realpath with a realpath: resolve every existing ancestor.*
+- **A negated letter range in a new regex** (`[^0-9A-Za-z]`) — `face-facts.mjs` (lookarounds) — *tests/portability.bats's locale-collation rule applies to lint code as much as to shell.*
+- **The read host checked one read of a getter and keyed another**, and **a mutable manifest widened its routes after the check** — `face/src/lib/registry.mjs` (`snapshotRead`, a frozen manifest copy) — *"validate one read, compare another", now in the read host: copy once, then judge and use the copy.*
+- **An unpaired surrogate or a dot-segment id passed `readProblem` and then threw or climbed in `readPath`**; **a lane named `act` survived `dropReads`**; **a later `poll: true` on a repeated read was lost**; **`notServedOf` missed Map/Set and recursed forever through a getter**; **an act on an undeclared route poisoned every later fold** — `registry.mjs` — *a key's shape, not a coincidence of its fields, says what it is.*
+- **After a stamp the room sat on "reading" until the next poll, a poll in flight brought the stamped approval back, and an as-of change hid a stamp that had landed** — `face/src/shell/RoomFrame.tsx` (a read epoch, `dropAll` bumping the load effect, acts not tied to the door's abort) — *a write that reached the door is shown, and a read older than the write is thrown away.*
+- **The heading check compared the door with itself, a run that checked zero rooms passed, and an unreadable NOT SERVED count became 0** — `face/scripts/smoke.mjs` (the contract's frozen sentence, a zero floor in `judge`, `panels=unread`), `face/scripts/harness-run.mjs`, `tests/face-browser.bats` (the browser's count EQUAL to the shipped rings' lists) — *a smoke judged against the door it tests is the Phase 00 defect again.*
+- **The smoke's `oneLine` and face-pure's left ESC and other controls in a printed line** — `face-pure.mjs`, `smoke.mjs` — *one-line means no terminal control either.*
+- **Typecheck errors pushed to CI** (`door.mjs` untyped default, a `never[]` union, an `unknown` argument) — found on CI run 35241805573 — *a typecheck is run over a changed lib before the push that relies on it.*
+
+## Face v2 Phase 03 (kernel ring) — 2026-09-18
+
+Two fresh attackers, one on the decision logic and one on the shell/OS and browser boundary, carrying
+this file. 20 holes; every one is fixed below or carries a debt row.
+
+- A 200 that is not a lane, or is a body about ANOTHER lane, drew "reading the lane…" for ever →
+  `BAD_BODY` / `WRONG_LANE` refusals with codes (`lane-room.mjs`). The twin of the `BAD_BODY` fix made
+  twenty lines above it in the same file: a fix is not applied until it is attacked where it was not made.
+- A spine body with no `events` list read as an EMPTY spine ("No receipt of … on the spine") → the
+  shape is checked before the count becomes a sentence; `BAD_BODY` names it.
+- A file body about another id drew under the requested id's card → `WRONG_FILE`; an empty file read
+  as "1 line" → 0 lines.
+- A partial page (`more: true`, and the door pages from the OLDEST receipt) was drawn as complete: a
+  "last fire", run counts, "drivers seen" and "all time" subtitles → every figure derived from a page
+  now says which page it is a figure of, counts carry `+`, and the last fire says it is the newest on
+  that page, which has more past it.
+- A kind the registry does not home here was counted as `0` → unread (`—`), and the three rooms that
+  group run receipts gate on the kind being homed.
+- `sourceFile` read `sha256` three times (validate one read, display another) → every field read once
+  into a copy, then judged and drawn from the copy. `room.holds` was read 21 times per fold → once.
+- A malformed ADR band vanished; a kind carrying a comma WIDENED what the room asked the door for; a
+  kind list of the wrong shape was indistinguishable from "homes no kind"; a second lane was dropped
+  silently → each is named on screen now, and a kind that is not a kind is never sent.
+- `laneCard` threw on `phases: [null]`, taking the whole room to a Failure → unreadable rows are
+  dropped and counted in the panel's note.
+- A job name escaped in a receipt and decoded in the registry drew the same job twice → names are
+  decoded once, on both sides; a job listed twice in the registry is listed once.
+- `runsBy` took the last ARRAY ENTRY as the newest run and sliced an unreadable timestamp into a
+  clock → newest by timestamp, and a timestamp this shell cannot read prints "time unreadable".
+- The lane meter drew 0% for a lane with no measured burn (a progressbar telling a screen reader the
+  one thing `burnMeter` refuses to say) → `hasMeter`, and no bar without a measurement.
+- `roomLink` counted planned and template rooms as openable, the fourth reader of that question and
+  the only one without the filter → same predicate as the rail.
+- `laneCard` and the folds unescaped text the shell had already decoded (`&amp;lt;` became `<`) →
+  decoded once, where the door's escapes are undone.
+- The NOT SERVED list checked three of its four columns, and the fourth had already drifted → the
+  sentence is compared too; `verbPending` had no gate at all → `verbPendingOf`, a derived
+  `verbs-pending-kernel.md`, a module-frame arm and a per-room browser count.
+- The browser compared only the TOTAL number of NOT SERVED panels: a panel deleted in one room and
+  duplicated in another passed → both derived lists are compared PER ROOM, in both directions.
+- The two readers of an evidence list disagreed by construction (grep breaks on `\n`; a /m regex also
+  breaks on CR, U+2028, U+2029) and duplicates were invisible → one reader, held to one row shape.
+- `tests/face/cdp-client.mjs` pinned `rings=command` and asserted a kernel room is NOT heading-checked
+  → updated, with the negative control re-pointed at a ring no module has shipped in.
+- `judge()` had no clause for either derived count, so a page drawing none of them exited 0 → a count
+  that could not be read is a refusal.
+- A module declaring `/api/spine` while claiming `asOf: false` had its numbers cut by a scrub the
+  shell then greyed out → every manifest's `asOf` now matches whether the scrub reaches its routes,
+  pinned by a module-frame arm (this moved `board` and `ask-arc` too — the class, not the file).
+- Declared, with a debt row each: the page contract beyond the four marks CI counts, and kit
+  decisions that `face-pure` cannot see.
+
+## Face v2 Phase 03 (factory ring) — 2026-09-18
+
+One fresh attacker on the ring's new decision logic, carrying this file. 18 findings; the ones that
+put a fact on screen the door did not serve are fixed here, three are debt rows with a named pay-down.
+
+- The lane FIGURE read `card.isRead` while the badge read `isRefused`, so a body the panel refused as
+  `WRONG_LANE` still drew ANOTHER lane's status in the instrument strip — two readers of one question
+  inside one file, the exact class this lane keeps paying for. Both ask `isRefused` first now.
+- The trail drew receipts of kinds the room never asked for: `WRONG_LANE` and `WRONG_FILE` were built
+  for the lane and file bodies, and the spine body — the one that fills every ring room's trail — had
+  no equivalent. `WRONG_KINDS` names it, with both kind lists in the sentence.
+- A page whose `count` exceeded the receipts it carried was called complete when `more` was false. A
+  count larger than its page is a partial page whatever the flag says.
+- `heldAcrossRooms` threw away `heldBy`'s `unreadable`, so the toolbelt's catalogue shrank silently —
+  in the room whose own copy says it cannot drift from arc. Every section and every figure it feeds
+  reads `—` when a room carried its list unreadably, and the room names which room.
+- The two lane-less rooms said the registry homes NO agent / NO gate / NO workflow when it had homed
+  one unreadably; the council's badge also bypassed `holdsCount` and `fmtInt`, printing a count the
+  strip beside it refused to print. Both say "unread" now, through the same helper.
+- A registry row with no id produced an ENABLED button labelled "undefined" that opened `undefined`.
+  A row whose room this shell cannot name is dropped and counted.
+- A name the registry listed twice was counted twice and drawn under a duplicate React key (the
+  catalogue already deduped, one file away); an entry that renders as nothing — spaces, a zero-width
+  character — was counted as a thing arc has. Both are gone.
+- A section nobody searched printed "nothing here matches": absent, unreadable and unmatched are three
+  sentences, and the section now picks the right one.
+- The catalogue sorted case-sensitively while the find box folds case, so one command appeared in
+  three places in one alphabetical list.
+- `hasLane:false` (new this ring, for the two rooms the registry gives no lane) made a MISSING lane
+  silent for lane rooms too: the panel drew its title and hint over nothing. It says why now.
+- The evidence list's "Routes named by this ring: 4" was prose nothing derived; the count is gone and
+  the table is the claim.
+- Debt rows, each with a named pay-down in the money ring's PR: `lane-room.mjs` has no unit suite
+  (seven mutants of one fold survived every gate); a fold can ask for a read its manifest does not
+  declare if the REGISTRY changes under it; the catalogue is rebuilt per keystroke and reads each
+  room's holds nine times per fold.

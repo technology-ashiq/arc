@@ -187,6 +187,34 @@ export function tokenFromHash(hash) {
 export const ASOF_ROUTES = Object.freeze(["/api/spine", "/api/brief", "/api/inbox"]);
 
 /**
+ * Every route the door serves the face, read off arc-dash's ROUTES table and pinned to it by
+ * tests/face/module-frame.mjs (face v2 Phase 03, REQ-05, ADR-1324).
+ *
+ * A module's `routes` names only these. A route the door does not serve is never declared: the panel
+ * that needs it renders NOT SERVED, and Phase 04 builds the route. A GET is a READ a fold asks the
+ * host for; a POST is an ACT only a View's handler reaches, through the host. `query` is the keys a
+ * read may carry -- `asof` is never one of them, because the scrub is this client's (withAsOf).
+ * `rereads` marks an act whose landing changes what every read shows.
+ */
+/** @typedef {Readonly<{ method: "GET" | "POST", param: boolean, query: readonly string[], rereads: boolean }>} DoorRoute */
+/** @param {string[]} [query] @returns {DoorRoute} */
+const read = (query = []) => Object.freeze({ method: "GET", param: false, query: Object.freeze(query), rereads: false });
+/** @type {Readonly<Record<string, DoorRoute>>} */
+export const DOOR_ROUTES = Object.freeze({
+  "/api/health": read(),
+  "/api/spine": read(["since", "kind", "venture", "date", "limit"]),
+  "/api/brief": read(),
+  "/api/inbox": read(),
+  "/api/pnl": read(["simulated", "venture", "month"]),
+  "/api/board": read(),
+  "/api/rooms": read(),
+  "/api/lane/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
+  "/api/file/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
+  "/api/decide": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: true }),
+  "/api/ask": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
+});
+
+/**
  * Attach the shell's as-of to a path, if that path takes one and does not already carry one.
  *
  * Pure and exported so a node test can hold every branch: the three routes that accept it,

@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // THE FACE. The one element of the owner's reference design that must not change.
 //
-// Ported from docs/design/reference/face-hq/assets/arcface/src/face/FaceStage.jsx:
+// Ported from docs/design/reference/face-hq/assets/arcface-v0.4/src/face/FaceStage.jsx:
 // a 90x90 particle cyber-mask inside an ambient particle cloud, additively blended
 // and bloomed, both repelled by the cursor, with the listening / thinking / talking
 // states layered on top. Every constant is the reference's; none of them is a taste
@@ -109,7 +109,15 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
     const camera = new THREE.PerspectiveCamera(CAMERA.fov, width / height, CAMERA.near, CAMERA.far)
     camera.position.z = CAMERA.z
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    // The WebGL guard (face v2 Phase 02, debt-ledger): where WebGL is unavailable the renderer's
+    // constructor throws, and a throw here took the room around the stage down with it. The stage
+    // is decoration; with no WebGL it draws nothing and the room stands.
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    } catch {
+      return
+    }
     renderer.setSize(width, height)
     container.appendChild(renderer.domElement)
 

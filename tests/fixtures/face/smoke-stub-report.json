@@ -1,0 +1,17 @@
+{
+  "$comment": "The report a smoke run produces when it never navigates: 34 served, 33 openable, 0 opened, 0 errors. Kept as the mutant control -- the verdict must FAIL it (face v2 Phase 00). A gate that only counted errors would call this clean. Carries a mood (face v2 Phase 01) with an empty miss list, so the refusal it proves is the opened=0 one and not a missing mood.",
+  "chrome": "/stub",
+  "chromeSource": "stub",
+  "openable": 33,
+  "opened": 0,
+  "notOpened": [
+    "lane"
+  ],
+  "countedErrors": 0,
+  "excludedErrors": 0,
+  "consoleErrors": 0,
+  "exceptions": 0,
+  "unsettled": [],
+  "mood": "dark",
+  "moodMiss": []
+}

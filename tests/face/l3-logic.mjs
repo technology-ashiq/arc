@@ -11,7 +11,7 @@
 // before any behavioural check is trusted. "RAN: <n> checks" on the last line is what the
 // bats wrapper asserts, so a suite that dies half-way cannot read green.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -368,7 +368,9 @@ check("moving in an empty nav does not throw or invent a room",
 const ctx = { inTextField: false, paletteOpen: false };
 check("j moves forward", shell.keyAction({ key: "j" }, ctx).type === "room-move");
 check("k moves back", shell.keyAction({ key: "k" }, ctx).delta === -1);
-check("g goes home", shell.keyAction({ key: "g" }, ctx).room === "today");
+// Home is the served registry's first openable room (registry.mjs homeRoom), never a room id
+// spelled in the shell (face v2 Phase 02) -- so the key asks for home and names nothing.
+check("g goes home", shell.keyAction({ key: "g" }, ctx).type === "room-home");
 check("an unbound key is left alone for the browser", shell.keyAction({ key: "q" }, ctx) === null);
 check("a modified key is left alone", shell.keyAction({ key: "j", ctrlKey: true }, ctx) === null);
 check("NOTHING fires while the owner is typing",
@@ -989,6 +991,78 @@ check("a dead handle SAYS it is dead rather than reporting a clean boundary",
   const unclassified = ask.actionAudit({ open_room: { effect: "navigate" }, mystery: {} });
   check("an action with no declared effect counts as a hand", !unclassified.clean && unclassified.hands.includes("mystery"), unclassified.line);
   check("and an EMPTY vocabulary is dead, not clean", !ask.actionAudit({}).clean, ask.actionAudit({}).line);
+}
+
+// face v2 Phase 01 -- the two moods (ADR-1331) and the kit's shape (ADR-1323).
+{
+  const mood = await import(pathToFileURL(join(LIB, "mood.mjs")).href);
+  check("mood.mjs loaded with its rules", typeof mood.applyMood === "function" && typeof mood.readMood === "function" && Array.isArray(mood.MOODS));
+  check("the moods are exactly dark and light", JSON.stringify(mood.MOODS) === JSON.stringify(["dark", "light"]));
+  check("only the exact string light is light; anything else stored is dark",
+    mood.moodFrom("light") === "light" && ["dark", "LIGHT", " light", "", null, undefined, 1, {}].every((v) => mood.moodFrom(v) === "dark"));
+  check("the toggle flips both ways", mood.nextMood("dark") === "light" && mood.nextMood("light") === "dark");
+
+  const store = (value) => ({ data: value, getItem() { return this.data; }, setItem(_k, v) { this.data = v; } });
+  check("a stored light is read as light", mood.readMood(store("light")) === "light");
+  check("no storage at all is dark, never a throw", mood.readMood(null) === "dark" && mood.readMood(undefined) === "dark");
+  check("storage that throws on read is dark, never a throw", mood.readMood({ getItem() { throw new Error("SecurityError"); } }) === "dark");
+  const s = store(null);
+  check("storing writes under the reference's key", mood.storeMood({ setItem(k, v) { s.key = k; s.data = v; } }, "light") && s.key === "arc-hq-theme" && s.data === "light");
+  check("storage that throws on write reports false, never a throw", mood.storeMood({ setItem() { throw new Error("QuotaExceeded"); } }, "dark") === false);
+  check("storing a non-mood stores dark", (() => { const t = store(null); mood.storeMood(t, "sepia"); return t.data === "dark"; })());
+
+  const classList = () => { const set = new Set(); return { set, add: (c) => set.add(c), remove: (c) => set.delete(c) }; };
+  const l = classList(); mood.applyMood(l, "light");
+  check("light puts both hq and hq-light on <html>", l.set.has("hq") && l.set.has("hq-light") && l.set.size === 2);
+  mood.applyMood(l, "dark");
+  check("going back to dark removes hq-light and keeps hq", l.set.has("hq") && !l.set.has("hq-light"));
+  const d = classList(); d.add("hq-light"); mood.applyMood(d, "not-a-mood");
+  check("an unknown mood applies dark, removing a stale hq-light", d.set.has("hq") && !d.set.has("hq-light"));
+  check("the toggle names what it will do", /light/.test(mood.moodToggleLabel("dark")) && /dark/.test(mood.moodToggleLabel("light")));
+
+  // The harness writes the same key the app reads: two spellings, held equal here.
+  const smoke = await import(pathToFileURL(join(REPO, "face", "scripts", "smoke.mjs")).href);
+  check("the smoke harness writes the key the app reads", smoke.MOOD_KEY === mood.MOOD_KEY, `${smoke.MOOD_KEY} vs ${mood.MOOD_KEY}`);
+
+  // The kit is TSX, which node cannot import with no install, so its shape is read as text.
+  const SRC = join(REPO, "face", "src");
+  const kit = readFileSync(join(SRC, "ui", "kit.tsx"), "utf8");
+  const bits = readFileSync(join(SRC, "ui", "bits.tsx"), "utf8");
+  const exported = (text, name) => new RegExp(`^export function ${name}\\b`, "m").test(text);
+  for (const name of ["PickRow", "Meter", "Chip"]) check(`kit.tsx exports ${name}`, exported(kit, name));
+  for (const name of ["RoomHead", "KpiStrip", "HPanel", "Empty", "SectionLabel"]) check(`bits.tsx exports ${name}`, exported(bits, name));
+  check("council renders --kind-council in the kit, never violet", /council:\s*\{\s*color:\s*'var\(--kind-council\)'/.test(kit) && !/council:\s*\{\s*color:\s*[^}]*violet/.test(kit));
+  check("live renders --mode-live in the kit, never green", /state === 'live' \? 'var\(--mode-live\)'/.test(kit));
+
+  // No faked light mood: `filter: invert` anywhere under face/src is refused (ADR-1331).
+  const walk = (dir, out = []) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p, out); else out.push(p);
+    }
+    return out;
+  };
+  const files = walk(SRC);
+  const inverted = files.filter((f) => /filter\s*:\s*invert|filter:\s*['"`]invert|invert\(/.test(readFileSync(f, "utf8")));
+  check("face/src was walked (vacuous-pass guard)", files.length >= 20, `files=${files.length}`);
+  check("nothing under face/src inverts colours to fake a mood", inverted.length === 0, inverted.join(", "));
+
+  const css = readFileSync(join(SRC, "index.css"), "utf8");
+  const tw = css.indexOf('@import "tailwindcss" source(".");');
+  const tok = css.indexOf('@import "./tokens.css"');
+  check("index.css imports Tailwind, then the generated token copy", tw !== -1 && tok > tw);
+  check("Tailwind scans face/src by an explicit source, whichever default base the plugin uses", tw !== -1);
+  // index.css adds no colour of its own: the one custom property it declares is the light remap.
+  const declared = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(--[a-zA-Z0-9-]+)\s*:/g)].map((m) => m[1]);
+  check("index.css declares no token but the --color-white remap", declared.length === 1 && declared[0] === "--color-white", declared.join(","));
+  check("the light remap is a @custom-variant over html.hq.hq-light", /@custom-variant hq-light \(&:where\(html\.hq\.hq-light, html\.hq\.hq-light \*\)\);/.test(css));
+  check("the remap uses that variant", /@variant hq-light\s*\{\s*--color-white:\s*var\(--text-1\);/.test(css));
+  const app = readFileSync(join(SRC, "App.tsx"), "utf8");
+  check("the app loads index.css, not the bare token copy", /import '\.\/index\.css'/.test(app) && !/import '\.\/tokens\.css'/.test(app));
+  const main = readFileSync(join(SRC, "main.tsx"), "utf8");
+  check("the mood is applied before the first render", main.indexOf("applyMood(") !== -1 && main.indexOf("applyMood(") < main.indexOf("createRoot("));
+  const libImports = readdirSync(LIB).filter((f) => f.endsWith(".mjs")).filter((f) => /from\s+['"](tailwindcss|@tailwindcss|@phosphor-icons)/.test(readFileSync(join(LIB, f), "utf8")));
+  check("Tailwind and phosphor stop at L3: no lib file imports them", libImports.length === 0, libImports.join(", "));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

@@ -1,12 +1,15 @@
-// 00 · OVERVIEW — the daily screen: brief, KPIs, live timeline,
+// 00 · OVERVIEW — the daily screen: figures, brief, live tape,
 // approval inbox (j/k select · a approve · r reject), quick panels.
 import { useEffect, useRef, useState } from 'react'
-import { MONO, COLOR, Btn, SimBadge } from '../../ui/kit.jsx'
-import { RoomHead, HPanel, EventRow, ApprovalCard, ReceiptDrawer } from '../bits.jsx'
-import { spine, recordDecision } from '../../spine/store.js'
-import { kpis, briefLines, timeline, ladder, calibration, clockLabel } from '../../spine/derive.js'
+import { Tray, Pulse } from '@phosphor-icons/react'
+import { UI, MONO, COLOR, Btn, SimBadge, Chip } from '../../ui/kit.jsx'
+import { RoomHead, HPanel, KpiStrip, EventRow, ApprovalCard, ReceiptDrawer, Empty, SectionLabel } from '../bits.jsx'
+import { spine, recordDecision, setSpeed } from '../../spine/store.js'
+import { kpis, briefLines, timeline, ladder, calibration, clockLabel, greenFired } from '../../spine/derive.js'
 import { useSpine } from '../useSpine.js'
 import { uiBus } from '../../lib/uiBus.js'
+
+const TONE_OF = { amber: COLOR.amber, green: COLOR.green, cyan: COLOR.cyan }
 
 export default function Overview() {
   useSpine()
@@ -46,113 +49,121 @@ export default function Overview() {
   }, [evs.length])
 
   const decided = spine.events.filter((e) => e.kind === 'decision.recorded' && e.day === spine.dayIndex && e.decided).slice(-4)
+  const real = greenFired()
 
   return (
     <>
       <RoomHead
         title={brief.greeting}
-        hint="the whole company on one screen — every number derives from the event log"
-        right={<SimBadge>{spine.source === 'real' ? 'real spine · read-only' : 'simulated future day · real vocabulary'}</SimBadge>}
+        hint="The whole company on one screen. Every number derives from the event log."
+        right={<SimBadge>{spine.source === 'real' ? 'real spine · read-only' : 'simulated day · real vocabulary'}</SimBadge>}
       />
 
-      {/* the brief — ≤40 lines by law; here it is 4 */}
-      <HPanel title="arc brief" hint={`noise budget: whole day ≤ 40 lines · now ${clockLabel()}`}>
-        <div className="space-y-1.5 text-[12.5px]" style={{ fontFamily: MONO }}>
-          {brief.lines.map((l) => (
-            <div key={l.tag} className="flex gap-3 items-baseline">
-              <span className="w-[92px] shrink-0 text-[10.5px] uppercase tracking-[0.12em]" style={{ color: l.tone === 'amber' ? COLOR.amber : l.tone === 'green' ? COLOR.green : l.tone === 'cyan' ? COLOR.cyan : 'rgba(255,255,255,0.5)' }}>
-                {l.tag}
-              </span>
-              <span className="text-white/80" style={{ fontWeight: 300 }}>{l.text}</span>
+      {/* the instrument strip — figures lead; a number never shows a spinner */}
+      <KpiStrip
+        items={[
+          real
+            ? { v: '₹' + k.realRev.toLocaleString('en-IN'), l: 'Real revenue today', tone: 'green' }
+            : { v: '₹0', l: 'Real revenue', sub: 'never fired · honest' },
+          { v: '₹' + k.simRev.toLocaleString('en-IN'), l: 'Simulated revenue', sub: 'labeled, not counted', tone: 'violet' },
+          { v: '₹' + k.cost.toLocaleString('en-IN'), l: 'AI spend today', sub: k.ret.toFixed(1) + '× return' },
+          { v: k.ideas, l: 'Ideas captured' },
+          { v: k.phases + ' · ' + k.content, l: 'Phases closed · published' },
+          { v: '~' + k.minutesNeeded + ' min', l: 'Your time needed', sub: k.pending ? k.pending + ' decisions waiting' : 'inbox zero', tone: k.pending ? 'amber' : undefined },
+        ]}
+      />
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4 items-start">
+        <div className="min-w-0">
+          {/* the brief — ≤40 lines by law; here it is 5, each with its tone */}
+          <HPanel title="Brief" hint={`noise budget: whole day ≤ 40 lines · now ${clockLabel()}`}>
+            <div className="-mx-2">
+              {brief.lines.map((l) => {
+                const c = TONE_OF[l.tone] || 'var(--text-3)'
+                return (
+                  <div key={l.tag} className="grid grid-cols-[110px_1fr] gap-3 items-baseline px-2 py-[7px] rounded-md transition-colors duration-200 hover:bg-(--bg-3)">
+                    <span className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.06em] truncate" style={{ fontFamily: UI, fontWeight: 600, color: c }}>
+                      <span aria-hidden="true" className="w-[6px] h-[6px] rounded-full shrink-0" style={{ background: c }} />
+                      {l.tag}
+                    </span>
+                    <span className="text-[13.5px] leading-[21px]" style={{ fontFamily: UI, color: 'var(--text-1)' }}>{l.text}</span>
+                  </div>
+                )
+              })}
             </div>
-          ))}
+          </HPanel>
+
+          {/* live timeline */}
+          <HPanel
+            title="Today"
+            hint="everything the company did · ⌗ opens the receipt"
+            actions={<Btn small onClick={() => uiBus.openRoom('spine')}>Open the spine</Btn>}
+          >
+            <div ref={feedRef} className="max-h-[520px] overflow-y-auto -mx-2" style={{ scrollbarWidth: 'thin' }}>
+              {evs.length === 0 && (
+                <Empty
+                  icon={Pulse}
+                  title="The day hasn't started"
+                  hint="Press play and the company wakes up. Every line that appears here is an event on the spine."
+                  action={<Btn small tone="primary" onClick={() => setSpeed(10)}>Play the day at 10×</Btn>}
+                />
+              )}
+              {evs.map((e) => (
+                <EventRow key={e.id} e={e} onReceipt={setReceipt} />
+              ))}
+            </div>
+          </HPanel>
         </div>
-      </HPanel>
-
-      {/* KPI row — a number never shows a spinner (HQ brief rule) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
-        {[
-          { v: '₹0', l: 'real revenue — honest', tone: 'green' },
-          { v: '₹' + k.simRev.toLocaleString('en-IN'), l: 'simulated · labeled', tone: 'default' },
-          { v: '₹' + k.cost.toLocaleString('en-IN') + ' · ' + k.ret.toFixed(1) + '×', l: 'ai cost · return', tone: 'default' },
-          { v: k.ideas, l: 'ideas captured', tone: 'default' },
-          { v: k.phases + ' · ' + k.content, l: 'phases · content', tone: 'default' },
-          { v: '~' + k.minutesNeeded + ' min', l: 'your time needed', tone: k.pending ? 'amber' : 'green' },
-        ].map((s) => (
-          <div key={s.l} className="rounded-xl border p-3.5" style={{ background: 'rgba(4,9,8,0.78)', borderColor: s.tone === 'amber' ? 'rgba(251,191,93,0.4)' : 'rgba(255,255,255,0.1)' }}>
-            <div className="text-[19px] tracking-tight" style={{ fontWeight: 600, color: s.tone === 'amber' ? COLOR.amber : s.tone === 'green' ? COLOR.green : '#fff', fontVariantNumeric: 'tabular-nums' }}>{s.v}</div>
-            <div className="text-[9px] uppercase tracking-[0.16em] text-white/45 mt-1" style={{ fontFamily: MONO }}>{s.l}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_1fr] gap-4 items-start">
-        {/* live timeline */}
-        <HPanel title="today — everything the company did" hint="live · every line is an event · ⌗ opens the receipt">
-          <div ref={feedRef} className="max-h-[430px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
-            {evs.length === 0 && (
-              <div className="py-8 text-center text-[12px] text-white/45" style={{ fontWeight: 300 }}>
-                The day hasn't started — press play in the top bar (⏸ → 10×) and the company wakes up.
-              </div>
-            )}
-            {evs.map((e) => (
-              <EventRow key={e.id} e={e} onReceipt={setReceipt} />
-            ))}
-          </div>
-          <div className="mt-3 flex justify-between items-center flex-wrap gap-2">
-            <span className="text-[9.5px] text-white/40 uppercase tracking-[0.14em]" style={{ fontFamily: MONO }}>
-              full log + filters → the spine room
-            </span>
-            <Btn small onClick={() => uiBus.openRoom('spine')}>open the spine →</Btn>
-          </div>
-        </HPanel>
 
         {/* inbox + quick panels */}
-        <div>
-          <HPanel title={`approval inbox — ${pending.length} waiting`} hint="j/k move · a approve · r reject · reasons become calibration data" tone={pending.length ? 'amber' : undefined}>
+        <div className="min-w-0">
+          <HPanel
+            title="Approval inbox"
+            hint="j k move · a approve · r reject"
+            tone={pending.length ? 'amber' : undefined}
+            actions={<Chip tone={pending.length ? 'amber' : undefined}>{pending.length} waiting</Chip>}
+          >
             {pending.length === 0 && (
-              <div className="py-6 text-center">
-                <div className="text-[15px] text-white/85 mb-1" style={{ fontWeight: 500 }}>Inbox zero. The company runs itself.</div>
-                <div className="text-[11px] text-white/48" style={{ fontWeight: 300 }}>New approvals will stream in as the day plays.</div>
-              </div>
+              <Empty icon={Tray} title="Inbox zero. The company runs itself." hint="New approvals stream in as the day plays. A reason typed here becomes calibration data." />
             )}
             {pending.map((ap, i) => (
               <ApprovalCard key={ap.id} ap={ap} selected={i === Math.min(sel, pending.length - 1)} onAct={(id, ok, reason, label) => recordDecision(id, ok, reason, label)} />
             ))}
             {decided.length > 0 && (
-              <div className="border-t border-white/8 pt-3 mt-1">
-                <div className="text-[9px] uppercase tracking-[0.2em] text-white/42 mb-2" style={{ fontFamily: MONO }}>done log — decision.recorded</div>
+              <div className="pt-3 mt-1" style={{ borderTop: '1px solid var(--line-1)' }}>
+                <SectionLabel>Decided today</SectionLabel>
                 {decided.map((d) => (
-                  <div key={d.id} className="flex items-baseline gap-2.5 text-[10.5px] py-[3px] flex-wrap" style={{ fontFamily: MONO }}>
-                    <span style={{ color: d.decided.approved ? COLOR.green : COLOR.red }}>{d.decided.approved ? d.decided.actionLabel || 'approved' : 'rejected'}</span>
-                    <span className="text-white/62 truncate max-w-[240px]">{d.decided.title}</span>
-                    <span style={{ color: 'rgba(0,255,209,0.5)' }}>⌗ {String(d.id).slice(-6)}</span>
+                  <div key={d.id} className="grid grid-cols-[auto_1fr_auto] items-baseline gap-2.5 text-[12px] py-[4px]">
+                    <span className="shrink-0" style={{ fontFamily: UI, fontWeight: 600, color: d.decided.approved ? COLOR.green : COLOR.red }}>{d.decided.approved ? d.decided.actionLabel || 'approved' : 'rejected'}</span>
+                    <span className="truncate" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{d.decided.title}</span>
+                    <button type="button" onClick={() => setReceipt(d)} className="text-[11px] cursor-pointer hover:text-(--accent)" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>⌗ {String(d.id).slice(-6)}</button>
                   </div>
                 ))}
               </div>
             )}
           </HPanel>
 
-          <HPanel title="autonomy — at a glance" hint="full ladder → autonomy room">
-            <div className="space-y-1.5" style={{ fontFamily: MONO }}>
+          <HPanel title="Policy" hint="the ladder at a glance" actions={<Btn small onClick={() => uiBus.openRoom('policy')}>Policy room</Btn>}>
+            <div className="space-y-1">
               {ladder().slice(0, 4).map((l) => (
-                <div key={l.cap} className="flex items-center gap-2.5 text-[10.5px]">
-                  <span className="w-8 text-center rounded px-1 py-[2px]" style={{ background: 'rgba(0,255,209,0.12)', color: COLOR.cyan, fontWeight: 700 }}>{l.level}</span>
-                  <span className="text-white/78">{l.cap}</span>
-                  <span className="text-white/40 truncate">{l.cap2}</span>
+                <div key={l.cap} className="grid grid-cols-[34px_1fr_auto] items-center gap-2.5 text-[12.5px] py-[3px]">
+                  <span className="inline-flex items-center justify-center h-[20px] rounded text-[11px] tnum" style={{ fontFamily: MONO, fontWeight: 600, background: 'rgba(var(--accent-rgb),0.1)', color: 'var(--accent)' }}>{l.level}</span>
+                  <span className="truncate" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{l.cap}</span>
+                  <span className="truncate text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{l.cap2}</span>
                 </div>
               ))}
             </div>
-            <div className="mt-3 flex justify-end"><Btn small onClick={() => uiBus.openRoom('autonomy')}>ladder →</Btn></div>
           </HPanel>
 
-          <HPanel title="learned this week" hint="calibration, not vibes">
-            <div className="text-[11px] leading-[17px] text-white/68 space-y-1.5" style={{ fontWeight: 300 }}>
+          <HPanel title="Learned this week" hint="calibration, not vibes" actions={<Btn small onClick={() => uiBus.openRoom('learn')}>Learn room</Btn>}>
+            <div className="space-y-2">
               {calibration().rules.slice(0, 2).map((r) => (
-                <div key={r.id}><b className="text-white/90" style={{ fontWeight: 600 }}>{r.id}:</b> {r.text}</div>
+                <div key={r.id} className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
+                  <span className="mr-1.5" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-1)' }}>{r.id}</span>
+                  {r.text}
+                </div>
               ))}
             </div>
-            <div className="mt-3 flex justify-end"><Btn small onClick={() => uiBus.openRoom('learn')}>learn →</Btn></div>
           </HPanel>
         </div>
       </div>

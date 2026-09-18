@@ -1,114 +1,134 @@
-// App.tsx -- the shell. It holds the face, the rail, and whichever room is open.
+// App.tsx -- the workroom shell (face v2 Phase 02): v0.7's 240 px rail, 56 px header, ⌘K palette and
+// a text-only dock in the content column (ADR-1315), around whichever room is open.
 //
-// It decides as little as possible: routing, the keyboard model, nav order and ring grouping
-// all live in ../lib/*.mjs where `node` can hold them without an install. What is left here
-// is wiring -- effects, fetches and which component to mount.
+// It names no room. The served registry says which rooms exist, in which ring and order, and which
+// one the shell opens on (registry.mjs); a module folder attaches to a served room by id, and a
+// served room with no module draws through the generic module and says so (ADR-1321). Every
+// decision is in ../lib/*.mjs where node can hold it; what is left here is wiring.
+//
+// The face stage is not in the workroom, in either mood. v0.7's workroom is "a clean room, the face
+// belongs to the front door" (its App.jsx), and the reference is the target (ADR-1318); the owner's
+// Phase 01 ruling left the stage dark-only until this phase placed it. The product has no front door,
+// so the stage is unmounted here and kept, WebGL-guarded, for the room that next draws it.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 
-import './tokens.css'
+// Tailwind v4 and the generated token copy both enter through index.css (ADR-1323).
+import './index.css'
 
 import { ASOF_ROUTES, Door, DoorError, decodeRegistry, tokenFromHash, unescapeDoorText } from './lib/door.mjs'
-import { byRing, findRoom, defaultRoom, errorSentence, laneForRoom } from './lib/rooms.mjs'
+import { findRoom, errorSentence } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
-import { HOME, buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash } from './lib/shell.mjs'
-
-import FaceStage from './face/FaceStage'
-import Rings from './shell/Rings'
-import Palette from './shell/Palette'
-import AsOf from './shell/AsOf'
-import type { PaletteItem } from './shell/Palette'
-import GenericRoom from './rooms/GenericRoom'
-import IndexRoom from './rooms/IndexRoom'
-import Today from './rooms/Today'
-import Inbox from './rooms/Inbox'
-import SpineRoom from './rooms/SpineRoom'
-import BoardRoom from './rooms/BoardRoom'
-import CouncilRoom from './rooms/CouncilRoom'
-import AskArcRoom from './rooms/AskArcRoom'
-import MoneyRoom from './rooms/MoneyRoom'
-import VenturesRoom from './rooms/VenturesRoom'
-import MapRoom from './rooms/MapRoom'
+import { buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash } from './lib/shell.mjs'
+import { asOfReaches, attachModules, collectModules, homeRoom, modeChip, railGroups, roomHoldingKind } from './lib/registry.mjs'
+import type { ModuleContext } from './lib/registry.mjs'
 import { needsYouByRoom } from './lib/map.mjs'
-import { Failure, Loading } from './ui/kit'
+import { applyMood, nextMood, readMood, storeMood } from './lib/mood.mjs'
+import type { Mood } from './lib/mood.mjs'
+
+import Rail from './shell/Rail'
+import Header from './shell/Header'
+import Palette from './shell/Palette'
+import Dock from './shell/Dock'
+import RoomFrame from './shell/RoomFrame'
+import type { PaletteItem } from './shell/Palette'
+import { Failure, Loading } from './ui/legacy'
+import { UI } from './ui/kit'
 
 // `inventories` is nullable, not optional-with-a-default. A door serving a registry generated
 // before ADR-1317 sends null, and a room must be able to say "the registry carried no band map"
-// rather than draw an empty one — which would read as "the company has claimed no centuries".
+// rather than draw an empty one.
 type Registry = { rings: string[]; rooms: Room[]; kindsEverFired: number; mode?: string; inventories?: Record<string, Record<string, string>> | null }
+type Contract = { gates?: { map?: Record<string, string> }; lanes?: { map?: Record<string, string> } }
+
+// The kind the header's inbox chip counts; the chip opens the room that homes it.
+const APPROVAL_KIND = 'approval.requested'
+
+// Every module the bundler can find, by the key shape registry.mjs reads (`./modules/RING/ID/FILE`).
+// The glob lives in THIS file because its keys are relative to it: from face/src the keys start
+// `./modules/`, and from anywhere else they would not. Four globs, one per file of the contract, so a
+// folder missing one is visible to collectModules as an incomplete module rather than a silent gap.
+const FOUND_MODULES: Record<string, unknown> = {
+  ...import.meta.glob('./modules/*/*/module.mjs', { eager: true }),
+  ...import.meta.glob('./modules/*/*/fold.mjs', { eager: true }),
+  ...import.meta.glob('./modules/*/*/ops.mjs', { eager: true }),
+  ...import.meta.glob('./modules/*/*/View.tsx', { eager: true }),
+}
 
 export default function App() {
   const [registry, setRegistry] = useState<Registry | null>(null)
   const [error, setError] = useState<unknown>(null)
-  const [roomId, setRoomId] = useState<string>(() => parseHash(window.location.hash).room ?? HOME)
-  const [talking] = useState(false)
+  const [roomId, setRoomId] = useState<string | null>(() => parseHash(window.location.hash).room)
+  // The workroom's mood. main.tsx already put the stored one on <html> before the first render;
+  // this state only follows it, and a toggle writes both the classes and the preference.
+  const [mood, setMood] = useState<Mood>(() => readMood(storage()))
+  const toggleMood = useCallback(() => setMood((m) => nextMood(m)), [])
+  useEffect(() => {
+    applyMood(document.documentElement.classList, mood)
+    storeMood(storage(), mood)
+  }, [mood])
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [asOf, setAsOf] = useState<string | null>(() => parseHash(window.location.hash).asOf)
   const [today, setToday] = useState<string | null>(null)
   const [concepts, setConcepts] = useState<Record<string, { room: string; station: string }>>({})
-  // Only the two maps the Map needs; the rest of the frozen contract is not this shell's
-  // business, and narrowing here keeps an `unknown` from travelling into a pure function.
-  const [contract, setContract] = useState<{ gates?: { map?: Record<string, string> }; lanes?: { map?: Record<string, string> } }>({})
-  const [openItems, setOpenItems] = useState<{ gate?: string; venture?: string }[]>([])
+  const [contract, setContract] = useState<Contract>({})
+  const [openItems, setOpenItems] = useState<{ gate?: string; venture?: string }[] | null>(null)
   const token = useMemo(
-    // The token arrives in the fragment, either as arc-dash prints it (`#token=...`) or
-    // alongside a room. Both shapes are one function's problem, not this component's.
+    // The token arrives in the fragment, either as arc-dash prints it (`#token=...`) or alongside a
+    // room. Both shapes are one function's problem, not this component's.
     () => parseHash(window.location.hash).token ?? tokenFromHash(window.location.hash),
     [],
   )
   // The scrub lives on the DOOR, so every room inherits it without knowing it exists.
   const door = useMemo(() => new Door({ token: token ?? undefined, asOf }), [token, asOf])
 
-  // The registry is fetched ONCE and drives everything: the rail, the nav order, the room.
-  // It is never imported from disk -- a second spelling of the room list in the renderer is
-  // how a renamed room silently empties a screen (ADR-1306).
+  // The registry is fetched ONCE and drives everything: the rail, the nav order, home, the room.
+  // It is never imported from disk -- a second spelling of the room list in the renderer is how a
+  // renamed room silently empties a screen (ADR-1306).
   useEffect(() => {
     const ac = new AbortController()
     door
       .rooms(ac.signal)
-      // Decoded HERE, once, where the registry enters -- not at each of the render
-      // sites that show a room's name. See decodeRegistry for why that distinction matters.
       .then((r: Registry) => setRegistry(decodeRegistry(r)))
       .catch((e: unknown) => {
         if (e instanceof DoorError || !ac.signal.aborted) setError(e)
       })
-    // The vocabulary comes from the frozen contract over the door's allow-listed file route
-    // -- the SAME file face-coverage validates, so the palette cannot quietly know less than
-    // arc does. A failure here dims the palette to rooms only; it never blocks the shell,
-    // because not being able to search is a smaller problem than not being able to look.
-    // The door's own day, never the browser's: a clock skew of one day would label a sealed
-    // day as open, or the reverse, and the two carry different guarantees.
+    // The door's own day, never the browser's: a clock skew of one day would label a sealed day as
+    // open, or the reverse, and the two carry different guarantees.
     door
       .health(ac.signal)
       .then((h: { now?: unknown }) => { if (typeof h.now === 'string') setToday(h.now.slice(0, 10)) })
       .catch(() => { /* the control still works; it just cannot mark today */ })
+    // The vocabulary comes from the frozen contract over the door's allow-listed file route -- the
+    // SAME file face-coverage validates, so the palette cannot quietly know less than arc does.
     door
       .file('expected-set', ac.signal)
       .then((body: unknown) => {
         const got = conceptsFromContract(body, unescapeDoorText)
         if (got.ok) setConcepts(got.concepts)
-        // The same contract answers "which room owns this gate", which is what turns an open
-        // approval into a mark on the Map.
-        try { setContract(JSON.parse(unescapeDoorText((body as { text?: unknown }).text)) as { gates?: { map?: Record<string, string> }; lanes?: { map?: Record<string, string> } }) } catch { /* palette-only */ }
+        try { setContract(JSON.parse(unescapeDoorText((body as { text?: unknown }).text)) as Contract) } catch { /* palette-only */ }
       })
       .catch(() => { /* rooms-only palette; the shell still works */ })
-    // What is waiting on the owner, so the Map can show WHERE he is needed rather than only
-    // what exists. A failure here leaves the Map correct and unmarked; it never blocks it.
+    // What is waiting on the owner. A failure leaves the inbox chip saying it could not read --
+    // never "inbox zero", which would be a claim about the company made from a failed read.
     door
       .inbox(ac.signal)
       .then((b: { open?: { gate?: string; venture?: string }[] }) => setOpenItems(Array.isArray(b.open) ? b.open : []))
-      .catch(() => { /* an unmarked map is honest; a blocked one is not */ })
+      .catch(() => setOpenItems(null))
     return () => ac.abort()
   }, [door])
 
-  const groups = useMemo(() => (registry ? byRing(registry.rooms) : []), [registry])
+  const groups = useMemo(() => (registry ? railGroups(registry) : []), [registry])
   const order = useMemo(() => navOrder(groups), [groups])
+  const home = useMemo(() => (registry ? homeRoom(registry) : null), [registry])
+  // Modules attach to the SERVED rooms, both ways (ADR-1321). What the glob found is fixed at
+  // build time; what it attaches to is whatever the door serves today.
+  const attachment = useMemo(() => attachModules(registry ?? { rooms: [] }, collectModules(FOUND_MODULES)), [registry])
 
   const open = useCallback(
     (id: string) => {
       setRoomId(id)
-      // Replace, not push: holding j through the company should not bury the back button
-      // under thirty entries. A room is a view, not a destination you navigate back through.
+      // Replace, not push: holding j through the company should not bury the back button under
+      // thirty entries. A room is a view, not a destination you navigate back through.
       window.history.replaceState(null, '', buildHash(id, token, asOf))
     },
     [token, asOf],
@@ -125,21 +145,9 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  // Opening a room must start at its opening SENTENCE.
-  //
-  // The room column is what scrolls, and React keeps its scrollTop across a content swap --
-  // so leaving Money half-read and opening Bench showed Bench's FOOTER and then a screenful
-  // of nothing. Every room in this product leads with a declarative line that is the whole
-  // point of the screen, and a room you arrive at from the bottom has effectively lost it.
-  // Found by sweeping all 32 rooms and looking, not by any check.
-  // It is the WINDOW that scrolls, not the room column. The column carries overflowY:auto but
-  // nothing constrains its height, so it never overflows and the document scrolls instead --
-  // which is why resetting the column's scrollTop was a no-op, and why the check that
-  // "proved" the fix passed vacuously on 0 === 0. Asserting the precondition (that something
-  // had actually been scrolled) is what caught it.
-  const roomScrollRef = useRef<HTMLElement | null>(null)
+  // Opening a room starts at its opening SENTENCE. The document scrolls in v0.7's shell (the rail
+  // and header are fixed), so it is the window that is reset.
   useEffect(() => {
-    roomScrollRef.current?.scrollTo({ top: 0 })
     window.scrollTo({ top: 0 })
   }, [roomId])
 
@@ -147,6 +155,8 @@ export default function App() {
   orderRef.current = order
   const roomRef = useRef(roomId)
   roomRef.current = roomId
+  const homeRef = useRef(home)
+  homeRef.current = home
   const paletteOpenRef = useRef(paletteOpen)
   paletteOpenRef.current = paletteOpen
 
@@ -157,18 +167,15 @@ export default function App() {
         paletteOpen: paletteOpenRef.current,
       })
       if (!action) return
-      if (action.type === 'palette-toggle') {
-        ev.preventDefault()
-        setPaletteOpen((o) => !o)
-        return
-      }
+      if (action.type === 'palette-toggle') { ev.preventDefault(); setPaletteOpen((o) => !o); return }
       if (action.type === 'palette-close') { ev.preventDefault(); setPaletteOpen(false); return }
-      if (action.type === 'room-move' && typeof action.delta === 'number') {
+      const current = roomRef.current ?? homeRef.current
+      if (action.type === 'room-move' && typeof action.delta === 'number' && current) {
         ev.preventDefault()
-        open(moveRoom(orderRef.current, roomRef.current, action.delta))
-      } else if (action.type === 'room-open' && action.room) {
+        open(moveRoom(orderRef.current, current, action.delta))
+      } else if (action.type === 'room-home' && homeRef.current) {
         ev.preventDefault()
-        open(action.room)
+        open(homeRef.current)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -177,17 +184,16 @@ export default function App() {
 
   if (error) {
     return (
-      <main style={pageStyle}>
-        <div style={{ padding: 'calc(var(--grid) * 4)', maxWidth: 640 }}>
+      <main className="min-h-screen" style={{ background: 'var(--bg-0)', color: 'var(--text-1)', fontFamily: UI }}>
+        <div className="p-8 max-w-[640px]">
           <Failure error={error} what="the room registry" />
-          <p style={hintStyle}>
-            {/* The door is localhost + token by law (ADR-1312). The overwhelmingly likely
-                cause of a failure here is that it is not running, or the token is missing --
-                say that, rather than making the owner guess. */}
-            Start the door from the main clone with <code>node .claude/scripts/hq/arc-dash.mjs</code>,
-            then open the URL it prints — it carries the token in the fragment.
+          <p className="text-[12.5px] leading-[20px] mt-4" style={{ color: 'var(--text-2)' }}>
+            {/* The door is localhost + token by law (ADR-1312). The overwhelmingly likely cause of a
+                failure here is that it is not running, or the token is missing -- say that. */}
+            Start the door from the main clone with <code>node .claude/scripts/hq/arc-dash.mjs</code>, then
+            open the URL it prints — it carries the token in the fragment.
           </p>
-          <p style={hintStyle}>{errorSentence(error).human}</p>
+          <p className="text-[12.5px] leading-[20px] mt-2" style={{ color: 'var(--text-3)' }}>{errorSentence(error).human}</p>
         </div>
       </main>
     )
@@ -195,25 +201,28 @@ export default function App() {
 
   if (!registry) {
     return (
-      <main style={pageStyle}>
+      <main className="min-h-screen" style={{ background: 'var(--bg-0)', color: 'var(--text-1)', fontFamily: UI }}>
         <Loading what="the company" />
       </main>
     )
   }
 
-  const room = findRoom(registry.rooms, roomId) ?? defaultRoom(registry.rooms)
+  const shownId = roomId ?? home
+  const room = shownId === null ? null : findRoom(registry.rooms, shownId)
+  // A template is not a room you can open; asking for it by URL is answered like any unknown id.
+  const openable = room && !room.template ? room : null
   const items: PaletteItem[] = paletteItems(registry.rooms, concepts)
-  const needs = needsYouByRoom(openItems, contract, registry.rooms.map((r) => r.id))
+  const needs = needsYouByRoom(openItems ?? [], contract, registry.rooms.map((r) => r.id))
+  const attached = openable ? attachment.attached[openable.id] : undefined
+  const ctx: ModuleContext | null = openable
+    ? {
+        room: openable, rooms: registry.rooms, door, onOpen: open, mode: registry.mode, token,
+        needs: needs.counts, needsUnplaced: needs.unplaced, inventories: registry.inventories, laneMap: contract.lanes?.map,
+      }
+    : null
 
   return (
-    <main style={pageStyle}>
-      {/* The face persists behind every room at reduced presence. It is the one element of
-          the design the owner required unchanged, and it is the shell rather than a hero
-          image -- which is what stops this reading as a dashboard template. */}
-      <div style={faceLayerStyle} aria-hidden="true">
-        <FaceStage presence={0.28} state={talking ? 'talking' : 'idle'} />
-      </div>
-
+    <div className="relative min-h-screen" style={{ fontFamily: UI, background: 'var(--bg-0)', color: 'var(--text-1)' }}>
       {paletteOpen && (
         <Palette
           items={items}
@@ -222,121 +231,84 @@ export default function App() {
         />
       )}
 
-      <div style={frameStyle}>
-        <Rings groups={groups} current={room ? room.id : HOME} onOpen={open} />
-        <section ref={roomScrollRef} style={roomStyle} aria-live="polite">
-          <AsOf
-            asOf={asOf}
-            today={today}
-            supported={asOfReaches(room)}
-            onChange={(day) => {
-              setAsOf(day)
-              window.history.replaceState(null, '', buildHash(room ? room.id : HOME, token, day))
-            }}
-          />
-          {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} needs={needs.counts} needsUnplaced={needs.unplaced} inventories={registry.inventories} laneMap={contract.lanes?.map} /> : <NoSuchRoom id={roomId} />}
-        </section>
-      </div>
-    </main>
-  )
-}
+      <Rail
+        groups={groups}
+        current={openable ? openable.id : null}
+        onOpen={open}
+        onPalette={() => setPaletteOpen(true)}
+        attachment={attachment}
+        ringCount={registry.rings.length}
+      />
 
-/**
- * Whether the shell's as-of actually reaches this room.
- *
- * Only three routes take `?asof=` -- spine, brief and inbox -- so a room built on any other
- * read is untouched by the scrub. Saying so is the point: a control that appears to apply
- * everywhere and silently does nothing in half the product is worse than one that admits its
- * edge. The Money room is the honest case, and the door refuses its day-asof BY NAME.
- */
-function asOfReaches(room: Room | null): boolean {
-  if (!room) return false
-  if (room.live.state === 'file-borne' || room.live.state === 'index') return false
-  return ASOF_ROUTES.length > 0 && room.id !== 'money' && room.id !== 'ventures'
-}
+      <Header
+        room={openable}
+        mode={modeChip(registry.mode)}
+        inbox={{ open: openItems === null ? null : openItems.length, room: roomHoldingKind(registry, APPROVAL_KIND) }}
+        onOpen={open}
+        mood={mood}
+        onToggleMood={toggleMood}
+        asOf={asOf}
+        today={today}
+        asOfSupported={openable !== null && ASOF_ROUTES.length > 0 && asOfReaches(openable, attached ? attached.manifest : null)}
+        onAsOf={(day) => {
+          setAsOf(day)
+          window.history.replaceState(null, '', buildHash(openable ? openable.id : shownId ?? '', token, day))
+        }}
+        groups={groups}
+        current={openable ? openable.id : null}
+      />
 
-/**
- * Which component draws this room. The registry's own `render` decides, never a list of ids
- * kept here -- a second spelling of that decision would drift the moment a room changes mode.
- * The two bespoke ids are the exception and they are named, not guessed.
- */
-function RoomHost({ room, rooms, door, onOpen, mode, token, needs, needsUnplaced, inventories, laneMap }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void; mode?: string; token: string | null; needs: Record<string, number>; needsUnplaced: number; inventories?: Record<string, Record<string, string>> | null; laneMap?: Record<string, string> }) {
-  if (room.id === 'today') return <Today door={door} sentence={room.sentence} lede={room.lede} />
-  if (room.id === 'inbox') return <Inbox door={door} sentence={room.sentence} lede={room.lede} />
-  if (room.id === 'spine') return <SpineRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
-  if (room.id === 'board') return <BoardRoom door={door} room={room} sentence={room.sentence} lede={room.lede} adrBands={inventories?.adrs} rooms={rooms} />
-  if (room.id === 'council-chamber') return <CouncilRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
-  if (room.id === 'ask-arc') return <AskArcRoom door={door} room={room} sentence={room.sentence} lede={room.lede} onOpen={onOpen} />
-  if (room.id === 'money') return <MoneyRoom door={door} room={room} sentence={room.sentence} lede={room.lede} />
-  if (room.id === 'ventures') return <VenturesRoom door={door} room={room} sentence={room.sentence} lede={room.lede} declared={inventories?.ventures} />
-  if (room.id === 'map') return <MapRoom rooms={rooms} onOpen={onOpen} mode={mode} token={token} needsYou={needs} needsYouUnplaced={needsUnplaced} />
-  if (room.render === 'index') return <IndexRoom room={room} rooms={rooms} door={door} />
-  // A lane's own room reads that lane's phase specs from the door. `laneForRoom` returns
-  // null for every room that is NOT a lane's (concepts, today, review-ship), so those
-  // fetch nothing rather than 404 on a lane named after themselves.
-  return <GenericRoom room={room} door={door} lane={laneForRoom(room.id, laneMap)} />
-}
+      {/* No z-index here on purpose: a room's drawers (z-50, fixed) must stack above the rail and
+          header (z-40), as in v0.7. */}
+      <main className="relative pt-[104px] lg:pt-[80px] lg:pl-[240px] pb-40 overflow-x-clip">
+        <div className="px-4 sm:px-6 lg:px-8 max-w-[1440px] min-w-0">
+          {/* data-room names the room actually rendered and data-render how, so the browser harness
+              can tell "opened the room I asked for" from a fallback, and a module from the generic
+              module (face v2 Phases 00 and 02). */}
+          <section
+            aria-live="polite"
+            data-room={openable ? openable.id : ''}
+            data-render={openable ? (attached ? 'module' : 'generic') : 'none'}
+            data-module={attached ? attached.key : undefined}
+          >
+            {openable && ctx ? (
+              <div key={openable.id} className="room-enter">
+                <RoomFrame room={openable} attachment={attachment} ctx={ctx} />
+              </div>
+            ) : (
+              <NoSuchRoom id={shownId ?? ''} />
+            )}
+          </section>
+        </div>
+      </main>
 
-/**
- * An unknown room id is a thing a person can type. It gets a named answer, never a blank
- * screen -- the product exists so nothing goes missing, and its own router must not be the
- * place where something silently does.
- */
-function NoSuchRoom({ id }: { id: string }) {
-  return (
-    <div style={{ padding: 'calc(var(--grid) * 4)' }}>
-      <h1 style={{ font: `600 var(--step-room)/1.1 var(--font-display)`, margin: 0, color: 'var(--prose)' }}>
-        There is no room called “{id}”.
-      </h1>
-      <p style={hintStyle}>Every room arc has is in the rail, and all of them are on the Map.</p>
+      <Dock door={door} />
     </div>
   )
 }
 
-const pageStyle: CSSProperties = {
-  position: 'relative',
-  minHeight: '100vh',
-  background: 'var(--ground)',
-  color: 'var(--prose)',
-  font: `400 var(--step-body)/1.5 var(--font-display)`,
+/**
+ * An unknown room id is a thing a person can type. It gets a named answer, never a blank screen --
+ * the product exists so nothing goes missing, and its own router must not be where something does.
+ */
+function NoSuchRoom({ id }: { id: string }) {
+  return (
+    <div className="py-10">
+      <h1 className="text-[22px] sm:text-[26px] leading-[1.15] tracking-[-0.01em]" style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-1)' }}>
+        There is no room called “{id}”.
+      </h1>
+      <p className="text-[13.5px] leading-[21px] mt-1.5" style={{ color: 'var(--text-2)' }}>
+        Every room arc has is in the rail.
+      </p>
+    </div>
+  )
 }
 
-const faceLayerStyle: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  zIndex: 0,
-  pointerEvents: 'none',
-  // The face is the shell, and a shell must not compete with the words in front of it.
-  // At full strength the particle field sat directly behind the room's opening sentence and
-  // made it hard to read -- the same defect the reference has on its own landing, where the
-  // paragraph beside the mask is barely legible. Presence drives SCALE, not opacity, so the
-  // dimming belongs here rather than in a prop.
-  opacity: 0.5,
-}
-
-const frameStyle: CSSProperties = {
-  position: 'relative',
-  zIndex: 1,
-  display: 'flex',
-  alignItems: 'stretch',
-  minHeight: '100vh',
-}
-
-const roomStyle: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  padding: 'calc(var(--grid) * 3)',
-  overflowY: 'auto',
-  // A scrim, not a slab. The reference puts translucent panels over the face and lets it
-  // show through the gaps; the gaps are where a room's opening SENTENCE lives, and that is
-  // the largest text on the page. This keeps the face visible while giving every headline a
-  // ground to sit on -- the alternative, an opaque column, deletes the one element the owner
-  // said must not change.
-  background: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.55))',
-}
-
-const hintStyle: CSSProperties = {
-  font: `400 var(--step-meta)/1.6 var(--font-mono)`,
-  color: 'var(--meta)',
-  maxWidth: '60ch',
+/** `window.localStorage` can throw on access under a storage policy; the mood then lives for this visit only. */
+function storage(): Storage | null {
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
 }

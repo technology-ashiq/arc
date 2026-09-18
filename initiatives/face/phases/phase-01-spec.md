@@ -1,85 +1,67 @@
-# Phase 01 — Explore ×3 + design system (the design lane decides the look)
+# Phase 01 — Tokens + kit: one source, two moods, the shared kit, and the 9 bespoke rooms on it
 
-**Goal (one line):** three genuinely different theses of the 8 signature screens, judged
-blind against a reference, owner pick + falsifiable PREDICTION — then the winner's tokens
-canonicalised as the design system.
-**Appetite:** 5 days (3d explore + 2d design system; day 3 tripwire checks BOTH the
-≥3/7 IA / ≥3/4 art-axis divergence AND that all 24 variant builds — 3 theses × 8
-signature screens, lint-passing and rendered — are done; incomplete theses are cut to
-their finished screens before the 2 design-system days start)
+**Goal (one line):** REQ-02 — `docs/design/system/tokens.css` carries both moods with computed contrast, the copy is generated, v0.7's kit is ported onto Tailwind v4 in L3, and the 9 bespoke rooms render on it in both moods.
+**Appetite:** 2 days
 **Depends on:** phase-00
+**Serves:** REQ-02
+**Branch:** `feat/face-v2-01`
+**Preconditions (STOP if absent):** Phase 00's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 00` from the main clone.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] `design-director` assigns three theses (default: command center / canvas map-first /
-      review workspace inbox-first) + 4-axis art direction; `matrix.md` filled at
-      assignment; divergence call ≥3/7 IA dimensions and ≥3/4 art axes (≤1 reassignment
-      round — else assumption row 4 fires)
-- [ ] `ui-composer` ×3 build isolated variants (own dir, own `tokens.css`, same base SHA)
-      of the 8 signature screens; each passes `design-lint` (exit 0)
-- [ ] deterministic renders via `design-render.sh` — same input → same hash, recorded
-- [ ] `design-jury` ×3 rank blind with the reference (Linear) as the unlabelled 4th item;
-      3 ranking artifacts + the reference's position recorded
-- [ ] owner PICK + falsifiable PREDICTION recorded as `decision.recorded` (emitted from
-      the main clone), made only after the owner has opened the three rendered variants
-      himself — not the jury's textual rankings alone (design Cycle 3, 2026-07-30: five
-      critique rounds, three blind rankings and a sealed prediction were built from
-      agent reports about pixels nobody had opened; the owner opened them once and
-      scored 23/100) — ≤2 critique rounds total (ADR-1308)
-- [ ] winner's tokens → canonical `tokens.css`; core components specified: stamp, chip,
-      seal, receipt drawer, station/line, KPI tile with *Why?*, tape ruler, room shell,
-      honesty watermarks (ADR-1313 classes); design-lint canonical-tokens check green
-- [ ] Claude Design sync only AFTER the DES-G "W3+" `/arc-change` ruling AND the owner's
-      explicit publish OK per CLAUDE.md's publishing rule (an ADR ruling authorizes the
-      sync mechanism, not the act of sending product screens to a third-party hosted
-      service — the ADR-0040 gap nearly put LexOS mockups on a public subreddit) —
-      repo → Claude Design, never the reverse (skip cleanly if the ruling is not sought
-      this cycle)
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [ ] `docs/design/system/tokens.css` rewritten: `:root` landing untouched · `html.hq` (dark) · `html.hq.hq-light` (paper); `--blue` added for neutral progress; council → `--accent-dim` and violet reserved for the non-real family (ADR-1322).
+- [ ] Every text-on-surface contrast ratio for both moods is **computed by `tests/face/tokens-contrast.mjs`** and written into the file header by the same script — never typed; a pair under 4.5:1 (3:1 for large/UI) FAILs.
+- [ ] `face-tokens.mjs` generator run; `--check` exit 0; a planted edit in `face/src/tokens.css` FAILs `--check`.
+- [ ] `face/package.json` gains `tailwindcss` + `@tailwindcss/vite` (^4.3.x) and `@phosphor-icons/react` (^2.1.x) — the ranges verified in ADR-1323; phosphor is the only icon set; the lockfile regenerated so the Phase 00 platform check passes for linux-x64, darwin-arm64 and win32-x64.
+- [ ] `face/src/ui/kit.tsx` + `face/src/ui/bits.tsx` ported: `RoomHead` · `KpiStrip` · `HPanel` · `PickRow` · `Meter` · `Chip` · `Empty` · `SectionLabel`. The light remap uses `@custom-variant` under `html.hq.hq-light`; no `filter: invert()` (ADR-1331).
+- [ ] Colour-literal lint (FAIL from birth): scans `face/src/ui/**` and `face/src/modules/**`, prints the files-scanned count, asserts it is > 0, and FAILs a planted hex, `white` and `black` literal.
+- [ ] The 9 bespoke rooms (Today · Inbox · Map · Spine · Board · Money · Council · Ventures · Ask arc) render on the kit; `tests/face-browser.bats` gains a mood arm and reads 0 console errors and 0 exceptions for every served room in BOTH moods on every Node ≥20.19 leg.
+- [ ] Block A tripwire reading (day 3 of 6) recorded in PROGRESS.md; at this phase's exit, the owner's by-eye read of the 9 rooms × 2 moods recorded — if they do not render, STOP (PLAN kill criteria).
+- [ ] Two fresh attackers (contrast/lint decision logic · generator + shell/OS boundary) with the fixed-defect list; holes fixed + pinned.
+- [ ] CI green per job; `/arc-phase-done 01` from the main clone.
 
 ## Verification plan
 
-- **Test command:** `node .claude/scripts/design/design-lint.mjs docs/design/briefs/face-hq/brief.md`
-  plus per-variant `design-lint` route scans and the `design-render.sh` hash comparison
-- **Expected failure first:** before variants exist, the per-variant design-lint / render
-  invocations fail with missing-path errors (red); the matrix divergence check fails while
-  `matrix.md` is unfilled. Run once before composing — a divergence call that never
-  failed is the same-app-different-styling smell.
-- **Live demo scenario:** open the three variant dirs side by side; confirm three
-  different products, not three themes; open the jury artifacts and find the reference's
-  rank position stated in each.
-- **Real-system check:** the owner's pick lands as `decision.recorded` on the canonical
-  spine (verify by ULID from the main clone — a worktree emit leaves no trace, retro
-  2026-08-10 lesson).
-- **Expected evidence:** `matrix.md` · 3 variant dirs + lint transcripts · render hashes ·
-  3 ranking artifacts · the decision ULID · canonical `tokens.css`.
+- **Test command:** `node .claude/scripts/core/face-tokens.mjs --check` · `node tests/face/tokens-contrast.mjs` · `node tests/face/l3-logic.mjs` · `bats tests/face-browser.bats` — on CI only, read per job.
+- **Expected failure first:** `tests/face/tokens-contrast.mjs` is committed first and fails `missing selector html.hq.hq-light` and `missing token --blue`; the smoke mood arm fails `hq-light: class not applied on <html>`; the colour-literal lint's planted fixture fails before the lint exists with `ERR_MODULE_NOT_FOUND`.
+- **Live demo scenario:** after merge, main clone: `node .claude/scripts/hq/arc-face.mjs` → toggle the mood → Today, Inbox, Council and Money in both moods; a council verdict chip reads `--accent-dim`, a simulated figure reads violet, and nothing is inverted.
+- **Real-system check:** the PR's CI run — the lockfile arm and the browser arm pass on ubuntu, macOS and windows after the Tailwind install; the generated copy builds under Tailwind v4 (assumptions ledger row 4).
+- **Expected evidence:** `initiatives/face/evidence/phase-01/` — `contrast-table.md` (script output) · `ci-jobs.json` · `owner-read-9-rooms-2-moods.md` · attacker reports.
 
 ## Rabbit holes in this phase
 
-A design-token theming engine · chart perfectionism · variants of more than 8 screens ·
-critique rounds beyond 2.
+- **Hand-translating v0.7 utilities** — rejected (ADR-1323); port utilities as written.
+- **Re-deciding colours the reference already chose** — the only permitted delta is ADR-1322's council rule.
+- **Tailwind reaching `face/src/lib/*.mjs`** — `tests/face/l3-logic.mjs` keeps importing every `.mjs` with no install; a red there stops the phase.
 
 ## Out of scope for this phase
 
-Any L2/L3 code (Phases 03/04) · Map implementation (Phase 05) · bespoke room panels
-(Phase 06).
+The v0.7 shell and module folders → Phase 02 · the other 27 modules → Phase 03.
 
 ## Your-setup / pending
 
-Owner: the blind pick + prediction (a human gate mid-phase) · optionally the DES-G ruling
-via `/arc-change` in the design lane if Claude Design is used this cycle.
+- If the lockfile platform check fails, the owner regenerates the lockfile on the Windows box with per-platform `--os`/`--cpu` installs (the session supplies the exact commands).
+- The owner's by-eye read of 9 rooms × 2 moods at exit.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- One write path, mandatory reason, byte-parity with the CLI (E2, E1, ADR-1302).
-- Reader-only over the spine; no second truth in the UI (SPINE-G/ADR-0030, A5, ADR-1301).
-- Every number has *Why?* precedents; no invented numbers, ETAs, health emoji (A1, E3).
-- Real vs simulated/rehearsal/drill never mixed or summed; MISSING ≠ 0; ABSENT with reason (E3, ADR-1313, ADR-1018, ADR-0416).
-- Kinds, gates, lanes, ADR ids verbatim (A5); unknown kinds/profiles render generically — nothing dropped silently (E1, ADR-1306).
-- Seals for every forever-human action; no button ever exists for them (E2, ADR-1303, ADR-0069 b1, ADR-0305, ADR-0110, ADR-1203).
-- Localhost + token; no PII; escaped serializer (ADR-1312, ADR-0410, LED-C, SPINE-E).
-- Design lane law: three theses, blind jury with reference, owner pick + prediction, two critique rounds max (ADR-1308, ADR-0034…0049).
-- Every new face lint starts WARN-first in the TRIAL set and earns FAIL through the trial ledger (A1) — `face-coverage` excepted (a validator over the tree, FAIL from birth like policy-lint, ADR-1311).
-- The Engine room's unlock-ladder rung indicator reads evidence only — the rung is never a control (E2).
-- Tests green on CI per job; two fresh attackers per gate (decision logic + shell/HTTP boundary); attacker prompt carries the lane's fixed-defect list; vacuous-pass rule (assert it RAN before asserting what it printed).
-- Zero product-code writes before explicit owner approval of this plan; L3 stack never enters the arc repo (ADR-1300, ADR-1309).
+<!-- Generated from PLAN.md at kickoff; resynced by /arc-change. Never hand-edited. -->
+
+- The served registry is the only room list: modules attach to served ids, orphans are checked both ways, and the four extra rooms are exempted by name only (ADR-1306, ADR-1321, ADR-1327).
+- Tokens have one source, `docs/design/system/tokens.css`; `face/src/tokens.css` is generated and never hand-edited, as `.claude/scripts/core/face-tokens.mjs --check` enforces; no colour literal under `face/src/modules/**`; council renders `--accent-dim` and violet is the non-real family alone (ADR-1308, ADR-1322).
+- Every decision lives in a `.mjs` that node imports with no install: `fold.mjs` imports nothing from React, Vite or three, `View.tsx` carries no branch worth asserting, and Tailwind stops at L3 (ADR-1320, ADR-1323).
+- `POST /api/decide` stays byte-parity with `arc-inbox`: the parity fixture is green on every PR of this cycle and is a Phase 05 exit criterion (ADR-1302, ADR-1333).
+- Zero new spine kinds: every op emits a kind already in `validate.mjs` KINDS, and an op that would need a new one does not ship (ADR-0026, ADR-1334).
+- Branch-only writes: a file-touching op writes to a `feat/face-*` branch, shows the diff and stops; `main` is untouchable and merge never exists in the face (ADR-1326).
+- The WORK door has no logic of its own: each op shells the same script a hand-run calls, proven per op by a no-second-path fixture; an op without a green fixture ships read-only with an honest badge (ADR-1326).
+- The SESSION door starts `arc-run --driver …`, never a harness binary (ADR-1326).
+- No provider key in the browser; Ask keeps zero write tools and `ASK_ACTIONS` = `open_room` · `set_speed` · `enter_hq` (ADR-1325).
+- No facts bundle under `face/src/**`: a module cites a door route or renders `NOT SERVED` (ADR-1324).
+- No new surface outside `.claude/scripts/` this cycle; the layout move belongs to the distribute lane, in one atomic PR (ADR-1319).
+- Real vs simulated / rehearsal / planned are never mixed or summed; planned rooms render dotted and every write inside them says REHEARSAL (ADR-1313, ADR-1328).
+- Both moods ship together from Phase 01; light is never deferred to a later batch (ADR-1331).
+- The reference is the target: v0.7 is the canonical design and the ported harness's frozen strings are the bar (ADR-1318, ADR-1330).
+- REQ-10 claims the surface is operable over two real days and never claims the habit holds (ADR-1329).
+- Localhost + token; no PII in git, the door or the intake; escaped serializer (ADR-1312).
+- Zero product-code writes before explicit owner approval of this plan; each phase lands as its own feat branch + PR, and a phase closes through `/arc-phase-done` from the main clone before the next phase's branch opens (ADR-1332).
+- Tests green on CI per job, never run on this box; the browser harness runs on every leg with Node ≥20.19 and Node 18 is a named, counted skip; structural face lints (`face-pure`, colour-literal, facts-bundle) FAIL from birth, heuristic arms start WARN-first; two fresh attackers per new gate (decision logic + shell/OS boundary) carrying the lane's fixed-defect list; assert it RAN before asserting what it printed (ADR-1335, ADR-1336).

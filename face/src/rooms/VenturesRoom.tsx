@@ -34,6 +34,7 @@ import {
 import type {
   PnlView, KillView, GreenGate, Figure, VentureRow, CostLine, RevenueRow,
 } from "../lib/money.mjs";
+import { HPanel, RoomHead } from "../ui/bits";
 
 /* -------------------------------------------------------------------------- */
 
@@ -141,19 +142,19 @@ export function VenturesRoom({ door, room, sentence, lede, declared }: VenturesR
     <section className="v-room" aria-label="Ventures">
       <style>{CSS}</style>
 
-      <header className="v-head">
-        <div className="v-headtext">
-          <h1 className="v-sentence">{opening.sentence}</h1>
-          <p className="v-lede">{opening.lede}</p>
-        </div>
-        <div className="v-chrome">
-          <ModeChip mode={realData === null ? null : realData.doorMode} />
-          <span className="v-clock" title="the door's own clock, in the company's timezone">
-            {readAt === "" ? "reading…" : readAt}
-          </span>
-          <button type="button" className="v-btn" onClick={reread}>re-read the door</button>
-        </div>
-      </header>
+      <RoomHead
+        title={opening.sentence}
+        hint={opening.lede}
+        right={
+          <>
+            <ModeChip mode={realData === null ? null : realData.doorMode} />
+            <span className="v-clock" title="the door's own clock, in the company's timezone">
+              {readAt === "" ? "reading…" : readAt}
+            </span>
+            <button type="button" className="v-btn" onClick={reread}>re-read the door</button>
+          </>
+        }
+      />
 
       {/* ── the roster's own headline, which is not a bare count either ── */}
       <div className="v-summary">
@@ -206,14 +207,17 @@ export function VenturesRoom({ door, room, sentence, lede, declared }: VenturesR
       )}
 
       {/* ── the factory itself, which is deliberately NOT one of the rows above ── */}
-      <section className="v-panel v-factory" aria-label="Overhead">
-        <div className="v-panel-head">
-          <span className="v-panel-title">the factory · venture: {OVERHEAD_VENTURE}</span>
-          <span className="v-panel-hint">
+      <HPanel
+        title={<>the factory · venture: {OVERHEAD_VENTURE}</>}
+        hint={
+          <>
             {realData === null ? "—" : fmtInt(realData.overhead.lines.length)} cost line
             {realData !== null && realData.overhead.lines.length === 1 ? "" : "s"}
-          </span>
-        </div>
+          </>
+        }
+        ariaLabel="Overhead"
+        className="v-factory mb-0!"
+      >
         <p className="v-panel-lede">
           The room's own sentence, as a rule the data obeys: building the factory is not a cost of
           any product made in it, so <code className="v-code">venture: {OVERHEAD_VENTURE}</code> is
@@ -246,7 +250,7 @@ export function VenturesRoom({ door, room, sentence, lede, declared }: VenturesR
             </details>
           </>
         )}
-      </section>
+      </HPanel>
 
       <Declared ids={declared} />
 
@@ -299,20 +303,26 @@ function VentureCard({
   const danger = worst === "CROSSED" || worst === "WARNING" || !row.declared;
 
   return (
-    <article className={danger ? "v-panel v-card v-card-loud" : "v-panel v-card"} aria-label={row.venture}>
-      <div className="v-card-head">
-        <h2 className="v-name">{row.venture}</h2>
-        {row.declared ? (
-          <span className="v-badge" title="named in ventures.yaml, whose criteria have an approved receipt on the spine">
-            declared
-          </span>
-        ) : (
-          <span className="v-badge v-badge-warn" title="money is booked to this venture and ventures.yaml declares no kill line for it">
-            no kill lines
-          </span>
-        )}
-        {worst === null ? null : <span className={worst === "CROSSED" ? "v-worst v-worst-loud" : "v-worst"}>{worst}</span>}
-      </div>
+    <HPanel
+      title={row.venture}
+      actions={
+        <>
+          {row.declared ? (
+            <span className="v-badge" title="named in ventures.yaml, whose criteria have an approved receipt on the spine">
+              declared
+            </span>
+          ) : (
+            <span className="v-badge v-badge-warn" title="money is booked to this venture and ventures.yaml declares no kill line for it">
+              no kill lines
+            </span>
+          )}
+          {worst === null ? null : <span className={worst === "CROSSED" ? "v-worst v-worst-loud" : "v-worst"}>{worst}</span>}
+        </>
+      }
+      ariaLabel={row.venture}
+      tone={danger ? "amber" : undefined}
+      className={danger ? "v-card v-card-loud mb-0!" : "v-card mb-0!"}
+    >
 
       {/* ── the sentence first, the numbers second. A venture that has never earned says so in
              words as well as in shape, because the shape is what a reader sees and the words
@@ -425,7 +435,7 @@ function VentureCard({
           </ul>
         </details>
       )}
-    </article>
+    </HPanel>
   );
 }
 
@@ -529,17 +539,12 @@ function ModeChip({ mode }: { mode: string | null }) {
 
 const CSS = `
 .v-room{font-family:var(--font-display);color:var(--prose);padding:calc(var(--grid)*3) calc(var(--grid)*3) calc(var(--grid)*6);max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:calc(var(--grid)*2);}
-.v-head{display:flex;align-items:flex-start;gap:calc(var(--grid)*2);flex-wrap:wrap;}
-.v-headtext{flex:1 1 420px;min-width:0;}
-.v-sentence{font-size:clamp(24px,3.6vw,var(--step-room));line-height:1.04;letter-spacing:-0.02em;font-weight:600;margin:0 0 var(--grid) 0;color:var(--prose);}
-.v-lede{font-size:var(--step-lede);line-height:1.5;font-weight:300;color:var(--meta);margin:0;max-width:64ch;}
-.v-chrome{display:flex;align-items:center;gap:var(--grid);flex-wrap:wrap;margin-left:auto;}
 .v-mode,.v-clock{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-tight);text-transform:uppercase;padding:calc(var(--grid-in)*1) calc(var(--grid-in)*2);border-radius:var(--radius-pill);}
 .v-mode{color:var(--mode-live);background:var(--mode-bg);}
 .v-mode-sim{color:var(--mode-sim);background:var(--sim-hatch);}
 .v-mode-unknown{color:var(--faint);background:var(--mode-bg);}
 .v-clock{color:var(--meta);text-transform:none;}
-.v-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:rgba(255,255,255,0.04);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
+.v-btn{font-family:var(--font-mono);font-size:var(--step-data);letter-spacing:var(--track-tight);text-transform:uppercase;min-height:var(--row-h-live);padding:0 calc(var(--grid)*2);border-radius:var(--radius-chip);border:1px solid var(--hairline-strong);background:var(--mode-bg);color:var(--prose);cursor:pointer;transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease);}
 .v-btn:hover{border-color:var(--accent-line);background:var(--accent-wash);}
 
 .v-summary{display:flex;align-items:center;gap:calc(var(--grid)*2);flex-wrap:wrap;padding:calc(var(--grid)*2);border:1px solid var(--panel-border);border-radius:var(--radius-panel);background:var(--panel);backdrop-filter:blur(var(--panel-blur));-webkit-backdrop-filter:blur(var(--panel-blur));}
@@ -553,11 +558,7 @@ const CSS = `
 .v-contradiction{margin:0;padding:calc(var(--grid)*1.5) calc(var(--grid)*2);border:1px solid var(--amber);border-radius:var(--radius-chip);color:var(--amber);font-size:var(--step-body);line-height:1.5;}
 
 .v-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:var(--grid);align-items:start;}
-.v-panel{border:1px solid var(--panel-border);border-radius:var(--radius-panel);background:var(--panel);backdrop-filter:blur(var(--panel-blur));-webkit-backdrop-filter:blur(var(--panel-blur));padding:var(--pad-panel);min-width:0;}
 .v-card{display:flex;flex-direction:column;gap:calc(var(--grid)*1.5);}
-.v-card-loud{border-color:var(--amber);}
-.v-card-head{display:flex;align-items:baseline;gap:var(--grid);flex-wrap:wrap;}
-.v-name{font-size:var(--step-lede);font-weight:600;letter-spacing:-0.01em;margin:0;color:var(--prose);font-family:var(--font-mono);}
 .v-badge{font-family:var(--font-mono);font-size:var(--step-micro);letter-spacing:var(--track-tight);text-transform:uppercase;color:var(--meta);border:1px solid var(--hairline-strong);border-radius:var(--radius-pill);padding:2px 8px;}
 .v-badge-warn{color:var(--amber);border-color:var(--amber);}
 .v-worst{font-family:var(--font-mono);font-size:var(--step-micro);letter-spacing:var(--track-tight);text-transform:uppercase;color:var(--faint);margin-left:auto;}
@@ -618,10 +619,6 @@ const CSS = `
 .v-row-fx{color:var(--faint);font-size:var(--step-micro);}
 .v-row-id{color:var(--faint);font-size:var(--step-micro);overflow-wrap:anywhere;}
 
-.v-factory{border-style:dashed;}
-.v-panel-head{display:flex;align-items:baseline;gap:var(--grid);flex-wrap:wrap;margin-bottom:var(--grid);}
-.v-panel-title{font-family:var(--font-mono);font-size:var(--step-meta);letter-spacing:var(--track-wide);text-transform:uppercase;color:var(--accent);}
-.v-panel-hint{font-family:var(--font-mono);font-size:var(--step-meta);color:var(--faint);margin-left:auto;}
 .v-panel-lede{font-size:var(--step-body);line-height:1.55;font-weight:300;color:var(--meta);margin:0 0 calc(var(--grid)*2);max-width:76ch;}
 
 .v-refused{border-left:2px solid var(--hairline-strong);padding-left:var(--grid);}
