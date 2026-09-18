@@ -25,7 +25,7 @@ depends-on: —
 | 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
-| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | **2 of 5 rings merged** — command `81dcf814` (#239) · kernel `bee88cce` (#240); 14 modules green in both moods on every L3 leg |
+| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | **3 of 5 rings merged** — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242); 19 modules green in both moods on every L3 leg |
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | spec'd |
 | 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — needs owner rulings §13 items 4, 5 |
 | 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
@@ -52,6 +52,9 @@ journal line (decided outside the face) · 1 of 5 days carried a decision throug
 **2026-09-18, kernel ring** — unchanged: 6 · 55 · 1 of 5. Nothing was decided through the face on
 either day, which is the number Phase 07's two-day bar has to move; it is a TREND here and is never
 counted toward REQ-10 (ADR-1329).
+**2026-09-18, factory ring** — unchanged: 6 · 55 · 1 of 5, read from the main clone at `98f405f5`
+(the only day through the face is still 2026-08-24). Three rings in, the surface has not yet been the
+place a decision was made; the trend stays flat until the owner decides from it.
 
 **Block B tripwire (day 5 of 10), read on 2026-09-18 after the command and kernel rings: GREEN — no
 cut.** The clause is "if 14 modules are not green → cut the remaining bespoke folds to generic
@@ -252,35 +255,35 @@ stay bespoke folds.
 
 ## Now
 
-**RESUME HERE (2026-09-17):** **Phase 02 is CLOSED** (done log, 2026-09-17), and with it Block A at 2d of
-6d. The next phase is **Phase 03 — the 36 modules read-side** (`phases/phase-03-spec.md`, REQ-01 +
-REQ-05, 7d appetite), in five ring PRs in order: `feat/face-v2-03-command` · `-kernel` · `-factory` ·
-`-money` · `-company`. Its Preconditions line is satisfied by the Phase 02 row above once this close merges.
+**RESUME HERE (2026-09-18):** **Phase 03 — the 36 modules read-side** is running (`phases/phase-03-spec.md`,
+REQ-01 + REQ-05, 7d appetite). **3 of 5 rings are merged**: command `81dcf814` (#239), kernel `bee88cce`
+(#240), factory `98f405f5` (#242) — 19 modules green in both moods on every L3 leg (run 35272310975,
+19/19 on `09090743`: `heading rings=command,kernel,factory checked=19 miss=0`, `not-served panels=24`,
+`verbs-pending cards=18`), and `main` re-verified by dispatch (run 35275053756, 19/19). The Block B
+tripwire read GREEN after the kernel ring, so the last two rings stay bespoke folds. Where the phase
+stands ring by ring is `evidence/phase-03/handoff-2026-09-18.md`.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
 `approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP`; the kickoff merged as `c5dabfbc`
 (#232) before the first Phase 00 commit. Standing instruction from the owner (2026-09-17): build
 every phase through to the end without waiting, push and merge per phase on green CI, run nothing
-locally, and ask only at owner-only gates.
+locally, and ask only at owner-only gates. **Owner, 2026-09-18: "entha cut panna kodathu, fulla work
+pannanum"** — nothing in Phase 03 is cut; every ring ships in full, with its debts paid where the
+ledger says.
 
-**Waiting on the owner, none of it blocking Phase 03's first ring:** the stamps on
-`approval.requested{gate: phase-done}` `01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02),
-`01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01), `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and
-`01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the main clone,
-`node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13 items 4 and 5
-(the six flagship ops; story/factory registry rows vs exemption) are due by the Phase 04 close and are
-raised at the Block B reading.
+**Waiting on the owner:** the stamps on `approval.requested{gate: phase-done}`
+`01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02), `01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01),
+`01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and `01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the
+main clone, `node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13
+item 5 (`story` and `factory`: a registry row or an exemption) now gates Phase 03's 36/36 as well as
+Phase 05 — the four extra rooms (factory, executor, agents, story) are not built until it is ruled, and
+it is asked before the company ring; item 4 (the six flagship ops) is due by the Phase 04 close.
 
-**What Phase 03 inherits:** the module frame — `/arc-face-module RING/ID` scaffolds a green module in one
-command, and `face-pure` + face-coverage's module half FAIL from birth; the nine CARRIED modules (today,
-inbox, map, spine, board, ask-arc in command; council-chamber in factory; money, ventures in money) whose
-Views each ring replaces with the v0.7 port, deleting the Cycle 15 renderer it no longer mounts; the host
-handing `fold()` `{}` until the command ring loads declared routes (debt row, REQ-05); the shell's missing
-route to the ADR-1327 rows, due with the factory ring's first exemption (debt row); the render verdict
-already reading the gate's attachment, so each ring's module count is judged against its folders; the
-Cycle 15 findings F1–F3; the shot-review contract against Phase 00's baseline; debts in `debt-ledger.md`.
-
-**Next step:** `/arc-develop start 03 --lane face` on `feat/face-v2-03-command` cut from `main` after this
-close merges — the command ring first (today · inbox · map · spine · board · ask-arc · chat-mcp generic).
-Tests first per the spec's Verification plan (the ring's module count RED before its modules exist), on CI only.
+**Next step:** the **money ring** on `feat/face-v2-03-money`, cut from `main` — five served (money, growth,
+leads, legal, ventures) and three served-planned (ops, trader, discover). It owes, beyond the ports:
+**F3** (a planned room never wears LIVE — dotted, REHEARSAL, ADR-1328, with a module-frame arm); the
+deletion of the last two carried Cycle 15 renderers, `MoneyRoom.tsx` and `VenturesRoom.tsx`; and the four
+debt rows whose pay-down is this PR — the `lane-room.mjs` unit suite as its first slice, `laneRoom`
+refusing a read its manifest does not declare, the toolbelt catalogue built in one pass, and one kit pass
+for the factory ring's hint truncation and repeated line. Red first on CI, as every ring.
