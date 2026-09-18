@@ -16,13 +16,14 @@ The smoke counts the same panels in the page per room, per mood.
 | `leads` | Suppression ledger | `/api/leads` | Every suppressed lead, why, and since when -- event-backed and derived, with no way to reset it. A suppressed lead lands here and never leaves. |
 | `legal` | The gates | `/api/gates` | Every enforcement gate with its mode -- block, warn, profile or off -- its tier and its evidence, parsed from arc.gates.yaml, where a mode changes only by a reviewed diff. |
 | `legal` | The publish gate | `/api/legal` | The pieces held between draft and the internet right now -- awaiting a review pack, or approved with their sha pinned and awaiting a person's merge -- with the legal lints' results beside each. |
-| `legal` | The five seals | `/api/legal` | The actions no level of proven autonomy ever includes, as the constitution states them -- moving money, killing a venture, changing a price, unlocking real-money trading, publishing under the owner's name. |
+| `legal` | The seals | `/api/legal` | The actions no level of proven autonomy ever includes, as the constitution states them, each beside the legal lane's own check on it -- the law room reads the constitution whole; this panel is the lane's fold of it. |
 | `legal` | Hash chain | `/api/legal` | The legal lane's verification chain: how many receipts it covers and whether it is intact, from the lane's own verify run -- append-only, a correction supersedes, a closed day never changes. |
 | `money` | Fourteen days | `/api/pnl?by=day` | Simulated revenue, cost and real revenue by day on one axis -- three substances, three marks, never one line -- each point derived by the money brain, which serves months today and no daily series. |
 | `money` | The milestone line | `/api/strategy` | The honest ranges the company has written down for when money arrives, read from its strategy documents rather than typed into this screen. |
 | `money` | Where money comes from | `/api/ventures` | Each venture's revenue model and price, and what the factory itself may earn, from each venture's own record -- never a sentence typed into this room. |
 | `ventures` | Passports | `/api/ventures` | Each venture's passport -- live, candidate or attic, its stage and its own repo -- as ventures.yaml records it, with a row that leaves only by your stamp and never by deletion. |
 | `ventures` | The rules of the file | `/api/ventures` | ventures.yaml's own rules, read from the file rather than typed here: criteria only, money never lives in it, and the digest is over parsed values so it cannot be edited silently. |
+| `ventures` | The base rate | `/api/ventures` | How many ventures the kill criteria were planned to expect to live, as the criteria file states it, written before the first launch -- so a death is a data point, not a surprise. |
 
 Two routes here are not new door routes but a new shape of one: `/api/pnl?by=day` is the money brain's daily series
 on the P&L route the door already serves, and `/api/gates` is the gates table the factory ring's review-and-ship

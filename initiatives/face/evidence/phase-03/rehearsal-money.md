@@ -17,11 +17,11 @@ per room, and F3 holds each planned room to its dotted, REHEARSAL marking with n
 | `discover` | Send the top two to council | The shortlist is exactly two; the council debates them and you stamp one, and the one-pager comes before a separate venture kickoff. No council is convened from here. |
 | `ops` | Raise an incident | incident.raised, then an acknowledgement, then a resolution typed by a person -- an incident is open until someone closes it in words. Rehearsed: the ops lane is not born, so nothing is raised. |
 | `ops` | Drop a support file | A dropped message is classified, a template reply is drafted, and your stamp seals it for a person to send. The machine drafts; a person sends. Rehearsed, and never sent. |
-| `ops` | Write the weekly ops report | One report a week and a drill, once two ventures are live and support stops being one person. Until then it is rehearsed, and no report is written. |
+| `ops` | Write the weekly ops report | A report and a drill, on the cadence the ops lane will set once its trigger in the planned-rooms registry is met. Until then it is rehearsed, and no report is written. |
 | `trader` | Open a question | question.opened: a strategy exists to answer a question, never the other way round. Rehearsed on paper; the trader lane is not born. |
 | `trader` | Register a strategy in the playground | strategy.registered, exploratory: it can be thrown away without a retro, and it names a paper market only. |
 | `trader` | Pin a snapshot and backtest it | A pinned snapshot, a backtest, and the honesty battery -- no lookahead, no survivorship, costs included. Paper numbers, and a failed check keeps a strategy on paper. |
-| `trader` | Record a verdict | CONTINUE or DORMANT, each with a typed reason, and thirty paper days before either. No verdict places an order. |
+| `trader` | Record a verdict | CONTINUE or DORMANT, each with a typed reason, after the paper period the planned line names. No verdict places an order. |
 
 Phase 05's flows harness runs these as REHEARSAL assertions only (ADR-1328): they bind to no receipt kind, because
 the kinds they would write belong to lanes that do not exist.

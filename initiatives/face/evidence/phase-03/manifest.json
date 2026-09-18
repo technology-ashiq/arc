@@ -1,0 +1,116 @@
+{
+  "phase": "03",
+  "commit": "d83862167de02d13187435b670b26f41c1cdbf97",
+  "short": "d8386216",
+  "generated": "2026-09-18T11:07:37Z",
+  "files": [
+    {
+      "name": "attacker-reports.md",
+      "sha256": "7bb23fb36b18868249d3a4991df9def8df52d86afaa268bd94c5b899f20dbcf6"
+    },
+    {
+      "name": "ci-jobs.json",
+      "sha256": "b5ea3350fc4c935b2a567c47376cbffb839df7ac1170112c1185e0474ee692d0"
+    },
+    {
+      "name": "handoff-2026-09-18.md",
+      "sha256": "f53a633b26fedf9b72ac2c24e176531bee7f88996976cdff4ff6dd1b9fedb5b6"
+    },
+    {
+      "name": "handoff.md",
+      "sha256": "b201df5579fa385a3abfda4c91a5954c9b7d8dd63b95bcf997cb8914a9361060"
+    },
+    {
+      "name": "not-served-command.md",
+      "sha256": "83a041245e6f88c14769026f9bee613aef0dc2ff1e7de9ed536b6fd055fb331c"
+    },
+    {
+      "name": "not-served-company.md",
+      "sha256": "751fd71f3fd9b857fd7eec26e02947056be07e1019ba6fc2a6ba2e000bb4cb3b"
+    },
+    {
+      "name": "not-served-factory.md",
+      "sha256": "a3e91de23a708c4e6be298548416f2aa4236ae80f1fa5f3b436205bca8ab49a4"
+    },
+    {
+      "name": "not-served-kernel.md",
+      "sha256": "5bac00380485ed1b6ba3485994bcfa283651b4ba308b12ff1b43ec8d02c5302f"
+    },
+    {
+      "name": "not-served-money.md",
+      "sha256": "804b49cc54da311c5093c640806793206b2a22a7f05778a651f498e87bf80c61"
+    },
+    {
+      "name": "red-first.md",
+      "sha256": "1a9d2054578477d1deb15516b37a530b00d2b59bb7f5f8a2330589741c398bd4"
+    },
+    {
+      "name": "rehearsal-money.md",
+      "sha256": "7323348b8bdac59fc21756d5edc6378e53e6cfc59ac8415581f85256527c8503"
+    },
+    {
+      "name": "shot-review-command.md",
+      "sha256": "f5b2099b0fc7a68704a10e68005d69cc39a244527c3c84d84323205407cc5fee"
+    },
+    {
+      "name": "shot-review-company.md",
+      "sha256": "9047fefecd99c4b83f746e681a8cd7dadca0917a0f5b7d324f29f73e7f42b18c"
+    },
+    {
+      "name": "shot-review-factory.md",
+      "sha256": "899bf351ac096670cece5e8fbbbe8f2e59cea7c79a9f0a81d972944034e38c99"
+    },
+    {
+      "name": "shot-review-kernel.md",
+      "sha256": "c0a1c8167d9eb92c288a96def51e7f4182b37bb0fa6463172686eb72b908d7ff"
+    },
+    {
+      "name": "shot-review-money.md",
+      "sha256": "ea960394f66e1ae39a59d30c4153d36c48c40438bebb049455749d2418b30f7d"
+    },
+    {
+      "name": "shots-command.json",
+      "sha256": "785ebb4e20fe9e1813f078b4340812bfa528da6356a332eeb5c799d270703b71"
+    },
+    {
+      "name": "shots-company.json",
+      "sha256": "f6e2ed80b966384619fe79750a1a352d91939ae423a1c33a672384e9375b1e9a"
+    },
+    {
+      "name": "shots-factory.json",
+      "sha256": "93531717bc01055dbae40199318d9d281353c93ceeaa6badf84ea334a782f18b"
+    },
+    {
+      "name": "shots-kernel.json",
+      "sha256": "1c5a95703bf54bde0184d71292bc4bc747097d84a35aed01d1b7a9d4bdd2bc5d"
+    },
+    {
+      "name": "shots-money.json",
+      "sha256": "73126a8b79c4c0843641ce7772165b93de56760bdb1252d52e2ee4989e1d8855"
+    },
+    {
+      "name": "spec-fidelity.md",
+      "sha256": "b8e1006871d51d09f1a67b58654e8dd91cf61d5daab0ffe1ba193b6345d8064c"
+    },
+    {
+      "name": "verbs-pending-command.md",
+      "sha256": "adf2cd4699427f303946121645d201d92b4b7b54b57e6e8816ca460f90256087"
+    },
+    {
+      "name": "verbs-pending-company.md",
+      "sha256": "8b5539723005322f3b931072a0f8c5c60bcb806461867c3d3ad82e5b17d6bd42"
+    },
+    {
+      "name": "verbs-pending-factory.md",
+      "sha256": "b2a864da4798436562a1c508ddabf7c2f68c93bbaefd8feba0f0feaa398da8b1"
+    },
+    {
+      "name": "verbs-pending-kernel.md",
+      "sha256": "0192cb97efa74f2a76f4e3fe44a4f5d364237e77fe244fd0cbda83a857469aac"
+    },
+    {
+      "name": "verbs-pending-money.md",
+      "sha256": "2eba9e6a7d0d6e7fcd10b77b481342a02517853afd45c39d40bd340c585f52f8"
+    }
+  ]
+}

@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 03
+phase: 04
 appetite: 24d
-burn: 3d
+burn: 3.5d
 blocked-on: —
 depends-on: —
 
@@ -26,13 +26,13 @@ depends-on: —
 | 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
-| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | **4 of 5 rings merged** — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242) · money `969d9634` (#244); 27 modules green in both moods on every L3 leg |
+| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | ✅ **CLOSED 2026-09-18** — 1.5d of 7d; 36/36 modules in both moods on every L3 leg (34 served module rooms + the 2 exempt extras, headings 36 checked, 0 errors); five ring PRs merged — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242) · money `969d9634` (#244) · company `d8386216` (#246); `main` re-verified 19/19 (run 35336492657), suite 1..3414; receipts `01M2T38JEG2AWDY61X7QAARNYF` · `01M2T38JSWD6QSHTYA7S0M1R1W` |
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | spec'd |
 | 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — needs owner rulings §13 items 4, 5 |
 | 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 3d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 1/10d ·
+**Appetite burn: 3.5d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 1.5/10d ·
 C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
 35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
@@ -58,6 +58,9 @@ counted toward REQ-10 (ADR-1329).
 place a decision was made; the trend stays flat until the owner decides from it.
 **2026-09-18, money ring** — unchanged: 6 · 55 · 1 of 5, read from the main clone at `969d9634`. The
 money rooms are now on the door, and still no decision has gone through them.
+**2026-09-18, company ring (the Phase 03 close)** — unchanged: 6 · 55 · 1 of 5, read from the main clone at
+`d8386216`. All 36 modules are on the door and the surface has still not been where a decision was made; the
+trend is Phase 07's to move (REQ-10, ADR-1329).
 
 **Block B tripwire (day 5 of 10), read on 2026-09-18 after the command and kernel rings: GREEN — no
 cut.** The clause is "if 14 modules are not green → cut the remaining bespoke folds to generic
@@ -255,18 +258,56 @@ stay bespoke folds.
   amendments: 0 · reopened: n.
   Receipts (main clone spine, landed in `2026-09-17.jsonl`): `phase.closed` `01M2QWMG3CSBD1B4JFSAKWEXYX` ·
   `approval.requested{gate: phase-done}` `01M2QWMGM3FBKW5BMBAVAMZGKE` — the second waits on the owner's stamp.
+- **2026-09-18 — Phase 03 CLOSED (`/arc-phase-done 03` from the main clone).** The 36 modules read-side, in
+  five ring PRs: command (6), kernel (8), factory (5, then its three extras), money (8) and company (6); every
+  served room now draws through a v0.7 module on the door, and chat-mcp stays the generic planned room. A module
+  is four files and decides nothing in its View; it declares the door routes it reads, and a panel no route fills
+  is a `NOT SERVED` panel naming the route -- five derived lists, 50 panels, 22 distinct route strings, which are
+  Phase 04's work, and five verbs-pending lists, which are Phase 05's. **F1** (org's ADR band map names lanes,
+  from PORTFOLIO.md, held against the board), **F2** (the scheduler's promises each drawn or named) and **F3** (a
+  planned room never wears LIVE, judged by room id) closed in their rings. The last two Cycle 15 renderers are
+  deleted. The owner's section 13 item 5 ruling (ADR-1337): story and factory earned served-registry rows,
+  executor and agents stay exemptions drawn from rows the door serves. Merged as `81dcf814` (#239), `bee88cce`
+  (#240), `98f405f5` (#242), `969d9634` (#244) and `d8386216` (#246).
+  **Tests:** red first on every ring (`evidence/phase-03/red-first.md`); each ring PR's head 19/19 read per job
+  (command run 35248578768 on `f8e43338`; kernel 35263610481; factory 35272310975; money 35323854485; company
+  35334544298, code head 35334146777); `main` re-verified by dispatch after every ring, the last run 35336492657,
+  19/19, full suite `1..3414` with 0 not ok on ubuntu Node 20 (`evidence/phase-03/ci-jobs.json`). Every L3 leg:
+  `opened=35 openable=35 errors=0` and `heading rings=command,kernel,factory,money,company checked=36 miss=0` in
+  both moods, `extras expected=2 opened=2`, `planned rooms=4 expected=4 live=0`; the Windows runner's
+  socket-buffer class counted on its own line (a debt row, never folded into a zero).
+  **Attackers:** two fresh agents per ring (decision logic · shell/OS), every hole fixed and pinned
+  (`fixed-defects.md`; the company ring alone 23). **Shot reviews:** five, each 0 VIOLATION and 0 BELOW-BAR on
+  the pixels that merged; two needed a re-read (money after its WEAKNESS rows were paid; company after its first
+  read quoted baseline pixels as candidate findings, ruled not present by crops and a fresh re-read).
+  **Spec-fidelity: drift found**, every finding dispositioned (`evidence/phase-03/spec-fidelity.md`): typed
+  numbers and names in folds FIXED at this close, with four twins found by grepping the pattern (the board's "1 in
+  4" among them -- now a NOT SERVED base rate); the shell's two-source room list DECLARED in ADR-1337; the runner
+  ceiling DEBT. **Predictions:** 3 hit · 2 miss (`evidence/phase-03/handoff.md`).
+  **Assumptions adjudicated by measurement:** the route gap "~17 ±5" -- 22 distinct route strings, at the bound,
+  NOT fired (the trigger is more than 22); Phase 04 re-measures its appetite against the parsers first. Cycle
+  15's open question (the owner decided in the CLI because the surface arrived late) -- not yet evaluable: no
+  decision has gone through the face on any day since the command ring. **ADR revisit triggers:** ADR-1327's
+  (the owner rules on story/factory) MET and answered in the same change by ADR-1337, as the trigger requires;
+  1320 (0 face-pure exemptions), 1321 (no blank room, no ungated folder), 1331 (0 errors in light every ring) and
+  1335 (no leg red for a reason outside the product) not met; 1324 and 1337 are evaluable only after Phase 04 and
+  a whole cycle. No ADR DEFERRED.
+  Evidence: `initiatives/face/evidence/phase-03/` (handoff, spec-fidelity, red-first, attacker reports, the five
+  shot reviews and shot manifests, the derived lists, ci-jobs) with its sha256 manifest from
+  `arc-evidence.sh bundle 03 --lane face`.
+  amendments: 1 (the 2026-09-17 verification-plan refinement, trivial) · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-18.jsonl`): `phase.closed` `01M2T38JEG2AWDY61X7QAARNYF` ·
+  `approval.requested{gate: phase-done}` `01M2T38JSWD6QSHTYA7S0M1R1W` — the second waits on the owner's stamp.
 
 ## Now
 
-**RESUME HERE (2026-09-18):** **Phase 03 — the 36 modules read-side** is running (`phases/phase-03-spec.md`,
-REQ-01 + REQ-05, 7d appetite). **4 of 5 rings are merged**: command `81dcf814` (#239), kernel `bee88cce`
-(#240), factory `98f405f5` (#242), money `969d9634` (#244) — 27 modules green in both moods on every L3
-leg (run 35323854485, 19/19 on `e562bed7`: `heading rings=command,kernel,factory,money checked=27 miss=0`,
-`not-served panels=37`, `verbs-pending cards=34`, `rehearsal cards=10`, `planned rooms=4 expected=4
-live=0`), and `main` re-verified by dispatch (run 35325186981, 19/19 on `969d9634`). F3 is closed: a planned room never wears LIVE,
-checked by room id in both moods. The Block B tripwire read GREEN after the kernel ring, so the last ring
-stays bespoke folds. Where the phase
-stands ring by ring is `evidence/phase-03/handoff-2026-09-18.md`.
+**RESUME HERE (2026-09-18):** **Phase 03 is CLOSED** — the 36 modules read-side, 1.5d of its 7d appetite (see the
+done log). **Next: Phase 04 — door read routes** (`phases/phase-04-spec.md`, REQ-06, 3d): the gaps Phase 03 named
+are served. Its input is the union of the five `evidence/phase-03/not-served-*.md` lists -- **22 distinct route
+strings** (21 new routes and a query mode of the served `/api/pnl`), exactly at the edge of the Assumptions
+ledger's "~17 ±5" bound, so Phase 04 starts by grouping them by the parser that owns each and measuring the
+appetite against that, rather than assuming 3d holds. Phase 04 opens on `feat/face-v2-04-*` from `main` after
+this close merges.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
@@ -274,26 +315,13 @@ stands ring by ring is `evidence/phase-03/handoff-2026-09-18.md`.
 (#232) before the first Phase 00 commit. Standing instruction from the owner (2026-09-17): build
 every phase through to the end without waiting, push and merge per phase on green CI, run nothing
 locally, and ask only at owner-only gates. **Owner, 2026-09-18: "entha cut panna kodathu, fulla work
-pannanum"** — nothing in Phase 03 is cut; every ring ships in full, with its debts paid where the
-ledger says.
+pannanum"** — nothing in Phase 03 was cut; every ring shipped in full, with its debts paid where the
+ledger said. **Owner ruling, 2026-09-18 — PLAN-face-v2 §13 item 5: "Both registry row"** (ADR-1337): `story`
+and `factory` are served rooms; `executor` and `agents` stay labelled exemptions.
 
 **Waiting on the owner:** the stamps on `approval.requested{gate: phase-done}`
-`01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02), `01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01),
-`01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and `01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the
-main clone, `node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13
-item 4 (the six flagship ops) is due by the Phase 04 close.
-
-**Owner ruling, 2026-09-18 — PLAN-face-v2 §13 item 5: "Both registry row".** Asked before the company ring,
-as this file required. `story` and `factory` earn rows in the served registry instead of ADR-1327
-exemptions; `executor` and `agents` were not in the question and stay labelled exemptions. ADR-1337 records
-it and lands with the change that executes it: both rows written through `face-sections.mjs`, their two
-exemptions never written, served rooms 34 → 36 and openable 33 → 35, and every count pinned against the
-old numbers moved in the same PR.
-
-**Next step:** the **company ring** on `feat/face-v2-03-company`, cut from `main`, and with it the four extra
-rooms the ruling unblocked — the last Phase 03 PR. Five served (law, learn, strategy, org, concepts); `story`
-and `factory` with their new registry rows (ADR-1337); `executor` and `agents` as ADR-1327 exemptions, whose
-rows reach the shell through an allow-listed file route so each gets a rail entry with the not-in-registry
-badge (the debt row that has waited on this since Phase 02). It owes **F1** — the ADR band map in `org`
-names LANES, read from PORTFOLIO's band table, not the rooms `expected-set.json` homes each band to. Red
-first on CI, as every ring; then `/arc-phase-done 03 --lane face` from the main clone.
+`01M2T38JSWD6QSHTYA7S0M1R1W` (Phase 03), `01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02),
+`01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01), `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and
+`01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the main clone,
+`node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13 item 4 (the six
+flagship ops) is due by the Phase 04 close.

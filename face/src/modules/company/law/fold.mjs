@@ -86,6 +86,6 @@ export function fold(payloads, ctx) {
     showWorkingNote: note("working", "x") !== "",
     isAmendmentEmpty: !isLawRead || law.amendment.length === 0,
     isTeethEmpty: !isLawRead || law.teeth.length === 0,
-    amendBy: "An amendment is the owner's alone: a written proposal, a seven-day cooling period, a sign-off, and a fresh constitution.adopted receipt that supersedes the last. No machine amends, and this room offers no button for it.",
+    amendBy: "An amendment is the owner's alone, by the steps the constitution states above, and it lands as a fresh constitution.adopted receipt that supersedes the last. No machine amends, and this room offers no button for it.",
   };
 }

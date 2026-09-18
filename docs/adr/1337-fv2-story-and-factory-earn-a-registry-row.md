@@ -40,3 +40,16 @@ still FAILs.
 - Neither room's truth is invented to fill its row: `story` reads the cycles from `docs/HISTORY.md` through
   `/api/file/history`, and `factory` reads the lanes and the phase each is on through the door; what the
   door does not serve renders NOT SERVED (ADR-1324).
+
+## How the two exemptions are drawn (recorded at the Phase 03 close, 2026-09-18)
+
+The Phase 03 spec-fidelity pass found this decision's mechanism unrecorded, so it is recorded here:
+
+- The shell draws the rooms arc does not serve from `initiatives/face/contracts/module-exemptions.json`, which
+  the door now serves on its allow-list as `/api/file/module-exemptions` -- an allow-list row, not a new route.
+  The registry has nothing for these rooms, so each exemption row also carries the facts the shell draws the room
+  from: its `name`, `ring`, `sentence` and `lede`. `face-coverage` holds those fields (the ring must be the ring
+  the module lives in; the name and sentence must be visible text), and the shell draws an extra only where its
+  module lives, so the gate and the browser answer the question the same way.
+- The room list the shell draws is therefore two sources in one fixed order: the served registry, then the
+  exempted extras. A row naming a room the registry serves never replaces it.

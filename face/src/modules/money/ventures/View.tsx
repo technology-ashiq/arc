@@ -75,8 +75,8 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             </div>
           </HPanel>
 
-          <HPanel title="1 in 4" hint="the base rate, planned for">
-            <p className="text-[13.5px] leading-[21px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{f.oneInFour}</p>
+          <HPanel title="The base rate" hint="planned for, before the first launch">
+            <NotServed item={f.baseRate} />
           </HPanel>
 
           <HPanel title="Ship WITH distribution">

@@ -42,7 +42,7 @@ export function fold(payloads, ctx) {
     ),
     rehearsal(
       "Record a verdict",
-      "CONTINUE or DORMANT, each with a typed reason, and thirty paper days before either. No verdict places an order.",
+      "CONTINUE or DORMANT, each with a typed reason, after the paper period the planned line names. No verdict places an order.",
     ),
   ];
   return {
@@ -57,7 +57,7 @@ export function fold(payloads, ctx) {
     why: [
       "Real-money trading is ungrantable at every level: no capability, no tier and no stamp in this app can hand it to a process.",
       "The only unlock is a written rule change and a cooldown, with a review-by date -- an amendment, not a toggle. Until that text exists, every number on this page is paper and says so.",
-      "A backtest with a failed honesty check cannot leave paper. Thirty paper days end in CONTINUE or DORMANT, never in an order.",
+      "A backtest with a failed honesty check cannot leave paper. The paper period ends in CONTINUE or DORMANT, never in an order.",
     ],
   };
 }

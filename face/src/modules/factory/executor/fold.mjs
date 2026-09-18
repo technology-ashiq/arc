@@ -51,7 +51,7 @@ export function fold(payloads, ctx) {
     kpis: [
       { key: "employees", v: held.unreadable.length > 0 ? "—" : fmtInt(new Set(held.rows.map((r) => r.name)).size), l: "Employees", sub: "agents, spawned in-house per task" },
       { key: "contractors", v: "—", l: "Contractors on tenure", sub: "not served yet · /api/roster" },
-      { key: "certified", v: "—", l: "Certified", sub: "twelve fixtures · not served yet" },
+      { key: "certified", v: "—", l: "Certified", sub: "not served yet · /api/roster" },
       { key: "runs", v: "—", l: "Runs dispatched", sub: "not served yet · /api/roster" },
     ],
     router,
@@ -63,7 +63,7 @@ export function fold(payloads, ctx) {
     certification: notServed(
       "Certification",
       "/api/roster",
-      "The twelve-fixture certification each hire passes before it is dispatched anything, and which fixture a failed one missed.",
+      "The certification each hire passes before it is dispatched anything, fixture by fixture, and which fixture a failed one missed.",
     ),
     runs: notServed(
       "Runs",

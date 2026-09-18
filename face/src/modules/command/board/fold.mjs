@@ -50,6 +50,7 @@ const STAGES = Object.freeze([
  * @property {{ key: string, name: string, n: string, note: string }[]} pipeline
  * @property {string} pipelineHint
  * @property {import("../../../lib/registry.mjs").NotServed} ventures
+ * @property {import("../../../lib/registry.mjs").NotServed} baseRate
  * @property {boolean} canOpenOrg
  * @property {string} orgRoom
  * @property {import("../../../lib/registry.mjs").Read[]} reads
@@ -144,6 +145,12 @@ export function fold(payloads, ctx) {
     pipelineHint: day === "" ? "idea → money · reading the door's day" : `idea → money · counted from ${day}'s receipts by kind`,
     canOpenOrg: served.has("org"),
     orgRoom: served.has("org") ? "org" : "",
+    // v0.7 typed "1 in 4" into this panel; a number no route serves is a NOT SERVED panel (Phase 03 spec-fidelity).
+    baseRate: notServed(
+      "The base rate",
+      "/api/ventures",
+      "How many ventures the kill criteria were planned to expect to live, as the criteria file states it, written before the first launch -- so a death is a data point, not a surprise.",
+    ),
     ventures: notServed("Ventures", "/api/ventures", "The kill-distance card for each venture: its stage, its criteria set at kickoff, and how far it is from its own kill line. The door serves no ventures route yet."),
     reads,
   };

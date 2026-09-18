@@ -85,8 +85,8 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
       </HPanel>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <HPanel title="1 in 4" hint="the base rate, planned for">
-          <p className="text-[13px] leading-[20px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>One in four ventures is expected to live, written before the first launch, so a death is a data point, not a surprise. Kill-distance meters exist because the criteria were set at kickoff, in writing.</p>
+        <HPanel title="The base rate" hint="planned for, before the first launch">
+          <NotServed item={f.baseRate} />
         </HPanel>
         <HPanel title="Appetite is the kill line">
           <p className="text-[13px] leading-[20px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>A lane buys its appetite at kickoff in days. Burn is spent against bought; at the line the phase-done gate refuses and the lane stops. Extending is a new decision, recorded, never a quiet edit of the number.</p>
