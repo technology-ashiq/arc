@@ -488,9 +488,28 @@ consumer projects — it carries the owner's approvals.
   criterion, because Phase 02 owns "images stay out of git". It goes in red-first, with two
   negative controls. Not load-bearing: no schema, dependency or API. It touches the shared
   `.gitignore`, and main's last change there (`a0e8ee1f`) is now merged in.
+- **The explore ignore rule: red-first, then green, read per JOB.**
+  - Run **35310537083** at `45a2557f` (test only): the new case failed on all 5 legs for its
+    named reason, "NOT ignored", on top of the refpack 14.
+  - Run **35310611527** at `652c4cde` (the rule): 14/19 jobs green. The 5 red jobs fail on the
+    refpack 14 alone. The case ran `ok` on all 5 legs, none skipped, and `declared = executed`
+    on every leg.
+  - With the rule in, `git status` lists no untracked files. The 51 files committed before the
+    ruling stay tracked.
+- **Windows hang, third time.** Run **35310285706** at the merge commit `f8bdd3b6`: shard 8/12
+  sat in `Run bats self-tests` for 66 minutes with no log, then failed. Every other leg that
+  finished showed the refpack 14 alone.
+  - Replaying `shard-tests.mjs` on each commit shows the three hung shards had only two files
+    in common: `absorb-rebuild-t01.bats` and `memory-index.bats`. Those are other lanes' suites,
+    and neither backgrounds a process in the test file itself.
+  - The same shard passed at `fba9a89e`, `45a2557f` and `652c4cde`, so the hang is
+    intermittent, not deterministic.
+  - No design file is in that common set. The merge is verified by its descendant `652c4cde`,
+    whose run is clean.
 
 **Resume here next (Phase 02), in order:**
-0. **The explore ignore rule**, red-first on CI and then green (see the update above).
+0. ~~**The explore ignore rule**, red-first on CI and then green.~~ Done 2026-09-18 (see the
+   update above).
 1. **Decision queued for the owner.** The read and write boundaries can scope to `ui-composer` by
    `agent_type`, as the Bash boundary already does. That ends the operator lock (every Read, Grep,
    Glob and Write refused while a composer is armed) and allows parallel composition. Route it
