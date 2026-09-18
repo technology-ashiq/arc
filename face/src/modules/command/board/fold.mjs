@@ -95,7 +95,16 @@ function venturesKill(st, panel) {
       const distance = c["distance"] === null || c["distance"] === undefined ? (field(c, "reason") || "not measured") : `${cell(c["distance"])}${unit ? ` ${unit}` : ""}`;
       return venture === "" || criterion === "" ? null : { key: `${venture}/${criterion}`, cells: [venture, `${criterion} ${cell(c["threshold"])}`, field(c, "status"), distance] };
     },
-    note: armed ? `evaluated on ${field(kill, "asOf")} from ${field(kill, "path")} by the ledger's kill panel` : "",
+    note: armed ? [
+      `evaluated on ${field(kill, "asOf")} from ${field(kill, "path")} by the ledger's kill panel`,
+      // What the panel set aside, said beside the distances it shaped -- the money room draws the same exclusion from
+      // /api/pnl, and a board without it drew "42 days" with its caveat removed (Phase 04 round 3).
+      ...asArray(kill["futureRevenue"]).map((r) => {
+        const n = asObject(r)["count"];
+        return typeof n === "number" && n > 0 ? `${cell(n)} revenue receipt${n === 1 ? "" : "s"} for ${field(asObject(r), "venture")} dated after the panel's clock, excluded from every distance` : "";
+      }),
+      typeof kill["absentCount"] === "number" && kill["absentCount"] > 0 ? `${cell(kill["absentCount"])} criteria the panel could not evaluate on this read` : "",
+    ].filter((n) => n !== "").join(" · ") : "",
   });
 }
 
@@ -115,6 +124,7 @@ export function fold(payloads, ctx) {
   const board = view !== null && !("code" in view) ? view : null;
   const rows = board === null ? [] : board.rows;
   const totals = boardTotals(rows);
+  const outsideLanes = boardP.state === "ok" ? asArray(asObject(boardP.data)["outside"]).map((l) => decodeDoorText(typeof l === "string" ? l : "")).filter((l) => l !== "") : [];
 
   const healthP = payloadOf(payloads, { route: "/api/health" });
   const health = healthP.state === "ok" ? readHealth(healthP.data) : null;
@@ -159,7 +169,9 @@ export function fold(payloads, ctx) {
     lede: decodeDoorText(ctx.room.lede),
     badge: board === null ? "board unread" : `board · ${fmtInt(rows.length)} lanes · ${board.badge}`,
     kpis: [
-      { key: "lanes", v: board === null ? "—" : fmtInt(totals.lanes), l: "Lanes on the board", sub: "PORTFOLIO.md's order" },
+      // A board row whose lane resolves off the tree is named by the door and never read (Phase 04 round 3); the tile
+      // says how many, so a shorter board is never read as a smaller company.
+      { key: "lanes", v: board === null ? "—" : fmtInt(totals.lanes), l: "Lanes on the board", sub: outsideLanes.length > 0 ? `PORTFOLIO.md's order · ${fmtInt(outsideLanes.length)} row${outsideLanes.length === 1 ? "" : "s"} off the tree, not read: ${outsideLanes.join(", ")}` : "PORTFOLIO.md's order" },
       { key: "live", v: board === null ? "—" : fmtInt(totals.live), l: "Live", sub: "header reads LIVE" },
       { key: "blocked", v: board === null ? "—" : fmtInt(totals.blocked), l: "Blocked", sub: "header names what blocks it" },
       { key: "spent", v: board === null ? "—" : `${fmtDays(totals.spent)} / ${fmtDays(totals.bought)}`, l: "Appetite spent / bought", sub: totals.unmeasured > 0 ? `${fmtInt(totals.unmeasured)} lanes not summed` : "every lane measured" },

@@ -124,7 +124,10 @@ export function fold(payloads, ctx) {
       empty: "hq.jobs.yaml registers no job, so nothing is judged.",
       row: (j) => {
         const name = field(j, "name");
-        const missed = typeof j["missed"] === "number" ? String(j["missed"]) : "—";
+        // The lane counts missed slots only for an enabled job with a readable cadence; for any other the question is
+        // not asked, which is "—", never the 0 a row starts with (panel.mjs; Phase 04 round 3).
+        const asked = j["enabled"] === true && field(j, "state") !== "unreadable-cadence";
+        const missed = asked && typeof j["missed"] === "number" ? String(j["missed"]) : "—";
         return name === "" ? null : { key: name, cells: [name, j["overdue"] === true ? "overdue" : field(j, "state"), missed, field(j, "lastRun") || "never on this spine"] };
       },
       note: [

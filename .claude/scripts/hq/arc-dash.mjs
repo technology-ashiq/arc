@@ -46,7 +46,7 @@
 
 import { createServer } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, mkdirSync, appendFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, mkdirSync, appendFileSync, realpathSync, statSync } from "node:fs";
 import { join, dirname, resolve, sep, relative as relativePath } from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -162,8 +162,36 @@ class DashError extends Error {
 function parseAsof(url) {
   const asof = url.searchParams.get("asof");
   if (asof === null) return null;
-  if (!DAY_RE.test(asof)) throw new DashError("BAD_ASOF", `asof "${asof}" is not YYYY-MM-DD`);
+  // A REAL day: 2026-09-31 has the shape and V8 reads it as October 1 (the round-1 rule, applied here in round 3).
+  if (!DAY_RE.test(asof) || !reads.isRealDay(asof)) throw new DashError("BAD_ASOF", `asof "${asof}" is not a YYYY-MM-DD day that exists`);
   return asof;
+}
+
+/**
+ * The query keys a route reads, each at most once; anything else is BAD_ARGS (face v2 Phase 04 round 3). The older
+ * routes answered 200 to a key they ignored -- `?kindd=x` unfiltered -- and `?kind=a&kind=b` silently dropped b: the
+ * lie /api/pnl was cured of in round 1, still told one route over.
+ * @param {URL} url @param {string[]} allowed
+ */
+function onlyKeys(url, allowed) {
+  for (const k of new Set(url.searchParams.keys())) {
+    if (!allowed.includes(k)) throw new DashError("BAD_ARGS", `this route takes ${allowed.length ? allowed.join(", ") : "no query"}; "${k}" is not one of them`);
+    const n = url.searchParams.getAll(k).length;
+    if (n > 1) throw new DashError("BAD_ARGS", `each key is given once; "${k}" came ${n} times`);
+  }
+}
+
+/**
+ * Where a path's bytes really are, against the tree the door serves: a junction or symlink under an allow-listed name
+ * served another tree's file under this one's badge and sha (round 3, the twin of Phase 04's `contained`).
+ * @param {{ repo: string }} ctx @param {string} p
+ */
+function insideRepo(ctx, p) {
+  try {
+    const real = realpathSync(p);
+    const root = realpathSync(ctx.repo);
+    return real === root || real.startsWith(root + sep);
+  } catch { return false; }
 }
 // The as-of cut is IMPORTED, never re-implemented (arc-inbox.cutToDay) -- see its comment:
 // this was a twin, and twins in this repo drift and then disagree at the boundary.
@@ -173,14 +201,18 @@ function lastId(events) {
 }
 
 // ---------- route handlers ----------
-async function apiHealth(ctx) {
+async function apiHealth(ctx, url) {
+  onlyKeys(url, []);
   const health = spineHealth(ctx.root);
-  const all = (await readAll(ctx.root)).events;
+  const all = await readAll(ctx.root);
   return {
     mode: ctx.mode, now: formatIst(nowMs()),
-    spine: { root: ctx.mode === "live" ? "canonical" : ctx.root, ...health },
-    cursor: lastId(all),
-    journal: ctx.journalDir,
+    ...(reads.clockForced() ? { clockForced: true } : {}),
+    // The machine's paths leave repo-relative or not at all: a sim spine's root and the journal directory carried the
+    // account name in every health answer (Phase 04 round 3).
+    spine: { root: ctx.mode === "live" ? "canonical" : reads.scrub(ctx.root, ctx.repo), ...reads.scrubDeep(health, ctx.repo), unreadableDays: Array.isArray(all.unreadable) ? all.unreadable.length : 0 },
+    cursor: lastId(all.events),
+    journal: reads.scrub(ctx.journalDir, ctx.repo),
   };
 }
 
@@ -255,6 +287,7 @@ async function apiRooms(ctx) {
 }
 
 async function apiSpine(ctx, url) {
+  onlyKeys(url, ["asof", "limit", "since", "kind", "venture", "date"]);
   const asof = parseAsof(url);
   const limitRaw = url.searchParams.get("limit");
   let limit = PAGE_DEFAULT;
@@ -285,7 +318,7 @@ async function apiSpine(ctx, url) {
 function shellBrief(ctx) {
   return new Promise((resolveP, rejectP) => {
     execFile(process.execPath, [ARC_BRIEF], {
-      cwd: ctx.repo, env: { ...process.env, ...(ctx.mode === "sim" ? { ARC_SPINE_ROOT: ctx.root } : {}) },
+      cwd: ctx.repo, env: { ...reads.childEnv(), ...(ctx.mode === "sim" ? { ARC_SPINE_ROOT: ctx.root } : {}) },
       timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
     }, (err, stdout, stderr) => {
       // The brief CLI exits non-zero on real refusals; its text IS the product either way,
@@ -297,6 +330,7 @@ function shellBrief(ctx) {
 }
 
 async function apiBrief(ctx, url) {
+  onlyKeys(url, ["asof"]);
   const asof = parseAsof(url);
   if (asof === null) {
     const text = await shellBrief(ctx);
@@ -313,6 +347,7 @@ async function apiBrief(ctx, url) {
 }
 
 async function apiInbox(ctx, url) {
+  onlyKeys(url, ["asof"]);
   const asof = parseAsof(url);
   const { requested, decidedIds } = await loadApprovals(ctx.root, { asof });
   const open = requested.filter((e) => !decidedIds.has(e.event.id));
@@ -373,7 +408,7 @@ async function apiPnl(ctx, url) {
     const real = await moneyBrain(ctx, () => deriveDaily(ctx.root, { mode: "real", days: PNL_DAYS, today }));
     const simulated = await moneyBrain(ctx, () => deriveDaily(ctx.root, { mode: "simulated", days: PNL_DAYS, today }));
     return {
-      mode: ctx.mode, route: "/api/pnl", by: "day", badge: "log",
+      mode: ctx.mode, route: "/api/pnl", by: "day", badge: "log", ...(reads.clockForced() ? { clockForced: true } : {}),
       parser: "hq/lib/ledger/pnl.mjs#deriveDaily (real, then simulated)", sources: [],
       today, days: PNL_DAYS,
       series: real.days.map((d, i) => ({
@@ -399,9 +434,20 @@ async function apiPnl(ctx, url) {
   // The kill panel's own path is the machine's (C:\Users\<account>\...), and ARC_VENTURES_FILE points it at another
   // criteria file under this tree's name -- the twin of what /api/ventures already refuses (Phase 04 re-attack). The
   // panel goes out with its path repo-relative, or not at all, with the reason beside it.
+  // The model's free text -- a cost line's label and source, a flag's detail -- is receipt text like any other, and
+  // leaves through scrub (Phase 04 round 3). A Map inside it crosses as {} either way; the money room names that.
+  const safeModel = reads.scrubDeep(model, ctx.repo);
+  const withheld = (why) => ({ mode: ctx.mode, month, model: safeModel, kill: null, killRefused: why });
   if ("ARC_VENTURES_FILE" in process.env)
-    return { mode: ctx.mode, month, model, kill: null, killRefused: "ARC_VENTURES_FILE is set in the door's environment, which points the kill panel at another criteria file -- the door serves only the tree's" };
-  const panel = await moneyBrain(ctx, () => deriveKillPanel(ctx.root, {}));
+    return withheld("ARC_VENTURES_FILE is set in the door's environment, which points the kill panel at another criteria file -- the door serves only the tree's");
+  // A kill panel that refuses (a directory where ventures.yaml belongs: NO_VENTURES, with the machine's path in its
+  // message) withholds the PANEL by name and keeps the P&L -- it answered 500 with the path (round 3), where
+  // /api/ventures already refused the same tree cleanly.
+  let panel;
+  try { panel = await moneyBrain(ctx, () => deriveKillPanel(ctx.root, {})); } catch (e) {
+    if (!(e instanceof SpineError) && !(e instanceof DashError)) throw e;
+    return withheld(reads.scrub(`the ledger's kill panel refused (${e.code}): ${String(e.message).split("\n")[0]}`, ctx.repo).slice(0, 500));
+  }
   if (panel && typeof panel.path === "string" && panel.path !== "") {
     let rel = null;
     try {
@@ -409,14 +455,15 @@ async function apiPnl(ctx, url) {
       const root = realpathSync(ctx.repo);
       if (real === root || real.startsWith(root + sep)) rel = relativePath(root, real).split(sep).join("/");
     } catch { rel = null; }
-    if (rel === null) return { mode: ctx.mode, month, model, kill: null, killRefused: "the kill panel read a criteria file that is not this tree's ventures.yaml" };
-    return { mode: ctx.mode, month, model, kill: { ...panel, path: rel } };
+    if (rel === null) return withheld("the kill panel read a criteria file that is not this tree's ventures.yaml");
+    return { mode: ctx.mode, month, model: safeModel, kill: reads.scrubDeep({ ...panel, path: rel }, ctx.repo) };
   }
-  return { mode: ctx.mode, month, model, kill: panel };
+  return { mode: ctx.mode, month, model: safeModel, kill: reads.scrubDeep(panel, ctx.repo) };
 }
 
 function apiBoard(ctx) {
   const boardPath = join(ctx.repo, "PORTFOLIO.md");
+  if (existsSync(boardPath) && !insideRepo(ctx, boardPath)) throw new DashError("SOURCE_OUTSIDE", "PORTFOLIO.md resolves outside this tree -- not served");
   const text = existsSync(boardPath) ? readFileSync(boardPath, "utf8") : "";
   const updated = (text.match(/^Updated:\s*(.+)$/m) || [, null])[1];
   // Row ORDER comes from the board (priority is the owner's ordering); every VALUE comes
@@ -425,12 +472,16 @@ function apiBoard(ctx) {
   const order = [...text.matchAll(/^\|\s*([a-z][a-z0-9-]*)\s*\|/gm)].map((m) => m[1])
     .filter((l) => l !== "lane" && l !== "venture" && l !== "pair");
   const lanes = [];
+  // A lane whose files resolve off the tree is NAMED here and never read: its header would have been another tree's
+  // status, drawn as a LIVE lane of this company (Phase 04 round 3).
+  const outside = [];
   for (const lane of [...new Set(order)]) {
     const progress = join(ctx.repo, "initiatives", lane, "PROGRESS.md");
     if (!existsSync(progress)) continue; // a board row without a lane dir is the lint's problem, not a lie to serve
+    if (!insideRepo(ctx, progress)) { outside.push(lane); continue; }
     lanes.push({ lane, header: laneHeader(progress) });
   }
-  return { mode: ctx.mode, badge: "file, not log", updated, lanes };
+  return { mode: ctx.mode, badge: "file, not log", updated, lanes, outside };
 }
 
 /** The heading a phase spec opens with, as a title rather than as markdown. */
@@ -524,6 +575,10 @@ function apiLane(ctx, laneName) {
   const progress = join(dir, "PROGRESS.md");
   if (!existsSync(progress)) throw new DashError("UNKNOWN_LANE", `no lane "${laneName}" (no initiatives/${laneName}/PROGRESS.md)`);
   const planPath = join(dir, "PLAN.md");
+  // The lane directory and both files it serves whole, resolved: lanePhases fenced phases/ and nothing above it, so a
+  // junctioned lane served another tree's PROGRESS.md and PLAN.md (Phase 04 round 3).
+  if (!insideRepo(ctx, dir) || !insideRepo(ctx, progress) || (existsSync(planPath) && !insideRepo(ctx, planPath)))
+    throw new DashError("SOURCE_OUTSIDE", `lane "${laneName}" resolves outside this tree -- not served`);
   const { phases, phasesOmitted } = lanePhases(dir, ctx.repo);
   return {
     mode: ctx.mode, badge: "file, not log", lane: laneName,
@@ -547,6 +602,10 @@ function apiFile(ctx, id) {
   if (!rel) throw new DashError("UNKNOWN_FILE_ID", `"${id}" is not on the sanctioned allow-list (${Object.keys(FILE_ALLOW).join(", ")})`);
   const path = join(ctx.repo, rel);
   if (!existsSync(path)) throw new DashError("UNKNOWN_FILE_ID", `allow-listed id "${id}" has no file at ${rel} on this tree`);
+  // The allow-list names a PATH; only resolving it says whose bytes those are. A junction at docs/ served another
+  // tree's retro log with this tree's badge and a sha (Phase 04 round 3).
+  if (!insideRepo(ctx, path)) throw new DashError("SOURCE_OUTSIDE", `allow-listed id "${id}" resolves outside this tree -- not served`);
+  if (!statSync(path).isFile()) throw new DashError("SOURCE_INVALID", `allow-listed id "${id}" is not a file at ${rel} on this tree`);
   const text = readFileSync(path, "utf8");
   return { mode: ctx.mode, badge: "file, not log", id, path: rel, sha256: sha256Hex(text), text };
 }
@@ -670,10 +729,10 @@ const ROUTES = Object.freeze([
   { method: "GET", path: "/api/brief", mutates: false, spineEffect: "none", handler: (ctx, url) => apiBrief(ctx, url) },
   { method: "GET", path: "/api/inbox", mutates: false, spineEffect: "none", handler: (ctx, url) => apiInbox(ctx, url) },
   { method: "GET", path: "/api/pnl", mutates: false, spineEffect: "none", handler: (ctx, url) => apiPnl(ctx, url) },
-  { method: "GET", path: "/api/board", mutates: false, spineEffect: "none", handler: (ctx) => apiBoard(ctx) },
-  { method: "GET", path: "/api/rooms", mutates: false, spineEffect: "none", handler: (ctx) => apiRooms(ctx) },
-  { method: "GET", prefix: "/api/lane/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => apiLane(ctx, tail) },
-  { method: "GET", prefix: "/api/file/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => apiFile(ctx, tail) },
+  { method: "GET", path: "/api/board", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return apiBoard(ctx); } },
+  { method: "GET", path: "/api/rooms", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return apiRooms(ctx); } },
+  { method: "GET", prefix: "/api/lane/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => { onlyKeys(url, []); return apiLane(ctx, tail); } },
+  { method: "GET", prefix: "/api/file/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => { onlyKeys(url, []); return apiFile(ctx, tail); } },
   // Phase 04 (REQ-06): the union of Phase 03's five NOT SERVED lists, each GET-only and read-only, each parsing
   // with the function the lane that owns the file already uses (lib/face/reads.mjs).
   { method: "GET", path: "/api/engine", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiEngine(ctx, url) },
@@ -752,6 +811,14 @@ function boot(argv) {
     const table = ROUTES.map((r) => ({ method: r.method, path: r.path || `${r.prefix}:tail`, mutates: r.mutates, spineEffect: r.spineEffect, ...(r.proxy ? { proxy: r.proxy } : {}) }));
     process.stdout.write(JSON.stringify(table, null, 2) + "\n");
     return null;
+  }
+
+  // The clock, read once before any request can need it. An ARC_SPINE_NOW that is set and unreadable (empty, hex) made
+  // every authenticated read HANG: the throw landed outside the request's catch, in the journal line that stamps it
+  // (Phase 04 round 3). Refused at boot, by name, like every other bad start.
+  try { nowMs(); } catch (err) {
+    process.stderr.write(`arc-dash: ERROR ${err instanceof SpineError ? err.code : "BAD_TS"} -- ${err && err.message}\n`);
+    process.exit(1);
   }
 
   const port = flags.port ? Number(flags.port) : 8317;
@@ -907,7 +974,10 @@ function boot(argv) {
           // with the account name, a stack fragment (face v2 Phase 04 attack). The operator reads it on stderr.
           if (code === "INTERNAL") process.stderr.write(`arc-dash: WARN internal error on ${req.method} ${path} -- ${err && err.message}
 `);
-          fail(code, code === "INTERNAL" ? "the door hit an error it has no name for while serving this route; the detail is on the door's stderr" : err.message);
+          // A TYPED refusal's message is sent -- scrubbed. A lane's SpineError carries the machine's path as often as
+          // not (NO_VENTURES, a brief child's stderr), and round 3 found both reaching the wire from routes that
+          // were not scrubbing their own (Phase 04).
+          fail(code, code === "INTERNAL" ? "the door hit an error it has no name for while serving this route; the detail is on the door's stderr" : reads.scrub(String(err.message), ctx.repo));
         });
     };
 

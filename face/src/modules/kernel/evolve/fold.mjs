@@ -60,7 +60,11 @@ export function fold(payloads, ctx) {
         });
         const verdict = asObject(x["verdict"]);
         const closed = asObject(x["closed"]);
-        const state = field(verdict, "outcome") !== "" ? field(verdict, "outcome") : field(closed, "ts") !== "" ? "closed" : "open";
+        // CLOSED outranks the verdict, as the lane's own board renders it (board.mjs renderBoard checks closed first): an
+        // experiment killed after a no-verdict read "no-verdict", and its closing never appeared (Phase 04 round 3).
+        const isClosed = x["closed"] !== null && typeof x["closed"] === "object" && !Array.isArray(x["closed"]);
+        const state = isClosed ? `closed${field(closed, "outcome") !== "" ? ` ${field(closed, "outcome")}` : ""}`
+          : field(verdict, "outcome") !== "" ? field(verdict, "outcome") : "open";
         // Units set aside -- one measured under an arm it was not assigned, or under an arm the experiment never declared --
         // are said on the row, so a thin count is never read as the whole of what was measured (Phase 04 attack).
         const conflicts = typeof x["conflicts"] === "number" ? x["conflicts"] : 0;

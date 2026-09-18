@@ -51,7 +51,10 @@ const EMAIL = /[^\s@<>"'`,;()]+@[^\s@<>"'`,;()]+\.[^\s@<>"'`,;()]+/gu;
 // POSIX root that carries an account or a machine's layout. Repo-relative paths ("docs/adr/0001-x.md") are not matched.
 // Each alternative is anchored so a URL is not a path: a drive letter may not follow a letter or digit (`https:/`), a
 // root may not follow a host or a path segment (`example.com/home/`).
-const ABS_START = /(?<![A-Za-z0-9])[A-Za-z]:[\\/]|(?<![A-Za-z0-9._~%:/\\-])\\\\|(?<![A-Za-z0-9._~%:/\\-])\\(?:Users|home|Documents and Settings)\\|file:\/\/|(?<![A-Za-z0-9._~%:/-])~[A-Za-z0-9._-]*\/|(?<![A-Za-z0-9._~%:/-])\/(?:home|Users|root|tmp|var|private|mnt|opt|etc|usr|Volumes|srv|media|run|snap)\//;
+// Round 3 widened it: a drive and a BACKSLASH is a path whatever precedes it (`failedC:\Users\...`) -- only the
+// forward-slash form needs the lookbehind that keeps `https:/` a URL; the Git Bash and Cygwin spellings of a drive
+// (`/c/Users/...`, `/cygdrive/c/...`) are paths; and the whole pattern ignores case (`\users\bob`).
+const ABS_START = /[A-Za-z]:\\|(?<![A-Za-z0-9])[A-Za-z]:\/|(?<![A-Za-z0-9._~%:/\\-])\\\\|(?<![A-Za-z0-9._~%:/\\-])\\(?:Users|home|Documents and Settings)\\|file:\/\/|(?<![A-Za-z0-9._~%:/-])~[A-Za-z0-9._-]*\/|(?<![A-Za-z0-9._~%:/-])\/(?:cygdrive\/)?[A-Za-z]\/|(?<![A-Za-z0-9._~%:/-])\/(?:home|Users|root|tmp|var|private|mnt|opt|etc|usr|Volumes|srv|media|run|snap)\//i;
 
 /**
  * A sentence made safe for the wire: the repo's own path becomes repo-relative, any other absolute path and any
@@ -76,10 +79,42 @@ export function scrub(text, repo) {
   return at < 0 ? s : `${s.slice(0, at)}[path withheld]`;
 }
 
+/**
+ * Every string in a value made safe for the wire by `scrub`, keys defined rather than assigned. A Map or Set is passed
+ * through untouched: it crosses JSON as `{}` either way, and the money room names that as a known gap (money.mjs).
+ * @param {unknown} v @param {string} repo @param {number} [depth] @returns {unknown}
+ */
+export function scrubDeep(v, repo, depth = 0) {
+  if (typeof v === "string") return scrub(v, repo);
+  if (v === null || typeof v !== "object" || depth > 64 || v instanceof Map || v instanceof Set) return v;
+  if (Array.isArray(v)) return v.map((x) => scrubDeep(x, repo, depth + 1));
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const k of Object.keys(v)) Object.defineProperty(out, k, { value: scrubDeep(/** @type {Record<string, unknown>} */ (v)[k], repo, depth + 1), enumerable: true, writable: true, configurable: true });
+  return out;
+}
+
+/**
+ * The environment a child the door runs inherits: the door's own, without git's location variables. GIT_DIR or
+ * GIT_WORK_TREE in the door's env pointed arc-profile.sh at ANOTHER repo's settings while every source the door named
+ * was this tree's (Phase 04 round 3) -- the twin of the ARC_SETTINGS refusal, closed by not passing them on.
+ * @returns {NodeJS.ProcessEnv}
+ */
+export function childEnv() {
+  return Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/.test(k)));
+}
+
+/** The clock the door answers by is forced when ARC_SPINE_NOW is set; a body built on it says so. */
+export const clockForced = () => "ARC_SPINE_NOW" in process.env;
+
 /** A receipt's envelope id, served only when it is a ULID. @param {unknown} v */
-const idOf = (v) => (typeof v === "string" && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(v) ? v : "");
-/** A receipt's envelope ts, served only in the spine's IST shape. @param {unknown} v */
-const tsOf = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?\+05:30$/.test(v) ? v : "");
+export const idOf = (v) => (typeof v === "string" && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(v) ? v : "");
+/**
+ * A receipt's ts, served only in the spine's IST shape AND on a day that exists: `2026-02-31T10:00:00+05:30` has the
+ * shape, and the spine's own validateEvent refuses it (Phase 04 round 3, the twin of the round-1 real-day rule).
+ * @param {unknown} v
+ */
+export const tsOf = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?\+05:30$/.test(v) && isRealDay(v.slice(0, 10)) ? v : "");
 
 /** @param {{ repo: string }} ctx @param {string} code @param {string} message */
 const refusal = (ctx, code, message) => new ReadError(code, scrub(message, ctx.repo).slice(0, 500));
@@ -227,6 +262,8 @@ function answer(ctx, route, badge, parser, sources, body, unread = null) {
     mode: ctx.mode, route, badge, parser,
     sources: sources.map((s) => ({ path: s.path, sha256: s.sha256 })),
     ...(unread ? { unreadLines: unread } : {}),
+    // Every "today" below is the door's clock; when a test door forces it, the body says so (Phase 04 round 3).
+    ...(clockForced() ? { clockForced: true } : {}),
     ...body,
   };
 }
@@ -249,7 +286,9 @@ async function spineRead(ctx) {
       || payload === null || typeof payload !== "object" || Array.isArray(payload)) { skipped += 1; continue; }
     events.push(e);
   }
-  return { events, counts: { torn: Array.isArray(all.torn) ? all.torn.length : 0, skipped } };
+  // A day FILE the reader could not open is counted too: it held receipts nobody read, and a count of zero damage
+  // beside a day's missing receipts is the silence this whole block exists to refuse (Phase 04 round 3).
+  return { events, counts: { torn: Array.isArray(all.torn) ? all.torn.length : 0, skipped, days: Array.isArray(all.unreadable) ? all.unreadable.length : 0 } };
 }
 
 /** @param {unknown} v @returns {string} */
@@ -381,7 +420,7 @@ export async function apiRoster(ctx, url) {
       const p = obj(e.payload);
       return { id: idOf(e.id), ts: tsOf(e.ts), process: text(ctx, p.process), driver: text(ctx, p.driver), outcome: text(ctx, p.outcome) || text(ctx, e.outcome), reason: text(ctx, p.reason), duration_ms: num(p.duration_ms) };
     });
-  return answer(ctx, "/api/roster", "file and log", "engine/yaml-subset.mjs#parseYamlSubset · engine/router-row.mjs#isExpired,RUNTIME_DRIVERS · spine.mjs#readAll", [r.f], {
+  return answer(ctx, "/api/roster", "file and log", "engine/yaml-subset.mjs#parseYamlSubset · engine/router-row.mjs#isExpired,RUNTIME_DRIVERS · hq/spine.mjs#readAll", [r.f], {
     today: r.today,
     hires,
     runs,
@@ -457,7 +496,9 @@ export async function apiJobs(ctx, url) {
       lastRun: typeof r.lastRun === "string" ? r.lastRun : null,
       lastOutcome: typeof r.lastOutcome === "string" ? text(ctx, r.lastOutcome) : null,
       nextExpected: typeof r.nextExpected === "number" ? formatIst(r.nextExpected) : null,
-      missed: num(r.missed),
+      // The lane asks "how many missed" only of an enabled job with a readable cadence (panel.mjs: "Not zero missed --
+      // the question is not asked"); every other row carries null, never the 0 its row started with (round 3).
+      missed: r.enabled === true && r.state !== "unreadable-cadence" ? num(r.missed) : null,
       overdue: r.overdue === true,
       state: str(r.state),
     })),
@@ -505,12 +546,20 @@ export async function apiEvolve(ctx, url) {
   const sources = [];
   const contracts = [];
   // products/ is arc's own tree and is not synced into a consumer install: no directory is no manifests, not a refusal.
-  const products = existsSync(join(ctx.repo, "products")) ? dirAt(ctx, "products").filter((d) => d.isDirectory()).map((d) => d.name).sort() : [];
+  // Links are KEPT in the listing and containment decides: `isDirectory()` is false for a junction, and filtering on it
+  // dropped an in-tree product and hid an off-tree one before the fence could name it (round 3, the apiSlices twin).
+  const products = existsSync(join(ctx.repo, "products")) ? dirAt(ctx, "products").filter((d) => d.isDirectory() || d.isSymbolicLink()).map((d) => d.name).sort() : [];
   let manifestsRead = 0;
   for (const name of products) {
     const rel = `products/${name}/manifest.json`;
     if (!existsSync(join(ctx.repo, rel))) continue;
-    const f = fileAt(ctx, rel);
+    let f;
+    try { f = fileAt(ctx, rel); } catch (e) {
+      if (!(e instanceof ReadError) || e.code !== "SOURCE_OUTSIDE") throw e;
+      // An off-tree product is NAMED as a contract the door would not read, never served and never dropped.
+      contracts.push({ product: name, metrics: [], experiments: 0, promote_via: "", findings: ["its directory resolves outside the repo -- not read"] });
+      continue;
+    }
     manifestsRead += 1;
     let m;
     try { m = JSON.parse(f.text); } catch (e) { throw invalid(ctx, rel, e); }
@@ -591,7 +640,7 @@ export async function apiBench(ctx, url) {
         }),
       };
     });
-  return answer(ctx, "/api/bench", "log", "spine.mjs#readAll (arc-bench's run.completed payload)", [], { runs }, counts);
+  return answer(ctx, "/api/bench", "log", "hq/spine.mjs#readAll (arc-bench's run.completed payload)", [], { runs }, counts);
 }
 
 // ---------- council receipts: /api/council ----------
@@ -609,7 +658,7 @@ export async function apiCouncil(ctx, url) {
     return { id: idOf(e.id), ts: tsOf(e.ts), session: text(ctx, p.session_id), call: text(ctx, p.call), confidence: text(ctx, p.confidence), outcome: o ? text(ctx, obj(o.payload).outcome) : "", observed: o ? text(ctx, obj(o.payload).observed_at) : "" };
   });
   const c = calibrate(events);
-  return answer(ctx, "/api/council", "log", "evolve/calibrate.mjs#calibrate · spine.mjs#readAll", [], {
+  return answer(ctx, "/api/council", "log", "evolve/calibrate.mjs#calibrate · hq/spine.mjs#readAll", [], {
     verdicts,
     calibration: {
       scored: num(c.scored), excluded: num(c.excluded), pending: num(c.pending), floor: num(c.floor), brier: num(c.brier), verdict: str(c.verdict),
@@ -643,7 +692,12 @@ export async function apiSlices(ctx, url) {
     const progressRel = `initiatives/${lane}/PROGRESS.md`;
     if (!existsSync(join(ctx.repo, progressRel))) continue;
     let header;
-    try { header = obj(laneHeader(contained(ctx, progressRel, "file"))); } catch (e) { if (e instanceof ReadError && e.code === "SOURCE_OUTSIDE") throw e; continue; }
+    try { header = obj(laneHeader(contained(ctx, progressRel, "file"))); } catch (e) {
+      if (e instanceof ReadError && e.code === "SOURCE_OUTSIDE") throw e;
+      // A PROGRESS.md that is not a readable file is named like a lane entry that is not a directory -- never dropped.
+      lanes.push(absent(lane, "", "", "its PROGRESS.md is not a readable file -- not read"));
+      continue;
+    }
     if (str(header.status) !== "LIVE") continue;
     const phase = str(header.phase);
     if (!/^\d{1,3}$/.test(phase)) { lanes.push(absent(lane, phase, "", "its header names no phase number")); continue; }
@@ -681,7 +735,7 @@ export async function apiSlices(ctx, url) {
  */
 function profileSays(ctx, args) {
   return new Promise((resolveP, rejectP) => {
-    execFile("bash", [join(ctx.repo, ".claude", "scripts", "core", "arc-profile.sh"), ...args], { cwd: ctx.repo, timeout: 15_000, maxBuffer: 64 * 1024 },
+    execFile("bash", [join(ctx.repo, ".claude", "scripts", "core", "arc-profile.sh"), ...args], { cwd: ctx.repo, env: childEnv(), timeout: 15_000, maxBuffer: 64 * 1024 },
       (err, stdout) => (err ? rejectP(err) : resolveP(String(stdout).trim())));
   });
 }
@@ -780,7 +834,7 @@ export async function apiGrowth(ctx, url) {
     id: idOf(e.id), ts: tsOf(e.ts), what: text(ctx, obj(e.payload).what) || text(ctx, obj(e.payload).cluster_id), verdict: ["approve", "reject"].includes(decided.get(str(e.id)) || "") ? decided.get(str(e.id)) : "open",
   }));
   const headIds = new Set((Array.isArray(heads) ? heads : []).map((h) => str(obj(h).id)));
-  return answer(ctx, "/api/growth", "log", "growth/lib/cutover.mjs#assertChainIntegrity · spine.mjs#readAll", [], {
+  return answer(ctx, "/api/growth", "log", "growth/lib/cutover.mjs#assertChainIntegrity · hq/spine.mjs#readAll", [], {
     published: published.filter((e) => headIds.has(e.id)).map((e) => {
       const p = obj(e.payload);
       return { id: idOf(e.id), ts: tsOf(e.ts), site: text(ctx, p.site), slug: text(ctx, p.slug), title: text(ctx, p.title), url: text(ctx, p.url), cluster: text(ctx, p.cluster_id), content_sha: /^[0-9a-f]{64}$/.test(str(p.content_sha)) ? str(p.content_sha) : "", pr: text(ctx, p.pr_ref) };
@@ -838,7 +892,7 @@ export async function apiLeads(ctx, url) {
       if (at > nowMsValue) { after += 1; continue; }
       try { if (withinRollingWindow(t, now, window)) inWindow += 1; } catch { unreadable += 1; }
     }
-    return { lead_id: id, touches: ts.length, inWindow, afterNow: after, unreadable, last: ts.length ? ts[ts.length - 1] : "", replied: state.replied.has(id), suppressed: state.suppressed.has(id) };
+    return { lead_id: id, touches: ts.length, inWindow, afterNow: after, unreadable, last: ts.length ? tsOf(ts[ts.length - 1]) : "", replied: state.replied.has(id), suppressed: state.suppressed.has(id) };
   });
   return answer(ctx, "/api/leads", "file and log", "leads/lib/guard.mjs#deriveState,foldSends · leads/lib/caps.mjs#loadCaps,withinRollingWindow · hq/lib/validate-leads.mjs#LEAD_ID_RE", sources, {
     today,
@@ -917,6 +971,10 @@ export async function apiVentures(ctx, url) {
           path: at === "" ? "" : relative(fence(ctx), realpathSync(at)).split(sep).join("/"),
           asOf: str(panel.asOf),
           refused: "",
+          // What the panel set aside, served as /api/pnl serves it: revenue dated after its clock is excluded from every
+          // distance, and a board that drew the distance without it drew a number with its caveat removed (round 3).
+          absentCount: num(panel.absentCount),
+          futureRevenue: (Array.isArray(panel.futureRevenue) ? panel.futureRevenue : []).map((r) => ({ venture: str(obj(r).venture), count: num(obj(r).count) })),
           ventures: (Array.isArray(panel.ventures) ? panel.ventures : []).map((v) => {
             const x = obj(v);
             return {

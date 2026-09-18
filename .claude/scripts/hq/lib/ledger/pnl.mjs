@@ -289,6 +289,9 @@ export async function derivePnl(root, { mode = "real", venture = null, month = n
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** A calendar day that exists: the shape, a finite parse, and a round trip -- V8 reads 2026-09-31 as October 1. */
+const realDay = (d) => typeof d === "string" && DAY_RE.test(d) && Number.isFinite(Date.parse(`${d}T00:00:00Z`))
+  && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
 
 /**
  * ONE substance by IST day over the `days` days ending `today` -- the daily series the face's money room draws
@@ -310,8 +313,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export async function deriveDaily(root, { mode = "real", days = 14, today, engine } = {}) {
   // A REAL day: V8 parses 2026-09-31 as October 1, so the shape and a finite parse are not enough -- the day must
   // round-trip to itself (face v2 Phase 04 attack).
-  if (typeof today !== "string" || !DAY_RE.test(today) || !Number.isFinite(Date.parse(`${today}T00:00:00Z`))
-    || new Date(`${today}T00:00:00Z`).toISOString().slice(0, 10) !== today)
+  if (!realDay(today))
     throw new TypeError(`deriveDaily: today must be a YYYY-MM-DD day, got ${JSON.stringify(today)}`);
   if (!Number.isInteger(days) || days < 1 || days > 62)
     throw new RangeError(`deriveDaily: days must be an integer from 1 to 62, got ${JSON.stringify(days)}`);
@@ -321,7 +323,13 @@ export async function deriveDaily(root, { mode = "real", days = 14, today, engin
   const byDay = new Map(window.map((day) => [day, { day, cashInInr: 0, rows: 0, costLines: new Map(), unmeasuredCostLines: 0 }]));
   // A row or line whose ts is not a string cannot be placed on a day. It is COUNTED, never allowed to throw: a
   // receipt with no ts is on the spine, and the month view renders it (face v2 Phase 04 attack).
-  const dayOf = (ts) => (typeof ts === "string" ? ts.slice(0, 10) : null);
+  // And a ts whose day does not exist (`2026-06-31T10:00:00+05:30`) is unplaceable too: its ten characters sort inside
+  // the window and name no day in it, so it fell into no bucket and was counted nowhere (Phase 04 round 3).
+  const dayOf = (ts) => {
+    if (typeof ts !== "string") return null;
+    const d = ts.slice(0, 10);
+    return realDay(d) ? d : null;
+  };
   // Counted apart: a revenue row belongs to this call's substance, a cost line to every call -- summing the two made
   // the door report one ts-less cost under both substances (Phase 04 re-attack).
   let unplaceableRows = 0;

@@ -312,8 +312,15 @@ served** (39 served tables in all), listed in `evidence/phase-04/served.md`. **1
 exists only inside a lint that exits at import. That was over REQ-06's bound of 3 routes, so the owner ruled.
 **Owner ruling, 2026-09-18 — the Phase 04 residue: "un recommand A pannu machi"** (option A): the residue is
 accepted as named and filed, approved as a whole; REQ-06's acceptance is amended from "at most 3 routes" by
-**ADR-1338**, and the unwritten assumption behind the bound is recorded FIRED in the ledger (row 5). Next: CI per job
-on PR #248, the two fresh attackers (route decision logic · HTTP boundary), then `/arc-phase-done 04`.
+**ADR-1338**, and the unwritten assumption behind the bound is recorded FIRED in the ledger (row 5). **Three attacker
+rounds ran** (a fresh decision-logic + HTTP/OS-boundary pair each), each carrying `fixed-defects.md`: round 1 found
+25 holes, round 2 their twins one route over, round 3 twelve boundary holes (the door's OLDER routes kept Phase 04's
+defect classes -- closed here as a current-phase note in the spec, ADR-1312 being door-wide) and seven decision holes
+plus 29 surviving mutants, all now pinned (`tests/face/phase04-folds.mjs`, 130 checks). One Windows shard went red on
+the spine lock's documented flake, its second occurrence on the same emit index (recorded in the test, filed to the
+spine lane). Next: CI per job on PR #248's head, then merge and `/arc-phase-done 04` from the main clone. **Phase 05
+waits on the owner's ruling on PLAN-face-v2 §13 item 4** (the six flagship ops): a binding table read off the real
+CLIs shows four of the proposed six have no CLI or no kind, so a swapped six is recommended.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering

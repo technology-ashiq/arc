@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // The door's OWN serializer, so the phase-title assertion below cannot drift from the
 // representation contract it is checking against. Importing this module is sanctioned (its
@@ -517,6 +517,53 @@ try {
       const input = readdirSync(join(REPO, "initiatives/face/evidence/phase-03")).filter((n) => /^not-served-.+\.md$/.test(n))
         .flatMap((n) => [...disk(`initiatives/face/evidence/phase-03/${n}`).matchAll(/\| `(\/api\/[a-z-]+)[^`]*` \|/g)].map((m) => m[1]));
       check("P04 route list: every Phase 04 route is one a Phase 03 NOT SERVED list named", input.length >= 40 && P04.every((p) => input.includes(p)), P04.filter((p) => !input.includes(p)).join(","));
+      // The posture (ADR-1312) on EVERY Phase 04 route, not only on the routes the posture arms above sample.
+      const posture = [];
+      for (const p of P04) {
+        const noTok = await j(p);
+        const foreign = await j(p, { headers: { ...H, Origin: "http://evil.example" } });
+        posture.push({ p, noTok: noTok.status === 401 && noTok.body.error === "NO_TOKEN", foreign: foreign.status === 403 && foreign.body.error === "BAD_ORIGIN" });
+      }
+      check("P04 posture: every Phase 04 route refuses a request with no token (401) and one from a foreign Origin (403)",
+        posture.length === P04.length && posture.every((x) => x.noTok && x.foreign), JSON.stringify(posture.filter((x) => !x.noTok || !x.foreign)));
+      // REQ-06: each route's parser is IMPORTED from the lane that owns its file. The body names it as path#export; the
+      // named module must exist under .claude/scripts and export every name -- a parser the door re-implemented would
+      // name nothing real, or name the door itself.
+      const named = [];
+      for (const p of P04) {
+        const b = await j(p, { headers: H });
+        const parser = typeof b.body.parser === "string" ? b.body.parser : "";
+        for (const part of parser.split(" · ")) {
+          const m = /^([a-z0-9/._-]+\.mjs)#([A-Za-z0-9_,]+)/.exec(part.trim());
+          if (m) named.push({ route: p, file: m[1], names: m[2].split(",") });
+        }
+      }
+      const unresolved = [];
+      for (const n of named) {
+        const file = join(REPO, ".claude", "scripts", n.file);
+        if (!existsSync(file) || n.file.endsWith("face/reads.mjs") || n.file.endsWith("arc-dash.mjs")) { unresolved.push(`${n.route}: ${n.file}`); continue; }
+        const mod = await import(pathToFileURL(file).href);
+        for (const name of n.names) if (!(name in mod)) unresolved.push(`${n.route}: ${n.file}#${name}`);
+      }
+      // Round 3: the door's OLDER routes answered 200 to a key they ignored, dropped a repeated one, and took an asof
+      // that is no day. Each is now BAD_ARGS or BAD_ASOF by name -- and the keys the face sends still answer.
+      const refusedQueries = [
+        ["/api/spine?kindd=x", "BAD_ARGS"], ["/api/spine?kind=a&kind=b", "BAD_ARGS"], ["/api/health?x=1", "BAD_ARGS"],
+        ["/api/board?x=1", "BAD_ARGS"], ["/api/rooms?x=1", "BAD_ARGS"], ["/api/lane/face?x=1", "BAD_ARGS"], ["/api/file/portfolio?x=1", "BAD_ARGS"],
+        ["/api/inbox?bogus=1", "BAD_ARGS"], ["/api/brief?asof=2026-09-31", "BAD_ASOF"], ["/api/inbox?asof=2026-02-30", "BAD_ASOF"],
+      ];
+      const got = [];
+      for (const [q, code] of refusedQueries) { const x = await j(q, { headers: H }); got.push({ q, ok: x.status === 400 && x.body.error === code, status: x.status, error: x.body.error }); }
+      const kept = await j("/api/spine?kind=note.logged&limit=5", { headers: H });
+      check("OLD ROUTES: an unread key, a repeated key and an asof that is no day are refused by name; the keys the face sends still answer",
+        got.every((x) => x.ok) && kept.status === 200, JSON.stringify(got.filter((x) => !x.ok)));
+      // The machine's paths leave /api/health repo-relative or not at all: the sim spine and the journal are temp dirs.
+      const hb = await j("/api/health", { headers: H });
+      check("OLD ROUTES: /api/health names neither the spine's nor the journal's machine path",
+        hb.status === 200 && !JSON.stringify(hb.body).includes(JSON.stringify(tmp).slice(1, -1)) && typeof hb.body.journal === "string" && typeof hb.body.spine.unreadableDays === "number", JSON.stringify({ journal: hb.body.journal, root: hb.body.spine && hb.body.spine.root }));
+      const naming = new Set(named.map((n) => n.route));
+      check("P04 parsers: every route names a lane module, and each named module exports each name it is cited for",
+        named.length >= P04.length && P04.every((p) => naming.has(p)) && unresolved.length === 0, `unresolved=${unresolved.join("; ")} missing=${P04.filter((p) => !naming.has(p)).join(",")}`);
     }
   }
 

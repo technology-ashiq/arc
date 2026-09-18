@@ -46,17 +46,21 @@ export function chooseEngine(root, requested) {
 
 /**
  * Read every event in append order.
- * Returns { events, torn } -- torn lines are REPORTED, never silently dropped: a line the
+ * Returns { events, torn, unreadable } -- torn lines and unopenable day files are REPORTED, never dropped: a line the
  * reader cannot parse is exactly the kind of damage that must not look like an empty day.
  */
 export function scanAll(root) {
   const events = [];
   const torn = [];
+  // A day FILE that cannot be opened -- held exclusively by another process (EBUSY), unreadable, a directory where the
+  // file belongs -- is REPORTED like a torn line, never skipped: skipping it served 55 of 90 receipts beside a torn
+  // count of zero, which is damage dressed as a smaller day (face v2 Phase 04 round 3).
+  const unreadable = [];
   let seq = 0;
   for (const day of listDays(root)) {
     const file = dayFile(root, day);
     let text;
-    try { text = readFileSync(file, "utf8"); } catch { continue; }
+    try { text = readFileSync(file, "utf8"); } catch (e) { unreadable.push({ day, code: String((e && e.code) || "UNREADABLE") }); continue; }
     const lines = text.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -76,7 +80,7 @@ export function scanAll(root) {
       events.push({ event, day, seq: seq++, line });
     }
   }
-  return { events, torn };
+  return { events, torn, unreadable };
 }
 
 /**
@@ -108,7 +112,7 @@ export async function readAll(root, engine) {
           if (event === null || typeof event !== "object" || Array.isArray(event)) { torn.push({ day: r.day, line: r.seq }); continue; }
           events.push({ event, day: r.day, seq: r.seq, line: r.line });
         }
-        return { events, torn, engine: "sqlite" };
+        return { events, torn, unreadable: [], engine: "sqlite" };
       } finally { db.close(); }
     } catch (e) {
       if (process.env.ARC_SPINE_ENGINE === "sqlite")

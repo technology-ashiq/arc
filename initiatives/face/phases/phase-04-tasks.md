@@ -44,10 +44,10 @@ expected-proof-failures: (empty until proven)
 title: The route list is derived from `initiatives/face/evidence/phase-03/not-served-*.md`; a route not on those lists is not built.
 kind: logic
 risk: high
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit + contract -- on CI: tests/face/dash-doors.mjs's "P04 route list" arm reads the Phase 03 not-served lists and holds every Phase 04 route inside their union; tests/face/module-frame.mjs's PHASE 04 INPUT arms account for every panel those lists named (at least 40) as served or residue, none dropped
+tier: unit
 sources: phase-04-spec.md
-decision: (empty until proven)
+decision: The 22 route strings of the five lists are the whole input. 18 are served (17 new GET routes plus /api/pnl?by=day on the existing route); the rest are residue named by ADR-1338. No route outside the union was built.
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -56,10 +56,10 @@ commit: (empty until proven)
 title: Each route: GET only, on the door's allow-list, inside the existing token + origin + bind posture (ADR-1312); its parser imported from the lint that already reads that file (scheduler, memory, evolve, bench, absorb … PLAN-face-v2 §11), never re-implemented.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: contract -- on CI, over HTTP against a fixture spine: tests/face/dash-doors.mjs's "P04 posture" arm holds every Phase 04 route at 401 NO_TOKEN without the token and 403 BAD_ORIGIN from a foreign Origin; its "P04 parsers" arm reads each route's served `parser` field and imports every module it names from .claude/scripts, failing when a module is missing, is the door itself, or does not export a name it is cited for; its "P04 route table" arm holds each route GET and on the allow-list once
+tier: contract
 sources: phase-04-spec.md
-decision: (empty until proven)
+decision: Every handler lives in .claude/scripts/hq/lib/face/reads.mjs and lazily imports the owning lane's parser (engine yaml-subset and router-row, policy yaml and reduce, jobs panel, evolve board, memory adapters, bench ceilings, calibrate, develop ledger, absorb registry-ref, leads guard and caps, ledger ventures and kill panel); arc-dash.mjs keeps the one ROUTES table. Where a lane parser exists only inside a lint that exits at import, the panel is residue, never a re-implementation (ADR-1338).
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -68,10 +68,10 @@ commit: (empty until proven)
 title: Reader-only lint green; route-enumeration fixture proves no write verb appeared.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static + contract -- on CI: tests/spine-reader-lint.bats holds the real tree clean (every spine read goes through spine.mjs); dash-doors' "route enumeration" arm holds POST /api/decide as EXACTLY one mutating route, and its "P04 route table" arm reads `arc-dash.mjs --routes` and holds each Phase 04 route on the table exactly once, GET, `mutates: false`, `spineEffect: none`
+tier: contract
 sources: phase-04-spec.md
-decision: (empty until proven)
+decision: The 18 rows are GET, mutates false, spineEffect none; the write door is untouched.
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -80,10 +80,10 @@ commit: (empty until proven)
 title: `tests/face/dash-doors.mjs` gains ≥1 arm per route, each asserting the fixture LOADED before asserting the payload.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: integration -- on CI: dash-doors generates its spine with `--phase04 1` (25 receipts every Phase 04 route folds) and asserts the fixture loaded (base 2000, phase04 25, events 2025) before any arm; one P04 arm per route asserts the payload against that fixture; the suite FAILs below its floor (ran >= 131)
+tier: integration
 sources: phase-04-spec.md
-decision: (empty until proven)
+decision: A route's arm reads the receipts the fixture wrote for it, so an arm over an empty fold cannot pass; the by=day arm asserts the wire shape, and the fixture's own day is proven in phase04-folds, where deriveDaily is handed that day.
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -92,10 +92,10 @@ commit: (empty until proven)
 title: Modules flip from `NOT SERVED` to live; the residue is 0 or a named, labelled list in `initiatives/face/evidence/phase-04/residue.md`.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit + e2e-visual -- on CI: module-frame folds all 36 modules and holds evidence/phase-04/served.md (39 tables on 35 panels) and residue.md (15 panels on 10 routes) EQUAL to the folds, the two lists disjoint; tests/face-browser.bats counts the served tables and the residue panels in the rendered page on every leg; tests/face/phase04-folds.mjs pins each fold's decisions over bodies built to kill its mutants
+tier: e2e-visual
 sources: phase-04-spec.md
-decision: (empty until proven)
+decision: 35 of 50 panels are served. The 15 residue panels each name their gap and the lane it is filed to; the owner approved the whole residue (ADR-1338, REQ-06 amended), since most of it is data no file or receipt records.
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -104,10 +104,10 @@ commit: (empty until proven)
 title: If the union exceeded 22 routes, the Block B reading re-scoped this phase first (assumptions ledger row 5).
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static -- the union was measured at the Block B reading before any route was built, from the five Phase 03 not-served lists: 22 route strings (PLAN assumptions row 5, "held: exactly 22"); dash-doors' "P04 route list" arm then keeps every built route inside that union on CI
+tier: static
 sources: phase-04-spec.md
-decision: (empty until proven)
+decision: The union held at exactly 22, so the re-scope half of row 5 did not fire. Its OTHER half, a residue past three routes, did: FIRED 2026-09-18, routed through /arc-change, and REQ-06's bound amended by ADR-1338 on the owner's ruling.
 result: (empty until proven)
 commit: (empty until proven)
 
@@ -116,9 +116,9 @@ commit: (empty until proven)
 title: Two fresh attackers (route decision logic · HTTP boundary); CI green per job; `/arc-phase-done 04` from the main clone.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: verified-real -- two fresh attackers per round (decision logic · HTTP/OS boundary), each carrying initiatives/face/fixed-defects.md; every hole they reproduced is fixed and pinned in phase04-folds, dash-doors or module-frame; CI read per job on the final head; the phase closes through /arc-phase-done 04 from the main clone
+tier: verified-real
 sources: phase-04-spec.md
-decision: (empty until proven)
+decision: Round 1 found 25 holes and the first CI run one red; round 2 found the twins left open one route over, and CI two reds (fixed-defects.md, Phase 04 and its Round 2). A third pair verifies round 2 before the merge.
 result: (empty until proven)
 commit: (empty until proven)

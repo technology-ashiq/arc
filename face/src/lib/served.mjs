@@ -88,10 +88,15 @@ function sourceLine(body) {
   const torn = typeof unreadLines["torn"] === "number" ? unreadLines["torn"] : 0;
   const skipped = typeof unreadLines["skipped"] === "number" ? unreadLines["skipped"] : 0;
   const unread = torn + skipped;
+  const days = typeof unreadLines["days"] === "number" ? unreadLines["days"] : 0;
   return [
     parser !== "" ? `parsed by ${parser}` : "",
     files.length > 0 ? `from ${files.join(", ")}` : "",
     unread > 0 ? `-- ${unread} spine line${unread === 1 ? "" : "s"} the reader could not read, not counted here` : "",
+    // A whole day file the reader could not open holds receipts nobody counted (Phase 04 round 3).
+    days > 0 ? `-- ${days} spine day file${days === 1 ? "" : "s"} the reader could not open, none of ${days === 1 ? "its" : "their"} receipts counted here` : "",
+    // Every date in the body is read off the door's clock; a forced clock is said, never passed off as the day (round 3).
+    body["clockForced"] === true ? "-- the door's clock is forced (ARC_SPINE_NOW), not the machine's" : "",
   ].filter((s) => s !== "").join(" ");
 }
 

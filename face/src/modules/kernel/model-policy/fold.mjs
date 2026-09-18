@@ -35,6 +35,7 @@ export function fold(payloads, ctx) {
     trailEmpty: "The registry homes no receipt kind here. A tier change is a reviewed diff to the router file, and the merge that lands it is its record.",
   });
   const st = servedRead(payloads, ctx, base.reads, "/api/model-policy");
+  const routerFaults = asArray(st.body["faults"]).map(cell).filter((f) => f !== "");
   const tiersTable = servedTable(st, {
     panel: "The tier table",
     route: "/api/model-policy",
@@ -60,6 +61,10 @@ export function fold(payloads, ctx) {
       const terms = field(c, "cap") === "" ? "—" : `${field(c, "cap")} · ${field(c, "judge")} · ${field(c, "review_by")}${c["expired"] === true ? " (past it)" : ""}`;
       return name === "" ? null : { key: name, cells: [name, field(c, "tier"), chain, terms] };
     },
+    // The router loader's faults, drawn where they change what a row means -- a wrong-typed fallback becomes no
+    // fallback, and the chain above would read whole without it. The engine room draws the same list from the same
+    // file (Phase 04 round 3).
+    note: routerFaults.length === 0 ? "" : `the router loader reports ${routerFaults.length} fault${routerFaults.length === 1 ? "" : "s"}: ${routerFaults.join(" · ")}`,
   });
   return {
     ...base,

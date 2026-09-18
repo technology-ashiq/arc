@@ -79,9 +79,16 @@ export function fold(payloads, ctx) {
         return bucket === "" ? null : { key: bucket, cells: [bucket, cell(b["prob"]), cell(b["n"]), cell(b["hits"])] };
       },
       note: st.isRead
-        ? (cal["brier"] === null || cal["brier"] === undefined
-          ? `${cell(cal["scored"])} scored of a floor of ${cell(cal["floor"])}, ${cell(cal["pending"])} pending -- below the floor no calibration figure is reported at all`
-          : `Brier ${cell(cal["brier"])} over ${cell(cal["scored"])} scored calls · ${field(cal, "verdict")}`)
+        ? [
+          cal["brier"] === null || cal["brier"] === undefined
+            ? `${cell(cal["scored"])} scored of a floor of ${cell(cal["floor"])}, ${cell(cal["pending"])} pending -- below the floor no calibration figure is reported at all`
+            : `Brier ${cell(cal["brier"])} over ${cell(cal["scored"])} scored calls · ${field(cal, "verdict")}`,
+          // An outcome the lane will not score ("unresolved") is excluded, and the lane says so: a verdict must not
+          // vanish from the count without a word (calibrate.mjs renderCalibration; Phase 04 round 3).
+          typeof cal["excluded"] === "number" && cal["excluded"] > 0
+            ? `${cell(cal["excluded"])} excluded -- an outcome the lane does not score, NOT counted as a miss`
+            : "",
+        ].filter((n) => n !== "").join(" · ")
         : "",
     }),
     seats,

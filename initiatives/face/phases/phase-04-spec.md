@@ -16,6 +16,7 @@
 - [ ] Modules flip from `NOT SERVED` to live; the residue is 0 or a named, labelled list in `initiatives/face/evidence/phase-04/residue.md` -- each row naming its gap and the lane it is filed to, the list approved by the owner as a whole and NOT capped at three routes (ADR-1338, owner ruling 2026-09-18: "un recommand A pannu machi"); every panel Phase 03 named is in `served.md` or `residue.md`, none dropped.
 - [ ] If the union exceeded 22 routes, the Block B reading re-scoped this phase first (assumptions ledger row 5).
 - [ ] Two fresh attackers (route decision logic · HTTP boundary); CI green per job; `/arc-phase-done 04` from the main clone.
+- [ ] *(current-phase note, 2026-09-18, via `/arc-change` triage: trivial and in scope)* The round-3 verification pair found Phase 04's defect classes still open on the door's OLDER routes -- a machine path in `/api/health` and in a typed refusal, no containment on `/api/file`, `/api/lane` and `/api/board`, unread and repeated query keys answered 200 on `/api/spine`, `/api/brief` and `/api/inbox`, an asof that is no day. ADR-1312's no-PII rule and the containment rule are door-wide, so the twins are closed here, each pinned; `/api/spine` and `/api/inbox` serving receipts verbatim stays as designed (the spine keeps PII off at emission, ADR-1312) and is a debt-ledger row with its trigger.
 
 ## Verification plan
 
