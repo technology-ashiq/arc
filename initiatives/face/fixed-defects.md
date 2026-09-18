@@ -254,3 +254,64 @@ put a fact on screen the door did not serve are fixed here, three are debt rows 
   (seven mutants of one fold survived every gate); a fold can ask for a read its manifest does not
   declare if the REGISTRY changes under it; the catalogue is rebuilt per keystroke and reads each
   room's holds nine times per fold.
+
+## Face v2 Phase 03 (money ring) — 2026-09-18
+
+Two fresh attackers, one on the ring's decision logic and one on the shell/OS boundary, each carrying this
+file. 16 shell findings (5 bugs, 7 test holes) and 18 logic findings plus 7 test holes; at the ring's head
+all seventeen mutants the logic attacker built survived every gate. Everything that could put a fact on
+screen the door did not serve is fixed here and pinned by `tests/face/money-ring.mjs` (new),
+`tests/face/lane-room.mjs`, `tests/face/module-frame.mjs`, `tests/face/cdp-client.mjs` and the browser
+suite's new mutant control.
+
+- **A fix claimed one ring ago was not true.** The factory ring wrote that an entry which "renders as
+  nothing -- spaces, a zero-width character" is not counted; `trim()` leaves U+200B, the word joiner and
+  the soft hyphen standing, so it still was. `heldBy` strips them first and counts a repeated name once.
+  The same pass found `planned-room.mjs` decoding the file's strings twice -- the kernel ring's "decoded
+  once" rule, broken in a new file.
+- The real P&L's substance was trusted by default: `readPnl` calls any body "real" unless it says
+  "simulated" exactly, so `model.mode` of "SIMULATED", "sim", missing, or a body that was no P&L at all
+  drew as real revenue in green. The real read must name "real" and the simulated read "simulated";
+  anything else is `WRONG_SUBSTANCE`.
+- An unreadable `/api/health` read as "revenue.received has never fired" -- `readHealth` coerces a
+  missing kinds list to an empty one. A health body with no kinds list is refused, and the gate says
+  health did not answer.
+- Green could be spent on a door reading a simulated spine. The gate now also asks the door's data mode:
+  on anything but a live spine, real money's colour stays unspent, whatever kinds the fixture fired.
+- A kill panel that measured nothing -- the criteria file unreceipted -- showed "0 kill lines crossed"
+  and drew every venture as having "no kill lines" when the file declares them. Its counts are unread,
+  no roster is drawn from it, and the refusal is drawn once rather than twice. Which ventures are
+  declared now has one reader, the kill panel, not the panel and the registry's inventory.
+- F3 reached a planned room by two more routes: the legacy `stateBadge` (the rail's label and a generic
+  room's head) still said live for ops, trader, discover and chat-mcp when a homed kind fired, and the
+  header's as-of control drew "live" on every room -- a planned one included -- whose numbers have no
+  scrub at all. A planned room's badge is "planned" everywhere, and the header draws "live" only where
+  the scrub applies.
+- The LIVE check matched `LIVE` case-sensitively over a whole room's text, so "● Live" passed and prose
+  tripped it. It is now a pill-shaped rule -- a short text saying live as a word of its own, in any case,
+  invisible characters removed -- shared by the smoke (in the page) and module-frame (in the folds),
+  which also refuses a boolean named for liveness.
+- The planned verdict counted rooms, not which rooms: one losing its mark while another gained one
+  passed. The smoke compares the contract's planned ids to the marked ones.
+- The runner class was wider than the one line it names and had no ceiling: any `console.error` or log
+  text merely CONTAINING the phrase was excluded on windows, and five hundred of them would have passed.
+  It is now Chrome's exact log line, whole, on win32 alone, at most two in one room per mood --
+  `classifyErrors` is the one filter, and a test holds it. The largest-body line could not see the body
+  the class exists to measure: a failed load reports no size, so its bytes are summed as they arrive.
+- The rehearsal list was required for the command ring, whose planned room (chat-mcp) has no module; the
+  CI red run caught it. A stray list file for an unshipped ring would have widened what the browser is
+  judged against; module-frame now fails one, and a list must end with a newline because the browser
+  suite reads each kind in one stream.
+- Lists were compared as SETS, so a card a fold returned twice was invisible; they are multisets now.
+- Also fixed: a receipt with no kind, or a kind with a trailing space, passed `WRONG_KINDS`; a page
+  counting fewer receipts than it carried drew both numbers; a timestamp shaped right with no real instant
+  won "newest", and the date printed came from a second field; a lane or kinds list carried unreadably
+  read as "no lane" / "no trail"; a planned list with a damaged entry printed its short count; the seal
+  rule matched one spelling of "(the word)"; two planned rows, unreadable rows and an empty room id each
+  fell to a guess; a room id outside the grammar linked another room's rows; a refusal said "the door
+  refused" when the module's own manifest had; the heading floor refused 28 and 29.
+- Accepted, with reasons: the header's data-mode chip ("Live spine" on a live door) names the door's mode
+  for every room and is not the room's pill, so the F3 scan stays inside the room; a CRLF smoke line
+  would compare differently on windows, but the smoke never writes one. Carried as debt rows: the browser
+  suite's "no inline program text" grep catches only `node -e` (a Phase 00 gate, widened in its own
+  change).

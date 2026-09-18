@@ -446,6 +446,8 @@ load 'test_helper'
              "F3: MUTANT -- a fold that returns a LIVE pill anywhere in its output is caught" \
              "F3: trader with every read it asks for answered wears no LIVE pill anywhere in what it returns" \
              "F3: trader's View marks the room data-planned and draws no live tone" \
+             "F3: chat-mcp's rail and head badge says planned, never live, whatever its kinds did" \
+             "F3: MUTANT -- a built room whose kinds fired still reads live, so the planned badge is not a blanket" \
              "F2: the scheduler fold, handed its manifest, asks the door for its trail (vacuous-pass guard)" \
              "F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it" \
              "F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat"; do
@@ -478,6 +480,29 @@ load 'test_helper'
   done
   for i in 1 2 3 4 5 6 7; do
     [[ "$output" == *"ok MUTANT $i ("*") is FAILED by the catalogue checks"* ]] || { echo "mutant $i survived or never ran"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: the money ring's shared folds answer every loaded branch -- substance, gate, kill panel, planned row" {
+  # The money ring attacker's seventeen surviving mutants, each pinned by a check that fails when its decision is
+  # removed: WRONG_SUBSTANCE, green without the gate or on a simulated door, an unread health body, the
+  # unreceipted kill panel, the planned row guessed, the seal word printed, a LIVE pill in any case (face v2 Phase 03).
+  run node "$ARC_ROOT/tests/face/money-ring.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 45 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "READS: a fold handed no manifest reads nothing, and says so in every panel" \
+             "SUBSTANCE: the real read answered with model.mode \"SIMULATED\" is refused WRONG_SUBSTANCE, never drawn as real" \
+             "GATE: a door reading a SIMULATED spine never spends green, whatever kinds its spine holds" \
+             "HEALTH: a health body with no kinds LIST is refused, and the gate says health did not answer -- never 'has never fired'" \
+             "VENTURES: an unreceipted criteria file measures nothing -- no roster, every count unread, never 0" \
+             "PLANNED: two rows for one room are refused -- choosing one would be a guess" \
+             "PLANNED: the file's text is un-escaped ONCE -- a literal entity in it stays literal" \
+             "F3: trader with its file read returns no LIVE pill in any case"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }
 

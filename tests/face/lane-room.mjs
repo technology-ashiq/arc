@@ -236,6 +236,86 @@ const byRoute = (map) => (read) => (Object.hasOwn(map, read.route) ? map[read.ro
     withBrief.phases[1].label === "02" && /Only a brief/.test(withBrief.phases[1].title) && withBrief.phases[1].also === "" && withBrief.phases[2].title === "Notes", JSON.stringify(withBrief.phases));
 }
 
+// ── the money ring attack on this file, pinned (fixed-defects.md, money ring) ─────────────────────────
+{
+  const lanesText = foldLoaded(room({ holds: { lanes: "bench", kinds: [] } }), () => undefined).first;
+  check("ATTACK: a lanes list carried unreadably is a named refusal, never 'the registry homes no lane'",
+    lanesText.lane.isRefused === true && lanesText.lane.refusal.code === "UNREAD_LANES" && lanesText.laneAbsent === "" && lanesText.lane.absent === "" && lr.laneBadge(lanesText) === "lane not read",
+    JSON.stringify({ lane: lanesText.lane.refusal, absent: lanesText.laneAbsent, badge: lr.laneBadge(lanesText) }));
+  const lanesMixed = foldLoaded(room({ holds: { lanes: [7, "bench"], kinds: [] } }), () => undefined).first;
+  check("ATTACK: a lanes list with an unreadable entry draws the readable lane AND says the list was not read in full",
+    lanesMixed.laneName === "bench" && /not read in full/.test(lanesMixed.lane.note), lanesMixed.lane.note);
+  const kindsText = foldLoaded(room({ holds: { lanes: ["bench"], kinds: "run.completed" } }), () => undefined).first;
+  check("ATTACK: kinds carried unreadably read as an unread trail, never 'homes no receipt kind'",
+    kindsText.trail.isUnread === true && /could not read/.test(kindsText.trail.empty) && !/homes no receipt kind/.test(kindsText.trail.empty) && lr.countedOn(kindsText, "x") === "the registry's kinds here were not read",
+    JSON.stringify({ empty: kindsText.trail.empty, counted: lr.countedOn(kindsText, "x") }));
+  const holdsText = foldLoaded(room({ holds: "lanes: bench" }), () => undefined).first;
+  check("ATTACK: holds that are not an object are named in the note, and the lane and trail read as unread",
+    /holds/.test(holdsText.holdsNote) && holdsText.lane.refusal.code === "UNREAD_LANES" && holdsText.trail.isUnread === true, JSON.stringify({ note: holdsText.holdsNote }));
+  const noKind = { count: 1, more: false, events: [{ day: "2026-09-17", seq: 1, event: { id: "01K9", ts: "2026-09-17T08:00:00+05:30", venture: "arc", actor: "x", payload: {} } }] };
+  const nk = foldLoaded(room(), byRoute({ "/api/spine": ok(noKind) })).base;
+  check("ATTACK: a receipt with no kind is not a receipt of a homed kind -- the page is refused, not counted",
+    nk.trail.isRefused === true && nk.trail.refusal.code === "WRONG_KINDS" && nk.trail.rows.length === 0, JSON.stringify(nk.trail.refusal));
+  const spaced = { count: 1, more: false, events: [ev("01KA", "run.completed ", "2026-09-17T08:00:00+05:30")] };
+  const sp = foldLoaded(room(), byRoute({ "/api/spine": ok(spaced) })).base;
+  check("ATTACK: a kind spelled with a trailing space is compared exactly, as the counts compare it",
+    sp.trail.refusal.code === "WRONG_KINDS" && lr.kindCount(sp, "run.completed") === "—", JSON.stringify(sp.trail.refusal));
+  const under = { count: 0, more: false, events: [ev("01KB", "run.completed", "2026-09-17T08:00:00+05:30"), ev("01KC", "run.completed", "2026-09-17T09:00:00+05:30")] };
+  const un = foldLoaded(room(), byRoute({ "/api/spine": ok(under) })).base;
+  check("ATTACK: a page counting fewer receipts than it carries is refused -- one number in the hint, another in the figure",
+    un.trail.isRefused === true && un.trail.refusal.code === "BAD_BODY" && /counted 0 receipts on a page that carries 2/.test(un.trail.refusal.human) && lr.kindCount(un, "run.completed") === "—", JSON.stringify(un.trail.refusal));
+  const e = (id, ts, day, driver) => ({ id, ts, kind: "run.completed", venture: "arc", actor: "x", outcome: "", day, payload: { driver, outcome: "ok" } });
+  const rows = lr.runsBy([e("a", "2026-09-17T10:00:00+05:30", "1999-01-01", "opus"), e("b", "2026-99-99T99:99", "2026-09-18", "opus")], "driver", []);
+  check("ATTACK: a timestamp with the right shape and no real instant never wins newest, and is not printed as a clock",
+    rows.length === 1 && rows[0].when === "2026-09-17 10:00", JSON.stringify(rows));
+  check("ATTACK: the date printed is the validated timestamp's, never the wrapper's day beside it", !/1999/.test(rows[0].when), rows[0].when);
+  const counted = lr.countedBy([
+    ev("c1", "content.published", "2026-09-10T09:00:00+05:30", { channel: "seo-article" }),
+    ev("c2", "content.published", "2026-09-12T09:00:00+05:30", { channel: "seo-article" }),
+    ev("c3", "content.published", "2026-09-11T09:00:00+05:30", { channel: "video" }),
+    ev("c4", "metric.observed", "2026-09-11T09:00:00+05:30", { channel: "video" }),
+    ev("c5", "content.published", "2026-09-11T09:00:00+05:30", { channel: "   " }),
+  ].map((w) => ({ ...w.event, day: w.day, outcome: "", payload: w.event.payload })), "content.published", "channel", false);
+  check("COUNTED BY: receipts of one kind grouped by a field, most first, a blank field and another kind left out",
+    counted.map((r) => `${r.name}=${r.count}`).join(",") === "seo-article=2,video=1" && counted[0].when === "last 2026-09-12 09:00", JSON.stringify(counted));
+  const partial = lr.countedBy([{ id: "p", ts: "2026-09-12T09:00:00+05:30", kind: "content.published", venture: "arc", actor: "x", outcome: "", day: "2026-09-12", payload: { channel: "video" } }], "content.published", "channel", true);
+  check("COUNTED BY: on a partial page the count and the time both say they are that page's", partial[0].count === "1 on that page" && /^newest on that page /.test(partial[0].when), JSON.stringify(partial));
+  const odd = lr.catalogueOf({ rooms: [{ id: "board ", name: "Planned board", planned: true, holds: { commands: ["x"] } }, { id: "board", name: "Board", status: "built", holds: { commands: ["y"] } }] }, ["commands"]);
+  check("ATTACK: an id outside the room-id grammar is not a room this shell can name -- counted, never linked to another room",
+    odd.commands.unreadable.includes("a room with no id") && odd.commands.rows.length === 1 && odd.commands.rows[0].name === "y" && odd.commands.rows[0].canOpen === true, JSON.stringify(odd.commands));
+  let threw = null;
+  try { lr.roomLink({ rooms: "not a list" }, "board"); } catch (err) { threw = err; }
+  check("ATTACK: a rooms value that is not a list opens nothing and throws nothing", threw === null && lr.roomLink({ rooms: "x" }, "board").canOpen === false);
+  const noId = lr.sourceFile("hq-policy", ok({ path: "hq.policy.yaml", sha256: "a".repeat(64), text: "x\n" }));
+  check("ATTACK: a file body that names no file is refused, never drawn as the file asked for", noId.isRefused === true && noId.refusal.code === "BAD_BODY", JSON.stringify(noId));
+  const refusedTrail = foldLoaded(room(), () => undefined, { manifest: { ...MANIFEST, routes: ["/api/lane/:id"] } }).first;
+  check("ATTACK: a refusal says who refused -- this module's manifest, not the door", /this module may not read them/.test(lr.countedOn(refusedTrail, "run.completed")), lr.countedOn(refusedTrail, "run.completed"));
+}
+{
+  const withBriefFirst = spine.laneCard(laneBody("develop", {}, [
+    { phase: 1, file: "phase-01-tasks.md", kind: "tasks", title: "Build Brief — phase 01 · The proof floor" },
+    { phase: 1, file: "phase-01-spec.md", kind: "spec", title: "Phase 01 — The proof floor" },
+  ]));
+  check("KIT: the spec wins its phase's row wherever it sorts -- a brief listed first does not take the row",
+    withBriefFirst.phases.length === 1 && withBriefFirst.phases[0].title === "Phase 01 — The proof floor" && withBriefFirst.phases[0].also === "tasks", JSON.stringify(withBriefFirst.phases));
+  const twoTasks = spine.laneCard(laneBody("develop", {}, [
+    { phase: 2, file: "phase-02-spec.md", kind: "spec", title: "Phase 02 — X" },
+    { phase: 2, file: "phase-02-tasks.md", kind: "tasks", title: "Build Brief — phase 02 · X" },
+    { phase: 2, file: "phase-02-tasks-b.md", kind: "tasks", title: "Build Brief — phase 02 · X, again" },
+  ]));
+  check("KIT: two files of one kind for one phase are counted, not folded into one word", twoTasks.phases[0].also === "2 tasks files", twoTasks.phases[0].also);
+  const capped = spine.laneCard({ ...laneBody("develop"), phases: [], phasesOmitted: 12 });
+  check("KIT: a phase list the door capped to nothing says what was not sent, never 'no phase spec written yet'",
+    /12 more not sent/.test(capped.phasesNote) && !/written yet/.test(capped.phasesNote), capped.phasesNote);
+}
+{
+  const invisible = foldLoaded(room({ holds: { lanes: ["bench"], kinds: [], lints: ["slop-lint", "slop-lint", "​", "⁠", "cite­lint"] } }), () => undefined).first;
+  check("HOLDS: an entry of only zero-width characters is lost, not held -- and the list reads as not read in full",
+    invisible.held.lints.join(",") === "slop-lint,citelint" && lr.holdsCount(invisible, "lints") === "—", JSON.stringify(invisible.held.lints));
+  const dup = foldLoaded(room({ holds: { lanes: ["bench"], kinds: [], lints: ["slop-lint", "slop-lint"] } }), () => undefined).first;
+  check("HOLDS: a name listed twice is one thing held, counted once, and the list is still whole", dup.held.lints.join(",") === "slop-lint" && lr.holdsCount(dup, "lints") === "1", JSON.stringify(dup.held.lints));
+}
+
 // ── the toolbelt's catalogue, and the seven mutants that walked past every gate ─────────────────────
 const TOOLBELT_ROOMS = [
   { id: "toolbelt", name: "Toolbelt", ring: "factory", status: "built", sentence: "t", lede: "", holds: {} },
@@ -266,6 +346,13 @@ const toolbeltFailures = (fold) => {
   const damaged = TOOLBELT_ROOMS.map((r) => (r.id === "beta" ? { ...r, holds: { ...r.holds, commands: "not a list" } } : r));
   const d = at(damaged);
   if (sec(d, "commands").count !== "—" || !/beta/.test(d.catalogueNote)) out.push(`an unreadable list reads ${sec(d, "commands").count}`);
+  // The same unread list must not reappear as a number anywhere else on the strip (money ring attack).
+  if (kpi(d, "commands") !== "—" || kpi(d, "total") !== "—") out.push(`an unreadable list is still a number on the strip: commands=${kpi(d, "commands")} total=${kpi(d, "total")}`);
+  if (!/could not read/.test(sec(d, "commands").empty)) out.push("an unreadable list's sentence does not say it was not read");
+  // Three different empties, three different sentences: none held, none matched, not read.
+  if (sec(f, "gates").empty !== "the served registry homes none of these") out.push(`an empty section says ${JSON.stringify(sec(f, "gates").empty)}`);
+  const none = at(TOOLBELT_ROOMS, "zzz-no-such-tool");
+  if (sec(none, "gates").empty !== "nothing here matches") out.push(`a find with no match says ${JSON.stringify(sec(none, "gates").empty)}`);
   if (!sec(f, "commands").rows.some((r) => r.name === "arc-soon" && r.canOpen === false)) out.push("a planned room's row is dropped or openable");
   return out;
 };

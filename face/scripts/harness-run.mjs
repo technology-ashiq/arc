@@ -23,7 +23,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runSmoke, summaryLines, renderLine, notServedLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlanned } from "./smoke.mjs";
+import { runSmoke, summaryLines, renderLine, notServedLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FACE_DEFAULT = resolve(HERE, "..");
@@ -106,7 +106,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
   if (!chrome.path) throw new SetupError(`Chrome not found. Looked at: ${chrome.tried.join(" | ")}`);
   const expected = expectedOpenable();
   // How many planned rooms the contract names (F3, ADR-1328): read here, from the contract, never the door.
-  const plannedCount = expectedPlanned(REPO);
+  const plannedIds = expectedPlannedIds(REPO);
   // The frozen opening sentences the heading check holds each shipped module room to -- the contract, never
   // the door under test.
   const sentences = Object.fromEntries(Object.entries(JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "room-copy.json"), "utf8")).rooms ?? {}).map(([id, r]) => [id, String(r && r.sentence ? r.sentence : "")]));
@@ -153,7 +153,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
           token,
           exclude: opts.exclude,
           expected,
-          expectedPlanned: plannedCount,
+          expectedPlannedIds: plannedIds,
           roomTimeoutMs: 15000,
           mood,
           sentences,

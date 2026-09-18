@@ -7,7 +7,7 @@
 // stamp once the lane exists -- nothing here convenes one.
 import { rehearsal } from "../../../lib/registry.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
-import { plannedFigure, plannedRoom } from "../../../lib/planned-room.mjs";
+import { plannedFigure, plannedKinds, plannedRoom } from "../../../lib/planned-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 
@@ -43,10 +43,10 @@ export function fold(payloads, ctx) {
   return {
     ...base,
     kpis: [
-      plannedFigure(base, "stations", "Stations on the planned line", base.line.length, "planned-rooms.json · none has run"),
+      plannedFigure(base, "stations", "Stations on the planned line", "line", "planned-rooms.json · none has run"),
       { key: "flows", v: fmtInt(flows.length), l: "Flows rehearsed here", sub: "each says REHEARSAL · none writes" },
-      plannedFigure(base, "today", "Already in the repo", base.showsToday.length, "what the unborn lane can point at"),
-      { key: "kinds", v: fmtInt(base.kinds.length), l: "Kinds it will own", sub: "company-wide · none counted here" },
+      plannedFigure(base, "today", "Already in the repo", "showsToday", "what the unborn lane can point at"),
+      plannedKinds(base),
     ],
     flows,
     rules: [

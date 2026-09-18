@@ -88,39 +88,75 @@ export function moneyReads(payloads, ctx) {
   const realP = one(REAL_READ);
   const simP = one(SIM_READ);
 
-  const healthView = healthP.state === "ok" ? readHealth(healthP.data) : null;
+  // The kinds-ever-fired set must BE a list. readHealth coerces anything else into an empty one, which would
+  // tell the owner revenue.received "has never fired" on a body that said nothing about it (money ring attack):
+  // a health body with no kinds list is refused, and the gate then says health did not answer.
+  let healthState = stateOf(healthP);
+  const healthKinds = healthP.state === "ok" ? asObject(asObject(healthP.data)["spine"])["kinds"] : undefined;
+  if (healthP.state === "ok" && !Array.isArray(healthKinds))
+    healthState = refused("BAD_BODY", "/api/health answered without a list of the kinds that have ever fired, so nothing here can say whether revenue.received has");
+  const healthView = healthP.state === "ok" && !healthState.isRefused ? readHealth(healthP.data) : null;
   let realState = stateOf(realP);
   let realView = realP.state === "ok" ? readPnl(realP.data) : null;
   let simState = stateOf(simP);
   let simView = simP.state === "ok" ? readPnl(simP.data) : null;
-  // A body of the other substance is not the thing asked for. Drawing it would put real money under the
-  // simulated heading, or a simulated figure under the real one -- the exact lie this room exists to refuse.
-  if (realView !== null && realView.substance !== "real") {
-    realState = refused("WRONG_SUBSTANCE", `the real P&L was asked for, and the door answered with a ${realView.substance} body`);
+  // Each read must be the substance it asked for, NAMED by the body: the money brain writes `model.mode` as
+  // "real" or "simulated", and anything else -- "SIMULATED", "sim", a missing mode, a body with no model at all --
+  // is not the real P&L. readPnl calls every body "real" unless it says "simulated" exactly, which failed open
+  // (money ring attack). Drawing the wrong body would put real money under the simulated heading, or a simulated
+  // figure under the real one: the exact lie this room exists to refuse.
+  const modeOf = (/** @type {Payload} */ pl) => (pl.state === "ok" ? asObject(asObject(pl.data)["model"])["mode"] : undefined);
+  const realMode = modeOf(realP);
+  const simMode = modeOf(simP);
+  if (realP.state === "ok" && realMode !== "real") {
+    realState = refused("WRONG_SUBSTANCE", `the real P&L was asked for, and the body the door answered with names its substance ${JSON.stringify(realMode ?? null)}, not "real"`);
     realView = null;
   }
-  if (simView !== null && simView.substance !== "simulated") {
-    simState = refused("WRONG_SUBSTANCE", `the simulated P&L was asked for, and the door answered with a ${simView.substance} body`);
+  if (simP.state === "ok" && simMode !== "simulated") {
+    simState = refused("WRONG_SUBSTANCE", `the simulated P&L was asked for, and the body the door answered with names its substance ${JSON.stringify(simMode ?? null)}, not "simulated"`);
     simView = null;
   }
   // The kill panel rides on the REAL body; a body refused above carries no kill panel either.
   const killView = realView === null || realP.state !== "ok" ? null : readKill(realP.data);
-  const gate = greenGate({ health: healthView, real: realView });
   const kinds = healthView !== null && Array.isArray(healthView.kinds) ? healthView.kinds : [];
   return {
     reads,
-    health: stateOf(healthP),
+    health: healthState,
     real: realState,
     sim: simState,
     healthView,
     realView,
     simView,
     killView,
-    gate,
+    gate: gateOf(healthView, realView),
     realFired: kinds.includes(REAL_KIND),
     simFired: kinds.includes(SIM_KIND),
     mode: realView !== null ? realView.doorMode : "unknown",
     readAt: healthView !== null && typeof healthView.now === "string" ? healthView.now : "",
+  };
+}
+
+/** @param {unknown} v @returns {Record<string, unknown>} */
+function asObject(v) {
+  return v !== null && typeof v === "object" && !Array.isArray(v) ? /** @type {Record<string, unknown>} */ (v) : {};
+}
+
+/**
+ * Whether real money's colour may be painted: money.mjs's green gate, which fails closed -- and, over it, the
+ * DOOR's data mode. A door reading a simulated spine can carry a revenue.received that fired only in its
+ * fixture; nothing on that door is real money, whatever kinds its spine holds, so the colour stays unspent
+ * there (money ring attack). The gate is still the one place that decides; this only refuses to open it.
+ * @param {HealthView | null} health @param {PnlView | null} real
+ * @returns {GreenGate}
+ */
+function gateOf(health, real) {
+  const gate = greenGate({ health, real });
+  if (!gate.spendable || health === null || health.mode === "live") return gate;
+  return {
+    spendable: false,
+    why: `${REAL_KIND} has fired on the spine this door is reading, and the door reads a ${health.mode === "sim" ? "simulated" : "non-live"} spine (mode ${JSON.stringify(health.mode)}): no figure here is real money, so its colour stays unspent.`,
+    source: "GET /api/health → mode, and spine.kinds",
+    contradiction: gate.contradiction,
   };
 }
 

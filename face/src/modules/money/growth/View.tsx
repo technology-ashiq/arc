@@ -53,7 +53,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Lints on duty" hint="from the served registry">
-            <NameList names={f.lints} isEmpty={f.showLintsEmpty} empty="The served registry homes no lint in this room." />
+            <NameList names={f.lints} isEmpty={f.showLintsEmpty} empty={f.lintsEmpty} />
           </HPanel>
 
           <LanePanel lane={f.lane} />

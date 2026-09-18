@@ -186,8 +186,10 @@ export function Reading({ what }: { what: string }) {
 export function DoorRefusal({ code, human }: { code: string; human: string }) {
   return (
     <div role="status" className="px-4 py-3 min-w-0" style={{ background: 'var(--well)', border: '1px solid var(--line-2)', borderRadius: 'var(--r-md)' }}>
-      <span className="text-[11.5px]" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-1)' }}>{code}</span>
-      <p className="text-[12.5px] leading-[19px] mt-0.5" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{human}</p>
+      <span className="text-[11.5px] [overflow-wrap:anywhere]" style={{ fontFamily: MONO, fontWeight: 600, color: 'var(--text-1)' }}>{code}</span>
+      {/* A door sentence can carry a digest or a path with no space in it; it wraps inside the card rather than
+          running out of it (money ring shots: a criteria digest crossed the kill-lines panel's edge). */}
+      <p className="text-[12.5px] leading-[19px] mt-0.5 [overflow-wrap:anywhere]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{human}</p>
     </div>
   )
 }

@@ -62,9 +62,16 @@ export function fold(payloads, ctx) {
     ],
     // A stage whose kind the registry does not home here was never asked for: it reads unread, never zero.
     funnel: FUNNEL.map(([kind, stage]) => ({ key: kind, stage, kind, v: kindCount(base, kind), isHomed: hasKind(base, kind) })),
-    funnelNote: base.trail.isPartial
-      ? "Counted on the oldest page of receipts the door sent, with more past it: each count is that page's, never all time."
-      : "Counted on the page of receipts the door sent. A receipt is a step one lead took, so a lead that moved twice is counted in two columns.",
+    // A refused or unread trail counted nothing: the note says so rather than describing a page that never came.
+    funnelNote: base.trail.isRefused
+      ? `Nothing is counted: ${base.trail.refusal.human}.`
+      : base.trail.isUnread
+        ? "Nothing is counted: the registry's kinds for this room were not read."
+        : base.trail.isReading
+          ? "Reading the funnel's receipts from the door."
+          : base.trail.isPartial
+            ? "Counted on the oldest page of receipts the door sent, with more past it: each count is that page's, never all time."
+            : "Counted on the page of receipts the door sent. A receipt is a step one lead took, so a lead that moved twice is counted in two columns.",
     researchVerb: verbPending(
       "Research a lead",
       "lead.researched, with its geography riding on it for the jurisdiction guard, keyed by an HMAC id and never a raw contact. It arrives with the work door.",

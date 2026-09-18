@@ -68,7 +68,8 @@ export function FigureStrip({ figures, counts }: { figures: { key: string; label
         <div key={s.key} className="px-5 py-4 min-w-0" style={{ boxShadow: 'inset 1px 0 0 var(--line-1), inset 0 1px 0 var(--line-1)' }}>
           <div className="leading-[28px] tracking-[-0.01em] truncate tnum" style={{ fontFamily: FONT, fontWeight: 600, fontSize: 24, color: 'var(--text-1)' }}>{s.v}</div>
           <div className="text-[12px] leading-[16px] mt-1 line-clamp-2" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{s.l}</div>
-          <div className="text-[11px] leading-[14px] mt-0.5 line-clamp-2 break-all" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{s.sub}</div>
+          {/* Wraps at a space first and inside a word only when it must: `break-all` split "summed" across lines. */}
+          <div className="text-[11px] leading-[14px] mt-0.5 line-clamp-2 [overflow-wrap:anywhere]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{s.sub}</div>
         </div>
       ))}
     </div>

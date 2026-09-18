@@ -103,9 +103,22 @@ export function fold(payloads, ctx) {
   // The roster needs the kill panel to know which ventures are DECLARED. Until it arrives there is no roster --
   // and an empty roster is not drawn in its place: "the company has no ventures" and "the read has not
   // finished" are different claims.
-  const rows = kill === null ? [] : ventureRoster({ real: m.realView, sim: m.simView, kill });
+  // A kill panel that is not a PANEL -- the criteria file changed with no approving receipt, or not served --
+  // measured nothing: its counts are unread, never a clean 0 beside the refusal that says why (money ring shots),
+  // and no roster is drawn from it, because every venture would read "no kill lines" when the file DOES declare
+  // them and only its approval is missing (money ring attack). An ABSENT file is different: it declares nothing,
+  // so money booked to a venture is truly booked with no kill line, and that roster is drawn.
+  const isPanel = kill !== null && kill.state === "panel";
+  const rosterable = kill !== null && (kill.state === "panel" || kill.state === "absent");
+  const rows = rosterable && kill !== null ? ventureRoster({ real: m.realView, sim: m.simView, kill }) : [];
   const summary = kill === null ? { headline: "reading", detail: "" } : rosterSummary(rows, kill);
-  const counts = kill === null ? null : killSummary(kill).counts;
+  const counts = isPanel ? killSummary(kill).counts : null;
+  const unread = kill === null ? (m.real.isRefused ? m.real.refusal.code : "reading the kill panel") : kill.refusal !== null ? kill.refusal.code : "no kill panel";
+  // The refusal is drawn once, as its own card below the headline; the headline's sentence points at it rather
+  // than repeating it word for word (money ring shots).
+  const detail = kill !== null && kill.refusal !== null && rows.length === 0
+    ? "No roster is drawn until the criteria file has an approving receipt; the refusal below says what changed and how to clear it."
+    : summary.detail;
   const served = { real: m.real.isRead, sim: m.sim.isRead };
   /** @type {VentureCard[]} */
   const cards = rows.map((row) => {
@@ -146,9 +159,10 @@ export function fold(payloads, ctx) {
     };
   });
   const realPanel = substanceView(m, "real");
-  /** @type {Record<string, string> | null | undefined} */
-  const declaredIds = ctx.inventories ? ctx.inventories.ventures : undefined;
-  const names = declaredIds ? Object.keys(declaredIds).sort() : null;
+  // Which ventures are DECLARED has one reader: the kill panel, the same body the cards' badges read. The
+  // registry's inventory beside it was a second reading of the same fact, and the two could disagree on one
+  // screen (money ring attack).
+  const names = isPanel && kill !== null ? kill.ventures.map((v) => v.venture).sort() : null;
   const asof = asOfSupport();
 
   return {
@@ -162,11 +176,11 @@ export function fold(payloads, ctx) {
       { key: "real", label: "Real ₹ to date", sub: `${REAL_KIND} · per venture below, never summed here`, figure: realPanel.cashIn },
     ],
     counts: [
-      { key: "ventures", v: kill === null ? "—" : fmtInt(rows.length), l: "Ventures in the roster", sub: kill === null ? (m.real.isRefused ? m.real.refusal.code : "reading the kill panel") : "declared or carrying money" },
-      { key: "crossed", v: counts === null ? "—" : fmtInt(counts.crossed), l: "Kill lines crossed", sub: counts === null ? "reading the kill panel" : `${fmtInt(counts.warning)} inside the warning band` },
-      { key: "undeclared", v: kill === null ? "—" : fmtInt(rows.filter((r) => !r.declared).length), l: "Money with no kill line", sub: "a finding, never a quiet row" },
+      { key: "ventures", v: isPanel ? fmtInt(rows.length) : "—", l: "Ventures in the roster", sub: isPanel ? "declared or carrying money" : unread },
+      { key: "crossed", v: counts === null ? "—" : fmtInt(counts.crossed), l: "Kill lines crossed", sub: counts === null ? unread : `${fmtInt(counts.warning)} inside the warning band` },
+      { key: "undeclared", v: isPanel ? fmtInt(rows.filter((r) => !r.declared).length) : "—", l: "Money with no kill line", sub: isPanel ? "a finding, never a quiet row" : unread },
     ],
-    summary: { headline: summary.headline, detail: summary.detail, badge: `${KILL_BADGE} — the venture set` },
+    summary: { headline: summary.headline, detail, badge: `${KILL_BADGE} — the venture set` },
     roster: { isReading: m.real.isReading, isRefused: m.real.isRefused, refusal: m.real.refusal },
     hasKillNote: kill !== null && kill.refusal !== null,
     isKillLoud: kill !== null && kill.state === "unreceipted",
@@ -182,7 +196,7 @@ export function fold(payloads, ctx) {
     ),
     overheadLede: "",
     declared: names === null
-      ? "The registry served no venture roster, so this room cannot say which ventures are declared. That is a fact about this read, not about the company."
+      ? "Which ventures are declared is read from the criteria file's kill panel, and there is no readable panel on this read -- a fact about the read, not about the company."
       : names.length === 0
         ? "ventures.yaml declares no ventures. That is a measured zero, not a missing read: the file was there and it was empty."
         : `Declared in ventures.yaml: ${names.join(", ")} -- ${names.length === 1 ? "one venture, carrying a kill line" : `${fmtInt(names.length)} ventures, each carrying a kill line`}. A venture appears here the moment it is declared, whether or not it has earned anything.`,

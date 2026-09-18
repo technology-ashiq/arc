@@ -74,9 +74,12 @@ export default function AsOf({
         >
           back to live
         </button>
-      ) : (
+      ) : supported ? (
         <span className="text-[10.5px] uppercase tracking-[0.06em]" style={{ fontWeight: 600, color: 'var(--mode-live)' }}>live</span>
-      )}
+      ) : null}
+      {/* "live" says the scrub is not holding a past day. A room whose numbers are not day-scoped has no scrub to
+          hold, so the word is not drawn there: on a planned room it read as the room being LIVE, the Cycle 15 F3
+          defect by another route (money ring attack). */}
       {note ? <span className="hidden xl:inline whitespace-nowrap" title={said}>{note}</span> : null}
     </span>
   )

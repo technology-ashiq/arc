@@ -25,6 +25,7 @@ import { countedBy, countedOn, hasKind, holdsCount, kindCount, laneBadge, laneKp
  *   channelsEmpty: string,
  *   lints: string[],
  *   showLintsEmpty: boolean,
+ *   lintsEmpty: string,
  *   gates: { key: string, name: string, line: string }[],
  * }} Folded
  */
@@ -39,6 +40,9 @@ export function fold(payloads, ctx) {
   const publishedHomed = hasKind(base, "content.published");
   const channels = publishedHomed && base.trail.isDrawn ? countedBy(base.trail.events, "content.published", "channel", base.trail.isPartial) : [];
   const lints = base.held.lints ?? [];
+  // A lints list the registry carried unreadably is not "no lint in this room" beside a KPI that says unread --
+  // two readers of one question (money ring attack).
+  const lintsUnread = base.unreadable.includes("lints") || base.unreadable.includes("holds");
   return {
     ...base,
     badge: laneBadge(base),
@@ -70,6 +74,9 @@ export function fold(payloads, ctx) {
     channelsEmpty: "No content.published receipt on the page the door sent names a channel. A channel that has never published has no receipt, so it is not listed as a zero.",
     lints,
     showLintsEmpty: lints.length === 0,
+    lintsEmpty: lintsUnread
+      ? "The served registry carried this room's lints in a shape this shell could not read -- unread, not none."
+      : "The served registry homes no lint in this room.",
     gates: [
       { key: "gate-1", name: "gate 1 -- the review pack", line: "one inbox item bundling the preview, the lints and the diff. Your stamp pins the draft's sha." },
       { key: "gate-2", name: "gate 2 -- the merge", line: "a person merges; content.published carries the sha read from the merged tree. Unedited means the two shas match." },

@@ -1593,7 +1593,11 @@ export function laneCard(payload) {
       group.row.title = drawn.title;
       group.kind = kind;
     } else group.others.push(kind === "" ? drawn.key : kind);
-    group.row.also = [...new Set(group.others)].join(" · ");
+    // Two files of ONE kind for one phase (two task files) are named by file, so the second is not folded away
+    // into the first's word (money ring attack).
+    const counts = new Map();
+    for (const o of group.others) counts.set(o, (counts.get(o) ?? 0) + 1);
+    group.row.also = [...new Set(group.others)].map((o) => ((counts.get(o) ?? 0) > 1 ? `${fmtInt(counts.get(o) ?? 0)} ${o} files` : o)).join(" · ");
   }
   const notSent = listed.omitted > 0 ? `${fmtInt(listed.omitted)} more not sent` : "";
   const notRead = dropped > 0 ? `${fmtInt(dropped)} the door sent in a shape this shell cannot read` : "";
@@ -1617,9 +1621,11 @@ export function laneCard(payload) {
     distance: meter.label,
     phases: rows,
     hasPhases: rows.length > 0,
+    // "No phase spec written yet" is a claim about the lane; a list the door capped to nothing is a claim about
+    // the read, and says so (money ring attack).
     phasesNote: listed.state === "absent"
       ? "the door did not send a phase list"
-      : rows.length === 0 && dropped === 0
+      : rows.length === 0 && dropped === 0 && listed.omitted === 0
         ? "no phase spec written yet"
         : [notSent, notRead].filter((s) => s !== "").join(" · "),
   };
