@@ -92,7 +92,7 @@ export function moneyReads(payloads, ctx) {
   // tell the owner revenue.received "has never fired" on a body that said nothing about it (money ring attack):
   // a health body with no kinds list is refused, and the gate then says health did not answer.
   let healthState = stateOf(healthP);
-  const healthKinds = healthP.state === "ok" ? asObject(asObject(healthP.data)["spine"])["kinds"] : undefined;
+  const healthKinds = healthP.state === "ok" ? asObject(asObject(healthP.data).spine)["kinds"] : undefined;
   if (healthP.state === "ok" && !Array.isArray(healthKinds))
     healthState = refused("BAD_BODY", "/api/health answered without a list of the kinds that have ever fired, so nothing here can say whether revenue.received has");
   const healthView = healthP.state === "ok" && !healthState.isRefused ? readHealth(healthP.data) : null;

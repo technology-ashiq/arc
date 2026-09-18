@@ -177,8 +177,10 @@ export function fold(payloads, ctx) {
     ],
     counts: [
       { key: "ventures", v: isPanel ? fmtInt(rows.length) : "—", l: "Ventures in the roster", sub: isPanel ? "declared or carrying money" : unread },
-      { key: "crossed", v: counts === null ? "—" : fmtInt(counts.crossed), l: "Kill lines crossed", sub: counts === null ? unread : `${fmtInt(counts.warning)} inside the warning band` },
-      { key: "undeclared", v: isPanel ? fmtInt(rows.filter((r) => !r.declared).length) : "—", l: "Money with no kill line", sub: isPanel ? "a finding, never a quiet row" : unread },
+      // The cause is named once, on the first tile; the other two say what they wait on, so three dashes do not
+      // carry one caption three times (money ring shot review).
+      { key: "crossed", v: counts === null ? "—" : fmtInt(counts.crossed), l: "Kill lines crossed", sub: counts === null ? "unread · no distance is drawn without the roster" : `${fmtInt(counts.warning)} inside the warning band` },
+      { key: "undeclared", v: isPanel ? fmtInt(rows.filter((r) => !r.declared).length) : "—", l: "Money with no kill line", sub: isPanel ? "a finding, never a quiet row" : "unread · no finding is made without the roster" },
     ],
     summary: { headline: summary.headline, detail, badge: `${KILL_BADGE} — the venture set` },
     roster: { isReading: m.real.isReading, isRefused: m.real.isRefused, refusal: m.real.refusal },

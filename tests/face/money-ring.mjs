@@ -153,6 +153,9 @@ const readsWith = (h, real, sim) => {
   const unreceipted = loaded(fold, ctxFor("ventures", manifest), answer(pnl("real", { kill: { present: true, receipted: false, digest: "f".repeat(64), path: "ventures.yaml" } }))).full;
   check("VENTURES: an unreceipted criteria file measures nothing -- no roster, every count unread, never 0",
     unreceipted.cards.length === 0 && unreceipted.counts.every((c) => c.v === "—") && unreceipted.hasKillNote === true, JSON.stringify(unreceipted.counts));
+  check("VENTURES: three unread tiles carry three captions, and the refusal's code on exactly one (shot review)",
+    new Set(unreceipted.counts.map((c) => c.sub)).size === 3 && unreceipted.counts.filter((c) => c.sub.includes("UNRECEIPTED")).length === 1,
+    JSON.stringify(unreceipted.counts.map((c) => c.sub)));
   check("VENTURES: the refusal is drawn once, and the headline points at it instead of repeating it",
     !unreceipted.summary.detail.includes("f".repeat(64)) && unreceipted.killNote.human.includes("f".repeat(64)), unreceipted.summary.detail);
   const withMoney = pnl("real", { kill: { present: false } });

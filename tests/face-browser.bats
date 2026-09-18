@@ -419,5 +419,5 @@ runner_verdict() {
   local declared
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared declared"; false; }
-  [ "$declared" -eq 10 ] || { echo "expected 10 @test lines, found $declared -- update this floor with the file"; false; }
+  [ "$declared" -eq 11 ] || { echo "expected 11 @test lines, found $declared -- update this floor with the file"; false; }
 }

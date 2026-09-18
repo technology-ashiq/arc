@@ -315,3 +315,16 @@ suite's new mutant control.
   would compare differently on windows, but the smoke never writes one. Carried as debt rows: the browser
   suite's "no inline program text" grep catches only `node -e` (a Phase 00 gate, widened in its own
   change).
+- The first CI run on the fixed tree (arc-ci **35317532261**, 12bf81c3) was red in six jobs on two
+  defects of the fix batch itself, read per job: the browser suite's own @test floor still said 10 after
+  the batch added its eleventh test (the floor is the guard against bats dropping a test, and it did its
+  job), and `money-room.mjs` read the health payload's key as the quoted string `"spine"`, which the
+  module frame's shell scan reads as a room named from shell code. The floor now says 11, and the key is
+  read as a property, so the scan has nothing to excuse; the scan's exclusion list was not widened.
+- The shot review (0 VIOLATION, 0 BELOW-BAR) found three WEAKNESS rows; all three are paid in this PR,
+  not carried: the ventures stat tiles repeated one refusal code three times (the cause is now named on
+  the first tile only, and a test holds that), and the header's as-of field showed its `dd-mm-yyyy` mask
+  in every shot (live now draws a `pick a day` button, and a room that is not day-scoped says so in the
+  field's place -- the command ring's debt row for the same mask is paid with it). The review's
+  "review-ship AGENTS still dim" reading is a viewport effect, not the kit: `Holds` draws every group in
+  one ink, and that row sits under the dock's bottom gradient at 1000 px.
