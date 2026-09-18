@@ -1,13 +1,13 @@
 // View.tsx -- kernel/memory: v0.7's Memory, drawing what fold() returned and deciding nothing (face v2
 // Phase 03, ADR-1320).
 //
-// Declared deltas from the reference: the lessons and the recall cost are NOT SERVED panels until
-// /api/memory (ADR-1324); Log, Recall and Propose rule are verb-pending cards (ADR-1326); the trial ledger
+// Declared deltas from the reference: the lessons are read from /api/memory (Phase 04); the recall cost is a NOT SERVED panel, because
+// no gate measures it (ADR-1324); Log, Recall and Propose rule are verb-pending cards (ADR-1326); the trial ledger
 // panel is the file the door serves, by path, hash and size, instead of its last rows copied into a bundle.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, ReceiptDrawer, RoomHead, SourcesPanel, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, ReceiptDrawer, RoomHead, ServedTable, SourcesPanel, TrailPanel, VerbPending } from '../../../ui/bits'
 export { Brain as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -28,7 +28,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Lessons" hint="yours · the retro log · promoted">
-            <NotServed item={f.lessons} />
+            <ServedTable item={f.lessons} />
           </HPanel>
 
           <TrailPanel trail={f.trail} onReceipt={(id) => ctx.onPick('receipt', id)} />

@@ -430,17 +430,12 @@ load 'test_helper'
              "UNDECLARED: a payload for a route the manifest does not declare FAILs the fold (REQ-05)" \
              "a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)" \
              "SHIPPED RING command: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-command.md: the list names exactly what the folds render, both ways" \
              "VERBS PENDING LIST verbs-pending-command.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING kernel: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-kernel.md: the list names exactly what the folds render, both ways" \
-             "NOT SERVED LIST not-served-kernel.md: every row grep counts parses here too" \
              "VERBS PENDING LIST verbs-pending-kernel.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING factory: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-factory.md: the list names exactly what the folds render, both ways" \
              "VERBS PENDING LIST verbs-pending-factory.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING money: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-money.md: the list names exactly what the folds render, both ways" \
              "VERBS PENDING LIST verbs-pending-money.md: the list names exactly what the folds render, both ways" \
              "REHEARSAL LIST rehearsal-money.md: the list names exactly what the folds render, both ways" \
              "F3: MUTANT -- a fold that returns a LIVE pill anywhere in its output is caught" \
@@ -449,8 +444,14 @@ load 'test_helper'
              "F3: chat-mcp's rail and head badge says planned, never live, whatever its kinds did" \
              "F3: MUTANT -- a built room whose kinds fired still reads live, so the planned badge is not a blanket" \
              "F2: the scheduler fold, handed its manifest, asks the door for its trail (vacuous-pass guard)" \
-             "F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it" \
-             "F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat"; do
+             "F2: NEXT FIRE -- served by /api/jobs, and no longer named NOT SERVED" \
+             "F2: HEARTBEAT -- served by /api/jobs, and the trail's last fire is still drawn as a fire, not as a beat" \
+             "F2: a body answering another route is WRONG_ROUTE, never a table" \
+             "NOT SERVED LIST residue.md: the list names exactly what the folds render, both ways" \
+             "NOT SERVED LIST residue.md: every row grep counts parses here too" \
+             "SERVED LIST served.md: the list names exactly what the folds render, both ways" \
+             "SERVED: every route a served panel names is a door route" \
+             "PHASE 04 INPUT: every panel Phase 03 named NOT SERVED is now served or in the residue, none dropped"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }
@@ -501,7 +502,45 @@ load 'test_helper'
              "VENTURES: an unreceipted criteria file measures nothing -- no roster, every count unread, never 0" \
              "PLANNED: two rows for one room are refused -- choosing one would be a guess" \
              "PLANNED: the file's text is un-escaped ONCE -- a literal entity in it stays literal" \
-             "F3: trader with its file read returns no LIVE pill in any case"; do
+             "F3: trader with its file read returns no LIVE pill in any case"              "MONEY: a day read answered with the month model is refused, never drawn"              "MONEY: fourteen days per substance, each in its own table -- real, simulated, and cost lines counted, never summed"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: Phase 04 served panels answer every loaded branch, and the door refuses a hostile tree by name" {
+  # The Phase 04 attackers' surviving mutants, each pinned by a check that fails when its decision is removed: an
+  # empty table for a body with no list, a sum across substances or currencies, the overdue flag ignored, a seal drawn
+  # as quoted, a Definition of Done blind to refused slices -- and at the door, a wrong-shaped file read as empty, a
+  # junction off the tree, an address where a lead id belongs, a null spine line, an env var swapping a file.
+  run node "$ARC_ROOT/tests/face/phase04-folds.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 141 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "SERVED: a body with no list where the rows live is BAD_BODY -- never an empty table" \
+             "SERVED: unreadable, blank and repeated entries are COUNTED in the note, and never drawn" \
+             "MONEY DAY: the real cell holds the real amount alone -- never real + simulated" \
+             "MONEY DAY: cost lines counted per currency and never totalled, the unmeasurable one counted on its day" \
+             "SCHEDULER: a job whose overdue flag is set reads overdue, whatever its state string says" \
+             "LEGAL: a seal the policy file does not quote is drawn as drifted, never as quoted" \
+             "DEVELOP: a task file with a heading the parser refused does NOT prove its close" \
+             "DAILY: the day's cash-in equals the month model's rows recorded that day" \
+             "DOOR: a directory that resolves off the tree is SOURCE_OUTSIDE -- no off-tree ADR is served" \
+             "DOOR: a lead_id that is not an HMAC id never reaches the wire, and is counted as withheld" \
+             "DOOR: a null line on the spine is torn -- counted, never a 500" \
+             "SERIALIZER: a payload nested past the cap is served as a sentence, never a stack overflow" \
+             "PNL DOOR: ARC_VENTURES_FILE in the door's env withholds the kill panel by name" \
+             "GATES DOOR: a resolver echoing anything but warn or block leaves the gate unresolved -- an address never reaches the wire" \
+             "SLICES DOOR: a lane whose directory resolves off the tree is NAMED in the table, not read and not dropped" \
+             "LEARN DOOR: a row dated 2026-09-31 is a rule and never this week's; the malformed row is counted" \
+             "PNL DOOR: a directory where ventures.yaml belongs withholds the kill panel by name and keeps the P&L -- no 500, no path" \
+             "FILE DOOR: an allow-listed id whose path resolves off the tree is SOURCE_OUTSIDE, never another tree's bytes" \
+             "SPINE: a day file the reader cannot open is reported, and the door counts it under the table" \
+             "EVOLVE: a closed experiment reads closed with its outcome, whatever verdict came before -- as the lane's board renders it" \
+             "DAILY: a receipt on 2026-06-31 is unplaceable -- counted, never a silent gap in fourteen days" \
+             "SPINE ROOM: a door that does not say whether every day file opened is unknown, never zero"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }

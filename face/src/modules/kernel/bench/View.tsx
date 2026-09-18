@@ -1,13 +1,13 @@
 // View.tsx -- kernel/bench: v0.7's Bench, drawing what fold() returned and deciding nothing (face v2
 // Phase 03, ADR-1320).
 //
-// Declared deltas from the reference: the scorecards are a NOT SERVED panel until /api/bench (ADR-1324);
+// Declared deltas from the reference: the scorecards are the scored runs /api/bench serves (Phase 04), none labelled champion;
 // Add to bench, Run scorecard, Propose promotion and Retire are verb-pending cards (ADR-1326); runs by
 // driver are the door's run.completed receipts, not a mock scorecard at no cost.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Btn, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, Reading, ReceiptDrawer, RoomHead, RunRows, TrailPanel, VerbPending } from '../../../ui/bits'
+import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, Reading, ReceiptDrawer, RoomHead, RunRows, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
 export { ChartBarHorizontal as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -24,7 +24,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="The bench" hint="every number derives from scored runs">
-            <NotServed item={f.scorecards} />
+            <ServedTable item={f.scorecards} />
           </HPanel>
 
           <HPanel title="Runs by driver" hint="run.completed receipts, grouped by the driver that ran">

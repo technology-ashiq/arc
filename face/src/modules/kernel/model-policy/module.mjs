@@ -5,6 +5,6 @@
 export default Object.freeze({
   id: "model-policy",
   ring: "kernel",
-  routes: Object.freeze(["/api/lane/:id", "/api/file/:id"]),
+  routes: Object.freeze(["/api/lane/:id", "/api/file/:id", "/api/model-policy"]),
   asOf: false,
 });

@@ -62,7 +62,7 @@ export function isLeadsKind(kind) {
 // can never produce (store.mjs formats a Number) -- so a suppression receipt could be indexed
 // under a string no lookup would ever equal, and the person gets contacted again. That is
 // D1's un-fixed twin: D1 fixed the version RANGE and nobody fixed version CANONICALIZATION.
-const LEAD_ID_RE = /^lead_hmac_v[1-9][0-9]*_[0-9a-f]{32}$/;
+export const LEAD_ID_RE = /^lead_hmac_v[1-9][0-9]*_[0-9a-f]{32}$/;
 // Deliberately NOT accepted for a lead id, and asserted against by fixture: the unkeyed
 // `h-<hex16>` form evolve uses for URL-derived source ids.
 const BARE_HASH_RE = /^h-[0-9a-f]{16}$/;

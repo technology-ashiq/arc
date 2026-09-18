@@ -5,10 +5,13 @@
 // deleted). "The factory is not the product": every venture with its own money and its own kill lines, joined
 // from two authorities and trusting neither alone -- ventures.yaml (through the kill panel) says which ventures
 // exist, /api/pnl says what each one earned, and the roster is their union (money.mjs ventureRoster), so a venture
-// spending money with no kill line is a finding rather than a missing row. What is not served: each venture's
-// passport -- its status, stage and repo -- and the file's own rules, which /api/ventures will parse. Registering,
-// staging and proposing a kill are verbs of the work door (Phase 05).
+// spending money with no kill line is a finding rather than a missing row. Through /api/ventures (Phase 04): the
+// file's own rules as the ledger's parser enforces them -- the closed set of criteria, the ceiling, the digest over
+// the parsed values. What is still NOT SERVED: each venture's passport and the base rate, because ventures.yaml holds
+// only kill criteria and no parser reads either from anywhere else. Registering, staging and proposing a kill are
+// verbs of the work door (Phase 05).
 import { notServed, readProblem, payloadOf, verbPending } from "../../../lib/registry.mjs";
+import { asArray, asObject, cell, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
 import {
   KILL_BADGE, OVERHEAD_VENTURE, REAL_KIND, SIM_KIND, asOfSupport, costTally, criterionSentence, fmtInt, killSummary,
   rosterSummary, ventureMoney, ventureRoster,
@@ -69,7 +72,7 @@ import { roomLink, sourceFile } from "../../../lib/lane-room.mjs";
  * @property {string} declared
  * @property {import("../../../lib/lane-room.mjs").SourceFile} file
  * @property {import("../../../lib/registry.mjs").NotServed} passports
- * @property {import("../../../lib/registry.mjs").NotServed} rules
+ * @property {import("../../../lib/served.mjs").ServedTable} rules
  * @property {{ isVerbPending: true, verb: string, sentence: string }} registerVerb
  * @property {{ isVerbPending: true, verb: string, sentence: string }} stageVerb
  * @property {{ isVerbPending: true, verb: string, sentence: string }} killVerb
@@ -90,6 +93,7 @@ import { roomLink, sourceFile } from "../../../lib/lane-room.mjs";
 export function fold(payloads, ctx) {
   const m = moneyReads(payloads, ctx);
   const reads = [...m.reads];
+  const venturesSt = servedRead(payloads, ctx, reads, "/api/ventures");
   // ventures.yaml's provenance -- the file the passports and the rules will be parsed from once their route
   // exists. Asked for only if the manifest allows it, like every read.
   const fileRead = { route: "/api/file/:id", param: "ventures" };
@@ -206,13 +210,26 @@ export function fold(payloads, ctx) {
     passports: notServed(
       "Passports",
       "/api/ventures",
-      "Each venture's passport -- live, candidate or attic, its stage and its own repo -- as ventures.yaml records it, with a row that leaves only by your stamp and never by deletion.",
+      "Each venture's passport -- live, candidate or attic, its stage and its own repo -- with a row that leaves only by your stamp and never by deletion. ventures.yaml holds kill criteria only; the passports are a PORTFOLIO.md table that only the board lint's awk reads -- filed to the ledger lane.",
     ),
-    rules: notServed(
-      "The rules of the file",
-      "/api/ventures",
-      "ventures.yaml's own rules, read from the file rather than typed here: criteria only, money never lives in it, and the digest is over parsed values so it cannot be edited silently.",
-    ),
+    rules: servedTable(projected(venturesSt, "rows", (b) => {
+      if (!Array.isArray(b["criteria"]) || !Array.isArray(b["ventures"])) return undefined;
+      return [
+        { rule: "the schema version", value: cell(b["version"]) },
+        { rule: "the only kill criteria a venture may declare", value: b["criteria"].map(cell).join(", ") },
+        { rule: "the ceiling on any criterion", value: cell(b["ceiling"]) },
+        { rule: "the digest, over the parsed values", value: field(b, "digest").slice(0, 16) },
+        ...b["ventures"].map((v) => ({ rule: `${field(asObject(v), "name")} declares`, value: asArray(asObject(v)["kill"]).map((k) => `${field(asObject(k), "criterion")} ${cell(asObject(k)["value"])}`).join(" · ") })),
+      ];
+    }), {
+      panel: "The rules of the file",
+      route: "/api/ventures",
+      columns: ["rule", "as the ledger's parser holds it"],
+      listKey: "rows",
+      empty: "ventures.yaml parsed to nothing.",
+      row: (r) => (field(r, "rule") === "" ? null : { key: field(r, "rule"), cells: [field(r, "rule"), field(r, "value") || "—"] }),
+      note: "money never lives in this file: a key outside the two criteria is refused by the parser, and the file's prose rules are comments it does not keep",
+    }),
     registerVerb: verbPending(
       "Register a venture",
       "venture.registered makes a candidate, and its kill line is written before its first launch. It arrives with the work door.",
@@ -230,7 +247,7 @@ export function fold(payloads, ctx) {
     baseRate: notServed(
       "The base rate",
       "/api/ventures",
-      "How many ventures the kill criteria were planned to expect to live, as the criteria file states it, written before the first launch -- so a death is a data point, not a surprise.",
+      "How many ventures the kill criteria were planned to expect to live, written before the first launch -- so a death is a data point, not a surprise. The criteria file does not state it: the figure is prose in the master execution plan, which no parser reads -- filed to the ledger lane.",
     ),
     shipWith: "A venture without a distribution plan does not ship. Launch week is a written playbook -- a channel at a time, personal and honest -- and growth wakes as a module only when a live venture pulls it.",
     board: roomLink(ctx, "board"),

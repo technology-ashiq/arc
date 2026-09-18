@@ -3,10 +3,12 @@
 //
 // The port of v0.7's Strategy onto the door. "One plan is live per lane. The rest are history." The live plans are the
 // lanes whose header reads LIVE on the board, each with the cycle its PLAN.md runs; the shelf is every plan and brief
-// the served registry homes here, from docs/strategy/plans. What is not served: the ADR index with each decision's
-// reversibility -- what is now too expensive to revisit -- which /api/adrs will fold. Adopting a plan and recording an
-// ADR are verbs of the work door.
+// the served registry homes here, from docs/strategy/plans. Through /api/adrs (Phase 04): the decision record, every
+// ADR read by the memory lane's own adapter and counted by the century its number falls in. What is still NOT SERVED:
+// each decision's reversibility -- what is now too expensive to revisit -- which only kickoff-lint parses, and it runs
+// at import, so no parser exists for the door to use. Adopting a plan and recording an ADR are verbs of the work door.
 import { notServed, payloadOf, readProblem, verbPending } from "../../../lib/registry.mjs";
+import { asArray, asObject, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { boardRows } from "../../../lib/spine.mjs";
 import { holdsCount, laneRoom } from "../../../lib/lane-room.mjs";
@@ -28,7 +30,7 @@ import { boardLanes, laneLinks } from "../../../lib/company-room.mjs";
  *   shelf: { key: string, id: string, path: string }[],
  *   isShelfEmpty: boolean,
  *   shelfEmpty: string,
- *   adrs: import("../../../lib/registry.mjs").NotServed,
+ *   adrs: import("../../../lib/served.mjs").ServedTable,
  *   expensive: import("../../../lib/registry.mjs").NotServed,
  *   adoptVerb: { isVerbPending: true, verb: string, sentence: string },
  *   recordVerb: { isVerbPending: true, verb: string, sentence: string },
@@ -70,6 +72,9 @@ export function fold(payloads, ctx) {
   }));
   const plans = base.unreadable.includes("plans") ? null : [...(base.held["plans"] ?? [])].sort();
   const shelf = (plans ?? []).map((id) => ({ key: id, id, path: `docs/strategy/plans/${id}.md` }));
+  const adrSt = servedRead(payloads, ctx, reads, "/api/adrs");
+  const adrCount = asArray(adrSt.body["adrs"]).length;
+  const malformed = typeof adrSt.body["malformed"] === "number" ? adrSt.body["malformed"] : 0;
   return {
     ...base,
     reads: [...base.reads, ...reads],
@@ -96,15 +101,46 @@ export function fold(payloads, ctx) {
     // The shelf draws the plans; the holds panel lists what else the registry homes here, never the plans twice.
     holdsShown: base.holds.filter((g) => g.key !== "plans"),
     hasHoldsShown: base.holds.some((g) => g.key !== "plans"),
-    adrs: notServed(
-      "The decision record",
-      "/api/adrs",
-      "Every ADR by its number and its lane's century, with its status and how reversible it is -- two-way, expensive, or one-way -- read from each file's own header.",
-    ),
+    // Every ADR, counted into the century its number falls in -- 286 rows is not a panel, and the century is the
+    // lane's band (the band map is the board's ADR station).
+    adrs: servedTable(projected(adrSt, "centuries", (b) => {
+      if (!Array.isArray(b["adrs"])) return undefined;
+      /** @type {Map<string, { century: string, n: number, statuses: Map<string, number>, newest: string }>} */
+      const by = new Map();
+      for (const a of b["adrs"]) {
+        const x = asObject(a);
+        const century = field(x, "century") || "unnumbered";
+        const g = by.get(century) ?? { century, n: 0, statuses: new Map(), newest: "" };
+        g.n += 1;
+        const status = (field(x, "status").toLowerCase().match(/[a-z]+/) ?? ["unknown"])[0];
+        g.statuses.set(status, (g.statuses.get(status) ?? 0) + 1);
+        const label = `${field(x, "number")} ${field(x, "title").replace(/^ADR[- ]?\d{4}\s*[—:-]\s*/, "")}`;
+        if (label > g.newest) g.newest = label;
+        by.set(century, g);
+      }
+      return [...by.values()].sort((a, b2) => (a.century < b2.century ? -1 : 1)).map((g) => ({
+        century: g.century, n: g.n, statuses: [...g.statuses.entries()].map(([k, v]) => `${v} ${k}`).join(", "), newest: g.newest,
+      }));
+    }), {
+      panel: "The decision record",
+      route: "/api/adrs",
+      columns: ["century", "ADRs", "by status", "the newest"],
+      listKey: "centuries",
+      empty: "docs/adr holds no ADR.",
+      row: (g) => {
+        const century = field(g, "century");
+        return century === "" ? null : { key: century, cells: [century, String(g["n"]), field(g, "statuses"), field(g, "newest")] };
+      },
+      note: [
+        adrSt.isRead ? `${adrCount} ADRs in all` : "",
+        malformed > 0 ? `${malformed} header${malformed === 1 ? "" : "s"} the adapter flagged` : "",
+        "how reversible each is lives in its header and is parsed only by kickoff-lint, which cannot be imported",
+      ].filter((n) => n !== "").join(" · "),
+    }),
     expensive: notServed(
       "Too expensive to revisit",
       "/api/adrs",
-      "The one-way and expensive decisions, the ones a new plan has to live with rather than reopen, each with the ADR that made it.",
+      "The one-way and expensive decisions, the ones a new plan has to live with rather than reopen, each with the ADR that made it. Reversibility is parsed only by kickoff-lint, which runs at import and cannot be imported, so no parser exists for the door to use -- filed to the plan lane.",
     ),
     adoptVerb: verbPending(
       "Adopt a plan",

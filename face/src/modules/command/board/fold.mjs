@@ -4,9 +4,11 @@
 // The port of v0.7's Board onto the door. Every lane VALUE is its own PROGRESS header, parsed by
 // spine.mjs's board readers (the board is a view; the lane files are the truth, ADR-0051); the totals
 // leave out and COUNT a lane whose header records no appetite or burn, never summing it as zero. The
-// pipeline counts today's receipts by the kind each stage names. The venture cards are NOT SERVED: v0.7
-// drew them from a simulated portfolio, and the door has no ventures route yet.
+// pipeline counts today's receipts by the kind each stage names. The venture cards are read from /api/ventures
+// (Phase 04): each venture's kill criteria, evaluated by the ledger's own kill panel. v0.7 drew them from a
+// simulated portfolio. The base rate is still NOT SERVED: no file the door can parse states it.
 import { notServed, payloadOf } from "../../../lib/registry.mjs";
+import { asArray, asObject, cell, field, projected, refusedPart, servedRead, servedTable } from "../../../lib/served.mjs";
 import { dayOf, decodeDoorText, fmtInt, readHealth, readSpinePage } from "../../../lib/inbox.mjs";
 import { boardProvenance, boardRows, boardTotals, fmtDays, sharePct } from "../../../lib/spine.mjs";
 
@@ -49,12 +51,62 @@ const STAGES = Object.freeze([
  * @property {string} sort
  * @property {{ key: string, name: string, n: string, note: string }[]} pipeline
  * @property {string} pipelineHint
- * @property {import("../../../lib/registry.mjs").NotServed} ventures
+ * @property {import("../../../lib/served.mjs").ServedTable} ventures
  * @property {import("../../../lib/registry.mjs").NotServed} baseRate
  * @property {boolean} canOpenOrg
  * @property {string} orgRoom
  * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
+
+// The kill-distance card, from the ledger's kill panel through /api/ventures (Phase 04). It lives in this fold, not in
+// lib/served.mjs: it reads the body's venture list by name, and a shell file names no room (module-frame's scan).
+/**
+ * Each venture's distance from its kill lines, one row per criterion, as the ledger's kill panel evaluated them
+ * (/api/ventures). A criteria file whose digest no receipt pins is NOT evaluated -- the panel says the kill lines
+ * are unarmed rather than drawing distances the ledger refused to compute.
+ * @param {import("../../../lib/served.mjs").ServedState} st @param {string} panel
+ * @returns {import("../../../lib/served.mjs").ServedTable}
+ */
+function venturesKill(st, panel) {
+  const kill = asObject(st.body["kill"]);
+  const armed = kill["present"] === true && kill["receipted"] === true;
+  // A panel the door withheld by name (a criteria file off this tree, an env var swapping one in) is that refusal --
+  // never the "ventures.yaml is not on this tree" empty state its present:false would otherwise read as.
+  const withheld = field(kill, "refused");
+  const answered = withheld !== "" ? refusedPart(st, "KILL_REFUSED", `the door withheld the kill panel: ${withheld}`) : st;
+  return servedTable(projected(answered, "rows", (b) => {
+    const k = asObject(b["kill"]);
+    if (!Array.isArray(k["ventures"])) return undefined;
+    return k["ventures"].flatMap((v) => asArray(asObject(v)["criteria"]).map((c) => ({ ...asObject(c), venture: asObject(v)["venture"] })));
+  }), {
+    panel,
+    route: "/api/ventures",
+    columns: ["venture", "kill criterion", "status", "distance to the line"],
+    listKey: "rows",
+    empty: kill["present"] !== true
+      ? "ventures.yaml is not on this tree, so no venture has a kill line."
+      : kill["receipted"] !== true
+        ? "The criteria file's digest is pinned by no receipt, so the ledger arms no kill line and computes no distance."
+        : "The criteria file names no venture.",
+    row: (c) => {
+      const venture = field(c, "venture");
+      const criterion = field(c, "criterion");
+      const unit = field(c, "unit");
+      const distance = c["distance"] === null || c["distance"] === undefined ? (field(c, "reason") || "not measured") : `${cell(c["distance"])}${unit ? ` ${unit}` : ""}`;
+      return venture === "" || criterion === "" ? null : { key: `${venture}/${criterion}`, cells: [venture, `${criterion} ${cell(c["threshold"])}`, field(c, "status"), distance] };
+    },
+    note: armed ? [
+      `evaluated on ${field(kill, "asOf")} from ${field(kill, "path")} by the ledger's kill panel`,
+      // What the panel set aside, said beside the distances it shaped -- the money room draws the same exclusion from
+      // /api/pnl, and a board without it drew "42 days" with its caveat removed (Phase 04 round 3).
+      ...asArray(kill["futureRevenue"]).map((r) => {
+        const n = asObject(r)["count"];
+        return typeof n === "number" && n > 0 ? `${cell(n)} revenue receipt${n === 1 ? "" : "s"} for ${field(asObject(r), "venture")} dated after the panel's clock, excluded from every distance` : "";
+      }),
+      typeof kill["absentCount"] === "number" && kill["absentCount"] > 0 ? `${cell(kill["absentCount"])} criteria the panel could not evaluate on this read` : "",
+    ].filter((n) => n !== "").join(" · ") : "",
+  });
+}
 
 /**
  * @param {Record<string, Payload>} payloads
@@ -72,12 +124,14 @@ export function fold(payloads, ctx) {
   const board = view !== null && !("code" in view) ? view : null;
   const rows = board === null ? [] : board.rows;
   const totals = boardTotals(rows);
+  const outsideLanes = boardP.state === "ok" ? asArray(asObject(boardP.data)["outside"]).map((l) => decodeDoorText(typeof l === "string" ? l : "")).filter((l) => l !== "") : [];
 
   const healthP = payloadOf(payloads, { route: "/api/health" });
   const health = healthP.state === "ok" ? readHealth(healthP.data) : null;
   const day = health === null ? "" : dayOf(health.now);
   const feedRead = day === "" ? null : { route: "/api/spine", query: { date: day, limit: FEED_LIMIT }, poll: true };
   if (feedRead !== null) reads.push(feedRead);
+  const venturesSt = servedRead(payloads, ctx, reads, "/api/ventures");
   const feedP = feedRead === null ? null : payloadOf(payloads, feedRead);
   const events = feedP !== null && feedP.state === "ok" ? readSpinePage(feedP.data).events : [];
 
@@ -115,7 +169,9 @@ export function fold(payloads, ctx) {
     lede: decodeDoorText(ctx.room.lede),
     badge: board === null ? "board unread" : `board · ${fmtInt(rows.length)} lanes · ${board.badge}`,
     kpis: [
-      { key: "lanes", v: board === null ? "—" : fmtInt(totals.lanes), l: "Lanes on the board", sub: "PORTFOLIO.md's order" },
+      // A board row whose lane resolves off the tree is named by the door and never read (Phase 04 round 3); the tile
+      // says how many, so a shorter board is never read as a smaller company.
+      { key: "lanes", v: board === null ? "—" : fmtInt(totals.lanes), l: "Lanes on the board", sub: outsideLanes.length > 0 ? `PORTFOLIO.md's order · ${fmtInt(outsideLanes.length)} row${outsideLanes.length === 1 ? "" : "s"} off the tree, not read: ${outsideLanes.join(", ")}` : "PORTFOLIO.md's order" },
       { key: "live", v: board === null ? "—" : fmtInt(totals.live), l: "Live", sub: "header reads LIVE" },
       { key: "blocked", v: board === null ? "—" : fmtInt(totals.blocked), l: "Blocked", sub: "header names what blocks it" },
       { key: "spent", v: board === null ? "—" : `${fmtDays(totals.spent)} / ${fmtDays(totals.bought)}`, l: "Appetite spent / bought", sub: totals.unmeasured > 0 ? `${fmtInt(totals.unmeasured)} lanes not summed` : "every lane measured" },
@@ -149,9 +205,9 @@ export function fold(payloads, ctx) {
     baseRate: notServed(
       "The base rate",
       "/api/ventures",
-      "How many ventures the kill criteria were planned to expect to live, as the criteria file states it, written before the first launch -- so a death is a data point, not a surprise.",
+      "How many ventures the kill criteria were planned to expect to live, written before the first launch -- so a death is a data point, not a surprise. The criteria file does not state it: the figure is prose in the master execution plan, which no parser reads -- filed to the ledger lane.",
     ),
-    ventures: notServed("Ventures", "/api/ventures", "The kill-distance card for each venture: its stage, its criteria set at kickoff, and how far it is from its own kill line. The door serves no ventures route yet."),
+    ventures: venturesKill(venturesSt, "Ventures"),
     reads,
   };
 }

@@ -472,6 +472,7 @@ export function judge(report) {
   // A count that could not be read is not a clean run: REQ-05's browser half rests on these two numbers.
   if (report.notServed && report.notServed.panels === null) reasons.push("the NOT SERVED panel count could not be read in every opened room");
   if (report.verbsPending && report.verbsPending.panels === null) reasons.push("the verb-pending card count could not be read in every opened room");
+  if (report.served && report.served.panels === null) reasons.push("the served panel count could not be read in every opened room");
   if (report.rehearsal && report.rehearsal.panels === null) reasons.push("the rehearsal card count could not be read in every opened room");
   // F3 (ADR-1328): every planned room the contract names opened marked planned, and none of them drew LIVE.
   if (Array.isArray(report.runner)) {
@@ -552,6 +553,15 @@ export function notServedLine(report) {
   const n = report.notServed ?? { panels: 0, rooms: [] };
   // A room whose count could not be read makes the whole count UNREAD, never a quiet zero.
   return `smoke: not-served mood=${report.mood ?? "unstated"} panels=${n.panels === null ? "unread" : n.panels} rooms=${n.rooms.join(",") || "none"}`;
+}
+
+/**
+ * How many panels a Phase 04 door route fills, per room (face v2 Phase 04, REQ-06): the other side of the NOT
+ * SERVED count, so a panel that flipped is seen to arrive, not only to leave.
+ */
+export function servedLine(report) {
+  const n = report.served ?? { panels: 0, rooms: [] };
+  return `smoke: served mood=${report.mood ?? "unstated"} panels=${n.panels === null ? "unread" : n.panels} rooms=${n.rooms.join(",") || "none"}`;
 }
 
 /**
@@ -873,6 +883,13 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
             returnByValue: true,
           });
           room.notServed = Number.isInteger(gaps.result?.value) ? gaps.result.value : null;
+          // REQ-06: the panels a Phase 04 door route fills, counted the same way -- a flipped panel moves from one count
+          // to the other, and the browser suite holds each against its derived list.
+          const fills = await page.send("Runtime.evaluate", {
+            expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.querySelectorAll("[data-served]").length : 0; })()`,
+            returnByValue: true,
+          });
+          room.served = Number.isInteger(fills.result?.value) ? fills.result.value : null;
           // ADR-1326: the verbs this face does not perform yet, counted where they are drawn.
           const verbs = await page.send("Runtime.evaluate", {
             expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.querySelectorAll("[data-verb-pending]").length : 0; })()`,
@@ -974,6 +991,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
         return { checked: checks.length, miss: checks.filter((c) => !c.ok) };
       })(),
       notServed: countedPerRoom(rooms, "notServed"),
+      served: countedPerRoom(rooms, "served"),
       verbsPending: countedPerRoom(rooms, "verbsPending"),
       rehearsal: countedPerRoom(rooms, "rehearsal"),
       planned: {

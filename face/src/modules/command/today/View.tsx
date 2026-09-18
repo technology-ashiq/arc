@@ -3,12 +3,12 @@
 //
 // Declared deltas from the reference: the approval list is read here and decided in the inbox module
 // (v0.7's one-key approve had no reason, and a stamp without one is not a stamp); the policy ladder and
-// "learned this week" are NOT SERVED panels (ADR-1324); the tape is the door's day, newest at the foot.
+// "learned this week" are read from /api/policy and /api/learn (Phase 04); the tape is the door's day, newest at the foot.
 import { Pulse, Tray } from '@phosphor-icons/react'
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Btn, Chip, MONO, SimBadge, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, Empty, EventRow, HPanel, KpiStrip, NotServed, Reading, ReceiptDrawer, RoomHead, SectionLabel } from '../../../ui/bits'
+import { DoorRefusal, Empty, EventRow, HPanel, KpiStrip, Reading, ReceiptDrawer, RoomHead, SectionLabel, ServedTable } from '../../../ui/bits'
 export { SunHorizon as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -127,11 +127,11 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Policy" hint="the ladder at a glance">
-            <NotServed item={f.policy} />
+            <ServedTable item={f.policy} />
           </HPanel>
 
           <HPanel title="Learned this week" hint="calibration, not vibes">
-            <NotServed item={f.learned} />
+            <ServedTable item={f.learned} />
           </HPanel>
         </div>
       </div>

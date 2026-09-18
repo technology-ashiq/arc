@@ -4,11 +4,11 @@
 // Declared deltas from the reference: every lane value is its PROGRESS header through the door, in
 // PORTFOLIO.md's order unless re-sorted; a blocked lane and a lane past its line wear no reserved colour
 // (blocked is not needs-you and burn is not an incident), the words carry it; the pipeline counts the
-// door's day of receipts by kind; the venture cards are a NOT SERVED panel (ADR-1324).
+// door's day of receipts by kind; the venture cards are the ledger's kill panel through /api/ventures, and the base rate is NOT SERVED (ADR-1324).
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Btn, FONT, MONO, Meter, PickRow, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, KpiStrip, NotServed, Reading, RoomHead } from '../../../ui/bits'
+import { DoorRefusal, HPanel, KpiStrip, NotServed, Reading, RoomHead, ServedTable } from '../../../ui/bits'
 export { Kanban as Icon } from '@phosphor-icons/react'
 
 // one column template for the header row and every lane row
@@ -81,7 +81,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
       </HPanel>
 
       <HPanel title="Ventures" hint="kill-distance cards · criteria set at kickoff, in writing">
-        <NotServed item={f.ventures} />
+        <ServedTable item={f.ventures} />
       </HPanel>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

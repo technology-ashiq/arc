@@ -3,14 +3,14 @@
 //
 // Declared deltas from the reference: the roster is the union of ventures.yaml's kill panel and the P&L, not a
 // seeded registry, and each card carries both substances and its costs as the Cycle 15 renderer this replaces
-// did; passports (status, stage, repo) and the file's own rules are NOT SERVED panels (ADR-1324); registering,
+// did; the file's own rules are read from /api/ventures (Phase 04) and the passports are NOT SERVED (ADR-1324); registering,
 // staging and proposing a kill are work-door cards (ADR-1326); the venture.* trail is a sentence, because the
 // spine records no such kind yet; "Kill reviews waiting" became the crossed and undeclared counts the kill panel
 // actually serves.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Btn, MONO, SimBadge, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, NotServed, Reading, RoomHead, SourceFile, VerbPending } from '../../../ui/bits'
+import { DoorRefusal, HPanel, NotServed, Reading, RoomHead, ServedTable, SourceFile, VerbPending } from '../../../ui/bits'
 import { CostPanel, FigureStrip, FileBadge, GateStrip, VentureCardPanel } from '../../../ui/money'
 export { Buildings as Icon } from '@phosphor-icons/react'
 
@@ -71,7 +71,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           <HPanel title="The rules of the file" hint="ventures.yaml, through the door">
             <SourceFile file={f.file} />
             <div className="mt-3">
-              <NotServed item={f.rules} />
+              <ServedTable item={f.rules} />
             </div>
           </HPanel>
 

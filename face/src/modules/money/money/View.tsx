@@ -2,14 +2,14 @@
 // ADR-1320).
 //
 // Declared deltas from the reference: the two substances are the door's two P&L reads, side by side and never
-// summed, where v0.7 drew one simulated series; the fourteen-day chart, the milestone line and "where money
-// comes from" are NOT SERVED panels (ADR-1324) -- the money brain serves months, and the reference's milestones
+// summed, where v0.7 drew one simulated series; the fourteen days are the money brain's day series through /api/pnl?by=day,
+// drawn as three tables rather than one chart so no row holds two substances; the milestone line and "where money comes from" are NOT SERVED (ADR-1324) -- the reference's milestones
 // and prices were facts typed into it; "Record real revenue" is a work-door card, not a form (ADR-1326); cost
 // is counted and never totalled, and the return is refused by name, as the Cycle 15 renderer this replaces did.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { MONO, SimBadge, UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, NotServed, RoomHead, VerbPending } from '../../../ui/bits'
+import { HPanel, NotServed, RoomHead, ServedTable, VerbPending } from '../../../ui/bits'
 import { CostPanel, FigureStrip, FileBadge, GateStrip, KillLinesPanel, SubstancePanel } from '../../../ui/money'
 export { CurrencyInr as Icon } from '@phosphor-icons/react'
 
@@ -33,7 +33,11 @@ export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
           <p className="text-[12.5px] leading-[19px] mb-4 max-w-[82ch]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.neverAdded}</p>
 
           <HPanel title="Fourteen days" hint="one axis, three substances · every line derives from the log">
-            <NotServed item={f.chart} />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <ServedTable item={f.chart} />
+              <ServedTable item={f.chartSim} />
+              <ServedTable item={f.chartCost} />
+            </div>
           </HPanel>
 
           <HPanel title="Record real revenue" hint="money moves by human hands only">

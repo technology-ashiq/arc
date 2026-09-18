@@ -796,6 +796,17 @@ export function notServedOf(folded) {
 }
 
 /**
+ * Every panel a Phase 04 door route fills (served.mjs), nested anywhere, in document order -- the list the
+ * phase-04 SERVED evidence file is held equal to, by the same walk, so a NOT SERVED panel that flips to live
+ * leaves one list and joins the other rather than vanishing from both (face v2 Phase 04, REQ-06).
+ * @param {unknown} folded
+ * @returns {{ isServed: true, panel: string, route: string }[]}
+ */
+export function servedOf(folded) {
+  return /** @type {{ isServed: true, panel: string, route: string }[]} */ (/** @type {unknown} */ (markedIn(folded, "isServed", ["route", "panel"])));
+}
+
+/**
  * The header's data-mode chip. A sim spine is violet's (the non-real family), live is the product's
  * own colour, and a mode the door did not state is drawn as unstated -- never as live.
  * @param {string | undefined} mode

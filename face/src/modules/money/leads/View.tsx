@@ -2,13 +2,13 @@
 // ADR-1320).
 //
 // Declared deltas from the reference: the funnel's columns count the door's receipts by kind, where v0.7 drew a
-// card per lead from a local store -- no lead is named on this screen; the per-lead funnel, the caps and the
-// suppression ledger are NOT SERVED panels until /api/leads (ADR-1324); research, send, move and suppress are
+// card per lead from a local store -- no lead is named on this screen, only its HMAC id; the per-lead funnel, the caps and the
+// suppression ledger are read from /api/leads (Phase 04); research, send, move and suppress are
 // work-door cards, not buttons (ADR-1326).
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { MONO, UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, ReceiptDrawer, RoomHead, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, LanePanel, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
 export { Funnel as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -43,7 +43,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="The funnel by lead" hint="one card per lead, never a raw contact">
-            <NotServed item={f.byLead} />
+            <ServedTable item={f.byLead} />
           </HPanel>
 
           <TrailPanel trail={f.trail} onReceipt={(id) => ctx.onPick('receipt', id)} />
@@ -51,7 +51,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
         <div className="min-w-0">
           <HPanel title="The caps" hint="values in config, enforcement in code">
-            <NotServed item={f.caps} />
+            <ServedTable item={f.caps} />
             <ul className="mt-3 list-disc pl-4 space-y-1 text-[12px] leading-[18px] marker:text-(--text-3)" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
               {f.guard.map((g) => (
                 <li key={g}>{g}</li>
@@ -60,7 +60,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Suppression ledger" hint="event-backed, derived · no way to reset it">
-            <NotServed item={f.ledger} />
+            <ServedTable item={f.ledger} />
           </HPanel>
 
           <LanePanel lane={f.lane} />

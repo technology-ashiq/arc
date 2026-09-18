@@ -2,12 +2,12 @@
 // company ring, ADR-1320).
 //
 // Declared deltas from the reference: the live plans are the board's LIVE lanes and the shelf is the served
-// registry's plans, not a seeded list with a "yours" tab; the ADR index and the too-expensive-to-revisit list are NOT
-// SERVED until /api/adrs (ADR-1324); adopting a plan and recording an ADR are work-door cards, not forms (ADR-1326).
+// registry's plans, not a seeded list with a "yours" tab; the ADR index is read from /api/adrs (Phase 04) and the too-expensive-to-revisit list is NOT
+// SERVED, since no importable parser reads reversibility (ADR-1324); adopting a plan and recording an ADR are work-door cards, not forms (ADR-1326).
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { MONO, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, NotServed, Reading, RoomHead, VerbPending } from '../../../ui/bits'
+import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, NotServed, Reading, RoomHead, ServedTable, VerbPending } from '../../../ui/bits'
 export { Compass as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -61,7 +61,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="The decision record" hint="docs/adr · one century per lane">
-            <NotServed item={f.adrs} />
+            <ServedTable item={f.adrs} />
           </HPanel>
 
           <HPanel title="Too expensive to revisit">

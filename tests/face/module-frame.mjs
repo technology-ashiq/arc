@@ -383,15 +383,15 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
   try { reg.payloadsFor(manifest, { "not a key": { state: "ok", data: 1 } }); } catch (e) { threwKey = e; }
   check("UNDECLARED: a payload under a key that is not a read key FAILs too", threwKey !== null);
 
-  const bad = reg.collectModules({ ...ns("command", "policy"), "./modules/command/policy/module.mjs": { default: { id: "policy", ring: "command", routes: ["/api/policy"], asOf: true } } });
-  check("a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)", bad.modules.length === 0 && bad.problems.some((p) => p.kind === "manifest" && p.why.includes("/api/policy")), JSON.stringify(bad.problems));
+  const bad = reg.collectModules({ ...ns("command", "policy"), "./modules/command/policy/module.mjs": { default: { id: "policy", ring: "command", routes: ["/api/secrets"], asOf: true } } });
+  check("a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)", bad.modules.length === 0 && bad.problems.some((p) => p.kind === "manifest" && p.why.includes("/api/secrets")), JSON.stringify(bad.problems));
 
   const refuse = (name, read, needle) => {
     const why = reg.readProblem(read, manifest);
     check(`READ REFUSED: ${name}`, typeof why === "string" && why.includes(needle), String(why));
   };
   refuse("a route this module does not declare", { route: "/api/inbox" }, "/api/inbox");
-  refuse("a route the door does not serve", { route: "/api/policy" }, "/api/policy");
+  refuse("a route the door does not serve", { route: "/api/secrets" }, "/api/secrets");
   refuse("a param route with no id", { route: "/api/lane/:id" }, "id");
   refuse("a plain route given an id", { route: "/api/board", param: "x" }, "id");
   refuse("a query key the route does not take", { route: "/api/spine", query: { secret: "1" } }, "secret");
@@ -515,7 +515,7 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
    */
   const listCheck = (name, file, re, shape, derivedRows, label) => {
     const raw = existsSync(file) ? readFileSync(file, "utf8") : null;
-    check(`${label} LIST: evidence/phase-03/${name} exists`, raw !== null);
+    check(`${label} LIST: ${relative(REPO, file).split(sep).join("/")} exists`, raw !== null);
     if (raw === null) return;
     check(`${label} LIST ${name}: every line break is a newline, so grep and this file read the same rows`,
       !/[\r\u2028\u2029]/.test(raw), JSON.stringify((/[\r\u2028\u2029]/.exec(raw) || [])[0] || ""));
@@ -536,6 +536,7 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
       `listed-only=${parsed.filter((r) => !derived.includes(r)).join(" ; ")} derived-only=${derived.filter((r) => !parsed.includes(r)).join(" ; ")}`);
   };
   const allRows = [];
+  const allServedRows = [];
   const allVerbRows = [];
   /** @type {string[]} */
   const ringsWithPlanned = [];
@@ -545,6 +546,7 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
     const have = existsSync(ringDir) ? readdirSync(ringDir).filter((id) => statSync(join(ringDir, id)).isDirectory()).sort() : [];
     check(`SHIPPED RING ${ring}: its module folders are modules-v2.json's ids for the ring`, want.length > 0 && JSON.stringify(have) === JSON.stringify(want), `have=${have.join(",")} want=${want.join(",")}`);
     const rows = [];
+    const servedRows = [];
     const verbRows = [];
     const rehearsalRows = [];
     for (const id of have) {
@@ -577,14 +579,14 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
       check(`SHIPPED RING ${ring}: ${id}'s asOf claim matches whether the scrub reaches its routes`,
         (manifest.asOf === true) === reachable, `asOf=${String(manifest.asOf)} reachable=${reachable}`);
       for (const ns of (typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [])) rows.push(`${id} | ${ns.panel} | ${ns.route} | ${ns.sentence}`);
+      for (const s of (typeof reg.servedOf === "function" ? reg.servedOf(folded) : [])) servedRows.push(`${id} | ${s.panel} | ${s.route}`);
       for (const v of (typeof reg.verbPendingOf === "function" ? reg.verbPendingOf(folded) : [])) verbRows.push(`${id} | ${v.verb} | ${v.sentence}`);
       for (const v of (typeof reg.rehearsalOf === "function" ? reg.rehearsalOf(folded) : [])) rehearsalRows.push(`${id} | ${v.verb} | ${v.sentence}`);
     }
-    // The evidence lists are what Phase 04 and Phase 05 build; each must be what the folds actually
-    // render, both ways, INCLUDING the sentence the file promises -- a typed column drifts (it already had).
-    listCheck(`not-served-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `not-served-${ring}.md`),
-      /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm,
-      (m) => `${m[1]} | ${m[2]} | ${m[3]} | ${m[4]}`, rows, "NOT SERVED");
+    // The evidence lists are what Phase 05 builds; each must be what the folds actually render, both ways,
+    // INCLUDING the sentence the file promises -- a typed column drifts (it already had). Phase 03's NOT SERVED
+    // lists were Phase 04's INPUT and stay frozen as it found them; what is still NOT SERVED after Phase 04, and
+    // what Phase 04 served, are held below against phase-04's two lists, across every ring at once.
     listCheck(`verbs-pending-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `verbs-pending-${ring}.md`),
       /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm,
       (m) => `${m[1]} | ${m[2]} | ${m[3]}`, verbRows, "VERBS PENDING");
@@ -601,7 +603,42 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
       check(`REHEARSAL LIST rehearsal-${ring}.md: the ring's planned rooms rehearse at least one flow (vacuous-pass guard)`, rehearsalRows.length > 0, `rows=${rehearsalRows.length}`);
     }
     allRows.push(...rows);
+    allServedRows.push(...servedRows);
     allVerbRows.push(...verbRows);
+  }
+  // Phase 04 (REQ-06): the RESIDUE -- every panel still NOT SERVED, with the route it needs -- and the SERVED list --
+  // every panel a door route now fills -- each held equal to the folds both ways. A panel that flips leaves the
+  // first and joins the second; one that vanished from both is a mismatch in the second.
+  const P04 = join(REPO, "initiatives", "face", "evidence", "phase-04");
+  listCheck("residue.md", join(P04, "residue.md"),
+    /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm,
+    (m) => `${m[1]} | ${m[2]} | ${m[3]} | ${m[4]}`, allRows, "NOT SERVED");
+  listCheck("served.md", join(P04, "served.md"),
+    /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \|$/gm,
+    (m) => `${m[1]} | ${m[2]} | ${m[3]}`, allServedRows, "SERVED");
+  // A panel is in EXACTLY one of the two lists: drawn both as a served table and as NOT SERVED, the list pair would
+  // agree with the folds while the room contradicted itself (Phase 04 attack: engine-room "Budgets" in both passed).
+  {
+    const panelOf = (r) => r.split(" | ").slice(0, 2).join(" | ");
+    const residuePanels = new Set(allRows.map(panelOf));
+    const both = allServedRows.map(panelOf).filter((k) => residuePanels.has(k));
+    check("PHASE 04: no panel is both served and NOT SERVED", allServedRows.length > 0 && both.length === 0, both.join(" ; "));
+  }
+  // Every route a served panel names is a route the door serves; a panel naming one it does not would read "…" for ever.
+  const servedRoutes = [...new Set(allServedRows.map((r) => r.split(" | ")[2]))];
+  const unrouted = servedRoutes.filter((r) => !Object.hasOwn(door.DOOR_ROUTES || {}, r));
+  check("SERVED: every route a served panel names is a door route", servedRoutes.length > 0 && unrouted.length === 0, unrouted.join(","));
+  // The Phase 03 lists were Phase 04's input: every panel they named is now either served or residue, by module and
+  // panel -- none quietly dropped on the way (REQ-06's "the union drops to 0, or to a named residue").
+  {
+    const input = readdirSync(join(REPO, "initiatives", "face", "evidence", "phase-03"))
+      .filter((n) => /^not-served-.+\.md$/.test(n))
+      .flatMap((n) => [...readFileSync(join(REPO, "initiatives", "face", "evidence", "phase-03", n), "utf8")
+        .matchAll(/^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm)].map((m) => `${m[1]} | ${m[2]}`));
+    const accounted = new Set([...allRows, ...allServedRows].map((r) => r.split(" | ").slice(0, 2).join(" | ")));
+    const dropped = input.filter((r) => !accounted.has(r));
+    check("PHASE 04 INPUT: the Phase 03 lists name panels to account for (vacuous-pass guard)", input.length >= 40, `input=${input.length}`);
+    check("PHASE 04 INPUT: every panel Phase 03 named NOT SERVED is now served or in the residue, none dropped", dropped.length === 0, dropped.join(" ; "));
   }
   // Two empty lists agree with each other. A ring may legitimately render no verb-pending card (the
   // command ring does not), so the floor is across the shipped rings, not per file (code review).
@@ -620,8 +657,9 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
     check("LISTS: every derived list names a shipped ring, and a rehearsal list a ring with planned modules -- no stray file widens the browser's judgement",
       files.length > 0 && stray.length === 0, `files=${files.join(",")} stray=${stray.join(",")}`);
   }
-  check("DERIVED LISTS: the shipped rings render NOT SERVED panels and work-door cards at all (vacuous-pass guard)",
-    allRows.length > 0 && allVerbRows.length > 0, `notServed=${allRows.length} verbsPending=${allVerbRows.length}`);
+  // The residue may legitimately be empty (REQ-06's target), so the floor is on what Phase 04 served.
+  check("DERIVED LISTS: the shipped rings render served panels and work-door cards at all (vacuous-pass guard)",
+    allServedRows.length > 0 && allVerbRows.length > 0, `served=${allServedRows.length} notServed=${allRows.length} verbsPending=${allVerbRows.length}`);
 }
 
 // ── F2 (Cycle 15 room sweep): the scheduler's lede promises only what the module shows ──
@@ -647,13 +685,37 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
       homed.length > 0 && JSON.stringify(drawn) === JSON.stringify(homed), `drawn=${drawn.join(",")} homed=${homed.join(",")}`);
     check("F2: LAST OUTCOME -- every job row carries one, and says it is unread rather than inventing it",
       Array.isArray(folded.jobs) && folded.jobs.every((j) => typeof j.last === "string" && j.last !== ""), JSON.stringify(drawn));
-    const nsFor = (re) => ns.filter((n) => re.test(n.panel) && n.route === "/api/jobs");
-    check("F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it",
-      nsFor(/next fire/i).length === 1, ns.map((n) => `${n.panel}=${n.route}`).join(" ; "));
-    check("F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat",
-      nsFor(/heartbeat/i).length === 1 && folded.lastFire !== undefined && typeof folded.lastFire.hasFire === "boolean"
+    // Phase 04 served both: /api/jobs runs the brief's own jobs panel. They are SERVED panels against that route now,
+    // and neither is NOT SERVED any more -- a panel in both lists would be drawn twice.
+    const sv = typeof reg.servedOf === "function" ? reg.servedOf(folded) : [];
+    const svFor = (re) => sv.filter((n) => re.test(n.panel) && n.route === "/api/jobs");
+    check("F2: NEXT FIRE -- served by /api/jobs, and no longer named NOT SERVED",
+      svFor(/next fire/i).length === 1 && ns.every((n) => !/next fire/i.test(n.panel)), sv.map((n) => `${n.panel}=${n.route}`).join(" ; "));
+    check("F2: HEARTBEAT -- served by /api/jobs, and the trail's last fire is still drawn as a fire, not as a beat",
+      svFor(/heartbeat/i).length === 1 && ns.every((n) => !/heartbeat/i.test(n.panel)) && folded.lastFire !== undefined && typeof folded.lastFire.hasFire === "boolean"
       && folded.lastFire.hasFire === false && !/heartbeat/i.test(String(folded.lastFire.line)),
       `lastFire=${JSON.stringify(folded.lastFire)}`);
+    // ... and with /api/jobs ANSWERED, so the arm asserts the rows a person reads, not the loading state.
+    {
+      const jobsRead = reg.plannedReads(folded, schedulerManifest).reads.filter((r) => r.route === "/api/jobs");
+      check("F2: the scheduler fold asks the door for /api/jobs (vacuous-pass guard)", jobsRead.length === 1, JSON.stringify(jobsRead));
+      const loaded = Object.create(null);
+      for (const r of jobsRead) loaded[r.key] = { state: "ok", data: { route: "/api/jobs", overdueSlots: 2, observedFrom: "2026-09-01", jobs: [
+        { name: "brief-materialize", enabled: true, cadence: "weekdays@06:00", nextExpected: "2026-09-21T06:00:00+05:30", missed: 3, overdue: true, state: "overdue", lastRun: "2026-09-10T06:00:04+05:30" },
+      ] } };
+      const f2 = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold(loaded, ctx);
+      check("F2: NEXT FIRE drawn from the served row -- the job, its cadence and its next fire",
+        f2.nextFire.isDrawn === true && f2.nextFire.rows.length === 1 && f2.nextFire.rows[0].cells.join("|") === "brief-materialize|weekdays@06:00|2026-09-21T06:00:00+05:30|enabled",
+        JSON.stringify(f2.nextFire.rows));
+      check("F2: HEARTBEAT drawn from the served row -- overdue, and how many slots it missed",
+        f2.heartbeat.isDrawn === true && f2.heartbeat.rows[0].cells[1] === "overdue" && f2.heartbeat.rows[0].cells[2] === "3",
+        JSON.stringify(f2.heartbeat.rows));
+      const wrong = Object.create(null);
+      for (const r of jobsRead) wrong[r.key] = { state: "ok", data: { route: "/api/policy", jobs: [] } };
+      const f3 = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold(wrong, ctx);
+      check("F2: a body answering another route is WRONG_ROUTE, never a table", f3.nextFire.isRefused === true && f3.nextFire.refusal.code === "WRONG_ROUTE" && f3.nextFire.isDrawn === false,
+        JSON.stringify(f3.nextFire.refusal));
+    }
     // ... and with a page that HAS a fire on it, so the arm asserts the sentence a person reads rather
     // than blessing the loading state (code review). The door pages oldest-first, so a page with more
     // past it must not call its newest receipt the newest fire.

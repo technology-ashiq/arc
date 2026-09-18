@@ -89,6 +89,13 @@ setup() {
   # right thing to go red on. What this note buys the next reader is the difference between
   # "first time" and "again" -- if it recurs, it is the lock, and the headroom sentence above
   # is the claim to re-examine first.
+  #
+  # AGAIN (2026-09-18, face lane, run 35360356265 on 65697998): `windows-latest, shard 7/12`,
+  # one of 200 refused, `fail w=1 j=23`, "spine lock held for more than 15000ms (last open:
+  # EEXIST)". The change under test touched only the READER (spine.mjs scanAll), which the
+  # emitter does not import. The pattern worth reading: both occurrences failed on the SAME
+  # emit index, j=23 -- the 24th of a worker's 25 -- on different workers. A scheduling stall
+  # would not pick an index. Filed to the spine lane as a recurrence, not acted on here.
 }
 
 # One emitter: PER_EMITTER strict emits, each with a payload no other emitter can produce.

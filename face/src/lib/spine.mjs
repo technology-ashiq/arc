@@ -363,6 +363,7 @@ export function readLogPage(raw) {
  * @property {number|null} idemIndex
  * @property {{ day: string, line: number }[]} tornLines
  * @property {boolean} tornRead
+ * @property {number|null} unreadableDays  day FILES the reader could not open (null: the door did not say)
  * @property {{ measured: boolean, total: number|null, stubOnly: number|null,
  *              unreadable: number|null, rows: QuarantineRow[] }} quarantine
  */
@@ -427,6 +428,7 @@ export function readSpineHealth(raw) {
     idemIndex: asCount(spine["idemIndex"]),
     tornLines,
     tornRead: Array.isArray(rawTorn),
+    unreadableDays: asCount(spine["unreadableDays"]),
     quarantine: {
       // "the door served a quarantine block" and "the quarantine is empty" are different
       // facts. Only the first makes a zero on this panel a measurement.
@@ -607,26 +609,6 @@ export function quarantineHeadline(v) {
   if (v.unknown > 0) parts.push(`${fmtInt(v.unknown)} this shell will not classify`);
   const tail_ = parts.length === 0 ? "and none of it is classified here" : `— ${parts.join(", ")}`;
   return `${fmtInt(v.total)} input${v.total === 1 ? "" : "s"} refused and held separately, never counted as receipts ${tail_}.`;
-}
-
-/**
- * Torn lines: bytes on the spine that could not be parsed back. Not an incident, and not
- * a zero either — a spine with no torn lines was READ and found clean, which is a
- * different claim from a health block that never carried the field.
- * @param {SpineHealth|null} health
- * @returns {{ state: "clean"|"torn"|"unread", count: number|null, sentence: string }}
- */
-export function tornView(health) {
-  if (health === null || !health.tornRead)
-    return { state: "unread", count: null, sentence: "The door did not serve a torn-line list, so nothing is claimed about the readability of the log." };
-  const n = health.tornLines.length;
-  if (n === 0)
-    return { state: "clean", count: 0, sentence: "Every line of the log parsed. Measured, not assumed — the reader walked the day files and found nothing it could not read." };
-  return {
-    state: "torn",
-    count: n,
-    sentence: `${fmtInt(n)} line${n === 1 ? "" : "s"} on the spine could not be parsed back. Those bytes are on disk and are not receipts, so nothing on any screen counts them. This is a defect to repair, and it is not an incident: --red is reserved for incident.raised and stays unspent.`,
-  };
 }
 
 /**

@@ -6,8 +6,9 @@
 // the one thing it names as blocking it -- each value from the lane's own header through the board (ADR-0051). The
 // phase closings and cycle kickoffs the registry homes here are the spine's. The factory's parts -- the products, the
 // commands, the agents and the gates -- are counted from the served registry, the list the shell already read. What
-// each gate is set to, and the profile that switches them as one, are NOT SERVED until /api/gates.
-import { notServed, payloadOf, readProblem, verbPending } from "../../../lib/registry.mjs";
+// each gate is set to, and the profile that switches them as one, are read from /api/gates (Phase 04).
+import { payloadOf, readProblem, verbPending } from "../../../lib/registry.mjs";
+import { gateModes, servedRead } from "../../../lib/served.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { boardRows } from "../../../lib/spine.mjs";
 import { catalogueOf, countedOn, kindCount, laneRoom } from "../../../lib/lane-room.mjs";
@@ -29,7 +30,7 @@ import { boardLanes, laneLinks } from "../../../lib/company-room.mjs";
  *   parts: { key: string, label: string, count: string, sub: string }[],
  *   gates: { key: string, name: string, roomName: string, room: string, canOpen: boolean }[],
  *   isGatesEmpty: boolean,
- *   modes: import("../../../lib/registry.mjs").NotServed,
+ *   modes: import("../../../lib/served.mjs").ServedTable,
  *   profileVerb: { isVerbPending: true, verb: string, sentence: string },
  * }} Folded
  */
@@ -79,6 +80,7 @@ export function fold(payloads, ctx) {
     return { key: p.key, label: p.label, count: sec.unreadable.length > 0 ? "—" : fmtInt(sec.rows.length), sub: p.sub };
   });
   const gateRows = (cat["gates"] ?? { rows: [] }).rows;
+  const gatesSt = servedRead(payloads, ctx, reads, "/api/gates");
   return {
     ...base,
     reads: [...base.reads, ...reads],
@@ -102,11 +104,7 @@ export function fold(payloads, ctx) {
     parts,
     gates: gateRows.map((g) => ({ key: g.key, name: g.name, roomName: g.roomName, room: g.room, canOpen: g.canOpen })),
     isGatesEmpty: gateRows.length === 0,
-    modes: notServed(
-      "Gate modes and the profile",
-      "/api/gates",
-      "What each gate is set to today -- blocking, advisory or off -- and the strictness profile that switches the whole set as one, parsed from the gates file.",
-    ),
+    modes: gateModes(gatesSt, "Gate modes and the profile"),
     profileVerb: verbPending(
       "Switch the profile",
       "One key switches every gate as a set, with a reason written down; loosening is a profile switch, never a flag somebody remembers. It arrives with the work door.",

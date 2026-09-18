@@ -3,12 +3,12 @@
 //
 // Declared deltas from the reference: the live cycle is every LIVE lane on the board, each value from its own header,
 // not one root PLAN.md; the parts are counted from the served registry rather than a typed ARC table; gate modes and
-// the profile are NOT SERVED until /api/gates (ADR-1324) and switching the profile is a work-door card, not a picker
+// the profile are read from /api/gates (Phase 04) and switching the profile is a work-door card, not a picker
 // (ADR-1326); the commands and agents are the toolbelt's and the agents room's, so this room counts them and links out.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { FONT, MONO, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, NotServed, Reading, ReceiptDrawer, RoomHead, TrailPanel, VerbPending } from '../../../ui/bits'
+import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, Reading, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
 export { Factory as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -72,7 +72,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                 </div>
               ))}
             </div>
-            <NotServed item={f.modes} />
+            <ServedTable item={f.modes} />
             <div className="mt-3">
               <VerbPending item={f.profileVerb} />
             </div>

@@ -2,9 +2,11 @@
 // install (face v2 Phase 03, ADR-1320, ADR-1324).
 //
 // The port of v0.7's Overview. Its figures, brief, tape and approval list read the door; the policy
-// ladder and "learned this week" are NOT SERVED until Phase 04 builds their routes. Approvals are
-// listed, never stamped, here: the one write lives in the inbox module, with its typed reason.
-import { LOADING, notServed, payloadOf, roomHoldingKind } from "../../../lib/registry.mjs";
+// ladder is read from /api/policy and "learned this week" from /api/learn (Phase 04) -- both files, not
+// the log, so neither moves with the as-of scrub, and each says so. Approvals are listed, never stamped,
+// here: the one write lives in the inbox module, with its typed reason.
+import { LOADING, payloadOf, roomHoldingKind } from "../../../lib/registry.mjs";
+import { asArray, asObject, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
 import {
   BRIEF_BUDGET, ageSentence, approvalBody, collapseBrief, dayOf, decodeDoorText, fmtInt, kpiTiles,
   parseBrief, readBrief, readHealth, readInbox, readSpinePage, tail,
@@ -50,8 +52,8 @@ const refusal = (p) => (p.state === "refused" ? { code: p.code, human: p.human }
  * @property {string} inboxRoom
  * @property {boolean} canOpenSpine
  * @property {string} spineRoom
- * @property {import("../../../lib/registry.mjs").NotServed} policy
- * @property {import("../../../lib/registry.mjs").NotServed} learned
+ * @property {import("../../../lib/served.mjs").ServedTable} policy
+ * @property {import("../../../lib/served.mjs").ServedTable} learned
  * @property {import("../../../lib/spine.mjs").ReceiptView} receipt
  * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
@@ -80,6 +82,10 @@ export function fold(payloads, ctx) {
   /** @type {import("../../../lib/registry.mjs").Read | null} */
   const feedRead = day === "" ? null : { route: "/api/spine", query: { date: day, limit: FEED_LIMIT }, poll: true };
   if (feedRead !== null) reads.push(feedRead);
+  const policySt = servedRead(payloads, ctx, reads, "/api/policy");
+  const learnSt = servedRead(payloads, ctx, reads, "/api/learn");
+  const learnMalformedRaw = learnSt.body["malformed"];
+  const learnMalformed = typeof learnMalformedRaw === "number" && Number.isInteger(learnMalformedRaw) ? learnMalformedRaw : 0;
   /** @type {import("../../../lib/registry.mjs").Payload} */
   const feedP = feedRead === null ? (healthP.state === "refused" ? healthP : LOADING) : payloadOf(payloads, feedRead);
   const page = feedP.state === "ok" ? readSpinePage(feedP.data) : null;
@@ -172,8 +178,55 @@ export function fold(payloads, ctx) {
     inboxRoom,
     canOpenSpine: spineRoom !== "",
     spineRoom,
-    policy: notServed("Policy", "/api/policy", "The ladder at a glance: each capability's autonomy level and the cap beside it. The door serves no policy route yet."),
-    learned: notServed("Learned this week", "/api/learn", "The calibration rules the owner's stamps taught the company this week. The door serves no learn route yet."),
+    policy: servedTable(projected(policySt, "capabilities", (b) => {
+      const caps = b["capabilities"];
+      const subjects = b["subjects"];
+      if (!Array.isArray(caps) || !Array.isArray(subjects)) return undefined;
+      const ORDER = ["L0", "L1", "L2", "L3"];
+      return caps.map((cap) => {
+        let best = "";
+        /** @type {string[]} */
+        const holders = [];
+        for (const sub of subjects) {
+          const cellOf = asArray(asObject(sub)["cells"]).map(asObject).find((c) => field(c, "capability") === cap);
+          const eff = cellOf === undefined ? "" : field(cellOf, "effective");
+          if (ORDER.indexOf(eff) > ORDER.indexOf(best)) { best = eff; holders.length = 0; }
+          if (eff !== "" && eff === best) holders.push(field(asObject(sub), "subject"));
+        }
+        return { capability: cap, level: best, holders: holders.join(", ") };
+      });
+    }), {
+      panel: "Policy",
+      route: "/api/policy",
+      columns: ["capability", "highest level held", "held by"],
+      listKey: "capabilities",
+      empty: "hq.policy.yaml names no capability.",
+      row: (c) => {
+        const cap = field(c, "capability");
+        return cap === "" ? null : { key: cap, cells: [cap, field(c, "level") || "—", field(c, "holders") || "no subject"] };
+      },
+      note: "each level is the effective one: the ceiling in hq.policy.yaml, capped by what the spine's level changes earned",
+    }),
+    learned: servedTable(learnSt, {
+      panel: "Learned this week",
+      route: "/api/learn",
+      columns: ["logged", "the pattern", "the rule it became"],
+      listKey: "thisWeek",
+      empty: "No lesson was logged to the retro log this week.",
+      row: (l) => {
+        const id = field(l, "id");
+        return id === "" ? null : { key: id, cells: [field(l, "date"), field(l, "pattern"), field(l, "prevention")] };
+      },
+      note: learnSt.isRead
+        ? [
+          `the retro log's rows dated ${field(learnSt.body, "weekFrom")} to ${field(learnSt.body, "today")} -- a file, so it does not move with the as-of scrub`,
+          // A malformed row may be this week's; the count says the week may be longer than drawn (Phase 04 re-attack).
+          learnMalformed > 0
+            ? `${learnMalformed} retro-log row${learnMalformed === 1 ? "" : "s"} the adapter refused as malformed, of any week, not drawn`
+            : "",
+        ].filter((n) => n !== "").join(" · ")
+        : "",
+    }),
     receipt: receiptView(events, picks.receipt),
     reads,
   };

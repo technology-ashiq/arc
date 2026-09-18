@@ -285,7 +285,7 @@ heading_verdict() {
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
   # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
   # 10 s -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: verbs-pending |smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: served |smoke: verbs-pending|smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
   # Both moods are judged, each from its own line, before the exit status is trusted: a harness
   # that ran only dark must not pass on dark's line (ADR-1331).
   local mood verdicts=0
@@ -302,17 +302,32 @@ heading_verdict() {
     # cannot see a panel deleted in one room and duplicated in another -- the Phase 03 attacker shipped
     # exactly that mutant past a sum -- so the room:count distribution is what is compared, in both
     # directions, against the lists module-frame holds equal to the folds.
-    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-03" "not-served-*.md" > "$BATS_TEST_TMPDIR/ns-expected"
+    # Phase 04 (REQ-06): the NOT SERVED panels are the RESIDUE -- which may be empty -- and the panels a door route
+    # now fills are a list of their own; both are held equal to the folds by module-frame, and to the page here.
+    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-04" "residue.md" > "$BATS_TEST_TMPDIR/ns-expected"
+    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-04" "served.md" > "$BATS_TEST_TMPDIR/sv-expected"
     list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-03" "verbs-pending-*.md" > "$BATS_TEST_TMPDIR/vp-expected"
     local nsPanels nsRooms nsExpected nsRoomsExpected vpCards vpRooms vpExpected vpRoomsExpected
     nsPanels="$(printf '%s\n' "$output" | grep "^smoke: not-served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: not-served mood=$mood panels=\([0-9][0-9]*\) rooms=.*/\1/p")"
     nsRooms="$(printf '%s\n' "$output" | grep "^smoke: not-served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: not-served mood=$mood panels=[0-9]* rooms=\(.*\)\$/\1/p")"
     nsExpected="$(head -1 "$BATS_TEST_TMPDIR/ns-expected")"
     nsRoomsExpected="$(tail -1 "$BATS_TEST_TMPDIR/ns-expected")"
-    [ -n "$nsPanels" ] && [ "$nsExpected" -gt 0 ] && [ "$nsPanels" = "$nsExpected" ] \
-      || { echo "mood=$mood: the browser drew '$nsPanels' NOT SERVED panels, the shipped rings' lists name $nsExpected"; false; }
+    # The residue may be 0, so its floor is gone -- the served count below carries the vacuous-pass guard instead.
+    [ -n "$nsPanels" ] && [ -n "$nsExpected" ] && [ "$nsPanels" = "$nsExpected" ] \
+      || { echo "mood=$mood: the browser drew '$nsPanels' NOT SERVED panels, the residue list names $nsExpected"; false; }
     [ "$nsRooms" = "$nsRoomsExpected" ] \
-      || { echo "mood=$mood: NOT SERVED panels per room read '$nsRooms', the lists name '$nsRoomsExpected'"; false; }
+      || { echo "mood=$mood: NOT SERVED panels per room read '$nsRooms', the residue list names '$nsRoomsExpected'"; false; }
+    printf '%s\n' "$output" | grep -qE "^smoke: served mood=$mood panels=[0-9]+ rooms=[a-z0-9:,-]+\$" \
+      || { echo "no served line for mood=$mood (harness exit $status)"; false; }
+    local svPanels svRooms svExpected svRoomsExpected
+    svPanels="$(printf '%s\n' "$output" | grep "^smoke: served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: served mood=$mood panels=\([0-9][0-9]*\) rooms=.*/\1/p")"
+    svRooms="$(printf '%s\n' "$output" | grep "^smoke: served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: served mood=$mood panels=[0-9]* rooms=\(.*\)\$/\1/p")"
+    svExpected="$(head -1 "$BATS_TEST_TMPDIR/sv-expected")"
+    svRoomsExpected="$(tail -1 "$BATS_TEST_TMPDIR/sv-expected")"
+    [ -n "$svPanels" ] && [ "$svExpected" -gt 0 ] && [ "$svPanels" = "$svExpected" ] \
+      || { echo "mood=$mood: the browser drew '$svPanels' served panels, the served list names $svExpected"; false; }
+    [ "$svRooms" = "$svRoomsExpected" ] \
+      || { echo "mood=$mood: served panels per room read '$svRooms', the served list names '$svRoomsExpected'"; false; }
     vpCards="$(printf '%s\n' "$output" | grep "^smoke: verbs-pending mood=$mood cards=" | tail -1 | sed -n "s/^smoke: verbs-pending mood=$mood cards=\([0-9][0-9]*\) rooms=.*/\1/p")"
     vpRooms="$(printf '%s\n' "$output" | grep "^smoke: verbs-pending mood=$mood cards=" | tail -1 | sed -n "s/^smoke: verbs-pending mood=$mood cards=[0-9]* rooms=\(.*\)\$/\1/p")"
     vpExpected="$(head -1 "$BATS_TEST_TMPDIR/vp-expected")"

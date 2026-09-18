@@ -939,6 +939,12 @@ export function readKill(raw) {
     badge: KILL_BADGE,
   };
 
+  // The door withheld the panel by name -- a criteria file off this tree, or one an env var swapped in -- which
+  // is its own sentence, never the generic "did not arrive" (face v2 Phase 04 re-attack).
+  const withheld = asText(body["killRefused"]);
+  if ((k === undefined || k === null) && withheld !== "")
+    return { ...base, refusal: { code: "KILL_REFUSED", human: `The door withheld the kill panel: ${withheld}. No distance is drawn.` } };
+
   if (k === undefined || k === null || typeof k !== "object" || Array.isArray(k))
     return {
       ...base,

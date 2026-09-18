@@ -1,14 +1,14 @@
 // View.tsx -- money/growth: v0.7's Growth, drawing what fold() returned and deciding nothing (face v2 Phase 03,
 // ADR-1320).
 //
-// Declared deltas from the reference: the pipeline is a NOT SERVED panel until /api/growth (ADR-1324); drafting,
+// Declared deltas from the reference: the pipeline is what /api/growth serves from the receipts (Phase 04); drafting,
 // the review pack and the merge are work-door cards, not forms (ADR-1326); the channel scoreboard counts the
 // door's content.published receipts by the channel each names, where v0.7 counted a typed channel list; "lints on
 // duty" is the served registry's own list.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { UI, YoursBadge } from '../../../ui/kit'
-import { CountRows, DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, NameList, NotServed, Reading, ReceiptDrawer, RoomHead, TrailPanel, VerbPending } from '../../../ui/bits'
+import { CountRows, DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, NameList, Reading, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
 export { Megaphone as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -29,7 +29,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="The pipeline" hint="status moves only on receipts">
-            <NotServed item={f.pipeline} />
+            <ServedTable item={f.pipeline} />
           </HPanel>
 
           <TrailPanel trail={f.trail} onReceipt={(id) => ctx.onPick('receipt', id)} />

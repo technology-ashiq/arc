@@ -71,7 +71,7 @@ export function fold(_payloads, ctx) {
     tiers: notServed(
       "Tiers and who is switched on",
       "/api/roster",
-      "Each agent's tier -- cheap scan, balanced workhorse, high judgment, independent-family verifier -- and whether it is enabled, read from the agent's own frontmatter.",
+      "Each agent's tier -- cheap scan, balanced workhorse, high judgment, independent-family verifier -- and whether it is enabled. An agent's frontmatter carries its name, tools and model, but no tier and no enabled flag, and no importable parser reads it -- filed to the engine lane.",
     ),
     addVerb: verbPending(
       "Add an agent",

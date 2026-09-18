@@ -106,6 +106,16 @@ export function fold(payloads, ctx) {
     : scope === "today" ? `today (${today})` : scope === "yesterday" ? `yesterday (${dayBefore(today)})` : "from the start of the log";
   const quarantined = spineHealth === null ? null : spineHealth.quarantine.total;
   const torn = spineHealth === null || !spineHealth.tornRead ? null : spineHealth.tornLines.length;
+  // A day FILE the reader could not open is damage the torn list cannot show, and "every line of every day file
+  // parsed" over it was the lie round 3 fixed in a helper this room never called (round 4). A door that does not say
+  // is unknown, never zero.
+  const unopened = spineHealth === null ? null : spineHealth.unreadableDays;
+  const tornText = torn === null ? "The door did not report torn lines this read." : [
+    torn > 0 ? `${fmtInt(torn)} line${torn === 1 ? " is" : "s are"} UNREADABLE and reported, never skipped.`
+      : unopened === 0 ? "Every line of every day file parsed on this read." : "Every line that was read parsed on this read.",
+    unopened !== null && unopened > 0 ? `${fmtInt(unopened)} day file${unopened === 1 ? "" : "s"} could not be opened at all -- ${unopened === 1 ? "its" : "their"} receipts are on disk and counted nowhere.` : "",
+    unopened === null ? "The door did not say whether every day file opened." : "",
+  ].filter((s) => s !== "").join(" ");
 
   return {
     sentence: decodeDoorText(ctx.room.sentence),
@@ -143,7 +153,7 @@ export function fold(payloads, ctx) {
     integrity: [
       { key: "replay", title: "Replay determinism", text: "Delete every derived view, replay the log, byte-identical state. CI proves it on the spine's own suite." },
       { key: "quarantine", title: "Quarantine", text: quarantined === null ? "The door did not say how many events were refused this read." : `Invalid events never block work; they quarantine and surface. On this spine: ${fmtInt(quarantined)} held separately by refusal code, never counted as receipts.` },
-      { key: "torn", title: "Torn lines", text: torn === null ? "The door did not report torn lines this read." : torn === 0 ? "Every line of every day file parsed on this read." : `${fmtInt(torn)} line${torn === 1 ? " is" : "s are"} UNREADABLE and reported, never skipped.` },
+      { key: "torn", title: "Torn lines", text: tornText },
       { key: "revenue", title: "Revenue truth", text: "revenue.received is real-only; a simulated sale is revenue.simulated. The P&L cannot be polluted by wishes." },
     ],
     source: health === null
