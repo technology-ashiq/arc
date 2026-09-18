@@ -161,6 +161,22 @@ runner_verdict() {
   echo "runner verdict: mood=$mood count=$count os=$os"
 }
 
+# The rooms arc does not serve but the face keeps (ADR-1327): the smoke reads them from the exemption file, never
+# from the door it judges, opens each, and prints what it opened against what the file lists. Every one opened with
+# no error, and at least the two the owner's ruling left exempt (ADR-1337: executor, agents) -- in both moods.
+extras_verdict() {
+  local out="$1" mood="$2" line expected opened errors
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  line="$(printf '%s\n' "$out" | grep "^smoke: extras mood=$mood expected=" | tail -1)"
+  expected="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=\([0-9][0-9]*\) opened=[0-9]* errors=[0-9]* rooms=.*/\1/p")"
+  opened="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=[0-9]* opened=\([0-9][0-9]*\) errors=[0-9]* rooms=.*/\1/p")"
+  errors="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=[0-9]* opened=[0-9]* errors=\([0-9][0-9]*\) rooms=.*/\1/p")"
+  [ -n "$expected" ] && [ "$expected" -ge 2 ] && [ "$opened" = "$expected" ] \
+    || { echo "mood=$mood: extras opened '$opened', the exemption file lists '$expected': $line"; return 1; }
+  [ "$errors" = "0" ] || { echo "mood=$mood: an extra room logged errors: $line"; return 1; }
+  echo "extras verdict: mood=$mood opened=$opened errors=0"
+}
+
 @test "face-browser: the node floor is reported, and only Node 18 may skip" {
   run node "$ARC_ROOT/face/scripts/node-floor.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -286,10 +302,11 @@ runner_verdict() {
     rehearsal_verdict "$output" "$mood" "$ARC_ROOT/initiatives/face/evidence/phase-03" || { echo "(harness exit $status)"; false; }
     planned_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
     runner_verdict "$output" "$mood" "$(uname -s)" || { echo "(harness exit $status)"; false; }
-    # The shipped rings' module rooms open with the contract's frozen sentence as their heading: every module
-    # of the four shipped rings was checked and none missed (a blank room is not an opened one). Twenty-seven
-    # and up -- 28 and 29 included, which the first cut of this pattern refused (money ring attack).
-    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command,kernel,factory,money checked=(2[7-9]|[3-9][0-9]|[1-9][0-9][0-9]+) miss=0\$" \
+    extras_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
+    # Every ring has shipped, so every module room opens with the contract's frozen sentence as its heading -- an
+    # exempted extra with its exemption row's -- and none missed (a blank room is not an opened one). Thirty-six and
+    # up: 29 served modules, 3 renamed, 2 extras given registry rows and 2 exempt (ADR-1337).
+    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command,kernel,factory,money,company checked=(3[6-9]|[4-9][0-9]|[1-9][0-9][0-9]+) miss=0\$" \
       || { echo "heading check missing, too few checked, or a miss for mood=$mood (harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done
@@ -333,6 +350,16 @@ runner_verdict() {
   [ "$status" -ne 0 ] || { echo "an unread runner count passed: $output"; false; }
   run runner_verdict "" dark Linux
   [ "$status" -ne 0 ] || { echo "no runner line at all passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=2 opened=2 errors=0 rooms=agents,executor" dark
+  [ "$status" -eq 0 ] || { echo "the real extras line failed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=2 opened=1 errors=0 rooms=agents" dark
+  [ "$status" -ne 0 ] || { echo "an extra left unopened passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=2 opened=2 errors=1 rooms=agents,executor" dark
+  [ "$status" -ne 0 ] || { echo "an extra that logged an error passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=0 opened=0 errors=0 rooms=none" dark
+  [ "$status" -ne 0 ] || { echo "an exemption file listing nothing passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=light expected=2 opened=2 errors=0 rooms=agents,executor" dark
+  [ "$status" -ne 0 ] || { echo "the other mood's line passed: $output"; false; }
 }
 
 @test "face-browser: MUTANT CONTROL -- the render verdict FAILS a shell that drew every room generic" {

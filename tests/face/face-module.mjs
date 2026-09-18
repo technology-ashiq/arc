@@ -64,7 +64,7 @@ try {
     const r = run(root, `${target.ring}/${target.id}`);
     check(`scaffolds ${target.ring}/${target.id} in one command with exit 0`, r.status === 0, out(r));
     check("reports face-pure green on the tree it wrote into", /face-pure: modules=\d+ folds=\d+ views=\d+ files=\d+ findings=0/.test(r.stdout), out(r));
-    check("reports face-coverage's module half green", /face-coverage \(module half\): folders=\d+ generic=\d+ orphans=0 exemptions=0/.test(r.stdout), out(r));
+    check("reports face-coverage's module half green", /face-coverage \(module half\): folders=\d+ generic=\d+ orphans=0 exemptions=d+/.test(r.stdout), out(r));
     check("ends on the GREEN verdict line", new RegExp(`face-module: GREEN on face-pure and face-coverage -- ${target.ring}/${target.id}`).test(r.stdout), out(r));
     const dir = join(root, "face", "src", "modules", target.ring, target.id);
     const files = existsSync(dir) ? readdirSync(dir).sort() : [];

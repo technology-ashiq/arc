@@ -506,6 +506,26 @@ load 'test_helper'
   done
 }
 
+@test "face v2: the company ring reads its files -- F1 names lanes, the constitution and logbook are read, the extras drawn" {
+  # The company ring and the four extra rooms the owner's section 13 item 5 ruling unblocked (ADR-1337): the folds
+  # answer over the door's real bodies and over mutants of them; F1's arm FAILs Cycle 15's band -> room map.
+  run node "$ARC_ROOT/tests/face/company-ring.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 40 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "F1: the face band 1300-1399 names the lane face, not the room toolbelt" \
+             "F1: MUTANT -- the Cycle 15 band map (bands homed to ROOMS) fails the same lane check" \
+             "ORG FOLD: the band map it draws names lanes (F1 in the module that renders it)" \
+             "LAW: a file whose eternal section is renamed reads that section as UNREAD, never as zero articles" \
+             "STORY: a logbook with no Entries section reads as UNREAD, never as a company with no history" \
+             "EXTRAS: a row that cites no ADR-1327 is refused, and draws nothing"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
 @test "face v2: /arc-face-module scaffolds a module green on face-pure + face-coverage, and refuses what it must" {
   run node "$ARC_ROOT/tests/face/face-module.mjs"
   [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }

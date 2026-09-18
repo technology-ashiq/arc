@@ -658,6 +658,27 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     check("RUNNER: a run with none prints count=0, never no line", smoke.runnerLine({ mood: "light", runner: [] }) === "smoke: runner-errors mood=light count=0 rooms=none");
   }
 
+  // The company ring (face v2 Phase 03): the rooms arc does not serve but the face keeps (ADR-1327). The smoke reads
+  // them from the exemption FILE, never from the door it judges, opens each, and judges them by id.
+  const hasExtras = typeof smoke.extrasLine === "function" && typeof smoke.expectedExtraIds === "function";
+  check("the smoke exports the extras line and reads the extras from the contract (company ring)", hasExtras, Object.keys(smoke).join(","));
+  if (hasExtras) {
+    const extraIds = smoke.expectedExtraIds();
+    check("EXTRAS: the expected extras are read from module-exemptions.json, sorted, by id",
+      JSON.stringify(extraIds) === JSON.stringify(["agents", "executor"]), JSON.stringify(extraIds));
+    check("EXTRAS: the line names what was opened against what the file lists, sorted",
+      smoke.extrasLine({ mood: "dark", extras: { expected: ["executor", "agents"], opened: ["executor", "agents"], errors: 0 } }) === "smoke: extras mood=dark expected=2 opened=2 errors=0 rooms=agents,executor",
+      smoke.extrasLine({ mood: "dark", extras: { expected: ["executor", "agents"], opened: ["executor", "agents"], errors: 0 } }));
+    check("EXTRAS: a report that measured nothing prints UNREAD, never a zero",
+      smoke.extrasLine({ mood: "dark" }) === "smoke: extras mood=dark expected=unread opened=unread errors=unread rooms=none", smoke.extrasLine({ mood: "dark" }));
+    const extrasBase = { ...clean, mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], headings: { checked: 6, miss: [] } };
+    const missed = smoke.judge({ ...extrasBase, extras: { expected: ["agents", "executor"], opened: ["agents"], errors: 0 } });
+    check("EXTRAS: an extra the file lists and the smoke never opened FAILS the run, by id",
+      !missed.ok && missed.reasons.some((r) => /extra room.*not opened.*executor/.test(r)), JSON.stringify(missed.reasons));
+    const noisy = smoke.judge({ ...extrasBase, extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 2 } });
+    check("EXTRAS: an extra that logged an error FAILS the run", !noisy.ok && noisy.reasons.some((r) => /extra room.*error/.test(r)), JSON.stringify(noisy.reasons));
+  }
+
   // The attack on the mood verdict (face v2 Phase 01).
   check("a report that names no mood FAILS, however clean", !smoke.judge({ ...clean, moodMiss: [] }).ok
     && smoke.judge({ ...clean, moodMiss: [] }).reasons.some((r) => /no mood named/.test(r)));
