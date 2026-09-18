@@ -5,7 +5,7 @@ cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
 phase: 05
 appetite: 24d
 burn: 4d
-blocked-on: the owner's ruling on PLAN-face-v2 §13 item 4 (the six flagship ops) -- Phase 05 does not open without it (PLAN, Owner steps)
+blocked-on: owner — the ruling on PLAN-face-v2 §13 item 4 (the six flagship ops); Phase 05 does not open without it
 depends-on: —
 
 > Tracker for the cycle planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done` from the
