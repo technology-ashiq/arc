@@ -27,7 +27,7 @@ depends-on: —
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
 | 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | ✅ **CLOSED 2026-09-18** — 1.5d of 7d; 36/36 modules in both moods on every L3 leg (34 served module rooms + the 2 exempt extras, headings 36 checked, 0 errors); five ring PRs merged — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242) · money `969d9634` (#244) · company `d8386216` (#246); `main` re-verified 19/19 (run 35336492657), suite 1..3414; receipts `01M2T38JEG2AWDY61X7QAARNYF` · `01M2T38JSWD6QSHTYA7S0M1R1W` |
-| 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | in build — 18 routes served, 35 of 50 panels; residue 15 panels on 10 routes awaits the owner's ruling |
+| 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | in build — 18 routes served, 35 of 50 panels; residue 15 panels on 10 routes, approved by the owner (ADR-1338) |
 | 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — needs owner rulings §13 items 4, 5 |
 | 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
@@ -309,9 +309,11 @@ its lane's own parser lazily, plus `/api/pnl?by=day` from a new additive `derive
 absorb's `registry-ref.mjs` gained an exported `judgeRegistry`, its CLI output byte-identical). **35 of 50 panels are
 served** (39 served tables in all), listed in `evidence/phase-04/served.md`. **15 panels on 10 routes are residue**
 (`evidence/phase-04/residue.md`), each gap named with its lane: data no file or receipt records, or a parser that
-exists only inside a lint that exits at import. That is **over REQ-06's bound of 3 routes** -- the owner's ruling on
-the residue is owed before `/arc-phase-done 04`. Next: CI per job on the Phase 04 PR, the two fresh attackers (route
-decision logic · HTTP boundary), then the ruling.
+exists only inside a lint that exits at import. That was over REQ-06's bound of 3 routes, so the owner ruled.
+**Owner ruling, 2026-09-18 — the Phase 04 residue: "un recommand A pannu machi"** (option A): the residue is
+accepted as named and filed, approved as a whole; REQ-06's acceptance is amended from "at most 3 routes" by
+**ADR-1338**, and the unwritten assumption behind the bound is recorded FIRED in the ledger (row 5). Next: CI per job
+on PR #248, the two fresh attackers (route decision logic · HTTP boundary), then `/arc-phase-done 04`.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering

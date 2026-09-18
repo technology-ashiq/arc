@@ -52,5 +52,5 @@ without inventing it.
   kinds name one in their payload.
 - **/api/strategy** (the milestone line) -- plan lane. The honest ranges are prose in the master execution plan.
 
-Ten routes against REQ-06's bound of three: the owner's ruling on this residue is recorded in PROGRESS.md before the
-phase closes.
+**Approved by the owner as a whole, 2026-09-18** -- option A of the two put to him after the build measured the residue:
+"un recommand A pannu machi". REQ-06's bound of three routes is amended to "named and filed" by ADR-1338.

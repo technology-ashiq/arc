@@ -13,7 +13,7 @@
 - [ ] Each route: GET only, on the door's allow-list, inside the existing token + origin + bind posture (ADR-1312); its parser imported from the lint that already reads that file (scheduler, memory, evolve, bench, absorb … PLAN-face-v2 §11), never re-implemented.
 - [ ] Reader-only lint green; route-enumeration fixture proves no write verb appeared.
 - [ ] `tests/face/dash-doors.mjs` gains ≥1 arm per route, each asserting the fixture LOADED before asserting the payload.
-- [ ] Modules flip from `NOT SERVED` to live; the residue is 0 or a named, labelled list in `initiatives/face/evidence/phase-04/residue.md`.
+- [ ] Modules flip from `NOT SERVED` to live; the residue is 0 or a named, labelled list in `initiatives/face/evidence/phase-04/residue.md` -- each row naming its gap and the lane it is filed to, the list approved by the owner as a whole and NOT capped at three routes (ADR-1338, owner ruling 2026-09-18: "un recommand A pannu machi"); every panel Phase 03 named is in `served.md` or `residue.md`, none dropped.
 - [ ] If the union exceeded 22 routes, the Block B reading re-scoped this phase first (assumptions ledger row 5).
 - [ ] Two fresh attackers (route decision logic · HTTP boundary); CI green per job; `/arc-phase-done 04` from the main clone.
 
