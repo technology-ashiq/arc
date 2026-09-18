@@ -63,6 +63,7 @@ export default function Rail({
             {g.rooms.map((r) => {
               const isActive = current === r.id
               const planned = Boolean(r.planned)
+              const extra = Boolean(r.extra)
               const attached = attachment.attached[r.id]
               const Icon = ((attached && attached.Icon) || CircleDashed) as ComponentType<IconProps>
               const badge = stateBadge(r)
@@ -79,6 +80,7 @@ export default function Rail({
                   <Icon size={16} weight={isActive ? 'fill' : 'regular'} color={isActive ? 'var(--accent)' : planned ? 'var(--text-3)' : 'var(--text-2)'} aria-hidden="true" />
                   <span className="text-[13px] truncate" style={{ fontFamily: UI, fontWeight: isActive ? 600 : 500, color: isActive ? 'var(--text-1)' : planned ? 'var(--text-3)' : 'var(--text-2)' }}>{r.name}</span>
                   {planned ? <span className="ml-auto text-[9.5px] uppercase tracking-[0.06em]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-3)' }}>planned</span> : null}
+                  {extra ? <span className="ml-auto text-[9.5px] uppercase tracking-[0.06em]" title={badge.title} style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-3)' }}>extra</span> : null}
                   <span className="sr-only">{badge.label}</span>
                 </button>
               )

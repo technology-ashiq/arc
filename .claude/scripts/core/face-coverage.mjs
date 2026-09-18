@@ -461,6 +461,13 @@ export function moduleFindings(tree) {
     if (served.has(row.id)) { findings.push(`[module-exemption] "${row.id}" is served by /api/rooms, so it needs no exemption`); ok = false; }
     else if (!extras.has(row.id)) { findings.push(`[module-exemption] "${row.id}" is not one of the ${MODULE_EXEMPTION_ADR} extra rooms (${[...extras.keys()].join(", ")}) -- a fifth, unnamed exemption`); ok = false; }
     if (!tree.folders.some((f) => f.id === row.id)) { findings.push(`[module-exemption] "${row.id}" exempts a module folder that does not exist`); ok = false; }
+    // The shell draws an exempted room from its row -- the registry serves nothing for it (company ring, ADR-1337) --
+    // so a row is also the room's facts: its ring, which must be the ring its module lives in, a name and a sentence.
+    const extra = extras.get(row.id);
+    if (extra && row.ring !== extra.ring) { findings.push(`[module-exemption] "${row.id}" says ring ${JSON.stringify(row.ring ?? null)}, and its module lives in "${extra.ring}" -- the shell would draw it in a ring its folder is not in`); ok = false; }
+    if (typeof row.name !== "string" || row.name.trim() === "") { findings.push(`[module-exemption] "${row.id}" carries no name -- the rail draws the room by it`); ok = false; }
+    if (typeof row.sentence !== "string" || row.sentence.trim() === "") { findings.push(`[module-exemption] "${row.id}" carries no sentence -- every room opens with one, and this row is the only place it can come from`); ok = false; }
+    if (row.lede !== undefined && typeof row.lede !== "string") { findings.push(`[module-exemption] "${row.id}" carries a lede that is not text`); ok = false; }
     if (ok) exempt.add(row.id);
   }
 
@@ -914,9 +921,12 @@ async function selftest(repo) {
     ["an ADR-1327 extra exempted by name passes", withExemptedExtra(clean, "ADR-1327"), null, (findings) => {
       const extra = clean.modules?.extras?.[0];
       if (!extra) return false;
-      const bare = coverageFindings(withModuleFolder(clean, extra.ring, extra.id)).findings.some((f) => f.includes(`"${extra.id}"`) && f.includes("orphan"));
+      const bare = coverageFindings(withModuleFolder(withoutExtra(clean, extra.id), extra.ring, extra.id)).findings.some((f) => f.includes(`"${extra.id}"`) && f.includes("orphan"));
       return bare && !findings.some((f) => f.includes(`"${extra.id}"`));
     }],
+    ["an exemption row whose ring is not its module's", withExemptedExtra(clean, "ADR-1327", { ring: "money" }), "would draw it in a ring its folder is not in"],
+    ["an exemption row with no sentence", withExemptedExtra(clean, "ADR-1327", { sentence: " " }), "carries no sentence"],
+    ["an exemption row with no name", withExemptedExtra(clean, "ADR-1327", { name: undefined }), "carries no name"],
     ["an exemption for a room that is not an extra", withExemptionRow(withModuleFolder(clean, firstServedRing(clean), "ghost-extra"), { id: "ghost-extra", adr: "ADR-1327" }), "a fifth, unnamed exemption"],
     ["an exemption citing another ADR", withExemptedExtra(clean, "ADR-9999"), "not ADR-1327"],
     ["an exemption for a served room", withExemptionRow(clean, { id: clean.modules?.served?.find((r) => !r.template)?.id ?? "?", adr: "ADR-1327" }), "needs no exemption"],
@@ -1086,11 +1096,21 @@ function withExemptionRow(data, row) {
   const m = data.modules || {};
   return { ...data, modules: { ...m, exemptions: [...(m.exemptions || []), row] } };
 }
-/** The first ADR-1327 extra given a folder in its own ring AND a row citing `adr`. */
-function withExemptedExtra(data, adr) {
+/**
+ * An extra's folder and row taken OUT of the tree as gathered. The real tree carries exempted extras (ADR-1337), so an
+ * arm that adds one must start from a tree without it -- adding a second row and a second folder would test "listed
+ * twice", not the arm it names.
+ */
+function withoutExtra(data, id) {
+  const m = data.modules || {};
+  return { ...data, modules: { ...m, folders: (m.folders || []).filter((f) => f.id !== id), exemptions: (m.exemptions || []).filter((r) => !r || r.id !== id) } };
+}
+/** The first ADR-1327 extra given a folder in its own ring AND a complete row citing `adr`, with `over` applied. */
+function withExemptedExtra(data, adr, over = {}) {
   const extra = data.modules?.extras?.[0];
   if (!extra) return data;
-  return withExemptionRow(withModuleFolder(data, extra.ring, extra.id), { id: extra.id, adr });
+  const row = { id: extra.id, adr, name: extra.id, ring: extra.ring, sentence: "a sentence", lede: "", ...over };
+  return withExemptionRow(withModuleFolder(withoutExtra(data, extra.id), extra.ring, extra.id), row);
 }
 /** The first real module folder moved to another served ring. */
 function withMisplacedFolder(data) {

@@ -88,15 +88,17 @@ const byFile = (files, extra = () => undefined) => (read) => (read.route === "/a
   const manifest = await manifestOf("company", "law");
   const fold = await foldOf("company", "law");
   const ctx = ctxFor(roomOf("law"), manifest);
-  const health = (kinds) => ({ state: "ok", data: { mode: "sim", spine: { kinds } } });
-  const answer = (h, files = { constitution: served("constitution", "CONSTITUTION.md", CONSTITUTION) }) => byFile(files, (r) => (r.route === "/api/health" ? h : undefined));
-  const full = loaded(fold, ctx, answer(health(["constitution.adopted"]))).full;
+  const ev = (id, kind, ts) => ({ day: ts.slice(0, 10), seq: 1, event: { id, ts, kind, venture: "arc", actor: "owner", outcome: "", payload: {} } });
+  const page = (events) => ({ state: "ok", data: { count: events.length, more: false, events } });
+  const answer = (spine, files = { constitution: served("constitution", "CONSTITUTION.md", CONSTITUTION) }) => byFile(files, (r) => (r.route === "/api/spine" ? spine : undefined));
+  const full = loaded(fold, ctx, answer(page([ev("01KZ0001", "constitution.adopted", "2026-08-06T10:00:00+05:30")]))).full;
   const kpi = (f, key) => (f.kpis.find((k) => k.key === key) || { v: "?" }).v;
   check("LAW FOLD: the counts are the articles the file carries", kpi(full, "eternal") === "3" && kpi(full, "working") === String(workingIds.length), JSON.stringify(full.kpis));
-  const never = loaded(fold, ctx, answer(health(["note.logged"]))).full;
-  check("LAW FOLD: adoption reads the spine -- fired, or NEVER when the kind has never fired, never both",
-    kpi(full, "adopted") !== kpi(never, "adopted") && /never/i.test(kpi(never, "adopted")), `${kpi(full, "adopted")} | ${kpi(never, "adopted")}`);
-  const wrong = loaded(fold, ctx, answer(health([]), { constitution: served("portfolio", "PORTFOLIO.md", PORTFOLIO) })).full;
+  const never = loaded(fold, ctx, answer(page([]))).full;
+  const unread = loaded(fold, ctx, answer(undefined)).full;
+  check("LAW FOLD: adoption is counted from the spine's receipts -- one read, none on an empty page, and unread while the page is not",
+    kpi(full, "adopted") === "1" && kpi(never, "adopted") === "0" && kpi(unread, "adopted") === "—", `${kpi(full, "adopted")} | ${kpi(never, "adopted")} | ${kpi(unread, "adopted")}`);
+  const wrong = loaded(fold, ctx, answer(page([]), { constitution: served("portfolio", "PORTFOLIO.md", PORTFOLIO) })).full;
   check("LAW FOLD: a body naming another file is refused WRONG_FILE, and no article is drawn from it",
     wrong.doc.isRefused && wrong.doc.refusal.code === "WRONG_FILE" && wrong.law.eternal.length === 0 && kpi(wrong, "eternal") === "—", JSON.stringify(wrong.doc.refusal));
   const amp = cr.constitutionOf("# The arc Constitution (v9)\n\n## Eternal articles (x)\n\n**E1 · A &amp; B.**\nText.\n");

@@ -93,6 +93,9 @@ const FILE_ALLOW = Object.freeze({
   "expected-set": "initiatives/face/contracts/expected-set.json",
   "planned-rooms": "initiatives/face/contracts/planned-rooms.json",
   "face-schema": "initiatives/face/contracts/face-schema.json",
+  // The rooms arc does not serve but the face keeps (ADR-1327): the shell draws each from its row, because the
+  // registry has nothing for it (face v2 Phase 03, company ring, ADR-1337).
+  "module-exemptions": "initiatives/face/contracts/module-exemptions.json",
 });
 
 // ---------- display-safe serialization (the representation contract) ----------

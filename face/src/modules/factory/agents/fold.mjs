@@ -1,0 +1,76 @@
+// fold.mjs -- factory/agents: every decision the agents room makes, where node can import it with no install
+// (face v2 Phase 03, company ring PR, ADR-1320, ADR-1324, ADR-1326, ADR-1327).
+//
+// v0.7's Agents: the roster. arc does not serve this room -- the owner's ruling left it an ADR-1327 exemption
+// (ADR-1337) -- so the shell draws it from its exemption row. The roster is real all the same: every agent the served
+// registry homes, and the room each works in, from the list the shell already read. What is not served: each agent's
+// tier and whether it is switched on, which /api/roster will read from each agent's own frontmatter. A tier is law,
+// not taste (ADR-0069): adding an agent, with its tier declared, is a verb of the work door.
+import { notServed, verbPending } from "../../../lib/registry.mjs";
+import { fmtInt } from "../../../lib/inbox.mjs";
+import { heldAcrossRooms } from "../../../lib/lane-room.mjs";
+
+/** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
+/** @typedef {import("../../../lib/registry.mjs").Read} Read */
+
+/**
+ * @typedef {object} Folded
+ * @property {string} sentence
+ * @property {string} lede
+ * @property {string} badge
+ * @property {{ key: string, v: string, l: string, sub: string }[]} kpis
+ * @property {{ key: string, name: string, room: string, roomName: string, canOpen: boolean }[]} roster
+ * @property {{ key: string, room: string, roomName: string, canOpen: boolean, names: string[] }[]} byRoom
+ * @property {boolean} isRosterEmpty
+ * @property {string} rosterEmpty
+ * @property {import("../../../lib/registry.mjs").NotServed} tiers
+ * @property {{ isVerbPending: true, verb: string, sentence: string }} addVerb
+ * @property {string} law
+ * @property {Read[]} reads
+ */
+
+/**
+ * @param {Record<string, Payload>} _payloads
+ * @param {import("../../../lib/registry.mjs").FoldContext} ctx
+ * @returns {Folded}
+ */
+export function fold(_payloads, ctx) {
+  const held = heldAcrossRooms(ctx, "agents");
+  const roster = held.rows.map((r) => ({ key: r.key, name: r.name, room: r.room, roomName: r.roomName, canOpen: r.canOpen }));
+  /** @type {Map<string, { key: string, room: string, roomName: string, canOpen: boolean, names: string[] }>} */
+  const groups = new Map();
+  for (const r of roster) {
+    const g = groups.get(r.room) ?? { key: r.room, room: r.room, roomName: r.roomName, canOpen: r.canOpen, names: [] };
+    g.names.push(r.name);
+    groups.set(r.room, g);
+  }
+  const isUnread = held.unreadable.length > 0;
+  return {
+    sentence: String(ctx.room.sentence ?? ""),
+    lede: String(ctx.room.lede ?? ""),
+    badge: "not in arc's registry · ADR-1327",
+    kpis: [
+      { key: "agents", v: isUnread ? "—" : fmtInt(roster.length), l: "Agents on the roster", sub: "homed by the served registry" },
+      { key: "rooms", v: isUnread ? "—" : fmtInt(groups.size), l: "Rooms they work in", sub: "each agent in one" },
+      { key: "tiers", v: "—", l: "High-judgment tier", sub: "not served yet · /api/roster" },
+      { key: "on", v: "—", l: "Switched on", sub: "not served yet · /api/roster" },
+    ],
+    roster,
+    byRoom: [...groups.values()],
+    isRosterEmpty: roster.length === 0,
+    rosterEmpty: isUnread
+      ? `The served registry carried agents unreadably in ${held.unreadable.join(", ")} -- none is drawn, and none is claimed absent.`
+      : "The served registry homes no agent in any room.",
+    tiers: notServed(
+      "Tiers and who is switched on",
+      "/api/roster",
+      "Each agent's tier -- cheap scan, balanced workhorse, high judgment, independent-family verifier -- and whether it is enabled, read from the agent's own frontmatter.",
+    ),
+    addVerb: verbPending(
+      "Add an agent",
+      "An agent joins the roster with its tier declared at birth; the tier forces the ADR-0069 citation, and changing one later is a reviewed diff. It arrives with the work door.",
+    ),
+    law: "An employee here is an agent spawned for a task, then gone. Tiers are law, not taste: a tier change is a production change, reviewed and cited, never a quiet edit (ADR-0069).",
+    reads: [],
+  };
+}

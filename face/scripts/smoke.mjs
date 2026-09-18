@@ -383,6 +383,29 @@ export function expectedPlannedIds(repo = REPO) {
   return payload.rooms.filter((r) => r.status !== "template" && (r.planned === true || r.status === "planned")).map((r) => r.id).sort();
 }
 
+/**
+ * The rooms arc does not serve but the face keeps (ADR-1327), by id -- read from the exemption FILE, never from the
+ * door the smoke judges, as strictly as the planned set: a file with no list, or a row with no id, is a setup error
+ * rather than a quiet zero (company ring). Each row also carries the sentence its room must open with.
+ * @returns {{ id: string, ring: string, sentence: string }[]}
+ */
+export function expectedExtras(repo = REPO) {
+  const file = join(repo, "initiatives", "face", "contracts", "module-exemptions.json");
+  let payload;
+  try { payload = JSON.parse(readFileSync(file, "utf8")); }
+  catch (e) { throw new SetupError(`cannot read the exemption rows at ${file}: ${e.message}`); }
+  if (!payload || !Array.isArray(payload.exemptions)) throw new SetupError(`${file} carries no exemptions list`);
+  return payload.exemptions.map((r, i) => {
+    if (!r || typeof r.id !== "string" || !/^[a-z][a-z0-9-]*$/.test(r.id)) throw new SetupError(`${file}: exemption row ${i} has no room id`);
+    return { id: r.id, ring: typeof r.ring === "string" ? r.ring : "", sentence: typeof r.sentence === "string" ? r.sentence : "" };
+  }).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** The exempted extras' ids, sorted -- what the smoke must open beyond the served rooms. */
+export function expectedExtraIds(repo = REPO) {
+  return expectedExtras(repo).map((r) => r.id);
+}
+
 const isCount = (n) => Number.isInteger(n) && n >= 0;
 
 /**
@@ -469,6 +492,18 @@ export function judge(report) {
   }
   if (report.headings && Array.isArray(report.headings.miss) && report.headings.miss.length)
     reasons.push(`heading miss: ${report.headings.miss.map((m) => `${m.id} showed ${JSON.stringify(m.got)} for ${JSON.stringify(m.expected)}`).join("; ")}`);
+  // The exempted extras (ADR-1327): every room the exemption file lists opened, by id, and none of them logged an
+  // error. They are not in the door's openable count, so this is the only place a blank or broken one is caught.
+  if (report.extras) {
+    const x = report.extras;
+    if (!Array.isArray(x.expected) || !Array.isArray(x.opened)) reasons.push("which extra rooms opened could not be read");
+    else {
+      const missing = x.expected.filter((id) => !x.opened.includes(id));
+      if (missing.length) reasons.push(`extra rooms the exemption file lists were not opened: ${missing.join(",")}`);
+    }
+    if (!isCount(x.errors)) reasons.push("the extra rooms' error count could not be read");
+    else if (x.errors !== 0) reasons.push(`extra rooms logged ${x.errors} error(s)`);
+  }
   return { ok: reasons.length === 0, reasons };
 }
 
@@ -531,6 +566,14 @@ export function rehearsalLine(report) {
  * the CONTRACT names -- read from the contract file, never from the door under test -- and which of them
  * drew the word LIVE. Cycle 15's trader wore `● LIVE` while its own lede said "planned, drawn dotted".
  */
+/** The extras line per mood: what the exemption file lists, what opened, and their errors (company ring). */
+export function extrasLine(report) {
+  const x = report.extras ?? null;
+  const expected = x && Array.isArray(x.expected) ? x.expected : null;
+  const opened = x && Array.isArray(x.opened) ? x.opened : null;
+  return `smoke: extras mood=${report.mood ?? "unstated"} expected=${expected === null ? "unread" : expected.length} opened=${opened === null ? "unread" : opened.length} errors=${x && isCount(x.errors) ? x.errors : "unread"} rooms=${opened === null || opened.length === 0 ? "none" : [...opened].sort().join(",")}`;
+}
+
 export function plannedLine(report) {
   // A report that measured no planned block prints UNREAD, never "rooms=0 live=0" (money ring attack).
   const p = report.planned ?? { rooms: null, live: null, expected: null };
@@ -731,6 +774,12 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
   const servedById = new Map((Array.isArray(payload?.rooms) ? payload.rooms : []).map((r) => [r.id, r]));
   const unknownExcludes = (opts.exclude ?? []).filter((id) => !openable.includes(id));
   if (unknownExcludes.length) throw new SetupError(`--exclude names rooms the door does not serve as openable: ${unknownExcludes.join(",")}`);
+  // The exempted extras, from the contract (never the door), opened after the served rooms and judged on their own
+  // line; each carries the sentence its heading must show (company ring, ADR-1327).
+  const extraRows = Array.isArray(opts.extras) ? opts.extras : expectedExtras();
+  const extraSet = new Set(extraRows.map((r) => r.id).filter((id) => !openable.includes(id)));
+  for (const r of extraRows) if (extraSet.has(r.id)) servedById.set(r.id, { id: r.id, ring: r.ring, sentence: r.sentence });
+  const targets = [...openable, ...[...extraSet]];
 
   return withChrome(async (session, found) => {
     const page = await openPage(session);
@@ -765,12 +814,12 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
     // A room's error count is final once the next room starts, so its line is printed THEN --
     // as the run goes, so a CDP failure part-way never throws away the rooms already measured.
     const printRoom = (r, end) => { r.newErrors = end - r.before; log(roomLine(r)); };
-    for (let i = 0; i < openable.length; i++) {
-      const id = openable[i];
+    for (let i = 0; i < targets.length; i++) {
+      const id = targets[i];
       const before = errors.length;
       if (i > 0) printRoom(rooms[i - 1], before);
       current.room = id;
-      const room = { id, opened: false, settled: false, settleMs: null, newErrors: 0, before };
+      const room = { id, extra: extraSet.has(id), opened: false, settled: false, settleMs: null, newErrors: 0, before };
       rooms.push(room);
       if (session.closed) { room.cdpError = "the DevTools socket is closed"; continue; }
       try {
@@ -871,7 +920,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       chrome: found.path,
       chromeSource: found.source,
       openable: openable.length,
-      opened: rooms.filter((r) => r.opened).length,
+      opened: rooms.filter((r) => r.opened && !r.extra).length,
       notOpened,
       countedErrors: counted.length,
       excludedErrors: errors.filter((e) => excluded.has(e.room)).length,
@@ -888,10 +937,17 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       // A room that opened but whose class list was never read (a CDP error after it settled) is a
       // miss too: an unmeasured mood is not a held one.
       moodMiss: rooms.filter((r) => r.opened && r.moodMiss !== false).map((r) => ({ id: r.id, htmlClass: r.htmlClass ?? null })),
+      // The served rooms only: the render verdict holds these EQUAL to face-coverage's attached and generic rooms,
+      // and an exempted extra is neither -- it has its own line.
       render: {
-        module: rooms.filter((r) => r.opened && r.render === "module").map((r) => r.id),
-        generic: rooms.filter((r) => r.opened && r.render === "generic").map((r) => r.id),
-        unmarked: rooms.filter((r) => r.opened && r.render !== "module" && r.render !== "generic").map((r) => r.id),
+        module: rooms.filter((r) => r.opened && !r.extra && r.render === "module").map((r) => r.id),
+        generic: rooms.filter((r) => r.opened && !r.extra && r.render === "generic").map((r) => r.id),
+        unmarked: rooms.filter((r) => r.opened && !r.extra && r.render !== "module" && r.render !== "generic").map((r) => r.id),
+      },
+      extras: {
+        expected: [...extraSet].sort(),
+        opened: rooms.filter((r) => r.extra && r.opened && r.render === "module").map((r) => r.id).sort(),
+        errors: counted.filter((e) => extraSet.has(e.room)).length,
       },
       shots: shots === null ? null : {
         chrome: browserVersion && typeof browserVersion.product === "string" ? browserVersion.product : null,
