@@ -321,3 +321,33 @@ _smuggle_setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"2 receipts, distinct idems"* ]]
 }
+
+# ---------- 5. LexOS explores never enter git (owner ruling 2026-09-16: text only) ----------
+
+@test "explore: a LexOS explore output is ignored by the tracked rule, and nothing wider is" {
+  # Against $ARC_ROOT, not a sandbox: the claim is about THIS public repo's ignore rules.
+  # Nothing is planted. check-ignore matches paths, and a plant under docs/ would be a real
+  # untracked file in the very tree whose rule is missing on the red run.
+  cd "$ARC_ROOT"
+  local p rule
+  for p in docs/design/explore/lexos-zz-probe/variant-a/index.html \
+           docs/design/explore/lexos-zz-probe/variant-a/renders/desktop.png; do
+    run git check-ignore --no-index -v "$p"
+    [ "$status" -eq 0 ] || { echo "NOT ignored, so this LexOS output could be committed: $p $output"; false; }
+    # The pattern field, not the whole line: the probe path itself contains "lexos-", so
+    # matching the line would pass for ANY rule that happened to catch it.
+    rule="${output%%$'\t'*}"
+    case "$rule" in
+      ".gitignore:"*":docs/design/explore/lexos-*/") ;;
+      *) echo "ignored, but not by the tracked explore rule: $rule"; false ;;
+    esac
+  done
+  # Negative control 1: a non-LexOS explore stays committable. Without it, a rule that
+  # ignored all of docs/ would pass everything above.
+  run git check-ignore --no-index -v docs/design/explore/zz-probe-v1/variant-a/index.html
+  [ "$status" -eq 1 ] || { echo "a NON-LexOS explore is ignored too, the rule is too wide: $output"; false; }
+  # Negative control 2: #228's UTF-16 line made check-ignore exit 0 for ANY trailing-slash
+  # path, which turns every ignore assertion in this repo into a vacuous pass.
+  run git check-ignore --no-index -q zzz-nonsense-probe/
+  [ "$status" -eq 1 ] || { echo "an arbitrary trailing-slash path reads as ignored: a corrupt .gitignore line is back"; false; }
+}
