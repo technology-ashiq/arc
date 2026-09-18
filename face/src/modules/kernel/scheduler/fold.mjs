@@ -126,7 +126,10 @@ export function fold(payloads, ctx) {
         const name = field(j, "name");
         // The lane counts missed slots only for an enabled job with a readable cadence; for any other the question is
         // not asked, which is "—", never the 0 a row starts with (panel.mjs; Phase 04 round 3).
-        const asked = j["enabled"] === true && field(j, "state") !== "unreadable-cadence";
+        // Round 4: nor for an unreadable last receipt, nor a never-run job with no window the spine witnesses.
+        const state = field(j, "state");
+        const asked = j["enabled"] === true && state !== "unreadable-cadence" && state !== "unreadable-receipt"
+          && !(state === "never-run" && !/^\d{4}-\d{2}-\d{2}$/.test(observedFrom));
         const missed = asked && typeof j["missed"] === "number" ? String(j["missed"]) : "—";
         return name === "" ? null : { key: name, cells: [name, j["overdue"] === true ? "overdue" : field(j, "state"), missed, field(j, "lastRun") || "never on this spine"] };
       },

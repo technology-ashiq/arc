@@ -234,7 +234,9 @@ async function apiRooms(ctx) {
   const p = join(ctx.repo, "initiatives", "face", "contracts", "rooms.generated.json");
   if (!existsSync(p))
     throw new DashError("REGISTRY_ABSENT", "rooms.generated.json has not been generated -- run face-sections.mjs");
-  const registry = JSON.parse(readFileSync(p, "utf8"));
+  // Fenced like every other file the door serves: a junction at contracts/ served another tree's registry (round 4).
+  if (!insideRepo(ctx, p)) throw new DashError("SOURCE_OUTSIDE", "rooms.generated.json resolves outside this tree -- not served");
+  const registry = JSON.parse(readFileSync(realpathSync(p), "utf8"));
 
   // Counted from the log, never from a stored total: a cached count is the second truth
   // ADR-1301 forbids, and it is the one that goes stale without anyone noticing.
@@ -299,9 +301,13 @@ async function apiSpine(ctx, url) {
   const filters = {};
   for (const k of ["since", "kind", "venture", "date"]) {
     const v = url.searchParams.get(k);
+    // An EMPTY filter is a question with no answer, and the reader treats it as no filter: `?kind=` answered every
+    // receipt unfiltered (round 4). And a date is a day that exists, as an asof is.
+    if (v !== null && v.trim() === "") throw new DashError("BAD_ARGS", `"${k}" was given with no value -- leave it out to read unfiltered`);
+    if (k === "date" && v !== null && !(DAY_RE.test(v) && reads.isRealDay(v))) throw new DashError("BAD_ARGS", `date "${v}" is not a YYYY-MM-DD day that exists`);
     if (v !== null) filters[k] = v;
   }
-  const { events, torn, engine } = await readAll(ctx.root);
+  const { events, torn, engine, unreadable } = await readAll(ctx.root);
   // applyFilters WITHOUT limit so the page contract can report `more` honestly; the same
   // filter function the CLI uses (unknown cursor -> CURSOR_NOT_FOUND, never an empty 200).
   const filtered = applyFilters(cutAsof(events, asof), filters);
@@ -311,6 +317,8 @@ async function apiSpine(ctx, url) {
     count: page.length, more: filtered.length > page.length,
     next: page.length ? lastId(page) : (filters.since || null),
     torn: torn.length,
+    // A day file the reader could not open is damage the torn count cannot show (round 4): the page says how many.
+    unreadableDays: Array.isArray(unreadable) ? unreadable.length : 0,
     events: page.map((e) => ({ day: e.day, seq: e.seq, event: e.event })),
   };
 }
@@ -407,6 +415,9 @@ async function apiPnl(ctx, url) {
     const today = formatIst(nowMs()).slice(0, 10);
     const real = await moneyBrain(ctx, () => deriveDaily(ctx.root, { mode: "real", days: PNL_DAYS, today }));
     const simulated = await moneyBrain(ctx, () => deriveDaily(ctx.root, { mode: "simulated", days: PNL_DAYS, today }));
+    // The reader's own damage counts, beside the series: a day file it could not open holds receipts in no bucket and in
+    // no unplaceable count, and the money room says so under every table (round 4).
+    const damage = await readAll(ctx.root);
     return {
       mode: ctx.mode, route: "/api/pnl", by: "day", badge: "log", ...(reads.clockForced() ? { clockForced: true } : {}),
       parser: "hq/lib/ledger/pnl.mjs#deriveDaily (real, then simulated)", sources: [],
@@ -420,6 +431,7 @@ async function apiPnl(ctx, url) {
       })),
       // A ts-less revenue row per substance; a ts-less cost line once -- it is the same line in both reads.
       unplaceable: { real: real.unplaceableRows, simulated: simulated.unplaceableRows, costLines: real.unplaceableCostLines },
+      unreadLines: { torn: damage.torn.length, skipped: 0, days: Array.isArray(damage.unreadable) ? damage.unreadable.length : 0 },
       // Per substance, never summed: the cost flags are the same flags in both reads, and adding them counted each twice.
       needsYou: { real: real.needsYou, simulated: simulated.needsYou },
     };
@@ -521,8 +533,11 @@ function lanePhases(dir, repo) {
   // is a real directory entry by every test the OS offers. Both served arbitrary off-tree file
   // content under this door's "file, not log" badge.
   //
-  // Resolving and comparing is the only check that survives both, because it asks where the
-  // bytes actually ARE rather than what kind of entry points at them.
+  // Resolving and comparing survives the JUNCTION and the symlink, because it asks where the path
+  // resolves rather than what kind of entry points at it. It does NOT survive a hardlink: a hardlink
+  // has no "real" path to resolve to -- both names are the file -- so realpath answers the name it
+  // was given (face v2 Phase 04 round 4 measured this; the claim this comment used to make was false).
+  // A hardlink needs write access to the tree, which already reaches the bytes; it is a debt row.
   let fence;
   let realPhases;
   try {
@@ -544,8 +559,8 @@ function lanePhases(dir, repo) {
     });
 
   const kept = names.slice(0, PHASE_LIST_CAP)
-    // And each FILE, for the hardlink case: a hardlink is a real directory entry that passes
-    // isFile(), so only resolving it says whether the bytes live under initiatives/.
+    // And each FILE: a file SYMLINK inside phases/ resolves to where its bytes live. (A hardlink does
+    // not -- see the fence above; it is a debt row, not a claim this filter makes.)
     .filter((name) => { try { return inside(realpathSync(join(phasesDir, name))); } catch { return false; } });
   const phases = kept.map((name) => {
     const m = name.match(PHASE_FILE_RE);
@@ -605,8 +620,11 @@ function apiFile(ctx, id) {
   // The allow-list names a PATH; only resolving it says whose bytes those are. A junction at docs/ served another
   // tree's retro log with this tree's badge and a sha (Phase 04 round 3).
   if (!insideRepo(ctx, path)) throw new DashError("SOURCE_OUTSIDE", `allow-listed id "${id}" resolves outside this tree -- not served`);
-  if (!statSync(path).isFile()) throw new DashError("SOURCE_INVALID", `allow-listed id "${id}" is not a file at ${rel} on this tree`);
-  const text = readFileSync(path, "utf8");
+  // The RESOLVED path is what is read, so a link flipped between the check and the read cannot swap the bytes: the
+  // unresolved one served another tree's retro log in 3 of 41 racing reads (round 4). A hardlink is a debt row.
+  const real = realpathSync(path);
+  if (!insideRepo(ctx, real) || !statSync(real).isFile()) throw new DashError("SOURCE_INVALID", `allow-listed id "${id}" is not a file at ${rel} on this tree`);
+  const text = readFileSync(real, "utf8");
   return { mode: ctx.mode, badge: "file, not log", id, path: rel, sha256: sha256Hex(text), text };
 }
 
@@ -698,7 +716,7 @@ async function apiAsk(ctx, body) {
     // a silently-dropped argument.
     execFile(process.execPath, [join(ctx.repo, ".claude", "scripts", "engine", "arc-run.mjs"),
       "--process", "face-ask", "--input", JSON.stringify({ q, state: pack })], {
-      cwd: ctx.repo, timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
+      cwd: ctx.repo, env: reads.childEnv(), timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
     }, (err, stdout, stderr) => {
       if (err) return rejectP(new DashError("ASK_FAILED", String(stderr || err.message).slice(0, 500)));
       resolveP({ mode: ctx.mode, answer: stdout });
@@ -816,7 +834,9 @@ function boot(argv) {
   // The clock, read once before any request can need it. An ARC_SPINE_NOW that is set and unreadable (empty, hex) made
   // every authenticated read HANG: the throw landed outside the request's catch, in the journal line that stamps it
   // (Phase 04 round 3). Refused at boot, by name, like every other bad start.
-  try { nowMs(); } catch (err) {
+  // formatIst too: a clock nowMs accepts can still be past what a Date can hold (year 33658), and every request then
+  // hung in its own error path, which stamps the journal with the same call (round 4).
+  try { formatIst(nowMs()); } catch (err) {
     process.stderr.write(`arc-dash: ERROR ${err instanceof SpineError ? err.code : "BAD_TS"} -- ${err && err.message}\n`);
     process.exit(1);
   }

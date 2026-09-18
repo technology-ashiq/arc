@@ -612,31 +612,6 @@ export function quarantineHeadline(v) {
 }
 
 /**
- * Torn lines: bytes on the spine that could not be parsed back. Not an incident, and not
- * a zero either — a spine with no torn lines was READ and found clean, which is a
- * different claim from a health block that never carried the field.
- * @param {SpineHealth|null} health
- * @returns {{ state: "clean"|"torn"|"unread", count: number|null, sentence: string }}
- */
-export function tornView(health) {
-  if (health === null || !health.tornRead)
-    return { state: "unread", count: null, sentence: "The door did not serve a torn-line list, so nothing is claimed about the readability of the log." };
-  const n = health.tornLines.length;
-  // A day FILE the reader could not open is damage the torn-line list cannot show: "every line parsed" over a day
-  // nobody read was the round-3 lie (face v2 Phase 04). A door that does not say reads as unknown, never as zero.
-  const days = health.unreadableDays;
-  const daysSentence = days === null || days === 0 ? ""
-    : ` ${fmtInt(days)} day file${days === 1 ? "" : "s"} of the spine could not be opened at all, so ${days === 1 ? "its" : "their"} receipts are on disk and counted nowhere.`;
-  if (n === 0 && daysSentence === "")
-    return { state: "clean", count: 0, sentence: `Every line of the log parsed. Measured, not assumed — the reader walked the day files and found nothing it could not read.${days === null ? " (The door did not say whether every day file opened.)" : ""}` };
-  return {
-    state: "torn",
-    count: n,
-    sentence: `${n === 0 ? "No line that was read failed to parse." : `${fmtInt(n)} line${n === 1 ? "" : "s"} on the spine could not be parsed back. Those bytes are on disk and are not receipts, so nothing on any screen counts them.`}${daysSentence} This is a defect to repair, and it is not an incident: --red is reserved for incident.raised and stays unspent.`,
-  };
-}
-
-/**
  * The honesty number: how many kinds have EVER fired. Derived from the log by the door,
  * never copied from a doc — a copied count is the exact defect ADR-0107's derive-it rule
  * exists to prevent.

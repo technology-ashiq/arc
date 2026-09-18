@@ -620,22 +620,32 @@ check("fixture loaded with its Phase 04 block (vacuous-pass guard)", gen.phase04
   const evoClosed = await foldWith("kernel", "evolve", only("/api/evolve", { route: "/api/evolve", superseded: 2, damaged: 0, manifestsRead: 0, contracts: [],
     experiments: [{ id: "x-closed", module: "m", surface: "s", arms: ["+a", "+b"], split: 50, ttl_days: 14, opened: "t", verdict: { outcome: "no-verdict", ts: "t" }, closed: { outcome: "killed", ts: "t" }, proposals: 0, conflicts: 0, strayArms: [], metrics: [] }] }));
   check("EVOLVE: a closed experiment reads closed with its outcome, whatever verdict came before -- as the lane's board renders it", evoClosed.experiments.rows[0].cells[3] === "closed killed", evoClosed.experiments.rows[0].cells[3]);
+  // Round 4: CLOSED is the receipt's presence, never a truthy ts -- a closing with no readable ts still closed it.
+  const evoClosedNoTs = await foldWith("kernel", "evolve", only("/api/evolve", { route: "/api/evolve", superseded: 0, damaged: 0, manifestsRead: 0, contracts: [],
+    experiments: [{ id: "x-c2", module: "m", surface: "s", arms: ["+a", "+b"], split: 50, ttl_days: 14, opened: "t", verdict: null, closed: { outcome: "killed", ts: "" }, proposals: 0, conflicts: 0, strayArms: [], metrics: [] }] }));
+  check("EVOLVE: a closing with no readable ts still reads closed", evoClosedNoTs.experiments.rows[0].cells[3] === "closed killed", evoClosedNoTs.experiments.rows[0].cells[3]);
+  const orgOutside = await foldWith("company", "org", only("/api/board", { mode: "sim", badge: "file, not log", updated: "2026-09-18", lanes: [], outside: ["evil"] }));
+  check("ORG: board rows whose lane resolves off the tree are named on the org badge, as on the board's lanes tile", /1 off the tree, not read: evil/.test(orgOutside.badge), orgOutside.badge);
+  const pnlUnread = await withEnv({ ARC_SPINE_NOW: at("2026-07-21T12:00:00+05:30") }, () => pnlRoute.handler({ mode: "sim", root: unreadRoot, repo: REPO }, url("/api/pnl?by=day")));
+  check("PNL DOOR: the day series says when a day file could not be opened, and the money room draws it under the table",
+    pnlUnread.unreadLines && pnlUnread.unreadLines.days === 1 && /1 spine day file the reader could not open/.test(sourceOf("/api/pnl", pnlUnread)), JSON.stringify(pnlUnread.unreadLines));
   check("EVOLVE: superseded receipts are counted under the table", /2 superseded receipts set aside/.test(evoClosed.experiments.note), evoClosed.experiments.note);
   const mpFaults = await foldWith("kernel", "model-policy", only("/api/model-policy", { route: "/api/model-policy", today: "2026-09-18", faults: ["classes.x.fallback must be a list"], tiers: [{ tier: "cheap-scan", models: [] }],
     classes: [{ name: "x", tier: "cheap-scan", driver: "claude-code", fallback: [], cap: "", judge: "", review_by: "", expired: false }] }));
   check("MODEL POLICY: the router loader's faults are drawn under the process routes, as the engine room draws them", /router loader reports 1 fault: classes\.x\.fallback must be a list/.test(mpFaults.routesTable.note), mpFaults.routesTable.note);
   const councilCal = (calibration) => foldWith("factory", "council-chamber", only("/api/council", { route: "/api/council", verdicts: [], calibration: { buckets: [], ...calibration } }));
   const couExcluded = await councilCal({ scored: 0, excluded: 1, pending: 0, floor: 20, brier: null, verdict: "" });
-  const couBrier = await councilCal({ scored: 25, excluded: 0, pending: 0, floor: 20, brier: 0.18, verdict: "calibrated" });
+  const couBrier = await councilCal({ scored: 25, excluded: 0, pending: 7, floor: 20, brier: 0.18, verdict: "calibrated" });
   check("COUNCIL: an excluded outcome is counted in the note, never a verdict that vanished", /1 excluded -- an outcome the lane does not score/.test(couExcluded.calibration.note), couExcluded.calibration.note);
-  check("COUNCIL: above the floor the note is the Brier figure over the scored calls", couBrier.calibration.note === "Brier 0.18 over 25 scored calls · calibrated", couBrier.calibration.note);
-  const schAsked = await foldWith("kernel", "scheduler", only("/api/jobs", { route: "/api/jobs", overdueSlots: 2, observedFrom: "2026-09-01", jobs: [
-    { name: "off-job", enabled: false, cadence: "daily@06:00", nextExpected: null, missed: 0, overdue: false, state: "disabled", lastRun: null },
-    { name: "junk", enabled: true, cadence: "whenever", nextExpected: null, missed: 0, overdue: false, state: "unreadable-cadence", lastRun: null },
-    { name: "live", enabled: true, cadence: "daily@07:00", nextExpected: null, missed: 0, overdue: false, state: "enabled", lastRun: null },
-  ] }));
+  // Round 4: the lane's order and all its lines, above the floor as below it -- the pending count was dropped there.
+  check("COUNCIL: the note reads in the lane's own order -- scored, excluded, pending, then the figure -- above the floor too",
+    couBrier.calibration.note === "25 scored of a floor of 20 · 0 excluded -- an outcome the lane does not score, NOT counted as a miss · 7 pending -- no outcome recorded yet · Brier 0.18 · calibrated", couBrier.calibration.note);
+  const schedulerOf = (observedFrom, jobs) => foldWith("kernel", "scheduler", only("/api/jobs", { route: "/api/jobs", overdueSlots: 2, observedFrom, jobs }));
+  const job = (name, enabled, state) => ({ name, enabled, cadence: "daily@06:00", nextExpected: null, missed: 0, overdue: false, state, lastRun: null });
+  const schAsked = await schedulerOf("2026-09-01", [job("off-job", false, "disabled"), job("junk", true, "unreadable-cadence"), job("live", true, "enabled"), job("bad-receipt", true, "unreadable-receipt"), job("young", true, "never-run")]);
+  const schNoWindow = await schedulerOf(null, [job("young", true, "never-run")]);
   check("SCHEDULER: a job the lane never judges reads —, never 0 missed; a judged one reads its count",
-    schAsked.heartbeat.rows[0].cells[2] === "—" && schAsked.heartbeat.rows[1].cells[2] === "—" && schAsked.heartbeat.rows[2].cells[2] === "0", JSON.stringify(schAsked.heartbeat.rows.map((r) => r.cells[2])));
+    JSON.stringify(schAsked.heartbeat.rows.map((r) => r.cells[2])) === JSON.stringify(["—", "—", "0", "—", "0"]) && schNoWindow.heartbeat.rows[0].cells[2] === "—", JSON.stringify([schAsked.heartbeat.rows.map((r) => r.cells[2]), schNoWindow.heartbeat.rows[0].cells[2]]));
   const boardFuture = await foldWith("command", "board", only("/api/ventures", { route: "/api/ventures", criteria: [], kill: { present: true, receipted: true, path: "ventures.yaml", asOf: "2026-07-20", refused: "", absentCount: 2, futureRevenue: [{ venture: "lexos", count: 1 }],
     ventures: [{ venture: "lexos", criteria: [{ criterion: "days_without_revenue", threshold: 90, status: "ok", distance: 42, unit: "days", reason: "" }] }] } }));
   check("BOARD: revenue the panel set aside and criteria it could not evaluate are said beside the distances",
@@ -682,16 +692,58 @@ check("fixture loaded with its Phase 04 block (vacuous-pass guard)", gen.phase04
   check("GATES: a profile ARC_PROFILE forced is said to be forced", /forced there by ARC_PROFILE/.test(forcedModes.note), forcedModes.note);
 
   // The spine room never says "every line parsed" over a day file nobody opened; the board says how many rows it left.
-  const spineLib = await import(u(join(LIB, "spine.mjs")));
-  const tornOf = (spineBlock) => spineLib.tornView(spineLib.readSpineHealth({ mode: "sim", now: "2026-09-18T09:00:00+05:30", spine: spineBlock }));
-  const unopened = tornOf({ torn: [], unreadableDays: 1 });
-  const clean = tornOf({ torn: [], unreadableDays: 0 });
-  check("SPINE ROOM: a day file the reader could not open is never 'every line parsed'; a spine with none is clean",
-    unopened.state === "torn" && /1 day file of the spine could not be opened/.test(unopened.sentence) && !/Every line of the log parsed/.test(unopened.sentence) && clean.state === "clean", JSON.stringify([unopened, clean.state]));
+  // Round 4: the ROOM is folded, never a helper -- round 3 fixed a lib function no room called, and its check passed
+  // on text nothing renders.
+  const tornOf = async (spineBlock) => {
+    const f = await foldWith("command", "spine", only("/api/health", { mode: "sim", now: "2026-09-18T09:00:00+05:30", cursor: null, spine: { events: 3, days: 2, daysClosed: 1, kindsSeen: 1, kinds: [], ...spineBlock } }));
+    return (f.integrity.find((i) => i.key === "torn") || { text: "" }).text;
+  };
+  const unopened = await tornOf({ torn: [], unreadableDays: 1 });
+  const clean = await tornOf({ torn: [], unreadableDays: 0 });
+  const unsaid = await tornOf({ torn: [] });
+  const both = await tornOf({ torn: [{ day: "2026-09-17", line: 3 }], unreadableDays: 2 });
+  check("SPINE ROOM: a day file the reader could not open is never 'every line of every day file parsed'; a spine with none is",
+    /1 day file could not be opened at all/.test(unopened) && !/Every line of every day file parsed/.test(unopened) && clean === "Every line of every day file parsed on this read.", JSON.stringify([unopened, clean]));
+  check("SPINE ROOM: a door that does not say whether every day file opened is unknown, never zero",
+    /did not say whether every day file opened/.test(unsaid) && !/Every line of every day file parsed/.test(unsaid), unsaid);
+  check("SPINE ROOM: torn lines AND unopened day files are both said", /1 line is UNREADABLE/.test(both) && /2 day files could not be opened at all/.test(both), both);
   const boardOutside = await foldWith("command", "board", only("/api/board", { mode: "sim", badge: "file, not log", updated: "2026-09-18", lanes: [], outside: ["evil"] }));
   const lanesTile = boardOutside.kpis.find((k) => k.key === "lanes") || { sub: "" };
   check("BOARD: rows whose lane resolves off the tree are counted on the lanes tile, by name", /1 row off the tree, not read: evil/.test(lanesTile.sub), lanesTile.sub);
+
+  // ── round 4: a narrower pair on the round-3 diff ────────────────────────────────────────────────────────────────
+  const SEP = process.platform === "win32" ? BS : "/";
+  const scrub4 = [
+    [`failedC:/Users/bob/secret.txt`, "failed[path withheld]"], ["//fileserver/home/bob", "[path withheld]"],
+    [`${REPO}-evil${SEP}x`, "[path withheld]"], [`in ${join(REPO, "docs", "x.md")}`, `in docs${SEP}x.md`], ["see https://example.com/x", "see https://example.com/x"],
+  ].map(([input, want]) => [reads.scrub(input, REPO), want]);
+  check("SCRUB: a forward-slash drive glued to a word and a forward-slash share are withheld; a sibling of the repo is withheld whole, never cut to its tail",
+    scrub4.every(([got, want]) => got === want), JSON.stringify(scrub4));
+  const envSeen = await withEnv({ BASH_ENV: "x", ENV: "x", NODE_OPTIONS: "--x", ARC_VENTURES_FILE: "y", ARC_BENCH_CEILINGS: "y", ARC_SETTINGS: "y", GIT_DIR: "z", ARC_R4_KEEP: "1" }, async () => reads.childEnv());
+  check("CHILD ENV: a child the door runs gets no startup script, no preload, no source override and no git location -- and keeps the rest",
+    ["BASH_ENV", "ENV", "NODE_OPTIONS", "ARC_VENTURES_FILE", "ARC_BENCH_CEILINGS", "ARC_SETTINGS", "GIT_DIR"].every((k) => !(k in envSeen)) && envSeen.ARC_R4_KEEP === "1", Object.keys(envSeen).filter((k) => /^(BASH_ENV|ENV|NODE_OPTIONS|ARC_|GIT_)/.test(k)).join(","));
+  const bootHuge = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--spine", SPINE, "--port", "8498"], { env: { ...process.env, ARC_SPINE_NOW: "1000000000000000" }, timeout: 20_000 });
+  check("CLOCK: a clock nowMs accepts but no date can hold (year 33658) refuses the boot, never a door whose every request hangs",
+    bootHuge.status === 1, `status=${bootHuge.status} signal=${bootHuge.signal} ${String(bootHuge.stderr).slice(0, 200)}`);
+  const spineRoute = ROUTES.find((r) => r.method === "GET" && r.path === "/api/spine");
+  const spineRefusals = [];
+  for (const q of ["kind=", "venture=", "date=", "since=", "date=2026-02-31", "date=garbage"]) {
+    const e = await caught(() => spineRoute.handler({ mode: "sim", root: SPINE, repo: REPO }, url(`/api/spine?${q}`)));
+    spineRefusals.push({ q, ok: e !== null && e.code === "BAD_ARGS" });
+  }
+  const spineDay = await spineRoute.handler({ mode: "sim", root: SPINE, repo: REPO }, url("/api/spine?date=2026-07-20&limit=5"));
+  check("SPINE DOOR: an empty filter and a date that is no day are BAD_ARGS, never the whole log unfiltered; a real date answers",
+    spineRefusals.every((x) => x.ok) && spineDay.count === 5, JSON.stringify(spineRefusals.filter((x) => !x.ok)));
+  const spinePage = await spineRoute.handler({ mode: "sim", root: unreadRoot, repo: REPO }, url("/api/spine"));
+  check("SPINE DOOR: the log page counts a day file it could not open, beside its torn lines", spinePage.unreadableDays === 1 && spinePage.count === 1, JSON.stringify({ unreadableDays: spinePage.unreadableDays, count: spinePage.count }));
+  const roomsTree = treeOf("r4-rooms", {});
+  const foreignContracts = treeOf("r4-outside-contracts", { "rooms.generated.json": JSON.stringify({ rings: [], rooms: [{ id: "FOREIGN-TREE-ROOM" }] }) });
+  mkdirSync(join(roomsTree, "initiatives", "face"), { recursive: true });
+  const roomsLinked = junction(foreignContracts, join(roomsTree, "initiatives", "face", "contracts"));
+  const roomsRoute = ROUTES.find((r) => r.method === "GET" && r.path === "/api/rooms");
+  const roomsOff = await caught(() => roomsRoute.handler({ mode: "sim", root: SPINE, repo: roomsTree }, url("/api/rooms")));
+  check("ROOMS DOOR: a registry that resolves off the tree is SOURCE_OUTSIDE, never another tree's rooms", roomsLinked && roomsOff !== null && roomsOff.code === "SOURCE_OUTSIDE", String(roomsOff && roomsOff.message));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 130 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 141 ? 0 : 1;

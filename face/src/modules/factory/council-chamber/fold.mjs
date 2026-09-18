@@ -78,17 +78,18 @@ export function fold(payloads, ctx) {
         const bucket = field(b, "bucket");
         return bucket === "" ? null : { key: bucket, cells: [bucket, cell(b["prob"]), cell(b["n"]), cell(b["hits"])] };
       },
+      // In the lane's own order and with its own lines (calibrate.mjs renderCalibration): scored against the floor,
+      // excluded, pending -- always, above the floor as below it -- then the figure or its absence. Round 3 drew the
+      // excluded count after the figure and round 4 found the pending count dropped above the floor.
       note: st.isRead
         ? [
+          `${cell(cal["scored"])} scored of a floor of ${cell(cal["floor"])}`,
+          `${cell(cal["excluded"]) || "0"} excluded -- an outcome the lane does not score, NOT counted as a miss`,
+          `${cell(cal["pending"]) || "0"} pending -- no outcome recorded yet`,
           cal["brier"] === null || cal["brier"] === undefined
-            ? `${cell(cal["scored"])} scored of a floor of ${cell(cal["floor"])}, ${cell(cal["pending"])} pending -- below the floor no calibration figure is reported at all`
-            : `Brier ${cell(cal["brier"])} over ${cell(cal["scored"])} scored calls · ${field(cal, "verdict")}`,
-          // An outcome the lane will not score ("unresolved") is excluded, and the lane says so: a verdict must not
-          // vanish from the count without a word (calibrate.mjs renderCalibration; Phase 04 round 3).
-          typeof cal["excluded"] === "number" && cal["excluded"] > 0
-            ? `${cell(cal["excluded"])} excluded -- an outcome the lane does not score, NOT counted as a miss`
-            : "",
-        ].filter((n) => n !== "").join(" · ")
+            ? "below the floor no calibration figure is reported at all"
+            : `Brier ${cell(cal["brier"])} · ${field(cal, "verdict")}`,
+        ].join(" · ")
         : "",
     }),
     seats,

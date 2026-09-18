@@ -97,11 +97,15 @@ export function fold(payloads, ctx) {
   if (b.duplicates.length > 0) bandNotes.push(`Claimed on more than one row: ${b.duplicates.join(", ")}.`);
   if (isBoardRead && b.unverified.length > 0) bandNotes.push(`Named as owners and not lanes on the board: ${b.unverified.join(", ")}.`);
   if (board_.dropped > 0) bandNotes.push(`${fmtInt(board_.dropped)} board row${board_.dropped === 1 ? " carries" : "s carry"} no readable lane name or repeat${board_.dropped === 1 ? "s" : ""} one already listed -- left out and counted.`);
+  // A board row whose lane resolves off the tree is named by the door and never read (Phase 04 round 3); the org chart
+  // says so as the board's lanes tile does, so a shorter org is never read as a smaller company (round 4).
+  const rawBoard = boardP.state === "ok" && boardP.data !== null && typeof boardP.data === "object" ? /** @type {Record<string, unknown>} */ (boardP.data) : {};
+  const outsideLanes = (Array.isArray(rawBoard["outside"]) ? rawBoard["outside"] : []).filter((l) => typeof l === "string" && l !== "");
 
   return {
     sentence: String(ctx.room.sentence ?? ""),
     lede: String(ctx.room.lede ?? ""),
-    badge: isBoardRead ? `${fmtInt(totals.lanes)} lanes · each value from the lane's own header` : "the board · not read",
+    badge: isBoardRead ? `${fmtInt(totals.lanes)} lanes${outsideLanes.length > 0 ? ` · ${fmtInt(outsideLanes.length)} off the tree, not read: ${outsideLanes.join(", ")}` : ""} · each value from the lane's own header` : "the board · not read",
     kpis: [
       { key: "live", v: isBoardRead ? fmtInt(totals.live) : "—", l: "Awake", sub: "header reads LIVE" },
       { key: "idle", v: isBoardRead ? fmtInt(totals.idle) : "—", l: "Idle", sub: "no cycle running" },

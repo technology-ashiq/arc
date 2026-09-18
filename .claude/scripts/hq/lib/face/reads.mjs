@@ -54,7 +54,11 @@ const EMAIL = /[^\s@<>"'`,;()]+@[^\s@<>"'`,;()]+\.[^\s@<>"'`,;()]+/gu;
 // Round 3 widened it: a drive and a BACKSLASH is a path whatever precedes it (`failedC:\Users\...`) -- only the
 // forward-slash form needs the lookbehind that keeps `https:/` a URL; the Git Bash and Cygwin spellings of a drive
 // (`/c/Users/...`, `/cygdrive/c/...`) are paths; and the whole pattern ignores case (`\users\bob`).
-const ABS_START = /[A-Za-z]:\\|(?<![A-Za-z0-9])[A-Za-z]:\/|(?<![A-Za-z0-9._~%:/\\-])\\\\|(?<![A-Za-z0-9._~%:/\\-])\\(?:Users|home|Documents and Settings)\\|file:\/\/|(?<![A-Za-z0-9._~%:/-])~[A-Za-z0-9._-]*\/|(?<![A-Za-z0-9._~%:/-])\/(?:cygdrive\/)?[A-Za-z]\/|(?<![A-Za-z0-9._~%:/-])\/(?:home|Users|root|tmp|var|private|mnt|opt|etc|usr|Volumes|srv|media|run|snap)\//i;
+// Round 4: the forward-slash drive is a path glued to a word too (`failedC:/Users/...`) -- what keeps `https://` a URL
+// is the SECOND slash, not what precedes the drive; and a UNC share spelled with forward slashes (`//server/home`) is a
+// path wherever a scheme's colon does not precede it. A literal `e:\n` in a sentence is over-withheld: the recoverable
+// direction, and indistinguishable from a directory named n.
+const ABS_START = /[A-Za-z]:\\|[A-Za-z]:\/(?!\/)|(?<![A-Za-z0-9:/])\/\/(?=[A-Za-z0-9])|(?<![A-Za-z0-9._~%:/\\-])\\\\|(?<![A-Za-z0-9._~%:/\\-])\\(?:Users|home|Documents and Settings)\\|file:\/\/|(?<![A-Za-z0-9._~%:/-])~[A-Za-z0-9._-]*\/|(?<![A-Za-z0-9._~%:/-])\/(?:cygdrive\/)?[A-Za-z]\/|(?<![A-Za-z0-9._~%:/-])\/(?:home|Users|root|tmp|var|private|mnt|opt|etc|usr|Volumes|srv|media|run|snap)\//i;
 
 /**
  * A sentence made safe for the wire: the repo's own path becomes repo-relative, any other absolute path and any
@@ -68,7 +72,9 @@ export function scrub(text, repo) {
     for (const form of new Set([repo, repo.split(sep).join("/"), repo.split("/").join("\\")])) {
       if (!form) continue;
       const esc = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      s = s.replace(new RegExp(`${esc}[\\\\/]?`, "gi"), "");
+      // Only at a separator or the end of the path: a SIBLING of the repo (`...arc-face-v2-evil\x`) shares its prefix,
+      // and cutting the prefix off served the rest as `-evil\x` instead of withholding it (round 4).
+      s = s.replace(new RegExp(`${esc}(?:[\\\\/]|(?=[\\s"'\`),;]|$))`, "gi"), "");
     }
   }
   s = s.replace(EMAIL, "[address withheld]");
@@ -101,7 +107,11 @@ export function scrubDeep(v, repo, depth = 0) {
  * @returns {NodeJS.ProcessEnv}
  */
 export function childEnv() {
-  return Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/.test(k)));
+  // Round 4 widened it: BASH_ENV and ENV run a script before the child's own (one exported GIT_DIR and moved the gates),
+  // NODE_OPTIONS preloads code into a node child, and the three source overrides the door refuses on its own routes
+  // (ARC_VENTURES_FILE, ARC_BENCH_CEILINGS, ARC_SETTINGS) must not reach a child that reads the same file for it.
+  const DROP = new Set(["BASH_ENV", "ENV", "NODE_OPTIONS", "ARC_VENTURES_FILE", "ARC_BENCH_CEILINGS", "ARC_SETTINGS"]);
+  return Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/.test(k) && !DROP.has(k)));
 }
 
 /** The clock the door answers by is forced when ARC_SPINE_NOW is set; a body built on it says so. */
@@ -469,6 +479,14 @@ export async function apiPolicy(ctx, url) {
 }
 
 // ---------- hq.jobs.yaml: /api/jobs ----------
+/**
+ * Whether the jobs panel ASKED how many slots a row missed -- its own branches (hq/lib/jobs/panel.mjs): an enabled job
+ * with a readable cadence and a readable last receipt, or a never-run one inside a window the spine witnesses.
+ * @param {Record<string, unknown>} r @param {unknown} observedFrom
+ */
+const judged = (r, observedFrom) => r.enabled === true && r.state !== "unreadable-cadence" && r.state !== "unreadable-receipt"
+  && !(r.state === "never-run" && !(typeof observedFrom === "string" && /^\d{4}-\d{2}-\d{2}$/.test(observedFrom)));
+
 /** GET /api/jobs -- each job's cadence, last run, next fire and overdue mark, by the brief's own jobs panel. */
 export async function apiJobs(ctx, url) {
   onlyQuery(url, []);
@@ -498,7 +516,8 @@ export async function apiJobs(ctx, url) {
       nextExpected: typeof r.nextExpected === "number" ? formatIst(r.nextExpected) : null,
       // The lane asks "how many missed" only of an enabled job with a readable cadence (panel.mjs: "Not zero missed --
       // the question is not asked"); every other row carries null, never the 0 its row started with (round 3).
-      missed: r.enabled === true && r.state !== "unreadable-cadence" ? num(r.missed) : null,
+      // Round 4: and never of an unreadable last receipt, nor of a never-run job the spine gives no window to count in.
+      missed: judged(r, observedFrom) ? num(r.missed) : null,
       overdue: r.overdue === true,
       state: str(r.state),
     })),

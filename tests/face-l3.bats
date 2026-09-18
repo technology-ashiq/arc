@@ -517,7 +517,7 @@ load 'test_helper'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   local n
   n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
-  [ -n "$n" ] && [ "$n" -ge 130 ] || { echo "only '$n' checks ran: $output"; false; }
+  [ -n "$n" ] && [ "$n" -ge 141 ] || { echo "only '$n' checks ran: $output"; false; }
   local arm
   for arm in "SERVED: a body with no list where the rows live is BAD_BODY -- never an empty table" \
              "SERVED: unreadable, blank and repeated entries are COUNTED in the note, and never drawn" \
@@ -539,7 +539,8 @@ load 'test_helper'
              "FILE DOOR: an allow-listed id whose path resolves off the tree is SOURCE_OUTSIDE, never another tree's bytes" \
              "SPINE: a day file the reader cannot open is reported, and the door counts it under the table" \
              "EVOLVE: a closed experiment reads closed with its outcome, whatever verdict came before -- as the lane's board renders it" \
-             "DAILY: a receipt on 2026-06-31 is unplaceable -- counted, never a silent gap in fourteen days"; do
+             "DAILY: a receipt on 2026-06-31 is unplaceable -- counted, never a silent gap in fourteen days" \
+             "SPINE ROOM: a door that does not say whether every day file opened is unknown, never zero"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }

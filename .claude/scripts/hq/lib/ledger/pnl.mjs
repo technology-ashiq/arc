@@ -321,8 +321,10 @@ export async function deriveDaily(root, { mode = "real", days = 14, today, engin
   const window = [];
   for (let i = days - 1; i >= 0; i--) window.push(new Date(end - i * DAY_MS).toISOString().slice(0, 10));
   const byDay = new Map(window.map((day) => [day, { day, cashInInr: 0, rows: 0, costLines: new Map(), unmeasuredCostLines: 0 }]));
-  // A row or line whose ts is not a string cannot be placed on a day. It is COUNTED, never allowed to throw: a
-  // receipt with no ts is on the spine, and the month view renders it (face v2 Phase 04 attack).
+  // A row or line derivePnl hands over whose ts is not a string cannot be placed on a day: THIS loop counts it and
+  // never throws on it (face v2 Phase 04 attack). What it cannot promise is derivePnl's own behaviour: a revenue
+  // receipt with no string ts at all -- which the spine's validator refuses at emission -- throws inside derivePnl's
+  // MRR fold before this loop sees it, and the door answers that as a named SOURCE_INVALID for the series (round 4).
   // And a ts whose day does not exist (`2026-06-31T10:00:00+05:30`) is unplaceable too: its ten characters sort inside
   // the window and name no day in it, so it fell into no bucket and was counted nowhere (Phase 04 round 3).
   const dayOf = (ts) => {
