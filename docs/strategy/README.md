@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-09-16 — PLAN-face-v2 added: the face lane's Cycle-16 revision — the owner's v0.7 HQ becomes arc's only frontend as 36 four-file modules, PLAN-face.md NOT superseded; 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-09-19 — PLAN-docs added: the `docs` lane's generated-wiki plan, trigger fired by owner ruling 2026-09-18; the four overlapping how-it-works/usermanual/blueprint docs are MARKED for supersession by its REQ-08 but do NOT move until its Phase 02; 2026-09-16 — PLAN-face-v2 added: the face lane's Cycle-16 revision — the owner's v0.7 HQ becomes arc's only frontend as 36 four-file modules, PLAN-face.md NOT superseded; 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (26 files) | **ACTIVE — the operational layer** | Kickoff-ready: 24 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
+| `plans/` (27 files) | **ACTIVE — the operational layer** | Kickoff-ready: 25 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -614,6 +614,20 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     holds. `PLAN-face.md` (v1.0) is **NOT superseded and does not move**: it stays in `plans/` as
     Cycle 15's frozen decision record, the same way `PLAN-design.md` stands beside
     `PLAN-design-v2.md`.
+
+27. **2026-09-19:** `plans/PLAN-docs.md` added (`docs` v1 — arc's own reference: a
+    generated wiki over every product, lane, process and decision, complete by construction).
+    **Trigger FIRED by owner ruling 2026-09-18**, recorded on the spine in Phase 0. Decisions
+    **DOC-A…K locked, DOC-L open** (new `docs` lane vs a `core` home for the generator),
+    ADR century claimed at kickoff per `PORTFOLIO.md` after a sibling-worktree sweep. The load-
+    bearing one is **DOC-A**: tree discovery is IMPORTED from
+    `.claude/scripts/core/face-coverage.mjs` rather than re-implemented, so a newly born
+    product/lane/command/agent is seen by code already in production and already gated — and
+    the wiki and the face app cannot disagree about what exists. **`docs/how-it-works.md`,
+    `docs/how-arc-works-simple.md`, `docs/usermanual.md` and `docs/blueprint.md` are marked for
+    supersession by this plan's REQ-08/DOC-J but have NOT moved** — they go to `docs/archive/`
+    at the plan's Phase 02, when the wiki that replaces them exists, and this table gets the
+    move recorded in that same drop. Until then they remain the live answer.
 
 ## Provenance
 
