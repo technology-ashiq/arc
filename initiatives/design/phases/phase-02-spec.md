@@ -29,6 +29,14 @@ of git and whose provenance goes in.
       avoid-this — one row per screen
 - [ ] A PNG planted in the refpack dir is proven ignored by `git check-ignore` — asserted, not
       assumed from the gitignore's text
+- [ ] An explore output under `docs/design/explore/lexos-*/` (HTML and PNG) is proven ignored
+      by `git check-ignore -v`, naming the `.gitignore` rule that did it. This enforces the
+      owner's 2026-09-16 ruling that LexOS evidence is committed as text only, instead of
+      relying on nobody running `git add -A`. The same case runs two negative controls, and
+      both must NOT be ignored: a non-LexOS explore path, and a trailing-slash nonsense path.
+      The second pins the #228 regression, a UTF-16 line that made every trailing-slash path
+      read as ignored. The rule does not untrack the four `lexos-case-workspace-*` dirs
+      committed before the ruling. *(`/arc-change` 2026-09-18)*
 - [ ] A source with `status: off` produces **zero** fetch attempts
 - [ ] Two-surface adversarial pass by fresh agents on the registry lint and the preflight
 - [ ] tests added & green **on CI, read per JOB at the branch head SHA**
