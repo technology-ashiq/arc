@@ -1,0 +1,36 @@
+{
+  "phase": "04",
+  "commit": "0a4cb262368fef881a0aad58a6d4f3be069ad05a",
+  "short": "0a4cb262",
+  "generated": "2026-09-18T16:54:56Z",
+  "files": [
+    {
+      "name": "attackers.md",
+      "sha256": "be593443fc51b4a5ab71069e9c1d917e743bc557d85a8f9bc3c9b73a48449d65"
+    },
+    {
+      "name": "ci-jobs.json",
+      "sha256": "0e2681009dad7ba44db3c1e921b5e4c3b3941f8278d85e3ab070aac62560eeb4"
+    },
+    {
+      "name": "handoff.md",
+      "sha256": "765e24b119be9a0d65230a691010339468c3542856d1a92cc2f66adf75817365"
+    },
+    {
+      "name": "live-demo.md",
+      "sha256": "25cc82f2fc0430ba97adf7709d7607200740c7f01dc7a86912485566d09139b6"
+    },
+    {
+      "name": "residue.md",
+      "sha256": "2dfd6519ef9625ca958da5a059b4448cb032cca6c4ed4ef5f25afbc9e7772eee"
+    },
+    {
+      "name": "served.md",
+      "sha256": "e9bfaa8b733eea6aea4c0b2c8139d71246883017e15880d8bc07d96438c1660a"
+    },
+    {
+      "name": "spec-fidelity.md",
+      "sha256": "60caeb107729173e8a59eadc89f3600eaeb54fe797ff2ad268920ee79cd07916"
+    }
+  ]
+}
