@@ -220,10 +220,22 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
     }
   }
   check("the real tree holds module folders (vacuous-pass guard)", folders > 0, `folders=${folders}`);
-  const a = reg.attachModules(registry, reg.collectModules(found));
-  check("every real module folder attaches, with no problem", Object.keys(a.attached).length === folders && a.problems.length === 0, show(a));
-  const openable = registry.rooms.filter((r) => r.status !== "template").length;
-  check("attached + generic = every openable served room", Object.keys(a.attached).length + a.generic.length === openable, `${Object.keys(a.attached).length}+${a.generic.length} vs ${openable}`);
+  // The exemption rows, as the shell receives them: the door serves the file, and the shell draws each row as a
+  // room arc does not serve (ADR-1327, company ring). The gate and the browser read the SAME file.
+  const exemptFile = readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8");
+  // As the shell receives it: the door escapes every string once (company ring attack: the raw text skipped that step).
+  const doorEscaped = exemptFile.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const extrasServed = typeof reg.extraRooms === "function"
+    ? reg.extraRooms({ state: "ok", data: { id: "module-exemptions", path: "initiatives/face/contracts/module-exemptions.json", sha256: "e".repeat(64), text: doorEscaped } })
+    : { rooms: [], ids: [], problem: "registry.mjs exports no extraRooms" };
+  check("the shell reads the exemption rows the door serves, with no problem (company ring)", extrasServed.problem === "" && extrasServed.ids.length > 0, JSON.stringify({ problem: extrasServed.problem, ids: extrasServed.ids }));
+  const shellRegistry = typeof reg.withExtras === "function" ? reg.withExtras(registry, extrasServed) : registry;
+  const a = reg.attachModules(shellRegistry, reg.collectModules(found));
+  check("every real module folder attaches, with no problem -- an exempted extra through its row, never as an orphan", Object.keys(a.attached).length === folders && a.problems.length === 0, show(a));
+  const openable = shellRegistry.rooms.filter((r) => r.status !== "template").length;
+  check("attached + generic = every openable room the shell draws (served, plus the exempted extras)", Object.keys(a.attached).length + a.generic.length === openable, `${Object.keys(a.attached).length}+${a.generic.length} vs ${openable}`);
+  check("an exempted extra is drawn as an extra, never as a served room: the rail marks it", extrasServed.rooms.every((r) => r.status === "extra" && r.extra === true && typeof r.sentence === "string" && r.sentence !== ""),
+    JSON.stringify(extrasServed.rooms.map((r) => ({ id: r.id, status: r.status }))));
 
   check("face-coverage exports its module half", typeof coverage.treeModules === "function" && typeof coverage.moduleFindings === "function");
   const tree = coverage.treeModules(REPO);
@@ -232,7 +244,20 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
   check("face-coverage's module half finds nothing on the real tree", half.findings.length === 0, JSON.stringify(half.findings));
   check("the generic rooms the gate REPORTS are exactly the ones the browser renders generic",
     JSON.stringify(half.generic) === JSON.stringify(a.generic), `coverage=${half.generic.join(",")} frame=${a.generic.join(",")}`);
-  check("the exemption list is EMPTY until the factory and company rings add their rows (ADR-1327)", half.exemptions === 0, `exemptions=${half.exemptions}`);
+  // The owner's ruling on PLAN-face-v2 section 13 item 5 (2026-09-18, ADR-1337): story and factory earn registry
+  // rows, so the list names exactly the two extras the ruling left exempt.
+  check("the exemption list names exactly executor and agents (ADR-1327, ADR-1337)", half.exemptions === 2 && JSON.stringify([...(half.exempted || [])].sort()) === JSON.stringify(["agents", "executor"]),
+    `exemptions=${half.exemptions} exempted=${JSON.stringify(half.exempted)}`);
+  const servedIds = registry.rooms.map((r) => r.id);
+  check("story and factory are SERVED rooms now, each in its ring with a sentence (ADR-1337)",
+    ["story", "factory"].every((id) => { const r = registry.rooms.find((x) => x.id === id); return r !== undefined && typeof r.sentence === "string" && r.sentence !== "" && r.status !== "planned"; })
+    && registry.rooms.find((r) => r.id === "story")?.ring === "company" && registry.rooms.find((r) => r.id === "factory")?.ring === "factory",
+    JSON.stringify(registry.rooms.filter((r) => r.id === "story" || r.id === "factory")));
+  const contract = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "modules-v2.json"), "utf8"));
+  const classOf = (id) => (contract.modules.find((m) => m.id === id) || {}).class;
+  check("modules-v2.json classes story and factory as served and executor and agents as extra (ADR-1337)",
+    classOf("story") === "served" && classOf("factory") === "served" && classOf("executor") === "extra" && classOf("agents") === "extra" && servedIds.includes("story") && !servedIds.includes("executor"),
+    JSON.stringify({ story: classOf("story"), factory: classOf("factory"), executor: classOf("executor"), agents: classOf("agents") }));
 
   // The two readers AGREE on an exemption too (face v2 Phase 02 attack): a folder for an ADR-1327
   // extra with its row is fine for the gate and an extra -- not an orphan -- for the browser, while
@@ -240,8 +265,11 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
   const extra = (tree.extras || [])[0];
   check("the real contracts name an ADR-1327 extra to test the agreement with (vacuous-pass guard)", Boolean(extra), JSON.stringify(tree.extras));
   if (extra) {
-    const withFolder = { ...tree, folders: [...tree.folders, { ring: extra.ring, id: extra.id }] };
-    const withRow = { ...withFolder, exemptions: [{ id: extra.id, adr: "ADR-1327" }] };
+    // The real tree carries this extra's row and folder since the ruling (ADR-1337): the agreement is tested from a tree
+    // without either, then with a whole row -- the facts the shell draws the room from -- and the folder.
+    const bare = { ...tree, folders: tree.folders.filter((f) => f.id !== extra.id), exemptions: (tree.exemptions || []).filter((e) => !e || e.id !== extra.id) };
+    const withFolder = { ...bare, folders: [...bare.folders, { ring: extra.ring, id: extra.id }] };
+    const withRow = { ...withFolder, exemptions: [...bare.exemptions, { id: extra.id, adr: "ADR-1327", name: extra.id, ring: extra.ring, sentence: "a sentence", lede: "" }] };
     const foundExtra = { ...found,
       [`./modules/${extra.ring}/${extra.id}/module.mjs`]: { default: { id: extra.id, ring: extra.ring, routes: [], asOf: true } },
       [`./modules/${extra.ring}/${extra.id}/fold.mjs`]: { fold: () => ({}) },
@@ -261,7 +289,12 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
 }
 
 // ── the shell names no room ──
-const servedIds = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms.map((r) => r.id);
+// The rooms the shell draws: every served id, and the exempted extras the shell draws from their rows (company ring
+// attack: a shell file calling onOpen('executor') named a room the scan did not know).
+const servedIds = [
+  ...JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms.map((r) => r.id),
+  ...(JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8")).exemptions || []).map((e) => e.id),
+];
 /** Every quoted literal whose whole value is a served id, or a route to one (`/id`, `#/id`, `#id`). */
 const namedRooms = (text) => {
   const hits = [];
@@ -461,7 +494,7 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
 }
 
 // ── shipped rings (face v2 Phase 03): a ring listed here is PORTED, and its NOT SERVED list is derived ──
-const SHIPPED_RINGS = ["command", "kernel", "factory", "money"];
+const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
 {
   const contract = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "modules-v2.json"), "utf8"));
   const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
@@ -521,7 +554,9 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money"];
       const manifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
       const notDoor = (manifest.routes || []).filter((r) => !Object.hasOwn(door.DOOR_ROUTES || {}, r));
       check(`SHIPPED RING ${ring}: ${id} declares only door routes`, Array.isArray(manifest.routes) && notDoor.length === 0, notDoor.join(","));
-      const room = registry.rooms.find((r) => r.id === id) || { id, ring, name: id, sentence: "", lede: "", holds: { kinds: [] } };
+      const exemptRow = (JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8")).exemptions || []).find((e) => e.id === id);
+      const room = registry.rooms.find((r) => r.id === id)
+        || (exemptRow ? { id, ring, name: exemptRow.name, sentence: exemptRow.sentence, lede: exemptRow.lede ?? "", status: "extra", extra: true, holds: {} } : { id, ring, name: id, sentence: "", lede: "", holds: { kinds: [] } });
       // The host hands a fold the manifest it checks reads against (registry.foldContext), so a shared fold
       // refuses a read the manifest cannot make instead of planning one the host then drops (money ring).
       const fctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {}, manifest };

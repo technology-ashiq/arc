@@ -19,8 +19,8 @@ import { ASOF_ROUTES, Door, DoorError, decodeRegistry, tokenFromHash, unescapeDo
 import { findRoom, errorSentence } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
 import { buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash } from './lib/shell.mjs'
-import { asOfReaches, attachModules, collectModules, homeRoom, modeChip, railGroups, roomHoldingKind } from './lib/registry.mjs'
-import type { ModuleContext } from './lib/registry.mjs'
+import { asOfReaches, attachModules, collectModules, EXEMPTION_FILE, extraRooms, homeRoom, modeChip, railGroups, refusedPayload, roomHoldingKind, withExtras } from './lib/registry.mjs'
+import type { ExtraRooms, ModuleContext } from './lib/registry.mjs'
 import { needsYouByRoom } from './lib/map.mjs'
 import { applyMood, nextMood, readMood, storeMood } from './lib/mood.mjs'
 import type { Mood } from './lib/mood.mjs'
@@ -56,6 +56,9 @@ const FOUND_MODULES: Record<string, unknown> = {
 
 export default function App() {
   const [registry, setRegistry] = useState<Registry | null>(null)
+  // The rooms arc does not serve but the face keeps (ADR-1327): drawn from the exemption rows the door serves as a
+  // file, never from a list typed here. Until they are read, or if they cannot be, the served rooms stand alone.
+  const [extras, setExtras] = useState<ExtraRooms>(() => extraRooms({ state: 'loading' }))
   const [error, setError] = useState<unknown>(null)
   const [roomId, setRoomId] = useState<string | null>(() => parseHash(window.location.hash).room)
   // The workroom's mood. main.tsx already put the stored one on <html> before the first render;
@@ -108,6 +111,10 @@ export default function App() {
         try { setContract(JSON.parse(unescapeDoorText((body as { text?: unknown }).text)) as Contract) } catch { /* palette-only */ }
       })
       .catch(() => { /* rooms-only palette; the shell still works */ })
+    door
+      .file(EXEMPTION_FILE, ac.signal)
+      .then((body: unknown) => setExtras(extraRooms({ state: 'ok', data: body })))
+      .catch((e: unknown) => { if (!ac.signal.aborted) setExtras(extraRooms(refusedPayload(e))) })
     // What is waiting on the owner. A failure leaves the inbox chip saying it could not read --
     // never "inbox zero", which would be a claim about the company made from a failed read.
     door
@@ -117,12 +124,22 @@ export default function App() {
     return () => ac.abort()
   }, [door])
 
-  const groups = useMemo(() => (registry ? railGroups(registry) : []), [registry])
+  // What the bundle found is fixed at build time: read once, and handed to both questions asked of it.
+  const collected = useMemo(() => collectModules(FOUND_MODULES), [])
+  // The room list the shell draws: the served registry, then each exempted extra in its ring, where its module lives
+  // (ADR-1327). What could not be drawn is said, in the rail and on a deep link -- never a silent absence.
+  const shell = useMemo(() => (registry ? withExtras(registry, extras, collected.modules) : null), [registry, extras, collected])
+  const extrasNote = useMemo(() => {
+    const dropped = shell ? shell.extrasDropped : []
+    const parts = [extras.isLoading ? '' : extras.problem, dropped.length ? `rows left out: ${dropped.join(', ')}` : ''].filter((x) => x !== '')
+    return parts.join('; ')
+  }, [shell, extras])
+  const groups = useMemo(() => (shell ? railGroups(shell) : []), [shell])
   const order = useMemo(() => navOrder(groups), [groups])
   const home = useMemo(() => (registry ? homeRoom(registry) : null), [registry])
-  // Modules attach to the SERVED rooms, both ways (ADR-1321). What the glob found is fixed at
-  // build time; what it attaches to is whatever the door serves today.
-  const attachment = useMemo(() => attachModules(registry ?? { rooms: [] }, collectModules(FOUND_MODULES)), [registry])
+  // Modules attach to the SERVED rooms, both ways (ADR-1321), and to an exempted extra through its row. What the
+  // glob found is fixed at build time; what it attaches to is whatever the door serves today.
+  const attachment = useMemo(() => attachModules(shell ?? { rooms: [] }, collected), [shell, collected])
 
   const open = useCallback(
     (id: string) => {
@@ -199,7 +216,7 @@ export default function App() {
     )
   }
 
-  if (!registry) {
+  if (!registry || !shell) {
     return (
       <main className="min-h-screen" style={{ background: 'var(--bg-0)', color: 'var(--text-1)', fontFamily: UI }}>
         <Loading what="the company" />
@@ -208,15 +225,15 @@ export default function App() {
   }
 
   const shownId = roomId ?? home
-  const room = shownId === null ? null : findRoom(registry.rooms, shownId)
+  const room = shownId === null ? null : findRoom(shell.rooms, shownId)
   // A template is not a room you can open; asking for it by URL is answered like any unknown id.
   const openable = room && !room.template ? room : null
-  const items: PaletteItem[] = paletteItems(registry.rooms, concepts)
-  const needs = needsYouByRoom(openItems ?? [], contract, registry.rooms.map((r) => r.id))
+  const items: PaletteItem[] = paletteItems(shell.rooms, concepts)
+  const needs = needsYouByRoom(openItems ?? [], contract, shell.rooms.map((r) => r.id))
   const attached = openable ? attachment.attached[openable.id] : undefined
   const ctx: ModuleContext | null = openable
     ? {
-        room: openable, rooms: registry.rooms, door, onOpen: open, mode: registry.mode, token,
+        room: openable, rooms: shell.rooms, door, onOpen: open, mode: registry.mode, token,
         needs: needs.counts, needsUnplaced: needs.unplaced, inventories: registry.inventories, laneMap: contract.lanes?.map,
       }
     : null
@@ -238,6 +255,7 @@ export default function App() {
         onPalette={() => setPaletteOpen(true)}
         attachment={attachment}
         ringCount={registry.rings.length}
+        extrasNote={extras.isLoading ? '' : extrasNote}
       />
 
       <Header
@@ -276,7 +294,7 @@ export default function App() {
                 <RoomFrame room={openable} attachment={attachment} ctx={ctx} />
               </div>
             ) : (
-              <NoSuchRoom id={shownId ?? ''} />
+              <NoSuchRoom id={shownId ?? ''} extrasNote={extras.isLoading ? 'the exemption rows are still being read' : extrasNote} />
             )}
           </section>
         </div>
@@ -291,14 +309,19 @@ export default function App() {
  * An unknown room id is a thing a person can type. It gets a named answer, never a blank screen --
  * the product exists so nothing goes missing, and its own router must not be where something does.
  */
-function NoSuchRoom({ id }: { id: string }) {
+/**
+ * A room id nothing draws. While the rooms arc does not serve are unread -- or could not be read -- the answer is not
+ * "there is no such room": that would be a claim made from a failed read (company ring attack).
+ */
+function NoSuchRoom({ id, extrasNote }: { id: string; extrasNote: string }) {
+  const unsure = extrasNote !== ''
   return (
     <div className="py-10">
       <h1 className="text-[22px] sm:text-[26px] leading-[1.15] tracking-[-0.01em]" style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-1)' }}>
-        There is no room called “{id}”.
+        {unsure ? <>No room called “{id}” is drawn yet.</> : <>There is no room called “{id}”.</>}
       </h1>
       <p className="text-[13.5px] leading-[21px] mt-1.5" style={{ color: 'var(--text-2)' }}>
-        Every room arc has is in the rail.
+        {unsure ? <>The rooms arc does not serve are drawn from a file the door serves, and {extrasNote}.</> : <>Every room arc has is in the rail.</>}
       </p>
     </div>
   )

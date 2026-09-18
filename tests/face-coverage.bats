@@ -288,7 +288,7 @@ load 'test_helper'
   done
 }
 
-@test "face v2: face-coverage's module half FAILs an orphan and an unnamed exemption, and the exemption list is EMPTY" {
+@test "face v2: face-coverage's module half FAILs an orphan and an unnamed exemption, and names exactly the two exempt extras" {
   # ADR-1321 (orphans both ways) and ADR-1327 (the four extras, by name only). Every arm BY NAME:
   # the arms that carry the Phase 02 exit criteria, and the exit arm, so a mutant that narrows the
   # exit to another finding class is visible here.
@@ -306,16 +306,19 @@ load 'test_helper'
   # cannot print a matching number.
   run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  local line folders served generic
+  local line folders served generic exempt
   line="$(printf '%s\n' "$output" | grep '^face-coverage: module half ' | tail -1)"
   [ -n "$line" ] || { echo "no module-half line: $output"; false; }
   folders="$(find "$ARC_ROOT/face/src/modules" -mindepth 2 -maxdepth 2 -type d | wc -l | tr -d ' ')"
   [ "$folders" -gt 0 ] || { echo "no module folders on the tree to reconcile"; false; }
   [[ "$line" == "face-coverage: module half folders=$folders "* ]] || { echo "expected folders=$folders: $line"; false; }
-  [[ "$line" == *" orphans=0 exemptions=0 "* ]] || { echo "the exemption list must be EMPTY in Phase 02 and nothing orphaned: $line"; false; }
+  # The owner's ruling on PLAN-face-v2 section 13 item 5 (ADR-1337): story and factory earned registry rows, so the
+  # list names exactly executor and agents -- and their two folders are the only folders the door does not serve.
+  [[ "$line" == *" orphans=0 exemptions=2 "* ]] || { echo "the exemption list must name exactly the two exempt extras, and nothing orphaned: $line"; false; }
   served="$(printf '%s\n' "$line" | sed -n 's/^face-coverage: module half folders=[0-9]* served=\([0-9][0-9]*\) generic=[0-9]* .*/\1/p')"
   generic="$(printf '%s\n' "$line" | sed -n 's/^face-coverage: module half folders=[0-9]* served=[0-9]* generic=\([0-9][0-9]*\) .*/\1/p')"
-  [ -n "$served" ] && [ -n "$generic" ] && [ "$((folders + generic))" -eq "$served" ] || { echo "folders=$folders + generic=$generic != served=$served: $line"; false; }
+  exempt="$(printf '%s\n' "$line" | sed -n 's/^face-coverage: module half folders=[0-9]* served=[0-9]* generic=[0-9]* orphans=0 exemptions=\([0-9][0-9]*\) generic-rooms=.*/\1/p')"
+  [ -n "$served" ] && [ -n "$generic" ] && [ -n "$exempt" ] && [ "$((folders - exempt + generic))" -eq "$served" ] || { echo "folders=$folders - exempt=$exempt + generic=$generic != served=$served: $line"; false; }
   # REPORTED by name (ADR-1321): the generic rooms are listed, not only counted.
   [[ "$line" == *" generic-rooms="*"-- a served room with no module renders through the generic module (ADR-1321)" ]] || { echo "$line"; false; }
 }

@@ -1,4 +1,21 @@
 {
-  "$comment": "ADR-1327: the v0.7 rooms arc does not serve may keep a module under face/src/modules only when a row here names the room id and ADR-1327 -- face-coverage's module half reads this file (face v2 Phase 02). The ids a row may name are derived from modules-v2.json's extra class, never listed here, so a fifth, unnamed exemption FAILs. EMPTY until the factory ring (factory, executor, agents) and the company ring (story) add their rows in Phase 03, unless the owner's PLAN-face-v2 section 13 item 5 ruling gives a room a registry row instead. A row is an object with an id and an adr.",
-  "exemptions": []
+  "$comment": "ADR-1327: the v0.7 rooms arc does not serve may keep a module under face/src/modules only when a row here names the room id and ADR-1327 -- face-coverage's module half reads this file (face v2 Phase 02). The ids a row may name are derived from modules-v2.json's extra class, never listed here, so an unnamed exemption FAILs. The owner's PLAN-face-v2 section 13 item 5 ruling (2026-09-18, ADR-1337) gave story and factory registry rows; executor and agents stay here. A row is an object with an id and an adr, and the name, ring, sentence and lede the shell draws the room from -- the door serves this file (/api/file/module-exemptions), because a room the registry does not serve has no other source for them.",
+  "exemptions": [
+    {
+      "id": "executor",
+      "adr": "ADR-1327",
+      "name": "Executor",
+      "ring": "factory",
+      "sentence": "The credential is the leash.",
+      "lede": "employees and contractors — tenure fields, capped keys, a twelve-fixture certification"
+    },
+    {
+      "id": "agents",
+      "adr": "ADR-1327",
+      "name": "Agents",
+      "ring": "factory",
+      "sentence": "A roster, not a crowd.",
+      "lede": "every agent, its tier, and whether it is switched on"
+    }
+  ]
 }

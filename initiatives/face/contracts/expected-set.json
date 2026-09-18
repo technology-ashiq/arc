@@ -10,7 +10,7 @@
     "company"
   ],
   "rooms": {
-    "$comment": "32 rooms + the lane-room template. status: built = lane/product exists, planned = dotted from planned-rooms.json",
+    "$comment": "34 rooms + the lane-room template. status: built = lane/product exists, planned = dotted from planned-rooms.json",
     "template": {
       "id": "lane",
       "name": "Lane room",
@@ -228,6 +228,16 @@
         ]
       },
       {
+        "id": "factory",
+        "name": "Factory",
+        "ring": "factory",
+        "status": "built",
+        "sources": [
+          "PORTFOLIO.md",
+          "initiatives/*/PROGRESS.md"
+        ]
+      },
+      {
         "id": "money",
         "name": "Money",
         "ring": "money",
@@ -373,6 +383,15 @@
           "glossary inventory",
           "manifests face: concepts"
         ]
+      },
+      {
+        "id": "story",
+        "name": "Story",
+        "ring": "company",
+        "status": "built",
+        "sources": [
+          "docs/HISTORY.md"
+        ]
       }
     ]
   },
@@ -419,13 +438,15 @@
       "kickoff.done": {
         "group": "progress",
         "homes": [
-          "lane"
+          "lane",
+          "factory"
         ]
       },
       "phase.closed": {
         "group": "progress",
         "homes": [
-          "lane"
+          "lane",
+          "factory"
         ]
       },
       "review.completed": {
@@ -1287,6 +1308,14 @@
       "arc dash (L2)": {
         "room": "spine",
         "station": "L2 door"
+      },
+      "cycle": {
+        "room": "story",
+        "station": "the cycles"
+      },
+      "logbook": {
+        "room": "story",
+        "station": "the logbook"
       }
     }
   },

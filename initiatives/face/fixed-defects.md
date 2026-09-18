@@ -328,3 +328,69 @@ suite's new mutant control.
   field's place -- the command ring's debt row for the same mask is paid with it). The review's
   "review-ship AGENTS still dim" reading is a viewport effect, not the kit: `Holds` draws every group in
   one ink, and that row sits under the dock's bottom gradient at 1000 px.
+
+## Face v2 Phase 03 (company ring and the four extras) — 2026-09-18
+
+Two fresh attackers, one on the decision logic and one on the shell/OS boundary, each handed the lane's running
+list of fixed defects with the instruction to try every class again in the new files. The logic attacker found 13
+holes (2 HIGH, 6 MED, 5 LOW, 11 of them putting an unsupported fact on screen); the shell attacker found 10
+(0 HIGH, 2 MED, 8 LOW). Every one is fixed and pinned in `tests/face/company-ring.mjs` (the `ATTACK` checks),
+`tests/face/cdp-client.mjs` (the extras verdict) or `tests/face-browser.bats` (the heading and extras mutant
+controls); none is ledgered.
+
+- **The parser that goes quiet, again (HIGH).** A constitution section written in a shape the reader could not
+  read -- articles as `###` headings, prose where a list was expected -- printed "0 Working articles"; a logbook
+  glance table with a column removed printed "0 Initiatives" and the false sentence "carries no glance table".
+  The readers now answer ABSENT, UNREADABLE or read, never two: an unreadable section is "—" with its own
+  sentence, a malformed table row is counted, never dropped, prose is read as its paragraphs, and a dash is read
+  as well as a middle dot between an article's id and name.
+- **One entry's code beside another's date (HIGH).** The story's lag paired the first coded chapter with the
+  newest date across all entries, and the book's two C6s and two C7s hid the lag entirely. The newest chapter is
+  now the entry with the latest REAL calendar date, named with its own code, and the lag counts the glance rows
+  with no chapter by code AND name.
+- **F1's band map (MED).** Any backticked token at the start of a band cell became a lane: `model-policy`'s,
+  a room id, the device name `con`. A lane is now a name that stands as the row's owner, passes the lanes rule,
+  and is on the board; any other name is drawn as what it is and listed. A malformed band row, a century claimed
+  twice and a second table in the section are named rather than silently dropped, merged or counted.
+- **Board rows (MED).** A nameless, path-like or repeated lane became a live plan with a path like
+  `initiatives//PLAN.md`. `boardLanes` keeps each lane once, each a lane name, and the rest are counted out loud.
+  Lanes now link through the room that homes them, so `engine` opens the engine room.
+- **Two readers of the exemption rows (MED).** The shell drew a row the gate refuses -- a ring its module is not
+  in, or no module at all. `withExtras` now takes the modules the bundle found and draws an extra only where its
+  module lives, naming every row it leaves out. The shell also held nothing of the refusal: a door that does not
+  serve the file left the extras missing from the rail without a word, and a deep link said "There is no room
+  called executor" from a failed read. The rail now says the extras are not all drawn, and a deep link says the
+  rows are unread or refused, never that the room does not exist.
+- **A partial roster (MED)** drew 18 of 30 agents silently when one room's agents were unreadable; it now says
+  it is partial beside what it draws. An agent homed twice is counted once.
+- **The adoption line (MED)** glued any later blockquote onto "Adoption status"; it now reads to the end of its
+  own quote only. The version is the document's own title line, never a later heading.
+- **Invisible names (LOW)** passed both the gate and the shell; both now strip invisible characters first.
+- **`fileText` read the body twice (LOW)** -- validate one read, draw another: a getter could pass as one file
+  and draw another's text. The body is copied once, field by field, and both provenance and text come from the
+  copy. `extraRooms` does the same and requires the file's path and hash.
+- **The glossary (LOW)** counted non-object entries as terms and an empty station as a station, and read a term
+  homed in the lane-room template as homed. Each is fixed and counted.
+- **Dates (LOW)** were shape-checked only; `2026-19-45` won "newest". `realDate` round-trips the calendar.
+- **The smoke (MED, LOW).** `judge()` passed a report with no extras block, an opened room the file does not
+  list, and a repeated id; each now fails, and the line counts distinct ids. `expectedExtras` accepted an id
+  listed twice (the shell kept the first copy, the smoke the last); it is now a setup error, as a repeated served
+  id is. The extras were excluded by the openable list, so a row naming the lane-room template became an extra;
+  they are now excluded by every served id. The heading check undid a door escape the exemption file never had;
+  the smoke now escapes the row's sentence the way the door would, and module-frame feeds the shell's reader the
+  door-escaped text.
+- **The browser verdicts (MED, LOW).** `tests/face/company-ring.mjs` ended with `process.exit()`, the pipe race
+  fixed twice before; it sets `process.exitCode`. The heading check grepped every line, so a miss followed by a
+  clean line passed, and Git Bash accepted a carriage return that Linux rejected; `heading_verdict` now reads the
+  LAST heading line in pure bash -- no grep and no command substitution, both of which strip a carriage return on
+  Git Bash -- refuses a CR on every OS, and has seven mutant controls. `extras_verdict` refuses zero-padded counts
+  and a rooms field that does not name as many rooms as opened. The fd-3 progress echo now carries the extras
+  line, and face-coverage.bats reads the exemption count with an anchored pattern.
+- **Found by the ring's own CI run, not an attacker:** five suites red on test fixtures the ruling moved -- the
+  scaffold suite's refusal ran on a tree that now carries the extra's row and folder, the contract suite counted
+  four extras, module-frame's agreement test added a second copy of an extra the tree already has, cdp-client's
+  heading line named four rings, and the factory verbs list carried a sentence changed after it was derived.
+  Each fixture now builds from the tree it tests.
+- **Found while writing the fixes:** two edit scripts lost a regex backslash (a quoted heredoc and an inline
+  program), and one inserted `$'` into a replacement string, which `String.replace` expands. Every edit since
+  goes through a script written with the file tool, with function replacements.

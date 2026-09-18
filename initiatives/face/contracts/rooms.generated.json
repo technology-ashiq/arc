@@ -791,6 +791,24 @@
       "itemCount": 33
     },
     {
+      "id": "factory",
+      "name": "Factory",
+      "ring": "factory",
+      "status": "built",
+      "sentence": "Cycles, phases, gates — the floor.",
+      "lede": "the current cycle and what each phase is waiting on",
+      "render": "bespoke",
+      "copySource": "the owner's reference, adapted",
+      "stations": [],
+      "holds": {
+        "kinds": [
+          "kickoff.done",
+          "phase.closed"
+        ]
+      },
+      "itemCount": 2
+    },
+    {
       "id": "money",
       "name": "Money",
       "ring": "money",
@@ -1181,12 +1199,33 @@
       "ring": "company",
       "status": "built",
       "sentence": "Every word arc uses, and the room it lives in.",
-      "lede": "107 terms, each anchored to a room and a station — this is what the command palette searches",
+      "lede": "every term, each anchored to a room and a station — this is what the command palette searches",
       "render": "index",
       "indexes": "concepts",
       "stations": [],
       "holds": {},
-      "itemCount": 107
+      "itemCount": 109
+    },
+    {
+      "id": "story",
+      "name": "Story",
+      "ring": "company",
+      "status": "built",
+      "sentence": "How it got here.",
+      "lede": "the cycles, in order",
+      "render": "bespoke",
+      "copySource": "the owner's reference, adapted",
+      "stations": [
+        "the cycles",
+        "the logbook"
+      ],
+      "holds": {
+        "concepts": [
+          "cycle",
+          "logbook"
+        ]
+      },
+      "itemCount": 2
     },
     {
       "id": "lane",

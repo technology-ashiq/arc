@@ -10,8 +10,8 @@
 //
 // Dependency-free like every lib module: node imports it with no install, and a decision here is
 // a decision a test can hold. No room id is spelled in this file -- the shell names no room.
-import { byRing } from "./rooms.mjs";
-import { ASOF_ROUTES, DOOR_ROUTES, DoorError } from "./door.mjs";
+import { byRing, RING_ORDER } from "./rooms.mjs";
+import { ASOF_ROUTES, DOOR_ROUTES, DoorError, unescapeDoorText } from "./door.mjs";
 import { refusalOf, stamp } from "./inbox.mjs";
 import { ASK_GRANTS, askable, askThrough, readOnly } from "./ask.mjs";
 
@@ -191,6 +191,95 @@ export function attachModules(registry, collected, exempted = []) {
   }
   const generic = rooms.filter((r) => !isTemplate(r) && !Object.hasOwn(attached, r.id)).map((r) => r.id);
   return { attached, generic, problems, extras };
+}
+
+/** The one ADR an exemption row may cite (face-coverage holds the same rule on the tree). */
+const EXEMPTION_ADR = "ADR-1327";
+/** The allow-listed file the door serves the exemption rows as. */
+export const EXEMPTION_FILE = "module-exemptions";
+
+/** Characters a person cannot see: a name made only of them is no name (money ring attack, company ring twin). */
+const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;
+
+/**
+ * @typedef {{ rooms: import("./rooms.mjs").Room[], ids: string[], problem: string, isLoading: boolean, isRead: boolean }} ExtraRooms
+ */
+
+/**
+ * The rooms arc does not serve but the face keeps (ADR-1327), read from the exemption rows the door serves as a
+ * file. The registry has nothing for these rooms, so each row carries what the shell draws it from -- its ring,
+ * name, sentence and lede (company ring, ADR-1337). A row that cannot be drawn whole is refused, never drawn half,
+ * and the refusal is said rather than the room silently missing.
+ * @param {Payload | null | undefined} p  the `/api/file/module-exemptions` payload
+ * @returns {ExtraRooms}
+ */
+export function extraRooms(p) {
+  /** @param {string} problem @param {boolean} [isLoading] @returns {ExtraRooms} */
+  const none = (problem, isLoading = false) => ({ rooms: [], ids: [], problem, isLoading, isRead: false });
+  if (!p || p.state === "loading" || p.state === "pending") return none("the exemption rows have not been read yet", true);
+  if (p.state === "refused") return none(`the door refused the exemption rows (${p.code})`);
+  if (p.state !== "ok") return none("the exemption rows could not be read");
+  const body = p.data !== null && typeof p.data === "object" && !Array.isArray(p.data) ? p.data : {};
+  // Every field read ONCE into a copy, and the file held to what the door always sends: its id, path, hash and text.
+  const copy = { id: body.id, path: body.path, sha256: body.sha256, text: body.text };
+  if (copy.id !== EXEMPTION_FILE) return none(`the door answered with ${JSON.stringify(copy.id ?? null)}, not the exemption rows`);
+  if (typeof copy.path !== "string" || copy.path === "" || typeof copy.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(copy.sha256)) return none("the door answered without the file's path or hash");
+  if (typeof copy.text !== "string") return none("the door answered without the file's text");
+  /** @type {unknown} */
+  let parsed;
+  try { parsed = JSON.parse(unescapeDoorText(copy.text)); } catch { return none("the exemption file does not parse"); }
+  const list = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? /** @type {Record<string, unknown>} */ (parsed)["exemptions"] : undefined;
+  if (!Array.isArray(list)) return none("the exemption file carries no exemptions list");
+  /** @type {import("./rooms.mjs").Room[]} */
+  const rooms = [];
+  /** @type {string[]} */
+  const problems = [];
+  const seen = new Set();
+  for (const raw of list) {
+    const row = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? /** @type {Record<string, unknown>} */ (raw) : {};
+    const id = typeof row["id"] === "string" ? row["id"] : "";
+    if (!NAME.test(id)) { problems.push("a row with no room id"); continue; }
+    if (seen.has(id)) { problems.push(`"${id}" is listed twice`); continue; }
+    seen.add(id);
+    const ring = row["ring"];
+    const name = typeof row["name"] === "string" ? row["name"].replace(INVISIBLE, "").trim() : "";
+    const sentence = typeof row["sentence"] === "string" ? row["sentence"].replace(INVISIBLE, "").trim() : "";
+    const lede = row["lede"];
+    if (row["adr"] !== EXEMPTION_ADR) { problems.push(`"${id}" cites ${JSON.stringify(row["adr"] ?? null)}, not ${EXEMPTION_ADR}`); continue; }
+    if (typeof ring !== "string" || !RING_ORDER.includes(ring)) { problems.push(`"${id}" names no ring the shell draws`); continue; }
+    if (name === "" || sentence === "") { problems.push(`"${id}" carries no name or no sentence`); continue; }
+    if (lede !== undefined && typeof lede !== "string") { problems.push(`"${id}" carries a lede that is not text`); continue; }
+    rooms.push({
+      id, name, ring, status: "extra", extra: true, sentence, lede: typeof lede === "string" ? lede.trim() : "",
+      render: "bespoke", stations: [], holds: {}, itemCount: 0,
+      live: { kindsHomed: 0, kindsFired: 0, receipts: 0, state: "file-borne" },
+    });
+  }
+  return { rooms, ids: rooms.map((r) => r.id), problem: problems.join("; "), isLoading: false, isRead: true };
+}
+
+/**
+ * The room list the shell draws: the served registry, then each exempted extra in its ring. A row naming a room the
+ * registry serves never replaces it -- the served registry is the only room list for what it serves (ADR-1306). With
+ * the modules the bundle found, an extra is drawn only where its module lives: a row with no module, or naming another
+ * ring than its module's, is the row face-coverage refuses, and the shell refuses it too rather than drawing an
+ * invented room (company ring attack: two readers of one question). Every row left out is named.
+ * @template {{ rooms?: import("./rooms.mjs").Room[] }} R
+ * @param {R} registry @param {ExtraRooms} extras
+ * @param {readonly { id: string, ring: string }[] | null} [modules]
+ * @returns {R & { rooms: import("./rooms.mjs").Room[], extrasDropped: string[] }}
+ */
+export function withExtras(registry, extras, modules = null) {
+  const rooms = registry && Array.isArray(registry.rooms) ? registry.rooms : [];
+  const served = new Set(rooms.map((r) => r.id));
+  /** @type {string[]} */
+  const extrasDropped = [];
+  const add = (extras && Array.isArray(extras.rooms) ? extras.rooms : []).filter((r) => {
+    if (served.has(r.id)) { extrasDropped.push(`${r.id} (a room the registry serves)`); return false; }
+    if (modules !== null && !modules.some((m) => m.id === r.id && m.ring === r.ring)) { extrasDropped.push(`${r.id} (no module in the ${r.ring} ring)`); return false; }
+    return true;
+  });
+  return { ...registry, rooms: [...rooms, ...add], extrasDropped };
 }
 
 /**

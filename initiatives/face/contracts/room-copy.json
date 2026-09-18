@@ -103,6 +103,12 @@
       "render": "generic",
       "source": "the owner's reference, adapted"
     },
+    "factory": {
+      "sentence": "Cycles, phases, gates — the floor.",
+      "lede": "the current cycle and what each phase is waiting on",
+      "render": "bespoke",
+      "source": "the owner's reference, adapted"
+    },
     "money": {
       "sentence": "Real and simulated are different substances.",
       "lede": "revenue.received is real-only and has never fired; everything else on this screen says so in its own colour",
@@ -173,9 +179,15 @@
     },
     "concepts": {
       "sentence": "Every word arc uses, and the room it lives in.",
-      "lede": "107 terms, each anchored to a room and a station — this is what the command palette searches",
+      "lede": "every term, each anchored to a room and a station — this is what the command palette searches",
       "render": "index",
       "indexes": "concepts"
+    },
+    "story": {
+      "sentence": "How it got here.",
+      "lede": "the cycles, in order",
+      "render": "bespoke",
+      "source": "the owner's reference, adapted"
     },
     "lane": {
       "sentence": "One lane, six zones, the same shape every time.",

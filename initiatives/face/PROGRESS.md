@@ -10,8 +10,9 @@ depends-on: —
 
 > Tracker for the cycle planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done` from the
 > main clone (tests green on CI per job + live demo + exit criteria + evidence). This cycle claims
-> **ADR 1318–1336** from the face band 1300–1399; before writing them the claim was swept across
-> all 25 sibling worktrees and every `origin/*` branch on 2026-09-16 — none held an ADR ≥1318.
+> **ADR 1318–1337** from the face band 1300–1399; before writing them the claim was swept across
+> all 25 sibling worktrees and every `origin/*` branch on 2026-09-16 — none held an ADR ≥1318 (1337 swept
+> again on 2026-09-18, when the owner's §13 item 5 ruling needed it).
 > Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`) stay at root
 > (ADR-0053); evidence is lane-scoped at `initiatives/face/evidence/phase-NN/` (ADR-0055).
 > **Cycle 15's record** — PLAN, PROGRESS, its nine phase specs and its evidence bundles — lives at
