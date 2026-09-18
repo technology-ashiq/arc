@@ -17,7 +17,7 @@ blast-radius-dropped: 8
 - Zero new spine kinds: every op emits a kind already in `validate.mjs` KINDS, and an op that would need a new one does not ship (ADR-0026, ADR-1334).
 - Branch-only writes: a file-touching op writes to a `feat/face-*` branch, shows the diff and stops; `main` is untouchable and merge never exists in the face (ADR-1326).
 - The WORK door has no logic of its own: each op shells the same script a hand-run calls, proven per op by a no-second-path fixture; an op without a green fixture ships read-only with an honest badge (ADR-1326).
-- The SESSION door starts `arc-run --driver …`, never a harness binary (ADR-1326).
+- The SESSION door starts `arc-run --driver ...`, never a harness binary (ADR-1326).
 - No provider key in the browser; Ask keeps zero write tools and `ASK_ACTIONS` = `open_room` · `set_speed` · `enter_hq` (ADR-1325).
 - No facts bundle under `face/src/**`: a module cites a door route or renders `NOT SERVED` (ADR-1324).
 - No new surface outside `.claude/scripts/` this cycle; the layout move belongs to the distribute lane, in one atomic PR (ADR-1319).
@@ -48,20 +48,20 @@ proof: unit + contract -- on CI: tests/face/dash-doors.mjs's "P04 route list" ar
 tier: unit
 sources: phase-04-spec.md
 decision: The 22 route strings of the five lists are the whole input. 18 are served (17 new GET routes plus /api/pnl?by=day on the existing route); the rest are residue named by ADR-1338. No route outside the union was built.
-result: (empty until proven)
-commit: (empty until proven)
+result: dash-doors "P04 route list" and module-frame's PHASE 04 INPUT arms ok on CI: the PR head d62ea4b6 run 35367884908 19/19, and main 0a4cb262 by dispatch run 35369459599. The union is 22 route strings; 18 were built and none outside it.
+commit: 0a4cb262
 
 #### slice: 02
 
-title: Each route: GET only, on the door's allow-list, inside the existing token + origin + bind posture (ADR-1312); its parser imported from the lint that already reads that file (scheduler, memory, evolve, bench, absorb … PLAN-face-v2 §11), never re-implemented.
+title: Each route: GET only, on the door's allow-list, inside the existing token + origin + bind posture (ADR-1312); its parser imported from the lint that already reads that file (scheduler, memory, evolve, bench, absorb ... PLAN-face-v2 §11), never re-implemented.
 kind: logic
 risk: medium
 proof: contract -- on CI, over HTTP against a fixture spine: tests/face/dash-doors.mjs's "P04 posture" arm holds every Phase 04 route at 401 NO_TOKEN without the token and 403 BAD_ORIGIN from a foreign Origin; its "P04 parsers" arm reads each route's served `parser` field and imports every module it names from .claude/scripts, failing when a module is missing, is the door itself, or does not export a name it is cited for; its "P04 route table" arm holds each route GET and on the allow-list once
 tier: contract
 sources: phase-04-spec.md
 decision: Every handler lives in .claude/scripts/hq/lib/face/reads.mjs and lazily imports the owning lane's parser (engine yaml-subset and router-row, policy yaml and reduce, jobs panel, evolve board, memory adapters, bench ceilings, calibrate, develop ledger, absorb registry-ref, leads guard and caps, ledger ventures and kill panel); arc-dash.mjs keeps the one ROUTES table. Where a lane parser exists only inside a lint that exits at import, the panel is residue, never a re-implementation (ADR-1338).
-result: (empty until proven)
-commit: (empty until proven)
+result: dash-doors "P04 posture" (every Phase 04 route 401 with no token, 403 from a foreign Origin) and "P04 parsers" (every lane export a route names resolves and is not the door) ok on run 35367884908, 19/19. Live: 19 of 19 routes 200 from the main clone (evidence/phase-04/live-demo.md).
+commit: 0a4cb262
 
 #### slice: 03
 
@@ -72,8 +72,8 @@ proof: static + contract -- on CI: tests/spine-reader-lint.bats holds the real t
 tier: contract
 sources: phase-04-spec.md
 decision: The 18 rows are GET, mutates false, spineEffect none; the write door is untouched.
-result: (empty until proven)
-commit: (empty until proven)
+result: spine-reader-lint green locally and on CI; dash-doors "route enumeration" (exactly one mutating route, /api/decide) and "P04 route table" ok on run 35367884908.
+commit: 0a4cb262
 
 #### slice: 04
 
@@ -84,8 +84,8 @@ proof: integration -- on CI: dash-doors generates its spine with `--phase04 1` (
 tier: integration
 sources: phase-04-spec.md
 decision: A route's arm reads the receipts the fixture wrote for it, so an arm over an empty fold cannot pass; the by=day arm asserts the wire shape, and the fixture's own day is proven in phase04-folds, where deriveDaily is handed that day.
-result: (empty until proven)
-commit: (empty until proven)
+result: dash-doors' fixture guard ok (base 2000, phase04 25, events 2025) before every arm, and one P04 arm per route ok on run 35367884908; the suite's floor (ran >= 131) met.
+commit: 0a4cb262
 
 #### slice: 05
 
@@ -96,8 +96,8 @@ proof: unit + e2e-visual -- on CI: module-frame folds all 36 modules and holds e
 tier: e2e-visual
 sources: phase-04-spec.md
 decision: 35 of 50 panels are served. The 15 residue panels each name their gap and the lane it is filed to; the owner approved the whole residue (ADR-1338, REQ-06 amended), since most of it is data no file or receipt records.
-result: (empty until proven)
-commit: (empty until proven)
+result: module-frame holds served.md (39 tables on 35 panels) and residue.md (15 panels on 10 routes) equal to the folds and disjoint; tests/face/phase04-folds.mjs RAN 141 checks, 0 failed, on every leg of run 35367884908; face-browser counts both distributions in the rendered page.
+commit: 0a4cb262
 
 #### slice: 06
 
@@ -108,8 +108,8 @@ proof: static -- the union was measured at the Block B reading before any route 
 tier: static
 sources: phase-04-spec.md
 decision: The union held at exactly 22, so the re-scope half of row 5 did not fire. Its OTHER half, a residue past three routes, did: FIRED 2026-09-18, routed through /arc-change, and REQ-06's bound amended by ADR-1338 on the owner's ruling.
-result: (empty until proven)
-commit: (empty until proven)
+result: the union measured at 22 at the Block B reading, before any route was built: the re-scope half did not fire. The other half of assumption row 5 FIRED 2026-09-18 and was routed through /arc-change as ADR-1338.
+commit: 0a4cb262
 
 #### slice: 07
 
@@ -120,5 +120,5 @@ proof: verified-real -- two fresh attackers per round (decision logic · HTTP/OS
 tier: verified-real
 sources: phase-04-spec.md
 decision: Round 1 found 25 holes and the first CI run one red; round 2 found the twins left open one route over, and CI two reds (fixed-defects.md, Phase 04 and its Round 2). A third pair verifies round 2 before the merge.
-result: (empty until proven)
-commit: (empty until proven)
+result: four attacker rounds, eight fresh agents, every reproduced hole fixed and pinned or a debt row with its trigger (evidence/phase-04/attackers.md); CI 19/19 on the PR head (run 35367884908) and on main by dispatch (run 35369459599); closed by /arc-phase-done 04 from the main clone.
+commit: 0a4cb262

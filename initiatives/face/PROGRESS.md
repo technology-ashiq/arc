@@ -1,11 +1,11 @@
 # PROGRESS.md — Cycle 16 · arc-face v2 "The Workroom"
 
-status: LIVE
+status: BLOCKED
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 04
+phase: 05
 appetite: 24d
-burn: 3.5d
-blocked-on: —
+burn: 4d
+blocked-on: owner — the ruling on PLAN-face-v2 §13 item 4 (the six flagship ops); Phase 05 does not open without it
 depends-on: —
 
 > Tracker for the cycle planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done` from the
@@ -27,12 +27,12 @@ depends-on: —
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
 | 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | ✅ **CLOSED 2026-09-18** — 1.5d of 7d; 36/36 modules in both moods on every L3 leg (34 served module rooms + the 2 exempt extras, headings 36 checked, 0 errors); five ring PRs merged — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242) · money `969d9634` (#244) · company `d8386216` (#246); `main` re-verified 19/19 (run 35336492657), suite 1..3414; receipts `01M2T38JEG2AWDY61X7QAARNYF` · `01M2T38JSWD6QSHTYA7S0M1R1W` |
-| 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | in build — 18 routes served, 35 of 50 panels; residue 15 panels on 10 routes, approved by the owner (ADR-1338) |
-| 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — needs owner rulings §13 items 4, 5 |
+| 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | ✅ **CLOSED 2026-09-18** — 0.5d of 3d; 18 routes served, 35 of 50 panels (39 tables), residue 15 panels on 10 routes approved by the owner (ADR-1338); four attacker rounds, `phase04-folds` 141 checks; merged `0a4cb262` (#248), PR head 19/19 (run 35367884908), `main` re-verified 19/19 (run 35369459599), suite 1..3415; live door 19 of 19 routes 200; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` · `01M2TPXZGPTN08BN98G6TCRZ5J` |
+| 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — waits on the owner's ruling on §13 item 4 (item 5 ruled, ADR-1337); the binding table read off the real CLIs recommends a swapped six |
 | 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 3.5d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 1.5/10d ·
+**Appetite burn: 4d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
 C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
 35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
@@ -299,28 +299,58 @@ stay bespoke folds.
   Receipts (main clone spine, landed in `2026-09-18.jsonl`): `phase.closed` `01M2T38JEG2AWDY61X7QAARNYF` ·
   `approval.requested{gate: phase-done}` `01M2T38JSWD6QSHTYA7S0M1R1W` — the second waits on the owner's stamp.
 
+- **2026-09-18 — Phase 04 CLOSED (`/arc-phase-done 04` from the main clone).** Door read routes: the union of Phase
+  03's five NOT SERVED lists -- 22 route strings, 50 panels -- is served where a parser exists to import. **18 routes**
+  (17 new GET routes in `.claude/scripts/hq/lib/face/reads.mjs`, each lazily importing its lane's own parser; and
+  `/api/pnl?by=day` from an additive `deriveDaily` in the ledger's `pnl.mjs`); **35 of 50 panels served** (39 tables,
+  `evidence/phase-04/served.md`); **15 panels on 10 routes are residue** (`residue.md`), each gap named with its lane.
+  That was over REQ-06's three-route bound, so the owner ruled: "un recommand A pannu machi" -- ADR-1338 amends
+  REQ-06, and assumption row 5 is recorded FIRED. Merged as `0a4cb262` (#248).
+  **Tests:** PR head `d62ea4b6` 19/19 read per job (run 35367884908); `main` re-verified by dispatch 19/19 (run
+  35369459599), full suite `1..3415` with 0 not ok on ubuntu Node 20 (`evidence/phase-04/ci-jobs.json`);
+  `tests/face/phase04-folds.mjs` 141 checks on every leg. One Windows shard on an earlier head hit the spine lock's
+  documented `LOCK_TIMEOUT` flake and passed on re-run; its second occurrence on the same emit index is recorded in
+  `tests/spine-concurrency.bats` and filed to the spine lane.
+  **Live demo (the real place):** the door in live mode from the main clone at `0a4cb262`, over the canonical spine
+  (1,359 events): 19 of 19 Phase 04 routes answered 200 (`evidence/phase-04/live-demo.md`).
+  **Attackers:** four rounds, a fresh decision-logic + HTTP/OS-boundary pair each, every one carrying
+  `fixed-defects.md`; every reproduced hole fixed and pinned or a debt row with its trigger
+  (`evidence/phase-04/attackers.md`). Round 3 found the Phase 04 defect classes on the door's older routes (closed as
+  a current-phase note, ADR-1312 being door-wide); round 4 found a round-3 fix in a helper no room called (deleted;
+  the room is tested). The round-4 fixes were not attacked again -- recorded, not implied away.
+  **Spec-fidelity: drift found**, every item dispositioned (`evidence/phase-04/spec-fidelity.md`) and written into
+  the spec as a current-phase note for the owner: three receipt joins folded in the door (DEBT); two additive exports
+  in owning lanes, `deriveDaily` and absorb's `judgeRegistry`, against ADR-1338's residue for three lints' inline
+  parsers (DECLARED, the owner may rule); the reader and panel changes the attacks drove (DECLARED).
+  **Predictions:** none were written before the build, so none is scored (`evidence/phase-04/handoff.md`). The
+  verification plan was still the coarse one-liner and was refined at the close.
+  **Assumptions and triggers:** row 5 FIRED and routed (ADR-1338); no other trigger fired; no ADR DEFERRED.
+  Evidence: `initiatives/face/evidence/phase-04/` (served, residue, live-demo, spec-fidelity, attackers, handoff,
+  ci-jobs) with its sha256 manifest from `arc-evidence.sh bundle 04 --lane face`.
+  amendments: 3 (ADR-1338's residue ruling; the round-3 current-phase note; the spec-fidelity note) · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-18.jsonl`): `phase.closed` `01M2TPXZ16FDQ07K3SWBJ6V44M` ·
+  `approval.requested{gate: phase-done}` `01M2TPXZGPTN08BN98G6TCRZ5J` — the second waits on the owner's stamp.
+
 ## Now
 
-**RESUME HERE (2026-09-18):** **Phase 04 — door read routes — is IN BUILD** on `feat/face-v2-04` (opened from `main`
-after the Phase 03 close merged as `e4aa8bf4`, #247, `main` re-verified 19/19 on run 35341665548). The input was the
-union of the five `evidence/phase-03/not-served-*.md` lists -- 22 route strings, 50 panels. Grouped by the parser that
-owns each file: **18 routes are served** (17 new GET routes in `.claude/scripts/hq/lib/face/reads.mjs`, each importing
-its lane's own parser lazily, plus `/api/pnl?by=day` from a new additive `deriveDaily` in the ledger's `pnl.mjs`;
-absorb's `registry-ref.mjs` gained an exported `judgeRegistry`, its CLI output byte-identical). **35 of 50 panels are
-served** (39 served tables in all), listed in `evidence/phase-04/served.md`. **15 panels on 10 routes are residue**
-(`evidence/phase-04/residue.md`), each gap named with its lane: data no file or receipt records, or a parser that
-exists only inside a lint that exits at import. That was over REQ-06's bound of 3 routes, so the owner ruled.
-**Owner ruling, 2026-09-18 — the Phase 04 residue: "un recommand A pannu machi"** (option A): the residue is
-accepted as named and filed, approved as a whole; REQ-06's acceptance is amended from "at most 3 routes" by
-**ADR-1338**, and the unwritten assumption behind the bound is recorded FIRED in the ledger (row 5). **Three attacker
-rounds ran** (a fresh decision-logic + HTTP/OS-boundary pair each), each carrying `fixed-defects.md`: round 1 found
-25 holes, round 2 their twins one route over, round 3 twelve boundary holes (the door's OLDER routes kept Phase 04's
-defect classes -- closed here as a current-phase note in the spec, ADR-1312 being door-wide) and seven decision holes
-plus 29 surviving mutants, all now pinned (`tests/face/phase04-folds.mjs`, 130 checks). One Windows shard went red on
-the spine lock's documented flake, its second occurrence on the same emit index (recorded in the test, filed to the
-spine lane). Next: CI per job on PR #248's head, then merge and `/arc-phase-done 04` from the main clone. **Phase 05
-waits on the owner's ruling on PLAN-face-v2 §13 item 4** (the six flagship ops): a binding table read off the real
-CLIs shows four of the proposed six have no CLI or no kind, so a swapped six is recommended.
+**RESUME HERE (2026-09-18):** **Phase 04 is CLOSED** (`/arc-phase-done 04` from the main clone): 18 door read
+routes served, 35 of 50 panels, the residue of 15 panels named and filed and approved by the owner (ADR-1338);
+merged as `0a4cb262` (#248), `main` re-verified 19/19 (run 35369459599), suite `1..3415`; the live door answered 19 of
+19 routes from the main clone. Four attacker rounds; the spec-fidelity pass found drift, every item written into the
+Phase 04 spec as a current-phase note for the owner (the receipt joins folded in the door; two additive exports in
+owning lanes against ADR-1338's lint residue -- the owner may rule either way). Receipts `01M2TPXZ16FDQ07K3SWBJ6V44M`
+(`phase.closed`) and `01M2TPXZGPTN08BN98G6TCRZ5J` (the phase-done approval, waiting on the owner's stamp).
+
+**The lane is BLOCKED on one owner ruling: PLAN-face-v2 §13 item 4, the six flagship ops.** PLAN's owner steps make
+it due by the Phase 04 close, and Phase 05 does not open without it. The binding table read off the real CLIs
+(2026-09-18): of the proposed six, `add-agent` and `propose-cap` have no CLI (and `policy.proposed` is not a kind),
+`register-job` and `pin-tool` emit no kind, so four fail and Block C's gate would fire. Recommended (option A): a
+swapped six -- `bench-a-model` (the one with a real `--dry-run`), `close month` (`arc-pnl --close` prints the seal and
+never emits; the owner seals), `growth publish` (a reader-only review pack and branch commands), `ledger criteria`
+(the digest first, an existing approval profile), `capture-idea` and `develop checkpoint` (each needs only a
+dry-run flag in its own lane). Option B keeps the proposed six (the work door does not ship this cycle); option C
+ships the four that qualify today and amends REQ-07's "six" through `/arc-change`. **Next, on the ruling:** record it
+here, then `/arc-develop start 05 --lane face` on `feat/face-v2-05` from `main`.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
@@ -333,8 +363,9 @@ ledger said. **Owner ruling, 2026-09-18 — PLAN-face-v2 §13 item 5: "Both regi
 and `factory` are served rooms; `executor` and `agents` stay labelled exemptions.
 
 **Waiting on the owner:** the stamps on `approval.requested{gate: phase-done}`
-`01M2T38JSWD6QSHTYA7S0M1R1W` (Phase 03), `01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02),
+`01M2TPXZGPTN08BN98G6TCRZ5J` (Phase 04), `01M2T38JSWD6QSHTYA7S0M1R1W` (Phase 03), `01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02),
 `01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01), `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and
 `01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the main clone,
 `node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13 item 4 (the six
-flagship ops) is due by the Phase 04 close.
+flagship ops) is now DUE -- the Phase 04 close has passed, and the lane is BLOCKED on it (the recommendation and
+the two alternatives are in the RESUME HERE paragraph above).
