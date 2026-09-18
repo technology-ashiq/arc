@@ -74,7 +74,7 @@ import { roomLink, sourceFile } from "../../../lib/lane-room.mjs";
  * @property {{ isVerbPending: true, verb: string, sentence: string }} stageVerb
  * @property {{ isVerbPending: true, verb: string, sentence: string }} killVerb
  * @property {string} trailNote
- * @property {string} oneInFour
+ * @property {import("../../../lib/registry.mjs").NotServed} baseRate
  * @property {string} shipWith
  * @property {{ canOpen: boolean, room: string }} board
  * @property {{ canOpen: boolean, room: string }} money
@@ -226,8 +226,13 @@ export function fold(payloads, ctx) {
       "A kill is a stamped decision: the attic with a retro, components harvested, the lesson pinned -- never a deletion. The proposal lands in your inbox with the work door.",
     ),
     trailNote: "The spine records no venture.* kind yet: registering, staging and killing a venture are work-door verbs, and their receipts land here the day they exist.",
-    oneInFour: "One in four ventures is expected to live -- written before the first launch, so a death is a data point, not a surprise. Kill-distance exists because the criteria were set at kickoff, in writing.",
-    shipWith: "A venture without a distribution plan does not ship. Launch week is a written playbook -- one channel a day, personal and honest -- and growth wakes as a module only when a live venture pulls it.",
+    // The base rate is a number, and no route serves it yet: v0.7 typed "1 in 4" here (Phase 03 spec-fidelity).
+    baseRate: notServed(
+      "The base rate",
+      "/api/ventures",
+      "How many ventures the kill criteria were planned to expect to live, as the criteria file states it, written before the first launch -- so a death is a data point, not a surprise.",
+    ),
+    shipWith: "A venture without a distribution plan does not ship. Launch week is a written playbook -- a channel at a time, personal and honest -- and growth wakes as a module only when a live venture pulls it.",
     board: roomLink(ctx, "board"),
     money: roomLink(ctx, "money"),
     asof: { code: asof.code, offer: asof.offer },

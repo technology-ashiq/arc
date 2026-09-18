@@ -17,7 +17,7 @@ including the sentence. The smoke counts the same panels in the page per room, p
 | `develop` | Slices | `/api/slices` | Each slice of the live phase with its proof tier, the output that proved it and the commit it landed on, as the phase's task file records them. |
 | `develop` | The Definition of Done | `/api/slices` | The close condition computed rather than asserted: every slice proven, tests green on CI, evidence bundled -- and the refusal that names what is missing when it is not. |
 | `executor` | Hires on the books | `/api/roster` | Every contractor hired in engine/router.yaml with its four terms -- cap, hosted, judge and review_by, its tenure -- the decision that hired it, and the ones past their tenure date. |
-| `executor` | Certification | `/api/roster` | The twelve-fixture certification each hire passes before it is dispatched anything, and which fixture a failed one missed. |
+| `executor` | Certification | `/api/roster` | The certification each hire passes before it is dispatched anything, fixture by fixture, and which fixture a failed one missed. |
 | `executor` | Runs | `/api/roster` | Every dispatch with its outcome, its receipt and the judge's verdict on the draft it produced. |
 | `factory` | Gate modes and the profile | `/api/gates` | What each gate is set to today -- blocking, advisory or off -- and the strictness profile that switches the whole set as one, parsed from the gates file. |
 | `review-ship` | Gate modes and the profile | `/api/gates` | What each gate is set to today -- blocking, advisory or off -- the time budget it runs inside, and the strictness profile that switches the whole set as one, parsed from the gates file. |

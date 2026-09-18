@@ -55,9 +55,9 @@ export function fold(payloads, ctx) {
       "The pieces held between draft and the internet right now -- awaiting a review pack, or approved with their sha pinned and awaiting a person's merge -- with the legal lints' results beside each.",
     ),
     seals: notServed(
-      "The five seals",
+      "The seals",
       "/api/legal",
-      "The actions no level of proven autonomy ever includes, as the constitution states them -- moving money, killing a venture, changing a price, unlocking real-money trading, publishing under the owner's name.",
+      "The actions no level of proven autonomy ever includes, as the constitution states them, each beside the legal lane's own check on it -- the law room reads the constitution whole; this panel is the lane's fold of it.",
     ),
     chain: notServed(
       "Hash chain",

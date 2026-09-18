@@ -37,6 +37,14 @@ riskiest-file: face/src/shell/RoomFrame.tsx -- the one host loop every module's 
 expected-blockers: `tsc --noEmit` on the host's generic payload and read types; the facts-bundle lint's first real-tree run landing a FAIL on a Cycle 15 lib constant rather than on a bundle
 expected-proof-failures: the first implementation run shows a face-pure finding on a ported View, and the browser smoke finds a console error from a read the fixture door refuses in sim mode
 
+### Prediction scores
+
+likely-failure-mode: hit — the second half fired in every ring: face-pure pushed the v0.7 markup's constructs into the folds (the money View's nested ternary became the fold's `hatch`, the law View's length comparisons became `isAmendmentEmpty`/`isTeethEmpty`, each on the ring's own lint run); the first half fired as a stale read, not a loop -- after a stamp the room sat on "reading" and a poll in flight brought the stamped approval back (command ring attack, RoomFrame's read epoch)
+likely-regression-site: hit — the inbox stamp through the host: the command ring's shell attacker showed the stamped approval coming back from an in-flight poll and an as-of change hiding a stamp that had landed; fixed in the host (fixed-defects.md, command ring)
+riskiest-file: miss — RoomFrame.tsx carried one race class; the files with the most confirmed holes were face-facts.mjs (command ring) and the shared readers built later -- lane-room.mjs (factory and money rings) and company-room.mjs (company ring, 13 logic holes)
+expected-blockers: hit — the first clause fired: typecheck errors on the host's types reached CI (door.mjs untyped default, a never[] union, an unknown argument; run 35241805573); the second did not -- the lint's first real-tree red was macOS's /var realpath, not a Cycle 15 constant
+expected-proof-failures: miss — no face-pure finding reached CI on a ported View (each was caught locally before the push), and no console error came from a refused read; the only console errors CI saw were the Windows runner's socket-buffer class (net::ERR_NO_BUFFER_SPACE), which nobody predicted and the money ring counted on its own line
+
 ### Slices
 
 #### slice: 01
@@ -47,9 +55,9 @@ risk: high
 proof: unit -- on CI for each ring's PR: tests/face/face-pure.mjs holds the real tree at findings=0 with the ring's modules counted; face-coverage's module half reads orphans=0; tests/face/module-frame.mjs's shipped-ring arm holds the ring's folders EQUAL to contracts/modules-v2.json's ids for it, no View importing face/src/rooms/, every declared route in DOOR_ROUTES, every boolean-named fold field a boolean -- red first with the ring listed before its modules are ported
 tier: unit
 sources: phase-03-spec.md, code:grep-fallback(1279; no .codegraph/), adrs(38), learning(2), retro(28), churn(319)
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Every module is face/src/modules/RING/ID with module.mjs, fold.mjs, ops.mjs and View.tsx; decisions live in the fold, the View branches only on boolean fields the fold returns. The ring is held by tests/face/module-frame.mjs's shipped-ring arm (folders EQUAL to modules-v2.json's ids for the ring, an ADR-1327 extra counted only with its exemption row).
+result: command 81dcf814 (#239, run 35248578768 on f8e43338) · kernel bee88cce (#240, run 35263610481 on 62e9ba44) · factory 98f405f5 (#242, run 35272310975 on 09090743) · money 969d9634 (#244, run 35323854485 on e562bed7) · company d8386216 (#246, run 35334544298 on f08e04a6, code head ca2d5352 run 35334146777), each 19/19 read per job. After the company ring: `face-pure: modules=36 folds=36 views=36 files=144 findings=0`; face-coverage's module half `orphans=0 exemptions=2` (executor, agents -- the owner's section 13 item 5 ruling gave story and factory registry rows, ADR-1337); module-frame's SHIPPED RING arms green for command, kernel, factory, money and company.
+commit: d8386216
 
 #### slice: 02
 
@@ -59,9 +67,9 @@ risk: medium
 proof: e2e-visual -- gh run view --json jobs on each ring PR's head: tests/face-browser.bats green on ubuntu Node 20 + 22, macOS and windows, each log carrying `smoke: opened=N openable=N errors=0` in dark and in light and the render line judged equal to face-coverage's module half; ubuntu Node 18 the counted skip
 tier: e2e-visual
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: The browser smoke opens every openable served room and, from the company ring, the two exempted extras from the contract file, in both moods; the bats verdicts read each mood's own lines.
+result: command 81dcf814 (#239, run 35248578768 on f8e43338) · kernel bee88cce (#240, run 35263610481 on 62e9ba44) · factory 98f405f5 (#242, run 35272310975 on 09090743) · money 969d9634 (#244, run 35323854485 on e562bed7) · company d8386216 (#246, run 35334544298 on f08e04a6, code head ca2d5352 run 35334146777), each 19/19 read per job. Final head, every L3 leg (ubuntu Node 20 and 22, macOS, windows): `smoke: opened=35 openable=35 errors=0 ... unsettled=0 expected=35 ... mood-miss=0` in dark and light, `render module=34 generic=1 generic-rooms=chat-mcp`, `extras expected=2 opened=2 errors=0 rooms=agents,executor`; ubuntu Node 18 the counted skip. main re-verified by dispatch: run 35336492657, 19/19 on d8386216.
+commit: d8386216
 
 #### slice: 03
 
@@ -71,9 +79,9 @@ risk: medium
 proof: unit -- tests/face/module-frame.mjs on CI folds every module of each shipped ring with no payloads and requires evidence/phase-03/not-served-RING.md's table (module · panel · route) to EQUAL the notServed entries the folds return, both ways; the smoke prints `smoke: not-served mood=M panels=N` per mood
 tier: unit
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: notServed(panel, route, sentence) in the folds; the lists are derived from the folds, never typed, and held EQUAL both ways as multisets, including the sentence, with a trailing newline and no stray list for an unshipped ring.
+result: evidence/phase-03/not-served-{command,kernel,factory,money,company}.md; the browser counts the same panels per room per mood (company head: `not-served mood=dark panels=48`, EQUAL per room to the five lists). These lists, not PLAN-face-v2 section 5.2, are Phase 04's work.
+commit: d8386216
 
 #### slice: 04
 
@@ -83,9 +91,9 @@ risk: medium
 proof: verified-real -- after each ring merges, `node .claude/scripts/core/face-dogfood.mjs` from the main clone; its summary line copied into PROGRESS.md's usage-trend line with the date, never counted toward REQ-10
 tier: verified-real
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: `face-dogfood` from the main clone after each ring merges; the summary copied into PROGRESS.md's usage-trend line as a TREND, never counted toward REQ-10 (ADR-1329).
+result: Five readings, every one 6 matched · 55 decided outside the face · 1 of 5 days: command 2026-09-17, kernel, factory (98f405f5), money (969d9634) and company (d8386216) 2026-09-18. The surface has not yet been where a decision was made; Phase 07's two-day bar has to move it.
+commit: d8386216
 
 #### slice: 05
 
@@ -95,9 +103,9 @@ risk: medium
 proof: unit -- tests/face/module-frame.mjs on CI: F1 the org fold's ADR band rows name a lane id from the registry and never a room name (company ring); F2 the scheduler fold's lede names only what its panels show and a field the door does not serve is a NOT SERVED panel (kernel ring); F3 the trader fold of a planned room returns isLive false and a REHEARSAL badge (money ring)
 tier: unit
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: F2 in the kernel ring (the scheduler's lede promises only what the room shows; next fire and last outcome are NOT SERVED panels), F3 in the money ring (planned rooms from planned-rooms.json, dotted, every flow REHEARSAL, stateBadge 'planned' first, a pill-shaped LIVE refused by room id in both moods), F1 in the company ring -- org's band map reads PORTFOLIO.md's band table, so each century names the LANE, held against the board's lanes (a declared delta from this slice's proof, which said 'a lane id from the registry': the registry homes bands to ROOMS, which was F1's cause).
+result: F2: module-frame's F2 arm, kernel run 35263610481. F3: `smoke: planned rooms=4 expected=4 live=0` in both moods, money run 35323854485. F1: tests/face/company-ring.mjs 'F1: the face band 1300-1399 names the lane face, not the room toolbelt' and its Cycle 15 mutant ('bands homed to ROOMS fails the same lane check'), company run 35334146777; the fresh shot re-read saw every band name a lane.
+commit: d8386216
 
 #### slice: 06
 
@@ -107,9 +115,9 @@ risk: medium
 proof: unit -- face-coverage --selftest and tests/face-coverage.bats on CI read `exemptions=3` after the factory ring (factory · executor · agents, each naming ADR-1327) and `exemptions=4` after the company ring (story); the shell draws each extra as a labelled room, and the render line counts it
 tier: unit
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: The owner ruled PLAN-face-v2 section 13 item 5 on 2026-09-18, asked before the company ring as PROGRESS required: 'Both registry row'. ADR-1337: story and factory get served-registry rows (written through face-sections); executor and agents stay ADR-1327 exemptions whose rows carry their room facts, served on the door's allow-list, drawn in the rail with an extra label only where their module lives.
+result: face-coverage module half `orphans=0 exemptions=2`; face-coverage.bats 'names exactly the two exempt extras' and the selftest's exemption-row arms (ring, name, sentence) green on company run 35334146777; the shell attaches every real folder through the rows (module-frame), and the smoke's extras line reads `expected=2 opened=2 errors=0` in both moods. The factory ring's three extras shipped in the company ring's PR, after the ruling unblocked them.
+commit: d8386216
 
 #### slice: 07
 
@@ -119,9 +127,9 @@ risk: medium
 proof: verified-real -- per ring, `harness-run.mjs --shots DIR` from the branch build (1440x1000, both moods, Chrome version in the shots manifest); a fresh design-critic agent reads each candidate PNG beside its Phase 00 baseline PNG and writes evidence/phase-03/shot-review-RING.md, one line per module x mood; 0 VIOLATION and 0 BELOW-BAR before the ring's merge
 tier: verified-real
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: `harness-run.mjs --shots` from each ring's branch build (1440x1000, both moods, the Chrome version in the manifest, shots pinned by sha256); a fresh design-critic per ring, never the ring's author, and the author looks at the PNGs before carrying a verdict.
+result: evidence/phase-03/shots-{command,kernel,factory,money,company}.json and shot-review-{command,kernel,factory,money,company}.md, each 0 VIOLATION and 0 BELOW-BAR before its merge. Two reviews needed a re-read: money (its WEAKNESS rows paid in the PR, then re-read RESOLVED) and company (its first read quoted baseline pixels as candidate findings; the author's crops and a fresh re-read told to quote only named candidate files ruled them not present).
+commit: d8386216
 
 #### slice: 08
 
@@ -131,9 +139,9 @@ risk: medium
 proof: e2e-visual -- after the company ring: the smoke on every Node >=20.19 leg opens the 36 modules and the generic chat-mcp room in both moods with 0 errors, and all five shot reviews read 0 VIOLATION and 0 BELOW-BAR
 tier: e2e-visual
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: 36 modules: 29 same-id + 3 renamed + 2 extras with registry rows + 2 exempt extras; chat-mcp stays the generic planned room.
+result: Company head, every L3 leg: `heading rings=command,kernel,factory,money,company checked=36 miss=0` in both moods (34 served module rooms + 2 extras, each opening with the contract's frozen sentence), 0 errors, 0 exceptions; all five shot reviews 0 VIOLATION and 0 BELOW-BAR. main re-verified by dispatch: run 35336492657, 19/19 on d8386216.
+commit: d8386216
 
 #### slice: 09
 
@@ -143,9 +151,9 @@ risk: medium
 proof: unit -- tests/face/face-facts.mjs on CI: each structural arm planted FAILs by kind (data file, link, import outside, ?raw import, JSON attribute, glob beyond code, asset URL, env value, static fetch, blob, JSON.parse of a literal, data mass, v0.7's bundle by name, unscannable), v0.7's arcFacts shape planted under face/src/lib FAILs, each heuristic arm WARNs with exit 0, and `face-facts.mjs` on the real tree prints fail=0 with files counted; red first on ERR_MODULE_NOT_FOUND
 tier: unit
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: `.claude/scripts/core/face-facts.mjs` over face/src: structural arms FAIL from birth, heuristic arms WARN; shipped in the command ring PR.
+result: tests/face/face-facts.mjs green on command run 35248578768 and every ring after; the lint on the final tree `face-facts: files=178 ... fail=0 warn=0` (company ring, local, the same command CI runs).
+commit: 81dcf814
 
 #### slice: 10
 
@@ -155,9 +163,9 @@ risk: medium
 proof: verified-real -- after the kernel ring merges: PROGRESS.md records the Block B reading with the green module count (command 6 + kernel 8) read off that PR's CI run, and the cut-or-continue ruling
 tier: verified-real
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: After the kernel ring: 14 modules green (command 6 + kernel 8) is the clause's bar.
+result: Recorded in PROGRESS.md 2026-09-18: GREEN, no cut -- run 35263610481, 19/19 on 62e9ba44, carrying `heading rings=command,kernel checked=14 miss=0`; the last three rings stayed bespoke folds.
+commit: be832ac7
 
 #### slice: 11
 
@@ -167,9 +175,9 @@ risk: medium
 proof: e2e-visual -- every ring PR's smoke line reads `excluded-errors=0` with no --exclude passed, on every configuration that builds L3; evidence/phase-00/delta-report.md's list stays MEASURED EMPTY
 tier: e2e-visual
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: The throwing-room baseline stays MEASURED EMPTY: the harness passes no --exclude, so the 0-exceptions assertion excludes nothing.
+result: Every ring head's smoke line reads `excluded-errors=0` with 0 exceptions on every L3 leg; evidence/phase-00/delta-report.md's list is still '— none —'.
+commit: d8386216
 
 #### slice: 12
 
@@ -179,9 +187,9 @@ risk: medium
 proof: verified-real -- two fresh general-purpose agents on the command ring PR (decision logic: face-facts, the read host's registry decisions; shell/OS boundary: face-facts walk, the host loop, the shots capture), each in a private scratch directory with fixed-defects.md; every confirmed hole fixed, pinned and appended to fixed-defects.md; reports in evidence/phase-03/attacker-reports.md
 tier: verified-real
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Two fresh attackers against the PR that SHIPS each new gate -- the command ring (face-facts, the read host), and again in every later ring for its own new decision logic and shell surface; each carried fixed-defects.md, each in a private scratch directory.
+result: Command ring: evidence/phase-03/attacker-reports.md, every hole fixed and pinned. Kernel, factory, money and company rings: the same pass per ring, recorded in fixed-defects.md (company ring: 23 holes, 13 logic and 10 shell/OS, every one fixed and pinned in tests/face/company-ring.mjs's ATTACK checks, cdp-client and the browser suite's mutant controls).
+commit: 81dcf814
 
 #### slice: 13
 
@@ -191,6 +199,6 @@ risk: medium
 proof: verified-real -- /arc-phase-done 03 from the main clone after the company ring merges and main is re-verified by dispatch
 tier: verified-real
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Closed once, after the company ring merged and main was re-verified by dispatch; the receipts come from the main clone.
+result: The company ring merged as d8386216 (#246); main re-verified by dispatch: run 35336492657, 19/19 on d8386216. This close is the phase's last PR.
+commit: d8386216

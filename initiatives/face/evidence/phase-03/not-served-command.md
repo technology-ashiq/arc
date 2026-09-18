@@ -11,6 +11,7 @@ counts the same panels in the page per mood (`smoke: not-served mood=M panels=N 
 
 | module | panel | route it needs | what it would show |
 |---|---|---|---|
+| `board` | The base rate | `/api/ventures` | How many ventures the kill criteria were planned to expect to live, as the criteria file states it, written before the first launch -- so a death is a data point, not a surprise. |
 | `board` | Ventures | `/api/ventures` | The kill-distance card for each venture: its stage, its criteria set at kickoff, and how far it is from its own kill line. The door serves no ventures route yet. |
 | `today` | Policy | `/api/policy` | The ladder at a glance: each capability's autonomy level and the cap beside it. The door serves no policy route yet. |
 | `today` | Learned this week | `/api/learn` | The calibration rules the owner's stamps taught the company this week. The door serves no learn route yet. |

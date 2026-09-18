@@ -37,7 +37,7 @@ export function fold(payloads, ctx) {
     ),
     rehearsal(
       "Write the weekly ops report",
-      "One report a week and a drill, once two ventures are live and support stops being one person. Until then it is rehearsed, and no report is written.",
+      "A report and a drill, on the cadence the ops lane will set once its trigger in the planned-rooms registry is met. Until then it is rehearsed, and no report is written.",
     ),
   ];
   return {

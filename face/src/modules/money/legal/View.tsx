@@ -39,7 +39,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
         </div>
 
         <div className="min-w-0">
-          <HPanel title="The five seals" hint="human sovereignty">
+          <HPanel title="The seals" hint="human sovereignty">
             <NotServed item={f.seals} />
             <p className="mt-3 text-[12px] leading-[18px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>
               No level of proven autonomy ever includes these. Changing that article means it is no longer arc.
