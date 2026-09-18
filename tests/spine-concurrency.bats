@@ -93,9 +93,17 @@ setup() {
   # AGAIN (2026-09-18, face lane, run 35360356265 on 65697998): `windows-latest, shard 7/12`,
   # one of 200 refused, `fail w=1 j=23`, "spine lock held for more than 15000ms (last open:
   # EEXIST)". The change under test touched only the READER (spine.mjs scanAll), which the
-  # emitter does not import. The pattern worth reading: both occurrences failed on the SAME
-  # emit index, j=23 -- the 24th of a worker's 25 -- on different workers. A scheduling stall
-  # would not pick an index. Filed to the spine lane as a recurrence, not acted on here.
+  # emitter does not import.
+  #
+  # AND AGAIN, THE SAME DAY (run 35374697154 on 0e8a1390, a docs-only commit on `main`): shard
+  # 7/12 again, FOUR of 200 refused -- `w=1 j=7`, `w=2 j=3`, `w=4 j=8`, `w=7 j=4` -- same
+  # LOCK_TIMEOUT. That falsifies the reading written after the second one (that both failures
+  # were on emit j=23, and a stall would not pick an index): the indexes vary. None of the face
+  # suites runs in that shard, so nothing the face lane added loads it. Three occurrences, two
+  # in one day, on the same leg and shard: by this note's own rule, it is the lock -- and the
+  # headroom sentence above is the claim to re-examine. NO LANE OWNS THIS FILE today (the spine
+  # has no live lane on the board); the face lane records it here and raises it to the owner,
+  # and does not change the lock or the assertion.
 }
 
 # One emitter: PER_EMITTER strict emits, each with a payload no other emitter can produce.
