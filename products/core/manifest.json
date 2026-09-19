@@ -37,6 +37,8 @@
     ".claude/scripts/core/profile-request.mjs",
     ".claude/scripts/core/lane-resolve.mjs",
     ".claude/scripts/core/lane-resolve.sh",
+    ".claude/scripts/core/lane-status.mjs",
+    ".claude/scripts/core/concept-define.mjs",
     ".claude/scripts/core/ownership-lint.sh",
     ".claude/scripts/core/product-lint.mjs",
     ".claude/scripts/core/review-ledger.sh",

@@ -29,7 +29,6 @@ import { bandsOf, boardLanes, fileText, laneLinks } from "../../../lib/company-r
  * @property {{ rows: (import("../../../ui/company").BandView & { lane: string })[], isRead: boolean, isEmpty: boolean, empty: string, notes: string[], hasNotes: boolean }} bands
  * @property {import("../../../lib/lane-room.mjs").SourceFile} portfolio
  * @property {import("../../../lib/registry.mjs").NotServed} today
- * @property {{ isVerbPending: true, verb: string, sentence: string }} statusVerb
  * @property {{ isVerbPending: true, verb: string, sentence: string }} birthVerb
  * @property {Read[]} reads
  */
@@ -132,10 +131,8 @@ export function fold(payloads, ctx) {
       "/api/lanes",
       "Which lanes fired a receipt today, counted per lane -- so a lane whose header says IDLE and that emitted today reads awake, and one whose header says LIVE and fired nothing reads quiet. A receipt carries no lane: the spine's envelope has no lane field and only three develop kinds name one in their payload, so no count per lane can be derived -- filed to the spine lane.",
     ),
-    statusVerb: verbPending(
-      "Set a lane's status",
-      "A lane's status is its PROGRESS header; changing it -- awake, idle, blocked on a named thing -- is a reviewed edit that lands as a receipt. It arrives with the work door.",
-    ),
+    // "Set a lane's status" is LIVE since face v2 Phase 05 (ADR-1343): the work door's org.lane-status op, drawn under
+    // this room by the host. Its card is retired; birthing a lane stays /arc-kickoff's.
     birthVerb: verbPending(
       "Birth a lane",
       "Only /arc-kickoff births a lane: it claims the next ADR century and lands the lane's room in the same change. The work door will start that ceremony from here.",

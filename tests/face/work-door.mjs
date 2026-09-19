@@ -133,6 +133,9 @@ const INPUTS = {
   "money.ingest": { provider: "razorpay", export: join(tmp, "no-export.csv"), venture: "lexos", interval: "monthly" },
   "ventures.register": { slug: "work-door-probe", days: "60", floor: "50", repository: "acme/work-door-probe" },
   "ventures.kill-review": { venture: "lexos", reason: "the work door suite asks for a review" },
+  // The company ring (ADR-1343): branch writers, planned where there is a main and refused SIM_EFFECT at apply.
+  "org.lane-status": { lane: "face", status: "QUEUED" },
+  "concepts.define-term": { term: "work door probe", room: "today", station: "needs-you cards" },
 };
 // The ops whose tool refuses its PLAN on this tree, each by its NAMED refusal -- any refusal would pass a sim door that
 // ran an effect and failed later (PR 3a logic attack). No product here declares an evolve section, so open answers
@@ -141,7 +144,8 @@ const INPUTS = {
 const REFUSES_ON_THIS_TREE = new Map([["evolve.open-experiment", /NO_EVOLVE_SECTION/], ["evolve.measure", /NOT_OPEN/], ["evolve.conclude", /NOT_OPEN/], ["develop.slice", /unknown lane/],
   ["money.ingest", /the export cannot be found/], ["ventures.register", /NO_BASE|no approved criteria receipt/], ["ventures.kill-review", /UNRECEIPTED/]]);
 const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows/], ["engine-room.driver-switch", /NO_BASE/], ["model-policy.tier-proposal", /NO_BASE/], ["absorb.pin-source", /NO_BASE/], ["absorb.trial", /NO_BASE/],
-  ["design-studio.open-brief", /NO_BASE/], ["executor.terminate", /NO_BASE/], ["agents.add-agent", /NO_BASE/], ["factory.switch-profile", /already strict/]]);
+  ["design-studio.open-brief", /NO_BASE/], ["executor.terminate", /NO_BASE/], ["agents.add-agent", /NO_BASE/], ["factory.switch-profile", /already strict/],
+  ["org.lane-status", /NO_BASE/], ["concepts.define-term", /NO_BASE/]]);
 check("every registry op is driven by this suite",
   OPS_MOD.OPS.length > 0 && OPS_MOD.OPS.every((o) => Object.hasOwn(INPUTS, o.id)) && Object.keys(INPUTS).length === OPS_MOD.OPS.length,
   OPS_MOD.OPS.map((o) => o.id).join(","));
@@ -157,7 +161,9 @@ const WRITERS = (() => {
       const p = join(d, n.name);
       if (n.isDirectory()) { walk(p); continue; }
       if (!n.name.endsWith(".mjs") || n.name === "proposal-branch.mjs") continue;
-      if (/import\s*\{[^}]*\bwriteProposal\b[^}]*\}\s*from\s*"[^"]*core\/proposal-branch\.mjs"/.test(readFileSync(p, "utf8"))) out.add(p.slice(root.length + 1).split(sep).join("/"));
+      // Any spelling of the one module's path: a tool that lives IN core imports it as "./proposal-branch.mjs", and a
+      // `core/`-only pattern read two branch writers as writing nothing (PR 5b CI).
+      if (/import\s*\{[^}]*\bwriteProposal\b[^}]*\}\s*from\s*"[^"]*proposal-branch\.mjs"/.test(readFileSync(p, "utf8"))) out.add(p.slice(root.length + 1).split(sep).join("/"));
     }
   };
   walk(root);

@@ -168,6 +168,16 @@ function registeredVentures() {
   } catch { return []; }
 }
 
+/** The rooms a term can be homed in: the contract's BUILT rooms and the lane template -- a planned room opens nothing. */
+function conceptRooms() {
+  try {
+    const rooms = JSON.parse(readFileSync(join(HERE, "..", "..", "..", "initiatives", "face", "contracts", "expected-set.json"), "utf8")).rooms;
+    const ids = rooms.list.filter((r) => r && r.status === "built").map((r) => r.id);
+    if (rooms.template && rooms.template.id) ids.push(rooms.template.id);
+    return [...new Set(ids)].filter((r) => typeof r === "string" && /^[a-z][a-z0-9-]{0,40}$/.test(r)).sort();
+  } catch { return []; }
+}
+
 /** The rooms the contract's agents.map already seats an agent in: a new agent joins one of those. */
 function agentRooms() {
   try {
@@ -465,6 +475,47 @@ export const OPS = Object.freeze([
     ]),
     plan: (v) => ({ script: "hq/arc-pnl.mjs", args: ["--kill-request", v.venture, "--reason", v.reason] }),
     apply: "emit-plan",
+  }),
+  // The company ring (ADR-1343): both land as proposal branches with a request in the inbox.
+  Object.freeze({
+    id: "org.lane-status",
+    room: "org",
+    lane: "portfolio",
+    label: "Set a lane's status",
+    hint: "A lane's status is its PROGRESS header, and the board row is a view of it: both change on one proposal branch you merge, and the request lands in your inbox. BLOCKED names what blocks it.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `set status` -> a proposal branch (the lane's PROGRESS header and its PORTFOLIO.md row, ADR-0051) and approval.requested (gate lane-status) (ADR-1343)",
+    retires: Object.freeze({ module: "org", verb: "Set a lane's status" }),
+    humanRun: true, spends: false, touchesFiles: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "lane", label: "Lane", placeholder: "face", type: "text", max: 64, pattern: "[a-z][a-z0-9-]*", required: true }),
+      Object.freeze({ name: "status", label: "Status", placeholder: "", type: "select", options: Object.freeze(["LIVE", "IDLE", "QUEUED", "BLOCKED"]), required: true }),
+      // The tool's own allow-list, so the door refuses what the tool would: ADR-0051's target, then plain words; "—"
+      // clears the blocker, and leaving it empty keeps main's.
+      Object.freeze({ name: "blocked", label: "Blocked on (empty keeps it, — clears it)", placeholder: "owner — the reason", type: "text", max: 200, pattern: "—|(owner|external|[a-z][a-z0-9-]{0,63}) — [A-Za-z0-9][A-Za-z0-9 ,.()'#%+&-]*", required: false }),
+    ]),
+    plan: (v) => ({ script: "core/lane-status.mjs", args: ["--lane", v.lane, "--status", v.status, ...(v.blocked ? ["--blocked-on", v.blocked] : []), "--dry-run"] }),
+    apply: (v) => ({ script: "core/lane-status.mjs", args: ["--lane", v.lane, "--status", v.status, ...(v.blocked ? ["--blocked-on", v.blocked] : [])] }),
+    expect: true,
+  }),
+  Object.freeze({
+    id: "concepts.define-term",
+    room: "concepts",
+    lane: "face",
+    label: "Define a term",
+    hint: "A term is homed in a built room and a station on its line, as a reviewed edit to the face's contract on a proposal branch you merge -- the palette finds it the moment it lands.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `define` -> a proposal branch (the contract's concepts.map and what it derives) and approval.requested (gate concept-define) (ADR-1343)",
+    retires: Object.freeze({ module: "concepts", verb: "Define a term" }),
+    humanRun: true, spends: false, touchesFiles: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "term", label: "Term", placeholder: "the word, as the palette finds it", type: "text", max: 60, pattern: "(?!.*(//|\\.\\.|:[^ ]))[A-Za-z0-9][A-Za-z0-9 ./()?%:&+-]{0,59}", required: true }),
+      Object.freeze({ name: "room", label: "Room", placeholder: "", type: "select", get options() { return Object.freeze(conceptRooms()); }, required: true }),
+      Object.freeze({ name: "station", label: "Station", placeholder: "a stop on the room's line", type: "text", max: 40, pattern: "[A-Za-z0-9][A-Za-z0-9 .-]{0,39}", required: true }),
+    ]),
+    plan: (v) => ({ script: "core/concept-define.mjs", args: ["--term", v.term, "--room", v.room, "--station", v.station, "--dry-run"] }),
+    apply: (v) => ({ script: "core/concept-define.mjs", args: ["--term", v.term, "--room", v.room, "--station", v.station] }),
+    expect: true,
   }),
   Object.freeze({
     id: "growth.publish",

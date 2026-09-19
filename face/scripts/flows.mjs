@@ -77,6 +77,9 @@ export function flowInputs(ctx) {
     "money.ingest": { provider: "razorpay", export: join(ctx.tmp, "no-export.csv"), venture: "lexos", interval: "monthly" },
     "ventures.register": { slug: "browser-flow-probe", days: "60", floor: "50", repository: "acme/browser-flow-probe" },
     "ventures.kill-review": { venture: "lexos", reason: "a browser flow asks for a review" },
+    // The company ring (ADR-1343): both write a proposal branch, so a sim door refuses them at apply.
+    "org.lane-status": { lane: "face", status: "QUEUED" },
+    "concepts.define-term": { term: "browser flow probe", room: "today", station: "needs-you cards" },
   };
 }
 
@@ -115,6 +118,11 @@ export const REFUSALS = Object.freeze({
   // (main CI after PR 5a: green on the PR, where NO_BASE came first).
   "ventures.register": "SIM_EFFECT|NO_BASE|no approved criteria receipt|torn line",
   "ventures.kill-review": "UNRECEIPTED",
+  // The company ring: branch writers, refused SIM_EFFECT at apply, or NO_BASE where a CI checkout has no main.
+  // Or, on a checkout WITH a main, the fixture spine's deliberate torn line: an unknown read is never "nothing
+  // requested" (the register's twin -- main CI after PR 5a).
+  "org.lane-status": "SIM_EFFECT|NO_BASE|torn line",
+  "concepts.define-term": "SIM_EFFECT|NO_BASE|torn line",
 });
 
 /**

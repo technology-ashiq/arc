@@ -29,7 +29,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
           <HPanel title="Change the roster" hint="a status is a header, a lane is born by kickoff">
             <div className="space-y-2.5">
-              <VerbPending item={f.statusVerb} />
               <VerbPending item={f.birthVerb} />
             </div>
           </HPanel>
