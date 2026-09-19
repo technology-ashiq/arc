@@ -172,7 +172,7 @@ change decisions above:
 - **§4, add-agent:** the branch carries what the contract derives (`rooms.generated.json`, any face: section), made by
   `face-sections deriveFromContract`, so it is green when it merges. Its JSON edits are structural, over canonical
   files, and the description is written quoted.
-- **The door:** a bound or emit-plan plan whose last line the page cannot show is not held (PLAN_HIDDEN, 422).
+- **The door:** a bound (digest) plan whose last line the page cannot show is not held (PLAN_HIDDEN, 422). An emit-plan row is exempt: its last line is the receipt, and growth.publish carries the owner's own absolute article path in it by design.
 
 The rest are twins of fixed rows:
 - pick and profile-request check and emit under `withExclusiveLock`
