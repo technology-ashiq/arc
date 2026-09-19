@@ -217,7 +217,7 @@
 .claude/scripts/hq/jobs/day-close-roll.mjs	cf47ce763a261eba34350385555119025b29a1050469606dc728994996628523
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	db5fc5a85baa049ea71073e74e9f387263e187713091ac39b5b79df33f875884
-.claude/scripts/hq/lib/face/reads.mjs	64e1c57c7a482685b41173e17753c38bb60e2f599f68ef6eae71cf280db8c3c1
+.claude/scripts/hq/lib/face/reads.mjs	0c5e01a8873899015ff7a01b3ccc95890f95cc71b9693e5f439ac33d4730c727
 .claude/scripts/hq/lib/face/work-door.mjs	cb7f7a5f144f51cd28fa086942f9501d7966a91b9bf90afad3978577d2f011ec
 .claude/scripts/hq/lib/jobs/audit.mjs	f44b1a1ea933ff7e80f4cf7429307b636342f6658b22360fddb602957416f8fd
 .claude/scripts/hq/lib/jobs/cadence.mjs	b6373ced54530a19858148308f54daccea88c4474a51f7b3fa07301ea97642bb
@@ -264,7 +264,7 @@
 .claude/scripts/hq/policy-hook.mjs	d1f038fb8a16ee229673ec7886e130835b26bd22e17f9f7176ccc635f06aad76
 .claude/scripts/hq/policy-lint.mjs	2a6d1101f2de3e84dbb650be3b07a90ccf124ce07595c658ac3c9b1e87370e5a
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb
-.claude/scripts/hq/spine.mjs	6a70301e76e26d1ec7f10e75bdac0f4368a866c6db408ab53aff5a8a88cba027
+.claude/scripts/hq/spine.mjs	c176d0145d6dcf5fa99bb6693144dc22116db55c573b78e25c9c92bc158103bd
 .claude/scripts/leads/arc-leads.mjs	74a64cda1ad500959bc3fe7e9c9dc803433d98fea1cf676b7a9c94d07d7f4047
 .claude/scripts/leads/lib/caps.mjs	4e6bbf03ba53dd72b6a6e571b31f85c03783549cd04b890e62b3fa19ed9d2d4b
 .claude/scripts/leads/lib/deps.mjs	eebf5ab87ee1cdcf1f7a3371ebbe900356ddabab64970ba457004bc4b7de6f40

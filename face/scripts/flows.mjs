@@ -20,6 +20,7 @@ import { join } from "node:path";
 
 import { openPage } from "./cdp.mjs";
 import { withChrome, collectErrors, until, redactSecrets, oneLine } from "./smoke.mjs";
+import { unescapeDoorText } from "../src/lib/door.mjs";
 
 /** The dock's button text. Frozen: the flows find buttons by it, and a change to either is a change to this file. */
 export const FROZEN = Object.freeze({ plan: "Plan it", run: "Run it" });
@@ -149,10 +150,20 @@ export async function runFlows(opts, log = (line) => process.stdout.write(line +
   if (seeded.status !== 0) log(`flows: WARN the close flow's payment was not seeded -- ${oneLine(String(seeded.stderr).slice(0, 200))}`);
   writeFileSync(join(opts.tmp, "flow-probe.mdx"), "---\ntitle: A browser flow, sealed\n---\n\nAn article the browser flow seals.\n");
 
+  // EVERY page, through the door's own cursor: the first page of a kind the fixture already holds many of ends before
+  // a receipt written a second ago, and the flow read "no such id" for a receipt that was there (CI, PR 2 run 1).
   const spineIds = async (kind) => {
-    const r = await fetch(new URL(`/api/spine?kind=${encodeURIComponent(kind)}&limit=1000`, opts.door), { headers });
-    const b = await r.json();
-    return new Set((Array.isArray(b.events) ? b.events : []).map((e) => e && e.event && e.event.id).filter(Boolean));
+    const ids = new Set();
+    let since = "";
+    for (let pages = 0; pages < 200; pages++) {
+      const r = await fetch(new URL(`/api/spine?kind=${encodeURIComponent(kind)}&limit=500${since ? `&since=${since}` : ""}`, opts.door), { headers });
+      const b = await r.json();
+      const evs = Array.isArray(b.events) ? b.events : [];
+      for (const e of evs) if (e && e.event && e.event.id) ids.add(e.event.id);
+      if (!b.more || !b.next || b.next === since) break;
+      since = b.next;
+    }
+    return ids;
   };
 
   return withChrome(async (session) => {
@@ -174,7 +185,11 @@ export async function runFlows(opts, log = (line) => process.stdout.write(line +
       try {
         await page.send("Page.navigate", { url: `${opts.base}?flow=${i}#/${encodeURIComponent(op.room)}&token=${encodeURIComponent(opts.token)}` });
         const t0 = Date.now();
-        const arg = { id: op.id, fields: op.fields, input, humanRun: op.humanRun === true, frozen: FROZEN, capMs: 180000 };
+        // The door HTML-escapes every string it serves and the face decodes it before drawing; the flow finds inputs by
+        // what the page DRAWS, so it decodes with the face's own function (CI, PR 2 run 1: a placeholder with an apostrophe
+        // arrived as &#39; and matched nothing).
+        const fields = (Array.isArray(op.fields) ? op.fields : []).map((f) => ({ ...f, placeholder: unescapeDoorText(String(f.placeholder ?? "")) }));
+        const arg = { id: op.id, fields, input, humanRun: op.humanRun === true, frozen: FROZEN, capMs: 180000 };
         const r = await page.send("Runtime.evaluate", { expression: `(${pageFlow.toString()})(${JSON.stringify(arg)})`, awaitPromise: true, returnByValue: true });
         const res = r.result && r.result.value ? r.result.value : { ok: false, step: "the page returned nothing" };
         if (!res.ok) { failed.push(op.id); log(`flow: FAIL ${op.id} -- ${oneLine(redactSecrets(res.step + (res.text ? ` :: ${res.text}` : ""), [opts.token]))}`); continue; }

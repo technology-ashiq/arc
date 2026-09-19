@@ -35,7 +35,7 @@ import { tmpdir } from "node:os";
 import { join, relative, sep, dirname } from "node:path";
 import { execFile } from "node:child_process";
 
-import { readAll } from "../../spine.mjs";
+import { readAll, spineStamp } from "../../spine.mjs";
 import { sha256Hex, formatIst, nowMs } from "../canonical.mjs";
 
 /** A refusal this module raises; arc-dash maps its code to a status exactly as it maps its own. */
@@ -1100,13 +1100,9 @@ export function apiPulse(ctx, files) {
     try { const s = statSync(p); parts.push(`${label}|${s.size}|${s.mtimeMs}`); }
     catch { parts.push(`${label}|absent`); }
   };
-  const ev = join(ctx.root, "events");
-  /** @type {string[]} */
-  let days = [];
-  try { days = readdirSync(ev).sort(); } catch { parts.push("events|unreadable"); }
-  for (const n of days) stamp(`events/${n}`, join(ev, n));
-  try { for (const n of readdirSync(join(ev, "_quarantine")).sort()) stamp(`quarantine/${n}`, join(ev, "_quarantine", n)); }
-  catch { /* no quarantine yet */ }
+  // The spine's half comes from the reader (ADR-0030): the door never lists events/ itself, and spine-reader-lint
+  // holds it to that.
+  parts.push(...spineStamp(ctx.root));
   for (const f of files) stamp(f, join(ctx.repo, f));
   /** @type {string[]} */
   let lanes = [];

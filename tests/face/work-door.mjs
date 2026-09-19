@@ -287,11 +287,12 @@ try {
       check("with derived/state.db present, a fresh receipt is still found (the door reads by scan)", done.body.result && done.body.result.ok === true, JSON.stringify(done.body.result).slice(0, 300));
       // The twins (round-2 logic attack): the approval an op raises must be in the inbox, and decidable, with the
       // index still present -- the inbox and decide read through arc-inbox, not through the work door.
-      const c = await post("/api/op/money.criteria/plan", { input: { what: "raised after a replay built the index" } });
-      await post("/api/op/money.criteria/apply", { planId: c.body.planId }, { Origin: ORIGIN });
-      const raised = await settle(c.body.planId);
-      const rid = raised.body.result && raised.body.result.receipt ? raised.body.result.receipt.id : "";
-      check("with the index present, an op raised an approval (vacuous-pass guard)", /^[0-9A-HJKMNP-TV-Z]{26}$/.test(rid), JSON.stringify(raised.body.result).slice(0, 300));
+      // A FRESH approval, raised after the index was built (money.criteria's idem is the ventures.yaml digest, so the
+      // loop above already spent it on this spine -- a second criteria request is a duplicate by design).
+      const raisedBy = spawnSync(process.execPath, [EVENT, "emit", "approval.requested", "--payload", JSON.stringify({ gate: "work-door-suite", what: "raised after a replay built the index" }), "--strict"],
+        { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_A } });
+      const rid = String(raisedBy.stdout).trim();
+      check("with the index present, an approval was raised after it (vacuous-pass guard)", raisedBy.status === 0 && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(rid), `${raisedBy.status} ${raisedBy.stderr}`);
       const inbox = await j("/api/inbox", { headers: H });
       check("with the index present, the approval an op just raised is OPEN in the inbox", inbox.status === 200 && (inbox.body.open || []).some((o) => o.id === rid), `${inbox.status} open=${(inbox.body.open || []).map((o) => o.id).join(",")}`);
       const dupe = await j("/api/decide", { method: "POST", headers: { ...H, Origin: ORIGIN }, body: `{"id":"${rid}","verdict":"reject","reason":"no","verdict":"approve"}` });
