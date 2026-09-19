@@ -22,7 +22,8 @@ import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync,
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { baseText, checkProposal, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
+import { baseText, checkProposal, mainHolds, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
+import { spawnBounded } from "../core/spawn-bounded.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
@@ -87,27 +88,34 @@ async function main() {
   // a file the branch does not have.
   const brief = await baseText({ repo: REPO, path: a.brief });
   if (brief.text === null) die(2, `${a.brief} is not on main -- the explore's branch is based on main, so its brief must be there`);
+  // An explore MAIN holds -- any file under its folder -- is evidence, never a scaffold to write over. The script's own
+  // guard reads the owner's checkout, and a checkout behind main (merged on GitHub, not yet pulled) let the branch
+  // blank a merged explore's variants and base (PR 4 attacks, both; the trial and pin twins).
+  const held = await mainHolds({ repo: REPO, path: `docs/design/explore/${a.id}` });
+  if (held.base !== brief.base) die(2, "main moved while the explore was checked -- run it again");
+  if (held.holds) die(2, `main already holds the explore ${a.id} -- an explore is evidence, not a scratch dir; take a new --id`);
   let scratch;
   try { scratch = mkdtempSync(join(tmpdir(), "arc-open-brief-")); }
   catch (e) { die(2, `no temp directory could be made (${e && e.code ? e.code : "error"}) -- nothing was written`); }
   try {
     const dest = join(scratch, "explore");
-    const s = spawnSync("bash", [EXPLORE, "init", a.id, "--brief", a.brief, "--out-dir", dest, "--base", brief.base.slice(0, 12)],
-      { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000, windowsHide: true });
-    if (s.status !== 0) die(2, String(s.stderr || "").trim().replace(/^design-explore: /, "") || `the scaffold exited ${s.status}`);
+    // Bounded like every child the door's tools start: a timeout ends bash AND what it started (a BASH_ENV sleep outlived
+    // the old spawnSync), and a failure is named -- a missing bash or a timeout read as "exited null" (PR 4 shell attack).
+    let errText = "";
+    const s = await spawnBounded("bash", [EXPLORE, "init", a.id, "--brief", a.brief, "--out-dir", dest, "--base", brief.base.slice(0, 12)],
+      { cwd: REPO, env: process.env, timeoutMs: 60_000, onData: (stream, chunk) => { if (stream === "err" && errText.length < 4096) errText += chunk.toString("utf8"); } });
+    if (s.timedOut) die(2, "the scaffold did not finish in 60 s -- it, and everything it started, was ended; nothing was written");
+    if (s.exit === null) die(2, `the scaffold could not be run (${s.error || s.signal || "no exit"}) -- is Git Bash on PATH? nothing was written`);
+    if (s.exit !== 0) die(2, errText.trim().split(/\r?\n/)[0].replace(/^design-explore: /, "") || `the scaffold exited ${s.exit}`);
     const files = scaffoldFiles(dest, a.id);
     if (files.length === 0) die(2, "the scaffold wrote nothing -- nothing to propose");
     const allow = files.map((f) => f.path);
     const { base } = await checkProposal({ repo: REPO, branch, paths: allow, allow });
     if (base !== brief.base) die(2, "main moved while the scaffold was made -- run it again");
-    // An explore MAIN already holds is evidence, not a scaffold to write over: design-explore.sh checks the owner's
-    // checkout, and the branch is cut from main (the pin and trial twins, PR 3b round 2).
-    const held = await baseText({ repo: REPO, path: `docs/design/explore/${a.id}/explore.txt` });
-    if (held.base !== base) die(2, "main moved while the explore was checked -- run it again");
-    if (held.text !== null) die(2, `main already holds the explore ${a.id} -- an explore is evidence, not a scratch dir; take a new --id`);
-    // The id is followed by a comma: the scanner also reads each string with its spaces removed (the pin twin, PR 3b).
-    const what = `open the design explore ${a.id}, from ${a.brief}`;
-    const approval = (commit) => ({ what, gate: "design-explore", explore: a.id, brief: a.brief, branch, base, commit, ...(a.why ? { why: a.why } : {}) });
+    // The id is named by its folder, and quoted in the sentence: the scanner joins each string with the next, and a
+    // bare "risk-assessment-surface" read as a key -- the agent twin (PR 4 shell attack).
+    const what = `open the design explore "${a.id}", from ${a.brief}`;
+    const approval = (commit) => ({ what, gate: "design-explore", explore_dir: `docs/design/explore/${a.id}/`, brief: a.brief, branch, base, commit, ...(a.why ? { why: a.why } : {}) });
     const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)), { cwd: REPO });
     if (refused) die(2, `the approval this explore raises would be refused by the spine, so nothing is written: ${refused}`);
     const message = `design: ${what}\n\n${a.why ? `${a.why}\n\n` : ""}The director assigns theses and writes matrix.md; the composers fill variant-{a,b,c} on this branch, and the pick decides it.\nWritten by the face's work door (ADR-1341).`;

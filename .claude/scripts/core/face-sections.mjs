@@ -247,6 +247,30 @@ export function roomRegistry(contract, copy) {
   };
 }
 
+/**
+ * Everything a contract derives, as the text each derived file must hold -- the room registry, and each product
+ * manifest whose `face:` section changes -- for a tool that proposes a contract change on a branch. The branch carries
+ * these too, or `face-sections --check` fails on main once it merges (PR 4 logic attack: an added agent turned main
+ * red on rooms.generated.json). The same generator as run(): one spelling of the derivation, never a second.
+ * @param {object} contract @param {object} copy room-copy.json, parsed
+ * @param {Record<string, string>} manifests product -> manifest text as main holds it
+ * @returns {{ registryText: string, manifests: Record<string, string> }} only the manifests whose section changes
+ */
+export function deriveFromContract(contract, copy, manifests) {
+  const registryText = JSON.stringify(roomRegistry(contract, copy), null, 2) + "\n";
+  /** @type {Record<string, string>} */
+  const changed = {};
+  for (const [product, text] of Object.entries(manifests)) {
+    const want = sectionFor(product, contract);
+    if (want === null) continue;
+    const manifest = JSON.parse(text);
+    if (JSON.stringify(manifest.face) === JSON.stringify(want)) continue;
+    manifest.face = want;
+    changed[product] = JSON.stringify(manifest, null, 2) + "\n";
+  }
+  return { registryText, manifests: changed };
+}
+
 function registryPath(repo) { return join(repo, "initiatives", "face", "contracts", "rooms.generated.json"); }
 function loadCopy(repo) {
   const p = join(repo, "initiatives", "face", "contracts", "room-copy.json");

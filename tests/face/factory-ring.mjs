@@ -90,6 +90,9 @@ function scratchRepo(name, files) {
   check("develop next, applied: the ledger moved and its receipt names the slice (note.logged develop.next)", ap.status === 0 && sha256(readFileSync(ledger)) !== ledgerBefore && !!rec && rec.kind === "note.logged" && rec.payload.note === "develop.next" && rec.payload.slice === "01", `${ap.status} ${ap.stdout.slice(-300)}`);
   const again = dev("next", "--expect", d || ZERO);
   check("develop next, the same plan applied twice: the ledger moved, so the digest is stale (PLAN_STALE)", again.status !== 0 && /PLAN_STALE/.test(again.stdout + again.stderr), `${again.status} ${again.stdout.slice(-200)}`);
+  // A plan that would write nothing is refused: applied, it only emitted receipts, one per click (PR 4 logic attack).
+  const noop = dev("next", "--dry-run");
+  check("develop next with nothing left to record refuses its plan -- no receipt per click", noop.status === 2 && /nothing to record/.test(noop.stdout), `${noop.status} ${noop.stdout.slice(-200)}`);
 }
 
 // ---- open-brief: design-explore init into a scratch dir, committed to a proposal branch ----
@@ -142,7 +145,7 @@ function scratchRepo(name, files) {
     return sha256(readdirSync(dir).sort().map((n) => `${n}\t${sha256(readFileSync(join(dir, n)))}`).join("\n"));
   })();
   check("pick, applied: approval.requested (gate design-pick) names the explore, the variant, the reason and the variant's fingerprint",
-    ap.status === 0 && !!appr && appr.payload.gate === "design-pick" && appr.payload.explore === "pick-probe" && appr.payload.pick === "b" && appr.payload.why === "b reads clearest at a glance" && appr.payload.variant_sha === fp, `${ap.status} ${ap.stderr}`);
+    ap.status === 0 && !!appr && appr.payload.gate === "design-pick" && appr.payload.explore_dir === "docs/design/explore/pick-probe/" && appr.payload.pick === "b" && appr.payload.why === "b reads clearest at a glance" && appr.payload.variant_sha === fp, `${ap.status} ${ap.stderr}`);
   const again = tool("design/pick.mjs", [...A, "--dry-run"]);
   check("pick of the same explore again refuses -- a pick is recorded once (the spine holds it)", again.status === 2 && /recorded once/.test(again.stderr), again.stderr);
   const done = tool("design/pick.mjs", ["--explore", "picked-already", "--pick", "a", "--why", "x", "--dry-run"]);
@@ -205,19 +208,34 @@ function scratchRepo(name, files) {
 {
   const GOLDEN = "tests/fixtures/sync-golden/tree-manifest.txt";
   const CONTRACT = "initiatives/face/contracts/expected-set.json";
-  const { g, clean, sp, tool } = scratchRepo("agent-repo", { "engine/router.yaml": true, [GOLDEN]: true, [CONTRACT]: true, "products/review/manifest.json": true, "products/engine/manifest.json": true });
+  const REGISTRY = "initiatives/face/contracts/rooms.generated.json";
+  const COPY = "initiatives/face/contracts/room-copy.json";
+  const productFiles = Object.fromEntries(readdirSync(join(REPO, "products")).filter((p) => existsSync(join(REPO, "products", p, "manifest.json"))).map((p) => [`products/${p}/manifest.json`, true]));
+  const { g, clean, sp, tool } = scratchRepo("agent-repo", { "engine/router.yaml": true, [GOLDEN]: true, [CONTRACT]: true, [REGISTRY]: true, [COPY]: true, ...productFiles });
   const A = ["--name", "probe-agent", "--description", "Reads a diff and names its riskiest hunk", "--tools", "Read, Grep", "--tier", "cheap-scan", "--room", "review-ship", "--product", "review"];
   const plan = tool("engine/agent-scaffold.mjs", [...A, "--dry-run"]);
   const d = lastExpect(plan.stdout);
-  check("agent-scaffold, planned: four diffs and a digest; nothing written", plan.status === 0 && !!d && [".claude/agents/probe-agent.md", "products/review/manifest.json", GOLDEN, CONTRACT].every((p) => plan.stdout.includes(`b/${p}`)) && clean(), `${plan.status} ${plan.stderr}`);
+  check("agent-scaffold, planned: the agent, its manifest line, its golden line, its contract row and the registry the contract derives -- and a digest; nothing written",
+    plan.status === 0 && !!d && [".claude/agents/probe-agent.md", "products/review/manifest.json", GOLDEN, CONTRACT, REGISTRY].every((p) => plan.stdout.includes(`b/${p}`)) && clean(), `${plan.status} ${plan.stderr}`);
   const stale = tool("engine/agent-scaffold.mjs", [...A, "--expect", ZERO]);
   check("agent-scaffold with a digest no plan printed refuses (PLAN_STALE)", stale.status === 2 && /PLAN_STALE/.test(stale.stderr) && approvals(sp).length === 0, stale.stderr);
   const ap = tool("engine/agent-scaffold.mjs", [...A, "--expect", d || ZERO]);
   const branch = "feat/face-agents-add-probe-agent";
   const show = (p) => g("show", `${branch}:${p}`).stdout;
   const agent = show(".claude/agents/probe-agent.md");
-  check("agent-scaffold, applied: the agent file carries its name, tools and the tier's model (haiku for cheap-scan)",
-    ap.status === 0 && /^name: probe-agent$/m.test(agent) && /^tools: Read, Grep$/m.test(agent) && /^model: haiku$/m.test(agent) && /cheap-scan \(ADR-0069\)/.test(agent) && clean(), `${ap.status} ${ap.stderr}`);
+  check("agent-scaffold, applied: the agent file carries its name, tools, the tier's model (haiku for cheap-scan) and its description QUOTED",
+    ap.status === 0 && /^name: probe-agent$/m.test(agent) && /^tools: Read, Grep$/m.test(agent) && /^model: haiku$/m.test(agent) && /^description: "Reads a diff and names its riskiest hunk"$/m.test(agent) && /cheap-scan \(ADR-0069\)/.test(agent) && clean(), `${ap.status} ${ap.stderr}`);
+  // THE BRANCH KEEPS MAIN GREEN: what face-sections derives from the branch's contract is what the branch holds (PR 4
+  // logic attack: the four files alone failed face-sections --check once merged).
+  {
+    const FS = await import(pathToFileURL(S("core", "face-sections.mjs")).href);
+    const branchContract = JSON.parse(show(CONTRACT));
+    const branchCopy = JSON.parse(show(COPY));
+    const manifestsOnBranch = Object.fromEntries(Object.keys(productFiles).map((p) => [p.split("/")[1], show(p)]));
+    const derived = FS.deriveFromContract(branchContract, branchCopy, manifestsOnBranch);
+    check("agent-scaffold, applied: the branch's registry and every face: section are exactly what the generator derives from its contract",
+      derived.registryText === show(REGISTRY) && Object.keys(derived.manifests).length === 0, `registry=${derived.registryText === show(REGISTRY)} drifted=${Object.keys(derived.manifests).join(",")}`);
+  }
   let manifest = null; try { manifest = JSON.parse(show("products/review/manifest.json")); } catch { /* reported */ }
   check("agent-scaffold, applied: the product's manifest lists it, and is still JSON", !!manifest && manifest.agents[manifest.agents.length - 1] === ".claude/agents/probe-agent.md");
   const golden = show(GOLDEN).split("\n").filter(Boolean);
@@ -233,7 +251,7 @@ function scratchRepo(name, files) {
     !!contract && contract.agents.map["probe-agent"] === "review-ship" && census(contract) === census(mainContract) + 1 && Object.keys(contract.agents.map).length === Object.keys(mainContract.agents.map).length + 1);
   const appr = approvals(sp).find((e) => e.id === receiptOf(ap.stdout));
   check("agent-scaffold, applied: approval.requested (gate agent-roster, ADR-0069) names the tier, the model, the branch and its commit",
-    !!appr && appr.payload.gate === "agent-roster" && appr.payload.adr === "ADR-0069" && appr.payload.tier === "cheap-scan" && appr.payload.model === "haiku" && appr.payload.branch === branch && appr.payload.commit === g("rev-parse", branch).stdout.trim());
+    !!appr && appr.payload.gate === "agent-roster" && appr.payload.adr === "ADR-0069" && appr.payload.agent_file === ".claude/agents/probe-agent.md" && appr.payload.tier === "cheap-scan" && appr.payload.model === "haiku" && appr.payload.branch === branch && appr.payload.commit === g("rev-parse", branch).stdout.trim());
   for (const [why, args, re] of [
     // The scratch repo holds the contract, not the agent files: the contract's own row is the refusal here.
     ["an agent main already has", ["--name", "code-reviewer"], /already on main|already has a room/],
@@ -242,7 +260,7 @@ function scratchRepo(name, files) {
     ["a room that seats no agent", ["--room", "money"], /not a room that hosts agents/],
     ["a product that ships no agents", ["--product", "engine"], /no "agents" array|ships no agents/],
     ["a tool outside the set", ["--tools", "Read, Teleport"], /--tools/],
-    ["a description YAML would read as a mapping", ["--description", "Reviews: diffs"], /--description/],
+    ["a description with an invisible character", ["--description", "Reviews\u200bdiffs"], /--description/],
   ]) {
     const merged = [...A];
     for (let i = 0; i < args.length; i += 2) merged[merged.indexOf(args[i]) + 1] = args[i + 1];

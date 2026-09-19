@@ -159,3 +159,26 @@ Convening, critique and the jury, hiring, dispatch, and closing a phase stay pen
   alone: nothing else in the tree moves (tests/face/factory-ring.mjs, in a scratch tree).
 - An agent added through the door carries a body stub. Its method is written on the branch before anything invokes
   it.
+
+## Amendment, 2026-09-19: what PR 4's two attackers found
+
+A fresh pair found 30 defects (15 logic and 15 shell, several of them the same). Every one is fixed and pinned. Four
+change decisions above:
+- **§1, the write in place:** develop's bound apply holds a per-ledger lock and re-reads the ledger immediately before
+  an atomic write, refusing PLAN_STALE on any change. The ledger must resolve inside the repo and match the phase the
+  lane's header names. The receipt is judged before the write, and a plan that would write nothing is refused.
+- **§2, open-brief:** refuses an explore that main holds anywhere under its folder. `design-explore.sh --out-dir`
+  consults neither the tree's brief nor its explore, and takes only a new folder outside the repo.
+- **§4, add-agent:** the branch carries what the contract derives (`rooms.generated.json`, any face: section), made by
+  `face-sections deriveFromContract`, so it is green when it merges. Its JSON edits are structural, over canonical
+  files, and the description is written quoted.
+- **The door:** a bound or emit-plan plan whose last line the page cannot show is not held (PLAN_HIDDEN, 422).
+
+The rest are twins of fixed rows:
+- pick and profile-request check and emit under `withExclusiveLock`
+- the spine query reports unreadable day files
+- payloads name agents and explores by file or folder
+- retire compares the parsed router
+- selects are read when asked
+- the codegraph test doors are refused
+- bash is run bounded

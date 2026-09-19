@@ -162,8 +162,8 @@ function pinsOf(pinP, all) {
     const row = s ? s.rows.find((r) => r.name === name) : undefined;
     return row
       ? { tool, name, roomName: row.roomName, room: row.room, canOpen: row.canOpen, found: true }
-      : { tool, name: name || tool, roomName: "no longer in the registry", room: "", canOpen: false, found: false };
+      : { tool, name: name || tool, roomName: "not in the registry", room: "", canOpen: false, found: false };
   });
-  const pinsNote = page.more ? "the newest pins past the first 500 are not replayed here -- unpin some to keep the list honest" : pins.length === 0 ? "nothing pinned yet -- pin a tool with the card below" : "";
+  const pinsNote = page.more ? "more than 500 pin receipts: only the first 500 are replayed, so pins and unpins after them are not shown here" : pins.length === 0 ? "nothing pinned yet -- pin a tool with the card below" : "";
   return { pins, hasPins: pins.length > 0, pinsNote, hasPinsNote: pinsNote !== "" };
 }
