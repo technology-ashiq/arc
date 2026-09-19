@@ -490,7 +490,9 @@ export const OPS = Object.freeze([
     fields: Object.freeze([
       Object.freeze({ name: "lane", label: "Lane", placeholder: "face", type: "text", max: 64, pattern: "[a-z][a-z0-9-]*", required: true }),
       Object.freeze({ name: "status", label: "Status", placeholder: "", type: "select", options: Object.freeze(["LIVE", "IDLE", "QUEUED", "BLOCKED"]), required: true }),
-      Object.freeze({ name: "blocked", label: "Blocked on (BLOCKED only)", placeholder: "owner — the reason", type: "text", max: 200, pattern: `(?!.*[|])${ONE_LINE}`, required: false }),
+      // The tool's own allow-list, so the door refuses what the tool would: ADR-0051's target, then plain words; "—"
+      // clears the blocker, and leaving it empty keeps main's.
+      Object.freeze({ name: "blocked", label: "Blocked on (empty keeps it, — clears it)", placeholder: "owner — the reason", type: "text", max: 200, pattern: "—|(owner|external|[a-z][a-z0-9-]{0,63}) — [A-Za-z0-9][A-Za-z0-9 ,.()'#%+&-]*", required: false }),
     ]),
     plan: (v) => ({ script: "core/lane-status.mjs", args: ["--lane", v.lane, "--status", v.status, ...(v.blocked ? ["--blocked-on", v.blocked] : []), "--dry-run"] }),
     apply: (v) => ({ script: "core/lane-status.mjs", args: ["--lane", v.lane, "--status", v.status, ...(v.blocked ? ["--blocked-on", v.blocked] : [])] }),
@@ -507,7 +509,7 @@ export const OPS = Object.freeze([
     retires: Object.freeze({ module: "concepts", verb: "Define a term" }),
     humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
-      Object.freeze({ name: "term", label: "Term", placeholder: "the word, as the palette finds it", type: "text", max: 60, pattern: `(?!.*[|\`])${ONE_LINE}`, required: true }),
+      Object.freeze({ name: "term", label: "Term", placeholder: "the word, as the palette finds it", type: "text", max: 60, pattern: "(?!.*(//|\\.\\.|:[^ ]))[A-Za-z0-9][A-Za-z0-9 ./()?%:&+-]{0,59}", required: true }),
       Object.freeze({ name: "room", label: "Room", placeholder: "", type: "select", get options() { return Object.freeze(conceptRooms()); }, required: true }),
       Object.freeze({ name: "station", label: "Station", placeholder: "a stop on the room's line", type: "text", max: 40, pattern: "[A-Za-z0-9][A-Za-z0-9 .-]{0,39}", required: true }),
     ]),

@@ -93,7 +93,8 @@ load 'test_helper'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
   [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok lane-status, applied: the branch holds the new header and the new board row"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok lane-status, applied: the branch holds the new board row"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok on the branch, the CI gate reads the new status"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok MUTANT CONTROL: board-lint names the face lane"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok concept-define, applied: the branch homes the term"* ]] || { echo "$output"; false; }
 }

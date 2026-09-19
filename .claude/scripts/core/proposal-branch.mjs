@@ -392,18 +392,72 @@ async function refuseCaseClash(repo, base, paths, hooks) {
  * @param {{ repo: string, prefix: string, path: string }} o @returns {Promise<string[]>}
  */
 export function openProposalsHolding({ repo, prefix, path }) {
-  if (typeof prefix !== "string" || !/^feat\/face-[abcdefghijklmnopqrstuvwxyz0123456789-]+$/.test(prefix)) throw new ProposalError("BAD_BRANCH", `${JSON.stringify(prefix)} is not a proposal branch prefix`);
+  checkPrefix(prefix);
   checkFiles([{ path, content: "" }], [path]);
   return withHooks(repo, async (hooks) => {
+    const want = path.toLowerCase();
+    /** @type {Set<string>} */
+    const out = new Set();
+    for (const { ref, shown } of await proposalRefs(repo, prefix, hooks)) {
+      // The whole tree's names, compared without case: a pathspec is matched exactly. A failure here is git's own error,
+      // never read as "not held".
+      const names = (await git(repo, ["ls-tree", "-r", "--name-only", "-z", ref], { hooks })).out.split("\u0000");
+      if (names.some((n) => n.toLowerCase() === want)) out.add(shown);
+    }
+    return [...out].sort();
+  });
+}
+
+/**
+ * The OPEN proposal branches under a prefix that CHANGE a path main already holds: the branch's copy differs from the
+ * one at its fork from main, and main does not hold that copy yet. "Holds the path" is the question for a NEW file; for
+ * an edit it is true of every branch cut from main, so one lane's status proposal refused every other lane's, and a
+ * merged one refused forever (PR 5b round-1 shell attack).
+ * @param {{ repo: string, prefix: string, path: string }} o @returns {Promise<string[]>}
+ */
+export function openProposalsChanging({ repo, prefix, path }) {
+  checkPrefix(prefix);
+  checkFiles([{ path, content: "" }], [path]);
+  return withHooks(repo, async (hooks) => {
+    const base = await mainCommit(repo, hooks);
+    const blob = async (commit) => {
+      const r = await git(repo, ["rev-parse", "--verify", "--quiet", `${commit}:${path}`], { hooks, ok: [0, 1] });
+      return r.status === 0 ? r.out.trim() : "";
+    };
+    const onMain = await blob(base);
+    /** @type {Set<string>} */
+    const out = new Set();
+    for (const { ref, shown } of await proposalRefs(repo, prefix, hooks)) {
+      // No common history with main is not "unchanged": it is counted open, never passed over.
+      const mb = await git(repo, ["merge-base", base, ref], { hooks, ok: [0, 1] });
+      const fork = mb.status === 0 ? await blob(mb.out.trim()) : null;
+      const mine = await blob(ref);
+      if (mine !== fork && mine !== onMain) out.add(shown);
+    }
+    return [...out].sort();
+  });
+}
+
+/** A proposal branch prefix, or a refusal: it is matched against branch names, never widened. */
+function checkPrefix(prefix) {
+  if (typeof prefix !== "string" || !/^feat\/face-[abcdefghijklmnopqrstuvwxyz0123456789-]+$/.test(prefix)) throw new ProposalError("BAD_BRANCH", `${JSON.stringify(prefix)} is not a proposal branch prefix`);
+}
+
+/**
+ * Every proposal branch under a prefix, local and remote-tracking, with the name git shows it by.
+ * @param {string} repo @param {string} prefix @param {{ dir: string, off: string[] }} hooks
+ * @returns {Promise<{ ref: string, shown: string }[]>}
+ */
+async function proposalRefs(repo, prefix, hooks) {
+  {
     // Local AND remote-tracking branches, matched without case: a branch pushed and then deleted locally, or a bundle
     // named RACE1 beside race1, was invisible to an exact, local-only look (PR 3b round-3 logic attack).
     const listed = (await git(repo, ["for-each-ref", "--format=%(refname)", "refs/heads/", "refs/remotes/"], { hooks })).out.split(/\r?\n/).filter(Boolean);
     // A remote's NAME may hold a slash ("up/stream"): cutting at the first one missed every branch under it (PR 3b
     // round-4 logic attack). The configured names, longest first, say where the branch begins.
     const remotes = (await git(repo, ["remote"], { hooks })).out.split(/\r?\n/).filter(Boolean).sort((x, y) => y.length - x.length);
-    const want = path.toLowerCase();
-    /** @type {Set<string>} */
-    const out = new Set();
+    /** @type {{ ref: string, shown: string }[]} */
+    const found = [];
     for (const ref of listed) {
       let name;
       let shown;
@@ -423,13 +477,10 @@ export function openProposalsHolding({ repo, prefix, path }) {
         shown = rest;
       }
       if (!name.toLowerCase().startsWith(prefix)) continue;
-      // The whole tree's names, compared without case: a pathspec is matched exactly. A failure here is git's own error,
-      // never read as "not held".
-      const names = (await git(repo, ["ls-tree", "-r", "--name-only", "-z", ref], { hooks })).out.split("\u0000");
-      if (names.some((n) => n.toLowerCase() === want)) out.add(shown);
+      found.push({ ref, shown });
     }
-    return [...out].sort();
-  });
+    return found;
+  }
 }
 
 /**

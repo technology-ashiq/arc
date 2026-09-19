@@ -19,8 +19,10 @@ searches.
 1. **A lane's status is a proposal branch** (`core/lane-status.mjs`): the lane's PROGRESS header (`status:` and
    `blocked-on:`) and its board row (the status cell and column 6) change in ONE commit, computed from main's bytes, so
    board-lint and the board suite stay green when it merges. Only a lane main holds can be set -- /arc-kickoff alone
-   births a lane. BLOCKED names what blocks it in ADR-0051's `<target> — <reason>`; every other status clears the
-   blocker. One open proposal of a lane's status at a time.
+   births a lane. A blocker is its own fact in ADR-0051's `<target> — <reason>`: BLOCKED needs one, any status may set
+   one, `—` clears it, and none given keeps main's (a LIVE lane may carry one). The header must be one both its readers
+   -- board-lint and the CI gate -- read alike, or the edit is refused. One open proposal of a lane's status at a time,
+   per lane.
 2. **A word is a proposal branch** (`core/concept-define.mjs`): the contract's concepts.map with the term homed in a
    BUILT room at a station, plus what the contract derives (face-sections), so face-coverage stays green. A word is
    defined once, whatever its case; a planned room is refused (a term there is unhomed). One open definition at a time.
@@ -33,3 +35,10 @@ searches.
 - The org room keeps one card, "Birth a lane" (it stays /arc-kickoff's ceremony); the concepts room has none.
 - A board row whose free "next" prose later holds something the face's scrub rewrites would hide that lane's status plan
   (PLAN_HIDDEN) -- a refusal, never a leak.
+
+## Amendment, PR 5b round 1 (same day)
+
+A fresh pair found 2 HIGH and 12 more. The decisions that moved: a blocker is kept unless the owner changes it (the
+first cut wiped the blockers growth and scheduler carry while LIVE); every published value -- the blocker, the term,
+the why -- is allow-listed, never only scrubbed; "one open proposal" is judged per lane by what a branch changed and
+main does not hold yet, under a lock; and a header the two readers would read differently is refused rather than edited.

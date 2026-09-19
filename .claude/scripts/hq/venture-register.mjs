@@ -46,7 +46,9 @@ const PASSPORT_HEAD = "| venture | repository | current status | next |";
 class Stop extends Error {}
 const out = [];
 const say = (s) => out.push(s);
-function die(code, msg) { process.stderr.write(`venture-register: ${msg}\n`); process.exitCode = code; throw new Stop(); }
+// SYNCHRONOUS, and a closed stderr is not a crash: its EPIPE turned a refusal into exit 1 (PR 5b round-1 shell attack).
+const err = (s) => { try { writeSync(2, s); } catch { /* the words are lost; the exit code is not */ } };
+function die(code, msg) { err(`venture-register: ${msg}\n`); process.exitCode = code; throw new Stop(); }
 let written = false;
 
 function parseArgs(argv) {
@@ -86,7 +88,9 @@ function parseArgs(argv) {
   if (!HTTPS.test(a.repository) && !OWNER_NAME.test(a.repository) && !WORDS.test(a.repository))
     die(2, "--repository is an https URL, an owner/name, or plain words (letters, digits, spaces and , . ( ) -) -- it is published in PORTFOLIO.md");
   if (scrub(a.repository, REPO) !== a.repository) die(2, "--repository names a machine path or an address, and it would be published in PORTFOLIO.md -- give an https URL or a name");
-  if (a.why && (!isOneLine(a.why) || Buffer.byteLength(a.why) > 300)) die(2, "--why is one line of text, up to 300 bytes, with no control or invisible characters");
+  // The why goes into the commit message, which the plan shows and a merge publishes: plain words (PR 5b round 1).
+  if (a.why && (!/^[A-Za-z0-9][A-Za-z0-9 ,.()'#%+&-]*$/.test(a.why) || a.why !== a.why.trim() || Buffer.byteLength(a.why) > 300 || scrub(a.why, REPO) !== a.why))
+    die(2, "--why is plain words (letters, digits, spaces and , . ( ) ' # % + & -), up to 300 bytes");
   return a;
 }
 
@@ -183,6 +187,9 @@ export function addToContract(text, slug) {
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
+  // THE TOOL'S OWN REPO, for the spine as for main (PR 5b round-1 shell attack). A relative ARC_SPINE_ROOT means the caller's.
+  if (process.env.ARC_SPINE_ROOT) process.env.ARC_SPINE_ROOT = resolve(process.env.ARC_SPINE_ROOT);
+  process.chdir(REPO);
   const branch = proposalBranch("ventures-register", a.slug);
   const [ventures, portfolio, contract, copy, registry] = await Promise.all([mainText(VENTURES), mainText(PORTFOLIO), mainText(CONTRACT), mainText(ROOM_COPY), mainText(REGISTRY)]);
   const base = ventures.base;
@@ -208,6 +215,11 @@ async function main() {
     if (r.base !== base) die(2, "main moved while its files were read -- run it again");
     if (r.text !== null) manifests[name] = r.text;
   }
+  // MAIN'S DERIVED FILES MUST BE MAIN'S CONTRACT'S FIRST: a drift already on main rides along under "register this
+  // venture" otherwise (the concept-define twin, PR 5b round-1 logic attack).
+  const onMain = deriveFromContract(JSON.parse(contract.text), copyValue, manifests);
+  const drifted = [...Object.keys(onMain.manifests).filter((n) => onMain.manifests[n] !== manifests[n]).map((n) => `products/${n}/manifest.json`), ...(registry.text === onMain.registryText ? [] : [REGISTRY])];
+  if (drifted.length) die(2, `main's derived files already drift from its contract (${drifted.join(", ")}) -- regenerate them on main first, so this branch carries only the venture`);
   const derived = deriveFromContract(k.value, copyValue, manifests);
   const files = [
     { path: VENTURES, content: v.text },
@@ -250,6 +262,9 @@ async function main() {
     const plan = await planProposal({ repo: REPO, branch, files, allow, base });
     say(`venture-register: would ${what}`);
     say(`venture-register: ${files.length} files on a new branch ${branch} off main ${base.slice(0, 12)}, then approval.requested[ledger.criteria] for digest ${digest}`);
+    // The commit message is part of what merges: the plan shows it (the PR 4 round-3 rule).
+    say("venture-register: the commit message:");
+    for (const l of message.split("\n")) say(`  | ${l}`);
     say(plan.diff.replace(/\n$/, ""));
     say("venture-register: dry run -- no branch, no object, no receipt was written");
     say(expectLine(planned));
@@ -279,10 +294,10 @@ if (isMainModule()) {
   try { await main(); }
   catch (e) {
     if (e instanceof Stop) { /* exitCode set */ }
-    else if (!written && e instanceof ProposalError) { process.stderr.write(`venture-register: ${e.code} -- ${e.message}\n`); process.exitCode = 2; }
+    else if (!written && e instanceof ProposalError) { err(`venture-register: ${e.code} -- ${e.message}\n`); process.exitCode = 2; }
     else {
       const why = e instanceof Error ? e.message : String(e);
-      process.stderr.write(written ? `venture-register: the branch IS written, and then this failed: ${why}\n` : `venture-register: nothing was written: ${why}\n`);
+      err(written ? `venture-register: the branch IS written, and then this failed: ${why}\n` : `venture-register: nothing was written: ${why}\n`);
       process.exitCode = written ? 1 : 2;
     }
   }

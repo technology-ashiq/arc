@@ -16,11 +16,11 @@
 // Exit: 0 done · 1 the branch IS written and its receipt is not (said so) · 2 refused, nothing written.
 
 import { createHash } from "node:crypto";
-import { realpathSync, writeSync } from "node:fs";
+import { existsSync, realpathSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { baseText, checkProposal, mainDirNames, openProposalsHolding, planProposal, proposalBranch, writeProposal, ProposalError } from "./proposal-branch.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "./plan-expect.mjs";
+import { baseText, checkProposal, mainDirNames, openProposalsChanging, planProposal, proposalBranch, writeProposal, ProposalError } from "./proposal-branch.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLock } from "./plan-expect.mjs";
 import { isOneLine } from "./one-line.mjs";
 import { deriveFromContract } from "./face-sections.mjs";
 import { query, spineRoot } from "../hq/spine.mjs";
@@ -33,11 +33,19 @@ const CONTRACT = "initiatives/face/contracts/expected-set.json";
 const ROOM_COPY = "initiatives/face/contracts/room-copy.json";
 const REGISTRY = "initiatives/face/contracts/rooms.generated.json";
 const STATION_RE = /^[A-Za-z0-9][A-Za-z0-9 .-]{0,39}$/;
+// ALLOW-LISTED, because the contract is published: a scrub-only test let "C://Users/x", a full-width @ address and a
+// zero-width twin of "ULID" in (PR 5b round-1 shell attack). ASCII only, the punctuation the glossary's own terms use
+// ("line / station", "Why? precedents", "50% tripwire", "face: section") -- and never a path's shape.
+const TERM_RE = /^[A-Za-z0-9][A-Za-z0-9 ./()?%:&+-]{0,59}$/;
+const PATH_SHAPE = /\/\/|\.\.|:(?! |$)|^[/~]/;
+const WORDS = /^[A-Za-z0-9][A-Za-z0-9 ,.()'#%+&-]*$/;
 
 class Stop extends Error {}
 const out = [];
 const say = (s) => out.push(s);
-function die(code, msg) { process.stderr.write(`concept-define: ${msg}\n`); process.exitCode = code; throw new Stop(); }
+// SYNCHRONOUS, and a closed stderr is not a crash (the lane-status twin, PR 5b round 1).
+const err = (s) => { try { writeSync(2, s); } catch { /* the words are lost; the exit code is not */ } };
+function die(code, msg) { err(`concept-define: ${msg}\n`); process.exitCode = code; throw new Stop(); }
 let written = false;
 
 function parseArgs(argv) {
@@ -59,12 +67,14 @@ function parseArgs(argv) {
   if (a.dryRun && a.expect !== undefined) die(2, "--dry-run plans and --expect applies; give one");
   // A term is the palette's search key: one line, no pipe or backtick (the glossary renders it in tables and code), no
   // padding, short. The contract is published, so the scrub is a second test.
-  if (!isOneLine(a.term) || a.term !== a.term.trim() || /[|`]/.test(a.term) || Buffer.byteLength(a.term) > 60)
-    die(2, "--term is one line, up to 60 bytes, with no | or backtick and no leading or trailing space");
+  if (!isOneLine(a.term) || a.term !== a.term.trim() || !TERM_RE.test(a.term) || PATH_SHAPE.test(a.term))
+    die(2, "--term is up to 60 ASCII letters, digits, spaces and . / ( ) ? % : & + - (no | or backtick), and never a path's shape");
   if (scrub(a.term, REPO) !== a.term) die(2, "--term names a machine path or an address, and the contract is published -- say it without one");
   if (!/^[a-z][a-z0-9-]{0,40}$/.test(a.room)) die(2, `--room ${JSON.stringify(a.room)} is a room id (lowercase kebab)`);
   if (!STATION_RE.test(a.station) || a.station !== a.station.trim()) die(2, "--station is a stop on the room's line: letters, digits, spaces, . and -, up to 40 characters");
-  if (a.why && (!isOneLine(a.why) || Buffer.byteLength(a.why) > 300)) die(2, "--why is one line of text, up to 300 bytes, with no control or invisible characters");
+  // The why goes into the commit message, which the plan shows and a merge publishes: plain words.
+  if (a.why && (!WORDS.test(a.why) || a.why !== a.why.trim() || Buffer.byteLength(a.why) > 300 || scrub(a.why, REPO) !== a.why))
+    die(2, "--why is plain words (letters, digits, spaces and , . ( ) ' # % + & -), up to 300 bytes");
   return a;
 }
 
@@ -86,19 +96,27 @@ export function addConcept(text, term, room, station) {
   const map = c.concepts && c.concepts.map;
   if (!map || typeof map !== "object" || Array.isArray(map)) die(2, "the contract has no concepts.map");
   // ONE term per word, whatever its case: the palette's fold is case-blind, so "ULID" and "ulid" would be one hit twice.
-  const same = Object.keys(map).find((k) => k.toLowerCase() === term.toLowerCase());
+  // Blind to spacing too: "idem  key" beside "idem key" was a second hit that reads the same (PR 5b round-1 logic attack).
+  const fold = (t) => t.toLowerCase().replace(/\s+/g, " ");
+  const same = Object.keys(map).find((k) => fold(k) === fold(term));
   if (same !== undefined) die(2, `${JSON.stringify(same)} is already a term, homed in ${map[same] && map[same].room} -- a word is defined once`);
   const list = c.rooms && Array.isArray(c.rooms.list) ? c.rooms.list : [];
   const tpl = c.rooms && c.rooms.template && c.rooms.template.id;
   const row = list.find((r) => r && r.id === room);
   if (room !== tpl && !(row && row.status === "built"))
     die(2, row ? `${room} is a planned room -- a term homed there is unhomed, a search result that opens nothing` : `${room} is not a room in the contract`);
+  // A station is a stop on the room's line: "kpi row" beside "KPI row" added a second stop that reads the same.
+  const stop = Object.values(map).map((v) => v && v.room === room ? v.station : null).find((s) => typeof s === "string" && s !== station && fold(s) === fold(station));
+  if (stop !== undefined) die(2, `${room} already has the stop ${JSON.stringify(stop)} -- use that spelling`);
   const value = { ...c, concepts: { ...c.concepts, map: { ...map, [term]: { room, station } } } };
   return { text: canonical(value), value };
 }
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
+  // THE TOOL'S OWN REPO, for the spine as for main (the lane-status twin). A relative ARC_SPINE_ROOT means the caller's.
+  if (process.env.ARC_SPINE_ROOT) process.env.ARC_SPINE_ROOT = resolve(process.env.ARC_SPINE_ROOT);
+  process.chdir(REPO);
   // The branch is named by a slug of the term: its letters and digits, lowercased, hyphen-joined.
   const slug = a.term.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "term";
   const branch = proposalBranch("concept-define", slug);
@@ -118,14 +136,24 @@ async function main() {
     if (r.base !== base) die(2, "main moved while its files were read -- run it again");
     if (r.text !== null) manifests[name] = r.text;
   }
+  // MAIN'S DERIVED FILES MUST BE MAIN'S CONTRACT'S FIRST: a drift already on main rode along with "define a term in
+  // today" and was approved under that sentence (PR 5b round-1 logic attack; the register's criteria twin, PR 5a).
+  let mainContract;
+  try { mainContract = JSON.parse(contract.text); } catch { die(2, `${CONTRACT} on main is not JSON`); }
+  const onMain = deriveFromContract(mainContract, copyValue, manifests);
+  const drifted = [...Object.keys(onMain.manifests).filter((n) => onMain.manifests[n] !== manifests[n]).map((n) => `products/${n}/manifest.json`), ...(registry.text === onMain.registryText ? [] : [REGISTRY])];
+  if (drifted.length) die(2, `main's derived files already drift from its contract (${drifted.join(", ")}) -- regenerate them on main first, so this branch carries only the term`);
   const derived = deriveFromContract(k.value, copyValue, manifests);
   const files = [
     { path: CONTRACT, content: k.text },
     ...Object.keys(derived.manifests).filter((n) => derived.manifests[n] !== manifests[n]).map((n) => ({ path: `products/${n}/manifest.json`, content: derived.manifests[n] })),
     ...(registry.text === derived.registryText ? [] : [{ path: REGISTRY, content: derived.registryText }]),
   ];
-  // ONE OPEN DEFINITION at a time: two branches each adding a term to the one contract conflict when both merge.
-  const open = await openProposalsHolding({ repo: REPO, prefix: "feat/face-concept-define-", path: CONTRACT });
+  // ONE OPEN DEFINITION at a time: two branches each adding a term to the one contract conflict when both merge. Judged
+  // by what a branch CHANGED and main does not hold yet -- "holds the contract" is true of every branch, so a merged
+  // definition refused every later one (PR 5b round-1 shell attack).
+  const openOf = () => openProposalsChanging({ repo: REPO, prefix: "feat/face-concept-define-", path: CONTRACT });
+  const open = await openOf();
   if (open.length) die(2, `a definition is already open (${open.join(", ")}) -- merge or delete it first`);
   const allow = files.map((f) => f.path);
   const checked = await checkProposal({ repo: REPO, branch, paths: allow, allow, base });
@@ -136,13 +164,18 @@ async function main() {
   const approval = { what, gate: "concept-define", term: a.term, room: a.room, station: a.station, branch };
   const idem = createHash("sha256").update(`concept.define|${a.term}|${a.room}|${a.station}|${base}`).digest("hex");
   const emitFlags = ["--idem", idem, "--strict"];
+  // ONE spine that exists, for the read, the lock and the emit (the lane-status twin).
   let root;
   try { root = spineRoot(); } catch (e) { die(2, `the spine cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+  if (!existsSync(join(root, "events"))) die(2, "the spine has no events folder -- point ARC_SPINE_ROOT at a spine; nothing was written");
   const spineEnv = { ...process.env, ARC_SPINE_ROOT: root };
-  const read = await query(root, { kind: "approval.requested", engine: "scan" });
-  if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) die(2, "the spine has a day it cannot read or a torn line, so an earlier request cannot be ruled out -- nothing was written");
-  const already = read.events.map((r) => r.event).find((e) => e && e.idem === idem);
-  if (already) die(2, `this definition is already requested on the spine (${already.id}) -- decide that one; nothing was written`);
+  const requested = async () => {
+    const read = await query(root, { kind: "approval.requested", engine: "scan" });
+    if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) die(2, "the spine has a day it cannot read or a torn line, so an earlier request cannot be ruled out -- nothing was written");
+    const already = read.events.map((r) => r.event).find((e) => e && e.idem === idem);
+    if (already) die(2, `this definition is already requested on the spine (${already.id}) -- decide that one; nothing was written`);
+  };
+  await requested();
   const refused = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags });
   if (refused) die(2, `the request this raises would be refused by the spine, so nothing is written: ${refused}`);
 
@@ -152,6 +185,9 @@ async function main() {
     const plan = await planProposal({ repo: REPO, branch, files, allow, base });
     say(`concept-define: would define "${a.term}" in ${a.room}, at ${a.station}`);
     say(`concept-define: ${files.length} files on a new branch ${branch} off main ${base.slice(0, 12)}, then approval.requested[concept-define]`);
+    // The commit message is part of what merges: the plan shows it (the PR 4 round-3 rule).
+    say("concept-define: the commit message:");
+    for (const l of message.split("\n")) say(`  | ${l}`);
     say(plan.diff.replace(/\n$/, ""));
     say("concept-define: dry run -- no branch, no object, no receipt was written");
     say(expectLine(planned));
@@ -160,15 +196,22 @@ async function main() {
   if (a.expect === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, read the diff, then run it again with the --expect it prints");
   const stale = staleReason(a.expect, planned);
   if (stale) die(2, stale);
-  const w = await writeProposal({ repo: REPO, branch, files, allow, base, message,
-    beforeRef: () => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) die(2, `the spine would refuse the request, so no branch was written: ${no}`); } });
-  written = true;
-  say(`concept-define: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}`);
-  const got = emitReceipt(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags, timeoutMs: 60_000 });
-  if (got.state === "refused") die(1, `the branch ${branch} IS written, and its request was not raised -- ${got.why}`);
-  if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its request landed is unknown -- ${got.why}. Look in your inbox before applying again`);
-  if (!got.id) die(1, `the branch ${branch} IS written, and its request landed without its id -- ${got.why}`);
-  say(`receipt: approval.requested ${got.id}`);
+  // ONE WRITER AT A TIME, the open check again inside: two definitions checked then written side by side both passed.
+  const held = await withExclusiveLock(join(root, "locks"), "concept-define.lock", async () => {
+    const again = await openOf();
+    if (again.length) die(2, `a definition was opened while this one was planned (${again.join(", ")}) -- nothing was written`);
+    await requested();
+    const w = await writeProposal({ repo: REPO, branch, files, allow, base, message,
+      beforeRef: () => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) die(2, `the spine would refuse the request, so no branch was written: ${no}`); } });
+    written = true;
+    say(`concept-define: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}`);
+    const got = emitReceipt(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags, timeoutMs: 60_000 });
+    if (got.state === "refused") die(1, `the branch ${branch} IS written, and its request was not raised -- ${got.why}`);
+    if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its request landed is unknown -- ${got.why}. Look in your inbox before applying again`);
+    if (!got.id) die(1, `the branch ${branch} IS written, and its request landed without its id -- ${got.why}`);
+    say(`receipt: approval.requested ${got.id}`);
+  });
+  if (held.busy) die(2, "another definition is being written right now -- nothing was written; plan again when it is done");
 }
 
 function isMainModule() {
@@ -179,10 +222,10 @@ if (isMainModule()) {
   try { await main(); }
   catch (e) {
     if (e instanceof Stop) { /* exitCode set */ }
-    else if (!written && e instanceof ProposalError) { process.stderr.write(`concept-define: ${e.code} -- ${e.message}\n`); process.exitCode = 2; }
+    else if (!written && e instanceof ProposalError) { err(`concept-define: ${e.code} -- ${e.message}\n`); process.exitCode = 2; }
     else {
       const why = e instanceof Error ? e.message : String(e);
-      process.stderr.write(written ? `concept-define: the branch IS written, and then this failed: ${why}\n` : `concept-define: nothing was written: ${why}\n`);
+      err(written ? `concept-define: the branch IS written, and then this failed: ${why}\n` : `concept-define: nothing was written: ${why}\n`);
       process.exitCode = written ? 1 : 2;
     }
   }

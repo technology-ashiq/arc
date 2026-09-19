@@ -7,8 +7,9 @@
 //
 // A lane's status is its PROGRESS header, and PORTFOLIO.md's row is a view of it (ADR-0051): the two change in ONE
 // commit, or board-lint and portfolio-board.bats go red on main. Only /arc-kickoff births a lane, so a lane main does
-// not hold is refused, never created. BLOCKED names what blocks it in ADR-0051's `<target> — <reason>`; every other
-// status clears the blocker. The receipt is approval.requested (gate lane-status) for the owner's inbox.
+// not hold is refused, never created. A blocker is ADR-0051's `<target> — <reason>`: BLOCKED needs one, any status may
+// set one, "—" clears it, and none given keeps main's. The receipt is approval.requested (gate lane-status) for the
+// owner's inbox.
 //
 //   --dry-run   the diffs against main and the digest last
 //   --expect D  writes only if that digest still holds (PLAN_STALE otherwise)
@@ -16,11 +17,11 @@
 // Exit: 0 done · 1 the branch IS written and its receipt is not (said so) · 2 refused, nothing written.
 
 import { createHash } from "node:crypto";
-import { realpathSync, writeSync } from "node:fs";
+import { existsSync, realpathSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { baseText, checkProposal, openProposalsHolding, planProposal, proposalBranch, writeProposal, ProposalError } from "./proposal-branch.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "./plan-expect.mjs";
+import { baseText, checkProposal, openProposalsChanging, planProposal, proposalBranch, writeProposal, ProposalError } from "./proposal-branch.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLock } from "./plan-expect.mjs";
 import { isOneLine } from "./one-line.mjs";
 import { query, spineRoot } from "../hq/spine.mjs";
 import { scrub } from "../hq/lib/face/reads.mjs";
@@ -36,18 +37,26 @@ const LANE_RE = /^[a-z][a-z0-9-]{0,63}$/;
 const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 const BOARD_HEAD = "| lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |";
 const BOARD_RULE = "|---|---|---|---|---|---|---|";
+// ALLOW-LISTED, because the board is published: a scrub-only test let "E:Work_Hub\...", "C://Users/..." and "..\..\x"
+// into PORTFOLIO.md, and the markdown of a tracking image with them (PR 5b round-1 shell attack; the venture-register
+// twin of PR 5a round 2). Plain ASCII words -- no slash, backslash, colon, @, markup or invisible character.
+const WORDS = /^[A-Za-z0-9][A-Za-z0-9 ,.()'#%+&-]*$/;
+// ADR-0051's `<lane|owner|external> — <reason>`: the target a lane name, owner or external, the reason plain words.
+const BLOCKER = new RegExp(`^(owner|external|[a-z][a-z0-9-]{0,63}) ${DASH} (.+)$`);
 
 class Stop extends Error {}
 const out = [];
 const say = (s) => out.push(s);
-function die(code, msg) { process.stderr.write(`lane-status: ${msg}\n`); process.exitCode = code; throw new Stop(); }
+// SYNCHRONOUS, and a closed stderr is not a crash: its EPIPE turned "refused, nothing written" into exit 1, "the branch
+// IS written" (PR 5b round-1 shell attack; the ingest twin was stdout).
+const err = (s) => { try { writeSync(2, s); } catch { /* the words are lost; the exit code is not */ } };
+function die(code, msg) { err(`lane-status: ${msg}\n`); process.exitCode = code; throw new Stop(); }
 let written = false;
 
-/** ADR-0051's `<target> — <reason>`: both halves words, one separator, nothing a board cell cannot hold. */
+/** ADR-0051's `<target> — <reason>`, allow-listed: one separator, a target that names someone, a reason in words. */
 function blockerOk(v) {
-  const at = v.indexOf(` ${DASH} `);
-  if (at < 0 || v.indexOf(` ${DASH} `, at + 1) >= 0) return false;
-  return v.slice(0, at).trim() !== "" && v.slice(at + 3).trim() !== "" && !v.includes(" / ");
+  const m = BLOCKER.exec(v);
+  return !!m && WORDS.test(m[2]) && m[2] === m[2].trim();
 }
 
 function parseArgs(argv) {
@@ -69,15 +78,20 @@ function parseArgs(argv) {
   if (a.dryRun && a.expect !== undefined) die(2, "--dry-run plans and --expect applies; give one");
   if (!LANE_RE.test(a.lane) || RESERVED.test(a.lane)) die(2, `--lane ${JSON.stringify(a.lane)} is not a lane name (lowercase kebab, up to 64 characters)`);
   if (!STATUSES.includes(a.status)) die(2, `--status is one of ${STATUSES.join(", ")}`);
-  if (a.status === "BLOCKED") {
-    const b = a["blocked-on"];
-    if (b === undefined) die(2, `BLOCKED names what blocks the lane: --blocked-on "owner ${DASH} the reason"`);
-    if (!isOneLine(b) || b !== b.trim() || b.includes("|") || b.includes("`") || Buffer.byteLength(b) > 200 || !blockerOk(b))
-      die(2, `--blocked-on is ADR-0051's "<lane|owner|external> ${DASH} <reason>": one line, up to 200 bytes, one ${DASH} between spaces, no | and no " / "`);
+  // A blocker is its own fact: a LIVE lane may carry one (growth and scheduler do on main), so any status takes
+  // --blocked-on, "—" clears it, and none keeps what main holds -- a non-BLOCKED status wiped it, under a request that
+  // named only the status (PR 5b round-1 logic attack).
+  const b = a["blocked-on"];
+  if (a.status === "BLOCKED" && b === DASH) die(2, "BLOCKED names what blocks the lane -- it cannot clear the blocker");
+  if (b !== undefined && b !== DASH) {
+    if (!isOneLine(b) || b !== b.trim() || Buffer.byteLength(b) > 200 || !blockerOk(b))
+      die(2, `--blocked-on is ADR-0051's "<lane|owner|external> ${DASH} <reason>": up to 200 bytes, the reason in plain words (letters, digits, spaces and , . ( ) ' # % + & -)`);
     // The board is published: a machine path or an address in the reason would be the owner's, in public.
     if (scrub(b, REPO) !== b) die(2, "--blocked-on names a machine path or an address, and PORTFOLIO.md is published -- say it without one");
-  } else if (a["blocked-on"] !== undefined) die(2, `--blocked-on belongs with BLOCKED; ${a.status} clears the blocker`);
-  if (a.why && (!isOneLine(a.why) || Buffer.byteLength(a.why) > 300)) die(2, "--why is one line of text, up to 300 bytes, with no control or invisible characters");
+  }
+  // The why goes into the commit message, which the plan shows and a merge publishes: plain words, as the blocker.
+  if (a.why && (!WORDS.test(a.why) || a.why !== a.why.trim() || Buffer.byteLength(a.why) > 300 || scrub(a.why, REPO) !== a.why))
+    die(2, "--why is plain words (letters, digits, spaces and , . ( ) ' # % + & -), up to 300 bytes");
   return a;
 }
 
@@ -90,29 +104,38 @@ async function mainText(path) {
 }
 
 /**
- * The header block as board-lint reads it -- line 1 to the first `##`, fenced blocks skipped -- with status and
- * blocked-on replaced. Each of the three keys must be there exactly once: board-lint takes the LAST value, so a second
- * one would leave the edit invisible to it.
+ * The header block with status and blocked-on replaced -- refused unless the TWO readers of it agree on every line the
+ * edit depends on. board-lint skips fenced blocks and stops at the first `##`; the CI gate (`_arc_lane_header`,
+ * portfolio-board.bats) skips no fence, matches a key only at the start of a line, ignores case and `*`, and takes the
+ * LAST value. A fenced `status:`, a `**Status:**` twin, or a heading behind a no-break space each left the edit visible
+ * to one reader and not the other, and the status the owner approved never took (PR 5b round-1 logic attack). So: no
+ * fence before the first `##`, no heading behind a space either reader might not strip, and each key exactly once,
+ * written as both read it.
  */
+/** @param {string} text @param {string} status @param {string | undefined} blockedOn undefined keeps main's */
 export function setHeader(text, status, blockedOn) {
   const lines = text.split("\n");
   const at = { status: [], "blocked-on": [], "depends-on": [] };
-  let fence = "";
   for (let i = 0; i < lines.length; i++) {
-    const t = lines[i].trimStart();
-    const f3 = t.slice(0, 3);
-    if (f3 === "```" || f3 === "~~~") { fence = fence === "" ? f3 : fence === f3 ? "" : fence; continue; }
-    if (fence !== "") continue;
-    if (t.startsWith("##")) break;
-    for (const k of Object.keys(at)) if (new RegExp(`^${k}[ \\t]*:`).test(t)) at[k].push(i);
+    const l = lines[i].replace(/\r$/, "");
+    if (/^[ \t]*##/.test(l)) break;
+    if (/^\s*##/.test(l)) die(2, "the lane's PROGRESS header has a heading behind a space the readers do not agree on -- fix it first");
+    const f3 = l.replace(/^[ \t]+/, "").slice(0, 3);
+    if (f3 === "```" || f3 === "~~~") die(2, "the lane's PROGRESS header holds a code fence -- board-lint skips it and the CI gate does not; move it below the first ## heading");
+    // The loosest reading either reader could make of a key line counts it; the edit then writes the strictest form.
+    const plain = l.replace(/\*/g, "").replace(/^\s+/, "").toLowerCase();
+    for (const k of Object.keys(at)) if (new RegExp(`^${k}[ \\t]*:`).test(plain)) at[k].push(i);
   }
-  if (fence !== "") die(2, "the lane's PROGRESS header has a code fence left open -- fix it first");
   for (const k of Object.keys(at)) if (at[k].length !== 1) die(2, `the lane's PROGRESS header holds ${k}: ${at[k].length} times -- it must hold it once`);
-  const value = (i) => lines[i].slice(lines[i].indexOf(":") + 1).trim();
+  for (const k of Object.keys(at)) if (!lines[at[k][0]].replace(/\*/g, "").toLowerCase().startsWith(`${k}:`)) die(2, `the lane's PROGRESS header writes ${k} in a form only one reader takes -- write it as "${k}: <value>" first`);
+  const value = (i) => { const l = lines[i]; return l.slice(l.indexOf(":") + 1).replace(/[*`]/g, "").trim(); };
   const was = { status: value(at.status[0]), blockedOn: value(at["blocked-on"][0]), dependsOn: value(at["depends-on"][0]) };
+  // depends-on is copied into the board's column 6 as it stands: a pipe there would add a column to the row.
+  if (was.dependsOn.includes("|")) die(2, "the lane's depends-on holds a | -- a board cell cannot; fix the header first");
+  const next = blockedOn === undefined ? was.blockedOn : blockedOn;
   lines[at.status[0]] = `status: ${status}`;
-  lines[at["blocked-on"][0]] = `blocked-on: ${blockedOn}`;
-  return { text: lines.join("\n"), was };
+  lines[at["blocked-on"][0]] = `blocked-on: ${next}`;
+  return { text: lines.join("\n"), was, blockedOn: next };
 }
 
 /** The lane's board row with its status and blocked-on / depends-on cells rewritten; every other byte kept. */
@@ -127,7 +150,9 @@ export function setBoardRow(text, lane, status, col6) {
   }
   if (rows.length !== 1) die(2, `${PORTFOLIO} on main holds ${rows.length} rows for ${lane} -- a born lane has exactly one`);
   const { i, cells } = rows[0];
-  if (cells.length !== 9) die(2, `${lane}'s board row does not split into its seven cells -- fix it first`);
+  // A row may end without its closing pipe -- valid table markdown, and the bench row does -- so seven cells either way.
+  const closed = lines[i].trimEnd().endsWith("|");
+  if (cells.length !== (closed ? 9 : 8)) die(2, `${lane}'s board row does not split into its seven cells -- fix it first`);
   cells[2] = ` ${status} `;
   cells[6] = ` ${col6} `;
   lines[i] = cells.join("|");
@@ -136,7 +161,10 @@ export function setBoardRow(text, lane, status, col6) {
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
-  const blockedOn = a.status === "BLOCKED" ? a["blocked-on"] : DASH;
+  // THE TOOL'S OWN REPO, for the spine as for main: run from another repository's folder, the branch landed here and the
+  // request in that folder's spine (PR 5b round-1 shell attack). A relative ARC_SPINE_ROOT still means the caller's.
+  if (process.env.ARC_SPINE_ROOT) process.env.ARC_SPINE_ROOT = resolve(process.env.ARC_SPINE_ROOT);
+  process.chdir(REPO);
   const progressPath = `initiatives/${a.lane}/PROGRESS.md`;
   const branch = proposalBranch("lane-status", `${a.lane}-${a.status.toLowerCase()}`);
   const [progress, portfolio] = await Promise.all([mainText(progressPath), mainText(PORTFOLIO)]);
@@ -145,43 +173,57 @@ async function main() {
   const base = progress.base;
   if (portfolio.base !== base) die(2, "main moved while its files were read -- run it again");
 
-  const h = setHeader(progress.text, a.status, blockedOn);
-  if (h.was.status === a.status && h.was.blockedOn === blockedOn) die(2, `${a.lane} is already ${a.status}${a.status === "BLOCKED" ? ` on that blocker` : ""} on main -- nothing to change`);
+  const h = setHeader(progress.text, a.status, a["blocked-on"]);
+  const blockedOn = h.blockedOn;
+  if (a.status === "BLOCKED" && blockedOn === DASH) die(2, `BLOCKED names what blocks the lane, and ${a.lane} carries no blocker on main: --blocked-on "owner ${DASH} the reason"`);
+  if (h.was.status === a.status && h.was.blockedOn === blockedOn) die(2, `${a.lane} is already ${a.status} with that blocker on main -- nothing to change`);
+  // The request names EVERYTHING the branch changes: the status, and the blocker when it moves.
+  const change = `${h.was.status} -> ${a.status}${h.was.blockedOn !== blockedOn ? `; blocked-on ${h.was.blockedOn} -> ${blockedOn}` : ""}`;
   const col6 = blockedOn === DASH && h.was.dependsOn === DASH ? DASH : `${blockedOn} / ${h.was.dependsOn}`;
   const board = setBoardRow(portfolio.text, a.lane, a.status, col6);
 
-  // ONE OPEN PROPOSAL of a lane's status: two, merged in either order, leave the lane in whichever landed last, and
-  // the owner approved them as two separate states.
-  const open = await openProposalsHolding({ repo: REPO, prefix: "feat/face-lane-status-", path: progressPath });
+  // ONE OPEN PROPOSAL of a lane's status: two, merged in either order, leave the lane in whichever landed last, and the
+  // owner approved them as two separate states. Judged per lane, by what a branch CHANGED and main does not hold yet --
+  // "holds the file" is true of every branch, so one lane's proposal refused every lane's, and a merged one forever.
+  const openOf = () => openProposalsChanging({ repo: REPO, prefix: "feat/face-lane-status-", path: progressPath });
+  const open = await openOf();
   if (open.length) die(2, `a proposal of ${a.lane}'s status is already open (${open.join(", ")}) -- merge or delete it first`);
   const files = [{ path: progressPath, content: h.text }, { path: PORTFOLIO, content: board }];
   const allow = files.map((f) => f.path);
   const checked = await checkProposal({ repo: REPO, branch, paths: allow, allow, base });
   if (checked.base !== base) die(2, "main moved while the status was set -- run it again");
 
-  const what = `lane ${a.lane}: ${h.was.status} -> ${a.status}${a.status === "BLOCKED" ? ` (blocked on ${blockedOn})` : ""} (branch ${branch})`;
+  const what = `lane ${a.lane}: ${change} (branch ${branch})`;
   if (Buffer.byteLength(what) > 512) die(2, "the request's sentence is past 512 bytes -- shorten the blocker");
   const approval = { what, gate: "lane-status", lane: a.lane, status: a.status, blocked_on: blockedOn, branch };
   // One change of one lane off one main is one question; the emitter refuses the second.
   const idem = createHash("sha256").update(`lane.status|${a.lane}|${a.status}|${blockedOn}|${base}`).digest("hex");
   const emitFlags = ["--idem", idem, "--strict"];
-  // ONE spine for the read and the emit, handed to the emitter as an absolute path.
+  // ONE spine for the read, the lock and the emit, handed to the emitter as an absolute path -- and one that exists: a
+  // missing one was created by the emit, after a duplicate check that had nothing to read.
   let root;
   try { root = spineRoot(); } catch (e) { die(2, `the spine cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+  if (!existsSync(join(root, "events"))) die(2, "the spine has no events folder -- point ARC_SPINE_ROOT at a spine; nothing was written");
   const spineEnv = { ...process.env, ARC_SPINE_ROOT: root };
-  const read = await query(root, { kind: "approval.requested", engine: "scan" });
-  if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) die(2, "the spine has a day it cannot read or a torn line, so an earlier request cannot be ruled out -- nothing was written");
-  const already = read.events.map((r) => r.event).find((e) => e && e.idem === idem);
-  if (already) die(2, `this change of ${a.lane} is already requested on the spine (${already.id}) -- decide that one; nothing was written`);
+  const requested = async () => {
+    const read = await query(root, { kind: "approval.requested", engine: "scan" });
+    if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) die(2, "the spine has a day it cannot read or a torn line, so an earlier request cannot be ruled out -- nothing was written");
+    const already = read.events.map((r) => r.event).find((e) => e && e.idem === idem);
+    if (already) die(2, `this change of ${a.lane} is already requested on the spine (${already.id}) -- decide that one; nothing was written`);
+  };
+  await requested();
   const refused = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags });
   if (refused) die(2, `the request this raises would be refused by the spine, so nothing is written: ${refused}`);
 
-  const message = `${a.lane}: status ${h.was.status} -> ${a.status} (a proposal, ADR-0051)\n\n${a.why ? `${a.why}\n\n` : ""}The lane's PROGRESS header and its PORTFOLIO.md row, in one commit, so board-lint and the board suite stay green when this merges.\nWritten by the face's work door (ADR-1343).`;
+  const message = `${a.lane}: status ${change} (a proposal, ADR-0051)\n\n${a.why ? `${a.why}\n\n` : ""}The lane's PROGRESS header and its PORTFOLIO.md row, in one commit, so board-lint and the board suite stay green when this merges.\nWritten by the face's work door (ADR-1343).`;
   const planned = planDigest({ branch, base, files, message, approval, idem });
   if (a.dryRun) {
     const plan = await planProposal({ repo: REPO, branch, files, allow, base });
-    say(`lane-status: would set ${a.lane} ${h.was.status} -> ${a.status}${a.status === "BLOCKED" ? `, blocked on ${blockedOn}` : ""}`);
+    say(`lane-status: would set ${a.lane} ${change}`);
     say(`lane-status: ${files.length} files on a new branch ${branch} off main ${base.slice(0, 12)}, then approval.requested[lane-status]`);
+    // The commit message is part of what merges: the plan shows it (the PR 4 round-3 rule).
+    say("lane-status: the commit message:");
+    for (const l of message.split("\n")) say(`  | ${l}`);
     say(plan.diff.replace(/\n$/, ""));
     say("lane-status: dry run -- no branch, no object, no receipt was written");
     say(expectLine(planned));
@@ -190,15 +232,23 @@ async function main() {
   if (a.expect === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, read the diff, then run it again with the --expect it prints");
   const stale = staleReason(a.expect, planned);
   if (stale) die(2, stale);
-  const w = await writeProposal({ repo: REPO, branch, files, allow, base, message,
-    beforeRef: () => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) die(2, `the spine would refuse the request, so no branch was written: ${no}`); } });
-  written = true;
-  say(`lane-status: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}`);
-  const got = emitReceipt(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags, timeoutMs: 60_000 });
-  if (got.state === "refused") die(1, `the branch ${branch} IS written, and its request was not raised -- ${got.why}`);
-  if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its request landed is unknown -- ${got.why}. Look in your inbox before applying again`);
-  if (!got.id) die(1, `the branch ${branch} IS written, and its request landed without its id -- ${got.why}`);
-  say(`receipt: approval.requested ${got.id}`);
+  // ONE WRITER AT A TIME, the open check again inside: two applies of two statuses, checked then written side by side,
+  // both passed and wrote two branches and two requests for one lane (PR 5b round-1 shell attack).
+  const held = await withExclusiveLock(join(root, "locks"), "lane-status.lock", async () => {
+    const again = await openOf();
+    if (again.length) die(2, `a proposal of ${a.lane}'s status was opened while this one was planned (${again.join(", ")}) -- nothing was written`);
+    await requested();
+    const w = await writeProposal({ repo: REPO, branch, files, allow, base, message,
+      beforeRef: () => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) die(2, `the spine would refuse the request, so no branch was written: ${no}`); } });
+    written = true;
+    say(`lane-status: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}`);
+    const got = emitReceipt(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags, timeoutMs: 60_000 });
+    if (got.state === "refused") die(1, `the branch ${branch} IS written, and its request was not raised -- ${got.why}`);
+    if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its request landed is unknown -- ${got.why}. Look in your inbox before applying again`);
+    if (!got.id) die(1, `the branch ${branch} IS written, and its request landed without its id -- ${got.why}`);
+    say(`receipt: approval.requested ${got.id}`);
+  });
+  if (held.busy) die(2, "another lane's status is being written right now -- nothing was written; plan again when it is done");
 }
 
 function isMainModule() {
@@ -209,10 +259,10 @@ if (isMainModule()) {
   try { await main(); }
   catch (e) {
     if (e instanceof Stop) { /* exitCode set */ }
-    else if (!written && e instanceof ProposalError) { process.stderr.write(`lane-status: ${e.code} -- ${e.message}\n`); process.exitCode = 2; }
+    else if (!written && e instanceof ProposalError) { err(`lane-status: ${e.code} -- ${e.message}\n`); process.exitCode = 2; }
     else {
       const why = e instanceof Error ? e.message : String(e);
-      process.stderr.write(written ? `lane-status: the branch IS written, and then this failed: ${why}\n` : `lane-status: nothing was written: ${why}\n`);
+      err(written ? `lane-status: the branch IS written, and then this failed: ${why}\n` : `lane-status: nothing was written: ${why}\n`);
       process.exitCode = written ? 1 : 2;
     }
   }
