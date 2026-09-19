@@ -1160,6 +1160,7 @@
           "PLAN-design-v2",
           "PLAN-develop",
           "PLAN-discover",
+          "PLAN-docs",
           "PLAN-engine-process-layer",
           "PLAN-evolve",
           "PLAN-executor",
@@ -1178,7 +1179,7 @@
           "PLAN-trader"
         ]
       },
-      "itemCount": 27
+      "itemCount": 28
     },
     {
       "id": "org",
