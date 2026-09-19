@@ -23,7 +23,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkProposal, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
+import { baseText, checkProposal, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
@@ -83,6 +83,12 @@ async function main() {
     const allow = [a["--report"]];
     // The branch is free and main's commit is read ONCE: the plan, the digest and the write all use this base.
     const { base } = await checkProposal({ repo: REPO, branch, paths: allow, allow });
+    // A pin scaffolds a NEW report. One main already holds is replaced wholesale by a scaffold -- `--report
+    // initiatives/absorb/PLAN.md` planned 245 lines away under an approval that said "scaffold" (PR 3b round-2 logic
+    // attack; trial's main-tree guard, missing in its twin).
+    const held = await baseText({ repo: REPO, path: a["--report"] });
+    if (held.base !== base) die(2, "main moved while the report was checked -- plan again");
+    if (held.text !== null) die(2, `main already holds ${a["--report"]} -- a pin scaffolds a new report; name another --report path`);
     // The report's PATH, not its bare name, and first: the scanner also reads every string with its spaces removed, and
     // "pin risk-assessment at ..." became "sk-assessmentat0123..." -- a key -- while the path's "/" and "." end the run
     // (PR 3b logic attack, the branch's twin one field over).

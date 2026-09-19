@@ -186,6 +186,15 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("spine scan: an actor ending in sk- is not joined with the clock-made idem into a key (accepted, three times running)", runs.every((r) => r.status === 0), runs.map((r) => `${r.status} ${r.stderr.trim()}`).join(" | "));
   const split = dry({ note: "probe", a: "sk-", b: "Q".repeat(40) });
   check("spine scan: a key split across two CALLER fields is still refused (SECRET) -- the adjacency view stays", split.status === 2 && /SECRET/.test(split.stderr), `${split.status} ${split.stderr}`);
+  // Only what THIS call made is left out: a caller-supplied --idem is the caller's string (PR 3b round-2 logic attack).
+  const idemSplit = node([S("hq", "arc-event.mjs"), "emit", "note.logged", "--payload", JSON.stringify({ note: "probe" }), "--actor", "sk-", "--idem", "0123456789abcdef".repeat(4), "--dry-run"], { ARC_SPINE_ROOT: sp });
+  check("spine scan: a key split across the actor and a CALLER-supplied idem is refused (SECRET)", idemSplit.status === 2 && /SECRET/.test(idemSplit.stderr), `${idemSplit.status} ${idemSplit.stderr}`);
+  // A refused experiment.verdict is quarantined as a stub: its payload is a result nobody reads before it is recorded.
+  const qsp = spine("verdict-quarantine");
+  const refusedVerdict = node([S("hq", "arc-event.mjs"), "emit", "experiment.verdict", "--payload", JSON.stringify({ experiment_id: "x-q", outcome: "verdict", bound: 0.4321, delta: 0.8765 }), "--strict"], { ARC_SPINE_ROOT: qsp });
+  const qdir = join(qsp, "events", "_quarantine");
+  const quarantined = existsSync(qdir) ? readdirSync(qdir).map((n) => readFileSync(join(qdir, n), "utf8")).join("\n") : "";
+  check("a refused experiment.verdict is quarantined as a stub -- its bound and delta are not on disk", refusedVerdict.status === 2 && quarantined.length > 0 && !quarantined.includes("0.4321") && !quarantined.includes("0.8765"), `${refusedVerdict.status} ${quarantined.slice(0, 300)}`);
 }
 
 // ---- evolve LOGIC: open, measure and conclude as pure functions over in-memory receipts (wire.mjs) ----
@@ -475,6 +484,30 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   const lateApply = ev([...MEASURE(perArm["+champion"][5], 1, "2026-09-08..2026-09-14"), "--expect", lateDigest || "x"]);
   check("evolve measure: planned before the verdict, applied after it, refuses (VERDICTED) -- fixed horizon holds at apply", lateApply.status === 2 && /VERDICTED/.test(lateApply.stderr), lateApply.stderr);
 
+  // THE SPINE'S ANSWER CANNOT DEPEND ON THE RESULT (PR 3b round-2 logic attack). An experiment id ending in "ghp_" joins
+  // "verdict" plus the config hash into a GitHub-token shape, and "no-verdict" does not: judged in the outcome it would
+  // record, the plan passed for a no-verdict and refused a verdict -- the refusal was the result. Both spellings are
+  // judged, so this computable no-verdict is refused as a verdict would be, and nothing is recorded.
+  {
+    const spG = spine("evolve-ghp");
+    const evG = evolveOn(spG);
+    const XG = "x-k-ghp_";
+    const armsG = { "+champion": [], "+challenger": [] };
+    for (let i = 0; i < 400 && (armsG["+champion"].length < 5 || armsG["+challenger"].length < 5); i++) {
+      const g = A.assign(XG, `g-${i}`, ["+champion", "+challenger"], [50, 50]);
+      if (g.cohort === "verdict" && armsG[g.arm].length < 5) armsG[g.arm].push(`g-${i}`);
+    }
+    const opened = planApply(evG, OPEN(XG));
+    let measured = 0;
+    for (const arm of ["+champion", "+challenger"]) armsG[arm].forEach((u, i) => {
+      if (planApply(evG, ["measure", "--experiment", XG, "--unit", u, "--metric", "converted", "--value", String(i < 3 ? 1 : 0), "--count", "1", "--window", "2026-09-01..2026-09-07", "--source", "src-1"]).a?.status === 0) measured++;
+    });
+    check("ghp fixture: the experiment is open and measured to floor on both arms (vacuous-pass guard)", opened.a?.status === 0 && measured === 10, `open=${opened.a?.status} measured=${measured}`);
+    const plan = evG(["conclude", "--experiment", XG]);
+    check("evolve conclude: a no-verdict whose VERDICT spelling the spine would refuse is refused too -- the answer is the same whichever way the test goes",
+      plan.status === 2 && /whichever way the test goes/.test(plan.stderr) && !spineEvents(spG).some((e) => e.kind === "experiment.verdict"), `${plan.status} ${plan.stderr}`);
+  }
+
   // The cap, re-counted at apply: three opens planned while none was open, then all applied (PR 3a logic attack).
   const sp3 = spine("evolve-cap");
   const ev3 = evolveOn(sp3);
@@ -753,6 +786,26 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     const de = lastExpect(b("--propose", "--from", cand, "--champion", empty, "--dry-run").stdout);
     const ae = b("--propose", "--from", cand, "--champion", empty, "--expect", de || "x");
     check("bench --from against a champion with no rows proposes nothing and raises nothing (exit 0, no approval)", !!de && ae.status === 0 && count("approval.requested") === 0 && !/receipt:/.test(ae.stdout), `${ae.status} ${ae.stderr}`);
+    // ONE APPLY AT A TIME per store (PR 3b round-2 attacks: two applies of one plan raised two approvals). A lock held
+    // in the store refuses the next apply, and a pending mark with no id refuses it too.
+    const emptyStore = existsSync(store) ? readdirSync(store).map((k) => join(store, k)).find((d) => !existsSync(join(d, "approval.id"))) : null;
+    if (emptyStore) writeFileSync(join(emptyStore, ".apply.lock"), "");
+    const locked = b("--propose", "--from", cand, "--champion", empty, "--expect", de || "x");
+    check("bench --from: an apply while another holds the store's lock refuses and writes nothing", !!emptyStore && locked.status === 2 && /another apply of this proposal is running/.test(locked.stderr), `${locked.status} ${locked.stderr}`);
+    if (emptyStore) { rmSync(join(emptyStore, ".apply.lock"), { force: true }); writeFileSync(join(emptyStore, "approval.pending"), "x\n"); }
+    const pending = b("--propose", "--from", cand, "--champion", empty, "--expect", de || "x");
+    check("bench --from: a pending mark with no approval id refuses -- an earlier apply may have raised it", pending.status === 2 && /may have raised its approval/.test(pending.stderr), `${pending.status} ${pending.stderr}`);
+    if (emptyStore) rmSync(join(emptyStore, "approval.pending"), { force: true });
+  }
+  // A second run of the SAME subject is not a champion: there is no switch to propose (PR 3b round-2 logic attack).
+  {
+    const same = join(tmp, "bench-champ-same-subject");
+    cpSync(cand, same, { recursive: true });
+    const sc = JSON.parse(readFileSync(join(same, "scorecard.json"), "utf8"));
+    sc.generated_note = "a second run of the same driver";
+    writeFileSync(join(same, "scorecard.json"), JSON.stringify(sc));
+    const r = b("--propose", "--from", cand, "--champion", same, "--dry-run");
+    check("bench --from refuses a champion that ran the candidate's own subject", r.status === 2 && /different subjects/.test(r.stderr), `${r.status} ${r.stderr}`);
   }
   // Applied under a shim that makes the approval's temp cleanup throw EBUSY (a scanner holding the file): a cleanup is
   // litter, never the outcome. Unguarded, it made bench exit 1 with no receipt line after the approval had landed, and
@@ -890,6 +943,42 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   const reused = inScratch("absorb/trial.mjs", ["--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", "initiatives/absorb/evidence/kernel-old", "--correlation", "kernel-old-2", "--dry-run"]);
   g("checkout", "-q", "main");
   check("absorb trial into a bundle main already holds refuses, even from a checkout that lacks it -- nothing sealed", reused.status === 2 && /main already holds/.test(reused.stderr) && !existsSync(join(seals, "kernel-old-2.json")), `${reused.status} ${reused.stderr}`);
+
+  // A second trial into a bundle an OPEN trial branch already holds: the two would conflict at merge over a commitment
+  // somebody is judging against (PR 3b round-2 logic attack).
+  const openTwin = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -1), "kernel-trial-2", "--dry-run"]);
+  check("absorb trial into a bundle an open trial branch holds refuses -- nothing sealed", openTwin.status === 2 && /open trial branch feat\/face-absorb-trial-kernel-trial-1/.test(openTwin.stderr) && !existsSync(join(seals, "kernel-trial-2.json")), `${openTwin.status} ${openTwin.stderr}`);
+
+  // A pin scaffolds a NEW report: one main already holds would be replaced by a scaffold (PR 3b round-2 logic attack).
+  mkdirSync(join(repo, "initiatives", "absorb", "evidence"), { recursive: true });
+  writeFileSync(join(repo, "initiatives", "absorb", "evidence", "held-report.md"), "# a report somebody wrote\n");
+  g("add", "-A"); g("commit", "-q", "-m", "a report on main");
+  const heldPin = inScratch("absorb/pin.mjs", ["--root", src, "--pin", "0123456789abcdef", "--license", "MIT, in LICENSE", "--report", "initiatives/absorb/evidence/held-report.md", "--dry-run"]);
+  check("absorb pin of a report main already holds refuses -- a pin scaffolds a new report", heldPin.status === 2 && /main already holds/.test(heldPin.stderr), `${heldPin.status} ${heldPin.stderr}`);
+
+  // study's Identity line is relative to the REPOSITORY, whatever the cwd: run from elsewhere, the relative path still
+  // carried the account's home into a committed report (PR 3b round-2 shell attack).
+  const studyOut = join(tmp, "study-elsewhere.md");
+  const studied = spawnSync(process.execPath, [S("absorb", "study.mjs"), "--scaffold", "--root", src, "--pin", "0123456789abcdef", "--license", "MIT, in LICENSE", "--out", studyOut], { cwd: tmp, encoding: "utf8" });
+  const identity = existsSync(studyOut) ? (/\*\*Identity:\*\* (.*)$/m.exec(readFileSync(studyOut, "utf8")) || [])[1] : null;
+  check("study run from outside the repo names a source outside it by its folder alone", studied.status === 0 && identity === "(outside this repo) absorb-source", `${studied.status} ${identity} ${studied.stderr}`);
+
+  // TWO SEALS OF ONE CORRELATION AT ONCE: the nonce is created exclusively, so one wins and the other writes nothing --
+  // the stored nonce is the winner's (PR 3b round-2 attacks: with --judge between the check and the write, both won
+  // and the approval that landed could never be revealed).
+  const raceSeal = () => new Promise((resolveRun) => {
+    const c = spawn(process.execPath, [join(repo, ".claude", "scripts", "absorb", "judgement.mjs"), "seal", "--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", "initiatives/absorb/evidence/kernel-race", "--correlation", "kernel-race-1", "--bundle-dir", join(tmp, `race-bundle-${Math.random().toString(16).slice(2)}`), "--judge"],
+      { cwd: repo, env: { ...process.env, ARC_SPINE_ROOT: sp, ARC_ABSORB_SEAL_DIR: seals }, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "", err = "";
+    c.stdout.on("data", (x) => { out += x; }); c.stderr.on("data", (x) => { err += x; });
+    c.on("close", (code) => resolveRun({ code, out, err }));
+  });
+  const raced = await Promise.all([raceSeal(), raceSeal()]);
+  const winner = raced.find((x) => x.code === 0);
+  let stored = null; try { stored = JSON.parse(readFileSync(join(seals, "kernel-race-1.json"), "utf8")); } catch { /* reported */ }
+  let printed = null; try { printed = JSON.parse(String(winner && winner.out).trim().split(/\r?\n/).pop()); } catch { /* reported */ }
+  check("two seals of one correlation at once: exactly one seals, and the stored nonce is the one whose payload was printed",
+    raced.filter((x) => x.code === 0).length === 1 && !!stored && !!printed && stored.commitment === printed.commitment, raced.map((x) => `${x.code}:${x.err.trim().slice(0, 120)}`).join(" | "));
 }
 
 // ---- the writer's own refusal of the law files, whatever a caller allows ----

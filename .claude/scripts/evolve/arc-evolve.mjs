@@ -157,8 +157,18 @@ async function planOrApply(cmd, flags) {
   // the emitter refuses a caller-supplied one).
   const judged = (plan) => {
     const emit = ["emit", plan.kind, "--payload", JSON.stringify(plan.payload), "--strict"];
-    const dry = spawnSync(process.execPath, [ARC_EVENT, ...emit, "--dry-run"], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
-    if (dry.status !== 0) die(`the spine would refuse this ${plan.kind}: ${firstErr(dry)}`);
+    // A CONCLUDE is judged in both spellings of its outcome, and refused if either is: the scanner's joins read the
+    // outcome string, so an experiment id of `x-ghp_` planned cleanly for a no-verdict and was refused for a verdict --
+    // the refusal told the owner the result the plan withholds (PR 3b round-2 logic attack). Both are always asked, so
+    // the answer is the same whichever way the test goes. The numbers are not strings, and the joins do not read them.
+    const forms = plan.bind ? ["verdict", "no-verdict"].map((outcome) => ({ ...plan.payload, outcome })) : [plan.payload];
+    const refusals = [...new Set(forms.map((p) => {
+      const dry = spawnSync(process.execPath, [ARC_EVENT, "emit", plan.kind, "--payload", JSON.stringify(p), "--strict", "--dry-run"], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
+      return dry.status === 0 ? null : firstErr(dry);
+    }).filter(Boolean))].sort();
+    if (refusals.length) die(plan.bind
+      ? `the spine would refuse a verdict for this experiment, whichever way the test goes, so none is computed: ${refusals.join(" / ")}`
+      : `the spine would refuse this ${plan.kind}: ${refusals[0]}`);
     // A conclude binds its test's inputs, not its payload: a digest of the payload is a digest of the result (wire.mjs).
     return { emit, digest: planDigest(plan.bind ? { kind: plan.kind, bind: plan.bind } : { kind: plan.kind, payload: plan.payload }) };
   };

@@ -77,6 +77,10 @@
 import { readFileSync, writeFileSync, existsSync, statSync, realpathSync, readdirSync, lstatSync } from "node:fs";
 import { join, resolve, sep, relative, isAbsolute, basename, dirname } from "node:path";
 import { randomBytes, createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
+
+// The repository this script lives in: a root outside it is recorded by name alone (the Identity line).
+const STUDY_REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 const MAX_TEXT_BYTES = 1024 * 1024; // 1 MiB. Above this a file is QUARANTINEd, never inlined.
 const MAX_DEPTH = 64;               // an untrusted tree does not get unbounded recursion
@@ -122,7 +126,9 @@ function main() {
   // A root OUTSIDE the working directory is recorded by its name alone: the report is committed to a public repo, and
   // the relative path (or, on another drive, the absolute one) carried the owner's home directory and user name into it
   // (PR 3b shell attack).
-  const rootRel = relative(process.cwd(), ROOT);
+  // Relative to the REPOSITORY, not the cwd: run from C:\, the relative path still carried the account name
+  // (PR 3b round-2 shell attack).
+  const rootRel = relative(STUDY_REPO, ROOT);
   const ROOT_LABEL = rootRel === "" ? "." : isAbsolute(rootRel) || rootRel === ".." || rootRel.startsWith(`..${sep}`) ? `(outside this repo) ${basename(ROOT)}` : rootRel.split(sep).join("/");
 
   // Folding is used ONLY to make containment checks stricter (a fold can merge two names, never

@@ -286,13 +286,19 @@ function synthesize(kind, flags, { deriveIdem }) {
  * Validate -> scan -> seal. Returns { event, line }.
  * Throws SpineError; the caller maps that to exit 2 or to a quarantine record.
  */
-const EMITTER_FIELDS = new Set(["id", "ts", "idem", "sha"]);
-function seal(event) {
+/**
+ * @param {Record<string, unknown>} event
+ * @param {readonly string[]} [generated] the envelope fields THIS call made from the clock -- left out of the scanner's
+ *   adjacency joins, because where a random value sorted made the verdict random. Only those: a caller-supplied
+ *   `--idem` or an `--event-file`'s id is the caller's string, and a key split across it and the actor must still be
+ *   caught (PR 3b round-2 logic attack: `--actor sk-` beside `--idem <hex>` passed once they were all dropped).
+ */
+function seal(event, generated = []) {
   const canonicalNoSha = validateEvent(event);
 
   // The adjacency views join the caller's strings only: id, ts and idem are made here from the clock, and a verdict
   // that depended on where a random hash sorted was a dry-run that could not predict its emit (redact.mjs).
-  const callerFields = Object.fromEntries(Object.entries(event).filter(([k]) => !EMITTER_FIELDS.has(k)));
+  const callerFields = Object.fromEntries(Object.entries(event).filter(([k]) => k !== "sha" && !generated.includes(k)));
   const scan = scanSecrets(canonicalNoSha, event, { joinFrom: callerFields }); // throws REDACT_FAIL, never fails open
   if (scan.hit)
     throw new SpineError("SECRET", `payload matches deny-rule ${scan.rule} -- refused before the spine (ADR-0028)`);
@@ -370,7 +376,7 @@ function closeDay(root, date, timeoutMs) {
       evidence: null,
       supersedes: null,
     };
-    const { event: sealed, line } = seal(event);
+    const { event: sealed, line } = seal(event, ["id", "ts", "idem"]);
     appendEventUnlocked(root, sealed, line);
     writeCloseMarker(root, day, fileSha(file));
     return { day, id: sealed.id };
@@ -400,7 +406,8 @@ function main(parsed) {
 
   if (command === "close-day") {
     const { day, id } = closeDay(root, flags.date, timeoutMs);
-    process.stdout.write(`${id}\n`);
+    // Synchronous and guarded, like emit's: the close IS written by now (PR 3b round-2 shell attack, the twin).
+    try { writeSync(1, `${id}\n`); } catch { /* the line is lost; the close is not */ }
     process.stderr.write(`arc-event: closed ${day}\n`);
     return 0;
   }
@@ -409,6 +416,9 @@ function main(parsed) {
     throw new SpineError("BAD_ARGS", `unknown command "${command}"`);
 
   let event;
+  // What this call made from the clock: nothing for an event file (every field is the caller's), the id and ts for an
+  // emit, and the idem too unless the caller supplied it.
+  let generated = [];
   if (flags["event-file"]) {
     event = readJsonFile(flags["event-file"]);
   } else {
@@ -419,9 +429,10 @@ function main(parsed) {
       flags["payload-file"] = flags.json;
     }
     event = synthesize(kind, flags, { deriveIdem: command === "ingest" });
+    generated = flags.idem === undefined ? ["id", "ts", "idem"] : ["id", "ts"];
   }
 
-  const { event: sealed, line } = seal(event);
+  const { event: sealed, line } = seal(event, generated);
   if (flags.dryRun === true) {
     // The sealed line, exactly as it would be appended -- one line, canonical form. Its id and ts
     // are this moment's; a real emit made later carries its own.
@@ -448,6 +459,9 @@ const parsed = walkArgs(process.argv.slice(2));
 const strictMode = isStrict(parsed);
 
 /** Read back the input we were handed, so a quarantine record can carry it -- if it is safe. */
+/** Kinds whose payload is a result: refused, they are quarantined as a stub only. */
+const RESULT_KINDS = new Set(["experiment.verdict"]);
+
 function readSourceText(flags) {
   if (flags["event-file"]) { try { return readFileSync(flags["event-file"], "utf8"); } catch { return undefined; } }
   if (flags["payload-file"] || flags.json) {
@@ -490,15 +504,20 @@ try {
     // first version wrote those inputs to disk verbatim -- so a payload carrying a live
     // credential landed in cleartext in an append-only file. Scan first; any doubt at all,
     // including a scan that throws, means stub-only.
-    let stubOnly = code === "SECRET" || code === "REDACT_FAIL";
+    // A receipt whose payload IS a result nobody may read before it is recorded is quarantined as a stub: a conclude
+    // refused at append (a read-only day file, a lock timeout) left its bound and delta in plain text under _quarantine,
+    // and the plan could be run again (PR 3b round-2 logic attack).
+    const attempted = parsed.positional[1];
+    let stubOnly = code === "SECRET" || code === "REDACT_FAIL" || RESULT_KINDS.has(attempted);
     let raw;
     if (!stubOnly) {
       const text = readSourceText(parsed.flags);
       if (text !== undefined) {
         let parsedValue;
         try { parsedValue = JSON.parse(text); } catch { parsedValue = undefined; }
+        if (parsedValue && typeof parsedValue === "object" && RESULT_KINDS.has(parsedValue.kind)) stubOnly = true;
         try {
-          stubOnly = scanSecrets(text, parsedValue).hit;
+          stubOnly = stubOnly || scanSecrets(text, parsedValue).hit;
         } catch {
           stubOnly = true; // a scan that cannot complete is not a clean bill of health
         }

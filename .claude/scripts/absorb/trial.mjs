@@ -30,7 +30,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { baseText, checkProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
+import { baseText, checkProposal, openProposalsHolding, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 import { LABEL_POOL } from "../hq/lib/validate-absorb.mjs";
 
@@ -69,6 +69,19 @@ function parseArgs(argv) {
   return out;
 }
 
+/**
+ * One line of reason from a failed seal: its own refusal, else the error's name and message, else its exit. A crash's
+ * stack -- fourteen lines with the account's paths in them -- was carried whole into the refusal (PR 3b round-2 shell).
+ * @param {unknown} stderr @param {number | null} status
+ */
+function sealReason(stderr, status) {
+  const lines = String(stderr || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const own = lines.find((l) => l.startsWith("judgement: "));
+  if (own) return own.slice("judgement: ".length);
+  const err = lines.find((l) => /^[A-Za-z]*Error\b|^E[A-Z]+\b/.test(l));
+  return err ? err.replace(/,? (open|mkdir|write) '[^']*'/, "") : `the seal exited ${status}`;
+}
+
 /** Where judgement.mjs keeps a correlation's nonce: its own rule, resolved from the directory it runs in (REPO). */
 const sealFile = (corr) => resolve(REPO, process.env.ARC_ABSORB_SEAL_DIR || join(".claude", "state", "absorb", "seals"), `${corr}.json`);
 
@@ -103,6 +116,10 @@ async function main() {
     if (on.base !== base) die(2, "main moved while the bundle was checked -- plan again");
     if (on.text !== null) die(2, `main already holds ${a["--evidence"]}/${held} -- an earlier judgement's bundle; a new trial takes a new --evidence path, and nothing was sealed`);
   }
+  // And no OPEN trial branch holds it either: two unmerged trials into one bundle conflict at merge, over a commitment
+  // the owner is judging against (PR 3b round-2 logic attack).
+  const open = await openProposalsHolding({ repo: REPO, prefix: "feat/face-absorb-trial-", path: target });
+  if (open.length) die(2, `the open trial branch ${open[0]} already holds ${target} -- merge or delete it first, or take a new --evidence path; nothing was sealed`);
   const refused = spineRefusal(ARC_EVENT, "approval.requested", draftApproval(a), { cwd: REPO });
   if (refused) die(2, `the approval this trial raises would be refused by the spine, so nothing is sealed: ${refused}`);
   const digest = planDigest({ branch, base, target, seal: sealArgs(a) });
@@ -125,7 +142,7 @@ async function main() {
     // written. The draft judged at plan could not: other labels passed where these are refused (PR 3b attacks).
     const run = spawnSync(process.execPath, [JUDGEMENT, ...sealArgs(a), "--bundle-dir", scratch, "--judge"], { cwd: REPO, encoding: "utf8" });
     if (run.status !== 0) {
-      const why = String(run.stderr || "").trim().replace(/^judgement: /, "") || `the seal exited ${run.status}`;
+      const why = sealReason(run.stderr, run.status);
       // A seal that failed AFTER writing its nonce has burned the correlation, whatever it exited: a failed
       // commitment.txt write was reported as "nothing sealed" while the nonce sat in the store (PR 3b shell attack).
       if (existsSync(sealFile(a["--correlation"]))) { sealed = true; die(1, `the seal failed part-way, AFTER its nonce was written: correlation ${a["--correlation"]} is used and nothing was raised -- ${why}. Trial again with a new correlation`); }

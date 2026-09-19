@@ -25,7 +25,7 @@
 // Exit codes: 0 done · 2 usage/input error · 3 refused (a reveal before its decision, or a tamper)
 //             4 stale preimage format -- RE-SEAL, and explicitly not a tamper.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, writeSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, createHash } from "node:crypto";
@@ -40,7 +40,9 @@ const SEAL_DIR = process.env.ARC_ABSORB_SEAL_DIR || join(".claude", "state", "ab
 const SUBJECT = "absorb.ab-judgement";
 const MIN_FIXTURES = 3;
 
-const die = (msg, code = 2) => { console.error(`judgement: ${msg}`); process.exit(code); };
+// Synchronous, then the exit: console.error before process.exit can be cut on an asynchronous pipe (the fixed-defects
+// row every CLI here carries; PR 3b round-2 shell attack found this one).
+const die = (msg, code = 2) => { try { writeSync(2, `judgement: ${msg}\n`); } catch { /* a reader that left */ } process.exit(code); };
 const sha256 = (s) => createHash("sha256").update(s, "utf8").digest("hex");
 
 const argv = process.argv.slice(2);
@@ -184,11 +186,19 @@ if (cmd === "seal") seal: {
   if (refused) die(`the spine would refuse this seal's approval, so nothing was sealed and the correlation is still free: ${refused}`);
 
   mkdirSync(SEAL_DIR, { recursive: true });
-  writeFileSync(
-    join(SEAL_DIR, `${correlation}.json`),
-    JSON.stringify({ correlation, candidate, mapping, nonce, commitment, preimage_version: PREIMAGE_VERSION, sealed_at_note: "gitignored state; the bundle carries only the commitment" }, null, 2) + "\n",
-    "utf8"
-  );
+  // EXCLUSIVE CREATE. The existence check above and this write were two steps, and --judge put an emitter spawn between
+  // them: two seals of one correlation both passed the check, and the nonce stored was the LOSER's -- its approval
+  // could never be revealed (PR 3b round-2 shell attack: 6 of 6 races). "wx" makes the second writer fail here.
+  try {
+    writeFileSync(
+      join(SEAL_DIR, `${correlation}.json`),
+      JSON.stringify({ correlation, candidate, mapping, nonce, commitment, preimage_version: PREIMAGE_VERSION, sealed_at_note: "gitignored state; the bundle carries only the commitment" }, null, 2) + "\n",
+      { encoding: "utf8", flag: "wx" },
+    );
+  } catch (e) {
+    if (e && e.code === "EEXIST") die(`a seal already exists for correlation "${correlation}" -- another seal took it a moment ago; nothing of this one was written`);
+    throw e;
+  }
 
   // The bundle gets the commitment and NOTHING that reveals the mapping. (The reused-bundle check -- a PREVIOUS run's
   // revealed plaintext beside this run's commitment -- ran above, before anything was written.)

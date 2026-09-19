@@ -391,7 +391,7 @@ export const OPS = Object.freeze([
     room: "evolve",
     lane: "evolve",
     label: "Conclude an experiment",
-    hint: "Computes the one verdict the test allows, once, from the receipts: the verdict cohort, complete windows, both arms at their floor. A no-verdict is shown with its reasons and writes nothing.",
+    hint: "The plan says whether the test can be computed yet -- the verdict cohort, complete windows, both arms at their floor -- and never its result. Applying computes it ONCE and records it, verdict or no-verdict, and the experiment is then decided for good: do not apply to see how it looks.",
     receipt: Object.freeze({ kind: "experiment.verdict" }),
     binding: "v0.7 `conclude` -> experiment.verdict, written by arc-evolve conclude --expect after it re-checks the plan (ADR-1340)",
     humanRun: false, spends: false, touchesFiles: false,

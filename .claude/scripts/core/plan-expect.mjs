@@ -12,6 +12,9 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export const EXPECT_RE = /^[0-9a-f]{64}$/;
 
@@ -25,9 +28,21 @@ export const EXPECT_RE = /^[0-9a-f]{64}$/;
  * @param {{ cwd?: string, env?: Record<string, string | undefined>, flags?: string[] }} [o]
  */
 export function spineRefusal(arcEvent, kind, payload, o = {}) {
-  const r = spawnSync(process.execPath, [arcEvent, "emit", kind, "--payload", JSON.stringify(payload), ...(o.flags || []), "--strict", "--dry-run"],
-    { cwd: o.cwd, env: o.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return r.status === 0 ? null : (String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`);
+  // Through a FILE, as bench's real emit does: a payload on the command line past the OS's argv ceiling failed to spawn
+  // and was reported as "the emitter exited null" -- a refusal under the wrong cause (PR 3b round-2 shell attack).
+  let dir;
+  try { dir = mkdtempSync(join(tmpdir(), "arc-spine-judge-")); }
+  catch (e) { return `the spine could not be asked: no temp directory (${e && e.code ? e.code : "error"})`; }
+  try {
+    const file = join(dir, "payload.json");
+    writeFileSync(file, JSON.stringify(payload), "utf8");
+    const r = spawnSync(process.execPath, [arcEvent, "emit", kind, "--payload-file", file, ...(o.flags || []), "--strict", "--dry-run"],
+      { cwd: o.cwd, env: o.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    if (r.error) return `the spine could not be asked: the emitter did not start (${r.error.code || r.error.message})`;
+    return r.status === 0 ? null : (String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`);
+  } finally {
+    try { rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter */ }
+  }
 }
 
 /** JSON with every object's keys sorted, so a digest never depends on the order a payload was built in. */

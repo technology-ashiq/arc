@@ -431,9 +431,9 @@ if (command === "register") {
     try {
       reg = registrationFor(job, { repoRoot: root, nodePath, logDir });
       back = registerVerified(os, reg.name, reg);
-      process.stdout.write(
-        `arc-jobs: registered ${reg.name}  ${reg.trigger}  lastTaskResult=${back.lastTaskResult}  cwd ${back.cwd}\n`,
-      );
+      // Synchronous on the register path too: process.exit ends it, and an asynchronous write before the exit can be cut
+      // on a pipe (PR 3b round-2 shell attack; the dry run and the receipt line were already synchronous).
+      try { writeSync(1, `arc-jobs: registered ${reg.name}  ${reg.trigger}  lastTaskResult=${back.lastTaskResult}  cwd ${back.cwd}\n`); } catch { /* a reader that left */ }
     } catch (e) {
       // EVERY SchedulerError becomes a stated refusal with exit 2. Only three codes used to be
       // handled; the rest escaped as an unhandled rejection -- a raw stack trace and exit 1, which
@@ -457,7 +457,7 @@ if (command === "register") {
       try { writeSync(1, `receipt: note.logged ${id}\n`); } catch { /* the line is lost; the receipt is on the spine */ }
     }
   }
-  process.stdout.write(`arc-jobs: ${logonNote()}\n`);
+  try { writeSync(1, `arc-jobs: ${logonNote()}\n`); } catch { /* a reader that left */ }
   process.exit(0);
 }
 

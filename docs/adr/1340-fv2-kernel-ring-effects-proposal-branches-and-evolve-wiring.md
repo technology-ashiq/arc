@@ -289,3 +289,15 @@ The rest are twins of rows already here:
 - every temp cleanup in bench is litter
 - the scaffold records a source outside the repo by its folder name, not the owner's path
 - the shutdown pause shrinks with depth
+
+## Amendment, PR 3b round 2 (same day)
+
+A fresh pair attacked the PR 3b fixes: 10 logic and 11 shell findings, several shared. All are fixed and pinned. Three
+change decisions above:
+- **A conclude is judged in both outcome spellings**, and refused if either is, so the spine's answer is the same
+  whichever way the test goes. A refused `experiment.verdict` is quarantined as a stub only.
+- **The proposal writer proves its hooks are off** (read back through git) and refuses a hook name that is not UTF-8.
+  Every commit carries a per-call `Proposal-Nonce` trailer, so only the writer whose commit the branch holds can claim
+  it. A path that is a symlink or a gitlink on main is refused, and so is a relative temp directory.
+- **Bench `--propose --from` serialises its applies** per store (a `wx` lock), writes `approval.pending` before it
+  emits, and reads each evidence file once. It refuses a champion whose content or subject is the candidate's.

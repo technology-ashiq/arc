@@ -30,7 +30,8 @@
 
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname, delimiter } from "node:path";
+import { join, dirname, delimiter, isAbsolute } from "node:path";
+import { randomBytes } from "node:crypto";
 import { spawnBounded } from "./spawn-bounded.mjs";
 
 /** feat/face-<op>-<slug>: the only branch names this module writes. */
@@ -143,6 +144,9 @@ async function git(repo, args, o) {
  */
 function checkTemp() {
   if (tmpdir().includes(delimiter)) throw new ProposalError("NO_TEMP", `the temp directory's path holds "${delimiter}", which git reads as a list separator -- nothing was written; point TMP elsewhere`);
+  // A RELATIVE temp dir is the delimiter's twin: git drops a relative GIT_CEILING_DIRECTORIES, so the diff read the
+  // config of whatever repository the relative path landed in (PR 3b round-2 shell attack: diff.context=0 there).
+  if (!isAbsolute(tmpdir())) throw new ProposalError("NO_TEMP", "the temp directory is a relative path, which git will not take as a ceiling -- nothing was written; point TMP at an absolute path");
 }
 
 /** A temp directory, or a refusal that names the cause: a raw ENOENT stack is not a refusal. */
@@ -262,15 +266,49 @@ async function withHooks(repo, fn) {
   const dir = tempDir("arc-proposal-nohooks-");
   try {
     const hooks = { dir, off: [] };
-    const listed = await git(repo, ["config", "--name-only", "--get-regexp", "^hook\\..*\\.(command|event)$"], { hooks, ok: [0, 1] });
+    // NUL-separated, decoded strictly, matched across every character. The line-split, lossy, `.+` parse missed a name
+    // holding CR, U+2028 or U+2029, the empty name, and a byte that is not UTF-8 -- each of those hooks ran six times
+    // inside a write, and one vetoed it (PR 3b round-2 shell attack).
+    const listed = await git(repo, ["config", "--name-only", "-z", "--get-regexp", "^hook\\..*\\.(command|event)$"], { hooks, ok: [0, 1] });
     const names = new Set();
-    for (const key of listed.out.split(/\r?\n/)) {
-      const m = /^hook\.(.+)\.(command|event)$/i.exec(key.trim());
+    for (const raw of nulSplit(listed.buf)) {
+      let key;
+      try { key = new TextDecoder("utf-8", { fatal: true }).decode(raw); }
+      catch { throw new ProposalError("HOOK_NAME", "the repository's config defines a hook whose name is not UTF-8, which cannot be disabled by name -- nothing was written; rename it"); }
+      const m = /^hook\.([\s\S]*)\.(command|event)$/i.exec(key);
       if (m) names.add(m[1]);
     }
     hooks.off = [...names].sort();
+    if (hooks.off.length) await assertHooksOff(repo, hooks);
     return await fn(hooks);
   } finally { removeQuietly(dir); }
+}
+
+/** A buffer split on NUL bytes, empty pieces dropped. @param {Buffer} buf @returns {Buffer[]} */
+function nulSplit(buf) {
+  const out = [];
+  let from = 0;
+  for (let i = 0; i < buf.length; i++) if (buf[i] === 0) { if (i > from) out.push(buf.subarray(from, i)); from = i + 1; }
+  if (from < buf.length) out.push(buf.subarray(from));
+  return out;
+}
+
+/**
+ * Every hook found is proven OFF under the environment the writes will run with, before anything is written: git reads
+ * `hook.<name>.enabled` back as false for each one, or nothing is written. A name the environment cannot carry is a
+ * refusal here, not a hook that runs inside the write.
+ */
+async function assertHooksOff(repo, hooks) {
+  const r = await git(repo, ["config", "-z", "--get-regexp", "^hook\\..*\\.enabled$"], { hooks, ok: [0, 1] });
+  /** @type {Map<string, string>} */
+  const last = new Map();
+  for (const raw of nulSplit(r.buf)) {
+    const entry = raw.toString("utf8");
+    const nl = entry.lastIndexOf("\n");
+    if (nl >= 0) last.set(entry.slice(0, nl), entry.slice(nl + 1));
+  }
+  const on = hooks.off.filter((name) => last.get(`hook.${name}.enabled`) !== "false");
+  if (on.length) throw new ProposalError("HOOK_NOT_DISABLED", `the config hook ${JSON.stringify(on[0])} could not be disabled for this write -- nothing was written; rename it, or remove it from the config`);
 }
 
 /**
@@ -309,12 +347,15 @@ async function caseClash(repo, base, paths, hooks) {
       const tree = prefix === "" ? base : `${base}:${prefix}`;
       // "<mode> <type> <sha>\t<name>", NUL-terminated and never quoted.
       const rows = (await git(repo, ["ls-tree", "-z", tree], { hooks })).out.split("\u0000").filter(Boolean)
-        .map((r) => { const t = r.indexOf("\t"); return { type: r.slice(0, t).split(" ")[1], name: r.slice(t + 1) }; });
+        .map((r) => { const t = r.indexOf("\t"); const [mode, type] = r.slice(0, t).split(" "); return { mode, type, name: r.slice(t + 1) }; });
       const here = (n) => (prefix === "" ? n : `${prefix}/${n}`);
       const exact = rows.find((r) => r.name === seg);
       if (exact) {
         // A file where the path needs a directory, or a directory where it writes a file: no tree holds both.
         if ((last && exact.type === "tree") || (!last && exact.type !== "tree")) return { path, theirs: here(seg), kind: "type" };
+        // A symlink or a gitlink on main is not a file a proposal edits: the plan showed a text edit while the branch
+        // turned a link into a file (PR 3b round-2 shell attack: `120000 -> 100644`, no mode line in the plan).
+        if (last && exact.mode !== "100644" && exact.mode !== "100755") return { path, theirs: here(seg), kind: "mode", mode: exact.mode };
         prefix = here(seg);
         continue;
       }
@@ -330,7 +371,28 @@ async function caseClash(repo, base, paths, hooks) {
 async function refuseCaseClash(repo, base, paths, hooks) {
   const c = await caseClash(repo, base, paths, hooks);
   if (c && c.kind === "case") throw new ProposalError("CASE_CLASH", `${c.path} differs from main's ${c.theirs} only by case -- a Windows or macOS checkout cannot hold both; nothing was written`);
+  if (c && c.kind === "mode") throw new ProposalError("BAD_PATH", `${c.path} is a ${c.mode === "120000" ? "symbolic link" : c.mode === "160000" ? "submodule" : `mode-${c.mode} entry`} on main, not a file -- a proposal edits files; nothing was written`);
   if (c) throw new ProposalError("BAD_PATH", `${c.path} needs ${c.theirs} to be ${c.theirs === c.path ? "a file" : "a directory"}, and on main it is not -- nothing was written`);
+}
+
+/**
+ * The OPEN proposal branches under a prefix that already hold a path: another proposal of the same file, not merged yet.
+ * A second trial into one bundle planned cleanly while the first one's branch still held it, and merging both is a
+ * conflict over a commitment somebody is judging against (PR 3b round-2 logic attack).
+ * @param {{ repo: string, prefix: string, path: string }} o @returns {Promise<string[]>}
+ */
+export function openProposalsHolding({ repo, prefix, path }) {
+  if (typeof prefix !== "string" || !/^feat\/face-[abcdefghijklmnopqrstuvwxyz0123456789-]+$/.test(prefix)) throw new ProposalError("BAD_BRANCH", `${JSON.stringify(prefix)} is not a proposal branch prefix`);
+  checkFiles([{ path, content: "" }], [path]);
+  return withHooks(repo, async (hooks) => {
+    const refs = (await git(repo, ["for-each-ref", "--format=%(refname)", "refs/heads/feat/"], { hooks })).out.split(/\r?\n/).filter((r) => r.startsWith(`refs/heads/${prefix}`));
+    const out = [];
+    for (const ref of refs) {
+      const r = await git(repo, ["cat-file", "-e", `${ref}:${path}`], { hooks, ok: [0, 1, 128] });
+      if (r.status === 0) out.push(ref.slice("refs/heads/".length));
+    }
+    return out;
+  });
 }
 
 /** The base, checked against the one the caller read from, and the branch checked free. */
@@ -443,7 +505,11 @@ export async function writeProposal({ repo, branch, files, allow, message, base:
         await git(repo, ["update-index", "--add", "--cacheinfo", `${mode},${blob},${f.path}`], { hooks, env });
       }
       const tree = (await git(repo, ["write-tree"], { hooks, env })).out.trim();
-      const commit = (await git(repo, ["commit-tree", tree, "-p", base, "-F", "-"], { hooks, input: message.endsWith("\n") ? message : message + "\n" })).out.trim();
+      // A NONCE per call, as a trailer: two writers of one plan in one second computed ONE commit, and the update-ref
+      // catch below told each of them the branch was theirs -- three approvals for one branch (PR 3b round-2 shell
+      // attack). With the nonce only the writer whose commit the branch holds can claim it.
+      const body = message.endsWith("\n") ? message : message + "\n";
+      const commit = (await git(repo, ["commit-tree", tree, "-p", base, "-F", "-"], { hooks, input: `${body}\nProposal-Nonce: ${randomBytes(8).toString("hex")}\n` })).out.trim();
       if (beforeRef) await beforeRef(commit);
       // `create` refuses a ref that exists, inside git's own transaction: the check in baseOf is the friendly refusal,
       // this is the one a race cannot get past. Its failure is named by its real cause -- a stale .lock file or a

@@ -276,6 +276,71 @@ await refuse("a path that needs main's file to be a directory", { branch: "feat/
     after === before && refs(c).includes("refs/heads/feat/face-cfgeq "), `control=${controlFired} before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
 }
 
+// ---- config hook NAMES the line parse could not read: CR, U+2028, the empty name -- disabled; a name that is not UTF-8
+// -- refused before anything is written (PR 3b round-2 shell attack: each ran six times inside a write) ----
+{
+  for (const [label, nameBytes, expectRefusal] of [["CR", Buffer.from("a\rb"), false], ["U+2028", Buffer.from("a b"), false], ["the empty name", Buffer.alloc(0), false], ["a non-UTF-8 byte", Buffer.from([0x61, 0xff, 0x62]), true]]) {
+    const c = scratch("hookname");
+    const mark = join(c, "..", `hookname-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`).replace(/\\/g, "/");
+    writeFileSync(join(c, ".git", "config"), Buffer.concat([readFileSync(join(c, ".git", "config")), Buffer.from("[hook \""), nameBytes, Buffer.from(`"]\n\tevent = reference-transaction\n\tcommand = echo r >> ${mark}\n`)]));
+    git(c, "branch", "feat/face-hookname-control", "main");
+    const control = existsSync(mark) ? readFileSync(mark, "utf8").length : 0;
+    let code = null;
+    try { await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-hookname", files: [{ path: "engine/router.yaml", content: PROPOSED }] }); } catch (e) { code = e.code; }
+    const ranInWrite = (existsSync(mark) ? readFileSync(mark, "utf8").length : 0) - control;
+    check(expectRefusal
+      ? `a config hook named with ${label} is refused (HOOK_NAME) before anything is written${control ? "" : " (this git runs no config hooks)"}`
+      : `a config hook named with ${label} is disabled inside the write${control ? " (plain git runs it)" : " (this git runs no config hooks)"}`,
+      expectRefusal ? code === "HOOK_NAME" && !refs(c).includes("refs/heads/feat/face-hookname ") : code === null && ranInWrite === 0 && refs(c).includes("refs/heads/feat/face-hookname "),
+      `code=${code} control=${control} ran=${ranInWrite}`);
+  }
+}
+
+// ---- one plan, three writers at once: exactly one branch, and only its writer claims it (PR 3b round-2 shell attack:
+// the same second gave one commit, and the update-ref catch told all three writers the branch was theirs) ----
+{
+  const c = scratch("concurrent");
+  const results = await Promise.all([0, 1, 2].map(() => PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-concurrent", files: [{ path: "engine/router.yaml", content: PROPOSED }] }).then((w) => ({ ok: w.commit }), (e) => ({ code: e.code }))));
+  const tip = git(c, "rev-parse", "refs/heads/feat/face-concurrent");
+  check("three writers of one plan at once: one writes and claims the branch, the others refuse (BRANCH_EXISTS)",
+    results.filter((r) => r.ok).length === 1 && results.find((r) => r.ok).ok === tip && results.filter((r) => r.code === "BRANCH_EXISTS").length === 2, JSON.stringify(results));
+}
+
+// ---- a symbolic link on main is not a file a proposal edits (PR 3b round-2 shell attack: the plan showed a text edit
+// while the branch turned the link into a file) ----
+{
+  const c = scratch("symlink");
+  const blob = execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: c, input: "../hq.policy.yaml", encoding: "utf8", env: cleanEnv() }).trim();
+  git(c, "update-index", "--add", "--cacheinfo", `120000,${blob},docs/report.md`);
+  git(c, "commit", "-q", "-m", "a link on main");
+  let code = null, msg = "";
+  try { await PB.planProposal({ repo: c, branch: "feat/face-symlink", files: [{ path: "docs/report.md", content: "text\n" }], allow: ["docs/report.md"] }); } catch (e) { code = e.code; msg = e.message; }
+  check("a path main holds as a symbolic link refuses (BAD_PATH), plan and all", code === "BAD_PATH" && /symbolic link/.test(msg), `${code} ${msg}`);
+}
+
+// ---- a RELATIVE temp dir is refused (NO_TEMP): git drops a relative ceiling, and the diff read the surrounding repo's
+// config (PR 3b round-2 shell attack) ----
+{
+  const probe = join(r, "..", `reltmp-probe-${Date.now()}.mjs`);
+  writeFileSync(probe, [
+    `const PB = await import(${JSON.stringify(pathToFileURL(join(REPO, ".claude", "scripts", "core", "proposal-branch.mjs")).href)});`,
+    `try { await PB.checkProposal({ repo: ${JSON.stringify(r)}, branch: "feat/face-reltmp", paths: ["engine/router.yaml"], allow: ["engine/router.yaml"] }); console.log("PASSED"); }`,
+    "catch (e) { console.log(e.code); }",
+    "",
+  ].join("\n"));
+  const out = execFileSync(process.execPath, [probe], { encoding: "utf8", cwd: dirname(probe), env: { ...cleanEnv(), TMPDIR: "rel-tmp", TMP: "rel-tmp", TEMP: "rel-tmp" } }).trim();
+  check("a relative temp directory refuses (NO_TEMP) before git is asked anything", out === "NO_TEMP", out);
+}
+
+// ---- the open proposals holding a path: a second trial into one bundle while the first one's branch is unmerged ----
+{
+  const c = scratch("holding");
+  const w = await PB.writeProposal({ repo: c, message: "m", allow: ["docs/bundle/commitment.txt"], branch: "feat/face-absorb-trial-one", files: [{ path: "docs/bundle/commitment.txt", content: "a".repeat(64) + "\n" }] });
+  const held = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
+  const none = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/other/commitment.txt" });
+  check("openProposalsHolding names the open branch that holds the path, and none for a path no branch holds", !!w.commit && JSON.stringify(held) === JSON.stringify(["feat/face-absorb-trial-one"]) && none.length === 0, `${JSON.stringify(held)} ${JSON.stringify(none)}`);
+}
+
 // ---- beforeRef: the caller judges the real receipt, with its commit, before the ref exists; a throw writes no branch
 // (PR 3b attacks: a dry run judged a zero commit, and the branch was written before the real one was refused) ----
 {
