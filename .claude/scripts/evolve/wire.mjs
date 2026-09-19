@@ -264,21 +264,37 @@ export function planConclude(world, a) {
   // forbids. A test that could NOT be computed yet (below floor, a window MISSING, a violation) writes nothing: its
   // horizon has not been reached.
   const computed = !!r.stats && violations.size === 0 && missingWindows === 0 && guardrails.length === 0 && !x.verdict;
+  // A refusal names what keeps the test from being computed, and never the test: with a window missing, decide() has
+  // still computed the bound, and printing it here showed the result without recording it (PR 3b logic attack).
+  const gating = r.reasons.filter((why) => !(r.outcomeReasons || []).includes(why));
   if (r.outcome !== "verdict" && !computed)
-    no("NO_VERDICT", `no verdict for ${a.experiment}: ${r.reasons.join("; ")}`);
+    no("NO_VERDICT", `no verdict for ${a.experiment} yet -- the test is not computable: ${gating.join("; ")}`);
   const nPerArm = Object.fromEntries(arms.map((arm) => [arm, counts[arm].units]));
   const outcome = r.outcome === "verdict" ? "verdict" : "no-verdict";
   const head = outcome === "verdict"
     ? `conclude ${a.experiment}: ${arms[1]} vs ${arms[0]} on ${primary} (${direction}), improvement ${r.stats.d}, lower bound ${r.stats.lower}`
     : `conclude ${a.experiment}: NO VERDICT, and it is final -- the test was computed at floor and did not clear (${r.reasons.join("; ")}); fixed horizon, so it is recorded and never re-run`;
+  const configH = configHash({ alpha, effectFloor, floor, mde, arms, split: opened.split, guardrails: guardrailDefs, metric: primary, direction });
+  const metricH = metricHash(contributions);
   return {
     kind: "experiment.verdict",
     payload: {
       experiment_id: a.experiment, outcome, bound: r.stats.lower, delta: r.stats.d, n_per_arm: nPerArm,
-      config_hash: configHash({ alpha, effectFloor, floor, mde, arms, split: opened.split, guardrails: guardrailDefs, metric: primary, direction }),
-      metric_hash: metricHash(contributions),
+      config_hash: configH,
+      metric_hash: metricH,
     },
+    // Shown only once the verdict is ON the spine (arc-evolve prints `lines` after the receipt lands).
     lines: [`${head} at alpha ${alpha} (floor ${floor} per arm; n ${arms.map((arm) => counts[arm].units).join("/")})`],
+    // COMPUTE-ONCE, AT THE DOOR TOO. The plan says the test is computable and what it will be computed over, never its
+    // result: the first cut printed the bound on the plan card and recorded nothing, so the owner could plan again as
+    // the data grew and apply only the plan that won (3/5 v 4/5 no, then 8/10 v 9/10 yes: PR 3b logic attack).
+    planLines: [
+      `conclude ${a.experiment}: the test is computable -- ${arms[1]} vs ${arms[0]} on ${primary} (${direction}), n ${arms.map((arm) => counts[arm].units).join("/")} verdict units at floor ${floor}, ${complete.length} complete window(s), alpha ${alpha}`,
+      "the apply computes it ONCE and records the result, verdict or no-verdict; the result is shown after it is recorded, never before (ADR-0306 compute-once)",
+    ],
+    // What the plan binds: the test's INPUTS. The outcome is a function of them, so binding them binds it, and a digest
+    // over the payload itself would be a digest of the result.
+    bind: { experiment_id: a.experiment, n_per_arm: nPerArm, config_hash: configH, metric_hash: metricH },
   };
 }
 

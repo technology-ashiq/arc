@@ -118,14 +118,24 @@ fixture holds the refusal identical by door and by hand.
 
 - **Emit plan** (the tool prints its seal line and the door runs it): cap proposal.
 - **Bound apply** (the plan prints a digest, and the apply re-derives and writes only if it still holds; amended
-  below): open, measure, conclude, driver switch, tier proposal.
+  below): open, measure, conclude, driver switch, tier proposal, bench propose, pin source, trial. A trial is bound
+  to the branch, main's commit and the seal's arguments -- its commitment is drawn only when it seals -- and it is
+  checked BEFORE the seal burns the correlation.
 - **Tool-owned receipt with a `--dry-run` plan:**
   - register job (`arc-jobs register <job> --dry-run` / `--receipt`, `note.logged`)
-  - trial (`judgement.mjs seal --dry-run` / `--emit`). A seal burns its correlation, so it cannot be the plan.
-  - bench propose (`arc-bench --propose --from <candidate out>`: from an existing run's evidence, with no re-run
-    and no spend)
-- **Proposal branch plus `approval.requested`:** driver switch, tier proposal and pin source. A tier is law
-  (ADR-0069): a tier change is a reviewed diff to `engine/router.yaml`, so the tier proposal writes the
+  - bench propose (`arc-bench --propose --from <candidate out> --champion <champion out>`). It works from an
+    existing run's evidence, with no re-run and no spend. A new flag on bench's closed set, recorded here the way the
+    Phase 1 two were. The dry run computes every gate and diff in a scratch directory and raises nothing. For real,
+    the artifacts land beside the spine (`<state>/bench/proposals/`, gitignored state, never a tracked file), and
+    the same candidate twice is refused.
+- **Proposal branch plus `approval.requested`:** driver switch, tier proposal, pin source and trial.
+  - Pin source is `absorb/pin.mjs`. study.mjs keeps its no-execution-primitive boundary; pin.mjs is the file
+    that spawns.
+  - Trial is `absorb/trial.mjs` over `judgement.mjs seal --bundle-dir`: the commitment goes to the branch at
+    `<evidence>/commitment.txt`, and the payload still names `<evidence>`. A seal burns its correlation, so the
+    branch is checked writable BEFORE the seal. The seal's flags became a closed set on the way: an unknown flag
+    used to be ignored, so a mistyped `--dry-run` sealed for real.
+- **A tier is law** (ADR-0069): a tier change is a reviewed diff to `engine/router.yaml`, so the tier proposal writes the
   `classes.<c>.tier` edit to a branch rather than only asking. Both engine proposals come from one engine CLI
   (`engine/propose.mjs`). It edits one line of the class's block and re-runs the router's own loader
   (`routerFaults`) over the proposed file before anything is written; a proposal the router would refuse to load
@@ -242,3 +252,83 @@ The rest are twins of rows already in this ADR's amendment:
 - a delimiter in TMP
 - the commit encoding
 - the emitter's id line behind `process.exit`
+
+## Amendment, PR 3b (same day): what the second half's two attackers found
+
+PR 3b (bench `--propose --from`, absorb pin, absorb trial) got its own fresh pair, carrying every fixed-defect row.
+The logic attacker found 8 defects and the shell attacker found 12; several were one defect found twice. Each is
+fixed and pinned. Five change decisions above.
+
+- **Compute-once holds at the plan card too.** A conclude plan says the test is computable, over which units and
+  windows, and binds the test's INPUTS (`n_per_arm`, `config_hash`, `metric_hash`); the outcome is a function of them.
+  It never shows the bound: the first cut printed it and recorded nothing, so the owner could plan again as the data
+  grew and apply only the plan that won. A refusal names what gates the test, never the bound `decide()` computed
+  anyway. The apply prints the result after its receipt lands.
+- **The spine's scanner joins the caller's strings only.** The adjacency views joined the emitter's own id, ts and
+  idem, made from the clock, so a dry run could not predict its emit. They are still scanned whole in every canonical
+  view; a key split across two caller fields is still refused.
+- **The real receipt is judged before the effect, not a draft.** `judgement.mjs seal --judge` asks the spine about the
+  payload it will print (the drawn labels, the real commitment) before its nonce is written; trial passes it. A hand
+  seal keeps its old behaviour, because the suite seals into temp bundles the spine would refuse. `writeProposal`
+  takes `beforeRef(commit)`: propose and pin judge their approval WITH the real commit, and a refusal writes no ref.
+- **Branch names are built by `proposalBranch()`,** which defuses the key-shaped prefixes a slug can spell (sk-,
+  xox?-); `checkBranch` refuses one that kept them. The writer also refuses a path that differs from main's only by
+  case (CASE_CLASH), a file/directory conflict with main (BAD_PATH), and a TMP holding the path delimiter in every
+  entry point, the pre-seal check included.
+- **Bench `--propose --from` is keyed on candidate AND champion, and marked only once an approval lands**
+  (`approval.id`). The store is `<spine root>/bench/proposals`, inside the spine's own gitignored root. "Different
+  runs" is compared by content. The approval is judged by the spine (with bench's `--process`) before anything is
+  written, and an apply whose approval did not land exits 1 (PARTIAL) with nothing marked.
+
+The rest are twins of rows already here:
+- trial's reused-bundle guard now reads main
+- a half-failed seal is reported as sealed (exit 1)
+- the id line after the effect cannot turn a landed event into a refusal
+- the leads reader knows the named locks withLock takes
+- a config hook named `x=y` is disabled through `GIT_CONFIG_*`
+- every temp cleanup in bench is litter
+- the scaffold records a source outside the repo by its folder name, not the owner's path
+- the shutdown pause shrinks with depth
+
+## Amendment, PR 3b round 2 (same day)
+
+A fresh pair attacked the PR 3b fixes: 10 logic and 11 shell findings, several shared. All are fixed and pinned. Three
+change decisions above:
+- **A conclude is judged in both outcome spellings**, and refused if either is, so the spine's answer is the same
+  whichever way the test goes. A refused `experiment.verdict` is quarantined as a stub only.
+- **The proposal writer proves its hooks are off** (read back through git) and refuses a hook name that is not UTF-8.
+  Every commit carries a per-call `Proposal-Nonce` trailer, so only the writer whose commit the branch holds can claim
+  it. A path that is a symlink or a gitlink on main is refused, and so is a relative temp directory.
+- **Bench `--propose --from` serialises its applies** per store (a `wx` lock), writes `approval.pending` before it
+  emits, and reads each evidence file once. It refuses a champion whose content or subject is the candidate's.
+
+## Amendment, PR 3b round 4 (same day)
+
+A narrow pair attacked the round-3 diff: 6 logic and 7 shell findings, three shared. All are fixed and pinned. Two
+change decisions above:
+- **An emit has three outcomes, not two.** Landed is exit 0 (arc-event's own contract, whether or not the id line
+  survived); refused is an emitter that never started or exit 2 naming a refusal that stops before the append; everything
+  else is unknown, and unknown never removes a mark or reports "not raised". The spine's writer treats a flush that fails
+  after the line is written as a warning, so INTERNAL no longer means "maybe" for that case at all.
+- **One exclusive lock, and its break is serialised.** `withExclusiveLock` and its synchronous twin are the face tools'
+  one refuse-if-busy lock beside `spine-io.withLock`; a stale lock is broken under a breaker file, only if it is still the file
+  that was judged stale.
+
+## Amendment, PR 3b round 5 (same day)
+
+A narrow pair attacked the round-4 diff: 6 logic and 9 shell findings, the lock at the centre of both. All are fixed and
+pinned, and one decision above changes:
+- **The face tools' lock is numbered, and nobody breaks it.** `<name>.<n>`: a taker reads the highest number and, when
+  its holder is gone (on this machine, its process has exited; on another, its file is older than `staleMs`), creates
+  the next number with "wx", which one caller alone can do. No process deletes another's lock file, so there is no
+  break to race. The spine's own lock keeps its file names (the leads reader and the spine suites name them); it breaks
+  only a gone holder's lock and re-reads before it unlinks, and the remaining window is in the face lane's debt ledger.
+
+## Amendment, PR 3b round 6 (same day)
+
+The numbered lock of round 5 fell to its own attack pair (numbers reused after a sweep; an unreadable file read as
+released). The face tools' lock is now the simplest shape that can be argued: **every taker creates its own
+random-named file, then holds only if no other file has a live holder** (unreadable counts as live; on this machine a
+holder is live while its process runs, up to an hour; on another, by age). Two takers in one instant may both back off
+and neither holds wrongly. Nothing is renamed, numbered or reused, and only a gone holder's file is ever deleted. The
+spine lock keeps its file name; its token now names its host.

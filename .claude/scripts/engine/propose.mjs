@@ -21,13 +21,12 @@
 // written.
 
 import { readdirSync, realpathSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { routerFaults } from "./router-row.mjs";
-import { planProposal, writeProposal, baseText, ProposalError } from "../core/proposal-branch.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
+import { planProposal, proposalBranch, writeProposal, baseText, ProposalError } from "../core/proposal-branch.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -35,7 +34,6 @@ const REPO = resolve(HERE, "..", "..", "..");
 const ROUTER = "engine/router.yaml";
 const ARC_EVENT = join(REPO, ".claude", "scripts", "hq", "arc-event.mjs");
 const SLUG_RE = /^[a-z][a-z0-9-]{0,40}$/;
-const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 function die(code, msg) { process.stderr.write(`propose: ${msg}\n`); process.exitCode = code; throw new Stop(); }
 class Stop extends Error {}
@@ -102,11 +100,12 @@ export function editRouter(text, cls, field, to) {
 /**
  * The proposal branch. The class goes LAST: a class ending in "sk" (face-ask) followed by "-" made "sk-" inside the
  * branch name, the spine's secret scanner read it plus the neighbouring strings as an API key, and every face-ask
- * proposal wrote its branch and then had its approval refused (PR 3a logic attack).
+ * proposal wrote its branch and then had its approval refused (PR 3a logic attack). proposalBranch defuses an "sk-" the
+ * class-last order cannot, one INSIDE a name (face-ask-v2; PR 3b logic attack, the pin twin).
  * @param {"driver" | "tier"} verb @param {string} cls @param {string} to
  */
 export function branchFor(verb, cls, to) {
-  return `feat/face-engine-${verb}-${to}-${cls}`.slice(0, 90).replace(/-+$/, "");
+  return proposalBranch(`engine-${verb}`, `${to}-${cls}`);
 }
 
 /** The approval a written proposal raises. One builder, for the dry run and the real emit alike. */
@@ -144,7 +143,7 @@ async function main() {
   const files = [{ path: ROUTER, content: proposed }];
   const approval = (commit) => approvalPayload({ verb: args.verb, cls: args.class, from, to: args.to, why: args.why, branch, base, commit });
   // The approval is judged with a placeholder commit of the real one's shape, in the plan AND before the write.
-  const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)));
+  const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)), { cwd: REPO });
   if (refused) die(2, `the approval this proposal raises would be refused by the spine, so nothing is written: ${refused}`);
   const { what } = approval("");
   const message = `engine: ${what} (a proposal, ADR-0069${args.verb === "driver" ? "" : " tier change"})\n\n${args.why ? `${args.why}\n\n` : ""}Written by the face's work door (ADR-1340). Nothing routes differently until a human merges this branch.`;
@@ -167,15 +166,22 @@ async function main() {
   if (args.expect === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, read the diff, then run it again with the --expect it prints");
   const stale = staleReason(args.expect, digest);
   if (stale) die(2, stale);
-  const w = await writeProposal({ repo: REPO, branch, files, allow: [ROUTER], message, base });
+  // The REAL approval, its commit included, is judged once the commit exists and before the branch does: the plan judged
+  // a zero commit, and a real one can sort beside a string into a key the spine refuses (PR 3b attacks).
+  const w = await writeProposal({ repo: REPO, branch, files, allow: [ROUTER], message, base,
+    beforeRef: (commit) => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval(commit), { cwd: REPO }); if (no) die(2, `the spine would refuse this approval with its real commit, so no branch was written: ${no}`); } });
   written = true;
   process.stdout.write(`propose: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}\n`);
   process.stdout.write(w.diff.endsWith("\n") ? w.diff : w.diff + "\n");
-  const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(approval(w.commit)), "--strict"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  const id = String(r.stdout || "").trim();
-  if (r.status !== 0 || !ULID_RE.test(id))
-    die(1, `the branch ${branch} IS written, and its approval was not raised -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
-  process.stdout.write(`receipt: approval.requested ${id}\n`);
+  // From REPO, as pin and trial emit: from another clone's cwd the approval landed in THAT clone's spine while the branch
+  // went to this one (PR 3b round-4 shell attack).
+  // Three outcomes, never two: an unknown one (REJECT INTERNAL, a lost id line, a timeout) was read as "not raised",
+  // and the approval sat in the inbox while the tool said otherwise (PR 3b round-4 attacks).
+  const got = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit), { cwd: REPO, timeoutMs: 60_000 });
+  if (got.state === "refused") die(1, `the branch ${branch} IS written, and its approval was not raised -- ${got.why}`);
+  if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its approval landed is unknown -- ${got.why}. Look in your inbox before applying again`);
+  if (!got.id) die(1, `the branch ${branch} IS written, and its approval landed without its id -- ${got.why}`);
+  process.stdout.write(`receipt: approval.requested ${got.id}\n`);
 }
 
 // Run only as the CLI: importing this file for editRouter must not parse the importer's argv. Both sides realpathed --

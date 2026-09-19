@@ -15,9 +15,13 @@ import { spineRoot, eventsDir, quarantineDir, readIdemIndex } from "../../hq/lib
 
 const DAY_RE = /^(\d{4}-\d{2}-\d{2})\.jsonl$/;
 // The entries spine-io is KNOWN to put in events/ that are not day files: the quarantine
-// directory, a day-close marker, and the write lock. Listed rather than pattern-matched loosely,
-// so that adding a fourth kind of file over there is a decision somebody makes here.
-const KNOWN_NON_DAY_RE = /^(_quarantine|\.lock|\d{4}-\d{2}-\d{2}\.closed)$/;
+// directory, a day-close marker, the write lock, and the two NAMED locks withLock takes there --
+// evolve's apply lock and the scheduler's per-job overlap lock. Listed rather than pattern-matched
+// loosely, so that adding another kind of file over there is a decision somebody makes here. The
+// named locks were not listed: a killed evolve apply left its lock behind, and this reader then
+// refused every fold -- during every live apply, too (PR 3b shell attack; the job lock was the
+// same hole, older).
+const KNOWN_NON_DAY_RE = /^(_quarantine|\.lock|\.evolve-apply\.lock|\.job-[a-z0-9.-]+\.lock|\d{4}-\d{2}-\d{2}\.closed)$/;
 
 export function readAllEvents({ root = spineRoot(), allowMissing = false } = {}) {
   const dir = eventsDir(root);

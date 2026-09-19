@@ -57,10 +57,21 @@ process.once("exit", () => { for (const c of LIVE) killTree(c); });
 /** @param {number} code */
 const onSignal = (code) => () => {
   for (const c of LIVE) killTree(c, { graceful: true });
-  if (!IS_WIN && LIVE.size) pauseSync(300);
+  if (!IS_WIN && LIVE.size) pauseSync(PAUSE_MS);
   for (const c of LIVE) killTree(c);
   process.exit(code);
 };
+// THE PAUSE SHRINKS WITH DEPTH. A parent and its child both paused 300 ms, so the parent's SIGKILL could land before
+// the child had SIGKILLed its own git groups, and those ran on (PR 3b shell attack). A child is handed its DEPTH, not a
+// pause, and the depth counts only when the process that handed it down is this process's parent: an absolute value
+// read from the owner's environment made door and tool pause alike, or stalled Ctrl-C for five seconds (PR 3b round-2).
+// door 600, tool 450, its child 300, then 150; no two of the levels that exist are equal.
+const DEPTH = (() => {
+  const m = /^([0-9]{1,2}):([0-9]{1,10})$/.exec(process.env.ARC_SPAWN_DEPTH || "");
+  return m && Number(m[2]) === process.ppid ? Math.min(Number(m[1]), 3) : 0;
+})();
+const PAUSE_MS = 600 - 150 * DEPTH;
+const CHILD_DEPTH = `${DEPTH + 1}:${process.pid}`;
 const SIGNALS = /** @type {const} */ ([["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]);
 const armed = new Map();
 function armSignals() {
@@ -85,7 +96,7 @@ export function spawnBounded(file, args, { cwd, env, input, timeoutMs, onData })
     let child;
     try {
       child = spawn(file, args, {
-        cwd, env, windowsHide: true, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+        cwd, env: { ...(env ?? process.env), ARC_SPAWN_DEPTH: CHILD_DEPTH }, windowsHide: true, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
         // POSIX: the child leads its own group, so a timeout ends the WHOLE tree with one signal to -pid.
         detached: !IS_WIN,
       });

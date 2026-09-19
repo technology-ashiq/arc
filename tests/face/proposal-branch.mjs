@@ -142,6 +142,17 @@ await refuse("git's directory spelled .git.", { branch: "feat/face-t12", files: 
 await refuse("a Windows device name", { branch: "feat/face-t13", files: [{ path: "engine/nul", content: "x" }], allow: ["engine/nul"] }, "BAD_PATH");
 await refuse("a device name with an extension", { branch: "feat/face-t14", files: [{ path: "engine/com1.yaml", content: "x" }], allow: ["engine/com1.yaml"] }, "BAD_PATH");
 await refuse("a name that opens with a dash", { branch: "feat/face-t15", files: [{ path: "-x/y", content: "x" }], allow: ["-x/y"] }, "BAD_PATH");
+// A path main holds under another CASE: the branch would hold both, and a Windows or macOS checkout cannot (PR 3b shell
+// attack). A directory in another case is the same clash one level up; a file where a directory is needed is refused.
+await refuse("a file main holds under another case", { branch: "feat/face-t16", files: [{ path: "engine/Router.yaml", content: "x" }], allow: ["engine/Router.yaml"] }, "CASE_CLASH");
+await refuse("a directory main holds under another case", { branch: "feat/face-t17", files: [{ path: "Engine/new.yaml", content: "x" }], allow: ["Engine/new.yaml"] }, "CASE_CLASH");
+await refuse("a path that needs main's file to be a directory", { branch: "feat/face-t18", files: [{ path: "README.md/x.md", content: "x" }], allow: ["README.md/x.md"] }, "BAD_PATH");
+{
+  let code = null;
+  try { await PB.checkProposal({ repo: r, branch: "feat/face-t19", paths: ["engine/Router.yaml"], allow: ["engine/Router.yaml"] }); } catch (e) { code = e && e.code; }
+  const fine = await PB.checkProposal({ repo: r, branch: "feat/face-t20", paths: ["engine/new.yaml"], allow: ["engine/new.yaml"] }).catch((e) => ({ err: e.code }));
+  check("the pre-seal check refuses a case clash too (CASE_CLASH), and passes a new path (vacuous-pass guard)", code === "CASE_CLASH" && fine.base === before.main, `${code} ${JSON.stringify(fine)}`);
+}
 
 // ---- an existing branch in ANOTHER CASE, or as a directory, is a collision (PR 3a shell attack: on a case-insensitive
 // filesystem a loose feat/face-p2-f shadowed the owner's packed feat/face-P2-F and moved it) ----
@@ -248,6 +259,126 @@ await refuse("a name that opens with a dash", { branch: "feat/face-t15", files: 
     after === before && refs(c).includes("refs/heads/feat/face-cfghook "), `control=${controlFired} before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
 }
 
+// ---- a config hook whose NAME holds "=" is disabled too (PR 3b shell attack: git splits -c at the first "=", so
+// `-c hook.x=y.enabled=false` set hook.x to "y.enabled=false" and the hook ran three times inside a write) ----
+{
+  const c = scratch("cfgeq");
+  const mark = join(c, "..", `cfgeq-${Date.now()}.txt`);
+  const markPosix = mark.replace(/\\/g, "/");
+  git(c, "config", "hook.x=y.command", `echo ran >> "${markPosix}"`);
+  git(c, "config", "--add", "hook.x=y.event", "reference-transaction");
+  git(c, "branch", "feat/face-cfgeq-control", "main");
+  const controlFired = existsSync(mark);
+  const before = controlFired ? readFileSync(mark, "utf8") : "";
+  await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-cfgeq", files: [{ path: "engine/router.yaml", content: PROPOSED }] });
+  const after = existsSync(mark) ? readFileSync(mark, "utf8") : "";
+  check(controlFired ? "a config hook NAMED x=y that plain git runs is NOT run by the writer" : "a config hook named x=y: this git has no config hooks, so there is nothing to run (checked, not assumed)",
+    after === before && refs(c).includes("refs/heads/feat/face-cfgeq "), `control=${controlFired} before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+}
+
+// ---- config hook NAMES the line parse could not read: CR, U+2028, the empty name -- disabled; a name that is not UTF-8
+// -- refused before anything is written (PR 3b round-2 shell attack: each ran six times inside a write) ----
+{
+  for (const [label, nameBytes, expectRefusal] of [["CR", Buffer.from("a\rb"), false], ["U+2028", Buffer.from("a b"), false], ["the empty name", Buffer.alloc(0), false], ["a non-UTF-8 byte", Buffer.from([0x61, 0xff, 0x62]), true]]) {
+    const c = scratch("hookname");
+    const mark = join(c, "..", `hookname-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`).replace(/\\/g, "/");
+    writeFileSync(join(c, ".git", "config"), Buffer.concat([readFileSync(join(c, ".git", "config")), Buffer.from("[hook \""), nameBytes, Buffer.from(`"]\n\tevent = reference-transaction\n\tcommand = echo r >> ${mark}\n`)]));
+    git(c, "branch", "feat/face-hookname-control", "main");
+    const control = existsSync(mark) ? readFileSync(mark, "utf8").length : 0;
+    let code = null;
+    try { await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-hookname", files: [{ path: "engine/router.yaml", content: PROPOSED }] }); } catch (e) { code = e.code; }
+    const ranInWrite = (existsSync(mark) ? readFileSync(mark, "utf8").length : 0) - control;
+    check(expectRefusal
+      ? `a config hook named with ${label} is refused (HOOK_NAME) before anything is written${control ? "" : " (this git runs no config hooks)"}`
+      : `a config hook named with ${label} is disabled inside the write${control ? " (plain git runs it)" : " (this git runs no config hooks)"}`,
+      expectRefusal ? code === "HOOK_NAME" && !refs(c).includes("refs/heads/feat/face-hookname ") : code === null && ranInWrite === 0 && refs(c).includes("refs/heads/feat/face-hookname "),
+      `code=${code} control=${control} ran=${ranInWrite}`);
+  }
+}
+
+// ---- one plan, three writers at once: exactly one branch, and only its writer claims it (PR 3b round-2 shell attack:
+// the same second gave one commit, and the update-ref catch told all three writers the branch was theirs) ----
+{
+  const c = scratch("concurrent");
+  const results = await Promise.all([0, 1, 2].map(() => PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-concurrent", files: [{ path: "engine/router.yaml", content: PROPOSED }] }).then((w) => ({ ok: w.commit }), (e) => ({ code: e.code }))));
+  const tip = git(c, "rev-parse", "refs/heads/feat/face-concurrent");
+  check("three writers of one plan at once: one writes and claims the branch, the others refuse (BRANCH_EXISTS)",
+    results.filter((r) => r.ok).length === 1 && results.find((r) => r.ok).ok === tip && results.filter((r) => r.code === "BRANCH_EXISTS").length === 2, JSON.stringify(results));
+}
+
+// ---- a symbolic link on main is not a file a proposal edits (PR 3b round-2 shell attack: the plan showed a text edit
+// while the branch turned the link into a file) ----
+{
+  const c = scratch("symlink");
+  const blob = execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: c, input: "../hq.policy.yaml", encoding: "utf8", env: cleanEnv() }).trim();
+  git(c, "update-index", "--add", "--cacheinfo", `120000,${blob},docs/report.md`);
+  git(c, "commit", "-q", "-m", "a link on main");
+  let code = null, msg = "";
+  try { await PB.planProposal({ repo: c, branch: "feat/face-symlink", files: [{ path: "docs/report.md", content: "text\n" }], allow: ["docs/report.md"] }); } catch (e) { code = e.code; msg = e.message; }
+  check("a path main holds as a symbolic link refuses (BAD_PATH), plan and all", code === "BAD_PATH" && /symbolic link/.test(msg), `${code} ${msg}`);
+}
+
+// ---- a RELATIVE temp dir is refused (NO_TEMP): git drops a relative ceiling, and the diff read the surrounding repo's
+// config (PR 3b round-2 shell attack) ----
+{
+  const probe = join(r, "..", `reltmp-probe-${Date.now()}.mjs`);
+  writeFileSync(probe, [
+    `const PB = await import(${JSON.stringify(pathToFileURL(join(REPO, ".claude", "scripts", "core", "proposal-branch.mjs")).href)});`,
+    `try { await PB.checkProposal({ repo: ${JSON.stringify(r)}, branch: "feat/face-reltmp", paths: ["engine/router.yaml"], allow: ["engine/router.yaml"] }); console.log("PASSED"); }`,
+    "catch (e) { console.log(e.code); }",
+    "",
+  ].join("\n"));
+  const out = execFileSync(process.execPath, [probe], { encoding: "utf8", cwd: dirname(probe), env: { ...cleanEnv(), TMPDIR: "rel-tmp", TMP: "rel-tmp", TEMP: "rel-tmp" } }).trim();
+  check("a relative temp directory refuses (NO_TEMP) before git is asked anything", out === "NO_TEMP", out);
+}
+
+// ---- the open proposals holding a path: a second trial into one bundle while the first one's branch is unmerged ----
+{
+  const c = scratch("holding");
+  const w = await PB.writeProposal({ repo: c, message: "m", allow: ["docs/bundle/commitment.txt"], branch: "feat/face-absorb-trial-one", files: [{ path: "docs/bundle/commitment.txt", content: "a".repeat(64) + "\n" }] });
+  const held = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
+  const none = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/other/commitment.txt" });
+  check("openProposalsHolding names the open branch that holds the path, and none for a path no branch holds", !!w.commit && JSON.stringify(held) === JSON.stringify(["feat/face-absorb-trial-one"]) && none.length === 0, `${JSON.stringify(held)} ${JSON.stringify(none)}`);
+  // Without case, and on remote-tracking branches too (PR 3b round-3 logic attack): a bundle named in another case, and
+  // a branch pushed and then deleted locally, were invisible.
+  const cased = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/BUNDLE/commitment.txt" });
+  git(c, "update-ref", "refs/remotes/origin/feat/face-absorb-trial-two", w.commit);
+  git(c, "branch", "-D", "feat/face-absorb-trial-one");
+  const remote = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
+  check("openProposalsHolding matches a path in another case, and a remote-tracking branch after the local one is gone (named as git names it)",
+    JSON.stringify(cased) === JSON.stringify(["feat/face-absorb-trial-one"]) && JSON.stringify(remote) === JSON.stringify(["origin/feat/face-absorb-trial-two"]), `${JSON.stringify(cased)} ${JSON.stringify(remote)}`);
+  // A remote whose NAME holds a slash (PR 3b round-4 logic attack: cut at the first one, its branches were never seen).
+  git(c, "remote", "add", "up/stream", c);
+  git(c, "update-ref", "refs/remotes/up/stream/feat/face-absorb-trial-three", w.commit);
+  const slashed = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
+  check("openProposalsHolding sees a branch under a remote whose name holds a slash",
+    JSON.stringify(slashed) === JSON.stringify(["origin/feat/face-absorb-trial-two", "up/stream/feat/face-absorb-trial-three"]), JSON.stringify(slashed));
+  // A removed remote's refs under a SHORTER configured one ("up" beside a gone "up/river"): cut after "up", the name did
+  // not match and the prefix search never ran (PR 3b round-5 shell attack).
+  // The removed remote's refs stay: its config section goes (git remote add refuses "up" beside "up/stream" on newer
+  // git, CI), and "up" is configured by git config directly.
+  git(c, "config", "--remove-section", "remote.up/stream");
+  git(c, "config", "remote.up.url", c);
+  git(c, "update-ref", "refs/remotes/up/river/feat/face-absorb-trial-four", w.commit);
+  const orphan = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
+  check("openProposalsHolding sees a removed remote's branches under a shorter configured remote",
+    orphan.includes("up/river/feat/face-absorb-trial-four") && orphan.includes("up/stream/feat/face-absorb-trial-three"), JSON.stringify(orphan));
+}
+
+// ---- beforeRef: the caller judges the real receipt, with its commit, before the ref exists; a throw writes no branch
+// (PR 3b attacks: a dry run judged a zero commit, and the branch was written before the real one was refused) ----
+{
+  const c = scratch("beforeref");
+  let seen = "", refYet = true;
+  const w = await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-beforeref", files: [{ path: "engine/router.yaml", content: PROPOSED }],
+    beforeRef: (commit) => { seen = commit; refYet = refs(c).includes("refs/heads/feat/face-beforeref "); } });
+  check("beforeRef sees the commit the branch will point at, before the branch exists", seen === w.commit && refYet === false && refs(c).includes(`refs/heads/feat/face-beforeref ${w.commit}`), `${seen} ${w.commit} ${refYet}`);
+  let code = null;
+  try { await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-vetoed", files: [{ path: "engine/router.yaml", content: PROPOSED }], beforeRef: () => { throw Object.assign(new Error("no"), { code: "VETOED" }); } }); }
+  catch (e) { code = e && e.code; }
+  check("a beforeRef that throws writes no branch, and its own error comes back", code === "VETOED" && !refs(c).includes("refs/heads/feat/face-vetoed "), `${code}`);
+}
+
 // ---- a branch the writer DID create is the writer's, even when the update-ref call reports a failure (PR 3a round-2
 // shell attack: it was reported as someone else's branch, propose exited 2, and every retry refused) ----
 {
@@ -285,6 +416,45 @@ await refuse("a name that opens with a dash", { branch: "feat/face-t15", files: 
   try { commit = JSON.parse(out.trim().split(/\r?\n/).pop()).commit; } catch { /* reported below */ }
   check("a branch the writer created is returned as written when update-ref reports a failure after committing it",
     code === 0 && /^[0-9a-f]{40,64}$/.test(commit) && git(c, "rev-parse", "refs/heads/feat/face-ownref") === commit, `code=${code} ${out.slice(0, 300)}`);
+
+  // THE MUTANT'S CASE (PR 3b shell attack): the same failure, and the branch that now exists is SOMEONE ELSE'S -- it
+  // points at main, not at the writer's commit. Returned as written, the caller would raise an approval for a branch
+  // that does not carry the proposal. A writer that dropped the "is it my commit" comparison passed both tests above.
+  const foreignFake = join(c, "..", `foreign-update-ref-${Date.now()}.mjs`);
+  writeFileSync(foreignFake, [
+    "import { spawnSync } from \"node:child_process\";",
+    "import { readFileSync } from \"node:fs\";",
+    "readFileSync(0);",
+    "spawnSync(\"git\", [\"update-ref\", \"refs/heads/feat/face-foreign\", \"main\"], { stdio: \"inherit\" });",
+    "process.exit(1);",
+    "",
+  ].join("\n"));
+  const foreignShim = join(c, "..", `foreign-shim-${Date.now()}.mjs`);
+  writeFileSync(foreignShim, [
+    "import cp from \"node:child_process\";",
+    "import { syncBuiltinESMExports } from \"node:module\";",
+    "const real = cp.spawn;",
+    `cp.spawn = (file, args, opts) => (file === "git" && Array.isArray(args) && args.includes("update-ref") ? real(process.execPath, [${JSON.stringify(foreignFake)}, ...args], opts) : real(file, args, opts));`,
+    "syncBuiltinESMExports();",
+    "",
+  ].join("\n"));
+  const foreignProbe = join(c, "..", `foreign-probe-${Date.now()}.mjs`);
+  writeFileSync(foreignProbe, [
+    `const PB = await import(${JSON.stringify(pathToFileURL(join(REPO, ".claude", "scripts", "core", "proposal-branch.mjs")).href)});`,
+    "try {",
+    `  const w = await PB.writeProposal({ repo: ${JSON.stringify(c)}, message: "m2", allow: ["engine/router.yaml"], branch: "feat/face-foreign", files: [{ path: "engine/router.yaml", content: ${JSON.stringify(PROPOSED.replace("codex", "hermes"))} }] });`,
+    "  console.log(JSON.stringify({ written: w.commit }));",
+    "} catch (e) { console.log(JSON.stringify({ code: e.code })); }",
+    "",
+  ].join("\n"));
+  let fOut = "";
+  try { fOut = execFileSync(process.execPath, ["--import", pathToFileURL(foreignShim).href, foreignProbe], { encoding: "utf8", env: cleanEnv() }); }
+  catch (e) { fOut = String(e.stdout || "") + String(e.stderr || ""); }
+  let fGot = {};
+  try { fGot = JSON.parse(fOut.trim().split(/\r?\n/).pop()); } catch { /* reported below */ }
+  const foreignTip = (() => { try { return git(c, "rev-parse", "refs/heads/feat/face-foreign"); } catch { return ""; } })();
+  check("a branch that appeared during a failed update-ref and is NOT the writer's commit refuses (BRANCH_EXISTS), never returned as written",
+    fGot.code === "BRANCH_EXISTS" && foreignTip === git(c, "rev-parse", "main"), `${fOut.slice(0, 300)} tip=${foreignTip}`);
 }
 
 // ---- the module names no porcelain that could move the owner's tree ----

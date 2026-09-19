@@ -8,6 +8,9 @@
 //                apply is bound to its plan (--expect) and to the main it read; in a scratch repo it writes a branch
 //                and nothing else, and a cleanup that fails after the write is not reported as a refusal
 //   policy       the promotion request is the policy library's, accepted by the spine; refusals name the rule
+//   bench        --propose --from proposes from a run that already happened, bound to its plan's digest
+//   absorb       pin and trial write their branch and raise their approval in a scratch repo, each bound to its plan;
+//                a trial whose approval the spine would refuse is refused before the seal burns its correlation
 //   evolve       the LOGIC, as pure functions over in-memory receipts: supersedes, counts, conflicts, the cohort
 //                re-derived, completeness per cohort, direction, the module's alpha, TTL, drift, two arms, compute-once
 //                -- then the CLI: plan -> apply bound by --expect, and every check re-run at apply
@@ -21,8 +24,8 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync, statSync, utimesSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -169,6 +172,34 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("policy-promote: a kind hq.policy.yaml does not declare refuses (a subject is born by a reviewed edit)", ghost.status === 2 && /declares no kind/.test(ghost.stderr), ghost.stderr);
   const nocite = pp("--kind", "process:kickoff-plan", "--capability", "write", "--to", "L2");
   check("policy-promote: no evidence, no request (A4)", nocite.status === 2 && /--evidence is required/.test(nocite.stderr), nocite.stderr);
+}
+
+// ---- the spine's secret scanner joins the CALLER's strings, not the ones the emitter makes from the clock (PR 3b
+// attacks: the idem, a fresh hash per call, sat beside a caller's string in the joined views, so one payload was
+// accepted by a dry run and refused by the emit, or the other way round). An actor ending in "sk-" sat beside the idem
+// in the reversed view EVERY time: refused always before, accepted now -- and a key split across two caller fields is
+// still caught (the view exists for that). ----
+{
+  const sp = spine("redact-join");
+  const dry = (payload, actor) => node([S("hq", "arc-event.mjs"), "emit", "note.logged", "--payload", JSON.stringify(payload), ...(actor ? ["--actor", actor] : []), "--dry-run"], { ARC_SPINE_ROOT: sp });
+  const runs = Array.from({ length: 3 }, () => dry({ note: "probe" }, "bench-task-"));
+  check("spine scan: an actor ending in sk- is not joined with the clock-made idem into a key (accepted, three times running)", runs.every((r) => r.status === 0), runs.map((r) => `${r.status} ${r.stderr.trim()}`).join(" | "));
+  const split = dry({ note: "probe", a: "sk-", b: "Q".repeat(40) });
+  check("spine scan: a key split across two CALLER fields is still refused (SECRET) -- the adjacency view stays", split.status === 2 && /SECRET/.test(split.stderr), `${split.status} ${split.stderr}`);
+  // Only what THIS call made is left out: a caller-supplied --idem is the caller's string (PR 3b round-2 logic attack).
+  const idemSplit = node([S("hq", "arc-event.mjs"), "emit", "note.logged", "--payload", JSON.stringify({ note: "probe" }), "--actor", "sk-", "--idem", "0123456789abcdef".repeat(4), "--dry-run"], { ARC_SPINE_ROOT: sp });
+  check("spine scan: a key split across the actor and a CALLER-supplied idem is refused (SECRET)", idemSplit.status === 2 && /SECRET/.test(idemSplit.stderr), `${idemSplit.status} ${idemSplit.stderr}`);
+  // ingest derives its own idem and ignores --idem: the flag's presence does not put the derived value in the joins.
+  const ingestFile = join(tmp, "ingest-note.json");
+  writeFileSync(ingestFile, JSON.stringify({ note: "probe" }));
+  const ingestIdem = node([S("hq", "arc-event.mjs"), "ingest", "note.logged", "--json", ingestFile, "--actor", "xsk-", "--idem", "zz", "--dry-run"], { ARC_SPINE_ROOT: sp });
+  check("spine scan: ingest's DERIVED idem stays out of the joins even when --idem is given (accepted)", ingestIdem.status === 0, `${ingestIdem.status} ${ingestIdem.stderr}`);
+  // A refused experiment.verdict is quarantined as a stub: its payload is a result nobody reads before it is recorded.
+  const qsp = spine("verdict-quarantine");
+  const refusedVerdict = node([S("hq", "arc-event.mjs"), "emit", "experiment.verdict", "--payload", JSON.stringify({ experiment_id: "x-q", outcome: "verdict", bound: 0.4321, delta: 0.8765 }), "--strict"], { ARC_SPINE_ROOT: qsp });
+  const qdir = join(qsp, "events", "_quarantine");
+  const quarantined = existsSync(qdir) ? readdirSync(qdir).map((n) => readFileSync(join(qdir, n), "utf8")).join("\n") : "";
+  check("a refused experiment.verdict is quarantined as a stub -- its bound and delta are not on disk", refusedVerdict.status === 2 && quarantined.length > 0 && !quarantined.includes("0.4321") && !quarantined.includes("0.8765"), `${refusedVerdict.status} ${quarantined.slice(0, 300)}`);
 }
 
 // ---- evolve LOGIC: open, measure and conclude as pure functions over in-memory receipts (wire.mjs) ----
@@ -356,6 +387,15 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     check("conclude (pure): after a recorded no-verdict, conclude refuses (VERDICTED) -- never re-run as the data grows", again.code === "VERDICTED", JSON.stringify(again).slice(0, 200));
     const short = conclude([opened(), ...five("+champion").slice(0, 4).map((u) => measured(u, 0)), ...five("+challenger").slice(0, 4).map((u) => measured(u, 1))]);
     check("conclude (pure): below floor nothing is computed, so nothing is recorded (NO_VERDICT, a refusal)", short.code === "NO_VERDICT", JSON.stringify(short).slice(0, 200));
+    // COMPUTE-ONCE AT THE DOOR (PR 3b logic attack): the plan says the test is computable, never its result, and a
+    // refusal names what gates it, never the bound decide() computed anyway.
+    const bound = r.ok ? String(r.ok.payload.bound) : "no-bound";
+    const plan = r.ok ? r.ok.planLines.join("\n") : "";
+    check("conclude (pure): the plan's lines carry neither the bound nor the outcome -- it is shown once recorded", !!r.ok && /the test is computable/.test(plan) && !plan.includes(bound) && !/NO VERDICT|lower bound|improvement/.test(plan), plan);
+    const halfWindow = conclude([...weak, measured(five("+champion")[0], 1, { window_start: "2026-09-08", window_end: "2026-09-14" })]);
+    check("conclude (pure): a refusal with a MISSING window names the window, and not the bound decide() computed", halfWindow.code === "NO_VERDICT" && /1 window\(s\) are MISSING/.test(halfWindow.msg) && !halfWindow.msg.includes(bound) && !/bound|delta/.test(halfWindow.msg), JSON.stringify(halfWindow).slice(0, 300));
+    const grown = conclude([...weak.slice(0, 4), measured(five("+champion")[3], 1), ...weak.slice(5)]);
+    check("conclude (pure): the plan binds the test's inputs -- one changed measurement is another bind", !!r.ok && !!grown.ok && JSON.stringify(grown.ok.bind) !== JSON.stringify(r.ok.bind) && r.ok.bind.metric_hash === r.ok.payload.metric_hash, JSON.stringify(grown).slice(0, 200));
   }
   {
     const m = run(W.planMeasure, base(), { experiment: X, unit: "p-y", metric: "converted", value: "1", count: "0", window: "2026-09-01..2026-09-07", source: "s" });
@@ -439,12 +479,39 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   const verdictId = receiptOf(a1.stdout);
   const verdict = spineEvents(sp).find((e) => e.id === verdictId);
   check("evolve conclude, applied: the verdict lands on the spine", a1.status === 0 && !!verdict && verdict.kind === "experiment.verdict", `${a1.status} ${a1.stderr}`);
+  check("evolve conclude: the plan card shows no result, and the apply shows it once recorded -- compute once at the door",
+    !!verdict && !c1.stdout.includes(String(verdict.payload.bound)) && !/lower bound|improvement/.test(c1.stdout) && /the test is computable/.test(c1.stdout)
+      && a1.stdout.includes(`lower bound ${verdict.payload.bound}`) && a1.stdout.indexOf("lower bound") < a1.stdout.indexOf("receipt:"), `${c1.stdout}\n${a1.stdout}`);
   check("evolve conclude: n per arm is the verdict cohort's 5 each, and the delta is the whole difference",
     !!verdict && verdict.payload.n_per_arm["+champion"] === 5 && verdict.payload.n_per_arm["+challenger"] === 5 && verdict.payload.delta === 1 && verdict.payload.bound > 0 && /^[0-9a-f]{64}$/.test(verdict.payload.config_hash), JSON.stringify(verdict && verdict.payload));
   const a2 = ev(["conclude", "--experiment", "x-suite", "--expect", d2]);
   check("evolve conclude: a second plan applied after the verdict refuses (VERDICTED) -- compute once holds at apply", a2.status === 2 && /VERDICTED/.test(a2.stderr) && spineEvents(sp).filter((e) => e.kind === "experiment.verdict").length === 1, a2.stderr);
   const lateApply = ev([...MEASURE(perArm["+champion"][5], 1, "2026-09-08..2026-09-14"), "--expect", lateDigest || "x"]);
   check("evolve measure: planned before the verdict, applied after it, refuses (VERDICTED) -- fixed horizon holds at apply", lateApply.status === 2 && /VERDICTED/.test(lateApply.stderr), lateApply.stderr);
+
+  // THE SPINE'S ANSWER CANNOT DEPEND ON THE RESULT (PR 3b round-2 logic attack). An experiment id ending in "ghp_" joins
+  // "verdict" plus the config hash into a GitHub-token shape, and "no-verdict" does not: judged in the outcome it would
+  // record, the plan passed for a no-verdict and refused a verdict -- the refusal was the result. Both spellings are
+  // judged, so this computable no-verdict is refused as a verdict would be, and nothing is recorded.
+  {
+    const spG = spine("evolve-ghp");
+    const evG = evolveOn(spG);
+    const XG = "x-k-ghp_";
+    const armsG = { "+champion": [], "+challenger": [] };
+    for (let i = 0; i < 400 && (armsG["+champion"].length < 5 || armsG["+challenger"].length < 5); i++) {
+      const g = A.assign(XG, `g-${i}`, ["+champion", "+challenger"], [50, 50]);
+      if (g.cohort === "verdict" && armsG[g.arm].length < 5) armsG[g.arm].push(`g-${i}`);
+    }
+    const opened = planApply(evG, OPEN(XG));
+    let measured = 0;
+    for (const arm of ["+champion", "+challenger"]) armsG[arm].forEach((u, i) => {
+      if (planApply(evG, ["measure", "--experiment", XG, "--unit", u, "--metric", "converted", "--value", String(i < 3 ? 1 : 0), "--count", "1", "--window", "2026-09-01..2026-09-07", "--source", "src-1"]).a?.status === 0) measured++;
+    });
+    check("ghp fixture: the experiment is open and measured to floor on both arms (vacuous-pass guard)", opened.a?.status === 0 && measured === 10, `open=${opened.a?.status} measured=${measured}`);
+    const plan = evG(["conclude", "--experiment", XG]);
+    check("evolve conclude: a no-verdict whose VERDICT spelling the spine would refuse is refused too -- the answer is the same whichever way the test goes",
+      plan.status === 2 && /whichever way the test goes/.test(plan.stderr) && !spineEvents(spG).some((e) => e.kind === "experiment.verdict"), `${plan.status} ${plan.stderr}`);
+  }
 
   // The cap, re-counted at apply: three opens planned while none was open, then all applied (PR 3a logic attack).
   const sp3 = spine("evolve-cap");
@@ -467,6 +534,34 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   })));
   const openedRace = spineEvents(sp6).filter((e) => e.kind === "experiment.opened").length;
   check("evolve open: three planned opens applied AT ONCE -- two land, one refuses (CONCURRENCY_CAP), never three", racePlans.every(({ d }) => !!d) && openedRace === 2 && raced.filter((r) => r.code === 0).length === 2 && raced.some((r) => r.code === 2 && /CONCURRENCY_CAP/.test(r.err)), `opened=${openedRace} ${raced.map((r) => r.code + ":" + r.err.trim()).join(" | ")}`);
+
+  // THE LOCK, WITHOUT THE TIMING (PR 3b shell attack: the race above depends on the three starts overlapping, so a
+  // mutant could survive a staggered start). The suite HOLDS evolve's apply lock; one open lands first; two more applies
+  // start and must wait -- nothing lands while the lock is held. Released, they go one at a time and re-read inside the
+  // lock: exactly one lands and one refuses the cap. An apply that decided before taking the lock decided on one open,
+  // and both would land.
+  {
+    const sp7 = spine("evolve-held");
+    const ev7 = evolveOn(sp7);
+    const held = ["x-h1", "x-h2", "x-h3"].map((x) => ({ x, d: lastExpect(ev7(OPEN(x)).stdout) }));
+    const first = ev7([...OPEN("x-h1"), "--expect", held[0].d || "x"]);
+    const lock = join(sp7, "events", ".evolve-apply.lock");
+    writeFileSync(lock, "1:held-by-the-suite\n");
+    const waiting = held.slice(1).map(({ x, d }) => new Promise((resolveRun) => {
+      const c = spawn(process.execPath, [S("evolve", "arc-evolve.mjs"), ...OPEN(x), "--expect", d || "x", "--root", sp7, "--repo", fix], { cwd: REPO, stdio: ["ignore", "pipe", "pipe"] });
+      let err = "";
+      c.stderr.on("data", (b) => { err += b; });
+      c.on("close", (code) => resolveRun({ code, err }));
+    }));
+    await new Promise((r) => setTimeout(r, 4000));
+    const whileHeld = spineEvents(sp7).filter((e) => e.kind === "experiment.opened").length;
+    rmSync(lock, { force: true });
+    const after = await Promise.all(waiting);
+    const opened7 = spineEvents(sp7).filter((e) => e.kind === "experiment.opened").length;
+    check("evolve open: while the apply lock is held nothing lands; released, the waiting applies re-read inside it -- one lands, one refuses the cap",
+      first.status === 0 && whileHeld === 1 && opened7 === 2 && after.filter((r) => r.code === 0).length === 1 && after.some((r) => r.code === 2 && /CONCURRENCY_CAP/.test(r.err)),
+      `first=${first.status} whileHeld=${whileHeld} opened=${opened7} ${after.map((r) => r.code + ":" + r.err.trim()).join(" | ")}`);
+  }
 
   // A moved surface between plan and apply: the payload's seal changes, so the digest does.
   const sp4 = spine("evolve-drift");
@@ -635,6 +730,398 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("door: an expect row whose plan printed no digest is refused (NO_EXPECT, 502), never applied unbound", noExpect === "NO_EXPECT" && DOOR.WORK_STATUS.NO_EXPECT === 502, `code=${noExpect}`);
 }
 
+// ---- bench: propose from a run that already happened -- nothing runs, nothing is spent, the apply bound to its plan ----
+{
+  const sp = spine("bench");
+  const cand = join(tmp, "bench-cand");
+  const champ = join(tmp, "bench-champ");
+  // A mock run replays recorded bytes for every class; it takes tens of seconds, so it gets its own timeout.
+  const run = spawnSync(process.execPath, [S("engine", "arc-bench.mjs"), "--driver", "mock", "--model", "mock", "--budget", "inr=1,min=5", "--out", cand],
+    { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 300_000 });
+  check("fixture: a mock bench run (it spends nothing) is the candidate (vacuous-pass guard)", run.status === 0 && existsSync(join(cand, "scorecard.json")), `${run.status} ${String(run.stderr).slice(-300)}`);
+  cpSync(cand, champ, { recursive: true });
+  // A DIFFERENT run: a byte-identical copy of the candidate is the candidate, and is refused (PR 3b attacks). The
+  // incumbent's own driver makes it another run with the same scores -- "decided on tie" stays the path under test.
+  const champProvFile = join(champ, "provenance.json");
+  const cp0 = JSON.parse(readFileSync(champProvFile, "utf8"));
+  cp0.subject.driver = "claude-code";
+  writeFileSync(champProvFile, JSON.stringify(cp0));
+  const store = join(sp, "bench", "proposals");
+  const kinds = () => spineEvents(sp).map((e) => e.kind);
+  const count = (k) => kinds().filter((x) => x === k).length;
+  const runsBefore = count("run.completed");
+  const before = fingerprint(sp);
+  const b = (...a) => node([S("engine", "arc-bench.mjs"), ...a], { ARC_SPINE_ROOT: sp });
+  const dry = b("--propose", "--from", cand, "--champion", champ, "--dry-run");
+  const digest = lastExpect(dry.stdout);
+  check("bench --from --dry-run: computes the proposal, writes nothing, raises nothing, and prints its digest last", dry.status === 0 && /would propose/.test(dry.stdout) && !!digest && fingerprint(sp) === before && !existsSync(store), `${dry.status} ${dry.stderr}`);
+  const stale = b("--propose", "--from", cand, "--champion", champ, "--expect", "0".repeat(64));
+  check("bench --from with a digest no plan printed refuses (PLAN_STALE), writes nothing, raises nothing", stale.status === 2 && /PLAN_STALE/.test(stale.stderr) && count("approval.requested") === 0 && !existsSync(store), `${stale.status} ${stale.stderr}`);
+  // Unbound, on a candidate with no proposal yet: the answer is "bound to a plan", never "already exists" (PR 3b logic
+  // attack: run after the apply, the old check could not pass).
+  const unboundFresh = b("--propose", "--from", cand, "--champion", champ);
+  check("bench --from with no plan digest refuses -- an apply is bound to a plan (before any proposal exists)", unboundFresh.status === 2 && /bound to a plan/.test(unboundFresh.stderr) && count("approval.requested") === 0, unboundFresh.stderr);
+  // THE BINDING, tested (PR 3b logic attack: a constant digest passed every other check): the champion's evidence
+  // changes between the plan and the apply, and the apply is refused.
+  {
+    const champ2 = join(tmp, "bench-champ-swap");
+    cpSync(champ, champ2, { recursive: true });
+    const d2 = lastExpect(b("--propose", "--from", cand, "--champion", champ2, "--dry-run").stdout);
+    const p2 = JSON.parse(readFileSync(join(champ2, "provenance.json"), "utf8"));
+    p2.subject.ceilings_as_of = "1999-01-01";
+    writeFileSync(join(champ2, "provenance.json"), JSON.stringify(p2));
+    const swapped = b("--propose", "--from", cand, "--champion", champ2, "--expect", d2 || "x");
+    check("bench --from: the champion's evidence changed between plan and apply refuses (PLAN_STALE), raises nothing", !!d2 && swapped.status === 2 && /PLAN_STALE/.test(swapped.stderr) && count("approval.requested") === 0, `${swapped.status} ${swapped.stderr}`);
+  }
+  // A COPY of the candidate is the candidate (PR 3b attacks: the spelling guard let a copy, or an upper-cased path, in).
+  {
+    const twin = join(tmp, "bench-cand-copy");
+    cpSync(cand, twin, { recursive: true });
+    const self = b("--propose", "--from", cand, "--champion", twin, "--dry-run");
+    check("bench --from refuses a champion that is a byte-identical copy of the candidate (different runs, by content)", self.status === 2 && /different runs/.test(self.stderr), `${self.status} ${self.stderr}`);
+  }
+  // An apply that raised NOTHING does not block the next question (PR 3b logic attack: a champion with no class rows
+  // proposed nothing, and the right champion was then refused "already exists" forever).
+  {
+    const empty = join(tmp, "bench-champ-empty");
+    cpSync(champ, empty, { recursive: true });
+    const sc = JSON.parse(readFileSync(join(empty, "scorecard.json"), "utf8"));
+    sc.classes = [];
+    writeFileSync(join(empty, "scorecard.json"), JSON.stringify(sc));
+    const de = lastExpect(b("--propose", "--from", cand, "--champion", empty, "--dry-run").stdout);
+    const ae = b("--propose", "--from", cand, "--champion", empty, "--expect", de || "x");
+    check("bench --from against a champion with no rows proposes nothing and raises nothing (exit 0, no approval)", !!de && ae.status === 0 && count("approval.requested") === 0 && !/receipt:/.test(ae.stdout), `${ae.status} ${ae.stderr}`);
+    // ONE APPLY AT A TIME per store (PR 3b round-2 attacks: two applies of one plan raised two approvals). A lock held
+    // in the store refuses the next apply, and a pending mark with no id refuses it too.
+    const emptyStore = existsSync(store) ? readdirSync(store).map((k) => join(store, k)).find((d) => !existsSync(join(d, "approval.id"))) : null;
+    // A live holder: this test process, named in the numbered lock's token (host|pid|nonce).
+    if (emptyStore) writeFileSync(join(emptyStore, ".apply.lock.00000000000000aa"), `${hostname()}|${process.pid}|test`);
+    const locked = b("--propose", "--from", cand, "--champion", empty, "--expect", de || "x");
+    check("bench --from: an apply while another holds the store's lock refuses and writes nothing", !!emptyStore && locked.status === 2 && /another apply of this proposal is running/.test(locked.stderr), `${locked.status} ${locked.stderr}`);
+    if (emptyStore) { rmSync(join(emptyStore, ".apply.lock.00000000000000aa"), { force: true }); writeFileSync(join(emptyStore, "approval.pending"), "x\n"); }
+    const pending = b("--propose", "--from", cand, "--champion", empty, "--expect", de || "x");
+    check("bench --from: a pending mark with no approval id refuses -- an earlier apply may have raised it", pending.status === 2 && /may have raised its approval/.test(pending.stderr), `${pending.status} ${pending.stderr}`);
+    if (emptyStore) rmSync(join(emptyStore, "approval.pending"), { force: true });
+  }
+  // WHO RAN is the subject: a champion that differs only in bookkeeping (the ceilings' date) is the same subject (PR 3b
+  // round-3 logic attack), a champion whose provenance is null is refused by name, and a class listed twice is refused.
+  {
+    const booked = join(tmp, "bench-champ-bookkeeping");
+    cpSync(cand, booked, { recursive: true });
+    const p = JSON.parse(readFileSync(join(booked, "provenance.json"), "utf8"));
+    p.subject.ceilings_as_of = "1999-01-01";
+    writeFileSync(join(booked, "provenance.json"), JSON.stringify(p));
+    const r1 = b("--propose", "--from", cand, "--champion", booked, "--dry-run");
+    check("bench --from refuses a champion that differs from the candidate only in bookkeeping (same driver, version, model)", r1.status === 2 && /different subjects/.test(r1.stderr), `${r1.status} ${r1.stderr}`);
+    const nulled = join(tmp, "bench-champ-null");
+    cpSync(champ, nulled, { recursive: true });
+    writeFileSync(join(nulled, "provenance.json"), "null");
+    const r2 = b("--propose", "--from", cand, "--champion", nulled, "--dry-run");
+    check("bench --from refuses a champion whose provenance is null, by name (no stack)", r2.status === 2 && /not a bench run's output/.test(r2.stderr) && !/at .*\.mjs:\d+/.test(r2.stderr), `${r2.status} ${r2.stderr}`);
+    const twice = join(tmp, "bench-champ-twice");
+    cpSync(champ, twice, { recursive: true });
+    const sc = JSON.parse(readFileSync(join(twice, "scorecard.json"), "utf8"));
+    sc.classes = [...sc.classes, sc.classes[0]];
+    writeFileSync(join(twice, "scorecard.json"), JSON.stringify(sc));
+    const r3 = b("--propose", "--from", cand, "--champion", twice, "--dry-run");
+    check("bench --from refuses a scorecard that lists a task class twice", r3.status === 2 && /task class twice/.test(r3.stderr), `${r3.status} ${r3.stderr}`);
+  }
+  // AN UNKNOWN OUTCOME KEEPS THE PENDING MARK (PR 3b round-3 logic attack: an emit whose answer was not an id was read as
+  // "not landed", the mark was removed, and the same plan raised the question twice). A preload makes the emitter answer
+  // with a line that is not a receipt id.
+  {
+    const champU = join(tmp, "bench-champ-unknown");
+    cpSync(champ, champU, { recursive: true });
+    const pu = JSON.parse(readFileSync(join(champU, "provenance.json"), "utf8"));
+    pu.subject.driver = "codex";
+    writeFileSync(join(champU, "provenance.json"), JSON.stringify(pu));
+    const du = lastExpect(b("--propose", "--from", cand, "--champion", champU, "--dry-run").stdout);
+    const garble = join(tmp, "emit-garble.mjs");
+    writeFileSync(garble, [
+      "import cp from \"node:child_process\";",
+      "import { syncBuiltinESMExports } from \"node:module\";",
+      "const real = cp.spawnSync;",
+      "cp.spawnSync = (file, args, opts) => (file === process.execPath && Array.isArray(args) && String(args[0]).endsWith(\"arc-event.mjs\") && args.includes(\"approval.requested\") && !args.includes(\"--dry-run\") ? { status: 0, stdout: \"not-a-receipt-id\\n\", stderr: \"\" } : real(file, args, opts));",
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"));
+    const au = node(["--import", pathToFileURL(garble).href, S("engine", "arc-bench.mjs"), "--propose", "--from", cand, "--champion", champU, "--expect", du || "x"], { ARC_SPINE_ROOT: sp });
+    const pendingKept = existsSync(store) && readdirSync(store).some((k) => existsSync(join(store, k, "approval.pending")) && !existsSync(join(store, k, "approval.id")));
+    check("bench --from: an approval whose outcome is unknown keeps the pending mark and exits PARTIAL", !!du && au.status === 1 && /whether the approval landed is unknown/.test(au.stderr) && pendingKept, `${au.status} ${au.stderr} pending=${pendingKept}`);
+    // EXIT 2 IS NOT ALWAYS "NOTHING LANDED" (PR 3b round-4 logic attack): REJECT INTERNAL comes after the line can already
+    // be on the spine (a failed flush). It is unknown too, and keeps the mark.
+    const champI = join(tmp, "bench-champ-internal");
+    cpSync(champ, champI, { recursive: true });
+    const pi = JSON.parse(readFileSync(join(champI, "provenance.json"), "utf8"));
+    pi.subject.driver = "gemini";
+    writeFileSync(join(champI, "provenance.json"), JSON.stringify(pi));
+    const di = lastExpect(b("--propose", "--from", cand, "--champion", champI, "--dry-run").stdout);
+    const internal = join(tmp, "emit-internal.mjs");
+    writeFileSync(internal, [
+      "import cp from \"node:child_process\";",
+      "import { syncBuiltinESMExports } from \"node:module\";",
+      "const real = cp.spawnSync;",
+      "cp.spawnSync = (file, args, opts) => (file === process.execPath && Array.isArray(args) && String(args[0]).endsWith(\"arc-event.mjs\") && args.includes(\"approval.requested\") && !args.includes(\"--dry-run\") ? { status: 2, stdout: \"\", stderr: \"arc-event: REJECT INTERNAL -- EIO: i/o error, fsync\\n\" } : real(file, args, opts));",
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"));
+    const ai = node(["--import", pathToFileURL(internal).href, S("engine", "arc-bench.mjs"), "--propose", "--from", cand, "--champion", champI, "--expect", di || "x"], { ARC_SPINE_ROOT: sp });
+    const internalKept = existsSync(store) && readdirSync(store).filter((k) => existsSync(join(store, k, "approval.pending")) && !existsSync(join(store, k, "approval.id"))).length >= 2;
+    check("bench --from: REJECT INTERNAL is an unknown outcome -- the pending mark stays, exit PARTIAL", !!di && ai.status === 1 && /whether the approval landed is unknown/.test(ai.stderr) && /REJECT INTERNAL/.test(ai.stderr) && internalKept, `${ai.status} ${ai.stderr} kept=${internalKept}`);
+    // AN ID THE SPINE BENCH READS DOES NOT HOLD is unknown too (PR 3b round-5 logic attack: exit 0 and an id the lookup
+    // missed was "not raised", the mark went, and one plan raised twice).
+    const champG = join(tmp, "bench-champ-ghost");
+    cpSync(champ, champG, { recursive: true });
+    const pg = JSON.parse(readFileSync(join(champG, "provenance.json"), "utf8"));
+    pg.subject.driver = "ghost";
+    writeFileSync(join(champG, "provenance.json"), JSON.stringify(pg));
+    const dg = lastExpect(b("--propose", "--from", cand, "--champion", champG, "--dry-run").stdout);
+    const ghost = join(tmp, "emit-ghost.mjs");
+    writeFileSync(ghost, [
+      "import cp from \"node:child_process\";",
+      "import { syncBuiltinESMExports } from \"node:module\";",
+      "const real = cp.spawnSync;",
+      "cp.spawnSync = (file, args, opts) => (file === process.execPath && Array.isArray(args) && String(args[0]).endsWith(\"arc-event.mjs\") && args.includes(\"approval.requested\") && !args.includes(\"--dry-run\") ? { status: 0, pid: 1, stdout: \"01M2X81G8W5VM9HRCP0R8A571Q\\n\", stderr: \"\" } : real(file, args, opts));",
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"));
+    const ag = node(["--import", pathToFileURL(ghost).href, S("engine", "arc-bench.mjs"), "--propose", "--from", cand, "--champion", champG, "--expect", dg || "x"], { ARC_SPINE_ROOT: sp });
+    const ghostKept = existsSync(store) && readdirSync(store).filter((k) => existsSync(join(store, k, "approval.pending")) && !existsSync(join(store, k, "approval.id"))).length >= 3;
+    check("bench --from: an id the spine does not hold is UNKNOWN -- the pending mark stays, exit PARTIAL", !!dg && ag.status === 1 && /not in the spine bench reads/.test(ag.stderr) && ghostKept, `${ag.status} ${ag.stderr} kept=${ghostKept}`);
+  }
+  // WHO RAN is what RAN (PR 3b round-4 logic attack): two mock runs that asked for different models and applied none are
+  // one subject, and the shape check reaches every field the comparison reads.
+  {
+    const asked = join(tmp, "bench-champ-asked-model");
+    cpSync(cand, asked, { recursive: true });
+    const p = JSON.parse(readFileSync(join(asked, "provenance.json"), "utf8"));
+    p.fingerprint = { ...(p.fingerprint || {}), model_requested: "not-a-model" };
+    p.model_applied = null;
+    writeFileSync(join(asked, "provenance.json"), JSON.stringify(p));
+    const sc = JSON.parse(readFileSync(join(asked, "scorecard.json"), "utf8"));
+    sc.generated_note = "asked for another model, applied none";
+    writeFileSync(join(asked, "scorecard.json"), JSON.stringify(sc));
+    const r1 = b("--propose", "--from", cand, "--champion", asked, "--dry-run");
+    check("bench --from: a champion that only REQUESTED another model (none applied) is the same subject -- refused", r1.status === 2 && /different subjects/.test(r1.stderr), `${r1.status} ${r1.stderr}`);
+    for (const [why, mutate, re] of [
+      ["a class row of null", (s) => { s.classes = [null, ...s.classes]; }, /class row that is not an object/],
+      ["no eval_pack_revisions map", (s) => { delete s.eval_pack_revisions; }, /eval_pack_revisions/],
+      // Deeper than the shape check reaches: the comparison's own TypeError, refused by name (PR 3b round-5 logic attack).
+      ["a class row holding only its name", (s) => { s.classes = s.classes.map((c) => ({ task_class: c.task_class, eligible: true })); }, /not a bench run's output: a field the comparison reads/],
+    ]) {
+      const bad = join(tmp, `bench-champ-shape-${why.replace(/[^a-z]/g, "-")}`);
+      cpSync(champ, bad, { recursive: true });
+      const s = JSON.parse(readFileSync(join(bad, "scorecard.json"), "utf8"));
+      mutate(s);
+      writeFileSync(join(bad, "scorecard.json"), JSON.stringify(s));
+      const r = b("--propose", "--from", cand, "--champion", bad, "--dry-run");
+      check(`bench --from refuses a champion with ${why}, by name and with no stack`, r.status === 2 && re.test(r.stderr) && !/at .*\.mjs:\d+/.test(r.stderr), `${r.status} ${r.stderr}`);
+    }
+  }
+  // A second run of the SAME subject is not a champion: there is no switch to propose (PR 3b round-2 logic attack).
+  {
+    const same = join(tmp, "bench-champ-same-subject");
+    cpSync(cand, same, { recursive: true });
+    const sc = JSON.parse(readFileSync(join(same, "scorecard.json"), "utf8"));
+    sc.generated_note = "a second run of the same driver";
+    writeFileSync(join(same, "scorecard.json"), JSON.stringify(sc));
+    const r = b("--propose", "--from", cand, "--champion", same, "--dry-run");
+    check("bench --from refuses a champion that ran the candidate's own subject", r.status === 2 && /different subjects/.test(r.stderr), `${r.status} ${r.stderr}`);
+  }
+  // Applied under a shim that makes the approval's temp cleanup throw EBUSY (a scanner holding the file): a cleanup is
+  // litter, never the outcome. Unguarded, it made bench exit 1 with no receipt line after the approval had landed, and
+  // the retry refuse (PR 3b shell attack). The shim leaves a mark when it fires, so "it ran" is asserted, not assumed.
+  const busyMark = join(tmp, "bench-rm-busy.mark");
+  const busyShim = join(tmp, "bench-rm-busy.mjs");
+  writeFileSync(busyShim, [
+    "import fs from \"node:fs\";",
+    "import { syncBuiltinESMExports } from \"node:module\";",
+    "const real = fs.rmSync;",
+    `fs.rmSync = (p, o) => { if (String(p).includes("arc-spine-judge-")) { fs.appendFileSync(${JSON.stringify(busyMark)}, "x"); throw Object.assign(new Error("EBUSY: resource busy or locked"), { code: "EBUSY" }); } return real(p, o); };`,
+    "syncBuiltinESMExports();",
+    "",
+  ].join("\n"));
+  const ap = node(["--import", pathToFileURL(busyShim).href, S("engine", "arc-bench.mjs"), "--propose", "--from", cand, "--champion", champ, "--expect", digest || "x"], { ARC_SPINE_ROOT: sp });
+  const id = /receipt: approval\.requested ([0-9A-HJKMNP-TV-Z]{26})/.exec(ap.stdout);
+  check("bench --from: a temp cleanup that throws after the approval landed is litter -- exit 0 and the receipt line (the shim fired)", existsSync(busyMark) && ap.status === 0 && !!id, `mark=${existsSync(busyMark)} ${ap.status} ${ap.stderr}`);
+  check("bench --from, applied with its plan's digest: raises the router proposal and names its receipt; nothing was run", ap.status === 0 && !!id && /nothing was run, nothing was spent/.test(ap.stdout), `${ap.status} ${ap.stderr} ${ap.stdout.slice(-300)}`);
+  check("bench --from: one approval on the spine, and NO new run.completed (no run happened)", count("approval.requested") === 1 && count("run.completed") === runsBefore, `approvals=${count("approval.requested")} runs=${count("run.completed")} before=${runsBefore}`);
+  // Counted by what each store HOLDS, not by how many there are: the unknown-outcome test above keeps a pending store of
+  // its own in this spine, and a bare count of 2 read that as a defect (CI, PR 3b round 3).
+  const stores = existsSync(store) ? readdirSync(store) : [];
+  const landed = stores.filter((d) => existsSync(join(store, d, "approval.id")));
+  check("bench --from: the artifacts land INSIDE the spine's own root, one store per candidate-and-champion, one of them landed", stores.length >= 2 && stores.every((d) => /^[a-z0-9.-]+-vs-[0-9a-f]{12}$/.test(d)) && landed.length === 1, stores.join(",") || "no store");
+  const again = b("--propose", "--from", cand, "--champion", champ, "--expect", digest || "x");
+  check("bench --from: the same candidate twice refuses (one question, one approval)", again.status === 2 && /already exists/.test(again.stderr) && count("approval.requested") === 1, again.stderr);
+  const unbound = b("--propose", "--from", cand, "--champion", champ);
+  check("bench --from with no plan digest refuses -- an apply is bound to a plan (after one landed, too)", unbound.status === 2 && /bound to a plan/.test(unbound.stderr) && count("approval.requested") === 1, unbound.stderr);
+  for (const [why, args, re] of [
+    ["--driver with --from", ["--propose", "--from", cand, "--champion", champ, "--driver", "mock"], /meaningless with --from/],
+    ["--from without --propose", ["--from", cand, "--champion", champ], /comes with --propose/],
+    ["--from equal to --champion", ["--propose", "--from", cand, "--champion", cand], /different runs/],
+    ["a --from with no scorecard", ["--propose", "--from", tmp, "--champion", champ, "--dry-run"], /no scorecard\.json/],
+    ["--expect with --dry-run", ["--propose", "--from", cand, "--champion", champ, "--dry-run", "--expect", "0".repeat(64)], /give one/],
+    ["--expect without --from", ["--driver", "mock", "--expect", "0".repeat(64)], /nothing else takes it/],
+  ]) {
+    const r = b(...args);
+    check(`bench --from refuses ${why}`, r.status === 2 && re.test(r.stderr), `${r.status} ${r.stderr}`);
+  }
+}
+
+// ---- absorb pin and trial, APPLIED, in a scratch repository: a branch, an approval, the tree unmoved, each apply
+// bound to its plan ----
+{
+  const repo = join(tmp, "absorb-scratch-repo");
+  cpSync(join(REPO, ".claude", "scripts"), join(repo, ".claude", "scripts"), { recursive: true });
+  mkdirSync(join(repo, "engine"), { recursive: true });
+  writeFileSync(join(repo, "engine", "router.yaml"), readFileSync(join(REPO, "engine", "router.yaml"), "utf8"));
+  const g = (...a) => spawnSync("git", a, { cwd: repo, encoding: "utf8" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.name", "fixture"); g("config", "user.email", "fixture@example.invalid"); g("config", "commit.gpgsign", "false");
+  g("add", "-A"); g("commit", "-q", "-m", "scratch");
+  const mainBefore = g("rev-parse", "refs/heads/main").stdout.trim();
+  check("absorb scratch repository committed on main (vacuous-pass guard)", /^[0-9a-f]{40}$/.test(mainBefore));
+  const sp = spine("absorb-scratch-spine");
+  const seals = join(tmp, "scratch-seals");
+  const inScratch = (script, args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", ...script.split("/")), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp, ARC_ABSORB_SEAL_DIR: seals }, timeout: 120_000 });
+  const approvals = () => spineEvents(sp).filter((e) => e.kind === "approval.requested");
+  const clean = () => g("status", "--porcelain").stdout === "" && g("symbolic-ref", "HEAD").stdout.trim() === "refs/heads/main" && g("rev-parse", "refs/heads/main").stdout.trim() === mainBefore;
+
+  const src = join(tmp, "absorb-source");
+  mkdirSync(src, { recursive: true });
+  writeFileSync(join(src, "README.md"), "a source the kernel suite pins\n");
+  const PIN = ["--root", src, "--pin", "0123456789abcdef", "--license", "MIT, in LICENSE", "--report", "initiatives/absorb/evidence/kernel-suite.md"];
+  const pPlan = inScratch("absorb/pin.mjs", [...PIN, "--dry-run"]);
+  const pDigest = lastExpect(pPlan.stdout);
+  check("absorb pin, planned: the report's diff and a digest, and nothing written", pPlan.status === 0 && !!pDigest && /Extraction report/.test(pPlan.stdout) && approvals().length === 0 && clean(), `${pPlan.status} ${pPlan.stderr}`);
+  const pStale = inScratch("absorb/pin.mjs", [...PIN, "--expect", "0".repeat(64)]);
+  check("absorb pin with a digest no plan printed refuses (PLAN_STALE) and writes nothing", pStale.status === 2 && /PLAN_STALE/.test(pStale.stderr) && approvals().length === 0, pStale.stderr);
+  const pp = inScratch("absorb/pin.mjs", [...PIN, "--expect", pDigest || "x"]);
+  const pBranch = "feat/face-absorb-pin-kernel-suite";
+  const report = g("show", `${pBranch}:initiatives/absorb/evidence/kernel-suite.md`).stdout;
+  check("absorb pin, applied: the scaffolded report is on its branch, the tree unmoved", pp.status === 0 && /^# Extraction report/.test(report) && /0123456789abcdef/.test(report) && clean(), `${pp.status} ${pp.stderr}`);
+  check("absorb pin, applied: the approval names the report, the branch and the commit", approvals().some((e) => e.payload.gate === "absorb-pin" && e.payload.branch === pBranch && e.payload.report === "initiatives/absorb/evidence/kernel-suite.md" && e.payload.commit === g("rev-parse", pBranch).stdout.trim() && receiptOf(pp.stdout) === e.id));
+
+  const TRIAL = ["--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", "initiatives/absorb/evidence/kernel-trial", "--correlation", "kernel-trial-1"];
+  const tPlan = inScratch("absorb/trial.mjs", [...TRIAL, "--dry-run"]);
+  const tDigest = lastExpect(tPlan.stdout);
+  check("absorb trial, planned: nothing sealed, nothing written, and a digest", tPlan.status === 0 && !!tDigest && !existsSync(join(seals, "kernel-trial-1.json")) && approvals().filter((e) => e.payload.correlation === "kernel-trial-1").length === 0, `${tPlan.status} ${tPlan.stderr}`);
+  const tStale = inScratch("absorb/trial.mjs", [...TRIAL, "--expect", "0".repeat(64)]);
+  check("absorb trial with a digest no plan printed refuses (PLAN_STALE) BEFORE the seal burns the correlation", tStale.status === 2 && /PLAN_STALE/.test(tStale.stderr) && !existsSync(join(seals, "kernel-trial-1.json")), tStale.stderr);
+  const tr = inScratch("absorb/trial.mjs", [...TRIAL, "--expect", tDigest || "x"]);
+  const tBranch = "feat/face-absorb-trial-kernel-trial-1";
+  const commitment = g("show", `${tBranch}:initiatives/absorb/evidence/kernel-trial/commitment.txt`).stdout;
+  const tAppr = approvals().find((e) => e.payload.subject === "absorb.ab-judgement" && e.payload.correlation === "kernel-trial-1");
+  check("absorb trial, applied: the commitment is on its branch, the tree unmoved, the nonce in the seal store", tr.status === 0 && /^[0-9a-f]{64}/.test(commitment) && existsSync(join(seals, "kernel-trial-1.json")) && clean(), `${tr.status} ${tr.stderr}`);
+  check("absorb trial, applied: the approval is the ab-judgement profile, and its commitment is the one on the branch", !!tAppr && commitment.startsWith(tAppr.payload.commitment) && tAppr.payload.evidence_path === "initiatives/absorb/evidence/kernel-trial");
+  const twice = inScratch("absorb/trial.mjs", [...TRIAL, "--expect", tDigest || "x"]);
+  // The seal's own guard answers first (the correlation is used), before the branch's: either way nothing is sealed twice.
+  check("absorb trial applied again with its digest refuses BEFORE it seals again (the seal exists, and so does the branch)", twice.status === 2 && /a seal already exists|BRANCH_EXISTS/.test(twice.stderr) && approvals().filter((e) => e.payload.correlation === "kernel-trial-1").length === 1, twice.stderr);
+  const pUnbound = inScratch("absorb/pin.mjs", [...PIN.slice(0, -1), "initiatives/absorb/evidence/kernel-unbound.md"]);
+  const tUnbound = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -3), "initiatives/absorb/evidence/kernel-unbound", "--correlation", "kernel-trial-unbound"]);
+  check("absorb pin and trial with no plan digest refuse -- an apply is bound to a plan, and the trial seals nothing", pUnbound.status === 2 && /bound to a plan/.test(pUnbound.stderr) && tUnbound.status === 2 && /bound to a plan/.test(tUnbound.stderr) && !existsSync(join(seals, "kernel-trial-unbound.json")), `${pUnbound.stderr} :: ${tUnbound.stderr}`);
+  const unknown = inScratch("absorb/judgement.mjs", ["seal", "--candidate", "T-01", "--variants", "a,b", "--fixtures", "f1,f2,f3", "--evidence", "x", "--correlation", "c-unknown", "--dry-runn"]);
+  check("judgement seal refuses a flag it does not know -- it used to be ignored, and a mistyped --dry-run sealed for real", unknown.status === 2 && /does not take/.test(unknown.stderr) && !existsSync(join(seals, "c-unknown.json")), unknown.stderr);
+  // The seal's approval is judged BEFORE it seals: a correlation the secret scanner reads as a key burns nothing.
+  const keyish = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -3), "initiatives/absorb/evidence/kernel-keyish", "--correlation", "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789", "--dry-run"]);
+  check("absorb trial whose approval the spine would refuse is refused at its plan, before anything is sealed", keyish.status === 2 && /would be refused by the spine/.test(keyish.stderr) && !existsSync(join(seals, "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789.json")), `${keyish.status} ${keyish.stderr}`);
+
+  // A report NAMED like risk-assessment put "sk-" in its branch, and beside main's commit that is a key to the scanner:
+  // every such pin was refused (PR 3b logic attack). The branch defuses the prefix.
+  const risky = inScratch("absorb/pin.mjs", ["--root", src, "--pin", "0123456789abcdef", "--license", "MIT, in LICENSE", "--report", "initiatives/absorb/evidence/risk-assessment.md", "--dry-run"]);
+  check("absorb pin of a report named risk-assessment plans (its branch is feat/face-absorb-pin-riskassessment)", risky.status === 0 && /feat\/face-absorb-pin-riskassessment/.test(risky.stdout) && !!lastExpect(risky.stdout), `${risky.status} ${risky.stderr}`);
+
+  // --judge: the seal asks the spine about the payload it is about to print -- these labels, this commitment -- before
+  // the nonce is written. An evidence path the spine refuses (absolute) seals nothing with --judge; without it the hand
+  // seal behaves as it always has (the control).
+  const absBundle = join(tmp, "absolute-bundle");
+  const SEAL = (corr, ...extra) => inScratch("absorb/judgement.mjs", ["seal", "--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", absBundle, "--correlation", corr, ...extra]);
+  const judged = SEAL("judge-refused", "--judge");
+  const unjudged = SEAL("judge-control");
+  check("judgement seal --judge: a payload the spine refuses seals NOTHING -- the correlation stays free (and without --judge it seals, the control)",
+    judged.status === 2 && /the spine would refuse/.test(judged.stderr) && !existsSync(join(seals, "judge-refused.json")) && unjudged.status === 0 && existsSync(join(seals, "judge-control.json")), `${judged.status} ${judged.stderr} :: ${unjudged.status} ${unjudged.stderr}`);
+
+  // A seal that fails AFTER its nonce is written has burned its correlation: trial says so, exit 1, never "nothing
+  // sealed" (PR 3b shell attack). The commitment write is made to fail by a preload the seal inherits.
+  const failShim = join(tmp, "commitment-enospc.mjs");
+  writeFileSync(failShim, [
+    "import fs from \"node:fs\";",
+    "import { syncBuiltinESMExports } from \"node:module\";",
+    "const real = fs.writeFileSync;",
+    "fs.writeFileSync = (p, ...rest) => { if (String(p).endsWith(\"commitment.txt\")) throw Object.assign(new Error(\"ENOSPC: no space left on device\"), { code: \"ENOSPC\" }); return real(p, ...rest); };",
+    "syncBuiltinESMExports();",
+    "",
+  ].join("\n"));
+  const HALF = ["--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", "initiatives/absorb/evidence/kernel-half", "--correlation", "kernel-half-1"];
+  const hDigest = lastExpect(inScratch("absorb/trial.mjs", [...HALF, "--dry-run"]).stdout);
+  const half = spawnSync(process.execPath, [join(repo, ".claude", "scripts", "absorb", "trial.mjs"), ...HALF, "--expect", hDigest || "x"],
+    { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp, ARC_ABSORB_SEAL_DIR: seals, NODE_OPTIONS: `--import=${pathToFileURL(failShim).href}` }, timeout: 120_000 });
+  check("absorb trial whose seal fails after writing its nonce reports it SEALED (exit 1, the correlation used), raises nothing",
+    !!hDigest && half.status === 1 && /AFTER its nonce was written/.test(half.stderr) && existsSync(join(seals, "kernel-half-1.json")) && !approvals().some((e) => e.payload.correlation === "kernel-half-1"), `${half.status} ${half.stderr}`);
+
+  // A bundle MAIN already holds is an earlier judgement's, whatever the owner's checkout shows: the branch is cut from
+  // main (PR 3b logic attack: a checkout on another branch passed, and the branch replaced main's commitment.txt).
+  mkdirSync(join(repo, "initiatives", "absorb", "evidence", "kernel-old"), { recursive: true });
+  writeFileSync(join(repo, "initiatives", "absorb", "evidence", "kernel-old", "commitment.txt"), `${"a".repeat(64)}\n`);
+  g("add", "-A"); g("commit", "-q", "-m", "an earlier judgement's bundle");
+  g("checkout", "-q", "-b", "owner-elsewhere", mainBefore);
+  const reused = inScratch("absorb/trial.mjs", ["--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", "initiatives/absorb/evidence/kernel-old", "--correlation", "kernel-old-2", "--dry-run"]);
+  g("checkout", "-q", "main");
+  check("absorb trial into a bundle main already holds refuses, even from a checkout that lacks it -- nothing sealed", reused.status === 2 && /main already holds/.test(reused.stderr) && !existsSync(join(seals, "kernel-old-2.json")), `${reused.status} ${reused.stderr}`);
+
+  // A second trial into a bundle an OPEN trial branch already holds: the two would conflict at merge over a commitment
+  // somebody is judging against (PR 3b round-2 logic attack).
+  const openTwin = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -1), "kernel-trial-2", "--dry-run"]);
+  check("absorb trial into a bundle an open trial branch holds refuses -- nothing sealed", openTwin.status === 2 && /open trial branch feat\/face-absorb-trial-kernel-trial-1/.test(openTwin.stderr) && !existsSync(join(seals, "kernel-trial-2.json")), `${openTwin.status} ${openTwin.stderr}`);
+
+  // A pin scaffolds a NEW report: one main already holds would be replaced by a scaffold (PR 3b round-2 logic attack).
+  mkdirSync(join(repo, "initiatives", "absorb", "evidence"), { recursive: true });
+  writeFileSync(join(repo, "initiatives", "absorb", "evidence", "held-report.md"), "# a report somebody wrote\n");
+  g("add", "-A"); g("commit", "-q", "-m", "a report on main");
+  const heldPin = inScratch("absorb/pin.mjs", ["--root", src, "--pin", "0123456789abcdef", "--license", "MIT, in LICENSE", "--report", "initiatives/absorb/evidence/held-report.md", "--dry-run"]);
+  check("absorb pin of a report main already holds refuses -- a pin scaffolds a new report", heldPin.status === 2 && /main already holds/.test(heldPin.stderr), `${heldPin.status} ${heldPin.stderr}`);
+
+  // study's Identity line is relative to the REPOSITORY, whatever the cwd: run from elsewhere, the relative path still
+  // carried the account's home into a committed report (PR 3b round-2 shell attack).
+  const studyOut = join(tmp, "study-elsewhere.md");
+  const studied = spawnSync(process.execPath, [S("absorb", "study.mjs"), "--scaffold", "--root", src, "--pin", "0123456789abcdef", "--license", "MIT, in LICENSE", "--out", studyOut], { cwd: tmp, encoding: "utf8" });
+  const identity = existsSync(studyOut) ? (/\*\*Identity:\*\* (.*)$/m.exec(readFileSync(studyOut, "utf8")) || [])[1] : null;
+  check("study run from outside the repo names a source outside it by its folder alone", studied.status === 0 && identity === "(outside this repo) absorb-source", `${studied.status} ${identity} ${studied.stderr}`);
+
+  // TWO TRIALS INTO ONE BUNDLE AT ONCE: the open-branch check, the seal and the branch run under one lock per bundle --
+  // both passed the check and both raised approvals (PR 3b round-3 logic attack).
+  {
+    const BUNDLE = ["--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", "initiatives/absorb/evidence/kernel-bundle-race"];
+    const plans = ["kernel-br-1", "kernel-br-2"].map((corr) => ({ corr, d: lastExpect(inScratch("absorb/trial.mjs", [...BUNDLE, "--correlation", corr, "--dry-run"]).stdout) }));
+    const runs = await Promise.all(plans.map(({ corr, d }) => new Promise((resolveRun) => {
+      const c = spawn(process.execPath, [join(repo, ".claude", "scripts", "absorb", "trial.mjs"), ...BUNDLE, "--correlation", corr, "--expect", d || "x"],
+        { cwd: repo, env: { ...process.env, ARC_SPINE_ROOT: sp, ARC_ABSORB_SEAL_DIR: seals }, stdio: ["ignore", "pipe", "pipe"] });
+      let err = "";
+      c.stderr.on("data", (x) => { err += x; });
+      c.on("close", (code) => resolveRun({ code, err }));
+    })));
+    const raisedHere = approvals().filter((e) => ["kernel-br-1", "kernel-br-2"].includes(e.payload.correlation)).length;
+    check("two trials into one bundle at once: one seals and raises, the other refuses -- never two", plans.every((p) => !!p.d) && runs.filter((r) => r.code === 0).length === 1 && raisedHere === 1, runs.map((r) => `${r.code}:${r.err.trim().slice(0, 120)}`).join(" | "));
+  }
+
+  // TWO SEALS OF ONE CORRELATION AT ONCE: the nonce is created exclusively, so one wins and the other writes nothing --
+  // the stored nonce is the winner's (PR 3b round-2 attacks: with --judge between the check and the write, both won
+  // and the approval that landed could never be revealed).
+  const raceSeal = () => new Promise((resolveRun) => {
+    const c = spawn(process.execPath, [join(repo, ".claude", "scripts", "absorb", "judgement.mjs"), "seal", "--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", "initiatives/absorb/evidence/kernel-race", "--correlation", "kernel-race-1", "--bundle-dir", join(tmp, `race-bundle-${Math.random().toString(16).slice(2)}`), "--judge"],
+      { cwd: repo, env: { ...process.env, ARC_SPINE_ROOT: sp, ARC_ABSORB_SEAL_DIR: seals }, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "", err = "";
+    c.stdout.on("data", (x) => { out += x; }); c.stderr.on("data", (x) => { err += x; });
+    c.on("close", (code) => resolveRun({ code, out, err }));
+  });
+  const raced = await Promise.all([raceSeal(), raceSeal()]);
+  const winner = raced.find((x) => x.code === 0);
+  let stored = null; try { stored = JSON.parse(readFileSync(join(seals, "kernel-race-1.json"), "utf8")); } catch { /* reported */ }
+  let printed = null; try { printed = JSON.parse(String(winner && winner.out).trim().split(/\r?\n/).pop()); } catch { /* reported */ }
+  check("two seals of one correlation at once: exactly one seals, and the stored nonce is the one whose payload was printed",
+    raced.filter((x) => x.code === 0).length === 1 && !!stored && !!printed && stored.commitment === printed.commitment, raced.map((x) => `${x.code}:${x.err.trim().slice(0, 120)}`).join(" | "));
+}
+
 // ---- the writer's own refusal of the law files, whatever a caller allows ----
 {
   const PB = await import(pathToFileURL(S("core", "proposal-branch.mjs")).href);
@@ -643,5 +1130,346 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("the proposal-branch writer refuses hq.policy.yaml even when a caller allows it (UNGRANTABLE)", ug === "UNGRANTABLE");
 }
 
+// ---- PR 3b round 4: the shared emit's three outcomes, the spine write past a failed flush, the shared lock ----
+{
+  const PE = await import(pathToFileURL(S("core", "plan-expect.mjs")).href);
+  // A fake emitter answering by FAKE_MODE: the outcome is read from HOW it ended, never from whether an id came back.
+  const fake = join(tmp, "fake-arc-event.mjs");
+  writeFileSync(fake, [
+    "const m = process.env.FAKE_MODE;",
+    "if (m === \"ok\") { process.stdout.write(\"01M2X81G8W5VM9HRCP0R8A571Q\\n\"); process.exit(0); }",
+    "if (m === \"noid\") process.exit(0);",
+    "if (m === \"refuse\") { process.stderr.write(\"arc-event: REJECT BAD_PAYLOAD -- no\\n\"); process.exit(2); }",
+    "if (m === \"internal\") { process.stderr.write(\"arc-event: REJECT INTERNAL -- EIO: i/o error, fsync\\n\"); process.exit(2); }",
+    "if (m === \"crash\") process.exit(1);",
+    "if (m === \"hang\") setTimeout(() => {}, 60000);",
+    "",
+  ].join("\n"));
+  const outcome = (mode, o = {}) => PE.emitReceipt(fake, "approval.requested", { what: "x" }, { env: { ...process.env, FAKE_MODE: mode }, ...o });
+  const ok = outcome("ok"), noid = outcome("noid"), refuse = outcome("refuse"), internal = outcome("internal"), crash = outcome("crash"), hang = outcome("hang", { timeoutMs: 1500 });
+  check("emitReceipt: exit 0 with an id is landed, with its id", ok.state === "landed" && ok.id === "01M2X81G8W5VM9HRCP0R8A571Q", JSON.stringify(ok));
+  check("emitReceipt: exit 0 whose id line was lost is LANDED (arc-event's own contract), never read as not raised", noid.state === "landed" && noid.id === null && /id line was lost/.test(noid.why || ""), JSON.stringify(noid));
+  check("emitReceipt: exit 2 naming a refusal is refused", refuse.state === "refused" && /BAD_PAYLOAD/.test(refuse.why || ""), JSON.stringify(refuse));
+  check("emitReceipt: REJECT INTERNAL, a crash and a timeout are all UNKNOWN", internal.state === "unknown" && crash.state === "unknown" && hang.state === "unknown", JSON.stringify([internal, crash, hang]));
+
+  // A flush that fails AFTER the line is written is a warning, never a refusal (PR 3b round-4 logic attack: the event was
+  // quarantined while it sat on the spine, and its caller raised the same approval again). The lock token's flush is the
+  // first; the day line's is the second.
+  const spF = join(tmp, "flush-fault-spine");
+  mkdirSync(join(spF, "events"), { recursive: true });
+  const fsyncShim = join(tmp, "fsync-fault.mjs");
+  writeFileSync(fsyncShim, [
+    "import fs from \"node:fs\";",
+    "import { syncBuiltinESMExports } from \"node:module\";",
+    "const real = fs.fsyncSync;",
+    "let n = 0;",
+    "fs.fsyncSync = (fd) => { n += 1; if (n === 2) throw Object.assign(new Error(\"EIO: i/o error, fsync\"), { code: \"EIO\" }); return real(fd); };",
+    "syncBuiltinESMExports();",
+    "",
+  ].join("\n"));
+  const flushed = node(["--import", pathToFileURL(fsyncShim).href, S("hq", "arc-event.mjs"), "emit", "note.logged", "--payload", JSON.stringify({ note: "flush-probe" }), "--strict"], { ARC_SPINE_ROOT: spF });
+  const dayLines = readdirSync(join(spF, "events")).filter((n) => n.endsWith(".jsonl")).flatMap((n) => readFileSync(join(spF, "events", n), "utf8").split("\n").filter(Boolean));
+  const filesUnder = (d) => (existsSync(d) ? readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? filesUnder(join(d, e.name)) : [e.name])) : []);
+  const quarantined = filesUnder(join(spF, "_quarantine")).length + filesUnder(join(spF, "quarantine")).length;
+  check("spine: a flush that fails after the line is written exits 0 with a WARN, the event on the spine, nothing quarantined (the shim fired)",
+    flushed.status === 0 && /did not confirm the flush \(EIO\)/.test(flushed.stderr) && dayLines.some((l) => l.includes("flush-probe")) && quarantined === 0 && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(flushed.stdout.trim()),
+    `${flushed.status} ${flushed.stderr} lines=${dayLines.length} q=${quarantined}`);
+
+  // THE SHARED LOCK (PR 3b rounds 4 to 6): every taker creates its own file and holds only if no other file has a live
+  // holder; a holder on this machine is live while its process runs (up to an hour), another machine's by age; an
+  // unreadable file is live; a folder where a lock file belongs is refused by name.
+  const lockDir = join(tmp, "locks-r6");
+  mkdirSync(lockDir, { recursive: true });
+  const hex = (n) => n.toString(16).padStart(16, "0");
+  const liveToken = `${hostname()}|${process.pid}|test`;
+  const deadPid = (() => { const c = spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], { encoding: "utf8" }); return Number(c.stdout); })();
+  const age = (p, ms) => { const t = new Date(Date.now() - ms); utimesSync(p, t, t); };
+  mkdirSync(join(lockDir, `folder.lock.${hex(1)}`), { recursive: true });
+  let folderWhy = "";
+  try { await PE.withExclusiveLock(lockDir, "folder.lock", () => "x"); } catch (e) { folderWhy = e instanceof Error ? e.message : String(e); }
+  check("lock: a folder where a lock file belongs is refused by name -- never busy forever", new RegExp(`a folder sits where the lock folder\\.lock\\.${hex(1)} belongs`).test(folderWhy), folderWhy);
+  writeFileSync(join(lockDir, `future.lock.${hex(2)}`), "another-machine|1|x");
+  age(join(lockDir, `future.lock.${hex(2)}`), -24 * 3600_000);
+  const fut = await PE.withExclusiveLock(lockDir, "future.lock", () => "ran", { staleMs: 60_000 });
+  check("lock: another machine's lock dated a day into the future is no live holder's -- the run holds it", fut.busy === false && fut.value === "ran", JSON.stringify(fut));
+  writeFileSync(join(lockDir, `fresh.lock.${hex(3)}`), liveToken);
+  const fr = await PE.withExclusiveLock(lockDir, "fresh.lock", () => "ran", { staleMs: 60_000 });
+  check("lock: a fresh lock whose holder's process is running is busy (the control)", fr.busy === true, JSON.stringify(fr));
+  writeFileSync(join(lockDir, `slow.lock.${hex(4)}`), liveToken);
+  age(join(lockDir, `slow.lock.${hex(4)}`), 30 * 60_000);
+  const slow = await PE.withExclusiveLock(lockDir, "slow.lock", () => "ran", { staleMs: 60_000 });
+  check("lock: this machine's holder whose process still runs is live half an hour on -- busy (a spawnSync cannot beat)", slow.busy === true, JSON.stringify(slow));
+  writeFileSync(join(lockDir, `reused.lock.${hex(5)}`), liveToken);
+  age(join(lockDir, `reused.lock.${hex(5)}`), 2 * 3600_000);
+  const reused = await PE.withExclusiveLock(lockDir, "reused.lock", () => "ran", { staleMs: 60_000 });
+  check("lock: a running pid on a file two hours old is another program's -- the run holds it, never wedged", reused.busy === false && reused.value === "ran", JSON.stringify(reused));
+  writeFileSync(join(lockDir, `dead.lock.${hex(6)}`), `${hostname()}|${deadPid}|gone`);
+  const dead = await PE.withExclusiveLock(lockDir, "dead.lock", () => readdirSync(lockDir).filter((n) => n.startsWith("dead.lock.")), { staleMs: 60_000 });
+  const deadAfter = readdirSync(lockDir).filter((n) => n.startsWith("dead.lock."));
+  check("lock: a FRESH lock whose holder's process has exited is taken at once -- its file cleared, only the taker's while held, none after",
+    deadPid > 0 && dead.busy === false && Array.isArray(dead.value) && dead.value.length === 1 && dead.value[0] !== `dead.lock.${hex(6)}` && deadAfter.length === 0, `${JSON.stringify(dead)} after=${deadAfter.join(",")}`);
+  writeFileSync(join(lockDir, `away.lock.${hex(7)}`), `another-machine|${deadPid}|x`);
+  const away = await PE.withExclusiveLock(lockDir, "away.lock", () => "ran", { staleMs: 60_000 });
+  check("lock: another machine's fresh lock is judged by age alone -- busy", away.busy === true, JSON.stringify(away));
+  // An unreadable file is LIVE, never "released" (PR 3b round-6 logic attack): a shim holds one lock file unreadable.
+  {
+    const unDir = join(tmp, "locks-unreadable");
+    mkdirSync(unDir, { recursive: true });
+    writeFileSync(join(unDir, `scan.lock.${hex(8)}`), `${hostname()}|${deadPid}|x`);
+    const busyShim = join(tmp, "lock-ebusy.mjs");
+    writeFileSync(busyShim, [
+      "import fs from \"node:fs\";",
+      "import { syncBuiltinESMExports } from \"node:module\";",
+      "const real = fs.readFileSync;",
+      `fs.readFileSync = (p, o) => { if (String(p).endsWith(${JSON.stringify(`scan.lock.${hex(8)}`)})) throw Object.assign(new Error("EBUSY: resource busy or locked"), { code: "EBUSY" }); return real(p, o); };`,
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"));
+    const taker = join(tmp, "lock-taker.mjs");
+    writeFileSync(taker, [
+      "const [peUrl, dir] = process.argv.slice(2);",
+      "const { withExclusiveLock } = await import(peUrl);",
+      "const r = await withExclusiveLock(dir, \"scan.lock\", () => \"ran\", { staleMs: 60000 });",
+      "process.stdout.write(r.busy ? \"busy\" : \"held\");",
+      "",
+    ].join("\n"));
+    const r = spawnSync(process.execPath, ["--import", pathToFileURL(busyShim).href, taker, pathToFileURL(S("core", "plan-expect.mjs")).href, unDir], { encoding: "utf8" });
+    const control = spawnSync(process.execPath, [taker, pathToFileURL(S("core", "plan-expect.mjs")).href, unDir], { encoding: "utf8" });
+    check("lock: a lock file that cannot be read is LIVE -- busy; readable, its dead holder's lock is taken (the control)", r.stdout === "busy" && control.stdout === "held", `${r.stdout}|${r.stderr} / ${control.stdout}|${control.stderr}`);
+  }
+
+  // THE RACE, DETERMINISTIC. B creates its file and lists the folder, and is paused right there (a shim on its first
+  // listing); A comes in, creates its own and lists -- B's live file is there, so A backs off; B resumes and holds. One
+  // holder. The old three-step lock -- the negative control, the mutant this harness exists to catch -- is paused
+  // between its stale look and its unlink instead, and lets B in beside A.
+  const child = join(tmp, "lock-child.mjs");
+  writeFileSync(child, [
+    "import { closeSync, existsSync, openSync, readdirSync, statSync, unlinkSync, writeFileSync } from \"node:fs\";",
+    "import { join } from \"node:path\";",
+    "const [mode, role, dir, marks, peUrl] = process.argv.slice(2);",
+    "const { withExclusiveLock } = await import(peUrl);",
+    "const NAME = \"race.lock\";",
+    "const sleep = (ms) => new Promise((r) => setTimeout(r, ms));",
+    "const waitFor = async (p, ms) => { const end = Date.now() + ms; while (!existsSync(p) && Date.now() < end) await sleep(20); };",
+    "async function inside() {",
+    "  writeFileSync(join(marks, `in-${role}`), \"\");",
+    "  if (readdirSync(marks).some((n) => n.startsWith(\"in-\") && n !== `in-${role}`)) writeFileSync(join(marks, \"overlap\"), role);",
+    "  if (role === \"A\") { writeFileSync(join(marks, \"a-holds\"), \"\"); await waitFor(join(marks, \"b-done\"), 20000); }",
+    "  unlinkSync(join(marks, `in-${role}`));",
+    "  return \"held\";",
+    "}",
+    "async function naive(fn) {",
+    "  const lock = join(dir, NAME);",
+    "  const take = () => { try { closeSync(openSync(lock, \"wx\")); return true; } catch (e) { if (e.code === \"EEXIST\" || e.code === \"EPERM\" || e.code === \"EACCES\") return false; throw e; } };",
+    "  let ok = take();",
+    "  if (!ok) { let age = 0; try { age = Date.now() - statSync(lock).mtimeMs; } catch {} if (age > 60000) { try { unlinkSync(lock); } catch {} ok = take(); } }",
+    "  if (!ok) return { busy: true };",
+    "  try { return { busy: false, value: await fn() }; } finally { try { unlinkSync(lock); } catch {} }",
+    "}",
+    "const r = mode === \"naive\" ? await naive(inside) : await withExclusiveLock(dir, NAME, inside, { staleMs: 60000 });",
+    "writeFileSync(join(marks, `${role.toLowerCase()}-done`), \"\");",
+    "process.stdout.write(r.busy ? \"busy\" : \"held\");",
+    "",
+  ].join("\n"));
+  // B pauses on its FIRST look: the shared lock's listing of the folder, the old lock's stat of its file. It resumes when
+  // A holds, or when A is done.
+  const pauseShim = join(tmp, "lock-pause.mjs");
+  writeFileSync(pauseShim, [
+    "import fs from \"node:fs\";",
+    "import { syncBuiltinESMExports } from \"node:module\";",
+    "import { join, resolve } from \"node:path\";",
+    "const marks = process.env.LOCK_MARKS;",
+    "const lockDir = resolve(process.env.LOCK_DIR);",
+    "let paused = false;",
+    "const hold = () => {",
+    "  paused = true;",
+    "  fs.writeFileSync(join(marks, \"b-paused\"), \"\");",
+    "  const cell = new Int32Array(new SharedArrayBuffer(4));",
+    "  const end = Date.now() + 20000;",
+    "  while (!fs.existsSync(join(marks, \"a-holds\")) && !fs.existsSync(join(marks, \"a-done\")) && Date.now() < end) Atomics.wait(cell, 0, 0, 20);",
+    "};",
+    "const realStat = fs.statSync;",
+    "fs.statSync = (p, o) => { const st = realStat(p, o); if (!paused && String(p).endsWith(\"race.lock\")) hold(); return st; };",
+    "const realList = fs.readdirSync;",
+    "fs.readdirSync = (p, o) => { const out = realList(p, o); if (!paused && resolve(String(p)) === lockDir) hold(); return out; };",
+    "syncBuiltinESMExports();",
+    "",
+  ].join("\n"));
+  const race = async (mode) => {
+    const dir = join(tmp, `race-${mode}`);
+    const marks = join(tmp, `race-${mode}-marks`);
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(marks, { recursive: true });
+    // A killed holder's lock: the old lock's plain file, or a shared-lock file whose process is gone and whose file is old.
+    const lock = join(dir, mode === "naive" ? "race.lock" : `race.lock.${hex(9)}`);
+    writeFileSync(lock, `${hostname()}|${deadPid}|killed`);
+    age(lock, 10 * 60_000);
+    const run = (role, extra) => new Promise((res) => {
+      const c = spawn(process.execPath, [...extra, child, mode, role, dir, marks, pathToFileURL(S("core", "plan-expect.mjs")).href],
+        { cwd: REPO, env: { ...process.env, LOCK_MARKS: marks, LOCK_DIR: dir }, stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      c.stdout.on("data", (d) => { out += d; });
+      c.on("close", () => res(out.trim()));
+    });
+    const bRun = run("B", ["--import", pathToFileURL(pauseShim).href]);
+    const end = Date.now() + 20000;
+    while (!existsSync(join(marks, "b-paused")) && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+    const paused = existsSync(join(marks, "b-paused"));
+    const [a, b] = await Promise.all([run("A", []), bRun]);
+    return { paused, a, b, overlap: existsSync(join(marks, "overlap")) };
+  };
+  const shared = await race("shared");
+  check("lock: a taker that finds another's LIVE file backs off -- one holder (B held, A busy; the pause fired)", shared.paused && shared.a === "busy" && shared.b === "held" && !shared.overlap, JSON.stringify(shared));
+  const naive = await race("naive");
+  check("lock: the negative control -- the old three-step lock lets B in beside A (the harness sees the defect)", naive.paused && naive.overlap, JSON.stringify(naive));
+
+  // THE SPINE LOCK'S TOKEN NAMES ITS HOST (PR 3b round-6 logic attack): another machine's fresh lock is never broken by a
+  // pid look, and a dead writer's lock on THIS machine is broken at once.
+  {
+    const IO = await import(pathToFileURL(S("hq", "lib", "spine-io.mjs")).href);
+    const root = join(tmp, "spine-host");
+    mkdirSync(join(root, "events"), { recursive: true });
+    writeFileSync(join(root, "events", ".lock"), `another-machine|${deadPid}|abcdef\n`);
+    let awayCode = "ran";
+    try { IO.withLock(root, () => "x", { timeoutMs: 300 }); } catch (e) { awayCode = e.code; }
+    writeFileSync(join(root, "events", ".lock"), `${hostname()}|${deadPid}|abcdef\n`);
+    let deadRan = "no";
+    try { deadRan = IO.withLock(root, () => "ran", { timeoutMs: 300 }); } catch (e) { deadRan = e.code; }
+    check("spine lock: another machine's fresh lock waits (LOCK_TIMEOUT); this machine's dead writer's fresh lock is broken at once", awayCode === "LOCK_TIMEOUT" && deadRan === "ran", `${awayCode} ${deadRan}`);
+  }
+
+  // BENCH'S SPINE IS THE EMITTER'S (PR 3b round-5 logic attack): with ARC_SPINE_ROOT unset, a bench root holding .claude/
+  // and no .git/, inside a folder holding both, reads the outer spine -- where the emitter, run in the root, writes.
+  {
+    const BENCH = await import(pathToFileURL(S("engine", "arc-bench.mjs")).href);
+    const outer = join(tmp, "bench-outer");
+    const inner = join(outer, "inner");
+    mkdirSync(join(outer, ".claude"), { recursive: true });
+    mkdirSync(join(outer, ".git"), { recursive: true });
+    mkdirSync(join(inner, ".claude"), { recursive: true });
+    const saved = process.env.ARC_SPINE_ROOT;
+    delete process.env.ARC_SPINE_ROOT;
+    let events = "";
+    try { events = BENCH.spinePaths(inner).events; } finally { if (saved !== undefined) process.env.ARC_SPINE_ROOT = saved; }
+    check("bench: with no ARC_SPINE_ROOT, its spine is found as the emitter finds it (the folder holding .claude/ AND .git/)", resolve(events) === resolve(join(outer, ".claude", "state", "hq", "events")), events);
+  }
+
+  // THE JUDGMENT ASKS WHERE THE EMIT WOULD WRITE (PR 3b round-5 logic attack): from a linked worktree the dry run passed
+  // and the apply wrote its branch before the emit refused WORKTREE_SPINE.
+  {
+    const mainClone = join(tmp, "judge-main");
+    mkdirSync(join(mainClone, ".claude"), { recursive: true });
+    const g = (cwd, ...a) => spawnSync("git", a, { cwd, encoding: "utf8" });
+    g(mainClone, "init", "-q", "-b", "main");
+    g(mainClone, "config", "user.name", "fixture"); g(mainClone, "config", "user.email", "fixture@example.invalid"); g(mainClone, "config", "commit.gpgsign", "false");
+    writeFileSync(join(mainClone, ".claude", "keep.txt"), "x\n");
+    g(mainClone, "add", "-A"); g(mainClone, "commit", "-q", "-m", "fixture");
+    const linked = join(tmp, "judge-linked");
+    const added = g(mainClone, "worktree", "add", "-q", linked);
+    const okEmitter = join(tmp, "fake-ok-emitter.mjs");
+    writeFileSync(okEmitter, "process.exit(0);\n");
+    const saved = process.env.ARC_SPINE_ROOT;
+    delete process.env.ARC_SPINE_ROOT;
+    let fromLinked = null, fromMain = "unset";
+    try {
+      fromLinked = PE.spineRefusal(okEmitter, "approval.requested", { what: "x" }, { cwd: linked });
+      fromMain = PE.spineRefusal(okEmitter, "approval.requested", { what: "x" }, { cwd: mainClone });
+    } finally { if (saved !== undefined) process.env.ARC_SPINE_ROOT = saved; }
+    check("spineRefusal: from a linked worktree the judgment refuses WORKTREE_SPINE; from the main clone it passes (the control)",
+      added.status === 0 && /WORKTREE_SPINE/.test(fromLinked || "") && fromMain === null, `added=${added.status} linked=${fromLinked} main=${fromMain}`);
+  }
+
+  // THE SPINE LOCK'S BREAK, DETERMINISTIC (PR 3b round-5 shell attack: two writers in 4 of 6 forced runs). B reads a
+  // killed writer's lock and is paused right there; A breaks it and holds the spine; B resumes. The spine lock re-reads the
+  // token before it unlinks and finds A's, so B waits -- and times out -- rather than deleting A's lock. The old break
+  // (unlink after an age look) is the negative control.
+  {
+    const spineChild = join(tmp, "spine-lock-child.mjs");
+    writeFileSync(spineChild, [
+      "import { closeSync, existsSync, openSync, readdirSync, statSync, unlinkSync, writeFileSync } from \"node:fs\";",
+      "import { join } from \"node:path\";",
+      "const [mode, role, root, marks, ioUrl] = process.argv.slice(2);",
+      "const { withLock } = await import(ioUrl);",
+      "const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);",
+      "function inside() {",
+      "  writeFileSync(join(marks, `in-${role}`), \"\");",
+      "  if (readdirSync(marks).some((n) => n.startsWith(\"in-\") && n !== `in-${role}`)) writeFileSync(join(marks, \"overlap\"), role);",
+      "  if (role === \"A\") { writeFileSync(join(marks, \"a-holds\"), \"\"); const end = Date.now() + 20000; while (!existsSync(join(marks, \"b-done\")) && Date.now() < end) sleepSync(20); }",
+      "  unlinkSync(join(marks, `in-${role}`));",
+      "  return \"held\";",
+      "}",
+      "function naive(fn) {",
+      "  const lock = join(root, \"events\", \".lock\");",
+      "  const end = Date.now() + 1500;",
+      "  for (;;) {",
+      "    try { closeSync(openSync(lock, \"wx\")); break; } catch (e) { if (e.code !== \"EEXIST\" && e.code !== \"EPERM\" && e.code !== \"EACCES\") throw e; }",
+      "    try { if (Date.now() - statSync(lock).mtimeMs > 5000) { unlinkSync(lock); continue; } } catch {}",
+      "    if (Date.now() > end) return \"timeout\";",
+      "    sleepSync(15);",
+      "  }",
+      "  try { return fn(); } finally { try { unlinkSync(lock); } catch {} }",
+      "}",
+      "let r;",
+      "try { r = mode === \"naive\" ? naive(inside) : withLock(root, inside, { timeoutMs: role === \"B\" ? 1500 : 20000 }); }",
+      "catch (e) { r = e && e.code ? e.code : \"error\"; }",
+      "if (role === \"B\") writeFileSync(join(marks, \"b-done\"), \"\");",
+      "process.stdout.write(String(r));",
+      "",
+    ].join("\n"));
+    const spinePause = join(tmp, "spine-lock-pause.mjs");
+    writeFileSync(spinePause, [
+      "import fs from \"node:fs\";",
+      "import { syncBuiltinESMExports } from \"node:module\";",
+      "import { join } from \"node:path\";",
+      "const marks = process.env.LOCK_MARKS;",
+      "let paused = false;",
+      "const isLock = (p) => /[\\\\/]\\.lock$/.test(String(p));",
+      "const hold = () => {",
+      "  paused = true;",
+      "  fs.writeFileSync(join(marks, \"b-paused\"), \"\");",
+      "  const cell = new Int32Array(new SharedArrayBuffer(4));",
+      "  const end = Date.now() + 20000;",
+      "  while (!fs.existsSync(join(marks, \"a-holds\")) && Date.now() < end) Atomics.wait(cell, 0, 0, 20);",
+      "};",
+      // the spine lock's break reads the token first; the old break stats the file first -- B pauses on its first look
+      "const realRead = fs.readFileSync;",
+      "fs.readFileSync = (p, o) => { const out = realRead(p, o); if (!paused && isLock(p)) hold(); return out; };",
+      "const realStat = fs.statSync;",
+      "fs.statSync = (p, o) => { const st = realStat(p, o); if (!paused && isLock(p)) hold(); return st; };",
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"));
+    const spineRace = async (mode) => {
+      const root = join(tmp, `spine-race-${mode}`);
+      const marks = join(tmp, `spine-race-${mode}-marks`);
+      mkdirSync(join(root, "events"), { recursive: true });
+      mkdirSync(marks, { recursive: true });
+      const lock = join(root, "events", ".lock");
+      writeFileSync(lock, `${hostname()}|${deadPid}|deadbeef\n`);
+      const old = new Date(Date.now() - 10 * 60_000);
+      utimesSync(lock, old, old);
+      const run = (role, extra) => new Promise((res) => {
+        const c = spawn(process.execPath, [...extra, spineChild, mode, role, root, marks, pathToFileURL(S("hq", "lib", "spine-io.mjs")).href],
+          { cwd: REPO, env: { ...process.env, LOCK_MARKS: marks }, stdio: ["ignore", "pipe", "pipe"] });
+        let out = "";
+        c.stdout.on("data", (d) => { out += d; });
+        c.on("close", () => res(out.trim()));
+      });
+      const bRun = run("B", ["--import", pathToFileURL(spinePause).href]);
+      const end = Date.now() + 20000;
+      while (!existsSync(join(marks, "b-paused")) && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+      const paused = existsSync(join(marks, "b-paused"));
+      const [a, b] = await Promise.all([run("A", []), bRun]);
+      return { paused, a, b, overlap: existsSync(join(marks, "overlap")) };
+    };
+    const spineShared = await spineRace("shared");
+    check("spine lock: a waiter whose look predates another's break never deletes that fresh lock -- one writer (A held, B timed out; the pause fired)",
+      spineShared.paused && spineShared.a === "held" && spineShared.b === "LOCK_TIMEOUT" && !spineShared.overlap, JSON.stringify(spineShared));
+    const spineNaive = await spineRace("naive");
+    check("spine lock: the negative control -- the old break deletes A's fresh lock and lets B in beside it", spineNaive.paused && spineNaive.overlap, JSON.stringify(spineNaive));
+  }
+
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exit(failed === 0 && ran >= 60 ? 0 : 1);
+process.exit(failed === 0 && ran >= 80 ? 0 : 1);

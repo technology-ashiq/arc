@@ -4,9 +4,8 @@
 // The port of v0.7's Bench onto the door. What is real: the bench lane's header, the run.completed
 // receipts grouped by the driver that ran them, the promotion proposals counted, and -- through /api/bench
 // (Phase 04) -- every scored bench run, class by class, with NO PROPOSAL drawn as the result it is. Which run
-// was the champion is not recorded on any receipt, so the table never labels one. Adding a model, running a
-// scorecard and proposing a promotion are verbs of the work door (Phase 05).
-import { verbPending } from "../../../lib/registry.mjs";
+// was the champion is not recorded on any receipt, so the table never labels one. Running a model and proposing a
+// promotion from a run's evidence are the room's ops (face v2 Phase 05, ADR-1339, ADR-1340): the ops dock draws them.
 import { asArray, asObject, field, servedRead, servedTable } from "../../../lib/served.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { countedOn, hasKind, kindCount, laneBadge, laneKpi, laneRoom, roomLink, runsBy } from "../../../lib/lane-room.mjs";
@@ -20,7 +19,6 @@ import { countedOn, hasKind, kindCount, laneBadge, laneKpi, laneRoom, roomLink, 
  *   scorecards: import("../../../lib/served.mjs").ServedTable,
  *   drivers: import("../../../lib/lane-room.mjs").RunRow[],
  *   showDriversEmpty: boolean,
- *   addVerb: { isVerbPending: true, verb: string, sentence: string },
  *   policy: { canOpen: boolean, room: string },
  * }} Folded
  */
@@ -63,10 +61,6 @@ export function fold(payloads, ctx) {
     }),
     drivers,
     showDriversEmpty: runsHomed && base.trail.isDrawn && drivers.length === 0,
-    addVerb: verbPending(
-      "Add a model to the bench",
-      "A model joins as a challenger, runs its scorecard, and a win becomes a promotion proposal in your inbox. Every step arrives with the work door.",
-    ),
     policy: roomLink(ctx, "model-policy"),
   };
 }

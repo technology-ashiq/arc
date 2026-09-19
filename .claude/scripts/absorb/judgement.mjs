@@ -25,9 +25,11 @@
 // Exit codes: 0 done · 2 usage/input error · 3 refused (a reveal before its decision, or a tamper)
 //             4 stale preimage format -- RE-SEAL, and explicitly not a tamper.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, writeSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomBytes, createHash } from "node:crypto";
+import { spineRefusal } from "../core/plan-expect.mjs";
 // The pool is owned by the VALIDATOR (no side effects); this script consumes it.
 import { LABEL_POOL } from "../hq/lib/validate-absorb.mjs";
 
@@ -38,7 +40,9 @@ const SEAL_DIR = process.env.ARC_ABSORB_SEAL_DIR || join(".claude", "state", "ab
 const SUBJECT = "absorb.ab-judgement";
 const MIN_FIXTURES = 3;
 
-const die = (msg, code = 2) => { console.error(`judgement: ${msg}`); process.exit(code); };
+// Synchronous, then the exit: console.error before process.exit can be cut on an asynchronous pipe (the fixed-defects
+// row every CLI here carries; PR 3b round-2 shell attack found this one).
+const die = (msg, code = 2) => { try { writeSync(2, `judgement: ${msg}\n`); } catch { /* a reader that left */ } process.exit(code); };
 const sha256 = (s) => createHash("sha256").update(s, "utf8").digest("hex");
 
 const argv = process.argv.slice(2);
@@ -82,7 +86,29 @@ const badVariant = (v) =>
 // blind, and validate-absorb.mjs refuses those at the spine -- so they are never generated here.
 
 
-if (cmd === "seal") {
+if (cmd === "seal") seal: {
+  // THE SEAL'S FLAGS ARE A CLOSED SET. flag() looks names up, so an unknown flag was simply ignored -- and
+  // `seal ... --dry-run` would have sealed for real, burning the correlation (face v2 Phase 05 kernel ring: the
+  // develop.mjs and arc-jobs hazard the CLI probe named). A bare flag takes no =value either.
+  const SEAL_VALUE_FLAGS = ["--candidate", "--variants", "--fixtures", "--evidence", "--correlation", "--bundle-dir"];
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--dry-run" || a === "--judge") continue;
+    if (a.startsWith("--dry-run=") || a.startsWith("--judge=")) die(`${a.split("=")[0]} takes no value; write it bare, not ${a}`);
+    if (SEAL_VALUE_FLAGS.includes(a)) { i++; continue; }
+    die(`seal does not take ${JSON.stringify(a)} -- its flags are ${SEAL_VALUE_FLAGS.join(" ")} --dry-run --judge`);
+  }
+  // --dry-run: every check a seal makes, and nothing written -- no nonce, no commitment, no bundle.
+  // --bundle-dir DIR: write the bundle's commitment.txt into DIR instead of --evidence (the face's trial tool puts it on
+  // a proposal branch at --evidence, so the working tree is never written; the payload still names --evidence).
+  const dryRun = argv.includes("--dry-run");
+  // --judge: the spine judges the payload this seal will print -- its drawn labels, its commitment -- before the nonce is
+  // written, and a refusal seals nothing. The face's trial tool passes it, because it emits that payload next. Off by
+  // default: a hand seal may print a payload for a bundle outside the repo (the suite seals into a temp directory), and
+  // it is the emit, not the seal, that the spine answers.
+  const judge = argv.includes("--judge");
+  const bundleDir = flag("--bundle-dir");
+  if (dryRun && bundleDir) die("--dry-run writes no bundle, so it takes no --bundle-dir");
   const candidate = flag("--candidate");
   const variantsArg = flag("--variants");
   const fixturesArg = flag("--fixtures");
@@ -124,6 +150,18 @@ if (cmd === "seal") {
 
   if (existsSync(join(SEAL_DIR, `${correlation}.json`)))
     die(`a seal already exists for correlation "${correlation}" -- resealing would replace the commitment the owner is judging against`);
+  // Checked BEFORE anything is written. It used to be checked after the nonce was sealed, so a reused bundle refused the
+  // seal and still burned its correlation.
+  const bundle = resolve(bundleDir ?? evidence);
+  if (existsSync(join(resolve(evidence), "mapping.json")) || existsSync(join(bundle, "mapping.json")))
+    die(`${evidence} already holds a revealed mapping.json from an earlier judgement -- sealing into it would leave plaintext in a pre-decision bundle`);
+  if (dryRun) {
+    process.stdout.write(`judgement: would seal ${variants.length} variants as ${variants.length} blind labels over ${fixtures.length} fixtures for ${candidate} (correlation ${correlation}); the commitment goes to ${evidence}/commitment.txt\n`);
+    process.stdout.write("judgement: dry run -- no nonce, no commitment and no bundle was written; the labels are drawn only when it seals\n");
+    // exitCode and fall out of the block, never process.exit(): stdout to a pipe is asynchronous on some platforms.
+    process.exitCode = 0;
+    break seal;
+  }
 
   // Randomize which label goes to which variant. A shuffled COPY of the pool, so two seals in the
   // same run cannot collide on an ordering.
@@ -139,20 +177,32 @@ if (cmd === "seal") {
   const nonce = randomBytes(16).toString("hex");
   const commitment = sha256(preimage(mapping, nonce));
 
-  mkdirSync(SEAL_DIR, { recursive: true });
-  writeFileSync(
-    join(SEAL_DIR, `${correlation}.json`),
-    JSON.stringify({ correlation, candidate, mapping, nonce, commitment, preimage_version: PREIMAGE_VERSION, sealed_at_note: "gitignored state; the bundle carries only the commitment" }, null, 2) + "\n",
-    "utf8"
-  );
+  // The payload the owner is asked to judge -- built BEFORE anything is written, and judged by the spine as it is: these
+  // labels, this commitment. A draft with other labels passed the spine, and the real payload was then refused after
+  // the nonce had burned the correlation (fixture names that read as a key beside a drawn label: PR 3b attacks). A
+  // refusal here writes nothing; seal again, and other labels are drawn.
+  const payload = { subject: SUBJECT, candidate, fixtures, labels, commitment, evidence_path: evidence, correlation };
+  const refused = judge ? spineRefusal(join(dirname(fileURLToPath(import.meta.url)), "..", "hq", "arc-event.mjs"), "approval.requested", payload) : null;
+  if (refused) die(`the spine would refuse this seal's approval, so nothing was sealed and the correlation is still free: ${refused}`);
 
-  // The bundle gets the commitment and NOTHING that reveals the mapping.
-  const bundle = resolve(evidence);
+  mkdirSync(SEAL_DIR, { recursive: true });
+  // EXCLUSIVE CREATE. The existence check above and this write were two steps, and --judge put an emitter spawn between
+  // them: two seals of one correlation both passed the check, and the nonce stored was the LOSER's -- its approval
+  // could never be revealed (PR 3b round-2 shell attack: 6 of 6 races). "wx" makes the second writer fail here.
+  try {
+    writeFileSync(
+      join(SEAL_DIR, `${correlation}.json`),
+      JSON.stringify({ correlation, candidate, mapping, nonce, commitment, preimage_version: PREIMAGE_VERSION, sealed_at_note: "gitignored state; the bundle carries only the commitment" }, null, 2) + "\n",
+      { encoding: "utf8", flag: "wx" },
+    );
+  } catch (e) {
+    if (e && e.code === "EEXIST") die(`a seal already exists for correlation "${correlation}" -- another seal took it a moment ago; nothing of this one was written`);
+    throw e;
+  }
+
+  // The bundle gets the commitment and NOTHING that reveals the mapping. (The reused-bundle check -- a PREVIOUS run's
+  // revealed plaintext beside this run's commitment -- ran above, before anything was written.)
   mkdirSync(bundle, { recursive: true });
-  // A reused bundle would carry the PREVIOUS run's revealed plaintext beside this run's commitment,
-  // so a pre-decision bundle would contain a mapping. Test 1 only ever saw a virgin directory.
-  if (existsSync(join(bundle, "mapping.json")))
-    die(`${evidence} already holds a revealed mapping.json from an earlier judgement -- sealing into it would leave plaintext in a pre-decision bundle`);
   writeFileSync(join(bundle, "commitment.txt"),
     `${commitment}\n\n` +
     `sha256 of the sealed label-to-variant mapping for correlation ${correlation}.\n` +
@@ -162,9 +212,7 @@ if (cmd === "seal") {
     `  node .claude/scripts/absorb/judgement.mjs reveal --correlation ${correlation} --evidence ${evidence}\n`,
     "utf8");
 
-  // The payload the owner is asked to judge. Printed rather than emitted, because emitting is a
-  // separate deliberate act and this file proposes only.
-  const payload = { subject: SUBJECT, candidate, fixtures, labels, commitment, evidence_path: evidence, correlation };
+  // The payload, printed rather than emitted: emitting is a separate deliberate act and this file proposes only.
   process.stdout.write(JSON.stringify(payload) + "\n");
   process.stderr.write(
     `judgement: sealed ${variants.length} variants as ${labels.join(", ")} -- the mapping is NOT in the bundle.\n` +

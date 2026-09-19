@@ -60,6 +60,9 @@ export function flowInputs(ctx) {
     "evolve.open-experiment": { experiment: "x-browser-flow", module: "core", surface: "hero", target: "app/home/hero.tsx", arms: "+champion,+challenger" },
     "evolve.measure": { experiment: "x-browser-flow", unit: "u-1", metric: "signup_conversion", value: "1", count: "1", window: "2026-09-01..2026-09-07", source: "src-1" },
     "evolve.conclude": { experiment: "x-browser-flow" },
+    "bench.propose": { from: join(ctx.tmp, "no-bench-run"), champion: join(ctx.tmp, "no-champion-run") },
+    "absorb.pin-source": { root: ctx.tmp, pin: "0123456789abcdef", license: "MIT, in LICENSE at the source root", report: "initiatives/absorb/evidence/browser-flow.md" },
+    "absorb.trial": { candidate: "T-01", variants: "harbor,quartz", fixtures: "f1,f2,f3", evidence: "initiatives/absorb/evidence/browser-flow-trial", correlation: "browser-flow-trial-1" },
   };
 }
 
@@ -78,6 +81,11 @@ export const REFUSALS = Object.freeze({
   "evolve.open-experiment": "NO_EVOLVE_SECTION",
   "evolve.measure": "NOT_OPEN",
   "evolve.conclude": "NOT_OPEN",
+  // bench.propose proposes from a run that already happened, and the browser flow has none to point it at: the tool's
+  // own refusal is what the card must show. Its receipt path is the parity suite's, which runs a mock bench first.
+  "bench.propose": "has no scorecard\\.json|no scorecard\\.json",
+  "absorb.pin-source": "SIM_EFFECT|NO_BASE",
+  "absorb.trial": "SIM_EFFECT|NO_BASE",
 });
 
 /**

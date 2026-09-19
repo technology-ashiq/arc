@@ -12,10 +12,12 @@
   "scripts": [
     ".claude/scripts/absorb/ab-run.mjs",
     ".claude/scripts/absorb/judgement.mjs",
+    ".claude/scripts/absorb/pin.mjs",
     ".claude/scripts/absorb/rebuild-lint.mjs",
     ".claude/scripts/absorb/registry-ref.mjs",
     ".claude/scripts/absorb/report-lint.mjs",
-    ".claude/scripts/absorb/study.mjs"
+    ".claude/scripts/absorb/study.mjs",
+    ".claude/scripts/absorb/trial.mjs"
   ],
   "files": [],
   "docs": [],
