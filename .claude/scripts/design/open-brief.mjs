@@ -17,14 +17,13 @@
 //
 // Exit: 0 done · 1 the branch IS written and its receipt is not (said so) · 2 refused, nothing written.
 
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { baseText, checkProposal, mainHolds, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
 import { bashEnv, spawnBounded } from "../core/spawn-bounded.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -34,7 +33,6 @@ const ARC_EVENT = join(REPO, ".claude", "scripts", "hq", "arc-event.mjs");
 // design-explore.sh's own id grammar, and a brief path of plain segments under docs/.
 const ID_RE = /^[abcdefghijklmnopqrstuvwxyz0123456789][abcdefghijklmnopqrstuvwxyz0123456789-]{0,62}$/;
 const BRIEF_RE = /^docs\/[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*\.(md|html)$/;
-const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 class Stop extends Error {}
 const out = [];
@@ -126,6 +124,8 @@ async function main() {
       say(`open-brief: would ${what}`);
       say(`open-brief: ${files.length} scaffold file(s) on a new branch ${branch} off main ${base.slice(0, 12)}, then approval.requested to your inbox`);
       say(plan.diff.replace(/\n$/, ""));
+      say("commit message:");
+      for (const l of message.split("\n")) say(`  ${l}`);
       say("open-brief: dry run -- no branch, no object, no receipt was written");
       say(expectLine(digest));
       return;
@@ -138,11 +138,12 @@ async function main() {
       beforeRef: (commit) => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval(commit), { cwd: REPO }); if (no) die(2, `the spine would refuse this approval with its real commit, so no branch was written: ${no}`); } });
     written = true;
     say(`open-brief: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}`);
-    const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(approval(w.commit)), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    const id = String(r.stdout || "").trim();
-    if (r.status !== 0 || !ULID_RE.test(id))
-      die(1, `the branch ${branch} IS written, and its approval was not raised -- ${String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
-    say(`receipt: approval.requested ${id}`);
+    // Through the shared emit, three outcomes: an unknown one was read as "not raised" (the PR 3b round-4 row, twin).
+    const got = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit), { cwd: REPO, timeoutMs: 60_000 });
+    if (got.state === "refused") die(1, `the branch ${branch} IS written, and its approval was not raised -- ${got.why}`);
+    if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its approval landed is unknown -- ${got.why}. Look in your inbox before applying again`);
+    if (!got.id) die(1, `the branch ${branch} IS written, and its approval landed without its id -- ${got.why}`);
+    say(`receipt: approval.requested ${got.id}`);
   } finally {
     // Litter, never the outcome.
     try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter */ }

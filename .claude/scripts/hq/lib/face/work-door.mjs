@@ -209,7 +209,9 @@ export function createWorkDoor(ctx, opts = {}) {
     const planCmd = op.plan(values);
     const res = await runTool(ctx, planCmd, { timeoutMs: PLAN_TIMEOUT_MS });
     const base = {
-      mode: ctx.mode, op: op.id, label: op.label, command: commandLine(planCmd),
+      // Scrubbed like everything else the page is served: the argv carried a --root path and a `why` holding an address
+      // unscrubbed (PR 4 round-3 logic attack).
+      mode: ctx.mode, op: op.id, label: op.label, command: scrub(commandLine(planCmd), ctx.repo),
       receipt: op.receipt, humanRun: op.humanRun, spends: op.spends,
     };
     if (res.exit !== 0) {
@@ -231,6 +233,13 @@ export function createWorkDoor(ctx, opts = {}) {
     // attacks). So a bound plan the page cannot show EXACTLY, anywhere, is not held. Only a DIGEST row: an emit-plan line
     // is the receipt itself, carrying what the owner typed (growth.publish names the merged article by its absolute
     // path), so it held a path by design and was refused on every real input.
+    // A plan past the door's output cap was kept by its TAIL: its head -- the diff's first files, a path, an address --
+    // was never checked and never shown, and a 300 KB report was held (PR 4 round-3 attacks). A bound plan is shown whole
+    // or not held.
+    if (op.expect === true && res.droppedOut > 0) {
+      journal({ op: op.id, phase: "plan", refused: true, hidden: true });
+      throw new OpError("PLAN_HIDDEN", `${op.id}: the plan is longer than the page can show (${res.droppedOut} characters were cut from its head), so what the apply is bound to would be hidden from you -- not held, nothing ran; narrow the input and plan again`);
+    }
     if (op.expect === true) {
       const raw = String(res.stdout);
       if (String(scrub(raw, ctx.repo)) !== raw) {
@@ -245,7 +254,7 @@ export function createWorkDoor(ctx, opts = {}) {
     journal({ op: op.id, phase: "plan", planId });
     return {
       ...base, ok: true, planId, expiresInMs: PLAN_TTL_MS,
-      apply: commandLine(applyCmd),
+      apply: scrub(commandLine(applyCmd), ctx.repo),
       // The tool's own plan output, first -- it is the review the owner reads before the click.
       output: scrub(res.stdout, ctx.repo), notes: scrub(res.stderr, ctx.repo), outputDropped: res.dropped,
       diff: effectOf(op),

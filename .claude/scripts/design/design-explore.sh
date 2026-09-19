@@ -75,9 +75,18 @@ case "$CMD" in
     # (PR 4 shell attack).
     if [ -n "$OUT_DIR" ]; then
       case "$OUT_DIR" in
+        # A share or device path (//host/C$/..., \\?\...) names the repository in a spelling no comparison below can
+        # unify with its drive path: one was taken as outside and scaffolded into (PR 4 round-3 shell attack).
+        //*|\\\\*) echo "design-explore: --out-dir must be a drive or POSIX path, not a share or device path" >&2; exit 1;;
         /*|[A-Za-z]:[\\/]*) ;;
         *) echo "design-explore: --out-dir must be an absolute path outside the tree (got: $OUT_DIR)" >&2; exit 1;;
       esac
+      # A . or .. segment is resolved by its SPELLING by cd and through a junction by mkdir: j/../new passed as outside
+      # the repository and was made inside it (PR 4 round-3 shell attack). The folder is named plainly, or refused.
+      case "/$OUT_DIR/" in
+        */./*|*/../*|*\\.\\*|*\\..\\*|*/.\\*|*/..\\*|*\\./*|*\\../*) echo "design-explore: --out-dir must not hold a . or .. segment" >&2; exit 1;;
+      esac
+      command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- the out-dir check needs it" >&2; exit 1; }
       if [ -e "$OUT_DIR" ] || [ -L "$OUT_DIR" ]; then
         echo "design-explore: --out-dir $OUT_DIR already exists -- it must be a new directory" >&2; exit 1
       fi
@@ -85,7 +94,7 @@ case "$CMD" in
       # are one folder, and pwd -P kept them apart), with case folded where the filesystem has none -- a case-variant of
       # the repository's path was taken as outside it and scaffolded into (PR 4 round-2 attacks). cd first: a POSIX path
       # handed to native node is not a path on Windows.
-      native_of() { (cd "$1" 2>/dev/null && node -e "process.stdout.write(require(\"fs\").realpathSync.native(process.cwd()))"); }
+      native_of() { (cd -P "$1" 2>/dev/null && node -e "process.stdout.write(require(\"fs\").realpathSync.native(process.cwd()))"); }
       out_native="$(native_of "$(dirname "$OUT_DIR")")" && [ -n "$out_native" ] || { echo "design-explore: --out-dir's parent does not exist" >&2; exit 1; }
       root_native="$(native_of "$ROOT")" && [ -n "$root_native" ] || { echo "design-explore: the repository root cannot be resolved" >&2; exit 1; }
       case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) fold=1;; *) fold=0;; esac

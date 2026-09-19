@@ -22,14 +22,13 @@
 //
 // Exit: 0 done · 1 the branch IS written and its receipt is not (said so) · 2 refused, nothing written.
 
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { realpathSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { baseText, checkProposal, mainDirNames, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 import { deriveFromContract } from "../core/face-sections.mjs";
 
@@ -45,7 +44,6 @@ const REGISTRY = "initiatives/face/contracts/rooms.generated.json";
 export const AGENT_TOOLS = Object.freeze(["Read", "Grep", "Glob", "Write", "Edit", "Bash", "WebSearch", "WebFetch", "NotebookEdit"]);
 const NAME_RE = /^[a-z][a-z0-9-]{1,40}[a-z0-9]$/;
 const PRODUCT_RE = /^[a-z][a-z0-9-]{0,40}$/;
-const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 class Stop extends Error {}
 const out = [];
@@ -234,6 +232,8 @@ async function main() {
     say(`agent-scaffold: would ${what}`);
     say(`agent-scaffold: ${files.length} files on a new branch ${branch} off main ${base.slice(0, 12)}, then approval.requested to your inbox`);
     say(plan.diff.replace(/\n$/, ""));
+    say("commit message:");
+    for (const l of message.split("\n")) say(`  ${l}`);
     say("agent-scaffold: dry run -- no branch, no object, no receipt was written");
     say(expectLine(digest));
     return;
@@ -246,11 +246,12 @@ async function main() {
     beforeRef: (commit) => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval(commit), { cwd: REPO }); if (no) die(2, `the spine would refuse this approval with its real commit, so no branch was written: ${no}`); } });
   written = true;
   say(`agent-scaffold: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}`);
-  const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(approval(w.commit)), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  const id = String(r.stdout || "").trim();
-  if (r.status !== 0 || !ULID_RE.test(id))
-    die(1, `the branch ${branch} IS written, and its approval was not raised -- ${String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
-  say(`receipt: approval.requested ${id}`);
+  // Through the shared emit, three outcomes: an unknown one was read as "not raised" (the PR 3b round-4 row, twin).
+  const got = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit), { cwd: REPO, timeoutMs: 60_000 });
+  if (got.state === "refused") die(1, `the branch ${branch} IS written, and its approval was not raised -- ${got.why}`);
+  if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its approval landed is unknown -- ${got.why}. Look in your inbox before applying again`);
+  if (!got.id) die(1, `the branch ${branch} IS written, and its approval landed without its id -- ${got.why}`);
+  say(`receipt: approval.requested ${got.id}`);
 }
 
 function isMainModule() {

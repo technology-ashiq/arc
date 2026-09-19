@@ -438,6 +438,7 @@ import { mkdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLockSync } from "../core/plan-expect.mjs";
+import { bashEnv } from "../core/spawn-bounded.mjs";
 
 import { parseBudget } from "./drivers/common.mjs";
 
@@ -590,7 +591,8 @@ export function knownDrivers(root) {
 export function driverIdentity(root, driver) {
   const sh = join(root, ".claude/scripts/engine/drivers", `${driver}.sh`);
   if (!existsSync(sh)) return null;
-  const res = spawnSync("bash", [sh, "version"], { encoding: "utf8", cwd: root, timeout: 30000, killSignal: "SIGKILL" });
+  // bashEnv(): an exported `dirname` function ran another tree's driver as this one's version (PR 4 round-3 shell attack).
+  const res = spawnSync("bash", [sh, "version"], { encoding: "utf8", cwd: root, env: bashEnv(), timeout: 30000, killSignal: "SIGKILL" });
   if (res.status !== 0) return null;
   return (res.stdout || "").trim() || null;
 }
