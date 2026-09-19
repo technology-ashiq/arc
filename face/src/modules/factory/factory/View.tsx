@@ -8,7 +8,7 @@
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { FONT, MONO, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, Reading, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
+import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, Reading, ReceiptDrawer, RoomHead, ServedTable, TrailPanel } from '../../../ui/bits'
 export { Factory as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -73,9 +73,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
               ))}
             </div>
             <ServedTable item={f.modes} />
-            <div className="mt-3">
-              <VerbPending item={f.profileVerb} />
-            </div>
           </HPanel>
 
           <HoldsPanel holds={f.holds} century={f.century} hasHolds={f.hasHolds} note={f.holdsNote} />

@@ -70,6 +70,15 @@ load 'test_helper'
   [[ "$output" == *"ok door: a sim door refuses the effect's apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
 }
 
+@test "factory ring: develop next, open-brief, pick, profile, retire and add-agent APPLIED in scratch repos; touchesTree is SIM_EFFECT" {
+  run node "$ARC_ROOT/tests/face/factory-ring.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok agent-scaffold, applied: the golden holds its line -- sha256 of the bytes, CR stripped -- in byte order"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok door: a sim door refuses a touchesTree apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
+}
+
 @test "ask golden: 20 live-state questions answered deterministically, refusals hold" {
   run node "$ARC_ROOT/tests/face/ask-golden.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

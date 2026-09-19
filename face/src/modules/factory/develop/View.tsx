@@ -20,10 +20,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4 items-start">
         <div className="min-w-0">
-          <HPanel title="Open a slice" hint="a named unit of the live phase, open until it is proven">
-            <VerbPending item={f.openVerb} />
-          </HPanel>
-
           <HPanel title="Slices" hint="proven = tests green on CI AND the owner saw it run">
             <ServedTable item={f.slices} />
           </HPanel>

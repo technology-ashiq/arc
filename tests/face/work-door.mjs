@@ -118,13 +118,24 @@ const INPUTS = {
   "bench.propose": { from: join(tmp, "bench-cand"), champion: join(tmp, "bench-champ") },
   "absorb.pin-source": { root: join(tmp, "absorb-src"), pin: "0123456789abcdef", license: "MIT, in LICENSE at the source root", report: "initiatives/absorb/evidence/work-door-probe.md" },
   "absorb.trial": { candidate: "T-01", variants: "harbor,quartz", fixtures: "f1,f2,f3", evidence: "initiatives/absorb/evidence/work-door-trial", correlation: "work-door-trial-1" },
+  // The factory ring (ADR-1341). develop.slice names a lane that does not exist: `next` on a real lane depends on how
+  // far that lane's ledger has got, and its apply path is proven in a scratch tree (factory-ring.mjs).
+  "develop.slice": { lane: "work-door-no-lane" },
+  "toolbelt.pin-tool": { tool: "command:arc-review", action: "pin" },
+  "design-studio.open-brief": { id: "work-door-probe", brief: "docs/how-it-works.md" },
+  "design-studio.record-pick": { explore: OPS_MOD.OPS.find((o) => o.id === "design-studio.record-pick").fields[0].options[0], pick: "a", why: "the work door suite picks the first" },
+  "council-chamber.send-to-council": { question: "does the work door reach the council chamber" },
+  "factory.switch-profile": { to: "strict", why: "the work door suite asks for the strict profile" },
+  "executor.terminate": { class: OPS_MOD.OPS.find((o) => o.id === "executor.terminate").fields[0].options[0], why: "the work door suite ends it" },
+  "agents.add-agent": { name: "work-door-probe", description: "Reads a diff and names its riskiest hunk", tools: "Read, Grep", tier: "cheap-scan", room: "review-ship", product: "review" },
 };
 // The ops whose tool refuses its PLAN on this tree, each by its NAMED refusal -- any refusal would pass a sim door that
 // ran an effect and failed later (PR 3a logic attack). No product here declares an evolve section, so open answers
 // NO_EVOLVE_SECTION and measure and conclude answer NOT_OPEN; an effect op refuses its dry run where it cannot plan at
 // all (no main in a CI checkout, no Windows scheduler) and otherwise plans, and a sim door then refuses SIM_EFFECT.
-const REFUSES_ON_THIS_TREE = new Map([["evolve.open-experiment", /NO_EVOLVE_SECTION/], ["evolve.measure", /NOT_OPEN/], ["evolve.conclude", /NOT_OPEN/]]);
-const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows/], ["engine-room.driver-switch", /NO_BASE/], ["model-policy.tier-proposal", /NO_BASE/], ["absorb.pin-source", /NO_BASE/], ["absorb.trial", /NO_BASE/]]);
+const REFUSES_ON_THIS_TREE = new Map([["evolve.open-experiment", /NO_EVOLVE_SECTION/], ["evolve.measure", /NOT_OPEN/], ["evolve.conclude", /NOT_OPEN/], ["develop.slice", /unknown lane/]]);
+const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows/], ["engine-room.driver-switch", /NO_BASE/], ["model-policy.tier-proposal", /NO_BASE/], ["absorb.pin-source", /NO_BASE/], ["absorb.trial", /NO_BASE/],
+  ["design-studio.open-brief", /NO_BASE/], ["executor.terminate", /NO_BASE/], ["agents.add-agent", /NO_BASE/], ["factory.switch-profile", /already strict/]]);
 check("every registry op is driven by this suite",
   OPS_MOD.OPS.length > 0 && OPS_MOD.OPS.every((o) => Object.hasOwn(INPUTS, o.id)) && Object.keys(INPUTS).length === OPS_MOD.OPS.length,
   OPS_MOD.OPS.map((o) => o.id).join(","));
@@ -146,20 +157,25 @@ const WRITERS = (() => {
   walk(root);
   return out;
 })();
-check("the branch writers are found by what they import (vacuous-pass guard)", ["engine/propose.mjs", "absorb/pin.mjs", "absorb/trial.mjs"].every((w) => WRITERS.has(w)), [...WRITERS].join(","));
+check("the branch writers are found by what they import (vacuous-pass guard)", ["engine/propose.mjs", "absorb/pin.mjs", "absorb/trial.mjs", "design/open-brief.mjs", "engine/agent-scaffold.mjs"].every((w) => WRITERS.has(w)), [...WRITERS].join(","));
+// touchesTree: the one tool that writes a lane's own tracker in place (ADR-1341 §1) -- develop next, applied.
 const effectOfScript = (o) => {
-  if (typeof o.apply !== "function") return { files: false, os: false };
+  if (typeof o.apply !== "function") return { files: false, os: false, tree: false };
   const cmd = o.apply(INPUTS[o.id]);
-  return { files: WRITERS.has(cmd.script), os: cmd.script === "hq/arc-jobs.mjs" && cmd.args[0] === "register" };
+  return { files: WRITERS.has(cmd.script), os: cmd.script === "hq/arc-jobs.mjs" && cmd.args[0] === "register", tree: cmd.script === "develop/develop.mjs" && cmd.args[0] === "next" && !cmd.args.includes("--dry-run") };
 };
-const flagMismatch = (ops) => ops.filter((o) => { const e = effectOfScript(o); return (o.touchesFiles === true) !== e.files || (o.touchesOs === true) !== e.os; }).map((o) => o.id);
-check("every op's effect flags are what its apply script IS, both ways (touchesFiles <-> a branch writer, touchesOs <-> register)",
+const flagMismatch = (ops) => ops.filter((o) => { const e = effectOfScript(o); return (o.touchesFiles === true) !== e.files || (o.touchesOs === true) !== e.os || (o.touchesTree === true) !== e.tree; }).map((o) => o.id);
+check("every op's effect flags are what its apply script IS, both ways (touchesFiles <-> a branch writer, touchesOs <-> register, touchesTree <-> develop next)",
   flagMismatch(OPS_MOD.OPS).length === 0, flagMismatch(OPS_MOD.OPS).join(","));
+{
+  const mutant = OPS_MOD.OPS.map((o) => (o.id === "develop.slice" ? { ...o, touchesTree: false } : o));
+  check("MUTANT CONTROL: a row with its touchesTree dropped is caught by the derivation", flagMismatch(mutant).includes("develop.slice"));
+}
 {
   const mutant = OPS_MOD.OPS.map((o) => (o.id === "engine-room.driver-switch" ? { ...o, touchesFiles: false } : o));
   check("MUTANT CONTROL: a row with its touchesFiles dropped is caught by the derivation", flagMismatch(mutant).includes("engine-room.driver-switch"));
 }
-check("every effect op is human-run", OPS_MOD.OPS.filter((o) => o.touchesFiles || o.touchesOs).every((o) => o.humanRun === true));
+check("every effect op is human-run", OPS_MOD.OPS.filter((o) => o.touchesFiles || o.touchesOs || o.touchesTree).every((o) => o.humanRun === true));
 // Every op's receipt is a kind the spine has (ADR-1334).
 {
   const V = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "validate.mjs")).href);
@@ -295,7 +311,7 @@ try {
     if (REFUSES_ON_THIS_TREE.has(op.id)) { check(`${op.id}: refuses on this tree, by name`, false, `${plan.status} ${JSON.stringify(plan.body).slice(0, 300)}`); continue; }
     // An effect op that PLANNED (a clone with a main, a Windows leg): the plan wrote nothing, and a sim door refuses the
     // apply by name before anything runs -- no task registered, no branch written (ADR-1340).
-    if (op.touchesFiles || op.touchesOs) {
+    if (op.touchesFiles || op.touchesOs || op.touchesTree) {
       check(`${op.id}: the effect op's plan answers ok and wrote nothing`, plan.status === 200 && plan.body.ok === true && spineFingerprint(SPINE_A) === before, `${plan.status} ${plan.body.error || ""}`);
       {
         const printed = DOOR_TEXT(String(plan.body.output || "")).trim().split(/\r?\n/).pop() || "";
