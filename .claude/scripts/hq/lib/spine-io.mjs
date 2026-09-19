@@ -213,8 +213,18 @@ export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS, lockName = 
       // A killed emitter leaves its lock behind. Break it once it is provably stale, or the
       // next session inherits a wedged spine (the crash window is exactly when telemetry
       // must not block a human).
+      //
+      // PROVABLY: the holder is GONE -- the pid its token names has exited on this machine, or
+      // (a token naming no pid, or a pid running for more than ten minutes, which is a reused pid,
+      // not a writer) the lock is older than the threshold. And the token is read AGAIN right
+      // before the unlink: a waiter whose stale look predated another waiter's break-and-take
+      // deleted that FRESH lock, and two writers shared the critical section (PR 3b round-5 shell
+      // attack: 4 of 6 forced runs). The window left between that read and the unlink is named
+      // in the face lane's debt ledger; closing it renames the lock files other readers know.
       try {
-        if (Date.now() - statSync(lock).mtimeMs > staleMs) { unlinkSync(lock); continue; }
+        const seen = readLockToken(lock);
+        const age = Date.now() - statSync(lock).mtimeMs;
+        if (holderGone(seen, age, staleMs) && readLockToken(lock) === seen) { unlinkSync(lock); continue; }
       } catch { /* the holder released it between our check and now -- retry */ }
       if (Date.now() > deadline)
         throw new SpineError("LOCK_TIMEOUT", `spine lock held for more than ${timeoutMs}ms (last open: ${lastCode})`);
@@ -242,6 +252,21 @@ export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS, lockName = 
 
 function readLockToken(lock) {
   try { return readFileSync(lock, "utf8").trim(); } catch { return null; }
+}
+
+/**
+ * Whether a lock's holder is gone: the pid its token names (`<pid>:<hex>`) has exited, or -- for a token naming no pid,
+ * or a pid still running after ten minutes (reused by another program) -- the lock is older than `staleMs`.
+ * @param {string | null} token @param {number} age @param {number} staleMs
+ */
+function holderGone(token, age, staleMs) {
+  const m = /^([1-9][0-9]{0,9}):[0-9a-f]+$/.exec(token || "");
+  if (m) {
+    let running = false;
+    try { process.kill(Number(m[1]), 0); running = true; } catch (e) { running = !!e && e.code === "EPERM"; }
+    return running ? age > Math.max(staleMs, 10 * 60_000) : true;
+  }
+  return age > staleMs;
 }
 
 // One line, one write, then fsync: the whole line reaches the page cache in a single call,
@@ -273,7 +298,15 @@ function appendLine(file, line) {
   let wrote = false;
   let unsynced = null;
   try {
-    writeSync(fd, Buffer.from(prefix + line, "utf8"));
+    // EVERY byte, or an error: writeSync may write fewer than asked, and a short write was counted as landed while it
+    // left a torn line the next append "healed" into garbage (PR 3b round-5 shell attack).
+    const bytes = Buffer.from(prefix + line, "utf8");
+    let off = 0;
+    while (off < bytes.length) {
+      const n = writeSync(fd, bytes, off, bytes.length - off);
+      if (!(n > 0)) throw Object.assign(new Error("the write made no progress"), { code: "EIO" });
+      off += n;
+    }
     wrote = true;
     fsyncSync(fd);
   } catch (e) {

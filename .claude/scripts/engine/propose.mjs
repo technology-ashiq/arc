@@ -177,7 +177,7 @@ async function main() {
   // went to this one (PR 3b round-4 shell attack).
   // Three outcomes, never two: an unknown one (REJECT INTERNAL, a lost id line, a timeout) was read as "not raised",
   // and the approval sat in the inbox while the tool said otherwise (PR 3b round-4 attacks).
-  const got = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit), { cwd: REPO });
+  const got = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit), { cwd: REPO, timeoutMs: 60_000 });
   if (got.state === "refused") die(1, `the branch ${branch} IS written, and its approval was not raised -- ${got.why}`);
   if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its approval landed is unknown -- ${got.why}. Look in your inbox before applying again`);
   if (!got.id) die(1, `the branch ${branch} IS written, and its approval landed without its id -- ${got.why}`);

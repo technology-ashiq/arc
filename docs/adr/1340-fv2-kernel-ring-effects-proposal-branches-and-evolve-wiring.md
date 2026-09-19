@@ -313,3 +313,13 @@ change decisions above:
 - **One exclusive lock, and its break is serialised.** `withExclusiveLock` and its synchronous twin are the face tools'
   one refuse-if-busy lock beside `spine-io.withLock`; a stale lock is broken under a breaker file, only if it is still the file
   that was judged stale.
+
+## Amendment, PR 3b round 5 (same day)
+
+A narrow pair attacked the round-4 diff: 6 logic and 9 shell findings, the lock at the centre of both. All are fixed and
+pinned, and one decision above changes:
+- **The face tools' lock is numbered, and nobody breaks it.** `<name>.<n>`: a taker reads the highest number and, when
+  its holder is gone (on this machine, its process has exited; on another, its file is older than `staleMs`), creates
+  the next number with "wx", which one caller alone can do. No process deletes another's lock file, so there is no
+  break to race. The spine's own lock keeps its file names (the leads reader and the spine suites name them); it breaks
+  only a gone holder's lock and re-reads before it unlinks, and the remaining window is in the face lane's debt ledger.

@@ -411,8 +411,11 @@ export function openProposalsHolding({ repo, prefix, path }) {
       else {
         const rest = ref.slice("refs/remotes/".length);
         const remote = remotes.find((r) => rest.startsWith(`${r}/`));
-        // A tracking ref no configured remote names any more is still a branch someone pushed: it begins at the prefix.
-        const at = remote ? remote.length + 1 : rest.toLowerCase().indexOf(prefix);
+        // A tracking ref no configured remote names any more is still a branch someone pushed: it begins at the prefix --
+        // also when a SHORTER configured remote prefixes the removed one's name ("up" beside a gone "up/stream": PR 3b
+        // round-5 shell attack).
+        let at = remote ? remote.length + 1 : -1;
+        if (at < 0 || !rest.slice(at).toLowerCase().startsWith(prefix)) at = rest.toLowerCase().indexOf(prefix);
         if (at < 0) continue;
         name = rest.slice(at);
         // Named as git names it -- "<remote>/<branch>" -- so the advice to delete it can be followed as written: a bare

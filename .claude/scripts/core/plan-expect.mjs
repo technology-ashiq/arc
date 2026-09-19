@@ -12,9 +12,10 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync, writeSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync, writeSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
+import { spineRoot } from "../hq/lib/spine-io.mjs";
 
 export const EXPECT_RE = /^[0-9a-f]{64}$/;
 
@@ -32,7 +33,31 @@ export function spineRefusal(arcEvent, kind, payload, o = {}) {
   // and was reported as "the emitter exited null" -- a refusal under the wrong cause (PR 3b round-2 shell attack).
   const r = emitThroughFile(arcEvent, kind, payload, { ...o, dryRun: true });
   if (r.startFailed) return `the spine could not be asked: ${r.why}`;
-  return r.status === 0 ? null : r.why;
+  if (r.status !== 0) return r.why;
+  // WHERE the real emit would write, asked too: a dry run never resolves the spine (by design -- its verdict must not
+  // depend on which spine), so from a linked worktree or a folder with no repository the plan passed and the apply
+  // wrote its branch before the emit refused WORKTREE_SPINE (PR 3b round-5 logic attack).
+  return spineWhere(o.cwd);
+}
+
+/**
+ * Null when an emit run in `cwd` would find a spine, else why not -- by the emitter's own resolver, named by its code:
+ * the resolver's message carries absolute paths, which the door withholds along with everything after them.
+ * @param {string | undefined} cwd
+ */
+function spineWhere(cwd) {
+  const before = process.cwd();
+  try {
+    if (cwd) process.chdir(cwd);
+    spineRoot();
+    return null;
+  } catch (e) {
+    const code = e && e.code ? e.code : "error";
+    return code === "WORKTREE_SPINE" ? "the spine would refuse this emit (WORKTREE_SPINE): a linked worktree has no spine of its own -- run it from the main clone"
+      : `the spine would refuse this emit (${code}): no spine can be resolved from here`;
+  } finally {
+    try { process.chdir(before); } catch { /* the caller's cwd is gone; nothing to restore */ }
+  }
 }
 
 /**
@@ -60,6 +85,8 @@ function emitThroughFile(arcEvent, kind, payload, o = {}) {
     // A timeout is an emitter that STARTED and was killed: it may have appended first.
     if (r.error && r.error.code === "ETIMEDOUT")
       return { status: null, id: "", why: `the emitter did not answer within ${o.timeoutMs} ms and was stopped`, startFailed: false, state: "unknown" };
+    // Any other error with a pid is an emitter that STARTED (a stderr past the buffer, ENOBUFS): unknown, never refused.
+    if (r.error && r.pid) return { status: r.status, id: "", why: `the emitter started and then failed (${r.error.code || r.error.message})`, startFailed: false, state: "unknown" };
     if (r.error) return { status: null, id: "", why: `the emitter did not start (${r.error.code || r.error.message})`, startFailed: true, state: "refused" };
     const id = String(r.stdout || "").trim().split(/\r?\n/).pop() || "";
     const lines = String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean);
@@ -119,17 +146,24 @@ export function staleReason(given, digest) {
 
 
 /**
- * One holder at a time: an exclusive lock FILE (flag "wx") in `dir`, released when `fn` settles, and broken only when
- * older than `staleMs` (a killed holder's). It REFUSES rather than waits -- `{ busy: true }` -- so a second click is
- * told another run holds it. For a check-then-emit that must not run twice at once: three picks, and two profile
- * requests, raised from one plan in the same instant all landed (PR 4 logic attack; the PR 3a evolve row, re-found).
+ * One holder at a time, refusing rather than waiting -- `{ busy: true }` -- so a second click is told another run holds
+ * it. For a check-then-emit that must not run twice at once: three picks, and two profile requests, raised from one plan
+ * in the same instant all landed (PR 4 logic attack; the PR 3a evolve row, re-found).
  *
- * Breaking a stale lock is where two holders came from (PR 3b round-4 shell attack: 2 holders in 3 of 6 rounds behind a
- * killed holder's lock). Check-age-unlink-take is three steps: a breaker whose look was older than another's take
- * deleted that FRESH lock and took its own. So breakers go one at a time through `<name>.break`, and the one that holds
- * it deletes the lock only if it is still the very file it judged stale -- the same token, the same mtime. The take is
- * re-read before `fn` runs, and a live holder's lock is kept fresh while `fn` awaits, so a slow holder is not "stale".
- * A lock dated past `staleMs` into the future is no live holder's either: a skewed clock wedged it for a day.
+ * NO PROCESS EVER DELETES ANOTHER'S LOCK. Every earlier shape broke a dead holder's lock by check-then-delete, and each
+ * was a race: a breaker whose look predated another's take deleted that FRESH lock (PR 3b round 4: two holders in 3 of
+ * 6 rounds), and the breaker file that serialised breakers was itself cleared by age, the same race one level up (PR 3b
+ * round 5). So the lock is a NUMBERED file, `<name>.<n>`, and the holder of the highest number holds it:
+ *   take     read the highest; if its holder is live, busy. If it is gone, create the NEXT number with "wx" -- exactly one
+ *            caller can -- and never touch the old file. Then look again: a higher number means a caller on an older
+ *            listing lost the race, and backs off before `fn` runs.
+ *   gone     a holder on THIS machine is gone when its process is (the token names the host and the pid) -- however
+ *            long it has held: a heartbeat cannot beat during a spawnSync, and a live seal past `staleMs` was broken
+ *            into (PR 3b round-5 shell attack). Another machine's holder is gone when its file is older than
+ *            `staleMs`, or dated past it into the future; its file is kept fresh while `fn` awaits.
+ *   release  delete only this holder's own file, and the lower numbers it superseded (their holders are gone).
+ * A file dated more than `staleMs` into the future is no live holder's either, and a folder at the highest number is
+ * refused by name.
  * @template T @param {string} dir @param {string} name @param {() => Promise<T> | T} fn @param {{ staleMs?: number }} [o]
  * @returns {Promise<{ busy: true } | { busy: false, value: T }>}
  */
@@ -145,9 +179,8 @@ export async function withExclusiveLock(dir, name, fn, { staleMs = 10 * 60_000 }
 }
 
 /**
- * The same lock for a synchronous `fn` (arc-bench's proposal store, whose main is synchronous): one acquire, one
- * release, and no second hand-rolled copy -- bench's own copy carried the stale-break race too (PR 3b round-4 shell
- * attack). Nothing runs between the take and the release to refresh it, so `staleMs` must outlast the longest `fn`.
+ * The same lock for a synchronous `fn` (arc-bench's proposal store, whose main is synchronous). Nothing refreshes the
+ * file while it runs, so `staleMs` must outlast the longest `fn` -- or its holder's process must still be running.
  * @template T @param {string} dir @param {string} name @param {() => T} fn @param {{ staleMs?: number }} [o]
  * @returns {{ busy: true } | { busy: false, value: T }}
  */
@@ -158,21 +191,78 @@ export function withExclusiveLockSync(dir, name, fn, { staleMs = 10 * 60_000 } =
   finally { release(held); }
 }
 
-const readOrNull = (path) => { try { return readFileSync(path, "utf8"); } catch { return null; } };
 const statOrNull = (path) => { try { return statSync(path); } catch { return null; } };
-const contended = (e) => !!e && (e.code === "EEXIST" || e.code === "EPERM" || e.code === "EACCES" || e.code === "EISDIR");
+const HOST = hostname();
 
-/** Create `path` holding `text`, or false when another holds it. */
+/**
+ * A lock file's text, or null when it is gone. A file another process holds open without sharing (EBUSY, EPERM,
+ * EACCES on Windows) is read again before it is given up on: one such read left a lock nobody owned at release (PR 3b
+ * round-5 shell attack).
+ * @param {string} path
+ */
+function readOrNull(path) {
+  for (let i = 0; i < 4; i++) {
+    try { return readFileSync(path, "utf8"); }
+    catch (e) {
+      if (!e || !["EBUSY", "EPERM", "EACCES"].includes(e.code) || i === 3) return null;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+  }
+  return null;
+}
+
+/** Whether a process with this pid is running here. EPERM is a process this user cannot signal: running. */
+function pidRunning(pid) {
+  try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === "EPERM"; }
+}
+
+/**
+ * The generations of one lock in its folder, highest first: `[{ n, path }]`. A name that only looks like one (a leading
+ * zero, a sign, past the safe integers) is not one.
+ * @param {string} dir @param {string} name
+ */
+function generations(dir, name) {
+  const prefix = `${name}.`;
+  /** @type {{ n: number, path: string }[]} */
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    if (!entry.startsWith(prefix)) continue;
+    const tail = entry.slice(prefix.length);
+    if (!/^(0|[1-9][0-9]{0,14})$/.test(tail)) continue;
+    out.push({ n: Number(tail), path: join(dir, entry) });
+  }
+  return out.sort((a, b) => b.n - a.n);
+}
+
+/** Create `path` holding `text`, or false when it exists (or is being deleted -- Windows' EPERM, EACCES). */
 function createWith(path, text) {
   let fd;
   try { fd = openSync(path, "wx"); }
-  catch (e) { if (contended(e)) return false; throw e; }
+  catch (e) { if (e && (e.code === "EEXIST" || e.code === "EPERM" || e.code === "EACCES" || e.code === "EISDIR")) return false; throw e; }
   try { writeSync(fd, text); } finally { closeSync(fd); }
   return true;
 }
 
 /**
- * Take the lock: `{ lock, token }`, or null when a live holder has it.
+ * Whether the holder of one generation is live. A file that cannot be read was released (Windows keeps a deleted file
+ * listed until its last handle closes) -- the holder closed it after writing its token, so nothing live holds it open.
+ * @param {{ path: string }} g @param {number} staleMs
+ */
+function holderLive(g, staleMs) {
+  const st = statOrNull(g.path);
+  if (!st) return false;
+  if (st.isDirectory()) throw new Error(`a folder sits where the lock ${basename(g.path)} belongs, so no run can ever hold it -- remove that folder`);
+  const token = readOrNull(g.path);
+  if (token === null) return false;
+  const [host, pid] = token.split("|");
+  // A holder on THIS machine is live exactly while its process runs; another machine's is judged by age alone.
+  if (host === HOST && /^[1-9][0-9]{0,9}$/.test(pid || "")) return pidRunning(Number(pid));
+  const age = Date.now() - st.mtimeMs;
+  return !(age > staleMs || age < -staleMs);
+}
+
+/**
+ * Take the lock: `{ lock, token, n }`, or null when a live holder has it.
  * @param {string} dir @param {string} name @param {number} staleMs
  */
 function acquire(dir, name, staleMs) {
@@ -180,41 +270,38 @@ function acquire(dir, name, staleMs) {
   // and "mkdir 'C:\Users\...\locks'" hid the cause (PR 3b round-4 shell attack).
   try { mkdirSync(dir, { recursive: true }); }
   catch (e) { throw new Error(`the folder for the lock ${name} could not be made (${e && e.code ? e.code : "error"}) -- a file may sit where the locks folder belongs`); }
-  const lock = join(dir, name);
-  const breaker = join(dir, `${name}.break`);
-  // A TOKEN in the file, and a release that removes only its own: a lock broken as stale while its holder lived was later
-  // deleted by that holder -- the defect spine-io.withLock documents (PR 3b round-3 shell attack). EPERM and EACCES are
-  // Windows' delete-pending, contention like EEXIST.
-  const token = `${process.pid}:${randomBytes(8).toString("hex")}`;
-  const isStale = (st) => { const age = Date.now() - st.mtimeMs; return age > staleMs || age < -staleMs; };
-  let ok = createWith(lock, token);
-  if (!ok) {
-    const seen = statOrNull(lock);
-    if (seen && seen.isDirectory())
-      throw new Error(`a folder sits where the lock ${name} belongs, so no run can ever hold it -- remove that folder`);
-    if (seen && isStale(seen)) {
-      const seenToken = readOrNull(lock);
-      // A breaker that died holding `.break` would stop every later break: its file lives for microseconds, and one
-      // older than a minute is litter.
-      const b = statOrNull(breaker);
-      if (b && Date.now() - b.mtimeMs > 60_000) { try { unlinkSync(breaker); } catch { /* another cleaner */ } }
-      if (createWith(breaker, token)) {
-        try {
-          const now = statOrNull(lock);
-          if (now && now.isFile() && now.mtimeMs === seen.mtimeMs && isStale(now) && readOrNull(lock) === seenToken) {
-            try { unlinkSync(lock); } catch { /* released meanwhile */ }
-          }
-        } finally { if (readOrNull(breaker) === token) { try { unlinkSync(breaker); } catch { /* litter */ } } }
-        ok = createWith(lock, token);
-      }
-    }
+  const token = `${HOST}|${process.pid}|${randomBytes(8).toString("hex")}`;
+  let listed;
+  try { listed = generations(dir, name); }
+  catch (e) { throw new Error(`the folder for the lock ${name} could not be read (${e && e.code ? e.code : "error"})`); }
+  const top = listed[0];
+  if (top && holderLive(top, staleMs)) return null;
+  const n = top ? top.n + 1 : 0;
+  if (!Number.isSafeInteger(n)) throw new Error(`the lock ${name} has run out of numbers -- remove its files`);
+  const lock = join(dir, `${name}.${n}`);
+  let made;
+  try { made = createWith(lock, token); }
+  catch (e) { throw new Error(`the lock ${name} could not be created (${e && e.code ? e.code : "error"})`); }
+  if (!made) return null;
+  // Look again: a caller on an older listing may have created a number above this one's predecessor too late to see
+  // it -- the lower number backs off, before `fn` runs, and the file is re-read so this take is the one on disk.
+  let again = [];
+  try { again = generations(dir, name); } catch { /* the re-read below decides */ }
+  if ((again[0] && again[0].n > n) || readOrNull(lock) !== token) {
+    if (readOrNull(lock) === token) { try { unlinkSync(lock); } catch { /* released by the next taker's sweep */ } }
+    return null;
   }
-  // Re-read: a breaker whose judgment predates this take must not leave two holders (the spine lock's LOCK_LOST rule).
-  if (!ok || readOrNull(lock) !== token) return null;
-  return { lock, token };
+  return { lock, token, n, dir, name };
 }
 
-/** Remove the lock only when it is still this holder's. @param {{ lock: string, token: string }} held */
+/**
+ * Remove this holder's own file, and the lower numbers it superseded: their holders were judged gone before this one
+ * was taken, so nothing live holds them.
+ * @param {{ lock: string, token: string, n: number, dir: string, name: string }} held
+ */
 function release(held) {
-  try { if (readFileSync(held.lock, "utf8") === held.token) unlinkSync(held.lock); } catch { /* released, or not ours */ }
+  try { if (readOrNull(held.lock) === held.token) unlinkSync(held.lock); } catch { /* released, or not ours */ }
+  let lower = [];
+  try { lower = generations(held.dir, held.name).filter((g) => g.n < held.n); } catch { return; }
+  for (const g of lower) { try { if (statOrNull(g.path)?.isFile()) unlinkSync(g.path); } catch { /* another sweeper */ } }
 }

@@ -1338,7 +1338,18 @@ export function spinePaths(root) {
     if (!named.trim()) throw new OperatorError("ARC_SPINE_ROOT is set but empty -- refusing to fall back to a spine nobody named, because reading the wrong spine answers every question confidently and wrongly");
     base = resolve(root, named);
   } else {
-    base = join(root, ".claude/state/hq");
+    // THE EMITTER'S OWN WALK: it runs in `root` and finds its spine at the first folder holding BOTH .claude/ and .git/
+    // at or above it. A bench root with .claude/ and no .git/ inside a parent with both wrote to the parent's spine while
+    // bench looked in its own -- a landed approval read as "not raised", and one plan raised it twice (PR 3b round-5
+    // logic attack).
+    let dir = resolve(root);
+    for (;;) {
+      if (existsSync(join(dir, ".claude")) && existsSync(join(dir, ".git"))) break;
+      const up = dirname(dir);
+      if (up === dir) { dir = resolve(root); break; }
+      dir = up;
+    }
+    base = join(dir, ".claude/state/hq");
   }
   return { events: join(base, "events"), quarantine: join(base, "events", "_quarantine") };
 }
@@ -1436,27 +1447,9 @@ export function emitRunCompleted(root, payload, outcome) {
   // states for shell-embedded programs: the moment the text wants a backslash, it belongs in a
   // file. `arc-run.mjs:257` still passes `--payload` inline and carries the identical latent bug;
   // that is engine's to fix, and bench reports it rather than widening its one-line diff there.
-  const tmp = mkdtempSync(join(tmpdir(), "arc-bench-emit-"));
-  try {
-    const payloadFile = join(tmp, "payload.json");
-    writeFileSync(payloadFile, JSON.stringify(payload), "utf8");
-    const args = [
-      join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "run.completed",
-      "--payload-file", payloadFile,
-      "--process", BENCH_ID,
-      "--outcome", outcome,
-      "--strict",
-    ];
-    const res = spawnSync("bash", args, { encoding: "utf8", cwd: root, timeout: 30000, killSignal: "SIGKILL" });
-    const id = String(res.stdout || "").trim();
-    if (res.status !== 0 || !id) {
-      const why = String(res.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${res.status}`;
-      return { id: null, landed: false, inEvents: false, quarantined: null, why };
-    }
-    return { id, why: null, ...findReceipt(root, id) };
-  } finally {
-    try { rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter, never the outcome (PR 3b) */ }
-  }
+  // Through the one emit path: a payload FILE (the reason above), node rather than bash (a box whose bash is WSL's
+  // launcher could not run it), three outcomes, and the spine bench reads (PR 3b round 5, the approval twin).
+  return benchEmit(root, "run.completed", payload, ["--process", BENCH_ID, "--outcome", outcome]);
 }
 // ---- the run ---------------------------------------------------------------------------------
 
@@ -2252,19 +2245,26 @@ const SECRET_SHAPES = Object.freeze([
 ]);
 
 /** `approval.requested`, first-party and strict, then LOOKED FOR in both places (ADR-0031/0032). */
+/**
+ * One of bench's receipts, through the ONE emit path (core/plan-expect.mjs) -- node and a resolved payload file, with
+ * three outcomes -- and looked for in the spine bench reads, which `spinePaths` resolves as the emitter does. Exit 0 with
+ * an id is landed by the emitter's own contract: an id the lookup cannot find (or finds quarantined) is UNKNOWN, never
+ * "not raised" -- read as not raised, the pending mark went and one plan raised its approval twice (PR 3b round 5).
+ * @param {string} root @param {string} kind @param {unknown} payload @param {string[]} flags
+ */
+function benchEmit(root, kind, payload, flags) {
+  const got = emitReceipt(join(root, ".claude", "scripts", "hq", "arc-event.mjs"), kind, payload, { cwd: root, flags, timeoutMs: 30000 });
+  if (got.state === "refused") return { id: null, landed: false, inEvents: false, quarantined: null, refused: true, why: got.why };
+  if (got.state === "unknown" || !got.id) return { id: null, landed: false, inEvents: false, quarantined: null, unknown: true, why: got.why };
+  let found;
+  try { found = findReceipt(root, got.id); }
+  catch (e) { return { id: got.id, landed: false, inEvents: false, quarantined: null, unknown: true, why: `the receipt ${got.id} could not be looked for (${e && e.code ? e.code : "error"})` }; }
+  if (!found.landed) return { id: got.id, ...found, landed: false, unknown: true, why: found.quarantined ? `the emitter answered ${got.id} and the receipt is in quarantine` : `the emitter answered ${got.id} and it is not in the spine bench reads` };
+  return { id: got.id, why: null, ...found };
+}
+
 export function emitApprovalRequested(root, payload) {
-  // Through the ONE emit path the judgment used (core/plan-expect.mjs): node and a resolved payload file. The judgment ran
-  // node and the emit ran bash, so with no bash on PATH the plan passed and every apply was "unknown", and a relative TMP
-  // named a payload the emitter could not find (PR 3b round-4 attacks). Three outcomes: exit 2 naming a refusal is
-  // "nothing landed"; REJECT INTERNAL, a lost id line, a timeout and a lookup that threw are UNKNOWN -- the approval may
-  // be on the spine, and the caller must not treat it as not raised (PR 3b rounds 3 and 4: two approvals from one plan).
-  const got = emitReceipt(join(root, ".claude", "scripts", "hq", "arc-event.mjs"), "approval.requested", payload,
-    { cwd: root, flags: ["--process", BENCH_ID], timeoutMs: 30000 });
-  if (got.state === "refused") return { id: null, landed: false, refused: true, why: got.why };
-  if (got.state === "unknown") return { id: null, landed: false, unknown: true, why: got.why };
-  if (!got.id) return { id: null, landed: false, unknown: true, why: got.why };
-  try { return { id: got.id, why: null, ...findReceipt(root, got.id) }; }
-  catch (e) { return { id: got.id, landed: false, unknown: true, why: `the receipt ${got.id} could not be looked for (${e && e.code ? e.code : "error"})` }; }
+  return benchEmit(root, "approval.requested", payload, ["--process", BENCH_ID]);
 }
 
 // =============================================================================================
@@ -2699,7 +2699,12 @@ function main() {
     catch (e) { return stopFrom(`no temp directory could be made (${e && e.code ? e.code : "error"}) -- nothing was written`); }
     let dry;
     try { dry = buildProposal(root, report, champDir, scratch, { emit: false, champion }); }
-    catch (e) { return stopFrom(e.message, e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL); }
+    catch (e) {
+      // A TypeError here is a field the comparison reads that one of the two runs does not hold as a bench run would:
+      // the input, refused by name -- it was a stack at PARTIAL for a dry run that wrote nothing (PR 3b round 5).
+      if (e instanceof TypeError) return stopFrom(`--from or --champion is not a bench run's output: a field the comparison reads is missing or of the wrong kind (${e.message}) -- nothing was written`, EXIT.OPERATOR);
+      return stopFrom(e.message, e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL);
+    }
     finally { try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter */ } }
     // The spine judges the approval BEFORE anything is written, with the flags the real emit passes. A plan that never
     // asked planned an approval the spine then refused -- after the artifacts were written, with exit 0 and no receipt
