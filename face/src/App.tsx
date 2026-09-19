@@ -149,22 +149,37 @@ export default function App() {
   // The shell's live reads -- the inbox chip, and the registry whose live block says which kinds ever fired -- follow
   // the pulse too. The first pulse is where the shell starts, not a change: bootstrap has just read both.
   const seenPulse = useRef<string | undefined>(undefined)
+  // One re-read of the pair at a time. A pulse that arrives while they are in flight marks them, and they run once more
+  // when they land -- aborting them on every pulse starved a /api/rooms that takes longer than the pulse interval, so it
+  // never landed at all (PR 2 logic attack).
+  const shellFlight = useRef<AbortController | null>(null)
+  const shellDirty = useRef(false)
+  const rereadShell = useCallback(() => {
+    if (shellFlight.current) { shellDirty.current = true; return }
+    const ac = new AbortController()
+    shellFlight.current = ac
+    const inbox = door
+      .inbox(ac.signal)
+      .then((b: { open?: { gate?: string; venture?: string }[] }) => { if (!ac.signal.aborted) setOpenItems(Array.isArray(b.open) ? b.open : []) })
+      .catch(() => { /* the chip keeps its last honest answer */ })
+    const rooms = door
+      .rooms(ac.signal)
+      .then((r: Registry) => { if (!ac.signal.aborted) setRegistry(decodeRegistry(r)) })
+      .catch(() => { /* the rail keeps the registry it has */ })
+    void Promise.allSettled([inbox, rooms]).then(() => {
+      if (shellFlight.current !== ac) return
+      shellFlight.current = null
+      if (shellDirty.current && !ac.signal.aborted) { shellDirty.current = false; rereadShell() }
+    })
+  }, [door])
+  useEffect(() => () => { shellFlight.current?.abort(); shellFlight.current = null; shellDirty.current = false }, [door])
   useEffect(() => {
     if (pulse === undefined) return
     if (seenPulse.current === undefined) { seenPulse.current = pulse; return }
     if (seenPulse.current === pulse) return
     seenPulse.current = pulse
-    const ac = new AbortController()
-    door
-      .inbox(ac.signal)
-      .then((b: { open?: { gate?: string; venture?: string }[] }) => { if (!ac.signal.aborted) setOpenItems(Array.isArray(b.open) ? b.open : []) })
-      .catch(() => { /* the chip keeps its last honest answer */ })
-    door
-      .rooms(ac.signal)
-      .then((r: Registry) => { if (!ac.signal.aborted) setRegistry(decodeRegistry(r)) })
-      .catch(() => { /* the rail keeps the registry it has */ })
-    return () => ac.abort()
-  }, [pulse, door])
+    rereadShell()
+  }, [pulse, rereadShell])
 
   // What the bundle found is fixed at build time: read once, and handed to both questions asked of it.
   const collected = useMemo(() => collectModules(FOUND_MODULES), [])

@@ -54,10 +54,15 @@ function benchDrivers() {
 // (face v2 Phase 05 logic attack; the twin of Phase 03's "no terminal control in a sentence"). Nor the bidi embedding,
 // override and isolate controls: `safe <U+202E>txt.exe` planned, and on the plan card it reads in an order the bytes do
 // not have -- the owner approves one string and the receipt carries another (round-2 logic attack).
-const ONE_LINE_REFUSED = "\\p{Cc}\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069";
-const ONE_LINE = `[^${ONE_LINE_REFUSED}]+`;
-const ONE_LINE_BAD = new RegExp(`[${ONE_LINE_REFUSED}]`, "u");
+// And none of the other INVISIBLE format characters (\p{Cf}: soft hyphen, zero-width space, the bidi marks, word joiner,
+// BOM, the tag block, the interlinear annotations) or a lone surrogate: each renders as nothing, or as text nobody
+// wrote, and a lone surrogate becomes U+FFFD in the tool's argv (PR 2 logic attack). ZWNJ and ZWJ stay: they join emoji
+// and the letters of several scripts, and render as nothing but the join they make.
+const ONE_LINE_BAD_SRC = "[\\p{Cc}\\p{Cs}\\u2028\\u2029]|(?![\\u200C\\u200D])\\p{Cf}";
+const ONE_LINE = `(?:(?!${ONE_LINE_BAD_SRC})[\\s\\S])+`;
+const ONE_LINE_BAD = new RegExp(ONE_LINE_BAD_SRC, "u");
 const CHAR_NAMES = Object.freeze({ 0x09: "a tab", 0x0a: "a line break", 0x0d: "a carriage return", 0x1b: "an escape", 0x00: "a NUL", 0x2028: "a line separator", 0x2029: "a paragraph separator" });
+const BIDI = /[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/u;
 
 /** The first character a one-line field refuses, named: the owner cannot fix a character the refusal does not show. */
 function refusedChar(raw) {
@@ -65,7 +70,11 @@ function refusedChar(raw) {
   if (!m) return "";
   const cp = /** @type {number} */ (m[0].codePointAt(0));
   const hex = `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
-  return CHAR_NAMES[cp] ? `${hex} (${CHAR_NAMES[cp]})` : (cp >= 0x202a ? `${hex} (a text-direction control)` : `${hex} (a control character)`);
+  if (CHAR_NAMES[cp]) return `${hex} (${CHAR_NAMES[cp]})`;
+  if (BIDI.test(m[0])) return `${hex} (a text-direction control)`;
+  if (/\p{Cs}/u.test(m[0])) return `${hex} (a lone surrogate)`;
+  if (/\p{Cf}/u.test(m[0])) return `${hex} (an invisible format character)`;
+  return `${hex} (a control character)`;
 }
 
 /**
@@ -158,7 +167,7 @@ export const OPS = Object.freeze([
     humanRun: true, spends: false, touchesFiles: false,
     fields: Object.freeze([
       Object.freeze({ name: "slug", label: "Slug", placeholder: "the-author-cannot-be-the-attacker", type: "text", max: 120, pattern: "[a-z0-9]([a-z0-9-]*[a-z0-9])?", required: true }),
-      Object.freeze({ name: "article", label: "The merged .mdx", placeholder: "the article file in the site repo's merged tree", type: "text", max: 400, pattern: "(?![\\\\/]{2})[^\\p{Cc}\\u2028\\u2029]+\\.mdx", required: true }),
+      Object.freeze({ name: "article", label: "The merged .mdx", placeholder: "the article file in the site repo's merged tree", type: "text", max: 400, pattern: `(?![\\\\/]{2})${ONE_LINE}\\.mdx`, required: true }),
       Object.freeze({ name: "cluster", label: "Cluster", placeholder: "c-001", type: "text", max: 12, pattern: "c-[0-9]{3,9}", required: true }),
       Object.freeze({ name: "title", label: "Title", placeholder: "the title as published", type: "text", max: 300, pattern: ONE_LINE, required: true }),
       Object.freeze({ name: "pr", label: "Merged PR", placeholder: "2", type: "text", max: 10, pattern: "[1-9][0-9]{0,9}", required: true }),

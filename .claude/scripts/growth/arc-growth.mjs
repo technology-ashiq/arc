@@ -705,6 +705,9 @@ async function cmdSeal() {
   // BEFORE it is opened: a UNC or device-namespace path (\\server\share, //./pipe/x) reaches a network share or blocks
   // on a pipe, a FIFO or device blocks, and an unbounded file is read whole into memory (face v2 Phase 05 shell attack).
   if (/^[\\/]{2}/.test(articlePath)) die("BAD_ARTICLE", `${articlePath} is a network or device path; the merged article is a local file`);
+  // A colon anywhere but a drive letter names an NTFS alternate data stream: `article.mdx:hidden` sealed bytes the file
+  // listing never shows (PR 2 shell attack).
+  if (articlePath.replace(/^[A-Za-z]:(?=[\\/])/, "").includes(":")) die("BAD_ARTICLE", `${articlePath} names a data stream, not a file; the merged article is a plain path`);
   let st;
   try { st = statSync(articlePath); } catch (e) { die("BAD_ARTICLE", `the merged article could not be read: ${e.code || e.message}`); }
   if (!st.isFile()) die("BAD_ARTICLE", `${articlePath} is not a regular file`);

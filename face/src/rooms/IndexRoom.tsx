@@ -13,7 +13,7 @@
 // Every decision -- which route, how to narrow an untrusted body, how to group and order,
 // what counts as missing -- is in rooms.mjs. What is left here is React plumbing: three
 // render states, and the shapes the lib already decided.
-import { useEffect, useRef, useState } from "react";
+import { usePulseRead } from "../shell/usePulseRead";
 import type { CSSProperties, ReactNode } from "react";
 import type { Door } from "../lib/door.mjs";
 import type { Room } from "../lib/rooms.mjs";
@@ -35,35 +35,11 @@ type Read =
  * after the next one.
  */
 function useDoorRead(door: Door, route: string | null, pulse?: string): Read {
-  const [read, setRead] = useState<Read>({ phase: "loading" });
   const { base, token } = door;
-  // A pulse re-read (REQ-11) keeps the last answer on screen while it reads; only a NEW route starts from loading.
-  const lastRoute = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (route === null) return;
-    const control = new AbortController();
-    let live = true;
-    if (lastRoute.current !== route) setRead({ phase: "loading" });
-    lastRoute.current = route;
-    door
-      .call(route, { signal: control.signal })
-      .then((data: unknown) => {
-        if (live) setRead({ phase: "ready", data });
-      })
-      .catch((error: unknown) => {
-        // An aborted read is this component tidying up, not a failure to report.
-        if (live && !control.signal.aborted) setRead({ phase: "error", error });
-      });
-    return () => {
-      live = false;
-      control.abort();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: identity
-    // of `door` is not the thing that changes what this reads.
-  }, [route, base, token, pulse]);
-
-  return read;
+  // The pulse rules (a re-read keeps the last answer, a pulse never starves a slow read, a failed re-read keeps the good
+  // one) live in usePulseRead, shared with the lane's phases.
+  const r = usePulseRead<unknown>(route === null ? null : `${base}|${token}|${route}`, (signal) => door.call(route as string, { signal }), pulse);
+  return r.phase === "ready" ? { phase: "ready", data: r.data } : r;
 }
 
 const monoFace: CSSProperties = {

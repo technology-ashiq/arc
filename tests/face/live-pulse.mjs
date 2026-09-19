@@ -10,7 +10,7 @@
 // "RAN: <n> checks", which the bats wrapper requires.
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, existsSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -38,6 +38,15 @@ const check = (name, cond, detail = "") => {
   check("readsToLoad: a poll re-reads only the polled read", keys(reg.readsToLoad(planned, loaded, new Set(), true, false)) === "a");
   check("readsToLoad: a PULSE re-reads every read, polled or not (REQ-11)", keys(reg.readsToLoad(planned, loaded, new Set(), false, true)) === "a,b,c");
   check("readsToLoad: a read in flight is never started twice, pulse or not", keys(reg.readsToLoad(planned, loaded, new Set(["b"]), false, true)) === "a,c");
+  // PR 2 logic attack: a pulse that meets a read in flight marks it, and the read runs again once it lands.
+  check("pulseDirty: the reads a pulse finds in flight are the ones marked", reg.pulseDirty(planned, new Set(["b", "zz"])).join(",") === "b");
+  check("readsToLoad: a FORCED key is read again once it has landed, with no pulse and no poll", keys(reg.readsToLoad(planned, loaded, new Set(), false, false, new Set(["b"]))) === "b");
+  check("readsToLoad: a forced key still in flight waits (never two at once)", keys(reg.readsToLoad(planned, loaded, new Set(["b"]), false, false, new Set(["b"]))) === "");
+  const good = { state: "ok", data: { n: 1 } };
+  const refused = { state: "refused", code: "SOURCE_CHANGING", human: "the file moved under the read" };
+  const kept = reg.keepOnRereadFailure(good, refused);
+  check("keepOnRereadFailure: a failed RE-read keeps the last good answer, marked", kept.state === "ok" && kept.data.n === 1 && kept.rereadFailed && kept.rereadFailed.code === "SOURCE_CHANGING", JSON.stringify(kept));
+  check("keepOnRereadFailure: a read that never answered shows the refusal", reg.keepOnRereadFailure(undefined, refused) === refused && reg.keepOnRereadFailure({ state: "loading" }, refused) === refused);
   check("PULSE_MS asks well inside REQ-11's 5 s", typeof reg.PULSE_MS === "number" && reg.PULSE_MS > 0 && reg.PULSE_MS <= 2500, String(reg.PULSE_MS));
 
   const flows = await import(pathToFileURL(join(REPO, "face", "scripts", "flows.mjs")).href);
@@ -56,6 +65,54 @@ const check = (name, cond, detail = "") => {
   check("every flow's input is one the door accepts", bad.length === 0, bad.join(" ; "));
   const cm = flows.closeMonthFor(new Date(Date.UTC(2026, 0, 3)));
   check("the close flow closes two months back, mid-month (outside the ten-day fixture)", cm.month === "2025-11" && new Date(cm.at).getUTCDate() === 15, JSON.stringify(cm));
+}
+
+// ---- the pulse sees an in-place edit INSIDE a watched directory (PR 2 shell attack: a directory's own stat does not
+// move when a file in it is rewritten, and phases/ and docs/adr were stamped as directories) ----
+{
+  const R = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reads.mjs")).href);
+  const fake = mkdtempSync(join(tmpdir(), "face-pulse-tree-"));
+  const spec = join(fake, "initiatives", "demo", "phases", "phase-01-spec.md");
+  const adr = join(fake, "docs", "adr", "0001-x.md");
+  mkdirSync(dirname(spec), { recursive: true });
+  mkdirSync(dirname(adr), { recursive: true });
+  writeFileSync(spec, "aaaa");
+  writeFileSync(adr, "bbbb");
+  const spineDir = join(fake, "spine");
+  mkdirSync(join(spineDir, "events"), { recursive: true });
+  const ctx = { mode: "sim", root: spineDir, repo: fake };
+  const at = (d) => new Date(Date.UTC(2026, 0, d));
+  utimesSync(spec, at(1), at(1)); utimesSync(adr, at(1), at(1));
+  const p0 = R.apiPulse(ctx, []).pulse;
+  const dirBefore = statSync(dirname(spec)).mtimeMs;
+  writeFileSync(spec, "cccc"); utimesSync(spec, at(2), at(2));
+  check("MUTANT CONTROL: the phases directory's own stat did not move with the in-place edit (a directory stamp would miss it)", statSync(dirname(spec)).mtimeMs === dirBefore);
+  const p1 = R.apiPulse(ctx, []).pulse;
+  check("the pulse MOVES on an in-place edit of a phase spec", p1 !== p0, `${p0} -> ${p1}`);
+  writeFileSync(adr, "dddd"); utimesSync(adr, at(3), at(3));
+  const p2 = R.apiPulse(ctx, []).pulse;
+  check("the pulse MOVES on an in-place edit of an ADR", p2 !== p1, `${p1} -> ${p2}`);
+  // PR 2 logic attack: a source a route READ (the gates file, the rooms registry, bench's ceilings...) is watched from
+  // the first time it is read -- the door records it where every read passes.
+  const gates = join(fake, "arc.gates.yaml");
+  writeFileSync(gates, "gates: []\n"); utimesSync(gates, at(1), at(1));
+  const q0 = R.apiPulse(ctx, []).pulse;
+  writeFileSync(gates, "gates: [x]\n"); utimesSync(gates, at(4), at(4));
+  check("MUTANT CONTROL: a source no route has read does not move the pulse", R.apiPulse(ctx, []).pulse === q0);
+  R.watchSource(ctx, "arc.gates.yaml", "file");
+  const q1 = R.apiPulse(ctx, []).pulse;
+  writeFileSync(gates, "gates: [y]\n"); utimesSync(gates, at(5), at(5));
+  check("a source a route has read MOVES the pulse when it changes", R.apiPulse(ctx, []).pulse !== q1);
+  const readsSrc = readFileSync(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reads.mjs"), "utf8");
+  const containedBody = (readsSrc.split("function contained(ctx, rel, kind) {")[1] || "").split("\n}\n")[0];
+  check("every contained read registers its source (the one place every file and directory read passes)", /watchSource\(ctx, rel,/.test(containedBody));
+  // A closed day is fingerprinted by its name alone (it is pinned for ever); an open day by its stat.
+  const S = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "spine.mjs")).href);
+  writeFileSync(join(spineDir, "events", "2026-01-01.jsonl"), "{}\n");
+  writeFileSync(join(spineDir, "events", "2026-01-01.closed"), "x\n");
+  writeFileSync(join(spineDir, "events", "2026-01-02.jsonl"), "{}\n");
+  const stamps = S.spineStamp(spineDir);
+  check("spineStamp: a closed day is its name, not a stat; an open day is statted", stamps.includes("events/2026-01-01.jsonl|closed") && stamps.some((l) => /^events\/2026-01-02\.jsonl\|\d+\|/.test(l)), stamps.join(" ; "));
 }
 
 // ---- the door half ----

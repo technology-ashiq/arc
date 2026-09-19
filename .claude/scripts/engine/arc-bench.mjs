@@ -914,7 +914,11 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
     // The LAST such line: arc-run says it after its driver has finished, and a driver's own output that reaches this
     // stderr can carry a forged line naming someone else's receipt -- it can only come earlier.
     const named = [...String(res.stderr || "").matchAll(/^arc-run: receipt run\.completed ([0-9A-HJKMNP-TV-Z]{26})\r?$/gm)].pop();
-    const appended = spineSince(root, spineBefore).filter((e) => e.kind === "run.completed" && e.process !== BENCH_ID && named && e.id === named[1]);
+    // ...and the receipt it names must be THIS attempt's: this process and this driver. A later forged line (a descendant
+    // writing to the inherited stderr after arc-run finished) can name another run.completed written in the window, and
+    // stderr order alone cannot rule that out (PR 2 shell attack).
+    const appended = spineSince(root, spineBefore).filter((e) => e.kind === "run.completed" && e.process !== BENCH_ID && named && e.id === named[1]
+      && typeof e.process === "string" && e.process.startsWith(`${processName}@`) && (e.payload?.driver === undefined || e.payload.driver === driver));
     // M1s INVOCATION DISCIPLINE, checked at run time rather than trusted. Every attempt goes
     // through arc-run, and arc-run leaves exactly one receipt per invocation -- so an attempt
     // that produced an answer while leaving NO receipt did not go through arc-run. That is the

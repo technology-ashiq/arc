@@ -12,7 +12,7 @@
 //
 // The one rule that outranks looking good here: an empty room must say WHICH KIND of empty
 // it is. Fourteen convincing empty rooms would be worse than fourteen missing ones (D7).
-import { useEffect, useState } from "react";
+import { usePulseRead } from "../shell/usePulseRead";
 import type { Room } from "../lib/rooms.mjs";
 import { absence, displayValue, lanePhases, unescapeDoorText, zonesFor } from "../lib/rooms.mjs";
 import type { Door } from "../lib/door.mjs";
@@ -132,18 +132,11 @@ export function GenericRoom({ room, door, lane, pulse }: { room: Room; door?: Do
  * to refuse, and it is why the door sends an explicit empty array rather than omitting a key.
  */
 function Phases({ door, lane, pulse }: { door: Door; lane: string; pulse?: string }) {
-  const [state, setState] = useState<{ phase: "loading" } | { phase: "ok"; body: unknown } | { phase: "error" }>({ phase: "loading" });
-  useEffect(() => {
-    const ac = new AbortController();
-    // The `aborted` guard is what makes this survive StrictMode's mount/unmount/mount in dev:
-    // effect #1's fetch rejects with an AbortError that must NOT become a visible failure, and
-    // only effect #2's result may set state.
-    door.lane(lane, ac.signal)
-      .then((body: unknown) => { if (!ac.signal.aborted) setState({ phase: "ok", body }); })
-      .catch(() => { if (!ac.signal.aborted) setState({ phase: "error" }); });
-    return () => ac.abort();
-    // The pulse re-reads (REQ-11) without clearing: the phases on screen stay until the new answer lands.
-  }, [door, lane, pulse]);
+  // The pulse re-reads (REQ-11) without clearing: the phases on screen stay until the new answer lands, a slow read is
+  // never starved by the next pulse, and a failed re-read keeps the phases it had (usePulseRead).
+  const r = usePulseRead<unknown>(lane, (signal) => door.lane(lane, signal), pulse);
+  const state: { phase: "loading" } | { phase: "ok"; body: unknown } | { phase: "error" } =
+    r.phase === "ready" ? { phase: "ok", body: r.data } : r.phase === "error" ? { phase: "error" } : { phase: "loading" };
 
   if (state.phase === "loading") return null;
   if (state.phase === "error") {

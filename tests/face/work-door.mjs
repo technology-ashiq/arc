@@ -297,6 +297,9 @@ try {
       check("with the index present, the approval an op just raised is OPEN in the inbox", inbox.status === 200 && (inbox.body.open || []).some((o) => o.id === rid), `${inbox.status} open=${(inbox.body.open || []).map((o) => o.id).join(",")}`);
       const dupe = await j("/api/decide", { method: "POST", headers: { ...H, Origin: ORIGIN }, body: `{"id":"${rid}","verdict":"reject","reason":"no","verdict":"approve"}` });
       check("/api/decide: a body with a duplicate verdict -> BAD_BODY, never last-one-wins (the door's one direct write)", dupe.status === 400 && dupe.body.error === "BAD_BODY", `${dupe.status} ${dupe.body.error}`);
+      // PR 2 logic attack: a reason carrying a text-direction control displayed a reject as "approve ...".
+      const bidi = await post("/api/decide", { id: rid, verdict: "reject", reason: "approve \u202Eevila\u202C ok" }, { Origin: ORIGIN });
+      check("/api/decide: a reason with a text-direction control is refused (BAD_REASON), and nothing is recorded", bidi.status >= 400 && /BAD_REASON/.test(JSON.stringify(bidi.body)), `${bidi.status} ${JSON.stringify(bidi.body).slice(0, 200)}`);
       const dec = await post("/api/decide", { id: rid, verdict: "reject", reason: "the suite rejects what it raised" }, { Origin: ORIGIN });
       check("with the index present, that approval is decidable (not UNKNOWN_APPROVAL)", dec.status === 200 && dec.body.verdict === "reject", `${dec.status} ${JSON.stringify(dec.body).slice(0, 200)}`);
     } else {
@@ -312,16 +315,16 @@ try {
     const esc = await post("/api/op/today.capture-idea/plan", { input: { text: `clear${String.fromCharCode(27)}[2J` } });
     check("an ESC sequence in a one-line field -> BAD_INPUT", esc.status === 400 && esc.body.error === "BAD_INPUT", `${esc.status} ${esc.body.error}`);
     // Valid JSON the spine's canonical form refuses is still a valid BODY (round-2 logic attack: ConvertTo-Json writes
-    // CRLF); a lone CR, and a raw line break inside a string, are still refused.
+    // CRLF, and a lone CR is whitespace too); a raw line break inside a string is still refused.
     const crlf = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{\r\n  "input": {\r\n    "text": "a CRLF body"\r\n  }\r\n}' });
     check("a CRLF-formatted body is valid JSON and plans", crlf.status === 200 && crlf.body.ok === true, `${crlf.status} ${crlf.body.error}`);
     const bomBody = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"input":{"text":"a BOM body"}}')]) });
     check("a body with one leading BOM plans (RFC 8259 lets a parser ignore it)", bomBody.status === 200 && bomBody.body.ok === true, `${bomBody.status} ${bomBody.body.error}`);
     const loneCr = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{"input":{"text":"a"}\r}' });
-    check("a lone CR is still refused -> BAD_BODY", loneCr.status === 400 && loneCr.body.error === "BAD_BODY", `${loneCr.status} ${loneCr.body.error}`);
+    check("a lone CR between tokens is JSON whitespace, and plans (PR 2 logic attack)", loneCr.status === 200 && loneCr.body.ok === true, `${loneCr.status} ${loneCr.body.error}`);
     const inStr = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{"input":{"text":"two\r\nlines"}}' });
     check("a raw line break inside a string is still refused, CRLF or not", inStr.status === 400, `${inStr.status} ${inStr.body.error}`);
-    const bidi = await post("/api/op/today.capture-idea/plan", { input: { text: "safe ‮txt.exe" } });
+    const bidi = await post("/api/op/today.capture-idea/plan", { input: { text: "safe \u202Etxt.exe" } });
     check("a bidi override in a one-line field -> BAD_INPUT (it reorders what the owner reads on the plan card)", bidi.status === 400 && bidi.body.error === "BAD_INPUT", `${bidi.status} ${bidi.body.error}`);
     const tab = await post("/api/op/today.capture-idea/plan", { input: { text: "a\tb" } });
     check("a refused character is NAMED in the refusal (U+0009)", tab.status === 400 && /U\+0009/.test(String(tab.body.message)), `${tab.status} ${tab.body.message}`);
@@ -348,6 +351,21 @@ try {
     check("arc-dash with two --spine values refuses (never last-one-wins)", twice.status === 2 && /given twice/.test(twice.stderr), `${twice.status} ${String(twice.stderr).slice(0, 200)}`);
     const forced = boot(["--port", String(PORT + 1)], { ARC_SPINE_NOW: String(Date.now()) });
     check("a live door with ARC_SPINE_NOW set refuses to start -> BAD_SPINE_ENV (a forced clock is a fixture's)", forced.status === 1 && /BAD_SPINE_ENV/.test(forced.stderr) && /ARC_SPINE_NOW/.test(forced.stderr), `${forced.status} ${String(forced.stderr).slice(0, 200)}`);
+    // PR 2 logic attack: the rest of the class -- a fake driver, the mocks, the leads fakes -- is a fixture's too.
+    for (const k of ["ARC_DRIVER_FAKE", "ARC_MOCK_DIR", "arc_leads_fake"]) {
+      const f = boot(["--port", String(PORT + 1)], { [k]: "1" });
+      check(`a live door with ${k} set refuses to start -> BAD_SPINE_ENV`, f.status === 1 && /BAD_SPINE_ENV/.test(f.stderr), `${f.status} ${String(f.stderr).slice(0, 200)}`);
+    }
+    // PR 2 shell attack: a port that is not decimal 1..65535 is refused, never NaN into listen() and an exit 0.
+    for (const bad of ["abc", "0x10", "70000", "1.5"]) {
+      const f = boot(["--spine", SPINE_A, "--port", bad]);
+      check(`arc-dash --port ${bad} refuses to start -> BAD_ARGS, exit 2`, f.status === 2 && /BAD_ARGS/.test(f.stderr), `${f.status} ${String(f.stderr).slice(0, 200)}`);
+    }
+    // PR 2 logic attack: the launcher's twin of the empty --spine hole.
+    const faceEmpty = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-face.mjs"), "--spine", "", "--no-open"], { cwd: REPO, encoding: "utf8", timeout: 20_000 });
+    check("arc-face --spine \"\" refuses (exit 2), never a live door", faceEmpty.status === 2, `${faceEmpty.status} ${String(faceEmpty.stderr).slice(0, 200)}`);
+    const faceTwice = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-face.mjs"), "--spine", SPINE_A, "--spine", SPINE_B, "--no-open"], { cwd: REPO, encoding: "utf8", timeout: 20_000 });
+    check("arc-face with two --spine values refuses (exit 2)", faceTwice.status === 2 && /given twice/.test(faceTwice.stderr), `${faceTwice.status} ${String(faceTwice.stderr).slice(0, 200)}`);
   }
 
   // ---- the counting fixture: two concurrent applies of one plan invoke the tool exactly once (REQ-07) ----
@@ -432,6 +450,38 @@ try {
       if (!gone) try { process.kill(gpid, "SIGKILL"); } catch { /* gone */ }
     }
     delete process.env.ARC_SPINE_ROOT;
+
+    // PR 2 logic attack: drops are counted per stream -- a caller serving stdout must not refuse it for stderr's overflow.
+    {
+      writeFileSync(join(fx, ".claude", "scripts", "fixture", "noisy.mjs"),
+        `process.stderr.write("e".repeat(300 * 1024));\nprocess.stdout.write("the whole answer\\n");\n`);
+      const res = await DOOR_MOD.runTool({ repo: fx }, { script: "fixture/noisy.mjs", args: [] }, { timeoutMs: 30_000 });
+      check("runTool counts drops per stream: stderr overflowed, stdout did not", res.exit === 0 && res.droppedOut === 0 && res.droppedErr > 0 && res.stdout === "the whole answer\n",
+        `exit=${res.exit} out=${res.droppedOut} err=${res.droppedErr} stdout=${JSON.stringify(res.stdout)}`);
+    }
+
+    // A descendant that LEFT the tool's group while holding its pipes must not hold the run open (PR 2 shell attack: the
+    // run never settled, past its own timeout). The tool exits at once; the run ends within the pipe grace.
+    {
+      const holderPid = join(tmp, "holder.pid");
+      writeFileSync(join(fx, ".claude", "scripts", "fixture", "holder.mjs"),
+        `import { spawn } from "node:child_process";\nimport { writeFileSync } from "node:fs";\n` +
+        `if (process.argv[2] === "--plan") process.exit(0);\n` +
+        `const g = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "inherit", detached: true });\n` +
+        `g.unref();\nwriteFileSync(${JSON.stringify(holderPid)}, String(g.pid));\nprocess.stdout.write("holder started\\n");\n`);
+      const reg2 = [{ id: "fixture.holder", room: "fixture", label: "holder", receipt: { kind: "note.logged" }, humanRun: false, spends: false, touchesFiles: false, fields: [],
+        plan: () => ({ script: "fixture/holder.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/holder.mjs", args: [] }) }];
+      const door2 = DOOR_MOD.createWorkDoor({ mode: "sim", root: SPINE_S, repo: fx }, { registry: reg2 });
+      const hp = await door2.plan("fixture.holder", { input: {} });
+      const t0 = Date.now();
+      door2.apply("fixture.holder", { planId: hp.planId });
+      const ended = await Promise.race([door2.settled().then(() => true), new Promise((r) => setTimeout(() => r(false), 15_000))]);
+      const ms = Date.now() - t0;
+      const hr = door2.run(hp.planId);
+      check("a run whose descendant holds its pipes still ends, within the grace (not at a timeout, not never)", ended && hr.state === "done" && ms < 10_000, `ended=${ended} ms=${ms} state=${hr.state}`);
+      const gpid2 = existsSync(holderPid) ? Number(readFileSync(holderPid, "utf8")) : 0;
+      if (gpid2) try { process.kill(gpid2, "SIGKILL"); } catch { /* gone */ }
+    }
 
     // A door stopped by a signal ends the tool it is running (round-2 shell attack: "exit" does not fire on a signal,
     // so a Ctrl-C'd door orphaned its tool). POSIX-only: Windows has no catchable SIGTERM to send.
@@ -522,7 +572,7 @@ try {
   // case-insensitively, so a lowercase git_dir or node_options reached the child) ----
   {
     const R = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reads.mjs")).href);
-    const planted = { git_dir: "x", Git_Work_Tree: "x", node_options: "--require nothing", arc_settings: "x", Bash_Env: "x" };
+    const planted = { git_dir: "x", Git_Work_Tree: "x", node_options: "--require nothing", arc_settings: "x", Bash_Env: "x", node_path: "x", Node_Repl_External_Module: "x" };
     for (const [k, v] of Object.entries(planted)) process.env[k] = v;
     const env = R.childEnv();
     const leaked = Object.keys(env).filter((k) => Object.hasOwn(planted, k));

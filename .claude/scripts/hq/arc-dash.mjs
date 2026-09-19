@@ -242,6 +242,7 @@ async function apiRooms(ctx) {
     throw new DashError("REGISTRY_ABSENT", "rooms.generated.json has not been generated -- run face-sections.mjs");
   // Fenced like every other file the door serves: a junction at contracts/ served another tree's registry (round 4).
   if (!insideRepo(ctx, p)) throw new DashError("SOURCE_OUTSIDE", "rooms.generated.json resolves outside this tree -- not served");
+  reads.watchSource(ctx, "initiatives/face/contracts/rooms.generated.json", "file");
   const registry = JSON.parse(readFileSync(realpathSync(p), "utf8"));
 
   // Counted from the log, never from a stored total: a cached count is the second truth
@@ -722,11 +723,13 @@ async function apiAsk(ctx, body) {
   // Run through the work door's runTool, not execFile: execFile's timeout ends arc-run alone, and a paid driver arc-run
   // started kept running, and spending, after the ask was called over (face v2 Phase 05 round-2 logic attack, the twin
   // of the work door's tree kill). runTool leads a process group on POSIX and walks the tree on Windows.
-  const res = await runTool(ctx, { script: "engine/arc-run.mjs", args: ["--process", "face-ask", "--input", JSON.stringify({ q, state: pack })] }, { timeoutMs: 120_000 });
+  // The cap is the one execFile had (4 MiB): an answer the door served before this PR is still served.
+  const res = await runTool(ctx, { script: "engine/arc-run.mjs", args: ["--process", "face-ask", "--input", JSON.stringify({ q, state: pack })] }, { timeoutMs: 120_000, outputCap: 4 * 1024 * 1024 });
   if (res.timedOut) throw new DashError("ASK_FAILED", "the ask ran past 120 s and was ended, with everything it had started");
   if (res.exit !== 0) throw new DashError("ASK_FAILED", String(res.stderr || `arc-run exited ${res.exit ?? res.signal}`).slice(0, 500));
   // A tail is not an answer: an answer past the door's output cap is refused rather than served cut.
-  if (res.dropped) throw new DashError("ASK_FAILED", `the answer ran past the door's output cap (${res.dropped} characters over); it is not served cut`);
+  // Only the ANSWER's overflow refuses: a long stderr (a failed driver's, before the fallback answered) is not the answer.
+  if (res.droppedOut) throw new DashError("ASK_FAILED", `the answer ran past the door's output cap (${res.droppedOut} characters over); it is not served cut`);
   return { mode: ctx.mode, answer: res.stdout };
 }
 
@@ -797,13 +800,13 @@ const ROUTES = Object.freeze([
  * Two things valid JSON may carry that the spine's CANONICAL form refuses are normalised first, because a body is not
  * a record: CRLF between tokens (what PowerShell's ConvertTo-Json writes) and one leading BOM (RFC 8259 lets a parser
  * ignore it). Both are lossless for valid JSON -- a raw line break inside a string is not JSON with or without the CR,
- * so it is still refused, and a lone CR still is too.
+ * so it is still refused. A lone CR is JSON whitespace too, and is normalised the same way (PR 2 logic attack).
  * @param {Buffer} buf
  */
 function parseBody(buf) {
   let b = buf;
   if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) b = b.subarray(3);
-  if (b.includes(0x0d)) b = Buffer.from(b.toString("latin1").replace(/\r\n/g, "\n"), "latin1");
+  if (b.includes(0x0d)) b = Buffer.from(b.toString("latin1").replace(/\r\n?/g, "\n"), "latin1");
   return parseStrictJson(b, "body");
 }
 
@@ -892,6 +895,11 @@ function boot(argv) {
     process.exit(1);
   }
 
+  // A port is decimal digits in 1..65535, or the door does not start. `--port abc` reached listen() as NaN, threw
+  // synchronously past the bind-error handler into the uncaught-exception backstop, and the door EXITED 0 with nothing
+  // bound; `--port 0x10` bound port 16 (PR 2 shell attack).
+  if (flags.port !== undefined && !(/^[0-9]{1,5}$/.test(flags.port) && Number(flags.port) >= 1 && Number(flags.port) <= 65535))
+    argFail(`--port ${JSON.stringify(flags.port)} is not a port (decimal 1..65535)`);
   const port = flags.port ? Number(flags.port) : 8317;
   const bind = flags.bind || "127.0.0.1";
   if (bind !== "127.0.0.1" && bind !== "::1") {
@@ -922,7 +930,12 @@ function boot(argv) {
     // The spine's other test-only doors (arc-event.mjs names all five) are a fixture's too. ARC_SPINE_NOW on a live door
     // reached the tools it runs, and a real idea was sealed into a past day's file under a forged ts (face v2 Phase 05
     // round-2 logic attack).
-    const testDoors = ["ARC_SPINE_NOW", "ARC_SPINE_RAND", "ARC_SPINE_LOCK_TIMEOUT_MS", "ARC_SPINE_LOCK_STALE_MS"].filter((k) => process.env[k] !== undefined);
+    // ...and the rest of the class: the fakes and test clocks every lane keeps for its fixtures. ARC_DRIVER_FAKE makes a
+    // driver return a recording that seals as a run.completed looking exactly like a real one; the leads fakes and clock
+    // move outreach; the mock recordings and the absorb seal dir redirect what a tool reads or writes (PR 2 logic attack).
+    const TEST_DOORS = ["ARC_SPINE_NOW", "ARC_SPINE_RAND", "ARC_SPINE_LOCK_TIMEOUT_MS", "ARC_SPINE_LOCK_STALE_MS", "ARC_SPINE_MAX_FUTURE_MS",
+      "ARC_DRIVER_FAKE", "ARC_MOCK_DIR", "ARC_MOCK_FIXTURE", "ARC_LEADS_NOW", "ARC_LEADS_FAKE", "ARC_ABSORB_SEAL_DIR"];
+    const testDoors = Object.keys(process.env).filter((k) => TEST_DOORS.includes(k.toUpperCase()) || k.toUpperCase().startsWith("ARC_MOCK_"));
     if (testDoors.length) {
       process.stderr.write(`arc-dash: ERROR BAD_SPINE_ENV -- ${testDoors.join(", ")} set; those are the spine's test-only doors, and a live door writes the real company's receipts. Unset them, or run a fixture with --spine <path>\n`);
       process.exit(1);

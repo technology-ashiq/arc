@@ -110,7 +110,10 @@ export function childEnv() {
   // Round 4 widened it: BASH_ENV and ENV run a script before the child's own (one exported GIT_DIR and moved the gates),
   // NODE_OPTIONS preloads code into a node child, and the three source overrides the door refuses on its own routes
   // (ARC_VENTURES_FILE, ARC_BENCH_CEILINGS, ARC_SETTINGS) must not reach a child that reads the same file for it.
-  const DROP = new Set(["BASH_ENV", "ENV", "NODE_OPTIONS", "ARC_VENTURES_FILE", "ARC_BENCH_CEILINGS", "ARC_SETTINGS"]);
+  // NODE_PATH and the REPL module/history hooks load code or write files by environment too (PR 2 shell attack).
+  // ARC_SPINE_ACTOR and ARC_SPINE_PROCESS say who acted: a tool the door runs acts on the owner's click, never under a
+  // name the door's own environment happened to carry (PR 2 logic attack).
+  const DROP = new Set(["BASH_ENV", "ENV", "NODE_OPTIONS", "NODE_PATH", "NODE_REPL_EXTERNAL_MODULE", "NODE_REPL_HISTORY", "ARC_VENTURES_FILE", "ARC_BENCH_CEILINGS", "ARC_SETTINGS", "ARC_SPINE_ACTOR", "ARC_SPINE_PROCESS"]);
   // Compared UPPER-CASED: Windows reads env names case-insensitively, so `git_dir` or `node_options` set in lowercase
   // passed this filter and the child honoured it -- a preload ran and git followed another repo (face v2 Phase 05
   // shell attack). The twin of every name check: normalise before comparing.
@@ -206,6 +209,22 @@ function fence(ctx) {
  * @param {{ repo: string }} ctx @param {string} rel @param {"file" | "dir"} kind
  * @returns {string} the absolute path, when it is readable
  */
+/**
+ * Every repo source a route has read on this door, by door context: the pulse stamps them all. A room whose source the
+ * pulse did not watch -- the gates file, the rooms registry, bench's ceilings, the leads config, the product manifests --
+ * stayed stale until a reload, because only the command ring's reads poll (PR 2 logic attack). Recorded at the one
+ * place every read of a file or directory passes, so a new route is watched the day it first answers.
+ * @type {WeakMap<object, Map<string, "file" | "dir">>}
+ */
+const WATCHED = new WeakMap();
+const WATCH_CAP = 4096;
+/** @param {object} ctx @param {string} rel @param {"file" | "dir"} kind */
+export function watchSource(ctx, rel, kind) {
+  let m = WATCHED.get(ctx);
+  if (!m) { m = new Map(); WATCHED.set(ctx, m); }
+  if (m.size < WATCH_CAP || m.has(rel)) m.set(rel, kind);
+}
+
 function contained(ctx, rel, kind) {
   const p = join(ctx.repo, rel);
   if (!existsSync(p)) throw new ReadError("SOURCE_ABSENT", `${rel} is not on this tree, so there is nothing for this route to parse`);
@@ -216,6 +235,7 @@ function contained(ctx, rel, kind) {
   const st = statSync(real);
   if (kind === "file" && !st.isFile()) throw new ReadError("SOURCE_INVALID", `${rel} is not a regular file`);
   if (kind === "dir" && !st.isDirectory()) throw new ReadError("SOURCE_INVALID", `${rel} is not a directory`);
+  watchSource(ctx, rel, kind === "dir" ? "dir" : "file");
   return real;
 }
 
@@ -1107,7 +1127,23 @@ export function apiPulse(ctx, files) {
   /** @type {string[]} */
   let lanes = [];
   try { lanes = readdirSync(join(ctx.repo, "initiatives")).sort(); } catch { /* root-mode: no lanes */ }
-  for (const l of lanes) for (const f of ["PROGRESS.md", "PLAN.md", "phases"]) stamp(`initiatives/${l}/${f}`, join(ctx.repo, "initiatives", l, f));
-  stamp("docs/adr", join(ctx.repo, "docs", "adr"));
+  // A DIRECTORY's own stat does not move when a file inside it is rewritten in place, so a directory is stamped entry by
+  // entry: stamping phases/ and docs/adr as directories missed every edit to a spec or an ADR (PR 2 shell attack).
+  /** @param {string} label @param {string} dir */
+  const stampDir = (label, dir) => {
+    let names = [];
+    try { names = readdirSync(dir).sort(); } catch { parts.push(`${label}|absent`); return; }
+    parts.push(`${label}|${names.length}`);
+    for (const n of names) stamp(`${label}/${n}`, join(dir, n));
+  };
+  for (const l of lanes) {
+    for (const f of ["PROGRESS.md", "PLAN.md"]) stamp(`initiatives/${l}/${f}`, join(ctx.repo, "initiatives", l, f));
+    stampDir(`initiatives/${l}/phases`, join(ctx.repo, "initiatives", l, "phases"));
+  }
+  stampDir("docs/adr", join(ctx.repo, "docs", "adr"));
+  // Every other source a route has read on this door, file by file or entry by entry.
+  for (const [rel, kind] of [...(WATCHED.get(ctx) || new Map())].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
+    if (kind === "dir") stampDir(`src:${rel}`, join(ctx.repo, rel)); else stamp(`src:${rel}`, join(ctx.repo, rel));
+  }
   return { mode: ctx.mode, pulse: sha256Hex(parts.join("\n")).slice(0, 24), watched: parts.length };
 }

@@ -249,6 +249,11 @@ function assertDecision(event) {
   // prints the brief, and makes the receipt unreadable.
   if (hasControlChar(payload.reason))
     throw new SpineError("BAD_REASON", "decision.reason contains a control character");
+  // Nor a line separator, a lone surrogate, or an invisible format character (ZWNJ and ZWJ excepted: they join emoji and
+  // letters). A reject whose reason carried U+202E displayed as "approve ..." -- the decision reads as the opposite of
+  // what it records (face v2 Phase 05 PR 2 logic attack; the same class the work door's one-line fields refuse).
+  if (/[\p{Cs}\u2028\u2029]|(?![\u200C\u200D])\p{Cf}/u.test(payload.reason))
+    throw new SpineError("BAD_REASON", "decision.reason contains a line separator, a lone surrogate or an invisible format character (a text-direction control renders a reason as text nobody wrote)");
   // Bind the idem to the approval this decision names (checked LAST, so a bad shape/verdict/
   // reason still reports its own error first). arc-inbox keys a decision's idem on its decides,
   // and the emit path honours a caller-supplied --idem -- so without this an attacker could seal

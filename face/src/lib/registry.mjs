@@ -50,7 +50,7 @@ const KEY = /^\.\/modules\/([^/\\?#]+)\/([^/\\?#]+)\/(module\.mjs|fold\.mjs|ops\
  *
  * @typedef {{ route: string, param?: string, query?: Record<string, string | number>, poll?: boolean, act?: boolean }} Read
  *   one door read a fold asks for (or, with `act`, the log of one act route)
- * @typedef {{ state: "loading" } | { state: "pending" } | { state: "ok", data: any } | { state: "refused", code: string, human: string }} Payload
+ * @typedef {{ state: "loading" } | { state: "pending" } | { state: "ok", data: any, rereadFailed?: { code: string, human: string } } | { state: "refused", code: string, human: string }} Payload
  * @typedef {Read & { key: string, path: string }} PlannedRead
  * @typedef {{ n: number, body: Record<string, unknown>, result: Payload }} ActRecord
  * @typedef {{ isNotServed: true, panel: string, route: string, sentence: string }} NotServed
@@ -546,10 +546,34 @@ function snapshotRead(r) {
  * that asked once and never again is how a room goes stale in front of the owner.
  * @param {PlannedRead[]} planned @param {Record<string, Payload>} loaded @param {Set<string>} inflight @param {boolean} pollDue
  * @param {boolean} [pulseDue]
+ * @param {ReadonlySet<string> | null} [force]  keys due again whatever else is true: a read that was IN FLIGHT when the
+ *   pulse moved, and has landed since (see pulseDirty)
  * @returns {PlannedRead[]}
  */
-export function readsToLoad(planned, loaded, inflight, pollDue, pulseDue = false) {
-  return planned.filter((r) => !inflight.has(r.key) && (!Object.hasOwn(loaded, r.key) || pulseDue === true || (pollDue && r.poll === true)));
+export function readsToLoad(planned, loaded, inflight, pollDue, pulseDue = false, force = null) {
+  return planned.filter((r) => !inflight.has(r.key) && (!Object.hasOwn(loaded, r.key) || pulseDue === true || (force !== null && force.has(r.key)) || (pollDue && r.poll === true)));
+}
+
+/**
+ * The planned reads a pulse cannot start because they are already in flight. A read that began BEFORE the change can
+ * land with the old answer; the host marks it and reads it again once it lands, or the room keeps a stale answer with
+ * nothing left to correct it (PR 2 logic attack: the Today brief).
+ * @param {PlannedRead[]} planned @param {ReadonlySet<string>} inflight @returns {string[]}
+ */
+export function pulseDirty(planned, inflight) {
+  return planned.filter((r) => inflight.has(r.key)).map((r) => r.key);
+}
+
+/**
+ * What a failed RE-read leaves on screen: the last good answer, marked, rather than the refusal in its place. A pulse
+ * re-reads exactly while files are being written, so it meets a half-written source far more often than a first read
+ * does, and swapping a good panel for "SOURCE_CHANGING" every time arc writes would be a room that flickers into
+ * errors. A read that never answered well still shows its refusal.
+ * @param {Payload | undefined} prev @param {Payload} refused @returns {Payload}
+ */
+export function keepOnRereadFailure(prev, refused) {
+  if (prev && prev.state === "ok" && refused.state === "refused") return { state: "ok", data: prev.data, rereadFailed: { code: refused.code, human: refused.human } };
+  return refused;
 }
 
 /**
