@@ -190,6 +190,15 @@ async function main() {
   if (!reparsed.ok) die(2, `the proposed ${ROUTER} would not parse: ${reparsed.error.what}`);
   const faults = routerFaults(reparsed.value);
   if (faults.length) die(2, `the proposed ${ROUTER} would not load (${faults.length} fault(s)): ${faults[0]}`);
+  // A RETIRE changes exactly one thing: that row, back to the default driver, its tenure terms gone. The line edit left
+  // the block lines under a tenure key behind, and they became a silent `fallback` the approval never mentioned (PR 4
+  // logic attack). The proposed file, parsed, must equal main's with only that row changed.
+  if (args.verb === "retire") {
+    const row = Object.fromEntries(Object.entries(router.classes[args.class]).filter(([k]) => !TENURE_KEYS.includes(k)).map(([k, v]) => [k, k === "driver" ? args.to : v]));
+    const want = { ...router, classes: { ...router.classes, [args.class]: row } };
+    if (JSON.stringify(reparsed.value) !== JSON.stringify(want))
+      die(2, `ending the hire of ${args.class} would change ${ROUTER} beyond its row's driver and tenure terms (a tenure term carries a block value?) -- edit it by hand, citing ADR-0069`);
+  }
 
   const branch = branchFor(args.verb, args.class, args.to);
   const files = [{ path: ROUTER, content: proposed }];
