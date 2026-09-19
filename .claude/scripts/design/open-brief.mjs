@@ -100,7 +100,13 @@ async function main() {
     const allow = files.map((f) => f.path);
     const { base } = await checkProposal({ repo: REPO, branch, paths: allow, allow });
     if (base !== brief.base) die(2, "main moved while the scaffold was made -- run it again");
-    const what = `open the design explore ${a.id} from ${a.brief}`;
+    // An explore MAIN already holds is evidence, not a scaffold to write over: design-explore.sh checks the owner's
+    // checkout, and the branch is cut from main (the pin and trial twins, PR 3b round 2).
+    const held = await baseText({ repo: REPO, path: `docs/design/explore/${a.id}/explore.txt` });
+    if (held.base !== base) die(2, "main moved while the explore was checked -- run it again");
+    if (held.text !== null) die(2, `main already holds the explore ${a.id} -- an explore is evidence, not a scratch dir; take a new --id`);
+    // The id is followed by a comma: the scanner also reads each string with its spaces removed (the pin twin, PR 3b).
+    const what = `open the design explore ${a.id}, from ${a.brief}`;
     const approval = (commit) => ({ what, gate: "design-explore", explore: a.id, brief: a.brief, branch, base, commit, ...(a.why ? { why: a.why } : {}) });
     const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)), { cwd: REPO });
     if (refused) die(2, `the approval this explore raises would be refused by the spine, so nothing is written: ${refused}`);
