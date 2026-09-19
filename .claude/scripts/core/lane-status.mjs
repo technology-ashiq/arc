@@ -20,7 +20,7 @@ import { createHash } from "node:crypto";
 import { existsSync, realpathSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { baseText, checkProposal, openProposalsChanging, planProposal, proposalBranch, writeProposal, ProposalError } from "./proposal-branch.mjs";
+import { baseText, checkProposal, openProposalsChanging, planProposal, proposalBranch, proposalLocks, writeProposal, ProposalError } from "./proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLock } from "./plan-expect.mjs";
 import { isOneLine } from "./one-line.mjs";
 import { query, spineRoot } from "../hq/spine.mjs";
@@ -138,14 +138,39 @@ export function setHeader(text, status, blockedOn) {
   return { text: lines.join("\n"), was, blockedOn: next };
 }
 
-/** The lane's board row with its status and blocked-on / depends-on cells rewritten; every other byte kept. */
+/**
+ * The lane's board row with its status and blocked-on / depends-on cells rewritten; every other byte kept. The table is
+ * found as board-lint finds it -- outside any fence and any HTML comment, and once in the whole file (the passport rule
+ * of PR 5a round 2) -- and a row carrying a backslash is refused: board-lint splits a pipe by whether an EVEN number of
+ * backslashes precedes it, so on `\\|` the two readers count different columns and a write lands in the wrong one
+ * (PR 5b round-2 logic attack).
+ */
 export function setBoardRow(text, lane, status, col6) {
   const lines = text.split("\n");
-  const heads = lines.flatMap((l, i) => (l === BOARD_HEAD ? [i] : []));
-  if (heads.length !== 1 || lines[heads[0] + 1] !== BOARD_RULE) die(2, `${PORTFOLIO} on main does not hold the lane table exactly once (${BOARD_HEAD}) -- fix it first`);
+  const heads = [];
+  let fence = "";
+  let comment = false;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const t = l.replace(/^[ \t]+/, "");
+    const f3 = t.slice(0, 3);
+    if (!comment && (f3 === "```" || f3 === "~~~")) { fence = fence === "" ? f3 : fence === f3 ? "" : fence; continue; }
+    if (fence === "") {
+      // One line may open and close a comment; a line that only opens one hides every line after it from board-lint.
+      const opens = (l.match(/<!--/g) || []).length;
+      const closes = (l.match(/-->/g) || []).length;
+      if (!comment && opens > closes) comment = true;
+      else if (comment && closes >= opens && closes > 0) { comment = false; continue; }
+    }
+    if (fence === "" && !comment && l === BOARD_HEAD) heads.push(i);
+  }
+  if (fence !== "" || comment) die(2, `${PORTFOLIO} on main leaves a code fence or an HTML comment open -- where its tables are cannot be told; close it first`);
+  const anywhere = lines.filter((l) => l === BOARD_HEAD).length;
+  if (heads.length !== 1 || anywhere !== 1 || lines[heads[0] + 1] !== BOARD_RULE) die(2, `${PORTFOLIO} on main does not hold the lane table exactly once, outside every fence and comment (${BOARD_HEAD}) -- fix it first`);
   const rows = [];
   for (let i = heads[0] + 2; i < lines.length && lines[i].startsWith("|"); i++) {
-    const cells = lines[i].split(/(?<!\\)\|/);
+    if (lines[i].includes("\\")) die(2, `a row of ${PORTFOLIO}'s lane table holds a backslash, and its readers then count different columns -- take it out first`);
+    const cells = lines[i].split("|");
     if (cells.length > 2 && cells[1].trim() === lane) rows.push({ i, cells });
   }
   if (rows.length !== 1) die(2, `${PORTFOLIO} on main holds ${rows.length} rows for ${lane} -- a born lane has exactly one`);
@@ -179,15 +204,28 @@ async function main() {
   if (h.was.status === a.status && h.was.blockedOn === blockedOn) die(2, `${a.lane} is already ${a.status} with that blocker on main -- nothing to change`);
   // The request names EVERYTHING the branch changes: the status, and the blocker when it moves.
   const change = `${h.was.status} -> ${a.status}${h.was.blockedOn !== blockedOn ? `; blocked-on ${h.was.blockedOn} -> ${blockedOn}` : ""}`;
+  // A KEPT value is published as it stands: main's blocker and its depends-on go into the board cell, so a cell the
+  // board cannot hold is refused by name rather than written (PR 5b round-2 logic attack). The allow-list governs what
+  // this tool ADDS; what the owner already wrote is held to what board-lint can read.
+  for (const [what, v] of [["blocked-on", blockedOn], ["depends-on", h.was.dependsOn]])
+    if (!isOneLine(v) || v.includes("|") || v.includes(" / ") || Buffer.byteLength(v) > 400)
+      die(2, `the lane's ${what} cannot go into a board cell as it stands (one line, no |, no " / ", up to 400 bytes) -- fix the header first`);
   const col6 = blockedOn === DASH && h.was.dependsOn === DASH ? DASH : `${blockedOn} / ${h.was.dependsOn}`;
   const board = setBoardRow(portfolio.text, a.lane, a.status, col6);
 
   // ONE OPEN PROPOSAL of a lane's status: two, merged in either order, leave the lane in whichever landed last, and the
   // owner approved them as two separate states. Judged per lane, by what a branch CHANGED and main does not hold yet --
   // "holds the file" is true of every branch, so one lane's proposal refused every lane's, and a merged one forever.
-  const openOf = () => openProposalsChanging({ repo: REPO, prefix: "feat/face-lane-status-", path: progressPath });
+  // BOTH FILES the branch rewrites, so "one open proposal" covers the one the whole company shares: two lanes' status
+  // branches merged in order conflicted in PORTFOLIO.md, because their rows are adjacent lines -- and the plan promises
+  // a green merge (PR 5b round-2 shell attack). The board is a company organ; its proposals are one queue.
+  const openOf = async () => {
+    const seen = new Set();
+    for (const path of [progressPath, PORTFOLIO]) for (const b of await openProposalsChanging({ repo: REPO, prefix: "feat/face-lane-status-", path })) seen.add(b);
+    return [...seen].sort();
+  };
   const open = await openOf();
-  if (open.length) die(2, `a proposal of ${a.lane}'s status is already open (${open.join(", ")}) -- merge or delete it first`);
+  if (open.length) die(2, `a status proposal is already open (${open.join(", ")}), and it holds the board this one would rewrite -- merge or delete it first`);
   const files = [{ path: progressPath, content: h.text }, { path: PORTFOLIO, content: board }];
   const allow = files.map((f) => f.path);
   const checked = await checkProposal({ repo: REPO, branch, paths: allow, allow, base });
@@ -205,11 +243,18 @@ async function main() {
   try { root = spineRoot(); } catch (e) { die(2, `the spine cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
   if (!existsSync(join(root, "events"))) die(2, "the spine has no events folder -- point ARC_SPINE_ROOT at a spine; nothing was written");
   const spineEnv = { ...process.env, ARC_SPINE_ROOT: root };
+  // The spine says what is open as the OWNER sees it: an undecided request for this lane is the question they are
+  // holding, whatever its branch now looks like (a deleted branch left the idem as the only guard, and main moving made
+  // that a second question -- PR 5b round-2 logic attack).
   const requested = async () => {
-    const read = await query(root, { kind: "approval.requested", engine: "scan" });
+    const read = await query(root, { engine: "scan" });
     if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) die(2, "the spine has a day it cannot read or a torn line, so an earlier request cannot be ruled out -- nothing was written");
-    const already = read.events.map((r) => r.event).find((e) => e && e.idem === idem);
+    const evs = read.events.map((r) => r.event);
+    const already = evs.find((e) => e && e.idem === idem);
     if (already) die(2, `this change of ${a.lane} is already requested on the spine (${already.id}) -- decide that one; nothing was written`);
+    const decided = new Set(evs.filter((e) => e && e.kind === "decision.recorded" && e.payload && typeof e.payload.decides === "string").map((e) => e.payload.decides));
+    const open = evs.find((e) => e && e.kind === "approval.requested" && e.payload && e.payload.gate === "lane-status" && e.payload.lane === a.lane && !decided.has(e.id));
+    if (open) die(2, `a status of ${a.lane} is already in your inbox undecided (${open.id}) -- decide that one; nothing was written`);
   };
   await requested();
   const refused = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags });
@@ -234,9 +279,13 @@ async function main() {
   if (stale) die(2, stale);
   // ONE WRITER AT A TIME, the open check again inside: two applies of two statuses, checked then written side by side,
   // both passed and wrote two branches and two requests for one lane (PR 5b round-1 shell attack).
-  const held = await withExclusiveLock(join(root, "locks"), "lane-status.lock", async () => {
+  // The lock lives with the BRANCHES it protects, in the shared git directory: one under the caller's spine root let two
+  // applies with two spine roots both write (PR 5b round-2 shell attack).
+  let locks;
+  try { locks = await proposalLocks({ repo: REPO }); } catch (e) { die(2, `the lock directory cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+  const held = await withExclusiveLock(locks, "lane-status.lock", async () => {
     const again = await openOf();
-    if (again.length) die(2, `a proposal of ${a.lane}'s status was opened while this one was planned (${again.join(", ")}) -- nothing was written`);
+    if (again.length) die(2, `a status proposal was opened while this one was planned (${again.join(", ")}) -- nothing was written`);
     await requested();
     const w = await writeProposal({ repo: REPO, branch, files, allow, base, message,
       beforeRef: () => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) die(2, `the spine would refuse the request, so no branch was written: ${no}`); } });

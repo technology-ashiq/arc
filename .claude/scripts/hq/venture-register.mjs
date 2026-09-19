@@ -23,8 +23,8 @@ import { createHash } from "node:crypto";
 import { realpathSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { baseText, checkProposal, mainDirNames, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "../core/plan-expect.mjs";
+import { baseText, checkProposal, mainDirNames, openProposalsChanging, planProposal, proposalBranch, proposalLocks, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLock } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 import { deriveFromContract } from "../core/face-sections.mjs";
 import { parseVentures, MAX_CRITERION_VALUE } from "./lib/ledger/ventures.mjs";
@@ -209,6 +209,9 @@ async function main() {
   try { copyValue = JSON.parse(copy.text); } catch { die(2, `${ROOM_COPY} on main is not JSON`); }
   const listed = await mainDirNames({ repo: REPO, dir: "products" });
   if (listed.base !== base) die(2, "main moved while its files were read -- run it again");
+  // EVERY directory the generator reads (the concept-define twin, PR 5b round 2): a name skipped here drifts invisibly.
+  const odd = listed.names.filter((n) => !/^[a-z][a-z0-9-]{0,40}$/.test(n));
+  if (odd.length) die(2, `products/ on main holds ${odd.join(", ")}, which the generator reads and this tool does not -- rename or remove it first`);
   const manifests = {};
   for (const name of listed.names.filter((n) => /^[a-z][a-z0-9-]{0,40}$/.test(n))) {
     const r = await baseText({ repo: REPO, path: `products/${name}/manifest.json` });
@@ -229,6 +232,15 @@ async function main() {
     ...(registry.text === derived.registryText ? [] : [{ path: REGISTRY, content: derived.registryText }]),
   ];
   const allow = files.map((f) => f.path);
+  // ONE OPEN REGISTRATION at a time (the company-ring twin, PR 5b round 2): two branches each append to ventures.yaml
+  // and each add a passport row, so merging both conflicts, and the second's criteria digest no longer matches the file.
+  const openOf = async () => {
+    const seen = new Set();
+    for (const path of [VENTURES, PORTFOLIO, CONTRACT]) for (const b of await openProposalsChanging({ repo: REPO, prefix: "feat/face-ventures-register-", path })) seen.add(b);
+    return [...seen].sort();
+  };
+  const open = await openOf();
+  if (open.length) die(2, `a registration is already open (${open.join(", ")}), and it holds the files this one would change -- merge or delete it first`);
   const checked = await checkProposal({ repo: REPO, branch, paths: allow, allow, base });
   if (checked.base !== base) die(2, "main moved while the venture was registered -- run it again");
 
@@ -273,17 +285,25 @@ async function main() {
   if (a.expect === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, read the diff, then run it again with the --expect it prints");
   const stale = staleReason(a.expect, planned);
   if (stale) die(2, stale);
-  const w = await writeProposal({ repo: REPO, branch, files, allow, base, message,
-    beforeRef: () => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) die(2, `the spine would refuse the criteria request, so no branch was written: ${no}`); } });
-  written = true;
-  say(`venture-register: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}`);
-  // Three outcomes, never two: an unknown one was read as "not raised" (PR 3b round-4 attacks). The welded idem makes a
-  // second raise of the same digest a duplicate the emitter refuses, never a second question.
-  const got = emitReceipt(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags, timeoutMs: 60_000 });
-  if (got.state === "refused") die(1, `the branch ${branch} IS written, and its criteria request was not raised -- ${got.why}`);
-  if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its criteria request landed is unknown -- ${got.why}. Look in your inbox before applying again`);
-  if (!got.id) die(1, `the branch ${branch} IS written, and its criteria request landed without its id -- ${got.why}`);
-  say(`receipt: approval.requested ${got.id}`);
+  // ONE WRITER AT A TIME, with the lock beside the BRANCHES it protects (the company-ring twin, PR 5b round 2).
+  let locks;
+  try { locks = await proposalLocks({ repo: REPO }); } catch (e) { die(2, `the lock directory cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+  const held = await withExclusiveLock(locks, "ventures-register.lock", async () => {
+    const again = await openOf();
+    if (again.length) die(2, `a registration was opened while this one was planned (${again.join(", ")}) -- nothing was written`);
+    const w = await writeProposal({ repo: REPO, branch, files, allow, base, message,
+      beforeRef: () => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) die(2, `the spine would refuse the criteria request, so no branch was written: ${no}`); } });
+    written = true;
+    say(`venture-register: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}`);
+    // Three outcomes, never two: an unknown one was read as "not raised" (PR 3b round-4 attacks). The welded idem makes a
+    // second raise of the same digest a duplicate the emitter refuses, never a second question.
+    const got = emitReceipt(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags, timeoutMs: 60_000 });
+    if (got.state === "refused") die(1, `the branch ${branch} IS written, and its criteria request was not raised -- ${got.why}`);
+    if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its criteria request landed is unknown -- ${got.why}. Look in your inbox before applying again`);
+    if (!got.id) die(1, `the branch ${branch} IS written, and its criteria request landed without its id -- ${got.why}`);
+    say(`receipt: approval.requested ${got.id}`);
+  });
+  if (held.busy) die(2, "another registration is being written right now -- nothing was written; plan again when it is done");
 }
 
 function isMainModule() {

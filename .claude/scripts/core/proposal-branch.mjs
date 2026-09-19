@@ -420,21 +420,48 @@ export function openProposalsChanging({ repo, prefix, path }) {
   checkFiles([{ path, content: "" }], [path]);
   return withHooks(repo, async (hooks) => {
     const base = await mainCommit(repo, hooks);
-    const blob = async (commit) => {
-      const r = await git(repo, ["rev-parse", "--verify", "--quiet", `${commit}:${path}`], { hooks, ok: [0, 1] });
+    const blob = async (commit, p = path) => {
+      const r = await git(repo, ["rev-parse", "--verify", "--quiet", `${commit}:${p}`], { hooks, ok: [0, 1] });
       return r.status === 0 ? r.out.trim() : "";
     };
     const onMain = await blob(base);
     /** @type {Set<string>} */
     const out = new Set();
     for (const { ref, shown } of await proposalRefs(repo, prefix, hooks)) {
+      // The path WITHOUT case, as the twin above matches it: a branch holding "Initiatives/face/PROGRESS.md" was
+      // invisible to an exact rev-parse, and a second proposal planned for the same lane (PR 5b round-2 shell attack).
+      const names = (await git(repo, ["ls-tree", "-r", "--name-only", "-z", ref], { hooks })).out.split("\u0000");
+      const mineName = names.find((n) => n.toLowerCase() === path.toLowerCase());
       // No common history with main is not "unchanged": it is counted open, never passed over.
       const mb = await git(repo, ["merge-base", base, ref], { hooks, ok: [0, 1] });
-      const fork = mb.status === 0 ? await blob(mb.out.trim()) : null;
-      const mine = await blob(ref);
-      if (mine !== fork && mine !== onMain) out.add(shown);
+      const fork = mb.status === 0 ? await blob(mb.out.trim(), mineName === undefined ? path : mineName) : null;
+      const mine = mineName === undefined ? "" : await blob(ref, mineName);
+      if (mine === fork || mine === onMain) continue;
+      // MERGED IS A QUESTION ABOUT THE PATCH, not about the bytes: arc SQUASH-merges, so a merged proposal is no
+      // ancestor of main and its blob differs again the moment anything else changes the same file -- which counted
+      // every merged definition open again, one merge later, and would have bricked the verb (PR 5b round-2 logic
+      // attack). `git cherry` asks by patch-id: a branch whose every commit is already upstream is merged, however.
+      const cherry = await git(repo, ["cherry", base, ref], { hooks, ok: [0, 1] });
+      const commits = cherry.out.split(/\r?\n/).filter(Boolean);
+      if (commits.length && commits.every((l) => l.startsWith("-"))) continue;
+      out.add(shown);
     }
     return [...out].sort();
+  });
+}
+
+/**
+ * Where a lock that protects THIS repository's branches belongs: inside the shared git directory, never in the spine.
+ * A lock under a caller-chosen ARC_SPINE_ROOT let two applies with two spine roots write two branches for one lane --
+ * the mutex was not over the thing it protects (PR 5b round-2 shell attack). The common git dir is one directory for a
+ * clone AND every worktree of it, which is the set that shares refs.
+ * @param {{ repo: string }} o @returns {Promise<string>}
+ */
+export function proposalLocks({ repo }) {
+  return withHooks(repo, async (hooks) => {
+    const out = (await git(repo, ["rev-parse", "--path-format=absolute", "--git-common-dir"], { hooks })).out.trim().split(/\r?\n/)[0] || "";
+    if (out === "") throw new ProposalError("GIT_FAILED", "git did not say where this repository's shared git directory is");
+    return join(out, "arc-proposal-locks");
   });
 }
 

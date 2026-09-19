@@ -19,7 +19,7 @@ import { createHash } from "node:crypto";
 import { existsSync, realpathSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { baseText, checkProposal, mainDirNames, openProposalsChanging, planProposal, proposalBranch, writeProposal, ProposalError } from "./proposal-branch.mjs";
+import { baseText, checkProposal, mainDirNames, openProposalsChanging, planProposal, proposalBranch, proposalLocks, writeProposal, ProposalError } from "./proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLock } from "./plan-expect.mjs";
 import { isOneLine } from "./one-line.mjs";
 import { deriveFromContract } from "./face-sections.mjs";
@@ -71,7 +71,8 @@ function parseArgs(argv) {
     die(2, "--term is up to 60 ASCII letters, digits, spaces and . / ( ) ? % : & + - (no | or backtick), and never a path's shape");
   if (scrub(a.term, REPO) !== a.term) die(2, "--term names a machine path or an address, and the contract is published -- say it without one");
   if (!/^[a-z][a-z0-9-]{0,40}$/.test(a.room)) die(2, `--room ${JSON.stringify(a.room)} is a room id (lowercase kebab)`);
-  if (!STATION_RE.test(a.station) || a.station !== a.station.trim()) die(2, "--station is a stop on the room's line: letters, digits, spaces, . and -, up to 40 characters");
+  // The station is published beside the term, so it is held to the term's path rule too ("a..b" passed: PR 5b round-2).
+  if (!STATION_RE.test(a.station) || a.station !== a.station.trim() || PATH_SHAPE.test(a.station)) die(2, "--station is a stop on the room's line: letters, digits, spaces, . and -, up to 40 characters, and never a path's shape");
   // The why goes into the commit message, which the plan shows and a merge publishes: plain words.
   if (a.why && (!WORDS.test(a.why) || a.why !== a.why.trim() || Buffer.byteLength(a.why) > 300 || scrub(a.why, REPO) !== a.why))
     die(2, "--why is plain words (letters, digits, spaces and , . ( ) ' # % + & -), up to 300 bytes");
@@ -130,6 +131,10 @@ async function main() {
   try { copyValue = JSON.parse(copy.text); } catch { die(2, `${ROOM_COPY} on main is not JSON`); }
   const listed = await mainDirNames({ repo: REPO, dir: "products" });
   if (listed.base !== base) die(2, "main moved while its files were read -- run it again");
+  // EVERY directory the generator reads: it iterates products/ unfiltered, so a name this tool skipped would drift
+  // invisibly and merge stale (PR 5b round-2 logic attack).
+  const odd = listed.names.filter((n) => !/^[a-z][a-z0-9-]{0,40}$/.test(n));
+  if (odd.length) die(2, `products/ on main holds ${odd.join(", ")}, which the generator reads and this tool does not -- rename or remove it first`);
   const manifests = {};
   for (const name of listed.names.filter((n) => /^[a-z][a-z0-9-]{0,40}$/.test(n))) {
     const r = await baseText({ repo: REPO, path: `products/${name}/manifest.json` });
@@ -169,11 +174,17 @@ async function main() {
   try { root = spineRoot(); } catch (e) { die(2, `the spine cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
   if (!existsSync(join(root, "events"))) die(2, "the spine has no events folder -- point ARC_SPINE_ROOT at a spine; nothing was written");
   const spineEnv = { ...process.env, ARC_SPINE_ROOT: root };
+  // The spine says what is open as the OWNER sees it: one undecided definition at a time, whatever its branch now looks
+  // like (the lane-status twin, PR 5b round-2 logic attack).
   const requested = async () => {
-    const read = await query(root, { kind: "approval.requested", engine: "scan" });
+    const read = await query(root, { engine: "scan" });
     if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) die(2, "the spine has a day it cannot read or a torn line, so an earlier request cannot be ruled out -- nothing was written");
-    const already = read.events.map((r) => r.event).find((e) => e && e.idem === idem);
+    const evs = read.events.map((r) => r.event);
+    const already = evs.find((e) => e && e.idem === idem);
     if (already) die(2, `this definition is already requested on the spine (${already.id}) -- decide that one; nothing was written`);
+    const decided = new Set(evs.filter((e) => e && e.kind === "decision.recorded" && e.payload && typeof e.payload.decides === "string").map((e) => e.payload.decides));
+    const open = evs.find((e) => e && e.kind === "approval.requested" && e.payload && e.payload.gate === "concept-define" && !decided.has(e.id));
+    if (open) die(2, `a definition is already in your inbox undecided (${open.id}: ${open.payload.term}) -- decide that one; nothing was written`);
   };
   await requested();
   const refused = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags });
@@ -197,7 +208,10 @@ async function main() {
   const stale = staleReason(a.expect, planned);
   if (stale) die(2, stale);
   // ONE WRITER AT A TIME, the open check again inside: two definitions checked then written side by side both passed.
-  const held = await withExclusiveLock(join(root, "locks"), "concept-define.lock", async () => {
+  // The lock lives with the BRANCHES it protects, in the shared git directory (the lane-status twin, PR 5b round 2).
+  let locks;
+  try { locks = await proposalLocks({ repo: REPO }); } catch (e) { die(2, `the lock directory cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+  const held = await withExclusiveLock(locks, "concept-define.lock", async () => {
     const again = await openOf();
     if (again.length) die(2, `a definition was opened while this one was planned (${again.join(", ")}) -- nothing was written`);
     await requested();

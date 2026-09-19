@@ -42,3 +42,10 @@ A fresh pair found 2 HIGH and 12 more. The decisions that moved: a blocker is ke
 first cut wiped the blockers growth and scheduler carry while LIVE); every published value -- the blocker, the term,
 the why -- is allow-listed, never only scrubbed; "one open proposal" is judged per lane by what a branch changed and
 main does not hold yet, under a lock; and a header the two readers would read differently is refused rather than edited.
+
+## Amendment, PR 5b round 2 (same day, the last round)
+
+Two more HIGH. What changed in the decisions: "one open proposal" covers every file the branch rewrites, so status
+proposals are ONE queue for the company (the board is a company organ, ADR-0053), not one per lane; "merged" is a
+patch-id question, because arc squash-merges; and the write lock lives in the shared git directory beside the branches
+it protects, never under a caller-chosen spine root. The register takes the same open check and lock.
