@@ -6,16 +6,22 @@
 # committed BEFORE this code was written. That ordering is the whole point: expected values taken
 # from the code under test prove only that the code agrees with itself.
 #
-# The two derivations DISAGREED on 6 of 8 cases by up to 24 ULP, writing the same formula two
-# algebraically identical ways -- so acceptance is two assertions, not one:
+# They also AGREED on a mistake: both paired Newcombe's terms for p1 - p2 while the test is on
+# d = p2 - p1, and the code followed them, so every bound with unequal arms was too high. Two
+# derivations sharing a misreading prove nothing, so since 2026-09-19 the independent values come
+# from tests/fixtures/evolve/newcombe-exact.mjs (exact fixed-point arithmetic, anchored on
+# Newcombe's published worked example), and a test below holds the method to that example.
+#
+# The pinned tree and the exact values differ by up to 22 ULP on well-conditioned cases (228 on
+# D), writing the same formula in floating point -- so acceptance is two assertions, not one:
 #   bit-for-bit against the pinned tree   -> catches a refactor silently changing the math
 #   agreeing with the independent one     -> catches the pinned tree being WRONG, not different
 #
 # The agreement band is ABSOLUTE first (1e-15), because the decision-relevant question is
 # whether the bound crosses effect_floor -- not how many ULP it sits from another
 # implementation. ULP is a tighter secondary check, relaxed per-case where a near-0 or
-# near-1 cancellation makes the measure misleading: case D disagrees by 512 ULP and by
-# 2.2e-19, which is the same number to nineteen decimal places.
+# near-1 cancellation makes the measure misleading: case D sits 228 ULP and 9.9e-17 from the
+# exact value, which is the same number to sixteen decimal places.
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
@@ -65,7 +71,39 @@ VIMPORT='const {newcombeWilsonDifference, decide, configHash, metricHash, zFor} 
   [[ "$output" == *"INDEPENDENT OK"* ]]
 }
 
-@test "Wilson bounds stay inside 0..1 after clamping, and UPPER is deliberately NOT clamped" {
+@test "the method reproduces Newcombe (1998)'s published worked example, and the old term pairing does not" {
+  run _node "$VIMPORT
+    const { newcombeWilsonDifferenceAtZ, wilson } = await import('./.claude/scripts/evolve/verdict.mjs');
+    // Newcombe 1998, Statistics in Medicine 17:873-890, Table II (a): 56/70 vs 48/80 at the two-sided 95% z,
+    // theta = p1 - p2 = 0.2, interval 0.0524 to 0.3339. Here d = p2 - p1, so the groups go in swapped.
+    const z = 1.959963984540054;
+    const r = newcombeWilsonDifferenceAtZ(48, 80, 56, 70, z);
+    const bad = [];
+    if (r.lower.toFixed(4) !== '0.0524' || r.upper.toFixed(4) !== '0.3339') bad.push('published example: got ' + r.lower + ' .. ' + r.upper);
+    // MUTANT CONTROL: the pairing the first version shipped. It must MISS the published value, or this
+    // check could not have caught it.
+    const a1 = wilson(48, 80, z), a2 = wilson(56, 70, z);
+    const oldLower = (a2.p - a1.p) - Math.sqrt((a1.p - a1.l) ** 2 + (a2.u - a2.p) ** 2);
+    if (oldLower.toFixed(4) === '0.0524') bad.push('the mutant pairing reproduces the example too - the check cannot tell them apart');
+    // The case the attack found: 2/20 vs 6/20 at the pinned alpha. The old pairing called a verdict here.
+    const x = newcombeWilsonDifference(2, 20, 6, 20, 0.05);
+    if (!(x.lower < 0)) bad.push('2/20 vs 6/20 has a positive bound ' + x.lower);
+    // The exact derivation refuses to load unless it reproduces the same published example.
+    const E = await import('./tests/fixtures/evolve/newcombe-exact.mjs');
+    for (const c of V.cases) {
+      const e = E.newcombeExact(c.x1, c.n1, c.x2, c.n2, V.z);
+      if (!Object.is(e.lower, c.independent_lower)) bad.push(c.id + ' independent_lower is not what the exact derivation gives');
+      if (!Object.is(e.upper, c.independent_upper)) bad.push(c.id + ' independent_upper is not what the exact derivation gives');
+      const pinned = newcombeWilsonDifference(c.x1, c.n1, c.x2, c.n2, V.alpha);
+      if (Math.abs(pinned.upper - e.upper) > V.assertions.independent_absolute_tolerance) bad.push(c.id + ' upper is off the exact value');
+    }
+    if (bad.length) { console.log(bad.join('\n')); process.exit(1); }
+    console.log('PUBLISHED OK ' + V.cases.length);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"PUBLISHED OK 8"* ]]
+}
+
+@test "Wilson bounds stay inside 0..1 after clamping, and the difference stays in -1..1 with no clamp at all" {
   run _node "$VIMPORT
     const bad = [];
     for (const c of V.cases) {
@@ -74,8 +112,17 @@ VIMPORT='const {newcombeWilsonDifference, decide, configHash, metricHash, zFor} 
         if (!(l >= 0 && l <= 1 && u >= 0 && u <= 1)) bad.push(c.id + ' arm' + t + ' bound outside [0,1]');
       if (!(r.lower <= r.d && r.d <= r.upper)) bad.push(c.id + ' containment lower<=d<=upper failed');
     }
-    // Cases E and G legitimately exceed 1 on the UPPER side; clamping would change the method.
-    if (!(newcombeWilsonDifference(1,10,9,10,0.05).upper > 1)) bad.push('case E upper was clamped');
+    // The method keeps the difference in -1..1 by itself (U <= u2 - l1, L >= l2 - u1). The first
+    // term pairing did not: its upper reached 2.03 on case G, and that was mistaken for a property
+    // of the method rather than the sign of a wrong formula.
+    for (const c of V.cases) {
+      const r = newcombeWilsonDifference(c.x1, c.n1, c.x2, c.n2, V.alpha);
+      if (!(r.lower >= -1 && r.upper <= 1)) bad.push(c.id + ' difference outside -1..1: ' + r.lower + ' .. ' + r.upper);
+    }
+    for (const [x1, n1, x2, n2] of [[0,1,1,1],[1,1,0,1],[0,5,5,5],[5,5,0,5]]) {
+      const r = newcombeWilsonDifference(x1, n1, x2, n2, 0.05);
+      if (!(r.lower >= -1 && r.upper <= 1)) bad.push('extreme ' + [x1,n1,x2,n2].join('/') + ' outside -1..1');
+    }
     if (bad.length) { console.log(bad.join('\n')); process.exit(1); }
     console.log('INVARIANTS OK');"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -158,10 +205,10 @@ VIMPORT='const {newcombeWilsonDifference, decide, configHash, metricHash, zFor} 
 
 @test "the config hash changes when ANY hashed input changes, and is stable otherwise" {
   run _node "$VIMPORT
-    const base = {alpha:0.05, effectFloor:0, floor:1800, mde:0, arms:['+champion','+challenger-a'], split:[50,50], guardrails:[{name:'tickets'}]};
+    const base = {alpha:0.05, effectFloor:0, floor:1800, mde:0, arms:['+champion','+challenger-a'], split:[50,50], guardrails:[{name:'tickets'}], metric:'signup_conversion', direction:'higher-is-better'};
     const h = configHash(base);
     if (h !== configHash({...base})) { console.log('the hash is not stable'); process.exit(1); }
-    const variants = [{effectFloor:0.01},{floor:1801},{mde:0.001},{arms:['+challenger-a','+champion']},{split:[60,40]},{guardrails:[{name:'other'}]}];
+    const variants = [{effectFloor:0.01},{floor:1801},{mde:0.001},{arms:['+challenger-a','+champion']},{split:[60,40]},{guardrails:[{name:'other'}]},{metric:'other_metric'},{direction:'lower-is-better'}];
     for (const v of variants) if (configHash({...base, ...v}) === h) { console.log('the hash did not change for ' + JSON.stringify(v)); process.exit(1); }
     console.log('CONFIG HASH OK');"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
