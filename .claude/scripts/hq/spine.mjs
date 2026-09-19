@@ -144,8 +144,10 @@ export function applyFilters(events, { kind, since, venture, date, limit } = {})
 }
 
 export async function query(root, filters = {}) {
-  const { events, torn, engine } = await readAll(root, filters.engine);
-  return { events: applyFilters(events, filters), torn, engine };
+  // unreadable is carried through: a caller asking "is it already on the spine?" must know a day it could not read --
+  // pick raised a second pick past an unreadable day file (PR 4 shell attack).
+  const { events, torn, unreadable, engine } = await readAll(root, filters.engine);
+  return { events: applyFilters(events, filters), torn, unreadable: unreadable || [], engine };
 }
 
 /**

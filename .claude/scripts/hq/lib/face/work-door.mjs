@@ -63,6 +63,7 @@ export const WORK_STATUS = Object.freeze({
   PLAN_OTHER_OP: 409, PLAN_EXPIRED: 410, CONFIRM_REQUIRED: 428,
   SIM_SPEND: 403, SIM_EFFECT: 403,
   NO_EMIT_PLAN: 502, EMIT_PLAN_MISMATCH: 502, NO_EXPECT: 502, TOOL_MISSING: 503,
+  PLAN_HIDDEN: 422,
 });
 
 /**
@@ -222,6 +223,18 @@ export function createWorkDoor(ctx, opts = {}) {
       : op.expect === true
         ? (() => { const cmd = op.apply(values); return { ...cmd, args: [...cmd.args, "--expect", expectFrom(op, res.stdout)] }; })()
         : op.apply(values);
+    // THE OWNER READS WHAT IS APPLIED. The page shows the plan through the scrub, which withholds an absolute path and
+    // everything after it; a slice title or an agent description holding "/tmp/..." hid the digest -- and the rest of
+    // the diff -- while the apply stood ready (PR 4 shell attack). A bound plan whose last line the page cannot show is
+    // not held.
+    if (op.expect === true || op.apply === "emit-plan") {
+      const rawLast = String(res.stdout).split(/\r?\n/).filter((l) => l.trim() !== "").pop() || "";
+      const shownLast = String(scrub(res.stdout, ctx.repo)).split(/\r?\n/).filter((l) => l.trim() !== "").pop() || "";
+      if (shownLast !== rawLast) {
+        journal({ op: op.id, phase: "plan", refused: true, hidden: true });
+        throw new OpError("PLAN_HIDDEN", `${op.id}: the plan's text holds a path the page cannot show, so what the apply is bound to would be hidden from you -- not held, nothing ran; remove the path from the input and plan again`);
+      }
+    }
     prune();
     const planId = randomBytes(18).toString("base64url");
     const expiresAt = now() + PLAN_TTL_MS;

@@ -36,7 +36,7 @@
 //
 // Exit: 0 printed | 2 bad arguments.
 
-import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { ONE_LINE_SRC, ONE_LINE_BAD_SRC } from "../core/one-line.mjs";
@@ -130,7 +130,6 @@ function routeDrivers() {
   try { return readdirSync(join(HERE, "..", "engine", "drivers")).filter((f) => f.endsWith(".sh")).map((f) => f.slice(0, -3)).sort(); }
   catch { return []; }
 }
-const ROUTER = routerFacts();
 /** The action kinds hq.policy.yaml declares -- a promotion names one of them, or it names nothing. */
 function policyKinds() {
   try {
@@ -138,6 +137,9 @@ function policyKinds() {
     return pol && pol.kinds ? Object.keys(pol.kinds).filter((k) => /^(session|process):[a-z][a-z0-9-]{0,63}$/.test(k)).sort() : [];
   } catch { return []; }
 }
+// THE SELECTS ARE READ WHEN ASKED. Computed once at import, a new explore -- or hire, room or product -- could not be
+// chosen until the door restarted (PR 4 logic attack): each repo-derived select below is a getter, evaluated whenever the
+// registry is listed or an input is validated.
 /**
  * The explores a pick can be recorded for: every one of its three variants built and no PICK.md yet (pick.mjs re-checks
  * all of it, and the spine for a pick already raised).
@@ -146,7 +148,8 @@ function pickableExplores() {
   const root = join(HERE, "..", "..", "..", "docs", "design", "explore");
   try {
     return readdirSync(root).filter((n) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(n)).filter((n) => {
-      const has = (p) => { try { readFileSync(join(root, n, ...p)); return true; } catch { return false; } };
+      // A stat, never a read: this runs whenever the ops are listed, and a FIFO or a huge file must not stall it.
+      const has = (p) => { try { return statSync(join(root, n, ...p)).isFile(); } catch { return false; } };
       return ["a", "b", "c"].every((v) => has([`variant-${v}`, "index.html"])) && !has(["PICK.md"]);
     }).sort();
   } catch { return []; }
@@ -274,7 +277,7 @@ export const OPS = Object.freeze([
     binding: "v0.7 `record pick` -> approval.requested (gate design-pick) raised by design/pick.mjs, bound to the three variants' bytes (ADR-1341 §5)",
     humanRun: false, spends: false, touchesFiles: false,
     fields: Object.freeze([
-      Object.freeze({ name: "explore", label: "Explore", placeholder: "", type: "select", options: Object.freeze(pickableExplores()), required: true }),
+      Object.freeze({ name: "explore", label: "Explore", placeholder: "", type: "select", get options() { return Object.freeze(pickableExplores()); }, required: true }),
       Object.freeze({ name: "pick", label: "Variant", placeholder: "", type: "select", options: Object.freeze(["a", "b", "c"]), required: true }),
       Object.freeze({ name: "why", label: "Why this one", placeholder: "one line -- what made it the one", type: "text", max: 400, pattern: ONE_LINE, required: true }),
     ]),
@@ -326,7 +329,7 @@ export const OPS = Object.freeze([
     retires: Object.freeze({ module: "executor", verb: "Terminate a hire" }),
     humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
-      Object.freeze({ name: "class", label: "Hire", placeholder: "", type: "select", options: Object.freeze(ROUTER.hires), required: true }),
+      Object.freeze({ name: "class", label: "Hire", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().hires); }, required: true }),
       WHY,
     ]),
     plan: (v) => ({ script: "engine/propose.mjs", args: ["retire", "--class", v.class, ...(v.why ? ["--why", v.why] : []), "--dry-run"] }),
@@ -347,9 +350,9 @@ export const OPS = Object.freeze([
       Object.freeze({ name: "name", label: "Name", placeholder: "diff-summarizer", type: "text", max: 42, pattern: "[a-z][a-z0-9-]{1,40}[a-z0-9]", required: true }),
       Object.freeze({ name: "description", label: "What it does", placeholder: "one line -- when to invoke it", type: "text", max: 300, pattern: ONE_LINE, required: true }),
       Object.freeze({ name: "tools", label: "Tools", placeholder: "Read, Grep", type: "text", max: 200, pattern: `(${AGENT_TOOLS.join("|")})(, ?(${AGENT_TOOLS.join("|")})){0,${AGENT_TOOLS.length - 1}}`, required: true }),
-      Object.freeze({ name: "tier", label: "Tier (ADR-0069)", placeholder: "", type: "select", options: Object.freeze(ROUTER.tiers), required: true }),
-      Object.freeze({ name: "room", label: "Room", placeholder: "", type: "select", options: Object.freeze(agentRooms()), required: true }),
-      Object.freeze({ name: "product", label: "Product", placeholder: "", type: "select", options: Object.freeze(agentProducts()), required: true }),
+      Object.freeze({ name: "tier", label: "Tier (ADR-0069)", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().tiers); }, required: true }),
+      Object.freeze({ name: "room", label: "Room", placeholder: "", type: "select", get options() { return Object.freeze(agentRooms()); }, required: true }),
+      Object.freeze({ name: "product", label: "Product", placeholder: "", type: "select", get options() { return Object.freeze(agentProducts()); }, required: true }),
       WHY,
     ]),
     plan: (v) => ({ script: "engine/agent-scaffold.mjs", args: ["--name", v.name, "--description", v.description, "--tools", v.tools, "--tier", v.tier, "--room", v.room, "--product", v.product, ...(v.why ? ["--why", v.why] : []), "--dry-run"] }),
@@ -479,7 +482,7 @@ export const OPS = Object.freeze([
     binding: "v0.7 `driver switch` -> approval.requested (gate router-merge) naming the proposal branch engine/propose.mjs driver wrote (ADR-1340)",
     humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
-      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", options: Object.freeze(ROUTER.classes), required: true }),
+      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().classes); }, required: true }),
       Object.freeze({ name: "to", label: "Driver", placeholder: "", type: "select", options: Object.freeze(routeDrivers()), required: true }),
       WHY,
     ]),
@@ -498,8 +501,8 @@ export const OPS = Object.freeze([
     retires: Object.freeze({ module: "model-policy", verb: "Propose a tier change" }),
     humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
-      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", options: Object.freeze(ROUTER.classes), required: true }),
-      Object.freeze({ name: "to", label: "Tier", placeholder: "", type: "select", options: Object.freeze(ROUTER.tiers), required: true }),
+      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().classes); }, required: true }),
+      Object.freeze({ name: "to", label: "Tier", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().tiers); }, required: true }),
       WHY,
     ]),
     plan: (v) => ({ script: "engine/propose.mjs", args: [...proposeArgs("tier", v), "--dry-run"] }),
