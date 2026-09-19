@@ -11,10 +11,10 @@
 // PLAN_STALE and writes nothing. A hand-run works the same way: the plan prints the flag to add.
 
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 export const EXPECT_RE = /^[0-9a-f]{64}$/;
 
@@ -30,19 +30,46 @@ export const EXPECT_RE = /^[0-9a-f]{64}$/;
 export function spineRefusal(arcEvent, kind, payload, o = {}) {
   // Through a FILE, as bench's real emit does: a payload on the command line past the OS's argv ceiling failed to spawn
   // and was reported as "the emitter exited null" -- a refusal under the wrong cause (PR 3b round-2 shell attack).
+  const r = emitThroughFile(arcEvent, kind, payload, { ...o, dryRun: true });
+  if (r.startFailed) return `the spine could not be asked: ${r.why}`;
+  return r.status === 0 ? null : r.why;
+}
+
+/**
+ * One emit of `kind` with `payload` read from a temp FILE -- a payload on the command line past Windows' 32,767-char
+ * ceiling (escaped quotes count) failed to spawn after the seal and the branch were written (PR 3b round-3 shell attack)
+ * -- and the temp path RESOLVED, since the emitter runs in `cwd` and a relative TMP named a file it could not find (same
+ * attack). Returns the id when the emitter printed one as its last line.
+ * @param {string} arcEvent @param {string} kind @param {unknown} payload
+ * @param {{ cwd?: string, env?: Record<string, string | undefined>, flags?: string[], dryRun?: boolean }} [o]
+ * @returns {{ status: number | null, id: string, why: string, startFailed: boolean }}
+ */
+function emitThroughFile(arcEvent, kind, payload, o = {}) {
   let dir;
-  try { dir = mkdtempSync(join(tmpdir(), "arc-spine-judge-")); }
-  catch (e) { return `the spine could not be asked: no temp directory (${e && e.code ? e.code : "error"})`; }
+  try { dir = mkdtempSync(join(resolve(tmpdir()), "arc-spine-judge-")); }
+  catch (e) { return { status: null, id: "", why: `no temp directory (${e && e.code ? e.code : "error"})`, startFailed: true }; }
   try {
     const file = join(dir, "payload.json");
     writeFileSync(file, JSON.stringify(payload), "utf8");
-    const r = spawnSync(process.execPath, [arcEvent, "emit", kind, "--payload-file", file, ...(o.flags || []), "--strict", "--dry-run"],
+    const r = spawnSync(process.execPath, [arcEvent, "emit", kind, "--payload-file", file, ...(o.flags || []), "--strict", ...(o.dryRun ? ["--dry-run"] : [])],
       { cwd: o.cwd, env: o.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    if (r.error) return `the spine could not be asked: the emitter did not start (${r.error.code || r.error.message})`;
-    return r.status === 0 ? null : (String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`);
+    if (r.error) return { status: null, id: "", why: `the emitter did not start (${r.error.code || r.error.message})`, startFailed: true };
+    const id = String(r.stdout || "").trim().split(/\r?\n/).pop() || "";
+    return { status: r.status, id, why: String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`, startFailed: false };
   } finally {
     try { rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter */ }
   }
+}
+
+/**
+ * The REAL emit, through the same file path the judgment used: `{ id }` when a receipt id came back, else `{ id: null,
+ * why }`. For the tools that raise an approval after writing a branch or a seal.
+ * @param {string} arcEvent @param {string} kind @param {unknown} payload @param {{ cwd?: string, env?: Record<string, string | undefined>, flags?: string[] }} [o]
+ */
+export function emitReceipt(arcEvent, kind, payload, o = {}) {
+  const r = emitThroughFile(arcEvent, kind, payload, o);
+  if (r.status === 0 && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(r.id)) return { id: r.id, why: null };
+  return { id: null, why: r.startFailed ? r.why : r.status === 0 ? `the emitter printed no receipt id` : r.why };
 }
 
 /** JSON with every object's keys sorted, so a digest never depends on the order a payload was built in. */
@@ -87,14 +114,24 @@ export function staleReason(given, digest) {
 export async function withExclusiveLock(dir, name, fn, { staleMs = 120_000 } = {}) {
   mkdirSync(dir, { recursive: true });
   const lock = join(dir, name);
-  const take = () => { try { closeSync(openSync(lock, "wx")); return true; } catch (e) { if (e && e.code === "EEXIST") return false; throw e; } };
+  // A TOKEN in the file, and a release that removes only its own: a lock broken as stale while its holder lived was later
+  // deleted by that holder -- the defect spine-io.withLock documents (PR 3b round-3 shell attack). EPERM and EACCES are
+  // Windows' delete-pending, contention like EEXIST.
+  const token = `${process.pid}:${randomBytes(8).toString("hex")}`;
+  const take = () => {
+    let fd;
+    try { fd = openSync(lock, "wx"); }
+    catch (e) { if (e && (e.code === "EEXIST" || e.code === "EPERM" || e.code === "EACCES" || e.code === "EISDIR")) return false; throw e; }
+    try { writeSync(fd, token); } finally { closeSync(fd); }
+    return true;
+  };
   let ok = take();
   if (!ok) {
     let age = 0;
     try { age = Date.now() - statSync(lock).mtimeMs; } catch { /* released meanwhile */ }
-    if (age > staleMs) { try { unlinkSync(lock); } catch { /* another breaker */ } ok = take(); }
+    if (age > staleMs) { try { unlinkSync(lock); } catch { /* another breaker, or a directory */ } ok = take(); }
   }
   if (!ok) return { busy: true };
   try { return { busy: false, value: await fn() }; }
-  finally { try { unlinkSync(lock); } catch { /* released */ } }
+  finally { try { if (readFileSync(lock, "utf8") === token) unlinkSync(lock); } catch { /* released, or not ours */ } }
 }

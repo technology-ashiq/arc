@@ -32,7 +32,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { baseText, checkProposal, openProposalsHolding, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal, withExclusiveLock } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, withExclusiveLock, emitReceipt } from "../core/plan-expect.mjs";
 import { spineRoot } from "../hq/lib/spine-io.mjs";
 import { LABEL_POOL } from "../hq/lib/validate-absorb.mjs";
 
@@ -81,7 +81,9 @@ function sealReason(stderr, status) {
   const own = lines.find((l) => l.startsWith("judgement: "));
   if (own) return own.slice("judgement: ".length);
   const err = lines.find((l) => /^[A-Za-z]*Error\b|^E[A-Z]+\b/.test(l));
-  return err ? err.replace(/,? (open|mkdir|write) '[^']*'/, "") : `the seal exited ${status}`;
+  // From the syscall to the end of the line: an apostrophe in the path (O'Brien) stopped a quoted-path scrub short and
+  // served the rest of the path (PR 3b round-3 shell attack).
+  return err ? err.replace(/,? (open|mkdir|write|rename|unlink|stat|lstat|scandir|rmdir|copyfile)\b.*$/, "") : `the seal exited ${status}`;
 }
 
 /** Where judgement.mjs keeps a correlation's nonce: its own rule, resolved from the directory it runs in (REPO). */
@@ -172,10 +174,9 @@ async function main() {
           message: `absorb: the sealed commitment for ${payload.candidate}, correlation ${a["--correlation"]}\n\nThe labels are blind until the decision; judgement.mjs reveal writes the mapping afterwards.\nWritten by the face's work door (ADR-1340).` });
       } catch (e) { die(1, `sealed (correlation ${a["--correlation"]} is now used), and the branch was not written: ${e && e.code ? e.code : ""} ${e instanceof Error ? e.message : e} -- trial again with a new correlation`); }
       process.stdout.write(`trial: sealed ${payload.labels ? payload.labels.length : "?"} blind labels for ${payload.candidate}; the commitment is on ${branch} at ${w.commit.slice(0, 12)}\n`);
-      const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(payload), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-      const id = String(r.stdout || "").trim();
-      if (r.status !== 0 || !ULID_RE.test(id))
-        die(1, `sealed, and the branch ${branch} IS written, and the approval was not raised -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
+      // Through a payload FILE, as the spine was asked (PR 3b round-3 shell attack: a payload past the command line's ceiling failed after the effect).
+      const { id, why: emitWhy } = emitReceipt(ARC_EVENT, "approval.requested", payload, { cwd: REPO });
+      if (!id) die(1, `sealed, and the branch ${branch} IS written, and the approval was not raised -- ${emitWhy}`);
       process.stdout.write(`receipt: approval.requested ${id}\n`);
     } finally {
       // Litter, never the outcome: a cleanup that throws must not turn a sealed, written trial into a failure.

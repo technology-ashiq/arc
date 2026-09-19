@@ -24,7 +24,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { baseText, checkProposal, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -122,10 +122,9 @@ async function main() {
       beforeRef: (commit) => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval(commit), { cwd: REPO }); if (no) die(2, `the spine would refuse this approval with its real commit, so no branch was written: ${no}`); } });
     written = true;
     process.stdout.write(`pin: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}\n`);
-    const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(approval(w.commit)), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    const id = String(r.stdout || "").trim();
-    if (r.status !== 0 || !ULID_RE.test(id))
-      die(1, `the branch ${branch} IS written, and its approval was not raised -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
+    // Through a payload FILE, as the spine was asked (PR 3b round-3 shell attack: a payload past the command line's ceiling failed after the effect).
+    const { id, why: emitWhy } = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit), { cwd: REPO });
+    if (!id) die(1, `the branch ${branch} IS written, and its approval was not raised -- ${emitWhy}`);
     process.stdout.write(`receipt: approval.requested ${id}\n`);
   } finally {
     // Litter, never the outcome: a cleanup that throws must not turn a written proposal into a failure.

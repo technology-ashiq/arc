@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { routerFaults } from "./router-row.mjs";
 import { planProposal, proposalBranch, writeProposal, baseText, ProposalError } from "../core/proposal-branch.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -175,10 +175,9 @@ async function main() {
   written = true;
   process.stdout.write(`propose: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}\n`);
   process.stdout.write(w.diff.endsWith("\n") ? w.diff : w.diff + "\n");
-  const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(approval(w.commit)), "--strict"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  const id = String(r.stdout || "").trim();
-  if (r.status !== 0 || !ULID_RE.test(id))
-    die(1, `the branch ${branch} IS written, and its approval was not raised -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
+  // Through a payload FILE, as the spine was asked (PR 3b round-3 shell attack: a payload past the command line's ceiling failed after the effect).
+  const { id, why: emitWhy } = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit));
+  if (!id) die(1, `the branch ${branch} IS written, and its approval was not raised -- ${emitWhy}`);
   process.stdout.write(`receipt: approval.requested ${id}\n`);
 }
 

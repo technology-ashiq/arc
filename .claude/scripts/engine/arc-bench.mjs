@@ -434,7 +434,7 @@ export function repoStatus(root) {
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, mkdirSync, openSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
@@ -2627,8 +2627,11 @@ function main() {
     // EACH EVIDENCE FILE IS READ ONCE. The bytes feed the digest; the parsed objects feed the checks, the key and the
     // build (PR 3b round-2 logic attack: the files were read three times, and each read could see different bytes).
     const bytes = {};
-    try { for (const [who, dir] of [["cand", candDir], ["champ", champDir]]) for (const n of ["scorecard", "provenance"]) bytes[`${who}.${n}`] = readFileSync(join(dir, `${n}.json`)); }
-    catch (e) { return stopFrom(`${e && e.path && e.path.startsWith(champDir) ? `--champion ${shown(args.champion)}` : `--from ${shown(args.from)}`} cannot be read (${e && e.code ? e.code : "error"}) -- point it at a previous run's --out directory`); }
+    // The directory being read is named by the loop, never by the error: EISDIR carries no path, and the candidate was
+    // blamed for the champion's folder (PR 3b round-3 shell attack).
+    let reading = "--from";
+    try { for (const [who, dir] of [["cand", candDir], ["champ", champDir]]) for (const n of ["scorecard", "provenance"]) { reading = who === "cand" ? `--from ${shown(args.from)}` : `--champion ${shown(args.champion)}`; bytes[`${who}.${n}`] = readFileSync(join(dir, `${n}.json`)); } }
+    catch (e) { return stopFrom(`${reading} cannot be read (${e && e.code ? e.code : "error"}) -- point it at a previous run's --out directory`); }
     let report, champion;
     try { report = { scorecard: JSON.parse(bytes["cand.scorecard"].toString("utf8")), provenance: JSON.parse(bytes["cand.provenance"].toString("utf8")) }; }
     catch (e) { return stopFrom(`--from ${shown(args.from)} does not hold a readable scorecard and provenance: ${e.message}`); }
@@ -2715,7 +2718,17 @@ function main() {
     // fifteen minutes is a crashed apply's (this path runs nothing and spends nothing, so no live one takes that long).
     try { mkdirSync(store, { recursive: true }); } catch (e) { return stopFrom(`the proposal store could not be made (${e && e.code ? e.code : "error"}) -- nothing was written`); }
     const lockPath = join(store, ".apply.lock");
-    const takeLock = () => { try { closeSync(openSync(lockPath, "wx")); return true; } catch (e) { if (e && e.code === "EEXIST") return false; throw e; } };
+    // A TOKEN in the lock, and a release that removes only its own: a lock broken as stale while its holder lived was
+    // then deleted by that holder, and EPERM (Windows delete-pending) was thrown rather than read as contention (PR 3b
+    // round-3 shell attack; the rules spine-io.withLock already keeps).
+    const lockToken = `${process.pid}:${createHash("sha256").update(String(Math.random()) + String(Date.now())).digest("hex").slice(0, 16)}`;
+    const takeLock = () => {
+      let fd;
+      try { fd = openSync(lockPath, "wx"); }
+      catch (e) { if (e && ["EEXIST", "EPERM", "EACCES", "EISDIR"].includes(e.code)) return false; throw e; }
+      try { writeSync(fd, lockToken); } finally { closeSync(fd); }
+      return true;
+    };
     let locked = false;
     try { locked = takeLock(); } catch (e) { return stopFrom(`the proposal store's lock could not be taken (${e && e.code ? e.code : "error"}) -- nothing was written`); }
     if (!locked) {
@@ -2724,7 +2737,7 @@ function main() {
       if (age > 15 * 60_000) { try { unlinkSync(lockPath); } catch { /* another breaker */ } try { locked = takeLock(); } catch { locked = false; } }
     }
     if (!locked) return stopFrom(`another apply of this proposal is running -- nothing was written; wait for it, then read the inbox`);
-    const release = () => { try { unlinkSync(lockPath); } catch { /* litter */ } };
+    const release = () => { try { if (readFileSync(lockPath, "utf8") === lockToken) unlinkSync(lockPath); } catch { /* released, or not ours */ } };
     try {
       // Re-checked INSIDE the lock: the apply that held it may have raised the approval.
       if (existsSync(raisedMark)) return stopFrom(`a proposal from this exact candidate against this champion was raised a moment ago at ${shown(store)} -- proposing it twice would raise two approvals for one question`);
