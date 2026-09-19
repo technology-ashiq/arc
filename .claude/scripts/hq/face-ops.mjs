@@ -424,7 +424,7 @@ export const OPS = Object.freeze([
     binding: "v0.7 `paste model -> run` -> run.completed from arc-bench (process bench@0.1.0); the propose step is the kernel ring's",
     humanRun: true, spends: true, touchesFiles: false,
     fields: Object.freeze([
-      Object.freeze({ name: "driver", label: "Driver", placeholder: "", type: "select", options: Object.freeze(benchDrivers()), required: true }),
+      Object.freeze({ name: "driver", label: "Driver", placeholder: "", type: "select", get options() { return Object.freeze(benchDrivers()); }, required: true }),
       Object.freeze({ name: "model", label: "Model", placeholder: "the model id the driver takes", type: "text", max: 128, pattern: "[A-Za-z0-9][A-Za-z0-9._:/-]*", required: true }),
       // At least 1: a ceiling of 0 stops every attempt before it invokes anything (arc-run's own rule), so a run under it
       // measures nothing -- even on the mock driver, which spends 0 but still needs room to be called.
@@ -467,7 +467,7 @@ export const OPS = Object.freeze([
     binding: "v0.7 `register job` -> note.logged, written by arc-jobs register <job> --receipt after the OS read the task back (ADR-1339, ADR-1340)",
     humanRun: true, spends: false, touchesFiles: false, touchesOs: true,
     fields: Object.freeze([
-      Object.freeze({ name: "job", label: "Job", placeholder: "", type: "select", options: Object.freeze(scheduledJobs()), required: true }),
+      Object.freeze({ name: "job", label: "Job", placeholder: "", type: "select", get options() { return Object.freeze(scheduledJobs()); }, required: true }),
     ]),
     plan: (v) => ({ script: "hq/arc-jobs.mjs", args: ["register", v.job, "--dry-run"] }),
     apply: (v) => ({ script: "hq/arc-jobs.mjs", args: ["register", v.job, "--receipt"] }),
@@ -483,7 +483,7 @@ export const OPS = Object.freeze([
     humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
       Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().classes); }, required: true }),
-      Object.freeze({ name: "to", label: "Driver", placeholder: "", type: "select", options: Object.freeze(routeDrivers()), required: true }),
+      Object.freeze({ name: "to", label: "Driver", placeholder: "", type: "select", get options() { return Object.freeze(routeDrivers()); }, required: true }),
       WHY,
     ]),
     plan: (v) => ({ script: "engine/propose.mjs", args: [...proposeArgs("driver", v), "--dry-run"] }),
@@ -519,7 +519,7 @@ export const OPS = Object.freeze([
     binding: "v0.7 `cap proposal` -> approval.requested under the policy.promotion profile (POL-C), sealed by the line policy-promote.mjs prints (ADR-1340)",
     humanRun: false, spends: false, touchesFiles: false,
     fields: Object.freeze([
-      Object.freeze({ name: "kind", label: "Action kind", placeholder: "", type: "select", options: Object.freeze(policyKinds()), required: true }),
+      Object.freeze({ name: "kind", label: "Action kind", placeholder: "", type: "select", get options() { return Object.freeze(policyKinds()); }, required: true }),
       Object.freeze({ name: "capability", label: "Capability", placeholder: "", type: "select", options: Object.freeze(["read", "write", "shell", "network", "message", "publish", "deploy", "spend"]), required: true }),
       Object.freeze({ name: "to", label: "To level", placeholder: "", type: "select", options: Object.freeze(["L1", "L2", "L3"]), required: true }),
       Object.freeze({ name: "evidence", label: "Trial-ledger evidence", placeholder: "docs/trial-ledger.md#the-row-you-cite", type: "text", max: 300, pattern: ONE_LINE, required: true }),

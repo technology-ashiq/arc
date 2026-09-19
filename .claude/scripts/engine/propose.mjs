@@ -24,12 +24,12 @@
 // Exit: 0 done · 1 the branch IS written and its receipt is not (said so, never retried silently) · 2 refused, nothing
 // written.
 
-import { readdirSync, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { routerFaults } from "./router-row.mjs";
-import { planProposal, proposalBranch, writeProposal, baseText, ProposalError } from "../core/proposal-branch.mjs";
+import { planProposal, proposalBranch, writeProposal, baseText, mainDirNames, ProposalError } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
@@ -71,10 +71,15 @@ function parseArgs(argv) {
   return out;
 }
 
-/** The drivers this tree ships, read the way bench reads them: one .sh per driver. */
-function knownDrivers() {
-  try { return readdirSync(join(REPO, ".claude", "scripts", "engine", "drivers")).filter((f) => f.endsWith(".sh")).map((f) => f.slice(0, -3)).sort(); }
-  catch { return []; }
+/**
+ * The drivers MAIN ships, read the way bench reads them: one .sh per driver. The branch is cut from main, so a driver
+ * the checkout had and main did not routed a class to a script the merged tree lacks (PR 4 round 2, the add-agent twin).
+ * @param {string} base the commit the router was read from
+ */
+async function knownDrivers(base) {
+  const listed = await mainDirNames({ repo: REPO, dir: ".claude/scripts/engine/drivers" });
+  if (listed.base !== base) die(2, "main moved while its files were read -- run it again");
+  return listed.names.filter((f) => f.endsWith(".sh")).map((f) => f.slice(0, -3)).sort();
 }
 
 /**
@@ -172,8 +177,10 @@ async function main() {
   const parsed = parseYamlSubset(text);
   if (!parsed.ok) die(2, `${ROUTER} on main does not parse: ${parsed.error.what}`);
   const router = parsed.value;
-  if (args.verb === "driver" && !knownDrivers().includes(args.to))
-    die(2, `\`${args.to}\` is not a driver this tree ships (known: ${knownDrivers().join(", ")})`);
+  if (args.verb === "driver") {
+    const drivers = await knownDrivers(base);
+    if (!drivers.includes(args.to)) die(2, `\`${args.to}\` is not a driver main ships (known: ${drivers.join(", ")})`);
+  }
   if (args.verb === "tier" && !(Array.isArray(router.tiers) && router.tiers.includes(args.to)))
     die(2, `\`${args.to}\` is not a tier ADR-0069 names (the router's tiers: ${(router.tiers || []).join(", ")})`);
   // An ended hire goes back to the router's own default driver -- read from the file, never assumed.

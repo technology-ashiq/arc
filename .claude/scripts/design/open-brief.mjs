@@ -23,7 +23,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { baseText, checkProposal, mainHolds, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
-import { spawnBounded } from "../core/spawn-bounded.mjs";
+import { bashEnv, spawnBounded } from "../core/spawn-bounded.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
@@ -103,7 +103,7 @@ async function main() {
     // the old spawnSync), and a failure is named -- a missing bash or a timeout read as "exited null" (PR 4 shell attack).
     let errText = "";
     const s = await spawnBounded("bash", [EXPLORE, "init", a.id, "--brief", a.brief, "--out-dir", dest, "--base", brief.base.slice(0, 12)],
-      { cwd: REPO, env: process.env, timeoutMs: 60_000, onData: (stream, chunk) => { if (stream === "err" && errText.length < 4096) errText += chunk.toString("utf8"); } });
+      { cwd: REPO, env: bashEnv(), timeoutMs: 60_000, onData: (stream, chunk) => { if (stream === "err" && errText.length < 4096) errText += chunk.toString("utf8"); } });
     if (s.timedOut) die(2, "the scaffold did not finish in 60 s -- it, and everything it started, was ended; nothing was written");
     if (s.exit === null) die(2, `the scaffold could not be run (${s.error || s.signal || "no exit"}) -- is Git Bash on PATH? nothing was written`);
     if (s.exit !== 0) die(2, errText.trim().split(/\r?\n/)[0].replace(/^design-explore: /, "") || `the scaffold exited ${s.exit}`);

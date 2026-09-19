@@ -463,5 +463,23 @@ await refuse("a path that needs main's file to be a directory", { branch: "feat/
   check("the writer calls no porcelain that moves a tree, a branch or a remote", verbs.every((v) => !banned.includes(v)), verbs.filter((v) => banned.includes(v)).join(","));
 }
 
+// mainDirNames reads MAIN's tree, never the checkout (PR 4 round 2: add-agent listed products from the checkout and a
+// product main held got no manifest line). The checkout here has lost one product and gained another; main has neither
+// change.
+{
+  const r = scratch("dirnames");
+  mkdirSync(join(r, "products", "alpha"), { recursive: true });
+  mkdirSync(join(r, "products", "beta", "deep"), { recursive: true });
+  writeFileSync(join(r, "products", "alpha", "manifest.json"), "{}\n");
+  writeFileSync(join(r, "products", "beta", "deep", "x.txt"), "x\n");
+  git(r, "add", "-A");
+  git(r, "commit", "-q", "-m", "products");
+  rmSync(join(r, "products", "beta"), { recursive: true, force: true });
+  mkdirSync(join(r, "products", "gamma"), { recursive: true });
+  writeFileSync(join(r, "products", "gamma", "manifest.json"), "{}\n");
+  const listed = await PB.mainDirNames({ repo: r, dir: "products" });
+  check("mainDirNames lists main's folders -- one the checkout deleted, none it only added, no nested names", JSON.stringify(listed.names) === JSON.stringify(["alpha", "beta"]) && /^[0-9a-f]{40}$/.test(listed.base), JSON.stringify(listed));
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exit(failed === 0 && ran >= 50 ? 0 : 1);
