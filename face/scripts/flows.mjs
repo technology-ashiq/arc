@@ -110,7 +110,7 @@ export const REFUSALS = Object.freeze({
   // its apply path is money-work.mjs's. The register refuses where a CI checkout has no main, and elsewhere because the
   // fixture's criteria were never approved; the kill review refuses the same unapproved criteria.
   "money.ingest": "the export cannot be found",
-  "ventures.register": "SIM_EFFECT|is not on main|no approved criteria receipt",
+  "ventures.register": "SIM_EFFECT|NO_BASE|no approved criteria receipt",
   "ventures.kill-review": "UNRECEIPTED",
 });
 
