@@ -58,7 +58,7 @@ check("fixture: one payment ingested on each spine (vacuous-pass guard)",
   seeded.every((r) => r.status === 0 && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(String(r.stdout).trim())), seeded.map((r) => `${r.status}:${String(r.stderr).trim()}`).join(" | "));
 
 // bench.propose proposes from a run that ALREADY happened: one mock run (spends nothing) is its candidate, and a copy
-// of it the champion -- a tie, which the bench's gates propose. Run on a spine of its own, so the parity spines stay
+// of it under the incumbent's driver the champion -- a tie, which the bench's gates propose. Run on a spine of its own, so the parity spines stay
 // clean. absorb.pin-source studies a folder, read-only.
 {
   const benchSpine = join(tmp, "bench-spine");
@@ -67,6 +67,11 @@ check("fixture: one payment ingested on each spine (vacuous-pass guard)",
     { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: benchSpine }, timeout: 300_000 });
   check("fixture: a mock bench run wrote the candidate's scorecard and provenance (vacuous-pass guard)", run.status === 0 && existsSync(join(tmp, "bench-cand", "scorecard.json")), `${run.status} ${String(run.stderr).slice(-300)}`);
   cpSync(join(tmp, "bench-cand"), join(tmp, "bench-champ"), { recursive: true });
+  // Another RUN with the same scores: a byte-identical copy is the candidate itself, and bench refuses it (PR 3b).
+  const champProv = join(tmp, "bench-champ", "provenance.json");
+  const cp0 = JSON.parse(readFileSync(champProv, "utf8"));
+  cp0.subject.driver = "claude-code";
+  writeFileSync(champProv, JSON.stringify(cp0));
   mkdirSync(join(tmp, "absorb-src"), { recursive: true });
   writeFileSync(join(tmp, "absorb-src", "README.md"), "a source the suite pins\n");
 }

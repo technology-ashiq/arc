@@ -19,12 +19,13 @@ export const EXPECT_RE = /^[0-9a-f]{64}$/;
  * The spine's own judgment of a receipt BEFORE the effect it describes: null when `arc-event emit --dry-run` accepts
  * it, else the emitter's first line. A tool that writes a branch and only then has its approval refused has stranded
  * the branch -- every face-ask proposal did, because the secret scanner read "sk-" in its name (PR 3a logic attack).
- * One helper, so every branch-writing tool judges the same way.
+ * One helper, so every branch-writing tool judges the same way. `flags` are the envelope flags the real emit passes
+ * (bench emits with --process): the adjacency views join every caller field, so the judgment passes the same ones.
  * @param {string} arcEvent the arc-event.mjs path @param {string} kind @param {unknown} payload
- * @param {{ cwd?: string, env?: Record<string, string | undefined> }} [o]
+ * @param {{ cwd?: string, env?: Record<string, string | undefined>, flags?: string[] }} [o]
  */
 export function spineRefusal(arcEvent, kind, payload, o = {}) {
-  const r = spawnSync(process.execPath, [arcEvent, "emit", kind, "--payload", JSON.stringify(payload), "--strict", "--dry-run"],
+  const r = spawnSync(process.execPath, [arcEvent, "emit", kind, "--payload", JSON.stringify(payload), ...(o.flags || []), "--strict", "--dry-run"],
     { cwd: o.cwd, env: o.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   return r.status === 0 ? null : (String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`);
 }

@@ -57,10 +57,15 @@ process.once("exit", () => { for (const c of LIVE) killTree(c); });
 /** @param {number} code */
 const onSignal = (code) => () => {
   for (const c of LIVE) killTree(c, { graceful: true });
-  if (!IS_WIN && LIVE.size) pauseSync(300);
+  if (!IS_WIN && LIVE.size) pauseSync(PAUSE_MS);
   for (const c of LIVE) killTree(c);
   process.exit(code);
 };
+// THE PAUSE SHRINKS WITH DEPTH. A parent and its child both paused 300 ms, so the parent's SIGKILL could land before
+// the child had SIGKILLed its own git groups, and those ran on (PR 3b shell attack). Each child is handed a pause 200 ms
+// shorter than its parent's, so every level ends its own groups before the level above ends it: door 600, tool 400, git.
+const PAUSE_MS = (() => { const n = Number(process.env.ARC_SPAWN_PAUSE_MS); return Number.isInteger(n) && n >= 100 && n <= 5000 ? n : 600; })();
+const CHILD_PAUSE_MS = String(Math.max(100, PAUSE_MS - 200));
 const SIGNALS = /** @type {const} */ ([["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]);
 const armed = new Map();
 function armSignals() {
@@ -85,7 +90,7 @@ export function spawnBounded(file, args, { cwd, env, input, timeoutMs, onData })
     let child;
     try {
       child = spawn(file, args, {
-        cwd, env, windowsHide: true, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+        cwd, env: { ...(env ?? process.env), ARC_SPAWN_PAUSE_MS: CHILD_PAUSE_MS }, windowsHide: true, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
         // POSIX: the child leads its own group, so a timeout ends the WHOLE tree with one signal to -pid.
         detached: !IS_WIN,
       });

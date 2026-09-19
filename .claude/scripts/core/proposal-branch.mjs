@@ -81,8 +81,10 @@ function gitEnv(extra = {}) {
  * `*.yaml -diff` there made the plan read "Binary files differ", so the owner reviewed nothing). PR 3a shell attack.
  * CONFIG hooks too (git 2.54: `hook.<name>.command` / `.event`), which core.hooksPath does not reach: a
  * reference-transaction hook defined in the owner's config ran three times inside a write, could veto it, and a slow one
- * left a .lock behind (PR 3a round-2 shell attack). Each one found is disabled for the call by name. And the commit
- * encoding: `i18n.commitEncoding` in the owner's config stamped a Latin-1 header over UTF-8 bytes (same attack).
+ * left a .lock behind (PR 3a round-2 shell attack). Each one found is disabled for the call by name -- through the
+ * environment (offEnv), never `-c`: git splits `-c` at the first "=", so a hook NAMED `x=y` was never disabled and ran
+ * three times inside a write (PR 3b shell attack). And the commit encoding: `i18n.commitEncoding` in the owner's
+ * config stamped a Latin-1 header over UTF-8 bytes (PR 3a round-2).
  * @param {{ dir: string, off: string[] }} hooks
  */
 const safety = (hooks) => [
@@ -90,8 +92,19 @@ const safety = (hooks) => [
   "-c", `core.hooksPath=${hooks.dir}`, "-c", "core.fsmonitor=false", "-c", "core.splitIndex=false", "-c", "core.untrackedCache=false",
   "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "-c", `core.attributesFile=${NULL_FILE}`,
   "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "i18n.commitEncoding=UTF-8",
-  ...hooks.off.flatMap((name) => ["-c", `hook.${name}.enabled=false`]),
 ];
+
+/**
+ * The config hooks disabled by name, as git's own key/value triplets: a key there is never split, whatever it holds.
+ * gitEnv drops every inherited GIT_* first, so the owner's own GIT_CONFIG_COUNT cannot add to or shadow these.
+ * @param {string[]} off @returns {Record<string, string>}
+ */
+function offEnv(off) {
+  if (off.length === 0) return {};
+  const env = { GIT_CONFIG_COUNT: String(off.length) };
+  off.forEach((name, i) => { env[`GIT_CONFIG_KEY_${i}`] = `hook.${name}.enabled`; env[`GIT_CONFIG_VALUE_${i}`] = "false"; });
+  return env;
+}
 
 /**
  * One git call.
@@ -105,7 +118,7 @@ async function git(repo, args, o) {
   const err = [];
   let errBytes = 0;
   const r = await spawnBounded("git", [...safety(o.hooks), ...args], {
-    cwd: repo, env: gitEnv(o.env), input: o.input, timeoutMs: GIT_TIMEOUT_MS,
+    cwd: repo, env: gitEnv({ ...offEnv(o.hooks.off), ...o.env }), input: o.input, timeoutMs: GIT_TIMEOUT_MS,
     onData: (stream, chunk) => {
       if (stream === "out") { outBytes += chunk.length; if (outBytes <= MAX_GIT_OUT) out.push(chunk); }
       else if (errBytes < 64 * 1024) { errBytes += chunk.length; err.push(chunk); }
@@ -120,6 +133,16 @@ async function git(repo, args, o) {
   }
   const buf = Buffer.concat(out);
   return { buf, out: buf.toString("utf8"), status: r.exit };
+}
+
+/**
+ * The temp directory is one git can be pointed at: GIT_CEILING_DIRECTORIES is a LIST, and a temp dir whose path holds
+ * the delimiter split into two entries, so a repository around it reached the plan's diff (PR 3a round-2 shell attack).
+ * Checked in EVERY entry point: trial's pre-seal check lacked it, so a plan passed, the seal burned its correlation, and
+ * the write then refused NO_TEMP (PR 3b shell attack).
+ */
+function checkTemp() {
+  if (tmpdir().includes(delimiter)) throw new ProposalError("NO_TEMP", `the temp directory's path holds "${delimiter}", which git reads as a list separator -- nothing was written; point TMP elsewhere`);
 }
 
 /** A temp directory, or a refusal that names the cause: a raw ENOENT stack is not a refusal. */
@@ -175,6 +198,23 @@ export function checkFiles(files, allow) {
 function checkBranch(branch) {
   if (typeof branch !== "string" || !PROPOSAL_BRANCH_RE.test(branch) || branch.includes("--"))
     throw new ProposalError("BAD_BRANCH", `${JSON.stringify(branch)} is not a proposal branch name (feat/face-<op>-<slug>, lower case)`);
+  if (KEY_PREFIX_RE.test(branch))
+    throw new ProposalError("BAD_BRANCH", `${branch} holds a key-shaped prefix (sk-, xoxb- ...) that the spine's secret scanner reads, beside a commit hash, as a key -- build it with proposalBranch()`);
+}
+
+/** The prefixes the spine's secret scanner reads as a key's start, in the lower-case alphabet a branch is spelled in. */
+const KEY_PREFIX_RE = /sk-|xox[baprs]-/;
+
+/**
+ * A proposal branch built from a caller's text: lower case, plain segments, and every key-shaped prefix defused.
+ * "risk-assessment" put "sk-assessment" in the branch, and beside main's commit hash in the approval that is 32 key
+ * characters -- the spine refused every pin of such a report (PR 3b logic attack; propose's class-last rule was the same
+ * defect one PR earlier). The hyphen after the prefix goes: risk-assessment -> riskassessment.
+ * @param {string} op @param {string} slug
+ */
+export function proposalBranch(op, slug) {
+  const s = String(slug).toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return `feat/face-${op}-${s}`.replace(/sk-/g, "sk").replace(/(xox[baprs])-/g, "$1").slice(0, 90).replace(/-+$/, "");
 }
 
 /**
@@ -252,6 +292,47 @@ export function baseText({ repo, path }) {
   });
 }
 
+/**
+ * A path main already holds under another CASE, or null. `initiatives/absorb/evidence/Casey.md` beside main's
+ * `casey.md` made a branch holding both, which a Windows or macOS checkout cannot: one file kept, the other shown as
+ * modified (PR 3b shell attack). Walked one directory at a time from the root, so only the directories a path passes
+ * through are listed.
+ * @param {string} repo @param {string} base @param {readonly string[]} paths
+ */
+async function caseClash(repo, base, paths, hooks) {
+  for (const path of paths) {
+    const segs = path.split("/");
+    let prefix = "";
+    for (let i = 0; i < segs.length; i++) {
+      const seg = segs[i];
+      const last = i === segs.length - 1;
+      const tree = prefix === "" ? base : `${base}:${prefix}`;
+      // "<mode> <type> <sha>\t<name>", NUL-terminated and never quoted.
+      const rows = (await git(repo, ["ls-tree", "-z", tree], { hooks })).out.split("\u0000").filter(Boolean)
+        .map((r) => { const t = r.indexOf("\t"); return { type: r.slice(0, t).split(" ")[1], name: r.slice(t + 1) }; });
+      const here = (n) => (prefix === "" ? n : `${prefix}/${n}`);
+      const exact = rows.find((r) => r.name === seg);
+      if (exact) {
+        // A file where the path needs a directory, or a directory where it writes a file: no tree holds both.
+        if ((last && exact.type === "tree") || (!last && exact.type !== "tree")) return { path, theirs: here(seg), kind: "type" };
+        prefix = here(seg);
+        continue;
+      }
+      const other = rows.find((r) => r.name.toLowerCase() === seg.toLowerCase());
+      if (other) return { path, theirs: here(other.name), kind: "case" };
+      break;
+    }
+  }
+  return null;
+}
+
+/** @param {string} repo @param {string} base @param {readonly string[]} paths */
+async function refuseCaseClash(repo, base, paths, hooks) {
+  const c = await caseClash(repo, base, paths, hooks);
+  if (c && c.kind === "case") throw new ProposalError("CASE_CLASH", `${c.path} differs from main's ${c.theirs} only by case -- a Windows or macOS checkout cannot hold both; nothing was written`);
+  if (c) throw new ProposalError("BAD_PATH", `${c.path} needs ${c.theirs} to be ${c.theirs === c.path ? "a file" : "a directory"}, and on main it is not -- nothing was written`);
+}
+
 /** The base, checked against the one the caller read from, and the branch checked free. */
 async function baseOf(repo, branch, hooks, expected) {
   const base = await mainCommit(repo, hooks);
@@ -274,9 +355,7 @@ async function baseOf(repo, branch, hooks, expected) {
  * config around it reach the diff.
  */
 async function diffOf(repo, base, files, hooks) {
-  // GIT_CEILING_DIRECTORIES is a LIST: a temp dir whose parent holds the path delimiter split into two entries, and a
-  // repository around it reached the plan's diff (PR 3a round-2 shell attack).
-  if (tmpdir().includes(delimiter)) throw new ProposalError("NO_TEMP", `the temp directory's path holds "${delimiter}", which git reads as a list separator -- nothing was written; point TMP elsewhere`);
+  checkTemp();
   const tmp = tempDir("arc-proposal-diff-");
   try {
     let out = "";
@@ -306,8 +385,13 @@ async function diffOf(repo, base, files, hooks) {
  */
 export async function checkProposal({ repo, branch, paths, allow, base: expected }) {
   checkBranch(branch);
-  checkFiles((paths || []).map((p) => ({ path: p, content: "" })), allow);
-  return withHooks(repo, async (hooks) => ({ branch, base: await baseOf(repo, branch, hooks, expected) }));
+  const checked = checkFiles((paths || []).map((p) => ({ path: p, content: "" })), allow);
+  checkTemp();
+  return withHooks(repo, async (hooks) => {
+    const base = await baseOf(repo, branch, hooks, expected);
+    await refuseCaseClash(repo, base, checked.map((c) => c.path), hooks);
+    return { branch, base };
+  });
 }
 
 /**
@@ -318,24 +402,33 @@ export async function checkProposal({ repo, branch, paths, allow, base: expected
 export async function planProposal({ repo, branch, files, allow, base: expected }) {
   checkBranch(branch);
   const checked = checkFiles(files, allow);
+  checkTemp();
   return withHooks(repo, async (hooks) => {
     const base = await baseOf(repo, branch, hooks, expected);
+    await refuseCaseClash(repo, base, checked.map((c) => c.path), hooks);
     return { branch, base, diff: await diffOf(repo, base, checked, hooks) };
   });
 }
 
 /**
  * The apply: the branch, written by plumbing. Returns the commit and the diff it carries.
- * @param {{ repo: string, branch: string, files: unknown, allow: readonly string[], message: string, base?: string }} o
+ *
+ * `beforeRef(commit)`, when given, runs once the commit exists and BEFORE the ref does: a caller judges the receipt it
+ * will raise -- the real one, with this commit in it -- and a throw there writes no branch (the objects are unreachable,
+ * and gc removes them). A dry-run judged a zero commit, and a real one could sort beside a caller's string into a
+ * "key" the spine refused, after the branch was written (PR 3b attacks).
+ * @param {{ repo: string, branch: string, files: unknown, allow: readonly string[], message: string, base?: string, beforeRef?: (commit: string) => Promise<void> | void }} o
  * @returns {Promise<{ branch: string, base: string, commit: string, diff: string }>}
  */
-export async function writeProposal({ repo, branch, files, allow, message, base: expected }) {
+export async function writeProposal({ repo, branch, files, allow, message, base: expected, beforeRef }) {
   checkBranch(branch);
   const checked = checkFiles(files, allow);
   if (typeof message !== "string" || message.trim() === "" || message.includes("\u0000"))
     throw new ProposalError("BAD_MESSAGE", "a proposal commit carries a message");
+  checkTemp();
   return withHooks(repo, async (hooks) => {
     const base = await baseOf(repo, branch, hooks, expected);
+    await refuseCaseClash(repo, base, checked.map((c) => c.path), hooks);
     const diff = await diffOf(repo, base, checked, hooks);
     const idxDir = tempDir("arc-proposal-index-");
     try {
@@ -351,6 +444,7 @@ export async function writeProposal({ repo, branch, files, allow, message, base:
       }
       const tree = (await git(repo, ["write-tree"], { hooks, env })).out.trim();
       const commit = (await git(repo, ["commit-tree", tree, "-p", base, "-F", "-"], { hooks, input: message.endsWith("\n") ? message : message + "\n" })).out.trim();
+      if (beforeRef) await beforeRef(commit);
       // `create` refuses a ref that exists, inside git's own transaction: the check in baseOf is the friendly refusal,
       // this is the one a race cannot get past. Its failure is named by its real cause -- a stale .lock file or a
       // branch directory is not "appeared while the proposal was written" (PR 3a shell attack).

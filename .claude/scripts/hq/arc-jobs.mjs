@@ -420,7 +420,7 @@ if (command === "register") {
     plan += "arc-jobs: dry run -- nothing was handed to the OS\n";
     // One synchronous write, THEN the exit: process.exit right after an asynchronous pipe write can cut the plan the
     // door is reading (the fixed-defects row the PR 3a attackers carried; pipes are asynchronous on macOS).
-    writeSync(1, plan);
+    try { writeSync(1, plan); } catch { /* a reader that left loses the plan; nothing was written */ }
     process.exit(0);
   }
   for (const job of targets) {
@@ -452,8 +452,9 @@ if (command === "register") {
       if (r.status !== 0 || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id))
         die(1, `${job.name} IS registered, and its receipt was not written -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
       // Synchronous, like the dry run's plan: this is the line the door attributes the receipt by, and process.exit
-      // follows below.
-      writeSync(1, `receipt: note.logged ${id}\n`);
+      // follows below. The task is registered and its receipt landed: a reader that closed its end loses this line, not
+      // the receipt.
+      try { writeSync(1, `receipt: note.logged ${id}\n`); } catch { /* the line is lost; the receipt is on the spine */ }
     }
   }
   process.stdout.write(`arc-jobs: ${logonNote()}\n`);

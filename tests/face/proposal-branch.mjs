@@ -142,6 +142,17 @@ await refuse("git's directory spelled .git.", { branch: "feat/face-t12", files: 
 await refuse("a Windows device name", { branch: "feat/face-t13", files: [{ path: "engine/nul", content: "x" }], allow: ["engine/nul"] }, "BAD_PATH");
 await refuse("a device name with an extension", { branch: "feat/face-t14", files: [{ path: "engine/com1.yaml", content: "x" }], allow: ["engine/com1.yaml"] }, "BAD_PATH");
 await refuse("a name that opens with a dash", { branch: "feat/face-t15", files: [{ path: "-x/y", content: "x" }], allow: ["-x/y"] }, "BAD_PATH");
+// A path main holds under another CASE: the branch would hold both, and a Windows or macOS checkout cannot (PR 3b shell
+// attack). A directory in another case is the same clash one level up; a file where a directory is needed is refused.
+await refuse("a file main holds under another case", { branch: "feat/face-t16", files: [{ path: "engine/Router.yaml", content: "x" }], allow: ["engine/Router.yaml"] }, "CASE_CLASH");
+await refuse("a directory main holds under another case", { branch: "feat/face-t17", files: [{ path: "Engine/new.yaml", content: "x" }], allow: ["Engine/new.yaml"] }, "CASE_CLASH");
+await refuse("a path that needs main's file to be a directory", { branch: "feat/face-t18", files: [{ path: "README.md/x.md", content: "x" }], allow: ["README.md/x.md"] }, "BAD_PATH");
+{
+  let code = null;
+  try { await PB.checkProposal({ repo: r, branch: "feat/face-t19", paths: ["engine/Router.yaml"], allow: ["engine/Router.yaml"] }); } catch (e) { code = e && e.code; }
+  const fine = await PB.checkProposal({ repo: r, branch: "feat/face-t20", paths: ["engine/new.yaml"], allow: ["engine/new.yaml"] }).catch((e) => ({ err: e.code }));
+  check("the pre-seal check refuses a case clash too (CASE_CLASH), and passes a new path (vacuous-pass guard)", code === "CASE_CLASH" && fine.base === before.main, `${code} ${JSON.stringify(fine)}`);
+}
 
 // ---- an existing branch in ANOTHER CASE, or as a directory, is a collision (PR 3a shell attack: on a case-insensitive
 // filesystem a loose feat/face-p2-f shadowed the owner's packed feat/face-P2-F and moved it) ----
@@ -248,6 +259,37 @@ await refuse("a name that opens with a dash", { branch: "feat/face-t15", files: 
     after === before && refs(c).includes("refs/heads/feat/face-cfghook "), `control=${controlFired} before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
 }
 
+// ---- a config hook whose NAME holds "=" is disabled too (PR 3b shell attack: git splits -c at the first "=", so
+// `-c hook.x=y.enabled=false` set hook.x to "y.enabled=false" and the hook ran three times inside a write) ----
+{
+  const c = scratch("cfgeq");
+  const mark = join(c, "..", `cfgeq-${Date.now()}.txt`);
+  const markPosix = mark.replace(/\\/g, "/");
+  git(c, "config", "hook.x=y.command", `echo ran >> "${markPosix}"`);
+  git(c, "config", "--add", "hook.x=y.event", "reference-transaction");
+  git(c, "branch", "feat/face-cfgeq-control", "main");
+  const controlFired = existsSync(mark);
+  const before = controlFired ? readFileSync(mark, "utf8") : "";
+  await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-cfgeq", files: [{ path: "engine/router.yaml", content: PROPOSED }] });
+  const after = existsSync(mark) ? readFileSync(mark, "utf8") : "";
+  check(controlFired ? "a config hook NAMED x=y that plain git runs is NOT run by the writer" : "a config hook named x=y: this git has no config hooks, so there is nothing to run (checked, not assumed)",
+    after === before && refs(c).includes("refs/heads/feat/face-cfgeq "), `control=${controlFired} before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+}
+
+// ---- beforeRef: the caller judges the real receipt, with its commit, before the ref exists; a throw writes no branch
+// (PR 3b attacks: a dry run judged a zero commit, and the branch was written before the real one was refused) ----
+{
+  const c = scratch("beforeref");
+  let seen = "", refYet = true;
+  const w = await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-beforeref", files: [{ path: "engine/router.yaml", content: PROPOSED }],
+    beforeRef: (commit) => { seen = commit; refYet = refs(c).includes("refs/heads/feat/face-beforeref "); } });
+  check("beforeRef sees the commit the branch will point at, before the branch exists", seen === w.commit && refYet === false && refs(c).includes(`refs/heads/feat/face-beforeref ${w.commit}`), `${seen} ${w.commit} ${refYet}`);
+  let code = null;
+  try { await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-vetoed", files: [{ path: "engine/router.yaml", content: PROPOSED }], beforeRef: () => { throw Object.assign(new Error("no"), { code: "VETOED" }); } }); }
+  catch (e) { code = e && e.code; }
+  check("a beforeRef that throws writes no branch, and its own error comes back", code === "VETOED" && !refs(c).includes("refs/heads/feat/face-vetoed "), `${code}`);
+}
+
 // ---- a branch the writer DID create is the writer's, even when the update-ref call reports a failure (PR 3a round-2
 // shell attack: it was reported as someone else's branch, propose exited 2, and every retry refused) ----
 {
@@ -285,6 +327,45 @@ await refuse("a name that opens with a dash", { branch: "feat/face-t15", files: 
   try { commit = JSON.parse(out.trim().split(/\r?\n/).pop()).commit; } catch { /* reported below */ }
   check("a branch the writer created is returned as written when update-ref reports a failure after committing it",
     code === 0 && /^[0-9a-f]{40,64}$/.test(commit) && git(c, "rev-parse", "refs/heads/feat/face-ownref") === commit, `code=${code} ${out.slice(0, 300)}`);
+
+  // THE MUTANT'S CASE (PR 3b shell attack): the same failure, and the branch that now exists is SOMEONE ELSE'S -- it
+  // points at main, not at the writer's commit. Returned as written, the caller would raise an approval for a branch
+  // that does not carry the proposal. A writer that dropped the "is it my commit" comparison passed both tests above.
+  const foreignFake = join(c, "..", `foreign-update-ref-${Date.now()}.mjs`);
+  writeFileSync(foreignFake, [
+    "import { spawnSync } from \"node:child_process\";",
+    "import { readFileSync } from \"node:fs\";",
+    "readFileSync(0);",
+    "spawnSync(\"git\", [\"update-ref\", \"refs/heads/feat/face-foreign\", \"main\"], { stdio: \"inherit\" });",
+    "process.exit(1);",
+    "",
+  ].join("\n"));
+  const foreignShim = join(c, "..", `foreign-shim-${Date.now()}.mjs`);
+  writeFileSync(foreignShim, [
+    "import cp from \"node:child_process\";",
+    "import { syncBuiltinESMExports } from \"node:module\";",
+    "const real = cp.spawn;",
+    `cp.spawn = (file, args, opts) => (file === "git" && Array.isArray(args) && args.includes("update-ref") ? real(process.execPath, [${JSON.stringify(foreignFake)}, ...args], opts) : real(file, args, opts));`,
+    "syncBuiltinESMExports();",
+    "",
+  ].join("\n"));
+  const foreignProbe = join(c, "..", `foreign-probe-${Date.now()}.mjs`);
+  writeFileSync(foreignProbe, [
+    `const PB = await import(${JSON.stringify(pathToFileURL(join(REPO, ".claude", "scripts", "core", "proposal-branch.mjs")).href)});`,
+    "try {",
+    `  const w = await PB.writeProposal({ repo: ${JSON.stringify(c)}, message: "m2", allow: ["engine/router.yaml"], branch: "feat/face-foreign", files: [{ path: "engine/router.yaml", content: ${JSON.stringify(PROPOSED.replace("codex", "hermes"))} }] });`,
+    "  console.log(JSON.stringify({ written: w.commit }));",
+    "} catch (e) { console.log(JSON.stringify({ code: e.code })); }",
+    "",
+  ].join("\n"));
+  let fOut = "";
+  try { fOut = execFileSync(process.execPath, ["--import", pathToFileURL(foreignShim).href, foreignProbe], { encoding: "utf8", env: cleanEnv() }); }
+  catch (e) { fOut = String(e.stdout || "") + String(e.stderr || ""); }
+  let fGot = {};
+  try { fGot = JSON.parse(fOut.trim().split(/\r?\n/).pop()); } catch { /* reported below */ }
+  const foreignTip = (() => { try { return git(c, "rev-parse", "refs/heads/feat/face-foreign"); } catch { return ""; } })();
+  check("a branch that appeared during a failed update-ref and is NOT the writer's commit refuses (BRANCH_EXISTS), never returned as written",
+    fGot.code === "BRANCH_EXISTS" && foreignTip === git(c, "rev-parse", "main"), `${fOut.slice(0, 300)} tip=${foreignTip}`);
 }
 
 // ---- the module names no porcelain that could move the owner's tree ----

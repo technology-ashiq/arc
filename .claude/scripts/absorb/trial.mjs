@@ -6,9 +6,11 @@
 //             [--dry-run | --expect D]
 //
 // --dry-run   judgement.mjs seal --dry-run: every check the seal makes, plus whether the proposal branch could be
-//             written, plus the spine's judgment of the approval it would raise (with the longest labels the pool
-//             holds, since the real ones are drawn only when it seals). Nothing is written. Its LAST line is the digest
-//             an apply is bound to ({"expect":"..."}): the branch, main's commit and the seal's arguments.
+//             written (a bundle main already holds is refused), plus the spine's judgment of a DRAFT of the approval
+//             (the longest labels the pool holds, a zero commitment) -- an early answer only: the real labels are drawn
+//             when it seals, and the seal judges the real payload itself (--judge) before its nonce is written.
+//             Nothing is written. Its LAST line is the digest an apply is bound to ({"expect":"..."}): the branch,
+//             main's commit and the seal's arguments.
 // --expect D  refuses PLAN_STALE unless that digest still holds -- main moved, or the branch appeared -- BEFORE the
 //             seal burns the correlation. Then judgement.mjs seal --bundle-dir <scratch>: the nonce goes to the
 //             gitignored seal store as it always has; the bundle's commitment.txt is committed to a NEW branch
@@ -24,11 +26,11 @@
 // Exit: 0 done · 1 sealed, but the branch or the receipt was not written (said so) · 2 refused, nothing sealed.
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkProposal, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
+import { baseText, checkProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 import { LABEL_POOL } from "../hq/lib/validate-absorb.mjs";
 
@@ -67,6 +69,9 @@ function parseArgs(argv) {
   return out;
 }
 
+/** Where judgement.mjs keeps a correlation's nonce: its own rule, resolved from the directory it runs in (REPO). */
+const sealFile = (corr) => resolve(REPO, process.env.ARC_ABSORB_SEAL_DIR || join(".claude", "state", "absorb", "seals"), `${corr}.json`);
+
 /** The judgement.mjs seal argv, from this tool's own flags. */
 const sealArgs = (a) => ["seal", "--candidate", a["--candidate"], "--variants", a["--variants"], "--fixtures", a["--fixtures"], "--evidence", a["--evidence"], "--correlation", a["--correlation"]];
 
@@ -83,13 +88,21 @@ function draftApproval(a) {
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
-  const branch = `feat/face-absorb-trial-${a["--correlation"].toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")}`.slice(0, 90).replace(/-+$/, "");
+  const branch = proposalBranch("absorb-trial", a["--correlation"]);
   const target = `${a["--evidence"]}/commitment.txt`;
   // Every check the seal makes, written nothing.
   const dry = spawnSync(process.execPath, [JUDGEMENT, ...sealArgs(a), "--dry-run"], { cwd: REPO, encoding: "utf8" });
   if (dry.status !== 0) die(2, String(dry.stderr || "").trim().replace(/^judgement: /, "") || `the seal's dry run exited ${dry.status}`);
   // The branch is free and main's commit is read ONCE: the digest and the write both use this base.
   const { base } = await checkProposal({ repo: REPO, branch, paths: [target], allow: [target] });
+  // A bundle MAIN already holds is an earlier judgement's. The seal's own guard reads the owner's checkout, and the
+  // branch is cut from main: a checkout on another branch passed, and the new branch replaced main's commitment.txt
+  // beside that judgement's revealed mapping (PR 3b logic attack).
+  for (const held of ["mapping.json", "commitment.txt"]) {
+    const on = await baseText({ repo: REPO, path: `${a["--evidence"]}/${held}` });
+    if (on.base !== base) die(2, "main moved while the bundle was checked -- plan again");
+    if (on.text !== null) die(2, `main already holds ${a["--evidence"]}/${held} -- an earlier judgement's bundle; a new trial takes a new --evidence path, and nothing was sealed`);
+  }
   const refused = spineRefusal(ARC_EVENT, "approval.requested", draftApproval(a), { cwd: REPO });
   if (refused) die(2, `the approval this trial raises would be refused by the spine, so nothing is sealed: ${refused}`);
   const digest = planDigest({ branch, base, target, seal: sealArgs(a) });
@@ -108,8 +121,16 @@ async function main() {
   try { scratch = mkdtempSync(join(tmpdir(), "arc-absorb-trial-")); }
   catch (e) { die(2, `no temp directory could be made (${e && e.code ? e.code : "error"}) -- nothing was sealed`); }
   try {
-    const run = spawnSync(process.execPath, [JUDGEMENT, ...sealArgs(a), "--bundle-dir", scratch], { cwd: REPO, encoding: "utf8" });
-    if (run.status !== 0) die(2, String(run.stderr || "").trim().replace(/^judgement: /, "") || `the seal exited ${run.status}`);
+    // --judge: the spine judges the payload this seal prints -- its drawn labels, its commitment -- before its nonce is
+    // written. The draft judged at plan could not: other labels passed where these are refused (PR 3b attacks).
+    const run = spawnSync(process.execPath, [JUDGEMENT, ...sealArgs(a), "--bundle-dir", scratch, "--judge"], { cwd: REPO, encoding: "utf8" });
+    if (run.status !== 0) {
+      const why = String(run.stderr || "").trim().replace(/^judgement: /, "") || `the seal exited ${run.status}`;
+      // A seal that failed AFTER writing its nonce has burned the correlation, whatever it exited: a failed
+      // commitment.txt write was reported as "nothing sealed" while the nonce sat in the store (PR 3b shell attack).
+      if (existsSync(sealFile(a["--correlation"]))) { sealed = true; die(1, `the seal failed part-way, AFTER its nonce was written: correlation ${a["--correlation"]} is used and nothing was raised -- ${why}. Trial again with a new correlation`); }
+      die(2, why);
+    }
     sealed = true;
     const payloadLine = String(run.stdout || "").trim().split(/\r?\n/).pop() || "";
     let payload;

@@ -26,7 +26,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { routerFaults } from "./router-row.mjs";
-import { planProposal, writeProposal, baseText, ProposalError } from "../core/proposal-branch.mjs";
+import { planProposal, proposalBranch, writeProposal, baseText, ProposalError } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
@@ -102,11 +102,12 @@ export function editRouter(text, cls, field, to) {
 /**
  * The proposal branch. The class goes LAST: a class ending in "sk" (face-ask) followed by "-" made "sk-" inside the
  * branch name, the spine's secret scanner read it plus the neighbouring strings as an API key, and every face-ask
- * proposal wrote its branch and then had its approval refused (PR 3a logic attack).
+ * proposal wrote its branch and then had its approval refused (PR 3a logic attack). proposalBranch defuses an "sk-" the
+ * class-last order cannot, one INSIDE a name (face-ask-v2; PR 3b logic attack, the pin twin).
  * @param {"driver" | "tier"} verb @param {string} cls @param {string} to
  */
 export function branchFor(verb, cls, to) {
-  return `feat/face-engine-${verb}-${to}-${cls}`.slice(0, 90).replace(/-+$/, "");
+  return proposalBranch(`engine-${verb}`, `${to}-${cls}`);
 }
 
 /** The approval a written proposal raises. One builder, for the dry run and the real emit alike. */
@@ -167,7 +168,10 @@ async function main() {
   if (args.expect === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, read the diff, then run it again with the --expect it prints");
   const stale = staleReason(args.expect, digest);
   if (stale) die(2, stale);
-  const w = await writeProposal({ repo: REPO, branch, files, allow: [ROUTER], message, base });
+  // The REAL approval, its commit included, is judged once the commit exists and before the branch does: the plan judged
+  // a zero commit, and a real one can sort beside a string into a key the spine refuses (PR 3b attacks).
+  const w = await writeProposal({ repo: REPO, branch, files, allow: [ROUTER], message, base,
+    beforeRef: (commit) => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval(commit)); if (no) die(2, `the spine would refuse this approval with its real commit, so no branch was written: ${no}`); } });
   written = true;
   process.stdout.write(`propose: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}\n`);
   process.stdout.write(w.diff.endsWith("\n") ? w.diff : w.diff + "\n");

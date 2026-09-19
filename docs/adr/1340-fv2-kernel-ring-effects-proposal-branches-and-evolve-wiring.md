@@ -252,3 +252,40 @@ The rest are twins of rows already in this ADR's amendment:
 - a delimiter in TMP
 - the commit encoding
 - the emitter's id line behind `process.exit`
+
+## Amendment, PR 3b (same day): what the second half's two attackers found
+
+PR 3b (bench `--propose --from`, absorb pin, absorb trial) got its own fresh pair, carrying every fixed-defect row.
+The logic attacker found 8 defects and the shell attacker found 12; several were one defect found twice. Each is
+fixed and pinned. Five change decisions above.
+
+- **Compute-once holds at the plan card too.** A conclude plan says the test is computable, over which units and
+  windows, and binds the test's INPUTS (`n_per_arm`, `config_hash`, `metric_hash`); the outcome is a function of them.
+  It never shows the bound: the first cut printed it and recorded nothing, so the owner could plan again as the data
+  grew and apply only the plan that won. A refusal names what gates the test, never the bound `decide()` computed
+  anyway. The apply prints the result after its receipt lands.
+- **The spine's scanner joins the caller's strings only.** The adjacency views joined the emitter's own id, ts and
+  idem, made from the clock, so a dry run could not predict its emit. They are still scanned whole in every canonical
+  view; a key split across two caller fields is still refused.
+- **The real receipt is judged before the effect, not a draft.** `judgement.mjs seal --judge` asks the spine about the
+  payload it will print (the drawn labels, the real commitment) before its nonce is written; trial passes it. A hand
+  seal keeps its old behaviour, because the suite seals into temp bundles the spine would refuse. `writeProposal`
+  takes `beforeRef(commit)`: propose and pin judge their approval WITH the real commit, and a refusal writes no ref.
+- **Branch names are built by `proposalBranch()`,** which defuses the key-shaped prefixes a slug can spell (sk-,
+  xox?-); `checkBranch` refuses one that kept them. The writer also refuses a path that differs from main's only by
+  case (CASE_CLASH), a file/directory conflict with main (BAD_PATH), and a TMP holding the path delimiter in every
+  entry point, the pre-seal check included.
+- **Bench `--propose --from` is keyed on candidate AND champion, and marked only once an approval lands**
+  (`approval.id`). The store is `<spine root>/bench/proposals`, inside the spine's own gitignored root. "Different
+  runs" is compared by content. The approval is judged by the spine (with bench's `--process`) before anything is
+  written, and an apply whose approval did not land exits 1 (PARTIAL) with nothing marked.
+
+The rest are twins of rows already here:
+- trial's reused-bundle guard now reads main
+- a half-failed seal is reported as sealed (exit 1)
+- the id line after the effect cannot turn a landed event into a refusal
+- the leads reader knows the named locks withLock takes
+- a config hook named `x=y` is disabled through `GIT_CONFIG_*`
+- every temp cleanup in bench is litter
+- the scaffold records a source outside the repo by its folder name, not the owner's path
+- the shutdown pause shrinks with depth

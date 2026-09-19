@@ -122,8 +122,12 @@ function collectStringValues(value, out, depth = 0) {
     for (const k of Object.keys(value)) collectStringValues(value[k], out, depth + 1);
 }
 
-// Each view is a different way the same secret could be hiding.
-function buildViews(canonicalText, parsed) {
+// Each view is a different way the same secret could be hiding. `joinFrom` is the value whose strings are joined for
+// the adjacency views (default: all of `parsed`). The emitter passes its event WITHOUT the fields it generates from the
+// clock (id, ts, idem): joined beside a caller's string they made the verdict random -- one payload judged 48 times was
+// refused twice, and a dry-run's ACCEPT did not predict the real emit (PR 3b attacks). Those fields are still scanned
+// whole, in every canonical view.
+function buildViews(canonicalText, parsed, joinFrom = parsed) {
   const views = [canonicalText];
   const stripZw = (s) => s.replace(ZERO_WIDTH, "");
 
@@ -133,7 +137,7 @@ function buildViews(canonicalText, parsed) {
   views.push(stripZw(canonicalText).replace(/\s+/g, ""));
 
   const strings = [];
-  if (parsed !== undefined) collectStringValues(parsed, strings);
+  if (joinFrom !== undefined) collectStringValues(joinFrom, strings);
   if (strings.length) {
     // Adjacency in ONE order is not adjacency: swapping two fields defeated the original
     // single concatenation, so join in several orders.
@@ -169,12 +173,12 @@ function buildViews(canonicalText, parsed) {
  * Throws SpineError("REDACT_FAIL") if the scan itself could not complete -- the caller
  * must then drop the payload (never emit it unscanned).
  */
-export function scanSecrets(canonicalText, parsed) {
+export function scanSecrets(canonicalText, parsed, { joinFrom = parsed } = {}) {
   let views;
   try {
     const structural = scanStructural(parsed);
     if (structural) return { hit: true, rule: structural };
-    views = buildViews(canonicalText, parsed);
+    views = buildViews(canonicalText, parsed, joinFrom);
   } catch (e) {
     if (e instanceof SpineError && e.code === "REDACT_FAIL") throw e;
     throw new SpineError("REDACT_FAIL", `secret scan could not build its views: ${e.message}`);

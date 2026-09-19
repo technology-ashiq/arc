@@ -119,7 +119,11 @@ function main() {
   // later comparison, and every path the report records, comes from this -- never from the raw
   // argument, which can be a case variant or a link path whose bytes came from somewhere else.
   const ROOT = realpathSync(resolve(rootArg));
-  const ROOT_LABEL = relative(process.cwd(), ROOT).split(sep).join("/") || ROOT.split(sep).join("/");
+  // A root OUTSIDE the working directory is recorded by its name alone: the report is committed to a public repo, and
+  // the relative path (or, on another drive, the absolute one) carried the owner's home directory and user name into it
+  // (PR 3b shell attack).
+  const rootRel = relative(process.cwd(), ROOT);
+  const ROOT_LABEL = rootRel === "" ? "." : isAbsolute(rootRel) || rootRel === ".." || rootRel.startsWith(`..${sep}`) ? `(outside this repo) ${basename(ROOT)}` : rootRel.split(sep).join("/");
 
   // Folding is used ONLY to make containment checks stricter (a fold can merge two names, never
   // split one), so folding on every platform is fail-closed. It is NOT what fixes the per-leg

@@ -27,7 +27,9 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomBytes, createHash } from "node:crypto";
+import { spineRefusal } from "../core/plan-expect.mjs";
 // The pool is owned by the VALIDATOR (no side effects); this script consumes it.
 import { LABEL_POOL } from "../hq/lib/validate-absorb.mjs";
 
@@ -89,15 +91,20 @@ if (cmd === "seal") seal: {
   const SEAL_VALUE_FLAGS = ["--candidate", "--variants", "--fixtures", "--evidence", "--correlation", "--bundle-dir"];
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--dry-run") continue;
-    if (a.startsWith("--dry-run=")) die(`--dry-run takes no value; write it bare, not ${a}`);
+    if (a === "--dry-run" || a === "--judge") continue;
+    if (a.startsWith("--dry-run=") || a.startsWith("--judge=")) die(`${a.split("=")[0]} takes no value; write it bare, not ${a}`);
     if (SEAL_VALUE_FLAGS.includes(a)) { i++; continue; }
-    die(`seal does not take ${JSON.stringify(a)} -- its flags are ${SEAL_VALUE_FLAGS.join(" ")} --dry-run`);
+    die(`seal does not take ${JSON.stringify(a)} -- its flags are ${SEAL_VALUE_FLAGS.join(" ")} --dry-run --judge`);
   }
   // --dry-run: every check a seal makes, and nothing written -- no nonce, no commitment, no bundle.
   // --bundle-dir DIR: write the bundle's commitment.txt into DIR instead of --evidence (the face's trial tool puts it on
   // a proposal branch at --evidence, so the working tree is never written; the payload still names --evidence).
   const dryRun = argv.includes("--dry-run");
+  // --judge: the spine judges the payload this seal will print -- its drawn labels, its commitment -- before the nonce is
+  // written, and a refusal seals nothing. The face's trial tool passes it, because it emits that payload next. Off by
+  // default: a hand seal may print a payload for a bundle outside the repo (the suite seals into a temp directory), and
+  // it is the emit, not the seal, that the spine answers.
+  const judge = argv.includes("--judge");
   const bundleDir = flag("--bundle-dir");
   if (dryRun && bundleDir) die("--dry-run writes no bundle, so it takes no --bundle-dir");
   const candidate = flag("--candidate");
@@ -168,6 +175,14 @@ if (cmd === "seal") seal: {
   const nonce = randomBytes(16).toString("hex");
   const commitment = sha256(preimage(mapping, nonce));
 
+  // The payload the owner is asked to judge -- built BEFORE anything is written, and judged by the spine as it is: these
+  // labels, this commitment. A draft with other labels passed the spine, and the real payload was then refused after
+  // the nonce had burned the correlation (fixture names that read as a key beside a drawn label: PR 3b attacks). A
+  // refusal here writes nothing; seal again, and other labels are drawn.
+  const payload = { subject: SUBJECT, candidate, fixtures, labels, commitment, evidence_path: evidence, correlation };
+  const refused = judge ? spineRefusal(join(dirname(fileURLToPath(import.meta.url)), "..", "hq", "arc-event.mjs"), "approval.requested", payload) : null;
+  if (refused) die(`the spine would refuse this seal's approval, so nothing was sealed and the correlation is still free: ${refused}`);
+
   mkdirSync(SEAL_DIR, { recursive: true });
   writeFileSync(
     join(SEAL_DIR, `${correlation}.json`),
@@ -187,9 +202,7 @@ if (cmd === "seal") seal: {
     `  node .claude/scripts/absorb/judgement.mjs reveal --correlation ${correlation} --evidence ${evidence}\n`,
     "utf8");
 
-  // The payload the owner is asked to judge. Printed rather than emitted, because emitting is a
-  // separate deliberate act and this file proposes only.
-  const payload = { subject: SUBJECT, candidate, fixtures, labels, commitment, evidence_path: evidence, correlation };
+  // The payload, printed rather than emitted: emitting is a separate deliberate act and this file proposes only.
   process.stdout.write(JSON.stringify(payload) + "\n");
   process.stderr.write(
     `judgement: sealed ${variants.length} variants as ${labels.join(", ")} -- the mapping is NOT in the bundle.\n` +

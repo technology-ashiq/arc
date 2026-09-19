@@ -286,10 +286,14 @@ function synthesize(kind, flags, { deriveIdem }) {
  * Validate -> scan -> seal. Returns { event, line }.
  * Throws SpineError; the caller maps that to exit 2 or to a quarantine record.
  */
+const EMITTER_FIELDS = new Set(["id", "ts", "idem", "sha"]);
 function seal(event) {
   const canonicalNoSha = validateEvent(event);
 
-  const scan = scanSecrets(canonicalNoSha, event); // throws REDACT_FAIL, never fails open
+  // The adjacency views join the caller's strings only: id, ts and idem are made here from the clock, and a verdict
+  // that depended on where a random hash sorted was a dry-run that could not predict its emit (redact.mjs).
+  const callerFields = Object.fromEntries(Object.entries(event).filter(([k]) => !EMITTER_FIELDS.has(k)));
+  const scan = scanSecrets(canonicalNoSha, event, { joinFrom: callerFields }); // throws REDACT_FAIL, never fails open
   if (scan.hit)
     throw new SpineError("SECRET", `payload matches deny-rule ${scan.rule} -- refused before the spine (ADR-0028)`);
 
@@ -432,7 +436,9 @@ function main(parsed) {
     process.stderr.write("arc-event: WARN event is on the spine but the idem index was not updated -- replay will rebuild it\n");
   // SYNCHRONOUS, then the exit: the caller that spawned this parses exactly this line, and process.exit right after an
   // asynchronous pipe write can cut it (macOS pipes; PR 3a round-2 shell attack). A cut id reads as a receipt never raised.
-  writeSync(1, `${sealed.id}\n`);
+  // The event IS on the spine by now: a reader that closed its end (EPIPE, EAGAIN) loses the id line, and that is not a
+  // refusal. Uncaught, it reached the refusal path, wrote a quarantine record for a landed event and exited 2 (PR 3b).
+  try { writeSync(1, `${sealed.id}\n`); } catch { /* the id line is lost; the event is not */ }
   return 0;
 }
 

@@ -116,7 +116,7 @@ export function decide(input) {
   try {
     return decideInner(input);
   } catch (e) {
-    return { outcome: "no-verdict", reasons: [`the verdict gate could not evaluate this input: ${e?.message ?? e}`], stats: null, missing_windows: null };
+    return { outcome: "no-verdict", reasons: [`the verdict gate could not evaluate this input: ${e?.message ?? e}`], outcomeReasons: [], stats: null, missing_windows: null };
   }
 }
 
@@ -132,6 +132,9 @@ function decideInner(input) {
     guardrails, cohortViolations = 0, missingWindows = 0, computedBefore = false,
   } = input;
   const reasons = [];
+  // The reasons that REPORT the computed test (its bound, its delta), kept apart from the ones that gate it: a caller
+  // that refuses an uncomputable test must not print the result it just refused to record (PR 3b logic attack).
+  const outcomeReasons = [];
 
   // Fixed-horizon, compute-once. Peeking at a running experiment and stopping when it looks good
   // inflates the false-positive rate far above alpha; refusing the SECOND compute is what makes
@@ -176,8 +179,9 @@ function decideInner(input) {
 
       if (reasons.length === 0) {
         stats = newcombeWilsonDifference(s1, u1, s2, u2, alpha);
-        if (!(stats.lower >= effectFloor)) reasons.push(`bound ${stats.lower} does not clear effect_floor ${effectFloor}`);
-        if (!(stats.d >= mde)) reasons.push(`point delta ${stats.d} does not reach the MDE ${mde}`);
+        if (!(stats.lower >= effectFloor)) outcomeReasons.push(`bound ${stats.lower} does not clear effect_floor ${effectFloor}`);
+        if (!(stats.d >= mde)) outcomeReasons.push(`point delta ${stats.d} does not reach the MDE ${mde}`);
+        reasons.push(...outcomeReasons);
       }
     }
   }
@@ -212,6 +216,7 @@ function decideInner(input) {
   return {
     outcome: reasons.length === 0 ? "verdict" : "no-verdict",
     reasons,
+    outcomeReasons,
     stats,
     missing_windows: missingWindows,
   };

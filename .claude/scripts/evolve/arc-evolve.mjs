@@ -159,13 +159,14 @@ async function planOrApply(cmd, flags) {
     const emit = ["emit", plan.kind, "--payload", JSON.stringify(plan.payload), "--strict"];
     const dry = spawnSync(process.execPath, [ARC_EVENT, ...emit, "--dry-run"], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
     if (dry.status !== 0) die(`the spine would refuse this ${plan.kind}: ${firstErr(dry)}`);
-    return { emit, digest: planDigest({ kind: plan.kind, payload: plan.payload }) };
+    // A conclude binds its test's inputs, not its payload: a digest of the payload is a digest of the result (wire.mjs).
+    return { emit, digest: planDigest(plan.bind ? { kind: plan.kind, bind: plan.bind } : { kind: plan.kind, payload: plan.payload }) };
   };
 
   if (flags.expect === undefined) {
     const plan = compute((await readAll(root, "scan")).events.map((e) => e.event));
     const { digest } = judged(plan);
-    for (const l of plan.lines) process.stdout.write(`arc-evolve: ${l}\n`);
+    for (const l of plan.planLines ?? plan.lines) process.stdout.write(`arc-evolve: ${l}\n`);
     process.stdout.write(`arc-evolve: a plan -- nothing was written. To write exactly this, run the same command with --expect ${digest}\n`);
     process.stdout.write(expectLine(digest) + "\n");
     return;
@@ -178,11 +179,12 @@ async function planOrApply(cmd, flags) {
     const { emit, digest } = judged(plan);
     const stale = staleReason(flags.expect, digest);
     if (stale) die(stale);
-    for (const l of plan.lines) process.stdout.write(`arc-evolve: ${l}\n`);
     const w = spawnSync(process.execPath, [ARC_EVENT, ...emit], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
     if (w.status !== 0) die(`the spine refused the ${plan.kind}, and nothing was written: ${firstErr(w)}`);
     const id = String(w.stdout || "").trim().split(/\r?\n/).pop() || "";
     if (!ULID_RE.test(id)) die(`the emitter exited 0 and printed no receipt id -- look for a ${plan.kind} on the spine before running this again`, 1);
+    // AFTER the receipt: a conclude's result is shown once it is recorded, and an emit that failed shows nothing.
+    for (const l of plan.lines) process.stdout.write(`arc-evolve: ${l}\n`);
     process.stdout.write(`receipt: ${plan.kind} ${id}\n`);
   }, { lockName: ".evolve-apply.lock", timeoutMs: 60_000 });
 }

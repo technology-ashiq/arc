@@ -23,7 +23,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkProposal, planProposal, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
+import { checkProposal, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
@@ -69,7 +69,7 @@ function parseArgs(argv) {
 async function main() {
   const a = parseArgs(process.argv.slice(2));
   const name = basename(a["--report"], ".md").toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-  const branch = `feat/face-absorb-pin-${name}`.slice(0, 90).replace(/-+$/, "");
+  const branch = proposalBranch("absorb-pin", name);
   let scratch;
   try { scratch = mkdtempSync(join(tmpdir(), "arc-absorb-pin-")); }
   catch (e) { die(2, `no temp directory could be made (${e && e.code ? e.code : "error"}) -- nothing was written`); }
@@ -83,7 +83,10 @@ async function main() {
     const allow = [a["--report"]];
     // The branch is free and main's commit is read ONCE: the plan, the digest and the write all use this base.
     const { base } = await checkProposal({ repo: REPO, branch, paths: allow, allow });
-    const what = `pin ${name} at ${a["--pin"]} and scaffold its extraction report`;
+    // The report's PATH, not its bare name, and first: the scanner also reads every string with its spaces removed, and
+    // "pin risk-assessment at ..." became "sk-assessmentat0123..." -- a key -- while the path's "/" and "." end the run
+    // (PR 3b logic attack, the branch's twin one field over).
+    const what = `scaffold ${a["--report"]}, the extraction report for the source pinned at ${a["--pin"]}`;
     const approval = (commit) => ({ what, gate: "absorb-pin", pin: a["--pin"], license: a["--license"], report: a["--report"], branch, base, commit });
     // The approval is judged before anything is written: a refusal after the write would strand the branch.
     const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)), { cwd: REPO });
@@ -105,7 +108,9 @@ async function main() {
     if (a["--expect"] === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, read the diff, then run it again with the --expect it prints");
     const stale = staleReason(a["--expect"], digest);
     if (stale) die(2, stale);
-    const w = await writeProposal({ repo: REPO, branch, files, allow, base, message });
+    // The REAL approval, its commit included, is judged before the branch exists (writeProposal beforeRef; PR 3b attacks).
+    const w = await writeProposal({ repo: REPO, branch, files, allow, base, message,
+      beforeRef: (commit) => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval(commit), { cwd: REPO }); if (no) die(2, `the spine would refuse this approval with its real commit, so no branch was written: ${no}`); } });
     written = true;
     process.stdout.write(`pin: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}\n`);
     const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(approval(w.commit)), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });

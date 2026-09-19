@@ -431,10 +431,10 @@ export function repoStatus(root) {
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { planDigest, expectLine, staleReason } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 
 import { parseBudget } from "./drivers/common.mjs";
 
@@ -982,7 +982,7 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
     // (arc-run.mjs:184-186), so an exit-0 attempt is a schema PASS by construction.
     return { ok: true, verdict: "ok", output, score, elapsedMs, after, schema: true, measuredInr, tokensTotal, costSource, receiptsSeen, reason: null };
   } finally {
-    rmSync(tmp, { recursive: true, force: true });
+    try { rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter, never the outcome (PR 3b) */ }
     state.cleanup();
   }
 }
@@ -1452,7 +1452,7 @@ export function emitRunCompleted(root, payload, outcome) {
     }
     return { id, why: null, ...findReceipt(root, id) };
   } finally {
-    rmSync(tmp, { recursive: true, force: true });
+    try { rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter, never the outcome (PR 3b) */ }
   }
 }
 // ---- the run ---------------------------------------------------------------------------------
@@ -2187,16 +2187,19 @@ export function buildProposal(root, report, championDir, outDir, { emit = true }
   if (leaked.length) throw new Error(`a proposal artifact carries a secret shape (${leaked[0]}) -- nothing was proposed`);
 
   let approval = null;
+  // The approval this proposal raises, built whether or not it is emitted: propose --from has the spine judge it before
+  // anything is written (PR 3b shell attack: a dry run that never asked planned an approval the spine then refused).
+  const wouldRaise = !abort && diffWritten > 0 ? {
+    what: `route ${proposed.map((r) => r.task_class).join(", ")} to ${report.provenance.subject.driver}`,
+    gate: "router-merge",
+    router_sha: shaAtRead,
+    candidate: report.provenance.subject,
+    champion: champProv.subject,
+    classes: proposed.map((r) => ({ task_class: r.task_class, decided_by: r.verdict.decidedBy })),
+  } : null;
   // A dry run (propose --from --dry-run) computes every verdict and every diff and raises nothing.
-  if (emit && !abort && diffWritten > 0) {
-    approval = emitApprovalRequested(root, {
-      what: `route ${proposed.map((r) => r.task_class).join(", ")} to ${report.provenance.subject.driver}`,
-      gate: "router-merge",
-      router_sha: shaAtRead,
-      candidate: report.provenance.subject,
-      champion: champProv.subject,
-      classes: proposed.map((r) => ({ task_class: r.task_class, decided_by: r.verdict.decidedBy })),
-    });
+  if (emit && wouldRaise) {
+    approval = emitApprovalRequested(root, wouldRaise);
     summary.push(approval.landed
       ? `approval.requested ${approval.id} is in events/ and not in _quarantine/`
       : `approval.requested was NOT sealed${approval.why ? ` -- ${approval.why}` : ""}`);
@@ -2205,6 +2208,9 @@ export function buildProposal(root, report, championDir, outDir, { emit = true }
   return {
     abort,
     summary,
+    wouldRaise,
+    landed: !!(approval && approval.landed),
+    notRaised: approval && !approval.landed ? (approval.why || "it was not sealed") : null,
     receipt: {
       diffs: diffWritten,
       // The classes a DIFF was written for, not the ones that merely passed the gates: a receipt
@@ -2247,7 +2253,7 @@ export function emitApprovalRequested(root, payload) {
     }
     return { id, why: null, ...findReceipt(root, id) };
   } finally {
-    rmSync(tmp, { recursive: true, force: true });
+    try { rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter, never the outcome (PR 3b) */ }
   }
 }
 
@@ -2585,61 +2591,95 @@ function main() {
   // a tracked file) and the approval goes to the inbox; the receipt line names it.
   if (args.from) {
     const candDir = resolve(args.from);
+    const champDir = resolve(args.champion);
+    // A refusal SETS the exit code and returns: process.exit straight after console.error can cut the line on a pipe
+    // (the fixed-defects row -- six of them were new in this block, PR 3b shell attack).
+    const stopFrom = (msg, code = EXIT.OPERATOR) => { console.error(`arc-bench: ${msg}`); process.exitCode = code; };
+    // An apply is ALWAYS bound to a plan (PR 3a round-2 logic attack) -- checked FIRST: it is about how bench was run,
+    // and behind the existence check an unbound call was answered "already exists" (PR 3b logic attack).
+    if (!args.dryRun && !args.expect) return stopFrom("an apply is bound to a plan: run --propose --from with --dry-run first, then again with the --expect it prints");
     for (const f of ["scorecard.json", "provenance.json"]) {
-      if (!existsSync(join(candDir, f))) { console.error(`arc-bench: --from ${args.from} has no ${f} -- point it at a previous run's --out directory`); process.exit(EXIT.OPERATOR); }
+      if (!existsSync(join(candDir, f))) return stopFrom(`--from ${args.from} has no ${f} -- point it at a previous run's --out directory`);
     }
     let report;
     try { report = { scorecard: JSON.parse(readFileSync(join(candDir, "scorecard.json"), "utf8")), provenance: JSON.parse(readFileSync(join(candDir, "provenance.json"), "utf8")) }; }
-    catch (e) { console.error(`arc-bench: --from ${args.from} does not hold a readable scorecard and provenance: ${e.message}`); process.exit(EXIT.OPERATOR); }
-    if (!report.scorecard || !Array.isArray(report.scorecard.classes) || !report.provenance || !report.provenance.subject) {
-      console.error(`arc-bench: --from ${args.from} is not a bench run's output (no classes, or no subject)`); process.exit(EXIT.OPERATOR);
-    }
-    let outDir;
-    try {
-      outDir = args.dryRun
-        ? mkdtempSync(join(tmpdir(), "arc-bench-propose-dry-"))
-        : join(dirname(dirname(spinePaths(root).events)), "bench", "proposals", `${String(report.provenance.subject.driver || "candidate").replace(/[^a-z0-9-]/gi, "-")}-${canonicalHash(report.scorecard).slice(0, 12)}`);
-    } catch (e) { console.error(`arc-bench: ${e.message}`); process.exit(EXIT.OPERATOR); }
-    if (!args.dryRun && existsSync(join(outDir, "proposal"))) {
-      console.error(`arc-bench: a proposal from this exact candidate already exists at ${relative(root, outDir) || outDir} -- proposing it twice would raise two approvals for one question`);
-      process.exit(EXIT.OPERATOR);
+    catch (e) { return stopFrom(`--from ${args.from} does not hold a readable scorecard and provenance: ${e.message}`); }
+    if (!report.scorecard || !Array.isArray(report.scorecard.classes) || !report.provenance || !report.provenance.subject)
+      return stopFrom(`--from ${args.from} is not a bench run's output (no classes, or no subject)`);
+    const fileSha = (p) => { try { return createHash("sha256").update(readFileSync(p)).digest("hex"); } catch { return null; } };
+    const evidence = () => ["scorecard.json", "provenance.json"].flatMap((n) => [fileSha(join(candDir, n)), fileSha(join(champDir, n))]);
+    // DIFFERENT RUNS, BY CONTENT. parseArgs compares the spellings, so the candidate's path in upper case, or a copy of
+    // its directory, was its own champion and proposed "decided on tie" (PR 3b attacks, both).
+    const [candScore, champScore, candProv, champProv] = evidence();
+    if (candScore !== null && candScore === champScore && candProv === champProv)
+      return stopFrom(`--from and --champion must be different runs -- ${args.champion} holds the candidate's own scorecard and provenance, byte for byte; a candidate compared with itself proves nothing`);
+    // ONE QUESTION, ONE APPROVAL: keyed on the candidate AND the champion, and marked only once an approval LANDED. The
+    // key was the candidate alone and the mark was the artifacts, so an apply against the wrong champion raised nothing
+    // and then blocked the right one forever (PR 3b logic attack). The store is INSIDE the spine's own root: two levels up
+    // put it in a repository's working tree when the spine sat at its top (PR 3b logic attack).
+    const key = `${String(report.provenance.subject.driver || "candidate").replace(/[^a-z0-9-]/gi, "-")}-${canonicalHash(report.scorecard).slice(0, 12)}-vs-${planDigest({ champion: [champScore, champProv] }).slice(0, 12)}`;
+    let store;
+    try { store = join(dirname(spinePaths(root).events), "bench", "proposals", key); }
+    catch (e) { return stopFrom(e.message); }
+    const raisedMark = join(store, "approval.id");
+    if (existsSync(raisedMark)) {
+      let raised = "";
+      try { raised = readFileSync(raisedMark, "utf8").trim(); } catch { /* named without its id */ }
+      return stopFrom(`a proposal from this exact candidate against this champion already exists${raised ? ` (approval.requested ${raised})` : ""} at ${relative(root, store) || store} -- proposing it twice would raise two approvals for one question`);
     }
     // THE PLAN IS BOUND TO WHAT IT SHOWED. The digest covers the four evidence files' bytes and what the proposal would
     // say (the gates' verdicts, the diffs' classes, an abort for a moved router). An apply computes it again, from a
     // dry proposal in a scratch dir, and writes nothing unless it is the digest the plan printed: evidence swapped under
     // the same --from between the plan and the click is refused, not proposed (PR 3a logic attack, bound here too).
-    const fileSha = (p) => { try { return createHash("sha256").update(readFileSync(p)).digest("hex"); } catch { return null; } };
-    const digestOf = (p) => planDigest({
-      evidence: ["scorecard.json", "provenance.json"].flatMap((n) => [fileSha(join(candDir, n)), fileSha(join(resolve(args.champion), n))]),
-      summary: p.summary, abort: p.abort || null, proposed: p.receipt.proposed,
-    });
-    // An apply is ALWAYS bound to a plan (PR 3a round-2 logic attack, the propose twin): no unbound --from apply.
-    if (!args.dryRun && !args.expect) { console.error("arc-bench: an apply is bound to a plan: run --propose --from with --dry-run first, then again with the --expect it prints"); process.exitCode = EXIT.OPERATOR; return; }
-    if (!args.dryRun && args.expect) {
-      const scratch = mkdtempSync(join(tmpdir(), "arc-bench-propose-check-"));
-      let dry;
-      try { dry = buildProposal(root, report, resolve(args.champion), scratch, { emit: false }); }
-      catch (e) { console.error(`arc-bench: ${e.message}`); process.exitCode = e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL; return; }
-      finally { try { rmSync(scratch, { recursive: true, force: true }); } catch { /* litter */ } }
-      const stale = staleReason(args.expect, digestOf(dry));
-      if (stale) { console.error(`arc-bench: ${stale}`); process.exitCode = EXIT.OPERATOR; return; }
+    const digestOf = (p) => planDigest({ evidence: evidence(), summary: p.summary, abort: p.abort || null, proposed: p.receipt.proposed });
+    // ONE dry proposal, plan and apply alike, in a scratch dir that is ALWAYS removed: a refused dry run left its
+    // directory behind every time, and a missing TMP at apply was a raw stack and exit 1 (PR 3b shell attack).
+    let scratch;
+    try { scratch = mkdtempSync(join(tmpdir(), args.dryRun ? "arc-bench-propose-dry-" : "arc-bench-propose-check-")); }
+    catch (e) { return stopFrom(`no temp directory could be made (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+    let dry;
+    try { dry = buildProposal(root, report, champDir, scratch, { emit: false }); }
+    catch (e) { return stopFrom(e.message, e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL); }
+    finally { try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter */ } }
+    // The spine judges the approval BEFORE anything is written, with the flags the real emit passes. A plan that never
+    // asked planned an approval the spine then refused -- after the artifacts were written, with exit 0 and no receipt
+    // line, and every retry refused (a driver name holding "sk-": PR 3b shell attack).
+    if (dry.wouldRaise) {
+      const no = spineRefusal(join(root, ".claude", "scripts", "hq", "arc-event.mjs"), "approval.requested", dry.wouldRaise, { cwd: root, flags: ["--process", BENCH_ID] });
+      if (no) return stopFrom(`the spine would refuse this proposal's approval, so nothing is written: ${no}`);
     }
-    let proposal;
-    try { proposal = buildProposal(root, report, resolve(args.champion), outDir, { emit: !args.dryRun }); }
-    catch (e) { console.error(`arc-bench: ${e.message}`); process.exitCode = e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL; return; }
-    console.log(`arc-bench: ${args.dryRun ? "would propose" : "proposal"} -- candidate ${report.provenance.subject.driver}, champion from ${args.champion}; nothing was run, nothing was spent`);
-    for (const line of proposal.summary) console.log(`  ${line}`);
     if (args.dryRun) {
-      try { rmSync(outDir, { recursive: true, force: true }); } catch { /* litter */ }
+      console.log(`arc-bench: would propose -- candidate ${report.provenance.subject.driver}, champion from ${args.champion}; nothing was run, nothing was spent`);
+      for (const line of dry.summary) console.log(`  ${line}`);
       console.log("arc-bench: --dry-run -- no artifact was kept and no approval was raised");
-      console.log(expectLine(digestOf(proposal)));
+      console.log(expectLine(digestOf(dry)));
       // The exit code is SET: process.exit right after the line the door parses can cut an asynchronous pipe.
-      process.exitCode = proposal.abort ? EXIT.PARTIAL : EXIT.OK;
+      process.exitCode = dry.abort ? EXIT.PARTIAL : EXIT.OK;
       return;
     }
-    console.log(`arc-bench: proposal artifacts written to ${relative(root, join(outDir, "proposal")) || join(outDir, "proposal")}`);
-    if (proposal.abort) { console.error(`arc-bench: ABORTED -- ${proposal.abort}`); process.exitCode = EXIT.PARTIAL; return; }
-    if (proposal.receipt.approval) console.log(`receipt: approval.requested ${proposal.receipt.approval}`);
+    const stale = staleReason(args.expect, digestOf(dry));
+    if (stale) return stopFrom(stale);
+    // An earlier apply that raised nothing left its artifacts: they are set aside, never mixed into this one's.
+    if (existsSync(join(store, "proposal"))) {
+      try { renameSync(join(store, "proposal"), join(store, `proposal.unraised-${Date.now()}`)); }
+      catch (e) { return stopFrom(`an earlier, unraised proposal at ${relative(root, store) || store} could not be set aside (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+    }
+    let proposal;
+    try { proposal = buildProposal(root, report, champDir, store, { emit: true }); }
+    catch (e) { return stopFrom(e.message, e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL); }
+    console.log(`arc-bench: proposal -- candidate ${report.provenance.subject.driver}, champion from ${args.champion}; nothing was run, nothing was spent`);
+    for (const line of proposal.summary) console.log(`  ${line}`);
+    console.log(`arc-bench: proposal artifacts written to ${relative(root, join(store, "proposal")) || join(store, "proposal")}`);
+    if (proposal.abort) return stopFrom(`ABORTED -- ${proposal.abort}`, EXIT.PARTIAL);
+    // Artifacts written and no approval landed is NOT done: it exited 0 with no receipt line (PR 3b shell attack).
+    if (proposal.wouldRaise && !proposal.landed)
+      return stopFrom(`the artifacts are written, and the approval was NOT raised -- ${proposal.notRaised}. Nothing is marked, so this plan can be applied again once that is fixed`, EXIT.PARTIAL);
+    if (proposal.landed) {
+      // The mark is written only for an approval that landed. A mark that could not be written is said, never hidden.
+      try { writeFileSync(raisedMark, `${proposal.receipt.approval}\n`, "utf8"); }
+      catch (e) { console.error(`arc-bench: WARN the approval landed and its mark was not written (${e && e.code ? e.code : "error"}) -- do not apply this plan again`); }
+      console.log(`receipt: approval.requested ${proposal.receipt.approval}`);
+    }
     process.exitCode = EXIT.OK;
     return;
   }
