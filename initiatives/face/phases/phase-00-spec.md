@@ -1,7 +1,7 @@
 # Phase 00 — Harness steel thread: v0.7 in, L3 built on CI, the ported smoke opening today's rooms
 
 **Goal (one line):** v0.7 lands as the canonical reference with its 36-module contract frozen, and a bats suite builds `face/` and opens every served room in a real headless Chrome on every CI leg with Node ≥20.19 (ADR-1336).
-**Appetite:** 2 days (hard stop at 2 days without a green browser suite — ADR-1336)
+**Appetite:** 1 day spent of 2 days allotted, the rest banked forward (ADR-1339) — hard stop at 2 days without a green browser suite (ADR-1336)
 **Depends on:** none
 **Serves:** no REQ (steel thread) — it de-risks REQ-01 and REQ-09 before any dependent work.
 **Branch:** `feat/face-v2-00`

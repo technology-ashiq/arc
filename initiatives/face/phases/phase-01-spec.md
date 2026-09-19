@@ -1,7 +1,7 @@
 # Phase 01 — Tokens + kit: one source, two moods, the shared kit, and the 9 bespoke rooms on it
 
 **Goal (one line):** REQ-02 — `docs/design/system/tokens.css` carries both moods with computed contrast, the copy is generated, v0.7's kit is ported onto Tailwind v4 in L3, and the 9 bespoke rooms render on it in both moods.
-**Appetite:** 2 days
+**Appetite:** 0.5 days spent of 2 days allotted, the rest banked forward (ADR-1339)
 **Depends on:** phase-00
 **Serves:** REQ-02
 **Branch:** `feat/face-v2-01`

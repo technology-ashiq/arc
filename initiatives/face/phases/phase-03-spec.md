@@ -1,7 +1,7 @@
 # Phase 03 — The 36 modules, read-side, in five ring PRs
 
 **Goal (one line):** REQ-01 + REQ-05 — all 36 v0.7 modules render in both moods from what the door serves, and every gap is a named `NOT SERVED` entry instead of a bundled fact (ADR-1324).
-**Appetite:** 7 days — command 1d · kernel 2d · factory 1.5d · money 1.5d · company 1d
+**Appetite:** 1.5 days spent of 7 days allotted (command 1d · kernel 2d · factory 1.5d · money 1.5d · company 1d), the rest banked forward (ADR-1339)
 **Depends on:** phase-02
 **Serves:** REQ-01, REQ-05
 **Branches:** `feat/face-v2-03-command` · `-kernel` · `-factory` · `-money` · `-company` — one PR each, in that order.
