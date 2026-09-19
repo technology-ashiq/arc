@@ -28,15 +28,16 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, writeSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseLaneArgs, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
+import { laneHeader, parseLaneArgs, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
 import { buildPack, renderPack, sourcesField } from "./context-pack.mjs";
 import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger, scoreProblem, setSliceField } from "./ledger.mjs";
 import { RISK_GLOBS } from "./quality.mjs";
-import { planDigest, expectLine, staleReason } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_ROOT = resolve(HERE, "..", "..", "..");
@@ -288,6 +289,26 @@ function findLedger(tracker) {
   return { file: last, path: join(dir, last), parsed: parseLedger(readFileSync(join(dir, last), "utf8")) };
 }
 
+/**
+ * One bound apply per ledger at a time: an exclusive lock file named for the ledger's real path, in the temp dir (never
+ * in the owner's tree), released on exit. Three applies of one plan all landed, each emitting its receipts (PR 4
+ * attacks). A lock older than two minutes is a killed apply's.
+ * @param {string} ledgerReal
+ */
+function takeNextLock(ledgerReal) {
+  const lock = join(tmpdir(), `arc-develop-next-${createHash("sha256").update(ledgerReal).digest("hex").slice(0, 16)}.lock`);
+  const take = () => { try { closeSync(openSync(lock, "wx")); return true; } catch (e) { if (e && e.code === "EEXIST") return false; throw e; } };
+  let ok = false;
+  try { ok = take(); } catch (e) { die(`the apply's lock could not be taken (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+  if (!ok) {
+    let age = 0;
+    try { age = Date.now() - statSync(lock).mtimeMs; } catch { /* released meanwhile */ }
+    if (age > 120_000) { try { unlinkSync(lock); } catch { /* another breaker */ } try { ok = take(); } catch { ok = false; } }
+  }
+  if (!ok) die("another apply of this lane's next slice is running -- nothing was written; wait for it and plan again");
+  process.once("exit", () => { try { unlinkSync(lock); } catch { /* released */ } });
+}
+
 async function modeNext(ctx, bind = {}) {
   const led = findLedger(ctx.tracker);
   if (!led) die("no slice ledger found — run /arc-develop start <n> first");
@@ -295,6 +316,23 @@ async function modeNext(ctx, bind = {}) {
   for (const e of errors) say(`WARN  [ledger] ${led.file}:${e.line} — ${e.msg}`);
   // A bound run (the face's plan or apply) writes nothing and emits nothing until its digest is checked.
   const bound = bind.dryRun === true || bind.expect !== undefined;
+  let ledgerReal = led.path;
+  if (bound) {
+    // FENCED: the ledger and its phases folder resolve inside the repo. A junction on phases/ sent the write to a file
+    // outside it while the room's own reader refused that file (PR 4 shell attack).
+    try { ledgerReal = realpathSync(led.path); } catch { die(`${led.file} cannot be resolved -- not read, not written`); }
+    let top;
+    try { top = realpathSync(ctx.root); } catch { die("the repository root cannot be resolved -- nothing was written"); }
+    if (!ledgerReal.startsWith(top + sep)) die(`${led.file} resolves outside the repository -- not read, not written`);
+    // The room reads the ledger its lane's header names; the verb must write that one (PR 4 shell attack: the room
+    // showed phase 01 while next planned a write to phase 00).
+    if (ctx.mode !== "root") {
+      const hp = String(laneHeader(join(ctx.tracker, "PROGRESS.md")).phase || "");
+      if (/^[0-9]{1,3}$/.test(hp) && led.file !== `phase-${hp.padStart(2, "0")}-tasks.md`)
+        die(`the lane's header names phase ${hp}, and the lowest unfinished ledger is ${led.file} -- the room and this verb would read different ledgers; finish or fix ${led.file} first`);
+    }
+    if (bind.expect !== undefined) takeNextLock(ledgerReal);
+  }
   const before = readFileSync(led.path, "utf8");
   const phase = (led.file.match(/phase-(\d+)-tasks/) || [, null])[1];
 
@@ -384,6 +422,14 @@ async function modeNext(ctx, bind = {}) {
   }
 
   if (bound) {
+    // A plan that would write nothing is not a plan: applied, it only emitted receipts -- and each click added one to
+    // the room's "slices proven" (PR 4 logic attack).
+    if (after === before) die(`nothing to record: ${led.file} would not change${unrecorded ? ` (the pack cannot be recorded -- ${unrecorded})` : " -- slice " + next.id + "'s sources already hold this pack"}`);
+    // The receipt the apply raises, judged by the spine BEFORE anything is written: a slice id that reads as a key wrote
+    // the ledger and then had its receipt refused (PR 4 logic attack; the pin and propose twins).
+    const receipt = { note: "develop.next", lane: ctx.mode === "root" ? null : ctx.lane, phase, slice: next.id, recorded: true };
+    const refused = spineRefusal(join(ARC_ROOT, ".claude", "scripts", "hq", "arc-event.mjs"), "note.logged", receipt);
+    if (refused) die(`the spine would refuse this apply's receipt, so nothing is written: ${refused}`);
     // The digest covers the ledger as read, the slice handed out and the exact text that would be written.
     const digest = planDigest({
       lane: ctx.mode === "root" ? null : ctx.lane, ledger: led.file, phase, slice: next.id,
@@ -397,7 +443,18 @@ async function modeNext(ctx, bind = {}) {
     }
     const stale = staleReason(bind.expect, digest);
     if (stale) die(stale);
-    if (after !== before) writeFileSync(led.path, after, "utf8");
+    // RE-READ, THEN AN ATOMIC WRITE. The digest was checked against the ledger as read seconds earlier; the build
+    // session edits this file, and an edit landing while the pack was built was silently written over (PR 4 attacks).
+    let now;
+    try { now = readFileSync(led.path, "utf8"); } catch (e) { die(`${led.file} could not be read again (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+    if (now !== before) die(`PLAN_STALE -- ${led.file} changed while this apply ran (the session edited it); nothing was written, plan again`);
+    const tmp = join(dirname(ledgerReal), `.${led.file}.${process.pid}.tmp`);
+    try { writeFileSync(tmp, after, { encoding: "utf8", flag: "wx" }); renameSync(tmp, ledgerReal); }
+    catch (e) {
+      try { unlinkSync(tmp); } catch { /* not made */ }
+      // Nothing was written: exit 2, by name -- an uncaught EPERM was exit 1, "the ledger IS written" (PR 4 attacks).
+      die(`${led.file} could not be written (${e && e.code ? e.code : "error"}) -- nothing was written`);
+    }
     if (unrecorded) say(`WARN  [sources] the pack above was NOT recorded — ${unrecorded}`);
     // The slice.done the unbound run emits, for the last proven slice, then the op's OWN receipt -- strict, and its
     // id printed: a refused or lost one exits 1 and says the ledger IS written.
@@ -405,7 +462,7 @@ async function modeNext(ctx, bind = {}) {
       const last = proven[proven.length - 1];
       await emit("slice.done", { lane: ctx.mode === "root" ? null : ctx.lane, phase, slice: last.id, tier: last.fields.tier ?? null, commit: last.fields.commit ?? null });
     }
-    const rec = await emitNoteReceipt({ note: "develop.next", lane: ctx.mode === "root" ? null : ctx.lane, phase, slice: next.id, recorded: after !== before });
+    const rec = await emitNoteReceipt(receipt);
     say(`Progress: ${p}/${total} proven.`);
     if (!rec.id) { say(`STOP: ${led.file} IS written, and its receipt was not -- ${rec.why}`); flush(1); }
     say(`receipt: note.logged ${rec.id}`);

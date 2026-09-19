@@ -69,16 +69,23 @@ case "$CMD" in
       esac
     done
     # --out-dir: scaffold into a directory OUTSIDE the tree (the face's work door commits it to a proposal branch
-    # through the one proposal writer, ADR-1341 §2). It must be absolute and new, or empty. The repo's own explore dir
-    # is still refused below if it exists -- the branch would collide with it.
+    # through the one proposal writer, ADR-1341 §2). It must be absolute, must NOT exist yet, and its parent must sit
+    # outside the repository: "empty" was decided by a listing that could fail, so an unlistable folder read as empty
+    # and its files were overwritten, and a folder inside the tree -- another explore's, .claude/hooks -- was taken
+    # (PR 4 shell attack).
     if [ -n "$OUT_DIR" ]; then
       case "$OUT_DIR" in
         /*|[A-Za-z]:[\\/]*) ;;
         *) echo "design-explore: --out-dir must be an absolute path outside the tree (got: $OUT_DIR)" >&2; exit 1;;
       esac
-      if [ -e "$OUT_DIR" ] && [ -n "$(ls -A "$OUT_DIR" 2>/dev/null)" ]; then
-        echo "design-explore: --out-dir $OUT_DIR is not empty" >&2; exit 1
+      if [ -e "$OUT_DIR" ] || [ -L "$OUT_DIR" ]; then
+        echo "design-explore: --out-dir $OUT_DIR already exists -- it must be a new directory" >&2; exit 1
       fi
+      out_parent="$(cd "$(dirname "$OUT_DIR")" 2>/dev/null && pwd -P)" || { echo "design-explore: --out-dir's parent does not exist" >&2; exit 1; }
+      root_real="$(cd "$ROOT" && pwd -P)"
+      case "$out_parent/" in
+        "$root_real"/*) echo "design-explore: --out-dir must be outside the repository (got: $OUT_DIR)" >&2; exit 1;;
+      esac
     fi
     # --base: the revision the explore is built against, when it is not HEAD -- a proposal branch is based on main.
     if [ -n "$BASE_GIVEN" ]; then
@@ -101,11 +108,14 @@ case "$CMD" in
         echo "design-explore: --brief must be a repo-relative path without '..' (got: $BRIEF)" >&2
         exit 1;;
     esac
-    if [ ! -f "$ROOT/$BRIEF" ]; then
+    # With --out-dir the caller read the brief and the explore from MAIN, where the branch is cut (open-brief.mjs): the
+    # owner's checkout may be behind main, and consulting it refused a brief main holds (PR 4 attacks). Without it, the
+    # scaffold lands in this tree, and this tree is the one to check.
+    if [ -z "$OUT_DIR" ] && [ ! -f "$ROOT/$BRIEF" ]; then
       echo "design-explore: brief not found at $BRIEF" >&2
       exit 1
     fi
-    if [ -d "$EX" ]; then
+    if [ -z "$OUT_DIR" ] && [ -d "$EX" ]; then
       # An explore dir is append-only evidence: re-initialising would silently discard the
       # thesis assignments and artifacts of the run that already happened. A new attempt is
       # a NEW id, and the old dir stays as the record of the old attempt.

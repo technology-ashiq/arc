@@ -21,7 +21,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, writeSy
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isOneLine } from "../core/one-line.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, withExclusiveLock } from "../core/plan-expect.mjs";
 import { query } from "../hq/spine.mjs";
 import { spineRoot } from "../hq/lib/spine-io.mjs";
 
@@ -95,16 +95,32 @@ async function main() {
   if (!realpathSync(ex).startsWith(realpathSync(REPO) + sep)) die(2, `docs/design/explore/${a.explore} resolves outside this repo`);
   const missing = VARIANTS.filter((v) => !existsSync(join(ex, `variant-${v}`)));
   if (missing.length) die(2, `${a.explore} has no variant-${missing.join(", variant-")} -- a pick is among three built variants`);
+  // Each VARIANT folder is itself fenced: a variant-b that was a junction to a folder outside the repo was fingerprinted
+  // as the composer's work (PR 4 attacks, both). A link is refused, and the folder must resolve inside the explore.
+  const exReal = realpathSync(ex);
+  for (const v of VARIANTS) {
+    const vd = join(ex, `variant-${v}`);
+    if (lstatSync(vd).isSymbolicLink()) die(2, `variant-${v} of ${a.explore} is a link -- a variant is files the composer wrote`);
+    if (!realpathSync(vd).startsWith(exReal + sep)) die(2, `variant-${v} of ${a.explore} resolves outside the explore`);
+  }
   if (!existsSync(join(ex, `variant-${a.pick}`, "index.html"))) die(2, `variant-${a.pick} of ${a.explore} has no index.html -- its composer has not built it`);
   if (existsSync(join(ex, "PICK.md"))) die(2, `${a.explore} already has a PICK.md -- a pick is recorded once`);
-  // A pick raised before, on the spine, is a pick recorded -- stamped or still open.
-  const raised = (await query(spineRoot(), { kind: "approval.requested", engine: "scan" })).events
-    .some((e) => e.event && e.event.payload && e.event.payload.gate === "design-pick" && e.event.payload.explore === a.explore);
-  if (raised) die(2, `a pick of ${a.explore} is already in the inbox or decided -- a pick is recorded once`);
+  // A pick raised before, on the spine, is a pick recorded -- stamped or still open. A day file the reader could not
+  // open is a day it cannot answer for, so it refuses: a pick in an unreadable day was raised again (PR 4 shell attack).
+  const alreadyRaised = async () => {
+    const q = await query(spineRoot(), { kind: "approval.requested", engine: "scan" });
+    if (q.unreadable && q.unreadable.length) die(2, `the spine has ${q.unreadable.length} day file(s) it could not read (${q.unreadable[0].day}: ${q.unreadable[0].code}) -- it cannot tell whether this explore was picked; try again`);
+    return q.events.some((e) => e.event && e.event.payload && e.event.payload.gate === "design-pick"
+      && (e.event.payload.explore_dir === exploreDir || e.event.payload.explore === a.explore));
+  };
+  const exploreDir = `docs/design/explore/${a.explore}/`;
+  if (await alreadyRaised()) die(2, `a pick of ${a.explore} is already in the inbox or decided -- a pick is recorded once`);
   const fingerprints = Object.fromEntries(VARIANTS.map((v) => [v, fingerprint(join(ex, `variant-${v}`))]));
+  // The explore named by its folder and quoted in the sentence: a bare id holding "sk-" joined the next string into a
+  // key (PR 4 shell attack, the agent and explore twins).
   const payload = {
-    what: `pick variant ${a.pick} of the design explore ${a.explore}`,
-    gate: "design-pick", explore: a.explore, pick: a.pick, why: a.why,
+    what: `pick variant ${a.pick} of the design explore "${a.explore}"`,
+    gate: "design-pick", explore_dir: exploreDir, pick: a.pick, why: a.why,
     variant_sha: fingerprints[a.pick],
   };
   const refused = spineRefusal(ARC_EVENT, "approval.requested", payload, { cwd: REPO });
@@ -121,10 +137,17 @@ async function main() {
   if (a.expect === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, then again with the --expect it prints");
   const stale = staleReason(a.expect, digest);
   if (stale) die(2, stale);
-  const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(payload), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  const id = String(r.stdout || "").trim();
-  if (r.status !== 0 || !ULID_RE.test(id)) die(1, `the pick may not have been raised -- ${String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`}; look in your inbox before picking again`);
-  say(`receipt: approval.requested ${id}`);
+  // THE CHECK AND THE EMIT, ONE HOLDER AT A TIME: three picks of one explore planned apart and applied at once all
+  // passed the check before any landed (PR 4 logic attack). The lock sits beside the spine, never in events/.
+  const held = await withExclusiveLock(join(spineRoot(), "locks"), `design-pick-${a.explore}.lock`, async () => {
+    if (await alreadyRaised()) die(2, `a pick of ${a.explore} was raised a moment ago -- a pick is recorded once`);
+    const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(payload), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const id = String(r.stdout || "").trim();
+    if (r.status !== 0 || !ULID_RE.test(id)) die(1, `the pick may not have been raised -- ${String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`}; look in your inbox before picking again`);
+    return id;
+  });
+  if (held.busy) die(2, `another pick of ${a.explore} is being raised right now -- nothing was raised; read your inbox`);
+  say(`receipt: approval.requested ${held.value}`);
 }
 
 function isMainModule() {

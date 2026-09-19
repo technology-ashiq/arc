@@ -113,7 +113,9 @@ export function childEnv() {
   // NODE_PATH and the REPL module/history hooks load code or write files by environment too (PR 2 shell attack).
   // ARC_SPINE_ACTOR and ARC_SPINE_PROCESS say who acted: a tool the door runs acts on the owner's click, never under a
   // name the door's own environment happened to carry (PR 2 logic attack).
-  const DROP = new Set(["BASH_ENV", "ENV", "NODE_OPTIONS", "NODE_PATH", "NODE_REPL_EXTERNAL_MODULE", "NODE_REPL_HISTORY", "ARC_VENTURES_FILE", "ARC_BENCH_CEILINGS", "ARC_SETTINGS", "ARC_SPINE_ACTOR", "ARC_SPINE_PROCESS"]);
+  const DROP = new Set(["BASH_ENV", "ENV", "NODE_OPTIONS", "NODE_PATH", "NODE_REPL_EXTERNAL_MODULE", "NODE_REPL_HISTORY", "ARC_VENTURES_FILE", "ARC_BENCH_CEILINGS", "ARC_SETTINGS", "ARC_SPINE_ACTOR", "ARC_SPINE_PROCESS",
+    // A program the Context Pack would run in place of codegraph (context-pack.mjs): never handed to a door tool (PR 4).
+    "ARC_CODEGRAPH_CMD", "ARC_CODEGRAPH_ARGS"]);
   // Compared UPPER-CASED: Windows reads env names case-insensitively, so `git_dir` or `node_options` set in lowercase
   // passed this filter and the child honoured it -- a preload ran and git followed another repo (face v2 Phase 05
   // shell attack). The twin of every name check: normalise before comparing.
