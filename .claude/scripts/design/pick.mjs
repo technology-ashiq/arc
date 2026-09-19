@@ -15,13 +15,12 @@
 //
 // Exit: 0 done · 1 the approval's write is in doubt (said so) · 2 refused, nothing raised.
 
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, writeSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isOneLine } from "../core/one-line.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal, withExclusiveLock } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, withExclusiveLock, emitReceipt } from "../core/plan-expect.mjs";
 import { query } from "../hq/spine.mjs";
 import { spineRoot } from "../hq/lib/spine-io.mjs";
 
@@ -31,7 +30,6 @@ const ARC_EVENT = join(REPO, ".claude", "scripts", "hq", "arc-event.mjs");
 const VARIANTS = Object.freeze(["a", "b", "c"]);
 // design-explore.sh's own id grammar: lowercase kebab, spelled out rather than a locale range.
 const ID_RE = /^[abcdefghijklmnopqrstuvwxyz0123456789-]{1,64}$/;
-const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const MAX_VARIANT_BYTES = 8 * 1024 * 1024;
 
 class Stop extends Error {}
@@ -141,10 +139,12 @@ async function main() {
   // passed the check before any landed (PR 4 logic attack). The lock sits beside the spine, never in events/.
   const held = await withExclusiveLock(join(spineRoot(), "locks"), `design-pick-${a.explore}.lock`, async () => {
     if (await alreadyRaised()) die(2, `a pick of ${a.explore} was raised a moment ago -- a pick is recorded once`);
-    const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(payload), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    const id = String(r.stdout || "").trim();
-    if (r.status !== 0 || !ULID_RE.test(id)) die(1, `the pick may not have been raised -- ${String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`}; look in your inbox before picking again`);
-    return id;
+    // Through the shared emit (core/plan-expect.mjs): a payload file, and three outcomes -- a refusal names nothing raised,
+    // anything else may have landed (the PR 3b round-4 row, twin).
+    const got = emitReceipt(ARC_EVENT, "approval.requested", payload, { cwd: REPO, timeoutMs: 60_000 });
+    if (got.state === "refused") die(1, `the pick was not raised -- ${got.why}`);
+    if (got.state !== "landed" || !got.id) die(1, `the pick may have been raised -- ${got.why}; look in your inbox before picking again`);
+    return got.id;
   });
   if (held.busy) die(2, `another pick of ${a.explore} is being raised right now -- nothing was raised; read your inbox`);
   say(`receipt: approval.requested ${held.value}`);

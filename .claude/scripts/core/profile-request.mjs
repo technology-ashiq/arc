@@ -15,12 +15,11 @@
 //
 // Exit: 0 done · 1 the approval's write is in doubt (said so) · 2 refused, nothing raised.
 
-import { spawnSync } from "node:child_process";
 import { realpathSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isOneLine } from "./one-line.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal, withExclusiveLock } from "./plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, withExclusiveLock, emitReceipt } from "./plan-expect.mjs";
 import { bashEnv, spawnBounded } from "./spawn-bounded.mjs";
 import { query } from "../hq/spine.mjs";
 import { spineRoot } from "../hq/lib/spine-io.mjs";
@@ -30,7 +29,6 @@ const REPO = resolve(HERE, "..", "..", "..");
 const ARC_EVENT = join(REPO, ".claude", "scripts", "hq", "arc-event.mjs");
 const ARC_PROFILE = join(HERE, "arc-profile.sh");
 export const PROFILES = Object.freeze(["starter", "standard", "strict"]);
-const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 class Stop extends Error {}
 const out = [];
@@ -122,10 +120,12 @@ async function main() {
   const held = await withExclusiveLock(join(spineRoot(), "locks"), `profile-request-${a.to}.lock`, async () => {
     const again = await openRequestFor(a.to);
     if (again) die(2, `a request to switch to ${a.to} was raised a moment ago (${again}) -- decide that one`);
-    const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(payload), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    const id = String(r.stdout || "").trim();
-    if (r.status !== 0 || !ULID_RE.test(id)) die(1, `the approval may not have been raised -- ${String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`}; look in your inbox before asking again`);
-    return id;
+    // Through the shared emit (core/plan-expect.mjs): a payload file, and three outcomes -- a refusal names nothing raised,
+    // anything else may have landed (the PR 3b round-4 row, twin).
+    const got = emitReceipt(ARC_EVENT, "approval.requested", payload, { cwd: REPO, timeoutMs: 60_000 });
+    if (got.state === "refused") die(1, `the approval was not raised -- ${got.why}`);
+    if (got.state !== "landed" || !got.id) die(1, `the approval may have been raised -- ${got.why}; look in your inbox before asking again`);
+    return got.id;
   });
   if (held.busy) die(2, `another request to switch to ${a.to} is being raised right now -- nothing was raised; read your inbox`);
   say(`receipt: approval.requested ${held.value}`);
