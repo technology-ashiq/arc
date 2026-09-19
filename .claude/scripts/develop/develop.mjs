@@ -29,7 +29,6 @@
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -321,9 +320,11 @@ function sweepLeftTemps(dir) {
  * Whether a slice.done for this slice is already on the spine: true, false, or null when a day could not be read. The
  * bound apply raises it only on a clear false, so a click never adds a second one to the room's count (PR 4 round-2
  * logic attack: three applies, three slice.done for one proven slice).
- * @param {string | null} lane @param {string | null} phase @param {string} slice
+ * The COMMIT is part of the match: lanes reuse phase and slice numbers across cycles, and a slice re-proven at a new
+ * commit raised nothing because an old cycle's slice.done matched (PR 4 round-3 logic attack).
+ * @param {string | null} lane @param {string | null} phase @param {string} slice @param {string | null} commit
  */
-async function sliceDoneLanded(lane, phase, slice) {
+async function sliceDoneLanded(lane, phase, slice, commit) {
   try {
     const { spineRoot, eventsDir } = await import("../hq/lib/spine-io.mjs");
     const dir = eventsDir(spineRoot());
@@ -335,7 +336,7 @@ async function sliceDoneLanded(lane, phase, slice) {
         let e;
         try { e = JSON.parse(line); } catch { continue; }
         const p = e && e.payload;
-        if (e.kind === "slice.done" && p && p.slice === slice && (p.lane ?? null) === lane && String(p.phase ?? "") === String(phase ?? "")) return true;
+        if (e.kind === "slice.done" && p && p.slice === slice && (p.lane ?? null) === lane && String(p.phase ?? "") === String(phase ?? "") && (p.commit ?? null) === (commit ?? null)) return true;
       }
     }
     return false;
@@ -365,7 +366,9 @@ async function modeNext(ctx, bind = {}) {
     if (ctx.mode !== "root") {
       const header = laneHeader(join(ctx.tracker, "PROGRESS.md"));
       const hp = String(header.phase || "").trim();
-      const st = String(header.status || "").trim().toUpperCase();
+      // EXACTLY as the room compares it: "live" was upper-cased here and passed, while /api/slices lists "LIVE" alone
+      // and hid the lane (PR 4 round-3 logic attack).
+      const st = String(header.status || "").trim();
       if (st !== "LIVE") die(`the ${ctx.lane} lane is ${st || "not LIVE"} -- the face's next slice runs only in a LIVE lane, the one the room shows; nothing was written`);
       if (!/^[0-9]{1,3}$/.test(hp)) die(`the ${ctx.lane} lane's header names no phase number (${JSON.stringify(hp)}) -- the room shows no slice for it, so this verb writes none`);
       if (led.file !== `phase-${hp.padStart(2, "0")}-tasks.md`)
@@ -498,6 +501,10 @@ async function modeNext(ctx, bind = {}) {
     const applyNext = async () => {
     entered = true;
     sweepLeftTemps(dirname(ledgerReal));
+    // Whether slice.done is due is decided BEFORE the write: a day the spine could not read made the look answer
+    // "unknown", and the apply wrote the ledger and dropped the receipt without a word (PR 4 round-3 shell attack).
+    const doneDue = doneReceipt ? await sliceDoneLanded(doneReceipt.lane, phase, doneReceipt.slice, doneReceipt.commit) : true;
+    if (doneDue === null) stop(`a day file of the spine cannot be read, so whether slice ${doneReceipt.slice}'s slice.done is already recorded is unknown -- nothing was written`);
     // RE-READ, THEN AN ATOMIC WRITE. The digest was checked against the ledger as read seconds earlier; the build
     // session edits this file, and an edit landing while the pack was built was silently written over (PR 4 attacks).
     let now;
@@ -513,7 +520,7 @@ async function modeNext(ctx, bind = {}) {
     if (unrecorded) say(`WARN  [sources] the pack above was NOT recorded — ${unrecorded}`);
     // The slice.done the unbound run emits, for the last proven slice -- ONCE per slice: raised only when the spine
     // clearly holds none for it -- then the op's OWN receipt, strict, its id printed.
-    if (doneReceipt && (await sliceDoneLanded(doneReceipt.lane, phase, doneReceipt.slice)) === false) await emit("slice.done", doneReceipt);
+    if (doneReceipt && doneDue === false) await emit("slice.done", doneReceipt);
     const rec = await emitNoteReceipt(receipt);
     say(`Progress: ${p}/${total} proven.`);
     if (rec.state === "unknown") { say(`STOP: ${led.file} IS written, and whether its receipt landed is unknown -- ${rec.why}. Look at the spine before applying again`); throw new NextStop(1); }
@@ -521,7 +528,12 @@ async function modeNext(ctx, bind = {}) {
     say(`receipt: note.logged ${rec.id}`);
     };
     let held;
-    try { held = await withExclusiveLock(tmpdir(), nextLockName(ledgerReal), applyNext); }
+    // Beside the SPINE, as every sibling tool's: under TEMP, two applies with different TEMP values took two locks and
+    // both wrote (PR 4 round-3 attacks).
+    let lockDir;
+    try { const { spineRoot } = await import("../hq/lib/spine-io.mjs"); lockDir = join(spineRoot(), "locks"); }
+    catch (e) { die(`the spine cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+    try { held = await withExclusiveLock(lockDir, nextLockName(ledgerReal), applyNext); }
     catch (e) {
       if (e instanceof NextStop) flush(e.code);
       // Only the TAKE is the lock's: a fault inside the apply keeps its own cause.

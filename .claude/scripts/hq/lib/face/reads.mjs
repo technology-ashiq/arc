@@ -46,7 +46,9 @@ export class ReadError extends Error {
 
 // ---------- what may never reach the wire ----------
 // An address, including one whose domain is not ASCII (`alice@exämple.com`).
-const EMAIL = /[^\s@<>"'`,;()]+@[^\s@<>"'`,;()]+\.[^\s@<>"'`,;()]+/gu;
+// An ADDRESS ends in a letter top-level domain, or is an IPv4 host: `left-pad@1.3.0`, `text@v0.14.0` and
+// `madge@8.0.0` are package specs, and withholding them refused every plan that named one (PR 4 round-3 logic attack).
+const EMAIL = /[^\s@<>"'`,;()]+@(?:[^\s@<>"'`,;()]*\.[A-Za-z]{2,}(?![A-Za-z0-9])|\d{1,3}(?:\.\d{1,3}){3}(?![0-9.]))/gu;
 // The START of an absolute path: a Windows drive, a UNC share, a backslash root, a file:// URL, a home shorthand, or a
 // POSIX root that carries an account or a machine's layout. Repo-relative paths ("docs/adr/0001-x.md") are not matched.
 // Each alternative is anchored so a URL is not a path: a drive letter may not follow a letter or digit (`https:/`), a
@@ -58,7 +60,7 @@ const EMAIL = /[^\s@<>"'`,;()]+@[^\s@<>"'`,;()]+\.[^\s@<>"'`,;()]+/gu;
 // is the SECOND slash, not what precedes the drive; and a UNC share spelled with forward slashes (`//server/home`) is a
 // path wherever a scheme's colon does not precede it. A literal `e:\n` in a sentence is over-withheld: the recoverable
 // direction, and indistinguishable from a directory named n.
-const ABS_START = /[A-Za-z]:\\|[A-Za-z]:\/(?!\/)|(?<![A-Za-z0-9:/])\/\/(?=[A-Za-z0-9])|(?<![A-Za-z0-9._~%:/\\-])\\\\|(?<![A-Za-z0-9._~%:/\\-])\\(?:Users|home|Documents and Settings)\\|file:\/\/|(?<![A-Za-z0-9._~%:/-])~[A-Za-z0-9._-]*\/|(?<![A-Za-z0-9._~%:/-])\/(?:cygdrive\/)?[A-Za-z]\/|(?<![A-Za-z0-9._~%:/-])\/(?:home|Users|root|tmp|var|private|mnt|opt|etc|usr|Volumes|srv|media|run|snap)\//i;
+const ABS_START = /[A-Za-z]:\\|[A-Za-z]:\/(?!\/)|(?<![A-Za-z0-9:/])\/\/(?=[A-Za-z0-9])|(?<![A-Za-z0-9._~%:/\\\])}-])\\\\|(?<![A-Za-z0-9._~%:/\\\])}-])\\(?:Users|home|Documents and Settings)\\|file:\/\/|(?<![A-Za-z0-9._~%:/\])}-])~[A-Za-z0-9._-]*\/|(?<![A-Za-z0-9._~%:/\])}-])\/(?:cygdrive\/)?[A-Za-z]\/|(?<![A-Za-z0-9._~%:/\])}-])\/(?:home|Users|root|tmp|var|private|mnt|opt|etc|usr|Volumes|srv|media|run|snap)\//i;
 
 /**
  * A sentence made safe for the wire: the repo's own path becomes repo-relative, any other absolute path and any
@@ -115,11 +117,16 @@ export function childEnv() {
   // name the door's own environment happened to carry (PR 2 logic attack).
   const DROP = new Set(["BASH_ENV", "ENV", "NODE_OPTIONS", "NODE_PATH", "NODE_REPL_EXTERNAL_MODULE", "NODE_REPL_HISTORY", "ARC_VENTURES_FILE", "ARC_BENCH_CEILINGS", "ARC_SETTINGS", "ARC_SPINE_ACTOR", "ARC_SPINE_PROCESS",
     // A program the Context Pack would run in place of codegraph (context-pack.mjs): never handed to a door tool (PR 4).
-    "ARC_CODEGRAPH_CMD", "ARC_CODEGRAPH_ARGS"]);
+    "ARC_CODEGRAPH_CMD", "ARC_CODEGRAPH_ARGS",
+    // What makes bash run something else first, as bashEnv() drops it (core/spawn-bounded.mjs): SHELLOPTS=xtrace with a
+    // PS4 command ran through this env, and ARC_NODE picks the program every driver wrapper execs (PR 4 round-3 attacks).
+    "SHELLOPTS", "BASHOPTS", "ARC_NODE"]);
   // Compared UPPER-CASED: Windows reads env names case-insensitively, so `git_dir` or `node_options` set in lowercase
   // passed this filter and the child honoured it -- a preload ran and git followed another repo (face v2 Phase 05
   // shell attack). The twin of every name check: normalise before comparing.
-  return Object.fromEntries(Object.entries(process.env).filter(([k]) => { const up = k.toUpperCase(); return !up.startsWith("GIT_") && !DROP.has(up); }));
+  // An exported bash function (BASH_FUNC_name%% or ...()) shadows any command a child script calls: `dirname` ran another
+  // tree's driver, and `jq` changed the profile the gates page read (PR 4 round-3 attacks).
+  return Object.fromEntries(Object.entries(process.env).filter(([k]) => { const up = k.toUpperCase(); return !up.startsWith("GIT_") && !up.startsWith("BASH_FUNC_") && !DROP.has(up); }));
 }
 
 /** The clock the door answers by is forced when ARC_SPINE_NOW is set; a body built on it says so. */

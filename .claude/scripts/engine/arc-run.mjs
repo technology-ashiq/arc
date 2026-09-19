@@ -70,6 +70,7 @@ import { MODEL_RE } from "../hq/lib/validate.mjs";
 const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
+import { bashEnv } from "../core/spawn-bounded.mjs";
 import { isExpired, routerFaults, RUNTIME_DRIVERS } from "./router-row.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
@@ -1251,8 +1252,10 @@ function invoke(name) {
     // reason -- engine/router.yaml names it verbatim as "the un-reviewed tier change ADR-0069
     // block (b)(1) forbids", and `generic-api.mjs:22` falls back to it, so leaving it in the
     // spread would have left b1 open through the one door the seam did not close.
+    // bashEnv(): this process's env less what makes bash run something first -- BASH_ENV, ENV, SHELLOPTS and exported
+    // functions reached the paid driver run through the spread (PR 4 round-3 shell attack, the bashEnv twin).
     env: {
-      ...process.env,
+      ...bashEnv(),
       ARC_DRIVER_COST_FILE: costFile,
       ARC_ROOT: root,
       ARC_WORK_ROOT: workRoot,

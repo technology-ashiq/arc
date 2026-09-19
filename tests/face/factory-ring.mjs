@@ -16,7 +16,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -147,6 +147,37 @@ function scratchRepo(name, files) {
   const second = applyOnce();
   const dones = spineEvents(sp).filter((e) => e.kind === "slice.done" && e.payload.slice === "01").length;
   check("develop next: two applies after slice 01 is proven raise ONE slice.done for it (both applies ran)", st.status === 0 && !!first.d && !!second.d && first.r.status === 0 && second.r.status === 0 && dones === 1, `first=${first.r.status} second=${second.r.status} dones=${dones} ${second.r.stdout.slice(-200)}`);
+  // Re-proven at a NEW commit, the slice raises its slice.done again: the match carries the commit (PR 4 round 3).
+  {
+    const txt = readFileSync(ledger, "utf8");
+    const a = blockAt(txt, "01"), b = blockAt(txt, "02");
+    writeFileSync(ledger, txt.slice(0, a) + txt.slice(a, b).replace(/^commit: .*$/m, "commit: 9f8e7d6c") + txt.slice(b));
+    resetTwo();
+    const third = applyOnce();
+    const byCommit = spineEvents(sp).filter((e) => e.kind === "slice.done" && e.payload.slice === "01").map((e) => e.payload.commit).sort();
+    check("develop next: a slice re-proven at a new commit raises its slice.done for that commit", third.r.status === 0 && JSON.stringify(byCommit) === JSON.stringify(["9f8e7d6c", "abc1234"]), `${third.r.status} ${JSON.stringify(byCommit)} ${third.r.stdout.slice(-200)}`);
+  }
+  // A day the spine cannot read: whether slice.done is due is unknown, so the apply refuses with nothing written.
+  {
+    const txt = readFileSync(ledger, "utf8");
+    const a = blockAt(txt, "01"), b = blockAt(txt, "02");
+    writeFileSync(ledger, txt.slice(0, a) + txt.slice(a, b).replace(/^commit: .*$/m, "commit: 1a2b3c4d") + txt.slice(b));
+    resetTwo();
+    mkdirSync(join(sp, "events", "2020-01-01.jsonl"), { recursive: true });
+    const before = sha256(readFileSync(ledger));
+    const d4 = lastExpect(devIn(t, sp, "next", "--dry-run").stdout);
+    const r4 = devIn(t, sp, "next", "--expect", d4 || ZERO);
+    check("develop next: a day file the spine cannot read refuses the apply before the ledger is written", !!d4 && r4.status === 2 && /cannot be read/.test(r4.stdout) && sha256(readFileSync(ledger)) === before, `${r4.status} ${r4.stdout.slice(-240)}`);
+    rmSync(join(sp, "events", "2020-01-01.jsonl"), { recursive: true, force: true });
+  }
+  // The lane's status compared EXACTLY as the room compares it: "live" is not LIVE (PR 4 round 3).
+  {
+    const tl = tree("develop-lower", "status: live\nphase: 00");
+    const spl = spine("develop-lower-spine");
+    devIn(tl, spl, "start", "0");
+    const rl = devIn(tl, spl, "next", "--dry-run");
+    check("develop next refuses a lane whose status is lowercase live -- the room shows LIVE alone", rl.status === 2 && /lane is live/.test(rl.stdout), `${rl.status} ${rl.stdout.slice(-200)}`);
+  }
 }
 
 // ---- open-brief: design-explore init into a scratch dir, committed to a proposal branch ----
@@ -269,6 +300,10 @@ function scratchRepo(name, files) {
   const A = ["--name", "probe-agent", "--description", "Reads a diff and names its riskiest hunk", "--tools", "Read, Grep", "--tier", "cheap-scan", "--room", "review-ship", "--product", "review"];
   const plan = tool("engine/agent-scaffold.mjs", [...A, "--dry-run"]);
   const d = lastExpect(plan.stdout);
+  // The commit message the branch will carry is in the plan, so the owner reads it and the door's whole-plan check
+  // covers a why that holds a path or an address (PR 4 round-3 logic attack).
+  const whyPlan = tool("engine/agent-scaffold.mjs", [...A, "--why", "the roster needs a diff reader now", "--dry-run"]);
+  check("agent-scaffold, planned: the commit message -- the why included -- is printed in the plan", whyPlan.status === 0 && /commit message:/.test(whyPlan.stdout) && /the roster needs a diff reader now/.test(whyPlan.stdout), `${whyPlan.status} ${whyPlan.stderr}`);
   check("agent-scaffold, planned: the agent, its manifest line, its golden line, its contract row and the registry the contract derives -- and a digest; nothing written",
     plan.status === 0 && !!d && [".claude/agents/probe-agent.md", "products/review/manifest.json", GOLDEN, CONTRACT, REGISTRY].every((p) => plan.stdout.includes(`b/${p}`)) && clean(), `${plan.status} ${plan.stderr}`);
   const stale = tool("engine/agent-scaffold.mjs", [...A, "--expect", ZERO]);
@@ -388,6 +423,44 @@ function scratchRepo(name, files) {
   }
   check("door: a digest plan the scrub rewrites MID-TEXT is not held (the repo's path, an address); a clean one is (the control)",
     midCodes[0] === "PLAN_HIDDEN" && midCodes[1] === "PLAN_HIDDEN" && midCodes[2] === "held", JSON.stringify(midCodes));
+  // PR 4 round 3: a bound plan longer than the door keeps is not held (its head was never checked), and a package spec
+  // or a bracketed route segment is text, not an address or a path -- those plans are held.
+  const extra = [
+    ["long", "x".repeat(300 * 1024)],
+    ["package spec", "pins left-pad@1.3.0 and golang.org/x/text@v0.14.0"],
+    ["route segment", "touches app/[locale]/home/hero.tsx"],
+  ];
+  const extraReg = extra.map(([why, line], i) => {
+    writeFileSync(join(fx, ".claude", "scripts", "fixture", `ex${i}.mjs`), `process.stdout.write(${JSON.stringify(line)} + "\\n");\nconsole.log(JSON.stringify({ expect: ${JSON.stringify(digest)} }));\n`);
+    return { id: `fixture.ex${i}`, room: "fixture", label: why, receipt: { kind: "note.logged" }, humanRun: true, spends: false, touchesFiles: false, expect: true, fields: [],
+      plan: () => ({ script: `fixture/ex${i}.mjs`, args: [] }), apply: () => ({ script: `fixture/ex${i}.mjs`, args: [] }) };
+  });
+  const xd = DOOR.createWorkDoor({ mode: "sim", root: spine("door-extra"), repo: fx }, { registry: extraReg });
+  const extraCodes = [];
+  for (let i = 0; i < extra.length; i++) {
+    let code = "held";
+    try { const r = await xd.plan(`fixture.ex${i}`, { input: {} }); if (!r.ok) code = "refused"; } catch (e) { code = e.code; }
+    extraCodes.push(code);
+  }
+  check("door: a bound plan past the output cap is not held; a package spec and a bracketed route segment are (the scrub's false positives, PR 4 round 3)",
+    extraCodes[0] === "PLAN_HIDDEN" && extraCodes[1] === "held" && extraCodes[2] === "held", JSON.stringify(extraCodes));
+  // childEnv keeps bash's rules: an exported function, SHELLOPTS and ARC_NODE never reach a door child (PR 4 round 3).
+  const READS = await import(pathToFileURL(S("hq", "lib", "face", "reads.mjs")).href);
+  const keep = { f: process.env["BASH_FUNC_jq%%"], o: process.env.SHELLOPTS, n: process.env.ARC_NODE };
+  process.env["BASH_FUNC_jq%%"] = "() { echo starter; }"; process.env.SHELLOPTS = "xtrace"; process.env.ARC_NODE = "evil-node";
+  const envSeen = READS.childEnv();
+  for (const [k, v] of [["BASH_FUNC_jq%%", keep.f], ["SHELLOPTS", keep.o], ["ARC_NODE", keep.n]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  check("door: childEnv drops an exported bash function, SHELLOPTS and ARC_NODE", !Object.keys(envSeen).some((k) => /^(BASH_FUNC_|SHELLOPTS$|ARC_NODE$)/i.test(k)), Object.keys(envSeen).filter((k) => /BASH|SHELL|ARC_NODE/i.test(k)).join(","));
+}
+
+// ---- design-explore --out-dir: a share or device path, and a . or .. segment, are refused (PR 4 round 3) ----
+{
+  const ex = (od) => spawnSync("bash", [S("design", "design-explore.sh"), "init", "probe-od", "--brief", "docs/briefs/none.md", "--out-dir", od], { cwd: REPO, encoding: "utf8" });
+  const unc = ex("//localhost/C$/x/y");
+  // Built as a string: path.join would resolve the .. away before the script ever saw it.
+  const dots = ex(`${tmp.split("\\").join("/")}/j/../new-od`);
+  check("design-explore --out-dir refuses a share or device path, and a . or .. segment",
+    unc.status === 1 && /share or device path/.test(unc.stderr) && dots.status === 1 && /\. or \.\. segment/.test(dots.stderr), `${unc.status} ${unc.stderr} | ${dots.status} ${dots.stderr}`);
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

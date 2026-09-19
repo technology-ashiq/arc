@@ -225,6 +225,8 @@ async function main() {
     process.stdout.write(`propose: would ${what}\n`);
     process.stdout.write(`propose: a new branch ${branch} off main ${plan.base.slice(0, 12)}, then approval.requested to your inbox\n`);
     process.stdout.write(plan.diff.endsWith("\n") ? plan.diff : plan.diff + "\n");
+    // The message the commit will carry, printed in the plan: the door's whole-plan check reads it too (PR 4 round 3).
+    process.stdout.write(`commit message:\n${message.split("\n").map((l) => `  ${l}`).join("\n")}\n`);
     process.stdout.write("propose: dry run -- no branch, no object, no receipt was written\n");
     process.stdout.write(expectLine(digest) + "\n");
     return;

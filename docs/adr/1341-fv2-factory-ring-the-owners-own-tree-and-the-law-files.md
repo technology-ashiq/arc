@@ -192,3 +192,14 @@ decisions above:
   and every refusal inside it is thrown so the lock is released before the exit. `slice.done` is judged before the write
   and raised once per slice.
 - **§4, add-agent lists products from main's tree** (`mainDirNames`), and refuses a product main does not hold.
+
+## Amendment, PR 4 round 3 (same day)
+
+A narrow pair attacked the round-2 diff: 9 logic and 8 shell findings, four shared. All are fixed and pinned but one,
+which is a debt row (the face's selects list the checkout; each tool refuses what main lacks, by name). Two decisions
+above sharpen:
+- **The door holds a bound plan only when it can show it whole and exactly**: a plan cut by the output cap is refused
+  PLAN_HIDDEN too, and every proposal tool prints its commit message in the plan, so the check covers what the commit
+  carries. The scrub no longer reads a package spec as an address or a bracketed route segment as a path.
+- **develop next's lock sits beside the spine**, as every sibling's does, and `slice.done` is matched by lane, phase,
+  slice and commit, decided before the ledger is written.
