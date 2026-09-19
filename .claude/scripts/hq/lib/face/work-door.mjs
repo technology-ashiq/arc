@@ -56,6 +56,9 @@ function effectOf(op) {
   return "no file changes -- this op writes one receipt to the spine";
 }
 
+/** An argv with each argument scrubbed on its own. @param {{ script: string, args: string[] }} cmd @param {string} repo */
+const scrubArgs = (cmd, repo) => ({ ...cmd, args: cmd.args.map((a) => scrub(a, repo)) });
+
 /** The HTTP status each work-door refusal carries (arc-dash maps codes through its own table; these are the door's). */
 export const WORK_STATUS = Object.freeze({
   UNKNOWN_OP: 404, UNKNOWN_PLAN: 404,
@@ -209,9 +212,10 @@ export function createWorkDoor(ctx, opts = {}) {
     const planCmd = op.plan(values);
     const res = await runTool(ctx, planCmd, { timeoutMs: PLAN_TIMEOUT_MS });
     const base = {
-      // Scrubbed like everything else the page is served: the argv carried a --root path and a `why` holding an address
-      // unscrubbed (PR 4 round-3 logic attack).
-      mode: ctx.mode, op: op.id, label: op.label, command: scrub(commandLine(planCmd), ctx.repo),
+      // Scrubbed like everything else the page is served, ONE ARGUMENT AT A TIME: the argv carried a --root path and a
+      // `why` holding an address unscrubbed (PR 4 round-3 logic attack), and scrubbing the whole line withheld everything
+      // after the first path -- the `--expect <digest>` the card shows the apply is bound to among it.
+      mode: ctx.mode, op: op.id, label: op.label, command: commandLine(scrubArgs(planCmd, ctx.repo)),
       receipt: op.receipt, humanRun: op.humanRun, spends: op.spends,
     };
     if (res.exit !== 0) {
@@ -254,7 +258,7 @@ export function createWorkDoor(ctx, opts = {}) {
     journal({ op: op.id, phase: "plan", planId });
     return {
       ...base, ok: true, planId, expiresInMs: PLAN_TTL_MS,
-      apply: scrub(commandLine(applyCmd), ctx.repo),
+      apply: commandLine(scrubArgs(applyCmd, ctx.repo)),
       // The tool's own plan output, first -- it is the review the owner reads before the click.
       output: scrub(res.stdout, ctx.repo), notes: scrub(res.stderr, ctx.repo), outputDropped: res.dropped,
       diff: effectOf(op),
