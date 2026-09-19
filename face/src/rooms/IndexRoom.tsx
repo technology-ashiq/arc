@@ -13,7 +13,7 @@
 // Every decision -- which route, how to narrow an untrusted body, how to group and order,
 // what counts as missing -- is in rooms.mjs. What is left here is React plumbing: three
 // render states, and the shapes the lib already decided.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { Door } from "../lib/door.mjs";
 import type { Room } from "../lib/rooms.mjs";
@@ -34,15 +34,18 @@ type Read =
  * for this purpose, and the abort on cleanup means a route change cannot land its answer
  * after the next one.
  */
-function useDoorRead(door: Door, route: string | null): Read {
+function useDoorRead(door: Door, route: string | null, pulse?: string): Read {
   const [read, setRead] = useState<Read>({ phase: "loading" });
   const { base, token } = door;
+  // A pulse re-read (REQ-11) keeps the last answer on screen while it reads; only a NEW route starts from loading.
+  const lastRoute = useRef<string | null>(null);
 
   useEffect(() => {
     if (route === null) return;
     const control = new AbortController();
     let live = true;
-    setRead({ phase: "loading" });
+    if (lastRoute.current !== route) setRead({ phase: "loading" });
+    lastRoute.current = route;
     door
       .call(route, { signal: control.signal })
       .then((data: unknown) => {
@@ -58,7 +61,7 @@ function useDoorRead(door: Door, route: string | null): Read {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: identity
     // of `door` is not the thing that changes what this reads.
-  }, [route, base, token]);
+  }, [route, base, token, pulse]);
 
   return read;
 }
@@ -364,9 +367,9 @@ function Vocabulary({ payload, rooms, expected }: { payload: unknown; rooms: Roo
   );
 }
 
-export function IndexRoom({ room, rooms, door }: { room: Room; rooms: Room[]; door: Door }) {
+export function IndexRoom({ room, rooms, door, pulse }: { room: Room; rooms: Room[]; door: Door; pulse?: string }) {
   const source = indexSource(room);
-  const read = useDoorRead(door, source.route);
+  const read = useDoorRead(door, source.route, pulse);
   const what = `every ${unescapeDoorText(room.indexes) || "entry"} in the company`;
 
   return (

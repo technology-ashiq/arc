@@ -20,6 +20,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { join, sep } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 
 import { query } from "../../spine.mjs";
 import { OPS, OpError, validateInput, emitPlanFrom, commandLine, registryView } from "../../face-ops.mjs";
@@ -58,7 +59,7 @@ export const WORK_STATUS = Object.freeze({
  * @param {{ timeoutMs: number, onLine?: (stream: "out" | "err", line: string) => void }} opts
  * @returns {Promise<{ exit: number | null, signal: string | null, stdout: string, stderr: string, timedOut: boolean, dropped: number }>}
  */
-function runTool(ctx, cmd, { timeoutMs, onLine }) {
+export function runTool(ctx, cmd, { timeoutMs, onLine }) {
   if (!SCRIPT_RE.test(cmd.script)) throw new OpError("TOOL_MISSING", `the registry names "${cmd.script}", which is not a script path the door runs`);
   const script = join(ctx.repo, ".claude", "scripts", ...cmd.script.split("/"));
   if (!existsSync(script)) throw new OpError("TOOL_MISSING", `.claude/scripts/${cmd.script} is not on this tree`);
@@ -77,6 +78,7 @@ function runTool(ctx, cmd, { timeoutMs, onLine }) {
       detached: !IS_WIN,
     });
     LIVE.add(child);
+    armSignals();
     /** @type {{ out: string, err: string }} */
     const buf = { out: "", err: "" };
     const partial = { out: "", err: "" };
@@ -86,8 +88,11 @@ function runTool(ctx, cmd, { timeoutMs, onLine }) {
     // One line is capped too: a tool writing with no newline grew the pending fragment without bound, past the
     // output cap that bounds everything else.
     const cut = (l) => (l.length > LINE_CAP ? `${l.slice(0, LINE_CAP)} [line cut at ${LINE_CAP} characters]` : l);
+    // One decoder per stream: a character split across two chunks is held until its last byte arrives. Decoding each
+    // chunk on its own turned a split euro sign into three U+FFFD (round-2 shell attack).
+    const decoder = { out: new StringDecoder("utf8"), err: new StringDecoder("utf8") };
     const take = (stream) => (chunk) => {
-      const s = chunk.toString("utf8");
+      const s = decoder[stream].write(chunk);
       buf[stream] += s;
       if (buf[stream].length > OUTPUT_CAP) { dropped += buf[stream].length - OUTPUT_CAP; buf[stream] = buf[stream].slice(-OUTPUT_CAP); }
       if (onLine) {
@@ -105,6 +110,12 @@ function runTool(ctx, cmd, { timeoutMs, onLine }) {
       settled = true;
       clearTimeout(timer);
       LIVE.delete(child);
+      disarmSignals();
+      // A tool that exits and leaves a descendant running has not finished: on POSIX its group is ended now, whatever
+      // the exit (round-2 shell attack: a detached grandchild kept writing after the run settled). Windows has no
+      // group to signal once the tool is gone -- that remainder is a debt row, not a claim.
+      if (!IS_WIN && child.pid) { try { process.kill(-child.pid, "SIGKILL"); } catch { /* the group is already empty */ } }
+      for (const st of /** @type {const} */ (["out", "err"])) { const rest = decoder[st].end(); if (rest) { buf[st] += rest; partial[st] += rest; } }
       if (onLine) for (const st of /** @type {const} */ (["out", "err"])) if (partial[st]) { onLine(st, cut(partial[st])); partial[st] = ""; }
       resolveP({ exit, signal, stdout: buf.out, stderr: buf.err, timedOut, dropped });
     };
@@ -132,6 +143,22 @@ function killTree(child) {
 // rather than leave a run nobody can observe.
 const LIVE = new Set();
 process.once("exit", () => { for (const c of LIVE) killTree(c); });
+// "exit" does not fire on a signal, and Ctrl-C is how the door is stopped (round-2 shell attack: an interrupted door
+// orphaned its running tool). A signal ends every live tree, then the process, with the signal's conventional code.
+// Registered only while a tool runs, so a door with nothing running keeps the default Ctrl-C.
+/** @param {NodeJS.Signals} sig @param {number} code */
+const onSignal = (sig, code) => () => { for (const c of LIVE) killTree(c); process.exit(code); };
+const SIGNALS = /** @type {const} */ ([["SIGINT", 130], ["SIGTERM", 143]]);
+const armed = new Map();
+function armSignals() {
+  if (armed.size) return;
+  for (const [sig, code] of SIGNALS) { const h = onSignal(sig, code); armed.set(sig, h); process.on(sig, h); }
+}
+function disarmSignals() {
+  if (LIVE.size) return;
+  for (const [sig, h] of armed) process.off(sig, h);
+  armed.clear();
+}
 
 // Every read here is the SCAN engine, never "auto": auto picks derived/state.db once arc-replay has built one, and
 // nothing but arc-replay updates it, so a receipt written a second ago was invisible and every apply read

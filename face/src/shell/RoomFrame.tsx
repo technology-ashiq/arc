@@ -48,6 +48,16 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
   // away, so a poll that left before a stamp cannot bring the stamped approval back (face v2 Phase 03 attack).
   const readEpoch = useRef(0)
   const polledAt = useRef(0)
+  // The door's pulse (REQ-11): when it changes, every read of this room is due again. The first pulse the room sees is
+  // where it starts, not a change -- the room has just read everything.
+  const [pulseTick, setPulseTick] = useState(0)
+  const pulsedAt = useRef(0)
+  const lastPulse = useRef<string | undefined>(ctx.pulse)
+  useEffect(() => {
+    if (ctx.pulse === undefined || ctx.pulse === lastPulse.current) return
+    lastPulse.current = ctx.pulse
+    setPulseTick((n) => n + 1)
+  }, [ctx.pulse])
   const actCount = useRef<Record<string, number>>({})
   // One controller per door: a new door is a new as-of or token, and a read still in flight must not land
   // on it. Acts are NOT tied to it: a stamp that reached the door happened, whatever the scrub did since.
@@ -88,9 +98,11 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
     if (!ac || ac.signal.aborted) return
     const pollDue = pollTick !== polledAt.current
     polledAt.current = pollTick
+    const pulseDue = pulseTick !== pulsedAt.current
+    pulsedAt.current = pulseTick
     const epoch = readEpoch.current
     const landed = () => !ac.signal.aborted && epoch === readEpoch.current
-    for (const r of readsToLoad(plan.reads, loadedRef.current, inflight.current, pollDue)) {
+    for (const r of readsToLoad(plan.reads, loadedRef.current, inflight.current, pollDue, pulseDue)) {
       const flight = inflight.current
       flight.add(r.key)
       door
@@ -104,7 +116,7 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
         .finally(() => flight.delete(r.key))
     }
     // plan.reads is read through planKey: the same key list is the same plan.
-  }, [planKey, pollTick, door, generation])
+  }, [planKey, pollTick, pulseTick, door, generation])
 
   const onPick = useCallback((key: string, value: string) => {
     setPicks((prev) => ({ ...prev, [key]: value }))
@@ -186,9 +198,9 @@ function GenericModule({ room, ctx, problems }: { room: Room; ctx: ModuleContext
         ))}
       </p>
       {which === 'index' ? (
-        <IndexRoom room={room} rooms={ctx.rooms} door={ctx.door} />
+        <IndexRoom room={room} rooms={ctx.rooms} door={ctx.door} pulse={ctx.pulse} />
       ) : (
-        <GenericRoom room={room} door={ctx.door} lane={laneForRoom(room.id, ctx.laneMap)} />
+        <GenericRoom room={room} door={ctx.door} lane={laneForRoom(room.id, ctx.laneMap)} pulse={ctx.pulse} />
       )}
     </div>
   )

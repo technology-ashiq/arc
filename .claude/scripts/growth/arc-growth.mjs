@@ -19,7 +19,7 @@
 // thing is the capability, and opening a pull request is the act that puts a human in the loop
 // rather than one that bypasses them (phase-04 spec, Amendment 2026-08-14).
 
-import { readFileSync, writeFileSync, realpathSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, realpathSync, statSync, openSync, fstatSync, readSync, closeSync, constants as fsConstants } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSources, mine, assertCandidate, MineError } from "./lib/mine.mjs";
@@ -652,6 +652,33 @@ async function cmdIngest() {
 const SEAL_MAX_BYTES = 2 * 1024 * 1024;
 
 /**
+ * Read the article through ONE descriptor, checked again after it is open. The path check above runs on a name; a
+ * swap between that check and the read put a FIFO or a growing file behind the same name (round-2 shell attack). The
+ * open does not block on a FIFO (O_NONBLOCK where the platform has it), the descriptor's own stat decides, and the
+ * read stops one byte past the cap, so a file that grew after the stat is refused rather than read whole.
+ * @param {string} path @returns {Buffer}
+ */
+function readArticleBounded(path) {
+  let fd;
+  try { fd = openSync(path, fsConstants.O_RDONLY | (fsConstants.O_NONBLOCK || 0)); }
+  catch (e) { die("BAD_ARTICLE", `the merged article could not be read: ${e.code || e.message}`); }
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile()) die("BAD_ARTICLE", `${path} is not a regular file`);
+    const buf = Buffer.alloc(SEAL_MAX_BYTES + 1);
+    let got = 0;
+    for (let n = 1; n > 0 && got < buf.length; got += n) n = readSync(fd, buf, got, buf.length - got, got);
+    if (got > SEAL_MAX_BYTES) die("BAD_ARTICLE", `${path} grew past ${SEAL_MAX_BYTES} bytes while it was read; an article past that is not an article`);
+    return buf.subarray(0, got);
+  } catch (e) {
+    if (e && e.code === "EAGAIN") die("BAD_ARTICLE", `${path} is not a regular file`);
+    throw e;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
  * `seal <slug>` -- the `content.published` receipt for an article a HUMAN HAS ALREADY MERGED (face v2 Phase 05,
  * ADR-1339). RUNBOOK.md had the operator type its eight fields by hand, which is the class the site config exists
  * to end; here every field comes from its one source: `site` from site.json through loadSiteConfig, `url` from the
@@ -682,7 +709,7 @@ async function cmdSeal() {
   try { st = statSync(articlePath); } catch (e) { die("BAD_ARTICLE", `the merged article could not be read: ${e.code || e.message}`); }
   if (!st.isFile()) die("BAD_ARTICLE", `${articlePath} is not a regular file`);
   if (st.size > SEAL_MAX_BYTES) die("BAD_ARTICLE", `${articlePath} is ${st.size} bytes; an article past ${SEAL_MAX_BYTES} is not an article`);
-  const bytes = readBytesOrDie(articlePath, "the merged article");
+  const bytes = readArticleBounded(articlePath);
   // Refused, never stripped -- the same rule, for the same reason, as publish: content_sha is over raw bytes.
   if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
     die("BOM_IN_ARTICLE", `${articlePath} starts with a UTF-8 BOM; the published bytes would not be the hashed bytes`);

@@ -22,7 +22,7 @@ const check = (name, cond, detail = "") => {
 };
 
 const O = await import(pathToFileURL(join(REPO, "face", "src", "lib", "ops.mjs")).href);
-const FNS = ["opCards", "planInput", "planBlocked", "planStarted", "planSettled", "refusalOf", "callFailed", "applyArgs", "applyBlocked", "applyStarted", "runSettled", "applyFailed", "polling", "runVerdict"];
+const FNS = ["opCards", "planInput", "planBlocked", "planStarted", "planSettled", "refusalOf", "callFailed", "applyArgs", "applyBlocked", "applyStarted", "runSettled", "applyFailed", "polling", "runVerdict", "fieldCount"];
 check("ops.mjs loads and carries its exports (vacuous-pass guard)", FNS.every((k) => typeof O[k] === "function") && O.IDLE && O.IDLE.phase === "idle", FNS.filter((k) => typeof O[k] !== "function").join(","));
 
 // The door's registry answer, escaped as the door serves every string.
@@ -89,7 +89,22 @@ check("runVerdict: a refusal quotes the tool's first line, and names a receipt i
 const failedApply = O.applyFailed(planned, { code: "CONFIRM_REQUIRED", human: "money.close-month is human-run" }, planned.plan.planId);
 check("applyFailed: the plan stays on the card with the door's refusal under it", failedApply.phase === "planned" && failedApply.plan.planId === planned.plan.planId && /^CONFIRM_REQUIRED: /.test(failedApply.error || ""));
 check("applyFailed: a late refusal of an OLDER plan leaves the newer plan untouched", O.applyFailed(planned, { code: "PLAN_EXPIRED", human: "x" }, "q".repeat(24)) === planned);
-check("applyFailed: with no plan held it is a plain error", O.applyFailed(O.IDLE, { code: "X", human: "y" }, "p".repeat(24)).phase === "error");
+// Round-2 logic attack: a card with no plan never sent the apply, so its refusal is late -- the card is left alone.
+check("applyFailed: with no plan held (idle) a late refusal leaves the card as it is", O.applyFailed(O.IDLE, { code: "X", human: "y" }, "p".repeat(24)) === O.IDLE);
+{
+  const planning = O.planStarted();
+  check("applyFailed: a late refusal does not turn a card that is PLANNING again into an error", O.applyFailed(planning, { code: "X", human: "y" }, "p".repeat(24)) === planning);
+  const refused = O.planSettled({ ok: false, refusal: { exit: 2, stderr: "the tool said no" } });
+  check("applyFailed: a late refusal does not replace the tool.s own plan refusal", O.applyFailed(refused, { code: "X", human: "y" }, "p".repeat(24)) === refused && refused.phase === "plan-refused");
+}
+// Round-2 logic attack: the cap is bytes, so the owner sees the count in bytes as they type.
+{
+  const cards = O.opCards(["x.y"], { ops: [{ id: "x.y", label: "L", fields: [{ name: "t", label: "T", type: "text", max: 300 }, { name: "s", label: "S", type: "select", options: ["a"], max: 9 }] }] });
+  const [tf, sf] = cards[0].fields;
+  check("opCards: a text field carries its byte cap; a select carries none", tf.maxBytes === 300 && sf.maxBytes === 0, JSON.stringify(cards[0].fields));
+  check("fieldCount: 110 Tamil letters read as 330 of 300 bytes, over the cap", O.fieldCount(tf, "த".repeat(110)) === "330 / 300 bytes -- over the cap", O.fieldCount(tf, "த".repeat(110)));
+  check("fieldCount: an empty field reads 0 bytes, and a field with no cap reads nothing", O.fieldCount(tf, undefined) === "0 / 300 bytes" && O.fieldCount(sf, "a") === "");
+}
 check("planSettled: what the output cap dropped is carried, never silent", O.planSettled({ ...planPayload, outputDropped: 1234 }).plan.outputDropped === 1234);
 check("planSettled: a refusal carries what the cap dropped too", O.planSettled({ ok: false, refusal: { exit: 1, stderr: "x", stdout: "", dropped: 99 } }).refusal.dropped === 99);
 

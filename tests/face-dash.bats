@@ -43,6 +43,15 @@ load 'test_helper'
   [[ "$output" == *"ok bench.run-model: NO SECOND PATH -- the door's receipt is the hand-run's receipt"* ]] || { echo "$output"; false; }
 }
 
+@test "live rooms: the pulse holds still, moves with the spine, stays out of the journal; a pulse re-reads every read" {
+  run node "$ARC_ROOT/tests/face/live-pulse.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok the pulse MOVES when the spine does"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok readsToLoad: a PULSE re-reads every read, polled or not (REQ-11)"* ]] || { echo "$output"; false; }
+}
+
 @test "ask golden: 20 live-state questions answered deterministically, refusals hold" {
   run node "$ARC_ROOT/tests/face/ask-golden.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

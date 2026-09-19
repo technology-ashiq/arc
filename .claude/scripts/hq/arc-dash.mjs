@@ -64,7 +64,7 @@ import { askOffline } from "./lib/face/ask-offline.mjs";
 import * as reads from "./lib/face/reads.mjs";
 // Phase 05's work door (REQ-07, ADR-1339): the op registry and the plan/apply/run verbs. Same rule -- the handlers
 // live beside the door, the route table stays here.
-import { createWorkDoor, WORK_STATUS } from "./lib/face/work-door.mjs";
+import { createWorkDoor, runTool, WORK_STATUS } from "./lib/face/work-door.mjs";
 import { OpError } from "./face-ops.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -715,19 +715,19 @@ async function apiAsk(ctx, body) {
     `MODE: ${ctx.mode}${ctx.mode === "sim" ? " (SIMULATED — every value here is fixture data, never real)" : ""}`,
   ].join("\n");
 
-  return new Promise((resolveP, rejectP) => {
-    // arc-run takes ONE `--input` carrying a JSON object keyed by the process's declared
-    // input names -- not a flag per input. The first cut invented `--state` and arc-run
-    // rejected it by name, which is the good failure: an unknown flag is a refusal, never
-    // a silently-dropped argument.
-    execFile(process.execPath, [join(ctx.repo, ".claude", "scripts", "engine", "arc-run.mjs"),
-      "--process", "face-ask", "--input", JSON.stringify({ q, state: pack })], {
-      cwd: ctx.repo, env: reads.childEnv(), timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
-    }, (err, stdout, stderr) => {
-      if (err) return rejectP(new DashError("ASK_FAILED", String(stderr || err.message).slice(0, 500)));
-      resolveP({ mode: ctx.mode, answer: stdout });
-    });
-  });
+  // arc-run takes ONE `--input` carrying a JSON object keyed by the process's declared
+  // input names -- not a flag per input. The first cut invented `--state` and arc-run
+  // rejected it by name, which is the good failure: an unknown flag is a refusal, never
+  // a silently-dropped argument.
+  // Run through the work door's runTool, not execFile: execFile's timeout ends arc-run alone, and a paid driver arc-run
+  // started kept running, and spending, after the ask was called over (face v2 Phase 05 round-2 logic attack, the twin
+  // of the work door's tree kill). runTool leads a process group on POSIX and walks the tree on Windows.
+  const res = await runTool(ctx, { script: "engine/arc-run.mjs", args: ["--process", "face-ask", "--input", JSON.stringify({ q, state: pack })] }, { timeoutMs: 120_000 });
+  if (res.timedOut) throw new DashError("ASK_FAILED", "the ask ran past 120 s and was ended, with everything it had started");
+  if (res.exit !== 0) throw new DashError("ASK_FAILED", String(res.stderr || `arc-run exited ${res.exit ?? res.signal}`).slice(0, 500));
+  // A tail is not an answer: an answer past the door's output cap is refused rather than served cut.
+  if (res.dropped) throw new DashError("ASK_FAILED", `the answer ran past the door's output cap (${res.dropped} characters over); it is not served cut`);
+  return { mode: ctx.mode, answer: res.stdout };
 }
 
 // ---------- THE route table (single dispatch authority; --routes prints it) ----------
@@ -784,15 +784,36 @@ const ROUTES = Object.freeze([
   // lane's receipt -- a governed subprocess write, so "receipt", named by the registry it proxies; `op-run` reads a
   // run as it stands. apply takes ONE plan id and nothing else: there is no path that applies a list.
   { method: "GET", path: "/api/ops", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return ctx.work.list(); } },
-  { method: "POST", prefix: "/api/op/", suffix: "/plan", mutates: false, spineEffect: "none", strictBody: true, handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.plan(tail, body); } },
-  { method: "POST", prefix: "/api/op/", suffix: "/apply", mutates: true, spineEffect: "receipt", strictBody: true, proxy: "face-ops.mjs --list: the owning lane's own CLI, one plan per call", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.apply(tail, body); } },
+  // Phase 05 (REQ-11): the pulse -- a fingerprint of what the rooms read, from stats alone, so the face re-reads a room
+  // only when something under it changed.
+  { method: "GET", path: "/api/pulse", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return reads.apiPulse(ctx, Object.values(FILE_ALLOW)); } },
+  { method: "POST", prefix: "/api/op/", suffix: "/plan", mutates: false, spineEffect: "none", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.plan(tail, body); } },
+  { method: "POST", prefix: "/api/op/", suffix: "/apply", mutates: true, spineEffect: "receipt", proxy: "face-ops.mjs --list: the owning lane's own CLI, one plan per call", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.apply(tail, body); } },
   { method: "GET", prefix: "/api/op-run/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => { onlyKeys(url, []); return ctx.work.run(tail); } },
 ]);
+
+/**
+ * A request body, parsed by the spine's strict parser (duplicate keys, lossy numbers and runaway nesting refused).
+ * Two things valid JSON may carry that the spine's CANONICAL form refuses are normalised first, because a body is not
+ * a record: CRLF between tokens (what PowerShell's ConvertTo-Json writes) and one leading BOM (RFC 8259 lets a parser
+ * ignore it). Both are lossless for valid JSON -- a raw line break inside a string is not JSON with or without the CR,
+ * so it is still refused, and a lone CR still is too.
+ * @param {Buffer} buf
+ */
+function parseBody(buf) {
+  let b = buf;
+  if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) b = b.subarray(3);
+  if (b.includes(0x0d)) b = Buffer.from(b.toString("latin1").replace(/\r\n/g, "\n"), "latin1");
+  return parseStrictJson(b, "body");
+}
 
 /** The route's path as the table prints it: a literal path, a prefix with its tail, or a prefix, an id and a suffix. */
 function routeName(r) {
   return r.path || (r.suffix ? `${r.prefix}:id${r.suffix}` : `${r.prefix}:tail`);
 }
+
+/** The routes whose SUCCESSFUL answers are not journalled (see the dispatcher). */
+const QUIET_OK = new Set(ROUTES.filter((r) => r.path === "/api/pulse" || r.prefix === "/api/op-run/"));
 
 // ---------- the static shell (GET /, no data, no auth) ----------
 const SHELL = `<!doctype html>
@@ -837,10 +858,21 @@ function boot(argv) {
     process.exit(2);
   }
   const flags = {};
+  // A value flag with no value is refused, never read as absent: `--spine ""` and a trailing `--spine` both fell
+  // through `if (flags.spine)` to LIVE mode -- the canonical spine, where a paid op spends -- for a caller that asked for
+  // a fixture (face v2 Phase 05 round-2 logic attack). A value that is another flag has swallowed it, a repeat is two
+  // answers to one question, and a bare word is an argument nobody reads.
+  const argFail = (msg) => { process.stderr.write(`arc-dash: ERROR BAD_ARGS -- ${msg}\n`); process.exit(2); };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--routes") { flags.routes = true; continue; }
-    if (a.startsWith("--")) { flags[a.slice(2)] = argv[i + 1]; i++; }
+    if (!a.startsWith("--")) argFail(`unexpected argument ${JSON.stringify(a)}; every argument is a --flag`);
+    const name = a.slice(2);
+    const v = argv[i + 1];
+    if (Object.hasOwn(flags, name)) argFail(`${a} given twice; pick one`);
+    if (v === undefined || v === "" || v.startsWith("--")) argFail(`${a} needs a value (got ${v === undefined ? "end of args" : JSON.stringify(v)})`);
+    flags[name] = v;
+    i++;
   }
   if (flags.routes) {
     // spineEffect is printed VERBATIM, never defaulted: the fixture's "every route declares
@@ -887,6 +919,14 @@ function boot(argv) {
       process.stderr.write("arc-dash: ERROR BAD_SPINE_ENV -- ARC_SPINE_ROOT is set; a door over a named spine is sim mode: pass it as --spine <path>, or unset it for the canonical spine\n");
       process.exit(1);
     }
+    // The spine's other test-only doors (arc-event.mjs names all five) are a fixture's too. ARC_SPINE_NOW on a live door
+    // reached the tools it runs, and a real idea was sealed into a past day's file under a forged ts (face v2 Phase 05
+    // round-2 logic attack).
+    const testDoors = ["ARC_SPINE_NOW", "ARC_SPINE_RAND", "ARC_SPINE_LOCK_TIMEOUT_MS", "ARC_SPINE_LOCK_STALE_MS"].filter((k) => process.env[k] !== undefined);
+    if (testDoors.length) {
+      process.stderr.write(`arc-dash: ERROR BAD_SPINE_ENV -- ${testDoors.join(", ")} set; those are the spine's test-only doors, and a live door writes the real company's receipts. Unset them, or run a fixture with --spine <path>\n`);
+      process.exit(1);
+    }
     try {
       root = spineRoot(); // REFUSES a linked worktree (named), the C4 guard -- live mode
     } catch (err) {
@@ -896,6 +936,13 @@ function boot(argv) {
       process.exit(1);
     }
   }
+
+  // Every spine read behind this door -- its own, the libraries it calls, and the tools it runs (childEnv carries the
+  // variable) -- is the SCAN engine. "auto" prefers derived/state.db once arc-replay has built one, and nothing else
+  // updates it: an approval an op raised a second ago was invisible to the inbox and undecidable, 404 (face v2 Phase 05
+  // round-2 logic attack; the work door's own receipt reads were fixed in PR 1, and these were their twins). Set, not
+  // defaulted: an owner's ARC_SPINE_ENGINE=sqlite is exactly the stale read this refuses.
+  process.env.ARC_SPINE_ENGINE = "scan";
 
   const repo = repoRoot();
   if (repo === null) { process.stderr.write("arc-dash: ERROR NO_ROOT -- no repository at or above cwd\n"); process.exit(1); }
@@ -1018,7 +1065,9 @@ function boot(argv) {
       Promise.resolve()
         .then(() => route.handler(ctx, url, tail, body))
         .then((out) => {
-          journal({ ts: formatIst(nowMs()), method: req.method, path, status: 200, ...(path === "/api/decide" && out && out.decision ? { decision: out.decision.id, decides: out.decided } : {}) });
+          // The pulse and a run's poll are asked every few hundred milliseconds while the face is open: journalling each
+          // answer would bury the owner's acts under thousands of reads a day. Their REFUSALS are still journalled.
+          if (!QUIET_OK.has(route)) journal({ ts: formatIst(nowMs()), method: req.method, path, status: 200, ...(path === "/api/decide" && out && out.decision ? { decision: out.decision.id, decides: out.decided } : {}) });
           send(res, 200, out);
         })
         .catch((err) => {
@@ -1047,15 +1096,12 @@ function boot(argv) {
       req.on("end", () => {
         if (tooBig) return;
         let body;
-        // The work door's bodies are parsed STRICTLY: a duplicate key is refused, never last-one-wins -- the same rule
-        // the door already holds for a repeated query key (Phase 04 round 3), found missing here by the Phase 05 attack.
-        if (route.strictBody) {
-          try { body = chunks.length ? parseStrictJson(Buffer.concat(chunks), "body") : {}; }
-          catch (e) { return fail("BAD_BODY", e instanceof SpineError ? e.message : "body is not valid JSON"); }
-        } else {
-          try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {}; }
-          catch { return fail("BAD_BODY", "body is not valid JSON"); }
-        }
+        // EVERY body is parsed strictly: a duplicate key is refused, never last-one-wins -- the rule the door holds for
+        // a repeated query key (Phase 04 round 3). PR 1 gave it to the work door's routes only, and /api/decide, the
+        // door's one direct spine write, recorded "approve" from a body whose first verdict was "reject" (face v2
+        // Phase 05 round-2 logic attack). One parser for every POST, so a new route cannot be born lenient.
+        try { body = chunks.length ? parseBody(Buffer.concat(chunks)) : {}; }
+        catch (e) { return fail("BAD_BODY", e instanceof SpineError ? e.message : "body is not valid JSON"); }
         run(body);
       });
     } else {

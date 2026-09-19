@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Door } from '../lib/door.mjs'
 import {
-  IDLE, RUN_POLL_MS, applyArgs, applyBlocked, applyFailed, applyStarted, callFailed, opCards, planBlocked, planInput,
+  IDLE, RUN_POLL_MS, applyArgs, applyBlocked, applyFailed, applyStarted, callFailed, fieldCount, opCards, planBlocked, planInput,
   planSettled, planStarted, polling, runSettled, runVerdict,
 } from '../lib/ops.mjs'
 import type { OpCard, OpState } from '../lib/ops.mjs'
@@ -125,7 +125,7 @@ function OpCardView({ card, door, onApplied }: { card: OpCard; door: Door; onApp
       {/* Locked while a plan is answering or a run is going: an edit then would plan or run something else. */}
       <fieldset disabled={st.phase === 'planning' || live} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 min-w-0 border-0 p-0 m-0">
         {card.fields.map((f) => (
-          <Field key={f.name} label={f.label} className={f.type === 'select' ? 'md:col-span-2' : ''}>
+          <Field key={f.name} label={f.label} className={f.type === 'select' ? 'md:col-span-2' : ''} hint={fieldCount(f, values[f.name]) || undefined}>
             {f.type === 'select' ? (
               <PickRow small label={f.label} options={f.options} value={values[f.name] ?? ''} onPick={(v) => setValue(f.name, v)} />
             ) : (

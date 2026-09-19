@@ -326,7 +326,10 @@ function gitEnv(root) {
   const env = { ...process.env };
   // A stale index or work tree pointed at another repository would silently retarget every
   // command at it -- including the commit.
-  for (const k of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR", "GIT_ALTERNATE_OBJECT_DIRECTORIES"]) delete env[k];
+  // Compared upper-cased: Windows reads environment names case-insensitively, so a `git_dir` the spread copied under
+  // its own spelling still retargeted git after an exact-name delete (face v2 Phase 05 round-2 logic attack).
+  const drop = new Set(["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR", "GIT_ALTERNATE_OBJECT_DIRECTORIES"]);
+  for (const k of Object.keys(env)) if (drop.has(k.toUpperCase())) delete env[k];
   env.GIT_CONFIG_NOSYSTEM = "1";
   env.GIT_CONFIG_GLOBAL = join(root, ".arc-bench-no-global-gitconfig");
   return env;
@@ -904,7 +907,12 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
 
     // arc-run's own receipt for THIS attempt: the structured verdict, and the only place a
     // measured cost is visible to bench at all.
-    const appended = spineSince(root, spineBefore).filter((e) => e.kind === "run.completed" && e.process !== BENCH_ID);
+    // THE RECEIPT IS THE ONE arc-run NAMED, never the newest one written since the snapshot: any other writer of
+    // run.completed in that window -- a face ask, a second bench run the face applied -- was credited to this attempt,
+    // and its spend committed against the cap (face v2 Phase 05 round-2 logic attack: 35 rupees against a mock run
+    // that spends none). arc-run prints the id on stderr once it has sealed it.
+    const named = /^arc-run: receipt run\.completed ([0-9A-HJKMNP-TV-Z]{26})\r?$/m.exec(String(res.stderr || ""));
+    const appended = spineSince(root, spineBefore).filter((e) => e.kind === "run.completed" && e.process !== BENCH_ID && named && e.id === named[1]);
     // M1s INVOCATION DISCIPLINE, checked at run time rather than trusted. Every attempt goes
     // through arc-run, and arc-run leaves exactly one receipt per invocation -- so an attempt
     // that produced an answer while leaving NO receipt did not go through arc-run. That is the
@@ -933,7 +941,8 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
     }
     const status = res.status ?? 1;
     if (status !== 0) {
-      const line = String(res.stderr || "").trim().split("\n").filter(Boolean).pop() || `arc-run exited ${status}`;
+      // The receipt line arc-run prints last is bookkeeping, not the reason the run failed.
+      const line = String(res.stderr || "").trim().split("\n").filter((l) => l && !/^arc-run: receipt run\.completed /.test(l)).pop() || `arc-run exited ${status}`;
       // SCHEMA IS ONLY EVALUATED WHERE AN OUTPUT EXISTED. A driver that never answered leaves the
       // schema question unasked, and counting that as a schema failure would blame the process
       // for a fault arc-run has already attributed elsewhere (ADR-0204).

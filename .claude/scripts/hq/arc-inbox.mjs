@@ -58,8 +58,11 @@ export async function loadApprovals(root, { asof = null } = {}) {
   // the fold cut at the same boundary, or a later decision would close an approval that
   // was still open on the day being replayed (the Tape's honesty, ADR-1305).
   const cut = (events) => cutToDay(events, asof);
-  const requested = cut((await query(root, { kind: "approval.requested" })).events);
-  const decided = cut((await query(root, { kind: "decision.recorded" })).events);
+  // SCAN, never "auto": auto prefers derived/state.db once arc-replay has built one, and nothing else updates it, so
+  // an approval raised a second ago was missing here and `decide` answered UNKNOWN_APPROVAL for it (face v2 Phase 05
+  // round-2 logic attack). The inbox is where an approval is acted on; it reads the log, not a copy of it.
+  const requested = cut((await query(root, { kind: "approval.requested", engine: "scan" })).events);
+  const decided = cut((await query(root, { kind: "decision.recorded", engine: "scan" })).events);
   const decidedIds = new Set(decided.map((e) => e.event.payload && e.event.payload.decides));
   return { requested, decidedIds };
 }
@@ -151,7 +154,7 @@ export async function decide(root, verdict, id, reason) {
   if (!approval) {
     // Name the mistake: an id that exists but is the wrong kind is a caller error worth a
     // distinct message, not a silent "unknown".
-    const any = (await query(root, {})).events.find((e) => e.event.id === id);
+    const any = (await query(root, { engine: "scan" })).events.find((e) => e.event.id === id);
     if (any) throw new SpineError("WRONG_KIND", `${id} is a ${any.event.kind}, not an approval.requested`);
     throw new SpineError("UNKNOWN_APPROVAL", `${id} is not an approval on this spine`);
   }

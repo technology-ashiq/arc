@@ -38,7 +38,7 @@ SESSION verbs are Phase 06's).
 - [ ] **Every work verb (REQ-07):** each of the 31 ships with its no-second-path fixture green, or is a row in `evidence/phase-05/residue.md` naming the missing piece and the lane it is filed to; `tests/face/` holds the residue equal to the ops registry both ways (a verb can neither vanish nor be invented); the owner approves the residue as a whole at `/arc-phase-done 05`.
 - [ ] **Proposals stay proposals:** driver switch, terminate and cap proposal write a `feat/face-*` branch, show the diff and raise `approval.requested`; nothing in the face writes `engine/router.yaml` or `hq.policy.yaml`, and a fixture proves it.
 - [ ] **Human-run ops apply only on the owner's click:** close month, the leads send, growth publish and the legal stamp are applied by `apply` from a click and never from Ask, a schedule or a replay; a fixture proves each refuses the other three paths.
-- [ ] **Live rooms (REQ-11):** the door signals a change when the spine or a declared file changes; the open room re-reads within 5 s, proven by a browser-harness fixture that appends a spine event and times the panel; an op's receipt appears in its room within 5 s of `apply`; 36 of 36 modules re-read on change and a planted read-once module FAILs `face-coverage`.
+- [ ] **Live rooms (REQ-11):** the door signals a change when the spine or a declared file changes; the open room re-reads within 5 s, proven by a browser-harness fixture that appends a spine event and times the panel; an op's receipt appears in its room within 5 s of `apply`; every room re-reads on change because the host re-reads all of an open room's reads on the door's pulse (no module can opt out; the planted mutant is a host that stops re-reading, which the browser live flow FAILs).
 - [ ] Two fresh attackers per PR (door decision logic · shell/git boundary), each carrying the fixed-defect list; CI green per job on every PR; `/arc-phase-done 05` from the main clone.
 
 ## Verification plan
@@ -86,6 +86,31 @@ direct writes to `engine/router.yaml` or `hq.policy.yaml` → never.
     sha256("ledger.criteria|"+digest)` (the printed two-step never said so -- the emitter refused it); a bench ceiling of
     ₹0 runs nothing (the field floor is 1); the door reads for a receipt whatever the exit (bench exits 1 on a partial run
     and still records it).
+
+- **2026-09-19, PR 2 (live rooms + flows):**
+  - **The pulse, not a push.** `GET /api/pulse` is a fingerprint of what the rooms read, built from stats alone
+    (names, sizes, mtimes of the spine's day files and quarantine, the allow-listed files, every lane's PROGRESS.md,
+    PLAN.md and phases/, docs/adr/). The shell asks it every 2 s (`PULSE_MS`); a change re-reads ALL of the open room's
+    reads -- keeping the last answer on screen while they read, so nothing flickers -- plus the inbox chip and the
+    registry. A server push (SSE over a file watcher) was the alternative; a stat poll has no watcher to lose events on
+    one OS, and 2 s sits well inside REQ-11's 5 s. Successful pulse and run-poll answers are not journalled.
+  - **REQ-11's per-module check is replaced** by the host-level re-read (PLAN amended the same day): a room cannot be
+    read-once when the host re-reads all of its reads, so the mutant worth planting is a host that stops, and the
+    browser live flow FAILs it.
+  - **The `flows.mjs` port:** `face/scripts/flows.mjs` drives every registry op through its room's dock in Chrome --
+    typing by placeholder, clicking the FROZEN "Plan it" / "Run it", ticking a human-run op -- and reads each receipt
+    back through `/api/spine`; then the live flow appends a receipt behind the spine room and times its re-read. The
+    harness runs the flows once, after both moods' smoke, because they write to the fixture. A planted rename of a
+    frozen button FAILs `tests/face/live-pulse.mjs`.
+  - **Round 2 of PR 1's attackers lands here** (fixed-defects.md, "PR 2 -- round 2"). Every finding was a TWIN of a PR
+    1 fix, one file over, so the fixes reach past the door: `arc-inbox` reads by scan and the door forces
+    `ARC_SPINE_ENGINE=scan` for itself and its tools; `arc-run` prints `arc-run: receipt run.completed <id>` on stderr
+    and bench credits only that id; bench's `gitEnv` compares names upper-cased; every POST body is strict (CRLF and one
+    BOM normalised, duplicates refused); `/api/ask` runs through `runTool`, so its timeout ends the tree; a live door
+    refuses all five spine test doors and every malformed flag. The dock shows a text field's size in bytes as the
+    owner types; one-line fields refuse bidi controls and name the character they refuse. Three process-tree
+    remainders are debt rows, not claims: Windows descendants after the tool exits, POSIX `setsid` escapes, and bench's
+    own synchronous attempt timeout.
 
 ## Your-setup / pending
 

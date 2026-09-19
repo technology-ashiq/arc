@@ -41,7 +41,7 @@ const KEY = /^\.\/modules\/([^/\\?#]+)\/([^/\\?#]+)\/(module\.mjs|fold\.mjs|ops\
  * @property {ModuleManifest} [manifest]  the manifest the host checks this module's reads against, handed to
  *   the fold so a shared fold refuses a read the manifest cannot make instead of planning one the host drops
  *
- * @typedef {Omit<FoldContext, "picks" | "manifest"> & { door: import("./door.mjs").Door, onOpen: (id: string) => void }} ModuleContext
+ * @typedef {Omit<FoldContext, "picks" | "manifest"> & { door: import("./door.mjs").Door, onOpen: (id: string) => void, pulse?: string }} ModuleContext
  *   what the shell hands the frame for a room
  *
  * @typedef {ModuleContext & { picks: Record<string, string>, onPick: (key: string, value: string) => void,
@@ -390,6 +390,12 @@ export function foldContext(ctx, picks = {}, manifest = undefined) {
 /** How often a read a fold marks `poll` is read again. The brief is not polled: it shells the CLI. */
 export const POLL_MS = 45_000;
 
+/**
+ * How often the shell asks the door's pulse whether anything under the rooms changed (REQ-11: a change shows within
+ * 5 s). The pulse is stats alone, so asking often is cheap; a changed pulse re-reads the open room, all of its reads.
+ */
+export const PULSE_MS = 2_000;
+
 /** @type {Payload} */
 export const LOADING = Object.freeze({ state: "loading" });
 
@@ -535,12 +541,15 @@ function snapshotRead(r) {
 
 /**
  * Which planned reads the host starts now: every one neither loaded nor in flight, and -- when a poll is
- * due -- every polled one again, keeping its last payload on screen while it reads.
+ * due -- every polled one again, keeping its last payload on screen while it reads. When the door's PULSE changed
+ * (face v2 Phase 05, REQ-11), every read is due again, polled or not: something under the room changed, and a read
+ * that asked once and never again is how a room goes stale in front of the owner.
  * @param {PlannedRead[]} planned @param {Record<string, Payload>} loaded @param {Set<string>} inflight @param {boolean} pollDue
+ * @param {boolean} [pulseDue]
  * @returns {PlannedRead[]}
  */
-export function readsToLoad(planned, loaded, inflight, pollDue) {
-  return planned.filter((r) => !inflight.has(r.key) && (!Object.hasOwn(loaded, r.key) || (pollDue && r.poll === true)));
+export function readsToLoad(planned, loaded, inflight, pollDue, pulseDue = false) {
+  return planned.filter((r) => !inflight.has(r.key) && (!Object.hasOwn(loaded, r.key) || pulseDue === true || (pollDue && r.poll === true)));
 }
 
 /**

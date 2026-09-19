@@ -285,6 +285,19 @@ try {
       await post("/api/op/today.capture-idea/apply", { planId: p.body.planId }, { Origin: ORIGIN });
       const done = await settle(p.body.planId);
       check("with derived/state.db present, a fresh receipt is still found (the door reads by scan)", done.body.result && done.body.result.ok === true, JSON.stringify(done.body.result).slice(0, 300));
+      // The twins (round-2 logic attack): the approval an op raises must be in the inbox, and decidable, with the
+      // index still present -- the inbox and decide read through arc-inbox, not through the work door.
+      const c = await post("/api/op/money.criteria/plan", { input: { what: "raised after a replay built the index" } });
+      await post("/api/op/money.criteria/apply", { planId: c.body.planId }, { Origin: ORIGIN });
+      const raised = await settle(c.body.planId);
+      const rid = raised.body.result && raised.body.result.receipt ? raised.body.result.receipt.id : "";
+      check("with the index present, an op raised an approval (vacuous-pass guard)", /^[0-9A-HJKMNP-TV-Z]{26}$/.test(rid), JSON.stringify(raised.body.result).slice(0, 300));
+      const inbox = await j("/api/inbox", { headers: H });
+      check("with the index present, the approval an op just raised is OPEN in the inbox", inbox.status === 200 && (inbox.body.open || []).some((o) => o.id === rid), `${inbox.status} open=${(inbox.body.open || []).map((o) => o.id).join(",")}`);
+      const dupe = await j("/api/decide", { method: "POST", headers: { ...H, Origin: ORIGIN }, body: `{"id":"${rid}","verdict":"reject","reason":"no","verdict":"approve"}` });
+      check("/api/decide: a body with a duplicate verdict -> BAD_BODY, never last-one-wins (the door's one direct write)", dupe.status === 400 && dupe.body.error === "BAD_BODY", `${dupe.status} ${dupe.body.error}`);
+      const dec = await post("/api/decide", { id: rid, verdict: "reject", reason: "the suite rejects what it raised" }, { Origin: ORIGIN });
+      check("with the index present, that approval is decidable (not UNKNOWN_APPROVAL)", dec.status === 200 && dec.body.verdict === "reject", `${dec.status} ${JSON.stringify(dec.body).slice(0, 200)}`);
     } else {
       // Node before 22 has no node:sqlite, so arc-replay builds no index and there is nothing to hide a receipt behind.
       check(`no derived/state.db on this Node (${process.version}): the stale-index arm has nothing to run against`, replay.status === 0 || /sqlite/i.test(String(replay.stderr) + String(replay.stdout)), `${replay.status} ${replay.stderr}`);
@@ -297,6 +310,20 @@ try {
     check("a body with a duplicate key -> BAD_BODY, never last-one-wins", raw.status === 400 && raw.body.error === "BAD_BODY", `${raw.status} ${raw.body.error}`);
     const esc = await post("/api/op/today.capture-idea/plan", { input: { text: `clear${String.fromCharCode(27)}[2J` } });
     check("an ESC sequence in a one-line field -> BAD_INPUT", esc.status === 400 && esc.body.error === "BAD_INPUT", `${esc.status} ${esc.body.error}`);
+    // Valid JSON the spine's canonical form refuses is still a valid BODY (round-2 logic attack: ConvertTo-Json writes
+    // CRLF); a lone CR, and a raw line break inside a string, are still refused.
+    const crlf = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{\r\n  "input": {\r\n    "text": "a CRLF body"\r\n  }\r\n}' });
+    check("a CRLF-formatted body is valid JSON and plans", crlf.status === 200 && crlf.body.ok === true, `${crlf.status} ${crlf.body.error}`);
+    const bomBody = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"input":{"text":"a BOM body"}}')]) });
+    check("a body with one leading BOM plans (RFC 8259 lets a parser ignore it)", bomBody.status === 200 && bomBody.body.ok === true, `${bomBody.status} ${bomBody.body.error}`);
+    const loneCr = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{"input":{"text":"a"}\r}' });
+    check("a lone CR is still refused -> BAD_BODY", loneCr.status === 400 && loneCr.body.error === "BAD_BODY", `${loneCr.status} ${loneCr.body.error}`);
+    const inStr = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{"input":{"text":"two\r\nlines"}}' });
+    check("a raw line break inside a string is still refused, CRLF or not", inStr.status === 400, `${inStr.status} ${inStr.body.error}`);
+    const bidi = await post("/api/op/today.capture-idea/plan", { input: { text: "safe ‮txt.exe" } });
+    check("a bidi override in a one-line field -> BAD_INPUT (it reorders what the owner reads on the plan card)", bidi.status === 400 && bidi.body.error === "BAD_INPUT", `${bidi.status} ${bidi.body.error}`);
+    const tab = await post("/api/op/today.capture-idea/plan", { input: { text: "a\tb" } });
+    check("a refused character is NAMED in the refusal (U+0009)", tab.status === 400 && /U\+0009/.test(String(tab.body.message)), `${tab.status} ${tab.body.message}`);
   }
 
   // ---- a door over a NAMED spine is sim mode, never live (logic attack: ARC_SPINE_ROOT made a scratch spine "live") ----
@@ -304,6 +331,22 @@ try {
     const live = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--port", String(PORT + 1)],
       { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_B, ARC_DASH_JOURNAL_DIR: JOURNAL }, timeout: 20_000 });
     check("arc-dash with ARC_SPINE_ROOT and no --spine refuses to start -> BAD_SPINE_ENV", live.status === 1 && /BAD_SPINE_ENV/.test(live.stderr), `${live.status} ${String(live.stderr).slice(0, 200)}`);
+    // Round-2 logic attack: an empty or missing --spine value fell through to LIVE mode.
+    const boot = (args, extraEnv = {}) => {
+      const env = { ...process.env, ARC_DASH_JOURNAL_DIR: JOURNAL, ...extraEnv };
+      delete env.ARC_SPINE_ROOT;
+      return spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), ...args], { cwd: REPO, encoding: "utf8", env, timeout: 20_000 });
+    };
+    const empty = boot(["--spine", "", "--port", String(PORT + 1)]);
+    check("arc-dash --spine \"\" refuses to start -> BAD_ARGS, never live", empty.status === 2 && /BAD_ARGS/.test(empty.stderr), `${empty.status} ${String(empty.stderr).slice(0, 200)}`);
+    const trailing = boot(["--port", String(PORT + 1), "--spine"]);
+    check("arc-dash with a trailing --spine refuses to start -> BAD_ARGS, never live", trailing.status === 2 && /BAD_ARGS/.test(trailing.stderr), `${trailing.status} ${String(trailing.stderr).slice(0, 200)}`);
+    const swallowed = boot(["--spine", "--port", String(PORT + 1)]);
+    check("arc-dash --spine followed by another flag refuses (the flag is not a path)", swallowed.status === 2 && /BAD_ARGS/.test(swallowed.stderr), `${swallowed.status} ${String(swallowed.stderr).slice(0, 200)}`);
+    const twice = boot(["--spine", SPINE_A, "--spine", SPINE_B, "--port", String(PORT + 1)]);
+    check("arc-dash with two --spine values refuses (never last-one-wins)", twice.status === 2 && /given twice/.test(twice.stderr), `${twice.status} ${String(twice.stderr).slice(0, 200)}`);
+    const forced = boot(["--port", String(PORT + 1)], { ARC_SPINE_NOW: String(Date.now()) });
+    check("a live door with ARC_SPINE_NOW set refuses to start -> BAD_SPINE_ENV (a forced clock is a fixture's)", forced.status === 1 && /BAD_SPINE_ENV/.test(forced.stderr) && /ARC_SPINE_NOW/.test(forced.stderr), `${forced.status} ${String(forced.stderr).slice(0, 200)}`);
   }
 
   // ---- the counting fixture: two concurrent applies of one plan invoke the tool exactly once (REQ-07) ----
@@ -341,6 +384,81 @@ try {
     try { door.apply("fixture.count", { planId: p2.planId }); } catch (e) { expired = e.code; }
     check("an expired plan -> PLAN_EXPIRED, and the tool was not run", expired === "PLAN_EXPIRED" && readFileSync(counter, "utf8") === "xxx", `code=${expired} count=${readFileSync(counter, "utf8").length}`);
     delete process.env.ARC_SPINE_ROOT;
+  }
+
+  // ---- a character split across two writes, and a descendant the tool leaves behind (round-2 shell attack) ----
+  {
+    const fx = join(tmp, "fixture-split");
+    mkdirSync(join(fx, ".claude", "scripts", "fixture"), { recursive: true });
+    const gpidFile = join(tmp, "grandchild.pid");
+    // The euro sign is three bytes; the tool writes the first two, waits, then the third -- two chunks for the door.
+    // On apply it also starts a grandchild in its own process group that would run forever, and exits without it.
+    writeFileSync(join(fx, ".claude", "scripts", "fixture", "split.mjs"),
+      `import { spawn, spawnSync } from "node:child_process";\nimport { writeFileSync } from "node:fs";\n` +
+      `const w = (b) => new Promise((r) => process.stdout.write(Buffer.from(b), r));\n` +
+      `await w([0x70, 0x72, 0x69, 0x63, 0x65, 0x20, 0xe2, 0x82]);\n` +
+      `await new Promise((r) => setTimeout(r, 200));\n` +
+      `await w([0xac, 0x0a]);\n` +
+      `if (process.argv[2] === "--plan") process.exit(0);\n` +
+      `const g = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });\n` +
+      `g.unref();\nwriteFileSync(${JSON.stringify(gpidFile)}, String(g.pid));\n` +
+      `const r = spawnSync(process.execPath, [${JSON.stringify(EVENT)}, "emit", "note.logged", "--payload", JSON.stringify({ note: "split" }), "--strict"], { encoding: "utf8" });\n` +
+      `process.stdout.write(r.stdout); process.exit(r.status);\n`);
+    const SPINE_S = join(tmp, "spine-split");
+    mkdirSync(join(SPINE_S, "events"), { recursive: true });
+    process.env.ARC_SPINE_ROOT = SPINE_S;
+    const registry = [{ id: "fixture.split", room: "fixture", label: "split", receipt: { kind: "note.logged" }, humanRun: false, spends: false, touchesFiles: false, fields: [],
+      plan: () => ({ script: "fixture/split.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/split.mjs", args: [] }) }];
+    const door = DOOR_MOD.createWorkDoor({ mode: "sim", root: SPINE_S, repo: fx }, { registry });
+    const p = await door.plan("fixture.split", { input: {} });
+    check("a character split across two chunks arrives whole in the plan output", p.ok === true && String(p.output).includes("price €") && !String(p.output).includes("�"), JSON.stringify(p.output));
+    door.apply("fixture.split", { planId: p.planId });
+    await door.settled();
+    const run = door.run(p.planId);
+    const text = run.lines.map((l) => l.t).join("\n");
+    check("a character split across two chunks arrives whole in the streamed run lines", text.includes("price €") && !text.includes("�"), JSON.stringify(text).slice(0, 200));
+    check("the split fixture ran to its receipt (vacuous-pass guard for the descendant check)", run.state === "done" && run.result.ok === true && existsSync(gpidFile), JSON.stringify(run.result).slice(0, 200));
+    const gpid = existsSync(gpidFile) ? Number(readFileSync(gpidFile, "utf8")) : 0;
+    const alive = () => { try { process.kill(gpid, 0); return true; } catch { return false; } };
+    if (process.platform === "win32") {
+      // Windows has no group to signal once the tool is gone: a debt-ledger row (a Job Object is out of Node reach).
+      console.log("note: the descendant check is POSIX-only (Windows remainder is a debt row); the grandchild is ended by the suite");
+      if (gpid && alive()) try { process.kill(gpid); } catch { /* gone */ }
+    } else {
+      let gone = false;
+      for (let i = 0; i < 20 && !gone; i++) { gone = !alive(); if (!gone) await new Promise((r) => setTimeout(r, 100)); }
+      check("a descendant the tool left in its group is ended when the run settles (POSIX)", gpid > 0 && gone, `pid=${gpid}`);
+      if (!gone) try { process.kill(gpid, "SIGKILL"); } catch { /* gone */ }
+    }
+    delete process.env.ARC_SPINE_ROOT;
+
+    // A door stopped by a signal ends the tool it is running (round-2 shell attack: "exit" does not fire on a signal,
+    // so a Ctrl-C'd door orphaned its tool). POSIX-only: Windows has no catchable SIGTERM to send.
+    if (process.platform !== "win32") {
+      const toolPid = join(tmp, "sleeper.pid");
+      writeFileSync(join(fx, ".claude", "scripts", "fixture", "sleep.mjs"),
+        `import { writeFileSync } from "node:fs";\nif (process.argv[2] === "--plan") process.exit(0);\n` +
+        `writeFileSync(${JSON.stringify(toolPid)}, String(process.pid));\nsetInterval(() => {}, 1000);\n`);
+      const harness = join(tmp, "signal-harness.mjs");
+      writeFileSync(harness,
+        `const D = await import(${JSON.stringify(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "work-door.mjs")).href)});\n` +
+        `const registry = [{ id: "fixture.sleep", room: "fixture", label: "sleep", receipt: { kind: "note.logged" }, humanRun: false, spends: false, touchesFiles: false, fields: [],\n` +
+        `  plan: () => ({ script: "fixture/sleep.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/sleep.mjs", args: [] }) }];\n` +
+        `const door = D.createWorkDoor({ mode: "sim", root: ${JSON.stringify(SPINE_S)}, repo: ${JSON.stringify(fx)} }, { registry });\n` +
+        `const p = await door.plan("fixture.sleep", { input: {} });\ndoor.apply("fixture.sleep", { planId: p.planId });\nsetInterval(() => {}, 1000);\n`);
+      const h = spawn(process.execPath, [harness], { stdio: "ignore" });
+      let tpid = 0;
+      for (let i = 0; i < 100 && !tpid; i++) { await new Promise((r) => setTimeout(r, 100)); if (existsSync(toolPid)) tpid = Number(readFileSync(toolPid, "utf8")) || 0; }
+      check("the signal harness started its tool (vacuous-pass guard)", tpid > 0);
+      const exited = new Promise((r) => h.once("exit", (code, signal) => r({ code, signal })));
+      h.kill("SIGTERM");
+      const ex = await exited;
+      const toolAlive = () => { try { process.kill(tpid, 0); return true; } catch { return false; } };
+      let gone = false;
+      for (let i = 0; i < 20 && !gone; i++) { gone = !toolAlive(); if (!gone) await new Promise((r) => setTimeout(r, 100)); }
+      check("SIGTERM to a door with a tool running ends the tool, then the door, with code 143", ex.code === 143 && gone, `${JSON.stringify(ex)} toolAlive=${!gone}`);
+      if (!gone) try { process.kill(tpid, "SIGKILL"); } catch { /* gone */ }
+    }
   }
 
   // ---- arc-event --dry-run (the shared unlock) ----
@@ -389,6 +507,14 @@ try {
     check("arc-growth seal: a directory is not an article -> BAD_ARTICLE", dir.status !== 0 && /BAD_ARTICLE/.test(dir.stderr), `${dir.status} ${dir.stderr}`);
     const unc = sealAt("//./pipe/work-door-probe.mdx");
     check("arc-growth seal: a network or device path is refused before it is opened -> BAD_ARTICLE", unc.status !== 0 && /BAD_ARTICLE/.test(unc.stderr), `${unc.status} ${unc.stderr}`);
+    // A FIFO blocks a plain open for read until a writer arrives; the seal must refuse it, not hang (POSIX has them).
+    if (process.platform !== "win32") {
+      const fifo = join(tmp, "article.fifo");
+      const mk = spawnSync("mkfifo", [fifo]);
+      check("mkfifo made the probe FIFO (vacuous-pass guard)", mk.status === 0, String(mk.stderr));
+      const f = sealAt(fifo);
+      check("arc-growth seal: a FIFO is refused, not waited on -> BAD_ARTICLE", f.status !== 0 && f.signal === null && /BAD_ARTICLE/.test(f.stderr), `${f.status} ${f.signal} ${f.stderr}`);
+    }
   }
 
   // ---- the child's environment: the drop list holds whatever the case (shell attack: Windows reads env names

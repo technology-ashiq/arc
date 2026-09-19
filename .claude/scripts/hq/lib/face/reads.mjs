@@ -1081,3 +1081,37 @@ export const PHASE04_HANDLERS = Object.freeze({
   "/api/ventures": apiVentures,
   "/api/absorb": apiAbsorb,
 });
+
+/**
+ * The pulse (face v2 Phase 05, REQ-11, ADR-1339): one fingerprint of everything the rooms read, built from STATS alone --
+ * names, sizes and modification times, never a file's bytes -- so the face can ask "did anything change?" every two
+ * seconds for the price of a few directory listings, and re-read a room only when the answer is yes.
+ *
+ * What it watches: every entry of the spine's events/ (day files and close markers) and its quarantine, the files the
+ * door allow-lists, every lane's PROGRESS.md, PLAN.md and phases/, and docs/adr/. A source a room reads that is not
+ * here still refreshes on the 45-second poll -- the pulse makes rooms fast, it does not make the poll unnecessary.
+ * @param {{ mode: string, root: string, repo: string }} ctx @param {readonly string[]} files  repo-relative paths
+ */
+export function apiPulse(ctx, files) {
+  /** @type {string[]} */
+  const parts = [];
+  /** @param {string} label @param {string} p */
+  const stamp = (label, p) => {
+    try { const s = statSync(p); parts.push(`${label}|${s.size}|${s.mtimeMs}`); }
+    catch { parts.push(`${label}|absent`); }
+  };
+  const ev = join(ctx.root, "events");
+  /** @type {string[]} */
+  let days = [];
+  try { days = readdirSync(ev).sort(); } catch { parts.push("events|unreadable"); }
+  for (const n of days) stamp(`events/${n}`, join(ev, n));
+  try { for (const n of readdirSync(join(ev, "_quarantine")).sort()) stamp(`quarantine/${n}`, join(ev, "_quarantine", n)); }
+  catch { /* no quarantine yet */ }
+  for (const f of files) stamp(f, join(ctx.repo, f));
+  /** @type {string[]} */
+  let lanes = [];
+  try { lanes = readdirSync(join(ctx.repo, "initiatives")).sort(); } catch { /* root-mode: no lanes */ }
+  for (const l of lanes) for (const f of ["PROGRESS.md", "PLAN.md", "phases"]) stamp(`initiatives/${l}/${f}`, join(ctx.repo, "initiatives", l, f));
+  stamp("docs/adr", join(ctx.repo, "docs", "adr"));
+  return { mode: ctx.mode, pulse: sha256Hex(parts.join("\n")).slice(0, 24), watched: parts.length };
+}

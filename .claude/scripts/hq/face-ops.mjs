@@ -51,8 +51,22 @@ function benchDrivers() {
 
 // One line of text: no control character at all (C0, DEL, C1 -- which covers CR, LF, NUL, ESC and tab) and none of the
 // Unicode line breaks. The first cut refused only CR, LF and NUL, and an ESC sequence reached the spine verbatim
-// (face v2 Phase 05 logic attack; the twin of Phase 03's "no terminal control in a sentence").
-const ONE_LINE = "[^\\p{Cc}\\u2028\\u2029]+";
+// (face v2 Phase 05 logic attack; the twin of Phase 03's "no terminal control in a sentence"). Nor the bidi embedding,
+// override and isolate controls: `safe <U+202E>txt.exe` planned, and on the plan card it reads in an order the bytes do
+// not have -- the owner approves one string and the receipt carries another (round-2 logic attack).
+const ONE_LINE_REFUSED = "\\p{Cc}\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069";
+const ONE_LINE = `[^${ONE_LINE_REFUSED}]+`;
+const ONE_LINE_BAD = new RegExp(`[${ONE_LINE_REFUSED}]`, "u");
+const CHAR_NAMES = Object.freeze({ 0x09: "a tab", 0x0a: "a line break", 0x0d: "a carriage return", 0x1b: "an escape", 0x00: "a NUL", 0x2028: "a line separator", 0x2029: "a paragraph separator" });
+
+/** The first character a one-line field refuses, named: the owner cannot fix a character the refusal does not show. */
+function refusedChar(raw) {
+  const m = ONE_LINE_BAD.exec(raw);
+  if (!m) return "";
+  const cp = /** @type {number} */ (m[0].codePointAt(0));
+  const hex = `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
+  return CHAR_NAMES[cp] ? `${hex} (${CHAR_NAMES[cp]})` : (cp >= 0x202a ? `${hex} (a text-direction control)` : `${hex} (a control character)`);
+}
 
 /**
  * An emit whose dry run IS the plan. The apply is the same argv without `--dry-run`, so the two cannot drift: they
@@ -218,11 +232,15 @@ export function validateInput(op, input) {
       if (n < f.min || n > f.max) throw new OpError("BAD_INPUT", `${f.label} must be between ${f.min} and ${f.max}`);
     } else {
       // Bytes, not characters: a field bound is a size on the wire and in the receipt.
-      if (Buffer.byteLength(raw, "utf8") > f.max) throw new OpError("BAD_INPUT", `${f.label} is longer than ${f.max} bytes`);
+      // The refusal says the size in both units: 110 Tamil letters are 330 bytes, and "longer than 300 bytes" read as
+      // a lie to an owner who typed 110 characters (round-2 logic attack). The face shows the same count as they type.
+      const bytes = Buffer.byteLength(raw, "utf8");
+      if (bytes > f.max) throw new OpError("BAD_INPUT", `${f.label} is ${bytes} bytes (${[...raw].length} characters); the cap is ${f.max} bytes -- an English letter is 1 byte, a Tamil letter 3, an emoji 4`);
       if (raw !== raw.trim()) throw new OpError("BAD_INPUT", `${f.label} starts or ends with whitespace`);
       // A value that opens with a dash can be read as a FLAG by the tool it is handed to (`--title --pr` would make
       // the title swallow the next flag in some parsers). Refused for every text field, whatever its pattern says.
       if (raw.startsWith("-")) throw new OpError("BAD_INPUT", `${f.label} may not start with "-" -- a tool could read it as a flag`);
+      if (f.pattern === ONE_LINE && refusedChar(raw)) throw new OpError("BAD_INPUT", `${f.label} is one line of text, and it holds ${refusedChar(raw)}`);
       if (!new RegExp(`^(?:${f.pattern})$`, "u").test(raw)) throw new OpError("BAD_INPUT", `${f.label} is not in the shape this op takes (${f.placeholder || f.pattern})`);
     }
     out[f.name] = raw;

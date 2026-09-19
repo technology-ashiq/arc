@@ -11,7 +11,7 @@
 
 import { unescapeDoorText } from "./door.mjs";
 
-/** @typedef {{ name: string, label: string, placeholder: string, type: "text" | "select" | "int", options: string[], required: boolean }} OpField */
+/** @typedef {{ name: string, label: string, placeholder: string, type: "text" | "select" | "int", options: string[], required: boolean, maxBytes: number }} OpField */
 /**
  * @typedef {{ id: string, state: "loading" } | { id: string, state: "absent", why: string } |
  *   { id: string, state: "ready", label: string, hint: string, humanRun: boolean, spends: boolean, receiptKind: string, fields: OpField[] }} OpCard
@@ -54,6 +54,8 @@ export function opCards(moduleOps, registry) {
         type: f.type === "select" || f.type === "int" ? f.type : "text",
         options: Array.isArray(f.options) ? f.options.map(String) : [],
         required: f.required === true,
+        // A text field's cap is in BYTES (the door's unit on the wire and in the receipt); 0 = no cap to show.
+        maxBytes: (f.type === "select" || f.type === "int") ? 0 : (Number.isInteger(f.max) && f.max > 0 ? f.max : 0),
       })),
     };
   });
@@ -76,6 +78,18 @@ export function planInput(card, values) {
     if (typeof v === "string" && v !== "") out[f.name] = v;
   }
   return out;
+}
+
+/**
+ * A text field's size as the owner types it, in the door's unit. The cap is bytes, and 110 Tamil letters are 330 of
+ * them: with no count on screen the owner met "longer than 300 bytes" having typed 110 characters (face v2 Phase 05
+ * round-2 logic attack). Empty when the field has no cap to show.
+ * @param {OpField} field @param {string | undefined} value
+ */
+export function fieldCount(field, value) {
+  if (!field.maxBytes) return "";
+  const bytes = new TextEncoder().encode(typeof value === "string" ? value : "").length;
+  return bytes > field.maxBytes ? `${bytes} / ${field.maxBytes} bytes -- over the cap` : `${bytes} / ${field.maxBytes} bytes`;
 }
 
 /**
@@ -196,7 +210,10 @@ export function runSettled(st, run) {
  */
 export function applyFailed(st, err, planId) {
   if ("plan" in st && st.plan.planId !== planId) return st;
-  if (!("plan" in st)) return callFailed(err);
+  // An apply is only ever sent from a card holding a plan, so a refusal reaching a card with NONE is late by
+  // construction: the card moved on (planning again, a plan refused, cleared) and the refusal is not its news. It
+  // replaced the tool's own refusal with a stale error (face v2 Phase 05 round-2 logic attack).
+  if (!("plan" in st)) return st;
   const r = refusalOf(err);
   return { phase: "planned", plan: st.plan, error: `${r.code}: ${r.human}` };
 }
