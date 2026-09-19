@@ -116,8 +116,10 @@ export const REFUSALS = Object.freeze({
   "ventures.register": "SIM_EFFECT|NO_BASE|no approved criteria receipt",
   "ventures.kill-review": "UNRECEIPTED",
   // The company ring: branch writers, refused SIM_EFFECT at apply, or NO_BASE where a CI checkout has no main.
-  "org.lane-status": "SIM_EFFECT|NO_BASE",
-  "concepts.define-term": "SIM_EFFECT|NO_BASE",
+  // Or, on a checkout WITH a main, the fixture spine's deliberate torn line: an unknown read is never "nothing
+  // requested" (the register's twin -- main CI after PR 5a).
+  "org.lane-status": "SIM_EFFECT|NO_BASE|torn line",
+  "concepts.define-term": "SIM_EFFECT|NO_BASE|torn line",
 });
 
 /**
