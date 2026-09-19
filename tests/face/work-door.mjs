@@ -118,7 +118,7 @@ function handRun(op, values) {
 /** The receipts of one kind on a spine, read through the spine's own reader. */
 async function receiptsOf(root, kind) {
   const S = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "spine.mjs")).href);
-  return (await S.query(root, { kind })).events.map((e) => e.event);
+  return (await S.query(root, { kind, engine: "scan" })).events.map((e) => e.event);
 }
 
 // ---- boot the door (sim, over spine A) ----
@@ -127,8 +127,18 @@ const dash = spawn(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mj
 let doorErr = "";
 dash.stderr.on("data", (c) => { doorErr += c; });
 const H = { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" };
+// ONE retry when the socket was closed under a reused connection: the door pins keepAliveTimeout at 5 s (slowloris),
+// and this suite pauses longer than that between requests while a hand-run works, so a pooled socket can be closed at
+// the moment it is reused ("other side closed", 3 of 19 CI jobs). A retry is safe by the door's own contract: a plan
+// is a new one-shot plan, and an apply of the same plan id REPLAYS -- it never runs twice.
 const j = async (path, opts = {}) => {
-  const r = await fetch(`http://127.0.0.1:${PORT}${path}`, opts);
+  let r;
+  try { r = await fetch(`http://127.0.0.1:${PORT}${path}`, opts); }
+  catch (e) {
+    const cause = e && e.cause ? String(e.cause.code || e.cause.message || e.cause) : "";
+    if (!/other side closed|ECONNRESET|UND_ERR_SOCKET/i.test(cause)) throw e;
+    r = await fetch(`http://127.0.0.1:${PORT}${path}`, opts);
+  }
   let body; try { body = await r.json(); } catch { body = {}; }
   return { status: r.status, body };
 };
