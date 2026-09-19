@@ -6,7 +6,7 @@
 // registry homes, and the room each works in, from the list the shell already read. What is not served: each agent's
 // tier and whether it is switched on, which /api/roster will read from each agent's own frontmatter. A tier is law,
 // not taste (ADR-0069): adding an agent, with its tier declared, is a verb of the work door.
-import { notServed, verbPending } from "../../../lib/registry.mjs";
+import { notServed } from "../../../lib/registry.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { heldAcrossRooms } from "../../../lib/lane-room.mjs";
 
@@ -26,7 +26,6 @@ import { heldAcrossRooms } from "../../../lib/lane-room.mjs";
  * @property {string} partial
  * @property {string} rosterEmpty
  * @property {import("../../../lib/registry.mjs").NotServed} tiers
- * @property {{ isVerbPending: true, verb: string, sentence: string }} addVerb
  * @property {string} law
  * @property {Read[]} reads
  */
@@ -72,10 +71,6 @@ export function fold(_payloads, ctx) {
       "Tiers and who is switched on",
       "/api/roster",
       "Each agent's tier -- cheap scan, balanced workhorse, high judgment, independent-family verifier -- and whether it is enabled. An agent's frontmatter carries its name, tools and model, but no tier and no enabled flag, and no importable parser reads it -- filed to the engine lane.",
-    ),
-    addVerb: verbPending(
-      "Add an agent",
-      "An agent joins the roster with its tier declared at birth; the tier forces the ADR-0069 citation, and changing one later is a reviewed diff. It arrives with the work door.",
     ),
     law: "An employee here is an agent spawned for a task, then gone. Tiers are law, not taste: a tier change is a production change, reviewed and cited, never a quiet edit (ADR-0069).",
     reads: [],

@@ -296,7 +296,7 @@ async function apiRooms(ctx) {
 }
 
 async function apiSpine(ctx, url) {
-  onlyKeys(url, ["asof", "limit", "since", "kind", "venture", "date"]);
+  onlyKeys(url, ["asof", "limit", "since", "kind", "venture", "date", "note"]);
   const asof = parseAsof(url);
   const limitRaw = url.searchParams.get("limit");
   let limit = PAGE_DEFAULT;
@@ -314,10 +314,19 @@ async function apiSpine(ctx, url) {
     if (k === "date" && v !== null && !(DAY_RE.test(v) && reads.isRealDay(v))) throw new DashError("BAD_ARGS", `date "${v}" is not a YYYY-MM-DD day that exists`);
     if (v !== null) filters[k] = v;
   }
+  // `note` narrows note.logged receipts to one note's, so a room reads ITS notes whatever else the spine has logged:
+  // pages start at the OLDEST receipt, and the toolbelt's pins sat behind every other note.logged (face v2 Phase 05 PR 4,
+  // ADR-1341 §5). A generic read filter -- the door decides nothing with it.
+  const note = url.searchParams.get("note");
+  if (note !== null) {
+    if (!/^[a-z][a-z0-9._-]{0,63}$/.test(note)) throw new DashError("BAD_ARGS", `note "${note}" is not a note name ([a-z][a-z0-9._-]{0,63})`);
+    if (filters.kind !== "note.logged") throw new DashError("BAD_ARGS", "note narrows note.logged receipts -- give kind=note.logged with it");
+  }
   const { events, torn, engine, unreadable } = await readAll(ctx.root);
   // applyFilters WITHOUT limit so the page contract can report `more` honestly; the same
   // filter function the CLI uses (unknown cursor -> CURSOR_NOT_FOUND, never an empty 200).
-  const filtered = applyFilters(cutAsof(events, asof), filters);
+  const filtered = applyFilters(cutAsof(events, asof), filters)
+    .filter((e) => note === null || (e.event && e.event.payload && e.event.payload.note === note));
   const page = filtered.slice(0, limit);
   return {
     mode: ctx.mode, asof, engine,
