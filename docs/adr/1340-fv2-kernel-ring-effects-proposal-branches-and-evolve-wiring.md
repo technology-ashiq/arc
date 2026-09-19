@@ -118,14 +118,24 @@ fixture holds the refusal identical by door and by hand.
 
 - **Emit plan** (the tool prints its seal line and the door runs it): cap proposal.
 - **Bound apply** (the plan prints a digest, and the apply re-derives and writes only if it still holds; amended
-  below): open, measure, conclude, driver switch, tier proposal.
+  below): open, measure, conclude, driver switch, tier proposal, bench propose, pin source, trial. A trial is bound
+  to the branch, main's commit and the seal's arguments -- its commitment is drawn only when it seals -- and it is
+  checked BEFORE the seal burns the correlation.
 - **Tool-owned receipt with a `--dry-run` plan:**
   - register job (`arc-jobs register <job> --dry-run` / `--receipt`, `note.logged`)
-  - trial (`judgement.mjs seal --dry-run` / `--emit`). A seal burns its correlation, so it cannot be the plan.
-  - bench propose (`arc-bench --propose --from <candidate out>`: from an existing run's evidence, with no re-run
-    and no spend)
-- **Proposal branch plus `approval.requested`:** driver switch, tier proposal and pin source. A tier is law
-  (ADR-0069): a tier change is a reviewed diff to `engine/router.yaml`, so the tier proposal writes the
+  - bench propose (`arc-bench --propose --from <candidate out> --champion <champion out>`). It works from an
+    existing run's evidence, with no re-run and no spend. A new flag on bench's closed set, recorded here the way the
+    Phase 1 two were. The dry run computes every gate and diff in a scratch directory and raises nothing. For real,
+    the artifacts land beside the spine (`<state>/bench/proposals/`, gitignored state, never a tracked file), and
+    the same candidate twice is refused.
+- **Proposal branch plus `approval.requested`:** driver switch, tier proposal, pin source and trial.
+  - Pin source is `absorb/pin.mjs`. study.mjs keeps its no-execution-primitive boundary; pin.mjs is the file
+    that spawns.
+  - Trial is `absorb/trial.mjs` over `judgement.mjs seal --bundle-dir`: the commitment goes to the branch at
+    `<evidence>/commitment.txt`, and the payload still names `<evidence>`. A seal burns its correlation, so the
+    branch is checked writable BEFORE the seal. The seal's flags became a closed set on the way: an unknown flag
+    used to be ignored, so a mistyped `--dry-run` sealed for real.
+- **A tier is law** (ADR-0069): a tier change is a reviewed diff to `engine/router.yaml`, so the tier proposal writes the
   `classes.<c>.tier` edit to a branch rather than only asking. Both engine proposals come from one engine CLI
   (`engine/propose.mjs`). It edits one line of the class's block and re-runs the router's own loader
   (`routerFaults`) over the proposed file before anything is written; a proposal the router would refuse to load

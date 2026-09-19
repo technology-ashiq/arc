@@ -366,11 +366,13 @@ owning-lane additions (`arc-event --dry-run`, `arc-pnl --criteria-request` and `
 checkpoint --receipt`, `arc-growth seal`), face-coverage's op half (117 selftest arms), and `tests/face/work-door.mjs`
 (the per-op no-second-path fixture). All six ran plan -> apply -> receipt against a sim door; close month and bench
 also through the dock in a real browser. **PR 1 MERGED** as `56ba17b0` (#252), CI 19/19 on the PR and on a main
-dispatch. **PR 2 (live rooms + flows) is BUILT on `feat/face-v2-05-live`:** `GET /api/pulse` (a stat fingerprint the
-shell asks every 2 s; a change re-reads every read of the open room with no flicker -- measured 922 ms in Chrome),
-`face/scripts/flows.mjs` driving all six ops through their docks plus the live flow, and round 2 of PR 1's attackers:
-13 twins fixed across the door, `arc-inbox`, `arc-run`, `arc-bench` and `arc-growth` (spec current-phase note), three
-process-tree remainders ledgered. **Next:** CI per job on PR 2, merge; then PR 3 -- the kernel ring's 10 verbs.
+dispatch. **PR 2 MERGED** as `600a94d1` (#253): live rooms (`GET /api/pulse`, every read of the open room re-read on a
+change, 922 ms measured in Chrome), the browser flows, round 2 of PR 1's attackers and PR 2's own two attackers (27
+fixes, fixed-defects.md); CI 19/19 on the PR and on a main dispatch. **PR 3 (kernel ring) ships as 3a + 3b under
+ADR-1340:** 3a -- register job, driver switch, tier proposal, cap proposal, evolve open/measure/conclude, and the
+proposal-branch writer -- is open as #254 (CI running, two fresh attackers out); 3b -- bench propose from a run's
+evidence, absorb pin and trial through proposal branches -- is built on `feat/face-v2-05-kernel-b`, waiting on 3a.
+**Next:** 3a's CI and attackers, merge; rebase 3b onto main, push, attack, merge; then PR 4 -- the factory ring.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering

@@ -434,6 +434,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { planDigest, expectLine, staleReason } from "../core/plan-expect.mjs";
 
 import { parseBudget } from "./drivers/common.mjs";
 
@@ -460,7 +461,11 @@ export class OperatorError extends Error {}
  * written for a live run. `--out` is what makes the capture bundle exist to replay at all, and
  * giving it a default instead would make every test write to one shared path.
  */
-const VALUE_FLAGS = Object.freeze({ "--driver": "driver", "--model": "model", "--budget": "budget", "--champion": "champion", "--out": "out", "--replay": "replay" });
+// `--from` (face v2 Phase 05 kernel ring, ADR-1340, recorded like the Phase 1 two): propose from a run that ALREADY
+// happened -- its --out directory -- against a champion's, with nothing run and nothing spent. `--propose` always
+// re-ran the bench, so asking for a proposal was paying for a run.
+// `--expect` binds a `--propose --from` apply to the digest its dry run printed (core/plan-expect.mjs, ADR-1340 amended).
+const VALUE_FLAGS = Object.freeze({ "--driver": "driver", "--model": "model", "--budget": "budget", "--champion": "champion", "--out": "out", "--replay": "replay", "--from": "from", "--expect": "expect" });
 const BOOL_FLAGS = Object.freeze({ "--propose": "propose", "--dry-run": "dryRun" });
 
 /**
@@ -483,7 +488,7 @@ export function budgetString(b) {
  * no creation rights was thereby made to report `create`.
  */
 export function parseArgs(argv) {
-  const out = { driver: "", model: "", budget: "", champion: "", out: "", replay: "", propose: false, dryRun: false };
+  const out = { driver: "", model: "", budget: "", champion: "", out: "", replay: "", from: "", expect: "", propose: false, dryRun: false };
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -505,6 +510,19 @@ export function parseArgs(argv) {
     out[VALUE_FLAGS[a]] = v;
     i++;
   }
+  // PROPOSE FROM EVIDENCE: --from names the candidate run, --champion the incumbent, and nothing runs. So nothing is
+  // driven, budgeted, modelled, captured or replayed -- a flag for any of those is a run the caller thinks will happen.
+  if (out.from) {
+    if (!out.propose) throw new OperatorError("--from proposes from a run that already happened: it comes with --propose");
+    if (!out.champion) throw new OperatorError("--propose --from needs --champion DIR -- every gate past the first is a comparison against the incumbent");
+    for (const [flag, key] of [["--driver", "driver"], ["--model", "model"], ["--budget", "budget"], ["--out", "out"], ["--replay", "replay"]]) {
+      if (out[key]) throw new OperatorError(`${flag} is meaningless with --from, which runs nothing: the candidate is the run in the --from directory`);
+    }
+    if (resolve(out.from) === resolve(out.champion)) throw new OperatorError("--from and --champion must be different runs -- a candidate compared with itself proves nothing");
+    if (out.expect && out.dryRun) throw new OperatorError("--dry-run plans and --expect applies; give one");
+    return out;
+  }
+  if (out.expect) throw new OperatorError("--expect binds a --propose --from apply to its plan; nothing else takes it");
   // `--propose` and `--champion` come as a PAIR. There is no such thing as a proposal without an
   // incumbent: every gate past the first is a comparison, and a "proposal" with nothing to beat
   // would have to invent a baseline to clear (ADR-0906).
@@ -2059,7 +2077,7 @@ function withMetrics(entry, metrics) {
  * 2, the router SHA is still re-read, and the redaction scan still runs. A gate that returned
  * early past its bundled checks is how a short-circuit turns into a silent skip.
  */
-export function buildProposal(root, report, championDir, outDir) {
+export function buildProposal(root, report, championDir, outDir, { emit = true } = {}) {
   const cPath = join(championDir, "scorecard.json");
   const cProv = join(championDir, "provenance.json");
   for (const p of [cPath, cProv]) {
@@ -2169,7 +2187,8 @@ export function buildProposal(root, report, championDir, outDir) {
   if (leaked.length) throw new Error(`a proposal artifact carries a secret shape (${leaked[0]}) -- nothing was proposed`);
 
   let approval = null;
-  if (!abort && diffWritten > 0) {
+  // A dry run (propose --from --dry-run) computes every verdict and every diff and raises nothing.
+  if (emit && !abort && diffWritten > 0) {
     approval = emitApprovalRequested(root, {
       what: `route ${proposed.map((r) => r.task_class).join(", ")} to ${report.provenance.subject.driver}`,
       gate: "router-merge",
@@ -2558,6 +2577,72 @@ function main() {
   // from the file rather than from cwd: bench is invoked from wherever, and a runner that
   // resolved its own repo from the caller cwd would score whichever tree it happened to land in.
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+  // ---- propose from evidence: no driver, no spend, no run.completed ----
+  // The candidate is a run that already happened (its --out directory); the gates, the router diff and the approval
+  // are buildProposal's, the same function a live --propose uses. A dry run computes all of it in a scratch directory
+  // and raises nothing. For real, the artifacts land beside the spine (<state>/bench/proposals/, gitignored state, never
+  // a tracked file) and the approval goes to the inbox; the receipt line names it.
+  if (args.from) {
+    const candDir = resolve(args.from);
+    for (const f of ["scorecard.json", "provenance.json"]) {
+      if (!existsSync(join(candDir, f))) { console.error(`arc-bench: --from ${args.from} has no ${f} -- point it at a previous run's --out directory`); process.exit(EXIT.OPERATOR); }
+    }
+    let report;
+    try { report = { scorecard: JSON.parse(readFileSync(join(candDir, "scorecard.json"), "utf8")), provenance: JSON.parse(readFileSync(join(candDir, "provenance.json"), "utf8")) }; }
+    catch (e) { console.error(`arc-bench: --from ${args.from} does not hold a readable scorecard and provenance: ${e.message}`); process.exit(EXIT.OPERATOR); }
+    if (!report.scorecard || !Array.isArray(report.scorecard.classes) || !report.provenance || !report.provenance.subject) {
+      console.error(`arc-bench: --from ${args.from} is not a bench run's output (no classes, or no subject)`); process.exit(EXIT.OPERATOR);
+    }
+    let outDir;
+    try {
+      outDir = args.dryRun
+        ? mkdtempSync(join(tmpdir(), "arc-bench-propose-dry-"))
+        : join(dirname(dirname(spinePaths(root).events)), "bench", "proposals", `${String(report.provenance.subject.driver || "candidate").replace(/[^a-z0-9-]/gi, "-")}-${canonicalHash(report.scorecard).slice(0, 12)}`);
+    } catch (e) { console.error(`arc-bench: ${e.message}`); process.exit(EXIT.OPERATOR); }
+    if (!args.dryRun && existsSync(join(outDir, "proposal"))) {
+      console.error(`arc-bench: a proposal from this exact candidate already exists at ${relative(root, outDir) || outDir} -- proposing it twice would raise two approvals for one question`);
+      process.exit(EXIT.OPERATOR);
+    }
+    // THE PLAN IS BOUND TO WHAT IT SHOWED. The digest covers the four evidence files' bytes and what the proposal would
+    // say (the gates' verdicts, the diffs' classes, an abort for a moved router). An apply computes it again, from a
+    // dry proposal in a scratch dir, and writes nothing unless it is the digest the plan printed: evidence swapped under
+    // the same --from between the plan and the click is refused, not proposed (PR 3a logic attack, bound here too).
+    const fileSha = (p) => { try { return createHash("sha256").update(readFileSync(p)).digest("hex"); } catch { return null; } };
+    const digestOf = (p) => planDigest({
+      evidence: ["scorecard.json", "provenance.json"].flatMap((n) => [fileSha(join(candDir, n)), fileSha(join(resolve(args.champion), n))]),
+      summary: p.summary, abort: p.abort || null, proposed: p.receipt.proposed,
+    });
+    // An apply is ALWAYS bound to a plan (PR 3a round-2 logic attack, the propose twin): no unbound --from apply.
+    if (!args.dryRun && !args.expect) { console.error("arc-bench: an apply is bound to a plan: run --propose --from with --dry-run first, then again with the --expect it prints"); process.exitCode = EXIT.OPERATOR; return; }
+    if (!args.dryRun && args.expect) {
+      const scratch = mkdtempSync(join(tmpdir(), "arc-bench-propose-check-"));
+      let dry;
+      try { dry = buildProposal(root, report, resolve(args.champion), scratch, { emit: false }); }
+      catch (e) { console.error(`arc-bench: ${e.message}`); process.exitCode = e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL; return; }
+      finally { try { rmSync(scratch, { recursive: true, force: true }); } catch { /* litter */ } }
+      const stale = staleReason(args.expect, digestOf(dry));
+      if (stale) { console.error(`arc-bench: ${stale}`); process.exitCode = EXIT.OPERATOR; return; }
+    }
+    let proposal;
+    try { proposal = buildProposal(root, report, resolve(args.champion), outDir, { emit: !args.dryRun }); }
+    catch (e) { console.error(`arc-bench: ${e.message}`); process.exitCode = e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL; return; }
+    console.log(`arc-bench: ${args.dryRun ? "would propose" : "proposal"} -- candidate ${report.provenance.subject.driver}, champion from ${args.champion}; nothing was run, nothing was spent`);
+    for (const line of proposal.summary) console.log(`  ${line}`);
+    if (args.dryRun) {
+      try { rmSync(outDir, { recursive: true, force: true }); } catch { /* litter */ }
+      console.log("arc-bench: --dry-run -- no artifact was kept and no approval was raised");
+      console.log(expectLine(digestOf(proposal)));
+      // The exit code is SET: process.exit right after the line the door parses can cut an asynchronous pipe.
+      process.exitCode = proposal.abort ? EXIT.PARTIAL : EXIT.OK;
+      return;
+    }
+    console.log(`arc-bench: proposal artifacts written to ${relative(root, join(outDir, "proposal")) || join(outDir, "proposal")}`);
+    if (proposal.abort) { console.error(`arc-bench: ABORTED -- ${proposal.abort}`); process.exitCode = EXIT.PARTIAL; return; }
+    if (proposal.receipt.approval) console.log(`receipt: approval.requested ${proposal.receipt.approval}`);
+    process.exitCode = EXIT.OK;
+    return;
+  }
 
   // ---- replay: pure re-scoring, no driver, no receipt ----
   if (args.replay) {

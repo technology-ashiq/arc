@@ -11,7 +11,6 @@ retires it nor be invented. The browser suite counts the same cards in the page,
 | module | verb | what it would do |
 |---|---|---|
 | `absorb` | Absorb something | A candidate tool, skill, repo or dependency is captured, studied read-only, reported and vetted before anything installs. Capture arrives with the work door. |
-| `bench` | Add a model to the bench | A model joins as a challenger, runs its scorecard, and a win becomes a promotion proposal in your inbox. Every step arrives with the work door. |
 | `memory` | Log a correction | A correction is counted against its earlier repeats by its normalized text; the second one makes it proposable as a rule. Logging arrives with the work door. |
 | `memory` | Recall | How did we get burned by this before: a fold over the lessons, the trial ledger and the receipts, with no model and no spend. It runs through the work door. |
 | `policy` | Propose a cap, or demote a pair | A cap rises only on your stamp, citing trial-ledger evidence; a demotion needs no key at all. Both reach the policy through the work door. |

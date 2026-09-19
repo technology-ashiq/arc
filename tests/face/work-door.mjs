@@ -13,7 +13,7 @@
 
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, existsSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -39,7 +39,9 @@ const check = (name, cond, detail = "") => {
 
 const tmp = mkdtempSync(join(tmpdir(), "face-work-door-"));
 const SPINE_A = join(tmp, "spine-door");
-const SPINE_B = join(tmp, "spine-hand");
+// Under its own parent: a tool that keeps state BESIDE its spine (bench's proposals) must not see the door's run as the
+// hand-run's, or the parity run is refused as a repeat of itself.
+const SPINE_B = join(tmp, "hand", "spine-hand");
 const JOURNAL = join(tmp, "journal");
 for (const d of [SPINE_A, SPINE_B]) mkdirSync(join(d, "events"), { recursive: true });
 
@@ -54,6 +56,20 @@ const seeded = [SPINE_A, SPINE_B].map((root) => spawnSync(process.execPath,
   { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: root, ARC_SPINE_NOW: String(prev.getTime()) } }));
 check("fixture: one payment ingested on each spine (vacuous-pass guard)",
   seeded.every((r) => r.status === 0 && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(String(r.stdout).trim())), seeded.map((r) => `${r.status}:${String(r.stderr).trim()}`).join(" | "));
+
+// bench.propose proposes from a run that ALREADY happened: one mock run (spends nothing) is its candidate, and a copy
+// of it the champion -- a tie, which the bench's gates propose. Run on a spine of its own, so the parity spines stay
+// clean. absorb.pin-source studies a folder, read-only.
+{
+  const benchSpine = join(tmp, "bench-spine");
+  mkdirSync(join(benchSpine, "events"), { recursive: true });
+  const run = spawnSync(process.execPath, [join(REPO, ".claude", "scripts", "engine", "arc-bench.mjs"), "--driver", "mock", "--model", "mock", "--budget", "inr=1,min=5", "--out", join(tmp, "bench-cand")],
+    { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: benchSpine }, timeout: 300_000 });
+  check("fixture: a mock bench run wrote the candidate's scorecard and provenance (vacuous-pass guard)", run.status === 0 && existsSync(join(tmp, "bench-cand", "scorecard.json")), `${run.status} ${String(run.stderr).slice(-300)}`);
+  cpSync(join(tmp, "bench-cand"), join(tmp, "bench-champ"), { recursive: true });
+  mkdirSync(join(tmp, "absorb-src"), { recursive: true });
+  writeFileSync(join(tmp, "absorb-src", "README.md"), "a source the suite pins\n");
+}
 
 // The article a person merged, for the growth seal.
 const ARTICLE = join(tmp, "work-door-probe.mdx");
@@ -94,13 +110,16 @@ const INPUTS = {
   "evolve.open-experiment": { experiment: "x-work-door", module: "core", surface: "hero", target: "app/home/hero.tsx", arms: "+champion,+challenger" },
   "evolve.measure": { experiment: "x-work-door", unit: "u-1", metric: "signup_conversion", value: "1", count: "1", window: "2026-09-01..2026-09-07", source: "src-1" },
   "evolve.conclude": { experiment: "x-work-door" },
+  "bench.propose": { from: join(tmp, "bench-cand"), champion: join(tmp, "bench-champ") },
+  "absorb.pin-source": { root: join(tmp, "absorb-src"), pin: "0123456789abcdef", license: "MIT, in LICENSE at the source root", report: "initiatives/absorb/evidence/work-door-probe.md" },
+  "absorb.trial": { candidate: "T-01", variants: "harbor,quartz", fixtures: "f1,f2,f3", evidence: "initiatives/absorb/evidence/work-door-trial", correlation: "work-door-trial-1" },
 };
 // The ops whose tool refuses its PLAN on this tree, each by its NAMED refusal -- any refusal would pass a sim door that
 // ran an effect and failed later (PR 3a logic attack). No product here declares an evolve section, so open answers
 // NO_EVOLVE_SECTION and measure and conclude answer NOT_OPEN; an effect op refuses its dry run where it cannot plan at
 // all (no main in a CI checkout, no Windows scheduler) and otherwise plans, and a sim door then refuses SIM_EFFECT.
 const REFUSES_ON_THIS_TREE = new Map([["evolve.open-experiment", /NO_EVOLVE_SECTION/], ["evolve.measure", /NOT_OPEN/], ["evolve.conclude", /NOT_OPEN/]]);
-const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows/], ["engine-room.driver-switch", /NO_BASE/], ["model-policy.tier-proposal", /NO_BASE/]]);
+const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows/], ["engine-room.driver-switch", /NO_BASE/], ["model-policy.tier-proposal", /NO_BASE/], ["absorb.pin-source", /NO_BASE/], ["absorb.trial", /NO_BASE/]]);
 check("every registry op is driven by this suite",
   OPS_MOD.OPS.length > 0 && OPS_MOD.OPS.every((o) => Object.hasOwn(INPUTS, o.id)) && Object.keys(INPUTS).length === OPS_MOD.OPS.length,
   OPS_MOD.OPS.map((o) => o.id).join(","));
@@ -122,7 +141,7 @@ const WRITERS = (() => {
   walk(root);
   return out;
 })();
-check("the branch writers are found by what they import (vacuous-pass guard)", WRITERS.has("engine/propose.mjs"), [...WRITERS].join(","));
+check("the branch writers are found by what they import (vacuous-pass guard)", ["engine/propose.mjs", "absorb/pin.mjs", "absorb/trial.mjs"].every((w) => WRITERS.has(w)), [...WRITERS].join(","));
 const effectOfScript = (o) => {
   if (typeof o.apply !== "function") return { files: false, os: false };
   const cmd = o.apply(INPUTS[o.id]);

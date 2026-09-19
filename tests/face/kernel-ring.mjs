@@ -8,6 +8,9 @@
 //                apply is bound to its plan (--expect) and to the main it read; in a scratch repo it writes a branch
 //                and nothing else, and a cleanup that fails after the write is not reported as a refusal
 //   policy       the promotion request is the policy library's, accepted by the spine; refusals name the rule
+//   bench        --propose --from proposes from a run that already happened, bound to its plan's digest
+//   absorb       pin and trial write their branch and raise their approval in a scratch repo, each bound to its plan;
+//                a trial whose approval the spine would refuse is refused before the seal burns its correlation
 //   evolve       the LOGIC, as pure functions over in-memory receipts: supersedes, counts, conflicts, the cohort
 //                re-derived, completeness per cohort, direction, the module's alpha, TTL, drift, two arms, compute-once
 //                -- then the CLI: plan -> apply bound by --expect, and every check re-run at apply
@@ -635,6 +638,106 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("door: an expect row whose plan printed no digest is refused (NO_EXPECT, 502), never applied unbound", noExpect === "NO_EXPECT" && DOOR.WORK_STATUS.NO_EXPECT === 502, `code=${noExpect}`);
 }
 
+// ---- bench: propose from a run that already happened -- nothing runs, nothing is spent, the apply bound to its plan ----
+{
+  const sp = spine("bench");
+  const cand = join(tmp, "bench-cand");
+  const champ = join(tmp, "bench-champ");
+  // A mock run replays recorded bytes for every class; it takes tens of seconds, so it gets its own timeout.
+  const run = spawnSync(process.execPath, [S("engine", "arc-bench.mjs"), "--driver", "mock", "--model", "mock", "--budget", "inr=1,min=5", "--out", cand],
+    { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 300_000 });
+  check("fixture: a mock bench run (it spends nothing) is the candidate (vacuous-pass guard)", run.status === 0 && existsSync(join(cand, "scorecard.json")), `${run.status} ${String(run.stderr).slice(-300)}`);
+  cpSync(cand, champ, { recursive: true });
+  const kinds = () => spineEvents(sp).map((e) => e.kind);
+  const count = (k) => kinds().filter((x) => x === k).length;
+  const runsBefore = count("run.completed");
+  const before = fingerprint(sp);
+  const b = (...a) => node([S("engine", "arc-bench.mjs"), ...a], { ARC_SPINE_ROOT: sp });
+  const dry = b("--propose", "--from", cand, "--champion", champ, "--dry-run");
+  const digest = lastExpect(dry.stdout);
+  check("bench --from --dry-run: computes the proposal, writes nothing, raises nothing, and prints its digest last", dry.status === 0 && /would propose/.test(dry.stdout) && !!digest && fingerprint(sp) === before && !existsSync(join(tmp, "bench", "proposals")), `${dry.status} ${dry.stderr}`);
+  const stale = b("--propose", "--from", cand, "--champion", champ, "--expect", "0".repeat(64));
+  check("bench --from with a digest no plan printed refuses (PLAN_STALE), writes nothing, raises nothing", stale.status === 2 && /PLAN_STALE/.test(stale.stderr) && count("approval.requested") === 0 && !existsSync(join(tmp, "bench", "proposals")), `${stale.status} ${stale.stderr}`);
+  const ap = b("--propose", "--from", cand, "--champion", champ, "--expect", digest || "x");
+  const id = /receipt: approval\.requested ([0-9A-HJKMNP-TV-Z]{26})/.exec(ap.stdout);
+  check("bench --from, applied with its plan's digest: raises the router proposal and names its receipt; nothing was run", ap.status === 0 && !!id && /nothing was run, nothing was spent/.test(ap.stdout), `${ap.status} ${ap.stderr} ${ap.stdout.slice(-300)}`);
+  check("bench --from: one approval on the spine, and NO new run.completed (no run happened)", count("approval.requested") === 1 && count("run.completed") === runsBefore, `approvals=${count("approval.requested")} runs=${count("run.completed")} before=${runsBefore}`);
+  check("bench --from: the artifacts land beside the spine, never in the tree", existsSync(join(tmp, "bench", "proposals")) && readdirSync(join(tmp, "bench", "proposals")).length === 1);
+  const again = b("--propose", "--from", cand, "--champion", champ, "--expect", digest || "x");
+  check("bench --from: the same candidate twice refuses (one question, one approval)", again.status === 2 && /already exists/.test(again.stderr) && count("approval.requested") === 1, again.stderr);
+  const unbound = b("--propose", "--from", cand, "--champion", champ);
+  check("bench --from with no plan digest refuses -- an apply is bound to a plan", unbound.status === 2 && /bound to a plan/.test(unbound.stderr) && count("approval.requested") === 1, unbound.stderr);
+  for (const [why, args, re] of [
+    ["--driver with --from", ["--propose", "--from", cand, "--champion", champ, "--driver", "mock"], /meaningless with --from/],
+    ["--from without --propose", ["--from", cand, "--champion", champ], /comes with --propose/],
+    ["--from equal to --champion", ["--propose", "--from", cand, "--champion", cand], /different runs/],
+    ["a --from with no scorecard", ["--propose", "--from", tmp, "--champion", champ], /no scorecard\.json/],
+    ["--expect with --dry-run", ["--propose", "--from", cand, "--champion", champ, "--dry-run", "--expect", "0".repeat(64)], /give one/],
+    ["--expect without --from", ["--driver", "mock", "--expect", "0".repeat(64)], /nothing else takes it/],
+  ]) {
+    const r = b(...args);
+    check(`bench --from refuses ${why}`, r.status === 2 && re.test(r.stderr), `${r.status} ${r.stderr}`);
+  }
+}
+
+// ---- absorb pin and trial, APPLIED, in a scratch repository: a branch, an approval, the tree unmoved, each apply
+// bound to its plan ----
+{
+  const repo = join(tmp, "absorb-scratch-repo");
+  cpSync(join(REPO, ".claude", "scripts"), join(repo, ".claude", "scripts"), { recursive: true });
+  mkdirSync(join(repo, "engine"), { recursive: true });
+  writeFileSync(join(repo, "engine", "router.yaml"), readFileSync(join(REPO, "engine", "router.yaml"), "utf8"));
+  const g = (...a) => spawnSync("git", a, { cwd: repo, encoding: "utf8" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.name", "fixture"); g("config", "user.email", "fixture@example.invalid"); g("config", "commit.gpgsign", "false");
+  g("add", "-A"); g("commit", "-q", "-m", "scratch");
+  const mainBefore = g("rev-parse", "refs/heads/main").stdout.trim();
+  check("absorb scratch repository committed on main (vacuous-pass guard)", /^[0-9a-f]{40}$/.test(mainBefore));
+  const sp = spine("absorb-scratch-spine");
+  const seals = join(tmp, "scratch-seals");
+  const inScratch = (script, args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", ...script.split("/")), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp, ARC_ABSORB_SEAL_DIR: seals }, timeout: 120_000 });
+  const approvals = () => spineEvents(sp).filter((e) => e.kind === "approval.requested");
+  const clean = () => g("status", "--porcelain").stdout === "" && g("symbolic-ref", "HEAD").stdout.trim() === "refs/heads/main" && g("rev-parse", "refs/heads/main").stdout.trim() === mainBefore;
+
+  const src = join(tmp, "absorb-source");
+  mkdirSync(src, { recursive: true });
+  writeFileSync(join(src, "README.md"), "a source the kernel suite pins\n");
+  const PIN = ["--root", src, "--pin", "0123456789abcdef", "--license", "MIT, in LICENSE", "--report", "initiatives/absorb/evidence/kernel-suite.md"];
+  const pPlan = inScratch("absorb/pin.mjs", [...PIN, "--dry-run"]);
+  const pDigest = lastExpect(pPlan.stdout);
+  check("absorb pin, planned: the report's diff and a digest, and nothing written", pPlan.status === 0 && !!pDigest && /Extraction report/.test(pPlan.stdout) && approvals().length === 0 && clean(), `${pPlan.status} ${pPlan.stderr}`);
+  const pStale = inScratch("absorb/pin.mjs", [...PIN, "--expect", "0".repeat(64)]);
+  check("absorb pin with a digest no plan printed refuses (PLAN_STALE) and writes nothing", pStale.status === 2 && /PLAN_STALE/.test(pStale.stderr) && approvals().length === 0, pStale.stderr);
+  const pp = inScratch("absorb/pin.mjs", [...PIN, "--expect", pDigest || "x"]);
+  const pBranch = "feat/face-absorb-pin-kernel-suite";
+  const report = g("show", `${pBranch}:initiatives/absorb/evidence/kernel-suite.md`).stdout;
+  check("absorb pin, applied: the scaffolded report is on its branch, the tree unmoved", pp.status === 0 && /^# Extraction report/.test(report) && /0123456789abcdef/.test(report) && clean(), `${pp.status} ${pp.stderr}`);
+  check("absorb pin, applied: the approval names the report, the branch and the commit", approvals().some((e) => e.payload.gate === "absorb-pin" && e.payload.branch === pBranch && e.payload.report === "initiatives/absorb/evidence/kernel-suite.md" && e.payload.commit === g("rev-parse", pBranch).stdout.trim() && receiptOf(pp.stdout) === e.id));
+
+  const TRIAL = ["--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", "initiatives/absorb/evidence/kernel-trial", "--correlation", "kernel-trial-1"];
+  const tPlan = inScratch("absorb/trial.mjs", [...TRIAL, "--dry-run"]);
+  const tDigest = lastExpect(tPlan.stdout);
+  check("absorb trial, planned: nothing sealed, nothing written, and a digest", tPlan.status === 0 && !!tDigest && !existsSync(join(seals, "kernel-trial-1.json")) && approvals().filter((e) => e.payload.correlation === "kernel-trial-1").length === 0, `${tPlan.status} ${tPlan.stderr}`);
+  const tStale = inScratch("absorb/trial.mjs", [...TRIAL, "--expect", "0".repeat(64)]);
+  check("absorb trial with a digest no plan printed refuses (PLAN_STALE) BEFORE the seal burns the correlation", tStale.status === 2 && /PLAN_STALE/.test(tStale.stderr) && !existsSync(join(seals, "kernel-trial-1.json")), tStale.stderr);
+  const tr = inScratch("absorb/trial.mjs", [...TRIAL, "--expect", tDigest || "x"]);
+  const tBranch = "feat/face-absorb-trial-kernel-trial-1";
+  const commitment = g("show", `${tBranch}:initiatives/absorb/evidence/kernel-trial/commitment.txt`).stdout;
+  const tAppr = approvals().find((e) => e.payload.subject === "absorb.ab-judgement" && e.payload.correlation === "kernel-trial-1");
+  check("absorb trial, applied: the commitment is on its branch, the tree unmoved, the nonce in the seal store", tr.status === 0 && /^[0-9a-f]{64}/.test(commitment) && existsSync(join(seals, "kernel-trial-1.json")) && clean(), `${tr.status} ${tr.stderr}`);
+  check("absorb trial, applied: the approval is the ab-judgement profile, and its commitment is the one on the branch", !!tAppr && commitment.startsWith(tAppr.payload.commitment) && tAppr.payload.evidence_path === "initiatives/absorb/evidence/kernel-trial");
+  const twice = inScratch("absorb/trial.mjs", [...TRIAL, "--expect", tDigest || "x"]);
+  check("absorb trial applied again with its digest refuses BEFORE it seals again (BRANCH_EXISTS)", twice.status === 2 && /BRANCH_EXISTS/.test(twice.stderr) && approvals().filter((e) => e.payload.correlation === "kernel-trial-1").length === 1, twice.stderr);
+  const pUnbound = inScratch("absorb/pin.mjs", [...PIN.slice(0, -1), "initiatives/absorb/evidence/kernel-unbound.md"]);
+  const tUnbound = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -1), "kernel-trial-unbound"]);
+  check("absorb pin and trial with no plan digest refuse -- an apply is bound to a plan, and the trial seals nothing", pUnbound.status === 2 && /bound to a plan/.test(pUnbound.stderr) && tUnbound.status === 2 && /bound to a plan/.test(tUnbound.stderr) && !existsSync(join(seals, "kernel-trial-unbound.json")), `${pUnbound.stderr} :: ${tUnbound.stderr}`);
+  const unknown = inScratch("absorb/judgement.mjs", ["seal", "--candidate", "T-01", "--variants", "a,b", "--fixtures", "f1,f2,f3", "--evidence", "x", "--correlation", "c-unknown", "--dry-runn"]);
+  check("judgement seal refuses a flag it does not know -- it used to be ignored, and a mistyped --dry-run sealed for real", unknown.status === 2 && /does not take/.test(unknown.stderr) && !existsSync(join(seals, "c-unknown.json")), unknown.stderr);
+  // The seal's approval is judged BEFORE it seals: a correlation the secret scanner reads as a key burns nothing.
+  const keyish = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -1), "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789", "--dry-run"]);
+  check("absorb trial whose approval the spine would refuse is refused at its plan, before anything is sealed", keyish.status === 2 && /would be refused by the spine/.test(keyish.stderr) && !existsSync(join(seals, "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789.json")), `${keyish.status} ${keyish.stderr}`);
+}
+
 // ---- the writer's own refusal of the law files, whatever a caller allows ----
 {
   const PB = await import(pathToFileURL(S("core", "proposal-branch.mjs")).href);
@@ -644,4 +747,4 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exit(failed === 0 && ran >= 60 ? 0 : 1);
+process.exit(failed === 0 && ran >= 80 ? 0 : 1);

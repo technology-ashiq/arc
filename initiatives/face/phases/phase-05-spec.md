@@ -127,6 +127,15 @@ direct writes to `engine/router.yaml` or `hq.policy.yaml` → never.
   - On this tree no product declares an evolve section, so the three evolve ops refuse by name -- the dock shows the
     tool's sentence, and the flows and the parity suite hold that refusal identical by door and by hand. The
     receipts are proven in `tests/face/kernel-ring.mjs` over a scratch repo that declares one, through to a verdict.
+  - **3b, built:** `bench.propose` (`arc-bench --propose --from <run> --champion <run>` -- the gates and diff of a
+    live propose, over a run that already happened; artifacts beside the spine; nothing runs, nothing spends),
+    `absorb.pin-source` (`absorb/pin.mjs`: study's scaffold on a proposal branch -- study.mjs itself still names no
+    execution primitive) and `absorb.trial` (`absorb/trial.mjs` over `judgement.mjs seal --bundle-dir`: the commitment
+    on a proposal branch, the branch checked writable BEFORE the seal burns the correlation). The seal's flags became
+    a closed set -- an unknown flag used to be ignored, so a mistyped `--dry-run` sealed for real -- and its
+    reused-bundle refusal now runs before anything is written. Bench's "Add a model to the bench" card retires
+    (running and proposing are both live). The proposal tools' APPLY paths are proven in `kernel-ring.mjs` in a
+    scratch repository: a branch appears, the owner's tree does not move, the approval names what was written.
   - Retired with their ops: model-policy's "Propose a tier change" and evolve's "Open an experiment". The policy
     room's card ("Propose a cap, or demote a pair") and the scheduler's ("Register a job" -- a reviewed diff to
     hq.jobs.yaml, a different verb from registering a row with the OS) stay: neither op is all of its card.

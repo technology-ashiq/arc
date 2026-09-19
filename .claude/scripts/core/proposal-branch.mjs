@@ -299,6 +299,18 @@ async function diffOf(repo, base, files, hooks) {
 }
 
 /**
+ * Whether a proposal COULD be written -- the branch name, the paths, the base, the branch free -- for a tool whose
+ * content does not exist until apply (a seal's commitment is drawn at random when it seals). Writes nothing.
+ * @param {{ repo: string, branch: string, paths: readonly string[], allow: readonly string[], base?: string }} o
+ * @returns {Promise<{ branch: string, base: string }>}
+ */
+export async function checkProposal({ repo, branch, paths, allow, base: expected }) {
+  checkBranch(branch);
+  checkFiles((paths || []).map((p) => ({ path: p, content: "" })), allow);
+  return withHooks(repo, async (hooks) => ({ branch, base: await baseOf(repo, branch, hooks, expected) }));
+}
+
+/**
  * The plan: what the branch would hold, as a diff against the base. Writes nothing -- no object, no ref, no index.
  * @param {{ repo: string, branch: string, files: unknown, allow: readonly string[], base?: string }} o
  * @returns {Promise<{ branch: string, base: string, diff: string }>}

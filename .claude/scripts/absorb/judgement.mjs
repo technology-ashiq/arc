@@ -82,7 +82,24 @@ const badVariant = (v) =>
 // blind, and validate-absorb.mjs refuses those at the spine -- so they are never generated here.
 
 
-if (cmd === "seal") {
+if (cmd === "seal") seal: {
+  // THE SEAL'S FLAGS ARE A CLOSED SET. flag() looks names up, so an unknown flag was simply ignored -- and
+  // `seal ... --dry-run` would have sealed for real, burning the correlation (face v2 Phase 05 kernel ring: the
+  // develop.mjs and arc-jobs hazard the CLI probe named). A bare flag takes no =value either.
+  const SEAL_VALUE_FLAGS = ["--candidate", "--variants", "--fixtures", "--evidence", "--correlation", "--bundle-dir"];
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--dry-run") continue;
+    if (a.startsWith("--dry-run=")) die(`--dry-run takes no value; write it bare, not ${a}`);
+    if (SEAL_VALUE_FLAGS.includes(a)) { i++; continue; }
+    die(`seal does not take ${JSON.stringify(a)} -- its flags are ${SEAL_VALUE_FLAGS.join(" ")} --dry-run`);
+  }
+  // --dry-run: every check a seal makes, and nothing written -- no nonce, no commitment, no bundle.
+  // --bundle-dir DIR: write the bundle's commitment.txt into DIR instead of --evidence (the face's trial tool puts it on
+  // a proposal branch at --evidence, so the working tree is never written; the payload still names --evidence).
+  const dryRun = argv.includes("--dry-run");
+  const bundleDir = flag("--bundle-dir");
+  if (dryRun && bundleDir) die("--dry-run writes no bundle, so it takes no --bundle-dir");
   const candidate = flag("--candidate");
   const variantsArg = flag("--variants");
   const fixturesArg = flag("--fixtures");
@@ -124,6 +141,18 @@ if (cmd === "seal") {
 
   if (existsSync(join(SEAL_DIR, `${correlation}.json`)))
     die(`a seal already exists for correlation "${correlation}" -- resealing would replace the commitment the owner is judging against`);
+  // Checked BEFORE anything is written. It used to be checked after the nonce was sealed, so a reused bundle refused the
+  // seal and still burned its correlation.
+  const bundle = resolve(bundleDir ?? evidence);
+  if (existsSync(join(resolve(evidence), "mapping.json")) || existsSync(join(bundle, "mapping.json")))
+    die(`${evidence} already holds a revealed mapping.json from an earlier judgement -- sealing into it would leave plaintext in a pre-decision bundle`);
+  if (dryRun) {
+    process.stdout.write(`judgement: would seal ${variants.length} variants as ${variants.length} blind labels over ${fixtures.length} fixtures for ${candidate} (correlation ${correlation}); the commitment goes to ${evidence}/commitment.txt\n`);
+    process.stdout.write("judgement: dry run -- no nonce, no commitment and no bundle was written; the labels are drawn only when it seals\n");
+    // exitCode and fall out of the block, never process.exit(): stdout to a pipe is asynchronous on some platforms.
+    process.exitCode = 0;
+    break seal;
+  }
 
   // Randomize which label goes to which variant. A shuffled COPY of the pool, so two seals in the
   // same run cannot collide on an ordering.
@@ -146,13 +175,9 @@ if (cmd === "seal") {
     "utf8"
   );
 
-  // The bundle gets the commitment and NOTHING that reveals the mapping.
-  const bundle = resolve(evidence);
+  // The bundle gets the commitment and NOTHING that reveals the mapping. (The reused-bundle check -- a PREVIOUS run's
+  // revealed plaintext beside this run's commitment -- ran above, before anything was written.)
   mkdirSync(bundle, { recursive: true });
-  // A reused bundle would carry the PREVIOUS run's revealed plaintext beside this run's commitment,
-  // so a pre-decision bundle would contain a mapping. Test 1 only ever saw a virgin directory.
-  if (existsSync(join(bundle, "mapping.json")))
-    die(`${evidence} already holds a revealed mapping.json from an earlier judgement -- sealing into it would leave plaintext in a pre-decision bundle`);
   writeFileSync(join(bundle, "commitment.txt"),
     `${commitment}\n\n` +
     `sha256 of the sealed label-to-variant mapping for correlation ${correlation}.\n` +

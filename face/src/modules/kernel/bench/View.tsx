@@ -7,7 +7,7 @@
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Btn, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, Reading, ReceiptDrawer, RoomHead, RunRows, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
+import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, Reading, ReceiptDrawer, RoomHead, RunRows, ServedTable, TrailPanel } from '../../../ui/bits'
 export { ChartBarHorizontal as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -19,10 +19,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4 items-start">
         <div className="min-w-0">
-          <HPanel title="Add a model to the bench" hint="challenger · scorecard · promotion via your inbox">
-            <VerbPending item={f.addVerb} />
-          </HPanel>
-
           <HPanel title="The bench" hint="every number derives from scored runs">
             <ServedTable item={f.scorecards} />
           </HPanel>
