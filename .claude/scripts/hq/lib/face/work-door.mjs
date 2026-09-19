@@ -225,15 +225,17 @@ export function createWorkDoor(ctx, opts = {}) {
         : op.apply(values);
     // THE OWNER READS WHAT IS APPLIED. The page shows the plan through the scrub, which withholds an absolute path and
     // everything after it; a slice title or an agent description holding "/tmp/..." hid the digest -- and the rest of
-    // the diff -- while the apply stood ready (PR 4 shell attack). A bound plan whose last line the page cannot show is
-    // not held. Only a DIGEST row: an emit-plan line is the receipt itself, carrying what the owner typed (growth.publish
-    // names the merged article by its absolute path), so it held a path by design and was refused on every real input.
+    // the diff -- while the apply stood ready (PR 4 shell attack). And the scrub rewrites mid-text too: the repo's own path
+    // in forward slashes became ".claude/notes.md" with no marker, an address "[address withheld]" -- so the owner approved
+    // a diff that differed from the commit, and the commit put a machine path into the public repo (PR 4 round-2
+    // attacks). So a bound plan the page cannot show EXACTLY, anywhere, is not held. Only a DIGEST row: an emit-plan line
+    // is the receipt itself, carrying what the owner typed (growth.publish names the merged article by its absolute
+    // path), so it held a path by design and was refused on every real input.
     if (op.expect === true) {
-      const rawLast = String(res.stdout).split(/\r?\n/).filter((l) => l.trim() !== "").pop() || "";
-      const shownLast = String(scrub(res.stdout, ctx.repo)).split(/\r?\n/).filter((l) => l.trim() !== "").pop() || "";
-      if (shownLast !== rawLast) {
+      const raw = String(res.stdout);
+      if (String(scrub(raw, ctx.repo)) !== raw) {
         journal({ op: op.id, phase: "plan", refused: true, hidden: true });
-        throw new OpError("PLAN_HIDDEN", `${op.id}: the plan's text holds a path the page cannot show, so what the apply is bound to would be hidden from you -- not held, nothing ran; remove the path from the input and plan again`);
+        throw new OpError("PLAN_HIDDEN", `${op.id}: the plan's text holds a path or an address the page cannot show as written, so what the apply would write would differ from what you read -- not held, nothing ran; remove it from the input and plan again`);
       }
     }
     prune();

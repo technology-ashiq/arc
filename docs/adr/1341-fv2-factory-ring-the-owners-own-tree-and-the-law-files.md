@@ -172,7 +172,7 @@ change decisions above:
 - **§4, add-agent:** the branch carries what the contract derives (`rooms.generated.json`, any face: section), made by
   `face-sections deriveFromContract`, so it is green when it merges. Its JSON edits are structural, over canonical
   files, and the description is written quoted.
-- **The door:** a bound (digest) plan whose last line the page cannot show is not held (PLAN_HIDDEN, 422). An emit-plan row is exempt: its last line is the receipt, and growth.publish carries the owner's own absolute article path in it by design.
+- **The door:** a bound (digest) plan the page cannot show exactly -- anywhere in it, not only its last line (round 2) -- is not held (PLAN_HIDDEN, 422). An emit-plan row is exempt: its last line is the receipt, and growth.publish carries the owner's own absolute article path in it by design.
 
 The rest are twins of fixed rows:
 - pick and profile-request check and emit under `withExclusiveLock`
@@ -182,3 +182,13 @@ The rest are twins of fixed rows:
 - selects are read when asked
 - the codegraph test doors are refused
 - bash is run bounded
+
+## Amendment, PR 4 round 2 (same day)
+
+A fresh pair attacked the round-1 fixes: 8 logic and 7 shell findings, three shared. All are fixed and pinned. Two change
+decisions above:
+- **§1, develop next writes only where the room shows a slice:** a LIVE lane whose header names a numbered phase. A
+  closed cycle's merged ledger is refused, not rewritten. The apply runs under the shared lock (`withExclusiveLock`),
+  and every refusal inside it is thrown so the lock is released before the exit. `slice.done` is judged before the write
+  and raised once per slice.
+- **§4, add-agent lists products from main's tree** (`mainDirNames`), and refuses a product main does not hold.

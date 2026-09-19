@@ -81,10 +81,19 @@ case "$CMD" in
       if [ -e "$OUT_DIR" ] || [ -L "$OUT_DIR" ]; then
         echo "design-explore: --out-dir $OUT_DIR already exists -- it must be a new directory" >&2; exit 1
       fi
-      out_parent="$(cd "$(dirname "$OUT_DIR")" 2>/dev/null && pwd -P)" || { echo "design-explore: --out-dir's parent does not exist" >&2; exit 1; }
-      root_real="$(cd "$ROOT" && pwd -P)"
-      case "$out_parent/" in
-        "$root_real"/*) echo "design-explore: --out-dir must be outside the repository (got: $OUT_DIR)" >&2; exit 1;;
+      # Compared as the FILESYSTEM compares them: node's native realpath of each folder (Git Bash's /tmp and /c/Users/...
+      # are one folder, and pwd -P kept them apart), with case folded where the filesystem has none -- a case-variant of
+      # the repository's path was taken as outside it and scaffolded into (PR 4 round-2 attacks). cd first: a POSIX path
+      # handed to native node is not a path on Windows.
+      native_of() { (cd "$1" 2>/dev/null && node -e "process.stdout.write(require(\"fs\").realpathSync.native(process.cwd()))"); }
+      out_native="$(native_of "$(dirname "$OUT_DIR")")" && [ -n "$out_native" ] || { echo "design-explore: --out-dir's parent does not exist" >&2; exit 1; }
+      root_native="$(native_of "$ROOT")" && [ -n "$root_native" ] || { echo "design-explore: the repository root cannot be resolved" >&2; exit 1; }
+      case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) fold=1;; *) fold=0;; esac
+      norm_path() { if [ "$fold" = 1 ]; then printf '%s' "$1" | tr '\\' '/' | tr '[:upper:]' '[:lower:]'; else printf '%s' "$1" | tr '\\' '/'; fi; }
+      out_norm="$(norm_path "$out_native")/"
+      root_norm="$(norm_path "$root_native")"
+      case "$out_norm" in
+        "$root_norm"/*) echo "design-explore: --out-dir must be outside the repository (got: $OUT_DIR)" >&2; exit 1;;
       esac
     fi
     # --base: the revision the explore is built against, when it is not HEAD -- a proposal branch is based on main.

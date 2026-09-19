@@ -71,6 +71,8 @@ function scratchRepo(name, files) {
 {
   const t = join(tmp, "develop-tree");
   cpSync(join(REPO, "tests", "fixtures", "develop", "fake-phase"), t, { recursive: true });
+  // The room shows a slice only for a LIVE lane whose header names a numbered phase, and the verb writes only there.
+  writeFileSync(join(t, "initiatives", "develop", "PROGRESS.md"), "# PROGRESS\n\nstatus: LIVE\nphase: 00\n\n## Now\n");
   const sp = spine("develop-spine");
   const dev = (...a) => spawnSync(process.execPath, [S("develop", "develop.mjs"), ...a, "--lane", "develop", "--root", t], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
   const started = dev("start", "0");
@@ -96,6 +98,55 @@ function scratchRepo(name, files) {
   // A plan that would write nothing is refused: applied, it only emitted receipts, one per click (PR 4 logic attack).
   const noop = dev("next", "--dry-run");
   check("develop next with nothing left to record refuses its plan -- no receipt per click", noop.status === 2 && /nothing to record/.test(noop.stdout), `${noop.status} ${noop.stdout.slice(-200)}`);
+}
+
+// ---- develop next writes only where the room shows a slice, and raises slice.done once per slice ----
+{
+  const tree = (name, header) => {
+    const t = join(tmp, name);
+    cpSync(join(REPO, "tests", "fixtures", "develop", "fake-phase"), t, { recursive: true });
+    writeFileSync(join(t, "initiatives", "develop", "PROGRESS.md"), `# PROGRESS\n\n${header}\n\n## Now\n`);
+    return t;
+  };
+  const devIn = (t, sp, ...a) => spawnSync(process.execPath, [S("develop", "develop.mjs"), ...a, "--lane", "develop", "--root", t], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  // A closed cycle's ledger is never the verb's: the room does not show it (PR 4 round-2 logic attack).
+  for (const [name, header, re] of [
+    ["develop-idle", "status: IDLE\nphase: 00", /lane is IDLE/],
+    ["develop-closed", "status: LIVE\nphase: 08 (cycle closed)", /names no phase number/],
+  ]) {
+    const t = tree(name, header);
+    const sp = spine(`${name}-spine`);
+    const st = devIn(t, sp, "start", "0");
+    const ledger = join(t, "initiatives", "develop", "phases", "phase-00-tasks.md");
+    const before = existsSync(ledger) ? sha256(readFileSync(ledger)) : "";
+    const r = devIn(t, sp, "next", "--dry-run");
+    check(`develop next refuses a lane the room does not show (${name}) and writes nothing`, st.status === 0 && r.status === 2 && re.test(r.stdout) && sha256(readFileSync(ledger)) === before, `${r.status} ${r.stdout.slice(-240)}`);
+  }
+  // Slice 01 proven, slice 02 next: two applies (the session reset slice 02's sources between them) raise ONE slice.done.
+  const t = tree("develop-once", "status: LIVE\nphase: 00");
+  const sp = spine("develop-once-spine");
+  const st = devIn(t, sp, "start", "0");
+  const ledger = join(t, "initiatives", "develop", "phases", "phase-00-tasks.md");
+  const text0 = readFileSync(ledger, "utf8");
+  const blockAt = (txt, id) => txt.indexOf(`#### slice: ${id}`);
+  const proveOne = (txt) => {
+    const a = blockAt(txt, "01"), b = blockAt(txt, "02");
+    return txt.slice(0, a) + txt.slice(a, b).replace(/^result: .*$/m, "result: passed").replace(/^commit: .*$/m, "commit: abc1234") + txt.slice(b);
+  };
+  writeFileSync(ledger, proveOne(text0));
+  const resetTwo = () => {
+    const txt = readFileSync(ledger, "utf8");
+    const a = blockAt(txt, "02");
+    const end = txt.indexOf("#### slice:", a + 5);
+    const block = txt.slice(a, end < 0 ? txt.length : end).replace(/^sources: .*$/m, "sources: phase-00-spec.md");
+    writeFileSync(ledger, txt.slice(0, a) + block + (end < 0 ? "" : txt.slice(end)));
+  };
+  const applyOnce = () => { const d = lastExpect(devIn(t, sp, "next", "--dry-run").stdout); return { d, r: devIn(t, sp, "next", "--expect", d || ZERO) }; };
+  const first = applyOnce();
+  resetTwo();
+  const second = applyOnce();
+  const dones = spineEvents(sp).filter((e) => e.kind === "slice.done" && e.payload.slice === "01").length;
+  check("develop next: two applies after slice 01 is proven raise ONE slice.done for it (both applies ran)", st.status === 0 && !!first.d && !!second.d && first.r.status === 0 && second.r.status === 0 && dones === 1, `first=${first.r.status} second=${second.r.status} dones=${dones} ${second.r.stdout.slice(-200)}`);
 }
 
 // ---- open-brief: design-explore init into a scratch dir, committed to a proposal branch ----
@@ -316,6 +367,27 @@ function scratchRepo(name, files) {
   let emitPlan = null, emitCode = null;
   try { emitPlan = await hd.plan("fixture.emits", { input: {} }); } catch (e) { emitCode = e.code; }
   check("door: an emit-plan whose receipt names an absolute path IS held (growth.publish's article)", !!emitPlan && emitPlan.ok === true && emitCode === null, `code=${emitCode}`);
+  // The WHOLE plan (PR 4 round-2 attacks): the scrub rewrites mid-text with the digest line untouched -- the repo's own
+  // path in forward slashes (served as a relative path, no marker) and an address. A clean digest plan is the control.
+  const midText = [
+    ["repo path", `Reads the notes at ${fx.split("\\").join("/")}/.claude/notes.md`],
+    ["address", "Mails release@example.org when it is done"],
+    ["clean", "Reads the notes at .claude/notes.md"],
+  ];
+  const midReg = midText.map(([why, line], i) => {
+    writeFileSync(join(fx, ".claude", "scripts", "fixture", `mid${i}.mjs`), `console.log(${JSON.stringify(line)});\nconsole.log(JSON.stringify({ expect: ${JSON.stringify(digest)} }));\n`);
+    return { id: `fixture.mid${i}`, room: "fixture", label: why, receipt: { kind: "note.logged" }, humanRun: true, spends: false, touchesFiles: false, expect: true, fields: [],
+      plan: () => ({ script: `fixture/mid${i}.mjs`, args: [] }), apply: () => ({ script: `fixture/mid${i}.mjs`, args: [] }) };
+  });
+  const md = DOOR.createWorkDoor({ mode: "sim", root: spine("door-midtext"), repo: fx }, { registry: midReg });
+  const midCodes = [];
+  for (let i = 0; i < midText.length; i++) {
+    let code = "held";
+    try { const r = await md.plan(`fixture.mid${i}`, { input: {} }); if (!r.ok) code = "refused"; } catch (e) { code = e.code; }
+    midCodes.push(code);
+  }
+  check("door: a digest plan the scrub rewrites MID-TEXT is not held (the repo's path, an address); a clean one is (the control)",
+    midCodes[0] === "PLAN_HIDDEN" && midCodes[1] === "PLAN_HIDDEN" && midCodes[2] === "held", JSON.stringify(midCodes));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
