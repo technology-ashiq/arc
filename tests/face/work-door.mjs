@@ -161,7 +161,9 @@ const WRITERS = (() => {
       const p = join(d, n.name);
       if (n.isDirectory()) { walk(p); continue; }
       if (!n.name.endsWith(".mjs") || n.name === "proposal-branch.mjs") continue;
-      if (/import\s*\{[^}]*\bwriteProposal\b[^}]*\}\s*from\s*"[^"]*core\/proposal-branch\.mjs"/.test(readFileSync(p, "utf8"))) out.add(p.slice(root.length + 1).split(sep).join("/"));
+      // Any spelling of the one module's path: a tool that lives IN core imports it as "./proposal-branch.mjs", and a
+      // `core/`-only pattern read two branch writers as writing nothing (PR 5b CI).
+      if (/import\s*\{[^}]*\bwriteProposal\b[^}]*\}\s*from\s*"[^"]*proposal-branch\.mjs"/.test(readFileSync(p, "utf8"))) out.add(p.slice(root.length + 1).split(sep).join("/"));
     }
   };
   walk(root);

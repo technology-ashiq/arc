@@ -119,7 +119,8 @@ async function main() {
   if (process.env.ARC_SPINE_ROOT) process.env.ARC_SPINE_ROOT = resolve(process.env.ARC_SPINE_ROOT);
   process.chdir(REPO);
   // The branch is named by a slug of the term: its letters and digits, lowercased, hyphen-joined.
-  const slug = a.term.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "term";
+  // The letters spelled out, never a negated range: a range in a bracket expression collates by locale (portability.bats).
+  const slug = a.term.toLowerCase().replace(/[^abcdefghijklmnopqrstuvwxyz0123456789]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "term";
   const branch = proposalBranch("concept-define", slug);
   const [contract, copy, registry] = await Promise.all([mainText(CONTRACT), mainText(ROOM_COPY), mainText(REGISTRY)]);
   const base = contract.base;
