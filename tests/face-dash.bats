@@ -88,6 +88,16 @@ load 'test_helper'
   [[ "$output" == *"ok register, applied: the branch holds the new venture"* ]] || { echo "$output"; false; }
 }
 
+@test "company ring: a lane's status and a term's definition APPLIED in scratch, each on a proposal branch with its request" {
+  run node "$ARC_ROOT/tests/face/company-work.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok lane-status, applied: the branch holds the new header and the new board row"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT CONTROL: board-lint names the face lane"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok concept-define, applied: the branch homes the term"* ]] || { echo "$output"; false; }
+}
+
 @test "ask golden: 20 live-state questions answered deterministically, refusals hold" {
   run node "$ARC_ROOT/tests/face/ask-golden.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

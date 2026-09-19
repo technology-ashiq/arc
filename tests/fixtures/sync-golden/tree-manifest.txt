@@ -102,6 +102,7 @@
 .claude/scripts/core/arc-status.sh	923697030d9ae7c0a786727b09871463fc521b74362b044bd22f5cb16c588e21
 .claude/scripts/core/board-lint.sh	ba7f984b1fd9c25cd7acc399ae6f0fee11fc6887906e416d490a2a960d4f1722
 .claude/scripts/core/common.sh	62cb89ced2c73adfd92560db77b5ecafc6f94a7a1f76ffec5179d9746da49b20
+.claude/scripts/core/concept-define.mjs	6f7e4bd99875fc5ee593c1927c2be2300834f198bc87842fb1760d70a8fa2aca
 .claude/scripts/core/evolve-manifest.mjs	a48c33ecf28e8e8a2a337de3ca1694a7ba704d69f953f9c713e4764bfd04a780
 .claude/scripts/core/face-colour-literal.mjs	5e8c3fb3e2619b4bf06c1156e6e1f4955c9c96b93093571efec41390f88fb58e
 .claude/scripts/core/face-coverage.mjs	601caaaa7cfd3479c55cd242c4fe0cd2d3725574282a7c54f9b263e620275f3d
@@ -114,6 +115,7 @@
 .claude/scripts/core/json-strict.mjs	37076d0db3ca6788170dd8cba9cd3a012745aa4229ac259ea98647f81d1e9eb6
 .claude/scripts/core/lane-resolve.mjs	7408b929f8c9dd252035c1406e195a7423be6fbbfe7d6594427f4d79bb109e8f
 .claude/scripts/core/lane-resolve.sh	ef552ce6baa1a656f99fda331e936952fa53242b6b004070f699686525c8c57d
+.claude/scripts/core/lane-status.mjs	8b926b30a740cf3a42ac81de5b4c5062eeec679ffa231db89b891bf9012377c5
 .claude/scripts/core/money-surfaces.json	8157fd70e9940c23e873846f9df93a482deca702330629e369138dd480d97f1c
 .claude/scripts/core/one-line.mjs	de7576a87c7710b049a6984a6f60b48937b44d626a9ebd347f5af12b74625a65
 .claude/scripts/core/ownership-lint.sh	f6f24f2afaf6b845cca533728a85693926fa4c22b73d741fc868ce28bddc82dc
@@ -223,7 +225,7 @@
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/face-module.mjs	4dffb1452c051fb97512a0a92b30ddc7724c3197db549ca7980005692c27685a
 .claude/scripts/hq/face-modules-contract.mjs	5f98ea1ebcb15edf9e19ed5a3d331c8bca4b8b63addf8200a5cc67bf4f02c918
-.claude/scripts/hq/face-ops.mjs	857f9911359caaad025f2ffed35854e4025299164be440edd6ba14ff4d26cd88
+.claude/scripts/hq/face-ops.mjs	181a54960c6621a3c2a751d6ccf80e28f8e9f91dc8bfc25c93c2c0d8fc8fb540
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
 .claude/scripts/hq/jobs/day-close-roll.mjs	cf47ce763a261eba34350385555119025b29a1050469606dc728994996628523

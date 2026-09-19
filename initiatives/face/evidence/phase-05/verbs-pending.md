@@ -34,8 +34,6 @@ retires it nor be invented. The browser suite counts the same cards in the page,
 | `legal` | Run the legal lints | The publish gate, claims that need a source, the PII tripwire and the hash-chain verify, each result landing as a receipt. It arrives with the work door. |
 | `legal` | Stamp the full-read gate | Nothing ships under the owner's name until a person has read it in full and stamped it; the stamp is the gate. It arrives with the work door. |
 | `ventures` | Stage a venture | Kickoff, building, launched, live -- each move a receipt, and the venture track wins every tie. It arrives with the work door. |
-| `concepts` | Define a term | A term is homed in a room and a station on its line, as a reviewed edit to the contract -- the palette finds it the moment it lands. It arrives with the work door. |
-| `org` | Set a lane's status | A lane's status is its PROGRESS header; changing it -- awake, idle, blocked on a named thing -- is a reviewed edit that lands as a receipt. It arrives with the work door. |
 | `org` | Birth a lane | Only /arc-kickoff births a lane: it claims the next ADR century and lands the lane's room in the same change. The work door will start that ceremony from here. |
 | `strategy` | Adopt a plan | A plan becomes a lane's live plan at /arc-kickoff, and the lane's previous plan becomes history in the same change; the adoption is a receipt. It arrives with the work door. |
 | `strategy` | Record an ADR | An ADR takes the next free number in its lane's century, never the company's highest-plus-one, and lands as a reviewed file. It arrives with the work door. |

@@ -6,8 +6,7 @@
 // validates and the palette searches, so this room cannot know a different set of words than arc does. Every term is
 // grouped under the served room that homes it, with its station on that room's line; a term whose room is not served
 // is counted out loud as unhomed. The search is the palette's fold: substring, first eight. Defining a term is a verb
-// of the work door.
-import { verbPending } from "../../../lib/registry.mjs";
+// of the work door (concepts.define-term, ADR-1343).
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { fileText, glossaryOf } from "../../../lib/company-room.mjs";
 import { roomLink } from "../../../lib/lane-room.mjs";
@@ -32,7 +31,6 @@ const HITS = 8;
  * @property {boolean} isUnhomedEmpty
  * @property {string} unhomedEmpty
  * @property {string} coverage
- * @property {{ isVerbPending: true, verb: string, sentence: string }} defineVerb
  * @property {Read[]} reads
  */
 
@@ -86,12 +84,10 @@ export function fold(payloads, ctx) {
     isUnhomedEmpty: glossary.unhomed.length === 0,
     unhomedEmpty: isRead ? "Every term is homed in a served room -- the rule face-coverage holds on the tree." : "",
     coverage: isRead
-      ? `${fmtInt(glossary.count)} terms across ${fmtInt(groups.length)} rooms${glossary.unhomed.length ? ` · ${fmtInt(glossary.unhomed.length)} unhomed` : " · none unhomed"}. The contract is frozen: a new word lands by a reviewed diff to it, never from this screen.`
+      ? `${fmtInt(glossary.count)} terms across ${fmtInt(groups.length)} rooms${glossary.unhomed.length ? ` · ${fmtInt(glossary.unhomed.length)} unhomed` : " · none unhomed"}. The contract is frozen: a new word lands by a reviewed diff to it -- Define a term opens one as a proposal branch you merge.`
       : "",
-    defineVerb: verbPending(
-      "Define a term",
-      "A term is homed in a room and a station on its line, as a reviewed edit to the contract -- the palette finds it the moment it lands. It arrives with the work door.",
-    ),
+    // "Define a term" is LIVE since face v2 Phase 05 (ADR-1343): the work door's concepts.define-term op, drawn under
+    // this room by the host. Its card is retired.
     reads,
   };
 }

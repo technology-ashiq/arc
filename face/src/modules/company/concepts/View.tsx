@@ -6,7 +6,7 @@
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { MONO, TextInput, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, KpiStrip, Reading, RoomHead, SourceFile, VerbPending } from '../../../ui/bits'
+import { DoorRefusal, HPanel, KpiStrip, Reading, RoomHead, SourceFile } from '../../../ui/bits'
 import { Hits, TermGroup } from '../../../ui/company'
 export { BookBookmark as Icon } from '@phosphor-icons/react'
 
@@ -57,10 +57,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                 <li key={u.key} className="break-words">· {u.term} → {u.room}</li>
               ))}
             </ul>
-          </HPanel>
-
-          <HPanel title="Define a term" hint="homed in a room, found by the palette">
-            <VerbPending item={f.defineVerb} />
           </HPanel>
 
           <HPanel title="Where the words are kept" hint="the frozen contract, through the door">
