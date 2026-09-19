@@ -570,6 +570,8 @@ export function opFindings(tree, kinds) {
     if (typeof r.id !== "string" || !OP_ID.test(r.id)) { findings.push(`[op] the server registry carries an op id ${JSON.stringify(r.id ?? null)} that is not ROOM.VERB`); continue; }
     if (byId.has(r.id)) { findings.push(`[op] "${r.id}" is in the server registry twice`); continue; }
     byId.set(r.id, r);
+    // The id's ROOM half is the room: `money.close-month` placed in growth passed every other check (Phase 05 attack).
+    if (r.id.split(".")[0] !== r.room) findings.push(`[op] "${r.id}" is placed in room ${JSON.stringify(r.room ?? null)} -- an op id's first half names its room`);
     if (!kindSet.has(r.kind)) findings.push(`[op] "${r.id}" writes ${JSON.stringify(r.kind ?? null)}, which is not a spine kind -- an op that needs a new kind does not ship (ADR-1334)`);
   }
   const named = new Map();
@@ -1031,6 +1033,7 @@ async function selftest(repo) {
     ["an op named in another room's module", withMovedOp(clean), "which the registry places in room"],
     ["an op named by two modules", withDoubledOp(clean), "an op belongs to one room"],
     ["an op writing a kind the spine lacks", withOpKind(clean, "ghost.kind-op"), "ghost.kind-op"],
+    ["an op id whose room half is not its room", withRegistryOp(clean, { id: "ghostroom.op-misplaced", room: "otherroom", kind: firstKind(clean) }), "an op id's first half names its room"],
     ["an unreadable op tree", { ...clean, ops: { unreadable: "the selftest made it unreadable" } }, "[op] could not be read"],
   ];
 

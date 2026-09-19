@@ -57,7 +57,7 @@ import { render as renderBrief } from "./arc-brief.mjs";
 import { derivePnl, deriveDaily } from "./lib/ledger/pnl.mjs";
 import { deriveKillPanel } from "./lib/ledger/kill-panel.mjs";
 import { repoRoot } from "./lib/spine-io.mjs";
-import { SpineError, ULID_RE, sha256Hex, formatIst, nowMs } from "./lib/canonical.mjs";
+import { SpineError, ULID_RE, sha256Hex, formatIst, nowMs, parseStrictJson } from "./lib/canonical.mjs";
 import { laneHeader, validLaneName } from "../core/lane-resolve.mjs";
 import { askOffline } from "./lib/face/ask-offline.mjs";
 // Phase 04's read routes (REQ-06). The handlers live beside the door; THIS file keeps the one route table.
@@ -784,8 +784,8 @@ const ROUTES = Object.freeze([
   // lane's receipt -- a governed subprocess write, so "receipt", named by the registry it proxies; `op-run` reads a
   // run as it stands. apply takes ONE plan id and nothing else: there is no path that applies a list.
   { method: "GET", path: "/api/ops", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return ctx.work.list(); } },
-  { method: "POST", prefix: "/api/op/", suffix: "/plan", mutates: false, spineEffect: "none", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.plan(tail, body); } },
-  { method: "POST", prefix: "/api/op/", suffix: "/apply", mutates: true, spineEffect: "receipt", proxy: "face-ops.mjs --list: the owning lane's own CLI, one plan per call", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.apply(tail, body); } },
+  { method: "POST", prefix: "/api/op/", suffix: "/plan", mutates: false, spineEffect: "none", strictBody: true, handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.plan(tail, body); } },
+  { method: "POST", prefix: "/api/op/", suffix: "/apply", mutates: true, spineEffect: "receipt", strictBody: true, proxy: "face-ops.mjs --list: the owning lane's own CLI, one plan per call", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.apply(tail, body); } },
   { method: "GET", prefix: "/api/op-run/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => { onlyKeys(url, []); return ctx.work.run(tail); } },
 ]);
 
@@ -880,6 +880,13 @@ function boot(argv) {
     process.env.ARC_SPINE_ROOT = root;
   } else {
     mode = "live";
+    // ARC_SPINE_ROOT points spineRoot() at another spine, so a door started with it and no --spine called a SCRATCH
+    // spine live -- and live mode is the one that lets a paid op spend (face v2 Phase 05 logic attack). A fixture
+    // spine is named with --spine, which is sim mode and says so.
+    if (process.env.ARC_SPINE_ROOT !== undefined && process.env.ARC_SPINE_ROOT !== "") {
+      process.stderr.write("arc-dash: ERROR BAD_SPINE_ENV -- ARC_SPINE_ROOT is set; a door over a named spine is sim mode: pass it as --spine <path>, or unset it for the canonical spine\n");
+      process.exit(1);
+    }
     try {
       root = spineRoot(); // REFUSES a linked worktree (named), the C4 guard -- live mode
     } catch (err) {
@@ -1040,8 +1047,15 @@ function boot(argv) {
       req.on("end", () => {
         if (tooBig) return;
         let body;
-        try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {}; }
-        catch { return fail("BAD_BODY", "body is not valid JSON"); }
+        // The work door's bodies are parsed STRICTLY: a duplicate key is refused, never last-one-wins -- the same rule
+        // the door already holds for a repeated query key (Phase 04 round 3), found missing here by the Phase 05 attack.
+        if (route.strictBody) {
+          try { body = chunks.length ? parseStrictJson(Buffer.concat(chunks), "body") : {}; }
+          catch (e) { return fail("BAD_BODY", e instanceof SpineError ? e.message : "body is not valid JSON"); }
+        } else {
+          try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {}; }
+          catch { return fail("BAD_BODY", "body is not valid JSON"); }
+        }
         run(body);
       });
     } else {

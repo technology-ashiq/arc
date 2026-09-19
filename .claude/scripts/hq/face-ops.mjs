@@ -21,7 +21,7 @@
 // Phase 03's cards minus exactly these -- a card cannot vanish without an op that retires it.
 //
 // Fields are strings, always: a pattern is anchored whole, a select names its options, an int is digits in a
-// range. The field spelled here is the one the kit renders -- there is no second copy in face/src (a module's
+// range. The field spelled here is the one the kit renders -- there is no second copy in the face (a module's
 // ops.mjs names op ids and nothing else, and face-coverage holds the two lists equal both ways).
 //
 // Usage:
@@ -49,7 +49,10 @@ function benchDrivers() {
   } catch { return []; }
 }
 
-const ONE_LINE = "[^\\r\\n\\u0000]+";
+// One line of text: no control character at all (C0, DEL, C1 -- which covers CR, LF, NUL, ESC and tab) and none of the
+// Unicode line breaks. The first cut refused only CR, LF and NUL, and an ESC sequence reached the spine verbatim
+// (face v2 Phase 05 logic attack; the twin of Phase 03's "no terminal control in a sentence").
+const ONE_LINE = "[^\\p{Cc}\\u2028\\u2029]+";
 
 /**
  * An emit whose dry run IS the plan. The apply is the same argv without `--dry-run`, so the two cannot drift: they
@@ -141,7 +144,7 @@ export const OPS = Object.freeze([
     humanRun: true, spends: false, touchesFiles: false,
     fields: Object.freeze([
       Object.freeze({ name: "slug", label: "Slug", placeholder: "the-author-cannot-be-the-attacker", type: "text", max: 120, pattern: "[a-z0-9]([a-z0-9-]*[a-z0-9])?", required: true }),
-      Object.freeze({ name: "article", label: "The merged .mdx", placeholder: "the article file in the site repo's merged tree", type: "text", max: 400, pattern: "[^\\r\\n\\u0000]+\\.mdx", required: true }),
+      Object.freeze({ name: "article", label: "The merged .mdx", placeholder: "the article file in the site repo's merged tree", type: "text", max: 400, pattern: "(?![\\\\/]{2})[^\\p{Cc}\\u2028\\u2029]+\\.mdx", required: true }),
       Object.freeze({ name: "cluster", label: "Cluster", placeholder: "c-001", type: "text", max: 12, pattern: "c-[0-9]{3,9}", required: true }),
       Object.freeze({ name: "title", label: "Title", placeholder: "the title as published", type: "text", max: 300, pattern: ONE_LINE, required: true }),
       Object.freeze({ name: "pr", label: "Merged PR", placeholder: "2", type: "text", max: 10, pattern: "[1-9][0-9]{0,9}", required: true }),
@@ -252,7 +255,9 @@ export function emitPlanFrom(op, stdout) {
     seen.add(a);
     if (a === "--strict") continue;
     const v = argv[i + 1];
-    if (v === undefined || EMIT_PLAN_FLAGS.includes(v)) throw new OpError("EMIT_PLAN_MISMATCH", `${op.id}: the emit plan's ${a} has no value`);
+    // A value is text that is not a flag: empty, or opening with "--", is refused even where arc-event would read it as
+    // a value -- the plan would be relying on one parser's leniency (face v2 Phase 05 logic attack).
+    if (v === undefined || v === "" || v.startsWith("--")) throw new OpError("EMIT_PLAN_MISMATCH", `${op.id}: the emit plan's ${a} has no value`);
     i++;
   }
   if (!seen.has("--strict")) throw new OpError("EMIT_PLAN_MISMATCH", `${op.id}: the emit plan is not --strict, so a refusal would exit 0`);
@@ -290,9 +295,12 @@ function isMainModule() {
 
 if (isMainModule()) {
   const argv = process.argv.slice(2);
+  // exitCode, never process.exit(): the loop drains and stdout is flushed on every OS (the Windows teardown race in
+  // fixed-defects.md).
   if (argv.length !== 1 || argv[0] !== "--list") {
     process.stderr.write("usage: face-ops.mjs --list\n");
-    process.exit(2);
+    process.exitCode = 2;
+  } else {
+    process.stdout.write(JSON.stringify(registryView(), null, 2) + "\n");
   }
-  process.stdout.write(JSON.stringify(registryView(), null, 2) + "\n");
 }

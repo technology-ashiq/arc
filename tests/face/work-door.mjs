@@ -183,7 +183,7 @@ try {
     r = await post("/api/op/bench.run-model/plan", { input: { driver: paid, model: "m", inr: "1", minutes: "5" } });
     check("a sim door never spends: a paid driver -> SIM_SPEND", r.status === 403 && r.body.error === "SIM_SPEND", `${r.status} ${r.body.error}`);
   }
-  r = await post("/api/op/today.capture-idea/apply", { planId: "AAAAAAAAAAAAAAAAAAAAAAAA" });
+  r = await post("/api/op/today.capture-idea/apply", { planId: "AAAAAAAAAAAAAAAAAAAAAAAA" }, { Origin: ORIGIN });
   check("an unknown plan id -> UNKNOWN_PLAN", r.status === 404 && r.body.error === "UNKNOWN_PLAN", `${r.status} ${r.body.error}`);
   r = await post("/api/op/today.capture-idea/apply", { planId: ["a", "b"] }, { Origin: ORIGIN });
   check("apply takes ONE plan id, never a list -> BAD_PLAN_ID", r.status === 400 && r.body.error === "BAD_PLAN_ID", `${r.status} ${r.body.error}`);
@@ -248,6 +248,52 @@ try {
     check(`${op.id}: NO SECOND PATH -- the door's receipt is the hand-run's receipt`,
       !!doorEvent && !!handLast && JSON.stringify(comparable(doorEvent)) === JSON.stringify(comparable(handLast)),
       `door=${JSON.stringify(doorEvent && comparable(doorEvent)).slice(0, 300)} hand=${JSON.stringify(handLast && comparable(handLast)).slice(0, 300)}`);
+  }
+
+  // ---- each run reports ITS OWN receipt (logic attack: six concurrent captures came back with each other's) ----
+  {
+    const texts = ["attribution one", "attribution two", "attribution three", "attribution four"];
+    const plans = await Promise.all(texts.map((text) => post("/api/op/today.capture-idea/plan", { input: { text } })));
+    check("attribution: four capture plans held", plans.every((p) => p.body.ok === true), plans.map((p) => p.status).join(","));
+    await Promise.all(plans.map((p) => post("/api/op/today.capture-idea/apply", { planId: p.body.planId }, { Origin: ORIGIN })));
+    const runs = await Promise.all(plans.map((p) => settle(p.body.planId)));
+    const ideas = await receiptsOf(SPINE_A, "idea.captured");
+    const own = runs.map((r, i) => {
+      const rec = r.body.result && r.body.result.receipt;
+      const ev = rec && ideas.find((e) => e.id === rec.id);
+      return !!ev && ev.payload.text === texts[i];
+    });
+    check("attribution: four concurrent runs each report the receipt that carries THEIR text", own.every(Boolean), JSON.stringify(own));
+    check("attribution: four runs, four distinct receipts", new Set(runs.map((r) => r.body.result && r.body.result.receipt && r.body.result.receipt.id)).size === 4);
+  }
+
+  // ---- the door reads receipts by scan, so a derived sqlite index cannot hide a fresh one (logic attack) ----
+  {
+    const replay = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-replay.mjs"), "--quiet"], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_A } });
+    if (existsSync(join(SPINE_A, "derived", "state.db"))) {
+      const p = await post("/api/op/today.capture-idea/plan", { input: { text: "after a replay built the index" } });
+      await post("/api/op/today.capture-idea/apply", { planId: p.body.planId }, { Origin: ORIGIN });
+      const done = await settle(p.body.planId);
+      check("with derived/state.db present, a fresh receipt is still found (the door reads by scan)", done.body.result && done.body.result.ok === true, JSON.stringify(done.body.result).slice(0, 300));
+    } else {
+      // Node before 22 has no node:sqlite, so arc-replay builds no index and there is nothing to hide a receipt behind.
+      check(`no derived/state.db on this Node (${process.version}): the stale-index arm has nothing to run against`, replay.status === 0 || /sqlite/i.test(String(replay.stderr) + String(replay.stdout)), `${replay.status} ${replay.stderr}`);
+    }
+  }
+
+  // ---- bodies are parsed strictly, and text refuses control characters (logic attack) ----
+  {
+    const raw = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{"input":{"text":"a"},"input":{"text":"b"}}' });
+    check("a body with a duplicate key -> BAD_BODY, never last-one-wins", raw.status === 400 && raw.body.error === "BAD_BODY", `${raw.status} ${raw.body.error}`);
+    const esc = await post("/api/op/today.capture-idea/plan", { input: { text: `clear${String.fromCharCode(27)}[2J` } });
+    check("an ESC sequence in a one-line field -> BAD_INPUT", esc.status === 400 && esc.body.error === "BAD_INPUT", `${esc.status} ${esc.body.error}`);
+  }
+
+  // ---- a door over a NAMED spine is sim mode, never live (logic attack: ARC_SPINE_ROOT made a scratch spine "live") ----
+  {
+    const live = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--port", String(PORT + 1)],
+      { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_B, ARC_DASH_JOURNAL_DIR: JOURNAL }, timeout: 20_000 });
+    check("arc-dash with ARC_SPINE_ROOT and no --spine refuses to start -> BAD_SPINE_ENV", live.status === 1 && /BAD_SPINE_ENV/.test(live.stderr), `${live.status} ${String(live.stderr).slice(0, 200)}`);
   }
 
   // ---- the counting fixture: two concurrent applies of one plan invoke the tool exactly once (REQ-07) ----
@@ -327,6 +373,24 @@ try {
     writeFileSync(bom, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("x")]));
     const seal = spawnSync(process.execPath, [join(REPO, ".claude/scripts/growth/arc-growth.mjs"), "seal", "work-door-probe", "--article", bom, "--cluster-id", "c-001", "--title", "t", "--pr", "7"], { cwd: REPO, encoding: "utf8", env });
     check("arc-growth seal: a BOM-prefixed article is refused, never stripped", seal.status !== 0 && /BOM_IN_ARTICLE/.test(seal.stderr), `${seal.status} ${seal.stderr}`);
+    // The seal's path is checked before it is opened (shell attack): a directory, and a network/device-namespace path.
+    const sealAt = (article) => spawnSync(process.execPath, [join(REPO, ".claude/scripts/growth/arc-growth.mjs"), "seal", "work-door-probe", "--article", article, "--cluster-id", "c-001", "--title", "t", "--pr", "7"], { cwd: REPO, encoding: "utf8", env, timeout: 20_000 });
+    const dir = sealAt(tmp);
+    check("arc-growth seal: a directory is not an article -> BAD_ARTICLE", dir.status !== 0 && /BAD_ARTICLE/.test(dir.stderr), `${dir.status} ${dir.stderr}`);
+    const unc = sealAt("//./pipe/work-door-probe.mdx");
+    check("arc-growth seal: a network or device path is refused before it is opened -> BAD_ARTICLE", unc.status !== 0 && /BAD_ARTICLE/.test(unc.stderr), `${unc.status} ${unc.stderr}`);
+  }
+
+  // ---- the child's environment: the drop list holds whatever the case (shell attack: Windows reads env names
+  // case-insensitively, so a lowercase git_dir or node_options reached the child) ----
+  {
+    const R = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reads.mjs")).href);
+    const planted = { git_dir: "x", Git_Work_Tree: "x", node_options: "--require nothing", arc_settings: "x", Bash_Env: "x" };
+    for (const [k, v] of Object.entries(planted)) process.env[k] = v;
+    const env = R.childEnv();
+    const leaked = Object.keys(env).filter((k) => Object.hasOwn(planted, k));
+    for (const k of Object.keys(planted)) delete process.env[k];
+    check("childEnv drops git's variables, preloads and the source overrides in ANY case", leaked.length === 0 && Object.keys(env).length > 0, leaked.join(","));
   }
 
   // ---- nothing touched the repository ----

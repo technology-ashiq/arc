@@ -59,7 +59,9 @@ function OpCardView({ card, door, onApplied }: { card: OpCard; door: Door; onApp
 
   const setValue = useCallback((name: string, v: string) => {
     setValues((prev) => ({ ...prev, [name]: v }))
-    // A changed field makes the held plan a plan for something else: it is dropped, and so is the tick.
+    // A changed field makes the held plan a plan for something else: it is dropped, and so is the tick -- and so is
+    // any plan still answering, or its answer would put the OLD values' plan back on the card (Phase 05 attack).
+    attempt.current++
     setSt(IDLE)
     setConfirmed(false)
   }, [])
@@ -81,7 +83,7 @@ function OpCardView({ card, door, onApplied }: { card: OpCard; door: Door; onApp
     door
       .opApply(card.id, planId, confirm)
       .then((run: unknown) => setSt((s) => runSettled(s, run)))
-      .catch((err: unknown) => setSt((s) => applyFailed(s, err)))
+      .catch((err: unknown) => setSt((s) => applyFailed(s, err, planId)))
   }
 
   // The run streams by polling the door while the tool is still writing.
@@ -120,7 +122,8 @@ function OpCardView({ card, door, onApplied }: { card: OpCard; door: Door; onApp
       </div>
       <p className="mb-3 text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.hint}</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+      {/* Locked while a plan is answering or a run is going: an edit then would plan or run something else. */}
+      <fieldset disabled={st.phase === 'planning' || live} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 min-w-0 border-0 p-0 m-0">
         {card.fields.map((f) => (
           <Field key={f.name} label={f.label} className={f.type === 'select' ? 'md:col-span-2' : ''}>
             {f.type === 'select' ? (
@@ -130,7 +133,7 @@ function OpCardView({ card, door, onApplied }: { card: OpCard; door: Door; onApp
             )}
           </Field>
         ))}
-      </div>
+      </fieldset>
 
       <div className="flex flex-wrap items-center gap-2">
         <Btn small tone="ghost" onClick={onPlan} disabled={blockedPlan !== null || st.phase === 'planning' || live} title={blockedPlan ?? undefined}>
@@ -180,6 +183,7 @@ function OpStateView({ st }: { st: OpState }) {
       <div data-op-refused className="mt-3">
         <p className="text-[12px]" style={{ fontFamily: UI, color: 'var(--red)' }}>The tool refused the plan (exit {st.refusal.exit ?? '?'}), in its own words:</p>
         <Lines lines={[...st.refusal.stderr, ...st.refusal.stdout]} tone="var(--text-1)" />
+        {st.refusal.dropped > 0 ? <p className="text-[11px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{st.refusal.dropped} characters of the tool's earlier output not kept</p> : null}
       </div>
     )
   }
@@ -192,12 +196,13 @@ function OpStateView({ st }: { st: OpState }) {
       <Row k="cost" v={plan.estimate} />
       <Row k="receipt" v={plan.receiptKind} />
       <Lines lines={[...plan.output, ...plan.notes]} />
+      {plan.outputDropped > 0 ? <p className="text-[11px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{plan.outputDropped} characters of the tool's earlier output not kept</p> : null}
       {st.phase === 'planned' && st.error ? <p data-op-refused className="text-[12px]" style={{ fontFamily: MONO, color: 'var(--red)' }}>{st.error}</p> : null}
       {st.phase === 'applying' ? <p className="text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>starting the run</p> : null}
       {st.phase === 'running' || st.phase === 'done' ? (
         <div data-op-run={st.run.state}>
           <Lines lines={st.run.lines.map((l) => l.t)} />
-          {st.run.linesDropped > 0 ? <p className="text-[11px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{st.run.linesDropped} earlier line(s) not kept</p> : null}
+          {st.run.linesDropped > 0 || st.run.bytesDropped > 0 ? <p className="text-[11px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{st.run.linesDropped} earlier line(s) and {st.run.bytesDropped} characters of the tool's output not kept</p> : null}
           <p className="mt-2 text-[12.5px]" style={{ fontFamily: MONO, color: st.run.ok ? 'var(--text-1)' : 'var(--red)' }}>{runVerdict(st.run)}</p>
           {st.run.receipt ? (
             <div className="mt-1.5" data-op-receipt={st.run.receipt.id}>

@@ -19,7 +19,7 @@
 // thing is the capability, and opening a pull request is the act that puts a human in the loop
 // rather than one that bypasses them (phase-04 spec, Amendment 2026-08-14).
 
-import { readFileSync, writeFileSync, realpathSync } from "node:fs";
+import { readFileSync, writeFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSources, mine, assertCandidate, MineError } from "./lib/mine.mjs";
@@ -648,6 +648,9 @@ async function cmdIngest() {
   );
 }
 
+// An article is prose; past this it is not one, and reading it whole would be the attack.
+const SEAL_MAX_BYTES = 2 * 1024 * 1024;
+
 /**
  * `seal <slug>` -- the `content.published` receipt for an article a HUMAN HAS ALREADY MERGED (face v2 Phase 05,
  * ADR-1339). RUNBOOK.md had the operator type its eight fields by hand, which is the class the site config exists
@@ -671,6 +674,14 @@ async function cmdSeal() {
   try { site = loadSiteConfig(readOrDie(siteJson, "the site config")).site; }
   catch (e) { die(e.code || "BAD_SITE_CONFIG", e.message); }
 
+  // The path comes from whoever asks for the seal -- the face's work door hands it on from a form -- so it is checked
+  // BEFORE it is opened: a UNC or device-namespace path (\\server\share, //./pipe/x) reaches a network share or blocks
+  // on a pipe, a FIFO or device blocks, and an unbounded file is read whole into memory (face v2 Phase 05 shell attack).
+  if (/^[\\/]{2}/.test(articlePath)) die("BAD_ARTICLE", `${articlePath} is a network or device path; the merged article is a local file`);
+  let st;
+  try { st = statSync(articlePath); } catch (e) { die("BAD_ARTICLE", `the merged article could not be read: ${e.code || e.message}`); }
+  if (!st.isFile()) die("BAD_ARTICLE", `${articlePath} is not a regular file`);
+  if (st.size > SEAL_MAX_BYTES) die("BAD_ARTICLE", `${articlePath} is ${st.size} bytes; an article past ${SEAL_MAX_BYTES} is not an article`);
   const bytes = readBytesOrDie(articlePath, "the merged article");
   // Refused, never stripped -- the same rule, for the same reason, as publish: content_sha is over raw bytes.
   if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)

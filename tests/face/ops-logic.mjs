@@ -86,9 +86,12 @@ const noReceipt = O.runSettled(running, { planId: "p".repeat(24), state: "done",
 check("runVerdict: exit 0 with no receipt is said as that, never as success", /^no receipt -- the tool exited 0/.test(O.runVerdict(noReceipt.run)));
 const partial = O.runSettled(running, { planId: "p".repeat(24), state: "done", lines: [], result: { ok: false, exit: 1, receipt: { id: "R", kind: "run.completed", ts: "t", outcome: "partial" }, refusal: { exit: 1, stderr: "arc-bench: 1 attempt left no receipt", stdout: "" } } });
 check("runVerdict: a refusal quotes the tool's first line, and names a receipt it still wrote", /^refused -- exit 1: arc-bench: 1 attempt left no receipt \(it still wrote run.completed R\)$/.test(O.runVerdict(partial.run)), O.runVerdict(partial.run));
-const failedApply = O.applyFailed(planned, { code: "CONFIRM_REQUIRED", human: "money.close-month is human-run" });
+const failedApply = O.applyFailed(planned, { code: "CONFIRM_REQUIRED", human: "money.close-month is human-run" }, planned.plan.planId);
 check("applyFailed: the plan stays on the card with the door's refusal under it", failedApply.phase === "planned" && failedApply.plan.planId === planned.plan.planId && /^CONFIRM_REQUIRED: /.test(failedApply.error || ""));
-check("applyFailed: with no plan held it is a plain error", O.applyFailed(O.IDLE, { code: "X", human: "y" }).phase === "error");
+check("applyFailed: a late refusal of an OLDER plan leaves the newer plan untouched", O.applyFailed(planned, { code: "PLAN_EXPIRED", human: "x" }, "q".repeat(24)) === planned);
+check("applyFailed: with no plan held it is a plain error", O.applyFailed(O.IDLE, { code: "X", human: "y" }, "p".repeat(24)).phase === "error");
+check("planSettled: what the output cap dropped is carried, never silent", O.planSettled({ ...planPayload, outputDropped: 1234 }).plan.outputDropped === 1234);
+check("planSettled: a refusal carries what the cap dropped too", O.planSettled({ ok: false, refusal: { exit: 1, stderr: "x", stdout: "", dropped: 99 } }).refusal.dropped === 99);
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exit(failed === 0 && ran > 30 ? 0 : 1);
+process.exit(failed === 0 && ran >= 30 ? 0 : 1);

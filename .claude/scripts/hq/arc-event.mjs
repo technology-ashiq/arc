@@ -97,7 +97,10 @@ function walkArgs(argv) {
         if (eqName === "strict") { flags.strict = a.slice(eq + 1); continue; }
         // `--dry-run=0` is refused, not read as "off": a value on a flag that takes none is
         // ambiguous, and the wrong reading of THIS flag is a real write the caller did not want.
-        if (eqName === "dry-run") { errors.push("flag --dry-run takes no value"); continue; }
+        // It still COUNTS as a dry run for how the refusal is handled -- strict, and writing nothing:
+        // the first cut only pushed the error, so the refusal went down hook mode's path and wrote a
+        // quarantine record from a command that asked to write nothing (face v2 Phase 05, CI).
+        if (eqName === "dry-run") { flags.dryRun = true; errors.push("flag --dry-run takes no value"); continue; }
         if (!VALUE_FLAGS.has(eqName)) { errors.push(`unknown flag --${eqName}`); continue; }
         flags[eqName] = a.slice(eq + 1);
         continue;

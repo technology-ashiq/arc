@@ -16,7 +16,7 @@
 // the argv list with no shell between the door and the tool, in the door's own repo, with childEnv() (git's location
 // variables and preload hooks withheld). A tool's refusal comes back in its own words, scrubbed of machine paths.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { join, sep } from "node:path";
@@ -32,6 +32,8 @@ const APPLY_TIMEOUT_MS = 30 * 60_000;
 // truncated log reads exactly like a short one.
 const OUTPUT_CAP = 256 * 1024;
 const LINES_KEPT = 400;
+const LINE_CAP = 8192;
+const IS_WIN = process.platform === "win32";
 // Plans held at once. Past it the oldest UNCLAIMED plan is dropped (a running or finished one is kept: its replay is
 // what stops a repeat from running twice).
 const PLANS_CAP = 128;
@@ -69,12 +71,21 @@ function runTool(ctx, cmd, { timeoutMs, onLine }) {
   return new Promise((resolveP) => {
     const child = spawn(process.execPath, [real, ...cmd.args], {
       cwd: ctx.repo, env: childEnv(), windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
+      // On POSIX the tool leads its own process group, so a timeout can end the WHOLE tree with one signal to -pid:
+      // killing only the direct child left a driver it started running, and spending, after the door called the run
+      // over (face v2 Phase 05 shell attack). Windows has no groups; killTree walks the tree with taskkill /T.
+      detached: !IS_WIN,
     });
+    LIVE.add(child);
     /** @type {{ out: string, err: string }} */
     const buf = { out: "", err: "" };
     const partial = { out: "", err: "" };
     let dropped = 0;
     let timedOut = false;
+    let settled = false;
+    // One line is capped too: a tool writing with no newline grew the pending fragment without bound, past the
+    // output cap that bounds everything else.
+    const cut = (l) => (l.length > LINE_CAP ? `${l.slice(0, LINE_CAP)} [line cut at ${LINE_CAP} characters]` : l);
     const take = (stream) => (chunk) => {
       const s = chunk.toString("utf8");
       buf[stream] += s;
@@ -82,15 +93,19 @@ function runTool(ctx, cmd, { timeoutMs, onLine }) {
       if (onLine) {
         const lines = (partial[stream] + s).split(/\r?\n/);
         partial[stream] = lines.pop() || "";
-        for (const l of lines) onLine(stream, l);
+        for (const l of lines) onLine(stream, cut(l));
+        if (partial[stream].length > LINE_CAP) { onLine(stream, cut(partial[stream])); partial[stream] = ""; }
       }
     };
     child.stdout.on("data", take("out"));
     child.stderr.on("data", take("err"));
-    const timer = setTimeout(() => { timedOut = true; try { child.kill("SIGKILL"); } catch { /* already gone */ } }, timeoutMs);
+    const timer = setTimeout(() => { timedOut = true; killTree(child); }, timeoutMs);
     const finish = (exit, signal) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      if (onLine) for (const st of /** @type {const} */ (["out", "err"])) if (partial[st]) { onLine(st, partial[st]); partial[st] = ""; }
+      LIVE.delete(child);
+      if (onLine) for (const st of /** @type {const} */ (["out", "err"])) if (partial[st]) { onLine(st, cut(partial[st])); partial[st] = ""; }
       resolveP({ exit, signal, stdout: buf.out, stderr: buf.err, timedOut, dropped });
     };
     child.on("error", () => finish(null, "spawn-failed"));
@@ -98,28 +113,68 @@ function runTool(ctx, cmd, { timeoutMs, onLine }) {
   });
 }
 
-/** The ids of one kind already on the spine: the set a new receipt is found AGAINST, not a count that can collide. */
+/**
+ * End a tool AND everything it started. POSIX: the tool leads its own group (spawned detached), so -pid reaches the
+ * whole tree. Windows: taskkill /T walks the tree the tool built. Either way the direct child is killed as a fallback.
+ * @param {import("node:child_process").ChildProcess} child
+ */
+function killTree(child) {
+  if (!child.pid) return;
+  if (IS_WIN) {
+    try { spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore", timeout: 10_000 }); } catch { /* fall through */ }
+  } else {
+    try { process.kill(-child.pid, "SIGKILL"); } catch { /* the group is gone, or never formed */ }
+  }
+  try { child.kill("SIGKILL"); } catch { /* already gone */ }
+}
+
+// Every tool still running. A detached POSIX group does not die with the door, so the door ends them on its way out
+// rather than leave a run nobody can observe.
+const LIVE = new Set();
+process.once("exit", () => { for (const c of LIVE) killTree(c); });
+
+// Every read here is the SCAN engine, never "auto": auto picks derived/state.db once arc-replay has built one, and
+// nothing but arc-replay updates it, so a receipt written a second ago was invisible and every apply read
+// "no receipt" -- an owner who then runs it again pays twice (face v2 Phase 05 logic attack).
+const SCAN = "scan";
+const ULID_ANYWHERE = /(?<![0-9A-Z])[0-7][0-9A-HJKMNP-TV-Z]{25}(?![0-9A-Z])/g;
+
+/** The ids of one kind already on the spine: the set a new receipt is checked AGAINST. */
 async function kindIds(ctx, kind) {
-  const { events } = await query(ctx.root, { kind });
+  const { events } = await query(ctx.root, { kind, engine: SCAN });
   return new Set(events.map((e) => e.event.id));
 }
 
 /**
- * The receipt the tool wrote: a `kind` event (of `process`, when the row names one) that was not on the spine before
- * the run. The newest wins when a tool wrote several of the kind -- bench's own summary lands after its attempts'.
+ * The receipt THIS run wrote. Every op's tool prints the id the spine gave its receipt (arc-event's last line,
+ * develop's "receipt: ...", bench's "receipt <id> is in events/"), so the door takes an id the tool PRINTED, and
+ * accepts it only if it names an event of the row's kind (and process) that was not on the spine before the run.
+ * The first cut took the newest new event of the kind, and six concurrent captures came back with each other's
+ * receipts -- another writer's event is new too (face v2 Phase 05 logic attack). No printed id, no receipt: never a
+ * guess.
+ * @param {{ root: string }} ctx @param {{ kind: string, process?: string }} receipt @param {Set<string>} before
+ * @param {string} stdout
  */
-async function findReceipt(ctx, receipt, before) {
-  const { events } = await query(ctx.root, { kind: receipt.kind });
-  const fresh = events.filter((e) => !before.has(e.event.id) && (!receipt.process || e.event.process === receipt.process));
-  if (!fresh.length) return null;
-  const ev = fresh[fresh.length - 1].event;
-  return { id: ev.id, kind: ev.kind, ts: ev.ts, outcome: ev.outcome, process: ev.process, payload: ev.payload };
+async function findReceipt(ctx, receipt, before, stdout) {
+  const printed = [...String(stdout).matchAll(ULID_ANYWHERE)].map((m) => m[0]);
+  if (!printed.length) return null;
+  const { events } = await query(ctx.root, { kind: receipt.kind, engine: SCAN });
+  const byId = new Map(events.map((e) => [e.event.id, e.event]));
+  // The LAST id the tool printed that qualifies: a tool that names several ids names its own receipt last.
+  for (let i = printed.length - 1; i >= 0; i--) {
+    const ev = byId.get(printed[i]);
+    if (!ev || before.has(ev.id)) continue;
+    if (receipt.process && ev.process !== receipt.process) continue;
+    return { id: ev.id, kind: ev.kind, ts: ev.ts, outcome: ev.outcome, process: ev.process, payload: ev.payload };
+  }
+  return null;
 }
 
 const refusalOf = (res, repo) => ({
   exit: res.exit, signal: res.signal, timedOut: res.timedOut,
-  // The tool's own words, scrubbed of machine paths and addresses (ADR-1312) -- never paraphrased.
-  stderr: scrub(res.stderr, repo), stdout: scrub(res.stdout, repo),
+  // The tool's own words, scrubbed of machine paths and addresses (ADR-1312) -- never paraphrased. What the cap cut is
+  // said, never silent: a refusal whose first line was dropped reads like a different refusal.
+  stderr: scrub(res.stderr, repo), stdout: scrub(res.stdout, repo), dropped: res.dropped,
 });
 
 /**
@@ -189,7 +244,7 @@ export function createWorkDoor(ctx, opts = {}) {
       ...base, ok: true, planId, expiresInMs: PLAN_TTL_MS,
       apply: commandLine(applyCmd),
       // The tool's own plan output, first -- it is the review the owner reads before the click.
-      output: scrub(res.stdout, ctx.repo), notes: scrub(res.stderr, ctx.repo),
+      output: scrub(res.stdout, ctx.repo), notes: scrub(res.stderr, ctx.repo), outputDropped: res.dropped,
       diff: op.touchesFiles ? "file changes are shown on the branch this op writes" : "no file changes -- this op writes one receipt to the spine",
       estimate: typeof op.estimate === "function" ? op.estimate(values) : "₹0 -- no model is called",
     };
@@ -239,7 +294,7 @@ export function createWorkDoor(ctx, opts = {}) {
         p.bytesDropped += res.dropped;
         // Looked for whatever the exit: a tool can refuse part of the work and still write its receipt (bench exits 1 on a
         // partial run and records it), and a receipt the face does not show is a receipt the owner cannot find.
-        const receipt = await findReceipt(ctx, p.receipt, before);
+        const receipt = await findReceipt(ctx, p.receipt, before, res.stdout);
         result = {
           ok: res.exit === 0 && receipt !== null,
           exit: res.exit, ms: now() - t0,

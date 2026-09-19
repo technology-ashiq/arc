@@ -17,10 +17,10 @@ import { unescapeDoorText } from "./door.mjs";
  *   { id: string, state: "ready", label: string, hint: string, humanRun: boolean, spends: boolean, receiptKind: string, fields: OpField[] }} OpCard
  */
 /**
- * @typedef {{ planId: string, command: string, apply: string, estimate: string, diff: string, output: string[], notes: string[], receiptKind: string, humanRun: boolean }} PlanView
- * @typedef {{ exit: number | null, stderr: string[], stdout: string[] }} RefusalView
+ * @typedef {{ planId: string, command: string, apply: string, estimate: string, diff: string, output: string[], notes: string[], outputDropped: number, receiptKind: string, humanRun: boolean }} PlanView
+ * @typedef {{ exit: number | null, stderr: string[], stdout: string[], dropped: number }} RefusalView
  * @typedef {{ id: string, kind: string, ts: string, outcome: string }} ReceiptView
- * @typedef {{ state: string, lines: { s: string, t: string }[], linesDropped: number, done: boolean, ok: boolean, receipt: ReceiptView | null, refusal: RefusalView | null, noReceipt: string, error: string }} RunView
+ * @typedef {{ state: string, lines: { s: string, t: string }[], linesDropped: number, bytesDropped: number, done: boolean, ok: boolean, receipt: ReceiptView | null, refusal: RefusalView | null, noReceipt: string, error: string }} RunView
  * @typedef {{ phase: "idle" } | { phase: "planning" } | { phase: "planned", plan: PlanView, error?: string } |
  *   { phase: "plan-refused", refusal: RefusalView } | { phase: "error", code: string, human: string } |
  *   { phase: "applying", plan: PlanView } | { phase: "running", plan: PlanView, run: RunView } | { phase: "done", plan: PlanView, run: RunView }} OpState
@@ -91,7 +91,7 @@ export function planBlocked(card, values) {
 
 /** @param {any} r @returns {RefusalView} */
 function refusalView(r) {
-  return { exit: r && typeof r.exit === "number" ? r.exit : null, stderr: lines(r && r.stderr), stdout: lines(r && r.stdout) };
+  return { exit: r && typeof r.exit === "number" ? r.exit : null, stderr: lines(r && r.stderr), stdout: lines(r && r.stdout), dropped: r && typeof r.dropped === "number" ? r.dropped : 0 };
 }
 
 /** @param {any} p @returns {PlanView} */
@@ -100,6 +100,7 @@ function planView(p) {
     planId: String(p.planId), command: text(p.command), apply: text(p.apply),
     estimate: text(p.estimate), diff: text(p.diff),
     output: lines(p.output), notes: lines(p.notes),
+    outputDropped: typeof p.outputDropped === "number" ? p.outputDropped : 0,
     receiptKind: p.receipt && typeof p.receipt.kind === "string" ? p.receipt.kind : "",
     humanRun: p.humanRun === true,
   };
@@ -168,6 +169,7 @@ function runView(run) {
     state: String(run && run.state), done: run && run.state === "done",
     lines: (Array.isArray(run && run.lines) ? run.lines : []).map((/** @type {any} */ l) => ({ s: l && l.s === "err" ? "err" : "out", t: text(l && l.t) })),
     linesDropped: run && typeof run.linesDropped === "number" ? run.linesDropped : 0,
+    bytesDropped: run && typeof run.bytesDropped === "number" ? run.bytesDropped : 0,
     ok: r !== null && r.ok === true,
     receipt,
     refusal: r && r.refusal ? refusalView(r.refusal) : null,
@@ -189,9 +191,11 @@ export function runSettled(st, run) {
 
 /**
  * An apply the door refused (no confirmation, an expired plan): the plan stays on the card with the refusal under it.
- * @param {OpState} st @param {any} err @returns {OpState}
+ * Only for the plan it was sent for -- a late refusal of an older plan must not land under a newer one.
+ * @param {OpState} st @param {any} err @param {string} planId  the plan the refused apply was for @returns {OpState}
  */
-export function applyFailed(st, err) {
+export function applyFailed(st, err, planId) {
+  if ("plan" in st && st.plan.planId !== planId) return st;
   if (!("plan" in st)) return callFailed(err);
   const r = refusalOf(err);
   return { phase: "planned", plan: st.plan, error: `${r.code}: ${r.human}` };
