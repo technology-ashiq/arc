@@ -44,7 +44,6 @@ const VALUE_FLAGS = ["--candidate", "--variants", "--fixtures", "--evidence", "-
 const REQUIRED = ["--candidate", "--variants", "--fixtures", "--evidence", "--correlation"];
 // The bundle is absorb's evidence: a path under the lane's own evidence tree, in plain segments.
 const EVIDENCE_RE = /^initiatives\/absorb\/evidence\/[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/;
-const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 class Stop extends Error {}
 function die(code, msg) { process.stderr.write(`trial: ${msg}\n`); process.exitCode = code; throw new Stop(); }
@@ -126,7 +125,7 @@ async function main() {
   // And no OPEN trial branch holds it either: two unmerged trials into one bundle conflict at merge, over a commitment
   // the owner is judging against (PR 3b round-2 logic attack).
   const open = await openProposalsHolding({ repo: REPO, prefix: "feat/face-absorb-trial-", path: target });
-  if (open.length) die(2, `the open trial branch ${open[0]} already holds ${target} -- merge or delete it first, or take a new --evidence path; nothing was sealed`);
+  if (open.length) die(2, heldBy(open[0], target));
   const refused = spineRefusal(ARC_EVENT, "approval.requested", draftApproval(a), { cwd: REPO });
   if (refused) die(2, `the approval this trial raises would be refused by the spine, so nothing is sealed: ${refused}`);
   const digest = planDigest({ branch, base, target, seal: sealArgs(a) });
@@ -145,9 +144,11 @@ async function main() {
   // and two trials into one bundle started together both passed and both raised approvals -- the branch names differ, so
   // git's own create could not catch it (PR 3b round-3 logic attack). The lock is named for the bundle, beside the spine.
   const lockName = `absorb-bundle-${createHash("sha256").update(a["--evidence"].toLowerCase()).digest("hex").slice(0, 16)}.lock`;
-  const held = await withExclusiveLock(join(spineRoot(), "locks"), lockName, async () => {
+  // In the spine the emit writes to -- REPO's, never the caller's cwd's: from another clone's cwd the lock sat in that
+  // clone's spine, and trials from two cwds did not serialise (PR 3b round-4 shell attack).
+  const held = await withExclusiveLock(join("ARC_SPINE_ROOT" in process.env ? spineRoot() : join(REPO, ".claude", "state", "hq"), "locks"), lockName, async () => {
     const openNow = await openProposalsHolding({ repo: REPO, prefix: "feat/face-absorb-trial-", path: target });
-    if (openNow.length) die(2, `the open trial branch ${openNow[0]} already holds ${target} -- merge or delete it first, or take a new --evidence path; nothing was sealed`);
+    if (openNow.length) die(2, heldBy(openNow[0], target));
     let scratch;
     try { scratch = mkdtempSync(join(tmpdir(), "arc-absorb-trial-")); }
     catch (e) { die(2, `no temp directory could be made (${e && e.code ? e.code : "error"}) -- nothing was sealed`); }
@@ -174,16 +175,28 @@ async function main() {
           message: `absorb: the sealed commitment for ${payload.candidate}, correlation ${a["--correlation"]}\n\nThe labels are blind until the decision; judgement.mjs reveal writes the mapping afterwards.\nWritten by the face's work door (ADR-1340).` });
       } catch (e) { die(1, `sealed (correlation ${a["--correlation"]} is now used), and the branch was not written: ${e && e.code ? e.code : ""} ${e instanceof Error ? e.message : e} -- trial again with a new correlation`); }
       process.stdout.write(`trial: sealed ${payload.labels ? payload.labels.length : "?"} blind labels for ${payload.candidate}; the commitment is on ${branch} at ${w.commit.slice(0, 12)}\n`);
-      // Through a payload FILE, as the spine was asked (PR 3b round-3 shell attack: a payload past the command line's ceiling failed after the effect).
-      const { id, why: emitWhy } = emitReceipt(ARC_EVENT, "approval.requested", payload, { cwd: REPO });
-      if (!id) die(1, `sealed, and the branch ${branch} IS written, and the approval was not raised -- ${emitWhy}`);
-      process.stdout.write(`receipt: approval.requested ${id}\n`);
+      // Three outcomes, never two: an unknown one (REJECT INTERNAL, a lost id line, a timeout) was read as "not raised",
+      // and the approval sat in the inbox while the tool said otherwise (PR 3b round-4 attacks).
+      const got = emitReceipt(ARC_EVENT, "approval.requested", payload, { cwd: REPO });
+      if (got.state === "refused") die(1, `sealed, and the branch ${branch} IS written, and its approval was not raised -- ${got.why}`);
+      if (got.state === "unknown") die(1, `sealed, and the branch ${branch} IS written, and whether its approval landed is unknown -- ${got.why}. Look in your inbox before applying again`);
+      if (!got.id) die(1, `sealed, and the branch ${branch} IS written, and its approval landed without its id -- ${got.why}`);
+      process.stdout.write(`receipt: approval.requested ${got.id}\n`);
     } finally {
       // Litter, never the outcome: a cleanup that throws must not turn a sealed, written trial into a failure.
       try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter */ }
     }
   });
-  if (held.busy) die(2, `another trial into ${a["--evidence"]} is being sealed right now -- nothing was sealed`);
+  if (held.busy) die(2, `another trial into ${a["--evidence"]} is being sealed right now -- nothing was sealed; a lock left by a killed trial clears after ten minutes`);
+}
+
+/**
+ * The refusal for a bundle an open trial branch already holds. The advice works for both kinds: a remote-tracking
+ * branch is named as git names it, and `git branch -D` answers "not found" for one (PR 3b round-4 logic attack).
+ * @param {string} name @param {string} target
+ */
+function heldBy(name, target) {
+  return `the open trial branch ${name} already holds ${target} -- merge it, or delete it (git branch -D for a local branch; git push <remote> --delete <branch>, then git fetch --prune, for a remote-tracking one), or take a new --evidence path; nothing was sealed`;
 }
 
 function isMainModule() {

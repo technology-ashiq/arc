@@ -345,8 +345,14 @@ await refuse("a path that needs main's file to be a directory", { branch: "feat/
   git(c, "update-ref", "refs/remotes/origin/feat/face-absorb-trial-two", w.commit);
   git(c, "branch", "-D", "feat/face-absorb-trial-one");
   const remote = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
-  check("openProposalsHolding matches a path in another case, and a remote-tracking branch after the local one is gone",
-    JSON.stringify(cased) === JSON.stringify(["feat/face-absorb-trial-one"]) && JSON.stringify(remote) === JSON.stringify(["feat/face-absorb-trial-two"]), `${JSON.stringify(cased)} ${JSON.stringify(remote)}`);
+  check("openProposalsHolding matches a path in another case, and a remote-tracking branch after the local one is gone (named as git names it)",
+    JSON.stringify(cased) === JSON.stringify(["feat/face-absorb-trial-one"]) && JSON.stringify(remote) === JSON.stringify(["origin/feat/face-absorb-trial-two"]), `${JSON.stringify(cased)} ${JSON.stringify(remote)}`);
+  // A remote whose NAME holds a slash (PR 3b round-4 logic attack: cut at the first one, its branches were never seen).
+  git(c, "remote", "add", "up/stream", c);
+  git(c, "update-ref", "refs/remotes/up/stream/feat/face-absorb-trial-three", w.commit);
+  const slashed = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
+  check("openProposalsHolding sees a branch under a remote whose name holds a slash",
+    JSON.stringify(slashed) === JSON.stringify(["origin/feat/face-absorb-trial-two", "up/stream/feat/face-absorb-trial-three"]), JSON.stringify(slashed));
 }
 
 // ---- beforeRef: the caller judges the real receipt, with its commit, before the ref exists; a throw writes no branch

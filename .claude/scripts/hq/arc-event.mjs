@@ -452,6 +452,8 @@ function main(parsed) {
     process.stderr.write("arc-event: WARN healed a torn tail in the day file before appending\n");
   if (!result.indexed)
     process.stderr.write("arc-event: WARN event is on the spine but the idem index was not updated -- replay will rebuild it\n");
+  if (result.unsynced)
+    process.stderr.write(`arc-event: WARN event is on the spine and the disk did not confirm the flush (${result.unsynced}) -- it is readable now; check the disk\n`);
   // SYNCHRONOUS, then the exit: the caller that spawned this parses exactly this line, and process.exit right after an
   // asynchronous pipe write can cut it (macOS pipes; PR 3a round-2 shell attack). A cut id reads as a receipt never raised.
   // The event IS on the spine by now: a reader that closed its end (EPIPE, EAGAIN) loses the id line, and that is not a

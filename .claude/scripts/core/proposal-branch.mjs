@@ -398,16 +398,32 @@ export function openProposalsHolding({ repo, prefix, path }) {
     // Local AND remote-tracking branches, matched without case: a branch pushed and then deleted locally, or a bundle
     // named RACE1 beside race1, was invisible to an exact, local-only look (PR 3b round-3 logic attack).
     const listed = (await git(repo, ["for-each-ref", "--format=%(refname)", "refs/heads/", "refs/remotes/"], { hooks })).out.split(/\r?\n/).filter(Boolean);
+    // A remote's NAME may hold a slash ("up/stream"): cutting at the first one missed every branch under it (PR 3b
+    // round-4 logic attack). The configured names, longest first, say where the branch begins.
+    const remotes = (await git(repo, ["remote"], { hooks })).out.split(/\r?\n/).filter(Boolean).sort((x, y) => y.length - x.length);
     const want = path.toLowerCase();
     /** @type {Set<string>} */
     const out = new Set();
     for (const ref of listed) {
-      const name = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref.replace(/^refs\/remotes\/[^/]+\//, "");
+      let name;
+      let shown;
+      if (ref.startsWith("refs/heads/")) { name = ref.slice("refs/heads/".length); shown = name; }
+      else {
+        const rest = ref.slice("refs/remotes/".length);
+        const remote = remotes.find((r) => rest.startsWith(`${r}/`));
+        // A tracking ref no configured remote names any more is still a branch someone pushed: it begins at the prefix.
+        const at = remote ? remote.length + 1 : rest.toLowerCase().indexOf(prefix);
+        if (at < 0) continue;
+        name = rest.slice(at);
+        // Named as git names it -- "<remote>/<branch>" -- so the advice to delete it can be followed as written: a bare
+        // branch name sent the owner to `git branch -D`, which answered "not found" (PR 3b round-4 logic attack).
+        shown = rest;
+      }
       if (!name.toLowerCase().startsWith(prefix)) continue;
       // The whole tree's names, compared without case: a pathspec is matched exactly. A failure here is git's own error,
       // never read as "not held".
       const names = (await git(repo, ["ls-tree", "-r", "--name-only", "-z", ref], { hooks })).out.split("\u0000");
-      if (names.some((n) => n.toLowerCase() === want)) out.add(name);
+      if (names.some((n) => n.toLowerCase() === want)) out.add(shown);
     }
     return [...out].sort();
   });

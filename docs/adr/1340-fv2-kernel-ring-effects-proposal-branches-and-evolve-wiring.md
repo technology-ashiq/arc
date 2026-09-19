@@ -301,3 +301,15 @@ change decisions above:
   it. A path that is a symlink or a gitlink on main is refused, and so is a relative temp directory.
 - **Bench `--propose --from` serialises its applies** per store (a `wx` lock), writes `approval.pending` before it
   emits, and reads each evidence file once. It refuses a champion whose content or subject is the candidate's.
+
+## Amendment, PR 3b round 4 (same day)
+
+A narrow pair attacked the round-3 diff: 6 logic and 7 shell findings, three shared. All are fixed and pinned. Two
+change decisions above:
+- **An emit has three outcomes, not two.** Landed is exit 0 (arc-event's own contract, whether or not the id line
+  survived); refused is an emitter that never started or exit 2 naming a refusal that stops before the append; everything
+  else is unknown, and unknown never removes a mark or reports "not raised". The spine's writer treats a flush that fails
+  after the line is written as a warning, so INTERNAL no longer means "maybe" for that case at all.
+- **One exclusive lock, and its break is serialised.** `withExclusiveLock` and its synchronous twin are the face tools'
+  one refuse-if-busy lock beside `spine-io.withLock`; a stale lock is broken under a breaker file, only if it is still the file
+  that was judged stale.

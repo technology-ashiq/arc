@@ -434,10 +434,10 @@ export function repoStatus(root) {
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, mkdirSync, openSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { mkdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLockSync } from "../core/plan-expect.mjs";
 
 import { parseBudget } from "./drivers/common.mjs";
 
@@ -2253,26 +2253,18 @@ const SECRET_SHAPES = Object.freeze([
 
 /** `approval.requested`, first-party and strict, then LOOKED FOR in both places (ADR-0031/0032). */
 export function emitApprovalRequested(root, payload) {
-  const tmp = mkdtempSync(join(tmpdir(), "arc-bench-appr-"));
-  try {
-    const f = join(tmp, "payload.json");
-    writeFileSync(f, JSON.stringify(payload), "utf8");
-    const res = spawnSync("bash", [
-      join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "approval.requested",
-      "--payload-file", f, "--process", BENCH_ID, "--strict",
-    ], { encoding: "utf8", cwd: root, timeout: 30000, killSignal: "SIGKILL" });
-    // The id is the LAST stdout line, in ULID form. Exit 2 is the emitter's refusal -- nothing landed. Anything else (a
-    // zero exit with no id, a killed spawn, a lookup that threw) is UNKNOWN: the approval may be on the spine, and the
-    // caller must not treat it as not raised (PR 3b round-3 logic attack: two approvals from one plan).
-    const id = String(res.stdout || "").trim().split(/\r?\n/).pop() || "";
-    const why = String(res.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${res.status}`;
-    if (res.status === 2) return { id: null, landed: false, refused: true, why };
-    if (res.status !== 0 || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id)) return { id: null, landed: false, unknown: true, why: `the emitter's answer was not a receipt id (exit ${res.status}) -- ${why}` };
-    try { return { id, why: null, ...findReceipt(root, id) }; }
-    catch (e) { return { id, landed: false, unknown: true, why: `the receipt ${id} could not be looked for (${e && e.code ? e.code : "error"})` }; }
-  } finally {
-    try { rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter, never the outcome (PR 3b) */ }
-  }
+  // Through the ONE emit path the judgment used (core/plan-expect.mjs): node and a resolved payload file. The judgment ran
+  // node and the emit ran bash, so with no bash on PATH the plan passed and every apply was "unknown", and a relative TMP
+  // named a payload the emitter could not find (PR 3b round-4 attacks). Three outcomes: exit 2 naming a refusal is
+  // "nothing landed"; REJECT INTERNAL, a lost id line, a timeout and a lookup that threw are UNKNOWN -- the approval may
+  // be on the spine, and the caller must not treat it as not raised (PR 3b rounds 3 and 4: two approvals from one plan).
+  const got = emitReceipt(join(root, ".claude", "scripts", "hq", "arc-event.mjs"), "approval.requested", payload,
+    { cwd: root, flags: ["--process", BENCH_ID], timeoutMs: 30000 });
+  if (got.state === "refused") return { id: null, landed: false, refused: true, why: got.why };
+  if (got.state === "unknown") return { id: null, landed: false, unknown: true, why: got.why };
+  if (!got.id) return { id: null, landed: false, unknown: true, why: got.why };
+  try { return { id: got.id, why: null, ...findReceipt(root, got.id) }; }
+  catch (e) { return { id: got.id, landed: false, unknown: true, why: `the receipt ${got.id} could not be looked for (${e && e.code ? e.code : "error"})` }; }
 }
 
 // =============================================================================================
@@ -2637,8 +2629,19 @@ function main() {
     catch (e) { return stopFrom(`--from ${shown(args.from)} does not hold a readable scorecard and provenance: ${e.message}`); }
     try { champion = { scorecard: JSON.parse(bytes["champ.scorecard"].toString("utf8")), provenance: JSON.parse(bytes["champ.provenance"].toString("utf8")) }; }
     catch (e) { return stopFrom(`--champion ${shown(args.champion)} does not hold a readable scorecard and provenance: ${e.message}`); }
-    if (!report.scorecard || !Array.isArray(report.scorecard.classes) || !report.provenance || !report.provenance.subject)
-      return stopFrom(`--from ${shown(args.from)} is not a bench run's output (no classes, or no subject)`);
+    // The shape reaches every field the comparison READS: one level deep, a class row of null and a scorecard with no
+    // revision map were stacks at exit 1 -- PARTIAL for a dry run that wrote nothing (PR 3b round-4 logic attack).
+    const shapeOf = (r) => {
+      const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+      if (!isObj(r.scorecard) || !Array.isArray(r.scorecard.classes)) return "no classes";
+      if (r.scorecard.classes.some((c) => !isObj(c) || typeof c.task_class !== "string" || c.task_class === "")) return "a class row that is not an object naming its task class";
+      if (!isObj(r.scorecard.eval_pack_revisions)) return "no eval_pack_revisions map";
+      if (!isObj(r.provenance) || !isObj(r.provenance.subject) || typeof r.provenance.subject.driver !== "string") return "no subject naming its driver";
+      if (r.provenance.metrics !== undefined && r.provenance.metrics !== null && !isObj(r.provenance.metrics)) return "metrics that are not a map";
+      return null;
+    };
+    const candShape = shapeOf(report);
+    if (candShape) return stopFrom(`--from ${shown(args.from)} is not a bench run's output (${candShape})`);
     const sha = (buf) => createHash("sha256").update(buf).digest("hex");
     const evidenceShas = ["scorecard", "provenance"].flatMap((n) => [sha(bytes[`cand.${n}`]), sha(bytes[`champ.${n}`])]);
     const evidence = () => evidenceShas;
@@ -2647,8 +2650,8 @@ function main() {
     // attacks, rounds 1 and 2). A switch needs a champion that ran something else.
     if (canonicalHash(report.scorecard) === canonicalHash(champion.scorecard) && canonicalHash(report.provenance) === canonicalHash(champion.provenance))
       return stopFrom(`--from and --champion must be different runs -- ${shown(args.champion)} holds the candidate's own scorecard and provenance; a candidate compared with itself proves nothing`);
-    if (!champion.scorecard || !Array.isArray(champion.scorecard.classes) || !champion.provenance || !champion.provenance.subject)
-      return stopFrom(`--champion ${shown(args.champion)} is not a bench run's output (no classes, or no subject)`);
+    const champShape = shapeOf(champion);
+    if (champShape) return stopFrom(`--champion ${shown(args.champion)} is not a bench run's output (${champShape})`);
     // A class twice is one question asked twice: the approval named it twice beside one diff (PR 3b round-3 attack).
     for (const [who, sc] of [["--from", report.scorecard], ["--champion", champion.scorecard]]) {
       const names = sc.classes.map((c) => c && c.task_class);
@@ -2656,16 +2659,20 @@ function main() {
     }
     // The SUBJECT is who ran: the driver, its version, the model. The bookkeeping fields beside them (the ceilings'
     // date, the router's sha) changed and made a re-run of the same driver "a different subject" (PR 3b round-3 attack).
-    const identity = (p) => ({ driver: p.subject.driver ?? null, driver_version: p.subject.driver_version ?? null, model: (p.fingerprint && (p.fingerprint.model_id ?? p.fingerprint.model_requested)) ?? null });
+    // The model is the one APPLIED, never the one requested: two mock runs asked for different models, applied none, and
+    // proposed mock over mock on a tie (PR 3b round-4 logic attack).
+    const identity = (p) => ({ driver: p.subject.driver ?? null, driver_version: p.subject.driver_version ?? null, model: p.model_applied ?? (p.fingerprint && p.fingerprint.model_id) ?? null });
     if (canonicalHash(identity(report.provenance)) === canonicalHash(identity(champion.provenance)))
       return stopFrom(`--from and --champion must be different runs of different subjects -- both ran ${report.provenance.subject.driver}${report.provenance.subject.driver_version ? ` (${report.provenance.subject.driver_version})` : ""} against the same router; there is no switch to propose`);
-    const champKey = canonicalHash({ scorecard: champion.scorecard, provenance: champion.provenance });
+    // Both halves of the key from the SAME identity the check above uses: a key that hashed the subject and left the
+    // model out refused a second model's run as "this exact candidate" (PR 3b round-4 logic attack).
+    const champKey = canonicalHash({ identity: identity(champion.provenance), scorecard: champion.scorecard });
     // ONE QUESTION, ONE APPROVAL: keyed on the candidate AND the champion, and marked only once an approval LANDED. The
     // key was the candidate alone and the mark was the artifacts, so an apply against the wrong champion raised nothing
     // and then blocked the right one forever (PR 3b logic attack). The store is INSIDE the spine's own root: two levels up
     // put it in a repository's working tree when the spine sat at its top (PR 3b logic attack).
     // The key carries the candidate's whole subject: a driver name sanitised alone let "a.b" and "a-b" share a store.
-    const key = `${String(report.provenance.subject.driver || "candidate").replace(/[^abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-]/g, "-")}-${canonicalHash({ subject: report.provenance.subject, scorecard: report.scorecard }).slice(0, 12)}-vs-${champKey.slice(0, 12)}`;
+    const key = `${String(report.provenance.subject.driver || "candidate").replace(/[^abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-]/g, "-")}-${canonicalHash({ identity: identity(report.provenance), scorecard: report.scorecard }).slice(0, 12)}-vs-${champKey.slice(0, 12)}`;
     let store;
     try { store = join(dirname(spinePaths(root).events), "bench", "proposals", key); }
     catch (e) { return stopFrom(e.message); }
@@ -2717,28 +2724,14 @@ function main() {
     // (PR 3b round-2 shell attack). An exclusive lock file in the store, taken before the re-check; a lock older than
     // fifteen minutes is a crashed apply's (this path runs nothing and spends nothing, so no live one takes that long).
     try { mkdirSync(store, { recursive: true }); } catch (e) { return stopFrom(`the proposal store could not be made (${e && e.code ? e.code : "error"}) -- nothing was written`); }
-    const lockPath = join(store, ".apply.lock");
-    // A TOKEN in the lock, and a release that removes only its own: a lock broken as stale while its holder lived was
-    // then deleted by that holder, and EPERM (Windows delete-pending) was thrown rather than read as contention (PR 3b
-    // round-3 shell attack; the rules spine-io.withLock already keeps).
-    const lockToken = `${process.pid}:${createHash("sha256").update(String(Math.random()) + String(Date.now())).digest("hex").slice(0, 16)}`;
-    const takeLock = () => {
-      let fd;
-      try { fd = openSync(lockPath, "wx"); }
-      catch (e) { if (e && ["EEXIST", "EPERM", "EACCES", "EISDIR"].includes(e.code)) return false; throw e; }
-      try { writeSync(fd, lockToken); } finally { closeSync(fd); }
-      return true;
-    };
-    let locked = false;
-    try { locked = takeLock(); } catch (e) { return stopFrom(`the proposal store's lock could not be taken (${e && e.code ? e.code : "error"}) -- nothing was written`); }
-    if (!locked) {
-      let age = 0;
-      try { age = Date.now() - statSync(lockPath).mtimeMs; } catch { /* released meanwhile */ }
-      if (age > 15 * 60_000) { try { unlinkSync(lockPath); } catch { /* another breaker */ } try { locked = takeLock(); } catch { locked = false; } }
-    }
-    if (!locked) return stopFrom(`another apply of this proposal is running -- nothing was written; wait for it, then read the inbox`);
-    const release = () => { try { if (readFileSync(lockPath, "utf8") === lockToken) unlinkSync(lockPath); } catch { /* released, or not ours */ } };
+    // The SHARED lock (core/plan-expect.mjs), not a second hand-rolled copy: this one broke a stale lock in three steps,
+    // and two applies behind a crashed one both took it (PR 3b round-4 shell attack). Fifteen minutes: this path runs
+    // nothing and spends nothing, so no live apply takes that long, and nothing refreshes a synchronous holder's lock.
+    let held;
+    let entered = false;
     try {
+      held = withExclusiveLockSync(store, ".apply.lock", () => {
+      entered = true;
       // Re-checked INSIDE the lock: the apply that held it may have raised the approval.
       if (existsSync(raisedMark)) return stopFrom(`a proposal from this exact candidate against this champion was raised a moment ago at ${shown(store)} -- proposing it twice would raise two approvals for one question`);
       if (existsSync(pendingMark)) return stopFrom(`an earlier apply of this proposal may have raised its approval -- look in your inbox; if it is not there, delete ${shown(pendingMark)} and apply again`);
@@ -2780,7 +2773,14 @@ function main() {
       }
       process.exitCode = EXIT.OK;
       return;
-    } finally { release(); }
+      }, { staleMs: 15 * 60_000 });
+    } catch (e) {
+      // Only the TAKE is reported as the lock's: a fault inside the apply is the apply's own, and keeps its own path.
+      if (entered) throw e;
+      return stopFrom(`the proposal store's lock could not be taken -- ${e && e.message ? e.message : "error"}; nothing was written`);
+    }
+    if (held.busy) return stopFrom(`another apply of this proposal is running -- nothing was written; wait for it, then read the inbox`);
+    return;
   }
 
   // ---- replay: pure re-scoring, no driver, no receipt ----

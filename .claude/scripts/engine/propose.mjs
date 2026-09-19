@@ -21,7 +21,6 @@
 // written.
 
 import { readdirSync, realpathSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "./yaml-subset.mjs";
@@ -35,7 +34,6 @@ const REPO = resolve(HERE, "..", "..", "..");
 const ROUTER = "engine/router.yaml";
 const ARC_EVENT = join(REPO, ".claude", "scripts", "hq", "arc-event.mjs");
 const SLUG_RE = /^[a-z][a-z0-9-]{0,40}$/;
-const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 function die(code, msg) { process.stderr.write(`propose: ${msg}\n`); process.exitCode = code; throw new Stop(); }
 class Stop extends Error {}
@@ -145,7 +143,7 @@ async function main() {
   const files = [{ path: ROUTER, content: proposed }];
   const approval = (commit) => approvalPayload({ verb: args.verb, cls: args.class, from, to: args.to, why: args.why, branch, base, commit });
   // The approval is judged with a placeholder commit of the real one's shape, in the plan AND before the write.
-  const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)));
+  const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)), { cwd: REPO });
   if (refused) die(2, `the approval this proposal raises would be refused by the spine, so nothing is written: ${refused}`);
   const { what } = approval("");
   const message = `engine: ${what} (a proposal, ADR-0069${args.verb === "driver" ? "" : " tier change"})\n\n${args.why ? `${args.why}\n\n` : ""}Written by the face's work door (ADR-1340). Nothing routes differently until a human merges this branch.`;
@@ -171,14 +169,19 @@ async function main() {
   // The REAL approval, its commit included, is judged once the commit exists and before the branch does: the plan judged
   // a zero commit, and a real one can sort beside a string into a key the spine refuses (PR 3b attacks).
   const w = await writeProposal({ repo: REPO, branch, files, allow: [ROUTER], message, base,
-    beforeRef: (commit) => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval(commit)); if (no) die(2, `the spine would refuse this approval with its real commit, so no branch was written: ${no}`); } });
+    beforeRef: (commit) => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval(commit), { cwd: REPO }); if (no) die(2, `the spine would refuse this approval with its real commit, so no branch was written: ${no}`); } });
   written = true;
   process.stdout.write(`propose: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}\n`);
   process.stdout.write(w.diff.endsWith("\n") ? w.diff : w.diff + "\n");
-  // Through a payload FILE, as the spine was asked (PR 3b round-3 shell attack: a payload past the command line's ceiling failed after the effect).
-  const { id, why: emitWhy } = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit));
-  if (!id) die(1, `the branch ${branch} IS written, and its approval was not raised -- ${emitWhy}`);
-  process.stdout.write(`receipt: approval.requested ${id}\n`);
+  // From REPO, as pin and trial emit: from another clone's cwd the approval landed in THAT clone's spine while the branch
+  // went to this one (PR 3b round-4 shell attack).
+  // Three outcomes, never two: an unknown one (REJECT INTERNAL, a lost id line, a timeout) was read as "not raised",
+  // and the approval sat in the inbox while the tool said otherwise (PR 3b round-4 attacks).
+  const got = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit), { cwd: REPO });
+  if (got.state === "refused") die(1, `the branch ${branch} IS written, and its approval was not raised -- ${got.why}`);
+  if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its approval landed is unknown -- ${got.why}. Look in your inbox before applying again`);
+  if (!got.id) die(1, `the branch ${branch} IS written, and its approval landed without its id -- ${got.why}`);
+  process.stdout.write(`receipt: approval.requested ${got.id}\n`);
 }
 
 // Run only as the CLI: importing this file for editRouter must not parse the importer's argv. Both sides realpathed --

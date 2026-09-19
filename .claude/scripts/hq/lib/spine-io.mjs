@@ -266,13 +266,24 @@ function appendLine(file, line) {
   } catch { /* no file yet, or unreadable -- the append below surfaces the real error */ }
 
   const fd = openSync(file, "a");
+  // Past the write the line IS in the file and every reader sees it. A flush or close that fails after it (EIO on a
+  // network share, a failing disk) is a durability warning, never a refusal: refused, the event was quarantined while it
+  // sat on the spine, and its caller raised the same approval again (PR 3b round-4 logic attack). The index rule, one
+  // call earlier.
+  let wrote = false;
+  let unsynced = null;
   try {
     writeSync(fd, Buffer.from(prefix + line, "utf8"));
+    wrote = true;
     fsyncSync(fd);
+  } catch (e) {
+    if (!wrote) throw e;
+    unsynced = (e && e.code) || "error";
   } finally {
-    closeSync(fd);
+    // A failed close after a failed write must not replace the write's own error, which is the one that matters.
+    try { closeSync(fd); } catch (e) { if (wrote && unsynced === null) unsynced = (e && e.code) || "error"; }
   }
-  return prefix !== "";
+  return { healed: prefix !== "", unsynced };
 }
 
 export function isDayClosed(root, day) {
@@ -329,7 +340,7 @@ export function appendEventUnlocked(root, event, canonicalLine) {
   // because truth is the JSONL and replay rebuilds the index from it. The reverse order
   // would leave an index entry with no event, and a legitimate retry would be refused as a
   // duplicate forever: a silently LOST receipt. Prefer a duplicate you can supersede.
-  const healed = appendLine(dayFile(root, day), canonicalLine + "\n");
+  const { healed, unsynced } = appendLine(dayFile(root, day), canonicalLine + "\n");
 
   // Past this point the receipt EXISTS. An index failure is a derived-state problem, and
   // reporting failure here would be a lie that makes the caller retry and duplicate it.
@@ -340,7 +351,7 @@ export function appendEventUnlocked(root, event, canonicalLine) {
   } catch {
     indexed = false;
   }
-  return { day, file: dayFile(root, day), healed, indexed };
+  return { day, file: dayFile(root, day), healed, indexed, unsynced };
 }
 
 /**
