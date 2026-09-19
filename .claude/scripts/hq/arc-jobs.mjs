@@ -26,7 +26,7 @@
  * Zero dependencies, Node 18+.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,7 +63,7 @@ const command = argv[0];
 // at the second, and `audit --to 2026-08-09` read as a stray positional the moment anything did.
 // Naming them is also what lets an unknown flag be caught instead of ignored.
 const VALUE_FLAGS = new Set(["next", "date", "slot", "from", "to"]);
-const BOOL_FLAGS = new Set(["scheduled", "json", "partial", "help"]);
+const BOOL_FLAGS = new Set(["scheduled", "json", "partial", "help", "dry-run", "receipt"]);
 
 const positional = (() => {
   const out = [];
@@ -101,6 +101,50 @@ const flag = (name) => {
 const has = (name) => argv.includes(`--${name}`);
 
 const die = (code, msg) => { process.stderr.write(`arc-jobs: ${msg}\n`); process.exit(code); };
+
+// EVERY --flag IS ONE THIS FILE NAMES, or the command does not run. The sets above were declared "so an unknown flag
+// can be caught" and nothing caught it: `register day-close-roll --dry-run` ran a REAL registration, because an
+// ignored safety flag reads exactly like an honoured one (face v2 Phase 05 kernel ring, the develop.mjs hazard the
+// CLI probe named). A boolean flag takes no `=value` either -- `--dry-run=0` must not mean anything at all.
+for (const a of argv.slice(1)) {
+  if (!a.startsWith("--")) continue;
+  const name = a.slice(2).split("=")[0];
+  if (!VALUE_FLAGS.has(name) && !BOOL_FLAGS.has(name)) die(2, `unknown flag ${a} -- known: ${[...VALUE_FLAGS, ...BOOL_FLAGS].map((f) => "--" + f).join(" ")}`);
+  if (BOOL_FLAGS.has(name) && a.includes("=")) die(2, `--${name} takes no value; write it bare, not ${a}`);
+}
+// Checked before ANY command runs: `unregister x --dry-run` would otherwise remove the task for real.
+if (command !== "register" && (has("dry-run") || has("receipt")))
+  die(2, "--dry-run and --receipt belong to register -- the other commands write their own receipts or none");
+// A DASH IS A DASH IN ANY SPELLING. The check above reads only "--"-prefixed words, so `register x -dry-run`, an em
+// dash, or a Unicode minus passed as a stray positional, and register ignores stray positionals: a real registration
+// with the safety flag silently dropped (PR 3a attacks, both). Any word that opens with a dash-like character and is
+// not a whole --flag is refused.
+for (const a of argv.slice(1)) {
+  if (/^[-\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/.test(a) && !/^--[a-z]/.test(a))
+    die(2, `${JSON.stringify(a)} looks like a flag and is not one -- flags are spelled --name with two ASCII hyphens`);
+}
+// Each command's OWN flags. A flag another command takes is refused here too: `register --slot day-close-roll` let
+// --slot swallow the job's name, and register fell back to every enabled job (PR 3a shell attack).
+const COMMAND_FLAGS = Object.freeze({
+  list: ["next"], panel: ["date"], run: ["slot", "scheduled"], catchup: [],
+  register: ["dry-run", "receipt"], unregister: [], audit: ["from", "to", "json", "partial"],
+});
+if (Object.hasOwn(COMMAND_FLAGS, command)) {
+  for (const a of argv.slice(1)) {
+    if (!a.startsWith("--")) continue;
+    const name = a.slice(2).split("=")[0];
+    if (name !== "help" && !COMMAND_FLAGS[command].includes(name))
+      die(2, `--${name} is not a flag ${command} takes (it takes: ${COMMAND_FLAGS[command].map((f) => "--" + f).join(" ") || "none"})`);
+  }
+}
+// register and unregister act on ONE named job, or on the enabled set when none is named -- never on the first of
+// several words. `register day-close-roll dry-run` registered day-close-roll for real.
+if ((command === "register" || command === "unregister" || command === "run") && positional.length > 1)
+  die(2, `${command} takes one job name; got ${positional.map((p) => JSON.stringify(p)).join(", ")}`);
+// An EMPTY name is not "no name": `register ""` read `positional[0] || null` as absent and acted on every enabled job
+// (PR 3a round-2 logic attack) -- the empty-value-read-as-absent pattern, in the one argument that picks the target.
+if ((command === "register" || command === "unregister" || command === "run") && positional.some((p) => p.trim() === ""))
+  die(2, `${command} was given an empty job name -- name the job, or leave the argument out to mean every enabled job`);
 
 if (!command || command === "help" || has("help")) {
   process.stdout.write(
@@ -323,6 +367,15 @@ if (command === "unregister") {
 }
 
 if (command === "register") {
+  // --dry-run: every check a registration makes -- the schedule's legality, the job enabled, the policy gate, the
+  // platform, the registration built -- and then NOTHING is handed to the OS. --receipt: after a registration the
+  // OS read back, a note.logged records it, and its id is printed (face v2 Phase 05, ADR-1339: the face's work door
+  // plans with the first and applies with the second). Each names ONE job: a plan for "all enabled" is a plan for a
+  // set the owner did not read.
+  const dryRun = has("dry-run");
+  const wantsReceipt = has("receipt");
+  if (dryRun && wantsReceipt) die(2, "--dry-run writes nothing, so it has no receipt -- pick one");
+  if ((dryRun || wantsReceipt) && !positional[0]) die(2, "--dry-run and --receipt name one job: register <name> --dry-run");
   const { doc } = loadSchedule();
   const only = positional[0] || null;
   const targets = (doc.jobs || []).filter((j) => (only ? j.name === only : j.enabled));
@@ -354,13 +407,29 @@ if (command === "register") {
   const os = osScheduler();
   const nodePath = process.execPath;
   const logDir = join(spineRoot(), "job-logs");
+  if (dryRun) {
+    // Built by the SAME registrationFor the real path uses, so the plan is the registration, not a description of it.
+    let plan = "";
+    for (const job of targets) {
+      let reg;
+      try { reg = registrationFor(job, { repoRoot: root, nodePath, logDir }); }
+      catch (e) { if (e instanceof SchedulerError) die(2, `${job.name}: [${e.code}] ${e.message}`); throw e; }
+      plan += `arc-jobs: would register ${reg.name}  ${reg.trigger}  cwd ${reg.cwd}\n`;
+    }
+    plan += `arc-jobs: ${logonNote()}\n`;
+    plan += "arc-jobs: dry run -- nothing was handed to the OS\n";
+    // One synchronous write, THEN the exit: process.exit right after an asynchronous pipe write can cut the plan the
+    // door is reading (the fixed-defects row the PR 3a attackers carried; pipes are asynchronous on macOS).
+    writeSync(1, plan);
+    process.exit(0);
+  }
   for (const job of targets) {
     // Register, read the whole registration back OFF THE OS, and unregister again if any part of
     // it disagrees -- all inside `registerVerified`, so the CLI and the contract fixture exercise
     // one function rather than two hopefully-identical copies of the same care.
-    let back;
+    let back, reg;
     try {
-      const reg = registrationFor(job, { repoRoot: root, nodePath, logDir });
+      reg = registrationFor(job, { repoRoot: root, nodePath, logDir });
       back = registerVerified(os, reg.name, reg);
       process.stdout.write(
         `arc-jobs: registered ${reg.name}  ${reg.trigger}  lastTaskResult=${back.lastTaskResult}  cwd ${back.cwd}\n`,
@@ -373,6 +442,18 @@ if (command === "register") {
       if (e instanceof SchedulerError)
         die(2, `${job.name}: [${e.code}] ${e.message}${e.rolledBack === false ? " -- AND THE ROLLBACK ALSO FAILED, so remove it by hand" : ""}`);
       throw e;
+    }
+    if (wantsReceipt) {
+      // A failure here IS the command's failure: the receipt is what was asked for. The task stays registered (the OS
+      // read it back); the refusal says so, so nobody registers it twice to get a receipt.
+      const payload = { note: "scheduler.register", job: job.name, trigger: reg.trigger, logon: PINNED_SETTINGS.LogonType };
+      const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "note.logged", "--payload", JSON.stringify(payload), "--strict"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      const id = String(r.stdout || "").trim();
+      if (r.status !== 0 || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id))
+        die(1, `${job.name} IS registered, and its receipt was not written -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
+      // Synchronous, like the dry run's plan: this is the line the door attributes the receipt by, and process.exit
+      // follows below.
+      writeSync(1, `receipt: note.logged ${id}\n`);
     }
   }
   process.stdout.write(`arc-jobs: ${logonNote()}\n`);

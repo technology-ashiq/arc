@@ -4,9 +4,9 @@
 // The port of v0.7's ModelPolicy onto the door. What is real: the model-policy lane's header, the router
 // file's path and hash, and -- through /api/model-policy (Phase 04) -- the tier table and the process routes,
 // parsed from that file by the engine lane's own reader. What is still NOT SERVED: the egress allowlist, which
-// only the egress proxy parses, in Python, so no parser exists for the door to import. Proposing a tier is a
-// verb of the work door (Phase 05); until then the room says so instead of drawing a button that writes nothing.
-import { notServed, verbPending } from "../../../lib/registry.mjs";
+// only the egress proxy parses, in Python, so no parser exists for the door to import. Proposing a tier is the
+// work door's model-policy.tier-proposal (face v2 Phase 05 kernel ring, ADR-1340): the room's ops dock draws it.
+import { notServed } from "../../../lib/registry.mjs";
 import { asArray, asObject, cell, field, servedRead, servedTable } from "../../../lib/served.mjs";
 import { holdsCount, laneBadge, laneKpi, laneRoom, roomLink } from "../../../lib/lane-room.mjs";
 
@@ -18,7 +18,6 @@ import { holdsCount, laneBadge, laneKpi, laneRoom, roomLink } from "../../../lib
  *   kpis: { key: string, v: string, l: string, sub: string }[],
  *   tiers: import("../../../lib/served.mjs").ServedTable,
  *   routesTable: import("../../../lib/served.mjs").ServedTable,
- *   propose: { isVerbPending: true, verb: string, sentence: string },
  *   egress: import("../../../lib/registry.mjs").NotServed,
  *   bench: { canOpen: boolean, room: string },
  * }} Folded
@@ -77,10 +76,6 @@ export function fold(payloads, ctx) {
     ],
     tiers: tiersTable,
     routesTable: processRoutes,
-    propose: verbPending(
-      "Propose a tier change",
-      "A tier change is a reviewed diff to the router file citing ADR-0069, raised to your inbox for a stamp; the route keeps its tier until you stamp. The face raises it once the work door exists.",
-    ),
     egress: notServed(
       "Egress allowlist",
       "/api/model-policy",

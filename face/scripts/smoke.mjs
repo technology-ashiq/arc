@@ -768,7 +768,8 @@ export function collectErrors(page, errors, current) {
     errors.push({ room: current.room, type: `console.${p.type}`, text });
   });
   page.on("Log.entryAdded", (p) => {
-    if (p.entry?.level === "error") errors.push({ room: current.room, type: "log", text: String(p.entry.text ?? "").slice(0, 300) });
+    // The resource's url rides along: a flow that EXPECTS one refused request can drop exactly that entry and no other.
+    if (p.entry?.level === "error") errors.push({ room: current.room, type: "log", text: String(p.entry.text ?? "").slice(0, 300), url: String(p.entry.url ?? "").slice(0, 300) });
   });
 }
 

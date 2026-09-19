@@ -5,9 +5,9 @@
 // receipts the registry homes here, counted by kind, and -- through /api/evolve (Phase 04) -- the experiments
 // themselves, folded from their receipts by the evolve lane's own board (each surface, its arms counted over
 // complete windows, its verdict), and every manifest's declared evolve section, judged by the lint that owns it.
-// A hypothesis is not drawn: the experiment.opened grammar carries none. Opening, measuring and concluding are
-// work-door verbs (Phase 05). The reference's batches were simulated; none is drawn here, simulated or otherwise.
-import { verbPending } from "../../../lib/registry.mjs";
+// A hypothesis is not drawn: the experiment.opened grammar carries none. Opening, measuring and concluding are the
+// room's ops (face v2 Phase 05 kernel ring, ADR-1340): the ops dock draws them. The reference's batches were
+// simulated; none is drawn here, simulated or otherwise.
 import { asArray, asObject, cell, field, servedRead, servedTable } from "../../../lib/served.mjs";
 import { countedOn, kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib/lane-room.mjs";
 
@@ -18,7 +18,6 @@ import { countedOn, kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib
  *   badge: string,
  *   kpis: { key: string, v: string, l: string, sub: string }[],
  *   experiments: import("../../../lib/served.mjs").ServedTable,
- *   openVerb: { isVerbPending: true, verb: string, sentence: string },
  *   contract: import("../../../lib/served.mjs").ServedTable,
  * }} Folded
  */
@@ -82,10 +81,6 @@ export function fold(payloads, ctx) {
         "a hypothesis is not drawn: the experiment.opened grammar does not carry one",
       ].filter((n) => n !== "").join(" · "),
     }),
-    openVerb: verbPending(
-      "Open an experiment",
-      "One declared surface, one metric, one hypothesis, written before the first batch. Opening, measuring and concluding arrive with the work door.",
-    ),
     contract: servedTable(st, {
       panel: "Experiment contract",
       route: "/api/evolve",

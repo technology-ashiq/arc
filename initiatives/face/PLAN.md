@@ -202,6 +202,7 @@ flowchart TB
 | 1337 | `story` and `factory` earn a registry row; `executor` and `agents` stay labelled exemptions | accepted |
 | 1338 | Phase 04's residue is named and filed, not capped at three routes (amends REQ-06) | accepted |
 | 1339 | The flagship six are option A, and every verb in the design works — additive changes in owning lanes, live rooms (amends REQ-07, REQ-08; adds REQ-11) | accepted |
+| 1340 | FV2 kernel ring — an effect past the spine is refused on a sim door at apply (`SIM_EFFECT`); a file change is a `feat/face-*` proposal branch written by git plumbing, never a checkout; the cap proposal is the `policy.promotion` approval and writes no branch; evolve's open/measure/conclude wired to the spine | accepted |
 
 ## Standing decisions this cycle leans on
 

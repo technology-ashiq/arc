@@ -52,7 +52,40 @@ export function flowInputs(ctx) {
     "money.close-month": { month: ctx.closeMonth, totals: `razorpay:INR=${FLOW_PAYMENT_MINOR}` },
     "growth.publish": { slug: "flow-probe", article: join(ctx.tmp, "flow-probe.mdx"), cluster: "c-001", title: "A browser flow, sealed", pr: "9" },
     "bench.run-model": { driver: "mock", model: "mock", inr: "1", minutes: "5" },
+    // The kernel ring (ADR-1340).
+    "scheduler.register-job": { job: "day-close-roll" },
+    "engine-room.driver-switch": { class: "review-diff", to: "codex" },
+    "model-policy.tier-proposal": { class: "face-ask", to: "high-judgment" },
+    "policy.cap-proposal": { kind: "process:kickoff-plan", capability: "write", to: "L2", evidence: "docs/trial-ledger.md#browser-flow" },
+    "evolve.open-experiment": { experiment: "x-browser-flow", module: "core", surface: "hero", target: "app/home/hero.tsx", arms: "+champion,+challenger" },
+    "evolve.measure": { experiment: "x-browser-flow", unit: "u-1", metric: "signup_conversion", value: "1", count: "1", window: "2026-09-01..2026-09-07", source: "src-1" },
+    "evolve.conclude": { experiment: "x-browser-flow" },
   };
+}
+
+/**
+ * What each refusal flow's card must SHOW, BY NAME. "Any refusal" passed a sim door that RAN an effect op and failed
+ * later -- propose's exit 1 after a branch was written reads as a refusal too (PR 3a logic attack). An effect op (its
+ * apply writes a branch or registers a task) ends on the door's SIM_EFFECT, or on its tool's own plan-time refusal on a
+ * runner that cannot plan it at all: NO_BASE where a CI checkout has no main, the scheduler's non-Windows refusal. The
+ * evolve verbs refuse by name on a tree where no product declares an evolve section. Keyed by op id, never by the
+ * effect flags the flows exist to check (tests/face/live-pulse.mjs holds every effect op to a SIM_EFFECT entry here).
+ */
+export const REFUSALS = Object.freeze({
+  "scheduler.register-job": "SIM_EFFECT|registration targets Windows",
+  "engine-room.driver-switch": "SIM_EFFECT|NO_BASE",
+  "model-policy.tier-proposal": "SIM_EFFECT|NO_BASE",
+  "evolve.open-experiment": "NO_EVOLVE_SECTION",
+  "evolve.measure": "NOT_OPEN",
+  "evolve.conclude": "NOT_OPEN",
+});
+
+/**
+ * What a flow must end on: a receipt, or a refusal the card shows in the words REFUSALS names.
+ * @param {{ id: string }} op @returns {"receipt" | "refusal"}
+ */
+export function flowExpect(op) {
+  return Object.hasOwn(REFUSALS, op.id) ? "refusal" : "receipt";
 }
 
 const FLOW_PAYMENT_MINOR = 120000;
@@ -103,8 +136,19 @@ export function pageFlow(arg) {
     const button = (t) => Array.from(card.querySelectorAll("button")).find((x) => x.textContent.trim() === t);
     const plan = button(arg.frozen.plan);
     if (!plan) return { ok: false, step: "no button " + JSON.stringify(arg.frozen.plan) };
+    // A disabled Plan button is a form the flow did not fill: say so now, rather than wait out the page timeout.
+    if (plan.disabled) return { ok: false, step: "the Plan button is disabled -- a required field was not filled", text: card.innerText.slice(-300) };
     plan.click();
     const planned = await until(() => { const s = card.getAttribute("data-op-state"); return s !== "planning" && s !== "idle" ? s : null; }, arg.capMs);
+    // A refusal flow: the card must SHOW a refusal -- the tool's own, at plan, or the door's, at apply -- never a receipt.
+    const refusedText = () => { const r = card.querySelector("[data-op-refused]"); return r ? r.textContent.trim() : ""; };
+    // A refusal counts only when the card shows the one this op must end on, by name.
+    const named = (t) => new RegExp(arg.refusal).test(t);
+    if (arg.expect === "refusal" && (planned === "plan-refused" || planned === "error")) {
+      const t = refusedText();
+      if (!t) return { ok: false, step: "the plan was refused and the card shows no refusal", text: card.innerText.slice(-500) };
+      return named(t) ? { ok: true, refused: t.slice(0, 160) } : { ok: false, step: "the plan was refused, but not by the refusal this op must end on (" + arg.refusal + ")", text: t.slice(0, 300) };
+    }
     if (planned !== "planned") return { ok: false, step: "the plan ended " + String(planned), text: card.innerText.slice(-500) };
     if (arg.humanRun) {
       const tick = card.querySelector("[data-op-confirm]");
@@ -115,6 +159,14 @@ export function pageFlow(arg) {
     const run = button(arg.frozen.run);
     if (!run) return { ok: false, step: "no button " + JSON.stringify(arg.frozen.run) };
     run.click();
+    if (arg.expect === "refusal") {
+      const ended = await until(() => (refusedText() ? "refused" : card.querySelector("[data-op-receipt]") ? "receipt" : null), arg.capMs);
+      if (ended === "refused") {
+        const t = refusedText();
+        return named(t) ? { ok: true, refused: t.slice(0, 160), atApply: true } : { ok: false, step: "the apply was refused, but not by the refusal this op must end on (" + arg.refusal + ")", text: t.slice(0, 300) };
+      }
+      return { ok: false, step: ended === "receipt" ? "a sim door RAN an effect op and drew a receipt" : "the apply was neither refused nor ended", text: card.innerText.slice(-500) };
+    }
     const done = await until(() => card.getAttribute("data-op-state") === "done", arg.capMs);
     const rec = card.querySelector("[data-op-receipt]");
     return done && rec
@@ -189,10 +241,25 @@ export async function runFlows(opts, log = (line) => process.stdout.write(line +
         // what the page DRAWS, so it decodes with the face's own function (CI, PR 2 run 1: a placeholder with an apostrophe
         // arrived as &#39; and matched nothing).
         const fields = (Array.isArray(op.fields) ? op.fields : []).map((f) => ({ ...f, placeholder: unescapeDoorText(String(f.placeholder ?? "")) }));
-        const arg = { id: op.id, fields, input, humanRun: op.humanRun === true, frozen: FROZEN, capMs: 180000 };
+        const expect = flowExpect(op);
+        const arg = { id: op.id, fields, input, humanRun: op.humanRun === true, frozen: FROZEN, capMs: 180000, expect, refusal: REFUSALS[op.id] || "" };
+        const errorsBefore = errors.length;
         const r = await page.send("Runtime.evaluate", { expression: `(${pageFlow.toString()})(${JSON.stringify(arg)})`, awaitPromise: true, returnByValue: true });
         const res = r.result && r.result.value ? r.result.value : { ok: false, step: "the page returned nothing" };
         if (!res.ok) { failed.push(op.id); log(`flow: FAIL ${op.id} -- ${oneLine(redactSecrets(res.step + (res.text ? ` :: ${res.text}` : ""), [opts.token]))}`); continue; }
+        if (expect === "refusal") {
+          // A door refusal at apply is an HTTP 403, and Chrome logs every non-2xx response as a resource error. That ONE
+          // entry -- this op's own /apply, answered 403, when the card showed SIM_EFFECT -- is the flow's expected
+          // outcome, not a page error; anything else logged meanwhile still counts (Windows CI, PR 3a: the only leg where
+          // the scheduler op plans, so the only one that reached the apply).
+          if (res.atApply && /SIM_EFFECT/.test(String(res.refused))) {
+            const k = errors.findIndex((e, i) => i >= errorsBefore && e.type === "log" && /status of 403/.test(e.text) && String(e.url || "").endsWith(`/api/op/${op.id}/apply`));
+            if (k >= 0) errors.splice(k, 1);
+          }
+          ok++;
+          log(`flow: ok ${op.id} refused-as-shown=${oneLine(redactSecrets(String(res.refused), [opts.token])).slice(0, 100)} ms=${Date.now() - t0}`);
+          continue;
+        }
         // The assertion is the RECEIPT, read back through the door -- never what the card says about itself.
         const kind = op.receipt && op.receipt.kind;
         const landed = (await spineIds(kind)).has(res.receipt);

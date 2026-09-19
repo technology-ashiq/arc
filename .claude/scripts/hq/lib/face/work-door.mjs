@@ -4,8 +4,9 @@
 //
 //   plan(op, input)    validate the owner's fields against the face-ops row, run the row's PLAN argv (a dry run that
 //                      writes nothing), and hold the result under a one-shot plan id. The apply argv is fixed HERE,
-//                      at plan time -- from the row, or from the emit line the tool itself printed -- so what the
-//                      owner read on the plan card is exactly what the click runs.
+//                      at plan time -- from the row, from the emit line the tool itself printed, or from the row
+//                      plus the digest the plan printed (--expect: the tool re-checks and writes only what was
+//                      planned) -- so what the owner read on the plan card is exactly what the click runs.
 //   apply(planId)      claim the plan (synchronously -- two clicks, or two tabs, start ONE run), run the held apply
 //                      argv, and find the receipt the tool wrote by reading the spine, never by trusting an exit code.
 //                      A repeat of a claimed plan replays its run; it never runs twice.
@@ -16,14 +17,14 @@
 // the argv list with no shell between the door and the tool, in the door's own repo, with childEnv() (git's location
 // variables and preload hooks withheld). A tool's refusal comes back in its own words, scrubbed of machine paths.
 
-import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { join, sep } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 
+import { spawnBounded } from "../../../core/spawn-bounded.mjs";
 import { query } from "../../spine.mjs";
-import { OPS, OpError, validateInput, emitPlanFrom, commandLine, registryView } from "../../face-ops.mjs";
+import { OPS, OpError, validateInput, emitPlanFrom, expectFrom, commandLine, registryView } from "../../face-ops.mjs";
 import { childEnv, scrub, scrubDeep } from "./reads.mjs";
 
 const PLAN_TTL_MS = 15 * 60_000;
@@ -34,9 +35,6 @@ const APPLY_TIMEOUT_MS = 30 * 60_000;
 const OUTPUT_CAP = 256 * 1024;
 const LINES_KEPT = 400;
 const LINE_CAP = 8192;
-// How long the pipes may keep draining after the tool exited, or after its timeout fired, before the run ends anyway.
-const PIPE_GRACE_MS = 2000;
-const IS_WIN = process.platform === "win32";
 // Plans held at once. Past it the oldest UNCLAIMED plan is dropped (a running or finished one is kept: its replay is
 // what stops a repeat from running twice).
 const PLANS_CAP = 128;
@@ -46,13 +44,24 @@ const DONE_KEEP_MS = 60 * 60_000;
 const SCRIPT_RE = /^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*\.mjs$/;
 const PLAN_ID_RE = /^[A-Za-z0-9_-]{24}$/;
 
+/**
+ * What an op changes besides the spine, in the owner's words, for the plan card. A file-touching op's own dry run prints
+ * its diff; the apply writes it to a NEW feat/face-* branch and never to main (ADR-1340).
+ * @param {{ touchesFiles?: boolean, touchesOs?: boolean }} op
+ */
+function effectOf(op) {
+  if (op.touchesFiles) return "the diff is in the plan's output above; apply commits it to a new feat/face-* branch, never to main -- a human merges it or does not";
+  if (op.touchesOs) return "no file changes -- apply registers a task with this machine's scheduler, and the receipt records it";
+  return "no file changes -- this op writes one receipt to the spine";
+}
+
 /** The HTTP status each work-door refusal carries (arc-dash maps codes through its own table; these are the door's). */
 export const WORK_STATUS = Object.freeze({
   UNKNOWN_OP: 404, UNKNOWN_PLAN: 404,
   BAD_INPUT: 400, BAD_PLAN_ID: 400,
   PLAN_OTHER_OP: 409, PLAN_EXPIRED: 410, CONFIRM_REQUIRED: 428,
-  SIM_SPEND: 403,
-  NO_EMIT_PLAN: 502, EMIT_PLAN_MISMATCH: 502, TOOL_MISSING: 503,
+  SIM_SPEND: 403, SIM_EFFECT: 403,
+  NO_EMIT_PLAN: 502, EMIT_PLAN_MISMATCH: 502, NO_EXPECT: 502, TOOL_MISSING: 503,
 });
 
 /**
@@ -71,113 +80,39 @@ export function runTool(ctx, cmd, { timeoutMs, onLine, outputCap = OUTPUT_CAP })
   const root = realpathSync(ctx.repo);
   if (!real.startsWith(root + sep)) throw new OpError("TOOL_MISSING", `.claude/scripts/${cmd.script} resolves outside this tree -- not run`);
 
-  return new Promise((resolveP) => {
-    const child = spawn(process.execPath, [real, ...cmd.args], {
-      cwd: ctx.repo, env: childEnv(), windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
-      // On POSIX the tool leads its own process group, so a timeout can end the WHOLE tree with one signal to -pid:
-      // killing only the direct child left a driver it started running, and spending, after the door called the run
-      // over (face v2 Phase 05 shell attack). Windows has no groups; killTree walks the tree with taskkill /T.
-      detached: !IS_WIN,
-    });
-    LIVE.add(child);
-    armSignals();
-    /** @type {{ out: string, err: string }} */
-    const buf = { out: "", err: "" };
-    const partial = { out: "", err: "" };
-    // Per stream: a caller that serves stdout must not refuse it for what stderr overflowed (PR 2 logic attack: a paid,
-    // complete ask answer was thrown away because a failed driver's long stderr came first).
-    const droppedBy = { out: 0, err: 0 };
-    let timedOut = false;
-    let settled = false;
-    // One line is capped too: a tool writing with no newline grew the pending fragment without bound, past the
-    // output cap that bounds everything else.
-    const cut = (l) => (l.length > LINE_CAP ? `${l.slice(0, LINE_CAP)} [line cut at ${LINE_CAP} characters]` : l);
-    // One decoder per stream: a character split across two chunks is held until its last byte arrives. Decoding each
-    // chunk on its own turned a split euro sign into three U+FFFD (round-2 shell attack).
-    const decoder = { out: new StringDecoder("utf8"), err: new StringDecoder("utf8") };
-    const take = (stream) => (chunk) => {
-      const s = decoder[stream].write(chunk);
-      buf[stream] += s;
-      if (buf[stream].length > outputCap) { droppedBy[stream] += buf[stream].length - outputCap; buf[stream] = buf[stream].slice(-outputCap); }
-      if (onLine) {
-        const lines = (partial[stream] + s).split(/\r?\n/);
-        partial[stream] = lines.pop() || "";
-        for (const l of lines) onLine(stream, cut(l));
-        if (partial[stream].length > LINE_CAP) { onLine(stream, cut(partial[stream])); partial[stream] = ""; }
-      }
-    };
-    child.stdout.on("data", take("out"));
-    child.stderr.on("data", take("err"));
-    // SETTLEMENT DOES NOT WAIT ON THE PIPES. "close" fires only when every holder of the tool's stdout and stderr has let
-    // go, and a descendant that left the tool's group (detached, setsid) while inheriting them held a run open past its
-    // own timeout -- the timeout killed what it could reach and the run never ended (PR 2 shell attack). So: once the
-    // tool itself has EXITED, the pipes get a short grace to drain; and once the timeout has FIRED, the same. Either
-    // way the run then ends with what arrived, and the pipes are let go.
-    let grace = null;
-    const letGo = (exit, signal) => {
-      if (settled || grace) return;
-      grace = setTimeout(() => {
-        for (const st of [child.stdout, child.stderr]) { try { st.destroy(); } catch { /* already closed */ } }
-        finish(exit, signal);
-      }, PIPE_GRACE_MS);
-      grace.unref?.();
-    };
-    const timer = setTimeout(() => { timedOut = true; killTree(child); letGo(null, "timeout"); }, timeoutMs);
-    child.on("exit", (code, signal) => letGo(code, signal));
-    const finish = (exit, signal) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (grace) clearTimeout(grace);
-      LIVE.delete(child);
-      disarmSignals();
-      // A tool that exits and leaves a descendant running has not finished: on POSIX its group is ended now, whatever
-      // the exit (round-2 shell attack: a detached grandchild kept writing after the run settled). Windows has no
-      // group to signal once the tool is gone -- that remainder is a debt row, not a claim.
-      if (!IS_WIN && child.pid) { try { process.kill(-child.pid, "SIGKILL"); } catch { /* the group is already empty */ } }
+  /** @type {{ out: string, err: string }} */
+  const buf = { out: "", err: "" };
+  const partial = { out: "", err: "" };
+  // Per stream: a caller that serves stdout must not refuse it for what stderr overflowed (PR 2 logic attack: a paid,
+  // complete ask answer was thrown away because a failed driver's long stderr came first).
+  const droppedBy = { out: 0, err: 0 };
+  // One line is capped too: a tool writing with no newline grew the pending fragment without bound, past the
+  // output cap that bounds everything else.
+  const cut = (l) => (l.length > LINE_CAP ? `${l.slice(0, LINE_CAP)} [line cut at ${LINE_CAP} characters]` : l);
+  // One decoder per stream: a character split across two chunks is held until its last byte arrives. Decoding each
+  // chunk on its own turned a split euro sign into three U+FFFD (round-2 shell attack).
+  const decoder = { out: new StringDecoder("utf8"), err: new StringDecoder("utf8") };
+  /** @param {"out" | "err"} stream @param {Buffer} chunk */
+  const take = (stream, chunk) => {
+    const s = decoder[stream].write(chunk);
+    buf[stream] += s;
+    if (buf[stream].length > outputCap) { droppedBy[stream] += buf[stream].length - outputCap; buf[stream] = buf[stream].slice(-outputCap); }
+    if (onLine) {
+      const lines = (partial[stream] + s).split(/\r?\n/);
+      partial[stream] = lines.pop() || "";
+      for (const l of lines) onLine(stream, cut(l));
+      if (partial[stream].length > LINE_CAP) { onLine(stream, cut(partial[stream])); partial[stream] = ""; }
+    }
+  };
+  // The spawn, the tree kill and the settle-on-exit live in core/spawn-bounded.mjs, shared with the proposal writer's
+  // git calls: killing only the direct child left a driver it started running, and spending, after the door called the
+  // run over (face v2 Phase 05 shell attack).
+  return spawnBounded(process.execPath, [real, ...cmd.args], { cwd: ctx.repo, env: childEnv(), timeoutMs, onData: take })
+    .then(({ exit, signal, timedOut }) => {
       for (const st of /** @type {const} */ (["out", "err"])) { const rest = decoder[st].end(); if (rest) { buf[st] += rest; partial[st] += rest; } }
       if (onLine) for (const st of /** @type {const} */ (["out", "err"])) if (partial[st]) { onLine(st, cut(partial[st])); partial[st] = ""; }
-      resolveP({ exit, signal, stdout: buf.out, stderr: buf.err, timedOut, dropped: droppedBy.out + droppedBy.err, droppedOut: droppedBy.out, droppedErr: droppedBy.err });
-    };
-    child.on("error", () => finish(null, "spawn-failed"));
-    child.on("close", (code, signal) => finish(code, signal));
-  });
-}
-
-/**
- * End a tool AND everything it started. POSIX: the tool leads its own group (spawned detached), so -pid reaches the
- * whole tree. Windows: taskkill /T walks the tree the tool built. Either way the direct child is killed as a fallback.
- * @param {import("node:child_process").ChildProcess} child
- */
-function killTree(child) {
-  if (!child.pid) return;
-  if (IS_WIN) {
-    try { spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore", timeout: 10_000 }); } catch { /* fall through */ }
-  } else {
-    try { process.kill(-child.pid, "SIGKILL"); } catch { /* the group is gone, or never formed */ }
-  }
-  try { child.kill("SIGKILL"); } catch { /* already gone */ }
-}
-
-// Every tool still running. A detached POSIX group does not die with the door, so the door ends them on its way out
-// rather than leave a run nobody can observe.
-const LIVE = new Set();
-process.once("exit", () => { for (const c of LIVE) killTree(c); });
-// "exit" does not fire on a signal, and Ctrl-C is how the door is stopped (round-2 shell attack: an interrupted door
-// orphaned its running tool). A signal ends every live tree, then the process, with the signal's conventional code.
-// Registered only while a tool runs, so a door with nothing running keeps the default Ctrl-C.
-/** @param {NodeJS.Signals} sig @param {number} code */
-const onSignal = (sig, code) => () => { for (const c of LIVE) killTree(c); process.exit(code); };
-const SIGNALS = /** @type {const} */ ([["SIGINT", 130], ["SIGTERM", 143]]);
-const armed = new Map();
-function armSignals() {
-  if (armed.size) return;
-  for (const [sig, code] of SIGNALS) { const h = onSignal(sig, code); armed.set(sig, h); process.on(sig, h); }
-}
-function disarmSignals() {
-  if (LIVE.size) return;
-  for (const [sig, h] of armed) process.off(sig, h);
-  armed.clear();
+      return { exit, signal, stdout: buf.out, stderr: buf.err, timedOut, dropped: droppedBy.out + droppedBy.err, droppedOut: droppedBy.out, droppedErr: droppedBy.err };
+    });
 }
 
 // Every read here is the SCAN engine, never "auto": auto picks derived/state.db once arc-replay has built one, and
@@ -279,20 +214,24 @@ export function createWorkDoor(ctx, opts = {}) {
       journal({ op: op.id, phase: "plan", refused: true, exit: res.exit });
       return { ...base, ok: false, refusal: refusalOf(res, ctx.repo) };
     }
+    // The apply is fixed HERE. An expect row's apply carries the digest its plan printed, so the tool writes what the
+    // owner read or refuses PLAN_STALE -- never what the world looks like fifteen minutes later (ADR-1340 amended).
     const applyCmd = op.apply === "emit-plan"
       ? { script: "hq/arc-event.mjs", args: emitPlanFrom(op, res.stdout) }
-      : op.apply(values);
+      : op.expect === true
+        ? (() => { const cmd = op.apply(values); return { ...cmd, args: [...cmd.args, "--expect", expectFrom(op, res.stdout)] }; })()
+        : op.apply(values);
     prune();
     const planId = randomBytes(18).toString("base64url");
     const expiresAt = now() + PLAN_TTL_MS;
-    plans.set(planId, { id: planId, opId: op.id, applyCmd, humanRun: op.humanRun, receipt: op.receipt, expiresAt, state: "planned", lines: [], linesDropped: 0, bytesDropped: 0, result: null, done: null });
+    plans.set(planId, { id: planId, opId: op.id, applyCmd, values, humanRun: op.humanRun, receipt: op.receipt, expiresAt, state: "planned", lines: [], linesDropped: 0, bytesDropped: 0, result: null, done: null });
     journal({ op: op.id, phase: "plan", planId });
     return {
       ...base, ok: true, planId, expiresInMs: PLAN_TTL_MS,
       apply: commandLine(applyCmd),
       // The tool's own plan output, first -- it is the review the owner reads before the click.
       output: scrub(res.stdout, ctx.repo), notes: scrub(res.stderr, ctx.repo), outputDropped: res.dropped,
-      diff: op.touchesFiles ? "file changes are shown on the branch this op writes" : "no file changes -- this op writes one receipt to the spine",
+      diff: effectOf(op),
       estimate: typeof op.estimate === "function" ? op.estimate(values) : "₹0 -- no model is called",
     };
   }
@@ -320,6 +259,11 @@ export function createWorkDoor(ctx, opts = {}) {
     // started the run.
     if (p.humanRun && confirm !== op.id)
       throw new OpError("CONFIRM_REQUIRED", `${op.id} is human-run: apply carries confirm: "${op.id}", sent only by the owner's confirming click`);
+    // An effect past the spine never runs on a sim door (ADR-1340): the plan was the tool's own dry run and wrote nothing;
+    // the apply would register a real task, or write a real branch, to rehearse something. Refused before the claim, so
+    // the plan stays held and a repeat is refused the same way.
+    if (ctx.mode === "sim" && (op.touchesOs || op.touchesFiles) && !(typeof op.simSafe === "function" && op.simSafe(p.values)))
+      throw new OpError("SIM_EFFECT", `${op.id} ${op.touchesOs ? "registers a task with this machine's scheduler" : "writes a proposal branch to this repository"}, and this door is in sim mode -- the plan above is the whole rehearsal`);
     if (p.state !== "planned") return { ...view(p), replayed: true };
     if (p.expiresAt <= now()) { plans.delete(planId); throw new OpError("PLAN_EXPIRED", "that plan expired before it was applied -- plan again, and read the new one"); }
 

@@ -26,7 +26,7 @@
 // Test-only env doors (never set in production): ARC_SPINE_ROOT, ARC_SPINE_NOW,
 // ARC_SPINE_RAND, ARC_SPINE_LOCK_TIMEOUT_MS, ARC_SPINE_LOCK_STALE_MS.
 
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, realpathSync, writeSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
@@ -430,7 +430,9 @@ function main(parsed) {
     process.stderr.write("arc-event: WARN healed a torn tail in the day file before appending\n");
   if (!result.indexed)
     process.stderr.write("arc-event: WARN event is on the spine but the idem index was not updated -- replay will rebuild it\n");
-  process.stdout.write(`${sealed.id}\n`);
+  // SYNCHRONOUS, then the exit: the caller that spawned this parses exactly this line, and process.exit right after an
+  // asynchronous pipe write can cut it (macOS pipes; PR 3a round-2 shell attack). A cut id reads as a receipt never raised.
+  writeSync(1, `${sealed.id}\n`);
   return 0;
 }
 
