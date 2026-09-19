@@ -7,5 +7,6 @@ export default Object.freeze({
   id: "toolbelt",
   ring: "factory",
   routes: Object.freeze(["/api/lane/:id", "/api/spine"]),
-  asOf: false,
+  // /api/spine is a route the shell's as-of scrub reaches, so the pins replay as of the moment scrubbed to.
+  asOf: true,
 });
