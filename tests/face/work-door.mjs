@@ -365,7 +365,7 @@ try {
     const faceEmpty = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-face.mjs"), "--spine", "", "--no-open"], { cwd: REPO, encoding: "utf8", timeout: 20_000 });
     check("arc-face --spine \"\" refuses (exit 2), never a live door", faceEmpty.status === 2, `${faceEmpty.status} ${String(faceEmpty.stderr).slice(0, 200)}`);
     const faceTwice = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-face.mjs"), "--spine", SPINE_A, "--spine", SPINE_B, "--no-open"], { cwd: REPO, encoding: "utf8", timeout: 20_000 });
-    check("arc-face with two --spine values refuses (exit 2)", faceTwice.status === 2 && /given twice/.test(faceTwice.stderr), `${faceTwice.status} ${String(faceTwice.stderr).slice(0, 200)}`);
+    check("arc-face with two --spine values refuses (exit 2)", faceTwice.status === 2 && /given (twice|more than once)/.test(faceTwice.stderr), `${faceTwice.status} ${String(faceTwice.stderr).slice(0, 200)}`);
   }
 
   // ---- the counting fixture: two concurrent applies of one plan invoke the tool exactly once (REQ-07) ----
