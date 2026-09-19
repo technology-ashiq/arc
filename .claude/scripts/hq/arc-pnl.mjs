@@ -13,7 +13,8 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { SpineError, formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
-import { spineRoot } from "./spine.mjs";
+import { query, spineRoot } from "./spine.mjs";
+import { isOneLine } from "../core/one-line.mjs";
 import { derivePnl } from "./lib/ledger/pnl.mjs";
 import { formatMinorUnits, renderComponent, ABSENT } from "./lib/ledger/money.mjs";
 import { deriveKillPanel, venturesPath, UNRECEIPTED } from "./lib/ledger/kill-panel.mjs";
@@ -34,6 +35,9 @@ const BOOL_FLAGS = new Set(["simulated", "help", "criteria-digest", "emit-plan"]
 // `--reconcile-file` and `--reconcile-total` are REPEATABLE: a month has one rail per provider
 // account, and a close reconciles all of them at once. Everything else is last-wins as before.
 const REPEATABLE_FLAGS = new Set(["reconcile-file", "reconcile-total"]);
+// The kill review's flags NEVER repeat: last-wins picked "--kill-request lexos" out of "--kill-request nope
+// --kill-request lexos" in silence (PR 5a round-1 shell attack). The older flags keep their last-wins, unchanged.
+const ONCE_FLAGS = new Set(["kill-request", "reason"]);
 
 function parseArgs(argv) {
   const flags = {};
@@ -49,6 +53,7 @@ function parseArgs(argv) {
       if (!VALUE_FLAGS.has(name)) throw new SpineError("BAD_ARGS", `unknown flag --${name}`);
       // The `=` spelling accumulates too. Two spellings of one flag that disagree about whether it
       // repeats is how `--reconcile-file=a --reconcile-file=b` silently reconciles only b.
+      if (ONCE_FLAGS.has(name) && flags[name] !== undefined) throw new SpineError("BAD_ARGS", `--${name} given twice; pick one`);
       if (REPEATABLE_FLAGS.has(name)) (flags[name] = flags[name] || []).push(a.slice(eq + 1));
       else flags[name] = a.slice(eq + 1);
       continue;
@@ -65,6 +70,7 @@ function parseArgs(argv) {
     // exists to be obviously fake. `--month` survived only because a regex happened to catch it.
     if (typeof next === "string" && next.startsWith("--"))
       throw new SpineError("BAD_ARGS", `flag --${name} was given ${JSON.stringify(next)}, which is another flag -- an unquoted empty variable swallows the flag after it, and this one changes what the output MEANS`);
+    if (ONCE_FLAGS.has(name) && flags[name] !== undefined) throw new SpineError("BAD_ARGS", `--${name} given twice; pick one`);
     if (REPEATABLE_FLAGS.has(name)) (flags[name] = flags[name] || []).push(next);
     else flags[name] = next;
     i++;
@@ -556,7 +562,9 @@ async function main(argv) {
  */
 async function killRequest(venture, reason, engine) {
   if (!/^[a-z][a-z0-9-]{0,40}$/.test(venture)) throw new SpineError("BAD_ARGS", `--kill-request ${JSON.stringify(venture)} is not a venture slug`);
-  if (typeof reason !== "string" || reason.trim() === "" || reason !== reason.trim() || /[\u0000-\u001f\u007f\u2028\u2029]/.test(reason))
+  // isOneLine, as the sibling tools read it: a hand-written check let a right-to-left override through, and a spoofed
+  // question reached the inbox (PR 5a round-1 shell attack).
+  if (typeof reason !== "string" || reason.trim() === "" || reason !== reason.trim() || !isOneLine(reason))
     throw new SpineError("BAD_ARGS", "--kill-request needs --reason: one line, with no leading or trailing space");
   if (Buffer.byteLength(reason, "utf8") > 512) throw new SpineError("BAD_ARGS", "--reason is longer than 512 bytes");
   if (engine !== undefined && engine !== "scan" && engine !== "sqlite")
@@ -567,6 +575,16 @@ async function killRequest(venture, reason, engine) {
   // approved (ADR-1008).
   if (!panel.receipted) throw new SpineError("UNRECEIPTED", `${UNRECEIPTED} -- the criteria digest ${panel.digest} has no approved receipt, so its kill lines are not the owner's yet; approve the criteria first`);
   const row = panel.ventures.find((v) => v.venture === venture);
+  // ONE OPEN REVIEW PER VENTURE, and one a day: a click on each of N days raised N open questions for one kill, and the
+  // same day's second click was refused only at the emit (PR 5a round-1 logic attack). Judged on a WHOLE read: a torn
+  // or unreadable day refuses, never counts as "nothing open".
+  const read = await query(spineRoot(), { engine });
+  if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length))
+    throw new SpineError("PARTIAL_SPINE", "the spine has a day it cannot read or a torn line, so an open review cannot be ruled out -- replay the spine first");
+  const evs = read.events.map((r) => r.event);
+  const decided = new Set(evs.filter((e) => e && e.kind === "decision.recorded" && e.payload && typeof e.payload.decides === "string").map((e) => e.payload.decides));
+  const open = evs.find((e) => e && e.kind === "approval.requested" && e.payload && e.payload.gate === "venture-kill" && e.payload.venture === venture && !decided.has(e.id));
+  if (open) throw new SpineError("OPEN_REVIEW", `a kill review of ${venture} is already open in your inbox (${open.id}) -- decide that one`);
   if (!row) throw new SpineError("NO_VENTURE", `${venture} is not in ventures.yaml (${panel.ventures.map((v) => v.venture).join(", ") || "none"}) -- only a registered venture has a kill line to review`);
   const lines = row.criteria.map((c) => ({ criterion: c.criterion, status: c.status, value: c.value ?? null, threshold: c.threshold ?? null, ...(c.status === "ABSENT" ? { reason: String(c.reason) } : {}) }));
   const crossed = lines.filter((l) => l.status === "CROSSED").map((l) => l.criterion);
@@ -578,6 +596,8 @@ async function killRequest(venture, reason, engine) {
   // ONE review per venture, per criteria version, per day: a second click the same day is the same question, and the
   // emitter refuses it as a duplicate rather than filling the inbox.
   const idem = sha256Hex(`ledger.kill|${venture}|${panel.digest}|${formatIst(nowMs()).slice(0, 10)}`);
+  const today = evs.find((e) => e && e.kind === "approval.requested" && e.idem === idem);
+  if (today) throw new SpineError("ALREADY_ASKED", `a kill review of ${venture} under these criteria was already raised today (${today.id}) and decided -- raise the next one tomorrow`);
   process.stdout.write(`${JSON.stringify({ emit: ["emit", "approval.requested", "--payload", JSON.stringify(payload), "--idem", idem, "--venture", venture, "--strict"] })}\n`);
   process.stderr.write("arc-pnl: planned, not raised. The last stdout line is the emit; the owner decides the review through arc-inbox.\n");
   return 0;

@@ -11,7 +11,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync as fs_append, cpSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -67,6 +67,21 @@ writeFileSync(VENTURES, "version: 1\nventures:\n  lexos:\n    kill:\n      days_
   check("ingest refuses a venture ventures.yaml does not register", other.status === 2 && /not a registered venture/.test(other.stderr), other.stderr);
   const dup = node([S("hq", "ledger-ingest.mjs"), "--export", `razorpay=${exportFile}`, "--venture", "lexos", "--dry-run"], { ...env, ARC_VENTURES_FILE: (() => { const v = join(tmp, "ventures-two.yaml"); writeFileSync(v, readFileSync(VENTURES, "utf8") + "  other:\n    kill:\n      days_without_revenue: 30\n      traffic_floor_monthly: 10\n"); return v; })() });
   check("ingest with every payment recorded for its venture refuses cleanly under a wider ventures.yaml too", dup.status === 2, dup.stderr);
+  // ONE SPINE (PR 5a round 1): a RELATIVE ARC_SPINE_ROOT from another folder -- read, lock and receipts all in that one.
+  {
+    const cwd = join(tmp, "ingest-elsewhere");
+    mkdirSync(join(cwd, "rel-spine", "events"), { recursive: true });
+    const envRel = { ARC_SPINE_ROOT: "rel-spine", ARC_VENTURES_FILE: VENTURES };
+    const p2 = node([S("hq", "ledger-ingest.mjs"), ...A, "--dry-run"], envRel, cwd);
+    const a2 = node([S("hq", "ledger-ingest.mjs"), ...A, "--expect", lastExpect(p2.stdout) || ZERO], envRel, cwd);
+    const landed = spineEvents(join(cwd, "rel-spine")).filter((e) => e.kind === "revenue.received").length;
+    check("ingest from another folder with a relative ARC_SPINE_ROOT: the receipts land in the spine it read, and none in the repo", a2.status === 0 && landed === rows && !existsSync(join(REPO, "rel-spine")), `${a2.status} ${a2.stderr} landed=${landed}`);
+    // A torn line may be a payment: the plan refuses rather than reading it as "not recorded".
+    const day = readdirSync(join(cwd, "rel-spine", "events")).find((n) => n.endsWith(".jsonl"));
+    fs_append(join(cwd, "rel-spine", "events", day), '{"kind":"revenue.rec');
+    const p3 = node([S("hq", "ledger-ingest.mjs"), ...A, "--dry-run"], envRel, cwd);
+    check("ingest refuses a spine with a torn line -- what is recorded is unknown", p3.status === 2 && /torn line/.test(p3.stderr), p3.stderr);
+  }
 }
 
 // ---- the kill review: arc-pnl --kill-request prints the emit the door runs ----
@@ -96,6 +111,12 @@ writeFileSync(VENTURES, "version: 1\nventures:\n  lexos:\n    kill:\n      days_
   check("kill review: the door accepts the emit line for its row (the kind, the closed flag set, --strict)", Array.isArray(doorArgv) && doorArgv[1] === "approval.requested", JSON.stringify(doorArgv));
   const nobody = pnl("--kill-request", "nobody", "--reason", "x");
   check("kill review refuses a venture ventures.yaml does not name", nobody.status === 2 && /NO_VENTURE/.test(nobody.stderr), nobody.stderr);
+  // Raised for real (the door runs the emit line), a second review while the first is open is refused (round 1).
+  const raised = node([S("hq", "arc-event.mjs"), ...emit.slice()], env);
+  const second = pnl("--kill-request", "lexos", "--reason", "still nothing");
+  check("kill review: a second review while one is open in the inbox is refused (OPEN_REVIEW)", raised.status === 0 && second.status === 2 && /OPEN_REVIEW/.test(second.stderr), `${raised.status} ${raised.stderr} / ${second.stderr}`);
+  const twice = pnl("--kill-request", "nope", "--kill-request", "lexos", "--reason", "x");
+  check("kill review: a repeated --kill-request is refused, never last-wins", twice.status === 2 && /given twice/.test(twice.stderr), twice.stderr);
   const stray = pnl("--reason", "x");
   check("--reason without --kill-request is refused, never dropped", stray.status === 2 && /belongs with --kill-request/.test(stray.stderr), stray.stderr);
 }
@@ -117,10 +138,25 @@ writeFileSync(VENTURES, "version: 1\nventures:\n  lexos:\n    kill:\n      days_
   const sp = spine("register-spine");
   const reg = (...a) => node([join(repo, ".claude", "scripts", "hq", "venture-register.mjs"), ...a], { ARC_SPINE_ROOT: sp }, repo);
   const A = ["--slug", "probe-venture", "--days-without-revenue", "60", "--traffic-floor", "50", "--repository", "private, separate repo"];
+  // MAIN'S CRITERIA MUST BE THE OWNER'S FIRST (round 1): unreceipted, the register is refused; then they are receipted.
+  const unrec = reg(...A, "--dry-run");
+  check("register refuses while main's current criteria have no approved receipt -- they would be approved unseen", unrec.status === 2 && /no approved criteria receipt/.test(unrec.stderr), unrec.stderr);
+  {
+    const VEN0 = await import(pathToFileURL(S("hq", "lib", "ledger", "ventures.mjs")).href);
+    const d0 = VEN0.parseVentures(readFileSync(join(repo, "ventures.yaml"), "utf8")).digest;
+    const req0 = node([S("hq", "arc-event.mjs"), "emit", "approval.requested", "--payload", JSON.stringify({ subject: "ledger.criteria", digest: d0, what: "register fixture" }), "--idem", createHash("sha256").update(`ledger.criteria|${d0}`).digest("hex"), "--strict"], { ARC_SPINE_ROOT: sp });
+    const ok0 = node([S("hq", "arc-inbox.mjs"), "approve", req0.stdout.trim(), "--reason", "register fixture"], { ARC_SPINE_ROOT: sp });
+    check("register fixture: main's criteria are receipted (vacuous-pass guard)", req0.status === 0 && ok0.status === 0, `${req0.stderr} ${ok0.stderr}`);
+  }
+  for (const [why, value] of [["a machine path", "C:\\Users\\someone\\acme"], ["an address", "git@github.com:someone/acme.git"]]) {
+    const r = reg("--slug", "probe-venture", "--days-without-revenue", "60", "--traffic-floor", "50", "--repository", value, "--dry-run");
+    check(`register refuses a --repository holding ${why} -- PORTFOLIO.md is published`, r.status === 2 && /machine path or an address/.test(r.stderr), r.stderr);
+  }
+  const eventsBefore = spineEvents(sp).length;
   const plan = reg(...A, "--dry-run");
   const d = lastExpect(plan.stdout);
   check("register, planned: ventures.yaml, the passport row and the contract on one branch, a digest; nothing written",
-    plan.status === 0 && !!d && ["ventures.yaml", "PORTFOLIO.md", "initiatives/face/contracts/expected-set.json"].every((p) => plan.stdout.includes(`b/${p}`)) && clean() && spineEvents(sp).length === 0,
+    plan.status === 0 && !!d && ["ventures.yaml", "PORTFOLIO.md", "initiatives/face/contracts/expected-set.json"].every((p) => plan.stdout.includes(`b/${p}`)) && clean() && spineEvents(sp).length === eventsBefore,
     `${plan.status} ${plan.stderr}`);
   const ap = reg(...A, "--expect", d || ZERO);
   const branch = "feat/face-ventures-register-probe-venture";
@@ -128,10 +164,14 @@ writeFileSync(VENTURES, "version: 1\nventures:\n  lexos:\n    kill:\n      days_
   const VEN = await import(pathToFileURL(S("hq", "lib", "ledger", "ventures.mjs")).href);
   let newDigest = "";
   try { newDigest = VEN.parseVentures(onBranch).digest; } catch { /* checked below */ }
-  const req = spineEvents(sp).find((e) => e.kind === "approval.requested");
+  const req = spineEvents(sp).find((e) => e.kind === "approval.requested" && e.payload.digest === newDigest);
   check("register, applied: the branch holds the new venture, main is untouched, and the criteria request carries the NEW digest",
     ap.status === 0 && /probe-venture:/.test(onBranch) && clean() && !!req && req.payload.subject === "ledger.criteria" && req.payload.digest === newDigest && req.idem === createHash("sha256").update(`ledger.criteria|${newDigest}`).digest("hex"),
     `${ap.status} ${ap.stderr} ${JSON.stringify(req && req.payload)}`);
+  // One digest is one request: with the branch gone, the same registration is refused before anything is written.
+  g("branch", "-D", branch);
+  const again = reg(...A, "--dry-run");
+  check("register refuses a digest whose criteria request is already on the spine -- before any branch is written", again.status === 2 && /already on the spine/.test(again.stderr) && g("rev-parse", "--verify", "--quiet", branch).status !== 0, again.stderr);
   for (const [why, args, re] of [
     ["a venture already registered", ["--slug", "lexos"], /already in ventures\.yaml/],
     ["arc, the factory's own overhead", ["--slug", "arc"], /overhead/],

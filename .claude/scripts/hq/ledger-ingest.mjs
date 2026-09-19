@@ -22,11 +22,12 @@
 // nothing recorded.
 
 import { createHash } from "node:crypto";
-import { readFileSync, realpathSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { query, spineRoot } from "./spine.mjs";
-import { SpineError } from "./lib/canonical.mjs";
+import { SpineError, formatIst, nowMs } from "./lib/canonical.mjs";
+import { formatMinorUnits } from "./lib/ledger/money.mjs";
 import { normalizeRows } from "./lib/ledger/normalize.mjs";
 import { parseRazorpayExport } from "./lib/ledger/parsers/razorpay.mjs";
 import { parseMorExport } from "./lib/ledger/parsers/mor.mjs";
@@ -50,7 +51,9 @@ class Stop extends Error {}
 const out = [];
 const say = (s = "") => out.push(s);
 /** Written synchronously, then the exit code set: a caller parses the receipt lines. */
-function flush() { if (out.length) { try { process.stdout.write(out.join("\n") + "\n"); } catch { /* the lines are lost */ } out.length = 0; } }
+// SYNCHRONOUS: an asynchronous write's EPIPE arrived after the receipts had landed, as an uncaught error and exit 1
+// ("some recorded, the rest not") with a stack of absolute paths (PR 5a round-1 shell attack).
+function flush() { if (out.length) { try { writeSync(1, out.join("\n") + "\n"); } catch { /* the lines are lost; the receipts are not */ } out.length = 0; } }
 function die(code, msg) { flush(); process.stderr.write(`ledger-ingest: ${msg}\n`); process.exitCode = code; throw new Stop(); }
 
 function parseArgs(argv) {
@@ -146,9 +149,14 @@ async function derive(a) {
 
   // What the spine already holds, read through the spine reader. A day it cannot read is refused, never read as
   // "not recorded": that is how a payment is recorded twice (the pick twin, PR 4).
+  // ONE SPINE, resolved once and handed to the emitter as an absolute path: the read and the lock went through this
+  // process's folder while the emitter ran in REPO, so a payment was checked on one spine and recorded on another, and a
+  // relative ARC_SPINE_ROOT made a spine inside the repo (PR 5a round-1 attacks, the bench twin).
   let root;
   try { root = spineRoot(); } catch (e) { die(2, `the spine cannot be found (${e && e.code ? e.code : "error"}) -- nothing was recorded`); }
-  const { events, unreadable } = await query(root, { kind: "revenue.received", engine: "scan" });
+  const { events, unreadable, torn } = await query(root, { kind: "revenue.received", engine: "scan" });
+  // A torn line may be a payment: "not on the spine" was read from it, and the payment was recorded twice (round 1).
+  if (torn && (Array.isArray(torn) ? torn.length : torn > 0)) die(2, "the spine has a torn line, so what is already recorded is unknown -- nothing was recorded; replay the spine first");
   if (unreadable && unreadable.length) die(2, `${unreadable.length} day file(s) of the spine cannot be read, so what is already recorded is unknown -- nothing was recorded`);
   /** @type {Map<string, string>} */
   const onSpine = new Map();
@@ -167,26 +175,32 @@ async function derive(a) {
     if (held !== a.venture) die(2, `payment ${n.payload.provider_payment_id} is already recorded for ${held}, not ${a.venture} -- one payment belongs to one venture; nothing was recorded`);
     skipped.push(n);
   }
-  const digest = planDigest({ venture: a.venture, provider: a.provider, export: exp.sha, record: record.map((n) => n.payload) });
+  // The MONTH it is recorded in is part of what the plan showed ("counts in YYYY-MM"): a plan made before midnight on a
+  // month's last day and applied after it is stale, never a silent move to the next month (PR 5a round 1).
+  const month = formatIst(nowMs()).slice(0, 7);
+  const digest = planDigest({ venture: a.venture, provider: a.provider, export: exp.sha, month, record: record.map((n) => n.payload) });
   return { exp, record, skipped, digest, root };
 }
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
   const d = await derive(a);
-  const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
+  const today = formatIst(nowMs()).slice(0, 10);
   say(`export: ${a.provider}, sha256 ${d.exp.sha.slice(0, 12)}, ${d.exp.rows.length} row(s) for ${a.venture}`);
   for (const n of d.record) {
     const p = n.payload;
     const settled = n.ts.slice(0, 10);
-    say(`  record  ${p.provider_payment_id}  ${p.amount} ${p.currency} ex-tax${p.refund_of ? ` (refund of ${p.refund_of})` : ""}  settled ${settled}${settled.slice(0, 7) !== today.slice(0, 7) ? ` -- counts in ${today.slice(0, 7)}, the month it is recorded` : ""}`);
+    // Money as money: "100000 INR" was a thousand rupees in minor units (PR 5a round 1).
+    let shown;
+    try { shown = formatMinorUnits(p.amount, p.currency); } catch { shown = `${p.amount} ${p.currency} minor units`; }
+    say(`  record  ${p.provider_payment_id}  ${shown} ex-tax${p.refund_of ? ` (refund of ${p.refund_of})` : ""}  settled ${settled}${settled.slice(0, 7) !== today.slice(0, 7) ? ` -- counts in ${today.slice(0, 7)}, the month it is recorded` : ""}`);
   }
   for (const n of d.skipped) say(`  skip    ${n.payload.provider_payment_id}  already on the spine`);
   if (d.record.length === 0) die(2, `every row of this export is already recorded (${d.skipped.length}) -- nothing to record`);
 
   // Each payload judged by the spine BEFORE anything is recorded: a row the spine refuses would stop the apply part-way.
   for (const n of d.record) {
-    const no = spineRefusal(ARC_EVENT, "revenue.received", n.payload, { cwd: REPO, command: "ingest", flags: ["--venture", a.venture] });
+    const no = spineRefusal(ARC_EVENT, "revenue.received", n.payload, { cwd: REPO, env: { ...process.env, ARC_SPINE_ROOT: d.root }, command: "ingest", flags: ["--venture", a.venture] });
     if (no) die(2, `the spine would refuse payment ${n.payload.provider_payment_id}: ${no} -- nothing was recorded`);
   }
 
@@ -208,7 +222,7 @@ async function main() {
     if (stale2) die(2, stale2);
     let done = 0;
     for (const n of again.record) {
-      const got = emitReceipt(ARC_EVENT, "revenue.received", n.payload, { cwd: REPO, command: "ingest", flags: ["--venture", a.venture], timeoutMs: 60_000 });
+      const got = emitReceipt(ARC_EVENT, "revenue.received", n.payload, { cwd: REPO, env: { ...process.env, ARC_SPINE_ROOT: again.root }, command: "ingest", flags: ["--venture", a.venture], timeoutMs: 60_000 });
       if (got.state === "landed" && got.id) { say(`receipt: revenue.received ${got.id}`); done += 1; continue; }
       const left = again.record.length - done;
       if (got.state === "refused") die(done ? 1 : 2, `${done} of ${again.record.length} recorded; payment ${n.payload.provider_payment_id} was refused (${got.why}) and the ${left - 1} after it were not tried -- plan again: the recorded ones are skipped`);

@@ -28,6 +28,9 @@ import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "
 import { isOneLine } from "../core/one-line.mjs";
 import { deriveFromContract } from "../core/face-sections.mjs";
 import { parseVentures, MAX_CRITERION_VALUE } from "./lib/ledger/ventures.mjs";
+import { isReceipted } from "./lib/ledger/kill-panel.mjs";
+import { query, spineRoot } from "./spine.mjs";
+import { scrub } from "./lib/face/reads.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
@@ -73,6 +76,9 @@ function parseArgs(argv) {
   // A table cell: one line, no pipe (it would split the row), and short.
   if (!a.repository || !isOneLine(a.repository) || a.repository.includes("|") || Buffer.byteLength(a.repository) > 120)
     die(2, "--repository is one line of text, up to 120 bytes, with no | and no control or invisible characters");
+  // It goes into PORTFOLIO.md, in a public repository: a machine path or an address there is the owner's, published (PR
+  // 5a round-1 shell attack). The face's scrub is the test -- what it would rewrite is refused here, by name.
+  if (scrub(a.repository, REPO) !== a.repository) die(2, "--repository names a machine path or an address, and it would be published in PORTFOLIO.md -- give an https URL or a name");
   if (a.why && (!isOneLine(a.why) || Buffer.byteLength(a.why) > 300)) die(2, "--why is one line of text, up to 300 bytes, with no control or invisible characters");
   return a;
 }
@@ -115,7 +121,17 @@ export function addToVentures(text, slug, days, floor) {
 /** The passport table's venture names, and where a new row goes (after its last row). */
 function passports(text) {
   const lines = text.split("\n");
-  const head = lines.indexOf(PASSPORT_HEAD);
+  // The table's header OUTSIDE fenced blocks, and exactly one: a quoted copy of the table in a code block took the row
+  // (PR 5a round-1 shell attack).
+  const heads = [];
+  let fence = "";
+  lines.forEach((l, i) => {
+    const t = l.trimStart().slice(0, 3);
+    if (t === "```" || t === "~~~") { fence = fence === "" ? t : fence === t ? "" : fence; return; }
+    if (fence === "" && l === PASSPORT_HEAD) heads.push(i);
+  });
+  if (heads.length > 1) die(2, `${PORTFOLIO} on main holds the "Venture passports" header ${heads.length} times outside code blocks -- make it one table first`);
+  const head = heads.length ? heads[0] : -1;
   if (head < 0 || !/^\|(---\|){4}$/.test(lines[head + 1] || "")) die(2, `${PORTFOLIO} on main has no "Venture passports" table (${PASSPORT_HEAD}) -- fix it first`);
   let end = head + 2;
   const names = [];
@@ -199,7 +215,21 @@ async function main() {
   const approval = { subject: "ledger.criteria", digest, what };
   const idem = createHash("sha256").update(`ledger.criteria|${digest}`).digest("hex");
   const emitFlags = ["--idem", idem];
-  const refused = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, flags: emitFlags });
+  // ONE spine for the reads below and the emit, handed to the emitter as an absolute path (the ingest twin, round 1).
+  let root;
+  try { root = spineRoot(); } catch (e) { die(2, `the spine cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+  const spineEnv = { ...process.env, ARC_SPINE_ROOT: root };
+  const read = await query(root, { engine: "scan" });
+  if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) die(2, "the spine has a day it cannot read or a torn line, so the criteria's approval cannot be judged -- nothing was written");
+  const spineEvents = read.events.map((r) => r.event);
+  // MAIN'S CRITERIA MUST BE THE OWNER'S FIRST: the request covers every venture's lines, so an unreceipted change already
+  // on main (lexos loosened to 999999 days) rode along with "register newco" and was approved unseen (PR 5a round-1
+  // logic attack).
+  if (!isReceipted(spineEvents, v.before.digest)) die(2, `ventures.yaml on main (digest ${v.before.digest}) has no approved criteria receipt -- its kill lines are not the owner's yet, and registering a venture would approve them unseen; approve the current criteria first`);
+  // One digest is one request, and the emitter refuses a second only AFTER the branch is written (round 1).
+  const already = spineEvents.find((e) => e && e.kind === "approval.requested" && e.idem === idem);
+  if (already) die(2, `the criteria request for digest ${digest} is already on the spine (${already.id}) -- decide that one; nothing was written`);
+  const refused = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags });
   if (refused) die(2, `the criteria request this raises would be refused by the spine, so nothing is written: ${refused}`);
   const message = `ventures: register ${a.slug} as a candidate (a proposal, ADR-1008)\n\n${a.why ? `${a.why}\n\n` : ""}Its kill lines in ventures.yaml, its passport row in PORTFOLIO.md, its room in the face's contract, and what the contract derives (face-sections), so main stays green when this merges. The criteria digest ${digest} is requested for approval in the same step.\nWritten by the face's work door (ADR-1342).`;
   const planned = planDigest({ branch, base, files, message, approval, idem });
@@ -216,12 +246,12 @@ async function main() {
   const stale = staleReason(a.expect, planned);
   if (stale) die(2, stale);
   const w = await writeProposal({ repo: REPO, branch, files, allow, base, message,
-    beforeRef: () => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, flags: emitFlags }); if (no) die(2, `the spine would refuse the criteria request, so no branch was written: ${no}`); } });
+    beforeRef: () => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) die(2, `the spine would refuse the criteria request, so no branch was written: ${no}`); } });
   written = true;
   say(`venture-register: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}`);
   // Three outcomes, never two: an unknown one was read as "not raised" (PR 3b round-4 attacks). The welded idem makes a
   // second raise of the same digest a duplicate the emitter refuses, never a second question.
-  const got = emitReceipt(ARC_EVENT, "approval.requested", approval, { cwd: REPO, flags: emitFlags, timeoutMs: 60_000 });
+  const got = emitReceipt(ARC_EVENT, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags, timeoutMs: 60_000 });
   if (got.state === "refused") die(1, `the branch ${branch} IS written, and its criteria request was not raised -- ${got.why}`);
   if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its criteria request landed is unknown -- ${got.why}. Look in your inbox before applying again`);
   if (!got.id) die(1, `the branch ${branch} IS written, and its criteria request landed without its id -- ${got.why}`);

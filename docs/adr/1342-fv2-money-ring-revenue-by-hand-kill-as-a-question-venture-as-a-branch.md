@@ -48,3 +48,9 @@ The probe (evidence/phase-05/cli-probe.md) found no CLI for any of the three:
   review". Staging a venture stays a card.
 - Two new CLIs in the ledger lane's folder, and one flag on arc-pnl; each carries its tests in
   `tests/face/money-work.mjs`, and the ledger's own suites must stay green.
+
+## Amendment, PR 5a round 1 (next day)
+
+A fresh pair found 7 logic and 6 shell holes. All but one (a debt row) are fixed and pinned. One decision sharpens: **a
+venture is registered only on top of criteria the owner has already approved** -- the criteria request covers the
+whole file, so without that gate an unreceipted change on main would be approved under the new venture's name.
