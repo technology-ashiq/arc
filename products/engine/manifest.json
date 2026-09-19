@@ -18,6 +18,7 @@
     ".claude/scripts/engine/egress-session.sh",
     ".claude/scripts/engine/arc-bench.mjs",
     ".claude/scripts/engine/propose.mjs",
+    ".claude/scripts/engine/agent-scaffold.mjs",
     ".claude/scripts/engine/adapters/claude-code.mjs",
     ".claude/scripts/engine/adapters/codex.mjs",
     ".claude/scripts/engine/drivers/common.mjs",

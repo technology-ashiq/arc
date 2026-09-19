@@ -30,7 +30,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             <div className="mt-3 space-y-2.5">
               <VerbPending item={f.hireVerb} />
               <VerbPending item={f.dispatchVerb} />
-              <VerbPending item={f.terminateVerb} />
             </div>
           </HPanel>
         </div>

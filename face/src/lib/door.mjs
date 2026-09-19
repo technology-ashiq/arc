@@ -202,7 +202,7 @@ const read = (query = []) => Object.freeze({ method: "GET", param: false, query:
 /** @type {Readonly<Record<string, DoorRoute>>} */
 export const DOOR_ROUTES = Object.freeze({
   "/api/health": read(),
-  "/api/spine": read(["since", "kind", "venture", "date", "limit"]),
+  "/api/spine": read(["since", "kind", "venture", "date", "limit", "note"]),
   "/api/brief": read(),
   "/api/inbox": read(),
   "/api/pnl": read(["simulated", "venture", "month", "by"]),

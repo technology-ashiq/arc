@@ -20,10 +20,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4 items-start">
         <div className="min-w-0">
-          <HPanel title="Submit a surface" hint="three variants, each with a thesis it must differ by">
-            <VerbPending item={f.submitVerb} />
-          </HPanel>
-
           <HPanel title="The studio floor" hint="explores · critique · blind jury">
             <div className="space-y-2.5">
               <NotServed item={f.floor} />
