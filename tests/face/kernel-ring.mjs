@@ -876,7 +876,11 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("bench --from: a temp cleanup that throws after the approval landed is litter -- exit 0 and the receipt line (the shim fired)", existsSync(busyMark) && ap.status === 0 && !!id, `mark=${existsSync(busyMark)} ${ap.status} ${ap.stderr}`);
   check("bench --from, applied with its plan's digest: raises the router proposal and names its receipt; nothing was run", ap.status === 0 && !!id && /nothing was run, nothing was spent/.test(ap.stdout), `${ap.status} ${ap.stderr} ${ap.stdout.slice(-300)}`);
   check("bench --from: one approval on the spine, and NO new run.completed (no run happened)", count("approval.requested") === 1 && count("run.completed") === runsBefore, `approvals=${count("approval.requested")} runs=${count("run.completed")} before=${runsBefore}`);
-  check("bench --from: the artifacts land INSIDE the spine's own root, one store per candidate-and-champion", existsSync(store) && readdirSync(store).length === 2 && readdirSync(store).some((d) => existsSync(join(store, d, "approval.id"))), existsSync(store) ? readdirSync(store).join(",") : "no store");
+  // Counted by what each store HOLDS, not by how many there are: the unknown-outcome test above keeps a pending store of
+  // its own in this spine, and a bare count of 2 read that as a defect (CI, PR 3b round 3).
+  const stores = existsSync(store) ? readdirSync(store) : [];
+  const landed = stores.filter((d) => existsSync(join(store, d, "approval.id")));
+  check("bench --from: the artifacts land INSIDE the spine's own root, one store per candidate-and-champion, one of them landed", stores.length >= 2 && stores.every((d) => /^[a-z0-9.-]+-vs-[0-9a-f]{12}$/.test(d)) && landed.length === 1, stores.join(",") || "no store");
   const again = b("--propose", "--from", cand, "--champion", champ, "--expect", digest || "x");
   check("bench --from: the same candidate twice refuses (one question, one approval)", again.status === 2 && /already exists/.test(again.stderr) && count("approval.requested") === 1, again.stderr);
   const unbound = b("--propose", "--from", cand, "--champion", champ);
