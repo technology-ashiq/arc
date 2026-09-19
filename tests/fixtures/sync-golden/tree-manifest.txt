@@ -117,7 +117,7 @@
 .claude/scripts/core/money-surfaces.json	8157fd70e9940c23e873846f9df93a482deca702330629e369138dd480d97f1c
 .claude/scripts/core/one-line.mjs	de7576a87c7710b049a6984a6f60b48937b44d626a9ebd347f5af12b74625a65
 .claude/scripts/core/ownership-lint.sh	f6f24f2afaf6b845cca533728a85693926fa4c22b73d741fc868ce28bddc82dc
-.claude/scripts/core/plan-expect.mjs	13e98288bd6cd0cc3c2506b03696549eb09f77a8a27707987236a201cc042607
+.claude/scripts/core/plan-expect.mjs	94d5d89b19db14ab02c6121f4dc5ec8218f4c01ba69c60ffd9cb5500cd14bc4c
 .claude/scripts/core/product-lint.mjs	5951dad55b6ed153973e7fcdbfd0f50c54d66d001c29146e138d232fe27bb72e
 .claude/scripts/core/profile-request.mjs	2d542bf188a84e2da1fa3198d093903c7371fe66b0a37122c1b86462301def3f
 .claude/scripts/core/proposal-branch.mjs	bdf9d653c905ff10a52381fcf0960a5ff9b300558a8076f07777d56793cc9b92
@@ -218,15 +218,16 @@
 .claude/scripts/hq/arc-inbox.mjs	30c5d19a5fe5aa23cc01f72df53316b6d850f5290ffb92922af886a1132e809e
 .claude/scripts/hq/arc-jobs.mjs	d6e9c51919bb603d78a67cb399cfcbcebc5314d1dce080a253973f80ee69ae0a
 .claude/scripts/hq/arc-jobs.sh	ac0dd934e1c6959f512e283d9411382a29bd3671bc4542ba05b74371d204323b
-.claude/scripts/hq/arc-pnl.mjs	60f7af1931102fb946ac4cb8ae01913be29312f2882cf0b3d954975f0bc45409
+.claude/scripts/hq/arc-pnl.mjs	1c79af9b70cde51f419f413335765598fb37e393cdef2fedf2cbb1b52495c237
 .claude/scripts/hq/arc-pnl.sh	a90ec8a57d367b82dea236abaa64f98bff9e39d85f5872b74683b45c1b31f23b
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/face-module.mjs	4dffb1452c051fb97512a0a92b30ddc7724c3197db549ca7980005692c27685a
 .claude/scripts/hq/face-modules-contract.mjs	5f98ea1ebcb15edf9e19ed5a3d331c8bca4b8b63addf8200a5cc67bf4f02c918
-.claude/scripts/hq/face-ops.mjs	4139aa53ec8dd587919cbf29b45dcdfcf97be729d7daa579c52bf07471bda6e9
+.claude/scripts/hq/face-ops.mjs	857f9911359caaad025f2ffed35854e4025299164be440edd6ba14ff4d26cd88
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
 .claude/scripts/hq/jobs/day-close-roll.mjs	cf47ce763a261eba34350385555119025b29a1050469606dc728994996628523
+.claude/scripts/hq/ledger-ingest.mjs	196cc1111fc71162fabaea4cb5ebacaef4d7d2e6e00eb99122112bf56ddf1661
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	db5fc5a85baa049ea71073e74e9f387263e187713091ac39b5b79df33f875884
 .claude/scripts/hq/lib/face/reads.mjs	795c65d4c1a71ebbf43e3a9d000efd197f0a78aee6beb1156cb4543677dffd1c
@@ -241,7 +242,7 @@
 .claude/scripts/hq/lib/jobs/schema.mjs	312a3ae673b8e6141b689d8029679f4e45cac386dc6c341753a147fad03491fb
 .claude/scripts/hq/lib/ledger/costs.mjs	353c4a67cadcbc1b11f69807b17370634f046af2834a254e21956db5a4c20c68
 .claude/scripts/hq/lib/ledger/kill-distance.mjs	3ba724b5bdcce46193d1376c09551e1d38a1e9ce2b90f2636aa32ac1da6af05b
-.claude/scripts/hq/lib/ledger/kill-panel.mjs	86d0d7220d32789566fc34829b74500e2b020f37e405f43f78ad9c37eaac59e5
+.claude/scripts/hq/lib/ledger/kill-panel.mjs	8387cc9b2d8de20831a5aa4958b61a13366527fafd90431f2f405efcdd6a3be5
 .claude/scripts/hq/lib/ledger/money.mjs	ea3da9692c6828e708eac680fe824f8324d36cf822982d17731cc704403202bc
 .claude/scripts/hq/lib/ledger/normalize.mjs	6dc5a37a742bbcd6c4f19665307bc722260bc2a54388ce12ef8e3c6c933d1a17
 .claude/scripts/hq/lib/ledger/parsers/mor.mjs	312b190c8cd9ac997fda09fd4cd5049daefef504866d39c489e44811f5744256
@@ -278,6 +279,7 @@
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb
 .claude/scripts/hq/policy-promote.mjs	d594a4169c11a96f4bba24eb53b0937d02d53525085c674fda34089cb6a7ed20
 .claude/scripts/hq/spine.mjs	11a9da5fea85c5880b14372949e95351da86af917c4b6a55ea7d2597ef7b8ad9
+.claude/scripts/hq/venture-register.mjs	1b8ac66f70f425f3a9ca96c6196f6eeca6f0f461bbf737b084b54405f82641fc
 .claude/scripts/leads/arc-leads.mjs	74a64cda1ad500959bc3fe7e9c9dc803433d98fea1cf676b7a9c94d07d7f4047
 .claude/scripts/leads/lib/caps.mjs	4e6bbf03ba53dd72b6a6e571b31f85c03783549cd04b890e62b3fa19ed9d2d4b
 .claude/scripts/leads/lib/deps.mjs	eebf5ab87ee1cdcf1f7a3371ebbe900356ddabab64970ba457004bc4b7de6f40

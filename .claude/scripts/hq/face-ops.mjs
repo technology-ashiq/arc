@@ -39,6 +39,8 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
+import { parseVentures } from "./lib/ledger/ventures.mjs";
+import { venturesPath } from "./lib/ledger/kill-panel.mjs";
 import { ONE_LINE_SRC, ONE_LINE_BAD_SRC } from "../core/one-line.mjs";
 import { AGENT_TOOLS } from "../engine/agent-scaffold.mjs";
 import { dirname, join } from "node:path";
@@ -154,6 +156,18 @@ function pickableExplores() {
     }).sort();
   } catch { return []; }
 }
+/**
+ * The ventures ventures.yaml registers, read as the ledger's parser reads them: revenue is recorded, and a kill review
+ * raised, only for a venture with a kill line. None when the file is absent or does not parse -- the tool says why.
+ */
+function registeredVentures() {
+  try {
+    const path = venturesPath();
+    if (path === null) return [];
+    return Object.keys(parseVentures(readFileSync(path, "utf8")).ventures).sort();
+  } catch { return []; }
+}
+
 /** The rooms the contract's agents.map already seats an agent in: a new agent joins one of those. */
 function agentRooms() {
   try {
@@ -392,6 +406,64 @@ export const OPS = Object.freeze([
       Object.freeze({ name: "totals", label: "Provider totals", placeholder: "razorpay:INR=0 -- one per rail, space-separated", type: "text", max: 400, pattern: "[a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}( [a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}){0,7}", required: false }),
     ]),
     plan: (v) => ({ script: "hq/arc-pnl.mjs", args: ["--close", v.month, ...(v.totals ? v.totals.split(" ").flatMap((t) => ["--reconcile-total", t]) : []), "--emit-plan"] }),
+    apply: "emit-plan",
+  }),
+  Object.freeze({
+    id: "money.ingest",
+    room: "money",
+    lane: "ledger",
+    label: "Record real revenue",
+    hint: "The ledger's own parser reads the provider's settlement export, and each payment lands once however often it is recorded. Revenue is recorded by your hand only: this applies only on your click.",
+    receipt: Object.freeze({ kind: "revenue.received" }),
+    binding: "v0.7 `ingest` -> revenue.received per payment through arc-event ingest (its idem is the payment's content), written by ledger-ingest.mjs --expect after it re-reads the export and the spine (ADR-1342)",
+    retires: Object.freeze({ module: "money", verb: "Record real revenue" }),
+    humanRun: true, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "provider", label: "Provider", placeholder: "", type: "select", options: Object.freeze(["razorpay", "mor"]), required: true }),
+      Object.freeze({ name: "export", label: "The settlement export", placeholder: "the export file the provider sent", type: "text", max: 400, pattern: `(?![\\\\/]{2})${ONE_LINE}`, required: true }),
+      Object.freeze({ name: "venture", label: "Venture", placeholder: "", type: "select", get options() { return Object.freeze(registeredVentures()); }, required: true }),
+      Object.freeze({ name: "interval", label: "Billing interval", placeholder: "", type: "select", options: Object.freeze(["monthly", "quarterly", "annual", "one_time"]), required: false }),
+    ]),
+    plan: (v) => ({ script: "hq/ledger-ingest.mjs", args: ["--export", `${v.provider}=${v.export}`, "--venture", v.venture, ...(v.interval ? ["--interval", v.interval] : []), "--dry-run"] }),
+    apply: (v) => ({ script: "hq/ledger-ingest.mjs", args: ["--export", `${v.provider}=${v.export}`, "--venture", v.venture, ...(v.interval ? ["--interval", v.interval] : [])] }),
+    expect: true,
+  }),
+  Object.freeze({
+    id: "ventures.register",
+    room: "ventures",
+    lane: "ledger",
+    label: "Register a venture",
+    hint: "A candidate, with its kill lines written before its first launch: ventures.yaml, its passport row and its room, on a proposal branch you merge -- and the criteria request for your inbox.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `register` -> a proposal branch (ventures.yaml, PORTFOLIO.md's passport row, the face's contract and what it derives) and approval.requested under the ledger.criteria profile for the new digest (ADR-1342)",
+    retires: Object.freeze({ module: "ventures", verb: "Register a venture" }),
+    // Human-run, like every op that writes a branch (ADR-1340): the owner ticks before it is written.
+    humanRun: true, spends: false, touchesFiles: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "slug", label: "Venture", placeholder: "the venture's slug, lowercase", type: "text", max: 41, pattern: "[a-z][a-z0-9-]{1,40}", required: true }),
+      Object.freeze({ name: "days", label: "Kill after days without revenue", placeholder: "90", type: "int", min: 1, max: 1000000, required: true }),
+      Object.freeze({ name: "floor", label: "Kill under visits a month", placeholder: "100", type: "int", min: 1, max: 1000000, required: true }),
+      Object.freeze({ name: "repository", label: "Its repository", placeholder: "private, separate repo", type: "text", max: 120, pattern: `(?!.*[|])${ONE_LINE}`, required: true }),
+    ]),
+    plan: (v) => ({ script: "hq/venture-register.mjs", args: ["--slug", v.slug, "--days-without-revenue", v.days, "--traffic-floor", v.floor, "--repository", v.repository, "--dry-run"] }),
+    apply: (v) => ({ script: "hq/venture-register.mjs", args: ["--slug", v.slug, "--days-without-revenue", v.days, "--traffic-floor", v.floor, "--repository", v.repository] }),
+    expect: true,
+  }),
+  Object.freeze({
+    id: "ventures.kill-review",
+    room: "ventures",
+    lane: "ledger",
+    label: "Propose a kill review",
+    hint: "A kill is a stamped decision -- the attic with a retro, components harvested, never a deletion. This raises the question to your inbox with the venture's kill lines as they read now.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `kill review` -> approval.requested (gate venture-kill), sealed by the line arc-pnl --kill-request prints (ADR-1342)",
+    retires: Object.freeze({ module: "ventures", verb: "Propose a kill review" }),
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "venture", label: "Venture", placeholder: "", type: "select", get options() { return Object.freeze(registeredVentures()); }, required: true }),
+      Object.freeze({ name: "reason", label: "Why review it now", placeholder: "ninety days without a sale, and no pipeline", type: "text", max: 512, pattern: ONE_LINE, required: true }),
+    ]),
+    plan: (v) => ({ script: "hq/arc-pnl.mjs", args: ["--kill-request", v.venture, "--reason", v.reason] }),
     apply: "emit-plan",
   }),
   Object.freeze({

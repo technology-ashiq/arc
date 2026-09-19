@@ -79,6 +79,15 @@ load 'test_helper'
   [[ "$output" == *"ok door: a sim door refuses a touchesTree apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
 }
 
+@test "money ring: ingest, the kill review and the venture register APPLIED in scratch; the door accepts their plans" {
+  run node "$ARC_ROOT/tests/face/money-work.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok ingest, applied: one revenue.received per payment"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok register, applied: the branch holds the new venture"* ]] || { echo "$output"; false; }
+}
+
 @test "ask golden: 20 live-state questions answered deterministically, refusals hold" {
   run node "$ARC_ROOT/tests/face/ask-golden.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

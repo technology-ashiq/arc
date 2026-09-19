@@ -128,12 +128,18 @@ const INPUTS = {
   "factory.switch-profile": { to: "strict", why: "the work door suite asks for the strict profile" },
   "executor.terminate": { class: OPS_MOD.OPS.find((o) => o.id === "executor.terminate").fields[0].options[0], why: "the work door suite ends it" },
   "agents.add-agent": { name: "work-door-probe", description: "Reads a diff and names its riskiest hunk", tools: "Read, Grep", tier: "cheap-scan", room: "review-ship", product: "review" },
+  // The money ring (ADR-1342): each refuses here by name -- an export that does not exist, and criteria this spine never
+  // approved. Their apply paths are proven on scratch spines (money-work.mjs).
+  "money.ingest": { provider: "razorpay", export: join(tmp, "no-export.csv"), venture: "lexos", interval: "monthly" },
+  "ventures.register": { slug: "work-door-probe", days: "60", floor: "50", repository: "acme/work-door-probe" },
+  "ventures.kill-review": { venture: "lexos", reason: "the work door suite asks for a review" },
 };
 // The ops whose tool refuses its PLAN on this tree, each by its NAMED refusal -- any refusal would pass a sim door that
 // ran an effect and failed later (PR 3a logic attack). No product here declares an evolve section, so open answers
 // NO_EVOLVE_SECTION and measure and conclude answer NOT_OPEN; an effect op refuses its dry run where it cannot plan at
 // all (no main in a CI checkout, no Windows scheduler) and otherwise plans, and a sim door then refuses SIM_EFFECT.
-const REFUSES_ON_THIS_TREE = new Map([["evolve.open-experiment", /NO_EVOLVE_SECTION/], ["evolve.measure", /NOT_OPEN/], ["evolve.conclude", /NOT_OPEN/], ["develop.slice", /unknown lane/]]);
+const REFUSES_ON_THIS_TREE = new Map([["evolve.open-experiment", /NO_EVOLVE_SECTION/], ["evolve.measure", /NOT_OPEN/], ["evolve.conclude", /NOT_OPEN/], ["develop.slice", /unknown lane/],
+  ["money.ingest", /the export cannot be found/], ["ventures.register", /NO_BASE|no approved criteria receipt/], ["ventures.kill-review", /UNRECEIPTED/]]);
 const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows/], ["engine-room.driver-switch", /NO_BASE/], ["model-policy.tier-proposal", /NO_BASE/], ["absorb.pin-source", /NO_BASE/], ["absorb.trial", /NO_BASE/],
   ["design-studio.open-brief", /NO_BASE/], ["executor.terminate", /NO_BASE/], ["agents.add-agent", /NO_BASE/], ["factory.switch-profile", /already strict/]]);
 check("every registry op is driven by this suite",

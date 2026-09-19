@@ -140,10 +140,10 @@ const readsWith = (h, real, sim) => {
   check("MONEY: the kill lines are a panel with one venture's criterion", full.kill.isPanel === true && full.kill.rows.length === 1 && full.kill.rows[0].criterion === "days_without_revenue", JSON.stringify(full.kill.rows));
   // Phase 04: the fourteen days are the money brain's day series through /api/pnl?by=day -- three SERVED tables, one
   // per substance -- and the milestone line and "where money comes from" stay NOT SERVED.
-  // Phase 05 (ADR-1339): criteria and the month close are live work-door ops, so their cards retired; recording real
-  // revenue is the one card left.
-  check("MONEY: two NOT SERVED panels, three served day tables and one work-door card (record revenue)",
-    reg.notServedOf(full).length === 2 && reg.servedOf(full).length === 3 && reg.verbPendingOf(full).length === 1 && reg.verbPendingOf(full)[0].verb === "Record real revenue",
+  // Phase 05 (ADR-1339, ADR-1342): criteria, the month close and recording real revenue are live work-door ops, so
+  // their cards retired; the room has none left.
+  check("MONEY: two NOT SERVED panels, three served day tables and no work-door card left",
+    reg.notServedOf(full).length === 2 && reg.servedOf(full).length === 3 && reg.verbPendingOf(full).length === 0,
     JSON.stringify({ ns: reg.notServedOf(full).map((n) => n.panel), sv: reg.servedOf(full).map((s) => s.panel) }));
   // The day read answered with the MONTH model -- what an older door gives a key it does not read -- is refused, never
   // drawn as fourteen days.

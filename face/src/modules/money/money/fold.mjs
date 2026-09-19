@@ -11,7 +11,7 @@
 // line and the account of where money comes from, which were facts typed into the reference and live in no file a
 // parser reads. Recording real
 // revenue, setting criteria and closing a month are verbs of the work door (Phase 05).
-import { notServed, verbPending } from "../../../lib/registry.mjs";
+import { notServed } from "../../../lib/registry.mjs";
 import { asArray, asObject, cell, field, projected, servedRead, servedTable } from "../../../lib/served.mjs";
 import {
   COST_KIND, OVERHEAD_VENTURE, REAL_KIND, SIM_KIND, asOfSupport, costTally, fileBorneNote, fmtInt, moneyFlags, rupees,
@@ -50,7 +50,6 @@ import { costView, gateView, killLinesView, moneyReads, substanceView } from "..
  * @property {import("../../../lib/served.mjs").ServedTable} chartCost
  * @property {import("../../../lib/registry.mjs").NotServed} milestones
  * @property {import("../../../lib/registry.mjs").NotServed} sources
- * @property {{ isVerbPending: true, verb: string, sentence: string }} recordVerb
  * @property {string[]} northStar
  * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
@@ -163,13 +162,9 @@ export function fold(payloads, ctx) {
       "/api/ventures",
       "Each venture's revenue model and price, and what the factory itself may earn, from each venture's own record -- never a sentence typed into this room. No venture record carries a revenue model or a price: ventures.yaml holds kill criteria only -- filed to the ledger lane.",
     ),
-    recordVerb: verbPending(
-      "Record real revenue",
-      "revenue.received is recorded by a person's hand only, through the ledger's ingest; the first one opens the green gate and resets the kill clock. It arrives with the work door.",
-    ),
-    // "Set a venture's kill criteria" and "Close the month" are LIVE since face v2 Phase 05 (ADR-1339): the work door's
-    // money.criteria and money.close-month ops, drawn under this room by the host. Their cards are retired, and
-    // evidence/phase-05/verbs-pending.md is Phase 03's list without them.
+    // "Set a venture's kill criteria", "Close the month" and "Record real revenue" are LIVE since face v2 Phase 05
+    // (ADR-1339, ADR-1342): the work door's money.criteria, money.close-month and money.ingest ops, drawn under this
+    // room by the host. Their cards are retired, and evidence/phase-05/verbs-pending.md is Phase 03's list without them.
     northStar: [
       "Rupees a month of revenue, per hour of the owner's week.",
       "The only number arc optimises. A feature that adds human hours is a regression, however impressive it looks.",
