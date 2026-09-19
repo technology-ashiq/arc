@@ -16,7 +16,6 @@ import { countedOn, holdsCount, kindCount, laneBadge, laneKpi, laneRoom } from "
  *   badge: string,
  *   kpis: { key: string, v: string, l: string, sub: string }[],
  *   floor: import("../../../lib/registry.mjs").NotServed,
- *   submitVerb: { isVerbPending: true, verb: string, sentence: string },
  *   critiqueVerb: { isVerbPending: true, verb: string, sentence: string },
  * }} Folded
  */
@@ -41,10 +40,6 @@ export function fold(payloads, ctx) {
       "The studio floor",
       "/api/design",
       "Each submitted surface with its three explore variants and their theses, the read-only critique's findings by class, and the blind jury's ranking against a reference item. The design lane counts these in bash scripts and its lint cannot be imported, so no parser exists for the door to use -- filed to the design lane.",
-    ),
-    submitVerb: verbPending(
-      "Submit a surface",
-      "One surface goes out to three explores, each with a thesis it must differ by, before anything is judged. Submitting arrives with the work door.",
     ),
     critiqueVerb: verbPending(
       "Run a critique, or convene the jury",

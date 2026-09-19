@@ -8,11 +8,33 @@
 //
 // The find box filters every section at once, from `picks.find`; v0.7's pin is a write and waits for the
 // work door (Phase 05), and "explain" is a link to the ask room rather than a second asking surface.
-import { verbPending } from "../../../lib/registry.mjs";
-import { fmtInt } from "../../../lib/inbox.mjs";
+import { payloadOf } from "../../../lib/registry.mjs";
+import { fmtInt, readSpinePage } from "../../../lib/inbox.mjs";
 import { catalogueOf, laneBadge, laneRoom, roomLink } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
+
+/** The pins, read by their note: every other note.logged on the spine is skipped at the door (`note=`). */
+const PIN_READ = Object.freeze({ route: "/api/spine", query: Object.freeze({ kind: "note.logged", note: "toolbelt.pin", limit: 500 }) });
+/** A section's pin prefix, as the face-ops row spells a tool: `<singular>:<name>`. */
+const SINGULAR = Object.freeze({ commands: "command", agents: "agent", hooks: "hook", rules: "rule", lints: "lint", processes: "process", gates: "gate", products: "product", capabilities: "capability" });
+
+/**
+ * The pinned tools, replayed in append order: a pin adds, an unpin removes, the last word on a tool wins. Pure.
+ * @param {{ payload: Record<string, unknown> }[]} events
+ * @returns {string[]} the pinned tool names, in the order they were pinned
+ */
+export function replayPins(events) {
+  /** @type {Map<string, true>} */
+  const pinned = new Map();
+  for (const e of events) {
+    const tool = typeof e.payload["tool"] === "string" ? e.payload["tool"] : "";
+    if (tool === "") continue;
+    if (e.payload["action"] === "pin") { pinned.delete(tool); pinned.set(tool, true); }
+    else if (e.payload["action"] === "unpin") pinned.delete(tool);
+  }
+  return [...pinned.keys()];
+}
 
 /**
  * The catalogue's sections, in the order a person looks for them, each a key the registry homes.
@@ -43,7 +65,10 @@ const SECTIONS = Object.freeze([
  *   hasMatches: boolean,
  *   findNote: string,
  *   hasFindNote: boolean,
- *   pinVerb: { isVerbPending: true, verb: string, sentence: string },
+ *   pins: { tool: string, name: string, roomName: string, room: string, canOpen: boolean, found: boolean }[],
+ *   hasPins: boolean,
+ *   pinsNote: string,
+ *   hasPinsNote: boolean,
  *   ask: { canOpen: boolean, room: string },
  * }} Folded
  */
@@ -55,6 +80,7 @@ const SECTIONS = Object.freeze([
  */
 export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx);
+  const pinP = payloadOf(payloads, PIN_READ);
   /** @type {Record<string, string>} */
   const picks = ctx.picks ?? {};
   const find = typeof picks.find === "string" ? picks.find : "";
@@ -111,10 +137,33 @@ export function fold(payloads, ctx) {
     hasMatches: matches > 0,
     hasFindNote: needle !== "",
     findNote: needle === "" ? "" : matches === 0 ? `nothing in the catalogue matches ${JSON.stringify(find.trim())}${anyUnread ? " -- in the sections that could be read" : ""}` : `${fmtInt(matches)} of ${anyUnread ? "the readable" : fmtInt(total)} match ${JSON.stringify(find.trim())}`,
-    pinVerb: verbPending(
-      "Pin a tool to the top of this room",
-      "A pin is a receipt, so the room remembers what the owner reaches for most. It arrives with the work door.",
-    ),
+    ...pinsOf(pinP, all),
     ask: roomLink(ctx, "ask-arc"),
+    reads: [...base.reads, PIN_READ],
   };
+}
+
+/**
+ * The pinned panel: each pin matched to its catalogue row by `<section>:<name>`, or named as gone. A page that could
+ * not be read says so -- an empty panel would read as "nothing pinned".
+ * @param {Payload} pinP @param {{ key: string, rows: { name: string, room: string, roomName: string, canOpen: boolean }[] }[]} all
+ */
+function pinsOf(pinP, all) {
+  if (pinP.state !== "ok") {
+    const pinsNote = pinP.state === "refused" ? `the pins could not be read -- ${pinP.code}` : "reading the pins…";
+    return { pins: [], hasPins: false, pinsNote, hasPinsNote: true };
+  }
+  const page = readSpinePage(pinP.data);
+  const names = replayPins(page.events);
+  const pins = names.map((tool) => {
+    const [section, ...rest] = tool.split(":");
+    const name = rest.join(":");
+    const s = all.find((x) => SINGULAR[/** @type {keyof typeof SINGULAR} */ (x.key)] === section);
+    const row = s ? s.rows.find((r) => r.name === name) : undefined;
+    return row
+      ? { tool, name, roomName: row.roomName, room: row.room, canOpen: row.canOpen, found: true }
+      : { tool, name: name || tool, roomName: "no longer in the registry", room: "", canOpen: false, found: false };
+  });
+  const pinsNote = page.more ? "the newest pins past the first 500 are not replayed here -- unpin some to keep the list honest" : pins.length === 0 ? "nothing pinned yet -- pin a tool with the card below" : "";
+  return { pins, hasPins: pins.length > 0, pinsNote, hasPinsNote: pinsNote !== "" };
 }
