@@ -7,7 +7,7 @@
 // phase closings and cycle kickoffs the registry homes here are the spine's. The factory's parts -- the products, the
 // commands, the agents and the gates -- are counted from the served registry, the list the shell already read. What
 // each gate is set to, and the profile that switches them as one, are read from /api/gates (Phase 04).
-import { payloadOf, readProblem, verbPending } from "../../../lib/registry.mjs";
+import { payloadOf, readProblem } from "../../../lib/registry.mjs";
 import { gateModes, servedRead } from "../../../lib/served.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { boardRows } from "../../../lib/spine.mjs";
@@ -31,7 +31,6 @@ import { boardLanes, laneLinks } from "../../../lib/company-room.mjs";
  *   gates: { key: string, name: string, roomName: string, room: string, canOpen: boolean }[],
  *   isGatesEmpty: boolean,
  *   modes: import("../../../lib/served.mjs").ServedTable,
- *   profileVerb: { isVerbPending: true, verb: string, sentence: string },
  * }} Folded
  */
 
@@ -105,9 +104,5 @@ export function fold(payloads, ctx) {
     gates: gateRows.map((g) => ({ key: g.key, name: g.name, roomName: g.roomName, room: g.room, canOpen: g.canOpen })),
     isGatesEmpty: gateRows.length === 0,
     modes: gateModes(gatesSt, "Gate modes and the profile"),
-    profileVerb: verbPending(
-      "Switch the profile",
-      "One key switches every gate as a set, with a reason written down; loosening is a profile switch, never a flag somebody remembers. It arrives with the work door.",
-    ),
   };
 }

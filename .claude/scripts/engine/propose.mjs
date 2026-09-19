@@ -3,6 +3,10 @@
 //
 //   propose.mjs driver --class C --to DRIVER [--why TEXT] [--dry-run | --expect D]   route a class to another driver
 //   propose.mjs tier   --class C --to TIER   [--why TEXT] [--dry-run | --expect D]   move a class to another tier (ADR-0069)
+//   propose.mjs retire --class C             [--why TEXT] [--dry-run | --expect D]   end a hire (ADR-1341 §4): the class
+//                      goes back to the router's default driver and its tenure terms (cap, hosted, judge, review_by)
+//                      leave its row, with the comments written against them. The class itself stays -- arc-run, its
+//                      process and the policy still name it.
 //
 // engine/router.yaml is hand-edited, forever in v1: "nothing writes to this file at run time, and every change is a
 // reviewed diff citing ADR-0069". This tool never writes it. It edits ONE line of the class's block in main's copy of
@@ -44,7 +48,7 @@ let written = false;
 
 function parseArgs(argv) {
   const [verb, ...rest] = argv;
-  if (verb !== "driver" && verb !== "tier") die(2, "usage: propose.mjs driver|tier --class C --to X [--why TEXT] [--dry-run | --expect D]");
+  if (verb !== "driver" && verb !== "tier" && verb !== "retire") die(2, "usage: propose.mjs driver|tier --class C --to X | retire --class C  [--why TEXT] [--dry-run | --expect D]");
   const out = { verb, class: "", to: "", why: "", expect: undefined, dryRun: false };
   const seen = new Set();
   for (let i = 0; i < rest.length; i++) {
@@ -61,7 +65,8 @@ function parseArgs(argv) {
   }
   if (out.dryRun && out.expect !== undefined) die(2, "--dry-run plans and --expect applies; give one");
   if (!SLUG_RE.test(out.class)) die(2, `--class ${JSON.stringify(out.class)} is not a task class name`);
-  if (!SLUG_RE.test(out.to)) die(2, `--to ${JSON.stringify(out.to)} is not a ${verb} name`);
+  if (verb === "retire") { if (out.to) die(2, "retire takes no --to: an ended hire goes back to the router's default driver"); }
+  else if (!SLUG_RE.test(out.to)) die(2, `--to ${JSON.stringify(out.to)} is not a ${verb} name`);
   if (out.why && !isOneLine(out.why)) die(2, "--why is one line of text, with no control or text-direction characters");
   return out;
 }
@@ -97,22 +102,63 @@ export function editRouter(text, cls, field, to) {
   return { text: lines.join("\n"), from };
 }
 
+/** The tenure terms a hire carries (router-row.mjs): a row with any of them is a hire. */
+export const TENURE_KEYS = Object.freeze(["cap", "hosted", "judge", "review_by"]);
+
+/**
+ * The router text with one hire ended: its driver set to `to`, and each tenure line removed together with the comment
+ * lines written directly above it. Refuses a class that is not a hire, and one already on `to`.
+ * @param {string} text @param {string} cls @param {string} to
+ */
+export function retireHire(text, cls, to) {
+  const lines = text.split("\n");
+  const top = lines.findIndex((l) => l === "classes:");
+  if (top < 0) die(2, `${ROUTER} on main has no \`classes:\` block`);
+  const at = lines.findIndex((l, i) => i > top && l === `  ${cls}:`);
+  if (at < 0) die(2, `${ROUTER} on main has no \`classes.${cls}\` row -- there is nothing to retire`);
+  let end = at + 1;
+  while (end < lines.length && (lines[end].trim() === "" || /^ {4}/.test(lines[end]) || /^\s*#/.test(lines[end]) && /^ {4}/.test(lines[end]))) {
+    if (lines[end].trim() === "" && !(end + 1 < lines.length && /^ {4}/.test(lines[end + 1]))) break;
+    end++;
+  }
+  const block = lines.slice(at + 1, end);
+  const keyOf = (l) => (/^ {4}([a-z_]+):/.exec(l) || [])[1];
+  const tenure = block.filter((l) => TENURE_KEYS.includes(keyOf(l)));
+  if (tenure.length === 0) die(2, `\`classes.${cls}\` carries no tenure terms -- it is not a hire, so there is nothing to end (a driver switch moves a class that is not one)`);
+  const driverAt = block.findIndex((l) => keyOf(l) === "driver");
+  if (driverAt < 0) die(2, `\`classes.${cls}\` declares no driver line`);
+  const from = block[driverAt].replace(/^ {4}driver:\s*/, "").replace(/\s+#.*$/, "").trim();
+  if (from === to) die(2, `${cls} is already on ${to} -- only its terms would go; edit them by hand, citing ADR-0069`);
+  // Drop each tenure line and the comment lines directly above it (a comment written about that term).
+  const drop = new Set();
+  block.forEach((l, i) => {
+    if (!TENURE_KEYS.includes(keyOf(l))) return;
+    drop.add(i);
+    for (let j = i - 1; j >= 0 && /^ {4}#/.test(block[j]); j--) drop.add(j);
+  });
+  const kept = block.map((l, i) => (i === driverAt ? `    driver: ${to}` : l)).filter((_, i) => !drop.has(i));
+  return { text: [...lines.slice(0, at + 1), ...kept, ...lines.slice(end)].join("\n"), from, removed: tenure.map(keyOf) };
+}
+
 /**
  * The proposal branch. The class goes LAST: a class ending in "sk" (face-ask) followed by "-" made "sk-" inside the
  * branch name, the spine's secret scanner read it plus the neighbouring strings as an API key, and every face-ask
  * proposal wrote its branch and then had its approval refused (PR 3a logic attack). proposalBranch defuses an "sk-" the
  * class-last order cannot, one INSIDE a name (face-ask-v2; PR 3b logic attack, the pin twin).
- * @param {"driver" | "tier"} verb @param {string} cls @param {string} to
+ * @param {"driver" | "tier" | "retire"} verb @param {string} cls @param {string} to
  */
 export function branchFor(verb, cls, to) {
+  if (verb === "retire") return proposalBranch("engine-retire", cls);
   return proposalBranch(`engine-${verb}`, `${to}-${cls}`);
 }
 
 /** The approval a written proposal raises. One builder, for the dry run and the real emit alike. */
 export function approvalPayload({ verb, cls, from, to, why, branch, base, commit }) {
-  const what = verb === "driver" ? `route ${cls} from ${from} to ${to}` : `move ${cls} from the ${from} tier to ${to}`;
+  const what = verb === "driver" ? `route ${cls} from ${from} to ${to}`
+    : verb === "retire" ? `end the hire of ${cls}: back from ${from} to ${to}, its tenure terms removed`
+    : `move ${cls} from the ${from} tier to ${to}`;
   return {
-    what, gate: verb === "driver" ? "router-merge" : "model-policy",
+    what, gate: verb === "tier" ? "model-policy" : "router-merge",
     adr: "ADR-0069", class: cls, field: verb, from, to,
     branch, base, commit,
     ...(why ? { why } : {}),
@@ -130,8 +176,14 @@ async function main() {
     die(2, `\`${args.to}\` is not a driver this tree ships (known: ${knownDrivers().join(", ")})`);
   if (args.verb === "tier" && !(Array.isArray(router.tiers) && router.tiers.includes(args.to)))
     die(2, `\`${args.to}\` is not a tier ADR-0069 names (the router's tiers: ${(router.tiers || []).join(", ")})`);
+  // An ended hire goes back to the router's own default driver -- read from the file, never assumed.
+  if (args.verb === "retire") {
+    const dflt = router.default && typeof router.default.driver === "string" ? router.default.driver : "";
+    if (!SLUG_RE.test(dflt)) die(2, `${ROUTER} on main has no default driver to send an ended hire back to`);
+    args.to = dflt;
+  }
 
-  const { text: proposed, from } = editRouter(text, args.class, args.verb, args.to);
+  const { text: proposed, from } = args.verb === "retire" ? retireHire(text, args.class, args.to) : editRouter(text, args.class, args.verb, args.to);
   // The router's OWN loader, over the proposed file: a proposal arc-run would refuse to load is refused here, in the
   // router's words -- routing a class to the agent runtime without its terms is the case this catches.
   const reparsed = parseYamlSubset(proposed);
@@ -146,7 +198,7 @@ async function main() {
   const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)), { cwd: REPO });
   if (refused) die(2, `the approval this proposal raises would be refused by the spine, so nothing is written: ${refused}`);
   const { what } = approval("");
-  const message = `engine: ${what} (a proposal, ADR-0069${args.verb === "driver" ? "" : " tier change"})\n\n${args.why ? `${args.why}\n\n` : ""}Written by the face's work door (ADR-1340). Nothing routes differently until a human merges this branch.`;
+  const message = `engine: ${what} (a proposal, ADR-0069${args.verb === "tier" ? " tier change" : args.verb === "retire" ? ", ADR-1341 §4" : ""})\n\n${args.why ? `${args.why}\n\n` : ""}Written by the face's work door (ADR-1340). Nothing routes differently until a human merges this branch.`;
   // The digest covers EVERYTHING the apply writes: the branch, its base, the bytes, the commit message and the approval
   // (with a placeholder commit). It covered the first three only, and an apply with another --why wrote a reason the
   // owner never read into both the commit and the inbox (PR 3a round-2 logic attack).
