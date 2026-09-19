@@ -202,7 +202,7 @@ check("an empty reason is refused locally, without a round trip",
 let seen = null;
 const spy = async (url, init) => { seen = { url, init }; return { ok: true, status: 200, statusText: "OK", json: async () => ({}) }; };
 await new door.Door({ token: "tok", fetchImpl: spy }).decide({ id: VALID_ULID, decision: "reject", reason: "not yet" });
-check("the write is a POST to the one mutating route",
+check("the decision is a POST to /api/decide, the door's one spine write",
   seen && seen.init.method === "POST" && seen.url.endsWith("/api/decide"), seen && seen.url);
 check("the token rides as a bearer header, never in the query string",
   seen && seen.init.headers.Authorization === "Bearer tok" && !seen.url.includes("tok="), seen && seen.url);

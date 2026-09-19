@@ -24,7 +24,9 @@ for _arc_arg in "$@"; do
     continue
   fi
   case "$_arc_arg" in
-    --strict|--strict=*)
+    --strict|--strict=*|--dry-run|--dry-run=*)
+      # A dry run is answered strictly by the emitter (exit 2 on a refusal); absorbing that into
+      # hook mode's exit 0 here would answer "accepted" to every dry run made through this wrapper.
       _arc_strict=1 ;;
     --payload|--payload-file|--event-file|--json|--actor|--process|--model|--venture|--run-id|--outcome|--evidence|--supersedes|--idem|--cost|--date)
       _arc_expect_value=1 ;;

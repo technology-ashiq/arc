@@ -6,6 +6,7 @@
 //   arc-growth render   --draft F --plan F --out F
 //   arc-growth lint     --file F [--markers F] [--offline]
 //   arc-growth publish  <slug> --article F --plan F --preview URL [--out F]
+//   arc-growth seal     <slug> --article F --cluster-id c-NNN --title T --pr N   (after a HUMAN merged it)
 //
 // E2 (Tier E, unamendable): there is no promote, MERGE, deploy or ship verb here, and there is no
 // path to one -- `exec-allowlist.mjs` is the single module that may spawn anything, `guard.mjs`
@@ -19,6 +20,7 @@
 // rather than one that bypasses them (phase-04 spec, Amendment 2026-08-14).
 
 import { readFileSync, writeFileSync, realpathSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSources, mine, assertCandidate, MineError } from "./lib/mine.mjs";
 import {
@@ -33,18 +35,21 @@ import { loadExemplars, clusterRows, assemblePrompt, assertNoStylePrescription, 
 import { assignArm } from "./lib/templates.mjs";
 import { buildReviewPack, renderReviewPack, PublishError } from "./lib/publish.mjs";
 import { contentShaOfBytes } from "./lib/content-sha.mjs";
+import { loadSiteConfig } from "./lib/cutover.mjs";
+import { assertContent, contentIdem } from "../hq/lib/validate-content.mjs";
 
 // Assigned by main() once the verb is known. Every flag read goes through flag()/has(), which read
 // this and nothing else -- there is no second reading of argv anywhere in the file.
 let ARGS = { values: new Map(), bare: new Set(), positional: [] };
 
 const VALUE_FLAGS = ["sources", "out", "sitemap", "sitemap-file", "candidates", "cluster-id", "plan",
-  "keyword", "exemplars", "markers", "file", "draft", "article", "preview", "templates", "receipts", "week", "range-start", "range-end", "revision"];
+  "keyword", "exemplars", "markers", "file", "draft", "article", "preview", "templates", "receipts", "week", "range-start", "range-end", "revision",
+  "title", "pr"];
 const BARE_FLAGS = ["offline", "accept-unknown"];
 
 // How many BARE arguments each verb takes. Declared per verb rather than globally, so `lint` still
 // refuses a shell-expanded glob while `publish <slug>` keeps the argument ADR-1102 gives it.
-const POSITIONALS = Object.freeze({ publish: 1, ingest: 1 });
+const POSITIONALS = Object.freeze({ publish: 1, ingest: 1, seal: 1 });
 
 // ---------------------------------------------------------------------------------------------
 // ONE PARSE, and everything reads from it.
@@ -643,7 +648,65 @@ async function cmdIngest() {
   );
 }
 
-export const COMMANDS = { mine: cmdMine, cluster: cmdCluster, generate: cmdGenerate, render: cmdRender, lint: cmdLint, publish: cmdPublish, ingest: cmdIngest, "spec-verify": cmdSpecVerify };
+/**
+ * `seal <slug>` -- the `content.published` receipt for an article a HUMAN HAS ALREADY MERGED (face v2 Phase 05,
+ * ADR-1339). RUNBOOK.md had the operator type its eight fields by hand, which is the class the site config exists
+ * to end; here every field comes from its one source: `site` from site.json through loadSiteConfig, `url` from the
+ * site and the slug, `template_id` from the same assignArm publish uses, `content_sha` from contentShaOfBytes over
+ * the merged file's raw bytes. The last stdout line is the exact emit. It spawns nothing and emits nothing -- E2
+ * holds, because this records a merge and has no way to make one.
+ */
+async function cmdSeal() {
+  const slug = ARGS.positional[0];
+  const articlePath = flag("article");
+  const clusterId = flag("cluster-id");
+  const title = flag("title");
+  const pr = flag("pr");
+  if (!slug || !articlePath || !clusterId || !title || !pr)
+    die("BAD_ARGS", "seal needs: arc-growth seal <slug> --article <the merged .mdx> --cluster-id c-NNN --title T --pr N");
+  if (!/^[1-9][0-9]{0,9}$/.test(pr)) die("BAD_ARGS", `--pr is the merged pull request's number, got ${JSON.stringify(pr)}`);
+
+  const siteJson = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "initiatives", "growth", "site.json");
+  let site;
+  try { site = loadSiteConfig(readOrDie(siteJson, "the site config")).site; }
+  catch (e) { die(e.code || "BAD_SITE_CONFIG", e.message); }
+
+  const bytes = readBytesOrDie(articlePath, "the merged article");
+  // Refused, never stripped -- the same rule, for the same reason, as publish: content_sha is over raw bytes.
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
+    die("BOM_IN_ARTICLE", `${articlePath} starts with a UTF-8 BOM; the published bytes would not be the hashed bytes`);
+  if (bytes.length === 0) die("EMPTY_ARTICLE", `${articlePath} is empty -- there is nothing that was published`);
+
+  const payload = {
+    site,
+    slug,
+    url: `https://${site}/blog/${slug}/`,
+    title,
+    template_id: assignArm(slug),
+    cluster_id: clusterId,
+    content_sha: contentShaOfBytes(bytes),
+    pr_ref: `#${pr}`,
+  };
+  // Checked by the spine's OWN validator before it is printed: a seal line that the emitter would refuse is a plan
+  // that lies about what apply will do.
+  // The idem is part of what the validator checks (ADR-1101: the total preimage over the identity fields), so it is
+  // derived with the same function the emitter uses -- never recomputed here another way.
+  try { assertContent({ kind: "content.published", payload, idem: contentIdem("content.published", payload) }); }
+  catch (e) { die(e.code || "BAD_CONTENT", e.message); }
+
+  process.stdout.write(
+    `seal: content.published for ${payload.url}\n` +
+    `  title        ${payload.title}\n` +
+    `  arm          ${payload.template_id} (sha256(slug), the same assignment publish printed)\n` +
+    `  cluster      ${payload.cluster_id}\n` +
+    `  content_sha  ${payload.content_sha} (raw bytes of ${articlePath})\n` +
+    `  merged PR    ${payload.pr_ref}\n` +
+    `This records a merge a human made (E2). It is sealed by the emit on the next line, and by nothing here.\n`,
+  );
+  process.stdout.write(`${JSON.stringify({ emit: ["emit", "content.published", "--payload", JSON.stringify(payload), "--strict"] })}\n`);
+}
+
+export const COMMANDS = { mine: cmdMine, cluster: cmdCluster, generate: cmdGenerate, render: cmdRender, lint: cmdLint, publish: cmdPublish, ingest: cmdIngest, "spec-verify": cmdSpecVerify, seal: cmdSeal };
 
 export async function main(argvIn = process.argv.slice(2)) {
   const v = argvIn[0];

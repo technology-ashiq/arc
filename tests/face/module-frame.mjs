@@ -362,8 +362,10 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
   // DOOR_ROUTES is read off arc-dash's own ROUTES table, method for method -- a route the face thinks
   // exists and the door does not serve is how a panel would wait forever.
   const dash = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "utf8");
-  const served = [...dash.matchAll(/\{ method: "(GET|POST)", (path|prefix): "(\/api\/[a-z/-]*)"/g)]
-    .map((m) => `${m[1]} ${m[2] === "prefix" ? `${m[3]}:id` : m[3]}`).sort();
+  // A prefix route may carry a SUFFIX (Phase 05's /api/op/:id/plan and /apply share one prefix): it is part of the
+  // route's name, or the two would read as one route and the face could not tell a plan from an apply.
+  const served = [...dash.matchAll(/\{ method: "(GET|POST)", (path|prefix): "(\/api\/[a-z/-]*)"(?:, suffix: "(\/[a-z-]+)")?/g)]
+    .map((m) => `${m[1]} ${m[2] === "prefix" ? `${m[3]}:id${m[4] || ""}` : m[3]}`).sort();
   const named = Object.entries(R).map(([route, spec]) => `${spec.method} ${route}`).sort();
   check("DOOR_ROUTES names exactly the routes arc-dash serves, method for method", served.length >= 10 && JSON.stringify(served) === JSON.stringify(named), `dash=${served.join(",")} face=${named.join(",")}`);
 
@@ -587,9 +589,8 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
     // INCLUDING the sentence the file promises -- a typed column drifts (it already had). Phase 03's NOT SERVED
     // lists were Phase 04's INPUT and stay frozen as it found them; what is still NOT SERVED after Phase 04, and
     // what Phase 04 served, are held below against phase-04's two lists, across every ring at once.
-    listCheck(`verbs-pending-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `verbs-pending-${ring}.md`),
-      /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm,
-      (m) => `${m[1]} | ${m[2]} | ${m[3]}`, verbRows, "VERBS PENDING");
+    // Phase 05 (ADR-1339): the verb-pending cards are held against ONE list across every ring,
+    // evidence/phase-05/verbs-pending.md, below -- Phase 03's per-ring lists stay frozen as that phase left them.
     // A planned room's flows are REHEARSAL and never reach the work door (ADR-1328), so they are a list of
     // their own rather than rows among the verbs Phase 05 builds -- derived from the folds the same way, and
     // required for exactly the rings whose MODULES include a planned room. A planned room the ring leaves to the
@@ -606,6 +607,30 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
     allServedRows.push(...servedRows);
     allVerbRows.push(...verbRows);
   }
+  // Phase 05 (REQ-07, ADR-1339): the VERBS still PENDING -- Phase 03's cards minus each one a work-door op retired.
+  // Held equal to the folds both ways, AND to Phase 03's rows minus the registry's `retires`, so a card can neither
+  // leave a fold without an op that retires it nor be invented; and every retirement names a real Phase 03 card and
+  // an op its module declares.
+  {
+    const VERB_RE = /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm;
+    listCheck("verbs-pending.md", join(REPO, "initiatives", "face", "evidence", "phase-05", "verbs-pending.md"),
+      VERB_RE, (m) => `${m[1]} | ${m[2]} | ${m[3]}`, allVerbRows, "VERBS PENDING");
+    const P03 = join(REPO, "initiatives", "face", "evidence", "phase-03");
+    const phase03 = readdirSync(P03).filter((n) => /^verbs-pending-.+\.md$/.test(n))
+      .flatMap((n) => [...readFileSync(join(P03, n), "utf8").matchAll(VERB_RE)].map((m) => ({ module: m[1], verb: m[2], row: `${m[1]} | ${m[2]} | ${m[3]}` })));
+    const opsReg = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "face-ops.mjs")).href);
+    const retirements = opsReg.OPS.filter((o) => o.retires).map((o) => ({ op: o.id, room: o.room, module: o.retires.module, verb: o.retires.verb }));
+    const retiredKeys = new Set(retirements.map((r) => `${r.module} | ${r.verb}`));
+    const expected = phase03.filter((c) => !retiredKeys.has(`${c.module} | ${c.verb}`)).map((c) => c.row).sort();
+    check("PHASE 05: the pending cards are Phase 03's minus exactly the cards an op retired",
+      phase03.length >= 40 && JSON.stringify(allVerbRows.slice().sort()) === JSON.stringify(expected),
+      `phase03=${phase03.length} retired=${retirements.length} folds=${allVerbRows.length} expected=${expected.length}`);
+    const phantom = retirements.filter((r) => !phase03.some((c) => c.module === r.module && c.verb === r.verb));
+    check("PHASE 05: every retirement names a card Phase 03 drew", retirements.length > 0 && phantom.length === 0, phantom.map((r) => `${r.op}->${r.module}/${r.verb}`).join(" ; "));
+    const foreign = retirements.filter((r) => r.room !== r.module);
+    check("PHASE 05: an op retires a card only in its own room", foreign.length === 0, foreign.map((r) => `${r.op} (${r.room}) -> ${r.module}`).join(" ; "));
+  }
+
   // Phase 04 (REQ-06): the RESIDUE -- every panel still NOT SERVED, with the route it needs -- and the SERVED list --
   // every panel a door route now fills -- each held equal to the folds both ways. A panel that flips leaves the
   // first and joins the second; one that vanished from both is a mismatch in the second.

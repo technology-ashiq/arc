@@ -241,7 +241,14 @@ try {
   // route enumeration off the table the server actually dispatches from
   const routes = JSON.parse(execFileSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--routes"], { stdio: ["ignore", "pipe", "inherit"] }).toString());
   const mutating = routes.filter((x) => x.mutates);
-  check("route enumeration: EXACTLY one mutating route, /api/decide", mutating.length === 1 && mutating[0].path === "/api/decide");
+  // Phase 05 (REQ-07, ADR-1339): EXACTLY two mutating routes, as a SET -- the one decision door, and the work door's
+  // apply, which takes one plan id. A third, or either of these renamed, is a change this suite must be told about.
+  check("route enumeration: the mutating routes are exactly /api/decide and /api/op/:id/apply",
+    JSON.stringify(mutating.map((x) => x.path).sort()) === JSON.stringify(["/api/decide", "/api/op/:id/apply"]), mutating.map((x) => x.path).join(","));
+  // No bulk write path appeared: no route is named for a batch, and apply is the only mutating prefix route.
+  check("route enumeration: no bulk write path -- no route names a batch, and apply is the only mutating prefix route",
+    routes.every((x) => !/bulk|batch|all\b/.test(x.path)) && mutating.filter((x) => x.path.includes(":")).map((x) => x.path).join(",") === "/api/op/:id/apply",
+    routes.map((x) => x.path).join(","));
   // The above ALONE is circular -- it reads back the flag it asserts on, so a write route
   // labelled mutates:false (or with the key absent, which filter() silently drops) passes.
   // These three close that: every route must DECLARE an effect from a closed set, exactly

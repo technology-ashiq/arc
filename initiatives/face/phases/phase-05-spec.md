@@ -64,6 +64,29 @@ The 15 SESSION verbs (council convene, develop proof, close phase, review, qa, s
 promote rule, absorb adopt, growth draft, adopt plan, record ADR, lane birth) → Phase 06 · merge from the UI → never ·
 direct writes to `engine/router.yaml` or `hq.policy.yaml` → never.
 
+## Current-phase notes
+
+- **2026-09-19, PR 1 (door + six), where it departs from the letter above, stated rather than hidden:**
+  - `ops.mjs` names op **ids only**. PLAN-face-v2 §5.1's example put label and fields in the module; they live once, in
+    the server registry (`.claude/scripts/hq/face-ops.mjs`), and the dock reads them through `GET /api/ops` -- one
+    spelling of what the door validates, with `face-coverage`'s op half holding ids equal both ways.
+  - **Apply streams by polling** `GET /api/op-run/:planId` (the tool's lines so far, then its result) rather than a
+    chunked response: every door answer keeps going through the one escaping serializer, and a second apply of the same
+    plan replays the run instead of opening a second stream.
+  - **Three Phase 03 verb-pending cards are retired** (money: criteria, close the month; growth: merge and publish),
+    each named by its op's `retires`; `evidence/phase-05/verbs-pending.md` is Phase 03's cards minus exactly those, held
+    by `module-frame` to the folds and to the registry. Bench's "Add a model to the bench" card stays until the kernel
+    ring ships its propose half -- it promises the whole flow, and only the run is live.
+  - **The `flows.mjs` port moves to PR 2** (live rooms), which rebuilds the browser harness anyway. PR 1 drives every op
+    through the same door routes the dock uses (`tests/face/work-door.mjs`: plan, confirm, apply, replay, and the
+    hand-run's receipt compared per op), and the dock itself was driven in a real browser against a sim door: money
+    `close month` (plan GREEN, confirm, run, `month.closed`) and bench `run` on the mock driver (16 streamed lines,
+    `run.completed`), 0 console errors.
+  - **Found by building it, fixed in the owning lanes:** `arc-pnl`'s criteria request needs `--idem
+    sha256("ledger.criteria|"+digest)` (the printed two-step never said so -- the emitter refused it); a bench ceiling of
+    ₹0 runs nothing (the field floor is 1); the door reads for a receipt whatever the exit (bench exits 1 on a partial run
+    and still records it).
+
 ## Your-setup / pending
 
 Both §13 rulings are in (ADR-1337, ADR-1339). The owner's click is the keystroke for the human-run ops; any real spend

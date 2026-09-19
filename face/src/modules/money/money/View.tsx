@@ -43,8 +43,6 @@ export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
           <HPanel title="Record real revenue" hint="money moves by human hands only">
             <div className="space-y-2.5">
               <VerbPending item={f.recordVerb} />
-              <VerbPending item={f.criteriaVerb} />
-              <VerbPending item={f.closeVerb} />
             </div>
           </HPanel>
 

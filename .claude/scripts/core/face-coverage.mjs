@@ -511,14 +511,95 @@ export function moduleFindings(tree) {
   return { findings, generic, folders: tree.folders.length, served: openable.length, orphans, exemptions: tree.exemptions.length, exempted: [...exempt].sort() };
 }
 
+// ---------- the op half (face v2 Phase 05, REQ-04, ADR-1326, ADR-1339) ----------
+//
+// A module's ops.mjs names op ids; the WORK door's server registry (.claude/scripts/hq/face-ops.mjs) holds each op's
+// fields and command. The two are reconciled both ways, the way module folders are with the served registry: an id
+// a module names that the door does not serve is a button that plans nothing, and a registry op no module names is an
+// undeclared op -- a write path no room shows. And every op's receipt is a kind the spine already has: an op that
+// would need a new one does not ship (ADR-0026, ADR-1334).
+
+const OP_ID = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
+
+/**
+ * Each module's ops.mjs list, and the server registry's rows. Unreadable -- never empty -- when either cannot be read.
+ * @param {string} repo
+ */
+export async function treeOps(repo) {
+  const root = join(repo, "face", "src", "modules");
+  const modules = [];
+  try {
+    for (const ring of readdirSync(root).sort()) {
+      const rp = join(root, ring);
+      if (!lstatSync(rp).isDirectory()) continue;
+      for (const id of readdirSync(rp).sort()) {
+        const file = join(rp, id, "ops.mjs");
+        if (!existsSync(file)) continue;
+        const ns = await import(pathToFileURL(file).href);
+        if (!Array.isArray(ns.ops)) return { unreadable: `face/src/modules/${ring}/${id}/ops.mjs exports no ops list` };
+        modules.push({ ring, id, ops: [...ns.ops] });
+      }
+    }
+  } catch (e) {
+    return { unreadable: `a module's ops.mjs could not be read (${e.code ?? e.message})` };
+  }
+  let registry;
+  try {
+    const reg = await import(pathToFileURL(join(repo, ".claude", "scripts", "hq", "face-ops.mjs")).href);
+    if (!Array.isArray(reg.OPS)) return { unreadable: "face-ops.mjs exports no OPS table" };
+    registry = reg.OPS.map((o) => ({ id: o && o.id, room: o && o.room, kind: o && o.receipt && o.receipt.kind }));
+  } catch (e) {
+    return { unreadable: `the work door's registry (face-ops.mjs) could not be read (${e.code ?? e.message})` };
+  }
+  return { modules, registry };
+}
+
+/**
+ * The op half's findings.
+ * @param {Awaited<ReturnType<typeof treeOps>> | undefined} tree @param {string[]} kinds  the spine's closed KINDS
+ */
+export function opFindings(tree, kinds) {
+  const findings = [];
+  if (!tree || tree.unreadable) {
+    findings.push(`[op] could not be read from the tree -- ${tree ? tree.unreadable : "no op tree was gathered"}. A source that cannot be read is not a source with nothing in it`);
+    return findings;
+  }
+  const kindSet = new Set(kinds);
+  const byId = new Map();
+  for (const r of tree.registry) {
+    if (typeof r.id !== "string" || !OP_ID.test(r.id)) { findings.push(`[op] the server registry carries an op id ${JSON.stringify(r.id ?? null)} that is not ROOM.VERB`); continue; }
+    if (byId.has(r.id)) { findings.push(`[op] "${r.id}" is in the server registry twice`); continue; }
+    byId.set(r.id, r);
+    if (!kindSet.has(r.kind)) findings.push(`[op] "${r.id}" writes ${JSON.stringify(r.kind ?? null)}, which is not a spine kind -- an op that needs a new kind does not ship (ADR-1334)`);
+  }
+  const named = new Map();
+  for (const m of tree.modules) {
+    const where = `face/src/modules/${m.ring}/${m.id}/ops.mjs`;
+    for (const op of m.ops) {
+      if (typeof op !== "string") { findings.push(`[op] ${where} names an op that is not an id string -- ops.mjs names ids, the registry holds the rest`); continue; }
+      if (named.has(op)) { findings.push(`[op] "${op}" is named by ${named.get(op)} and ${where} -- an op belongs to one room`); continue; }
+      named.set(op, where);
+      const row = byId.get(op);
+      if (!row) { findings.push(`[op] ${where} names "${op}", which the work door's registry does not serve -- a button that would plan nothing`); continue; }
+      if (row.room !== m.id) findings.push(`[op] ${where} names "${op}", which the registry places in room "${row.room}"`);
+    }
+  }
+  for (const id of byId.keys())
+    if (!named.has(id)) findings.push(`[op] "${id}" is in the work door's registry and no module's ops.mjs names it -- an undeclared op, a write path no room shows`);
+  return findings;
+}
+
 // ---------- the check (pure: tree facts + contract -> findings) ----------
 export function coverageFindings({ kinds, lanes, commands, agents, products, rules, processes, contract,
   // ADR-1317: seven inventories derived from the WORLD rather than from the contract.
   gates, jobs, ventures, adrBands, plans, capabilities, plannedRooms, ci, hooks, lints,
   // face v2 Phase 02: module folders reconciled with the served registry (ADR-1321, ADR-1327).
-  modules }) {
+  modules,
+  // face v2 Phase 05: module ops reconciled with the work door's registry (REQ-04, ADR-1339).
+  ops }) {
   const findings = [];
   findings.push(...moduleFindings(modules).findings);
+  findings.push(...opFindings(ops, kinds));
   const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
   // The room ids are the vocabulary everything else points at, so they are validated FIRST
@@ -814,6 +895,7 @@ async function gather(repo) {
     // them printed "0 plans ... all covered" past every control this gate had.
     ...Object.fromEntries(await Promise.all(WORLD_READERS.map(async ([key, read]) => [key, await read(repo)]))),
     modules: treeModules(repo),
+    ops: await treeOps(repo),
   };
 }
 
@@ -827,6 +909,11 @@ async function run(repoOrData, quiet = false) {
   const half = moduleFindings(data.modules);
   if (!data.modules?.unreadable) {
     process.stdout.write(oneLine(`face-coverage: module half folders=${half.folders} served=${half.served} generic=${half.generic.length} orphans=${half.orphans} exemptions=${half.exemptions} generic-rooms=${half.generic.join(",") || "none"} -- a served room with no module renders through the generic module (ADR-1321)`) + "\n");
+  }
+  // What the op half REPORTS (face v2 Phase 05): the registry's ops and the rooms that name them.
+  if (data.ops && !data.ops.unreadable) {
+    const rooms = data.ops.modules.filter((m) => m.ops.length > 0).map((m) => m.id);
+    process.stdout.write(oneLine(`face-coverage: op half registry=${data.ops.registry.length} named=${data.ops.modules.reduce((n, m) => n + m.ops.length, 0)} rooms=${rooms.join(",") || "none"} -- every op a room names is served, and every served op is named (REQ-04)`) + "\n");
   }
   if (findings.length) {
     for (const f of findings) process.stderr.write(`FAIL  ${oneLine(f)}\n`);
@@ -933,6 +1020,18 @@ async function selftest(repo) {
     ["an exemption citing another ADR", withExemptedExtra(clean, "ADR-9999"), "not ADR-1327"],
     ["an exemption for a served room", withExemptionRow(clean, { id: clean.modules?.served?.find((r) => !r.template)?.id ?? "?", adr: "ADR-1327" }), "needs no exemption"],
     ["an unreadable module tree", { ...clean, modules: { unreadable: "the selftest made it unreadable" } }, "[module] could not be read"],
+
+    // ---- the op half (face v2 Phase 05, REQ-04, ADR-1339) -----------------------------------
+    //
+    // Each direction gets its own arm, and each arm names its own ghost: a module naming an op the door does not
+    // serve, a registry op no module names, an op named in the wrong room, an op named twice, an op writing a kind the
+    // spine does not have, and an op tree that could not be read.
+    ["a module op the registry does not serve", withModuleOp(clean, "ghost.op-unserved"), "ghost.op-unserved"],
+    ["a registry op no module names", withRegistryOp(clean, { id: "ghost.op-undeclared", room: "ghost", kind: firstKind(clean) }), "ghost.op-undeclared"],
+    ["an op named in another room's module", withMovedOp(clean), "which the registry places in room"],
+    ["an op named by two modules", withDoubledOp(clean), "an op belongs to one room"],
+    ["an op writing a kind the spine lacks", withOpKind(clean, "ghost.kind-op"), "ghost.kind-op"],
+    ["an unreadable op tree", { ...clean, ops: { unreadable: "the selftest made it unreadable" } }, "[op] could not be read"],
   ];
 
   let allArmsWiring = true;
@@ -973,6 +1072,17 @@ async function selftest(repo) {
     const populated = Boolean(direct?.unreadable) || (direct?.folders?.length ?? 0) > 0;
     if (!populated) allArmsWiring = false;
     lines.push(`wiring ${"modules".padEnd(26)} reads something: ${populated ? "PASS" : "FAIL (read no module folder on a tree that has some)"}`);
+  }
+  // And the op reader (face v2 Phase 05): gather's op tree is what treeOps reads directly, and on this tree the
+  // registry has ops and some module names one -- two disconnected halves also agree, so the floor is on both.
+  {
+    const direct = await treeOps(repo);
+    const same = JSON.stringify(clean.ops) === JSON.stringify(direct);
+    if (!same) allArmsWiring = false;
+    lines.push(`wiring ${"ops".padEnd(26)} gather==reader: ${same ? "PASS" : "FAIL (gather and treeOps disagree)"}`);
+    const populated = Boolean(direct?.unreadable) || ((direct?.registry?.length ?? 0) > 0 && (direct?.modules ?? []).some((m) => m.ops.length > 0));
+    if (!populated) allArmsWiring = false;
+    lines.push(`wiring ${"ops".padEnd(26)} reads something: ${populated ? "PASS" : "FAIL (read no op on a tree that has some)"}`);
   }
   let allArms = allArmsWiring;
   for (const [label, mutant, needle, judgeArm] of arms) {
@@ -1022,6 +1132,8 @@ async function selftest(repo) {
     ["an unreadable inventory source", withUnreadable(clean, "gates")],
     ["a contract inventory nothing derives", withUnderivedInventory(clean)],
     ["orphan module folder", withModuleFolder(clean, firstServedRing(clean), "ghost-module")],
+    ["module op the door does not serve", withModuleOp(clean, "ghost.op-unserved")],
+    ["registry op no module names", withRegistryOp(clean, { id: "ghost.op-undeclared", room: "ghost", kind: firstKind(clean) })],
   ];
   let allExits = true;
   for (const [label, mutant] of exitArms) {
@@ -1087,6 +1199,47 @@ function withUnderivedInventory(data) {
 /** The first ring the served registry declares, or a placeholder the arm will then fail on honestly. */
 function firstServedRing(data) {
   return data.modules?.rings?.[0] ?? "command";
+}
+/** The first spine kind, for an op row that must be valid on every axis but the one its arm corrupts. */
+function firstKind(data) {
+  return data.kinds?.[0] ?? "note.logged";
+}
+/** An op id added to the FIRST module that names any op (or the first module), as if its ops.mjs grew one. */
+function withModuleOp(data, op) {
+  const o = data.ops || {};
+  const mods = (o.modules || []).map((m) => ({ ...m, ops: [...m.ops] }));
+  const target = mods.find((m) => m.ops.length > 0) || mods[0];
+  if (target) target.ops.push(op);
+  return { ...data, ops: { ...o, modules: mods } };
+}
+/** A row added to the work door's registry, as gathered. */
+function withRegistryOp(data, row) {
+  const o = data.ops || {};
+  return { ...data, ops: { ...o, registry: [...(o.registry || []), row] } };
+}
+/** The first named op moved to a DIFFERENT module's ops.mjs. */
+function withMovedOp(data) {
+  const o = data.ops || {};
+  const mods = (o.modules || []).map((m) => ({ ...m, ops: [...m.ops] }));
+  const from = mods.find((m) => m.ops.length > 0);
+  const to = mods.find((m) => m !== from);
+  if (from && to) to.ops.push(/** @type {string} */ (from.ops.shift()));
+  return { ...data, ops: { ...o, modules: mods } };
+}
+/** The first named op named again by a second module. */
+function withDoubledOp(data) {
+  const o = data.ops || {};
+  const mods = (o.modules || []).map((m) => ({ ...m, ops: [...m.ops] }));
+  const from = mods.find((m) => m.ops.length > 0);
+  const to = mods.find((m) => m !== from);
+  if (from && to) to.ops.push(from.ops[0]);
+  return { ...data, ops: { ...o, modules: mods } };
+}
+/** The first registry op's receipt kind changed to `kind`. */
+function withOpKind(data, kind) {
+  const o = data.ops || {};
+  const reg = (o.registry || []).map((r, i) => (i === 0 ? { ...r, kind } : r));
+  return { ...data, ops: { ...o, registry: reg } };
 }
 /** A module folder added to the tree the gather read. */
 function withModuleFolder(data, ring, id) {

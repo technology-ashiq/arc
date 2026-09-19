@@ -21,6 +21,14 @@ load 'test_helper'
   [ -n "$n" ] && [ "$n" -ge 215 ] || { echo "only $n checks ran: $output"; false; }
 }
 
+@test "face v2: the ops dock's decisions run with no install, and every check passes" {
+  run node "$ARC_ROOT/tests/face/ops-logic.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok runVerdict: exit 0 with no receipt is said as that, never as success"* ]] || { echo "$output"; false; }
+}
+
 @test "no L3 test or source file carries a byte that makes grep call it binary" {
   # A literal NUL in a source file makes grep treat the whole file as binary, and a
   # binary-flagged file is SKIPPED silently by every grep-driven gate -- including CI's own

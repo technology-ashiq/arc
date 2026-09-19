@@ -359,9 +359,14 @@ is done (`evidence/phase-05/cli-probe.md`): of 46 verbs, 2 READY, 15 SMALL-GAP, 
 Phase 05 is now 10d in five PRs -- (1) the door machinery, `arc-event --dry-run` and the flagship six, (2) live rooms
 (REQ-11), (3) kernel 10 verbs, (4) factory 8, (5) money + company 7 -- and Phase 06 carries the 15 SESSION verbs in 5d.
 Plan sums to 21d of 24d. Phase 04 closed 2026-09-18 (`0a4cb262`, #248; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` and
-`01M2TPXZGPTN08BN98G6TCRZ5J`). **Next:** the owner's OK on this widened plan (an `/arc-change` scope change stops for
-it), then PR 1 on `feat/face-v2-05` from `main`: each owning-lane change's behaviour-pinning fixture RED-first, then
-the ops registry and the door.
+`01M2TPXZGPTN08BN98G6TCRZ5J`). The owner's OK on the widened plan: "OK machi, start pannu" (2026-09-19).
+**PR 1 (door + six) is BUILT on `feat/face-v2-05`:** the registry (`hq/face-ops.mjs`), the door's plan/apply/run
+(`hq/lib/face/work-door.mjs`, four routes on `arc-dash`), the ops dock in every room that names ops, the six ops, the
+owning-lane additions (`arc-event --dry-run`, `arc-pnl --criteria-request` and `--close ... --emit-plan`, `develop.mjs
+checkpoint --receipt`, `arc-growth seal`), face-coverage's op half (117 selftest arms), and `tests/face/work-door.mjs`
+(the per-op no-second-path fixture). All six ran plan -> apply -> receipt against a sim door; close month and bench
+also through the dock in a real browser. The `flows.mjs` port moves to PR 2 (spec current-phase note). **Next:** CI
+per job on PR 1, the two fresh attackers, merge; then PR 2 -- live rooms and the flows port.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering

@@ -533,7 +533,7 @@ async function modeCheckpoint(ctx, opts = {}) {
   if (!files.length) {
     say("checkpoint: no changed files to check.");
     if (!opts.inline) flush(0);
-    return { tripped: [], markers: [] };
+    return { tripped: [], markers: [], files: 0 };
   }
 
   const tripped = RISK_GLOBS
@@ -570,21 +570,51 @@ async function modeCheckpoint(ctx, opts = {}) {
     say(`  WARN  [debt-marker] ${m.file}:${m.line} — new marker with no row in ${debtPath.replace(ctx.root, "").replace(/^[\\/]/, "")} [trial]`);
   }
   if (!opts.inline) flush(0);
-  return { tripped, markers };
+  return { tripped, markers, files: files.length };
+}
+
+/**
+ * The checkpoint's OWN receipt (`checkpoint --receipt`, face v2 Phase 05, ADR-1339). Unlike emit() above, a failure
+ * here IS the command's failure: the receipt is what was asked for, so a refused or lost one exits non-zero and says
+ * why, and the ULID the spine assigned is printed so the caller can read it back.
+ * @returns {Promise<{ id: string | null, why: string | null }>}
+ */
+async function emitCheckpointReceipt(ctx, cp) {
+  const payload = {
+    note: "develop.checkpoint",
+    lane: ctx.mode === "root" ? null : ctx.lane,
+    files: cp.files,
+    tripped: cp.tripped.map((g) => g.name),
+    markers: cp.markers.length,
+  };
+  const { spawnSync } = await import("node:child_process");
+  const res = spawnSync(process.execPath,
+    [join(ARC_ROOT, ".claude", "scripts", "hq", "arc-event.mjs"), "emit", "note.logged", "--payload", JSON.stringify(payload), "--strict"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const id = String(res.stdout || "").trim();
+  if (res.status !== 0 || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id))
+    return { id: null, why: String(res.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${res.status}` };
+  return { id, why: null };
 }
 
 // ---------------------------------------------------------------------------
 // Entry
 // ---------------------------------------------------------------------------
 
-const argv = process.argv.slice(2);
+// `--receipt` is taken out before the lane parser sees argv: that parser reads every unknown token as a positional,
+// so left in, it would be read as a phase argument -- the swallowed-flag hazard the Phase 05 probe named.
+const rawArgv = process.argv.slice(2);
+if (rawArgv.some((a) => a.startsWith("--receipt="))) { say("STOP: --receipt takes no value"); flush(2); }
+const wantsReceipt = rawArgv.includes("--receipt");
+const argv = rawArgv.filter((a) => a !== "--receipt");
 const { lane, laneGiven, laneDup, root: rootArg, positionals } = parseLaneArgs(argv);
 
 const mode = positionals[0];
 if (!mode || !MODES.has(mode)) {
-  say(`usage: develop.mjs <${[...MODES].join("|")}> [phase] [--lane NAME] [--root PATH]`);
+  say(`usage: develop.mjs <${[...MODES].join("|")}> [phase] [--lane NAME] [--root PATH] [--receipt (checkpoint only)]`);
   flush(mode ? 2 : 0);
 }
+if (wantsReceipt && mode !== "checkpoint") { say("STOP: --receipt belongs to checkpoint -- the other modes write their own receipts"); flush(2); }
 
 let root = rootArg;
 if (!root) {
@@ -620,6 +650,12 @@ if (mode === "start") {
   await modeStatus(ctx);
 } else if (mode === "handoff") {
   await modeHandoff(ctx, phaseNum);
+} else if (wantsReceipt) {
+  const cp = await modeCheckpoint(ctx, { inline: true });
+  const r2 = await emitCheckpointReceipt(ctx, cp);
+  if (!r2.id) { say(`STOP: the checkpoint receipt was not written -- ${r2.why}`); flush(1); }
+  say(`receipt: note.logged ${r2.id}`);
+  flush(0);
 } else {
   await modeCheckpoint(ctx);
 }

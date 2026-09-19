@@ -16,6 +16,13 @@
 //   arc-event ingest <kind> --json F   # provider payload -> event (strict is implied)
 //   arc-event close-day [--date YYYY-MM-DD]
 //
+//   --dry-run (emit and ingest only): validate, scan and seal exactly as a real emit would, print
+//   the sealed record on stdout, and write NOTHING -- no append, no idem index, no quarantine. A
+//   refusal is exit 2 in either mode, because a dry run exists to answer "would this be accepted",
+//   and hook mode's exit 0 would answer yes to everything. It cannot see a DUP_IDEM: that check
+//   needs the spine's index, and reading it is not what a dry run is for. (ADR-1339: the face's
+//   work door plans an emit through this flag instead of building the record itself.)
+//
 // Test-only env doors (never set in production): ARC_SPINE_ROOT, ARC_SPINE_NOW,
 // ARC_SPINE_RAND, ARC_SPINE_LOCK_TIMEOUT_MS, ARC_SPINE_LOCK_STALE_MS.
 
@@ -76,6 +83,7 @@ function walkArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--strict") { flags.strict = true; continue; }
+    if (a === "--dry-run") { flags.dryRun = true; continue; }
     if (a.startsWith("--")) {
       const eq = a.indexOf("=");
       if (eq !== -1) {
@@ -87,6 +95,9 @@ function walkArgs(argv) {
         // no longer reach this fast path unchecked.
         const eqName = a.slice(2, eq);
         if (eqName === "strict") { flags.strict = a.slice(eq + 1); continue; }
+        // `--dry-run=0` is refused, not read as "off": a value on a flag that takes none is
+        // ambiguous, and the wrong reading of THIS flag is a real write the caller did not want.
+        if (eqName === "dry-run") { errors.push("flag --dry-run takes no value"); continue; }
         if (!VALUE_FLAGS.has(eqName)) { errors.push(`unknown flag --${eqName}`); continue; }
         flags[eqName] = a.slice(eq + 1);
         continue;
@@ -105,9 +116,10 @@ function walkArgs(argv) {
 }
 
 // Strict is a property of the parsed command line, never of "does the word appear anywhere".
-// `--strict=0` is still strict (the flag was given); the value is ignored deliberately.
+// `--strict=0` is still strict (the flag was given); the value is ignored deliberately. A dry run
+// is strict too: its whole answer is "accepted or refused", and hook mode cannot say refused.
 function isStrict({ positional, flags }) {
-  return flags.strict !== undefined || positional[0] === "ingest";
+  return flags.strict !== undefined || flags.dryRun === true || positional[0] === "ingest";
 }
 
 const envOr = (name, fallback) => {
@@ -368,11 +380,16 @@ function main(parsed) {
   const timeoutMs = strict ? STRICT_LOCK_TIMEOUT_MS : HOOK_LOCK_TIMEOUT_MS;
 
   if (!command || command === "help") {
-    process.stdout.write("usage: arc-event emit <kind> [flags] | emit --event-file F | ingest <kind> --json F | close-day [--date D]\n");
+    process.stdout.write("usage: arc-event emit <kind> [flags] [--dry-run] | emit --event-file F | ingest <kind> --json F | close-day [--date D]\n");
     return 0;
   }
 
-  const root = spineRoot();
+  if (flags.dryRun === true && command !== "emit" && command !== "ingest")
+    throw new SpineError("BAD_ARGS", `--dry-run applies to emit and ingest only, not "${command}"`);
+
+  // A dry run never resolves the spine: resolving it is the first step of writing to it, and the
+  // answer a dry run gives must not depend on which spine this checkout would have written to.
+  const root = flags.dryRun === true ? null : spineRoot();
 
   if (command === "close-day") {
     const { day, id } = closeDay(root, flags.date, timeoutMs);
@@ -398,6 +415,13 @@ function main(parsed) {
   }
 
   const { event: sealed, line } = seal(event);
+  if (flags.dryRun === true) {
+    // The sealed line, exactly as it would be appended -- one line, canonical form. Its id and ts
+    // are this moment's; a real emit made later carries its own.
+    process.stdout.write(`${line}\n`);
+    process.stderr.write("arc-event: --dry-run -- validated, scanned and sealed; nothing was written\n");
+    return 0;
+  }
   const result = appendEvent(root, sealed, line, { timeoutMs });
   if (result.healed)
     process.stderr.write("arc-event: WARN healed a torn tail in the day file before appending\n");
@@ -438,6 +462,13 @@ try {
 } catch (err) {
   const code = err instanceof SpineError ? err.code : "INTERNAL";
   const message = err && err.message ? err.message : String(err);
+
+  // A dry run writes NOTHING, and a quarantine record is a write: the refusal goes to stderr and
+  // the exit is 2, and the spine directory is not touched.
+  if (parsed.flags.dryRun === true) {
+    process.stderr.write(`arc-event: REJECT ${code} -- ${message} (--dry-run: nothing was written)\n`);
+    process.exit(2);
+  }
 
   try {
     const root = spineRoot();

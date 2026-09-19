@@ -306,7 +306,9 @@ heading_verdict() {
     # now fills are a list of their own; both are held equal to the folds by module-frame, and to the page here.
     list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-04" "residue.md" > "$BATS_TEST_TMPDIR/ns-expected"
     list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-04" "served.md" > "$BATS_TEST_TMPDIR/sv-expected"
-    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-03" "verbs-pending-*.md" > "$BATS_TEST_TMPDIR/vp-expected"
+    # Phase 05 (ADR-1339): Phase 03's cards minus the ones a work-door op retired -- the one list module-frame holds
+    # equal to the folds AND to Phase 03's rows minus the registry's retirements.
+    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-05" "verbs-pending.md" > "$BATS_TEST_TMPDIR/vp-expected"
     local nsPanels nsRooms nsExpected nsRoomsExpected vpCards vpRooms vpExpected vpRoomsExpected
     nsPanels="$(printf '%s\n' "$output" | grep "^smoke: not-served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: not-served mood=$mood panels=\([0-9][0-9]*\) rooms=.*/\1/p")"
     nsRooms="$(printf '%s\n' "$output" | grep "^smoke: not-served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: not-served mood=$mood panels=[0-9]* rooms=\(.*\)\$/\1/p")"
