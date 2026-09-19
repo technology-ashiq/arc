@@ -950,7 +950,7 @@ async function cmdDaily(argv) {
   // WHAT THE PLAN SHOWED: the campaign, the IST day the cap buckets by, and every approved draft with the sha the
   // owner approved. A draft approved, edited and re-approved between the plan and the click is a different send.
   const day = istDay(nowIst());
-  const attempts = approved.map((ref) => ({ ref, approved_sha: String(approvedShaFor(readEvents(), ref)) }));
+  const attempts = approved.map((ref) => ({ ref, approved_sha: String((approvedShaFor(readEvents(), ref) || {}).approvedSha) }));
   const digest = planDigest({ campaign, day, attempts });
   if (dryRun) {
     // A plan with nothing to send is a refusal, not a green run: it prints no digest, so nothing can be bound to it.

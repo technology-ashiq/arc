@@ -31,7 +31,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             <ServedTable item={f.publishGate} />
             <div className="mt-3 space-y-2.5">
               <VerbPending item={f.lintVerb} />
-              <VerbPending item={f.stampVerb} />
             </div>
           </HPanel>
 

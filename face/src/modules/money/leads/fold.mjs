@@ -36,7 +36,6 @@ const FUNNEL = Object.freeze([
  *   funnel: { key: string, stage: string, kind: string, v: string, isHomed: boolean }[],
  *   funnelNote: string,
  *   researchVerb: { isVerbPending: true, verb: string, sentence: string },
- *   sendVerb: { isVerbPending: true, verb: string, sentence: string },
  *   moveVerb: { isVerbPending: true, verb: string, sentence: string },
  *   suppressVerb: { isVerbPending: true, verb: string, sentence: string },
  *   byLead: import("../../../lib/served.mjs").ServedTable,
@@ -82,10 +81,8 @@ export function fold(payloads, ctx) {
       "Research a lead",
       "lead.researched, with its geography riding on it for the jurisdiction guard, keyed by an HMAC id and never a raw contact. It arrives with the work door.",
     ),
-    sendVerb: verbPending(
-      "Send today's outreach",
-      "A capped daily send, confirmed by your keystroke: approval authorises a send attempt, never a send, and the caps, suppression and jurisdiction are checked at the moment of use.",
-    ),
+    // "Send today's outreach" is LIVE since face v2 Phase 05 (ADR-1344): the work door's leads.daily-send op, drawn
+    // under this room by the host, bound to the plan the owner read. Its card is retired.
     moveVerb: verbPending(
       "Move a lead along the funnel",
       "Mark a reply, book a meeting, record a win or a loss -- each a receipt, and a reply stops every later touch at once. It arrives with the work door.",

@@ -13,7 +13,8 @@
  *      parse error, canonicaliser refusal, or a FAIL in a group promoted out of TRIAL.
  *   3  could not run at all: unknown venture, unreadable facts, missing template set.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, realpathSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync, readdirSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,6 +24,9 @@ import { validateFacts } from "./lib/schema.mjs";
 import { renderTemplate, strictestWindow, TemplateError, TRANSFORMS } from "./lib/template.mjs";
 import { runAllLints, scenarioSetLint, crossPageLint, findingsAreFatal, TRIAL, GROUPS_RUN } from "./lib/lints.mjs";
 import { buildChecklist, renderChecklist, renderCiGuard, guardVersionIn } from "./lib/checklist.mjs";
+// The house plan-and-apply binding, and the emitter with three outcomes (ADR-1340/1344).
+import { planDigest, expectLine, staleReason, emitReceipt } from "../core/plan-expect.mjs";
+import { query, spineRoot } from "../hq/spine.mjs";
 import {
   approvalPayload, validateApprovalPayload, verifyChain, verifyDecision,
   backdatingErrors, semanticDiff, APPROVAL_SUBJECT, TEMPLATE_SUBJECT, templateSetApprovalErrors,
@@ -79,7 +83,7 @@ function readJson(path) {
 function usage() {
   return [
     "usage: arc-legal render  --venture NAME --out DIR",
-    "       arc-legal propose --venture NAME --out DIR",
+    "       arc-legal propose --venture NAME --out DIR [--venture-dir DIR] (--dry-run | --expect DIGEST)",
     "       arc-legal publish --venture NAME --dir DIR --decision FILE --request ULID",
     "       arc-legal verify  --venture NAME --dir DIR",
     "       arc-legal checklist --venture NAME [--out FILE] [--evidence FILE]",
@@ -94,7 +98,9 @@ function usage() {
     "  --request ULID   the approval.requested event that decision decides",
     "",
     "render  produces pages and lints them; it publishes nothing.",
-    "propose renders and writes the approval request for a HUMAN to decide (REQ-06).",
+    "propose renders, writes the payload and RAISES the question for a HUMAN to decide (REQ-06):",
+    "        the stamp is the decision in the inbox, and publish then checks it against these bytes.",
+    "  --venture-dir DIR  where a real venture's facts.yaml and pins.yaml live (or ARC_LEGAL_VENTURE_DIR).",
     "publish re-derives every hash and refuses unless the decision approved these bytes.",
     "",
     "exit 0 done - exit 2 refused - exit 3 could not run",
@@ -102,7 +108,7 @@ function usage() {
 }
 
 /** The only flags that take no value. Closed on purpose -- see the comment at the use site. */
-const BOOLEAN_FLAGS = new Set(["--no-guard"]);
+const BOOLEAN_FLAGS = new Set(["--no-guard", "--dry-run"]);
 
 /** Flag values are separate argv entries; `--flag=value` is refused rather than half-supported. */
 function parseArgs(argv) {
@@ -443,19 +449,41 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
 }
 
 /**
- * propose -- render, then write the approval request a HUMAN decides on.
+ * propose -- render, then RAISE the approval request a HUMAN decides on (face v2 Phase 05 PR 5c, ADR-1344).
  *
- * It emits nothing to the spine itself. REQ-06 makes the human gate permanent, and a verb that
- * both requests approval and could record it is one refactor away from doing both. It writes the
- * payload and prints the exact `arc-inbox` command, which is run by a person, from the canonical
- * clone -- the spine is gitignored, so a worktree has its own and a failed approve leaves no
- * trace anywhere anyone would look.
+ * It never records the decision: REQ-06 makes the human gate permanent, and a verb that both requests approval and
+ * could record it is one refactor away from doing both. What it does raise is the QUESTION, onto the spine, because
+ * until PR 5c nothing did -- the payload sat in a file, the printed command named a script that does not exist
+ * (`arc-inbox.sh`), and `publish --request ULID` asked for an id no verb produced. Now the inbox the face already
+ * stamps through carries it: one `approval.requested` (gate legal, subject legal.publish) naming the sha of the exact
+ * payload file, with a welded idem, so a second raise of the same bytes is a duplicate the emitter refuses.
+ *
+ * Bound like every other apply: `--dry-run` renders into a temp directory, prints what it would do and a plan digest;
+ * `--expect D` writes the payload and raises the request only if that digest still holds.
  */
-function proposeMain(args) {
+async function proposeMain(args) {
   if (!args.venture) { console.error(`propose needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`propose needs --out DIR\n\n${usage()}`); return 2; }
+  const dryRun = args["dry-run"] === true;
+  const expect = args.expect;
+  if (dryRun && expect !== undefined) { console.error("--dry-run plans and --expect raises the request. Give one."); return 2; }
+  if (expect !== undefined && !/^[0-9a-f]{64}$/.test(String(expect))) { console.error("--expect takes the 64-hex digest the dry run printed."); return 2; }
+  if (!dryRun && expect === undefined) {
+    console.error("a request is bound to a plan: run it with --dry-run first, read what it would ask, then run it again with the --expect it prints. Nothing was written.");
+    return 2;
+  }
+  // The facts of a REAL venture live in that venture's own repo, never in arc's fixtures (ADR-1205) and never in this
+  // public repository. `--venture-dir` names it, or `ARC_LEGAL_VENTURE_DIR` does -- and only WHICH source is printed,
+  // never the directory, because a machine path in this output would be the owner's, in a public log.
+  const ventureDir = args["venture-dir"] || process.env.ARC_LEGAL_VENTURE_DIR || undefined;
+  const factsFrom = args["venture-dir"] ? "--venture-dir" : process.env.ARC_LEGAL_VENTURE_DIR ? "ARC_LEGAL_VENTURE_DIR" : "the fixtures root";
 
-  const { run } = renderVenture({ ventureName: args.venture, outDir: args.out });
+  // A PLAN RENDERS NOWHERE THE OPERATOR CHOSE: the pages are written to a temp directory and thrown away, so a dry run
+  // cannot leave a half-rendered gate behind in --out.
+  const outDir = dryRun ? mkdtempSync(join(tmpdir(), "arc-legal-plan-")) : args.out;
+  let run;
+  try { ({ run } = renderVenture({ ventureName: args.venture, outDir, ventureDir })); }
+  finally { if (dryRun) { try { rmSync(outDir, { recursive: true, force: true }); } catch { /* a temp render nobody reads */ } } }
 
   // A page that failed a promoted lint is not a page to ask a human to approve. In TRIAL nothing
   // is promoted yet, so this is currently unreachable -- and it is written now rather than when
@@ -473,20 +501,74 @@ function proposeMain(args) {
   }
 
   const file = join(args.out, "_approval.json");
-  writeFileSync(file, JSON.stringify(payload, null, 2) + "\n", "utf8");
+  const text = JSON.stringify(payload, null, 2) + "\n";
+  // The spine carries a POINTER, not the payload: the legal approval profile is closed (ADR-1203), so the request names
+  // the sha of the exact file `publish` re-derives, and the file stays the whole of it.
+  const sha = bytesHash(Buffer.from(text, "utf8"));
+  const what = `legal full-read gate: ${payload.venture}, ${payload.pages.length} page(s), set ${payload.template_set}`;
+  const request = { what, gate: "legal", subject: APPROVAL_SUBJECT, sha };
+  const idem = bytesHash(Buffer.from(`${APPROVAL_SUBJECT}|${payload.venture}|${sha}`, "utf8"));
+  const digest = planDigest({ venture: payload.venture, payload, request, idem });
 
-  console.log(`approval request written to ${file}`);
+  console.log(`${dryRun ? "would write" : "approval request written to"} ${file}`);
   console.log(`subject ${APPROVAL_SUBJECT} - venture ${payload.venture} - ${payload.pages.length} page(s)`);
-  console.log(`facts ${payload.facts_sha256}`);
+  console.log(`facts ${payload.facts_sha256} (from ${factsFrom})`);
   console.log(`set ${payload.template_set}@${payload.template_set_sha}`);
-  console.log("");
-  console.log("A HUMAN decides this. From the CANONICAL clone, not a worktree:");
-  console.log(`  bash .claude/scripts/hq/arc-inbox.sh approve --id <REQUEST_ULID> --reason "<why>"`);
-  console.log("Then publish with the recorded decision:");
-  console.log(`  node .claude/scripts/legal/arc-legal.mjs publish --venture ${payload.venture} --dir ${args.out} --decision <DECISION_FILE>`);
-  return 0;
+  console.log(`payload ${sha}`);
+  if (dryRun) {
+    console.log("");
+    console.log("A HUMAN decides this: the full read IS the stamp, in your inbox.");
+    console.log("propose: dry run - nothing was rendered into --out, nothing was written, no request was raised");
+    console.log(expectLine(digest));
+    return 0;
+  }
+  const stale = staleReason(String(expect), digest);
+  if (stale) { console.error(`${stale} - nothing was written`); return 2; }
+
+  // ONE QUESTION PER PAYLOAD, refused BEFORE the effect: the emitter refuses a duplicate idem, but by then the payload
+  // file is rewritten and the exit says "IS written, not raised" for a question that is already in the inbox (the rule
+  // PR 5a round 1 wrote: a duplicate caught only after the effect).
+  return proposeAfterCheck({ args, payload, file, text, request, idem });
 }
 
+/**
+ * The spine read that must come before the write, split out so `propose` stays one screen: it refuses a payload whose
+ * question is already on the spine, and a spine it cannot read whole -- an unknown read is never "not raised".
+ */
+async function proposeAfterCheck({ args, payload, file, text, request, idem }) {
+  let already;
+  try {
+    const read = await query(spineRoot(), { kind: "approval.requested", engine: "scan" });
+    if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) {
+      console.error("the spine has a day it cannot read or a torn line, so an earlier request for these bytes cannot be ruled out - nothing was written; replay the spine first");
+      return 2;
+    }
+    already = read.events.map((r) => r.event).find((e) => e && e.idem === idem);
+  } catch (e) {
+    console.error(`the spine cannot be read (${e && e.code ? e.code : "error"}) - nothing was written`);
+    return 2;
+  }
+  if (already) {
+    console.error(`these exact bytes are already in your inbox as ${already.id} - decide that one; nothing was written`);
+    return 2;
+  }
+
+  writeFileSync(file, text, "utf8");
+  // Three outcomes, never two (ADR-1340's rule for every emitter): landed, refused, or unknown -- and an unknown one is
+  // never reported as "not raised", because the file IS written by then.
+  const got = emitReceipt(join(REPO_ROOT, ".claude", "scripts", "hq", "arc-event.mjs"), "approval.requested", request,
+    { cwd: REPO_ROOT, flags: ["--idem", idem, "--strict"], timeoutMs: 60_000 });
+  if (got.state === "refused") { console.error(`the payload IS written to ${file}, and its request was not raised - ${got.why}`); return 1; }
+  if (got.state === "unknown") { console.error(`the payload IS written to ${file}, and whether its request landed is unknown - ${got.why}. Look in your inbox before running this again`); return 1; }
+  if (!got.id) { console.error(`the payload IS written to ${file}, and its request landed without its id - ${got.why}`); return 1; }
+  console.log("");
+  console.log(`receipt: approval.requested ${got.id}`);
+  console.log("A HUMAN decides this: the full read IS the stamp. In the face's inbox, or from the CANONICAL clone:");
+  console.log(`  node .claude/scripts/hq/arc-inbox.mjs approve ${got.id} --reason "<why>"`);
+  console.log("Then publish with the recorded decision:");
+  console.log(`  node .claude/scripts/legal/arc-legal.mjs publish --venture ${payload.venture} --dir ${args.out} --decision <DECISION_FILE> --request ${got.id}`);
+  return 0;
+}
 /**
  * publish -- the gate. Re-derives everything from the tree as it stands NOW and refuses unless
  * the human decision approved exactly these bytes.
@@ -849,7 +931,7 @@ ${usage()}`); return 2; }
   return verdict === VERIFY_INTACT ? 0 : verdict === VERIFY_TAMPERED ? 2 : 3;
 }
 
-function main(argv) {
+async function main(argv) {
   const args = parseArgs(argv);
   if (args.help || !args._.length) { console.log(usage()); return args.help ? 0 : 2; }
 
@@ -901,7 +983,7 @@ function invokedDirectly() {
 
 if (invokedDirectly()) {
   try {
-    process.exitCode = main(process.argv.slice(2));
+    process.exitCode = await main(process.argv.slice(2));
   } catch (e) {
     if (e instanceof Fail) { console.error(`arc-legal: ${e.message}`); process.exitCode = e.code; }
     else { console.error(`arc-legal: unexpected: ${e && e.stack ? e.stack : e}`); process.exitCode = 2; }

@@ -517,6 +517,43 @@ export const OPS = Object.freeze([
     apply: (v) => ({ script: "core/concept-define.mjs", args: ["--term", v.term, "--room", v.room, "--station", v.station] }),
     expect: true,
   }),
+  // The live lanes (ADR-1344): the send and the legal gate both belong to a person's keystroke.
+  Object.freeze({
+    id: "leads.daily-send",
+    room: "leads",
+    lane: "leads",
+    label: "Send today's outreach",
+    hint: "A capped daily send, bound to the plan you read and confirmed by your keystroke: the approval authorises a send ATTEMPT, never a send. The caps, the suppression ledger, the send window and the jurisdiction check run per draft at the send, and each can refuse it there.",
+    receipt: Object.freeze({ kind: "outreach.sent" }),
+    binding: "v0.7 `send today` -> outreach.sent per draft, through arc-leads daily bound to its plan (ADR-1344, ADR-0402/0411)",
+    retires: Object.freeze({ module: "leads", verb: "Send today's outreach" }),
+    humanRun: true, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "campaign", label: "Campaign", placeholder: "the campaign's name in the store", type: "text", max: 64, pattern: "[a-z0-9-]{1,64}", required: true }),
+    ]),
+    plan: (v) => ({ script: "leads/arc-leads.mjs", args: ["daily", v.campaign, "--dry-run"] }),
+    apply: (v) => ({ script: "leads/arc-leads.mjs", args: ["daily", v.campaign] }),
+    expect: true,
+  }),
+  Object.freeze({
+    id: "legal.full-read",
+    room: "legal",
+    lane: "legal",
+    label: "Raise the full-read gate",
+    hint: "Nothing ships under your name until a person has read it in full and stamped it. This renders the venture's pages, writes the payload publish re-derives, and raises the question in your inbox -- the stamp there IS the gate.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `stamp the full-read gate` -> approval.requested (gate legal, subject legal.publish) naming the payload's sha; the stamp is the inbox decision publish then checks (ADR-1344, REQ-06)",
+    retires: Object.freeze({ module: "legal", verb: "Stamp the full-read gate" }),
+    humanRun: true, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "venture", label: "Venture", placeholder: "the venture whose pages these are", type: "text", max: 64, pattern: "[a-z][a-z0-9-]{0,63}", required: true }),
+    ]),
+    // The pages carry a real venture's contact facts, so they are rendered under the gitignored state directory, never
+    // into this public tree; the facts themselves come from ARC_LEGAL_VENTURE_DIR, which the tool never prints.
+    plan: (v) => ({ script: "legal/arc-legal.mjs", args: ["propose", "--venture", v.venture, "--out", `.claude/state/legal/${v.venture}`, "--dry-run"] }),
+    apply: (v) => ({ script: "legal/arc-legal.mjs", args: ["propose", "--venture", v.venture, "--out", `.claude/state/legal/${v.venture}`] }),
+    expect: true,
+  }),
   Object.freeze({
     id: "growth.publish",
     room: "growth",

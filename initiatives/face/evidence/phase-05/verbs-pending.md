@@ -27,12 +27,10 @@ retires it nor be invented. The browser suite counts the same cards in the page,
 | `growth` | Draft a piece | content.drafted, with the slop lint run as you type: it catches bad patterns and never prescribes a style. It arrives with the work door. |
 | `growth` | Send the review pack to your inbox | Gate one: one inbox item bundling the preview, the lint results and the diff; your stamp pins the draft's sha. It arrives with the work door. |
 | `leads` | Research a lead | lead.researched, with its geography riding on it for the jurisdiction guard, keyed by an HMAC id and never a raw contact. It arrives with the work door. |
-| `leads` | Send today's outreach | A capped daily send, confirmed by your keystroke: approval authorises a send attempt, never a send, and the caps, suppression and jurisdiction are checked at the moment of use. |
 | `leads` | Move a lead along the funnel | Mark a reply, book a meeting, record a win or a loss -- each a receipt, and a reply stops every later touch at once. It arrives with the work door. |
 | `leads` | Suppress a lead | lead.suppressed is honoured at once and survives every campaign: a suppressed lead is never contacted again, and there is no way to reset it. |
 | `legal` | Change a gate's mode | A gate's mode changes by a reviewed diff to arc.gates.yaml -- never an agent's action -- and the change is a receipt. It arrives with the work door. |
 | `legal` | Run the legal lints | The publish gate, claims that need a source, the PII tripwire and the hash-chain verify, each result landing as a receipt. It arrives with the work door. |
-| `legal` | Stamp the full-read gate | Nothing ships under the owner's name until a person has read it in full and stamped it; the stamp is the gate. It arrives with the work door. |
 | `ventures` | Stage a venture | Kickoff, building, launched, live -- each move a receipt, and the venture track wins every tie. It arrives with the work door. |
 | `org` | Birth a lane | Only /arc-kickoff births a lane: it claims the next ADR century and lands the lane's room in the same change. The work door will start that ceremony from here. |
 | `strategy` | Adopt a plan | A plan becomes a lane's live plan at /arc-kickoff, and the lane's previous plan becomes history in the same change; the adoption is a receipt. It arrives with the work door. |
