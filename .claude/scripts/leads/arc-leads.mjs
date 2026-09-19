@@ -25,6 +25,9 @@ import { inbound } from "./lib/deps.mjs";
 // validator the payload stamps went through, so a window bound and the receipts it is compared
 // against can never be judged by two different grammars (D5).
 import { leadsIdem, assertTs } from "../hq/lib/validate-leads.mjs";
+// The IST day the cap buckets by, and the house plan-and-apply binding (ADR-1344): a send is what its plan showed.
+import { istDay } from "./lib/caps.mjs";
+import { planDigest, expectLine, staleReason } from "../core/plan-expect.mjs";
 import { readAllEvents, dayFileCount, quarantineCount, idemKeys, UNFOLDABLE_REMEDY } from "./lib/spine-read.mjs";
 import { initCampaign, assertCampaignStore, CAMPAIGN_NAME_RE, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
 import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
@@ -894,8 +897,30 @@ function loadCredentials() {
   return envInfo;
 }
 
-async function cmdDaily(campaign) {
-  if (!campaign) die(2, "usage: arc-leads daily <campaign>");
+async function cmdDaily(argv) {
+  // A SEND IS BOUND TO A PLAN (face v2 Phase 05 PR 5c, ADR-1344): the face's work door plans first and the owner's
+  // keystroke sends exactly what the card showed -- never whatever the store holds by the time the click lands.
+  const rest = Array.isArray(argv) ? argv : argv === undefined ? [] : [argv];
+  const campaign = rest[0];
+  let expect;
+  let dryRun = false;
+  for (let i = 1; i < rest.length; i++) {
+    const t = rest[i];
+    if (t === "--dry-run") { if (dryRun) die(2, "--dry-run was given twice — repeating it plans nothing twice, and an argv list nobody meant to write is an operator error"); dryRun = true; continue; }
+    if (t.startsWith("--dry-run=")) die(2, "--dry-run takes no value — write it bare");
+    if (t === "--expect" || t.startsWith("--expect=")) {
+      if (expect !== undefined) die(2, "--expect was given twice — two digests cannot both be the plan this send is bound to");
+      const v = t === "--expect" ? rest[++i] : t.slice("--expect=".length);
+      if (typeof v !== "string" || !/^[0-9a-f]{64}$/.test(v)) die(2, "--expect takes the 64-hex digest the dry run printed");
+      expect = v;
+      continue;
+    }
+    die(2, `unknown argument ${JSON.stringify(t)} — daily takes <campaign> [--dry-run | --expect DIGEST]`);
+  }
+  if (!campaign) die(2, "usage: arc-leads daily <campaign> (--dry-run | --expect DIGEST)");
+  if (dryRun && expect !== undefined) die(2, "--dry-run plans and --expect sends — give one");
+  if (!dryRun && expect === undefined)
+    die(2, "a send is bound to a plan: run it with --dry-run first, read what would go out, then run it again with the --expect it prints — nothing was sent");
   // BEFORE the store opens and long before the provider is asked, so a poisoned credential file
   // refuses the run rather than being discovered three frames into a send.
   try { loadCredentials(); }
@@ -922,6 +947,22 @@ async function cmdDaily(campaign) {
   const approved = listDrafts(store, campaign)
     .filter((d) => approvedShaFor(readEvents(), d.draft_ref))
     .map((d) => d.draft_ref);
+  // WHAT THE PLAN SHOWED: the campaign, the IST day the cap buckets by, and every approved draft with the sha the
+  // owner approved. A draft approved, edited and re-approved between the plan and the click is a different send.
+  const day = istDay(nowIst());
+  const attempts = approved.map((ref) => ({ ref, approved_sha: String(approvedShaFor(readEvents(), ref)) }));
+  const digest = planDigest({ campaign, day, attempts });
+  if (dryRun) {
+    // A plan with nothing to send is a refusal, not a green run: it prints no digest, so nothing can be bound to it.
+    if (!attempts.length) die(2, `no approved drafts for ${campaign} — nothing to plan; approve a draft first`);
+    console.log(`arc-leads daily: would attempt ${attempts.length} approved draft(s) for ${campaign} on ${day}`);
+    for (const t of attempts) console.log(`  attempt  ${t.ref}  approved ${t.approved_sha.slice(0, 12)}`);
+    console.log("arc-leads daily: dry run — nothing was sent. The caps, the suppression ledger, the send window and the jurisdiction check run per draft at the send, and each can refuse it there.");
+    console.log(expectLine(digest));
+    return;
+  }
+  const stale = staleReason(expect, digest);
+  if (stale) die(2, `${stale} — nothing was sent`);
   if (!approved.length) { console.log("arc-leads daily: no approved drafts — nothing to send"); return; }
 
   const out = await runDaily({
@@ -1653,7 +1694,7 @@ try {
   else if (cmd === "ingest-reply") await cmdIngestReply(rest);
   else if (cmd === "reconcile") await cmdReconcile();
   else if (cmd === "unlock") cmdUnlock();
-  else if (cmd === "daily") await cmdDaily(rest[0]);
+  else if (cmd === "daily") await cmdDaily(rest);
   else if (cmd === "preflight") await cmdPreflight();
   else if (cmd === "mail") await cmdMail(rest);
   else if (cmd === "notify") await cmdNotify(rest);
