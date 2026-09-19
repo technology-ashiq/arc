@@ -943,7 +943,10 @@ function boot(argv) {
     // driver return a recording that seals as a run.completed looking exactly like a real one; the leads fakes and clock
     // move outreach; the mock recordings and the absorb seal dir redirect what a tool reads or writes (PR 2 logic attack).
     const TEST_DOORS = ["ARC_SPINE_NOW", "ARC_SPINE_RAND", "ARC_SPINE_LOCK_TIMEOUT_MS", "ARC_SPINE_LOCK_STALE_MS", "ARC_SPINE_MAX_FUTURE_MS",
-      "ARC_DRIVER_FAKE", "ARC_MOCK_DIR", "ARC_MOCK_FIXTURE", "ARC_LEADS_NOW", "ARC_LEADS_FAKE", "ARC_ABSORB_SEAL_DIR"];
+      "ARC_DRIVER_FAKE", "ARC_MOCK_DIR", "ARC_MOCK_FIXTURE", "ARC_LEADS_NOW", "ARC_LEADS_FAKE", "ARC_ABSORB_SEAL_DIR",
+      // The Context Pack runs a program from these (context-pack.mjs); "Open the next slice" is the first door verb that
+      // builds a pack, so a test door that names a program is refused like the rest (PR 4 shell attack).
+      "ARC_CODEGRAPH_CMD", "ARC_CODEGRAPH_ARGS"];
     const testDoors = Object.keys(process.env).filter((k) => TEST_DOORS.includes(k.toUpperCase()) || k.toUpperCase().startsWith("ARC_MOCK_"));
     if (testDoors.length) {
       process.stderr.write(`arc-dash: ERROR BAD_SPINE_ENV -- ${testDoors.join(", ")} set; those are the spine's test-only doors, and a live door writes the real company's receipts. Unset them, or run a fixture with --spine <path>\n`);
