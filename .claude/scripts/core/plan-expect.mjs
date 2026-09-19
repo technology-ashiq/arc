@@ -172,7 +172,7 @@ export function staleReason(given, digest) {
  * @returns {Promise<{ busy: true } | { busy: false, value: T }>}
  */
 export async function withExclusiveLock(dir, name, fn, { staleMs = 10 * 60_000 } = {}) {
-  const held = acquire(dir, name, staleMs);
+  const held = await acquireRetrying(dir, name, staleMs);
   if (!held) return { busy: true };
   const beat = setInterval(() => {
     try { const t = new Date(); utimesSync(held.lock, t, t); } catch { /* the release decides */ }
@@ -190,10 +190,37 @@ export async function withExclusiveLock(dir, name, fn, { staleMs = 10 * 60_000 }
  * @returns {{ busy: true } | { busy: false, value: T }}
  */
 export function withExclusiveLockSync(dir, name, fn, { staleMs = 10 * 60_000 } = {}) {
-  const held = acquire(dir, name, staleMs);
+  const held = acquireRetryingSync(dir, name, staleMs);
   if (!held) return { busy: true };
   try { return { busy: false, value: fn() }; }
   finally { release(held); }
+}
+
+/**
+ * TWO TAKERS IN ONE INSTANT each see the other and both back off: safe, and neither holds -- two trials started together
+ * both answered busy (CI, PR 3b round 6). So a busy take is tried again after a short RANDOM wait, for up to
+ * RETRY_MS: the random waits pull the two apart and one holds. Each try is a whole take, so the retries change who
+ * gets it, never whether two can. A holder that really holds is waited on for RETRY_MS, then the answer is busy.
+ */
+const RETRY_MS = 1500;
+const jitter = () => 20 + Math.floor(Math.random() * 180);
+/** @param {string} dir @param {string} name @param {number} staleMs */
+async function acquireRetrying(dir, name, staleMs) {
+  const end = Date.now() + RETRY_MS;
+  for (;;) {
+    const held = acquire(dir, name, staleMs);
+    if (held || Date.now() > end) return held;
+    await new Promise((r) => setTimeout(r, jitter()));
+  }
+}
+/** The same, for a synchronous caller. @param {string} dir @param {string} name @param {number} staleMs */
+function acquireRetryingSync(dir, name, staleMs) {
+  const end = Date.now() + RETRY_MS;
+  for (;;) {
+    const held = acquire(dir, name, staleMs);
+    if (held || Date.now() > end) return held;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, jitter());
+  }
 }
 
 const statOrNull = (path) => { try { return statSync(path); } catch { return null; } };
