@@ -189,6 +189,11 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   // Only what THIS call made is left out: a caller-supplied --idem is the caller's string (PR 3b round-2 logic attack).
   const idemSplit = node([S("hq", "arc-event.mjs"), "emit", "note.logged", "--payload", JSON.stringify({ note: "probe" }), "--actor", "sk-", "--idem", "0123456789abcdef".repeat(4), "--dry-run"], { ARC_SPINE_ROOT: sp });
   check("spine scan: a key split across the actor and a CALLER-supplied idem is refused (SECRET)", idemSplit.status === 2 && /SECRET/.test(idemSplit.stderr), `${idemSplit.status} ${idemSplit.stderr}`);
+  // ingest derives its own idem and ignores --idem: the flag's presence does not put the derived value in the joins.
+  const ingestFile = join(tmp, "ingest-note.json");
+  writeFileSync(ingestFile, JSON.stringify({ note: "probe" }));
+  const ingestIdem = node([S("hq", "arc-event.mjs"), "ingest", "note.logged", "--json", ingestFile, "--actor", "xsk-", "--idem", "zz", "--dry-run"], { ARC_SPINE_ROOT: sp });
+  check("spine scan: ingest's DERIVED idem stays out of the joins even when --idem is given (accepted)", ingestIdem.status === 0, `${ingestIdem.status} ${ingestIdem.stderr}`);
   // A refused experiment.verdict is quarantined as a stub: its payload is a result nobody reads before it is recorded.
   const qsp = spine("verdict-quarantine");
   const refusedVerdict = node([S("hq", "arc-event.mjs"), "emit", "experiment.verdict", "--payload", JSON.stringify({ experiment_id: "x-q", outcome: "verdict", bound: 0.4321, delta: 0.8765 }), "--strict"], { ARC_SPINE_ROOT: qsp });
@@ -797,6 +802,52 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     check("bench --from: a pending mark with no approval id refuses -- an earlier apply may have raised it", pending.status === 2 && /may have raised its approval/.test(pending.stderr), `${pending.status} ${pending.stderr}`);
     if (emptyStore) rmSync(join(emptyStore, "approval.pending"), { force: true });
   }
+  // WHO RAN is the subject: a champion that differs only in bookkeeping (the ceilings' date) is the same subject (PR 3b
+  // round-3 logic attack), a champion whose provenance is null is refused by name, and a class listed twice is refused.
+  {
+    const booked = join(tmp, "bench-champ-bookkeeping");
+    cpSync(cand, booked, { recursive: true });
+    const p = JSON.parse(readFileSync(join(booked, "provenance.json"), "utf8"));
+    p.subject.ceilings_as_of = "1999-01-01";
+    writeFileSync(join(booked, "provenance.json"), JSON.stringify(p));
+    const r1 = b("--propose", "--from", cand, "--champion", booked, "--dry-run");
+    check("bench --from refuses a champion that differs from the candidate only in bookkeeping (same driver, version, model)", r1.status === 2 && /different subjects/.test(r1.stderr), `${r1.status} ${r1.stderr}`);
+    const nulled = join(tmp, "bench-champ-null");
+    cpSync(champ, nulled, { recursive: true });
+    writeFileSync(join(nulled, "provenance.json"), "null");
+    const r2 = b("--propose", "--from", cand, "--champion", nulled, "--dry-run");
+    check("bench --from refuses a champion whose provenance is null, by name (no stack)", r2.status === 2 && /not a bench run's output/.test(r2.stderr) && !/at .*\.mjs:\d+/.test(r2.stderr), `${r2.status} ${r2.stderr}`);
+    const twice = join(tmp, "bench-champ-twice");
+    cpSync(champ, twice, { recursive: true });
+    const sc = JSON.parse(readFileSync(join(twice, "scorecard.json"), "utf8"));
+    sc.classes = [...sc.classes, sc.classes[0]];
+    writeFileSync(join(twice, "scorecard.json"), JSON.stringify(sc));
+    const r3 = b("--propose", "--from", cand, "--champion", twice, "--dry-run");
+    check("bench --from refuses a scorecard that lists a task class twice", r3.status === 2 && /task class twice/.test(r3.stderr), `${r3.status} ${r3.stderr}`);
+  }
+  // AN UNKNOWN OUTCOME KEEPS THE PENDING MARK (PR 3b round-3 logic attack: an emit whose answer was not an id was read as
+  // "not landed", the mark was removed, and the same plan raised the question twice). A preload makes the emitter answer
+  // with a line that is not a receipt id.
+  {
+    const champU = join(tmp, "bench-champ-unknown");
+    cpSync(champ, champU, { recursive: true });
+    const pu = JSON.parse(readFileSync(join(champU, "provenance.json"), "utf8"));
+    pu.subject.driver = "codex";
+    writeFileSync(join(champU, "provenance.json"), JSON.stringify(pu));
+    const du = lastExpect(b("--propose", "--from", cand, "--champion", champU, "--dry-run").stdout);
+    const garble = join(tmp, "emit-garble.mjs");
+    writeFileSync(garble, [
+      "import cp from \"node:child_process\";",
+      "import { syncBuiltinESMExports } from \"node:module\";",
+      "const real = cp.spawnSync;",
+      "cp.spawnSync = (file, args, opts) => (file === \"bash\" && Array.isArray(args) && String(args[0]).endsWith(\"arc-event.sh\") && args.includes(\"approval.requested\") ? { status: 0, stdout: \"not-a-receipt-id\\n\", stderr: \"\" } : real(file, args, opts));",
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"));
+    const au = node(["--import", pathToFileURL(garble).href, S("engine", "arc-bench.mjs"), "--propose", "--from", cand, "--champion", champU, "--expect", du || "x"], { ARC_SPINE_ROOT: sp });
+    const pendingKept = existsSync(store) && readdirSync(store).some((k) => existsSync(join(store, k, "approval.pending")) && !existsSync(join(store, k, "approval.id")));
+    check("bench --from: an approval whose outcome is unknown keeps the pending mark and exits PARTIAL", !!du && au.status === 1 && /whether the approval landed is unknown/.test(au.stderr) && pendingKept, `${au.status} ${au.stderr} pending=${pendingKept}`);
+  }
   // A second run of the SAME subject is not a champion: there is no switch to propose (PR 3b round-2 logic attack).
   {
     const same = join(tmp, "bench-champ-same-subject");
@@ -962,6 +1013,22 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   const studied = spawnSync(process.execPath, [S("absorb", "study.mjs"), "--scaffold", "--root", src, "--pin", "0123456789abcdef", "--license", "MIT, in LICENSE", "--out", studyOut], { cwd: tmp, encoding: "utf8" });
   const identity = existsSync(studyOut) ? (/\*\*Identity:\*\* (.*)$/m.exec(readFileSync(studyOut, "utf8")) || [])[1] : null;
   check("study run from outside the repo names a source outside it by its folder alone", studied.status === 0 && identity === "(outside this repo) absorb-source", `${studied.status} ${identity} ${studied.stderr}`);
+
+  // TWO TRIALS INTO ONE BUNDLE AT ONCE: the open-branch check, the seal and the branch run under one lock per bundle --
+  // both passed the check and both raised approvals (PR 3b round-3 logic attack).
+  {
+    const BUNDLE = ["--candidate", "T-01", "--variants", "harbor,quartz", "--fixtures", "f1,f2,f3", "--evidence", "initiatives/absorb/evidence/kernel-bundle-race"];
+    const plans = ["kernel-br-1", "kernel-br-2"].map((corr) => ({ corr, d: lastExpect(inScratch("absorb/trial.mjs", [...BUNDLE, "--correlation", corr, "--dry-run"]).stdout) }));
+    const runs = await Promise.all(plans.map(({ corr, d }) => new Promise((resolveRun) => {
+      const c = spawn(process.execPath, [join(repo, ".claude", "scripts", "absorb", "trial.mjs"), ...BUNDLE, "--correlation", corr, "--expect", d || "x"],
+        { cwd: repo, env: { ...process.env, ARC_SPINE_ROOT: sp, ARC_ABSORB_SEAL_DIR: seals }, stdio: ["ignore", "pipe", "pipe"] });
+      let err = "";
+      c.stderr.on("data", (x) => { err += x; });
+      c.on("close", (code) => resolveRun({ code, err }));
+    })));
+    const raisedHere = approvals().filter((e) => ["kernel-br-1", "kernel-br-2"].includes(e.payload.correlation)).length;
+    check("two trials into one bundle at once: one seals and raises, the other refuses -- never two", plans.every((p) => !!p.d) && runs.filter((r) => r.code === 0).length === 1 && raisedHere === 1, runs.map((r) => `${r.code}:${r.err.trim().slice(0, 120)}`).join(" | "));
+  }
 
   // TWO SEALS OF ONE CORRELATION AT ONCE: the nonce is created exclusively, so one wins and the other writes nothing --
   // the stored nonce is the winner's (PR 3b round-2 attacks: with --judge between the check and the write, both won

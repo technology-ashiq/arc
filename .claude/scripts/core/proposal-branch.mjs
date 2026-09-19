@@ -395,13 +395,21 @@ export function openProposalsHolding({ repo, prefix, path }) {
   if (typeof prefix !== "string" || !/^feat\/face-[abcdefghijklmnopqrstuvwxyz0123456789-]+$/.test(prefix)) throw new ProposalError("BAD_BRANCH", `${JSON.stringify(prefix)} is not a proposal branch prefix`);
   checkFiles([{ path, content: "" }], [path]);
   return withHooks(repo, async (hooks) => {
-    const refs = (await git(repo, ["for-each-ref", "--format=%(refname)", "refs/heads/feat/"], { hooks })).out.split(/\r?\n/).filter((r) => r.startsWith(`refs/heads/${prefix}`));
-    const out = [];
-    for (const ref of refs) {
-      const r = await git(repo, ["cat-file", "-e", `${ref}:${path}`], { hooks, ok: [0, 1, 128] });
-      if (r.status === 0) out.push(ref.slice("refs/heads/".length));
+    // Local AND remote-tracking branches, matched without case: a branch pushed and then deleted locally, or a bundle
+    // named RACE1 beside race1, was invisible to an exact, local-only look (PR 3b round-3 logic attack).
+    const listed = (await git(repo, ["for-each-ref", "--format=%(refname)", "refs/heads/", "refs/remotes/"], { hooks })).out.split(/\r?\n/).filter(Boolean);
+    const want = path.toLowerCase();
+    /** @type {Set<string>} */
+    const out = new Set();
+    for (const ref of listed) {
+      const name = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref.replace(/^refs\/remotes\/[^/]+\//, "");
+      if (!name.toLowerCase().startsWith(prefix)) continue;
+      // The whole tree's names, compared without case: a pathspec is matched exactly. A failure here is git's own error,
+      // never read as "not held".
+      const names = (await git(repo, ["ls-tree", "-r", "--name-only", "-z", ref], { hooks })).out.split("\u0000");
+      if (names.some((n) => n.toLowerCase() === want)) out.add(name);
     }
-    return out;
+    return [...out].sort();
   });
 }
 

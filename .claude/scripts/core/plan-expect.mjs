@@ -12,7 +12,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -74,4 +74,27 @@ export function staleReason(given, digest) {
   if (!EXPECT_RE.test(String(given))) return "--expect is the 64-hex digest a plan printed as its last line";
   if (given !== digest) return "PLAN_STALE -- what this run would write is not what the plan showed (the spine, main or the surface moved since). Nothing was written; plan again and read the new plan";
   return null;
+}
+
+/**
+ * One holder at a time: an exclusive lock FILE (flag "wx") in `dir`, released when `fn` settles, and broken only when
+ * older than `staleMs` (a killed holder's). It REFUSES rather than waits -- `{ busy: true }` -- so a second click is
+ * told another run holds it. For a check-then-emit that must not run twice at once: three picks, and two profile
+ * requests, raised from one plan in the same instant all landed (PR 4 logic attack; the PR 3a evolve row, re-found).
+ * @template T @param {string} dir @param {string} name @param {() => Promise<T> | T} fn @param {{ staleMs?: number }} [o]
+ * @returns {Promise<{ busy: true } | { busy: false, value: T }>}
+ */
+export async function withExclusiveLock(dir, name, fn, { staleMs = 120_000 } = {}) {
+  mkdirSync(dir, { recursive: true });
+  const lock = join(dir, name);
+  const take = () => { try { closeSync(openSync(lock, "wx")); return true; } catch (e) { if (e && e.code === "EEXIST") return false; throw e; } };
+  let ok = take();
+  if (!ok) {
+    let age = 0;
+    try { age = Date.now() - statSync(lock).mtimeMs; } catch { /* released meanwhile */ }
+    if (age > staleMs) { try { unlinkSync(lock); } catch { /* another breaker */ } ok = take(); }
+  }
+  if (!ok) return { busy: true };
+  try { return { busy: false, value: await fn() }; }
+  finally { try { unlinkSync(lock); } catch { /* released */ } }
 }

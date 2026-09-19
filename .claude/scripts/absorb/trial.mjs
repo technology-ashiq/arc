@@ -26,12 +26,14 @@
 // Exit: 0 done · 1 sealed, but the branch or the receipt was not written (said so) · 2 refused, nothing sealed.
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { baseText, checkProposal, openProposalsHolding, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
-import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal, withExclusiveLock } from "../core/plan-expect.mjs";
+import { spineRoot } from "../hq/lib/spine-io.mjs";
 import { LABEL_POOL } from "../hq/lib/validate-absorb.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -137,41 +139,50 @@ async function main() {
   if (a["--expect"] === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, then again with the --expect it prints -- nothing was sealed");
   const stale = staleReason(a["--expect"], digest);
   if (stale) die(2, stale);
-  let scratch;
-  try { scratch = mkdtempSync(join(tmpdir(), "arc-absorb-trial-")); }
-  catch (e) { die(2, `no temp directory could be made (${e && e.code ? e.code : "error"}) -- nothing was sealed`); }
-  try {
-    // --judge: the spine judges the payload this seal prints -- its drawn labels, its commitment -- before its nonce is
-    // written. The draft judged at plan could not: other labels passed where these are refused (PR 3b attacks).
-    const run = spawnSync(process.execPath, [JUDGEMENT, ...sealArgs(a), "--bundle-dir", scratch, "--judge"], { cwd: REPO, encoding: "utf8" });
-    if (run.status !== 0) {
-      const why = sealReason(run.stderr, run.status);
-      // A seal that failed AFTER writing its nonce has burned the correlation, whatever it exited: a failed
-      // commitment.txt write was reported as "nothing sealed" while the nonce sat in the store (PR 3b shell attack).
-      if (existsSync(sealFile(a["--correlation"]))) { sealed = true; die(1, `the seal failed part-way, AFTER its nonce was written: correlation ${a["--correlation"]} is used and nothing was raised -- ${why}. Trial again with a new correlation`); }
-      die(2, why);
-    }
-    sealed = true;
-    const payloadLine = String(run.stdout || "").trim().split(/\r?\n/).pop() || "";
-    let payload;
-    try { payload = JSON.parse(payloadLine); } catch { die(1, `sealed (correlation ${a["--correlation"]} is now used), and the seal printed no payload -- nothing was raised`); }
-    let commitment;
-    try { commitment = readFileSync(join(scratch, "commitment.txt"), "utf8"); } catch { die(1, `sealed (correlation ${a["--correlation"]} is now used), and no commitment.txt was written -- nothing was raised`); }
-    let w;
+  // ONE TRIAL PER BUNDLE AT A TIME. The open-branch check and the branch write were two steps with a seal between them,
+  // and two trials into one bundle started together both passed and both raised approvals -- the branch names differ, so
+  // git's own create could not catch it (PR 3b round-3 logic attack). The lock is named for the bundle, beside the spine.
+  const lockName = `absorb-bundle-${createHash("sha256").update(a["--evidence"].toLowerCase()).digest("hex").slice(0, 16)}.lock`;
+  const held = await withExclusiveLock(join(spineRoot(), "locks"), lockName, async () => {
+    const openNow = await openProposalsHolding({ repo: REPO, prefix: "feat/face-absorb-trial-", path: target });
+    if (openNow.length) die(2, `the open trial branch ${openNow[0]} already holds ${target} -- merge or delete it first, or take a new --evidence path; nothing was sealed`);
+    let scratch;
+    try { scratch = mkdtempSync(join(tmpdir(), "arc-absorb-trial-")); }
+    catch (e) { die(2, `no temp directory could be made (${e && e.code ? e.code : "error"}) -- nothing was sealed`); }
     try {
-      w = await writeProposal({ repo: REPO, branch, files: [{ path: target, content: commitment }], allow: [target], base,
-        message: `absorb: the sealed commitment for ${payload.candidate}, correlation ${a["--correlation"]}\n\nThe labels are blind until the decision; judgement.mjs reveal writes the mapping afterwards.\nWritten by the face's work door (ADR-1340).` });
-    } catch (e) { die(1, `sealed (correlation ${a["--correlation"]} is now used), and the branch was not written: ${e && e.code ? e.code : ""} ${e instanceof Error ? e.message : e} -- trial again with a new correlation`); }
-    process.stdout.write(`trial: sealed ${payload.labels ? payload.labels.length : "?"} blind labels for ${payload.candidate}; the commitment is on ${branch} at ${w.commit.slice(0, 12)}\n`);
-    const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(payload), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    const id = String(r.stdout || "").trim();
-    if (r.status !== 0 || !ULID_RE.test(id))
-      die(1, `sealed, and the branch ${branch} IS written, and the approval was not raised -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
-    process.stdout.write(`receipt: approval.requested ${id}\n`);
-  } finally {
-    // Litter, never the outcome: a cleanup that throws must not turn a sealed, written trial into a failure.
-    try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter */ }
-  }
+      // --judge: the spine judges the payload this seal prints -- its drawn labels, its commitment -- before its nonce is
+      // written. The draft judged at plan could not: other labels passed where these are refused (PR 3b attacks).
+      const run = spawnSync(process.execPath, [JUDGEMENT, ...sealArgs(a), "--bundle-dir", scratch, "--judge"], { cwd: REPO, encoding: "utf8" });
+      if (run.status !== 0) {
+        const why = sealReason(run.stderr, run.status);
+        // A seal that failed AFTER writing its nonce has burned the correlation, whatever it exited: a failed
+        // commitment.txt write was reported as "nothing sealed" while the nonce sat in the store (PR 3b shell attack).
+        if (existsSync(sealFile(a["--correlation"]))) { sealed = true; die(1, `the seal failed part-way, AFTER its nonce was written: correlation ${a["--correlation"]} is used and nothing was raised -- ${why}. Trial again with a new correlation`); }
+        die(2, why);
+      }
+      sealed = true;
+      const payloadLine = String(run.stdout || "").trim().split(/\r?\n/).pop() || "";
+      let payload;
+      try { payload = JSON.parse(payloadLine); } catch { die(1, `sealed (correlation ${a["--correlation"]} is now used), and the seal printed no payload -- nothing was raised`); }
+      let commitment;
+      try { commitment = readFileSync(join(scratch, "commitment.txt"), "utf8"); } catch { die(1, `sealed (correlation ${a["--correlation"]} is now used), and no commitment.txt was written -- nothing was raised`); }
+      let w;
+      try {
+        w = await writeProposal({ repo: REPO, branch, files: [{ path: target, content: commitment }], allow: [target], base,
+          message: `absorb: the sealed commitment for ${payload.candidate}, correlation ${a["--correlation"]}\n\nThe labels are blind until the decision; judgement.mjs reveal writes the mapping afterwards.\nWritten by the face's work door (ADR-1340).` });
+      } catch (e) { die(1, `sealed (correlation ${a["--correlation"]} is now used), and the branch was not written: ${e && e.code ? e.code : ""} ${e instanceof Error ? e.message : e} -- trial again with a new correlation`); }
+      process.stdout.write(`trial: sealed ${payload.labels ? payload.labels.length : "?"} blind labels for ${payload.candidate}; the commitment is on ${branch} at ${w.commit.slice(0, 12)}\n`);
+      const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(payload), "--strict"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      const id = String(r.stdout || "").trim();
+      if (r.status !== 0 || !ULID_RE.test(id))
+        die(1, `sealed, and the branch ${branch} IS written, and the approval was not raised -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
+      process.stdout.write(`receipt: approval.requested ${id}\n`);
+    } finally {
+      // Litter, never the outcome: a cleanup that throws must not turn a sealed, written trial into a failure.
+      try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter */ }
+    }
+  });
+  if (held.busy) die(2, `another trial into ${a["--evidence"]} is being sealed right now -- nothing was sealed`);
 }
 
 function isMainModule() {

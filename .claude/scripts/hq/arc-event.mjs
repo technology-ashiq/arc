@@ -298,7 +298,11 @@ function seal(event, generated = []) {
 
   // The adjacency views join the caller's strings only: id, ts and idem are made here from the clock, and a verdict
   // that depended on where a random hash sorted was a dry-run that could not predict its emit (redact.mjs).
-  const callerFields = Object.fromEntries(Object.entries(event).filter(([k]) => k !== "sha" && !generated.includes(k)));
+  // A "payload.<key>" entry names a payload field this call generated.
+  const payloadDrop = generated.filter((g) => g.startsWith("payload.")).map((g) => g.slice("payload.".length));
+  const callerFields = Object.fromEntries(Object.entries(event).filter(([k]) => k !== "sha" && !generated.includes(k))
+    .map(([k, v]) => [k, k === "payload" && payloadDrop.length && v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).filter(([pk]) => !payloadDrop.includes(pk))) : v]));
   const scan = scanSecrets(canonicalNoSha, event, { joinFrom: callerFields }); // throws REDACT_FAIL, never fails open
   if (scan.hit)
     throw new SpineError("SECRET", `payload matches deny-rule ${scan.rule} -- refused before the spine (ADR-0028)`);
@@ -376,7 +380,8 @@ function closeDay(root, date, timeoutMs) {
       evidence: null,
       supersedes: null,
     };
-    const { event: sealed, line } = seal(event, ["id", "ts", "idem"]);
+    // The day file's sha is made here too: joined beside an actor's name it decided the verdict (PR 3b round-3 attack).
+    const { event: sealed, line } = seal(event, ["id", "ts", "idem", "payload.file_sha"]);
     appendEventUnlocked(root, sealed, line);
     writeCloseMarker(root, day, fileSha(file));
     return { day, id: sealed.id };
@@ -429,7 +434,9 @@ function main(parsed) {
       flags["payload-file"] = flags.json;
     }
     event = synthesize(kind, flags, { deriveIdem: command === "ingest" });
-    generated = flags.idem === undefined ? ["id", "ts", "idem"] : ["id", "ts"];
+    // The idem is the CALLER's only when it is the value they supplied: ingest derives its own and ignores --idem, and a
+    // flag's mere presence kept that derived value in the joins (PR 3b round-3 logic attack).
+    generated = flags.idem !== undefined && event.idem === flags.idem ? ["id", "ts"] : ["id", "ts", "idem"];
   }
 
   const { event: sealed, line } = seal(event, generated);

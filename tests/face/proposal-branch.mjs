@@ -339,6 +339,14 @@ await refuse("a path that needs main's file to be a directory", { branch: "feat/
   const held = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
   const none = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/other/commitment.txt" });
   check("openProposalsHolding names the open branch that holds the path, and none for a path no branch holds", !!w.commit && JSON.stringify(held) === JSON.stringify(["feat/face-absorb-trial-one"]) && none.length === 0, `${JSON.stringify(held)} ${JSON.stringify(none)}`);
+  // Without case, and on remote-tracking branches too (PR 3b round-3 logic attack): a bundle named in another case, and
+  // a branch pushed and then deleted locally, were invisible.
+  const cased = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/BUNDLE/commitment.txt" });
+  git(c, "update-ref", "refs/remotes/origin/feat/face-absorb-trial-two", w.commit);
+  git(c, "branch", "-D", "feat/face-absorb-trial-one");
+  const remote = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
+  check("openProposalsHolding matches a path in another case, and a remote-tracking branch after the local one is gone",
+    JSON.stringify(cased) === JSON.stringify(["feat/face-absorb-trial-one"]) && JSON.stringify(remote) === JSON.stringify(["feat/face-absorb-trial-two"]), `${JSON.stringify(cased)} ${JSON.stringify(remote)}`);
 }
 
 // ---- beforeRef: the caller judges the real receipt, with its commit, before the ref exists; a throw writes no branch

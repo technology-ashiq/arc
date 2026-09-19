@@ -2223,6 +2223,7 @@ export function buildProposal(root, report, championDir, outDir, { emit = true, 
     summary,
     wouldRaise,
     landed: !!(approval && approval.landed),
+    unknown: !!(approval && approval.unknown),
     notRaised: approval && !approval.landed ? (approval.why || "it was not sealed") : null,
     receipt: {
       diffs: diffWritten,
@@ -2260,11 +2261,15 @@ export function emitApprovalRequested(root, payload) {
       join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "approval.requested",
       "--payload-file", f, "--process", BENCH_ID, "--strict",
     ], { encoding: "utf8", cwd: root, timeout: 30000, killSignal: "SIGKILL" });
-    const id = String(res.stdout || "").trim();
-    if (res.status !== 0 || !id) {
-      return { id: null, landed: false, why: String(res.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${res.status}` };
-    }
-    return { id, why: null, ...findReceipt(root, id) };
+    // The id is the LAST stdout line, in ULID form. Exit 2 is the emitter's refusal -- nothing landed. Anything else (a
+    // zero exit with no id, a killed spawn, a lookup that threw) is UNKNOWN: the approval may be on the spine, and the
+    // caller must not treat it as not raised (PR 3b round-3 logic attack: two approvals from one plan).
+    const id = String(res.stdout || "").trim().split(/\r?\n/).pop() || "";
+    const why = String(res.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${res.status}`;
+    if (res.status === 2) return { id: null, landed: false, refused: true, why };
+    if (res.status !== 0 || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id)) return { id: null, landed: false, unknown: true, why: `the emitter's answer was not a receipt id (exit ${res.status}) -- ${why}` };
+    try { return { id, why: null, ...findReceipt(root, id) }; }
+    catch (e) { return { id, landed: false, unknown: true, why: `the receipt ${id} could not be looked for (${e && e.code ? e.code : "error"})` }; }
   } finally {
     try { rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter, never the outcome (PR 3b) */ }
   }
@@ -2639,14 +2644,25 @@ function main() {
     // attacks, rounds 1 and 2). A switch needs a champion that ran something else.
     if (canonicalHash(report.scorecard) === canonicalHash(champion.scorecard) && canonicalHash(report.provenance) === canonicalHash(champion.provenance))
       return stopFrom(`--from and --champion must be different runs -- ${shown(args.champion)} holds the candidate's own scorecard and provenance; a candidate compared with itself proves nothing`);
-    if (canonicalHash(report.provenance.subject) === canonicalHash(champion.provenance.subject || null))
+    if (!champion.scorecard || !Array.isArray(champion.scorecard.classes) || !champion.provenance || !champion.provenance.subject)
+      return stopFrom(`--champion ${shown(args.champion)} is not a bench run's output (no classes, or no subject)`);
+    // A class twice is one question asked twice: the approval named it twice beside one diff (PR 3b round-3 attack).
+    for (const [who, sc] of [["--from", report.scorecard], ["--champion", champion.scorecard]]) {
+      const names = sc.classes.map((c) => c && c.task_class);
+      if (new Set(names).size !== names.length) return stopFrom(`${who} lists a task class twice -- a scorecard is one row per class`);
+    }
+    // The SUBJECT is who ran: the driver, its version, the model. The bookkeeping fields beside them (the ceilings'
+    // date, the router's sha) changed and made a re-run of the same driver "a different subject" (PR 3b round-3 attack).
+    const identity = (p) => ({ driver: p.subject.driver ?? null, driver_version: p.subject.driver_version ?? null, model: (p.fingerprint && (p.fingerprint.model_id ?? p.fingerprint.model_requested)) ?? null });
+    if (canonicalHash(identity(report.provenance)) === canonicalHash(identity(champion.provenance)))
       return stopFrom(`--from and --champion must be different runs of different subjects -- both ran ${report.provenance.subject.driver}${report.provenance.subject.driver_version ? ` (${report.provenance.subject.driver_version})` : ""} against the same router; there is no switch to propose`);
     const champKey = canonicalHash({ scorecard: champion.scorecard, provenance: champion.provenance });
     // ONE QUESTION, ONE APPROVAL: keyed on the candidate AND the champion, and marked only once an approval LANDED. The
     // key was the candidate alone and the mark was the artifacts, so an apply against the wrong champion raised nothing
     // and then blocked the right one forever (PR 3b logic attack). The store is INSIDE the spine's own root: two levels up
     // put it in a repository's working tree when the spine sat at its top (PR 3b logic attack).
-    const key = `${String(report.provenance.subject.driver || "candidate").replace(/[^abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-]/g, "-")}-${canonicalHash(report.scorecard).slice(0, 12)}-vs-${champKey.slice(0, 12)}`;
+    // The key carries the candidate's whole subject: a driver name sanitised alone let "a.b" and "a-b" share a store.
+    const key = `${String(report.provenance.subject.driver || "candidate").replace(/[^abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-]/g, "-")}-${canonicalHash({ subject: report.provenance.subject, scorecard: report.scorecard }).slice(0, 12)}-vs-${champKey.slice(0, 12)}`;
     let store;
     try { store = join(dirname(spinePaths(root).events), "bench", "proposals", key); }
     catch (e) { return stopFrom(e.message); }
@@ -2733,7 +2749,10 @@ function main() {
       console.log(`arc-bench: proposal -- candidate ${report.provenance.subject.driver}, champion from ${shown(args.champion)}; nothing was run, nothing was spent`);
       for (const line of proposal.summary) console.log(`  ${line}`);
       console.log(`arc-bench: proposal artifacts written to ${shown(join(store, "proposal"))}`);
-      if (!proposal.landed) { try { unlinkSync(pendingMark); } catch { /* not written */ } }
+      // The pending mark goes only when NOTHING can have landed: no approval was due, or the emitter refused it. An
+    // unknown outcome keeps it, so the same plan cannot raise the question twice (PR 3b round-3 logic attack).
+    if (!proposal.landed && !proposal.unknown) { try { unlinkSync(pendingMark); } catch { /* not written */ } }
+    if (proposal.unknown) return stopFrom(`the artifacts are written, and whether the approval landed is unknown -- ${proposal.notRaised}. Look in your inbox; the pending mark stays until you delete it`, EXIT.PARTIAL);
       if (proposal.abort) return stopFrom(`ABORTED -- ${proposal.abort}`, EXIT.PARTIAL);
       // Artifacts written and no approval landed is NOT done: it exited 0 with no receipt line (PR 3b shell attack).
       if (proposal.wouldRaise && !proposal.landed)
