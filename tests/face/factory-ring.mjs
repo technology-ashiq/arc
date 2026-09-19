@@ -88,8 +88,11 @@ function scratchRepo(name, files) {
   const ap = dev("next", "--expect", d || ZERO);
   const rec = spineEvents(sp).find((e) => e.id === receiptOf(ap.stdout));
   check("develop next, applied: the ledger moved and its receipt names the slice (note.logged develop.next)", ap.status === 0 && sha256(readFileSync(ledger)) !== ledgerBefore && !!rec && rec.kind === "note.logged" && rec.payload.note === "develop.next" && rec.payload.slice === "01", `${ap.status} ${ap.stdout.slice(-300)}`);
+  const ledgerApplied = sha256(readFileSync(ledger));
   const again = dev("next", "--expect", d || ZERO);
-  check("develop next, the same plan applied twice: the ledger moved, so the digest is stale (PLAN_STALE)", again.status !== 0 && /PLAN_STALE/.test(again.stdout + again.stderr), `${again.status} ${again.stdout.slice(-200)}`);
+  // Either refusal holds the line: the no-op check ("nothing to record") runs before the digest is compared, and a
+  // second apply of a pack already written is exactly that no-op.
+  check("develop next, the same plan applied twice: refused (nothing to record, or PLAN_STALE) and the ledger holds", ap.status === 0 && again.status !== 0 && /PLAN_STALE|nothing to record/.test(again.stdout + again.stderr) && sha256(readFileSync(ledger)) === ledgerApplied, `${again.status} ${again.stdout.slice(-200)} ${again.stderr.slice(-200)}`);
   // A plan that would write nothing is refused: applied, it only emitted receipts, one per click (PR 4 logic attack).
   const noop = dev("next", "--dry-run");
   check("develop next with nothing left to record refuses its plan -- no receipt per click", noop.status === 2 && /nothing to record/.test(noop.stdout), `${noop.status} ${noop.stdout.slice(-200)}`);
@@ -290,6 +293,29 @@ function scratchRepo(name, files) {
   live.apply("fixture.tree", { planId: lp.planId, confirm: "fixture.tree" });
   await live.settled();
   check("door: a LIVE door runs the same touchesTree apply (the refusal is the sim door's)", existsSync(marker));
+
+  // PLAN_HIDDEN: a digest row whose plan text holds an absolute path is not held (the scrub withholds from the path to
+  // the end, so the digest the apply is bound to would never reach the page) -- while an emit-plan row, whose last line
+  // IS the receipt and names the owner's own file (growth.publish), is held.
+  const digest = "a".repeat(64);
+  const pathy = process.platform === "win32" ? "C:\\Users\\someone\\notes.txt" : "/home/someone/notes.txt";
+  writeFileSync(join(fx, ".claude", "scripts", "fixture", "bound.mjs"),
+    `console.log("slice title: " + ${JSON.stringify(pathy)});\nconsole.log(JSON.stringify({ expect: ${JSON.stringify(digest)} }));\n`);
+  writeFileSync(join(fx, ".claude", "scripts", "fixture", "emits.mjs"),
+    `console.log(JSON.stringify({ emit: ["emit", "note.logged", "--payload", JSON.stringify({ note: "seal", article: ${JSON.stringify(pathy)} }), "--strict"] }));\n`);
+  const hideReg = [
+    { id: "fixture.bound", room: "fixture", label: "bound", receipt: { kind: "note.logged" }, humanRun: true, spends: false, touchesFiles: false, expect: true, fields: [],
+      plan: () => ({ script: "fixture/bound.mjs", args: [] }), apply: () => ({ script: "fixture/bound.mjs", args: [] }) },
+    { id: "fixture.emits", room: "fixture", label: "emits", receipt: { kind: "note.logged" }, humanRun: true, spends: false, touchesFiles: false, fields: [],
+      plan: () => ({ script: "fixture/emits.mjs", args: [] }), apply: "emit-plan" },
+  ];
+  const hd = DOOR.createWorkDoor({ mode: "sim", root: spine("door-hidden"), repo: fx }, { registry: hideReg });
+  let hiddenCode = null;
+  try { await hd.plan("fixture.bound", { input: {} }); } catch (e) { hiddenCode = e.code; }
+  check("door: a digest plan whose text holds an absolute path is not held (PLAN_HIDDEN)", hiddenCode === "PLAN_HIDDEN", `code=${hiddenCode}`);
+  let emitPlan = null, emitCode = null;
+  try { emitPlan = await hd.plan("fixture.emits", { input: {} }); } catch (e) { emitCode = e.code; }
+  check("door: an emit-plan whose receipt names an absolute path IS held (growth.publish's article)", !!emitPlan && emitPlan.ok === true && emitCode === null, `code=${emitCode}`);
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
