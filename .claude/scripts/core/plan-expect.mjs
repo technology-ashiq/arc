@@ -72,7 +72,7 @@ function spineWhere(cwd) {
  *   unknown  anything else: REJECT INTERNAL (a disk fault can land after the line is written), a signal, a timeout
  * Unknown is never read as "not raised": the same plan raised the question twice when it was (PR 3b round-4 attacks).
  * @param {string} arcEvent @param {string} kind @param {unknown} payload
- * @param {{ cwd?: string, env?: Record<string, string | undefined>, flags?: string[], dryRun?: boolean, timeoutMs?: number }} [o]
+ * @param {{ cwd?: string, env?: Record<string, string | undefined>, flags?: string[], dryRun?: boolean, timeoutMs?: number, command?: "emit" | "ingest" }} [o]
  * @returns {{ status: number | null, id: string, why: string, startFailed: boolean, state: "landed" | "refused" | "unknown" }}
  */
 function emitThroughFile(arcEvent, kind, payload, o = {}) {
@@ -82,7 +82,9 @@ function emitThroughFile(arcEvent, kind, payload, o = {}) {
   try {
     const file = join(dir, "payload.json");
     writeFileSync(file, JSON.stringify(payload), "utf8");
-    const r = spawnSync(process.execPath, [arcEvent, "emit", kind, "--payload-file", file, ...(o.flags || []), "--strict", ...(o.dryRun ? ["--dry-run"] : [])],
+    // `ingest` for an EXTERNAL fact (a payment): its idem is its content, so one payment is one receipt (arc-event).
+    const head = o.command === "ingest" ? [arcEvent, "ingest", kind, "--json", file] : [arcEvent, "emit", kind, "--payload-file", file];
+    const r = spawnSync(process.execPath, [...head, ...(o.flags || []), "--strict", ...(o.dryRun ? ["--dry-run"] : [])],
       { cwd: o.cwd, env: o.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...(o.timeoutMs ? { timeout: o.timeoutMs, killSignal: "SIGKILL" } : {}) });
     // A timeout is an emitter that STARTED and was killed: it may have appended first.
     if (r.error && r.error.code === "ETIMEDOUT")

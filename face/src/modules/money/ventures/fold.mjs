@@ -73,9 +73,7 @@ import { roomLink, sourceFile } from "../../../lib/lane-room.mjs";
  * @property {import("../../../lib/lane-room.mjs").SourceFile} file
  * @property {import("../../../lib/registry.mjs").NotServed} passports
  * @property {import("../../../lib/served.mjs").ServedTable} rules
- * @property {{ isVerbPending: true, verb: string, sentence: string }} registerVerb
  * @property {{ isVerbPending: true, verb: string, sentence: string }} stageVerb
- * @property {{ isVerbPending: true, verb: string, sentence: string }} killVerb
  * @property {string} trailNote
  * @property {import("../../../lib/registry.mjs").NotServed} baseRate
  * @property {string} shipWith
@@ -230,19 +228,13 @@ export function fold(payloads, ctx) {
       row: (r) => (field(r, "rule") === "" ? null : { key: field(r, "rule"), cells: [field(r, "rule"), field(r, "value") || "—"] }),
       note: "money never lives in this file: a key outside the two criteria is refused by the parser, and the file's prose rules are comments it does not keep",
     }),
-    registerVerb: verbPending(
-      "Register a venture",
-      "venture.registered makes a candidate, and its kill line is written before its first launch. It arrives with the work door.",
-    ),
     stageVerb: verbPending(
       "Stage a venture",
       "Kickoff, building, launched, live -- each move a receipt, and the venture track wins every tie. It arrives with the work door.",
     ),
-    killVerb: verbPending(
-      "Propose a kill review",
-      "A kill is a stamped decision: the attic with a retro, components harvested, the lesson pinned -- never a deletion. The proposal lands in your inbox with the work door.",
-    ),
-    trailNote: "The spine records no venture.* kind yet: registering, staging and killing a venture are work-door verbs, and their receipts land here the day they exist.",
+    // "Register a venture" and "Propose a kill review" are LIVE since face v2 Phase 05 (ADR-1342): the work door's
+    // ventures.register and ventures.kill-review ops, drawn under this room by the host. Their cards are retired.
+    trailNote: "The spine records no venture.* kind: registering a venture raises a criteria request (ledger.criteria) and a kill review raises a venture-kill request -- both land in your inbox, and the decision is the receipt. Staging is still a work-door card.",
     // The base rate is a number, and no route serves it yet: v0.7 typed "1 in 4" here (Phase 03 spec-fidelity).
     baseRate: notServed(
       "The base rate",

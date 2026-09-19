@@ -92,7 +92,7 @@ function daysBetween(fromDay, toDay) {
  * that counted its own request as its receipt would be a control that authorises itself, which is
  * the entire failure ADR-1008 exists to prevent.
  */
-function isReceipted(events, digest) {
+export function isReceipted(events, digest) {
   const approvedIds = new Set();
   for (const e of events) {
     if (e.kind !== "decision.recorded") continue;

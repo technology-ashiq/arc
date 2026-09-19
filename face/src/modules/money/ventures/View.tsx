@@ -48,11 +48,9 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             <VentureCardPanel key={v.key} v={v} neverMix={f.neverMix} />
           ))}
 
-          <HPanel title="Register, stage, review" hint="venture.registered · staged · a kill proposed to your inbox">
+          <HPanel title="Stage a venture" hint="each move a receipt">
             <div className="space-y-2.5">
-              <VerbPending item={f.registerVerb} />
               <VerbPending item={f.stageVerb} />
-              <VerbPending item={f.killVerb} />
             </div>
           </HPanel>
 

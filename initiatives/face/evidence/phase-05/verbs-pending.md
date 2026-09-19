@@ -33,10 +33,7 @@ retires it nor be invented. The browser suite counts the same cards in the page,
 | `legal` | Change a gate's mode | A gate's mode changes by a reviewed diff to arc.gates.yaml -- never an agent's action -- and the change is a receipt. It arrives with the work door. |
 | `legal` | Run the legal lints | The publish gate, claims that need a source, the PII tripwire and the hash-chain verify, each result landing as a receipt. It arrives with the work door. |
 | `legal` | Stamp the full-read gate | Nothing ships under the owner's name until a person has read it in full and stamped it; the stamp is the gate. It arrives with the work door. |
-| `money` | Record real revenue | revenue.received is recorded by a person's hand only, through the ledger's ingest; the first one opens the green gate and resets the kill clock. It arrives with the work door. |
-| `ventures` | Register a venture | venture.registered makes a candidate, and its kill line is written before its first launch. It arrives with the work door. |
 | `ventures` | Stage a venture | Kickoff, building, launched, live -- each move a receipt, and the venture track wins every tie. It arrives with the work door. |
-| `ventures` | Propose a kill review | A kill is a stamped decision: the attic with a retro, components harvested, the lesson pinned -- never a deletion. The proposal lands in your inbox with the work door. |
 | `concepts` | Define a term | A term is homed in a room and a station on its line, as a reviewed edit to the contract -- the palette finds it the moment it lands. It arrives with the work door. |
 | `org` | Set a lane's status | A lane's status is its PROGRESS header; changing it -- awake, idle, blocked on a named thing -- is a reviewed edit that lands as a receipt. It arrives with the work door. |
 | `org` | Birth a lane | Only /arc-kickoff births a lane: it claims the next ADR century and lands the lane's room in the same change. The work door will start that ceremony from here. |

@@ -9,7 +9,7 @@
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { MONO, SimBadge, UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, NotServed, RoomHead, ServedTable, VerbPending } from '../../../ui/bits'
+import { HPanel, NotServed, RoomHead, ServedTable } from '../../../ui/bits'
 import { CostPanel, FigureStrip, FileBadge, GateStrip, KillLinesPanel, SubstancePanel } from '../../../ui/money'
 export { CurrencyInr as Icon } from '@phosphor-icons/react'
 
@@ -37,12 +37,6 @@ export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
               <ServedTable item={f.chart} />
               <ServedTable item={f.chartSim} />
               <ServedTable item={f.chartCost} />
-            </div>
-          </HPanel>
-
-          <HPanel title="Record real revenue" hint="money moves by human hands only">
-            <div className="space-y-2.5">
-              <VerbPending item={f.recordVerb} />
             </div>
           </HPanel>
 
