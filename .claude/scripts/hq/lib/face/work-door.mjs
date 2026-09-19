@@ -20,6 +20,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { join, sep } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 
 import { query } from "../../spine.mjs";
 import { OPS, OpError, validateInput, emitPlanFrom, commandLine, registryView } from "../../face-ops.mjs";
@@ -33,6 +34,8 @@ const APPLY_TIMEOUT_MS = 30 * 60_000;
 const OUTPUT_CAP = 256 * 1024;
 const LINES_KEPT = 400;
 const LINE_CAP = 8192;
+// How long the pipes may keep draining after the tool exited, or after its timeout fired, before the run ends anyway.
+const PIPE_GRACE_MS = 2000;
 const IS_WIN = process.platform === "win32";
 // Plans held at once. Past it the oldest UNCLAIMED plan is dropped (a running or finished one is kept: its replay is
 // what stops a repeat from running twice).
@@ -55,10 +58,10 @@ export const WORK_STATUS = Object.freeze({
 /**
  * Spawn one tool, collect what it says, and never let it outlive its timeout.
  * @param {{ repo: string }} ctx @param {{ script: string, args: string[] }} cmd
- * @param {{ timeoutMs: number, onLine?: (stream: "out" | "err", line: string) => void }} opts
- * @returns {Promise<{ exit: number | null, signal: string | null, stdout: string, stderr: string, timedOut: boolean, dropped: number }>}
+ * @param {{ timeoutMs: number, onLine?: (stream: "out" | "err", line: string) => void, outputCap?: number }} opts
+ * @returns {Promise<{ exit: number | null, signal: string | null, stdout: string, stderr: string, timedOut: boolean, dropped: number, droppedOut: number, droppedErr: number }>}
  */
-function runTool(ctx, cmd, { timeoutMs, onLine }) {
+export function runTool(ctx, cmd, { timeoutMs, onLine, outputCap = OUTPUT_CAP }) {
   if (!SCRIPT_RE.test(cmd.script)) throw new OpError("TOOL_MISSING", `the registry names "${cmd.script}", which is not a script path the door runs`);
   const script = join(ctx.repo, ".claude", "scripts", ...cmd.script.split("/"));
   if (!existsSync(script)) throw new OpError("TOOL_MISSING", `.claude/scripts/${cmd.script} is not on this tree`);
@@ -77,19 +80,25 @@ function runTool(ctx, cmd, { timeoutMs, onLine }) {
       detached: !IS_WIN,
     });
     LIVE.add(child);
+    armSignals();
     /** @type {{ out: string, err: string }} */
     const buf = { out: "", err: "" };
     const partial = { out: "", err: "" };
-    let dropped = 0;
+    // Per stream: a caller that serves stdout must not refuse it for what stderr overflowed (PR 2 logic attack: a paid,
+    // complete ask answer was thrown away because a failed driver's long stderr came first).
+    const droppedBy = { out: 0, err: 0 };
     let timedOut = false;
     let settled = false;
     // One line is capped too: a tool writing with no newline grew the pending fragment without bound, past the
     // output cap that bounds everything else.
     const cut = (l) => (l.length > LINE_CAP ? `${l.slice(0, LINE_CAP)} [line cut at ${LINE_CAP} characters]` : l);
+    // One decoder per stream: a character split across two chunks is held until its last byte arrives. Decoding each
+    // chunk on its own turned a split euro sign into three U+FFFD (round-2 shell attack).
+    const decoder = { out: new StringDecoder("utf8"), err: new StringDecoder("utf8") };
     const take = (stream) => (chunk) => {
-      const s = chunk.toString("utf8");
+      const s = decoder[stream].write(chunk);
       buf[stream] += s;
-      if (buf[stream].length > OUTPUT_CAP) { dropped += buf[stream].length - OUTPUT_CAP; buf[stream] = buf[stream].slice(-OUTPUT_CAP); }
+      if (buf[stream].length > outputCap) { droppedBy[stream] += buf[stream].length - outputCap; buf[stream] = buf[stream].slice(-outputCap); }
       if (onLine) {
         const lines = (partial[stream] + s).split(/\r?\n/);
         partial[stream] = lines.pop() || "";
@@ -99,14 +108,36 @@ function runTool(ctx, cmd, { timeoutMs, onLine }) {
     };
     child.stdout.on("data", take("out"));
     child.stderr.on("data", take("err"));
-    const timer = setTimeout(() => { timedOut = true; killTree(child); }, timeoutMs);
+    // SETTLEMENT DOES NOT WAIT ON THE PIPES. "close" fires only when every holder of the tool's stdout and stderr has let
+    // go, and a descendant that left the tool's group (detached, setsid) while inheriting them held a run open past its
+    // own timeout -- the timeout killed what it could reach and the run never ended (PR 2 shell attack). So: once the
+    // tool itself has EXITED, the pipes get a short grace to drain; and once the timeout has FIRED, the same. Either
+    // way the run then ends with what arrived, and the pipes are let go.
+    let grace = null;
+    const letGo = (exit, signal) => {
+      if (settled || grace) return;
+      grace = setTimeout(() => {
+        for (const st of [child.stdout, child.stderr]) { try { st.destroy(); } catch { /* already closed */ } }
+        finish(exit, signal);
+      }, PIPE_GRACE_MS);
+      grace.unref?.();
+    };
+    const timer = setTimeout(() => { timedOut = true; killTree(child); letGo(null, "timeout"); }, timeoutMs);
+    child.on("exit", (code, signal) => letGo(code, signal));
     const finish = (exit, signal) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (grace) clearTimeout(grace);
       LIVE.delete(child);
+      disarmSignals();
+      // A tool that exits and leaves a descendant running has not finished: on POSIX its group is ended now, whatever
+      // the exit (round-2 shell attack: a detached grandchild kept writing after the run settled). Windows has no
+      // group to signal once the tool is gone -- that remainder is a debt row, not a claim.
+      if (!IS_WIN && child.pid) { try { process.kill(-child.pid, "SIGKILL"); } catch { /* the group is already empty */ } }
+      for (const st of /** @type {const} */ (["out", "err"])) { const rest = decoder[st].end(); if (rest) { buf[st] += rest; partial[st] += rest; } }
       if (onLine) for (const st of /** @type {const} */ (["out", "err"])) if (partial[st]) { onLine(st, cut(partial[st])); partial[st] = ""; }
-      resolveP({ exit, signal, stdout: buf.out, stderr: buf.err, timedOut, dropped });
+      resolveP({ exit, signal, stdout: buf.out, stderr: buf.err, timedOut, dropped: droppedBy.out + droppedBy.err, droppedOut: droppedBy.out, droppedErr: droppedBy.err });
     };
     child.on("error", () => finish(null, "spawn-failed"));
     child.on("close", (code, signal) => finish(code, signal));
@@ -132,6 +163,22 @@ function killTree(child) {
 // rather than leave a run nobody can observe.
 const LIVE = new Set();
 process.once("exit", () => { for (const c of LIVE) killTree(c); });
+// "exit" does not fire on a signal, and Ctrl-C is how the door is stopped (round-2 shell attack: an interrupted door
+// orphaned its running tool). A signal ends every live tree, then the process, with the signal's conventional code.
+// Registered only while a tool runs, so a door with nothing running keeps the default Ctrl-C.
+/** @param {NodeJS.Signals} sig @param {number} code */
+const onSignal = (sig, code) => () => { for (const c of LIVE) killTree(c); process.exit(code); };
+const SIGNALS = /** @type {const} */ ([["SIGINT", 130], ["SIGTERM", 143]]);
+const armed = new Map();
+function armSignals() {
+  if (armed.size) return;
+  for (const [sig, code] of SIGNALS) { const h = onSignal(sig, code); armed.set(sig, h); process.on(sig, h); }
+}
+function disarmSignals() {
+  if (LIVE.size) return;
+  for (const [sig, h] of armed) process.off(sig, h);
+  armed.clear();
+}
 
 // Every read here is the SCAN engine, never "auto": auto picks derived/state.db once arc-replay has built one, and
 // nothing but arc-replay updates it, so a receipt written a second ago was invisible and every apply read

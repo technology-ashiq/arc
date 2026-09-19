@@ -118,8 +118,9 @@ export function KpiStrip({ items, cols, className = '' }: { items: Kpi[]; cols?:
         const len = typeof s.v === 'string' || typeof s.v === 'number' ? String(s.v).length : 0
         const size = len > 12 ? 17 : len > 8 ? 20 : 24
         return (
-          <div key={s.key ?? i} className="px-5 py-4 min-w-0" style={{ boxShadow: 'inset 1px 0 0 var(--line-1), inset 0 1px 0 var(--line-1)' }}>
-            <div className="leading-[28px] tracking-[-0.01em] truncate tnum" style={{ fontFamily: FONT, fontWeight: 600, fontSize: size, color: c }}>{s.v}</div>
+          <div key={s.key ?? i} data-kpi={s.key ?? undefined} className="px-5 py-4 min-w-0" style={{ boxShadow: 'inset 1px 0 0 var(--line-1), inset 0 1px 0 var(--line-1)' }}>
+            {/* data-kpi-v: the figure alone, which the browser suite reads to time a room's re-read (REQ-11). */}
+            <div data-kpi-v className="leading-[28px] tracking-[-0.01em] truncate tnum" style={{ fontFamily: FONT, fontWeight: 600, fontSize: size, color: c }}>{s.v}</div>
             <div className="text-[12px] leading-[16px] mt-1 line-clamp-2" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{s.l}</div>
             {s.sub ? <div className="text-[11px] leading-[14px] mt-0.5 line-clamp-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{s.sub}</div> : null}
           </div>

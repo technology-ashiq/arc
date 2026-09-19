@@ -701,7 +701,7 @@ export function summaryLines(report) {
   ];
 }
 
-async function withChrome(fn, log = () => {}) {
+export async function withChrome(fn, log = () => {}) {
   const found = findChrome();
   if (!found.path) throw new SetupError(`Chrome not found. Looked at:\n  ${found.tried.join("\n  ")}`);
   const userDataDir = mkdtempSync(join(tmpdir(), "face-smoke-"));
@@ -756,7 +756,7 @@ async function withChromeOnce(found, fn) {
   }
 }
 
-function collectErrors(page, errors, current) {
+export function collectErrors(page, errors, current) {
   page.on("Runtime.exceptionThrown", (p) => errors.push({ room: current.room, type: "exception",
     text: String(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text ?? "").slice(0, 300) }));
   page.on("Runtime.consoleAPICalled", (p) => {
@@ -773,7 +773,7 @@ function collectErrors(page, errors, current) {
 }
 
 /** Wait until `predicate()` is true, polling, with a hard cap. Returns whether it became true. */
-async function until(predicate, capMs, pollMs = 100) {
+export async function until(predicate, capMs, pollMs = 100) {
   const started = Date.now();
   while (Date.now() - started < capMs) {
     if (await predicate()) return true;

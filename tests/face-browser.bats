@@ -111,6 +111,19 @@ list_distribution() {
   printf '%s\n%s\n' "$total" "${dist:-none}"
 }
 
+# The flows (face v2 Phase 05, REQ-09, REQ-11): every op the registry holds was driven through its room's dock, its
+# receipt read back through the door, and the live flow saw a receipt appended behind the page within 5 s. Judged from
+# the ONE line flows.mjs prints, against the registry's own op count -- a run that drove fewer ops cannot pass.
+flows_verdict() {
+  local out="$1" ops="$2" line
+  line="$(printf '%s\n' "$out" | grep '^flows: ' | tail -1)"
+  [ -n "$line" ] || { echo "no flows line"; return 1; }
+  [[ "$line" =~ ^flows:\ ops=([0-9]+)\ ok=([0-9]+)\ fail=0\ live=ok\ live-ms=([0-9]+)\ page-errors=0$ ]] || { echo "the flows line is not clean: $line"; return 1; }
+  [ "$ops" -gt 0 ] && [ "${BASH_REMATCH[1]}" -eq "$ops" ] && [ "${BASH_REMATCH[2]}" -eq "$ops" ] \
+    || { echo "flows ran ${BASH_REMATCH[1]} ops with ${BASH_REMATCH[2]} ok, and the registry holds $ops: $line"; return 1; }
+  [ "${BASH_REMATCH[3]}" -le 5000 ] || { echo "the live flow saw the change after ${BASH_REMATCH[3]} ms, past 5000: $line"; return 1; }
+}
+
 # The planned rooms' REHEARSAL cards (ADR-1328): what the browser drew EQUALS the derived lists, per room,
 # exactly as the work-door cards -- a planned room's flows are rehearsed, never sent to the door (money ring).
 rehearsal_verdict() {
@@ -279,13 +292,17 @@ heading_verdict() {
   run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT"
   half="$(printf '%s\n' "$output" | grep '^face-coverage: module half ' | tail -1)"
   [ -n "$half" ] || { echo "face-coverage printed no module-half line (exit $status): $output"; false; }
+  # How many ops the work door's registry holds -- what the flows line is judged against (REQ-09).
+  local opsCount
+  opsCount="$(node "$ARC_ROOT/.claude/scripts/hq/face-ops.mjs" --list | grep -c '^    "id": ' || true)"
+  [ "$opsCount" -gt 0 ] || { echo "the registry listed no op"; false; }
   run node "$ARC_ROOT/face/scripts/harness-run.mjs" --face "$dst" 3>&-
   echo "$output"
   [[ "$output" == *"face-browser: RAN leg="* ]] || { echo "the harness never started (exit $status)"; false; }
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
   # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
   # 10 s -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: served |smoke: verbs-pending|smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: served |smoke: verbs-pending|smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW |flows: |flow: )' | sed 's/^/# /' >&3 || true
   # Both moods are judged, each from its own line, before the exit status is trusted: a harness
   # that ran only dark must not pass on dark's line (ADR-1331).
   local mood verdicts=0
@@ -348,7 +365,27 @@ heading_verdict() {
     verdicts=$((verdicts + 1))
   done
   [ "$verdicts" -eq 2 ] || { echo "judged $verdicts of 2 moods"; false; }
+  flows_verdict "$output" "$opsCount" || { echo "(harness exit $status)"; false; }
   [ "$status" -eq 0 ]
+}
+
+@test "face-browser: MUTANT CONTROL -- the flows verdict refuses a short, failed, slow or erroring run" {
+  run flows_verdict "flows: ops=6 ok=6 fail=0 live=ok live-ms=2300 page-errors=0" 6
+  [ "$status" -eq 0 ] || { echo "the flows verdict refused the clean line: $output"; false; }
+  run flows_verdict "flows: ops=5 ok=5 fail=0 live=ok live-ms=2300 page-errors=0" 6
+  [ "$status" -ne 0 ] || { echo "a run that drove fewer ops than the registry holds passed: $output"; false; }
+  run flows_verdict "flows: ops=6 ok=5 fail=1 live=ok live-ms=2300 page-errors=0" 6
+  [ "$status" -ne 0 ] || { echo "a failed op passed: $output"; false; }
+  run flows_verdict "flows: ops=6 ok=6 fail=0 live=FAIL live-ms=none page-errors=0" 6
+  [ "$status" -ne 0 ] || { echo "a live flow that never saw the change passed: $output"; false; }
+  run flows_verdict "flows: ops=6 ok=6 fail=0 live=ok live-ms=7200 page-errors=0" 6
+  [ "$status" -ne 0 ] || { echo "a live change seen past 5 s passed: $output"; false; }
+  run flows_verdict "flows: ops=6 ok=6 fail=0 live=ok live-ms=2300 page-errors=2" 6
+  [ "$status" -ne 0 ] || { echo "a run with page errors passed: $output"; false; }
+  run flows_verdict "" 6
+  [ "$status" -ne 0 ] || { echo "no line at all passed: $output"; false; }
+  run flows_verdict "flows: ops=0 ok=0 fail=0 live=ok live-ms=2300 page-errors=0" 0
+  [ "$status" -ne 0 ] || { echo "a registry with no op passed: $output"; false; }
 }
 
 @test "face-browser: MUTANT CONTROL -- the rehearsal, planned and runner verdicts refuse what they must" {
@@ -502,5 +539,5 @@ heading_verdict() {
   local declared
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared declared"; false; }
-  [ "$declared" -eq 11 ] || { echo "expected 11 @test lines, found $declared -- update this floor with the file"; false; }
+  [ "$declared" -eq 12 ] || { echo "expected 12 @test lines, found $declared -- update this floor with the file"; false; }
 }

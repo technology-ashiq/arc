@@ -285,6 +285,23 @@ try {
       await post("/api/op/today.capture-idea/apply", { planId: p.body.planId }, { Origin: ORIGIN });
       const done = await settle(p.body.planId);
       check("with derived/state.db present, a fresh receipt is still found (the door reads by scan)", done.body.result && done.body.result.ok === true, JSON.stringify(done.body.result).slice(0, 300));
+      // The twins (round-2 logic attack): the approval an op raises must be in the inbox, and decidable, with the
+      // index still present -- the inbox and decide read through arc-inbox, not through the work door.
+      // A FRESH approval, raised after the index was built (money.criteria's idem is the ventures.yaml digest, so the
+      // loop above already spent it on this spine -- a second criteria request is a duplicate by design).
+      const raisedBy = spawnSync(process.execPath, [EVENT, "emit", "approval.requested", "--payload", JSON.stringify({ gate: "work-door-suite", what: "raised after a replay built the index" }), "--strict"],
+        { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_A } });
+      const rid = String(raisedBy.stdout).trim();
+      check("with the index present, an approval was raised after it (vacuous-pass guard)", raisedBy.status === 0 && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(rid), `${raisedBy.status} ${raisedBy.stderr}`);
+      const inbox = await j("/api/inbox", { headers: H });
+      check("with the index present, the approval an op just raised is OPEN in the inbox", inbox.status === 200 && (inbox.body.open || []).some((o) => o.id === rid), `${inbox.status} open=${(inbox.body.open || []).map((o) => o.id).join(",")}`);
+      const dupe = await j("/api/decide", { method: "POST", headers: { ...H, Origin: ORIGIN }, body: `{"id":"${rid}","verdict":"reject","reason":"no","verdict":"approve"}` });
+      check("/api/decide: a body with a duplicate verdict -> BAD_BODY, never last-one-wins (the door's one direct write)", dupe.status === 400 && dupe.body.error === "BAD_BODY", `${dupe.status} ${dupe.body.error}`);
+      // PR 2 logic attack: a reason carrying a text-direction control displayed a reject as "approve ...".
+      const bidi = await post("/api/decide", { id: rid, verdict: "reject", reason: "approve \u202Eevila\u202C ok" }, { Origin: ORIGIN });
+      check("/api/decide: a reason with a text-direction control is refused (BAD_REASON), and nothing is recorded", bidi.status >= 400 && /BAD_REASON/.test(JSON.stringify(bidi.body)), `${bidi.status} ${JSON.stringify(bidi.body).slice(0, 200)}`);
+      const dec = await post("/api/decide", { id: rid, verdict: "reject", reason: "the suite rejects what it raised" }, { Origin: ORIGIN });
+      check("with the index present, that approval is decidable (not UNKNOWN_APPROVAL)", dec.status === 200 && dec.body.verdict === "reject", `${dec.status} ${JSON.stringify(dec.body).slice(0, 200)}`);
     } else {
       // Node before 22 has no node:sqlite, so arc-replay builds no index and there is nothing to hide a receipt behind.
       check(`no derived/state.db on this Node (${process.version}): the stale-index arm has nothing to run against`, replay.status === 0 || /sqlite/i.test(String(replay.stderr) + String(replay.stdout)), `${replay.status} ${replay.stderr}`);
@@ -297,6 +314,20 @@ try {
     check("a body with a duplicate key -> BAD_BODY, never last-one-wins", raw.status === 400 && raw.body.error === "BAD_BODY", `${raw.status} ${raw.body.error}`);
     const esc = await post("/api/op/today.capture-idea/plan", { input: { text: `clear${String.fromCharCode(27)}[2J` } });
     check("an ESC sequence in a one-line field -> BAD_INPUT", esc.status === 400 && esc.body.error === "BAD_INPUT", `${esc.status} ${esc.body.error}`);
+    // Valid JSON the spine's canonical form refuses is still a valid BODY (round-2 logic attack: ConvertTo-Json writes
+    // CRLF, and a lone CR is whitespace too); a raw line break inside a string is still refused.
+    const crlf = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{\r\n  "input": {\r\n    "text": "a CRLF body"\r\n  }\r\n}' });
+    check("a CRLF-formatted body is valid JSON and plans", crlf.status === 200 && crlf.body.ok === true, `${crlf.status} ${crlf.body.error}`);
+    const bomBody = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"input":{"text":"a BOM body"}}')]) });
+    check("a body with one leading BOM plans (RFC 8259 lets a parser ignore it)", bomBody.status === 200 && bomBody.body.ok === true, `${bomBody.status} ${bomBody.body.error}`);
+    const loneCr = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{"input":{"text":"a"}\r}' });
+    check("a lone CR between tokens is JSON whitespace, and plans (PR 2 logic attack)", loneCr.status === 200 && loneCr.body.ok === true, `${loneCr.status} ${loneCr.body.error}`);
+    const inStr = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{"input":{"text":"two\r\nlines"}}' });
+    check("a raw line break inside a string is still refused, CRLF or not", inStr.status === 400, `${inStr.status} ${inStr.body.error}`);
+    const bidi = await post("/api/op/today.capture-idea/plan", { input: { text: "safe \u202Etxt.exe" } });
+    check("a bidi override in a one-line field -> BAD_INPUT (it reorders what the owner reads on the plan card)", bidi.status === 400 && bidi.body.error === "BAD_INPUT", `${bidi.status} ${bidi.body.error}`);
+    const tab = await post("/api/op/today.capture-idea/plan", { input: { text: "a\tb" } });
+    check("a refused character is NAMED in the refusal (U+0009)", tab.status === 400 && /U\+0009/.test(String(tab.body.message)), `${tab.status} ${tab.body.message}`);
   }
 
   // ---- a door over a NAMED spine is sim mode, never live (logic attack: ARC_SPINE_ROOT made a scratch spine "live") ----
@@ -304,6 +335,37 @@ try {
     const live = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--port", String(PORT + 1)],
       { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_B, ARC_DASH_JOURNAL_DIR: JOURNAL }, timeout: 20_000 });
     check("arc-dash with ARC_SPINE_ROOT and no --spine refuses to start -> BAD_SPINE_ENV", live.status === 1 && /BAD_SPINE_ENV/.test(live.stderr), `${live.status} ${String(live.stderr).slice(0, 200)}`);
+    // Round-2 logic attack: an empty or missing --spine value fell through to LIVE mode.
+    const boot = (args, extraEnv = {}) => {
+      const env = { ...process.env, ARC_DASH_JOURNAL_DIR: JOURNAL, ...extraEnv };
+      delete env.ARC_SPINE_ROOT;
+      return spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), ...args], { cwd: REPO, encoding: "utf8", env, timeout: 20_000 });
+    };
+    const empty = boot(["--spine", "", "--port", String(PORT + 1)]);
+    check("arc-dash --spine \"\" refuses to start -> BAD_ARGS, never live", empty.status === 2 && /BAD_ARGS/.test(empty.stderr), `${empty.status} ${String(empty.stderr).slice(0, 200)}`);
+    const trailing = boot(["--port", String(PORT + 1), "--spine"]);
+    check("arc-dash with a trailing --spine refuses to start -> BAD_ARGS, never live", trailing.status === 2 && /BAD_ARGS/.test(trailing.stderr), `${trailing.status} ${String(trailing.stderr).slice(0, 200)}`);
+    const swallowed = boot(["--spine", "--port", String(PORT + 1)]);
+    check("arc-dash --spine followed by another flag refuses (the flag is not a path)", swallowed.status === 2 && /BAD_ARGS/.test(swallowed.stderr), `${swallowed.status} ${String(swallowed.stderr).slice(0, 200)}`);
+    const twice = boot(["--spine", SPINE_A, "--spine", SPINE_B, "--port", String(PORT + 1)]);
+    check("arc-dash with two --spine values refuses (never last-one-wins)", twice.status === 2 && /given twice/.test(twice.stderr), `${twice.status} ${String(twice.stderr).slice(0, 200)}`);
+    const forced = boot(["--port", String(PORT + 1)], { ARC_SPINE_NOW: String(Date.now()) });
+    check("a live door with ARC_SPINE_NOW set refuses to start -> BAD_SPINE_ENV (a forced clock is a fixture's)", forced.status === 1 && /BAD_SPINE_ENV/.test(forced.stderr) && /ARC_SPINE_NOW/.test(forced.stderr), `${forced.status} ${String(forced.stderr).slice(0, 200)}`);
+    // PR 2 logic attack: the rest of the class -- a fake driver, the mocks, the leads fakes -- is a fixture's too.
+    for (const k of ["ARC_DRIVER_FAKE", "ARC_MOCK_DIR", "arc_leads_fake"]) {
+      const f = boot(["--port", String(PORT + 1)], { [k]: "1" });
+      check(`a live door with ${k} set refuses to start -> BAD_SPINE_ENV`, f.status === 1 && /BAD_SPINE_ENV/.test(f.stderr), `${f.status} ${String(f.stderr).slice(0, 200)}`);
+    }
+    // PR 2 shell attack: a port that is not decimal 1..65535 is refused, never NaN into listen() and an exit 0.
+    for (const bad of ["abc", "0x10", "70000", "1.5"]) {
+      const f = boot(["--spine", SPINE_A, "--port", bad]);
+      check(`arc-dash --port ${bad} refuses to start -> BAD_ARGS, exit 2`, f.status === 2 && /BAD_ARGS/.test(f.stderr), `${f.status} ${String(f.stderr).slice(0, 200)}`);
+    }
+    // PR 2 logic attack: the launcher's twin of the empty --spine hole.
+    const faceEmpty = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-face.mjs"), "--spine", "", "--no-open"], { cwd: REPO, encoding: "utf8", timeout: 20_000 });
+    check("arc-face --spine \"\" refuses (exit 2), never a live door", faceEmpty.status === 2, `${faceEmpty.status} ${String(faceEmpty.stderr).slice(0, 200)}`);
+    const faceTwice = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-face.mjs"), "--spine", SPINE_A, "--spine", SPINE_B, "--no-open"], { cwd: REPO, encoding: "utf8", timeout: 20_000 });
+    check("arc-face with two --spine values refuses (exit 2)", faceTwice.status === 2 && /given (twice|more than once)/.test(faceTwice.stderr), `${faceTwice.status} ${String(faceTwice.stderr).slice(0, 200)}`);
   }
 
   // ---- the counting fixture: two concurrent applies of one plan invoke the tool exactly once (REQ-07) ----
@@ -341,6 +403,113 @@ try {
     try { door.apply("fixture.count", { planId: p2.planId }); } catch (e) { expired = e.code; }
     check("an expired plan -> PLAN_EXPIRED, and the tool was not run", expired === "PLAN_EXPIRED" && readFileSync(counter, "utf8") === "xxx", `code=${expired} count=${readFileSync(counter, "utf8").length}`);
     delete process.env.ARC_SPINE_ROOT;
+  }
+
+  // ---- a character split across two writes, and a descendant the tool leaves behind (round-2 shell attack) ----
+  {
+    const fx = join(tmp, "fixture-split");
+    mkdirSync(join(fx, ".claude", "scripts", "fixture"), { recursive: true });
+    const gpidFile = join(tmp, "grandchild.pid");
+    // The euro sign is three bytes; the tool writes the first two, waits, then the third -- two chunks for the door.
+    // On apply it also starts a grandchild in its own process group that would run forever, and exits without it.
+    writeFileSync(join(fx, ".claude", "scripts", "fixture", "split.mjs"),
+      `import { spawn, spawnSync } from "node:child_process";\nimport { writeFileSync } from "node:fs";\n` +
+      `const w = (b) => new Promise((r) => process.stdout.write(Buffer.from(b), r));\n` +
+      `await w([0x70, 0x72, 0x69, 0x63, 0x65, 0x20, 0xe2, 0x82]);\n` +
+      `await new Promise((r) => setTimeout(r, 200));\n` +
+      `await w([0xac, 0x0a]);\n` +
+      `if (process.argv[2] === "--plan") process.exit(0);\n` +
+      `const g = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });\n` +
+      `g.unref();\nwriteFileSync(${JSON.stringify(gpidFile)}, String(g.pid));\n` +
+      `const r = spawnSync(process.execPath, [${JSON.stringify(EVENT)}, "emit", "note.logged", "--payload", JSON.stringify({ note: "split" }), "--strict"], { encoding: "utf8" });\n` +
+      `process.stdout.write(r.stdout); process.exit(r.status);\n`);
+    const SPINE_S = join(tmp, "spine-split");
+    mkdirSync(join(SPINE_S, "events"), { recursive: true });
+    process.env.ARC_SPINE_ROOT = SPINE_S;
+    const registry = [{ id: "fixture.split", room: "fixture", label: "split", receipt: { kind: "note.logged" }, humanRun: false, spends: false, touchesFiles: false, fields: [],
+      plan: () => ({ script: "fixture/split.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/split.mjs", args: [] }) }];
+    const door = DOOR_MOD.createWorkDoor({ mode: "sim", root: SPINE_S, repo: fx }, { registry });
+    const p = await door.plan("fixture.split", { input: {} });
+    check("a character split across two chunks arrives whole in the plan output", p.ok === true && String(p.output).includes("price €") && !String(p.output).includes("�"), JSON.stringify(p.output));
+    door.apply("fixture.split", { planId: p.planId });
+    await door.settled();
+    const run = door.run(p.planId);
+    const text = run.lines.map((l) => l.t).join("\n");
+    check("a character split across two chunks arrives whole in the streamed run lines", text.includes("price €") && !text.includes("�"), JSON.stringify(text).slice(0, 200));
+    check("the split fixture ran to its receipt (vacuous-pass guard for the descendant check)", run.state === "done" && run.result.ok === true && existsSync(gpidFile), JSON.stringify(run.result).slice(0, 200));
+    const gpid = existsSync(gpidFile) ? Number(readFileSync(gpidFile, "utf8")) : 0;
+    const alive = () => { try { process.kill(gpid, 0); return true; } catch { return false; } };
+    if (process.platform === "win32") {
+      // Windows has no group to signal once the tool is gone: a debt-ledger row (a Job Object is out of Node reach).
+      console.log("note: the descendant check is POSIX-only (Windows remainder is a debt row); the grandchild is ended by the suite");
+      if (gpid && alive()) try { process.kill(gpid); } catch { /* gone */ }
+    } else {
+      let gone = false;
+      for (let i = 0; i < 20 && !gone; i++) { gone = !alive(); if (!gone) await new Promise((r) => setTimeout(r, 100)); }
+      check("a descendant the tool left in its group is ended when the run settles (POSIX)", gpid > 0 && gone, `pid=${gpid}`);
+      if (!gone) try { process.kill(gpid, "SIGKILL"); } catch { /* gone */ }
+    }
+    delete process.env.ARC_SPINE_ROOT;
+
+    // PR 2 logic attack: drops are counted per stream -- a caller serving stdout must not refuse it for stderr's overflow.
+    {
+      writeFileSync(join(fx, ".claude", "scripts", "fixture", "noisy.mjs"),
+        `process.stderr.write("e".repeat(300 * 1024));\nprocess.stdout.write("the whole answer\\n");\n`);
+      const res = await DOOR_MOD.runTool({ repo: fx }, { script: "fixture/noisy.mjs", args: [] }, { timeoutMs: 30_000 });
+      check("runTool counts drops per stream: stderr overflowed, stdout did not", res.exit === 0 && res.droppedOut === 0 && res.droppedErr > 0 && res.stdout === "the whole answer\n",
+        `exit=${res.exit} out=${res.droppedOut} err=${res.droppedErr} stdout=${JSON.stringify(res.stdout)}`);
+    }
+
+    // A descendant that LEFT the tool's group while holding its pipes must not hold the run open (PR 2 shell attack: the
+    // run never settled, past its own timeout). The tool exits at once; the run ends within the pipe grace.
+    {
+      const holderPid = join(tmp, "holder.pid");
+      writeFileSync(join(fx, ".claude", "scripts", "fixture", "holder.mjs"),
+        `import { spawn } from "node:child_process";\nimport { writeFileSync } from "node:fs";\n` +
+        `if (process.argv[2] === "--plan") process.exit(0);\n` +
+        `const g = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "inherit", detached: true });\n` +
+        `g.unref();\nwriteFileSync(${JSON.stringify(holderPid)}, String(g.pid));\nprocess.stdout.write("holder started\\n");\n`);
+      const reg2 = [{ id: "fixture.holder", room: "fixture", label: "holder", receipt: { kind: "note.logged" }, humanRun: false, spends: false, touchesFiles: false, fields: [],
+        plan: () => ({ script: "fixture/holder.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/holder.mjs", args: [] }) }];
+      const door2 = DOOR_MOD.createWorkDoor({ mode: "sim", root: SPINE_S, repo: fx }, { registry: reg2 });
+      const hp = await door2.plan("fixture.holder", { input: {} });
+      const t0 = Date.now();
+      door2.apply("fixture.holder", { planId: hp.planId });
+      const ended = await Promise.race([door2.settled().then(() => true), new Promise((r) => setTimeout(() => r(false), 15_000))]);
+      const ms = Date.now() - t0;
+      const hr = door2.run(hp.planId);
+      check("a run whose descendant holds its pipes still ends, within the grace (not at a timeout, not never)", ended && hr.state === "done" && ms < 10_000, `ended=${ended} ms=${ms} state=${hr.state}`);
+      const gpid2 = existsSync(holderPid) ? Number(readFileSync(holderPid, "utf8")) : 0;
+      if (gpid2) try { process.kill(gpid2, "SIGKILL"); } catch { /* gone */ }
+    }
+
+    // A door stopped by a signal ends the tool it is running (round-2 shell attack: "exit" does not fire on a signal,
+    // so a Ctrl-C'd door orphaned its tool). POSIX-only: Windows has no catchable SIGTERM to send.
+    if (process.platform !== "win32") {
+      const toolPid = join(tmp, "sleeper.pid");
+      writeFileSync(join(fx, ".claude", "scripts", "fixture", "sleep.mjs"),
+        `import { writeFileSync } from "node:fs";\nif (process.argv[2] === "--plan") process.exit(0);\n` +
+        `writeFileSync(${JSON.stringify(toolPid)}, String(process.pid));\nsetInterval(() => {}, 1000);\n`);
+      const harness = join(tmp, "signal-harness.mjs");
+      writeFileSync(harness,
+        `const D = await import(${JSON.stringify(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "work-door.mjs")).href)});\n` +
+        `const registry = [{ id: "fixture.sleep", room: "fixture", label: "sleep", receipt: { kind: "note.logged" }, humanRun: false, spends: false, touchesFiles: false, fields: [],\n` +
+        `  plan: () => ({ script: "fixture/sleep.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/sleep.mjs", args: [] }) }];\n` +
+        `const door = D.createWorkDoor({ mode: "sim", root: ${JSON.stringify(SPINE_S)}, repo: ${JSON.stringify(fx)} }, { registry });\n` +
+        `const p = await door.plan("fixture.sleep", { input: {} });\ndoor.apply("fixture.sleep", { planId: p.planId });\nsetInterval(() => {}, 1000);\n`);
+      const h = spawn(process.execPath, [harness], { stdio: "ignore" });
+      let tpid = 0;
+      for (let i = 0; i < 100 && !tpid; i++) { await new Promise((r) => setTimeout(r, 100)); if (existsSync(toolPid)) tpid = Number(readFileSync(toolPid, "utf8")) || 0; }
+      check("the signal harness started its tool (vacuous-pass guard)", tpid > 0);
+      const exited = new Promise((r) => h.once("exit", (code, signal) => r({ code, signal })));
+      h.kill("SIGTERM");
+      const ex = await exited;
+      const toolAlive = () => { try { process.kill(tpid, 0); return true; } catch { return false; } };
+      let gone = false;
+      for (let i = 0; i < 20 && !gone; i++) { gone = !toolAlive(); if (!gone) await new Promise((r) => setTimeout(r, 100)); }
+      check("SIGTERM to a door with a tool running ends the tool, then the door, with code 143", ex.code === 143 && gone, `${JSON.stringify(ex)} toolAlive=${!gone}`);
+      if (!gone) try { process.kill(tpid, "SIGKILL"); } catch { /* gone */ }
+    }
   }
 
   // ---- arc-event --dry-run (the shared unlock) ----
@@ -389,13 +558,21 @@ try {
     check("arc-growth seal: a directory is not an article -> BAD_ARTICLE", dir.status !== 0 && /BAD_ARTICLE/.test(dir.stderr), `${dir.status} ${dir.stderr}`);
     const unc = sealAt("//./pipe/work-door-probe.mdx");
     check("arc-growth seal: a network or device path is refused before it is opened -> BAD_ARTICLE", unc.status !== 0 && /BAD_ARTICLE/.test(unc.stderr), `${unc.status} ${unc.stderr}`);
+    // A FIFO blocks a plain open for read until a writer arrives; the seal must refuse it, not hang (POSIX has them).
+    if (process.platform !== "win32") {
+      const fifo = join(tmp, "article.fifo");
+      const mk = spawnSync("mkfifo", [fifo]);
+      check("mkfifo made the probe FIFO (vacuous-pass guard)", mk.status === 0, String(mk.stderr));
+      const f = sealAt(fifo);
+      check("arc-growth seal: a FIFO is refused, not waited on -> BAD_ARTICLE", f.status !== 0 && f.signal === null && /BAD_ARTICLE/.test(f.stderr), `${f.status} ${f.signal} ${f.stderr}`);
+    }
   }
 
   // ---- the child's environment: the drop list holds whatever the case (shell attack: Windows reads env names
   // case-insensitively, so a lowercase git_dir or node_options reached the child) ----
   {
     const R = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reads.mjs")).href);
-    const planted = { git_dir: "x", Git_Work_Tree: "x", node_options: "--require nothing", arc_settings: "x", Bash_Env: "x" };
+    const planted = { git_dir: "x", Git_Work_Tree: "x", node_options: "--require nothing", arc_settings: "x", Bash_Env: "x", node_path: "x", Node_Repl_External_Module: "x" };
     for (const [k, v] of Object.entries(planted)) process.env[k] = v;
     const env = R.childEnv();
     const leaked = Object.keys(env).filter((k) => Object.hasOwn(planted, k));

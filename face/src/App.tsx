@@ -19,7 +19,7 @@ import { ASOF_ROUTES, Door, DoorError, decodeRegistry, tokenFromHash, unescapeDo
 import { findRoom, errorSentence } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
 import { buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash } from './lib/shell.mjs'
-import { asOfReaches, attachModules, collectModules, EXEMPTION_FILE, extraRooms, homeRoom, modeChip, railGroups, refusedPayload, roomHoldingKind, withExtras } from './lib/registry.mjs'
+import { asOfReaches, attachModules, collectModules, EXEMPTION_FILE, extraRooms, homeRoom, modeChip, PULSE_MS, railGroups, refusedPayload, roomHoldingKind, withExtras } from './lib/registry.mjs'
 import type { ExtraRooms, ModuleContext } from './lib/registry.mjs'
 import { needsYouByRoom } from './lib/map.mjs'
 import { applyMood, nextMood, readMood, storeMood } from './lib/mood.mjs'
@@ -123,6 +123,63 @@ export default function App() {
       .catch(() => setOpenItems(null))
     return () => ac.abort()
   }, [door])
+
+  // REQ-11: the door's pulse, asked every PULSE_MS -- a fingerprint of what the rooms read. A change re-reads the open
+  // room (RoomFrame) and the shell's own live reads below. Never over a scrubbed day: history does not change under the
+  // owner, so a re-read there would only redraw the page. One ask at a time; a missed pulse is a slower room, not a
+  // wrong one.
+  const [pulse, setPulse] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    if (asOf) return
+    const ac = new AbortController()
+    let asking = false
+    const ask = () => {
+      if (asking) return
+      asking = true
+      door
+        .pulse(ac.signal)
+        .then((b: { pulse?: unknown }) => { if (!ac.signal.aborted && typeof b.pulse === 'string') setPulse(b.pulse) })
+        .catch(() => { /* the next tick asks again */ })
+        .finally(() => { asking = false })
+    }
+    ask()
+    const t = window.setInterval(ask, PULSE_MS)
+    return () => { ac.abort(); window.clearInterval(t) }
+  }, [door, asOf])
+  // The shell's live reads -- the inbox chip, and the registry whose live block says which kinds ever fired -- follow
+  // the pulse too. The first pulse is where the shell starts, not a change: bootstrap has just read both.
+  const seenPulse = useRef<string | undefined>(undefined)
+  // One re-read of the pair at a time. A pulse that arrives while they are in flight marks them, and they run once more
+  // when they land -- aborting them on every pulse starved a /api/rooms that takes longer than the pulse interval, so it
+  // never landed at all (PR 2 logic attack).
+  const shellFlight = useRef<AbortController | null>(null)
+  const shellDirty = useRef(false)
+  const rereadShell = useCallback(() => {
+    if (shellFlight.current) { shellDirty.current = true; return }
+    const ac = new AbortController()
+    shellFlight.current = ac
+    const inbox = door
+      .inbox(ac.signal)
+      .then((b: { open?: { gate?: string; venture?: string }[] }) => { if (!ac.signal.aborted) setOpenItems(Array.isArray(b.open) ? b.open : []) })
+      .catch(() => { /* the chip keeps its last honest answer */ })
+    const rooms = door
+      .rooms(ac.signal)
+      .then((r: Registry) => { if (!ac.signal.aborted) setRegistry(decodeRegistry(r)) })
+      .catch(() => { /* the rail keeps the registry it has */ })
+    void Promise.allSettled([inbox, rooms]).then(() => {
+      if (shellFlight.current !== ac) return
+      shellFlight.current = null
+      if (shellDirty.current && !ac.signal.aborted) { shellDirty.current = false; rereadShell() }
+    })
+  }, [door])
+  useEffect(() => () => { shellFlight.current?.abort(); shellFlight.current = null; shellDirty.current = false }, [door])
+  useEffect(() => {
+    if (pulse === undefined) return
+    if (seenPulse.current === undefined) { seenPulse.current = pulse; return }
+    if (seenPulse.current === pulse) return
+    seenPulse.current = pulse
+    rereadShell()
+  }, [pulse, rereadShell])
 
   // What the bundle found is fixed at build time: read once, and handed to both questions asked of it.
   const collected = useMemo(() => collectModules(FOUND_MODULES), [])
@@ -233,7 +290,7 @@ export default function App() {
   const attached = openable ? attachment.attached[openable.id] : undefined
   const ctx: ModuleContext | null = openable
     ? {
-        room: openable, rooms: shell.rooms, door, onOpen: open, mode: registry.mode, token,
+        room: openable, rooms: shell.rooms, door, onOpen: open, mode: registry.mode, token, pulse,
         needs: needs.counts, needsUnplaced: needs.unplaced, inventories: registry.inventories, laneMap: contract.lanes?.map,
       }
     : null

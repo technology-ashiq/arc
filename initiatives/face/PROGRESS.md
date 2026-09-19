@@ -365,8 +365,12 @@ Plan sums to 21d of 24d. Phase 04 closed 2026-09-18 (`0a4cb262`, #248; receipts 
 owning-lane additions (`arc-event --dry-run`, `arc-pnl --criteria-request` and `--close ... --emit-plan`, `develop.mjs
 checkpoint --receipt`, `arc-growth seal`), face-coverage's op half (117 selftest arms), and `tests/face/work-door.mjs`
 (the per-op no-second-path fixture). All six ran plan -> apply -> receipt against a sim door; close month and bench
-also through the dock in a real browser. The `flows.mjs` port moves to PR 2 (spec current-phase note). **Next:** CI
-per job on PR 1, the two fresh attackers, merge; then PR 2 -- live rooms and the flows port.
+also through the dock in a real browser. **PR 1 MERGED** as `56ba17b0` (#252), CI 19/19 on the PR and on a main
+dispatch. **PR 2 (live rooms + flows) is BUILT on `feat/face-v2-05-live`:** `GET /api/pulse` (a stat fingerprint the
+shell asks every 2 s; a change re-reads every read of the open room with no flicker -- measured 922 ms in Chrome),
+`face/scripts/flows.mjs` driving all six ops through their docks plus the live flow, and round 2 of PR 1's attackers:
+13 twins fixed across the door, `arc-inbox`, `arc-run`, `arc-bench` and `arc-growth` (spec current-phase note), three
+process-tree remainders ledgered. **Next:** CI per job on PR 2, merge; then PR 3 -- the kernel ring's 10 verbs.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering

@@ -21,7 +21,7 @@
 //   spine cursor                       # the id of the newest event, for a consumer to store
 //   spine days                         # the days that exist
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { SpineError, ULID_RE } from "./lib/canonical.mjs";
 import { dayFile, listDays, spineRoot, derivedDir, quarantineDir, readIdemIndex, isDayClosed } from "./lib/spine-io.mjs";
 import { join } from "node:path";
@@ -146,6 +146,39 @@ export function applyFilters(events, { kind, since, venture, date, limit } = {})
 export async function query(root, filters = {}) {
   const { events, torn, engine } = await readAll(root, filters.engine);
   return { events: applyFilters(events, filters), torn, engine };
+}
+
+/**
+ * The spine's STAT fingerprint (face v2 Phase 05, REQ-11): one line per entry of events/ and of the quarantine --
+ * name, size, modification time -- and never a byte of any of them. The face's pulse hashes it to ask "did anything
+ * change?" every two seconds. Here, beside spineHealth and for the same reason: the door never lists events/ itself
+ * (ADR-0030, held by spine-reader-lint).
+ * @param {string} root @returns {string[]}
+ */
+export function spineStamp(root) {
+  /** @type {string[]} */
+  const parts = [];
+  /** @param {string} label @param {string} p */
+  const stamp = (label, p) => {
+    try { const s = statSync(p); parts.push(`${label}|${s.size}|${s.mtimeMs}`); }
+    catch { parts.push(`${label}|absent`); }
+  };
+  const ev = join(root, "events");
+  /** @type {string[]} */
+  let names = [];
+  try { names = readdirSync(ev).sort(); } catch { parts.push("events|unreadable"); }
+  // A CLOSED day's bytes are pinned for ever (ADR-0029), so its name is its whole fingerprint: the listing already says
+  // it is closed, and statting every closed day on every pulse cost 327 ms a pulse on a five-year spine, on the door's
+  // one thread, every two seconds per open tab (PR 2 logic attack). Only open days, and anything else here, are statted.
+  const closed = new Set(names.filter((n) => /^\d{4}-\d{2}-\d{2}\.closed$/.test(n)).map((n) => n.slice(0, 10)));
+  for (const n of names) {
+    const day = /^(\d{4}-\d{2}-\d{2})\.(jsonl|closed)$/.exec(n);
+    if (day && closed.has(day[1])) parts.push(`events/${n}|closed`);
+    else stamp(`events/${n}`, join(ev, n));
+  }
+  const q = quarantineDir(root);
+  try { for (const n of readdirSync(q).sort()) stamp(`quarantine/${n}`, join(q, n)); } catch { /* no quarantine yet */ }
+  return parts;
 }
 
 /**

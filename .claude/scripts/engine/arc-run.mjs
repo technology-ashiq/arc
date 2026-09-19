@@ -1083,6 +1083,10 @@ function emitRun(payload) {
   // the "verifier that cries wolf" failure the comment below already warns about. The gate lands
   // once the verifier is trustworthy, in the PR that repairs it.
   verifyLanded(r.id);
+  // The receipt's id, said once, so a caller credits THIS run rather than the newest run.completed it can find: bench
+  // took the latest one written since its snapshot, and a concurrent face ask or a second bench run was credited to
+  // the attempt, spend and all (face v2 Phase 05 round-2 logic attack). stderr, because stdout is the answer.
+  if (r.id) console.error(`arc-run: receipt run.completed ${r.id}`);
 }
 
 /** Returns TRUE only if the receipt is provably in today's log. The boolean is the point:

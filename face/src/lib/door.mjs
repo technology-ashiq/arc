@@ -234,6 +234,8 @@ export const DOOR_ROUTES = Object.freeze({
   // Phase 05 (REQ-07, ADR-1339): the work door. No module declares these in its `routes` -- the host's ops dock
   // reaches them through the methods below, for the ops a module names in its ops.mjs.
   "/api/ops": read(),
+  // REQ-11: what changed, as one fingerprint -- the shell asks it every two seconds and re-reads the open room on a change.
+  "/api/pulse": read(),
   "/api/op/:id/plan": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: false }),
   "/api/op/:id/apply": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: true }),
   "/api/op-run/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
@@ -401,6 +403,9 @@ export class Door {
   ask(q) { return this.call("/api/ask", { method: "POST", body: { q } }); }
 
   // ---- the work door (face v2 Phase 05, ADR-1339) ----
+
+  /** The pulse: a fingerprint of everything the rooms read, from stats alone (REQ-11). @param {AbortSignal} [signal] */
+  pulse(signal) { return this.call("/api/pulse", { signal }); }
 
   /** The op registry this door serves: ids, rooms, fields, receipts. @param {AbortSignal} [signal] */
   ops(signal) { return this.call("/api/ops", { signal }); }

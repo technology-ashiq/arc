@@ -23,6 +23,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runFlows, flowsLine } from "./flows.mjs";
 import { runSmoke, summaryLines, renderLine, notServedLine, servedLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, extrasLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds, expectedExtras } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -183,6 +184,20 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
       const verdict = judge(report);
       if (!verdict.ok) { failedMoods++; log(`smoke: FAIL mood=${mood} -- ${oneLine(verdict.reasons.join("; "))}`); }
     }
+    // THE FLOWS (face v2 Phase 05, REQ-09, REQ-11): every op driven through its room's dock, its receipt read back
+    // through the door, then the live flow -- once, after every mood's smoke has counted the fixture, because the
+    // flows write receipts to it.
+    let flowsFailed = false;
+    if (setupFailed === 0) {
+      try {
+        const fr = await runFlows({ base: `http://127.0.0.1:${appPort}/`, door: `http://127.0.0.1:${doorPort}`, token, spine, repo: REPO, tmp }, log);
+        log(flowsLine(fr));
+        flowsFailed = fr.ops === 0 || fr.failed.length > 0 || !fr.live.ok || fr.errors > 0;
+      } catch (e) {
+        flowsFailed = true;
+        log(`flows: SETUP-FAIL -- ${oneLine(redactSecrets(e?.message ?? e, [token]))}`);
+      }
+    }
     // Light is never optional (ADR-1331): a run that left a mood out is not a pass, however clean.
     const missing = MOODS.filter((m) => !moods.includes(m));
     if (opts.shots) {
@@ -192,7 +207,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     }
     if (missing.length) log(`face-browser: PARTIAL -- mood(s) ${missing.join(",")} not run; a partial run never exits 0`);
     if (setupFailed) return 2;
-    return failedMoods === 0 && missing.length === 0 ? 0 : 1;
+    return failedMoods === 0 && missing.length === 0 && !flowsFailed ? 0 : 1;
   } finally {
     await stopTree(preview);
     await stopTree(door);
