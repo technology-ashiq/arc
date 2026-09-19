@@ -119,6 +119,28 @@ writeFileSync(VENTURES, "version: 1\nventures:\n  lexos:\n    kill:\n      days_
   check("kill review: a repeated --kill-request is refused, never last-wins", twice.status === 2 && /given twice/.test(twice.stderr), twice.stderr);
   const stray = pnl("--reason", "x");
   check("--reason without --kill-request is refused, never dropped", stray.status === 2 && /belongs with --kill-request/.test(stray.stderr), stray.stderr);
+  // ROUND 2: the review reads the spine itself -- a stale sqlite index hid an open review -- and --engine never repeats.
+  const eng = pnl("--kill-request", "lexos", "--reason", "x", "--engine", "sqlite");
+  check("kill review refuses --engine -- it always reads the spine itself, never a stale index", eng.status === 2 && /takes no --engine/.test(eng.stderr), eng.stderr);
+  const eng2 = pnl("--month", "2026-07", "--engine", "scan", "--engine", "sqlite");
+  check("--engine given twice is refused, never last-wins", eng2.status === 2 && /given twice/.test(eng2.stderr), eng2.stderr);
+  // THE IDEM IS WELDED TO THE LAST DECIDED REVIEW, not the day: once decided, the next review is a new question; two
+  // plans held open (across midnight, say) are ONE question, and the emitter lands only one of them.
+  const kills = () => spineEvents(sp).filter((e) => e.kind === "approval.requested" && e.payload && e.payload.gate === "venture-kill");
+  const first = kills();
+  const decided = first.length === 1 ? node([S("hq", "arc-inbox.mjs"), "approve", first[0].id, "--reason", "money-work fixture"], env) : { status: -1, stderr: `${first.length} reviews` };
+  const h1 = pnl("--kill-request", "lexos", "--reason", "held one");
+  const h2 = pnl("--kill-request", "lexos", "--reason", "held two");
+  const emitOf = (out) => { try { return JSON.parse(lastLine(out)).emit; } catch { return null; } };
+  const idemOf = (out) => { const e = emitOf(out); return e ? e[e.indexOf("--idem") + 1] : ""; };
+  const want = createHash("sha256").update(`ledger.kill|lexos|${digest}|${first.length ? first[0].id : ""}`).digest("hex");
+  check("kill review after a decided one: a new question, its idem welded to the decided review -- not the day",
+    decided.status === 0 && h1.status === 0 && h2.status === 0 && idemOf(h1.stdout) === want && idemOf(h2.stdout) === want && want !== emit[emit.indexOf("--idem") + 1],
+    `${decided.stderr} ${h1.stderr} ${h2.stderr}`);
+  const run = (out) => { const e = emitOf(out); return e ? node([S("hq", "arc-event.mjs"), ...e], env) : { status: -1, stderr: "no emit" }; };
+  const e1 = run(h1.stdout);
+  run(h2.stdout);
+  check("two held kill-review plans, applied one after the other, land ONE review -- the emitter refuses the second idem", e1.status === 0 && kills().length === 2, `${e1.stderr} reviews=${kills().length}`);
 }
 
 // ---- venture-register: a proposal branch and the criteria request ----
@@ -148,9 +170,10 @@ writeFileSync(VENTURES, "version: 1\nventures:\n  lexos:\n    kill:\n      days_
     const ok0 = node([S("hq", "arc-inbox.mjs"), "approve", req0.stdout.trim(), "--reason", "register fixture"], { ARC_SPINE_ROOT: sp });
     check("register fixture: main's criteria are receipted (vacuous-pass guard)", req0.status === 0 && ok0.status === 0, `${req0.stderr} ${ok0.stderr}`);
   }
-  for (const [why, value] of [["a machine path", "C:\\Users\\someone\\acme"], ["an address", "git@github.com:someone/acme.git"]]) {
+  // Round 2: three shapes only -- an https URL, an owner/name, plain words. "C://..." and "C:x" passed the scrub.
+  for (const [why, value] of [["a machine path", "C:\\Users\\someone\\acme"], ["an address", "git@github.com:someone/acme.git"], ["a doubled-slash drive path", "C://Users/someone/acme"], ["a drive-relative path", "C:acme"], ["a parent-folder path", "..\\acme"], ["an address in a URL", "https://someone@example.com/acme"]]) {
     const r = reg("--slug", "probe-venture", "--days-without-revenue", "60", "--traffic-floor", "50", "--repository", value, "--dry-run");
-    check(`register refuses a --repository holding ${why} -- PORTFOLIO.md is published`, r.status === 2 && /machine path or an address/.test(r.stderr), r.stderr);
+    check(`register refuses a --repository holding ${why} -- PORTFOLIO.md is published`, r.status === 2 && /https URL, an owner\/name, or plain words|machine path or an address/.test(r.stderr), r.stderr);
   }
   const eventsBefore = spineEvents(sp).length;
   const plan = reg(...A, "--dry-run");
@@ -179,7 +202,22 @@ writeFileSync(VENTURES, "version: 1\nventures:\n  lexos:\n    kill:\n      days_
     const r = reg(...args, "--days-without-revenue", "60", "--traffic-floor", "50", "--repository", "x", "--dry-run");
     check(`register refuses ${why}`, r.status === 2 && re.test(r.stderr), r.stderr);
   }
+  // Round 2: the passport header ONCE in the whole file -- a copy anywhere, fenced or not, refuses -- and a code fence
+  // left open at the end refuses, since where the tables are cannot be told. Each case is committed on main, then undone.
+  const port = readFileSync(join(repo, "PORTFOLIO.md"), "utf8");
+  const HEAD = "| venture | repository | current status | next |";
+  const FENCE = String.fromCharCode(96).repeat(3);
+  for (const [why, text, re] of [
+    ["a second copy of the passport header inside a fenced block", port + "\n" + FENCE + "\n" + HEAD + "\n|---|---|---|---|\n" + FENCE + "\n", /header 2 times/],
+    ["a code fence left open at the end", port + "\n" + FENCE + "\nunclosed\n", /fence left open/],
+  ]) {
+    writeFileSync(join(repo, "PORTFOLIO.md"), text);
+    g("commit", "-q", "-am", "probe");
+    const r = reg("--slug", "probe-two", "--days-without-revenue", "60", "--traffic-floor", "50", "--repository", "acme/probe-two", "--dry-run");
+    g("reset", "-q", "--hard", mainBefore);
+    check(`register refuses a PORTFOLIO.md with ${why}`, r.status === 2 && re.test(r.stderr) && clean(), r.stderr);
+  }
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exit(failed === 0 && ran >= 18 ? 0 : 1);
+process.exit(failed === 0 && ran >= 38 ? 0 : 1);

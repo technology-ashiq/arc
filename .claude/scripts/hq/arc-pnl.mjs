@@ -12,7 +12,7 @@
 // ARC_SPINE_DEBUG, exactly as spine.mjs already does it. The test reads both streams.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { SpineError, formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
+import { SpineError, sha256Hex } from "./lib/canonical.mjs";
 import { query, spineRoot } from "./spine.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 import { derivePnl } from "./lib/ledger/pnl.mjs";
@@ -36,8 +36,9 @@ const BOOL_FLAGS = new Set(["simulated", "help", "criteria-digest", "emit-plan"]
 // account, and a close reconciles all of them at once. Everything else is last-wins as before.
 const REPEATABLE_FLAGS = new Set(["reconcile-file", "reconcile-total"]);
 // The kill review's flags NEVER repeat: last-wins picked "--kill-request lexos" out of "--kill-request nope
-// --kill-request lexos" in silence (PR 5a round-1 shell attack). The older flags keep their last-wins, unchanged.
-const ONCE_FLAGS = new Set(["kill-request", "reason"]);
+// --kill-request lexos" in silence (PR 5a round-1 shell attack). --engine joins them: "--engine scan --engine sqlite"
+// read the second in silence (round 2). The older flags keep their last-wins, unchanged.
+const ONCE_FLAGS = new Set(["kill-request", "reason", "engine"]);
 
 function parseArgs(argv) {
   const flags = {};
@@ -394,9 +395,11 @@ async function main(argv) {
   if (flags.reason !== undefined && flags["kill-request"] === undefined)
     throw new SpineError("BAD_ARGS", "--reason is the kill review's reason and belongs with --kill-request");
   if (flags["kill-request"] !== undefined) {
-    for (const other of ["close", "criteria-request", "criteria-digest", "month", "venture", "simulated", "emit-plan", "reconcile-file", "reconcile-total"])
+    // No --engine either: the review ALWAYS reads the spine itself, since a stale sqlite index hid an open review and a
+    // second one reached the inbox (PR 5a round-2 attacks, both).
+    for (const other of ["close", "criteria-request", "criteria-digest", "month", "venture", "simulated", "emit-plan", "reconcile-file", "reconcile-total", "engine"])
       if (flags[other] !== undefined) throw new SpineError("BAD_ARGS", `--kill-request is its own command; it takes no --${other} (the venture is its value, and it prints its own emit)`);
-    return killRequest(flags["kill-request"], flags.reason, flags.engine);
+    return killRequest(flags["kill-request"], flags.reason);
   }
 
   // The digest a criteria receipt has to carry. Deliberately does NOT read the spine: it is the
@@ -558,32 +561,31 @@ async function main(argv) {
  * owner's inbox, carrying the venture's kill lines as the panel reads them now and the criteria digest they were read
  * under. It asks whether or not a line is crossed: the owner may call a review early, and the payload says which.
  * The last stdout line is the exact emit; this command writes nothing.
- * @param {string} venture @param {string | undefined} reason @param {string | undefined} engine
+ * @param {string} venture @param {string | undefined} reason
  */
-async function killRequest(venture, reason, engine) {
+async function killRequest(venture, reason) {
   if (!/^[a-z][a-z0-9-]{0,40}$/.test(venture)) throw new SpineError("BAD_ARGS", `--kill-request ${JSON.stringify(venture)} is not a venture slug`);
   // isOneLine, as the sibling tools read it: a hand-written check let a right-to-left override through, and a spoofed
   // question reached the inbox (PR 5a round-1 shell attack).
   if (typeof reason !== "string" || reason.trim() === "" || reason !== reason.trim() || !isOneLine(reason))
     throw new SpineError("BAD_ARGS", "--kill-request needs --reason: one line, with no leading or trailing space");
   if (Buffer.byteLength(reason, "utf8") > 512) throw new SpineError("BAD_ARGS", "--reason is longer than 512 bytes");
-  if (engine !== undefined && engine !== "scan" && engine !== "sqlite")
-    throw new SpineError("BAD_ARGS", `--engine ${JSON.stringify(engine)} is neither "scan" nor "sqlite"`);
-  const panel = await deriveKillPanel(spineRoot(), { engine });
+  const panel = await deriveKillPanel(spineRoot(), { engine: "scan" });
   if (!panel.present) throw new SpineError("NO_VENTURES", "no ventures.yaml -- a venture is registered, with its kill lines, before it can be reviewed");
   // Under an unreceipted criteria file the panel's lines are not the owner's: the review would ask about numbers nobody
   // approved (ADR-1008).
   if (!panel.receipted) throw new SpineError("UNRECEIPTED", `${UNRECEIPTED} -- the criteria digest ${panel.digest} has no approved receipt, so its kill lines are not the owner's yet; approve the criteria first`);
   const row = panel.ventures.find((v) => v.venture === venture);
-  // ONE OPEN REVIEW PER VENTURE, and one a day: a click on each of N days raised N open questions for one kill, and the
+  // ONE OPEN REVIEW PER VENTURE: a click on each of N days raised N open questions for one kill, and the
   // same day's second click was refused only at the emit (PR 5a round-1 logic attack). Judged on a WHOLE read: a torn
   // or unreadable day refuses, never counts as "nothing open".
-  const read = await query(spineRoot(), { engine });
+  const read = await query(spineRoot(), { engine: "scan" });
   if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length))
     throw new SpineError("PARTIAL_SPINE", "the spine has a day it cannot read or a torn line, so an open review cannot be ruled out -- replay the spine first");
   const evs = read.events.map((r) => r.event);
   const decided = new Set(evs.filter((e) => e && e.kind === "decision.recorded" && e.payload && typeof e.payload.decides === "string").map((e) => e.payload.decides));
-  const open = evs.find((e) => e && e.kind === "approval.requested" && e.payload && e.payload.gate === "venture-kill" && e.payload.venture === venture && !decided.has(e.id));
+  const reviews = evs.filter((e) => e && e.kind === "approval.requested" && e.payload && e.payload.gate === "venture-kill" && e.payload.venture === venture);
+  const open = reviews.find((e) => !decided.has(e.id));
   if (open) throw new SpineError("OPEN_REVIEW", `a kill review of ${venture} is already open in your inbox (${open.id}) -- decide that one`);
   if (!row) throw new SpineError("NO_VENTURE", `${venture} is not in ventures.yaml (${panel.ventures.map((v) => v.venture).join(", ") || "none"}) -- only a registered venture has a kill line to review`);
   const lines = row.criteria.map((c) => ({ criterion: c.criterion, status: c.status, value: c.value ?? null, threshold: c.threshold ?? null, ...(c.status === "ABSENT" ? { reason: String(c.reason) } : {}) }));
@@ -593,11 +595,13 @@ async function killRequest(venture, reason, engine) {
   for (const l of lines) process.stdout.write(`  ${l.criterion}  ${l.status}${l.value !== null ? `  ${l.value} of ${l.threshold}` : ""}${l.reason ? `  (${l.reason})` : ""}\n`);
   process.stdout.write(crossed.length ? `crossed: ${crossed.join(", ")}\n` : "no kill line is crossed -- the review is asked early, and the request says so\n");
   process.stdout.write(`request: approval.requested[venture-kill] -- ${reason}\n`);
-  // ONE review per venture, per criteria version, per day: a second click the same day is the same question, and the
-  // emitter refuses it as a duplicate rather than filling the inbox.
-  const idem = sha256Hex(`ledger.kill|${venture}|${panel.digest}|${formatIst(nowMs()).slice(0, 10)}`);
-  const today = evs.find((e) => e && e.kind === "approval.requested" && e.idem === idem);
-  if (today) throw new SpineError("ALREADY_ASKED", `a kill review of ${venture} under these criteria was already raised today (${today.id}) and decided -- raise the next one tomorrow`);
+  // ONE review per venture, per criteria version, per DECIDED review before it: the idem is welded to the last decided
+  // review, never to the day, so two plans held open and applied either side of midnight are one question and the
+  // emitter refuses the second (PR 5a round-2 logic attack). Once the owner decides, the next review is a new one.
+  const last = reviews.length ? reviews[reviews.length - 1].id : "none";
+  const idem = sha256Hex(`ledger.kill|${venture}|${panel.digest}|${last}`);
+  const raised = evs.find((e) => e && e.kind === "approval.requested" && e.idem === idem);
+  if (raised) throw new SpineError("ALREADY_RAISED", `this kill review of ${venture} is already on the spine (${raised.id}) -- decide that one`);
   process.stdout.write(`${JSON.stringify({ emit: ["emit", "approval.requested", "--payload", JSON.stringify(payload), "--idem", idem, "--venture", venture, "--strict"] })}\n`);
   process.stderr.write("arc-pnl: planned, not raised. The last stdout line is the emit; the owner decides the review through arc-inbox.\n");
   return 0;

@@ -32,7 +32,7 @@ The probe (evidence/phase-05/cli-probe.md) found no CLI for any of the three:
    ledger lane's call, recorded as the revisit trigger, not taken here.
 2. **A kill review is a question, never an action.** `arc-pnl --kill-request VENTURE --reason WHY` prints the emit of
    approval.requested (gate `venture-kill`) carrying the venture's kill lines as the panel reads them, the crossed
-   ones, and the criteria digest; one per venture, per criteria version, per day (the idem). It refuses under an
+   ones, and the criteria digest; one per venture, per criteria version, per decided review before it (the idem). It refuses under an
    unreceipted criteria file (the lines are not the owner's yet). The owner's stamp in the inbox is the decision; the
    attic, the retro and the harvest stay the owner's.
 3. **A venture is registered on a proposal branch** (`hq/venture-register.mjs`, ADR-1340's rule for law files):
@@ -54,3 +54,10 @@ The probe (evidence/phase-05/cli-probe.md) found no CLI for any of the three:
 A fresh pair found 7 logic and 6 shell holes. All but one (a debt row) are fixed and pinned. One decision sharpens: **a
 venture is registered only on top of criteria the owner has already approved** -- the criteria request covers the
 whole file, so without that gate an unreceipted change on main would be approved under the new venture's name.
+
+## Amendment, PR 5a round 2 (same day, the last round)
+
+The second pair found one HIGH both of them hit: the kill review asked a possibly stale sqlite index whether a review
+was open. It now always reads the spine itself. The kill idem no longer carries the day; it is welded to the last
+decided review, so two plans held open across midnight are one question. `--repository` is allow-listed to three
+shapes. The owner capped attack rounds at two per PR, so what is left goes to the debt ledger.

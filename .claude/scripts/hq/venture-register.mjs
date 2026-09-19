@@ -78,6 +78,13 @@ function parseArgs(argv) {
     die(2, "--repository is one line of text, up to 120 bytes, with no | and no control or invisible characters");
   // It goes into PORTFOLIO.md, in a public repository: a machine path or an address there is the owner's, published (PR
   // 5a round-1 shell attack). The face's scrub is the test -- what it would rewrite is refused here, by name.
+  // THREE SHAPES, and nothing else: "C://Users/...", "C:x" and "..\x" all passed the scrub into a published file (PR 5a
+  // round-2 shell attack). Plain words hold no slash, backslash, colon or @; the scrub stays as the second test.
+  const HTTPS = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(\/[A-Za-z0-9._~-]+)*\/?$/;
+  const OWNER_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/(?!\.+$)[A-Za-z0-9._-]{1,100}$/;
+  const WORDS = /^[A-Za-z0-9][A-Za-z0-9 ,.()-]*$/;
+  if (!HTTPS.test(a.repository) && !OWNER_NAME.test(a.repository) && !WORDS.test(a.repository))
+    die(2, "--repository is an https URL, an owner/name, or plain words (letters, digits, spaces and , . ( ) -) -- it is published in PORTFOLIO.md");
   if (scrub(a.repository, REPO) !== a.repository) die(2, "--repository names a machine path or an address, and it would be published in PORTFOLIO.md -- give an https URL or a name");
   if (a.why && (!isOneLine(a.why) || Buffer.byteLength(a.why) > 300)) die(2, "--why is one line of text, up to 300 bytes, with no control or invisible characters");
   return a;
@@ -121,16 +128,22 @@ export function addToVentures(text, slug, days, floor) {
 /** The passport table's venture names, and where a new row goes (after its last row). */
 function passports(text) {
   const lines = text.split("\n");
-  // The table's header OUTSIDE fenced blocks, and exactly one: a quoted copy of the table in a code block took the row
-  // (PR 5a round-1 shell attack).
+  // The table's header ONCE IN THE WHOLE FILE, outside any fence, under its own heading: a quoted copy of the table in a
+  // code block took the row (round 1), and a fence tracker is fooled by a fence left open or an indented one (PR 5a
+  // round-2 shell attack) -- so any second copy, anywhere, refuses, and so does a fence open at the end.
   const heads = [];
+  const inFence = [];
   let fence = "";
+  let section = "";
   lines.forEach((l, i) => {
     const t = l.trimStart().slice(0, 3);
     if (t === "```" || t === "~~~") { fence = fence === "" ? t : fence === t ? "" : fence; return; }
-    if (fence === "" && l === PASSPORT_HEAD) heads.push(i);
+    if (fence === "" && l.startsWith("## ")) section = l;
+    if (l === PASSPORT_HEAD) { heads.push(i); inFence.push(fence !== "" || section !== "## Venture passports"); }
   });
-  if (heads.length > 1) die(2, `${PORTFOLIO} on main holds the "Venture passports" header ${heads.length} times outside code blocks -- make it one table first`);
+  if (fence !== "") die(2, `${PORTFOLIO} on main has a code fence left open -- where its tables are cannot be told; close it first`);
+  if (heads.length > 1) die(2, `${PORTFOLIO} on main holds the "Venture passports" header ${heads.length} times -- make it one table first`);
+  if (inFence[0]) die(2, `${PORTFOLIO} on main holds the "Venture passports" header inside a code block or outside its "## Venture passports" section -- fix it first`);
   const head = heads.length ? heads[0] : -1;
   if (head < 0 || !/^\|(---\|){4}$/.test(lines[head + 1] || "")) die(2, `${PORTFOLIO} on main has no "Venture passports" table (${PASSPORT_HEAD}) -- fix it first`);
   let end = head + 2;

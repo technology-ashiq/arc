@@ -437,7 +437,8 @@ export const OPS = Object.freeze([
     receipt: Object.freeze({ kind: "approval.requested" }),
     binding: "v0.7 `register` -> a proposal branch (ventures.yaml, PORTFOLIO.md's passport row, the face's contract and what it derives) and approval.requested under the ledger.criteria profile for the new digest (ADR-1342)",
     retires: Object.freeze({ module: "ventures", verb: "Register a venture" }),
-    humanRun: false, spends: false, touchesFiles: true,
+    // Human-run, like every op that writes a branch (ADR-1340): the owner ticks before it is written.
+    humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
       Object.freeze({ name: "slug", label: "Venture", placeholder: "the venture's slug, lowercase", type: "text", max: 41, pattern: "[a-z][a-z0-9-]{1,40}", required: true }),
       Object.freeze({ name: "days", label: "Kill after days without revenue", placeholder: "90", type: "int", min: 1, max: 1000000, required: true }),

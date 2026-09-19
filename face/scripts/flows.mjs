@@ -72,6 +72,11 @@ export function flowInputs(ctx) {
     "factory.switch-profile": { to: "strict", why: "a browser flow asks for the strict profile" },
     "executor.terminate": { class: "build-in-public-draft" },
     "agents.add-agent": { name: "browser-flow-probe", description: "Reads a diff and names its riskiest hunk", tools: "Read, Grep", tier: "cheap-scan", room: "review-ship", product: "review" },
+    // The money ring (ADR-1342). The fixture spine holds no approved criteria, so the register and the kill review end
+    // on their tools' refusals; their receipt paths are proven on scratch spines (tests/face/money-work.mjs).
+    "money.ingest": { provider: "razorpay", export: join(ctx.tmp, "no-export.csv"), venture: "lexos", interval: "monthly" },
+    "ventures.register": { slug: "browser-flow-probe", days: "60", floor: "50", repository: "acme/browser-flow-probe" },
+    "ventures.kill-review": { venture: "lexos", reason: "a browser flow asks for a review" },
   };
 }
 
@@ -101,6 +106,12 @@ export const REFUSALS = Object.freeze({
   "design-studio.open-brief": "SIM_EFFECT|NO_BASE",
   "executor.terminate": "SIM_EFFECT|NO_BASE",
   "agents.add-agent": "SIM_EFFECT|NO_BASE",
+  // The money ring. Ingest is pointed at an export that does not exist: recording money is the owner's hand-run, and
+  // its apply path is money-work.mjs's. The register refuses where a CI checkout has no main, and elsewhere because the
+  // fixture's criteria were never approved; the kill review refuses the same unapproved criteria.
+  "money.ingest": "the export cannot be found",
+  "ventures.register": "SIM_EFFECT|is not on main|no approved criteria receipt",
+  "ventures.kill-review": "UNRECEIPTED",
 });
 
 /**

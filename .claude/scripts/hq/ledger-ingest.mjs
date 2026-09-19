@@ -179,7 +179,7 @@ async function derive(a) {
   // month's last day and applied after it is stale, never a silent move to the next month (PR 5a round 1).
   const month = formatIst(nowMs()).slice(0, 7);
   const digest = planDigest({ venture: a.venture, provider: a.provider, export: exp.sha, month, record: record.map((n) => n.payload) });
-  return { exp, record, skipped, digest, root };
+  return { exp, record, skipped, digest, root, month };
 }
 
 async function main() {
@@ -222,6 +222,9 @@ async function main() {
     if (stale2) die(2, stale2);
     let done = 0;
     for (const n of again.record) {
+      // The month the plan showed holds for EVERY receipt: an apply running across midnight on a month's last day split
+      // one export over two months (PR 5a round-2 logic attack). Stop at the turn; a new plan says the new month.
+      if (formatIst(nowMs()).slice(0, 7) !== again.month) die(done ? 1 : 2, `${done} of ${again.record.length} recorded; the month turned during the apply and the rest would count in a month the plan never showed -- plan again`);
       const got = emitReceipt(ARC_EVENT, "revenue.received", n.payload, { cwd: REPO, env: { ...process.env, ARC_SPINE_ROOT: again.root }, command: "ingest", flags: ["--venture", a.venture], timeoutMs: 60_000 });
       if (got.state === "landed" && got.id) { say(`receipt: revenue.received ${got.id}`); done += 1; continue; }
       const left = again.record.length - done;
