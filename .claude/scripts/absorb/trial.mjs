@@ -101,6 +101,9 @@ function draftApproval(a) {
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
+  // How it was invoked comes first: an unbound apply is refused before any other check can answer for it (the bench
+  // rule, PR 3b).
+  if (!a.dryRun && a["--expect"] === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, then again with the --expect it prints -- nothing was sealed");
   const branch = proposalBranch("absorb-trial", a["--correlation"]);
   const target = `${a["--evidence"]}/commitment.txt`;
   // Every check the seal makes, written nothing.

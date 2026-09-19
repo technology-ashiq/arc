@@ -893,12 +893,12 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   // The seal's own guard answers first (the correlation is used), before the branch's: either way nothing is sealed twice.
   check("absorb trial applied again with its digest refuses BEFORE it seals again (the seal exists, and so does the branch)", twice.status === 2 && /a seal already exists|BRANCH_EXISTS/.test(twice.stderr) && approvals().filter((e) => e.payload.correlation === "kernel-trial-1").length === 1, twice.stderr);
   const pUnbound = inScratch("absorb/pin.mjs", [...PIN.slice(0, -1), "initiatives/absorb/evidence/kernel-unbound.md"]);
-  const tUnbound = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -1), "kernel-trial-unbound"]);
+  const tUnbound = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -3), "initiatives/absorb/evidence/kernel-unbound", "--correlation", "kernel-trial-unbound"]);
   check("absorb pin and trial with no plan digest refuse -- an apply is bound to a plan, and the trial seals nothing", pUnbound.status === 2 && /bound to a plan/.test(pUnbound.stderr) && tUnbound.status === 2 && /bound to a plan/.test(tUnbound.stderr) && !existsSync(join(seals, "kernel-trial-unbound.json")), `${pUnbound.stderr} :: ${tUnbound.stderr}`);
   const unknown = inScratch("absorb/judgement.mjs", ["seal", "--candidate", "T-01", "--variants", "a,b", "--fixtures", "f1,f2,f3", "--evidence", "x", "--correlation", "c-unknown", "--dry-runn"]);
   check("judgement seal refuses a flag it does not know -- it used to be ignored, and a mistyped --dry-run sealed for real", unknown.status === 2 && /does not take/.test(unknown.stderr) && !existsSync(join(seals, "c-unknown.json")), unknown.stderr);
   // The seal's approval is judged BEFORE it seals: a correlation the secret scanner reads as a key burns nothing.
-  const keyish = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -1), "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789", "--dry-run"]);
+  const keyish = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -3), "initiatives/absorb/evidence/kernel-keyish", "--correlation", "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789", "--dry-run"]);
   check("absorb trial whose approval the spine would refuse is refused at its plan, before anything is sealed", keyish.status === 2 && /would be refused by the spine/.test(keyish.stderr) && !existsSync(join(seals, "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789.json")), `${keyish.status} ${keyish.stderr}`);
 
   // A report NAMED like risk-assessment put "sk-" in its branch, and beside main's commit that is a key to the scanner:

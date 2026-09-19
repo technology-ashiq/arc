@@ -269,9 +269,12 @@ async function withHooks(repo, fn) {
     // NUL-separated, decoded strictly, matched across every character. The line-split, lossy, `.+` parse missed a name
     // holding CR, U+2028 or U+2029, the empty name, and a byte that is not UTF-8 -- each of those hooks ran six times
     // inside a write, and one vetoed it (PR 3b round-2 shell attack).
-    const listed = await git(repo, ["config", "--name-only", "-z", "--get-regexp", "^hook\\..*\\.(command|event)$"], { hooks, ok: [0, 1] });
+    // EVERY key, filtered here by its bytes: git's --get-regexp runs the locale's regex, and under a UTF-8 locale `.`
+    // does not match a byte that is not UTF-8, so such a hook was never listed and ran inside the write -- green on
+    // Windows, red on Linux and macOS (PR 3b round-2 CI).
+    const listed = await git(repo, ["config", "--name-only", "-z", "--list"], { hooks, ok: [0, 1] });
     const names = new Set();
-    for (const raw of nulSplit(listed.buf)) {
+    for (const raw of nulSplit(listed.buf).filter(isHookKey)) {
       let key;
       try { key = new TextDecoder("utf-8", { fatal: true }).decode(raw); }
       catch { throw new ProposalError("HOOK_NAME", "the repository's config defines a hook whose name is not UTF-8, which cannot be disabled by name -- nothing was written; rename it"); }
@@ -282,6 +285,12 @@ async function withHooks(repo, fn) {
     if (hooks.off.length) await assertHooksOff(repo, hooks);
     return await fn(hooks);
   } finally { removeQuietly(dir); }
+}
+
+/** Whether a config key's BYTES are hook.<anything>.command or .event, the section and variable without case. */
+function isHookKey(raw) {
+  const s = raw.toString("latin1").toLowerCase();
+  return s.startsWith("hook.") && (s.endsWith(".command") || s.endsWith(".event")) && s.length > "hook..event".length - 1;
 }
 
 /** A buffer split on NUL bytes, empty pieces dropped. @param {Buffer} buf @returns {Buffer[]} */
@@ -299,7 +308,8 @@ function nulSplit(buf) {
  * refusal here, not a hook that runs inside the write.
  */
 async function assertHooksOff(repo, hooks) {
-  const r = await git(repo, ["config", "-z", "--get-regexp", "^hook\\..*\\.enabled$"], { hooks, ok: [0, 1] });
+  // --list, not --get-regexp: the same locale-bound regex (withHooks).
+  const r = await git(repo, ["config", "-z", "--list"], { hooks, ok: [0, 1] });
   /** @type {Map<string, string>} */
   const last = new Map();
   for (const raw of nulSplit(r.buf)) {
