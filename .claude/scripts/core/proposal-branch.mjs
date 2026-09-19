@@ -558,7 +558,16 @@ export async function writeProposal({ repo, branch, files, allow, message, base:
         // written, raise no approval, and refuse every retry (PR 3a round-2 shell attack).
         const now = await git(repo, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`], { hooks, ok: [0, 1] }).catch(() => null);
         if (now && now.status === 0 && now.out.trim() === commit) return { branch, base, commit, diff };
-        const clash = await clashOf(repo, branch, hooks).catch(() => null);
+        // ANOTHER WRITER'S LOCK: git refuses while a concurrent writer holds refs/heads/<branch>.lock, before that writer's
+        // ref exists -- so the look below found nothing and a lost race read as GIT_FAILED (CI, Windows, three writers).
+        // A held lock is waited out briefly: the other writer's branch appears (BRANCH_EXISTS) or it gave up.
+        let clash = await clashOf(repo, branch, hooks).catch(() => null);
+        if (!clash && /cannot lock ref|unable to create .*\.lock|File exists/i.test(e instanceof Error ? e.message : String(e))) {
+          for (let i = 0; i < 20 && !clash; i++) {
+            await new Promise((r) => setTimeout(r, 100));
+            clash = await clashOf(repo, branch, hooks).catch(() => null);
+          }
+        }
         if (clash) throw new ProposalError("BRANCH_EXISTS", `${clash.slice("refs/heads/".length)} appeared while the proposal was written -- nothing was overwritten (the objects written are unreachable, and git's gc removes them)`);
         throw new ProposalError("GIT_FAILED", `the branch could not be created, and nothing was overwritten: ${e instanceof Error ? e.message : e}`);
       }

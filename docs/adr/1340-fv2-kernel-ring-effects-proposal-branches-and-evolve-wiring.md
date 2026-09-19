@@ -323,3 +323,12 @@ pinned, and one decision above changes:
   the next number with "wx", which one caller alone can do. No process deletes another's lock file, so there is no
   break to race. The spine's own lock keeps its file names (the leads reader and the spine suites name them); it breaks
   only a gone holder's lock and re-reads before it unlinks, and the remaining window is in the face lane's debt ledger.
+
+## Amendment, PR 3b round 6 (same day)
+
+The numbered lock of round 5 fell to its own attack pair (numbers reused after a sweep; an unreadable file read as
+released). The face tools' lock is now the simplest shape that can be argued: **every taker creates its own
+random-named file, then holds only if no other file has a live holder** (unreadable counts as live; on this machine a
+holder is live while its process runs, up to an hour; on another, by age). Two takers in one instant may both back off
+and neither holds wrongly. Nothing is renamed, numbered or reused, and only a gone holder's file is ever deleted. The
+spine lock keeps its file name; its token now names its host.

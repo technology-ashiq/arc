@@ -795,10 +795,10 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     // in the store refuses the next apply, and a pending mark with no id refuses it too.
     const emptyStore = existsSync(store) ? readdirSync(store).map((k) => join(store, k)).find((d) => !existsSync(join(d, "approval.id"))) : null;
     // A live holder: this test process, named in the numbered lock's token (host|pid|nonce).
-    if (emptyStore) writeFileSync(join(emptyStore, ".apply.lock.0"), `${hostname()}|${process.pid}|test`);
+    if (emptyStore) writeFileSync(join(emptyStore, ".apply.lock.00000000000000aa"), `${hostname()}|${process.pid}|test`);
     const locked = b("--propose", "--from", cand, "--champion", empty, "--expect", de || "x");
     check("bench --from: an apply while another holds the store's lock refuses and writes nothing", !!emptyStore && locked.status === 2 && /another apply of this proposal is running/.test(locked.stderr), `${locked.status} ${locked.stderr}`);
-    if (emptyStore) { rmSync(join(emptyStore, ".apply.lock.0"), { force: true }); writeFileSync(join(emptyStore, "approval.pending"), "x\n"); }
+    if (emptyStore) { rmSync(join(emptyStore, ".apply.lock.00000000000000aa"), { force: true }); writeFileSync(join(emptyStore, "approval.pending"), "x\n"); }
     const pending = b("--propose", "--from", cand, "--champion", empty, "--expect", de || "x");
     check("bench --from: a pending mark with no approval id refuses -- an earlier apply may have raised it", pending.status === 2 && /may have raised its approval/.test(pending.stderr), `${pending.status} ${pending.stderr}`);
     if (emptyStore) rmSync(join(emptyStore, "approval.pending"), { force: true });
@@ -1175,45 +1175,73 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     flushed.status === 0 && /did not confirm the flush \(EIO\)/.test(flushed.stderr) && dayLines.some((l) => l.includes("flush-probe")) && quarantined === 0 && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(flushed.stdout.trim()),
     `${flushed.status} ${flushed.stderr} lines=${dayLines.length} q=${quarantined}`);
 
-  // THE SHARED LOCK (PR 3b rounds 4 and 5): numbered files, and no process deletes another's. A holder on this machine is
-  // live exactly while its process runs; another machine's is judged by age; a future-dated file is no live holder's; a
-  // folder at the highest number is refused by name.
-  const lockDir = join(tmp, "locks-r5");
+  // THE SHARED LOCK (PR 3b rounds 4 to 6): every taker creates its own file and holds only if no other file has a live
+  // holder; a holder on this machine is live while its process runs (up to an hour), another machine's by age; an
+  // unreadable file is live; a folder where a lock file belongs is refused by name.
+  const lockDir = join(tmp, "locks-r6");
   mkdirSync(lockDir, { recursive: true });
+  const hex = (n) => n.toString(16).padStart(16, "0");
   const liveToken = `${hostname()}|${process.pid}|test`;
   const deadPid = (() => { const c = spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], { encoding: "utf8" }); return Number(c.stdout); })();
-  mkdirSync(join(lockDir, "folder.lock.0"), { recursive: true });
+  const age = (p, ms) => { const t = new Date(Date.now() - ms); utimesSync(p, t, t); };
+  mkdirSync(join(lockDir, `folder.lock.${hex(1)}`), { recursive: true });
   let folderWhy = "";
   try { await PE.withExclusiveLock(lockDir, "folder.lock", () => "x"); } catch (e) { folderWhy = e instanceof Error ? e.message : String(e); }
-  check("lock: a folder at the lock's number is refused by name -- never busy forever", /a folder sits where the lock folder\.lock\.0 belongs/.test(folderWhy), folderWhy);
-  writeFileSync(join(lockDir, "future.lock.0"), "another-machine|1|x");
-  const future = new Date(Date.now() + 24 * 3600_000);
-  utimesSync(join(lockDir, "future.lock.0"), future, future);
+  check("lock: a folder where a lock file belongs is refused by name -- never busy forever", new RegExp(`a folder sits where the lock folder\\.lock\\.${hex(1)} belongs`).test(folderWhy), folderWhy);
+  writeFileSync(join(lockDir, `future.lock.${hex(2)}`), "another-machine|1|x");
+  age(join(lockDir, `future.lock.${hex(2)}`), -24 * 3600_000);
   const fut = await PE.withExclusiveLock(lockDir, "future.lock", () => "ran", { staleMs: 60_000 });
-  check("lock: another machine's lock dated a day into the future is no live holder's -- the next number is taken and the run holds it", fut.busy === false && fut.value === "ran", JSON.stringify(fut));
-  // A holder on THIS machine is live while its process runs, however old its file: a heartbeat cannot beat during a
-  // spawnSync, and a live seal past staleMs was broken into (PR 3b round-5 shell attack).
-  writeFileSync(join(lockDir, "slow.lock.0"), liveToken);
-  const longAgo = new Date(Date.now() - 24 * 3600_000);
-  utimesSync(join(lockDir, "slow.lock.0"), longAgo, longAgo);
-  const slow = await PE.withExclusiveLock(lockDir, "slow.lock", () => "ran", { staleMs: 60_000 });
-  check("lock: this machine's holder whose process still runs is live however old its file -- busy", slow.busy === true, JSON.stringify(slow));
-  writeFileSync(join(lockDir, "fresh.lock.0"), liveToken);
+  check("lock: another machine's lock dated a day into the future is no live holder's -- the run holds it", fut.busy === false && fut.value === "ran", JSON.stringify(fut));
+  writeFileSync(join(lockDir, `fresh.lock.${hex(3)}`), liveToken);
   const fr = await PE.withExclusiveLock(lockDir, "fresh.lock", () => "ran", { staleMs: 60_000 });
   check("lock: a fresh lock whose holder's process is running is busy (the control)", fr.busy === true, JSON.stringify(fr));
-  writeFileSync(join(lockDir, "dead.lock.3"), `${hostname()}|${deadPid}|gone`);
-  const dead = await PE.withExclusiveLock(lockDir, "dead.lock", () => readdirSync(lockDir).filter((n) => n.startsWith("dead.lock.")).sort().join(","), { staleMs: 60_000 });
+  writeFileSync(join(lockDir, `slow.lock.${hex(4)}`), liveToken);
+  age(join(lockDir, `slow.lock.${hex(4)}`), 30 * 60_000);
+  const slow = await PE.withExclusiveLock(lockDir, "slow.lock", () => "ran", { staleMs: 60_000 });
+  check("lock: this machine's holder whose process still runs is live half an hour on -- busy (a spawnSync cannot beat)", slow.busy === true, JSON.stringify(slow));
+  writeFileSync(join(lockDir, `reused.lock.${hex(5)}`), liveToken);
+  age(join(lockDir, `reused.lock.${hex(5)}`), 2 * 3600_000);
+  const reused = await PE.withExclusiveLock(lockDir, "reused.lock", () => "ran", { staleMs: 60_000 });
+  check("lock: a running pid on a file two hours old is another program's -- the run holds it, never wedged", reused.busy === false && reused.value === "ran", JSON.stringify(reused));
+  writeFileSync(join(lockDir, `dead.lock.${hex(6)}`), `${hostname()}|${deadPid}|gone`);
+  const dead = await PE.withExclusiveLock(lockDir, "dead.lock", () => readdirSync(lockDir).filter((n) => n.startsWith("dead.lock.")), { staleMs: 60_000 });
   const deadAfter = readdirSync(lockDir).filter((n) => n.startsWith("dead.lock."));
-  check("lock: a FRESH lock whose holder's process has exited is taken at once -- the next number, the old file untouched while held, both gone after",
-    deadPid > 0 && dead.busy === false && dead.value === "dead.lock.3,dead.lock.4" && deadAfter.length === 0, `${JSON.stringify(dead)} after=${deadAfter.join(",")}`);
-  writeFileSync(join(lockDir, "away.lock.0"), `another-machine|${deadPid}|x`);
+  check("lock: a FRESH lock whose holder's process has exited is taken at once -- its file cleared, only the taker's while held, none after",
+    deadPid > 0 && dead.busy === false && Array.isArray(dead.value) && dead.value.length === 1 && dead.value[0] !== `dead.lock.${hex(6)}` && deadAfter.length === 0, `${JSON.stringify(dead)} after=${deadAfter.join(",")}`);
+  writeFileSync(join(lockDir, `away.lock.${hex(7)}`), `another-machine|${deadPid}|x`);
   const away = await PE.withExclusiveLock(lockDir, "away.lock", () => "ran", { staleMs: 60_000 });
   check("lock: another machine's fresh lock is judged by age alone -- busy", away.busy === true, JSON.stringify(away));
+  // An unreadable file is LIVE, never "released" (PR 3b round-6 logic attack): a shim holds one lock file unreadable.
+  {
+    const unDir = join(tmp, "locks-unreadable");
+    mkdirSync(unDir, { recursive: true });
+    writeFileSync(join(unDir, `scan.lock.${hex(8)}`), `${hostname()}|${deadPid}|x`);
+    const busyShim = join(tmp, "lock-ebusy.mjs");
+    writeFileSync(busyShim, [
+      "import fs from \"node:fs\";",
+      "import { syncBuiltinESMExports } from \"node:module\";",
+      "const real = fs.readFileSync;",
+      `fs.readFileSync = (p, o) => { if (String(p).endsWith(${JSON.stringify(`scan.lock.${hex(8)}`)})) throw Object.assign(new Error("EBUSY: resource busy or locked"), { code: "EBUSY" }); return real(p, o); };`,
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"));
+    const taker = join(tmp, "lock-taker.mjs");
+    writeFileSync(taker, [
+      "const [peUrl, dir] = process.argv.slice(2);",
+      "const { withExclusiveLock } = await import(peUrl);",
+      "const r = await withExclusiveLock(dir, \"scan.lock\", () => \"ran\", { staleMs: 60000 });",
+      "process.stdout.write(r.busy ? \"busy\" : \"held\");",
+      "",
+    ].join("\n"));
+    const r = spawnSync(process.execPath, ["--import", pathToFileURL(busyShim).href, taker, pathToFileURL(S("core", "plan-expect.mjs")).href, unDir], { encoding: "utf8" });
+    const control = spawnSync(process.execPath, [taker, pathToFileURL(S("core", "plan-expect.mjs")).href, unDir], { encoding: "utf8" });
+    check("lock: a lock file that cannot be read is LIVE -- busy; readable, its dead holder's lock is taken (the control)", r.stdout === "busy" && control.stdout === "held", `${r.stdout}|${r.stderr} / ${control.stdout}|${control.stderr}`);
+  }
 
-  // THE RACE, DETERMINISTIC. B lists the folder and is paused right there (a shim on its first listing); A takes the
-  // lock past the killed holder's number and holds it; B resumes on its old listing. The numbered lock gives B the same
-  // next number A took, so "wx" refuses it: one holder. The old three-step lock -- run here as the negative control, the
-  // mutant this harness exists to catch -- deletes A's fresh lock and lets B in beside it.
+  // THE RACE, DETERMINISTIC. B creates its file and lists the folder, and is paused right there (a shim on its first
+  // listing); A comes in, creates its own and lists -- B's live file is there, so A backs off; B resumes and holds. One
+  // holder. The old three-step lock -- the negative control, the mutant this harness exists to catch -- is paused
+  // between its stale look and its unlink instead, and lets B in beside A.
   const child = join(tmp, "lock-child.mjs");
   writeFileSync(child, [
     "import { closeSync, existsSync, openSync, readdirSync, statSync, unlinkSync, writeFileSync } from \"node:fs\";",
@@ -1239,11 +1267,12 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     "  try { return { busy: false, value: await fn() }; } finally { try { unlinkSync(lock); } catch {} }",
     "}",
     "const r = mode === \"naive\" ? await naive(inside) : await withExclusiveLock(dir, NAME, inside, { staleMs: 60000 });",
-    "if (role === \"B\") writeFileSync(join(marks, \"b-done\"), \"\");",
+    "writeFileSync(join(marks, `${role.toLowerCase()}-done`), \"\");",
     "process.stdout.write(r.busy ? \"busy\" : \"held\");",
     "",
   ].join("\n"));
-  // B pauses on its FIRST look at the lock: the numbered lock's listing of the folder, the old lock's stat of its file.
+  // B pauses on its FIRST look: the shared lock's listing of the folder, the old lock's stat of its file. It resumes when
+  // A holds, or when A is done.
   const pauseShim = join(tmp, "lock-pause.mjs");
   writeFileSync(pauseShim, [
     "import fs from \"node:fs\";",
@@ -1257,7 +1286,7 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     "  fs.writeFileSync(join(marks, \"b-paused\"), \"\");",
     "  const cell = new Int32Array(new SharedArrayBuffer(4));",
     "  const end = Date.now() + 20000;",
-    "  while (!fs.existsSync(join(marks, \"a-holds\")) && Date.now() < end) Atomics.wait(cell, 0, 0, 20);",
+    "  while (!fs.existsSync(join(marks, \"a-holds\")) && !fs.existsSync(join(marks, \"a-done\")) && Date.now() < end) Atomics.wait(cell, 0, 0, 20);",
     "};",
     "const realStat = fs.statSync;",
     "fs.statSync = (p, o) => { const st = realStat(p, o); if (!paused && String(p).endsWith(\"race.lock\")) hold(); return st; };",
@@ -1271,11 +1300,10 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     const marks = join(tmp, `race-${mode}-marks`);
     mkdirSync(dir, { recursive: true });
     mkdirSync(marks, { recursive: true });
-    // A killed holder's lock: the old lock's plain file, or the numbered lock's number 0 (its process gone, its file old).
-    const lock = join(dir, mode === "naive" ? "race.lock" : "race.lock.0");
+    // A killed holder's lock: the old lock's plain file, or a shared-lock file whose process is gone and whose file is old.
+    const lock = join(dir, mode === "naive" ? "race.lock" : `race.lock.${hex(9)}`);
     writeFileSync(lock, `${hostname()}|${deadPid}|killed`);
-    const old = new Date(Date.now() - 10 * 60_000);
-    utimesSync(lock, old, old);
+    age(lock, 10 * 60_000);
     const run = (role, extra) => new Promise((res) => {
       const c = spawn(process.execPath, [...extra, child, mode, role, dir, marks, pathToFileURL(S("core", "plan-expect.mjs")).href],
         { cwd: REPO, env: { ...process.env, LOCK_MARKS: marks, LOCK_DIR: dir }, stdio: ["ignore", "pipe", "pipe"] });
@@ -1291,9 +1319,24 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     return { paused, a, b, overlap: existsSync(join(marks, "overlap")) };
   };
   const shared = await race("shared");
-  check("lock: a taker on an old listing is refused its number -- one holder (A held, B busy; the pause fired)", shared.paused && shared.a === "held" && shared.b === "busy" && !shared.overlap, JSON.stringify(shared));
+  check("lock: a taker that finds another's LIVE file backs off -- one holder (B held, A busy; the pause fired)", shared.paused && shared.a === "busy" && shared.b === "held" && !shared.overlap, JSON.stringify(shared));
   const naive = await race("naive");
   check("lock: the negative control -- the old three-step lock lets B in beside A (the harness sees the defect)", naive.paused && naive.overlap, JSON.stringify(naive));
+
+  // THE SPINE LOCK'S TOKEN NAMES ITS HOST (PR 3b round-6 logic attack): another machine's fresh lock is never broken by a
+  // pid look, and a dead writer's lock on THIS machine is broken at once.
+  {
+    const IO = await import(pathToFileURL(S("hq", "lib", "spine-io.mjs")).href);
+    const root = join(tmp, "spine-host");
+    mkdirSync(join(root, "events"), { recursive: true });
+    writeFileSync(join(root, "events", ".lock"), `another-machine|${deadPid}|abcdef\n`);
+    let awayCode = "ran";
+    try { IO.withLock(root, () => "x", { timeoutMs: 300 }); } catch (e) { awayCode = e.code; }
+    writeFileSync(join(root, "events", ".lock"), `${hostname()}|${deadPid}|abcdef\n`);
+    let deadRan = "no";
+    try { deadRan = IO.withLock(root, () => "ran", { timeoutMs: 300 }); } catch (e) { deadRan = e.code; }
+    check("spine lock: another machine's fresh lock waits (LOCK_TIMEOUT); this machine's dead writer's fresh lock is broken at once", awayCode === "LOCK_TIMEOUT" && deadRan === "ran", `${awayCode} ${deadRan}`);
+  }
 
   // BENCH'S SPINE IS THE EMITTER'S (PR 3b round-5 logic attack): with ARC_SPINE_ROOT unset, a bench root holding .claude/
   // and no .git/, inside a folder holding both, reads the outer spine -- where the emitter, run in the root, writes.
@@ -1402,7 +1445,7 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
       mkdirSync(join(root, "events"), { recursive: true });
       mkdirSync(marks, { recursive: true });
       const lock = join(root, "events", ".lock");
-      writeFileSync(lock, `${deadPid}:deadbeef\n`);
+      writeFileSync(lock, `${hostname()}|${deadPid}|deadbeef\n`);
       const old = new Date(Date.now() - 10 * 60_000);
       utimesSync(lock, old, old);
       const run = (role, extra) => new Promise((res) => {

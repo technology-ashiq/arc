@@ -17,6 +17,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
+import { hostname } from "node:os";
 import { SpineError, canonicalize, formatIst, nowMs } from "./canonical.mjs";
 
 // The critical section is a few file appends -- single-digit milliseconds. A stale
@@ -174,7 +175,9 @@ export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS, lockName = 
   if (typeof lockName !== "string" || !/^\.[a-z0-9.-]+$/.test(lockName))
     throw new SpineError("LOCK_FAILED", `lockName ${JSON.stringify(lockName)} is not a safe lock filename`);
   const lock = join(dir, lockName);
-  const token = `${process.pid}:${randomBytes(8).toString("hex")}`;
+  // The HOST is in the token: a lock is judged by its pid only on the machine that pid belongs to. A pid-only token
+  // read another machine's fresh lock as a dead local writer's and broke it (PR 3b round-6 logic attack).
+  const token = `${hostname()}|${process.pid}|${randomBytes(8).toString("hex")}`;
   const deadline = Date.now() + timeoutMs;
   let fd = null;
   let lastCode = "EEXIST";
@@ -255,17 +258,20 @@ function readLockToken(lock) {
 }
 
 /**
- * Whether a lock's holder is gone: the pid its token names (`<pid>:<hex>`) has exited, or -- for a token naming no pid,
- * or a pid still running after ten minutes (reused by another program) -- the lock is older than `staleMs`.
+ * Whether a lock's holder is gone: on THIS machine (the token is `<host>|<pid>|<hex>`), its pid has exited, or it is still
+ * running a minute on (reused by another program); another machine's token, or one naming no pid, by age alone.
  * @param {string | null} token @param {number} age @param {number} staleMs
  */
 function holderGone(token, age, staleMs) {
-  const m = /^([1-9][0-9]{0,9}):[0-9a-f]+$/.exec(token || "");
-  if (m) {
+  const m = /^([^|]*)\|([1-9][0-9]{0,9})\|[0-9a-f]+$/.exec(token || "");
+  if (m && m[1] === hostname()) {
     let running = false;
-    try { process.kill(Number(m[1]), 0); running = true; } catch (e) { running = !!e && e.code === "EPERM"; }
-    return running ? age > Math.max(staleMs, 10 * 60_000) : true;
+    try { process.kill(Number(m[2]), 0); running = true; } catch (e) { running = !!e && e.code === "EPERM"; }
+    // Live while its process runs, up to a minute: no writer holds the spine for seconds, so a running pid past that is
+    // another program's -- the ten minutes round 5 allowed dropped every hook receipt behind a reused pid (round 6).
+    return running ? age > Math.max(staleMs, 60_000) : true;
   }
+  // Another machine's writer, or a token from an older emitter: by age alone, as before round 5.
   return age > staleMs;
 }
 

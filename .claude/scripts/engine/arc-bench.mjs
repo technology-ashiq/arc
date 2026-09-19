@@ -2206,9 +2206,12 @@ export function buildProposal(root, report, championDir, outDir, { emit = true, 
   // A dry run (propose --from --dry-run) computes every verdict and every diff and raises nothing.
   if (emit && wouldRaise) {
     approval = emitApprovalRequested(root, wouldRaise);
+    // Three outcomes reach the summary too: unknown was printed as "NOT sealed" (PR 3b round-6 attacks).
     summary.push(approval.landed
       ? `approval.requested ${approval.id} is in events/ and not in _quarantine/`
-      : `approval.requested was NOT sealed${approval.why ? ` -- ${approval.why}` : ""}`);
+      : approval.unknown
+        ? `approval.requested MAY HAVE LANDED -- whether it did is unknown${approval.why ? ` (${approval.why})` : ""}; look in the inbox before raising it again`
+        : `approval.requested was NOT sealed${approval.why ? ` -- ${approval.why}` : ""}`);
   }
 
   return {
@@ -2522,7 +2525,9 @@ export function buildGuardReport(root, report, championDir) {
     });
     lines.push(approval.landed
       ? `  approval.requested ${approval.id} is in events/ and not in _quarantine/`
-      : `  approval.requested was NOT sealed${approval.why ? ` -- ${approval.why}` : ""}`);
+      : approval.unknown
+        ? `  approval.requested MAY HAVE LANDED -- whether it did is unknown${approval.why ? ` (${approval.why})` : ""}; look in the inbox before raising it again`
+        : `  approval.requested was NOT sealed${approval.why ? ` -- ${approval.why}` : ""}`);
   } else {
     // Stated explicitly, because "no approval appeared" and "the guard did not run" look the
     // same in a log otherwise.
@@ -2942,7 +2947,8 @@ function main() {
         // The re-pin CAUSE is on the receipt, never the score movement that prompted the look:
         // a baseline that re-pinned itself on a score would measure the champion against itself.
         repin: guard.classes.filter((c) => c.repin?.mayRepin).map((c) => ({ task_class: c.task_class, causes: c.repin.causes })),
-        ...(guard.approval && guard.approval.id ? { approval: guard.approval.id } : {}),
+        // Only an approval bench FOUND: an id the spine it reads does not hold names nothing (PR 3b round 6).
+        ...(guard.approval && guard.approval.landed && guard.approval.id ? { approval: guard.approval.id } : {}),
       },
     } : {}),
   }, report.outcome === "ok" ? "ok" : "fail");
@@ -2950,6 +2956,9 @@ function main() {
     console.log(`arc-bench: receipt ${receipt.id} is in events/ and not in _quarantine/`);
   } else if (receipt.quarantined) {
     console.error(`arc-bench: receipt ${receipt.id} was QUARANTINED at ${receipt.quarantined} -- quarantine is not success (ADR-0032)`);
+  } else if (receipt.unknown) {
+    // May have landed: a re-run spends again and records a second run.completed, so say so (PR 3b round-6 attacks).
+    console.error(`arc-bench: whether this run's receipt landed is UNKNOWN${receipt.why ? ` -- ${receipt.why}` : ""}; look at the spine before running it again (a re-run spends again)`);
   } else {
     console.error(`arc-bench: NO receipt was sealed${receipt.why ? ` -- ${receipt.why}` : ""}`);
   }

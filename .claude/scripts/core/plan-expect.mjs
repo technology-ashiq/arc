@@ -53,8 +53,10 @@ function spineWhere(cwd) {
     return null;
   } catch (e) {
     const code = e && e.code ? e.code : "error";
-    return code === "WORKTREE_SPINE" ? "the spine would refuse this emit (WORKTREE_SPINE): a linked worktree has no spine of its own -- run it from the main clone"
-      : `the spine would refuse this emit (${code}): no spine can be resolved from here`;
+    // Named by the real cause: an EMPTY ARC_SPINE_ROOT and "no repository here" shared one sentence (PR 3b round 6).
+    if (code === "WORKTREE_SPINE") return "the spine would refuse this emit (WORKTREE_SPINE): a linked worktree has no spine of its own -- run it from the main clone";
+    if ("ARC_SPINE_ROOT" in process.env && String(process.env.ARC_SPINE_ROOT).trim() === "") return "the spine would refuse this emit (NO_ROOT): ARC_SPINE_ROOT is set but empty -- unset it, or name a spine";
+    return `the spine would refuse this emit (${code}): no spine can be resolved from here`;
   } finally {
     try { process.chdir(before); } catch { /* the caller's cwd is gone; nothing to restore */ }
   }
@@ -145,25 +147,27 @@ export function staleReason(given, digest) {
 }
 
 
+
 /**
  * One holder at a time, refusing rather than waiting -- `{ busy: true }` -- so a second click is told another run holds
  * it. For a check-then-emit that must not run twice at once: three picks, and two profile requests, raised from one plan
  * in the same instant all landed (PR 4 logic attack; the PR 3a evolve row, re-found).
  *
- * NO PROCESS EVER DELETES ANOTHER'S LOCK. Every earlier shape broke a dead holder's lock by check-then-delete, and each
- * was a race: a breaker whose look predated another's take deleted that FRESH lock (PR 3b round 4: two holders in 3 of
- * 6 rounds), and the breaker file that serialised breakers was itself cleared by age, the same race one level up (PR 3b
- * round 5). So the lock is a NUMBERED file, `<name>.<n>`, and the holder of the highest number holds it:
- *   take     read the highest; if its holder is live, busy. If it is gone, create the NEXT number with "wx" -- exactly one
- *            caller can -- and never touch the old file. Then look again: a higher number means a caller on an older
- *            listing lost the race, and backs off before `fn` runs.
- *   gone     a holder on THIS machine is gone when its process is (the token names the host and the pid) -- however
- *            long it has held: a heartbeat cannot beat during a spawnSync, and a live seal past `staleMs` was broken
- *            into (PR 3b round-5 shell attack). Another machine's holder is gone when its file is older than
- *            `staleMs`, or dated past it into the future; its file is kept fresh while `fn` awaits.
- *   release  delete only this holder's own file, and the lower numbers it superseded (their holders are gone).
- * A file dated more than `staleMs` into the future is no live holder's either, and a folder at the highest number is
- * refused by name.
+ * EVERY TAKER CREATES ITS OWN FILE, THEN LOOKS AT EVERYONE ELSE'S. Each shape that broke a dead holder's lock, or reused
+ * a name, raced: check-then-delete let a stale look delete a fresh lock (PR 3b round 4), a breaker file cleared by age
+ * raced one level up (round 5), and numbered files swept empty were numbered again from zero, so a slow taker's old
+ * number went to someone else beside a live holder (round 6). So:
+ *   take     create `<name>.<16 hex>`, a name nobody else will ever use, with "wx"; then list every `<name>.<16 hex>`.
+ *            ANY other file whose holder is live (or whose holder cannot be told -- an unreadable file is live, never
+ *            "released") and this taker deletes its own file and is busy. Two takers in the same instant may both back
+ *            off; neither holds wrongly, and the next click takes it.
+ *   gone     on THIS machine, a holder is gone when its process has exited, or when its file is over an hour old -- a
+ *            pid reused by another program, not a holder (a heartbeat cannot beat during a spawnSync, so nothing live
+ *            waits that long); on another machine, when its file is older than `staleMs` or dated past it into the
+ *            future. A live holder's file is kept fresh while `fn` awaits.
+ *   release  delete this holder's own file. A gone holder's file is deleted by whoever finds it: its holder is not in
+ *            the section, and its name is never used again.
+ * A folder where a lock file belongs is refused by name.
  * @template T @param {string} dir @param {string} name @param {() => Promise<T> | T} fn @param {{ staleMs?: number }} [o]
  * @returns {Promise<{ busy: true } | { busy: false, value: T }>}
  */
@@ -171,7 +175,7 @@ export async function withExclusiveLock(dir, name, fn, { staleMs = 10 * 60_000 }
   const held = acquire(dir, name, staleMs);
   if (!held) return { busy: true };
   const beat = setInterval(() => {
-    try { if (readOrNull(held.lock) === held.token) { const t = new Date(); utimesSync(held.lock, t, t); } } catch { /* the release decides */ }
+    try { const t = new Date(); utimesSync(held.lock, t, t); } catch { /* the release decides */ }
   }, Math.max(1000, Math.floor(staleMs / 4)));
   beat.unref();
   try { return { busy: false, value: await fn() }; }
@@ -180,7 +184,8 @@ export async function withExclusiveLock(dir, name, fn, { staleMs = 10 * 60_000 }
 
 /**
  * The same lock for a synchronous `fn` (arc-bench's proposal store, whose main is synchronous). Nothing refreshes the
- * file while it runs, so `staleMs` must outlast the longest `fn` -- or its holder's process must still be running.
+ * file while it runs, so on another machine `staleMs` must outlast the longest `fn`; on this one, its running process
+ * is what keeps it held.
  * @template T @param {string} dir @param {string} name @param {() => T} fn @param {{ staleMs?: number }} [o]
  * @returns {{ busy: true } | { busy: false, value: T }}
  */
@@ -193,22 +198,25 @@ export function withExclusiveLockSync(dir, name, fn, { staleMs = 10 * 60_000 } =
 
 const statOrNull = (path) => { try { return statSync(path); } catch { return null; } };
 const HOST = hostname();
+/** A holder on this machine is never live past this: past it, the pid is another program's. */
+const SAME_HOST_MAX_MS = 60 * 60_000;
 
 /**
- * A lock file's text, or null when it is gone. A file another process holds open without sharing (EBUSY, EPERM,
- * EACCES on Windows) is read again before it is given up on: one such read left a lock nobody owned at release (PR 3b
- * round-5 shell attack).
- * @param {string} path
+ * A lock file's text: the text, "gone" when the file is not there, or "unreadable" when it is and cannot be read (a
+ * scanner holding it open without sharing -- EBUSY, EPERM, EACCES on Windows), after a few tries. Unreadable is never
+ * read as released: a live holder's lock was counted gone that way (PR 3b round-6 logic attack).
+ * @param {string} path @returns {string | "gone" | "unreadable"}
  */
-function readOrNull(path) {
+function readToken(path) {
   for (let i = 0; i < 4; i++) {
     try { return readFileSync(path, "utf8"); }
     catch (e) {
-      if (!e || !["EBUSY", "EPERM", "EACCES"].includes(e.code) || i === 3) return null;
+      if (e && e.code === "ENOENT") return "gone";
+      if (i === 3) return "unreadable";
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
     }
   }
-  return null;
+  return "unreadable";
 }
 
 /** Whether a process with this pid is running here. EPERM is a process this user cannot signal: running. */
@@ -216,53 +224,33 @@ function pidRunning(pid) {
   try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === "EPERM"; }
 }
 
-/**
- * The generations of one lock in its folder, highest first: `[{ n, path }]`. A name that only looks like one (a leading
- * zero, a sign, past the safe integers) is not one.
- * @param {string} dir @param {string} name
- */
-function generations(dir, name) {
+/** Every lock file of one lock in its folder: `<name>.<16 lowercase hex>`, nothing else. @param {string} dir @param {string} name */
+function lockFiles(dir, name) {
   const prefix = `${name}.`;
-  /** @type {{ n: number, path: string }[]} */
-  const out = [];
-  for (const entry of readdirSync(dir)) {
-    if (!entry.startsWith(prefix)) continue;
-    const tail = entry.slice(prefix.length);
-    if (!/^(0|[1-9][0-9]{0,14})$/.test(tail)) continue;
-    out.push({ n: Number(tail), path: join(dir, entry) });
-  }
-  return out.sort((a, b) => b.n - a.n);
-}
-
-/** Create `path` holding `text`, or false when it exists (or is being deleted -- Windows' EPERM, EACCES). */
-function createWith(path, text) {
-  let fd;
-  try { fd = openSync(path, "wx"); }
-  catch (e) { if (e && (e.code === "EEXIST" || e.code === "EPERM" || e.code === "EACCES" || e.code === "EISDIR")) return false; throw e; }
-  try { writeSync(fd, text); } finally { closeSync(fd); }
-  return true;
+  return readdirSync(dir).filter((e) => e.startsWith(prefix) && /^[0-9a-f]{16}$/.test(e.slice(prefix.length))).map((e) => join(dir, e));
 }
 
 /**
- * Whether the holder of one generation is live. A file that cannot be read was released (Windows keeps a deleted file
- * listed until its last handle closes) -- the holder closed it after writing its token, so nothing live holds it open.
- * @param {{ path: string }} g @param {number} staleMs
+ * How one lock file stands: "live", "gone" (its holder is not in the section), or it throws for a folder.
+ * @param {string} path @param {number} staleMs @returns {"live" | "gone"}
  */
-function holderLive(g, staleMs) {
-  const st = statOrNull(g.path);
-  if (!st) return false;
-  if (st.isDirectory()) throw new Error(`a folder sits where the lock ${basename(g.path)} belongs, so no run can ever hold it -- remove that folder`);
-  const token = readOrNull(g.path);
-  if (token === null) return false;
-  const [host, pid] = token.split("|");
-  // A holder on THIS machine is live exactly while its process runs; another machine's is judged by age alone.
-  if (host === HOST && /^[1-9][0-9]{0,9}$/.test(pid || "")) return pidRunning(Number(pid));
+function standing(path, staleMs) {
+  const st = statOrNull(path);
+  if (!st) return "gone";
+  if (st.isDirectory()) throw new Error(`a folder sits where the lock ${basename(path)} belongs, so no run can ever hold it -- remove that folder`);
+  const token = readToken(path);
+  if (token === "gone") return "gone";
+  if (token === "unreadable") return "live";
   const age = Date.now() - st.mtimeMs;
-  return !(age > staleMs || age < -staleMs);
+  const [host, pid] = token.split("|");
+  // THIS machine: live exactly while its process runs, up to an hour (past that the pid is someone else's).
+  if (host === HOST && /^[1-9][0-9]{0,9}$/.test(pid || "")) return pidRunning(Number(pid)) && age <= SAME_HOST_MAX_MS && age >= -SAME_HOST_MAX_MS ? "live" : "gone";
+  // Another machine, or a token that names none: by age alone.
+  return age > staleMs || age < -staleMs ? "gone" : "live";
 }
 
 /**
- * Take the lock: `{ lock, token, n }`, or null when a live holder has it.
+ * Take the lock: `{ lock, token }`, or null when a live holder has it (or might).
  * @param {string} dir @param {string} name @param {number} staleMs
  */
 function acquire(dir, name, staleMs) {
@@ -271,37 +259,30 @@ function acquire(dir, name, staleMs) {
   try { mkdirSync(dir, { recursive: true }); }
   catch (e) { throw new Error(`the folder for the lock ${name} could not be made (${e && e.code ? e.code : "error"}) -- a file may sit where the locks folder belongs`); }
   const token = `${HOST}|${process.pid}|${randomBytes(8).toString("hex")}`;
-  let listed;
-  try { listed = generations(dir, name); }
-  catch (e) { throw new Error(`the folder for the lock ${name} could not be read (${e && e.code ? e.code : "error"})`); }
-  const top = listed[0];
-  if (top && holderLive(top, staleMs)) return null;
-  const n = top ? top.n + 1 : 0;
-  if (!Number.isSafeInteger(n)) throw new Error(`the lock ${name} has run out of numbers -- remove its files`);
-  const lock = join(dir, `${name}.${n}`);
-  let made;
-  try { made = createWith(lock, token); }
+  const lock = join(dir, `${name}.${randomBytes(8).toString("hex")}`);
+  let fd;
+  try { fd = openSync(lock, "wx"); }
   catch (e) { throw new Error(`the lock ${name} could not be created (${e && e.code ? e.code : "error"})`); }
-  if (!made) return null;
-  // Look again: a caller on an older listing may have created a number above this one's predecessor too late to see
-  // it -- the lower number backs off, before `fn` runs, and the file is re-read so this take is the one on disk.
-  let again = [];
-  try { again = generations(dir, name); } catch { /* the re-read below decides */ }
-  if ((again[0] && again[0].n > n) || readOrNull(lock) !== token) {
-    if (readOrNull(lock) === token) { try { unlinkSync(lock); } catch { /* released by the next taker's sweep */ } }
-    return null;
+  try { writeSync(fd, token); } finally { closeSync(fd); }
+  const backOff = () => { try { unlinkSync(lock); } catch { /* gone already */ } return null; };
+  let others;
+  try { others = lockFiles(dir, name).filter((p) => p !== lock); }
+  // A folder that cannot be listed says nothing about who holds it: busy, never "free" (PR 3b round-6 logic attack).
+  catch { return backOff(); }
+  for (const p of others) {
+    let s;
+    try { s = standing(p, staleMs); }
+    catch (e) { backOff(); throw e; }
+    if (s === "live") return backOff();
+    // A gone holder's file: deleted, and its name is never used again (the names are random).
+    try { unlinkSync(p); } catch { /* another taker's cleanup */ }
   }
-  return { lock, token, n, dir, name };
+  // Our own file is still ours: nothing deletes a live holder's file, so a mismatch is the filesystem, and it is busy.
+  if (readToken(lock) !== token) return backOff();
+  return { lock, token };
 }
 
-/**
- * Remove this holder's own file, and the lower numbers it superseded: their holders were judged gone before this one
- * was taken, so nothing live holds them.
- * @param {{ lock: string, token: string, n: number, dir: string, name: string }} held
- */
+/** Remove this holder's own file. @param {{ lock: string, token: string }} held */
 function release(held) {
-  try { if (readOrNull(held.lock) === held.token) unlinkSync(held.lock); } catch { /* released, or not ours */ }
-  let lower = [];
-  try { lower = generations(held.dir, held.name).filter((g) => g.n < held.n); } catch { return; }
-  for (const g of lower) { try { if (statOrNull(g.path)?.isFile()) unlinkSync(g.path); } catch { /* another sweeper */ } }
+  try { if (readToken(held.lock) === held.token) unlinkSync(held.lock); } catch { /* released */ }
 }

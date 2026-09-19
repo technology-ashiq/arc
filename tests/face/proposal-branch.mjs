@@ -355,10 +355,14 @@ await refuse("a path that needs main's file to be a directory", { branch: "feat/
     JSON.stringify(slashed) === JSON.stringify(["origin/feat/face-absorb-trial-two", "up/stream/feat/face-absorb-trial-three"]), JSON.stringify(slashed));
   // A removed remote's refs under a SHORTER configured one ("up" beside a gone "up/river"): cut after "up", the name did
   // not match and the prefix search never ran (PR 3b round-5 shell attack).
-  git(c, "remote", "add", "up", c);
+  // The removed remote's refs stay: its config section goes (git remote add refuses "up" beside "up/stream" on newer
+  // git, CI), and "up" is configured by git config directly.
+  git(c, "config", "--remove-section", "remote.up/stream");
+  git(c, "config", "remote.up.url", c);
   git(c, "update-ref", "refs/remotes/up/river/feat/face-absorb-trial-four", w.commit);
   const orphan = await PB.openProposalsHolding({ repo: c, prefix: "feat/face-absorb-trial-", path: "docs/bundle/commitment.txt" });
-  check("openProposalsHolding sees a removed remote's branch under a shorter configured remote", orphan.includes("up/river/feat/face-absorb-trial-four"), JSON.stringify(orphan));
+  check("openProposalsHolding sees a removed remote's branches under a shorter configured remote",
+    orphan.includes("up/river/feat/face-absorb-trial-four") && orphan.includes("up/stream/feat/face-absorb-trial-three"), JSON.stringify(orphan));
 }
 
 // ---- beforeRef: the caller judges the real receipt, with its commit, before the ref exists; a throw writes no branch
