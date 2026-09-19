@@ -911,7 +911,9 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
     // run.completed in that window -- a face ask, a second bench run the face applied -- was credited to this attempt,
     // and its spend committed against the cap (face v2 Phase 05 round-2 logic attack: 35 rupees against a mock run
     // that spends none). arc-run prints the id on stderr once it has sealed it.
-    const named = /^arc-run: receipt run\.completed ([0-9A-HJKMNP-TV-Z]{26})\r?$/m.exec(String(res.stderr || ""));
+    // The LAST such line: arc-run says it after its driver has finished, and a driver's own output that reaches this
+    // stderr can carry a forged line naming someone else's receipt -- it can only come earlier.
+    const named = [...String(res.stderr || "").matchAll(/^arc-run: receipt run\.completed ([0-9A-HJKMNP-TV-Z]{26})\r?$/gm)].pop();
     const appended = spineSince(root, spineBefore).filter((e) => e.kind === "run.completed" && e.process !== BENCH_ID && named && e.id === named[1]);
     // M1s INVOCATION DISCIPLINE, checked at run time rather than trusted. Every attempt goes
     // through arc-run, and arc-run leaves exactly one receipt per invocation -- so an attempt
