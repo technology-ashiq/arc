@@ -46,12 +46,23 @@ const DONE_KEEP_MS = 60 * 60_000;
 const SCRIPT_RE = /^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*\.mjs$/;
 const PLAN_ID_RE = /^[A-Za-z0-9_-]{24}$/;
 
+/**
+ * What an op changes besides the spine, in the owner's words, for the plan card. A file-touching op's own dry run prints
+ * its diff; the apply writes it to a NEW feat/face-* branch and never to main (ADR-1340).
+ * @param {{ touchesFiles?: boolean, touchesOs?: boolean }} op
+ */
+function effectOf(op) {
+  if (op.touchesFiles) return "the diff is in the plan's output above; apply commits it to a new feat/face-* branch, never to main -- a human merges it or does not";
+  if (op.touchesOs) return "no file changes -- apply registers a task with this machine's scheduler, and the receipt records it";
+  return "no file changes -- this op writes one receipt to the spine";
+}
+
 /** The HTTP status each work-door refusal carries (arc-dash maps codes through its own table; these are the door's). */
 export const WORK_STATUS = Object.freeze({
   UNKNOWN_OP: 404, UNKNOWN_PLAN: 404,
   BAD_INPUT: 400, BAD_PLAN_ID: 400,
   PLAN_OTHER_OP: 409, PLAN_EXPIRED: 410, CONFIRM_REQUIRED: 428,
-  SIM_SPEND: 403,
+  SIM_SPEND: 403, SIM_EFFECT: 403,
   NO_EMIT_PLAN: 502, EMIT_PLAN_MISMATCH: 502, TOOL_MISSING: 503,
 });
 
@@ -285,14 +296,14 @@ export function createWorkDoor(ctx, opts = {}) {
     prune();
     const planId = randomBytes(18).toString("base64url");
     const expiresAt = now() + PLAN_TTL_MS;
-    plans.set(planId, { id: planId, opId: op.id, applyCmd, humanRun: op.humanRun, receipt: op.receipt, expiresAt, state: "planned", lines: [], linesDropped: 0, bytesDropped: 0, result: null, done: null });
+    plans.set(planId, { id: planId, opId: op.id, applyCmd, values, humanRun: op.humanRun, receipt: op.receipt, expiresAt, state: "planned", lines: [], linesDropped: 0, bytesDropped: 0, result: null, done: null });
     journal({ op: op.id, phase: "plan", planId });
     return {
       ...base, ok: true, planId, expiresInMs: PLAN_TTL_MS,
       apply: commandLine(applyCmd),
       // The tool's own plan output, first -- it is the review the owner reads before the click.
       output: scrub(res.stdout, ctx.repo), notes: scrub(res.stderr, ctx.repo), outputDropped: res.dropped,
-      diff: op.touchesFiles ? "file changes are shown on the branch this op writes" : "no file changes -- this op writes one receipt to the spine",
+      diff: effectOf(op),
       estimate: typeof op.estimate === "function" ? op.estimate(values) : "₹0 -- no model is called",
     };
   }
@@ -320,6 +331,11 @@ export function createWorkDoor(ctx, opts = {}) {
     // started the run.
     if (p.humanRun && confirm !== op.id)
       throw new OpError("CONFIRM_REQUIRED", `${op.id} is human-run: apply carries confirm: "${op.id}", sent only by the owner's confirming click`);
+    // An effect past the spine never runs on a sim door (ADR-1340): the plan was the tool's own dry run and wrote nothing;
+    // the apply would register a real task, or write a real branch, to rehearse something. Refused before the claim, so
+    // the plan stays held and a repeat is refused the same way.
+    if (ctx.mode === "sim" && (op.touchesOs || op.touchesFiles) && !(typeof op.simSafe === "function" && op.simSafe(p.values)))
+      throw new OpError("SIM_EFFECT", `${op.id} ${op.touchesOs ? "registers a task with this machine's scheduler" : "writes a proposal branch to this repository"}, and this door is in sim mode -- the plan above is the whole rehearsal`);
     if (p.state !== "planned") return { ...view(p), replayed: true };
     if (p.expiresAt <= now()) { plans.delete(planId); throw new OpError("PLAN_EXPIRED", "that plan expired before it was applied -- plan again, and read the new one"); }
 

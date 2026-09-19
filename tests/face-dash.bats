@@ -52,6 +52,24 @@ load 'test_helper'
   [[ "$output" == *"ok readsToLoad: a PULSE re-reads every read, polled or not (REQ-11)"* ]] || { echo "$output"; false; }
 }
 
+@test "proposal branch: plumbing only -- the plan writes nothing, the write adds one ref, the owner's tree untouched" {
+  run node "$ARC_ROOT/tests/face/proposal-branch.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok the write left HEAD, the index, the working tree and main as they were"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok refused: hq.policy.yaml, even when the caller allows it -> UNGRANTABLE"* ]] || { echo "$output"; false; }
+}
+
+@test "kernel ring: the owning-lane tools -- jobs flags, engine proposals, policy promotion, evolve to a verdict, SIM_EFFECT" {
+  run node "$ARC_ROOT/tests/face/kernel-ring.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok evolve conclude: the verdict's emit lands on the spine"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok door: a sim door refuses the effect's apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
+}
+
 @test "ask golden: 20 live-state questions answered deterministically, refusals hold" {
   run node "$ARC_ROOT/tests/face/ask-golden.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

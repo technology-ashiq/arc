@@ -30,6 +30,8 @@
     ".claude/scripts/core/face-facts.mjs",
     ".claude/scripts/core/freeze-check.sh",
     ".claude/scripts/core/json-strict.mjs",
+    ".claude/scripts/core/one-line.mjs",
+    ".claude/scripts/core/proposal-branch.mjs",
     ".claude/scripts/core/lane-resolve.mjs",
     ".claude/scripts/core/lane-resolve.sh",
     ".claude/scripts/core/ownership-lint.sh",

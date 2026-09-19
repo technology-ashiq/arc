@@ -9,7 +9,7 @@
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Btn, UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, ReceiptDrawer, RoomHead, ServedTable, SourcesPanel, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, ReceiptDrawer, RoomHead, ServedTable, SourcesPanel, TrailPanel } from '../../../ui/bits'
 export { Stack as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -28,7 +28,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           <HPanel title="Process routes" hint="class · tier · driver · fallback chain · contractors carry tenure">
             <div className="space-y-2.5">
               <ServedTable item={f.routesTable} />
-              <VerbPending item={f.propose} />
             </div>
           </HPanel>
 

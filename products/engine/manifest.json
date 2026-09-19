@@ -17,6 +17,7 @@
     ".claude/scripts/engine/egress-proxy.py",
     ".claude/scripts/engine/egress-session.sh",
     ".claude/scripts/engine/arc-bench.mjs",
+    ".claude/scripts/engine/propose.mjs",
     ".claude/scripts/engine/adapters/claude-code.mjs",
     ".claude/scripts/engine/adapters/codex.mjs",
     ".claude/scripts/engine/drivers/common.mjs",

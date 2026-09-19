@@ -118,6 +118,8 @@ function OpCardView({ card, door, onApplied }: { card: OpCard; door: Door; onApp
         <span className="text-[14px]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{card.label}</span>
         {card.humanRun ? <Chip tone="amber">human-run</Chip> : null}
         {card.spends ? <Chip tone="amber">spends money</Chip> : null}
+        {card.touchesFiles ? <Chip tone="amber">writes a proposal branch</Chip> : null}
+        {card.touchesOs ? <Chip tone="amber">registers with this machine</Chip> : null}
         <Chip mono>{card.receiptKind}</Chip>
       </div>
       <p className="mb-3 text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.hint}</p>

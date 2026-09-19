@@ -7,7 +7,7 @@
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, LanePanel, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, LanePanel, ReceiptDrawer, RoomHead, ServedTable, TrailPanel } from '../../../ui/bits'
 export { Flask as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -19,10 +19,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4 items-start">
         <div className="min-w-0">
-          <HPanel title="Open an experiment" hint="one declared surface · one metric · one hypothesis">
-            <VerbPending item={f.openVerb} />
-          </HPanel>
-
           <HPanel title="Experiments" hint="open, concluded, landed · status moves only on receipts and your stamp">
             <ServedTable item={f.experiments} />
           </HPanel>

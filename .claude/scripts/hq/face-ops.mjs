@@ -30,7 +30,9 @@
 //
 // Exit: 0 printed | 2 bad arguments.
 
-import { readdirSync, realpathSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { parseYamlSubset } from "../engine/yaml-subset.mjs";
+import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -89,6 +91,43 @@ function emitOp(kind, payload) {
     apply: (v) => ({ script: "hq/arc-event.mjs", args: argv(v) }),
   };
 }
+
+/** The jobs hq.jobs.yaml declares, read from the schedule the scheduler itself reads -- never a second list. */
+function scheduledJobs() {
+  try {
+    const parsed = parseYamlSubset(readFileSync(join(HERE, "..", "..", "..", "hq.jobs.yaml"), "utf8"));
+    const jobs = parsed.ok && parsed.value && Array.isArray(parsed.value.jobs) ? parsed.value.jobs : [];
+    return jobs.map((j) => (j && typeof j.name === "string" ? j.name : "")).filter((n) => /^[a-z][a-z0-9-]*$/.test(n)).sort();
+  } catch { return []; }
+}
+
+/** The router's classes and tiers, read from engine/router.yaml the way the router's loader reads it. */
+function routerFacts() {
+  try {
+    const parsed = parseYamlSubset(readFileSync(join(HERE, "..", "..", "..", "engine", "router.yaml"), "utf8"));
+    const r = parsed.ok && parsed.value ? parsed.value : {};
+    const classes = r.classes && typeof r.classes === "object" ? Object.keys(r.classes).filter((c) => /^[a-z][a-z0-9-]{0,40}$/.test(c)).sort() : [];
+    const tiers = Array.isArray(r.tiers) ? r.tiers.filter((t) => typeof t === "string" && /^[a-z][a-z0-9-]{0,40}$/.test(t)) : [];
+    return { classes, tiers };
+  } catch { return { classes: [], tiers: [] }; }
+}
+/** The drivers engine/propose.mjs accepts: one .sh per driver, as bench reads them. */
+function routeDrivers() {
+  try { return readdirSync(join(HERE, "..", "engine", "drivers")).filter((f) => f.endsWith(".sh")).map((f) => f.slice(0, -3)).sort(); }
+  catch { return []; }
+}
+const ROUTER = routerFacts();
+/** The action kinds hq.policy.yaml declares -- a promotion names one of them, or it names nothing. */
+function policyKinds() {
+  try {
+    const pol = parsePolicyYaml(readFileSync(join(HERE, "..", "..", "..", "hq.policy.yaml"), "utf8"));
+    return pol && pol.kinds ? Object.keys(pol.kinds).filter((k) => /^(session|process):[a-z][a-z0-9-]{0,63}$/.test(k)).sort() : [];
+  } catch { return []; }
+}
+/** The optional one-line reason every proposal carries onto its branch and into the inbox. */
+const WHY = Object.freeze({ name: "why", label: "Why", placeholder: "one line -- the evidence you are acting on", type: "text", max: 400, pattern: ONE_LINE, required: false });
+/** A proposal's argv: the same for plan and apply, but for --dry-run. */
+const proposeArgs = (verb, v) => [verb, "--class", v.class, "--to", v.to, ...(v.why ? ["--why", v.why] : [])];
 
 export const OPS = Object.freeze([
   Object.freeze({
@@ -200,6 +239,131 @@ export const OPS = Object.freeze([
       ? "₹0 -- the mock driver replays recorded bytes and reaches no provider"
       : `at most ₹${v.inr} and ${v.minutes} min -- the --budget ceiling arc-bench enforces`),
   }),
+  Object.freeze({
+    id: "scheduler.register-job",
+    room: "scheduler",
+    lane: "scheduler",
+    label: "Register a job with the machine's scheduler",
+    hint: "The moment arc stops being attended (SCH-G): the plan runs every check a registration makes -- the schedule's legality, the job enabled, the policy gate -- and hands nothing to the OS. It applies only on your click.",
+    receipt: Object.freeze({ kind: "note.logged" }),
+    binding: "v0.7 `register job` -> note.logged, written by arc-jobs register <job> --receipt after the OS read the task back (ADR-1339, ADR-1340)",
+    humanRun: true, spends: false, touchesFiles: false, touchesOs: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "job", label: "Job", placeholder: "", type: "select", options: Object.freeze(scheduledJobs()), required: true }),
+    ]),
+    plan: (v) => ({ script: "hq/arc-jobs.mjs", args: ["register", v.job, "--dry-run"] }),
+    apply: (v) => ({ script: "hq/arc-jobs.mjs", args: ["register", v.job, "--receipt"] }),
+  }),
+  Object.freeze({
+    id: "engine-room.driver-switch",
+    room: "engine-room",
+    lane: "engine",
+    label: "Propose a driver switch",
+    hint: "Routes one task class to another driver as a PROPOSAL: a one-line router diff on a new feat/face-* branch, and an approval in your inbox. Nothing routes differently until a human merges it.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `driver switch` -> approval.requested (gate router-merge) naming the proposal branch engine/propose.mjs driver wrote (ADR-1340)",
+    humanRun: true, spends: false, touchesFiles: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", options: Object.freeze(ROUTER.classes), required: true }),
+      Object.freeze({ name: "to", label: "Driver", placeholder: "", type: "select", options: Object.freeze(routeDrivers()), required: true }),
+      WHY,
+    ]),
+    plan: (v) => ({ script: "engine/propose.mjs", args: [...proposeArgs("driver", v), "--dry-run"] }),
+    apply: (v) => ({ script: "engine/propose.mjs", args: proposeArgs("driver", v) }),
+  }),
+  Object.freeze({
+    id: "model-policy.tier-proposal",
+    room: "model-policy",
+    lane: "engine",
+    label: "Propose a tier change",
+    hint: "A tier is law (ADR-0069): the change is a one-line router diff on a new feat/face-* branch, raised to your inbox. The class keeps its tier until a human merges it.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `tier proposal` -> approval.requested (gate model-policy) naming the proposal branch engine/propose.mjs tier wrote (ADR-1340)",
+    retires: Object.freeze({ module: "model-policy", verb: "Propose a tier change" }),
+    humanRun: true, spends: false, touchesFiles: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", options: Object.freeze(ROUTER.classes), required: true }),
+      Object.freeze({ name: "to", label: "Tier", placeholder: "", type: "select", options: Object.freeze(ROUTER.tiers), required: true }),
+      WHY,
+    ]),
+    plan: (v) => ({ script: "engine/propose.mjs", args: [...proposeArgs("tier", v), "--dry-run"] }),
+    apply: (v) => ({ script: "engine/propose.mjs", args: proposeArgs("tier", v) }),
+  }),
+  Object.freeze({
+    id: "policy.cap-proposal",
+    room: "policy",
+    lane: "policy",
+    label: "Propose a capability promotion",
+    hint: "Asks for one (kind, capability) pair to climb a level within its ceiling, citing trial-ledger evidence. It moves only on your stamp in the inbox. Raising a ceiling is a reviewed edit to hq.policy.yaml, which nothing in the face writes.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `cap proposal` -> approval.requested under the policy.promotion profile (POL-C), sealed by the line policy-promote.mjs prints (ADR-1340)",
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "kind", label: "Action kind", placeholder: "", type: "select", options: Object.freeze(policyKinds()), required: true }),
+      Object.freeze({ name: "capability", label: "Capability", placeholder: "", type: "select", options: Object.freeze(["read", "write", "shell", "network", "message", "publish", "deploy", "spend"]), required: true }),
+      Object.freeze({ name: "to", label: "To level", placeholder: "", type: "select", options: Object.freeze(["L1", "L2", "L3"]), required: true }),
+      Object.freeze({ name: "evidence", label: "Trial-ledger evidence", placeholder: "docs/trial-ledger.md#the-row-you-cite", type: "text", max: 300, pattern: ONE_LINE, required: true }),
+      Object.freeze({ name: "what", label: "In a sentence", placeholder: "optional -- the request says it for you", type: "text", max: 300, pattern: ONE_LINE, required: false }),
+    ]),
+    plan: (v) => ({ script: "hq/policy-promote.mjs", args: ["--kind", v.kind, "--capability", v.capability, "--to", v.to, "--evidence", v.evidence, ...(v.what ? ["--what", v.what] : [])] }),
+    apply: "emit-plan",
+  }),
+  Object.freeze({
+    id: "evolve.open-experiment",
+    room: "evolve",
+    lane: "evolve",
+    label: "Open an experiment",
+    hint: "One declared surface, sealed at its bytes as they stand now (base_sha), two arms and a split. The module must declare an evolve section; the concurrency cap is two per module.",
+    receipt: Object.freeze({ kind: "experiment.opened" }),
+    binding: "v0.7 `open experiment` -> experiment.opened, sealed by the line arc-evolve open prints (ADR-1340)",
+    retires: Object.freeze({ module: "evolve", verb: "Open an experiment" }),
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "experiment", label: "Experiment id", placeholder: "x-hero-copy-2", type: "text", max: 64, pattern: "x-[A-Za-z0-9][A-Za-z0-9._-]{0,62}", required: true }),
+      Object.freeze({ name: "module", label: "Module", placeholder: "the product whose manifest declares the surface", type: "text", max: 64, pattern: "[a-z][a-z-]*", required: true }),
+      Object.freeze({ name: "surface", label: "Surface", placeholder: "hero-copy", type: "text", max: 64, pattern: "[a-z0-9][a-z0-9-]{0,63}", required: true }),
+      Object.freeze({ name: "target", label: "Surface file", placeholder: "the surface_file the manifest declares", type: "text", max: 300, pattern: "[A-Za-z0-9._()\\[\\]-]+(/[A-Za-z0-9._()\\[\\]-]+)*", required: true }),
+      Object.freeze({ name: "arms", label: "Arms", placeholder: "+champion,+challenger", type: "text", max: 200, pattern: "\\+[a-z0-9][a-z0-9-]{0,31}(,\\+[a-z0-9][a-z0-9-]{0,31}){1,7}", required: true }),
+      Object.freeze({ name: "split", label: "Split", placeholder: "optional -- the manifest's split", type: "text", max: 40, pattern: "[0-9]{1,2}(,[0-9]{1,2}){1,7}", required: false }),
+      Object.freeze({ name: "ttl", label: "TTL, days", placeholder: "28", type: "int", min: 1, max: 365, required: false }),
+    ]),
+    plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: ["open", "--experiment", v.experiment, "--module", v.module, "--surface", v.surface, "--target", v.target, "--arms", v.arms, ...(v.split ? ["--split", v.split] : []), ...(v.ttl ? ["--ttl", v.ttl] : [])] }),
+    apply: "emit-plan",
+  }),
+  Object.freeze({
+    id: "evolve.measure",
+    room: "evolve",
+    lane: "evolve",
+    label: "Record a measurement",
+    hint: "One unit's value for one metric over one window. The arm and cohort come from the experiment's own assignment, never from this form; a drifted surface refuses.",
+    receipt: Object.freeze({ kind: "experiment.measured" }),
+    binding: "v0.7 `measure` -> experiment.measured, sealed by the line arc-evolve measure prints (ADR-1340)",
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "experiment", label: "Experiment id", placeholder: "x-hero-copy-2", type: "text", max: 64, pattern: "x-[A-Za-z0-9][A-Za-z0-9._-]{0,62}", required: true }),
+      Object.freeze({ name: "unit", label: "Unit id", placeholder: "an opaque id, never an address", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
+      Object.freeze({ name: "metric", label: "Metric", placeholder: "signup_conversion", type: "text", max: 64, pattern: "[a-z][a-z0-9_]{0,63}", required: true }),
+      Object.freeze({ name: "value", label: "Value", placeholder: "1", type: "text", max: 32, pattern: "-?[0-9]+(\\.[0-9]+)?", required: true }),
+      Object.freeze({ name: "count", label: "Observations", placeholder: "1", type: "int", min: 0, max: 100000000, required: true }),
+      Object.freeze({ name: "window", label: "Window", placeholder: "2026-09-01..2026-09-07", type: "text", max: 22, pattern: "\\d{4}-\\d{2}-\\d{2}\\.\\.\\d{4}-\\d{2}-\\d{2}", required: true }),
+      Object.freeze({ name: "source", label: "Source id", placeholder: "where the number came from, as an opaque id", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
+    ]),
+    plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: ["measure", "--experiment", v.experiment, "--unit", v.unit, "--metric", v.metric, "--value", v.value, "--count", v.count, "--window", v.window, "--source", v.source] }),
+    apply: "emit-plan",
+  }),
+  Object.freeze({
+    id: "evolve.conclude",
+    room: "evolve",
+    lane: "evolve",
+    label: "Conclude an experiment",
+    hint: "Computes the one verdict the test allows, once, from the receipts: the verdict cohort, complete windows, both arms at their floor. A no-verdict is shown with its reasons and writes nothing.",
+    receipt: Object.freeze({ kind: "experiment.verdict" }),
+    binding: "v0.7 `conclude` -> experiment.verdict, sealed by the line arc-evolve conclude prints (ADR-1340)",
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([Object.freeze({ name: "experiment", label: "Experiment id", placeholder: "x-hero-copy-2", type: "text", max: 64, pattern: "x-[A-Za-z0-9][A-Za-z0-9._-]{0,62}", required: true })]),
+    plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: ["conclude", "--experiment", v.experiment] }),
+    apply: "emit-plan",
+  }),
 ]);
 
 export class OpError extends Error {
@@ -306,7 +470,7 @@ export function registryView(registry = OPS) {
   return registry.map((o) => ({
     id: o.id, room: o.room, lane: o.lane, label: o.label, hint: o.hint,
     receipt: o.receipt, binding: o.binding, retires: o.retires || null,
-    humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles,
+    humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles, touchesOs: o.touchesOs === true,
     fields: o.fields,
     apply: typeof o.apply === "function" ? "argv" : o.apply,
   }));

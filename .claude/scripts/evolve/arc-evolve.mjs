@@ -1,30 +1,50 @@
 #!/usr/bin/env node
-// arc-evolve -- the evolve CLI. `board` is its only subcommand this phase.
+// arc-evolve -- the evolve CLI.
 //
 // Usage:
 //   arc-evolve board [--root DIR] [--now MS]
+//   arc-evolve open     --experiment x-ID --module M --surface S --target PATH --arms +a,+b [--split 50,50] [--ttl DAYS]
+//   arc-evolve measure  --experiment x-ID --unit U --metric M --value N --count N --window FROM..TO --source ID
+//   arc-evolve conclude --experiment x-ID
+//
+// open, measure and conclude (face v2 Phase 05 kernel ring, ADR-1340) WRITE NOTHING. Each computes its receipt's
+// payload from the spine and the module's evolve section (wire.mjs), has the spine's validator judge it (arc-event
+// --dry-run), and prints the exact emit as its LAST stdout line: {"emit":["emit","<kind>",...]}. A refusal is exit 2
+// in its own words. --root and --repo point at a fixture spine and repo for tests; production omits both.
 //
 // --now exists so a render is a pure function of its inputs: staleness is an age in days, and a
 // wall clock would make two renders of the same spine differ. Tests and the replay-determinism
 // check pin it; production omits it and gets the spine's own clock.
 
-import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { readdirSync, readFileSync, existsSync, statSync, realpathSync } from "node:fs";
+import { join, dirname, sep } from "node:path";
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { spineRoot } from "../hq/lib/spine-io.mjs";
 import { checkEvolveSection } from "../core/evolve-manifest.mjs";
 import { assertNoDuplicateKeys } from "../core/json-strict.mjs";
 import { board } from "./board.mjs";
+import { readAll } from "../hq/spine.mjs";
+import { planOpen, planMeasure, planConclude, EvolveRefusal } from "./wire.mjs";
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
+// The flags each command reads. A flag another command takes is still unknown here: a --value handed to open is a
+// mistake, not a value to ignore.
+const ALLOWED = Object.freeze({
+  board: ["root", "now", "repo"],
+  open: ["root", "repo", "experiment", "module", "surface", "target", "arms", "split", "ttl"],
+  measure: ["root", "repo", "experiment", "unit", "metric", "value", "count", "window", "source"],
+  conclude: ["root", "repo", "experiment"],
+});
 const flags = {};
 for (let i = 1; i < argv.length; i++) {
   const a = argv[i];
   if (!a.startsWith("--")) { die(`unexpected argument: ${a}`); }
   const eq = a.indexOf("=");
   const name = eq === -1 ? a.slice(2) : a.slice(2, eq);
-  if (!["root", "now", "repo"].includes(name)) die(`unknown flag --${name}`);
+  if (!(ALLOWED[cmd] || ALLOWED.board).includes(name)) die(`unknown flag --${name}`);
   const val = eq === -1 ? argv[++i] : a.slice(eq + 1);
   if (val === undefined) die(`flag --${name} needs a value`);
   // Last-wins on a repeated flag is how `--now X --now 0` silently rendered every age as
@@ -81,12 +101,46 @@ function declaredModules(root) {
       name: obj.name ?? name,
       metrics: obj.evolve.metrics,
       per_arm_floor: obj.evolve.evals?.per_arm_floor,
+      experiments: obj.evolve.experiments,
+      evals: obj.evolve.evals,
     });
   }
   return { modules, rejected };
 }
 
-if (cmd !== "board") die("usage: arc-evolve board [--root DIR] [--now MS]");
+if (cmd === "open" || cmd === "measure" || cmd === "conclude") {
+  const repo = repoRoot();
+  const root = flags.root ?? spineRoot();
+  // The target's digest as it stands, read from THIS repo and fenced to it: base_sha seals real bytes, and a path that
+  // resolves outside the tree is not a surface of it.
+  const digestOf = (rel) => {
+    try {
+      const full = realpathSync(join(repo, rel));
+      const top = realpathSync(repo);
+      if (!full.startsWith(top + sep) || !statSync(full).isFile()) return null;
+      return createHash("sha256").update(readFileSync(full)).digest("hex");
+    } catch { return null; }
+  };
+  try {
+    const { modules } = declaredModules(repo);
+    const events = (await readAll(root, "scan")).events.map((e) => e.event);
+    const plan = (cmd === "open" ? planOpen : cmd === "measure" ? planMeasure : planConclude)({ events, modules, digestOf }, flags);
+    const emit = ["emit", plan.kind, "--payload", JSON.stringify(plan.payload), "--strict"];
+    // The spine's own validator judges the payload before it is offered (and derives the experiment idem itself --
+    // the emitter refuses a caller-supplied one).
+    const env = flags.root ? { ...process.env, ARC_SPINE_ROOT: flags.root } : process.env;
+    const dry = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "..", "hq", "arc-event.mjs"), ...emit, "--dry-run"], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
+    if (dry.status !== 0) die(`the spine would refuse this ${plan.kind}: ${String(dry.stderr || "").trim().split("\n").filter(Boolean)[0] || `exit ${dry.status}`}`);
+    for (const l of plan.lines) process.stdout.write(`arc-evolve: ${l}\n`);
+    process.stdout.write(JSON.stringify({ emit }) + "\n");
+    process.exit(0);
+  } catch (e) {
+    if (e instanceof EvolveRefusal) die(`${e.code} -- ${e.message}`);
+    die(e?.message ?? String(e));
+  }
+}
+
+if (cmd !== "board") die("usage: arc-evolve board|open|measure|conclude ... (see the header)");
 
 const spine = flags.root ?? spineRoot();
 // A plain positive integer literal only. `Number.isFinite` alone accepted "0x10", " 12 " and

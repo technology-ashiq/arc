@@ -36,7 +36,7 @@ SESSION verbs are Phase 06's).
 - [ ] **Block C gate:** if the six flagship ops cannot all be made green, the door does not ship — every module read-only with a no-verbs badge — and the door moves to its own cycle.
 - [ ] **Block C tripwire (day 5, burn 9d):** PR 1 not green on CI → every BIG-GAP verb not yet shipped becomes a residue row filed to its lane; the rings re-plan; no extension (ADR-1339).
 - [ ] **Every work verb (REQ-07):** each of the 31 ships with its no-second-path fixture green, or is a row in `evidence/phase-05/residue.md` naming the missing piece and the lane it is filed to; `tests/face/` holds the residue equal to the ops registry both ways (a verb can neither vanish nor be invented); the owner approves the residue as a whole at `/arc-phase-done 05`.
-- [ ] **Proposals stay proposals:** driver switch, terminate and cap proposal write a `feat/face-*` branch, show the diff and raise `approval.requested`; nothing in the face writes `engine/router.yaml` or `hq.policy.yaml`, and a fixture proves it.
+- [ ] **Proposals stay proposals:** driver switch and terminate write a `feat/face-*` branch by git plumbing (never a checkout), show the diff and raise `approval.requested`; the cap proposal raises the `policy.promotion` approval and writes no branch, because `hq.policy.yaml` is an un-grantable target (amended 2026-09-19, ADR-1340); nothing in the face writes `engine/router.yaml` or `hq.policy.yaml`, and a fixture proves it.
 - [ ] **Human-run ops apply only on the owner's click:** close month, the leads send, growth publish and the legal stamp are applied by `apply` from a click and never from Ask, a schedule or a replay; a fixture proves each refuses the other three paths.
 - [ ] **Live rooms (REQ-11):** the door signals a change when the spine or a declared file changes; the open room re-reads within 5 s, proven by a browser-harness fixture that appends a spine event and times the panel; an op's receipt appears in its room within 5 s of `apply`; every room re-reads on change because the host re-reads all of an open room's reads on the door's pulse (no module can opt out; the planted mutant is a host that stops re-reading, which the browser live flow FAILs).
 - [ ] Two fresh attackers per PR (door decision logic · shell/git boundary), each carrying the fixed-defect list; CI green per job on every PR; `/arc-phase-done 05` from the main clone.
@@ -111,6 +111,25 @@ direct writes to `engine/router.yaml` or `hq.policy.yaml` → never.
     owner types; one-line fields refuse bidi controls and name the character they refuse. Three process-tree
     remainders are debt rows, not claims: Windows descendants after the tool exits, POSIX `setsid` escapes, and bench's
     own synchronous attempt timeout.
+
+- **2026-09-19, PR 3 (kernel ring) -- ships as 3a and 3b.** ADR-1340 answers the three questions the ring raised before
+  any op was built: an effect past the spine (the machine's scheduler, a proposal branch) is refused on a sim door at
+  APPLY (`SIM_EFFECT`) while its dry-run plan still runs; a file change is a `feat/face-*` branch written by git
+  plumbing (`core/proposal-branch.mjs`), never a checkout; the cap proposal is the `policy.promotion` approval and
+  writes no branch (the DoD line amended the same day); evolve's open/measure/conclude are wired to the spine
+  (`evolve/wire.mjs`). **3a** carries seven verbs: register job (`arc-jobs register --dry-run|--receipt`, and arc-jobs
+  now refuses an unknown flag -- `register x --dry-run` used to register for real), driver switch and tier proposal
+  (`engine/propose.mjs`, one router line on a branch plus `approval.requested`), cap proposal (`hq/policy-promote.mjs`),
+  and open/measure/conclude (`arc-evolve`). **3b** carries pin source and trial (absorb: the study report and the
+  seal's commitment are FILES, so both go through the proposal-branch writer) and bench propose (a no-invoke plan
+  from an existing run's evidence). Split because 3b's absorb changes are a second design (bundle files on a branch)
+  and 3a's seven are ready to be attacked now.
+  - On this tree no product declares an evolve section, so the three evolve ops refuse by name -- the dock shows the
+    tool's sentence, and the flows and the parity suite hold that refusal identical by door and by hand. The
+    receipts are proven in `tests/face/kernel-ring.mjs` over a scratch repo that declares one, through to a verdict.
+  - Retired with their ops: model-policy's "Propose a tier change" and evolve's "Open an experiment". The policy
+    room's card ("Propose a cap, or demote a pair") and the scheduler's ("Register a job" -- a reviewed diff to
+    hq.jobs.yaml, a different verb from registering a row with the OS) stay: neither op is all of its card.
 
 ## Your-setup / pending
 

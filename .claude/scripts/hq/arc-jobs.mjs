@@ -63,7 +63,7 @@ const command = argv[0];
 // at the second, and `audit --to 2026-08-09` read as a stray positional the moment anything did.
 // Naming them is also what lets an unknown flag be caught instead of ignored.
 const VALUE_FLAGS = new Set(["next", "date", "slot", "from", "to"]);
-const BOOL_FLAGS = new Set(["scheduled", "json", "partial", "help"]);
+const BOOL_FLAGS = new Set(["scheduled", "json", "partial", "help", "dry-run", "receipt"]);
 
 const positional = (() => {
   const out = [];
@@ -101,6 +101,20 @@ const flag = (name) => {
 const has = (name) => argv.includes(`--${name}`);
 
 const die = (code, msg) => { process.stderr.write(`arc-jobs: ${msg}\n`); process.exit(code); };
+
+// EVERY --flag IS ONE THIS FILE NAMES, or the command does not run. The sets above were declared "so an unknown flag
+// can be caught" and nothing caught it: `register day-close-roll --dry-run` ran a REAL registration, because an
+// ignored safety flag reads exactly like an honoured one (face v2 Phase 05 kernel ring, the develop.mjs hazard the
+// CLI probe named). A boolean flag takes no `=value` either -- `--dry-run=0` must not mean anything at all.
+for (const a of argv.slice(1)) {
+  if (!a.startsWith("--")) continue;
+  const name = a.slice(2).split("=")[0];
+  if (!VALUE_FLAGS.has(name) && !BOOL_FLAGS.has(name)) die(2, `unknown flag ${a} -- known: ${[...VALUE_FLAGS, ...BOOL_FLAGS].map((f) => "--" + f).join(" ")}`);
+  if (BOOL_FLAGS.has(name) && a.includes("=")) die(2, `--${name} takes no value; write it bare, not ${a}`);
+}
+// Checked before ANY command runs: `unregister x --dry-run` would otherwise remove the task for real.
+if (command !== "register" && (has("dry-run") || has("receipt")))
+  die(2, "--dry-run and --receipt belong to register -- the other commands write their own receipts or none");
 
 if (!command || command === "help" || has("help")) {
   process.stdout.write(
@@ -323,6 +337,15 @@ if (command === "unregister") {
 }
 
 if (command === "register") {
+  // --dry-run: every check a registration makes -- the schedule's legality, the job enabled, the policy gate, the
+  // platform, the registration built -- and then NOTHING is handed to the OS. --receipt: after a registration the
+  // OS read back, a note.logged records it, and its id is printed (face v2 Phase 05, ADR-1339: the face's work door
+  // plans with the first and applies with the second). Each names ONE job: a plan for "all enabled" is a plan for a
+  // set the owner did not read.
+  const dryRun = has("dry-run");
+  const wantsReceipt = has("receipt");
+  if (dryRun && wantsReceipt) die(2, "--dry-run writes nothing, so it has no receipt -- pick one");
+  if ((dryRun || wantsReceipt) && !positional[0]) die(2, "--dry-run and --receipt name one job: register <name> --dry-run");
   const { doc } = loadSchedule();
   const only = positional[0] || null;
   const targets = (doc.jobs || []).filter((j) => (only ? j.name === only : j.enabled));
@@ -354,13 +377,25 @@ if (command === "register") {
   const os = osScheduler();
   const nodePath = process.execPath;
   const logDir = join(spineRoot(), "job-logs");
+  if (dryRun) {
+    // Built by the SAME registrationFor the real path uses, so the plan is the registration, not a description of it.
+    for (const job of targets) {
+      let reg;
+      try { reg = registrationFor(job, { repoRoot: root, nodePath, logDir }); }
+      catch (e) { if (e instanceof SchedulerError) die(2, `${job.name}: [${e.code}] ${e.message}`); throw e; }
+      process.stdout.write(`arc-jobs: would register ${reg.name}  ${reg.trigger}  cwd ${reg.cwd}\n`);
+    }
+    process.stdout.write(`arc-jobs: ${logonNote()}\n`);
+    process.stdout.write("arc-jobs: dry run -- nothing was handed to the OS\n");
+    process.exit(0);
+  }
   for (const job of targets) {
     // Register, read the whole registration back OFF THE OS, and unregister again if any part of
     // it disagrees -- all inside `registerVerified`, so the CLI and the contract fixture exercise
     // one function rather than two hopefully-identical copies of the same care.
-    let back;
+    let back, reg;
     try {
-      const reg = registrationFor(job, { repoRoot: root, nodePath, logDir });
+      reg = registrationFor(job, { repoRoot: root, nodePath, logDir });
       back = registerVerified(os, reg.name, reg);
       process.stdout.write(
         `arc-jobs: registered ${reg.name}  ${reg.trigger}  lastTaskResult=${back.lastTaskResult}  cwd ${back.cwd}\n`,
@@ -373,6 +408,16 @@ if (command === "register") {
       if (e instanceof SchedulerError)
         die(2, `${job.name}: [${e.code}] ${e.message}${e.rolledBack === false ? " -- AND THE ROLLBACK ALSO FAILED, so remove it by hand" : ""}`);
       throw e;
+    }
+    if (wantsReceipt) {
+      // A failure here IS the command's failure: the receipt is what was asked for. The task stays registered (the OS
+      // read it back); the refusal says so, so nobody registers it twice to get a receipt.
+      const payload = { note: "scheduler.register", job: job.name, trigger: reg.trigger, logon: PINNED_SETTINGS.LogonType };
+      const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "note.logged", "--payload", JSON.stringify(payload), "--strict"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      const id = String(r.stdout || "").trim();
+      if (r.status !== 0 || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id))
+        die(1, `${job.name} IS registered, and its receipt was not written -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
+      process.stdout.write(`receipt: note.logged ${id}\n`);
     }
   }
   process.stdout.write(`arc-jobs: ${logonNote()}\n`);

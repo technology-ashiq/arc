@@ -84,14 +84,28 @@ const INPUTS = {
   "money.close-month": { month: MONTH, totals: "razorpay:INR=100000" },
   "growth.publish": { slug: "work-door-probe", article: ARTICLE, cluster: "c-001", title: "The work door, probed", pr: "7" },
   "bench.run-model": { driver: "mock", model: "mock", inr: "1", minutes: "5" },
+  // The kernel ring (ADR-1340).
+  "scheduler.register-job": { job: "day-close-roll" },
+  "engine-room.driver-switch": { class: "review-diff", to: "codex", why: "the work door suite proposes this" },
+  "model-policy.tier-proposal": { class: "face-ask", to: "high-judgment" },
+  "policy.cap-proposal": { kind: "process:kickoff-plan", capability: "write", to: "L2", evidence: "docs/trial-ledger.md#work-door-suite" },
+  "evolve.open-experiment": { experiment: "x-work-door", module: "core", surface: "hero", target: "app/home/hero.tsx", arms: "+champion,+challenger" },
+  "evolve.measure": { experiment: "x-work-door", unit: "u-1", metric: "signup_conversion", value: "1", count: "1", window: "2026-09-01..2026-09-07", source: "src-1" },
+  "evolve.conclude": { experiment: "x-work-door" },
 };
+// The ops whose tool refuses on THIS tree, by name: no product here declares an evolve section (ADR-1340), so the
+// evolve verbs answer NO_EVOLVE_SECTION -- the door must show that refusal exactly as a hand-run gets it.
+const REFUSES_ON_THIS_TREE = new Set(["evolve.open-experiment", "evolve.measure", "evolve.conclude"]);
 check("every registry op is driven by this suite",
   OPS_MOD.OPS.length > 0 && OPS_MOD.OPS.every((o) => Object.hasOwn(INPUTS, o.id)) && Object.keys(INPUTS).length === OPS_MOD.OPS.length,
   OPS_MOD.OPS.map((o) => o.id).join(","));
-// No op touches files yet. The branch machinery (write to feat/face-*, show the diff, stop) ships with the first op
-// that needs it; until then an op that declares file writes is a registry row this door cannot honour.
-check("no registry op declares file writes (the branch fixture lands with the first one that does)",
-  OPS_MOD.OPS.every((o) => o.touchesFiles === false), OPS_MOD.OPS.filter((o) => o.touchesFiles).map((o) => o.id).join(","));
+// A file-touching op writes a PROPOSAL BRANCH, never a file in place (ADR-1340): it is human-run, and its tool is one
+// that writes through core/proposal-branch.mjs. An effect past the spine never runs on a sim door.
+const PROPOSAL_TOOLS = new Set(["engine/propose.mjs"]);
+check("every file-touching op is human-run and applies through a proposal-branch tool",
+  OPS_MOD.OPS.filter((o) => o.touchesFiles).every((o) => o.humanRun === true && typeof o.apply === "function" && PROPOSAL_TOOLS.has(o.apply(INPUTS[o.id]).script)),
+  OPS_MOD.OPS.filter((o) => o.touchesFiles).map((o) => o.id).join(","));
+check("every op that touches the machine's scheduler is human-run", OPS_MOD.OPS.filter((o) => o.touchesOs).every((o) => o.humanRun === true));
 // Every op's receipt is a kind the spine has (ADR-1334).
 {
   const V = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "validate.mjs")).href);
@@ -205,6 +219,31 @@ try {
     const values = INPUTS[op.id];
     const before = spineFingerprint(SPINE_A);
     const plan = await post(`/api/op/${op.id}/plan`, { input: values });
+    // An op whose tool refuses here -- the evolve verbs on a tree with no evolve section, an effect op whose tool
+    // refuses its dry run (no main to base a proposal on in a CI checkout, no Windows scheduler) -- must refuse through
+    // the door EXACTLY as by hand: the same exit and the same first line. That is its no-second-path fixture here.
+    if (plan.status === 200 && plan.body.ok === false && (REFUSES_ON_THIS_TREE.has(op.id) || op.touchesFiles || op.touchesOs)) {
+      const planCmd = op.plan(OPS_MOD.validateInput(op, values));
+      const hand = spawnSync(process.execPath, [join(REPO, ".claude", "scripts", ...planCmd.script.split("/")), ...planCmd.args], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_B } });
+      const first = (s) => String(s || "").trim().split(/\r?\n/)[0] || "";
+      const doorFirst = (plan.body.refusal.stderr || plan.body.refusal.stdout || "").trim().split(/\r?\n/)[0] || "";
+      check(`${op.id}: refused through the door exactly as by hand (exit ${hand.status})`,
+        plan.body.refusal.exit === hand.status && hand.status !== 0 && doorFirst.length > 0 && first(hand.stderr || hand.stdout).replace(/[A-Z]:[\\/][^ ]*|\/[^ ]*/g, "").slice(0, 60) === doorFirst.replace(/\[path withheld\]|[A-Z]:[\\/][^ ]*|\/[^ ]*/g, "").slice(0, 60),
+        `door=${plan.body.refusal.exit} ${JSON.stringify(doorFirst)} hand=${hand.status} ${JSON.stringify(first(hand.stderr || hand.stdout))}`);
+      check(`${op.id}: the refused plan wrote nothing`, spineFingerprint(SPINE_A) === before);
+      continue;
+    }
+    if (REFUSES_ON_THIS_TREE.has(op.id)) { check(`${op.id}: refuses on this tree (no product declares an evolve section)`, false, `${plan.status} ${JSON.stringify(plan.body).slice(0, 300)}`); continue; }
+    // An effect op that PLANNED (a clone with a main, a Windows leg): the plan wrote nothing, and a sim door refuses the
+    // apply by name before anything runs -- no task registered, no branch written (ADR-1340).
+    if (op.touchesFiles || op.touchesOs) {
+      check(`${op.id}: the effect op's plan answers ok and wrote nothing`, plan.status === 200 && plan.body.ok === true && spineFingerprint(SPINE_A) === before, `${plan.status} ${plan.body.error || ""}`);
+      const refsBefore = execFileSync("git", ["for-each-ref", "--format=%(refname)"], { cwd: REPO, encoding: "utf8" });
+      const ap = await post(`/api/op/${op.id}/apply`, { planId: plan.body.planId, confirm: op.id }, { Origin: ORIGIN });
+      check(`${op.id}: a sim door refuses the apply -> SIM_EFFECT, and nothing ran`, ap.status === 403 && ap.body.error === "SIM_EFFECT" && spineFingerprint(SPINE_A) === before, `${ap.status} ${ap.body.error}`);
+      check(`${op.id}: no branch appeared`, execFileSync("git", ["for-each-ref", "--format=%(refname)"], { cwd: REPO, encoding: "utf8" }) === refsBefore);
+      continue;
+    }
     check(`${op.id}: the plan answers ok`, plan.status === 200 && plan.body.ok === true && typeof plan.body.planId === "string",
       `${plan.status} ${plan.body.error || ""} ${JSON.stringify(plan.body.refusal || "").slice(0, 400)}`);
     check(`${op.id}: the plan wrote nothing to the spine`, spineFingerprint(SPINE_A) === before);
