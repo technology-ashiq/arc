@@ -110,7 +110,10 @@ export const REFUSALS = Object.freeze({
   // its apply path is money-work.mjs's. The register refuses where a CI checkout has no main, and elsewhere because the
   // fixture's criteria were never approved; the kill review refuses the same unapproved criteria.
   "money.ingest": "the export cannot be found",
-  "ventures.register": "SIM_EFFECT|NO_BASE|no approved criteria receipt",
+  // On a runner whose checkout HAS a main, the register reads the spine next -- and the fixture spine carries a torn
+  // line on purpose (the spine room draws it), which the register refuses rather than reading as "nothing requested"
+  // (main CI after PR 5a: green on the PR, where NO_BASE came first).
+  "ventures.register": "SIM_EFFECT|NO_BASE|no approved criteria receipt|torn line",
   "ventures.kill-review": "UNRECEIPTED",
 });
 
