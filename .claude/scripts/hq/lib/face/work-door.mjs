@@ -226,8 +226,9 @@ export function createWorkDoor(ctx, opts = {}) {
     // THE OWNER READS WHAT IS APPLIED. The page shows the plan through the scrub, which withholds an absolute path and
     // everything after it; a slice title or an agent description holding "/tmp/..." hid the digest -- and the rest of
     // the diff -- while the apply stood ready (PR 4 shell attack). A bound plan whose last line the page cannot show is
-    // not held.
-    if (op.expect === true || op.apply === "emit-plan") {
+    // not held. Only a DIGEST row: an emit-plan line is the receipt itself, carrying what the owner typed (growth.publish
+    // names the merged article by its absolute path), so it held a path by design and was refused on every real input.
+    if (op.expect === true) {
       const rawLast = String(res.stdout).split(/\r?\n/).filter((l) => l.trim() !== "").pop() || "";
       const shownLast = String(scrub(res.stdout, ctx.repo)).split(/\r?\n/).filter((l) => l.trim() !== "").pop() || "";
       if (shownLast !== rawLast) {
