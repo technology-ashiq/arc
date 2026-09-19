@@ -137,7 +137,9 @@ export function planConclude(world, a) {
   const guardrails = guardrailDefs.map((g) => ({ name: g.name, status: "unresolved" }));
 
   const windows = classifyWindows(x).filter((w) => w.metric === primary);
-  const complete = new Set(windows.filter((w) => !w.missing).map((w) => w.key));
+  // Matched on the LABELS classifyWindows hands back (metric, "start..end"), never on its internal key: that key joins the
+  // two with a NUL, and a key rebuilt here with a space matched nothing, so every unit read as outside a complete window.
+  const complete = new Set(windows.filter((w) => !w.missing).map((w) => `${w.metric}|${w.window}`));
   const missingWindows = windows.filter((w) => w.missing).length;
 
   // Per arm, per unit: the VERDICT cohort's primary-metric value in complete windows. One trial per unit (ADR-0306 v1):
@@ -149,7 +151,7 @@ export function planConclude(world, a) {
     if (e.kind !== "experiment.measured") continue;
     const p = e.payload;
     if (p.metric !== primary || p.cohort !== "verdict") continue;
-    if (!complete.has(`${p.metric} ${p.window_start}..${p.window_end}`)) continue;
+    if (!complete.has(`${p.metric}|${p.window_start}..${p.window_end}`)) continue;
     const arm = x.assigned.get(p.unit_id) || p.arm;
     if (!perArm.has(arm) || x.conflicts.has(p.unit_id)) continue;
     if (p.value !== 0 && p.value !== 1)

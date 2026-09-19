@@ -27,6 +27,8 @@ const EVENT = join(REPO, ".claude", "scripts", "hq", "arc-event.mjs");
 
 const OPS_MOD = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "face-ops.mjs")).href);
 const DOOR_MOD = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "work-door.mjs")).href);
+// The door HTML-escapes every string it serves; a refusal compared with a hand-run is compared as the face DRAWS it.
+const { unescapeDoorText: DOOR_TEXT } = await import(pathToFileURL(join(REPO, "face", "src", "lib", "door.mjs")).href);
 
 let ran = 0, failed = 0;
 const check = (name, cond, detail = "") => {
@@ -226,7 +228,7 @@ try {
       const planCmd = op.plan(OPS_MOD.validateInput(op, values));
       const hand = spawnSync(process.execPath, [join(REPO, ".claude", "scripts", ...planCmd.script.split("/")), ...planCmd.args], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_B } });
       const first = (s) => String(s || "").trim().split(/\r?\n/)[0] || "";
-      const doorFirst = (plan.body.refusal.stderr || plan.body.refusal.stdout || "").trim().split(/\r?\n/)[0] || "";
+      const doorFirst = DOOR_TEXT(plan.body.refusal.stderr || plan.body.refusal.stdout || "").trim().split(/\r?\n/)[0] || "";
       check(`${op.id}: refused through the door exactly as by hand (exit ${hand.status})`,
         plan.body.refusal.exit === hand.status && hand.status !== 0 && doorFirst.length > 0 && first(hand.stderr || hand.stdout).replace(/[A-Z]:[\\/][^ ]*|\/[^ ]*/g, "").slice(0, 60) === doorFirst.replace(/\[path withheld\]|[A-Z]:[\\/][^ ]*|\/[^ ]*/g, "").slice(0, 60),
         `door=${plan.body.refusal.exit} ${JSON.stringify(doorFirst)} hand=${hand.status} ${JSON.stringify(first(hand.stderr || hand.stdout))}`);

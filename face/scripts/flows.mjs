@@ -125,6 +125,8 @@ export function pageFlow(arg) {
     const button = (t) => Array.from(card.querySelectorAll("button")).find((x) => x.textContent.trim() === t);
     const plan = button(arg.frozen.plan);
     if (!plan) return { ok: false, step: "no button " + JSON.stringify(arg.frozen.plan) };
+    // A disabled Plan button is a form the flow did not fill: say so now, rather than wait out the page timeout.
+    if (plan.disabled) return { ok: false, step: "the Plan button is disabled -- a required field was not filled", text: card.innerText.slice(-300) };
     plan.click();
     const planned = await until(() => { const s = card.getAttribute("data-op-state"); return s !== "planning" && s !== "idle" ? s : null; }, arg.capMs);
     // A refusal flow: the card must SHOW a refusal -- the tool's own, at plan, or the door's, at apply -- never a receipt.

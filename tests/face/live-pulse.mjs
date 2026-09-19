@@ -63,6 +63,17 @@ const check = (name, cond, detail = "") => {
   const bad = [];
   for (const o of ops.OPS) { try { ops.validateInput(o, inputs[o.id]); } catch (e) { bad.push(`${o.id}: ${e.message}`); } }
   check("every flow's input is one the door accepts", bad.length === 0, bad.join(" ; "));
+  // The flow finds an input by its placeholder: two fields sharing one means the second is never typed into, and the
+  // Plan button stays disabled (PR 3a CI: evolve.measure's value and count both read "1").
+  const shared = ops.OPS.flatMap((o) => {
+    const seen = new Map();
+    return (o.fields || []).filter((f) => f.type !== "select" && f.placeholder).flatMap((f) => {
+      const other = seen.get(f.placeholder);
+      seen.set(f.placeholder, f.name);
+      return other ? [`${o.id}: ${other} and ${f.name} both read ${JSON.stringify(f.placeholder)}`] : [];
+    });
+  });
+  check("no op has two fields sharing a placeholder (the flow finds a field by it)", ops.OPS.length > 0 && shared.length === 0, shared.join(" ; "));
   const cm = flows.closeMonthFor(new Date(Date.UTC(2026, 0, 3)));
   check("the close flow closes two months back, mid-month (outside the ten-day fixture)", cm.month === "2025-11" && new Date(cm.at).getUTCDate() === 15, JSON.stringify(cm));
 }
