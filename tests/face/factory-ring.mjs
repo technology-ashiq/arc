@@ -121,7 +121,7 @@ function scratchRepo(name, files) {
 // ---- pick: an approval bound to the variants' bytes, recorded once ----
 {
   const variants = Object.fromEntries(["a", "b", "c"].map((v) => [`docs/design/explore/pick-probe/variant-${v}/index.html`, `<!doctype html><title>${v}</title>\n`]));
-  const { repo, clean, sp, tool } = scratchRepo("pick-repo", {
+  const { repo, g, clean, sp, tool } = scratchRepo("pick-repo", {
     ...variants,
     "docs/design/explore/picked-already/variant-a/index.html": "a\n", "docs/design/explore/picked-already/variant-b/index.html": "b\n",
     "docs/design/explore/picked-already/variant-c/index.html": "c\n", "docs/design/explore/picked-already/PICK.md": "picked: a\n",
@@ -149,7 +149,8 @@ function scratchRepo(name, files) {
   check("pick of an explore that has a PICK.md refuses", done.status === 2 && /PICK\.md/.test(done.stderr), done.stderr);
   const noWhy = tool("design/pick.mjs", ["--explore", "pick-probe", "--pick", "a", "--dry-run"]);
   check("pick without a reason refuses -- a pick carries its reason", noWhy.status === 2 && /--why is required/.test(noWhy.stderr), noWhy.stderr);
-  check("pick wrote no file: the tree is as committed", clean());
+  // The one change in the tree is the variant the suite rebuilt itself; pick wrote nothing.
+  check("pick wrote no file: the only change in the tree is the variant the suite rebuilt", g("status", "--porcelain").stdout.trim() === "M docs/design/explore/pick-probe/variant-c/index.html", g("status", "--porcelain").stdout);
 }
 
 // ---- profile-request: the approval that asks; settings.json is never written ----
@@ -234,7 +235,8 @@ function scratchRepo(name, files) {
   check("agent-scaffold, applied: approval.requested (gate agent-roster, ADR-0069) names the tier, the model, the branch and its commit",
     !!appr && appr.payload.gate === "agent-roster" && appr.payload.adr === "ADR-0069" && appr.payload.tier === "cheap-scan" && appr.payload.model === "haiku" && appr.payload.branch === branch && appr.payload.commit === g("rev-parse", branch).stdout.trim());
   for (const [why, args, re] of [
-    ["an agent main already has", ["--name", "code-reviewer"], /already on main/],
+    // The scratch repo holds the contract, not the agent files: the contract's own row is the refusal here.
+    ["an agent main already has", ["--name", "code-reviewer"], /already on main|already has a room/],
     ["a tier ADR-0069 does not name", ["--tier", "gold-plated"], /not a tier/],
     ["a tier with no claude-code model yet", ["--tier", "independent-family-verifier"], /no claude-code model/],
     ["a room that seats no agent", ["--room", "money"], /not a room that hosts agents/],
