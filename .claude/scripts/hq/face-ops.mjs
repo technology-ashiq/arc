@@ -33,6 +33,7 @@
 import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
+import { ONE_LINE_SRC, ONE_LINE_BAD_SRC } from "../core/one-line.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -60,8 +61,9 @@ function benchDrivers() {
 // BOM, the tag block, the interlinear annotations) or a lone surrogate: each renders as nothing, or as text nobody
 // wrote, and a lone surrogate becomes U+FFFD in the tool's argv (PR 2 logic attack). ZWNJ and ZWJ stay: they join emoji
 // and the letters of several scripts, and render as nothing but the join they make.
-const ONE_LINE_BAD_SRC = "[\\p{Cc}\\p{Cs}\\u2028\\u2029]|(?![\\u200C\\u200D])\\p{Cf}";
-const ONE_LINE = `(?:(?!${ONE_LINE_BAD_SRC})[\\s\\S])+`;
+// The class itself lives in core/one-line.mjs -- ONE definition, imported by the door's registry, the spine's decision
+// validator and every tool the door runs, so no copy can drift from another.
+const ONE_LINE = ONE_LINE_SRC;
 const ONE_LINE_BAD = new RegExp(ONE_LINE_BAD_SRC, "u");
 const CHAR_NAMES = Object.freeze({ 0x09: "a tab", 0x0a: "a line break", 0x0d: "a carriage return", 0x1b: "an escape", 0x00: "a NUL", 0x2028: "a line separator", 0x2029: "a paragraph separator" });
 const BIDI = /[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/u;
