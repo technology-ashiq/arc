@@ -10,9 +10,24 @@
 // apply re-derives everything, re-runs every check, and writes only if the digest is unchanged. Otherwise it refuses
 // PLAN_STALE and writes nothing. A hand-run works the same way: the plan prints the flag to add.
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
 export const EXPECT_RE = /^[0-9a-f]{64}$/;
+
+/**
+ * The spine's own judgment of a receipt BEFORE the effect it describes: null when `arc-event emit --dry-run` accepts
+ * it, else the emitter's first line. A tool that writes a branch and only then has its approval refused has stranded
+ * the branch -- every face-ask proposal did, because the secret scanner read "sk-" in its name (PR 3a logic attack).
+ * One helper, so every branch-writing tool judges the same way.
+ * @param {string} arcEvent the arc-event.mjs path @param {string} kind @param {unknown} payload
+ * @param {{ cwd?: string, env?: Record<string, string | undefined> }} [o]
+ */
+export function spineRefusal(arcEvent, kind, payload, o = {}) {
+  const r = spawnSync(process.execPath, [arcEvent, "emit", kind, "--payload", JSON.stringify(payload), "--strict", "--dry-run"],
+    { cwd: o.cwd, env: o.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return r.status === 0 ? null : (String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`);
+}
 
 /** JSON with every object's keys sorted, so a digest never depends on the order a payload was built in. */
 function canonical(value) {

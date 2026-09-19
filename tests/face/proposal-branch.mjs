@@ -163,7 +163,8 @@ await refuse("a name that opens with a dash", { branch: "feat/face-t15", files: 
   let code = null, msg = "";
   try { await PB.writeProposal({ repo: r, message: "m", allow: ALLOW, branch: "feat/face-locked", files: [{ path: "engine/router.yaml", content: PROPOSED.replace("codex", "lock") }] }); }
   catch (e) { code = e.code; msg = e.message; }
-  check("a stale .lock refuses as GIT_FAILED in git's words, not BRANCH_EXISTS", code === "GIT_FAILED" && /lock/i.test(msg), `${code} ${msg}`);
+  // The check NAMES never carry the word the bats wrapper forbids in the output, so the code is compared, not printed.
+  check("a stale .lock refuses as git's own error, in git's words, not BRANCH_EXISTS", code === "GIT_FAILED" && /lock/i.test(msg), `${code} ${msg}`);
   check("... and no branch was created behind the lock", !refs(r).includes("refs/heads/feat/face-locked "));
   rmSync(lock, { force: true });
 }
@@ -226,6 +227,64 @@ await refuse("a name that opens with a dash", { branch: "feat/face-t15", files: 
   } finally {
     if (saved === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = saved;
   }
+}
+
+// ---- CONFIG hooks (git 2.54: hook.<name>.command / .event) are disabled by name, not only core.hooksPath (PR 3a
+// round-2 shell attack: a reference-transaction hook in the owner's config ran three times inside a write) ----
+{
+  const c = scratch("cfghook");
+  const mark = join(c, "..", `cfghook-${Date.now()}.txt`);
+  const markPosix = mark.replace(/\\/g, "/");
+  git(c, "config", "hook.mark.command", `echo ran >> "${markPosix}"`);
+  git(c, "config", "--add", "hook.mark.event", "reference-transaction");
+  git(c, "config", "--add", "hook.mark.event", "post-index-change");
+  // MUTANT CONTROL: plain git, under the owner's config, runs it -- on a git that has config hooks at all.
+  git(c, "branch", "feat/face-cfg-control", "main");
+  const controlFired = existsSync(mark);
+  const before = controlFired ? readFileSync(mark, "utf8") : "";
+  await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-cfghook", files: [{ path: "engine/router.yaml", content: PROPOSED }] });
+  const after = existsSync(mark) ? readFileSync(mark, "utf8") : "";
+  check(controlFired ? "a config hook the owner's plain git runs is NOT run by the writer" : "a config hook: this git has no config hooks, so there is nothing to run (checked, not assumed)",
+    after === before && refs(c).includes("refs/heads/feat/face-cfghook "), `control=${controlFired} before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+}
+
+// ---- a branch the writer DID create is the writer's, even when the update-ref call reports a failure (PR 3a round-2
+// shell attack: it was reported as someone else's branch, propose exited 2, and every retry refused) ----
+{
+  const c = scratch("ownref");
+  // A preload that runs the real `git update-ref` and then reports exit 1: the transaction committed, the call "failed".
+  const fake = join(c, "..", `fake-update-ref-${Date.now()}.mjs`);
+  writeFileSync(fake, [
+    "import { spawnSync } from \"node:child_process\";",
+    "import { readFileSync } from \"node:fs\";",
+    "const input = readFileSync(0);",
+    "const r = spawnSync(\"git\", process.argv.slice(2), { input, stdio: [\"pipe\", \"inherit\", \"inherit\"] });",
+    "process.exit(r.status === 0 ? 1 : 2);",
+    "",
+  ].join("\n"));
+  const shim = join(c, "..", `shim-update-ref-${Date.now()}.mjs`);
+  writeFileSync(shim, [
+    "import cp from \"node:child_process\";",
+    "import { syncBuiltinESMExports } from \"node:module\";",
+    "const real = cp.spawn;",
+    `cp.spawn = (file, args, opts) => (file === "git" && Array.isArray(args) && args.includes("update-ref") ? real(process.execPath, [${JSON.stringify(fake)}, ...args], opts) : real(file, args, opts));`,
+    "syncBuiltinESMExports();",
+    "",
+  ].join("\n"));
+  const probe = join(c, "..", `own-ref-probe-${Date.now()}.mjs`);
+  writeFileSync(probe, [
+    `const PB = await import(${JSON.stringify(pathToFileURL(join(REPO, ".claude", "scripts", "core", "proposal-branch.mjs")).href)});`,
+    `const w = await PB.writeProposal({ repo: ${JSON.stringify(c)}, message: "m", allow: ["engine/router.yaml"], branch: "feat/face-ownref", files: [{ path: "engine/router.yaml", content: ${JSON.stringify(PROPOSED)} }] });`,
+    "console.log(JSON.stringify({ commit: w.commit }));",
+    "",
+  ].join("\n"));
+  let out = "", code = 0;
+  try { out = execFileSync(process.execPath, ["--import", pathToFileURL(shim).href, probe], { encoding: "utf8", env: cleanEnv() }); }
+  catch (e) { code = e.status; out = String(e.stdout || "") + String(e.stderr || ""); }
+  let commit = "";
+  try { commit = JSON.parse(out.trim().split(/\r?\n/).pop()).commit; } catch { /* reported below */ }
+  check("a branch the writer created is returned as written when update-ref reports a failure after committing it",
+    code === 0 && /^[0-9a-f]{40,64}$/.test(commit) && git(c, "rev-parse", "refs/heads/feat/face-ownref") === commit, `code=${code} ${out.slice(0, 300)}`);
 }
 
 // ---- the module names no porcelain that could move the owner's tree ----

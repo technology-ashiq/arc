@@ -13,7 +13,8 @@
 //                                     closed, verdicted, expired, drifted or redeclared experiments refuse
 //   planConclude experiment.verdict   decide() over the VERDICT cohort, counted from the receipts the fold KEEPS (after
 //                                     supersedes), each unit re-placed by assign(), direction-adjusted, at the
-//                                     module's own alpha; compute-once; a no-verdict is refused with decide's reasons
+//                                     module's own alpha; compute-once: a test computed at floor that did not clear
+//                                     is recorded as outcome no-verdict; one not yet computable is refused
 //
 // Every refusal is an EvolveRefusal with a code. None of these functions writes, spawns or reads a file. Every one of
 // them is re-run at apply (arc-evolve --expect, core/plan-expect.mjs), so a check here holds when the receipt is
@@ -104,16 +105,19 @@ function liveExperiment(world, id) {
   // An experiment is opened ONCE. Two opens with different arms leave the champion ambiguous -- conclude named it by
   // apply order (PR 3a logic attack) -- and two with the same arms leave the surface or the seal ambiguous. Compared in
   // DECLARED order: the fold's arm set is sorted, and a swap into sorted order read as no change at all.
-  const opens = kept.filter((e) => e.kind === "experiment.opened" && e.payload.experiment_id === id);
+  // Counted over EVERY admitted open, a superseded one included: an open corrected by `--supersedes` kept governing
+  // measure and conclude (the fold keeps the correction, this read the original), and an identical re-open restarted
+  // the TTL clock (PR 3a round-2 logic attack). An open is not corrected; a new experiment is opened instead.
+  const opens = ofExperiment(events, id).filter((e) => e.kind === "experiment.opened");
   if (x.armsRedeclared || opens.some((e) => e.payload.arms.join(",") !== opens[0].payload.arms.join(",")))
     no("ARMS_REDECLARED", `${id} was opened more than once with different arms -- which arm is the champion is ambiguous, so nothing more is measured or concluded on it`);
-  if (opens.length > 1) no("OPENED_TWICE", `${id} was opened ${opens.length} times -- which declaration governs is ambiguous, so nothing more is measured or concluded on it`);
+  if (opens.length > 1) no("OPENED_TWICE", `${id} was opened ${opens.length} times (a correction to an open counts) -- which declaration governs is ambiguous, so nothing more is measured or concluded on it; open a new experiment instead`);
   // TTL (ADR-0310): expiry archives as no-verdict. It was checked nowhere, and an experiment 90 days into a 7-day TTL
-  // still measured and concluded (PR 3a logic attack).
+  // still measured and concluded (PR 3a logic attack). Timed from the one open's own receipt.
   let expired;
-  try { expired = ttlExpired(x.opened_ts, opened.payload.ttl_days, nowOf(world)); }
+  try { expired = ttlExpired(opened.ts, opened.payload.ttl_days, nowOf(world)); }
   catch (e) { no("TTL_UNREADABLE", `${id}'s TTL cannot be evaluated (${e instanceof Error ? e.message : e}) -- refused rather than read as live`); }
-  if (expired) no("EXPIRED", `${id} was opened ${x.opened_ts} with a ${opened.payload.ttl_days}-day TTL, which has run out -- it archives as no-verdict, and nothing more is measured or concluded on it (ADR-0310)`);
+  if (expired) no("EXPIRED", `${id} was opened ${opened.ts} with a ${opened.payload.ttl_days}-day TTL, which has run out -- it archives as no-verdict, and nothing more is measured or concluded on it (ADR-0310)`);
   // The seal: measurements taken against bytes that moved cannot be attributed to either side of the move -- and a
   // verdict over them would promote a surface nobody measured.
   const broken = sealBroken(opened.payload.base_sha, world.digestOf(opened.payload.target_path) || "");
@@ -253,17 +257,28 @@ export function planConclude(world, a) {
     arms, counts, floor, alpha, effectFloor, mde, guardrails,
     cohortViolations: violations.size, missingWindows, computedBefore: !!x.verdict,
   });
-  if (r.outcome !== "verdict" || !r.stats)
+  // FIXED HORIZON, BOTH WAYS. A test that was COMPUTED -- both arms at floor, every window complete, no violation, no
+  // guardrail left to judge -- and did not clear is a result, and it is recorded: an `experiment.verdict` with outcome
+  // no-verdict and its stats. The first cut wrote nothing for it, so conclude could be run again as the data grew until
+  // it won (3/10 v 6/10 no, 3/12 v 8/12 yes: PR 3a round-2 logic attack), which is the peeking ADR-0306's compute-once
+  // forbids. A test that could NOT be computed yet (below floor, a window MISSING, a violation) writes nothing: its
+  // horizon has not been reached.
+  const computed = !!r.stats && violations.size === 0 && missingWindows === 0 && guardrails.length === 0 && !x.verdict;
+  if (r.outcome !== "verdict" && !computed)
     no("NO_VERDICT", `no verdict for ${a.experiment}: ${r.reasons.join("; ")}`);
   const nPerArm = Object.fromEntries(arms.map((arm) => [arm, counts[arm].units]));
+  const outcome = r.outcome === "verdict" ? "verdict" : "no-verdict";
+  const head = outcome === "verdict"
+    ? `conclude ${a.experiment}: ${arms[1]} vs ${arms[0]} on ${primary} (${direction}), improvement ${r.stats.d}, lower bound ${r.stats.lower}`
+    : `conclude ${a.experiment}: NO VERDICT, and it is final -- the test was computed at floor and did not clear (${r.reasons.join("; ")}); fixed horizon, so it is recorded and never re-run`;
   return {
     kind: "experiment.verdict",
     payload: {
-      experiment_id: a.experiment, outcome: "verdict", bound: r.stats.lower, delta: r.stats.d, n_per_arm: nPerArm,
+      experiment_id: a.experiment, outcome, bound: r.stats.lower, delta: r.stats.d, n_per_arm: nPerArm,
       config_hash: configHash({ alpha, effectFloor, floor, mde, arms, split: opened.split, guardrails: guardrailDefs, metric: primary, direction }),
       metric_hash: metricHash(contributions),
     },
-    lines: [`conclude ${a.experiment}: ${arms[1]} vs ${arms[0]} on ${primary} (${direction}), improvement ${r.stats.d}, lower bound ${r.stats.lower} at alpha ${alpha} (floor ${floor} per arm; n ${arms.map((arm) => counts[arm].units).join("/")})`],
+    lines: [`${head} at alpha ${alpha} (floor ${floor} per arm; n ${arms.map((arm) => counts[arm].units).join("/")})`],
   };
 }
 

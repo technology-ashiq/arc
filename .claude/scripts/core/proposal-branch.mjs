@@ -30,7 +30,7 @@
 
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { join, dirname, delimiter } from "node:path";
 import { spawnBounded } from "./spawn-bounded.mjs";
 
 /** feat/face-<op>-<slug>: the only branch names this module writes. */
@@ -79,19 +79,24 @@ function gitEnv(extra = {}) {
  * proposal and left a daemon watching the owner's repo), the split index (it wrote sharedindex.* into the owner's
  * .git), the untracked cache, auto gc and maintenance, line-ending conversion, and the per-user attributes file (a
  * `*.yaml -diff` there made the plan read "Binary files differ", so the owner reviewed nothing). PR 3a shell attack.
- * @param {string} hooks
+ * CONFIG hooks too (git 2.54: `hook.<name>.command` / `.event`), which core.hooksPath does not reach: a
+ * reference-transaction hook defined in the owner's config ran three times inside a write, could veto it, and a slow one
+ * left a .lock behind (PR 3a round-2 shell attack). Each one found is disabled for the call by name. And the commit
+ * encoding: `i18n.commitEncoding` in the owner's config stamped a Latin-1 header over UTF-8 bytes (same attack).
+ * @param {{ dir: string, off: string[] }} hooks
  */
 const safety = (hooks) => [
   "--no-pager",
-  "-c", `core.hooksPath=${hooks}`, "-c", "core.fsmonitor=false", "-c", "core.splitIndex=false", "-c", "core.untrackedCache=false",
+  "-c", `core.hooksPath=${hooks.dir}`, "-c", "core.fsmonitor=false", "-c", "core.splitIndex=false", "-c", "core.untrackedCache=false",
   "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "-c", `core.attributesFile=${NULL_FILE}`,
-  "-c", "gc.auto=0", "-c", "maintenance.auto=false",
+  "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "i18n.commitEncoding=UTF-8",
+  ...hooks.off.flatMap((name) => ["-c", `hook.${name}.enabled=false`]),
 ];
 
 /**
  * One git call.
  * @param {string} repo @param {string[]} args
- * @param {{ input?: string, env?: Record<string, string>, ok?: number[], hooks: string }} o
+ * @param {{ input?: string, env?: Record<string, string>, ok?: number[], hooks: { dir: string, off: string[] } }} o
  * @returns {Promise<{ buf: Buffer, out: string, status: number }>}
  */
 async function git(repo, args, o) {
@@ -207,10 +212,25 @@ async function atBase(repo, base, path, hooks) {
   return (await git(repo, ["cat-file", "blob", `${base}:${path}`], { hooks })).buf;
 }
 
-/** An empty hooks directory for one call's lifetime. */
-async function withHooks(fn) {
-  const hooks = tempDir("arc-proposal-nohooks-");
-  try { return await fn(hooks); } finally { removeQuietly(hooks); }
+/**
+ * The hooks context for one call's lifetime: an empty hooks directory, and the names of every CONFIG hook the repo's
+ * effective config defines (includes and includeIf included), each disabled by name on every git call. Listing the
+ * config runs no hook.
+ * @param {string} repo
+ */
+async function withHooks(repo, fn) {
+  const dir = tempDir("arc-proposal-nohooks-");
+  try {
+    const hooks = { dir, off: [] };
+    const listed = await git(repo, ["config", "--name-only", "--get-regexp", "^hook\\..*\\.(command|event)$"], { hooks, ok: [0, 1] });
+    const names = new Set();
+    for (const key of listed.out.split(/\r?\n/)) {
+      const m = /^hook\.(.+)\.(command|event)$/i.exec(key.trim());
+      if (m) names.add(m[1]);
+    }
+    hooks.off = [...names].sort();
+    return await fn(hooks);
+  } finally { removeQuietly(dir); }
 }
 
 /**
@@ -221,7 +241,7 @@ async function withHooks(fn) {
  * @param {{ repo: string, path: string }} o @returns {Promise<{ base: string, text: string | null }>}
  */
 export function baseText({ repo, path }) {
-  return withHooks(async (hooks) => {
+  return withHooks(repo, async (hooks) => {
     const base = await mainCommit(repo, hooks);
     const bytes = await atBase(repo, base, path, hooks);
     if (bytes === null) return { base, text: null };
@@ -254,6 +274,9 @@ async function baseOf(repo, branch, hooks, expected) {
  * config around it reach the diff.
  */
 async function diffOf(repo, base, files, hooks) {
+  // GIT_CEILING_DIRECTORIES is a LIST: a temp dir whose parent holds the path delimiter split into two entries, and a
+  // repository around it reached the plan's diff (PR 3a round-2 shell attack).
+  if (tmpdir().includes(delimiter)) throw new ProposalError("NO_TEMP", `the temp directory's path holds "${delimiter}", which git reads as a list separator -- nothing was written; point TMP elsewhere`);
   const tmp = tempDir("arc-proposal-diff-");
   try {
     let out = "";
@@ -283,7 +306,7 @@ async function diffOf(repo, base, files, hooks) {
 export async function planProposal({ repo, branch, files, allow, base: expected }) {
   checkBranch(branch);
   const checked = checkFiles(files, allow);
-  return withHooks(async (hooks) => {
+  return withHooks(repo, async (hooks) => {
     const base = await baseOf(repo, branch, hooks, expected);
     return { branch, base, diff: await diffOf(repo, base, checked, hooks) };
   });
@@ -299,7 +322,7 @@ export async function writeProposal({ repo, branch, files, allow, message, base:
   const checked = checkFiles(files, allow);
   if (typeof message !== "string" || message.trim() === "" || message.includes("\u0000"))
     throw new ProposalError("BAD_MESSAGE", "a proposal commit carries a message");
-  return withHooks(async (hooks) => {
+  return withHooks(repo, async (hooks) => {
     const base = await baseOf(repo, branch, hooks, expected);
     const diff = await diffOf(repo, base, checked, hooks);
     const idxDir = tempDir("arc-proposal-index-");
@@ -321,6 +344,11 @@ export async function writeProposal({ repo, branch, files, allow, message, base:
       // branch directory is not "appeared while the proposal was written" (PR 3a shell attack).
       try { await git(repo, ["update-ref", "--stdin"], { hooks, input: `create refs/heads/${branch} ${commit}\n` }); }
       catch (e) {
+        // The ref may be OURS: git committed the transaction and then the call failed -- a timeout, a hook after
+        // "committed". Reporting that as "someone else's branch appeared" made propose exit 2 over a branch it had
+        // written, raise no approval, and refuse every retry (PR 3a round-2 shell attack).
+        const now = await git(repo, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`], { hooks, ok: [0, 1] }).catch(() => null);
+        if (now && now.status === 0 && now.out.trim() === commit) return { branch, base, commit, diff };
         const clash = await clashOf(repo, branch, hooks).catch(() => null);
         if (clash) throw new ProposalError("BRANCH_EXISTS", `${clash.slice("refs/heads/".length)} appeared while the proposal was written -- nothing was overwritten (the objects written are unreachable, and git's gc removes them)`);
         throw new ProposalError("GIT_FAILED", `the branch could not be created, and nothing was overwritten: ${e instanceof Error ? e.message : e}`);

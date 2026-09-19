@@ -141,6 +141,10 @@ if (Object.hasOwn(COMMAND_FLAGS, command)) {
 // several words. `register day-close-roll dry-run` registered day-close-roll for real.
 if ((command === "register" || command === "unregister" || command === "run") && positional.length > 1)
   die(2, `${command} takes one job name; got ${positional.map((p) => JSON.stringify(p)).join(", ")}`);
+// An EMPTY name is not "no name": `register ""` read `positional[0] || null` as absent and acted on every enabled job
+// (PR 3a round-2 logic attack) -- the empty-value-read-as-absent pattern, in the one argument that picks the target.
+if ((command === "register" || command === "unregister" || command === "run") && positional.some((p) => p.trim() === ""))
+  die(2, `${command} was given an empty job name -- name the job, or leave the argument out to mean every enabled job`);
 
 if (!command || command === "help" || has("help")) {
   process.stdout.write(

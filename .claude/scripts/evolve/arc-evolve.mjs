@@ -29,12 +29,12 @@ import { join, dirname, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { spineRoot } from "../hq/lib/spine-io.mjs";
+import { spineRoot, withLock } from "../hq/lib/spine-io.mjs";
 import { checkEvolveSection } from "../core/evolve-manifest.mjs";
 import { assertNoDuplicateKeys } from "../core/json-strict.mjs";
 import { planDigest, expectLine, staleReason } from "../core/plan-expect.mjs";
 import { board } from "./board.mjs";
-import { readAll } from "../hq/spine.mjs";
+import { readAll, scanAll } from "../hq/spine.mjs";
 import { planOpen, planMeasure, planConclude, EvolveRefusal } from "./wire.mjs";
 
 const ARC_EVENT = join(dirname(fileURLToPath(import.meta.url)), "..", "hq", "arc-event.mjs");
@@ -147,36 +147,44 @@ async function planOrApply(cmd, flags) {
       return createHash("sha256").update(readFileSync(full)).digest("hex");
     } catch { return null; }
   };
-  let plan;
-  try {
-    const { modules } = declaredModules(repo);
-    const events = (await readAll(root, "scan")).events.map((e) => e.event);
-    plan = (cmd === "open" ? planOpen : cmd === "measure" ? planMeasure : planConclude)({ events, modules, digestOf, now: Date.now() }, flags);
-  } catch (e) {
-    if (e instanceof EvolveRefusal) die(`${e.code} -- ${e.message}`);
-    throw e;
-  }
-  const emit = ["emit", plan.kind, "--payload", JSON.stringify(plan.payload), "--strict"];
+  const { modules } = declaredModules(repo);
+  const compute = (events) => {
+    try { return (cmd === "open" ? planOpen : cmd === "measure" ? planMeasure : planConclude)({ events, modules, digestOf, now: Date.now() }, flags); }
+    catch (e) { if (e instanceof EvolveRefusal) die(`${e.code} -- ${e.message}`); throw e; }
+  };
+  const env = flags.root ? { ...process.env, ARC_SPINE_ROOT: flags.root } : process.env;
   // The spine's own validator judges the payload before it is offered (and derives the experiment idem itself --
   // the emitter refuses a caller-supplied one).
-  const env = flags.root ? { ...process.env, ARC_SPINE_ROOT: flags.root } : process.env;
-  const dry = spawnSync(process.execPath, [ARC_EVENT, ...emit, "--dry-run"], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
-  if (dry.status !== 0) die(`the spine would refuse this ${plan.kind}: ${firstErr(dry)}`);
-  for (const l of plan.lines) process.stdout.write(`arc-evolve: ${l}\n`);
-  const digest = planDigest({ kind: plan.kind, payload: plan.payload });
+  const judged = (plan) => {
+    const emit = ["emit", plan.kind, "--payload", JSON.stringify(plan.payload), "--strict"];
+    const dry = spawnSync(process.execPath, [ARC_EVENT, ...emit, "--dry-run"], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
+    if (dry.status !== 0) die(`the spine would refuse this ${plan.kind}: ${firstErr(dry)}`);
+    return { emit, digest: planDigest({ kind: plan.kind, payload: plan.payload }) };
+  };
 
   if (flags.expect === undefined) {
+    const plan = compute((await readAll(root, "scan")).events.map((e) => e.event));
+    const { digest } = judged(plan);
+    for (const l of plan.lines) process.stdout.write(`arc-evolve: ${l}\n`);
     process.stdout.write(`arc-evolve: a plan -- nothing was written. To write exactly this, run the same command with --expect ${digest}\n`);
     process.stdout.write(expectLine(digest) + "\n");
     return;
   }
-  const stale = staleReason(flags.expect, digest);
-  if (stale) die(stale);
-  const w = spawnSync(process.execPath, [ARC_EVENT, ...emit], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
-  if (w.status !== 0) die(`the spine refused the ${plan.kind}, and nothing was written: ${firstErr(w)}`);
-  const id = String(w.stdout || "").trim().split(/\r?\n/).pop() || "";
-  if (!ULID_RE.test(id)) die(`the emitter exited 0 and printed no receipt id -- look for a ${plan.kind} on the spine before running this again`, 1);
-  process.stdout.write(`receipt: ${plan.kind} ${id}\n`);
+  // THE APPLY: read, check, compare and write inside ONE lock that every evolve apply takes. Without it three opens
+  // applied at once each read a spine with none of the others on it and all three landed past a cap of two (PR 3a
+  // round-2 logic attack). arc-event takes the spine's own lock for the append; this one serialises the decision.
+  withLock(root, () => {
+    const plan = compute(scanAll(root).events.map((e) => e.event));
+    const { emit, digest } = judged(plan);
+    const stale = staleReason(flags.expect, digest);
+    if (stale) die(stale);
+    for (const l of plan.lines) process.stdout.write(`arc-evolve: ${l}\n`);
+    const w = spawnSync(process.execPath, [ARC_EVENT, ...emit], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
+    if (w.status !== 0) die(`the spine refused the ${plan.kind}, and nothing was written: ${firstErr(w)}`);
+    const id = String(w.stdout || "").trim().split(/\r?\n/).pop() || "";
+    if (!ULID_RE.test(id)) die(`the emitter exited 0 and printed no receipt id -- look for a ${plan.kind} on the spine before running this again`, 1);
+    process.stdout.write(`receipt: ${plan.kind} ${id}\n`);
+  }, { lockName: ".evolve-apply.lock", timeoutMs: 60_000 });
 }
 
 async function renderBoard(flags) {

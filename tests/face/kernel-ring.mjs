@@ -19,7 +19,7 @@
 // VACUOUS-PASS GUARD: each tool is proven to run (a receipt landed, a plan printed) before its refusals are counted,
 // and the last line is "RAN: <n> checks", which the bats wrapper requires.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -92,6 +92,8 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   }
   const stray = jobs("register", "day-close-roll", "dry-run");
   check("arc-jobs: a second job name refuses (register takes one)", stray.status === 2 && /takes one job name/.test(stray.stderr), stray.stderr);
+  const empty = jobs("register", "", "--dry-run");
+  check("arc-jobs: an EMPTY job name refuses -- it read as absent and acted on every enabled job", empty.status === 2 && /empty job name/.test(empty.stderr), empty.stderr);
   const foreign = jobs("register", "--slot", "day-close-roll");
   check("arc-jobs: another command's flag refuses (--slot swallowed the job name, and register fell back to every job)", foreign.status === 2 && /not a flag register takes/.test(foreign.stderr), foreign.stderr);
   // The dry run makes every check a registration makes and hands nothing to the OS. Off Windows the platform check is
@@ -228,7 +230,7 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     const evs = base();
     const corrections = evs.filter((e) => e.kind === "experiment.measured" && e.payload.arm === "+challenger").map((e) => measured(e.payload.unit_id, 0, {}, { supersedes: e.id }));
     const r = conclude([...evs, ...corrections]);
-    check("conclude (pure): superseded receipts are not counted -- every success corrected to 0 is no verdict", r.code === "NO_VERDICT", JSON.stringify(r).slice(0, 300));
+    check("conclude (pure): superseded receipts are not counted -- every success corrected to 0 is a recorded no-verdict, never a verdict", !!r.ok && r.ok.payload.outcome === "no-verdict" && r.ok.payload.delta === 0, JSON.stringify(r).slice(0, 300));
   }
   // A receipt that observed nothing is not a trial: challenger "successes" over zero observations reached n and a
   // verdict while the board said the arm had nothing.
@@ -270,7 +272,7 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     const lower = conclude(base(), { module: module({ direction: "lower-is-better" }) });
     const mirror = [opened(), ...five("+champion").map((u) => measured(u, 1)), ...five("+challenger").map((u) => measured(u, 0))];
     const good = conclude(mirror, { module: module({ direction: "lower-is-better" }) });
-    check("conclude (pure): a lower-is-better primary never names the WORSE arm the winner", lower.code === "NO_VERDICT", JSON.stringify(lower).slice(0, 300));
+    check("conclude (pure): a lower-is-better primary never names the WORSE arm the winner (the computed test is a recorded no-verdict)", !!lower.ok && lower.ok.payload.outcome === "no-verdict" && lower.ok.payload.delta < 0, JSON.stringify(lower).slice(0, 300));
     check("conclude (pure): lower-is-better scores fewer events as better -- the mirror data is a verdict, delta 1", good.ok && good.ok.payload.delta === 1 && good.ok.payload.bound > 0, JSON.stringify(good).slice(0, 300));
     check("the config hash carries the direction: the two verdicts' hashes differ", b.ok && good.ok && b.ok.payload.config_hash !== good.ok.payload.config_hash);
   }
@@ -311,6 +313,49 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   {
     const r = conclude([...base(), ev("experiment.verdict", { experiment_id: X, outcome: "verdict" })]);
     check("conclude (pure): a second verdict refuses (VERDICTED) -- compute once", r.code === "VERDICTED", JSON.stringify(r).slice(0, 300));
+  }
+  // An open is opened once: a CORRECTION to it (a superseding open) counts as a second open, and so does an identical
+  // re-open. The corrected open kept governing, and a re-open restarted the TTL (PR 3a round-2 logic attack).
+  {
+    const evs = base();
+    const corrected = opened({ arms: ["+challenger", "+champion"] });
+    corrected.supersedes = evs[0].id;
+    const r1 = conclude([...evs, corrected]);
+    const r2 = conclude([...base(), opened({ surface: "page-two" })]);
+    check("an open corrected by a superseding open refuses (ARMS_REDECLARED), and a second identical-armed open refuses (OPENED_TWICE)", r1.code === "ARMS_REDECLARED" && r2.code === "OPENED_TWICE", `${r1.code} ${r2.code}`);
+  }
+  // A supersede CHAIN keeps its head: r3 corrects r2 corrects r1, and only r3 counts. The old rule brought r1 back.
+  {
+    const B = await import(pathToFileURL(S("evolve", "board.mjs")).href);
+    const u = V["+champion"][5];
+    const r1 = measured(u, 1);
+    const r2 = measured(u, 0, {}, { supersedes: r1.id });
+    const r3 = measured(u, 0, {}, { supersedes: r2.id });
+    const kept = B.applySupersedes([r1, r2, r3]).kept.map((e) => e.id);
+    const r = conclude([...base(), r1, r2, r3]);
+    check("a supersede chain keeps only its head (r3), never the receipt its own correction retracted", JSON.stringify(kept) === JSON.stringify([r3.id]) && r.ok && r.ok.payload.n_per_arm["+champion"] === 6, `kept=${kept.length} ${JSON.stringify(r).slice(0, 200)}`);
+    const x1 = measured(u, 1), x2 = measured(u, 0);
+    x1.supersedes = x2.id; x2.supersedes = x1.id; x2.ts = x1.ts;
+    const cyc = B.applySupersedes([x1, x2]);
+    check("a supersede CYCLE takes no effect -- both receipts stay, and both supersedes are refused", cyc.kept.length === 2 && cyc.refused === 2, JSON.stringify(cyc).slice(0, 200));
+  }
+  // The board flags a swap of the arms, in declared order (the sorted comparison read the swap as no change).
+  {
+    const B = await import(pathToFileURL(S("evolve", "board.mjs")).href);
+    const swapped = B.foldExperiments([opened(), opened({ surface: "page-two", arms: ["+challenger", "+champion"] })]).experiments.get(X);
+    const same = B.foldExperiments([opened(), opened({ surface: "page-two" })]).experiments.get(X);
+    check("the board flags a swapped re-declaration of the arms, and not an identical one", swapped.armsRedeclared === true && same.armsRedeclared === false, `${swapped.armsRedeclared} ${same.armsRedeclared}`);
+  }
+  // FIXED HORIZON: a test computed at floor that did not clear is RECORDED as no-verdict, and conclude never runs again.
+  // A test not yet computable is refused and records nothing (PR 3a round-2 logic attack: re-run until it wins).
+  {
+    const weak = [opened(), ...five("+champion").map((u, i) => measured(u, i < 3 ? 1 : 0)), ...five("+challenger").map((u, i) => measured(u, i < 4 ? 1 : 0))];
+    const r = conclude(weak);
+    check("conclude (pure): a test computed at floor that did not clear is recorded -- outcome no-verdict, with its bound", r.ok && r.ok.kind === "experiment.verdict" && r.ok.payload.outcome === "no-verdict" && r.ok.payload.bound < 0 && /NO VERDICT, and it is final/.test(r.ok.lines[0]), JSON.stringify(r).slice(0, 300));
+    const again = conclude([...weak, ev("experiment.verdict", r.ok ? r.ok.payload : { experiment_id: X, outcome: "no-verdict" })]);
+    check("conclude (pure): after a recorded no-verdict, conclude refuses (VERDICTED) -- never re-run as the data grows", again.code === "VERDICTED", JSON.stringify(again).slice(0, 200));
+    const short = conclude([opened(), ...five("+champion").slice(0, 4).map((u) => measured(u, 0)), ...five("+challenger").slice(0, 4).map((u) => measured(u, 1))]);
+    check("conclude (pure): below floor nothing is computed, so nothing is recorded (NO_VERDICT, a refusal)", short.code === "NO_VERDICT", JSON.stringify(short).slice(0, 200));
   }
   {
     const m = run(W.planMeasure, base(), { experiment: X, unit: "p-y", metric: "converted", value: "1", count: "0", window: "2026-09-01..2026-09-07", source: "s" });
@@ -409,6 +454,20 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   const applied = plans.map(({ x, p }) => ev3([...OPEN(x), "--expect", lastExpect(p.stdout)]));
   check("evolve open: the third of three planned opens refuses at apply (CONCURRENCY_CAP), the first two land", applied[0].status === 0 && applied[1].status === 0 && applied[2].status === 2 && /CONCURRENCY_CAP/.test(applied[2].stderr), applied.map((r) => `${r.status} ${r.stderr.trim()}`).join(" | "));
 
+  // The SAME three opens, applied at once: the apply's read, check and write are one locked step, so the cap holds even
+  // when the applies race (PR 3a round-2 logic attack: all three landed).
+  const sp6 = spine("evolve-race");
+  const ev6 = evolveOn(sp6);
+  const racePlans = ["x-r1", "x-r2", "x-r3"].map((x) => ({ x, d: lastExpect(ev6(OPEN(x)).stdout) }));
+  const raced = await Promise.all(racePlans.map(({ x, d }) => new Promise((resolveRun) => {
+    const c = spawn(process.execPath, [S("evolve", "arc-evolve.mjs"), ...OPEN(x), "--expect", d || "x", "--root", sp6, "--repo", fix], { cwd: REPO, stdio: ["ignore", "pipe", "pipe"] });
+    let err = "";
+    c.stderr.on("data", (b) => { err += b; });
+    c.on("close", (code) => resolveRun({ code, err }));
+  })));
+  const openedRace = spineEvents(sp6).filter((e) => e.kind === "experiment.opened").length;
+  check("evolve open: three planned opens applied AT ONCE -- two land, one refuses (CONCURRENCY_CAP), never three", racePlans.every(({ d }) => !!d) && openedRace === 2 && raced.filter((r) => r.code === 0).length === 2 && raced.some((r) => r.code === 2 && /CONCURRENCY_CAP/.test(r.err)), `opened=${openedRace} ${raced.map((r) => r.code + ":" + r.err.trim()).join(" | ")}`);
+
   // A moved surface between plan and apply: the payload's seal changes, so the digest does.
   const sp4 = spine("evolve-drift");
   const ev4 = evolveOn(sp4);
@@ -468,26 +527,39 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     dp.status === 0 && g("rev-parse", "--verify", "--quiet", `refs/heads/${dBranch}`).status === 0 && g("diff", "--name-only", "main", dBranch).stdout.trim() === "engine/router.yaml" && clean(), `${dp.status} ${dp.stderr}`);
   check("propose driver, applied: the approval names the branch and the commit it wrote",
     !!dAppr && dAppr.payload.gate === "router-merge" && dAppr.payload.commit === g("rev-parse", dBranch).stdout.trim() && receiptOf(dp.stdout) === dAppr.id);
-  const again = inScratch("engine/propose.mjs", DRIVER);
+  /** A plan, then its apply bound by the digest the plan printed -- the only apply propose accepts. */
+  const planThenApply = (args, extraNode = []) => {
+    const p = inScratch("engine/propose.mjs", [...args, "--dry-run"]);
+    const d = lastExpect(p.stdout);
+    return { p, d, a: inScratch("engine/propose.mjs", [...args, "--expect", d || "x"], extraNode) };
+  };
+  const unbound = inScratch("engine/propose.mjs", ["driver", "--class", "kickoff-plan", "--to", "codex"]);
+  check("propose applied with no plan digest refuses -- an apply is bound to a plan, by hand as by the door", unbound.status === 2 && /bound to a plan/.test(unbound.stderr) && g("rev-parse", "--verify", "--quiet", "refs/heads/feat/face-engine-driver-codex-kickoff-plan").status !== 0, unbound.stderr);
+  const again = inScratch("engine/propose.mjs", [...DRIVER, ...WHY, "--expect", digest || "x"]);
   check("propose driver, applied twice: the second refuses (BRANCH_EXISTS) and raises nothing", again.status === 2 && /BRANCH_EXISTS/.test(again.stderr) && approvals().filter((e) => e.payload.branch === dBranch).length === 1, again.stderr);
-  const hermes = inScratch("engine/propose.mjs", ["driver", "--class", "review-diff", "--to", "hermes"]);
-  check("propose driver to the agent runtime without its terms refuses, in the router loader's words", hermes.status === 2 && /would not load/.test(hermes.stderr), hermes.stderr);
-  const tp = inScratch("engine/propose.mjs", ["tier", "--class", "face-ask", "--to", "cheap-scan"]);
-  check("propose tier for face-ask, applied: the approval lands (the secret scanner no longer reads the branch as a key)", tp.status === 0 && approvals().some((e) => e.payload.gate === "model-policy" && e.payload.branch === "feat/face-engine-tier-cheap-scan-face-ask") && clean(), `${tp.status} ${tp.stderr}`);
+  // The digest covers the reason: an apply with a --why the plan never showed refuses (PR 3a round-2 logic attack).
+  const whyPlan = inScratch("engine/propose.mjs", ["driver", "--class", "kickoff-plan", "--to", "codex", "--why", "the reason the owner read", "--dry-run"]);
+  const whyApply = inScratch("engine/propose.mjs", ["driver", "--class", "kickoff-plan", "--to", "codex", "--why", "a reason nobody planned", "--expect", lastExpect(whyPlan.stdout) || "x"]);
+  check("propose applied with a --why the plan never showed refuses (PLAN_STALE) and writes nothing", whyPlan.status === 0 && whyApply.status === 2 && /PLAN_STALE/.test(whyApply.stderr) && g("rev-parse", "--verify", "--quiet", "refs/heads/feat/face-engine-driver-codex-kickoff-plan").status !== 0, `${whyPlan.status} ${whyApply.status} ${whyApply.stderr}`);
+  const hermes = inScratch("engine/propose.mjs", ["driver", "--class", "review-diff", "--to", "hermes", "--dry-run"]);
+  check("propose driver to the agent runtime without its terms refuses at the plan, in the router loader's words", hermes.status === 2 && /would not load/.test(hermes.stderr), hermes.stderr);
+  const tp = planThenApply(["tier", "--class", "face-ask", "--to", "cheap-scan"]);
+  check("propose tier for face-ask, planned and applied: the approval lands (the secret scanner no longer reads the branch as a key)", tp.p.status === 0 && tp.a.status === 0 && approvals().some((e) => e.payload.gate === "model-policy" && e.payload.branch === "feat/face-engine-tier-cheap-scan-face-ask") && clean(), `${tp.a.status} ${tp.a.stderr}`);
 
-  // A cleanup that fails AFTER the branch is written is not the outcome: the proposal succeeded. A preload makes rmSync
-  // throw EBUSY on the temp index, the way a scanner holding the file does (PR 3a shell attack).
+  // A cleanup that fails AFTER the branch is written is not the outcome: the proposal succeeded. A preload makes EVERY
+  // rmSync of the writer's temp dirs throw EBUSY -- the index, the diff, the hooks dir -- the way a scanner holding the
+  // file does (PR 3a shell attack; the round-2 attack showed a shim on the index alone left two of them unpinned).
   const shim = join(tmp, "rm-busy.mjs");
   writeFileSync(shim, [
     "import fs from \"node:fs\";",
     "import { syncBuiltinESMExports } from \"node:module\";",
     "const real = fs.rmSync;",
-    "fs.rmSync = (p, o) => { if (String(p).includes(\"arc-proposal-index-\")) { const e = new Error(\"EBUSY: resource busy or locked\"); e.code = \"EBUSY\"; throw e; } return real(p, o); };",
+    "fs.rmSync = (p, o) => { if (String(p).includes(\"arc-proposal-\")) { const e = new Error(\"EBUSY: resource busy or locked\"); e.code = \"EBUSY\"; throw e; } return real(p, o); };",
     "syncBuiltinESMExports();",
     "",
   ].join("\n"));
-  const busy = inScratch("engine/propose.mjs", ["tier", "--class", "commit-msg-draft", "--to", "high-judgment"], ["--import", pathToFileURL(shim).href]);
-  check("propose, applied, with a temp-dir cleanup that throws: exit 0, the wrote line, the receipt -- never a failure", busy.status === 0 && /propose: wrote feat\/face-engine-tier-high-judgment-commit-msg-draft/.test(busy.stdout) && ULID.test(receiptOf(busy.stdout)), `${busy.status} ${busy.stderr}`);
+  const busy = planThenApply(["tier", "--class", "commit-msg-draft", "--to", "high-judgment"], ["--import", pathToFileURL(shim).href]);
+  check("propose, applied, with every temp-dir cleanup throwing: exit 0, the wrote line, the receipt -- never a failure", busy.a.status === 0 && /propose: wrote feat\/face-engine-tier-high-judgment-commit-msg-draft/.test(busy.a.stdout) && ULID.test(receiptOf(busy.a.stdout)), `${busy.a.status} ${busy.a.stderr}`);
 
   check("THE LAW: after every proposal, engine/router.yaml and hq.policy.yaml are byte-identical in the tree and on main", law() === law0, law());
   // MUTANT CONTROL: a tool that writes the router in place through fs.promises and a joined path -- the shape a source
@@ -507,11 +579,15 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   const STALE = ["driver", "--class", "commit-msg-draft", "--to", "codex"];
   const sPlan = inScratch("engine/propose.mjs", [...STALE, "--dry-run"]);
   const sDigest = lastExpect(sPlan.stdout);
-  const moved = readFileSync(join(repo, "engine", "router.yaml"), "utf8").replace("  kickoff-plan:\n", "  kickoff-plan:\n    # main moved after the plan\n");
+  // Edited from MAIN's bytes, never the checkout's: a Windows runner checks the router out with CRLF, a replace keyed
+  // on LF matched nothing, main never moved, and the check could not fire (CI, PR 3a round 2).
+  const mainRouter = g("show", "main:engine/router.yaml").stdout;
+  const moved = mainRouter.replace("  kickoff-plan:\n", "  kickoff-plan:\n    # main moved after the plan\n");
   writeFileSync(join(repo, "engine", "router.yaml"), moved);
   g("commit", "-q", "-am", "main moves");
+  const mainMoved = moved !== mainRouter && g("rev-parse", "refs/heads/main").stdout.trim() !== mainBefore;
   const sApply = inScratch("engine/propose.mjs", [...STALE, "--expect", sDigest || "x"]);
-  check("propose, applied after main moved: refuses (PLAN_STALE) and writes no branch", sPlan.status === 0 && !!sDigest && sApply.status === 2 && /PLAN_STALE/.test(sApply.stderr) && g("rev-parse", "--verify", "--quiet", "refs/heads/feat/face-engine-driver-codex-commit-msg-draft").status !== 0, `${sPlan.status} ${sApply.status} ${sApply.stderr}`);
+  check("propose, applied after main moved: refuses (PLAN_STALE) and writes no branch", mainMoved && sPlan.status === 0 && !!sDigest && sApply.status === 2 && /PLAN_STALE/.test(sApply.stderr) && g("rev-parse", "--verify", "--quiet", "refs/heads/feat/face-engine-driver-codex-commit-msg-draft").status !== 0, `${sPlan.status} ${sApply.status} ${sApply.stderr}`);
 }
 
 // ---- the door: an effect past the spine is refused on a sim door; an expect row's apply carries its plan's digest ----

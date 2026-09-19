@@ -135,7 +135,8 @@ function totalOrder(a, b) {
  */
 export function applySupersedes(events) {
   const byId = new Map(events.map((e) => [e.id, e]));
-  const dropped = new Set();
+  // superseder id -> victim id, for every supersede that is ENTITLED (same kind, same subject, not older, not itself).
+  const edges = new Map();
   let refused = 0;
   for (const sup of events) {
     if (!sup.supersedes) continue;
@@ -145,15 +146,24 @@ export function applySupersedes(events) {
     if (victim.kind !== sup.kind) { refused++; continue; }
     if (subjectOf(victim) !== subjectOf(sup)) { refused++; continue; }
     if (Date.parse(sup.ts) < Date.parse(victim.ts)) { refused++; continue; } // an older line cannot correct a newer one
-    dropped.add(victim.id);
+    edges.set(sup.id, victim.id);
   }
-  // A 2-cycle (A supersedes B, B supersedes A) would drop BOTH and erase real receipts without
-  // trace. If a superseder is itself dropped, its own supersede does not take effect.
-  for (const sup of events) {
-    if (sup.supersedes && dropped.has(sup.id) && dropped.has(sup.supersedes)) {
-      dropped.delete(sup.supersedes);
-      refused++;
+  // A CYCLE (A supersedes B, B supersedes A, or longer) would drop every member and erase real receipts without trace,
+  // so a supersede inside a cycle takes no effect. A CHAIN is not a cycle: r3 correcting r2 correcting r1 keeps r3 alone.
+  // The first rule -- "a superseder that is itself dropped has no effect" -- brought r1 BACK in every chain of two, and
+  // conclude counted the receipt its own correction had retracted (face v2 Phase 05 PR 3a round-2 logic attack).
+  const inCycle = (from) => {
+    let cur = edges.get(from);
+    for (let i = 0; cur !== undefined && i <= edges.size; i++) {
+      if (cur === from) return true;
+      cur = edges.get(cur);
     }
+    return false;
+  };
+  const dropped = new Set();
+  for (const [sup, victim] of edges) {
+    if (inCycle(sup)) { refused++; continue; }
+    dropped.add(victim);
   }
   return { kept: events.filter((e) => !dropped.has(e.id)), dropped: dropped.size, refused };
 }

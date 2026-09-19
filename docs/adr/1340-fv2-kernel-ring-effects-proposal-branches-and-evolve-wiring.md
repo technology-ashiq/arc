@@ -217,3 +217,28 @@ if main has moved by the time it writes.
   - a second job name
 
 `register day-close-roll -dry-run` would have registered the job for real.
+
+## Amendment, round 2 (same day): what the fixes' own attackers found
+
+A second, fresh pair attacked the round-1 fixes. The logic attacker found 8 defects and the shell attacker found 7.
+Each is fixed and pinned. Three change decisions above.
+
+- **A no-verdict at floor is recorded.** §4 said a no-verdict writes nothing. That let conclude be re-run as the
+  data grew until it won, which is exactly the peeking ADR-0306's compute-once forbids. A test that was COMPUTED
+  (both arms at floor, every window complete, no violation, no guardrail left to judge) and did not clear is now an
+  `experiment.verdict` with outcome `no-verdict` and its stats. That is final. A test that cannot be computed yet
+  still writes nothing.
+- **Every bound apply refuses without its digest,** by hand as by the door. propose's unbound "no plan" mode is
+  gone. The digest covers every byte an apply writes, the commit message and the approval included.
+- **The evolve apply is one locked step:** read, re-check, compare and write inside `.evolve-apply.lock`, so
+  concurrent applies cannot all pass the cap.
+
+The rest are twins of rows already in this ADR's amendment:
+- an open counted from the original rather than the kept set
+- a supersede-cycle guard that broke chains
+- config hooks (`hook.<name>.*`) that core.hooksPath does not reach
+- a written branch reported as someone else's
+- a group SIGKILL that left a nested tool no time to end its own groups (now SIGTERM first; SIGHUP handled)
+- a delimiter in TMP
+- the commit encoding
+- the emitter's id line behind `process.exit`

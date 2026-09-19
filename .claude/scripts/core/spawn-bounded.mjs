@@ -20,17 +20,29 @@ export const PIPE_GRACE_MS = 2000;
 const IS_WIN = process.platform === "win32";
 
 /**
- * End a child AND everything it started. The direct child is killed too, as a fallback.
- * @param {import("node:child_process").ChildProcess} child
+ * End a child AND everything it started. Windows: taskkill /T walks the whole tree, nested tools included.
+ * POSIX, `graceful`: SIGTERM to the group first, and nothing else -- the caller SIGKILLs the group once the pipes'
+ * grace is over. A child that runs children of its OWN in their own groups (propose runs git, the door runs propose)
+ * ends them in its SIGTERM handler; SIGKILL straight away never reached them, and git kept running, and could write the
+ * branch, after the door had called the run over (PR 3a round-2 shell attack). Not graceful: SIGKILL now.
+ * @param {import("node:child_process").ChildProcess} child @param {{ graceful?: boolean }} [o]
  */
-export function killTree(child) {
+export function killTree(child, o = {}) {
   if (!child.pid) return;
   if (IS_WIN) {
     try { spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore", timeout: 10_000 }); } catch { /* fall through */ }
+  } else if (o.graceful) {
+    try { process.kill(-child.pid, "SIGTERM"); } catch { /* the group is gone, or never formed */ }
+    return;
   } else {
     try { process.kill(-child.pid, "SIGKILL"); } catch { /* the group is gone, or never formed */ }
   }
   try { child.kill("SIGKILL"); } catch { /* already gone */ }
+}
+
+/** A synchronous pause, for a shutdown path that cannot wait on the event loop. */
+function pauseSync(ms) {
+  try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch { /* no pause is possible here */ }
 }
 
 // Every child still running. A detached POSIX group does not die with its parent, so the parent ends them on its way
@@ -38,11 +50,18 @@ export function killTree(child) {
 const LIVE = new Set();
 process.once("exit", () => { for (const c of LIVE) killTree(c); });
 // "exit" does not fire on a signal, and Ctrl-C is how the door is stopped (round-2 shell attack: an interrupted door
-// orphaned its running tool). A signal ends every live tree, then the process, with the signal's conventional code.
-// Registered only while a child runs, so a process with nothing running keeps the default Ctrl-C.
+// orphaned its running tool). A signal ends every live tree, then the process, with the signal's conventional code:
+// SIGTERM first, a short pause for nested tools to end their own groups, then SIGKILL. SIGHUP too -- closing the
+// terminal left a door's detached tools, a paid driver among them, running (PR 3a round-2 shell attack). Registered only
+// while a child runs, so a process with nothing running keeps the default handling.
 /** @param {number} code */
-const onSignal = (code) => () => { for (const c of LIVE) killTree(c); process.exit(code); };
-const SIGNALS = /** @type {const} */ ([["SIGINT", 130], ["SIGTERM", 143]]);
+const onSignal = (code) => () => {
+  for (const c of LIVE) killTree(c, { graceful: true });
+  if (!IS_WIN && LIVE.size) pauseSync(300);
+  for (const c of LIVE) killTree(c);
+  process.exit(code);
+};
+const SIGNALS = /** @type {const} */ ([["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]);
 const armed = new Map();
 function armSignals() {
   if (armed.size) return;
@@ -110,7 +129,8 @@ export function spawnBounded(file, args, { cwd, env, input, timeoutMs, onData })
       }, PIPE_GRACE_MS);
       grace.unref?.();
     };
-    const timer = setTimeout(() => { timedOut = true; killTree(child); letGo(null, "timeout"); }, timeoutMs);
+    // Graceful: SIGTERM now; the SIGKILL to the group comes in finish(), after the pipes' grace.
+    const timer = setTimeout(() => { timedOut = true; killTree(child, { graceful: true }); letGo(null, "timeout"); }, timeoutMs);
     child.on("exit", (code, signal) => letGo(code, signal));
     child.on("error", (e) => { error = e.message; finish(null, "spawn-failed"); });
     child.on("close", (code, signal) => finish(code, signal));

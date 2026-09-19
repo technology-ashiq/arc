@@ -15,7 +15,7 @@
 //               (core/proposal-branch.mjs: no checkout, the owner's tree untouched) -- only if what it would write is
 //               still D, and main has not moved since the file was read -- then raises approval.requested naming the
 //               branch, and prints `receipt: approval.requested <ULID>`. A human merges it, or does not.
-//   (neither)   the same as --expect, for a hand-run that read no plan first
+//   (neither)   refused: an apply is bound to a plan, by hand as by the door
 //
 // Exit: 0 done · 1 the branch IS written and its receipt is not (said so, never retried silently) · 2 refused, nothing
 // written.
@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { routerFaults } from "./router-row.mjs";
 import { planProposal, writeProposal, baseText, ProposalError } from "../core/proposal-branch.mjs";
-import { planDigest, expectLine, staleReason } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -120,12 +120,6 @@ export function approvalPayload({ verb, cls, from, to, why, branch, base, commit
   };
 }
 
-/** The spine's own judgment of an approval, BEFORE anything is written: a refusal there must not strand a branch. */
-function spineRefusal(payload) {
-  const r = spawnSync(process.execPath, [ARC_EVENT, "emit", "approval.requested", "--payload", JSON.stringify(payload), "--strict", "--dry-run"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return r.status === 0 ? null : (String(r.stderr || "").trim().split(/\r?\n/).filter(Boolean)[0] || `the emitter exited ${r.status}`);
-}
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const { base, text } = await baseText({ repo: REPO, path: ROUTER });
@@ -150,10 +144,14 @@ async function main() {
   const files = [{ path: ROUTER, content: proposed }];
   const approval = (commit) => approvalPayload({ verb: args.verb, cls: args.class, from, to: args.to, why: args.why, branch, base, commit });
   // The approval is judged with a placeholder commit of the real one's shape, in the plan AND before the write.
-  const refused = spineRefusal(approval("0".repeat(base.length)));
+  const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)));
   if (refused) die(2, `the approval this proposal raises would be refused by the spine, so nothing is written: ${refused}`);
-  const digest = planDigest({ branch, base, files });
   const { what } = approval("");
+  const message = `engine: ${what} (a proposal, ADR-0069${args.verb === "driver" ? "" : " tier change"})\n\n${args.why ? `${args.why}\n\n` : ""}Written by the face's work door (ADR-1340). Nothing routes differently until a human merges this branch.`;
+  // The digest covers EVERYTHING the apply writes: the branch, its base, the bytes, the commit message and the approval
+  // (with a placeholder commit). It covered the first three only, and an apply with another --why wrote a reason the
+  // owner never read into both the commit and the inbox (PR 3a round-2 logic attack).
+  const digest = planDigest({ branch, base, files, message, approval: approval("0".repeat(base.length)) });
 
   if (args.dryRun) {
     const plan = await planProposal({ repo: REPO, branch, files, allow: [ROUTER], base });
@@ -164,11 +162,11 @@ async function main() {
     process.stdout.write(expectLine(digest) + "\n");
     return;
   }
-  if (args.expect !== undefined) {
-    const stale = staleReason(args.expect, digest);
-    if (stale) die(2, stale);
-  }
-  const message = `engine: ${what} (a proposal, ADR-0069${args.verb === "driver" ? "" : " tier change"})\n\n${args.why ? `${args.why}\n\n` : ""}Written by the face's work door (ADR-1340). Nothing routes differently until a human merges this branch.`;
+  // An apply is ALWAYS bound to a plan. The unbound hand-run mode wrote whatever main held at that moment, and a row that
+  // lost its expect flag fell into it silently (PR 3a round-2 logic attack); arc-evolve has had the same default.
+  if (args.expect === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, read the diff, then run it again with the --expect it prints");
+  const stale = staleReason(args.expect, digest);
+  if (stale) die(2, stale);
   const w = await writeProposal({ repo: REPO, branch, files, allow: [ROUTER], message, base });
   written = true;
   process.stdout.write(`propose: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}\n`);

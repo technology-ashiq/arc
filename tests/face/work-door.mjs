@@ -273,6 +273,12 @@ try {
     // apply by name before anything runs -- no task registered, no branch written (ADR-1340).
     if (op.touchesFiles || op.touchesOs) {
       check(`${op.id}: the effect op's plan answers ok and wrote nothing`, plan.status === 200 && plan.body.ok === true && spineFingerprint(SPINE_A) === before, `${plan.status} ${plan.body.error || ""}`);
+      {
+        const printed = DOOR_TEXT(String(plan.body.output || "")).trim().split(/\r?\n/).pop() || "";
+        const binds = /^\{"expect":"[0-9a-f]{64}"\}$/.test(printed);
+        check(`${op.id}: the effect op is bound to its plan exactly when its tool prints a plan digest`,
+          binds === (op.expect === true) && (!binds || String(plan.body.apply).endsWith(`--expect ${JSON.parse(printed).expect}`)), `${printed.slice(0, 120)} :: ${plan.body.apply}`);
+      }
       const refsBefore = execFileSync("git", ["for-each-ref", "--format=%(refname)"], { cwd: REPO, encoding: "utf8" });
       const ap = await post(`/api/op/${op.id}/apply`, { planId: plan.body.planId, confirm: op.id }, { Origin: ORIGIN });
       check(`${op.id}: a sim door refuses the apply -> SIM_EFFECT, and nothing ran`, ap.status === 403 && ap.body.error === "SIM_EFFECT" && spineFingerprint(SPINE_A) === before, `${ap.status} ${ap.body.error}`);
@@ -284,6 +290,15 @@ try {
     check(`${op.id}: the plan wrote nothing to the spine`, spineFingerprint(SPINE_A) === before);
     check(`${op.id}: the plan names the command, what apply runs, the files and the cost`,
       [plan.body.command, plan.body.apply, plan.body.diff, plan.body.estimate].every((s) => typeof s === "string" && s.length > 0));
+    // BOUND EXACTLY WHEN THE TOOL BINDS: a plan whose last line is a digest belongs to an expect row, and an expect row's
+    // apply carries it -- read off what the tool printed, never off the flag (PR 3a round-2 logic attack: a row that
+    // lost its expect flag applied unbound).
+    {
+      const printed = DOOR_TEXT(String(plan.body.output || "")).trim().split(/\r?\n/).pop() || "";
+      const binds = /^\{"expect":"[0-9a-f]{64}"\}$/.test(printed);
+      check(`${op.id}: bound to its plan exactly when its tool prints a plan digest (${binds ? "it does" : "it does not"})`,
+        binds === (op.expect === true) && (!binds || String(plan.body.apply).endsWith(`--expect ${JSON.parse(printed).expect}`)), `${printed.slice(0, 120)} :: ${plan.body.apply}`);
+    }
     if (plan.body.ok !== true) continue;
 
     // Without Origin the mutating route refuses before anything runs.
