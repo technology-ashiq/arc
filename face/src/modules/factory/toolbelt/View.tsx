@@ -8,7 +8,7 @@
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Btn, MONO, TextInput, UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, LanePanel, ReceiptDrawer, RoomHead, SectionLabel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, LanePanel, ReceiptDrawer, RoomHead, SectionLabel } from '../../../ui/bits'
 export { Toolbox as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -54,8 +54,20 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
         </div>
 
         <div className="min-w-0">
-          <HPanel title="Pinned" hint="what the owner reaches for most">
-            <VerbPending item={f.pinVerb} />
+          <HPanel title="Pinned" hint="what the owner reaches for most -- a pin is a receipt">
+            {f.hasPins ? (
+              <div className="-mx-2">
+                {f.pins.map((p) => (
+                  <div key={p.tool} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 px-2 py-[6px]" style={{ borderBottom: '1px solid var(--line-1)' }} data-pin={p.tool}>
+                    <span className="text-[12.5px] truncate" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{p.name}</span>
+                    <button type="button" disabled={!p.canOpen} onClick={() => ctx.onOpen(p.room)} className="text-right cursor-pointer disabled:cursor-default text-[11.5px] truncate max-w-[22ch]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>
+                      {p.roomName}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {f.hasPinsNote ? <p className="text-[12px] leading-[18px] mt-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.pinsNote}</p> : null}
           </HPanel>
 
           <HPanel title="One place to look">

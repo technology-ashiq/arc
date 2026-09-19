@@ -47,13 +47,17 @@ const PLAN_ID_RE = /^[A-Za-z0-9_-]{24}$/;
 /**
  * What an op changes besides the spine, in the owner's words, for the plan card. A file-touching op's own dry run prints
  * its diff; the apply writes it to a NEW feat/face-* branch and never to main (ADR-1340).
- * @param {{ touchesFiles?: boolean, touchesOs?: boolean }} op
+ * @param {{ touchesFiles?: boolean, touchesOs?: boolean, touchesTree?: boolean }} op
  */
 function effectOf(op) {
   if (op.touchesFiles) return "the diff is in the plan's output above; apply commits it to a new feat/face-* branch, never to main -- a human merges it or does not";
   if (op.touchesOs) return "no file changes -- apply registers a task with this machine's scheduler, and the receipt records it";
+  if (op.touchesTree) return "apply writes the lane's own tracker in place -- the one change the plan above names, on your checkout, and nothing else (ADR-1341)";
   return "no file changes -- this op writes one receipt to the spine";
 }
+
+/** An argv with each argument scrubbed on its own. @param {{ script: string, args: string[] }} cmd @param {string} repo */
+const scrubArgs = (cmd, repo) => ({ ...cmd, args: cmd.args.map((a) => scrub(a, repo)) });
 
 /** The HTTP status each work-door refusal carries (arc-dash maps codes through its own table; these are the door's). */
 export const WORK_STATUS = Object.freeze({
@@ -62,6 +66,7 @@ export const WORK_STATUS = Object.freeze({
   PLAN_OTHER_OP: 409, PLAN_EXPIRED: 410, CONFIRM_REQUIRED: 428,
   SIM_SPEND: 403, SIM_EFFECT: 403,
   NO_EMIT_PLAN: 502, EMIT_PLAN_MISMATCH: 502, NO_EXPECT: 502, TOOL_MISSING: 503,
+  PLAN_HIDDEN: 422,
 });
 
 /**
@@ -207,7 +212,10 @@ export function createWorkDoor(ctx, opts = {}) {
     const planCmd = op.plan(values);
     const res = await runTool(ctx, planCmd, { timeoutMs: PLAN_TIMEOUT_MS });
     const base = {
-      mode: ctx.mode, op: op.id, label: op.label, command: commandLine(planCmd),
+      // Scrubbed like everything else the page is served, ONE ARGUMENT AT A TIME: the argv carried a --root path and a
+      // `why` holding an address unscrubbed (PR 4 round-3 logic attack), and scrubbing the whole line withheld everything
+      // after the first path -- the `--expect <digest>` the card shows the apply is bound to among it.
+      mode: ctx.mode, op: op.id, label: op.label, command: commandLine(scrubArgs(planCmd, ctx.repo)),
       receipt: op.receipt, humanRun: op.humanRun, spends: op.spends,
     };
     if (res.exit !== 0) {
@@ -221,6 +229,28 @@ export function createWorkDoor(ctx, opts = {}) {
       : op.expect === true
         ? (() => { const cmd = op.apply(values); return { ...cmd, args: [...cmd.args, "--expect", expectFrom(op, res.stdout)] }; })()
         : op.apply(values);
+    // THE OWNER READS WHAT IS APPLIED. The page shows the plan through the scrub, which withholds an absolute path and
+    // everything after it; a slice title or an agent description holding "/tmp/..." hid the digest -- and the rest of
+    // the diff -- while the apply stood ready (PR 4 shell attack). And the scrub rewrites mid-text too: the repo's own path
+    // in forward slashes became ".claude/notes.md" with no marker, an address "[address withheld]" -- so the owner approved
+    // a diff that differed from the commit, and the commit put a machine path into the public repo (PR 4 round-2
+    // attacks). So a bound plan the page cannot show EXACTLY, anywhere, is not held. Only a DIGEST row: an emit-plan line
+    // is the receipt itself, carrying what the owner typed (growth.publish names the merged article by its absolute
+    // path), so it held a path by design and was refused on every real input.
+    // A plan past the door's output cap was kept by its TAIL: its head -- the diff's first files, a path, an address --
+    // was never checked and never shown, and a 300 KB report was held (PR 4 round-3 attacks). A bound plan is shown whole
+    // or not held.
+    if (op.expect === true && res.droppedOut > 0) {
+      journal({ op: op.id, phase: "plan", refused: true, hidden: true });
+      throw new OpError("PLAN_HIDDEN", `${op.id}: the plan is longer than the page can show (${res.droppedOut} characters were cut from its head), so what the apply is bound to would be hidden from you -- not held, nothing ran; narrow the input and plan again`);
+    }
+    if (op.expect === true) {
+      const raw = String(res.stdout);
+      if (String(scrub(raw, ctx.repo)) !== raw) {
+        journal({ op: op.id, phase: "plan", refused: true, hidden: true });
+        throw new OpError("PLAN_HIDDEN", `${op.id}: the plan's text holds a path or an address the page cannot show as written, so what the apply would write would differ from what you read -- not held, nothing ran; remove it from the input and plan again`);
+      }
+    }
     prune();
     const planId = randomBytes(18).toString("base64url");
     const expiresAt = now() + PLAN_TTL_MS;
@@ -228,7 +258,7 @@ export function createWorkDoor(ctx, opts = {}) {
     journal({ op: op.id, phase: "plan", planId });
     return {
       ...base, ok: true, planId, expiresInMs: PLAN_TTL_MS,
-      apply: commandLine(applyCmd),
+      apply: commandLine(scrubArgs(applyCmd, ctx.repo)),
       // The tool's own plan output, first -- it is the review the owner reads before the click.
       output: scrub(res.stdout, ctx.repo), notes: scrub(res.stderr, ctx.repo), outputDropped: res.dropped,
       diff: effectOf(op),
@@ -262,8 +292,8 @@ export function createWorkDoor(ctx, opts = {}) {
     // An effect past the spine never runs on a sim door (ADR-1340): the plan was the tool's own dry run and wrote nothing;
     // the apply would register a real task, or write a real branch, to rehearse something. Refused before the claim, so
     // the plan stays held and a repeat is refused the same way.
-    if (ctx.mode === "sim" && (op.touchesOs || op.touchesFiles) && !(typeof op.simSafe === "function" && op.simSafe(p.values)))
-      throw new OpError("SIM_EFFECT", `${op.id} ${op.touchesOs ? "registers a task with this machine's scheduler" : "writes a proposal branch to this repository"}, and this door is in sim mode -- the plan above is the whole rehearsal`);
+    if (ctx.mode === "sim" && (op.touchesOs || op.touchesFiles || op.touchesTree) && !(typeof op.simSafe === "function" && op.simSafe(p.values)))
+      throw new OpError("SIM_EFFECT", `${op.id} ${op.touchesOs ? "registers a task with this machine's scheduler" : op.touchesTree ? "writes a lane's tracker in this checkout" : "writes a proposal branch to this repository"}, and this door is in sim mode -- the plan above is the whole rehearsal`);
     if (p.state !== "planned") return { ...view(p), replayed: true };
     if (p.expiresAt <= now()) { plans.delete(planId); throw new OpError("PLAN_EXPIRED", "that plan expired before it was applied -- plan again, and read the new one"); }
 

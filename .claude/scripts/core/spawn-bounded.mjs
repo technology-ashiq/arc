@@ -17,6 +17,24 @@ import { spawn, spawnSync } from "node:child_process";
 
 /** How long the pipes may keep draining after the child exited, or after its timeout fired. */
 export const PIPE_GRACE_MS = 2000;
+
+/**
+ * The environment a tool's bash runs under: this process's, less what makes bash run something else first. BASH_ENV is
+ * sourced by every non-interactive bash -- it exported ARC_SETTINGS from a file profile-request never named, and the
+ * request said "from strict" while the tree said standard (PR 4 round-2 logic attack) -- an exported function
+ * (BASH_FUNC_*) shadows any command a script calls, and ENV is sh's twin of BASH_ENV.
+ * @returns {NodeJS.ProcessEnv}
+ */
+export function bashEnv() {
+  /** @type {NodeJS.ProcessEnv} */
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    const K = k.toUpperCase();
+    if (K === "BASH_ENV" || K === "ENV" || K === "SHELLOPTS" || K === "BASHOPTS" || K.startsWith("BASH_FUNC_")) continue;
+    env[k] = v;
+  }
+  return env;
+}
 const IS_WIN = process.platform === "win32";
 
 /**

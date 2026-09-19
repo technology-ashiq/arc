@@ -36,10 +36,11 @@
 //
 // Exit: 0 printed | 2 bad arguments.
 
-import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { ONE_LINE_SRC, ONE_LINE_BAD_SRC } from "../core/one-line.mjs";
+import { AGENT_TOOLS } from "../engine/agent-scaffold.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -109,22 +110,26 @@ function scheduledJobs() {
   } catch { return []; }
 }
 
-/** The router's classes and tiers, read from engine/router.yaml the way the router's loader reads it. */
+/**
+ * The router's classes, tiers and HIRES, read from engine/router.yaml the way the router's loader reads it. A hire is a
+ * class whose row carries a tenure term (cap, hosted, judge, review_by -- router-row.mjs); only a hire can be ended.
+ */
 function routerFacts() {
   try {
     const parsed = parseYamlSubset(readFileSync(join(HERE, "..", "..", "..", "engine", "router.yaml"), "utf8"));
     const r = parsed.ok && parsed.value ? parsed.value : {};
-    const classes = r.classes && typeof r.classes === "object" ? Object.keys(r.classes).filter((c) => /^[a-z][a-z0-9-]{0,40}$/.test(c)).sort() : [];
+    const rows = r.classes && typeof r.classes === "object" ? r.classes : {};
+    const classes = Object.keys(rows).filter((c) => /^[a-z][a-z0-9-]{0,40}$/.test(c)).sort();
     const tiers = Array.isArray(r.tiers) ? r.tiers.filter((t) => typeof t === "string" && /^[a-z][a-z0-9-]{0,40}$/.test(t)) : [];
-    return { classes, tiers };
-  } catch { return { classes: [], tiers: [] }; }
+    const hires = classes.filter((c) => rows[c] && typeof rows[c] === "object" && ["cap", "hosted", "judge", "review_by"].some((k) => Object.hasOwn(rows[c], k)));
+    return { classes, tiers, hires };
+  } catch { return { classes: [], tiers: [], hires: [] }; }
 }
 /** The drivers engine/propose.mjs accepts: one .sh per driver, as bench reads them. */
 function routeDrivers() {
   try { return readdirSync(join(HERE, "..", "engine", "drivers")).filter((f) => f.endsWith(".sh")).map((f) => f.slice(0, -3)).sort(); }
   catch { return []; }
 }
-const ROUTER = routerFacts();
 /** The action kinds hq.policy.yaml declares -- a promotion names one of them, or it names nothing. */
 function policyKinds() {
   try {
@@ -132,6 +137,45 @@ function policyKinds() {
     return pol && pol.kinds ? Object.keys(pol.kinds).filter((k) => /^(session|process):[a-z][a-z0-9-]{0,63}$/.test(k)).sort() : [];
   } catch { return []; }
 }
+// THE SELECTS ARE READ WHEN ASKED. Computed once at import, a new explore -- or hire, room or product -- could not be
+// chosen until the door restarted (PR 4 logic attack): each repo-derived select below is a getter, evaluated whenever the
+// registry is listed or an input is validated.
+/**
+ * The explores a pick can be recorded for: every one of its three variants built and no PICK.md yet (pick.mjs re-checks
+ * all of it, and the spine for a pick already raised).
+ */
+function pickableExplores() {
+  const root = join(HERE, "..", "..", "..", "docs", "design", "explore");
+  try {
+    return readdirSync(root).filter((n) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(n)).filter((n) => {
+      // A stat, never a read: this runs whenever the ops are listed, and a FIFO or a huge file must not stall it.
+      const has = (p) => { try { return statSync(join(root, n, ...p)).isFile(); } catch { return false; } };
+      return ["a", "b", "c"].every((v) => has([`variant-${v}`, "index.html"])) && !has(["PICK.md"]);
+    }).sort();
+  } catch { return []; }
+}
+/** The rooms the contract's agents.map already seats an agent in: a new agent joins one of those. */
+function agentRooms() {
+  try {
+    const map = JSON.parse(readFileSync(join(HERE, "..", "..", "..", "initiatives", "face", "contracts", "expected-set.json"), "utf8")).agents.map;
+    return [...new Set(Object.values(map))].filter((r) => typeof r === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(r)).sort();
+  } catch { return []; }
+}
+/** The products whose manifest ships agents: the ones a bare install carries, so the sync golden holds a new one. */
+function agentProducts() {
+  const root = join(HERE, "..", "..", "..", "products");
+  try {
+    return readdirSync(root).filter((p) => /^[a-z][a-z0-9-]{0,40}$/.test(p)).filter((p) => {
+      try { const m = JSON.parse(readFileSync(join(root, p, "manifest.json"), "utf8")); return Array.isArray(m.agents) && m.agents.length > 0; } catch { return false; }
+    }).sort();
+  } catch { return []; }
+}
+
+/**
+ * The toolbelt's sections, singular, as a pin names a tool: `<section>:<name>`. The fold matches a pin to a catalogue
+ * row by the same spelling.
+ */
+const TOOL_SECTIONS = Object.freeze(["command", "agent", "hook", "rule", "lint", "process", "gate", "product", "capability"]);
 /** The optional one-line reason every proposal carries onto its branch and into the inbox. */
 const WHY = Object.freeze({ name: "why", label: "Why", placeholder: "one line -- the evidence you are acting on", type: "text", max: 400, pattern: ONE_LINE, required: false });
 /** The evolve argv: the SAME list for plan and apply -- the door appends --expect to the apply, and nothing else differs. */
@@ -170,6 +214,150 @@ export const OPS = Object.freeze([
     ]),
     plan: (v) => ({ script: "develop/develop.mjs", args: ["checkpoint", "--lane", v.lane] }),
     apply: (v) => ({ script: "develop/develop.mjs", args: ["checkpoint", "--lane", v.lane, "--receipt"] }),
+  }),
+  Object.freeze({
+    id: "develop.slice",
+    room: "develop",
+    lane: "develop",
+    label: "Open the next slice",
+    hint: "The develop harness hands out the lane's next unproven slice and records its Context Pack on the slice's sources: line -- the lane's own ledger, written in place, and nothing else. The plan shows the slice and the pack; the apply writes exactly that, or nothing.",
+    receipt: Object.freeze({ kind: "note.logged" }),
+    binding: "v0.7 `develop slice` -> note.logged (note develop.next), written by develop.mjs next --expect after it re-checks the plan; the ledger's sources: line is its one write (ADR-1341 §1)",
+    retires: Object.freeze({ module: "develop", verb: "Open a slice" }),
+    humanRun: true, spends: false, touchesFiles: false, touchesTree: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "lane", label: "Lane", placeholder: "face", type: "text", max: 64, pattern: "[a-z][a-z0-9-]*", required: true }),
+    ]),
+    plan: (v) => ({ script: "develop/develop.mjs", args: ["next", "--lane", v.lane, "--dry-run"] }),
+    apply: (v) => ({ script: "develop/develop.mjs", args: ["next", "--lane", v.lane] }),
+    expect: true,
+  }),
+  Object.freeze({
+    id: "toolbelt.pin-tool",
+    room: "toolbelt",
+    lane: "hq",
+    label: "Pin or unpin a tool",
+    hint: "A pin is a receipt, so the room remembers what you reach for most: it draws your pinned tools first. Unpinning is the other receipt -- nothing is deleted, and the room replays them in order.",
+    receipt: Object.freeze({ kind: "note.logged" }),
+    binding: "v0.7 `pin tool` -> note.logged {note: toolbelt.pin, tool, action}, emitted through arc-event; the toolbelt fold replays the pins (ADR-1341 §5)",
+    retires: Object.freeze({ module: "toolbelt", verb: "Pin a tool to the top of this room" }),
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "tool", label: "Tool", placeholder: "command:arc-review, or agent:code-reviewer", type: "text", max: 120, pattern: `(${TOOL_SECTIONS.join("|")}):[A-Za-z0-9][A-Za-z0-9._/() -]{0,100}`, required: true }),
+      Object.freeze({ name: "action", label: "Pin or unpin", placeholder: "", type: "select", options: Object.freeze(["pin", "unpin"]), required: true }),
+    ]),
+    ...emitOp("note.logged", (v) => ({ note: "toolbelt.pin", tool: v.tool, action: v.action })),
+  }),
+  Object.freeze({
+    id: "design-studio.open-brief",
+    room: "design-studio",
+    lane: "design",
+    label: "Open a design explore",
+    hint: "One surface goes out to three explores: the explore's scaffold -- its brief pointer and three empty variants -- goes to a new feat/face-* branch, and an approval to your inbox. The director and the composers work on that branch; nothing in your tree moves.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `open brief` -> approval.requested (gate design-explore) naming the proposal branch design/open-brief.mjs wrote from design-explore.sh init (ADR-1341 §2)",
+    retires: Object.freeze({ module: "design-studio", verb: "Submit a surface" }),
+    humanRun: true, spends: false, touchesFiles: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "id", label: "Explore id", placeholder: "checkout-v1", type: "text", max: 63, pattern: "[a-z0-9][a-z0-9-]{0,62}", required: true }),
+      Object.freeze({ name: "brief", label: "Brief (on main)", placeholder: "docs/design/briefs/checkout.md", type: "text", max: 200, pattern: "docs/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*[.](md|html)", required: true }),
+      WHY,
+    ]),
+    plan: (v) => ({ script: "design/open-brief.mjs", args: ["--id", v.id, "--brief", v.brief, ...(v.why ? ["--why", v.why] : []), "--dry-run"] }),
+    apply: (v) => ({ script: "design/open-brief.mjs", args: ["--id", v.id, "--brief", v.brief, ...(v.why ? ["--why", v.why] : [])] }),
+    expect: true,
+  }),
+  Object.freeze({
+    id: "design-studio.record-pick",
+    room: "design-studio",
+    lane: "design",
+    label: "Record your pick",
+    hint: "An explore ends in your pick among its three built variants. The pick goes to your inbox with its reason and the picked variant's fingerprint; your stamp there is the pick. A variant rebuilt after you looked is a new plan.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `record pick` -> approval.requested (gate design-pick) raised by design/pick.mjs, bound to the three variants' bytes (ADR-1341 §5)",
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "explore", label: "Explore", placeholder: "", type: "select", get options() { return Object.freeze(pickableExplores()); }, required: true }),
+      Object.freeze({ name: "pick", label: "Variant", placeholder: "", type: "select", options: Object.freeze(["a", "b", "c"]), required: true }),
+      Object.freeze({ name: "why", label: "Why this one", placeholder: "one line -- what made it the one", type: "text", max: 400, pattern: ONE_LINE, required: true }),
+    ]),
+    plan: (v) => ({ script: "design/pick.mjs", args: ["--explore", v.explore, "--pick", v.pick, "--why", v.why, "--dry-run"] }),
+    apply: (v) => ({ script: "design/pick.mjs", args: ["--explore", v.explore, "--pick", v.pick, "--why", v.why] }),
+    expect: true,
+  }),
+  Object.freeze({
+    id: "council-chamber.send-to-council",
+    room: "council-chamber",
+    lane: "council",
+    label: "Send a question to the council",
+    hint: "The question goes to your inbox as a request to convene. On your stamp the council convenes in a session -- seats argue blind, a verifier grades every point -- and its verdict comes back as a receipt. Sending spends nothing.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `send to council` -> approval.requested (gate council) naming the question; convening is a session verb (ADR-1341 §3)",
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "question", label: "The question", placeholder: "one line -- the decision to put to the council", type: "text", max: 300, pattern: ONE_LINE, required: true }),
+      WHY,
+    ]),
+    ...emitOp("approval.requested", (v) => ({ what: "convene the council on the question below", gate: "council", question: v.question, ...(v.why ? { why: v.why } : {}) })),
+  }),
+  Object.freeze({
+    id: "factory.switch-profile",
+    room: "factory",
+    lane: "hq",
+    label: "Ask to switch the profile",
+    hint: "One key switches every gate as a set (ADR-0008), with a reason written down. The request goes to your inbox; the key lives in .claude/settings.json, which nothing in the face writes, so the edit itself is yours.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `switch profile` -> approval.requested (gate profile, ADR-0008) raised by core/profile-request.mjs from the profile arc-profile.sh reads (ADR-1341 §3)",
+    retires: Object.freeze({ module: "factory", verb: "Switch the profile" }),
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "to", label: "Profile", placeholder: "", type: "select", options: Object.freeze(["starter", "standard", "strict"]), required: true }),
+      Object.freeze({ name: "why", label: "Why", placeholder: "one line -- loosening is never a flag somebody remembers", type: "text", max: 400, pattern: ONE_LINE, required: true }),
+    ]),
+    plan: (v) => ({ script: "core/profile-request.mjs", args: ["--to", v.to, "--why", v.why, "--dry-run"] }),
+    apply: (v) => ({ script: "core/profile-request.mjs", args: ["--to", v.to, "--why", v.why] }),
+    expect: true,
+  }),
+  Object.freeze({
+    id: "executor.terminate",
+    room: "executor",
+    lane: "engine",
+    label: "Propose ending a hire",
+    hint: "Ending a hire is a recorded decision, never a quiet edit: the class goes back to the router's default driver and its tenure terms leave its row, as a diff on a new feat/face-* branch with an approval in your inbox. Nothing routes differently until a human merges it.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `terminate` -> approval.requested (gate router-merge) naming the proposal branch engine/propose.mjs retire wrote (ADR-1341 §4)",
+    retires: Object.freeze({ module: "executor", verb: "Terminate a hire" }),
+    humanRun: true, spends: false, touchesFiles: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "class", label: "Hire", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().hires); }, required: true }),
+      WHY,
+    ]),
+    plan: (v) => ({ script: "engine/propose.mjs", args: ["retire", "--class", v.class, ...(v.why ? ["--why", v.why] : []), "--dry-run"] }),
+    apply: (v) => ({ script: "engine/propose.mjs", args: ["retire", "--class", v.class, ...(v.why ? ["--why", v.why] : [])] }),
+    expect: true,
+  }),
+  Object.freeze({
+    id: "agents.add-agent",
+    room: "agents",
+    lane: "hq",
+    label: "Add an agent",
+    hint: "An agent joins the roster with its tier declared at birth (ADR-0069): the agent file, its product's manifest line, its sync-golden line and its room in the contract go to a new feat/face-* branch, so main stays green when it merges. An approval goes to your inbox.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "v0.7 `add agent` -> approval.requested (gate agent-roster, ADR-0069) naming the proposal branch engine/agent-scaffold.mjs wrote (ADR-1341 §4)",
+    retires: Object.freeze({ module: "agents", verb: "Add an agent" }),
+    humanRun: true, spends: false, touchesFiles: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "name", label: "Name", placeholder: "diff-summarizer", type: "text", max: 42, pattern: "[a-z][a-z0-9-]{1,40}[a-z0-9]", required: true }),
+      Object.freeze({ name: "description", label: "What it does", placeholder: "one line -- when to invoke it", type: "text", max: 300, pattern: ONE_LINE, required: true }),
+      Object.freeze({ name: "tools", label: "Tools", placeholder: "Read, Grep", type: "text", max: 200, pattern: `(${AGENT_TOOLS.join("|")})(, ?(${AGENT_TOOLS.join("|")})){0,${AGENT_TOOLS.length - 1}}`, required: true }),
+      Object.freeze({ name: "tier", label: "Tier (ADR-0069)", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().tiers); }, required: true }),
+      Object.freeze({ name: "room", label: "Room", placeholder: "", type: "select", get options() { return Object.freeze(agentRooms()); }, required: true }),
+      Object.freeze({ name: "product", label: "Product", placeholder: "", type: "select", get options() { return Object.freeze(agentProducts()); }, required: true }),
+      WHY,
+    ]),
+    plan: (v) => ({ script: "engine/agent-scaffold.mjs", args: ["--name", v.name, "--description", v.description, "--tools", v.tools, "--tier", v.tier, "--room", v.room, "--product", v.product, ...(v.why ? ["--why", v.why] : []), "--dry-run"] }),
+    apply: (v) => ({ script: "engine/agent-scaffold.mjs", args: ["--name", v.name, "--description", v.description, "--tools", v.tools, "--tier", v.tier, "--room", v.room, "--product", v.product, ...(v.why ? ["--why", v.why] : [])] }),
+    expect: true,
   }),
   Object.freeze({
     id: "money.criteria",
@@ -236,7 +424,7 @@ export const OPS = Object.freeze([
     binding: "v0.7 `paste model -> run` -> run.completed from arc-bench (process bench@0.1.0); the propose step is the kernel ring's",
     humanRun: true, spends: true, touchesFiles: false,
     fields: Object.freeze([
-      Object.freeze({ name: "driver", label: "Driver", placeholder: "", type: "select", options: Object.freeze(benchDrivers()), required: true }),
+      Object.freeze({ name: "driver", label: "Driver", placeholder: "", type: "select", get options() { return Object.freeze(benchDrivers()); }, required: true }),
       Object.freeze({ name: "model", label: "Model", placeholder: "the model id the driver takes", type: "text", max: 128, pattern: "[A-Za-z0-9][A-Za-z0-9._:/-]*", required: true }),
       // At least 1: a ceiling of 0 stops every attempt before it invokes anything (arc-run's own rule), so a run under it
       // measures nothing -- even on the mock driver, which spends 0 but still needs room to be called.
@@ -279,7 +467,7 @@ export const OPS = Object.freeze([
     binding: "v0.7 `register job` -> note.logged, written by arc-jobs register <job> --receipt after the OS read the task back (ADR-1339, ADR-1340)",
     humanRun: true, spends: false, touchesFiles: false, touchesOs: true,
     fields: Object.freeze([
-      Object.freeze({ name: "job", label: "Job", placeholder: "", type: "select", options: Object.freeze(scheduledJobs()), required: true }),
+      Object.freeze({ name: "job", label: "Job", placeholder: "", type: "select", get options() { return Object.freeze(scheduledJobs()); }, required: true }),
     ]),
     plan: (v) => ({ script: "hq/arc-jobs.mjs", args: ["register", v.job, "--dry-run"] }),
     apply: (v) => ({ script: "hq/arc-jobs.mjs", args: ["register", v.job, "--receipt"] }),
@@ -294,8 +482,8 @@ export const OPS = Object.freeze([
     binding: "v0.7 `driver switch` -> approval.requested (gate router-merge) naming the proposal branch engine/propose.mjs driver wrote (ADR-1340)",
     humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
-      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", options: Object.freeze(ROUTER.classes), required: true }),
-      Object.freeze({ name: "to", label: "Driver", placeholder: "", type: "select", options: Object.freeze(routeDrivers()), required: true }),
+      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().classes); }, required: true }),
+      Object.freeze({ name: "to", label: "Driver", placeholder: "", type: "select", get options() { return Object.freeze(routeDrivers()); }, required: true }),
       WHY,
     ]),
     plan: (v) => ({ script: "engine/propose.mjs", args: [...proposeArgs("driver", v), "--dry-run"] }),
@@ -313,8 +501,8 @@ export const OPS = Object.freeze([
     retires: Object.freeze({ module: "model-policy", verb: "Propose a tier change" }),
     humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
-      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", options: Object.freeze(ROUTER.classes), required: true }),
-      Object.freeze({ name: "to", label: "Tier", placeholder: "", type: "select", options: Object.freeze(ROUTER.tiers), required: true }),
+      Object.freeze({ name: "class", label: "Task class", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().classes); }, required: true }),
+      Object.freeze({ name: "to", label: "Tier", placeholder: "", type: "select", get options() { return Object.freeze(routerFacts().tiers); }, required: true }),
       WHY,
     ]),
     plan: (v) => ({ script: "engine/propose.mjs", args: [...proposeArgs("tier", v), "--dry-run"] }),
@@ -331,7 +519,7 @@ export const OPS = Object.freeze([
     binding: "v0.7 `cap proposal` -> approval.requested under the policy.promotion profile (POL-C), sealed by the line policy-promote.mjs prints (ADR-1340)",
     humanRun: false, spends: false, touchesFiles: false,
     fields: Object.freeze([
-      Object.freeze({ name: "kind", label: "Action kind", placeholder: "", type: "select", options: Object.freeze(policyKinds()), required: true }),
+      Object.freeze({ name: "kind", label: "Action kind", placeholder: "", type: "select", get options() { return Object.freeze(policyKinds()); }, required: true }),
       Object.freeze({ name: "capability", label: "Capability", placeholder: "", type: "select", options: Object.freeze(["read", "write", "shell", "network", "message", "publish", "deploy", "spend"]), required: true }),
       Object.freeze({ name: "to", label: "To level", placeholder: "", type: "select", options: Object.freeze(["L1", "L2", "L3"]), required: true }),
       Object.freeze({ name: "evidence", label: "Trial-ledger evidence", placeholder: "docs/trial-ledger.md#the-row-you-cite", type: "text", max: 300, pattern: ONE_LINE, required: true }),
@@ -563,7 +751,7 @@ export function registryView(registry = OPS) {
   return registry.map((o) => ({
     id: o.id, room: o.room, lane: o.lane, label: o.label, hint: o.hint,
     receipt: o.receipt, binding: o.binding, retires: o.retires || null,
-    humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles, touchesOs: o.touchesOs === true, expect: o.expect === true,
+    humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles, touchesOs: o.touchesOs === true, touchesTree: o.touchesTree === true, expect: o.expect === true,
     fields: o.fields,
     apply: typeof o.apply === "function" ? "argv" : o.apply,
   }));

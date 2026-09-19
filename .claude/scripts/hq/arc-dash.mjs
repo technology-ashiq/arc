@@ -296,7 +296,7 @@ async function apiRooms(ctx) {
 }
 
 async function apiSpine(ctx, url) {
-  onlyKeys(url, ["asof", "limit", "since", "kind", "venture", "date"]);
+  onlyKeys(url, ["asof", "limit", "since", "kind", "venture", "date", "note"]);
   const asof = parseAsof(url);
   const limitRaw = url.searchParams.get("limit");
   let limit = PAGE_DEFAULT;
@@ -314,10 +314,19 @@ async function apiSpine(ctx, url) {
     if (k === "date" && v !== null && !(DAY_RE.test(v) && reads.isRealDay(v))) throw new DashError("BAD_ARGS", `date "${v}" is not a YYYY-MM-DD day that exists`);
     if (v !== null) filters[k] = v;
   }
+  // `note` narrows note.logged receipts to one note's, so a room reads ITS notes whatever else the spine has logged:
+  // pages start at the OLDEST receipt, and the toolbelt's pins sat behind every other note.logged (face v2 Phase 05 PR 4,
+  // ADR-1341 §5). A generic read filter -- the door decides nothing with it.
+  const note = url.searchParams.get("note");
+  if (note !== null) {
+    if (!/^[a-z][a-z0-9._-]{0,63}$/.test(note)) throw new DashError("BAD_ARGS", `note "${note}" is not a note name ([a-z][a-z0-9._-]{0,63})`);
+    if (filters.kind !== "note.logged") throw new DashError("BAD_ARGS", "note narrows note.logged receipts -- give kind=note.logged with it");
+  }
   const { events, torn, engine, unreadable } = await readAll(ctx.root);
   // applyFilters WITHOUT limit so the page contract can report `more` honestly; the same
   // filter function the CLI uses (unknown cursor -> CURSOR_NOT_FOUND, never an empty 200).
-  const filtered = applyFilters(cutAsof(events, asof), filters);
+  const filtered = applyFilters(cutAsof(events, asof), filters)
+    .filter((e) => note === null || (e.event && e.event.payload && e.event.payload.note === note));
   const page = filtered.slice(0, limit);
   return {
     mode: ctx.mode, asof, engine,
@@ -934,7 +943,10 @@ function boot(argv) {
     // driver return a recording that seals as a run.completed looking exactly like a real one; the leads fakes and clock
     // move outreach; the mock recordings and the absorb seal dir redirect what a tool reads or writes (PR 2 logic attack).
     const TEST_DOORS = ["ARC_SPINE_NOW", "ARC_SPINE_RAND", "ARC_SPINE_LOCK_TIMEOUT_MS", "ARC_SPINE_LOCK_STALE_MS", "ARC_SPINE_MAX_FUTURE_MS",
-      "ARC_DRIVER_FAKE", "ARC_MOCK_DIR", "ARC_MOCK_FIXTURE", "ARC_LEADS_NOW", "ARC_LEADS_FAKE", "ARC_ABSORB_SEAL_DIR"];
+      "ARC_DRIVER_FAKE", "ARC_MOCK_DIR", "ARC_MOCK_FIXTURE", "ARC_LEADS_NOW", "ARC_LEADS_FAKE", "ARC_ABSORB_SEAL_DIR",
+      // The Context Pack runs a program from these (context-pack.mjs); "Open the next slice" is the first door verb that
+      // builds a pack, so a test door that names a program is refused like the rest (PR 4 shell attack).
+      "ARC_CODEGRAPH_CMD", "ARC_CODEGRAPH_ARGS"];
     const testDoors = Object.keys(process.env).filter((k) => TEST_DOORS.includes(k.toUpperCase()) || k.toUpperCase().startsWith("ARC_MOCK_"));
     if (testDoors.length) {
       process.stderr.write(`arc-dash: ERROR BAD_SPINE_ENV -- ${testDoors.join(", ")} set; those are the spine's test-only doors, and a live door writes the real company's receipts. Unset them, or run a fixture with --spine <path>\n`);

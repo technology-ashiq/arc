@@ -63,6 +63,15 @@ export function flowInputs(ctx) {
     "bench.propose": { from: join(ctx.tmp, "no-bench-run"), champion: join(ctx.tmp, "no-champion-run") },
     "absorb.pin-source": { root: ctx.tmp, pin: "0123456789abcdef", license: "MIT, in LICENSE at the source root", report: "initiatives/absorb/evidence/browser-flow.md" },
     "absorb.trial": { candidate: "T-01", variants: "harbor,quartz", fixtures: "f1,f2,f3", evidence: "initiatives/absorb/evidence/browser-flow-trial", correlation: "browser-flow-trial-1" },
+    // The factory ring (ADR-1341).
+    "develop.slice": { lane: "browser-flow-no-lane" },
+    "toolbelt.pin-tool": { tool: "command:arc-review", action: "pin" },
+    "design-studio.open-brief": { id: "browser-flow", brief: "docs/how-it-works.md" },
+    "design-studio.record-pick": { explore: "hq-dashboard-v1", pick: "a", why: "a browser flow picks the first" },
+    "council-chamber.send-to-council": { question: "does a browser flow reach the council chamber" },
+    "factory.switch-profile": { to: "strict", why: "a browser flow asks for the strict profile" },
+    "executor.terminate": { class: "build-in-public-draft" },
+    "agents.add-agent": { name: "browser-flow-probe", description: "Reads a diff and names its riskiest hunk", tools: "Read, Grep", tier: "cheap-scan", room: "review-ship", product: "review" },
   };
 }
 
@@ -86,6 +95,12 @@ export const REFUSALS = Object.freeze({
   "bench.propose": "has no scorecard\\.json|no scorecard\\.json",
   "absorb.pin-source": "SIM_EFFECT|NO_BASE",
   "absorb.trial": "SIM_EFFECT|NO_BASE",
+  // The factory ring. develop.slice names a lane that does not exist: its real apply writes a lane ledger in place, and
+  // is proven in a scratch tree (tests/face/factory-ring.mjs).
+  "develop.slice": "SIM_EFFECT|unknown lane",
+  "design-studio.open-brief": "SIM_EFFECT|NO_BASE",
+  "executor.terminate": "SIM_EFFECT|NO_BASE",
+  "agents.add-agent": "SIM_EFFECT|NO_BASE",
 });
 
 /**

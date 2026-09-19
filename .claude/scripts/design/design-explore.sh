@@ -14,7 +14,7 @@
 # comes from fresh-context composers scoped by prompt; nothing merges to main before the
 # pick because the whole dir lives on the phase branch.
 #
-#   design-explore.sh init  <id> --brief <path>   # scaffold + record base SHA + brief
+#   design-explore.sh init  <id> --brief <path> [--out-dir <dir>] [--base <rev>]   # scaffold + record base SHA + brief
 #   design-explore.sh check <id>                  # deterministic gate before critique
 #   design-explore.sh render <id>                 # one shared render command, all variants
 #   design-explore.sh status <id>                 # where this explore stands
@@ -49,9 +49,71 @@ VARIANTS="a b c"
 case "$CMD" in
   init)
     BRIEF=""
+    OUT_DIR=""
+    BASE_GIVEN=""
+    # EVERY argument is one init knows, or init refuses. Unknown arguments used to be skipped, so a `--dry-run` handed
+    # to init scaffolded for real (face v2 Phase 05, the CLI probe's hazard). A value is never another flag.
     while [ "$#" -gt 0 ]; do
-      case "$1" in --brief) BRIEF="${2:-}"; shift 2;; *) shift;; esac
+      case "$1" in
+        --brief|--out-dir|--base)
+          if [ "$#" -lt 2 ] || [ -z "${2:-}" ] || [ "${2#-}" != "$2" ]; then
+            echo "design-explore: $1 needs a value" >&2; exit 1
+          fi
+          case "$1" in
+            --brief) [ -n "$BRIEF" ] && { echo "design-explore: --brief given twice" >&2; exit 1; }; BRIEF="$2";;
+            --out-dir) [ -n "$OUT_DIR" ] && { echo "design-explore: --out-dir given twice" >&2; exit 1; }; OUT_DIR="$2";;
+            --base) [ -n "$BASE_GIVEN" ] && { echo "design-explore: --base given twice" >&2; exit 1; }; BASE_GIVEN="$2";;
+          esac
+          shift 2;;
+        *) echo "design-explore: init does not take '$1' -- it takes --brief <path> [--out-dir <dir>] [--base <rev>]" >&2; exit 1;;
+      esac
     done
+    # --out-dir: scaffold into a directory OUTSIDE the tree (the face's work door commits it to a proposal branch
+    # through the one proposal writer, ADR-1341 §2). It must be absolute, must NOT exist yet, and its parent must sit
+    # outside the repository: "empty" was decided by a listing that could fail, so an unlistable folder read as empty
+    # and its files were overwritten, and a folder inside the tree -- another explore's, .claude/hooks -- was taken
+    # (PR 4 shell attack).
+    if [ -n "$OUT_DIR" ]; then
+      case "$OUT_DIR" in
+        # A share or device path (//host/C$/..., \\?\...) names the repository in a spelling no comparison below can
+        # unify with its drive path: one was taken as outside and scaffolded into (PR 4 round-3 shell attack).
+        //*|\\\\*) echo "design-explore: --out-dir must be a drive or POSIX path, not a share or device path" >&2; exit 1;;
+        /*|[A-Za-z]:[\\/]*) ;;
+        *) echo "design-explore: --out-dir must be an absolute path outside the tree (got: $OUT_DIR)" >&2; exit 1;;
+      esac
+      # A . or .. segment is resolved by its SPELLING by cd and through a junction by mkdir: j/../new passed as outside
+      # the repository and was made inside it (PR 4 round-3 shell attack). The folder is named plainly, or refused.
+      case "/$OUT_DIR/" in
+        */./*|*/../*|*\\.\\*|*\\..\\*|*/.\\*|*/..\\*|*\\./*|*\\../*) echo "design-explore: --out-dir must not hold a . or .. segment" >&2; exit 1;;
+      esac
+      command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- the out-dir check needs it" >&2; exit 1; }
+      if [ -e "$OUT_DIR" ] || [ -L "$OUT_DIR" ]; then
+        echo "design-explore: --out-dir $OUT_DIR already exists -- it must be a new directory" >&2; exit 1
+      fi
+      # Compared as the FILESYSTEM compares them: node's native realpath of each folder (Git Bash's /tmp and /c/Users/...
+      # are one folder, and pwd -P kept them apart), with case folded where the filesystem has none -- a case-variant of
+      # the repository's path was taken as outside it and scaffolded into (PR 4 round-2 attacks). cd first: a POSIX path
+      # handed to native node is not a path on Windows.
+      native_of() { (cd -P "$1" 2>/dev/null && node -e "process.stdout.write(require(\"fs\").realpathSync.native(process.cwd()))"); }
+      out_native="$(native_of "$(dirname "$OUT_DIR")")" && [ -n "$out_native" ] || { echo "design-explore: --out-dir's parent does not exist" >&2; exit 1; }
+      root_native="$(native_of "$ROOT")" && [ -n "$root_native" ] || { echo "design-explore: the repository root cannot be resolved" >&2; exit 1; }
+      case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Darwin) fold=1;; *) fold=0;; esac
+      norm_path() { if [ "$fold" = 1 ]; then printf '%s' "$1" | tr '\\' '/' | tr '[:upper:]' '[:lower:]'; else printf '%s' "$1" | tr '\\' '/'; fi; }
+      out_norm="$(norm_path "$out_native")/"
+      root_norm="$(norm_path "$root_native")"
+      case "$out_norm" in
+        "$root_norm"/*) echo "design-explore: --out-dir must be outside the repository (got: $OUT_DIR)" >&2; exit 1;;
+      esac
+    fi
+    # --base: the revision the explore is built against, when it is not HEAD -- a proposal branch is based on main.
+    if [ -n "$BASE_GIVEN" ]; then
+      case "$BASE_GIVEN" in
+        *[!0123456789abcdef]*) echo "design-explore: --base must be a lowercase hex revision (got: $BASE_GIVEN)" >&2; exit 1;;
+      esac
+      if [ "${#BASE_GIVEN}" -lt 7 ] || [ "${#BASE_GIVEN}" -gt 64 ]; then
+        echo "design-explore: --base must be 7 to 64 hex characters (got: $BASE_GIVEN)" >&2; exit 1
+      fi
+    fi
     if [ -z "$BRIEF" ]; then
       echo "design-explore: init needs --brief <path> — exploration without declared intent is exploration of nothing" >&2
       exit 1
@@ -64,26 +126,32 @@ case "$CMD" in
         echo "design-explore: --brief must be a repo-relative path without '..' (got: $BRIEF)" >&2
         exit 1;;
     esac
-    if [ ! -f "$ROOT/$BRIEF" ]; then
+    # With --out-dir the caller read the brief and the explore from MAIN, where the branch is cut (open-brief.mjs): the
+    # owner's checkout may be behind main, and consulting it refused a brief main holds (PR 4 attacks). Without it, the
+    # scaffold lands in this tree, and this tree is the one to check.
+    if [ -z "$OUT_DIR" ] && [ ! -f "$ROOT/$BRIEF" ]; then
       echo "design-explore: brief not found at $BRIEF" >&2
       exit 1
     fi
-    if [ -d "$EX" ]; then
+    if [ -z "$OUT_DIR" ] && [ -d "$EX" ]; then
       # An explore dir is append-only evidence: re-initialising would silently discard the
       # thesis assignments and artifacts of the run that already happened. A new attempt is
       # a NEW id, and the old dir stays as the record of the old attempt.
       echo "design-explore: '$ID' already exists at docs/design/explore/$ID — an explore is evidence, not a scratch dir. Use a new id." >&2
       exit 1
     fi
-    BASE="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo no-git)"
-    for v in $VARIANTS; do mkdir -p "$EX/variant-$v" || exit 1; done
-    printf '%s\n' "$BASE" > "$EX/base-revision.txt"
+    if [ -n "$BASE_GIVEN" ]; then BASE="$BASE_GIVEN"; else BASE="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo no-git)"; fi
+    # Where the scaffold is written: the repo's explore dir, or the --out-dir the caller named.
+    DEST="$EX"
+    [ -n "$OUT_DIR" ] && DEST="$OUT_DIR"
+    for v in $VARIANTS; do mkdir -p "$DEST/variant-$v" || exit 1; done
+    printf '%s\n' "$BASE" > "$DEST/base-revision.txt"
     {
       echo "id=$ID"
       echo "brief=$BRIEF"
       echo "base=$BASE"
       echo "isolation=route-namespace (ADR-0037 fallback, phase-open decision 2026-07-29)"
-    } > "$EX/explore.txt"
+    } > "$DEST/explore.txt"
     for v in $VARIANTS; do
       # The token file is the variant's ONLY colour authority. It starts empty-but-armed:
       # a composer must declare tokens before painting, and check() enforces it.
@@ -92,9 +160,13 @@ case "$CMD" in
         echo "   thesis: <the composer writes its one-line thesis here>  */"
         echo ":root{"
         echo "}"
-      } > "$EX/variant-$v/tokens.css"
+      } > "$DEST/variant-$v/tokens.css"
     done
-    echo "design-explore: scaffolded docs/design/explore/$ID (base $BASE)"
+    if [ -n "$OUT_DIR" ]; then
+      echo "design-explore: scaffolded $OUT_DIR for docs/design/explore/$ID (base $BASE)"
+    else
+      echo "design-explore: scaffolded docs/design/explore/$ID (base $BASE)"
+    fi
     echo "  next: the director assigns theses + writes matrix.md; composers fill variant-{a,b,c}/"
     ;;
 

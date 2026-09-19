@@ -30,7 +30,6 @@ import { heldAcrossRooms, roomLink } from "../../../lib/lane-room.mjs";
  * @property {import("../../../lib/served.mjs").ServedTable} runs
  * @property {{ isVerbPending: true, verb: string, sentence: string }} hireVerb
  * @property {{ isVerbPending: true, verb: string, sentence: string }} dispatchVerb
- * @property {{ isVerbPending: true, verb: string, sentence: string }} terminateVerb
  * @property {{ canOpen: boolean, room: string }} agentsLink
  * @property {{ canOpen: boolean, room: string }} engineLink
  * @property {string[]} terms
@@ -102,10 +101,6 @@ export function fold(payloads, ctx) {
     dispatchVerb: verbPending(
       "Dispatch a task",
       "A task goes to a certified hire under its cap, and its draft comes back through a judge. It arrives with the work door.",
-    ),
-    terminateVerb: verbPending(
-      "Terminate a hire",
-      "A hire past its tenure date is refused by name and proposed for rejustify-or-retire; ending one is a recorded decision, never a quiet edit to its row. It arrives with the work door.",
     ),
     agentsLink: roomLink(ctx, "agents"),
     engineLink: roomLink(ctx, "engine-room"),
