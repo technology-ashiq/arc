@@ -177,7 +177,7 @@ export function foldExperiments(rawEvents) {
     if (!byId.has(id)) {
       byId.set(id, {
         experiment_id: id, module: null, surface: null, target_path: null, base_sha: null,
-        split: null, ttl_days: null, arms: [], opened_ts: null, armsRedeclared: false,
+        split: null, ttl_days: null, arms: [], declaredArms: null, opened_ts: null, armsRedeclared: false,
         assigned: new Map(),   // unit_id -> arm  (the AUTHORITY on which arm a unit is in)
         windows: new Map(),    // metric\0window -> Map(arm -> Map(unit_id -> unit_count))
         strayArms: new Set(), conflicts: new Set(),
@@ -206,7 +206,11 @@ export function foldExperiments(rawEvents) {
         // complete ones — data nobody collected stopped being missing because the declaration
         // changed. The arm set is now the UNION of every declaration (fail closed: more arms
         // means more windows can be MISSING) and the redeclaration is rendered.
-        if (x.arms.length && x.arms.join(",") !== [...p.arms].join(",")) x.armsRedeclared = true;
+        // Compared in DECLARED order against the first declaration: the union below is sorted, so an open that swapped
+        // the champion into sorted order read as no change, and an identical re-declaration read as a change (face v2
+        // Phase 05 PR 3a logic attack). The order is the champion.
+        if (x.declaredArms && x.declaredArms.join(",") !== [...p.arms].join(",")) x.armsRedeclared = true;
+        if (!x.declaredArms) x.declaredArms = [...p.arms];
         const union = new Set([...x.arms, ...p.arms]);
         Object.assign(x, {
           module: p.module, surface: p.surface, target_path: p.target_path ?? x.target_path,
@@ -256,7 +260,9 @@ export function foldExperiments(rawEvents) {
       default: break;
     }
   }
-  return { experiments: byId, superseded: dropped, refusedSupersedes: refused };
+  // `kept` is the receipt set every figure above was folded from, after supersedes: a reader that counts values the
+  // fold does not keep (conclude does, ADR-1340) must count from these, never from the raw spine.
+  return { experiments: byId, superseded: dropped, refusedSupersedes: refused, kept };
 }
 
 // promoted / rolled_back name a proposal, not an experiment. Resolve through the proposal so a

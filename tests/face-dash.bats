@@ -66,7 +66,7 @@ load 'test_helper'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
   [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok evolve conclude: the verdict's emit lands on the spine"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok evolve conclude, applied: the verdict lands on the spine"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok door: a sim door refuses the effect's apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
 }
 

@@ -15,7 +15,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname, resolve } from "node:path";
+import { join, dirname, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -95,19 +95,47 @@ const INPUTS = {
   "evolve.measure": { experiment: "x-work-door", unit: "u-1", metric: "signup_conversion", value: "1", count: "1", window: "2026-09-01..2026-09-07", source: "src-1" },
   "evolve.conclude": { experiment: "x-work-door" },
 };
-// The ops whose tool refuses on THIS tree, by name: no product here declares an evolve section (ADR-1340), so the
-// evolve verbs answer NO_EVOLVE_SECTION -- the door must show that refusal exactly as a hand-run gets it.
-const REFUSES_ON_THIS_TREE = new Set(["evolve.open-experiment", "evolve.measure", "evolve.conclude"]);
+// The ops whose tool refuses its PLAN on this tree, each by its NAMED refusal -- any refusal would pass a sim door that
+// ran an effect and failed later (PR 3a logic attack). No product here declares an evolve section, so open answers
+// NO_EVOLVE_SECTION and measure and conclude answer NOT_OPEN; an effect op refuses its dry run where it cannot plan at
+// all (no main in a CI checkout, no Windows scheduler) and otherwise plans, and a sim door then refuses SIM_EFFECT.
+const REFUSES_ON_THIS_TREE = new Map([["evolve.open-experiment", /NO_EVOLVE_SECTION/], ["evolve.measure", /NOT_OPEN/], ["evolve.conclude", /NOT_OPEN/]]);
+const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows/], ["engine-room.driver-switch", /NO_BASE/], ["model-policy.tier-proposal", /NO_BASE/]]);
 check("every registry op is driven by this suite",
   OPS_MOD.OPS.length > 0 && OPS_MOD.OPS.every((o) => Object.hasOwn(INPUTS, o.id)) && Object.keys(INPUTS).length === OPS_MOD.OPS.length,
   OPS_MOD.OPS.map((o) => o.id).join(","));
-// A file-touching op writes a PROPOSAL BRANCH, never a file in place (ADR-1340): it is human-run, and its tool is one
-// that writes through core/proposal-branch.mjs. An effect past the spine never runs on a sim door.
-const PROPOSAL_TOOLS = new Set(["engine/propose.mjs"]);
-check("every file-touching op is human-run and applies through a proposal-branch tool",
-  OPS_MOD.OPS.filter((o) => o.touchesFiles).every((o) => o.humanRun === true && typeof o.apply === "function" && PROPOSAL_TOOLS.has(o.apply(INPUTS[o.id]).script)),
-  OPS_MOD.OPS.filter((o) => o.touchesFiles).map((o) => o.id).join(","));
-check("every op that touches the machine's scheduler is human-run", OPS_MOD.OPS.filter((o) => o.touchesOs).every((o) => o.humanRun === true));
+// THE EFFECT IS DERIVED FROM THE TOOL, never read off the flag it is meant to verify. The first cut asserted "every op
+// flagged touchesFiles applies through a proposal tool" -- with the flag dropped from a row, that held vacuously, and a
+// sim door wrote a real branch (PR 3a logic attack). Now: the branch writers are every script that imports
+// writeProposal, the OS effect is arc-jobs register, and each row's flag must equal what its apply script is, BOTH ways.
+const WRITERS = (() => {
+  const out = new Set();
+  const root = join(REPO, ".claude", "scripts");
+  const walk = (d) => {
+    for (const n of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, n.name);
+      if (n.isDirectory()) { walk(p); continue; }
+      if (!n.name.endsWith(".mjs") || n.name === "proposal-branch.mjs") continue;
+      if (/import\s*\{[^}]*\bwriteProposal\b[^}]*\}\s*from\s*"[^"]*core\/proposal-branch\.mjs"/.test(readFileSync(p, "utf8"))) out.add(p.slice(root.length + 1).split(sep).join("/"));
+    }
+  };
+  walk(root);
+  return out;
+})();
+check("the branch writers are found by what they import (vacuous-pass guard)", WRITERS.has("engine/propose.mjs"), [...WRITERS].join(","));
+const effectOfScript = (o) => {
+  if (typeof o.apply !== "function") return { files: false, os: false };
+  const cmd = o.apply(INPUTS[o.id]);
+  return { files: WRITERS.has(cmd.script), os: cmd.script === "hq/arc-jobs.mjs" && cmd.args[0] === "register" };
+};
+const flagMismatch = (ops) => ops.filter((o) => { const e = effectOfScript(o); return (o.touchesFiles === true) !== e.files || (o.touchesOs === true) !== e.os; }).map((o) => o.id);
+check("every op's effect flags are what its apply script IS, both ways (touchesFiles <-> a branch writer, touchesOs <-> register)",
+  flagMismatch(OPS_MOD.OPS).length === 0, flagMismatch(OPS_MOD.OPS).join(","));
+{
+  const mutant = OPS_MOD.OPS.map((o) => (o.id === "engine-room.driver-switch" ? { ...o, touchesFiles: false } : o));
+  check("MUTANT CONTROL: a row with its touchesFiles dropped is caught by the derivation", flagMismatch(mutant).includes("engine-room.driver-switch"));
+}
+check("every effect op is human-run", OPS_MOD.OPS.filter((o) => o.touchesFiles || o.touchesOs).every((o) => o.humanRun === true));
 // Every op's receipt is a kind the spine has (ADR-1334).
 {
   const V = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "validate.mjs")).href);
@@ -120,11 +148,12 @@ function handRun(op, values) {
   const env = { ...process.env, ARC_SPINE_ROOT: SPINE_B };
   const run = (cmd) => spawnSync(process.execPath, [join(REPO, ".claude", "scripts", ...cmd.script.split("/")), ...cmd.args], { cwd: REPO, encoding: "utf8", env });
   let applyCmd;
-  if (op.apply === "emit-plan") {
+  if (op.apply === "emit-plan" || op.expect === true) {
     const planned = run(op.plan(values));
     if (planned.status !== 0) return { error: `plan exited ${planned.status}: ${planned.stderr}` };
-    const last = String(planned.stdout).trim().split(/\r?\n/).pop() || "";
-    applyCmd = { script: "hq/arc-event.mjs", args: JSON.parse(last).emit };
+    const last = JSON.parse(String(planned.stdout).trim().split(/\r?\n/).pop() || "");
+    // A person types what the plan printed: the emit line, or the same command with --expect and the plan's digest.
+    applyCmd = op.apply === "emit-plan" ? { script: "hq/arc-event.mjs", args: last.emit } : { ...op.apply(values), args: [...op.apply(values).args, "--expect", last.expect] };
   } else {
     applyCmd = op.apply(values);
   }
@@ -224,18 +253,22 @@ try {
     // An op whose tool refuses here -- the evolve verbs on a tree with no evolve section, an effect op whose tool
     // refuses its dry run (no main to base a proposal on in a CI checkout, no Windows scheduler) -- must refuse through
     // the door EXACTLY as by hand: the same exit and the same first line. That is its no-second-path fixture here.
-    if (plan.status === 200 && plan.body.ok === false && (REFUSES_ON_THIS_TREE.has(op.id) || op.touchesFiles || op.touchesOs)) {
+    const namedRefusal = REFUSES_ON_THIS_TREE.get(op.id) || PLAN_REFUSAL_IF_ANY.get(op.id);
+    if (plan.status === 200 && plan.body.ok === false && namedRefusal) {
+      // The hand-run on the SAME spine the door read, and the WHOLE first line compared: the first cut compared sixty
+      // characters, read the hand-run's spine elsewhere, and never pinned which refusal it was (PR 3a logic attack).
       const planCmd = op.plan(OPS_MOD.validateInput(op, values));
-      const hand = spawnSync(process.execPath, [join(REPO, ".claude", "scripts", ...planCmd.script.split("/")), ...planCmd.args], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_B } });
+      const hand = spawnSync(process.execPath, [join(REPO, ".claude", "scripts", ...planCmd.script.split("/")), ...planCmd.args], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_A } });
       const first = (s) => String(s || "").trim().split(/\r?\n/)[0] || "";
+      const unpath = (s) => s.replace(/\[path withheld\]|[A-Z]:[\\/][^ ]*|\/[^ ]*/g, "<path>");
       const doorFirst = DOOR_TEXT(plan.body.refusal.stderr || plan.body.refusal.stdout || "").trim().split(/\r?\n/)[0] || "";
-      check(`${op.id}: refused through the door exactly as by hand (exit ${hand.status})`,
-        plan.body.refusal.exit === hand.status && hand.status !== 0 && doorFirst.length > 0 && first(hand.stderr || hand.stdout).replace(/[A-Z]:[\\/][^ ]*|\/[^ ]*/g, "").slice(0, 60) === doorFirst.replace(/\[path withheld\]|[A-Z]:[\\/][^ ]*|\/[^ ]*/g, "").slice(0, 60),
+      check(`${op.id}: refused through the door exactly as by hand (exit ${hand.status}), by name`,
+        plan.body.refusal.exit === hand.status && hand.status !== 0 && namedRefusal.test(doorFirst) && unpath(first(hand.stderr || hand.stdout)) === unpath(doorFirst),
         `door=${plan.body.refusal.exit} ${JSON.stringify(doorFirst)} hand=${hand.status} ${JSON.stringify(first(hand.stderr || hand.stdout))}`);
       check(`${op.id}: the refused plan wrote nothing`, spineFingerprint(SPINE_A) === before);
       continue;
     }
-    if (REFUSES_ON_THIS_TREE.has(op.id)) { check(`${op.id}: refuses on this tree (no product declares an evolve section)`, false, `${plan.status} ${JSON.stringify(plan.body).slice(0, 300)}`); continue; }
+    if (REFUSES_ON_THIS_TREE.has(op.id)) { check(`${op.id}: refuses on this tree, by name`, false, `${plan.status} ${JSON.stringify(plan.body).slice(0, 300)}`); continue; }
     // An effect op that PLANNED (a clone with a main, a Windows leg): the plan wrote nothing, and a sim door refuses the
     // apply by name before anything runs -- no task registered, no branch written (ADR-1340).
     if (op.touchesFiles || op.touchesOs) {

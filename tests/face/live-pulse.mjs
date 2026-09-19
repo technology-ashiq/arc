@@ -74,6 +74,14 @@ const check = (name, cond, detail = "") => {
     });
   });
   check("no op has two fields sharing a placeholder (the flow finds a field by it)", ops.OPS.length > 0 && shared.length === 0, shared.join(" ; "));
+  // Every effect op's flow must end on the door's SIM_EFFECT (or its tool's named plan refusal): a flow that accepted
+  // any refusal passed a sim door that ran the effect and failed afterwards (PR 3a logic attack).
+  const effectOps = ops.OPS.filter((o) => o.touchesFiles || o.touchesOs);
+  const unguarded = effectOps.filter((o) => !/SIM_EFFECT/.test(flows.REFUSALS[o.id] || "")).map((o) => o.id);
+  check("every effect op's flow must end on SIM_EFFECT or its tool's named refusal", effectOps.length >= 3 && unguarded.length === 0, unguarded.join(","));
+  const strayRefusal = Object.keys(flows.REFUSALS).filter((id) => !ops.OPS.some((o) => o.id === id));
+  check("no refusal is expected of an op the registry no longer holds", strayRefusal.length === 0, strayRefusal.join(","));
+  check("every expected refusal is a pattern, never empty (an empty pattern matches any refusal)", Object.values(flows.REFUSALS).every((p) => typeof p === "string" && p.length > 3 && !new RegExp(p).test("")));
   const cm = flows.closeMonthFor(new Date(Date.UTC(2026, 0, 3)));
   check("the close flow closes two months back, mid-month (outside the ten-day fixture)", cm.month === "2025-11" && new Date(cm.at).getUTCDate() === 15, JSON.stringify(cm));
 }

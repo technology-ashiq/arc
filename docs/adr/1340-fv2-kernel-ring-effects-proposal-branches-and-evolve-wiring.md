@@ -91,7 +91,7 @@ proves nothing in the face writes `hq.policy.yaml` covers the branch writer too.
   exploratory (ADR-0310).
   - Arms: the opened arms, exactly two, in declared order (champion first).
   - Per-arm floor: the manifest's `per_arm_floor`.
-  - Alpha: 0.05.
+  - Alpha: the manifest's `evals.alpha`. One the pinned test has no quantile for refuses (amended below).
   - Effect floor: the manifest's value, 0 by default (ADR-0310).
   - MDE: 0 unless the manifest declares one.
   - n per arm: the distinct units in the complete windows of the primary metric (`board.countPerArm`'s rule).
@@ -116,7 +116,9 @@ fixture holds the refusal identical by door and by hand.
 
 ### 5. The other verbs keep to PR 1's shapes
 
-- **Emit plan** (the tool prints its seal line and the door runs it): cap proposal, open, measure, conclude.
+- **Emit plan** (the tool prints its seal line and the door runs it): cap proposal.
+- **Bound apply** (the plan prints a digest, and the apply re-derives and writes only if it still holds; amended
+  below): open, measure, conclude, driver switch, tier proposal.
 - **Tool-owned receipt with a `--dry-run` plan:**
   - register job (`arc-jobs register <job> --dry-run` / `--receipt`, `note.logged`)
   - trial (`judgement.mjs seal --dry-run` / `--emit`). A seal burns its correlation, so it cannot be the plan.
@@ -142,3 +144,76 @@ honest, and visible in the face as the tool's own sentence.
 
 **Not decided here.** Which arc surface, if any, becomes an evolve experiment. That is the evolve lane's call and a
 real client's. Nothing here declares an evolve section.
+
+## Amendment, 2026-09-19: what PR 3a's two attackers found
+
+The logic attacker found 13 defects and the shell attacker found 11. Each one is fixed and pinned in
+`tests/face/kernel-ring.mjs`, `tests/face/proposal-branch.mjs` or `tests/face/work-door.mjs`. The fixes change four
+of the decisions above.
+
+**An apply is bound to its plan (core/plan-expect.mjs).** A plan is read, then applied up to fifteen minutes later.
+In between, main or the spine can move. An apply that re-derived its write from the world as it stood then wrote
+something the owner never saw:
+- a driver switch planned against one router was written against another, silently reverting a merge;
+- three opens planned while nothing was open all landed past the cap of two;
+- a second conclude, and a measurement planned before the verdict, both landed after it.
+
+The fix: open, measure, conclude and both engine proposals print the digest of exactly what their apply would
+write as the last line of the plan: `{"expect":"<64 hex>"}`. An `expect: true` row has the door append
+`--expect <digest>` to its apply. The tool re-derives everything, re-runs every check, and writes only if the
+digest still holds. Otherwise it refuses with `PLAN_STALE` and writes nothing. A plan with no digest is `NO_EXPECT`.
+Evolve's verbs stop being emit plans: the CLI writes through arc-event itself, and prints
+`receipt: <kind> <ULID>`. propose also passes the base it read to the branch writer, which refuses `BASE_MOVED`
+if main has moved by the time it writes.
+
+**Conclude counts what the board counts, and checks what the ADRs require.**
+- Counting:
+  - Receipts are counted after supersedes, from the fold's kept set. All five successes corrected to 0 used to
+    still give a delta of 1.
+  - A receipt over zero observations is not a trial.
+  - A unit reported as both 0 and 1 in one window is refused (`CONFLICTING_VALUES`), never scored by its maximum.
+- Assignment:
+  - Each unit is re-placed by `assign()`, and a recorded assignment must agree with it.
+  - A receipt whose arm or cohort disagrees is a `COHORT_VIOLATION` and is refused. A champion unit also written
+    as the challenger used to count in both arms.
+  - Completeness is judged on the verdict cohort alone. One generation unit used to "complete" a window the
+    verdict cohort had only half measured.
+- The ADRs' requirements:
+  - The improvement is direction-adjusted (ADR-0306): lower-is-better counts the units whose event did not happen.
+  - The alpha is the manifest's, and an alpha with no pinned quantile refuses (`ALPHA_UNPINNED`).
+  - TTL is enforced on measure and on conclude (`EXPIRED`, ADR-0310).
+  - Canonical drift refuses on conclude as it already did on measure.
+  - An experiment has exactly two arms, and one opened twice refuses.
+- The config hash carries the primary metric and its direction.
+- The attack also found that the verdict test itself paired Newcombe's terms the wrong way round. That is fixed in
+  the evolve lane's own file; see ADR-0311's correction.
+
+**The proposal writer runs git bounded and neutered.**
+- Every git call is async, under `core/spawn-bounded.mjs`, which the work door's `runTool` now shares. Before,
+  a timeout killed Git for Windows' launcher and left the real git holding the temp index. A backgrounded hook
+  turned a 700 ms write into a 60 s "timeout".
+- Every call turns off:
+  - hooks
+  - fsmonitor (its hook ran inside a proposal and left a daemon watching the owner's repo)
+  - the split index (it wrote into the owner's `.git`)
+  - the untracked cache
+  - auto gc and maintenance
+  - the per-user attributes file (`*.yaml -diff` made the plan read "Binary files differ")
+  - lazy fetch
+- Main's bytes are read as strict UTF-8. The diff's base side is main's raw bytes.
+- Refused names: a branch that collides in another case or as a directory, a name ending in a dot, a Windows
+  device name, and a name opening with a dash.
+- A failed `update-ref` is named by its real cause.
+- A temp-dir cleanup that fails after the write is never the outcome, and propose exits 1 only once the branch is
+  written.
+
+**propose and arc-jobs.**
+- The engine proposal's branch puts the class last. `face-ask` followed by `-` made `sk-` inside the name, the
+  spine's secret scanner read it as an API key, and every face-ask proposal wrote its branch before its approval
+  was refused. The approval is now judged by the spine before anything is written.
+- arc-jobs refuses:
+  - a dash-like word that is not a whole `--flag`, in any spelling
+  - a flag another command owns
+  - a second job name
+
+`register day-close-roll -dry-run` would have registered the job for real.

@@ -26,7 +26,7 @@
  * Zero dependencies, Node 18+.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -115,6 +115,32 @@ for (const a of argv.slice(1)) {
 // Checked before ANY command runs: `unregister x --dry-run` would otherwise remove the task for real.
 if (command !== "register" && (has("dry-run") || has("receipt")))
   die(2, "--dry-run and --receipt belong to register -- the other commands write their own receipts or none");
+// A DASH IS A DASH IN ANY SPELLING. The check above reads only "--"-prefixed words, so `register x -dry-run`, an em
+// dash, or a Unicode minus passed as a stray positional, and register ignores stray positionals: a real registration
+// with the safety flag silently dropped (PR 3a attacks, both). Any word that opens with a dash-like character and is
+// not a whole --flag is refused.
+for (const a of argv.slice(1)) {
+  if (/^[-\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/.test(a) && !/^--[a-z]/.test(a))
+    die(2, `${JSON.stringify(a)} looks like a flag and is not one -- flags are spelled --name with two ASCII hyphens`);
+}
+// Each command's OWN flags. A flag another command takes is refused here too: `register --slot day-close-roll` let
+// --slot swallow the job's name, and register fell back to every enabled job (PR 3a shell attack).
+const COMMAND_FLAGS = Object.freeze({
+  list: ["next"], panel: ["date"], run: ["slot", "scheduled"], catchup: [],
+  register: ["dry-run", "receipt"], unregister: [], audit: ["from", "to", "json", "partial"],
+});
+if (Object.hasOwn(COMMAND_FLAGS, command)) {
+  for (const a of argv.slice(1)) {
+    if (!a.startsWith("--")) continue;
+    const name = a.slice(2).split("=")[0];
+    if (name !== "help" && !COMMAND_FLAGS[command].includes(name))
+      die(2, `--${name} is not a flag ${command} takes (it takes: ${COMMAND_FLAGS[command].map((f) => "--" + f).join(" ") || "none"})`);
+  }
+}
+// register and unregister act on ONE named job, or on the enabled set when none is named -- never on the first of
+// several words. `register day-close-roll dry-run` registered day-close-roll for real.
+if ((command === "register" || command === "unregister" || command === "run") && positional.length > 1)
+  die(2, `${command} takes one job name; got ${positional.map((p) => JSON.stringify(p)).join(", ")}`);
 
 if (!command || command === "help" || has("help")) {
   process.stdout.write(
@@ -379,14 +405,18 @@ if (command === "register") {
   const logDir = join(spineRoot(), "job-logs");
   if (dryRun) {
     // Built by the SAME registrationFor the real path uses, so the plan is the registration, not a description of it.
+    let plan = "";
     for (const job of targets) {
       let reg;
       try { reg = registrationFor(job, { repoRoot: root, nodePath, logDir }); }
       catch (e) { if (e instanceof SchedulerError) die(2, `${job.name}: [${e.code}] ${e.message}`); throw e; }
-      process.stdout.write(`arc-jobs: would register ${reg.name}  ${reg.trigger}  cwd ${reg.cwd}\n`);
+      plan += `arc-jobs: would register ${reg.name}  ${reg.trigger}  cwd ${reg.cwd}\n`;
     }
-    process.stdout.write(`arc-jobs: ${logonNote()}\n`);
-    process.stdout.write("arc-jobs: dry run -- nothing was handed to the OS\n");
+    plan += `arc-jobs: ${logonNote()}\n`;
+    plan += "arc-jobs: dry run -- nothing was handed to the OS\n";
+    // One synchronous write, THEN the exit: process.exit right after an asynchronous pipe write can cut the plan the
+    // door is reading (the fixed-defects row the PR 3a attackers carried; pipes are asynchronous on macOS).
+    writeSync(1, plan);
     process.exit(0);
   }
   for (const job of targets) {
@@ -417,7 +447,9 @@ if (command === "register") {
       const id = String(r.stdout || "").trim();
       if (r.status !== 0 || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id))
         die(1, `${job.name} IS registered, and its receipt was not written -- ${String(r.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${r.status}`}`);
-      process.stdout.write(`receipt: note.logged ${id}\n`);
+      // Synchronous, like the dry run's plan: this is the line the door attributes the receipt by, and process.exit
+      // follows below.
+      writeSync(1, `receipt: note.logged ${id}\n`);
     }
   }
   process.stdout.write(`arc-jobs: ${logonNote()}\n`);

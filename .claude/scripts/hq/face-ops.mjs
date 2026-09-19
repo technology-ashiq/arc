@@ -16,6 +16,12 @@
 //                   the idem and the outcome; the door never builds one (arc-pnl --close has always printed its
 //                   seal line for a human to run -- this is the same line, run by the owner's click).
 //
+// A row with `expect: true` binds its apply to what its plan showed (core/plan-expect.mjs, ADR-1340 amended): the plan's
+// tool prints, as its LAST stdout line, {"expect":"<64 hex>"} -- the digest of exactly what the apply would write -- and
+// the door appends `--expect <digest>` to the apply argv. The tool re-derives everything at apply and writes only if
+// the digest still holds. A driver switch planned against one router and written against another, and an experiment
+// opened past its cap because the cap was counted at plan time, are what this closes (PR 3a logic attack).
+//
 // `retires` names the Phase 03 verb-pending card an op makes live (module + verb, as evidence/phase-03 lists it). The
 // card leaves its fold in the same change, and tests/face/module-frame.mjs holds evidence/phase-05/verbs-pending.md to
 // Phase 03's cards minus exactly these -- a card cannot vanish without an op that retires it.
@@ -128,6 +134,10 @@ function policyKinds() {
 }
 /** The optional one-line reason every proposal carries onto its branch and into the inbox. */
 const WHY = Object.freeze({ name: "why", label: "Why", placeholder: "one line -- the evidence you are acting on", type: "text", max: 400, pattern: ONE_LINE, required: false });
+/** The evolve argv: the SAME list for plan and apply -- the door appends --expect to the apply, and nothing else differs. */
+const evolveOpenArgs = (v) => ["open", "--experiment", v.experiment, "--module", v.module, "--surface", v.surface, "--target", v.target, "--arms", v.arms, ...(v.split ? ["--split", v.split] : []), ...(v.ttl ? ["--ttl", v.ttl] : [])];
+const evolveMeasureArgs = (v) => ["measure", "--experiment", v.experiment, "--unit", v.unit, "--metric", v.metric, "--value", v.value, "--count", v.count, "--window", v.window, "--source", v.source];
+const evolveConcludeArgs = (v) => ["conclude", "--experiment", v.experiment];
 /** A proposal's argv: the same for plan and apply, but for --dry-run. */
 const proposeArgs = (verb, v) => [verb, "--class", v.class, "--to", v.to, ...(v.why ? ["--why", v.why] : [])];
 
@@ -272,6 +282,7 @@ export const OPS = Object.freeze([
     ]),
     plan: (v) => ({ script: "engine/propose.mjs", args: [...proposeArgs("driver", v), "--dry-run"] }),
     apply: (v) => ({ script: "engine/propose.mjs", args: proposeArgs("driver", v) }),
+    expect: true,
   }),
   Object.freeze({
     id: "model-policy.tier-proposal",
@@ -290,6 +301,7 @@ export const OPS = Object.freeze([
     ]),
     plan: (v) => ({ script: "engine/propose.mjs", args: [...proposeArgs("tier", v), "--dry-run"] }),
     apply: (v) => ({ script: "engine/propose.mjs", args: proposeArgs("tier", v) }),
+    expect: true,
   }),
   Object.freeze({
     id: "policy.cap-proposal",
@@ -317,7 +329,7 @@ export const OPS = Object.freeze([
     label: "Open an experiment",
     hint: "One declared surface, sealed at its bytes as they stand now (base_sha), two arms and a split. The module must declare an evolve section; the concurrency cap is two per module.",
     receipt: Object.freeze({ kind: "experiment.opened" }),
-    binding: "v0.7 `open experiment` -> experiment.opened, sealed by the line arc-evolve open prints (ADR-1340)",
+    binding: "v0.7 `open experiment` -> experiment.opened, written by arc-evolve open --expect after it re-checks the plan (ADR-1340)",
     retires: Object.freeze({ module: "evolve", verb: "Open an experiment" }),
     humanRun: false, spends: false, touchesFiles: false,
     fields: Object.freeze([
@@ -325,12 +337,14 @@ export const OPS = Object.freeze([
       Object.freeze({ name: "module", label: "Module", placeholder: "the product whose manifest declares the surface", type: "text", max: 64, pattern: "[a-z][a-z-]*", required: true }),
       Object.freeze({ name: "surface", label: "Surface", placeholder: "hero-copy", type: "text", max: 64, pattern: "[a-z0-9][a-z0-9-]{0,63}", required: true }),
       Object.freeze({ name: "target", label: "Surface file", placeholder: "the surface_file the manifest declares", type: "text", max: 300, pattern: "[A-Za-z0-9._()\\[\\]-]+(/[A-Za-z0-9._()\\[\\]-]+)*", required: true }),
-      Object.freeze({ name: "arms", label: "Arms", placeholder: "+champion,+challenger", type: "text", max: 200, pattern: "\\+[a-z0-9][a-z0-9-]{0,31}(,\\+[a-z0-9][a-z0-9-]{0,31}){1,7}", required: true }),
-      Object.freeze({ name: "split", label: "Split", placeholder: "optional -- the manifest's split", type: "text", max: 40, pattern: "[0-9]{1,2}(,[0-9]{1,2}){1,7}", required: false }),
+      // Exactly two arms, champion then challenger: the pinned test compares one pair (ADR-0306).
+      Object.freeze({ name: "arms", label: "Arms", placeholder: "+champion,+challenger", type: "text", max: 80, pattern: "\\+[a-z0-9][a-z0-9-]{0,31},\\+[a-z0-9][a-z0-9-]{0,31}", required: true }),
+      Object.freeze({ name: "split", label: "Split", placeholder: "optional -- the manifest's split", type: "text", max: 5, pattern: "[0-9]{1,2},[0-9]{1,2}", required: false }),
       Object.freeze({ name: "ttl", label: "TTL, days", placeholder: "28", type: "int", min: 1, max: 365, required: false }),
     ]),
-    plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: ["open", "--experiment", v.experiment, "--module", v.module, "--surface", v.surface, "--target", v.target, "--arms", v.arms, ...(v.split ? ["--split", v.split] : []), ...(v.ttl ? ["--ttl", v.ttl] : [])] }),
-    apply: "emit-plan",
+    plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: evolveOpenArgs(v) }),
+    apply: (v) => ({ script: "evolve/arc-evolve.mjs", args: evolveOpenArgs(v) }),
+    expect: true,
   }),
   Object.freeze({
     id: "evolve.measure",
@@ -339,19 +353,20 @@ export const OPS = Object.freeze([
     label: "Record a measurement",
     hint: "One unit's value for one metric over one window. The arm and cohort come from the experiment's own assignment, never from this form; a drifted surface refuses.",
     receipt: Object.freeze({ kind: "experiment.measured" }),
-    binding: "v0.7 `measure` -> experiment.measured, sealed by the line arc-evolve measure prints (ADR-1340)",
+    binding: "v0.7 `measure` -> experiment.measured, written by arc-evolve measure --expect after it re-checks the plan (ADR-1340)",
     humanRun: false, spends: false, touchesFiles: false,
     fields: Object.freeze([
       Object.freeze({ name: "experiment", label: "Experiment id", placeholder: "x-hero-copy-2", type: "text", max: 64, pattern: "x-[A-Za-z0-9][A-Za-z0-9._-]{0,62}", required: true }),
       Object.freeze({ name: "unit", label: "Unit id", placeholder: "an opaque id, never an address", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
       Object.freeze({ name: "metric", label: "Metric", placeholder: "signup_conversion", type: "text", max: 64, pattern: "[a-z][a-z0-9_]{0,63}", required: true }),
       Object.freeze({ name: "value", label: "Value", placeholder: "1 for a success, 0 for none", type: "text", max: 32, pattern: "-?[0-9]+(\\.[0-9]+)?", required: true }),
-      Object.freeze({ name: "count", label: "Observations", placeholder: "how many observations the value covers", type: "int", min: 0, max: 100000000, required: true }),
+      Object.freeze({ name: "count", label: "Observations", placeholder: "how many observations the value covers", type: "int", min: 1, max: 100000000, required: true }),
       Object.freeze({ name: "window", label: "Window", placeholder: "2026-09-01..2026-09-07", type: "text", max: 22, pattern: "\\d{4}-\\d{2}-\\d{2}\\.\\.\\d{4}-\\d{2}-\\d{2}", required: true }),
       Object.freeze({ name: "source", label: "Source id", placeholder: "where the number came from, as an opaque id", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
     ]),
-    plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: ["measure", "--experiment", v.experiment, "--unit", v.unit, "--metric", v.metric, "--value", v.value, "--count", v.count, "--window", v.window, "--source", v.source] }),
-    apply: "emit-plan",
+    plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: evolveMeasureArgs(v) }),
+    apply: (v) => ({ script: "evolve/arc-evolve.mjs", args: evolveMeasureArgs(v) }),
+    expect: true,
   }),
   Object.freeze({
     id: "evolve.conclude",
@@ -360,11 +375,12 @@ export const OPS = Object.freeze([
     label: "Conclude an experiment",
     hint: "Computes the one verdict the test allows, once, from the receipts: the verdict cohort, complete windows, both arms at their floor. A no-verdict is shown with its reasons and writes nothing.",
     receipt: Object.freeze({ kind: "experiment.verdict" }),
-    binding: "v0.7 `conclude` -> experiment.verdict, sealed by the line arc-evolve conclude prints (ADR-1340)",
+    binding: "v0.7 `conclude` -> experiment.verdict, written by arc-evolve conclude --expect after it re-checks the plan (ADR-1340)",
     humanRun: false, spends: false, touchesFiles: false,
     fields: Object.freeze([Object.freeze({ name: "experiment", label: "Experiment id", placeholder: "x-hero-copy-2", type: "text", max: 64, pattern: "x-[A-Za-z0-9][A-Za-z0-9._-]{0,62}", required: true })]),
-    plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: ["conclude", "--experiment", v.experiment] }),
-    apply: "emit-plan",
+    plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: evolveConcludeArgs(v) }),
+    apply: (v) => ({ script: "evolve/arc-evolve.mjs", args: evolveConcludeArgs(v) }),
+    expect: true,
   }),
 ]);
 
@@ -458,6 +474,24 @@ export function emitPlanFrom(op, stdout) {
 }
 
 /**
+ * The digest a plan printed as its last line, checked before the door carries it into the apply: exactly
+ * {"expect":"<64 lowercase hex>"} and nothing else. A row that expects one and a plan that printed none is the tool
+ * and the registry disagreeing, and the door refuses rather than apply unbound.
+ * @param {typeof OPS[number]} op @param {string} stdout
+ * @returns {string}
+ */
+export function expectFrom(op, stdout) {
+  const lines = String(stdout).split(/\r?\n/).filter((l) => l.trim() !== "");
+  const last = lines.length ? lines[lines.length - 1] : "";
+  let parsed;
+  try { parsed = JSON.parse(last); } catch { throw new OpError("NO_EXPECT", `${op.id}: the plan's last line is not the {"expect":...} line its tool prints`); }
+  const keys = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? Object.keys(parsed) : [];
+  if (keys.length !== 1 || keys[0] !== "expect" || typeof parsed.expect !== "string" || !/^[0-9a-f]{64}$/.test(parsed.expect))
+    throw new OpError("NO_EXPECT", `${op.id}: the plan's last line carries no plan digest`);
+  return parsed.expect;
+}
+
+/**
  * The command line a person would type, for the plan card. Quoted for a POSIX shell; it is shown, never run --
  * the door runs the argv list, with no shell between it and the tool.
  * @param {{ script: string, args: string[] }} cmd
@@ -472,7 +506,7 @@ export function registryView(registry = OPS) {
   return registry.map((o) => ({
     id: o.id, room: o.room, lane: o.lane, label: o.label, hint: o.hint,
     receipt: o.receipt, binding: o.binding, retires: o.retires || null,
-    humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles, touchesOs: o.touchesOs === true,
+    humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles, touchesOs: o.touchesOs === true, expect: o.expect === true,
     fields: o.fields,
     apply: typeof o.apply === "function" ? "argv" : o.apply,
   }));

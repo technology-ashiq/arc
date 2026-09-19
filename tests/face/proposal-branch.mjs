@@ -12,7 +12,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -94,7 +94,7 @@ const objBefore = objects(r);
 }
 
 // ---- the plan writes nothing ----
-const plan = PB.planProposal({ repo: r, branch: "feat/face-engine-driver-review-diff", files: [{ path: "engine/router.yaml", content: PROPOSED }], allow: ALLOW });
+const plan = await PB.planProposal({ repo: r, branch: "feat/face-engine-driver-review-diff", files: [{ path: "engine/router.yaml", content: PROPOSED }], allow: ALLOW });
 check("the plan returns a unified diff of the proposed line", /-\s+driver: claude-code/.test(plan.diff) && /\+\s+driver: codex/.test(plan.diff) && plan.diff.includes("engine/router.yaml"), plan.diff.slice(0, 300));
 check("the plan's base is main (the scratch repo has no remote, so local main)", plan.base === before.main);
 check("the plan wrote NO object", objects(r) === objBefore);
@@ -102,7 +102,7 @@ check("the plan wrote NO ref", refs(r) === refsBefore);
 check("the plan left HEAD, the index and the working tree as they were", JSON.stringify(state()) === JSON.stringify(before));
 
 // ---- the write adds one ref and nothing else ----
-const w = PB.writeProposal({ repo: r, branch: "feat/face-engine-driver-review-diff", files: [{ path: "engine/router.yaml", content: PROPOSED }], allow: ALLOW, message: "engine: route review-diff to codex (proposal)" });
+const w = await PB.writeProposal({ repo: r, branch: "feat/face-engine-driver-review-diff", files: [{ path: "engine/router.yaml", content: PROPOSED }], allow: ALLOW, message: "engine: route review-diff to codex (proposal)" });
 check("the write returns a commit", /^[0-9a-f]{40,64}$/.test(w.commit));
 check("the branch exists and points at that commit", git(r, "rev-parse", "refs/heads/feat/face-engine-driver-review-diff") === w.commit);
 check("its parent is main", git(r, "rev-parse", `${w.commit}^`) === before.main);
@@ -115,26 +115,118 @@ check("no hook ran (reference-transaction, post-commit, post-checkout)", !exists
 check("the commit is written under the machine identity, not the owner's", git(r, "log", "-1", "--format=%an <%ae>", w.commit) === "arc face <face@arc.invalid>");
 
 // ---- refusals, by name ----
-const refuse = (name, o, code) => {
+const refuse = async (name, o, code) => {
   let got = null;
-  try { PB.writeProposal({ repo: r, message: "m", allow: ALLOW, files: [{ path: "engine/router.yaml", content: PROPOSED.replace("codex", "hermes") }], ...o }); }
+  try { await PB.writeProposal({ repo: r, message: "m", allow: ALLOW, files: [{ path: "engine/router.yaml", content: PROPOSED.replace("codex", "hermes") }], ...o }); }
   catch (e) { got = e && e.code; }
   check(`refused: ${name} -> ${code}`, got === code, `got ${got}`);
 };
-refuse("the branch already exists", { branch: "feat/face-engine-driver-review-diff" }, "BRANCH_EXISTS");
-refuse("a branch outside feat/face-*", { branch: "main" }, "BAD_BRANCH");
-refuse("a branch name with a double dash", { branch: "feat/face-x--y" }, "BAD_BRANCH");
-refuse("a traversal", { branch: "feat/face-t1", files: [{ path: "engine/../README.md", content: "x" }] }, "BAD_PATH");
-refuse("git's own directory", { branch: "feat/face-t2", files: [{ path: ".git/config", content: "x" }], allow: [".git/config"] }, "BAD_PATH");
-refuse("an absolute path", { branch: "feat/face-t3", files: [{ path: "/etc/passwd", content: "x" }] }, "BAD_PATH");
-refuse("hq.policy.yaml, even when the caller allows it", { branch: "feat/face-t4", files: [{ path: "hq.policy.yaml", content: "levels: {x: 1}\n" }] }, "UNGRANTABLE");
-refuse(".claude/settings.json, even when allowed", { branch: "feat/face-t5", files: [{ path: ".claude/settings.json", content: "{}" }], allow: [".claude/settings.json"] }, "UNGRANTABLE");
-refuse("a hook file, even when allowed", { branch: "feat/face-t6", files: [{ path: ".claude/hooks/x.sh", content: "x" }], allow: [".claude/hooks/x.sh"] }, "UNGRANTABLE");
-refuse("a path the caller did not allow", { branch: "feat/face-t7", files: [{ path: "README.md", content: "x" }] }, "NOT_ALLOWED");
-refuse("a proposal that changes nothing", { branch: "feat/face-t8", files: [{ path: "engine/router.yaml", content: git(r, "show", "main:engine/router.yaml") + "\n" }] }, "NO_CHANGE");
-refuse("a NUL byte", { branch: "feat/face-t9", files: [{ path: "engine/router.yaml", content: "a\u0000b" }] }, "BAD_CONTENT");
-refuse("no allow-list at all", { branch: "feat/face-t10", allow: [] }, "NO_ALLOW");
+await refuse("the branch already exists", { branch: "feat/face-engine-driver-review-diff" }, "BRANCH_EXISTS");
+await refuse("a branch outside feat/face-*", { branch: "main" }, "BAD_BRANCH");
+await refuse("a branch name with a double dash", { branch: "feat/face-x--y" }, "BAD_BRANCH");
+await refuse("a traversal", { branch: "feat/face-t1", files: [{ path: "engine/../README.md", content: "x" }] }, "BAD_PATH");
+await refuse("git's own directory", { branch: "feat/face-t2", files: [{ path: ".git/config", content: "x" }], allow: [".git/config"] }, "BAD_PATH");
+await refuse("an absolute path", { branch: "feat/face-t3", files: [{ path: "/etc/passwd", content: "x" }] }, "BAD_PATH");
+await refuse("hq.policy.yaml, even when the caller allows it", { branch: "feat/face-t4", files: [{ path: "hq.policy.yaml", content: "levels: {x: 1}\n" }] }, "UNGRANTABLE");
+await refuse(".claude/settings.json, even when allowed", { branch: "feat/face-t5", files: [{ path: ".claude/settings.json", content: "{}" }], allow: [".claude/settings.json"] }, "UNGRANTABLE");
+await refuse("a hook file, even when allowed", { branch: "feat/face-t6", files: [{ path: ".claude/hooks/x.sh", content: "x" }], allow: [".claude/hooks/x.sh"] }, "UNGRANTABLE");
+await refuse("a path the caller did not allow", { branch: "feat/face-t7", files: [{ path: "README.md", content: "x" }] }, "NOT_ALLOWED");
+await refuse("a proposal that changes nothing", { branch: "feat/face-t8", files: [{ path: "engine/router.yaml", content: git(r, "show", "main:engine/router.yaml") + "\n" }] }, "NO_CHANGE");
+await refuse("a NUL byte", { branch: "feat/face-t9", files: [{ path: "engine/router.yaml", content: "a\u0000b" }] }, "BAD_CONTENT");
+await refuse("no allow-list at all", { branch: "feat/face-t10", allow: [] }, "NO_ALLOW");
 check("none of the refusals left a ref behind", refs(r).split("\n").length === refsBefore.split("\n").length + 1, refs(r));
+
+// ---- names a case-insensitive or Windows checkout reads as another (PR 3a attacks) ----
+await refuse("a trailing dot on an un-grantable name (Windows reads hq.policy.yaml. as hq.policy.yaml)", { branch: "feat/face-t11", files: [{ path: "hq.policy.yaml.", content: "x" }], allow: ["hq.policy.yaml."] }, "BAD_PATH");
+await refuse("git's directory spelled .git.", { branch: "feat/face-t12", files: [{ path: ".git./config", content: "x" }], allow: [".git./config"] }, "BAD_PATH");
+await refuse("a Windows device name", { branch: "feat/face-t13", files: [{ path: "engine/nul", content: "x" }], allow: ["engine/nul"] }, "BAD_PATH");
+await refuse("a device name with an extension", { branch: "feat/face-t14", files: [{ path: "engine/com1.yaml", content: "x" }], allow: ["engine/com1.yaml"] }, "BAD_PATH");
+await refuse("a name that opens with a dash", { branch: "feat/face-t15", files: [{ path: "-x/y", content: "x" }], allow: ["-x/y"] }, "BAD_PATH");
+
+// ---- an existing branch in ANOTHER CASE, or as a directory, is a collision (PR 3a shell attack: on a case-insensitive
+// filesystem a loose feat/face-p2-f shadowed the owner's packed feat/face-P2-F and moved it) ----
+{
+  git(r, "branch", "feat/face-Case-Clash", "main");
+  git(r, "pack-refs", "--all");
+  const ownerTip = git(r, "rev-parse", "refs/heads/feat/face-Case-Clash");
+  await refuse("a branch that differs only in case from the owner's (packed) branch", { branch: "feat/face-case-clash" }, "BRANCH_EXISTS");
+  check("... and the owner's branch still points where it did", git(r, "rev-parse", "refs/heads/feat/face-Case-Clash") === ownerTip);
+  git(r, "branch", "feat/face-dir/wip", "main");
+  await refuse("a branch whose name is another branch's directory", { branch: "feat/face-dir" }, "BRANCH_EXISTS");
+}
+
+// ---- a stale ref lock is named for what it is, never "the branch appeared" (PR 3a shell attack) ----
+{
+  const lock = join(r, ".git", "refs", "heads", "feat", "face-locked.lock");
+  mkdirSync(dirname(lock), { recursive: true });
+  writeFileSync(lock, "");
+  let code = null, msg = "";
+  try { await PB.writeProposal({ repo: r, message: "m", allow: ALLOW, branch: "feat/face-locked", files: [{ path: "engine/router.yaml", content: PROPOSED.replace("codex", "lock") }] }); }
+  catch (e) { code = e.code; msg = e.message; }
+  check("a stale .lock refuses as GIT_FAILED in git's words, not BRANCH_EXISTS", code === "GIT_FAILED" && /lock/i.test(msg), `${code} ${msg}`);
+  check("... and no branch was created behind the lock", !refs(r).includes("refs/heads/feat/face-locked "));
+  rmSync(lock, { force: true });
+}
+
+// ---- the base the caller read from is the base, or nothing is written ----
+{
+  let code = null;
+  try { await PB.writeProposal({ repo: r, message: "m", allow: ALLOW, branch: "feat/face-moved", files: [{ path: "engine/router.yaml", content: PROPOSED.replace("codex", "moved") }], base: "0".repeat(40) }); }
+  catch (e) { code = e.code; }
+  check("a write whose base is not main's commit refuses (BASE_MOVED) and adds no ref", code === "BASE_MOVED" && !refs(r).includes("refs/heads/feat/face-moved "), `code=${code}`);
+}
+
+// ---- main's bytes are read strictly: a non-UTF-8 router is refused, never rewritten through U+FFFD ----
+{
+  const c = scratch("latin1");
+  writeFileSync(join(c, "engine", "router.yaml"), Buffer.concat([Buffer.from("classes:\n  # caf"), Buffer.from([0xe9]), Buffer.from("\n  review-diff:\n    driver: claude-code\n")]));
+  git(c, "commit", "-q", "-am", "a latin-1 byte");
+  let code = null;
+  try { await PB.baseText({ repo: c, path: "engine/router.yaml" }); } catch (e) { code = e.code; }
+  check("a router that is not valid UTF-8 on main refuses (NOT_UTF8)", code === "NOT_UTF8", `code=${code}`);
+  const clean = await PB.baseText({ repo: r, path: "engine/router.yaml" });
+  check("... and a valid one reads as its text, BOM-safe (vacuous-pass guard)", typeof clean.text === "string" && clean.text.startsWith("classes:") && clean.base === before.main);
+}
+
+// ---- config in the owner's repo that runs programs or hides the diff is overridden (PR 3a shell attack) ----
+{
+  const c = scratch("config");
+  const mark = join(c, "..", `fsmonitor-${Date.now()}.txt`);
+  const hook = join(c, "fsmon.sh");
+  writeFileSync(hook, `#!/bin/sh\necho ran >> "${mark.replace(/\\/g, "/")}"\nexit 1\n`);
+  try { chmodSync(hook, 0o755); } catch { /* windows */ }
+  git(c, "config", "core.fsmonitor", hook.replace(/\\/g, "/"));
+  git(c, "config", "core.splitIndex", "true");
+  // MUTANT CONTROL: plain git, with the owner's config, does run the hook -- so its absence below is a measurement.
+  try { execFileSync("git", ["status", "--porcelain"], { cwd: c, env: cleanEnv(), stdio: "ignore" }); } catch { /* the hook's exit 1 is fine */ }
+  check("MUTANT CONTROL: the owner's fsmonitor hook runs under plain git", existsSync(mark));
+  const marksBefore = existsSync(mark) ? readFileSync(mark, "utf8") : "";
+  const shared = () => readdirSync(join(c, ".git")).filter((n) => n.startsWith("sharedindex.")).sort().join(",");
+  const sharedBefore = shared();
+  await PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-config", files: [{ path: "engine/router.yaml", content: PROPOSED }] });
+  check("the writer ran no fsmonitor hook", (existsSync(mark) ? readFileSync(mark, "utf8") : "") === marksBefore);
+  check("the writer left no sharedindex.* in the owner's .git (split index off)", shared() === sharedBefore, `${sharedBefore} -> ${shared()}`);
+  // A per-user attributes file marking YAML as binary made the plan read "Binary files differ" (PR 3a shell attack).
+  const xdg = mkdtempSync(join(tmpdir(), "face-proposal-xdg-"));
+  mkdirSync(join(xdg, "git"), { recursive: true });
+  writeFileSync(join(xdg, "git", "attributes"), "*.yaml -diff\n");
+  // MUTANT CONTROL: plain `git diff --no-index` under that file does print "Binary files" -- the detector can fire.
+  const pair = mkdtempSync(join(tmpdir(), "face-proposal-pair-"));
+  writeFileSync(join(pair, "a.yaml"), "k: 1\n");
+  writeFileSync(join(pair, "b.yaml"), "k: 2\n");
+  let plain = "";
+  try { plain = execFileSync("git", ["diff", "--no-index", "--", "a.yaml", "b.yaml"], { cwd: pair, encoding: "utf8", env: { ...cleanEnv(), XDG_CONFIG_HOME: xdg } }); }
+  catch (e) { plain = String(e.stdout || ""); }
+  check("MUTANT CONTROL: plain git honours the per-user attributes file and hides the diff", /Binary files/.test(plain), plain.slice(0, 200));
+  const saved = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = xdg;
+  try {
+    const p = await PB.planProposal({ repo: c, branch: "feat/face-attrs", files: [{ path: "engine/router.yaml", content: PROPOSED.replace("codex", "attrs") }], allow: ALLOW });
+    check("a per-user attributes file cannot hide the plan's diff", /\+\s+driver: attrs/.test(p.diff) && !/Binary files/.test(p.diff), p.diff.slice(0, 200));
+  } finally {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = saved;
+  }
+}
 
 // ---- the module names no porcelain that could move the owner's tree ----
 {
@@ -147,4 +239,4 @@ check("none of the refusals left a ref behind", refs(r).split("\n").length === r
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exit(failed === 0 && ran >= 30 ? 0 : 1);
+process.exit(failed === 0 && ran >= 50 ? 0 : 1);
