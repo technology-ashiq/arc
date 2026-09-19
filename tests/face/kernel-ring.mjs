@@ -837,7 +837,8 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("absorb trial, applied: the commitment is on its branch, the tree unmoved, the nonce in the seal store", tr.status === 0 && /^[0-9a-f]{64}/.test(commitment) && existsSync(join(seals, "kernel-trial-1.json")) && clean(), `${tr.status} ${tr.stderr}`);
   check("absorb trial, applied: the approval is the ab-judgement profile, and its commitment is the one on the branch", !!tAppr && commitment.startsWith(tAppr.payload.commitment) && tAppr.payload.evidence_path === "initiatives/absorb/evidence/kernel-trial");
   const twice = inScratch("absorb/trial.mjs", [...TRIAL, "--expect", tDigest || "x"]);
-  check("absorb trial applied again with its digest refuses BEFORE it seals again (BRANCH_EXISTS)", twice.status === 2 && /BRANCH_EXISTS/.test(twice.stderr) && approvals().filter((e) => e.payload.correlation === "kernel-trial-1").length === 1, twice.stderr);
+  // The seal's own guard answers first (the correlation is used), before the branch's: either way nothing is sealed twice.
+  check("absorb trial applied again with its digest refuses BEFORE it seals again (the seal exists, and so does the branch)", twice.status === 2 && /a seal already exists|BRANCH_EXISTS/.test(twice.stderr) && approvals().filter((e) => e.payload.correlation === "kernel-trial-1").length === 1, twice.stderr);
   const pUnbound = inScratch("absorb/pin.mjs", [...PIN.slice(0, -1), "initiatives/absorb/evidence/kernel-unbound.md"]);
   const tUnbound = inScratch("absorb/trial.mjs", [...TRIAL.slice(0, -1), "kernel-trial-unbound"]);
   check("absorb pin and trial with no plan digest refuse -- an apply is bound to a plan, and the trial seals nothing", pUnbound.status === 2 && /bound to a plan/.test(pUnbound.stderr) && tUnbound.status === 2 && /bound to a plan/.test(tUnbound.stderr) && !existsSync(join(seals, "kernel-trial-unbound.json")), `${pUnbound.stderr} :: ${tUnbound.stderr}`);

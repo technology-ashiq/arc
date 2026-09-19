@@ -213,7 +213,7 @@ const KEY_PREFIX_RE = /sk-|xox[baprs]-/;
  * @param {string} op @param {string} slug
  */
 export function proposalBranch(op, slug) {
-  const s = String(slug).toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  const s = String(slug).toLowerCase().replace(/[^abcdefghijklmnopqrstuvwxyz0123456789-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   return `feat/face-${op}-${s}`.replace(/sk-/g, "sk").replace(/(xox[baprs])-/g, "$1").slice(0, 90).replace(/-+$/, "");
 }
 

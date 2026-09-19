@@ -68,7 +68,7 @@ function parseArgs(argv) {
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
-  const name = basename(a["--report"], ".md").toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  const name = basename(a["--report"], ".md").toLowerCase().replace(/[^abcdefghijklmnopqrstuvwxyz0123456789-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   const branch = proposalBranch("absorb-pin", name);
   let scratch;
   try { scratch = mkdtempSync(join(tmpdir(), "arc-absorb-pin-")); }
@@ -97,7 +97,10 @@ async function main() {
     const digest = planDigest({ branch, base, files, message, approval: approval("0".repeat(base.length)) });
     if (a.dryRun) {
       const plan = await planProposal({ repo: REPO, branch, files, allow, base });
-      process.stdout.write(`pin: ${String(s.stdout).trim().replace(/^study: /, "")}\n`);
+      // study's line names its --out, a scratch path, and the door withholds an absolute path AND everything after it:
+      // the plan's diff and digest were hidden from the owner's page (PR 3b CI). Only its counts are carried.
+      const counted = /\(([^()]*)\)\s*$/.exec(String(s.stdout).trim());
+      process.stdout.write(`pin: scaffolded the extraction report${counted ? ` (${counted[1]})` : ""}\n`);
       process.stdout.write(`pin: the report goes to ${a["--report"]} on a new branch ${branch} off main ${plan.base.slice(0, 12)}, then approval.requested to your inbox\n`);
       process.stdout.write(plan.diff.endsWith("\n") ? plan.diff : plan.diff + "\n");
       process.stdout.write("pin: dry run -- no branch, no object, no receipt was written\n");
