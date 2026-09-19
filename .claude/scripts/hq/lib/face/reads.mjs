@@ -111,7 +111,10 @@ export function childEnv() {
   // NODE_OPTIONS preloads code into a node child, and the three source overrides the door refuses on its own routes
   // (ARC_VENTURES_FILE, ARC_BENCH_CEILINGS, ARC_SETTINGS) must not reach a child that reads the same file for it.
   const DROP = new Set(["BASH_ENV", "ENV", "NODE_OPTIONS", "ARC_VENTURES_FILE", "ARC_BENCH_CEILINGS", "ARC_SETTINGS"]);
-  return Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/.test(k) && !DROP.has(k)));
+  // Compared UPPER-CASED: Windows reads env names case-insensitively, so `git_dir` or `node_options` set in lowercase
+  // passed this filter and the child honoured it -- a preload ran and git followed another repo (face v2 Phase 05
+  // shell attack). The twin of every name check: normalise before comparing.
+  return Object.fromEntries(Object.entries(process.env).filter(([k]) => { const up = k.toUpperCase(); return !up.startsWith("GIT_") && !DROP.has(up); }));
 }
 
 /** The clock the door answers by is forced when ARC_SPINE_NOW is set; a body built on it says so. */

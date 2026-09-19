@@ -231,6 +231,12 @@ export const DOOR_ROUTES = Object.freeze({
   "/api/absorb": read(),
   "/api/decide": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: true }),
   "/api/ask": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
+  // Phase 05 (REQ-07, ADR-1339): the work door. No module declares these in its `routes` -- the host's ops dock
+  // reaches them through the methods below, for the ops a module names in its ops.mjs.
+  "/api/ops": read(),
+  "/api/op/:id/plan": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: false }),
+  "/api/op/:id/apply": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: true }),
+  "/api/op-run/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
 });
 
 /**
@@ -393,4 +399,27 @@ export class Door {
 
   /** @param {string} q */
   ask(q) { return this.call("/api/ask", { method: "POST", body: { q } }); }
+
+  // ---- the work door (face v2 Phase 05, ADR-1339) ----
+
+  /** The op registry this door serves: ids, rooms, fields, receipts. @param {AbortSignal} [signal] */
+  ops(signal) { return this.call("/api/ops", { signal }); }
+
+  /**
+   * Plan one op: the door runs its dry run, which writes nothing, and holds the result under a one-shot plan id.
+   * @param {string} id @param {Record<string, string>} input
+   */
+  opPlan(id, input) { return this.call(`/api/op/${encodeURIComponent(id)}/plan`, { method: "POST", body: { input } }); }
+
+  /**
+   * Apply a held plan -- ONE plan id, never a list. `confirm` is the op's own id, sent only by the owner's confirming
+   * click on a human-run op; the door refuses a human-run apply without it.
+   * @param {string} id @param {string} planId @param {string | null} [confirm]
+   */
+  opApply(id, planId, confirm) {
+    return this.call(`/api/op/${encodeURIComponent(id)}/apply`, { method: "POST", body: confirm ? { planId, confirm } : { planId } });
+  }
+
+  /** A run as it stands: the tool's lines so far, then its result. @param {string} planId @param {AbortSignal} [signal] */
+  opRun(planId, signal) { return this.call(`/api/op-run/${encodeURIComponent(planId)}`, { signal }); }
 }

@@ -1,0 +1,417 @@
+#!/usr/bin/env node
+// work-door.mjs -- the WORK door's contract suite (face v2 Phase 05; REQ-07, ADR-1326, ADR-1334, ADR-1339).
+//
+// Self-contained: builds two identical fixture spines in a temp dir, boots arc-dash in sim mode over the first, drives
+// every op through plan -> apply -> run, and runs the SAME op by hand -- the command its tool prints -- over the second.
+// The receipts must match: that is the no-second-path fixture, measured per op rather than asserted of the design.
+// Also: a plan writes nothing, the door's refusals are named, a human-run op needs its confirmation, two applies of one
+// plan run the tool ONCE (a counting fixture CLI, through createWorkDoor itself), a sim door never spends, and no op
+// touches the repository's files.
+//
+// VACUOUS-PASS GUARD: the fixture is proven seeded and the door proven to see it before any behavioural check, and the
+// last line is "RAN: <n> checks", which the bats wrapper requires -- a suite that dies half-way cannot read green.
+
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(HERE, "..", "..");
+const PORT = 8431;
+const TOKEN = "work-door-token";
+const ORIGIN = `http://127.0.0.1:${PORT}`;
+const EVENT = join(REPO, ".claude", "scripts", "hq", "arc-event.mjs");
+
+const OPS_MOD = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "face-ops.mjs")).href);
+const DOOR_MOD = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "work-door.mjs")).href);
+
+let ran = 0, failed = 0;
+const check = (name, cond, detail = "") => {
+  ran++;
+  if (!cond) { failed++; console.log(`FAIL ${name} ${detail}`); }
+  else console.log(`ok ${name}`);
+};
+
+const tmp = mkdtempSync(join(tmpdir(), "face-work-door-"));
+const SPINE_A = join(tmp, "spine-door");
+const SPINE_B = join(tmp, "spine-hand");
+const JOURNAL = join(tmp, "journal");
+for (const d of [SPINE_A, SPINE_B]) mkdirSync(join(d, "events"), { recursive: true });
+
+// ---- the fixture: one real payment in the month before this one, on both spines ----
+// Mid-month, so no zone or boundary question reaches the close; last month, so the close is of a month that ended.
+const now = new Date();
+const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15, 6, 0, 0));
+const MONTH = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}`;
+writeFileSync(join(tmp, "charge.json"), JSON.stringify({ amount: 100000, currency: "INR", venture: "arc", provider: "razorpay", provider_payment_id: "razorpay:pay_workdoor1" }));
+const seeded = [SPINE_A, SPINE_B].map((root) => spawnSync(process.execPath,
+  [EVENT, "ingest", "revenue.received", "--json", join(tmp, "charge.json"), "--venture", "arc", "--run-id", "r-workdoor"],
+  { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: root, ARC_SPINE_NOW: String(prev.getTime()) } }));
+check("fixture: one payment ingested on each spine (vacuous-pass guard)",
+  seeded.every((r) => r.status === 0 && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(String(r.stdout).trim())), seeded.map((r) => `${r.status}:${String(r.stderr).trim()}`).join(" | "));
+
+// The article a person merged, for the growth seal.
+const ARTICLE = join(tmp, "work-door-probe.mdx");
+writeFileSync(ARTICLE, "---\ntitle: The work door, probed\n---\n\nA probe article the suite seals twice: once through the door, once by hand.\n");
+
+/** Every file under a spine, hashed -- what "writes nothing" is measured against. */
+function spineFingerprint(root) {
+  const out = [];
+  const walk = (d) => {
+    for (const n of readdirSync(d).sort()) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) walk(p);
+      else out.push(`${p.slice(root.length)}:${createHash("sha256").update(readFileSync(p)).digest("hex")}`);
+    }
+  };
+  walk(root);
+  return out.join("\n");
+}
+const gitStatus = () => execFileSync("git", ["status", "--porcelain"], { cwd: REPO, encoding: "utf8" });
+const gitHead = () => execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
+const statusBefore = gitStatus();
+const headBefore = gitHead();
+
+// The inputs each op is driven with, on both paths. Every registry op must appear here: an op the suite does not
+// drive is an op whose no-second-path property nobody measured.
+const INPUTS = {
+  "today.capture-idea": { text: "the work door captured this" },
+  "develop.checkpoint": { lane: "face" },
+  "money.criteria": { what: "the work door suite asks for a criteria change" },
+  "money.close-month": { month: MONTH, totals: "razorpay:INR=100000" },
+  "growth.publish": { slug: "work-door-probe", article: ARTICLE, cluster: "c-001", title: "The work door, probed", pr: "7" },
+  "bench.run-model": { driver: "mock", model: "mock", inr: "1", minutes: "5" },
+};
+check("every registry op is driven by this suite",
+  OPS_MOD.OPS.length > 0 && OPS_MOD.OPS.every((o) => Object.hasOwn(INPUTS, o.id)) && Object.keys(INPUTS).length === OPS_MOD.OPS.length,
+  OPS_MOD.OPS.map((o) => o.id).join(","));
+// No op touches files yet. The branch machinery (write to feat/face-*, show the diff, stop) ships with the first op
+// that needs it; until then an op that declares file writes is a registry row this door cannot honour.
+check("no registry op declares file writes (the branch fixture lands with the first one that does)",
+  OPS_MOD.OPS.every((o) => o.touchesFiles === false), OPS_MOD.OPS.filter((o) => o.touchesFiles).map((o) => o.id).join(","));
+// Every op's receipt is a kind the spine has (ADR-1334).
+{
+  const V = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "validate.mjs")).href);
+  const KINDS = new Set(V.KINDS);
+  check("every op writes a kind already in KINDS", KINDS.size > 40 && OPS_MOD.OPS.every((o) => KINDS.has(o.receipt.kind)), OPS_MOD.OPS.map((o) => o.receipt.kind).join(","));
+}
+
+// ---- the hand-run: exactly what a person would type, from the tool's own output ----
+function handRun(op, values) {
+  const env = { ...process.env, ARC_SPINE_ROOT: SPINE_B };
+  const run = (cmd) => spawnSync(process.execPath, [join(REPO, ".claude", "scripts", ...cmd.script.split("/")), ...cmd.args], { cwd: REPO, encoding: "utf8", env });
+  let applyCmd;
+  if (op.apply === "emit-plan") {
+    const planned = run(op.plan(values));
+    if (planned.status !== 0) return { error: `plan exited ${planned.status}: ${planned.stderr}` };
+    const last = String(planned.stdout).trim().split(/\r?\n/).pop() || "";
+    applyCmd = { script: "hq/arc-event.mjs", args: JSON.parse(last).emit };
+  } else {
+    applyCmd = op.apply(values);
+  }
+  const res = run(applyCmd);
+  return { exit: res.status, stdout: res.stdout, stderr: res.stderr };
+}
+/** The receipts of one kind on a spine, read through the spine's own reader. */
+async function receiptsOf(root, kind) {
+  const S = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "spine.mjs")).href);
+  return (await S.query(root, { kind, engine: "scan" })).events.map((e) => e.event);
+}
+
+// ---- boot the door (sim, over spine A) ----
+const dash = spawn(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--spine", SPINE_A, "--port", String(PORT)],
+  { cwd: REPO, env: { ...process.env, ARC_DASH_TOKEN: TOKEN, ARC_DASH_JOURNAL_DIR: JOURNAL }, stdio: ["ignore", "ignore", "pipe"] });
+let doorErr = "";
+dash.stderr.on("data", (c) => { doorErr += c; });
+const H = { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" };
+// ONE retry when the socket was closed under a reused connection: the door pins keepAliveTimeout at 5 s (slowloris),
+// and this suite pauses longer than that between requests while a hand-run works, so a pooled socket can be closed at
+// the moment it is reused ("other side closed", 3 of 19 CI jobs). A retry is safe by the door's own contract: a plan
+// is a new one-shot plan, and an apply of the same plan id REPLAYS -- it never runs twice.
+const j = async (path, opts = {}) => {
+  let r;
+  try { r = await fetch(`http://127.0.0.1:${PORT}${path}`, opts); }
+  catch (e) {
+    const cause = e && e.cause ? String(e.cause.code || e.cause.message || e.cause) : "";
+    if (!/other side closed|ECONNRESET|UND_ERR_SOCKET/i.test(cause)) throw e;
+    r = await fetch(`http://127.0.0.1:${PORT}${path}`, opts);
+  }
+  let body; try { body = await r.json(); } catch { body = {}; }
+  return { status: r.status, body };
+};
+const post = (path, body, extra = {}) => j(path, { method: "POST", headers: { ...H, ...extra }, body: JSON.stringify(body) });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function settle(planId) {
+  let r;
+  for (let i = 0; i < 600; i++) {
+    r = await j(`/api/op-run/${planId}`, { headers: H });
+    if (r.body && r.body.state === "done") return r;
+    await sleep(200);
+  }
+  return r;
+}
+
+let up = false;
+for (let i = 0; i < 50 && !up; i++) {
+  await sleep(200);
+  try { up = (await j("/api/health", { headers: H })).status === 200; } catch { /* not yet */ }
+}
+
+try {
+  check("door up", up, doorErr.slice(-300));
+  let r = await j("/api/health", { headers: H });
+  check("door sees the seeded fixture", r.body.spine && r.body.spine.events === 1, `saw=${r.body.spine && r.body.spine.events}`);
+
+  // ---- the registry the face reads ----
+  r = await j("/api/ops", { headers: H });
+  check("GET /api/ops serves exactly the registry", r.status === 200 && JSON.stringify(r.body.ops.map((o) => o.id)) === JSON.stringify(OPS_MOD.OPS.map((o) => o.id)), JSON.stringify(r.body).slice(0, 200));
+
+  // ---- refusals, each by name ----
+  r = await post("/api/op/ghost.op/plan", { input: {} });
+  check("an op the door does not serve -> UNKNOWN_OP 404", r.status === 404 && r.body.error === "UNKNOWN_OP", `${r.status} ${r.body.error}`);
+  r = await post("/api/op/today.capture-idea/plan", { input: { text: "x", extra: "y" } });
+  check("a field the op does not take -> BAD_INPUT", r.status === 400 && r.body.error === "BAD_INPUT", `${r.status} ${r.body.error}`);
+  r = await post("/api/op/today.capture-idea/plan", { input: {} });
+  check("a required field left out -> BAD_INPUT", r.status === 400 && r.body.error === "BAD_INPUT");
+  r = await post("/api/op/today.capture-idea/plan", { input: { text: "--strict" } });
+  check("a value that opens with a dash -> BAD_INPUT (a tool could read it as a flag)", r.status === 400 && r.body.error === "BAD_INPUT");
+  r = await post("/api/op/today.capture-idea/plan", { input: { text: "x".repeat(301) } });
+  check("a value past its byte bound -> BAD_INPUT", r.status === 400 && r.body.error === "BAD_INPUT");
+  r = await post("/api/op/today.capture-idea/plan", { input: { text: "two\nlines" } });
+  check("a line break in a one-line field -> BAD_INPUT", r.status === 400 && r.body.error === "BAD_INPUT");
+  r = await post("/api/op/bench.run-model/plan", { input: { driver: "no-such-driver", model: "m", inr: "1", minutes: "5" } });
+  check("a select value outside its options -> BAD_INPUT", r.status === 400 && r.body.error === "BAD_INPUT");
+  r = await post("/api/op/bench.run-model/plan", { input: { driver: "mock", model: "m", inr: "0", minutes: "5" } });
+  check("an int below its range -> BAD_INPUT", r.status === 400 && r.body.error === "BAD_INPUT");
+  r = await post("/api/op/today.capture-idea/plan", { input: { text: "x" }, planId: "y" });
+  check("plan takes { input } and nothing else -> BAD_INPUT", r.status === 400 && r.body.error === "BAD_INPUT", `${r.status} ${r.body.error}`);
+  const paid = OPS_MOD.OPS.find((o) => o.id === "bench.run-model").fields.find((f) => f.name === "driver").options.find((d) => d !== "mock");
+  if (paid) {
+    r = await post("/api/op/bench.run-model/plan", { input: { driver: paid, model: "m", inr: "1", minutes: "5" } });
+    check("a sim door never spends: a paid driver -> SIM_SPEND", r.status === 403 && r.body.error === "SIM_SPEND", `${r.status} ${r.body.error}`);
+  }
+  r = await post("/api/op/today.capture-idea/apply", { planId: "AAAAAAAAAAAAAAAAAAAAAAAA" }, { Origin: ORIGIN });
+  check("an unknown plan id -> UNKNOWN_PLAN", r.status === 404 && r.body.error === "UNKNOWN_PLAN", `${r.status} ${r.body.error}`);
+  r = await post("/api/op/today.capture-idea/apply", { planId: ["a", "b"] }, { Origin: ORIGIN });
+  check("apply takes ONE plan id, never a list -> BAD_PLAN_ID", r.status === 400 && r.body.error === "BAD_PLAN_ID", `${r.status} ${r.body.error}`);
+  r = await post("/api/op/today.capture-idea/apply", [{ planId: "x" }], { Origin: ORIGIN });
+  check("an array body -> BAD_PLAN_ID", r.status === 400 && r.body.error === "BAD_PLAN_ID", `${r.status} ${r.body.error}`);
+
+  // ---- every op, both paths ----
+  for (const op of OPS_MOD.OPS) {
+    const values = INPUTS[op.id];
+    const before = spineFingerprint(SPINE_A);
+    const plan = await post(`/api/op/${op.id}/plan`, { input: values });
+    check(`${op.id}: the plan answers ok`, plan.status === 200 && plan.body.ok === true && typeof plan.body.planId === "string",
+      `${plan.status} ${plan.body.error || ""} ${JSON.stringify(plan.body.refusal || "").slice(0, 400)}`);
+    check(`${op.id}: the plan wrote nothing to the spine`, spineFingerprint(SPINE_A) === before);
+    check(`${op.id}: the plan names the command, what apply runs, the files and the cost`,
+      [plan.body.command, plan.body.apply, plan.body.diff, plan.body.estimate].every((s) => typeof s === "string" && s.length > 0));
+    if (plan.body.ok !== true) continue;
+
+    // Without Origin the mutating route refuses before anything runs.
+    const noOrigin = await post(`/api/op/${op.id}/apply`, { planId: plan.body.planId });
+    check(`${op.id}: apply without Origin -> NO_ORIGIN`, noOrigin.status === 403 && noOrigin.body.error === "NO_ORIGIN", `${noOrigin.status} ${noOrigin.body.error}`);
+    if (op.humanRun) {
+      const bare = await post(`/api/op/${op.id}/apply`, { planId: plan.body.planId }, { Origin: ORIGIN });
+      check(`${op.id}: human-run, so apply without the confirmation -> CONFIRM_REQUIRED`, bare.status === 428 && bare.body.error === "CONFIRM_REQUIRED", `${bare.status} ${bare.body.error}`);
+      const wrong = await post(`/api/op/${op.id}/apply`, { planId: plan.body.planId, confirm: "today.capture-idea" }, { Origin: ORIGIN });
+      check(`${op.id}: a confirmation naming another op -> CONFIRM_REQUIRED`, wrong.status === 428);
+    }
+    const other = OPS_MOD.OPS.find((o) => o.id !== op.id);
+    const cross = await post(`/api/op/${other.id}/apply`, { planId: plan.body.planId, confirm: other.id }, { Origin: ORIGIN });
+    check(`${op.id}: its plan applied as another op -> PLAN_OTHER_OP`, cross.status === 409 && cross.body.error === "PLAN_OTHER_OP", `${cross.status} ${cross.body.error}`);
+
+    const ofOp = (events) => events.filter((e) => !op.receipt.process || e.process === op.receipt.process);
+    const kindBefore = ofOp(await receiptsOf(SPINE_A, op.receipt.kind)).length;
+    const body = { planId: plan.body.planId, ...(op.humanRun ? { confirm: op.id } : {}) };
+    // Two applies of one plan, concurrently: one run.
+    const [a1, a2] = await Promise.all([post(`/api/op/${op.id}/apply`, body, { Origin: ORIGIN }), post(`/api/op/${op.id}/apply`, body, { Origin: ORIGIN })]);
+    check(`${op.id}: two concurrent applies -> one run, the other a replay`, a1.status === 200 && a2.status === 200 && [a1.body.replayed, a2.body.replayed].filter(Boolean).length === 1,
+      `${a1.status}/${a2.status} ${a1.body.replayed}/${a2.body.replayed} ${a1.body.error || ""}${a2.body.error || ""}`);
+    const done = await settle(plan.body.planId);
+    const result = done && done.body && done.body.result;
+    check(`${op.id}: the run ends with a receipt of ${op.receipt.kind}`, !!result && result.ok === true && result.receipt && result.receipt.kind === op.receipt.kind,
+      JSON.stringify(result || done && done.body).slice(0, 500));
+    const kindAfter = await receiptsOf(SPINE_A, op.receipt.kind);
+    const mine = ofOp(kindAfter);
+    check(`${op.id}: the spine gained exactly one ${op.receipt.kind}${op.receipt.process ? ` from ${op.receipt.process}` : ""}, and it is the run's`,
+      mine.length === kindBefore + 1 && !!result && !!result.receipt && mine.some((e) => e.id === result.receipt.id), `before=${kindBefore} after=${mine.length}`);
+    const again = await post(`/api/op/${op.id}/apply`, body, { Origin: ORIGIN });
+    check(`${op.id}: a repeat apply replays the run and runs nothing`, again.status === 200 && again.body.replayed === true && again.body.result && result && again.body.result.receipt && again.body.result.receipt.id === result.receipt.id);
+    check(`${op.id}: ... and the spine did not grow`, (await receiptsOf(SPINE_A, op.receipt.kind)).length === kindAfter.length);
+
+    // THE NO-SECOND-PATH FIXTURE: the same op, by hand, on the twin spine. The receipt must match.
+    const hand = handRun(op, OPS_MOD.validateInput(op, values));
+    check(`${op.id}: the hand-run exits as the door's run did`, hand.exit === result.exit, `hand=${hand.exit} ${hand.error || String(hand.stderr).slice(0, 300)}`);
+    const handReceipts = (await receiptsOf(SPINE_B, op.receipt.kind)).filter((e) => !op.receipt.process || e.process === op.receipt.process);
+    const handLast = handReceipts[handReceipts.length - 1];
+    const doorEvent = kindAfter.find((e) => result && e.id === result.receipt.id);
+    const comparable = (e) => (op.id === "bench.run-model"
+      // Bench's payload carries measurements of the run (attempts, a scorecard sha over timings); the parity that
+      // matters is what was run and against what -- the same subject, model, router and classes.
+      ? { kind: e.kind, process: e.process, outcome: e.outcome, subject: e.payload.subject, model_applied: e.payload.model_applied, router_unchanged: e.payload.router_unchanged, classes: (e.payload.classes || []).map((c) => c.task_class) }
+      : { kind: e.kind, process: e.process, actor: e.actor, venture: e.venture, outcome: e.outcome, payload: e.payload, idemFixed: op.id === "money.close-month" || op.id === "money.criteria" ? e.idem : null });
+    check(`${op.id}: NO SECOND PATH -- the door's receipt is the hand-run's receipt`,
+      !!doorEvent && !!handLast && JSON.stringify(comparable(doorEvent)) === JSON.stringify(comparable(handLast)),
+      `door=${JSON.stringify(doorEvent && comparable(doorEvent)).slice(0, 300)} hand=${JSON.stringify(handLast && comparable(handLast)).slice(0, 300)}`);
+  }
+
+  // ---- each run reports ITS OWN receipt (logic attack: six concurrent captures came back with each other's) ----
+  {
+    const texts = ["attribution one", "attribution two", "attribution three", "attribution four"];
+    const plans = await Promise.all(texts.map((text) => post("/api/op/today.capture-idea/plan", { input: { text } })));
+    check("attribution: four capture plans held", plans.every((p) => p.body.ok === true), plans.map((p) => p.status).join(","));
+    await Promise.all(plans.map((p) => post("/api/op/today.capture-idea/apply", { planId: p.body.planId }, { Origin: ORIGIN })));
+    const runs = await Promise.all(plans.map((p) => settle(p.body.planId)));
+    const ideas = await receiptsOf(SPINE_A, "idea.captured");
+    const own = runs.map((r, i) => {
+      const rec = r.body.result && r.body.result.receipt;
+      const ev = rec && ideas.find((e) => e.id === rec.id);
+      return !!ev && ev.payload.text === texts[i];
+    });
+    check("attribution: four concurrent runs each report the receipt that carries THEIR text", own.every(Boolean), JSON.stringify(own));
+    check("attribution: four runs, four distinct receipts", new Set(runs.map((r) => r.body.result && r.body.result.receipt && r.body.result.receipt.id)).size === 4);
+  }
+
+  // ---- the door reads receipts by scan, so a derived sqlite index cannot hide a fresh one (logic attack) ----
+  {
+    const replay = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-replay.mjs"), "--quiet"], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_A } });
+    if (existsSync(join(SPINE_A, "derived", "state.db"))) {
+      const p = await post("/api/op/today.capture-idea/plan", { input: { text: "after a replay built the index" } });
+      await post("/api/op/today.capture-idea/apply", { planId: p.body.planId }, { Origin: ORIGIN });
+      const done = await settle(p.body.planId);
+      check("with derived/state.db present, a fresh receipt is still found (the door reads by scan)", done.body.result && done.body.result.ok === true, JSON.stringify(done.body.result).slice(0, 300));
+    } else {
+      // Node before 22 has no node:sqlite, so arc-replay builds no index and there is nothing to hide a receipt behind.
+      check(`no derived/state.db on this Node (${process.version}): the stale-index arm has nothing to run against`, replay.status === 0 || /sqlite/i.test(String(replay.stderr) + String(replay.stdout)), `${replay.status} ${replay.stderr}`);
+    }
+  }
+
+  // ---- bodies are parsed strictly, and text refuses control characters (logic attack) ----
+  {
+    const raw = await j("/api/op/today.capture-idea/plan", { method: "POST", headers: H, body: '{"input":{"text":"a"},"input":{"text":"b"}}' });
+    check("a body with a duplicate key -> BAD_BODY, never last-one-wins", raw.status === 400 && raw.body.error === "BAD_BODY", `${raw.status} ${raw.body.error}`);
+    const esc = await post("/api/op/today.capture-idea/plan", { input: { text: `clear${String.fromCharCode(27)}[2J` } });
+    check("an ESC sequence in a one-line field -> BAD_INPUT", esc.status === 400 && esc.body.error === "BAD_INPUT", `${esc.status} ${esc.body.error}`);
+  }
+
+  // ---- a door over a NAMED spine is sim mode, never live (logic attack: ARC_SPINE_ROOT made a scratch spine "live") ----
+  {
+    const live = spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--port", String(PORT + 1)],
+      { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: SPINE_B, ARC_DASH_JOURNAL_DIR: JOURNAL }, timeout: 20_000 });
+    check("arc-dash with ARC_SPINE_ROOT and no --spine refuses to start -> BAD_SPINE_ENV", live.status === 1 && /BAD_SPINE_ENV/.test(live.stderr), `${live.status} ${String(live.stderr).slice(0, 200)}`);
+  }
+
+  // ---- the counting fixture: two concurrent applies of one plan invoke the tool exactly once (REQ-07) ----
+  {
+    const fx = join(tmp, "fixture-repo");
+    mkdirSync(join(fx, ".claude", "scripts", "fixture"), { recursive: true });
+    const counter = join(tmp, "count.txt");
+    // A tool that counts its own invocations, then writes a receipt through the REAL emitter.
+    writeFileSync(join(fx, ".claude", "scripts", "fixture", "count.mjs"),
+      `import { appendFileSync } from "node:fs";\nimport { spawnSync } from "node:child_process";\n` +
+      `appendFileSync(${JSON.stringify(counter)}, "x");\n` +
+      `if (process.argv[2] === "--plan") { console.log("would count"); process.exit(0); }\n` +
+      `const r = spawnSync(process.execPath, [${JSON.stringify(EVENT)}, "emit", "note.logged", "--payload", JSON.stringify({ note: "counted" }), "--strict"], { encoding: "utf8" });\n` +
+      `process.stdout.write(r.stdout); process.exit(r.status);\n`);
+    const SPINE_C = join(tmp, "spine-count");
+    mkdirSync(join(SPINE_C, "events"), { recursive: true });
+    process.env.ARC_SPINE_ROOT = SPINE_C;
+    const registry = [{ id: "fixture.count", room: "fixture", label: "count", receipt: { kind: "note.logged" }, humanRun: false, spends: false, touchesFiles: false, fields: [],
+      plan: () => ({ script: "fixture/count.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/count.mjs", args: [] }) }];
+    let clock = Date.now();
+    const door = DOOR_MOD.createWorkDoor({ mode: "sim", root: SPINE_C, repo: fx }, { registry, now: () => clock });
+    const p = await door.plan("fixture.count", { input: {} });
+    check("counting fixture: the plan ran the tool once", p.ok === true && readFileSync(counter, "utf8") === "x", JSON.stringify(p).slice(0, 200));
+    const v1 = door.apply("fixture.count", { planId: p.planId });
+    const v2 = door.apply("fixture.count", { planId: p.planId });
+    await door.settled();
+    check("counting fixture: two concurrent applies invoked the tool EXACTLY ONCE", readFileSync(counter, "utf8") === "xx", `count=${readFileSync(counter, "utf8").length}`);
+    check("counting fixture: the second apply was a replay, not a run", v1.replayed !== true && v2.replayed === true);
+    const settled = door.run(p.planId);
+    check("counting fixture: the run found the receipt on the spine", settled.state === "done" && settled.result.ok === true && settled.result.receipt.kind === "note.logged", JSON.stringify(settled.result).slice(0, 300));
+    // An expired plan is refused, and runs nothing.
+    const p2 = await door.plan("fixture.count", { input: {} });
+    clock += 16 * 60_000;
+    let expired = null;
+    try { door.apply("fixture.count", { planId: p2.planId }); } catch (e) { expired = e.code; }
+    check("an expired plan -> PLAN_EXPIRED, and the tool was not run", expired === "PLAN_EXPIRED" && readFileSync(counter, "utf8") === "xxx", `code=${expired} count=${readFileSync(counter, "utf8").length}`);
+    delete process.env.ARC_SPINE_ROOT;
+  }
+
+  // ---- arc-event --dry-run (the shared unlock) ----
+  {
+    const SPINE_D = join(tmp, "spine-dry");
+    mkdirSync(join(SPINE_D, "events"), { recursive: true });
+    const env = { ...process.env, ARC_SPINE_ROOT: SPINE_D };
+    const before = spineFingerprint(SPINE_D);
+    const ok = spawnSync(process.execPath, [EVENT, "emit", "note.logged", "--payload", "{\"note\":\"dry\"}", "--dry-run"], { cwd: REPO, encoding: "utf8", env });
+    let sealed = null; try { sealed = JSON.parse(String(ok.stdout).trim()); } catch { /* checked below */ }
+    check("arc-event --dry-run: exit 0 and the sealed record on stdout", ok.status === 0 && sealed && sealed.kind === "note.logged" && /^[0-9a-f]{64}$/.test(sealed.sha || ""), `${ok.status} ${ok.stdout} ${ok.stderr}`);
+    const bad = spawnSync(process.execPath, [EVENT, "emit", "ghost.kind", "--dry-run"], { cwd: REPO, encoding: "utf8", env });
+    check("arc-event --dry-run: a refusal is exit 2, even without --strict", bad.status === 2 && /REJECT/.test(bad.stderr), `${bad.status} ${bad.stderr}`);
+    check("arc-event --dry-run: nothing was written -- no event, no quarantine record", spineFingerprint(SPINE_D) === before);
+    const eq = spawnSync(process.execPath, [EVENT, "emit", "note.logged", "--dry-run=0"], { cwd: REPO, encoding: "utf8", env });
+    check("arc-event: --dry-run=0 is refused, never read as off", eq.status === 2 && /takes no value/.test(eq.stderr), `${eq.status} ${eq.stderr}`);
+    const cd = spawnSync(process.execPath, [EVENT, "close-day", "--dry-run"], { cwd: REPO, encoding: "utf8", env });
+    check("arc-event: close-day --dry-run is refused", cd.status === 2 && /emit and ingest only/.test(cd.stderr), `${cd.status} ${cd.stderr}`);
+    check("arc-event: the refused dry runs wrote nothing either", spineFingerprint(SPINE_D) === before);
+    // The same event WITHOUT the flag still appends: the flag is the only difference (a positive control).
+    const real = spawnSync(process.execPath, [EVENT, "emit", "note.logged", "--payload", "{\"note\":\"dry\"}", "--strict"], { cwd: REPO, encoding: "utf8", env });
+    check("arc-event: the same emit without --dry-run appends (positive control)", real.status === 0 && spineFingerprint(SPINE_D) !== before, `${real.status} ${real.stderr}`);
+  }
+
+  // ---- the owning lanes' additive flags refuse their misuse ----
+  {
+    const env = { ...process.env, ARC_SPINE_ROOT: SPINE_B };
+    const pnl = (args) => spawnSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-pnl.mjs"), ...args], { cwd: REPO, encoding: "utf8", env });
+    const ep = pnl(["--emit-plan"]);
+    check("arc-pnl: --emit-plan without --close is refused", ep.status !== 0 && /BAD_ARGS/.test(ep.stderr + ep.stdout), `${ep.status} ${ep.stderr}`);
+    const both = pnl(["--criteria-request", "x", "--criteria-digest"]);
+    check("arc-pnl: --criteria-request with --criteria-digest is refused", both.status !== 0 && /BAD_ARGS/.test(both.stderr + both.stdout), `${both.status} ${both.stderr}`);
+    const plain = pnl(["--close", MONTH, "--reconcile-total", "razorpay:INR=100000"]);
+    const lastPlain = String(plain.stdout).trim().split(/\r?\n/).pop() || "";
+    let parsed = null; try { parsed = JSON.parse(lastPlain); } catch { /* checked */ }
+    check("arc-pnl: without --emit-plan the close's last line is still the bare payload (the RUNBOOK's tail -1)", plain.status === 0 && parsed && parsed.month === MONTH && !("emit" in parsed), `${plain.status} ${lastPlain.slice(0, 200)}`);
+    const dev = spawnSync(process.execPath, [join(REPO, ".claude/scripts/develop/develop.mjs"), "status", "--lane", "face", "--receipt"], { cwd: REPO, encoding: "utf8", env });
+    check("develop.mjs: --receipt outside checkpoint is refused", dev.status === 2 && /--receipt belongs to checkpoint/.test(dev.stdout), `${dev.status} ${dev.stdout}`);
+    const bom = join(tmp, "bom.mdx");
+    writeFileSync(bom, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("x")]));
+    const seal = spawnSync(process.execPath, [join(REPO, ".claude/scripts/growth/arc-growth.mjs"), "seal", "work-door-probe", "--article", bom, "--cluster-id", "c-001", "--title", "t", "--pr", "7"], { cwd: REPO, encoding: "utf8", env });
+    check("arc-growth seal: a BOM-prefixed article is refused, never stripped", seal.status !== 0 && /BOM_IN_ARTICLE/.test(seal.stderr), `${seal.status} ${seal.stderr}`);
+    // The seal's path is checked before it is opened (shell attack): a directory, and a network/device-namespace path.
+    const sealAt = (article) => spawnSync(process.execPath, [join(REPO, ".claude/scripts/growth/arc-growth.mjs"), "seal", "work-door-probe", "--article", article, "--cluster-id", "c-001", "--title", "t", "--pr", "7"], { cwd: REPO, encoding: "utf8", env, timeout: 20_000 });
+    const dir = sealAt(tmp);
+    check("arc-growth seal: a directory is not an article -> BAD_ARTICLE", dir.status !== 0 && /BAD_ARTICLE/.test(dir.stderr), `${dir.status} ${dir.stderr}`);
+    const unc = sealAt("//./pipe/work-door-probe.mdx");
+    check("arc-growth seal: a network or device path is refused before it is opened -> BAD_ARTICLE", unc.status !== 0 && /BAD_ARTICLE/.test(unc.stderr), `${unc.status} ${unc.stderr}`);
+  }
+
+  // ---- the child's environment: the drop list holds whatever the case (shell attack: Windows reads env names
+  // case-insensitively, so a lowercase git_dir or node_options reached the child) ----
+  {
+    const R = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reads.mjs")).href);
+    const planted = { git_dir: "x", Git_Work_Tree: "x", node_options: "--require nothing", arc_settings: "x", Bash_Env: "x" };
+    for (const [k, v] of Object.entries(planted)) process.env[k] = v;
+    const env = R.childEnv();
+    const leaked = Object.keys(env).filter((k) => Object.hasOwn(planted, k));
+    for (const k of Object.keys(planted)) delete process.env[k];
+    check("childEnv drops git's variables, preloads and the source overrides in ANY case", leaked.length === 0 && Object.keys(env).length > 0, leaked.join(","));
+  }
+
+  // ---- nothing touched the repository ----
+  check("no op touched the repository's files (git status unchanged)", gitStatus() === statusBefore, gitStatus().slice(0, 300));
+  check("no op moved HEAD off its branch", gitHead() === headBefore);
+  // A schedule never reaches the door: no job in hq.jobs.yaml names the door or an op route.
+  const jobs = existsSync(join(REPO, "hq.jobs.yaml")) ? readFileSync(join(REPO, "hq.jobs.yaml"), "utf8") : "";
+  check("no scheduled job names the door or an op route", jobs.length > 0 && !/arc-dash|\/api\/op/.test(jobs));
+} finally {
+  dash.kill();
+}
+
+console.log(`RAN: ${ran} checks, ${failed} failed`);
+process.exit(failed === 0 && ran > 60 ? 0 : 1);

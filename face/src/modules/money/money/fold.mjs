@@ -51,8 +51,6 @@ import { costView, gateView, killLinesView, moneyReads, substanceView } from "..
  * @property {import("../../../lib/registry.mjs").NotServed} milestones
  * @property {import("../../../lib/registry.mjs").NotServed} sources
  * @property {{ isVerbPending: true, verb: string, sentence: string }} recordVerb
- * @property {{ isVerbPending: true, verb: string, sentence: string }} criteriaVerb
- * @property {{ isVerbPending: true, verb: string, sentence: string }} closeVerb
  * @property {string[]} northStar
  * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
@@ -169,14 +167,9 @@ export function fold(payloads, ctx) {
       "Record real revenue",
       "revenue.received is recorded by a person's hand only, through the ledger's ingest; the first one opens the green gate and resets the kill clock. It arrives with the work door.",
     ),
-    criteriaVerb: verbPending(
-      "Set a venture's kill criteria",
-      "Criteria are written at kickoff into ventures.yaml and approved by your stamp; a change is a reviewed diff, never an edit on a screen. It arrives with the work door.",
-    ),
-    closeVerb: verbPending(
-      "Close the month",
-      "month.closed seals a month's P&L so it replays to the same figures for ever. It arrives with the work door.",
-    ),
+    // "Set a venture's kill criteria" and "Close the month" are LIVE since face v2 Phase 05 (ADR-1339): the work door's
+    // money.criteria and money.close-month ops, drawn under this room by the host. Their cards are retired, and
+    // evidence/phase-05/verbs-pending.md is Phase 03's list without them.
     northStar: [
       "Rupees a month of revenue, per hour of the owner's week.",
       "The only number arc optimises. A feature that adds human hours is a regression, however impressive it looks.",

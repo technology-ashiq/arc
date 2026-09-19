@@ -24,7 +24,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             <div className="space-y-2.5">
               <VerbPending item={f.draftVerb} />
               <VerbPending item={f.packVerb} />
-              <VerbPending item={f.publishVerb} />
             </div>
           </HPanel>
 

@@ -1,7 +1,7 @@
 # Phase 04 — Door read routes: serve what Phase 03 named
 
 **Goal (one line):** REQ-06 — the routes named by the union of Phase 03's five `NOT SERVED` lists are served read-only, allow-listed, with parsers imported from the lints that own them.
-**Appetite:** 3 days
+**Appetite:** 0.5 days spent of 3 days allotted, the rest banked forward (ADR-1339)
 **Depends on:** phase-03
 **Serves:** REQ-06
 **Branch:** `feat/face-v2-04`

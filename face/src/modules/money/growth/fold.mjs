@@ -21,7 +21,6 @@ import { countedBy, countedOn, hasKind, holdsCount, kindCount, laneBadge, laneKp
  *   kpis: { key: string, v: string, l: string, sub: string }[],
  *   draftVerb: { isVerbPending: true, verb: string, sentence: string },
  *   packVerb: { isVerbPending: true, verb: string, sentence: string },
- *   publishVerb: { isVerbPending: true, verb: string, sentence: string },
  *   pipeline: import("../../../lib/served.mjs").ServedTable,
  *   channels: import("../../../lib/lane-room.mjs").CountRow[],
  *   showChannelsEmpty: boolean,
@@ -65,10 +64,8 @@ export function fold(payloads, ctx) {
       "Send the review pack to your inbox",
       "Gate one: one inbox item bundling the preview, the lint results and the diff; your stamp pins the draft's sha. It arrives with the work door.",
     ),
-    publishVerb: verbPending(
-      "Merge and publish",
-      "Gate two: a person merges, and content.published carries the sha read from the merged tree -- unedited means the approved sha and the published sha match. The machine writes the branch; it never merges.",
-    ),
+    // "Merge and publish" is LIVE since face v2 Phase 05 (ADR-1339): a person merges, and the work door's growth.publish
+    // op seals content.published from the merged tree. Its card is retired (evidence/phase-05/verbs-pending.md).
     pipeline: servedTable(projected(st, "rows", (b) => (Array.isArray(b["published"]) && Array.isArray(b["clusters"])
       ? [
         ...b["clusters"].map((c) => ({ ...asObject(c), stage: "cluster plan" })),

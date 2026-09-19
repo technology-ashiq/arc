@@ -34,6 +34,15 @@ load 'test_helper'
   [[ "$output" == *"ok the torn line is REPORTED, not dropped"* ]] || { echo "$output"; false; }
 }
 
+@test "work door: every op plans without writing, applies once, and writes the hand-run's own receipt" {
+  run node "$ARC_ROOT/tests/face/work-door.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok counting fixture: two concurrent applies invoked the tool EXACTLY ONCE"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok bench.run-model: NO SECOND PATH -- the door's receipt is the hand-run's receipt"* ]] || { echo "$output"; false; }
+}
+
 @test "ask golden: 20 live-state questions answered deterministically, refusals hold" {
   run node "$ARC_ROOT/tests/face/ask-golden.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

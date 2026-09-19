@@ -1,18 +1,19 @@
 # PROGRESS.md — Cycle 16 · arc-face v2 "The Workroom"
 
-status: BLOCKED
+status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
 phase: 05
 appetite: 24d
 burn: 4d
-blocked-on: owner — the ruling on PLAN-face-v2 §13 item 4 (the six flagship ops); Phase 05 does not open without it
+blocked-on: —
 depends-on: —
 
 > Tracker for the cycle planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done` from the
 > main clone (tests green on CI per job + live demo + exit criteria + evidence). This cycle claims
-> **ADR 1318–1337** from the face band 1300–1399; before writing them the claim was swept across
+> **ADR 1318–1339** from the face band 1300–1399; before writing them the claim was swept across
 > all 25 sibling worktrees and every `origin/*` branch on 2026-09-16 — none held an ADR ≥1318 (1337 swept
-> again on 2026-09-18, when the owner's §13 item 5 ruling needed it).
+> again on 2026-09-18, when the owner's §13 item 5 ruling needed it; 1339 swept across every `origin/*` branch and
+> sibling worktree on 2026-09-19 for the item 4 ruling -- none held it).
 > Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`) stay at root
 > (ADR-0053); evidence is lane-scoped at `initiatives/face/evidence/phase-NN/` (ADR-0055).
 > **Cycle 15's record** — PLAN, PROGRESS, its nine phase specs and its evidence bundles — lives at
@@ -28,12 +29,13 @@ depends-on: —
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
 | 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | ✅ **CLOSED 2026-09-18** — 1.5d of 7d; 36/36 modules in both moods on every L3 leg (34 served module rooms + the 2 exempt extras, headings 36 checked, 0 errors); five ring PRs merged — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242) · money `969d9634` (#244) · company `d8386216` (#246); `main` re-verified 19/19 (run 35336492657), suite 1..3414; receipts `01M2T38JEG2AWDY61X7QAARNYF` · `01M2T38JSWD6QSHTYA7S0M1R1W` |
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | ✅ **CLOSED 2026-09-18** — 0.5d of 3d; 18 routes served, 35 of 50 panels (39 tables), residue 15 panels on 10 routes approved by the owner (ADR-1338); four attacker rounds, `phase04-folds` 141 checks; merged `0a4cb262` (#248), PR head 19/19 (run 35367884908), `main` re-verified 19/19 (run 35369459599), suite 1..3415; live door 19 of 19 routes 200; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` · `01M2TPXZGPTN08BN98G6TCRZ5J` |
-| 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — waits on the owner's ruling on §13 item 4 (item 5 ruled, ADR-1337); the binding table read off the real CLIs recommends a swapped six |
-| 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
+| 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | **OPEN 2026-09-19** — §13 item 4 ruled A and widened to every verb (ADR-1339); day-1 CLI probe done (`evidence/phase-05/cli-probe.md`: 46 verbs, 2 READY · 15 SMALL-GAP · 14 BIG-GAP · 15 SESSION · 0 NEEDS-KIND); five PRs: door + six · live rooms · kernel · factory · money + company |
+| 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | spec'd |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
 **Appetite burn: 4d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
-C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
+C · verbs (05–06) 0/15d — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
+3d unallocated. Tripwires: Block A day 3 · Block B day 5 · Block C at Phase 05 day 5 (burn 9d) · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
 35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
 Phase 01's exit. **Block A, read on 2026-09-17 during Phase 01 (burn 1d, before the day-3 mark):
@@ -330,27 +332,41 @@ stay bespoke folds.
   amendments: 3 (ADR-1338's residue ruling; the round-3 current-phase note; the spec-fidelity note) · reopened: n.
   Receipts (main clone spine, landed in `2026-09-18.jsonl`): `phase.closed` `01M2TPXZ16FDQ07K3SWBJ6V44M` ·
   `approval.requested{gate: phase-done}` `01M2TPXZGPTN08BN98G6TCRZ5J` — the second waits on the owner's stamp.
+- **2026-09-19 — main red on face-coverage, fixed (#251).** `docs/strategy/plans/PLAN-docs.md` reached `main` as a
+  direct push (`5c85573f`, no PR, so no CI) with no room in the contract: `FAIL [plan] "PLAN-docs"`, face-coverage
+  exit 1 in the main clone. Homed in the strategy room, `rooms.generated.json` regenerated by `face-sections.mjs`;
+  PR head 19/19 (run 35422908768), merged `0b2ec0cb`, `main` re-verified 19/19 (run 35423596554). The same gap as
+  #226/#227 on 2026-09-16, by a route no PR-side guard sees.
+- **2026-09-19 — §13 item 4 ruled, and the scope widened (`/arc-change --lane face`, ADR-1339).** The owner: "A pannu
+  machi, enaku ella products realtime la work aganum machi ... engine la koda check pannen like readonly maari tha
+  iruku, enaku full working product venum machi". Option A fixes the flagship six (`bench-a-model` · `close month` ·
+  `growth publish` · `ledger criteria` · `capture-idea` · `develop checkpoint`); the rest of the message makes every
+  §5.2 verb Phase 05's or Phase 06's, and the rooms live. Measured first: 0 of 36 modules declare an op, 31 of 36 read
+  once and never again (5 poll every 45 s), and the day-1 probe of all 46 verbs (`evidence/phase-05/cli-probe.md`,
+  three read-only agents, nine claims re-read by hand) found **2 READY · 15 SMALL-GAP · 14 BIG-GAP · 15 SESSION ·
+  0 NEEDS-KIND**. Assumptions row 6 **FIRED** — four of the six lacked a plan mode or a receipt as they stand — and is
+  routed by ADR-1339: gaps close additively in the owning lanes, each change pinned by a fixture first. REQ-07 and
+  REQ-08 amended to every verb, REQ-11 (live rooms) added — 6 active of 10. Block C re-banked: Phase 05 4d → 10d,
+  Phase 06 2d → 5d, from the 12d Blocks A and B left; the closed specs now state their actual spend, so the plan sums
+  to 21d of 24d. A Block C tripwire added at Phase 05 day 5 (burn 9d). The legal `propose` bug (it prints a script
+  that does not exist) was found by the probe and is PR 5's.
 
 ## Now
 
-**RESUME HERE (2026-09-18):** **Phase 04 is CLOSED** (`/arc-phase-done 04` from the main clone): 18 door read
-routes served, 35 of 50 panels, the residue of 15 panels named and filed and approved by the owner (ADR-1338);
-merged as `0a4cb262` (#248), `main` re-verified 19/19 (run 35369459599), suite `1..3415`; the live door answered 19 of
-19 routes from the main clone. Four attacker rounds; the spec-fidelity pass found drift, every item written into the
-Phase 04 spec as a current-phase note for the owner (the receipt joins folded in the door; two additive exports in
-owning lanes against ADR-1338's lint residue -- the owner may rule either way). Receipts `01M2TPXZ16FDQ07K3SWBJ6V44M`
-(`phase.closed`) and `01M2TPXZGPTN08BN98G6TCRZ5J` (the phase-done approval, waiting on the owner's stamp).
-
-**The lane is BLOCKED on one owner ruling: PLAN-face-v2 §13 item 4, the six flagship ops.** PLAN's owner steps make
-it due by the Phase 04 close, and Phase 05 does not open without it. The binding table read off the real CLIs
-(2026-09-18): of the proposed six, `add-agent` and `propose-cap` have no CLI (and `policy.proposed` is not a kind),
-`register-job` and `pin-tool` emit no kind, so four fail and Block C's gate would fire. Recommended (option A): a
-swapped six -- `bench-a-model` (the one with a real `--dry-run`), `close month` (`arc-pnl --close` prints the seal and
-never emits; the owner seals), `growth publish` (a reader-only review pack and branch commands), `ledger criteria`
-(the digest first, an existing approval profile), `capture-idea` and `develop checkpoint` (each needs only a
-dry-run flag in its own lane). Option B keeps the proposed six (the work door does not ship this cycle); option C
-ships the four that qualify today and amends REQ-07's "six" through `/arc-change`. **Next, on the ruling:** record it
-here, then `/arc-develop start 05 --lane face` on `feat/face-v2-05` from `main`.
+**RESUME HERE (2026-09-19):** **Phase 05 is OPEN.** The owner ruled PLAN-face-v2 §13 item 4 as option A and, in the
+same message, widened it: every room works, live, not read-only (ADR-1339, Done log 2026-09-19). The day-1 CLI probe
+is done (`evidence/phase-05/cli-probe.md`): of 46 verbs, 2 READY, 15 SMALL-GAP, 14 BIG-GAP, 15 SESSION, 0 NEEDS-KIND.
+Phase 05 is now 10d in five PRs -- (1) the door machinery, `arc-event --dry-run` and the flagship six, (2) live rooms
+(REQ-11), (3) kernel 10 verbs, (4) factory 8, (5) money + company 7 -- and Phase 06 carries the 15 SESSION verbs in 5d.
+Plan sums to 21d of 24d. Phase 04 closed 2026-09-18 (`0a4cb262`, #248; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` and
+`01M2TPXZGPTN08BN98G6TCRZ5J`). The owner's OK on the widened plan: "OK machi, start pannu" (2026-09-19).
+**PR 1 (door + six) is BUILT on `feat/face-v2-05`:** the registry (`hq/face-ops.mjs`), the door's plan/apply/run
+(`hq/lib/face/work-door.mjs`, four routes on `arc-dash`), the ops dock in every room that names ops, the six ops, the
+owning-lane additions (`arc-event --dry-run`, `arc-pnl --criteria-request` and `--close ... --emit-plan`, `develop.mjs
+checkpoint --receipt`, `arc-growth seal`), face-coverage's op half (117 selftest arms), and `tests/face/work-door.mjs`
+(the per-op no-second-path fixture). All six ran plan -> apply -> receipt against a sim door; close month and bench
+also through the dock in a real browser. The `flows.mjs` port moves to PR 2 (spec current-phase note). **Next:** CI
+per job on PR 1, the two fresh attackers, merge; then PR 2 -- live rooms and the flows port.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
@@ -366,6 +382,4 @@ and `factory` are served rooms; `executor` and `agents` stay labelled exemptions
 `01M2TPXZGPTN08BN98G6TCRZ5J` (Phase 04), `01M2T38JSWD6QSHTYA7S0M1R1W` (Phase 03), `01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02),
 `01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01), `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and
 `01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the main clone,
-`node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13 item 4 (the six
-flagship ops) is now DUE -- the Phase 04 close has passed, and the lane is BLOCKED on it (the recommendation and
-the two alternatives are in the RESUME HERE paragraph above).
+`node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`, or from the face's inbox room.

@@ -21,6 +21,14 @@ load 'test_helper'
   [ -n "$n" ] && [ "$n" -ge 215 ] || { echo "only $n checks ran: $output"; false; }
 }
 
+@test "face v2: the ops dock's decisions run with no install, and every check passes" {
+  run node "$ARC_ROOT/tests/face/ops-logic.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok runVerdict: exit 0 with no receipt is said as that, never as success"* ]] || { echo "$output"; false; }
+}
+
 @test "no L3 test or source file carries a byte that makes grep call it binary" {
   # A literal NUL in a source file makes grep treat the whole file as binary, and a
   # binary-flagged file is SKIPPED silently by every grep-driven gate -- including CI's own
@@ -430,13 +438,9 @@ load 'test_helper'
              "UNDECLARED: a payload for a route the manifest does not declare FAILs the fold (REQ-05)" \
              "a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)" \
              "SHIPPED RING command: its module folders are modules-v2.json's ids for the ring" \
-             "VERBS PENDING LIST verbs-pending-command.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING kernel: its module folders are modules-v2.json's ids for the ring" \
-             "VERBS PENDING LIST verbs-pending-kernel.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING factory: its module folders are modules-v2.json's ids for the ring" \
-             "VERBS PENDING LIST verbs-pending-factory.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING money: its module folders are modules-v2.json's ids for the ring" \
-             "VERBS PENDING LIST verbs-pending-money.md: the list names exactly what the folds render, both ways" \
              "REHEARSAL LIST rehearsal-money.md: the list names exactly what the folds render, both ways" \
              "F3: MUTANT -- a fold that returns a LIVE pill anywhere in its output is caught" \
              "F3: trader with every read it asks for answered wears no LIVE pill anywhere in what it returns" \
@@ -451,7 +455,11 @@ load 'test_helper'
              "NOT SERVED LIST residue.md: every row grep counts parses here too" \
              "SERVED LIST served.md: the list names exactly what the folds render, both ways" \
              "SERVED: every route a served panel names is a door route" \
-             "PHASE 04 INPUT: every panel Phase 03 named NOT SERVED is now served or in the residue, none dropped"; do
+             "PHASE 04 INPUT: every panel Phase 03 named NOT SERVED is now served or in the residue, none dropped" \
+             "VERBS PENDING LIST verbs-pending.md: the list names exactly what the folds render, both ways" \
+             "PHASE 05: the pending cards are Phase 03's minus exactly the cards an op retired" \
+             "PHASE 05: every retirement names a card Phase 03 drew" \
+             "PHASE 05: an op retires a card only in its own room"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }

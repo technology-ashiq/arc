@@ -29,8 +29,8 @@ import { parseMorExport } from "./lib/ledger/parsers/mor.mjs";
 const EXPORT_PARSERS = Object.freeze({ razorpay: parseRazorpayExport, mor: parseMorExport });
 
 const PROCESS_ID = "arc-pnl@1.0.0";
-const VALUE_FLAGS = new Set(["venture", "month", "engine", "close", "reconcile-file", "reconcile-total"]);
-const BOOL_FLAGS = new Set(["simulated", "help", "criteria-digest"]);
+const VALUE_FLAGS = new Set(["venture", "month", "engine", "close", "reconcile-file", "reconcile-total", "criteria-request"]);
+const BOOL_FLAGS = new Set(["simulated", "help", "criteria-digest", "emit-plan"]);
 // `--reconcile-file` and `--reconcile-total` are REPEATABLE: a month has one rail per provider
 // account, and a close reconciles all of them at once. Everything else is last-wins as before.
 const REPEATABLE_FLAGS = new Set(["reconcile-file", "reconcile-total"]);
@@ -371,14 +371,22 @@ async function main(argv) {
   if (flags.help) {
     process.stdout.write(
       "usage: arc-pnl [--venture V] [--month YYYY-MM] [--simulated] [--engine scan|sqlite] [--criteria-digest]\n" +
-      "       arc-pnl --close YYYY-MM (--reconcile-file PROVIDER:CURRENCY=PATH | --reconcile-total PROVIDER:CURRENCY=MINOR)...\n");
+      "       arc-pnl --criteria-request WHAT\n" +
+      "       arc-pnl --close YYYY-MM (--reconcile-file PROVIDER:CURRENCY=PATH | --reconcile-total PROVIDER:CURRENCY=MINOR)... [--emit-plan]\n");
     return 0;
   }
+
+  // `--emit-plan` answers "what exact emit would seal this", and only the close has a seal to plan.
+  // Accepted anywhere else it would be a flag that did nothing -- the silent no-op this parser refuses.
+  if (flags["emit-plan"] === true && flags.close === undefined)
+    throw new SpineError("BAD_ARGS", "--emit-plan plans the close's seal and belongs with --close; the criteria request prints its own");
+  if (flags["criteria-request"] !== undefined && (flags.close !== undefined || flags["criteria-digest"] === true))
+    throw new SpineError("BAD_ARGS", "--criteria-request is its own command; it takes no --close and prints the digest itself");
 
   // The digest a criteria receipt has to carry. Deliberately does NOT read the spine: it is the
   // command you run BEFORE the receipt exists, and a version of it that needed a green receipt to
   // print the digest that would make the receipt green could never be run for the first edit.
-  if (flags["criteria-digest"] === true) {
+  if (flags["criteria-digest"] === true || flags["criteria-request"] !== undefined) {
     const path = venturesPath();
     if (path === null) throw new SpineError("NO_VENTURES", "no ventures.yaml resolvable -- set ARC_VENTURES_FILE to name one");
     // Guarded rather than left to readFileSync, which reported ENOENT and EISDIR as `ERROR INTERNAL`
@@ -388,7 +396,27 @@ async function main(argv) {
       throw new SpineError("NO_VENTURES", `no criteria file at ${path}`);
     if (!statSync(path).isFile())
       throw new SpineError("NO_VENTURES", `${path} is not a regular file`);
-    process.stdout.write(`${parseVentures(readFileSync(path, "utf8")).digest}\n`);
+    const digest = parseVentures(readFileSync(path, "utf8")).digest;
+    if (flags["criteria-request"] === undefined) {
+      process.stdout.write(`${digest}\n`);
+      return 0;
+    }
+    // THE REQUEST, planned and never raised (ADR-1017 / ADR-1339). The payload is the profile's own
+    // three keys and nothing else; the last stdout line is the exact emit that raises it, for a human
+    // or the face's work door to run. This command writes nothing -- the same rule as the close.
+    const what = flags["criteria-request"];
+    if (typeof what !== "string" || what.trim() === "" || what !== what.trim())
+      throw new SpineError("BAD_ARGS", "--criteria-request needs the reason, one line, with no leading or trailing space");
+    if (Buffer.byteLength(what, "utf8") > 512)
+      throw new SpineError("BAD_ARGS", "--criteria-request's reason is longer than the 512 bytes the ledger.criteria profile takes");
+    const payload = { subject: "ledger.criteria", digest, what };
+    process.stdout.write(`criteria digest ${digest}\n`);
+    process.stdout.write(`request: approval.requested[ledger.criteria] -- ${what}\n`);
+    // The idem is welded to the digest (validate-ledger: sha256("ledger.criteria|"+digest)), so one digest is one
+    // request; a line without it is refused by the emitter -- which the older printed instruction never said.
+    const idem = sha256Hex(`ledger.criteria|${digest}`);
+    process.stdout.write(`${JSON.stringify({ emit: ["emit", "approval.requested", "--payload", JSON.stringify(payload), "--idem", idem, "--strict"] })}\n`);
+    process.stderr.write("arc-pnl: planned, not raised. The last stdout line is the emit; approve the request through arc-inbox afterwards.\n");
     return 0;
   }
 
@@ -452,6 +480,14 @@ async function main(argv) {
     // of an intention.
     const payload = closePayload({ month: flags.close, rails: verdict.rails, paymentCount: derived.paymentCount });
     process.stdout.write(`\n${JSON.stringify(payload)}\n`);
+    if (flags["emit-plan"] === true) {
+      // The same seal as the two steps below, as ONE argv a caller can run without a temp file: the
+      // payload rides in --payload (JSON.stringify escapes every non-ASCII-safe code unit, so argv
+      // carries it faithfully). It is the LAST line only under this flag; without it, `tail -1` is
+      // still the payload, exactly as the printed instruction says.
+      const idem = sha256Hex(`month.closed|${flags.close}`);
+      process.stdout.write(`${JSON.stringify({ emit: ["emit", "month.closed", "--payload", JSON.stringify(payload), "--idem", idem, "--strict", "--outcome", "ok"] })}\n`);
+    }
     process.stderr.write(
       `arc-pnl: gate GREEN for ${flags.close}. Seal it in two steps -- the JSON is the LAST line of stdout:\n` +
       `  arc-pnl --close ${flags.close} <the same --reconcile flags> | tail -1 > /tmp/close.json\n` +

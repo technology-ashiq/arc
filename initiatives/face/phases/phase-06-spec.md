@@ -1,7 +1,7 @@
 # Phase 06 — Session door: streaming work started by a click
 
-**Goal (one line):** REQ-08 — council convene, absorb read and hire certification start from a click, stream their phases, and land as receipts of existing kinds, always through `arc-run --driver` (ADR-1326, ADR-1333).
-**Appetite:** 2 days
+**Goal (one line):** REQ-08 — council convene, absorb read, hire certification and every SESSION verb the Phase 05 probe found (15) start from a click, stream their phases, and land as receipts of existing kinds, always through `arc-run --driver` (ADR-1326, ADR-1333, ADR-1339).
+**Appetite:** 5 days (2 allotted + 3 banked from Blocks A and B, ADR-1339)
 **Depends on:** phase-05
 **Serves:** REQ-08
 **Branch:** `feat/face-v2-06`
@@ -11,7 +11,8 @@
 
 - [ ] Session door start / stream / attach beside the work door; every session's command line is `arc-run --driver …`; a command line naming a harness binary FAILs the fixture.
 - [ ] Click-started only: a fixture proves 0 sessions start on page load, on reload, or on attach.
-- [ ] A council convened from the `council` module streams its phases and lands a `council.verdict` receipt; absorb read and hire certification land receipts of kinds already in `validate.mjs` KINDS, or are labelled NOT SHIPPABLE (ADR-1334).
+- [ ] A council convened from the `council` module streams its phases and lands a `council.verdict` receipt; absorb read and hire certification land receipts of kinds already in `validate.mjs` KINDS, or are labelled NOT SHIPPABLE (ADR-1334). The probe found `/arc-council`'s verdict payload fails the closed `council.verdict` shape (`validate.mjs:316`) — fixed in the council lane, additively, before the demo.
+- [ ] **Every SESSION verb (ADR-1339):** the 15 in `evidence/phase-05/cli-probe.md` — council convene · develop proof · close phase · review · qa · ship · hire · dispatch · log lesson · promote rule · absorb adopt · growth draft · adopt plan · record ADR · lane birth — each starts from a click through `arc-run --driver` and lands a receipt of an existing kind, or is a residue row approved by the owner as a whole. A verb whose command has no process file (qa, ship and others) gets one from the engine lane, additively; `ship` deploys outward, so its session stops for the owner's confirmation before the deploy step.
 - [ ] The Engine room shows driver, model and health; no key (ADR-1325).
 - [ ] Two fresh attackers (session decision logic · process/OS boundary); CI green per job; `/arc-phase-done 06` from the main clone.
 

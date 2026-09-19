@@ -57,11 +57,15 @@ import { render as renderBrief } from "./arc-brief.mjs";
 import { derivePnl, deriveDaily } from "./lib/ledger/pnl.mjs";
 import { deriveKillPanel } from "./lib/ledger/kill-panel.mjs";
 import { repoRoot } from "./lib/spine-io.mjs";
-import { SpineError, ULID_RE, sha256Hex, formatIst, nowMs } from "./lib/canonical.mjs";
+import { SpineError, ULID_RE, sha256Hex, formatIst, nowMs, parseStrictJson } from "./lib/canonical.mjs";
 import { laneHeader, validLaneName } from "../core/lane-resolve.mjs";
 import { askOffline } from "./lib/face/ask-offline.mjs";
 // Phase 04's read routes (REQ-06). The handlers live beside the door; THIS file keeps the one route table.
 import * as reads from "./lib/face/reads.mjs";
+// Phase 05's work door (REQ-07, ADR-1339): the op registry and the plan/apply/run verbs. Same rule -- the handlers
+// live beside the door, the route table stays here.
+import { createWorkDoor, WORK_STATUS } from "./lib/face/work-door.mjs";
+import { OpError } from "./face-ops.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_BRIEF = join(HERE, "arc-brief.mjs");
@@ -152,6 +156,8 @@ const STATUS = Object.freeze({
   // A source that resolves off the tree is refused like PHASES_OUTSIDE; one that changed while it was being read is
   // retryable, which is a 503, not a client mistake.
   SOURCE_OUTSIDE: 403, SOURCE_CHANGING: 503,
+  // Phase 05: the work door's own refusals, spelled once in lib/face/work-door.mjs.
+  ...WORK_STATUS,
 });
 
 class DashError extends Error {
@@ -773,7 +779,20 @@ const ROUTES = Object.freeze([
   { method: "GET", path: "/api/absorb", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiAbsorb(ctx, url) },
   { method: "POST", path: "/api/decide", mutates: true, spineEffect: "write", handler: (ctx, url, tail, body) => apiDecide(ctx, body) },
   { method: "POST", path: "/api/ask", mutates: false, spineEffect: "receipt", proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiAsk(ctx, body) },
+  // Phase 05 (REQ-07, ADR-1339): the WORK door. `plan` runs an op's dry run, which writes nothing (the per-op fixture
+  // holds the spine byte-identical across every plan); `apply` runs the owning lane's own CLI, which writes that
+  // lane's receipt -- a governed subprocess write, so "receipt", named by the registry it proxies; `op-run` reads a
+  // run as it stands. apply takes ONE plan id and nothing else: there is no path that applies a list.
+  { method: "GET", path: "/api/ops", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return ctx.work.list(); } },
+  { method: "POST", prefix: "/api/op/", suffix: "/plan", mutates: false, spineEffect: "none", strictBody: true, handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.plan(tail, body); } },
+  { method: "POST", prefix: "/api/op/", suffix: "/apply", mutates: true, spineEffect: "receipt", strictBody: true, proxy: "face-ops.mjs --list: the owning lane's own CLI, one plan per call", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.apply(tail, body); } },
+  { method: "GET", prefix: "/api/op-run/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => { onlyKeys(url, []); return ctx.work.run(tail); } },
 ]);
+
+/** The route's path as the table prints it: a literal path, a prefix with its tail, or a prefix, an id and a suffix. */
+function routeName(r) {
+  return r.path || (r.suffix ? `${r.prefix}:id${r.suffix}` : `${r.prefix}:tail`);
+}
 
 // ---------- the static shell (GET /, no data, no auth) ----------
 const SHELL = `<!doctype html>
@@ -826,7 +845,7 @@ function boot(argv) {
   if (flags.routes) {
     // spineEffect is printed VERBATIM, never defaulted: the fixture's "every route declares
     // one" check can only fail closed if an undeclared route arrives here as undefined.
-    const table = ROUTES.map((r) => ({ method: r.method, path: r.path || `${r.prefix}:tail`, mutates: r.mutates, spineEffect: r.spineEffect, ...(r.proxy ? { proxy: r.proxy } : {}) }));
+    const table = ROUTES.map((r) => ({ method: r.method, path: routeName(r), mutates: r.mutates, spineEffect: r.spineEffect, ...(r.proxy ? { proxy: r.proxy } : {}) }));
     process.stdout.write(JSON.stringify(table, null, 2) + "\n");
     return null;
   }
@@ -861,6 +880,13 @@ function boot(argv) {
     process.env.ARC_SPINE_ROOT = root;
   } else {
     mode = "live";
+    // ARC_SPINE_ROOT points spineRoot() at another spine, so a door started with it and no --spine called a SCRATCH
+    // spine live -- and live mode is the one that lets a paid op spend (face v2 Phase 05 logic attack). A fixture
+    // spine is named with --spine, which is sim mode and says so.
+    if (process.env.ARC_SPINE_ROOT !== undefined && process.env.ARC_SPINE_ROOT !== "") {
+      process.stderr.write("arc-dash: ERROR BAD_SPINE_ENV -- ARC_SPINE_ROOT is set; a door over a named spine is sim mode: pass it as --spine <path>, or unset it for the canonical spine\n");
+      process.exit(1);
+    }
     try {
       root = spineRoot(); // REFUSES a linked worktree (named), the C4 guard -- live mode
     } catch (err) {
@@ -879,6 +905,7 @@ function boot(argv) {
   const journalDir = process.env.ARC_DASH_JOURNAL_DIR || join(dirname(root), "face");
   mkdirSync(journalDir, { recursive: true });
 
+  /** @type {{ mode: string, root: string, repo: string, journalDir: string, work?: ReturnType<typeof createWorkDoor> }} */
   const ctx = { mode, root, repo, journalDir };
   const selfOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, `http://[::1]:${port}`]);
   const selfHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
@@ -890,6 +917,9 @@ function boot(argv) {
       appendFileSync(join(journalDir, `journal-${day}.jsonl`), JSON.stringify(entry) + "\n");
     } catch (e) { process.stderr.write(`arc-dash: WARN journal write failed (${e.code || e.message})\n`); }
   };
+
+  // The work door journals its own plans and runs: a run outlives the request that started it.
+  ctx.work = createWorkDoor(ctx, { journal: (entry) => journal({ ts: formatIst(nowMs()), work: true, ...entry }) });
 
   const send = (res, status, obj) => {
     // headersSent/writableEnded guard: an error AFTER a partial write would otherwise
@@ -964,7 +994,9 @@ function boot(argv) {
     const given = Buffer.from(auth.slice(7));
     if (given.length !== tokenBuf.length || !timingSafeEqual(given, tokenBuf)) return fail("BAD_TOKEN", "token does not match this session");
 
-    const route = ROUTES.find((r) => r.method === req.method && (r.path ? r.path === path : path.startsWith(r.prefix)));
+    const route = ROUTES.find((r) => r.method === req.method && (r.path
+      ? r.path === path
+      : path.startsWith(r.prefix) && (!r.suffix || (path.endsWith(r.suffix) && path.length > r.prefix.length + r.suffix.length))));
     if (!route) return fail("UNKNOWN_ROUTE", `${req.method} ${path} is not a route on this door (see --routes)`);
     if (route.mutates && origin === undefined) return fail("NO_ORIGIN", "the mutating route requires an Origin header (a browser always sends one on POST; a fixture must set it deliberately)");
 
@@ -973,7 +1005,8 @@ function boot(argv) {
     // rather than a generic "dispatch failed" 500.
     let tail = null;
     if (route.prefix) {
-      try { tail = decodeURIComponent(path.slice(route.prefix.length)); }
+      const end = route.suffix ? path.length - route.suffix.length : path.length;
+      try { tail = decodeURIComponent(path.slice(route.prefix.length, end)); }
       catch { return fail("BAD_ARGS", "malformed percent-encoding in the path"); }
     }
 
@@ -989,7 +1022,7 @@ function boot(argv) {
           send(res, 200, out);
         })
         .catch((err) => {
-          const code = (err instanceof SpineError || err instanceof DashError || err instanceof reads.ReadError) ? err.code : "INTERNAL";
+          const code = (err instanceof SpineError || err instanceof DashError || err instanceof reads.ReadError || err instanceof OpError) ? err.code : "INTERNAL";
           // An UNTYPED error's message is never sent: it carries whatever the throwing code put in it -- an OS path
           // with the account name, a stack fragment (face v2 Phase 04 attack). The operator reads it on stderr.
           if (code === "INTERNAL") process.stderr.write(`arc-dash: WARN internal error on ${req.method} ${path} -- ${err && err.message}
@@ -1014,8 +1047,15 @@ function boot(argv) {
       req.on("end", () => {
         if (tooBig) return;
         let body;
-        try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {}; }
-        catch { return fail("BAD_BODY", "body is not valid JSON"); }
+        // The work door's bodies are parsed STRICTLY: a duplicate key is refused, never last-one-wins -- the same rule
+        // the door already holds for a repeated query key (Phase 04 round 3), found missing here by the Phase 05 attack.
+        if (route.strictBody) {
+          try { body = chunks.length ? parseStrictJson(Buffer.concat(chunks), "body") : {}; }
+          catch (e) { return fail("BAD_BODY", e instanceof SpineError ? e.message : "body is not valid JSON"); }
+        } else {
+          try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {}; }
+          catch { return fail("BAD_BODY", "body is not valid JSON"); }
+        }
         run(body);
       });
     } else {

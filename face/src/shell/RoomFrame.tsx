@@ -19,6 +19,7 @@ import type { Room } from '../lib/rooms.mjs'
 import GenericRoom from '../rooms/GenericRoom'
 import IndexRoom from '../rooms/IndexRoom'
 import { Failure } from '../ui/legacy'
+import OpsDock from './OpsDock'
 import { MONO, UI } from '../ui/kit'
 
 type ViewProps = { f: Record<string, unknown>; ctx: ModuleViewContext }
@@ -157,6 +158,9 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
         </p>
       )}
       <View f={folded.f} ctx={viewCtx} />
+      {/* Phase 05 (ADR-1339): the room's ops, if its ops.mjs names any. A run that lands drops the room's reads, so the
+          receipt shows in the room without a reload. */}
+      {m.ops.length > 0 ? <OpsDock ops={m.ops} door={door} onApplied={dropAll} /> : null}
     </>
   )
 }
