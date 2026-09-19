@@ -125,7 +125,9 @@ export const REFUSALS = Object.freeze({
   // A send needs a warmed sending domain, and none is evidenced yet (ADR-0413): the leads lane's own gate is what the
   // card must show, wherever this runs. The plan and its binding are proven on a scratch config in
   // tests/face/live-work.mjs; a real send waits for that lane's Phase 03.
-  "leads.daily-send": "no sending_domain configured",
+  "leads.daily-send": "SIM_EFFECT|no sending_domain configured",
+  // The legal gate plans anywhere (a fixture venture) and its apply acts outside the spine, so a sim door refuses it.
+  "legal.full-read": "SIM_EFFECT",
   // The company ring: branch writers, refused SIM_EFFECT at apply, or NO_BASE where a CI checkout has no main.
   // Or, on a checkout WITH a main, the fixture spine's deliberate torn line: an unknown read is never "nothing
   // requested" (the register's twin -- main CI after PR 5a).

@@ -64,7 +64,7 @@ const node = (args, env = {}, cwd = REPO) => spawnSync(process.execPath, args, {
   const camp = al(["campaign", "init", "pilot"], env);
   // THE LANE'S OWN GATE, on the tree's real config: no warmed sending domain is evidenced, so the send cannot run at all
   // (ADR-0402/0413) -- and the face's card shows exactly this refusal. Asked with a store, so the store check is past.
-  const gated = al(["daily", "pilot", "--dry-run"]);
+  const gated = al(["daily", "pilot", "--dry-run"], { LEADS_CONFIG: join(REPO, ".claude", "config", "leads.json") });
   check("leads daily refuses on the lane's own gate where no sending domain is evidenced", gated.status === 3 && /no sending_domain configured/.test(gated.stderr), `${gated.status} ${gated.stderr.slice(0, 120)}`);
   check("leads fixture: a scratch store and campaign (vacuous-pass guard)", init.status === 0 && camp.status === 0, `${init.stderr} ${camp.stderr}`);
   const empty = al(["daily", "pilot", "--dry-run"], env);
@@ -92,11 +92,24 @@ const node = (args, env = {}, cwd = REPO) => spawnSync(process.execPath, args, {
     `${plan.status} ${plan.stderr.slice(0, 140)}`);
   const stale = al(["daily", "pilot", "--expect", ZERO], env);
   check("leads daily refuses a send whose digest is not the plan's, and sends nothing", stale.status === 2 && /PLAN_STALE|not what the plan showed/.test(stale.stderr) && sent() === 0, stale.stderr.slice(0, 140));
-  // Bound: the send path RUNS. The draft's lead is not in this scratch store, so the send refuses that draft by name --
-  // a refusal at the send is the mechanism working, and it is still not a send.
-  const bound = al(["daily", "pilot", "--expect", d || ZERO], env);
-  check("leads daily, bound to its plan: the send path runs, refuses this draft by name, and no outreach receipt is written",
-    bound.status !== 2 && /REFUSED|NOT SENT|refused/.test(`${bound.stdout}${bound.stderr}`) && sent() === 0, `${bound.status} ${(bound.stdout + bound.stderr).slice(0, 200)}`);
+  // THE DIGEST IS NOT A CONSTANT: a second approved draft changes what the plan describes, so the first plan's digest no
+  // longer applies -- without this the suite passed a planDigest that ignored every input (PR 5c round-1 attacks).
+  const rec2 = D.writeDraft(opened, { campaign: "pilot", lead_id: "b".repeat(64), touch_n: 1, body: "A second probe body, for the digest.", cites: ["https://example.test/b"], lintStatus: "PASS" });
+  const req2 = node([S("hq", "arc-event.mjs"), "emit", "approval.requested", "--payload", JSON.stringify(D.approvalPayload(rec2)), "--strict"], base);
+  node([S("hq", "arc-inbox.mjs"), "approve", req2.stdout.trim(), "--reason", "live-work fixture"], base);
+  const plan2 = al(["daily", "pilot", "--dry-run"], env);
+  const d2 = lastExpect(plan2.stdout);
+  const afterChange = al(["daily", "pilot", "--expect", d || ZERO], env);
+  check("leads daily: another approved draft is another plan -- the digest moves and the first one no longer applies",
+    plan2.status === 0 && !!d2 && d2 !== d && plan2.stdout.includes(rec2.draft_ref) && afterChange.status === 2 && sent() === 0,
+    `${d && d.slice(0, 12)} -> ${d2 && d2.slice(0, 12)} / ${afterChange.status} ${afterChange.stderr.slice(0, 120)}`);
+  // Bound: the send path RUNS. The drafts' leads are not in this scratch store, so the send refuses each by name -- a
+  // refusal at the send is the mechanism working, and it is still not a send. The draft's ref in the output is the proof
+  // that runDaily was reached, not merely that something printed the word "refused".
+  const bound = al(["daily", "pilot", "--expect", d2 || ZERO], env);
+  check("leads daily, bound to its plan: the send path runs and names each draft it refuses, and no outreach receipt is written",
+    (bound.status === 0 || bound.status === 3) && bound.stdout.includes(rec.draft_ref) && /REFUSED/.test(bound.stdout) && sent() === 0,
+    `${bound.status} ${(bound.stdout + bound.stderr).slice(0, 220)}`);
 }
 
 // ---- the legal full-read gate: rendered, written, raised ----
@@ -104,7 +117,8 @@ const node = (args, env = {}, cwd = REPO) => spawnSync(process.execPath, args, {
   const sp = spine("legal-spine");
   const out = join(tmp, "legal-out");
   const venture = readdirSync(join(REPO, "tests", "fixtures", "legal", "ventures")).sort()[0];
-  const lg = (...args) => node([S("legal", "arc-legal.mjs"), "propose", "--venture", venture, "--out", out, ...args], { ARC_SPINE_ROOT: sp });
+  // ARC_LEGAL_VENTURE_DIR is cleared: an operator who exports it would render a REAL venture into this scratch run.
+  const lg = (...args) => node([S("legal", "arc-legal.mjs"), "propose", "--venture", venture, "--out", out, ...args], { ARC_SPINE_ROOT: sp, ARC_LEGAL_VENTURE_DIR: "" });
   check("legal fixture: the repository holds a fixture venture to render (vacuous-pass guard)", typeof venture === "string" && venture.length > 0, String(venture));
 
   const unbound = lg();
@@ -116,8 +130,11 @@ const node = (args, env = {}, cwd = REPO) => spawnSync(process.execPath, args, {
   check("legal propose, planned: the pages, the facts and the payload sha, a digest -- and nothing written into --out",
     plan.status === 0 && !!d && /^payload [0-9a-f]{64}$/m.test(plan.stdout) && /facts [0-9a-f]{64} \(from the fixtures root\)/.test(plan.stdout) && !existsSync(out) && spineEvents(sp).length === 0,
     `${plan.status} ${plan.stderr.slice(0, 140)}`);
+  // NOTHING means nothing: the first cut rendered into --out before this check, so a refusal left 8 files behind while
+  // saying "nothing was written" -- and the check only looked for the payload file (PR 5c round-1 attacks, both).
   const stale = lg("--expect", ZERO);
-  check("legal propose refuses an apply whose digest is not the plan's, writing nothing", stale.status === 2 && !existsSync(join(out, "_approval.json")) && spineEvents(sp).length === 0, stale.stderr.slice(0, 140));
+  check("legal propose refuses an apply whose digest is not the plan's, and --out holds NOTHING at all",
+    stale.status === 2 && !existsSync(out) && spineEvents(sp).length === 0, `${stale.status} ${existsSync(out) ? readdirSync(out).join(",") : "absent"} ${stale.stderr.slice(0, 120)}`);
 
   const ap = lg("--expect", d || ZERO);
   const file = join(out, "_approval.json");
@@ -127,7 +144,7 @@ const node = (args, env = {}, cwd = REPO) => spawnSync(process.execPath, args, {
   const sha = existsSync(file) ? CANON.bytesHash(Buffer.from(readFileSync(file, "utf8"), "utf8")) : "";
   check("legal propose, applied: the payload written, its pages rendered, and ONE request naming that payload's sha",
     ap.status === 0 && !!payload && payload.subject === "legal.publish" && raised.length === 1 && raised[0].payload.sha === sha && raised[0].payload.subject === "legal.publish"
-      && readdirSync(out).some((n) => n.endsWith(".mdx")),
+      && readdirSync(out).filter((n) => n.endsWith(".mdx")).length === payload.pages.length,
     `${ap.status} ${ap.stderr.slice(0, 160)} raised=${raised.length}`);
   // The printed commands are the ones a person can run: the id the stamp needs, and the id `publish --request` needs.
   check("legal propose prints the stamp and the publish commands, both naming the script that exists and the request's id",
@@ -145,4 +162,4 @@ const node = (args, env = {}, cwd = REPO) => spawnSync(process.execPath, args, {
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exit(failed === 0 && ran >= 23 ? 0 : 1);
+process.exit(failed === 0 && ran >= 24 ? 0 : 1);

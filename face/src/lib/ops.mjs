@@ -14,7 +14,7 @@ import { unescapeDoorText } from "./door.mjs";
 /** @typedef {{ name: string, label: string, placeholder: string, type: "text" | "select" | "int", options: string[], required: boolean, maxBytes: number }} OpField */
 /**
  * @typedef {{ id: string, state: "loading" } | { id: string, state: "absent", why: string } |
- *   { id: string, state: "ready", label: string, hint: string, humanRun: boolean, spends: boolean, touchesFiles: boolean, touchesOs: boolean, touchesTree: boolean, receiptKind: string, fields: OpField[] }} OpCard
+ *   { id: string, state: "ready", label: string, hint: string, humanRun: boolean, spends: boolean, touchesFiles: boolean, touchesOs: boolean, touchesTree: boolean, leavesMachine: boolean, receiptKind: string, fields: OpField[] }} OpCard
  */
 /**
  * @typedef {{ planId: string, command: string, apply: string, estimate: string, diff: string, output: string[], notes: string[], outputDropped: number, receiptKind: string, humanRun: boolean }} PlanView
@@ -48,8 +48,10 @@ export function opCards(moduleOps, registry) {
       id, state: "ready",
       label: text(row.label), hint: text(row.hint),
       humanRun: row.humanRun === true, spends: row.spends === true,
-      // An effect past the spine, said on the card before the owner plans (ADR-1340): a proposal branch, or the scheduler.
+      // An effect past the spine, said on the card before the owner plans (ADR-1340): a proposal branch, the scheduler,
+      // a lane's tracker -- or, with the live lanes (ADR-1344), an act that leaves this machine or writes files here.
       touchesFiles: row.touchesFiles === true, touchesOs: row.touchesOs === true, touchesTree: row.touchesTree === true,
+      leavesMachine: row.leavesMachine === true,
       receiptKind: row.receipt && typeof row.receipt.kind === "string" ? row.receipt.kind : "",
       fields: (Array.isArray(row.fields) ? row.fields : []).map((/** @type {any} */ f) => ({
         name: String(f.name), label: text(f.label), placeholder: text(f.placeholder),

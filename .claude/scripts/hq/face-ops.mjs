@@ -527,7 +527,8 @@ export const OPS = Object.freeze([
     receipt: Object.freeze({ kind: "outreach.sent" }),
     binding: "v0.7 `send today` -> outreach.sent per draft, through arc-leads daily bound to its plan (ADR-1344, ADR-0402/0411)",
     retires: Object.freeze({ module: "leads", verb: "Send today's outreach" }),
-    humanRun: true, spends: false, touchesFiles: false,
+    // leavesMachine: mail leaves this machine. Without a flag for it a SIM door ran the real send (PR 5c round-1 attacks).
+    humanRun: true, spends: false, touchesFiles: false, leavesMachine: true,
     fields: Object.freeze([
       Object.freeze({ name: "campaign", label: "Campaign", placeholder: "the campaign's name in the store", type: "text", max: 64, pattern: "[a-z0-9-]{1,64}", required: true }),
     ]),
@@ -544,7 +545,9 @@ export const OPS = Object.freeze([
     receipt: Object.freeze({ kind: "approval.requested" }),
     binding: "v0.7 `stamp the full-read gate` -> approval.requested (gate legal, subject legal.publish) naming the payload's sha; the stamp is the inbox decision publish then checks (ADR-1344, REQ-06)",
     retires: Object.freeze({ module: "legal", verb: "Stamp the full-read gate" }),
-    humanRun: true, spends: false, touchesFiles: false,
+    // leavesMachine: the apply writes the pages and the payload into this checkout -- outside the spine and outside a
+    // proposal branch -- so a sim door refuses it (PR 5c round-1 attacks; "gitignored" is not "not in this checkout").
+    humanRun: true, spends: false, touchesFiles: false, leavesMachine: true,
     fields: Object.freeze([
       Object.freeze({ name: "venture", label: "Venture", placeholder: "the venture whose pages these are", type: "text", max: 64, pattern: "[a-z][a-z0-9-]{0,63}", required: true }),
     ]),
@@ -911,7 +914,8 @@ export function registryView(registry = OPS) {
   return registry.map((o) => ({
     id: o.id, room: o.room, lane: o.lane, label: o.label, hint: o.hint,
     receipt: o.receipt, binding: o.binding, retires: o.retires || null,
-    humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles, touchesOs: o.touchesOs === true, touchesTree: o.touchesTree === true, expect: o.expect === true,
+    humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles, touchesOs: o.touchesOs === true, touchesTree: o.touchesTree === true,
+    leavesMachine: o.leavesMachine === true, expect: o.expect === true,
     fields: o.fields,
     apply: typeof o.apply === "function" ? "argv" : o.apply,
   }));

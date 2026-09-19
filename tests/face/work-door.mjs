@@ -175,14 +175,26 @@ const WRITERS = (() => {
 })();
 check("the branch writers are found by what they import (vacuous-pass guard)", ["engine/propose.mjs", "absorb/pin.mjs", "absorb/trial.mjs", "design/open-brief.mjs", "engine/agent-scaffold.mjs"].every((w) => WRITERS.has(w)), [...WRITERS].join(","));
 // touchesTree: the one tool that writes a lane's own tracker in place (ADR-1341 §1) -- develop next, applied.
+// leavesMachine: the fourth kind (ADR-1344) -- an apply that acts outside the spine and outside a branch. The send
+// leaves this machine; the legal gate writes its pages and payload into this checkout. Both had NO flag, so a sim door
+// ran them for real (PR 5c round-1 attacks); the derivation names them, so a row cannot quietly drop one again.
 const effectOfScript = (o) => {
-  if (typeof o.apply !== "function") return { files: false, os: false, tree: false };
+  if (typeof o.apply !== "function") return { files: false, os: false, tree: false, world: false };
   const cmd = o.apply(INPUTS[o.id]);
-  return { files: WRITERS.has(cmd.script), os: cmd.script === "hq/arc-jobs.mjs" && cmd.args[0] === "register", tree: cmd.script === "develop/develop.mjs" && cmd.args[0] === "next" && !cmd.args.includes("--dry-run") };
+  return {
+    files: WRITERS.has(cmd.script),
+    os: cmd.script === "hq/arc-jobs.mjs" && cmd.args[0] === "register",
+    tree: cmd.script === "develop/develop.mjs" && cmd.args[0] === "next" && !cmd.args.includes("--dry-run"),
+    world: (cmd.script === "leads/arc-leads.mjs" && cmd.args[0] === "daily") || (cmd.script === "legal/arc-legal.mjs" && cmd.args[0] === "propose"),
+  };
 };
-const flagMismatch = (ops) => ops.filter((o) => { const e = effectOfScript(o); return (o.touchesFiles === true) !== e.files || (o.touchesOs === true) !== e.os || (o.touchesTree === true) !== e.tree; }).map((o) => o.id);
-check("every op's effect flags are what its apply script IS, both ways (touchesFiles <-> a branch writer, touchesOs <-> register, touchesTree <-> develop next)",
+const flagMismatch = (ops) => ops.filter((o) => { const e = effectOfScript(o); return (o.touchesFiles === true) !== e.files || (o.touchesOs === true) !== e.os || (o.touchesTree === true) !== e.tree || (o.leavesMachine === true) !== e.world; }).map((o) => o.id);
+check("every op's effect flags are what its apply script IS, both ways (touchesFiles <-> a branch writer, touchesOs <-> register, touchesTree <-> develop next, leavesMachine <-> a send or a rendered gate)",
   flagMismatch(OPS_MOD.OPS).length === 0, flagMismatch(OPS_MOD.OPS).join(","));
+{
+  const mutant = OPS_MOD.OPS.map((o) => (o.id === "leads.daily-send" ? { ...o, leavesMachine: false } : o));
+  check("MUTANT CONTROL: the send with its leavesMachine dropped is caught by the derivation", flagMismatch(mutant).includes("leads.daily-send"));
+}
 {
   const mutant = OPS_MOD.OPS.map((o) => (o.id === "develop.slice" ? { ...o, touchesTree: false } : o));
   check("MUTANT CONTROL: a row with its touchesTree dropped is caught by the derivation", flagMismatch(mutant).includes("develop.slice"));
@@ -191,7 +203,7 @@ check("every op's effect flags are what its apply script IS, both ways (touchesF
   const mutant = OPS_MOD.OPS.map((o) => (o.id === "engine-room.driver-switch" ? { ...o, touchesFiles: false } : o));
   check("MUTANT CONTROL: a row with its touchesFiles dropped is caught by the derivation", flagMismatch(mutant).includes("engine-room.driver-switch"));
 }
-check("every effect op is human-run", OPS_MOD.OPS.filter((o) => o.touchesFiles || o.touchesOs || o.touchesTree).every((o) => o.humanRun === true));
+check("every effect op is human-run", OPS_MOD.OPS.filter((o) => o.touchesFiles || o.touchesOs || o.touchesTree || o.leavesMachine).every((o) => o.humanRun === true));
 // Every op's receipt is a kind the spine has (ADR-1334).
 {
   const V = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "validate.mjs")).href);
@@ -327,7 +339,7 @@ try {
     if (REFUSES_ON_THIS_TREE.has(op.id)) { check(`${op.id}: refuses on this tree, by name`, false, `${plan.status} ${JSON.stringify(plan.body).slice(0, 300)}`); continue; }
     // An effect op that PLANNED (a clone with a main, a Windows leg): the plan wrote nothing, and a sim door refuses the
     // apply by name before anything runs -- no task registered, no branch written (ADR-1340).
-    if (op.touchesFiles || op.touchesOs || op.touchesTree) {
+    if (op.touchesFiles || op.touchesOs || op.touchesTree || op.leavesMachine) {
       check(`${op.id}: the effect op's plan answers ok and wrote nothing`, plan.status === 200 && plan.body.ok === true && spineFingerprint(SPINE_A) === before, `${plan.status} ${plan.body.error || ""}`);
       {
         const printed = DOOR_TEXT(String(plan.body.output || "")).trim().split(/\r?\n/).pop() || "";

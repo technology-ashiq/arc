@@ -121,6 +121,7 @@ function OpCardView({ card, door, onApplied }: { card: OpCard; door: Door; onApp
         {card.touchesFiles ? <Chip tone="amber">writes a proposal branch</Chip> : null}
         {card.touchesOs ? <Chip tone="amber">registers with this machine</Chip> : null}
         {card.touchesTree ? <Chip tone="amber">writes the lane's tracker</Chip> : null}
+        {card.leavesMachine ? <Chip tone="amber">acts outside this spine</Chip> : null}
         <Chip mono>{card.receiptKind}</Chip>
       </div>
       <p className="mb-3 text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.hint}</p>

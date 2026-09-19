@@ -42,3 +42,12 @@ Two verb-pending cards were left in the live lanes: "Send today's outreach" (lea
   on a scratch config in `tests/face/live-work.mjs`; a real send waits for that lane's Phase 03.
 - `arc-leads daily` now refuses a bare invocation. Nothing scheduled it, and one test that ran it bare fails earlier for
   its own reason, so no caller changes.
+
+## Amendment, PR 5c round 1 (same day)
+
+Two fresh attackers found three HIGH between them. One decision is new: **the door's effect taxonomy gains a fourth
+kind, `leavesMachine`** -- an apply that acts outside the spine and outside a proposal branch (a send; a render written
+into this checkout). A sim door refuses it like any other effect, the card says it, and the work-door suite derives it
+from the apply script so a row cannot quietly drop it. Two more: a render is staged in a temp directory and reaches
+`--out` only after every check has passed, and a real venture's facts directory is resolved in ONE place for every verb,
+so a gate raised for a real venture can actually be published.
