@@ -47,11 +47,12 @@ const PLAN_ID_RE = /^[A-Za-z0-9_-]{24}$/;
 /**
  * What an op changes besides the spine, in the owner's words, for the plan card. A file-touching op's own dry run prints
  * its diff; the apply writes it to a NEW feat/face-* branch and never to main (ADR-1340).
- * @param {{ touchesFiles?: boolean, touchesOs?: boolean }} op
+ * @param {{ touchesFiles?: boolean, touchesOs?: boolean, touchesTree?: boolean }} op
  */
 function effectOf(op) {
   if (op.touchesFiles) return "the diff is in the plan's output above; apply commits it to a new feat/face-* branch, never to main -- a human merges it or does not";
   if (op.touchesOs) return "no file changes -- apply registers a task with this machine's scheduler, and the receipt records it";
+  if (op.touchesTree) return "apply writes the lane's own tracker in place -- the one change the plan above names, on your checkout, and nothing else (ADR-1341)";
   return "no file changes -- this op writes one receipt to the spine";
 }
 
@@ -262,8 +263,8 @@ export function createWorkDoor(ctx, opts = {}) {
     // An effect past the spine never runs on a sim door (ADR-1340): the plan was the tool's own dry run and wrote nothing;
     // the apply would register a real task, or write a real branch, to rehearse something. Refused before the claim, so
     // the plan stays held and a repeat is refused the same way.
-    if (ctx.mode === "sim" && (op.touchesOs || op.touchesFiles) && !(typeof op.simSafe === "function" && op.simSafe(p.values)))
-      throw new OpError("SIM_EFFECT", `${op.id} ${op.touchesOs ? "registers a task with this machine's scheduler" : "writes a proposal branch to this repository"}, and this door is in sim mode -- the plan above is the whole rehearsal`);
+    if (ctx.mode === "sim" && (op.touchesOs || op.touchesFiles || op.touchesTree) && !(typeof op.simSafe === "function" && op.simSafe(p.values)))
+      throw new OpError("SIM_EFFECT", `${op.id} ${op.touchesOs ? "registers a task with this machine's scheduler" : op.touchesTree ? "writes a lane's tracker in this checkout" : "writes a proposal branch to this repository"}, and this door is in sim mode -- the plan above is the whole rehearsal`);
     if (p.state !== "planned") return { ...view(p), replayed: true };
     if (p.expiresAt <= now()) { plans.delete(planId); throw new OpError("PLAN_EXPIRED", "that plan expired before it was applied -- plan again, and read the new one"); }
 

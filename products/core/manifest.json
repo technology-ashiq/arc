@@ -34,6 +34,7 @@
     ".claude/scripts/core/plan-expect.mjs",
     ".claude/scripts/core/proposal-branch.mjs",
     ".claude/scripts/core/spawn-bounded.mjs",
+    ".claude/scripts/core/profile-request.mjs",
     ".claude/scripts/core/lane-resolve.mjs",
     ".claude/scripts/core/lane-resolve.sh",
     ".claude/scripts/core/ownership-lint.sh",

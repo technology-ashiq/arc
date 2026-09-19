@@ -20,7 +20,6 @@ import { countedOn, kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib
  *   kpis: { key: string, v: string, l: string, sub: string }[],
  *   slices: import("../../../lib/served.mjs").ServedTable,
  *   dod: import("../../../lib/served.mjs").ServedTable,
- *   openVerb: { isVerbPending: true, verb: string, sentence: string },
  *   closeVerb: { isVerbPending: true, verb: string, sentence: string },
  * }} Folded
  */
@@ -86,10 +85,6 @@ export function fold(payloads, ctx) {
       },
       note: "every slice proven is computed here; tests green on CI per job and the evidence bundle are checked by /arc-phase-done from the main clone, not by the door",
     }),
-    openVerb: verbPending(
-      "Open a slice",
-      "A named unit of the live phase, open until it is proven: tests green AND the owner saw it run. Opening and proving arrive with the work door.",
-    ),
     closeVerb: verbPending(
       "Close a phase on evidence",
       "The close is refused unless the Definition of Done computes, and the refusal is itself a receipt that says what is missing. It arrives with the work door.",
