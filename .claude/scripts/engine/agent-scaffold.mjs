@@ -24,11 +24,11 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdirSync, realpathSync, writeSync } from "node:fs";
+import { realpathSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "./yaml-subset.mjs";
-import { baseText, checkProposal, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
+import { baseText, checkProposal, mainDirNames, planProposal, proposalBranch, writeProposal, ProposalError } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
 import { deriveFromContract } from "../core/face-sections.mjs";
@@ -192,7 +192,11 @@ async function main() {
   const seated = addToContract(CONTRACT, contract.text, a.name, a.room);
   // EVERYTHING THE CONTRACT DERIVES rides on the branch too: the room registry and any product's face: section, from
   // face-sections' own generator -- the four files alone turned main red on face-sections --check (PR 4 logic attack).
-  const productNames = readdirSync(join(REPO, "products")).filter((p) => /^[a-z][a-z0-9-]{0,40}$/.test(p)).sort();
+  // From MAIN's tree, as every file above is read: the checkout missed a product main held (PR 4 round-2 attacks).
+  const listedProducts = await mainDirNames({ repo: REPO, dir: "products" });
+  if (listedProducts.base !== base) die(2, "main moved while its files were read -- run it again");
+  const productNames = listedProducts.names.filter((p) => /^[a-z][a-z0-9-]{0,40}$/.test(p));
+  if (!productNames.includes(a.product)) die(2, `--product ${JSON.stringify(a.product)} is not a product on main (${productNames.join(", ")})`);
   const manifests = {};
   for (const p of productNames) {
     const r = await baseText({ repo: REPO, path: `products/${p}/manifest.json` });

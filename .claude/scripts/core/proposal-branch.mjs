@@ -444,6 +444,21 @@ export function mainHolds({ repo, path }) {
   });
 }
 
+/**
+ * The names directly under a directory ON MAIN, and main's commit. add-agent listed products from the owner's checkout,
+ * so a product main held and the checkout lacked got no manifest line and no face: section on the branch (PR 4 round-2
+ * attacks, the "wrong tree" row once more).
+ * @param {{ repo: string, dir: string }} o @returns {Promise<{ base: string, names: string[] }>}
+ */
+export function mainDirNames({ repo, dir }) {
+  checkFiles([{ path: `${dir}/x`, content: "" }], [`${dir}/x`]);
+  return withHooks(repo, async (hooks) => {
+    const base = await mainCommit(repo, hooks);
+    const listed = (await git(repo, ["ls-tree", "-z", "--name-only", base, "--", `${dir}/`], { hooks })).out.split("\u0000").filter(Boolean);
+    return { base, names: listed.map((p) => p.slice(dir.length + 1)).filter((n) => n !== "" && !n.includes("/")).sort() };
+  });
+}
+
 /** The base, checked against the one the caller read from, and the branch checked free. */
 async function baseOf(repo, branch, hooks, expected) {
   const base = await mainCommit(repo, hooks);

@@ -21,7 +21,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isOneLine } from "./one-line.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal, withExclusiveLock } from "./plan-expect.mjs";
-import { spawnBounded } from "./spawn-bounded.mjs";
+import { bashEnv, spawnBounded } from "./spawn-bounded.mjs";
 import { query } from "../hq/spine.mjs";
 import { spineRoot } from "../hq/lib/spine-io.mjs";
 
@@ -72,7 +72,7 @@ async function profileInForce() {
   if (set) die(2, `${set} is set in this environment and moves where the profile is read -- an edit to .arc.profile would not be the profile in force here; unset it`);
   // Bounded, and a failure named: a missing bash, WSL's bash, or a slow one read as "exited null" (PR 4 shell attack).
   let out = "", err = "";
-  const r = await spawnBounded("bash", [ARC_PROFILE, "name"], { cwd: REPO, env: process.env, timeoutMs: 20_000,
+  const r = await spawnBounded("bash", [ARC_PROFILE, "name"], { cwd: REPO, env: bashEnv(), timeoutMs: 20_000,
     onData: (stream, chunk) => { if (stream === "out") out += chunk.toString("utf8"); else if (err.length < 4096) err += chunk.toString("utf8"); } });
   if (r.timedOut) die(2, "the profile in force could not be read: arc-profile.sh did not finish in 20 s");
   if (r.exit === null) die(2, `the profile in force could not be read: arc-profile.sh could not be run (${r.error || r.signal || "no exit"}) -- is Git Bash on PATH?`);
