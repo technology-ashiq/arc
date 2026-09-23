@@ -121,7 +121,7 @@ teardown() { _arc_legal_teardown; }
   # The criterion, end to end, with the positive control first: publish must SUCCEED before the
   # bump, or the refusal afterwards proves only that publishing is broken.
   _arc_legal_sandbox
-  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out"
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out"
   [ "$status" -eq 0 ]
   run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
   [ "$status" -eq 0 ]
@@ -171,7 +171,7 @@ teardown() { _arc_legal_teardown; }
   # End to end, in the layout a venture actually uses, with the clean run first -- a guard that
   # failed on everything would pass the red half and be useless.
   _arc_legal_sandbox
-  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/legal/rendered"
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/legal/rendered"
   [ "$status" -eq 0 ]
   run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/legal/rendered/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
   [ "$status" -eq 0 ]
@@ -244,7 +244,7 @@ teardown() { _arc_legal_teardown; }
   _arc_legal_sandbox
   run node "$ARC_ROOT/tests/legal-probe.mjs" data-edit "$SANDBOX" grievance-windows.json '"ack_hours": 48' '"ack_hours": 47'
   [ "$status" -eq 0 ]
-  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out"
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out"
   [ "$status" -eq 0 ]
   run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
   [ "$status" -eq 0 ]
@@ -260,7 +260,7 @@ teardown() { _arc_legal_teardown; }
 @test "legal templates: an UNedited set publishes, so the refusal above means something" {
   # The positive control for the test above. Same flow, nothing edited.
   _arc_legal_sandbox
-  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out"
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out"
   [ "$status" -eq 0 ]
   run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
   [ "$status" -eq 0 ]
@@ -278,7 +278,7 @@ teardown() { _arc_legal_teardown; }
   _arc_legal_sandbox
   run node "$ARC_ROOT/tests/legal-probe.mjs" drop-set-approval "$SANDBOX/products/legal/approved-sets.json" v1
   [ "$status" -eq 0 ]
-  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out"
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out"
   [ "$status" -eq 0 ]
   run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
   [ "$status" -eq 0 ]
@@ -294,7 +294,7 @@ teardown() { _arc_legal_teardown; }
   _arc_legal_sandbox
   run node "$ARC_ROOT/tests/legal-probe.mjs" json-del "$SANDBOX/products/legal/approved-sets.json" sets
   [ "$status" -eq 0 ]
-  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out"
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out"
   [ "$status" -eq 0 ]
   run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
   [ "$status" -eq 0 ]

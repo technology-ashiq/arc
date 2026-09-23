@@ -24,7 +24,7 @@ teardown() { _arc_legal_teardown; }
 # Render + propose inside the sandbox, leaving $SANDBOX/out ready to publish from.
 _proposed() {
   _arc_legal_sandbox || return 1
-  node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out" >/dev/null 2>&1 || return 1
+  _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out" >/dev/null 2>&1 || return 1
   [ -f "$SANDBOX/out/_approval.json" ] || { echo "propose wrote no approval request" >&2; return 1; }
   return 0
 }
@@ -47,13 +47,19 @@ _publish() {
   [ "${#output}" -eq 64 ]
 }
 
-@test "legal receipts: propose emits nothing to the spine and publishes nothing" {
+@test "legal receipts: propose raises ONE question, records no decision and publishes nothing" {
   # REQ-06 makes the human gate permanent. A verb that both requests approval and could record it
   # is one refactor away from doing both, so propose must leave no published artefact at all.
+  # Since ADR-1344 it DOES raise the question -- one approval.requested on the sandbox spine --
+  # and never the answer: no decision.recorded, whatever the payload says.
   _proposed
   [ ! -f "$SANDBOX/out/_published.json" ]
-  run cat "$SANDBOX/out/../out/_approval.json"
+  run cat "$SANDBOX/out/_approval.json"
   [ "$status" -eq 0 ]
+  run bash -c 'cat "$1"/spine/events/*.jsonl' _ "$SANDBOX"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c '"kind":"approval.requested"')" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -c '"kind":"decision.recorded"')" -eq 0 ]
 }
 
 @test "legal receipts: an approved decision bound to these bytes publishes" {
