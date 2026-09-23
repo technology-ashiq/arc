@@ -10,7 +10,7 @@
 // to print a digest, each refusal is matched by its own words, and the last line is "RAN: <n> checks".
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -103,6 +103,21 @@ const node = (args, env = {}, cwd = REPO) => spawnSync(process.execPath, args, {
   check("leads daily: another approved draft is another plan -- the digest moves and the first one no longer applies",
     plan2.status === 0 && !!d2 && d2 !== d && plan2.stdout.includes(rec2.draft_ref) && afterChange.status === 2 && sent() === 0,
     `${d && d.slice(0, 12)} -> ${d2 && d2.slice(0, 12)} / ${afterChange.status} ${afterChange.stderr.slice(0, 120)}`);
+  // WHO IT GOES TO is in the plan: the approval's sha covers the body only, so a record rewritten to another lead and
+  // subject after the plan kept the digest and was sent under it (PR 5c round-2 logic attack). Rewritten, the plan is
+  // stale; restored, it applies again.
+  {
+    const draftFile = join(store, "drafts", `${rec2.draft_ref}.json`);
+    const original = readFileSync(draftFile, "utf8");
+    writeFileSync(draftFile, JSON.stringify({ ...JSON.parse(original), lead_id: "c".repeat(64), subject: "a subject nobody planned" }, null, 2) + "\n");
+    const swapped = al(["daily", "pilot", "--expect", d2 || ZERO], env);
+    const replanned = lastExpect(al(["daily", "pilot", "--dry-run"], env).stdout);
+    writeFileSync(draftFile, original);
+    check("leads daily: a draft rewritten to another lead after the plan makes the plan stale, and nothing is sent",
+      swapped.status === 2 && /PLAN_STALE|not what the plan showed/.test(swapped.stderr) && replanned !== null && replanned !== d2 && sent() === 0,
+      `${swapped.status} ${swapped.stderr.slice(0, 140)} / ${replanned && replanned.slice(0, 12)}`);
+    check("leads fixture: the restored draft plans the same digest again (vacuous-pass guard)", lastExpect(al(["daily", "pilot", "--dry-run"], env).stdout) === d2);
+  }
   // Bound: the send path RUNS. The drafts' leads are not in this scratch store, so the send refuses each by name -- a
   // refusal at the send is the mechanism working, and it is still not a send. The draft's ref in the output is the proof
   // that runDaily was reached, not merely that something printed the word "refused".
@@ -125,6 +140,18 @@ const node = (args, env = {}, cwd = REPO) => spawnSync(process.execPath, args, {
   check("legal propose refuses a request with no plan behind it", unbound.status === 2 && /bound to a plan/.test(unbound.stderr) && !existsSync(join(out, "_approval.json")), unbound.stderr.slice(0, 140));
   const both = lg("--dry-run", "--expect", ZERO);
   check("legal propose refuses a plan and an apply in one run", both.status === 2 && /Give one|give one/.test(both.stderr), both.stderr.slice(0, 120));
+  // PR 5c round-2 attacks: the parser's three quiet holes, and the plan bound to a STRING rather than a directory.
+  {
+    const lgRaw = (args, cwd) => node([S("legal", "arc-legal.mjs"), "propose", "--venture", venture, ...args], { ARC_SPINE_ROOT: sp, ARC_LEGAL_VENTURE_DIR: "" }, cwd);
+    const typo = lgRaw(["--out", out, "--ventur-dir", tmp, "--dry-run"]);
+    check("legal propose refuses a flag it does not take (a typo never runs on the default source)", typo.status === 2 && /does not take --ventur-dir/.test(typo.stderr), typo.stderr.slice(0, 120));
+    const blank = lgRaw(["--out", out, "--venture-dir", "", "--dry-run"]);
+    check("legal propose refuses an EMPTY --venture-dir rather than reading it as absent", blank.status === 2 && /has no value/.test(blank.stderr), blank.stderr.slice(0, 120));
+    for (const dir of ["cwd-a", "cwd-b"]) mkdirSync(join(tmp, dir), { recursive: true });
+    const inA = lastExpect(lgRaw(["--out", "rel-out", "--dry-run"], join(tmp, "cwd-a")).stdout);
+    const inB = lastExpect(lgRaw(["--out", "rel-out", "--dry-run"], join(tmp, "cwd-b")).stdout);
+    check("legal propose binds the DIRECTORY: one relative --out from two folders is two plans", inA !== null && inB !== null && inA !== inB, `${inA} ${inB}`);
+  }
   const plan = lg("--dry-run");
   const d = lastExpect(plan.stdout);
   check("legal propose, planned: the pages, the facts and the payload sha, a digest -- and nothing written into --out",
@@ -150,15 +177,39 @@ const node = (args, env = {}, cwd = REPO) => spawnSync(process.execPath, args, {
   check("legal propose prints the stamp and the publish commands, both naming the script that exists and the request's id",
     raised.length === 1 && ap.stdout.includes(`arc-inbox.mjs approve ${raised[0].id}`) && ap.stdout.includes(`--request ${raised[0].id}`) && !ap.stdout.includes("arc-inbox.sh"),
     ap.stdout.slice(-300));
+  // SENTINELS in --out from here on: every refusal below must leave the folder byte-for-byte as it was. Only the stale
+  // digest was pinned that way, so a propose that wrote BEFORE its duplicate or spine check passed every assertion
+  // (PR 5c round-2 shell attack).
+  const page = readdirSync(out).filter((n) => n.endsWith(".mdx")).sort()[0];
+  writeFileSync(join(out, page), "SENTINEL-PAGE\n");
+  writeFileSync(file, "SENTINEL-PAYLOAD\n");
+  const untouched = () => readFileSync(join(out, page), "utf8") === "SENTINEL-PAGE\n" && readFileSync(file, "utf8") === "SENTINEL-PAYLOAD\n";
   // ONE QUESTION PER PAYLOAD, refused before the write: the same bytes twice is the same question.
   const again = lg("--expect", d || ZERO);
   check("legal propose refuses the same bytes a second time, before writing, and raises no second request",
-    again.status === 2 && /already in your inbox/.test(again.stderr) && spineEvents(sp).filter((e) => e.kind === "approval.requested").length === 1, again.stderr.slice(0, 160));
+    again.status === 2 && /already in your inbox/.test(again.stderr) && spineEvents(sp).filter((e) => e.kind === "approval.requested").length === 1 && untouched(), again.stderr.slice(0, 160));
+  // A FOLDER where a page belongs is refused before the first write -- the copy used to fail half-way, some approved
+  // pages overwritten and the old payload kept, reported as a stack trace (PR 5c round-2 attacks, both).
+  {
+    const out2 = join(tmp, "legal-out-2");
+    mkdirSync(join(out2, page), { recursive: true });
+    writeFileSync(join(out2, "_approval.json"), "SENTINEL-PAYLOAD\n");
+    // ANOTHER venture, so the payload is not the one already in the inbox and the duplicate check cannot answer first.
+    const venture2 = readdirSync(join(REPO, "tests", "fixtures", "legal", "ventures")).sort()[1];
+    const lg2 = (...args) => node([S("legal", "arc-legal.mjs"), "propose", "--venture", venture2, "--out", out2, ...args], { ARC_SPINE_ROOT: sp, ARC_LEGAL_VENTURE_DIR: "" });
+    const d2 = lastExpect(lg2("--dry-run").stdout);
+    check("legal fixture: a second venture plans into a second --out (vacuous-pass guard)", typeof venture2 === "string" && venture2 !== venture && d2 !== null, `${venture2} ${d2}`);
+    const blocked = lg2("--expect", d2 || ZERO);
+    check("legal propose into an --out with a FOLDER where a page belongs writes nothing and says why, with no stack",
+      blocked.status === 2 && /nothing was written/.test(blocked.stderr) && /is a folder or a link/.test(blocked.stderr) && !/\bat \w+ \(|EIO|node:internal/.test(blocked.stderr)
+        && readFileSync(join(out2, "_approval.json"), "utf8") === "SENTINEL-PAYLOAD\n" && statSync(join(out2, page)).isDirectory(),
+      blocked.stderr.slice(0, 200));
+  }
   // An unknown read is never "not raised": a torn line refuses the apply.
   const day = readdirSync(join(sp, "events")).find((n) => n.endsWith(".jsonl"));
   writeFileSync(join(sp, "events", day), `${readFileSync(join(sp, "events", day), "utf8")}{"kind":"approval.re`);
   const torn = lg("--expect", d || ZERO);
-  check("legal propose refuses a spine it cannot read whole", torn.status === 2 && /torn line|cannot read/.test(torn.stderr), torn.stderr.slice(0, 160));
+  check("legal propose refuses a spine it cannot read whole, and leaves --out as it was", torn.status === 2 && /torn line|cannot read/.test(torn.stderr) && untouched(), torn.stderr.slice(0, 160));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

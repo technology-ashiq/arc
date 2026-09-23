@@ -13,7 +13,8 @@
  *      parse error, canonicaliser refusal, or a FAIL in a group promoted out of TRIAL.
  *   3  could not run at all: unknown venture, unreadable facts, missing template set.
  */
-import { readFileSync, writeFileSync, writeSync, mkdirSync, mkdtempSync, cpSync, rmSync, existsSync, readdirSync, realpathSync } from "node:fs";
+import { readFileSync, writeFileSync, writeSync, mkdirSync, mkdtempSync, rmSync, existsSync, readdirSync, realpathSync, renameSync, lstatSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,7 +26,7 @@ import { renderTemplate, strictestWindow, TemplateError, TRANSFORMS } from "./li
 import { runAllLints, scenarioSetLint, crossPageLint, findingsAreFatal, TRIAL, GROUPS_RUN } from "./lib/lints.mjs";
 import { buildChecklist, renderChecklist, renderCiGuard, guardVersionIn } from "./lib/checklist.mjs";
 // The house plan-and-apply binding, and the emitter with three outcomes (ADR-1340/1344).
-import { planDigest, expectLine, staleReason, emitReceipt } from "../core/plan-expect.mjs";
+import { planDigest, expectLine, staleReason, emitReceipt, withExclusiveLock } from "../core/plan-expect.mjs";
 import { query, spineRoot } from "../hq/spine.mjs";
 import {
   approvalPayload, validateApprovalPayload, verifyChain, verifyDecision,
@@ -84,7 +85,7 @@ function usage() {
   return [
     "usage: arc-legal render  --venture NAME --out DIR",
     "       arc-legal propose --venture NAME --out DIR [--venture-dir DIR] (--dry-run | --expect DIGEST)",
-    "       arc-legal publish --venture NAME --dir DIR --decision FILE --request ULID",
+    "       arc-legal publish --venture NAME --dir DIR --request ULID",
     "       arc-legal verify  --venture NAME --dir DIR",
     "       arc-legal checklist --venture NAME [--out FILE] [--evidence FILE]",
     "       arc-legal bump-templates --venture NAME --to SET (--guard FILE | --no-guard)",
@@ -94,8 +95,7 @@ function usage() {
     "  --venture NAME   a fixture venture under tests/fixtures/legal/ventures/",
     "  --out DIR        where the rendered pages are written",
     "  --dir DIR        an already-rendered directory to publish from",
-    "  --decision FILE  the human decision receipt that approved those exact bytes",
-    "  --request ULID   the approval.requested event that decision decides",
+    "  --request ULID   the approval.requested propose raised; its decision is read from the spine",
     "",
     "render  produces pages and lints them; it publishes nothing.",
     "propose renders, writes the payload and RAISES the question for a HUMAN to decide (REQ-06):",
@@ -130,7 +130,8 @@ function parseArgs(argv) {
       if (a.includes("=")) throw new Fail(2, `use \`${a.split("=")[0]} VALUE\`, not \`${a}\``);
       const key = a.slice(2);
       const val = argv[i + 1];
-      if (val === undefined || val.startsWith("--")) throw new Fail(2, `flag ${a} has no value`);
+      // An explicit EMPTY value is not an absent flag: `--venture-dir ""` fell back to the env source silently.
+      if (val === undefined || val === "" || val.startsWith("--")) throw new Fail(2, `flag ${a} has no value`);
       // Two values for one flag is an OPERATOR ERROR, not a last-wins override. The lanes rule
       // already says so for --lane ("silently picking one of two named values is precisely the
       // never-guess failure"); it had never been applied to the other flag parser in the repo.
@@ -473,6 +474,54 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
  * Bound like every other apply: `--dry-run` renders into a temp directory, prints what it would do and a plan digest;
  * `--expect D` writes the payload and raises the request only if that digest still holds.
  */
+/**
+ * The staged render, then the payload, into --out -- each file written beside its destination and renamed over it, and
+ * every destination name checked FIRST. `cpSync` wrote page by page, so a folder or a read-only file where a page
+ * belongs failed half-way: some approved pages overwritten, the old payload kept, exit 2 ("refused") and a stack trace
+ * full of machine paths (PR 5c round-2 attacks, both). A failure is reported by its code, never its path, and says
+ * whether anything in --out was touched.
+ * @param {string} staged @param {string} out @param {string} payloadText
+ * @returns {{ error?: string, touched: boolean }}
+ */
+function writeStagedInto(staged, out, payloadText) {
+  const files = [];
+  const walk = (rel) => {
+    for (const d of readdirSync(join(staged, rel), { withFileTypes: true })) {
+      const r = rel ? join(rel, d.name) : d.name;
+      if (d.isDirectory()) walk(r); else files.push(r);
+    }
+  };
+  try { walk(""); } catch (e) { return { error: `the staged render cannot be read (${e && e.code ? e.code : "error"})`, touched: false }; }
+  const writes = [...files.map((r) => ({ rel: r, bytes: readFileSync(join(staged, r)) })), { rel: "_approval.json", bytes: Buffer.from(payloadText, "utf8") }];
+  // Every destination checked before the first write: a name that is a folder or a link would fail (or follow) mid-way.
+  try {
+    mkdirSync(out, { recursive: true });
+    for (const w of writes) {
+      const dest = join(out, w.rel);
+      let st = null;
+      try { st = lstatSync(dest); } catch (e) { if (!e || e.code !== "ENOENT") throw e; }
+      if (st && (st.isDirectory() || st.isSymbolicLink())) return { error: `${w.rel} in --out is a folder or a link, not a page`, touched: false };
+    }
+  } catch (e) {
+    return { error: `--out cannot be prepared (${e && e.code ? e.code : "error"})`, touched: false };
+  }
+  let touched = false;
+  for (const w of writes) {
+    const dest = join(out, w.rel);
+    const tmp = `${dest}.arc-legal-${randomBytes(6).toString("hex")}`;
+    try {
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(tmp, w.bytes);
+      renameSync(tmp, dest);
+      touched = true;
+    } catch (e) {
+      try { rmSync(tmp, { force: true }); } catch { /* the temp name is ours and unique */ }
+      return { error: `${w.rel} could not be written (${e && e.code ? e.code : "error"})`, touched };
+    }
+  }
+  return { touched };
+}
+
 async function proposeMain(args) {
   if (!args.venture) { console.error(`propose needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`propose needs --out DIR\n\n${usage()}`); return 2; }
@@ -524,8 +573,9 @@ async function proposeMain(args) {
     const what = `legal full-read gate: ${payload.venture}, ${payload.pages.length} page(s), set ${payload.template_set}`;
     const request = { what, gate: "legal", subject: APPROVAL_SUBJECT, sha };
     const idem = bytesHash(Buffer.from(`${APPROVAL_SUBJECT}|${payload.venture}|${sha}`, "utf8"));
-    // WHERE the pages land is part of the plan: a plan for one --out was accepted for another (PR 5c round 1).
-    const digest = planDigest({ venture: payload.venture, out: args.out, payload, request, idem });
+    // WHERE the pages land is part of the plan: a plan for one --out was accepted for another (PR 5c round 1) -- and the
+    // DIRECTORY, not the string: a relative --out planned in one folder applied in another (PR 5c round-2 attacks).
+    const digest = planDigest({ venture: payload.venture, out: resolve(args.out), payload, request, idem });
 
     console.log(`${dryRun ? "would write" : "writing"} ${file}`);
     console.log(`subject ${APPROVAL_SUBJECT} - venture ${payload.venture} - ${payload.pages.length} page(s)`);
@@ -558,45 +608,104 @@ async function proposeMain(args) {
     let root;
     try { root = spineRoot(); } catch (e) { console.error(`the spine cannot be found (${e && e.code ? e.code : "error"}) - nothing was written`); return 2; }
     const spineEnv = { ...process.env, ARC_SPINE_ROOT: root };
-    let already;
-    try {
-      const read = await query(root, { kind: "approval.requested", engine: "scan" });
-      if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) {
-        console.error("the spine has a day it cannot read or a torn line, so an earlier request for these bytes cannot be ruled out - nothing was written; replay the spine first");
-        return 2;
-      }
-      already = read.events.map((r) => r.event).find((e) => e && e.idem === idem);
-    } catch (e) {
-      console.error(`the spine cannot be read (${e && e.code ? e.code : "error"}) - nothing was written`);
-      return 2;
-    }
-    if (already) {
-      console.error(`these exact bytes are already in your inbox as ${already.id} - decide that one; nothing was written`);
-      return 2;
-    }
 
-    // Every check has passed: the pages reach --out now, then the payload, then the question.
-    mkdirSync(args.out, { recursive: true });
-    cpSync(staged, args.out, { recursive: true });
-    writeFileSync(file, text, "utf8");
-    // Three outcomes, never two (ADR-1340's rule for every emitter): landed, refused, or unknown -- and an unknown one is
-    // never reported as "not raised", because the pages and the payload ARE written by then.
-    const got = emitReceipt(join(REPO_ROOT, ".claude", "scripts", "hq", "arc-event.mjs"), "approval.requested", request,
-      { cwd: REPO_ROOT, env: spineEnv, flags: ["--idem", idem, "--strict"], timeoutMs: 60_000 });
-    if (got.state === "refused") { console.error(`the pages and the payload ARE written to ${args.out}, and the question was not raised - ${got.why}`); return 1; }
-    if (got.state === "unknown") { console.error(`the pages and the payload ARE written to ${args.out}, and whether the question landed is unknown - ${got.why}. Look in your inbox before running this again`); return 1; }
-    if (!got.id) { console.error(`the pages and the payload ARE written to ${args.out}, and the question landed without its id - ${got.why}`); return 1; }
+    // ONE PROPOSER AT A TIME, the duplicate check again inside: three applies of one digest in the same instant each
+    // passed the check, and the loser reported "ARE written, not raised" for a question that WAS raised (PR 5c round-2
+    // attacks; the PR 4 check-then-emit row, never applied here).
+    let got = null;
+    let exit = 0;
+    const held = await withExclusiveLock(join(root, "locks"), "legal-propose.lock", async () => {
+      let already;
+      try {
+        const read = await query(root, { kind: "approval.requested", engine: "scan" });
+        if ((read.unreadable && read.unreadable.length) || (read.torn && read.torn.length)) {
+          console.error("the spine has a day it cannot read or a torn line, so an earlier request for these bytes cannot be ruled out - nothing was written; replay the spine first");
+          exit = 2; return;
+        }
+        already = read.events.map((r) => r.event).find((e) => e && e.idem === idem);
+      } catch (e) {
+        console.error(`the spine cannot be read (${e && e.code ? e.code : "error"}) - nothing was written`);
+        exit = 2; return;
+      }
+      if (already) {
+        console.error(`these exact bytes are already in your inbox as ${already.id} - nothing was written`);
+        exit = 2; return;
+      }
+
+      // Every check has passed: the pages reach --out now, then the payload, then the question.
+      const wrote = writeStagedInto(staged, args.out, text);
+      if (wrote.error) {
+        console.error(wrote.touched
+          ? `the pages were PARTLY written to --out (${wrote.error}), no payload was written and no question was raised - propose again before anyone reads that folder`
+          : `nothing was written: ${wrote.error}`);
+        exit = wrote.touched ? 1 : 2; return;
+      }
+      // Three outcomes, never two (ADR-1340's rule for every emitter): landed, refused, or unknown -- and an unknown one
+      // is never reported as "not raised", because the pages and the payload ARE written by then.
+      got = emitReceipt(join(REPO_ROOT, ".claude", "scripts", "hq", "arc-event.mjs"), "approval.requested", request,
+        { cwd: REPO_ROOT, env: spineEnv, flags: ["--idem", idem, "--strict"], timeoutMs: 60_000 });
+    });
+    if (held.busy) { console.error("another propose is raising a question right now - nothing was written; plan again when it is done"); return 2; }
+    if (exit) return exit;
+    if (got.state === "refused" && /DUP_IDEM/.test(String(got.why))) { console.error("the pages and the payload ARE written to --out, and these exact bytes were already raised by another run - decide the one in your inbox"); return 1; }
+    if (got.state === "refused") { console.error(`the pages and the payload ARE written to --out, and the question was not raised - ${got.why}`); return 1; }
+    if (got.state === "unknown") { console.error(`the pages and the payload ARE written to --out, and whether the question landed is unknown - ${got.why}. Look in your inbox before running this again`); return 1; }
+    if (!got.id) { console.error(`the pages and the payload ARE written to --out, and the question landed without its id - ${got.why}`); return 1; }
     console.log("");
     console.log(`receipt: approval.requested ${got.id}`);
     console.log("A HUMAN decides this: the full read IS the stamp. In the face's inbox, or from the CANONICAL clone:");
     console.log(`  node .claude/scripts/hq/arc-inbox.mjs approve ${got.id} --reason "<why>"`);
     console.log("Then publish with the recorded decision:");
-    console.log(`  node .claude/scripts/legal/arc-legal.mjs publish --venture ${payload.venture} --dir ${args.out} --decision <DECISION_FILE> --request ${got.id}`);
+    console.log(`  node .claude/scripts/legal/arc-legal.mjs publish --venture ${payload.venture} --dir ${args.out} --request ${got.id}`);
     return 0;
   } finally {
     // The staging render is never left behind, on any path out of here.
     try { rmSync(staged, { recursive: true, force: true }); } catch { /* a temp render nobody reads */ }
   }
+}
+
+/**
+ * The request and its decision, read from the spine by the request's id. Returns the decision in the shape
+ * verifyDecision checks, or the problems that stop a publish: NO_REQUEST (no such question), REQUEST_MISMATCH (a
+ * question about other bytes, or not the legal gate's), NO_DECISION (asked, never answered). The hashes the decision
+ * approves are the ones in the approval file its request's sha binds -- the inbox receipt carries none of its own.
+ * @param {string} requestId @param {string} approvalText
+ * @returns {Promise<{ decision: object|null, problems: string[], unreadable?: string }>}
+ */
+async function decisionFromSpine(requestId, approvalText) {
+  let root;
+  try { root = spineRoot(); } catch (e) { return { decision: null, problems: [], unreadable: `the spine cannot be found (${e && e.code ? e.code : "error"})` }; }
+  const read = async (kind) => {
+    const r = await query(root, { kind, engine: "scan" });
+    if ((r.unreadable && r.unreadable.length) || (r.torn && r.torn.length)) throw Object.assign(new Error("torn"), { code: "TORN" });
+    return r.events.map((x) => x.event).filter(Boolean);
+  };
+  let requests, decisions;
+  try { requests = await read("approval.requested"); decisions = await read("decision.recorded"); }
+  catch (e) { return { decision: null, problems: [], unreadable: e && e.code === "TORN" ? "the spine has a day it cannot read or a torn line" : `the spine cannot be read (${e && e.code ? e.code : "error"})` }; }
+  const request = requests.find((e) => e.id === requestId);
+  if (!request) return { decision: null, problems: [`NO_REQUEST: no approval.requested ${requestId} is on the spine. A decision can only approve a question that was asked.`] };
+  const p = request.payload || {};
+  const problems = [];
+  if (p.gate !== "legal" || p.subject !== APPROVAL_SUBJECT)
+    problems.push(`REQUEST_MISMATCH: ${requestId} is not a legal full-read request (gate "${p.gate}", subject "${p.subject}").`);
+  if (p.sha !== bytesHash(approvalText))
+    problems.push(`REQUEST_MISMATCH: ${requestId} asked about other approval bytes than the _approval.json in --dir. The human read one payload; this is another.`);
+  const answers = decisions.filter((e) => e.payload && e.payload.decides === requestId);
+  if (!answers.length) {
+    problems.push(`NO_DECISION: ${requestId} has no recorded decision. Nothing publishes until a human stamps it in the inbox.`);
+    return { decision: null, problems };
+  }
+  const last = answers[answers.length - 1];
+  let approved;
+  try { approved = JSON.parse(approvalText); } catch { approved = {}; }
+  return {
+    problems,
+    decision: {
+      kind: last.kind, id: last.id, decides: last.payload.decides, verdict: last.payload.verdict, recorded_at: last.ts,
+      subject: p.subject, facts_sha256: approved.facts_sha256, template_set_sha: approved.template_set_sha,
+    },
+  };
 }
 
 /**
@@ -607,17 +716,22 @@ async function proposeMain(args) {
  * pass every TOCTOU case there is: edit the facts, re-render, and the sidecar agrees with the
  * facts perfectly while disagreeing with what anybody approved.
  */
-function publishMain(args) {
+async function publishMain(args) {
   if (!args.venture) { console.error(`publish needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.dir) { console.error(`publish needs --dir DIR\n\n${usage()}`); return 2; }
-  if (!args.decision) { console.error(`publish needs --decision FILE. There is no publish without a recorded human decision (REQ-06).\n\n${usage()}`); return 2; }
+  // THE DECISION IS READ FROM THE SPINE, NEVER HANDED IN. A caller-supplied receipt file published on a hand-written
+  // approve nobody recorded, while the real inbox decision -- verdict and decides under `payload`, no hashes -- could
+  // never satisfy it (PR 5c round-2 logic attack). The file IS the forgery surface, so its flag is refused outright.
+  if (args.decision !== undefined) {
+    console.error("publish takes no --decision: the decision is read from the spine by --request, where arc-inbox recorded it. A decision file is not evidence (REQ-06).");
+    return 2;
+  }
 
   const approvalFile = join(args.dir, "_approval.json");
-  if (!existsSync(approvalFile)) { console.error(`no approval request at ${approvalFile}. Run propose first.`); return 3; }
-  if (!existsSync(args.decision)) { console.error(`no decision receipt at ${args.decision}`); return 3; }
+  if (!existsSync(approvalFile)) { console.error("no approval request in --dir. Run propose first."); return 3; }
 
+  const approvalText = readFileSync(approvalFile, "utf8");
   const approved = readJson(approvalFile);
-  const decision = readJson(args.decision);
 
   const payloadErrs = validateApprovalPayload(approved);
   if (payloadErrs.length) {
@@ -626,7 +740,7 @@ function publishMain(args) {
   }
 
   // Fresh render into no directory: we want the hashes, not more files on disk.
-  const { run: fresh } = renderVenture({ ventureName: args.venture, outDir: null });
+  const { run: fresh } = renderVenture({ ventureName: args.venture, outDir: null, ventureDir: args["venture-dir"] });
 
   // `--request` is the ULID of the `approval.requested` event a human emitted for these bytes,
   // and it is REQUIRED. The first cut of this passed `decision.decides` in as the expected
@@ -637,6 +751,11 @@ function publishMain(args) {
     console.error("publish needs --request ULID, the approval.requested event this decision decides. Without it there is nothing to bind the decision TO, and any recorded approval would do.");
     return 2;
   }
+  // The question and its answer, from the spine: the request must be the legal gate's, about THESE approval bytes, and
+  // the decision the one recorded against that request id. A spine it cannot read is "could not check" (exit 3).
+  const found = await decisionFromSpine(String(args.request), approvalText);
+  if (found.unreadable) { console.error(`publish could not check: ${found.unreadable} - nothing was published`); return 3; }
+  const decision = found.decision;
 
   // propose refuses on fatal findings and publish did not. The comment on the propose check even
   // says it was written early "because that is the moment nobody will remember to add it" -- and
@@ -667,14 +786,15 @@ function publishMain(args) {
 
   const problems = [
     ...templateSetApprovalErrors({ approvedSets, templateSet: fresh.template_set, sha: fresh.template_set_sha }),
-    ...verifyDecision(decision, approved, args.request),
+    ...found.problems,
+    ...(decision ? verifyDecision(decision, approved, args.request) : []),
     ...verifyChain({ approved, fresh, dir: args.dir, dirEntries: listPagesRecursively(args.dir) }),
     ...backdatingErrors({
       // The RE-DERIVED date, never the one recorded in the approval file. That value was
       // forgeable -- editing it alone, facts hash untouched, published a record claiming a date
       // the rendered page never carried -- and it was what both backdating guards evaluated.
       effectiveDate: fresh.effective_date,
-      decisionAt: decision.recorded_at,
+      decisionAt: decision ? decision.recorded_at : null,
       previousEffectiveDate: previous ? previous.effective_date : null,
       hadPrevious,
     }),
@@ -702,7 +822,7 @@ function publishMain(args) {
     effective_date: fresh.effective_date,
     facts_sha256: fresh.facts_sha256,
     template_set_sha: fresh.template_set_sha,
-    decision: { id: decision.id ?? null, decides: decision.decides ?? null, recorded_at: decision.recorded_at ?? null },
+    decision: { id: decision.id, decides: decision.decides, recorded_at: decision.recorded_at },
     pages: approved.pages,
     semantic_diff: diff,
     run: fresh,
@@ -712,7 +832,7 @@ function publishMain(args) {
   writeFileSync(ledgerFile, readFileSync(join(args.dir, "_published.json"), "utf8"), "utf8");
 
   console.log(`published ${approved.pages.length} page(s) for ${fresh.venture}`);
-  console.log(`bound to decision ${decision.id ?? "(no id)"} recorded ${decision.recorded_at ?? "(no timestamp)"}`);
+  console.log(`bound to decision ${decision.id} recorded ${decision.recorded_at}`);
   return 0;
 }
 
@@ -874,7 +994,7 @@ function bumpTemplatesMain(args) {
 
   // What actually changes, computed rather than asserted, so the operator sees the consequence
   // and not just the intention.
-  const before = renderVenture({ ventureName: args.venture, outDir: null }).run;
+  const before = renderVenture({ ventureName: args.venture, outDir: null, ventureDir: args["venture-dir"] }).run;
   const pinPath = join(ventureDir, "pins.yaml");
   const src = readFileSync(pinPath, "utf8");
   const line = `template_set: ${from}`;
@@ -882,7 +1002,7 @@ function bumpTemplatesMain(args) {
   writeFileSync(pinPath, src.split(line).join(`template_set: ${args.to}`), "utf8");
 
   let after;
-  try { after = renderVenture({ ventureName: args.venture, outDir: null }).run; }
+  try { after = renderVenture({ ventureName: args.venture, outDir: null, ventureDir: args["venture-dir"] }).run; }
   catch (e) {
     // Put the pin back. A venture left pinned to a set it cannot render is worse than an
     // un-bumped one, and this is the only window in which that state can exist.
@@ -907,7 +1027,7 @@ function bumpTemplatesMain(args) {
 function checklistMain(args) {
   if (!args.venture) { console.error(`checklist needs --venture NAME\n\n${usage()}`); return 2; }
 
-  const { run } = renderVenture({ ventureName: args.venture, outDir: null });
+  const { run } = renderVenture({ ventureName: args.venture, outDir: null, ventureDir: args["venture-dir"] });
   const providerPages = renderInputs(run.template_set).data["provider-pages.json"];
   if (!providerPages) throw new Fail(3, "products/legal/data/provider-pages.json is missing");
 
@@ -944,7 +1064,7 @@ ${usage()}`); return 2; }
   if (!existsSync(publishedFile)) { console.error(`nothing published at ${publishedFile}`); return 3; }
 
   const published = readJson(publishedFile);
-  const { run: fresh } = renderVenture({ ventureName: args.venture, outDir: null });
+  const { run: fresh } = renderVenture({ ventureName: args.venture, outDir: null, ventureDir: args["venture-dir"] });
   const { verdict, results } = verifyPublished({
     published,
     fresh,
@@ -966,6 +1086,24 @@ async function main(argv) {
   if (args.help || !args._.length) { console.log(usage()); return args.help ? 0 : 2; }
 
   const verb = args._[0];
+  // EACH VERB TAKES ITS OWN FLAGS AND NO OTHERS. The parser accepted any --name VALUE, so a typo (`--ventur-dir X`)
+  // ran on the default source with exit 0, and `--venture-dir` reached publish and verify and was silently ignored
+  // there, so a gate raised for a real venture could never be published (PR 5c round-2 attacks).
+  const VERB_FLAGS = {
+    render: ["venture", "out", "venture-dir"],
+    propose: ["venture", "out", "venture-dir", "dry-run", "expect"],
+    publish: ["venture", "dir", "request", "venture-dir", "decision"],
+    verify: ["venture", "dir", "venture-dir"],
+    checklist: ["venture", "out", "evidence", "venture-dir"],
+    "bump-templates": ["venture", "to", "guard", "no-guard", "venture-dir"],
+    "ci-guard": ["venture", "out", "dir"],
+    "propose-templates": ["set", "out"],
+  };
+  if (Object.hasOwn(VERB_FLAGS, verb)) {
+    const stray = Object.keys(args).filter((k) => k !== "_" && k !== "help" && !VERB_FLAGS[verb].includes(k));
+    if (stray.length) { console.error(`${verb} does not take ${stray.map((k) => `--${k}`).join(", ")}\n\n${usage()}`); return 2; }
+    if (args._.length > 1) { console.error(`${verb} takes no positional argument (got ${JSON.stringify(args._.slice(1))})\n\n${usage()}`); return 2; }
+  }
   if (verb === "propose") return proposeMain(args);
   if (verb === "publish") return publishMain(args);
   if (verb === "verify") return verifyMain(args);

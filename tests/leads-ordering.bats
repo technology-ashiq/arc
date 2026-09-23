@@ -45,7 +45,7 @@ function draftFor(s) {
   return writeDraft(s, {campaign:"pilot", lead_id:id, touch_n:1, body:"Hi there, this is the body.", cites:[], lintStatus:"PASS"});
 }
 function approvalEvents(rec) {
-  return [{id:"01APPROVAL", kind:"approval.requested", payload:{gate:"leads-send", draft_ref:rec.draft_ref, draft_sha:rec.draft_sha}},
+  return [{id:"01APPROVAL", kind:"approval.requested", payload:{gate:"leads-send", draft_ref:rec.draft_ref, lead_hmac:rec.lead_id, campaign:rec.campaign, draft_sha:rec.draft_sha}},
           {id:"01DECISION", kind:"decision.recorded", payload:{decides:"01APPROVAL", verdict:"approve", reason:"ok"}}];
 }
 const trace = [];

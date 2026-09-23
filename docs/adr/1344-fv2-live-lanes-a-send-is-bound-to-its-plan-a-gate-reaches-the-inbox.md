@@ -51,3 +51,13 @@ into this checkout). A sim door refuses it like any other effect, the card says 
 from the apply script so a row cannot quietly drop it. Two more: a render is staged in a temp directory and reaches
 `--out` only after every check has passed, and a real venture's facts directory is resolved in ONE place for every verb,
 so a gate raised for a real venture can actually be published.
+
+## Amendment, PR 5c round 2 (2026-09-23)
+
+Two fresh attackers found two HIGH. One decision changes a lane's contract: **legal `publish` reads its decision from
+the spine and takes no decision file.** A caller-supplied `--decision FILE` was a forgery surface (a hand-written approve
+published) and the real inbox receipt could never satisfy it, so the gate this ADR routes to the inbox could not close
+honestly either way. publish now takes `--request ULID` alone: the request must be the legal gate's and name the sha of
+the exact `_approval.json` in `--dir`, and the decision is the one recorded against that id. The other HIGH stays inside
+this ADR's binding: the leads send digest covers each draft's lead, touch and subject, and the send refuses a lead or
+campaign its approval did not name. The approval step binding only the body is filed to the leads lane (debt ledger).

@@ -526,6 +526,12 @@ try {
       const f = boot(["--port", String(PORT + 1)], { [k]: "1" });
       check(`a live door with ${k} set refuses to start -> BAD_SPINE_ENV`, f.status === 1 && /BAD_SPINE_ENV/.test(f.stderr), `${f.status} ${String(f.stderr).slice(0, 200)}`);
     }
+    // PR 5c round-2 shell attack: the variables that steer a real send -- the vendor host the Bearer key goes to, the
+    // config, the warm-up attestation, rehearsal -- reached a live door's send; the leads lane's own list refuses them.
+    for (const k of ["LEADS_PROVIDER_BASE_URL", "leads_config", "LEADS_WARMUP_APPROVED", "ARC_LEADS_REHEARSAL", "ARC_LEADS_MAIL_BASE_URL"]) {
+      const f = boot(["--port", String(PORT + 1)], { [k]: "x" });
+      check(`a live door with ${k} set refuses to start -> BAD_SPINE_ENV, naming it`, f.status === 1 && /BAD_SPINE_ENV/.test(f.stderr) && f.stderr.includes(k), `${f.status} ${String(f.stderr).slice(0, 200)}`);
+    }
     // PR 2 shell attack: a port that is not decimal 1..65535 is refused, never NaN into listen() and an exit 0.
     for (const bad of ["abc", "0x10", "70000", "1.5"]) {
       const f = boot(["--spine", SPINE_A, "--port", bad]);

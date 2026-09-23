@@ -12,6 +12,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // This file lives at <repo>/tests/, so the repo root is two levels up. Imported through
@@ -39,6 +40,39 @@ function get(obj, dotted) {
     cur = Array.isArray(cur) ? cur[Number(part)] : cur[part];
   }
   return cur;
+}
+
+// The SANDBOX spine the suite exported (_arc_legal_sandbox). Never defaulted: a probe that fell back to the repo's own
+// spine would write test decisions into the owner's inbox.
+function spineDir() {
+  const spine = process.env.ARC_SPINE_ROOT;
+  if (!spine) die("ARC_SPINE_ROOT is not set -- the spine commands write only to the sandbox spine");
+  return spine;
+}
+
+function spineEvents() {
+  const dir = join(spineDir(), "events");
+  return readdirSync(dir).filter((n) => n.endsWith(".jsonl")).sort()
+    .flatMap((n) => readFileSync(join(dir, n), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)));
+}
+
+/** One event through the real arc-event, strict; returns its id or dies. `now` dates it (ARC_SPINE_NOW). */
+function emitEvent(kind, payload, flags, now) {
+  const env = { ...process.env, ARC_SPINE_ROOT: spineDir() };
+  if (now !== undefined) env.ARC_SPINE_NOW = String(now);
+  const r = spawnSync(process.execPath, [join(ARC_ROOT, ".claude", "scripts", "hq", "arc-event.mjs"), "emit", kind,
+    "--payload", JSON.stringify(payload), "--venture", "arc", ...flags, "--strict"], { cwd: ARC_ROOT, encoding: "utf8", env });
+  const id = String(r.stdout || "").trim().split(/\r?\n/).pop();
+  if (r.status !== 0 || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id)) die(`arc-event refused ${kind} (exit ${r.status}): ${String(r.stderr).trim()}`);
+  return id;
+}
+
+/** A decision exactly as `arc-inbox approve|reject` records it: its payload, its idem, its process. */
+function emitDecision(decides, verdict, recordedAt) {
+  const now = Date.parse(recordedAt);
+  if (!Number.isFinite(now)) die(`recorded_at ${recordedAt} is not a date`);
+  return emitEvent("decision.recorded", { decides, reason: "legal-probe", verdict },
+    ["--idem", createHash("sha256").update(`decision.recorded|${decides}`).digest("hex"), "--process", "arc-inbox@1.0.0"], now);
 }
 
 switch (cmd) {
@@ -425,36 +459,54 @@ switch (cmd) {
   }
 
   /**
-   * decision <approval.json> <out.json> [verdict] [recorded_at] [--facts SHA] [--set SHA]
+   * decision <approval.json> <out.json> [verdict] [recorded_at]
    *
-   * Mint a decision receipt bound to an approval payload. This is the offline FAKE for the spine
-   * (CLAUDE.md: every external dependency gets an interface, a fake and a real impl) -- the real
-   * receipt is written by `arc-inbox approve` on the canonical clone, which no test can reach:
-   * the spine is gitignored, so a worktree has its own and CI has none at all.
-   *
-   * It takes overrides on purpose. A fake that can only produce VALID receipts cannot test a
-   * gate whose entire job is refusing invalid ones.
+   * Record a human decision on the LATEST legal full-read request on the spine $ARC_SPINE_ROOT
+   * names (the sandbox's) -- through the real arc-event, with exactly the payload, idem and
+   * process `arc-inbox approve` writes, dated recorded_at by ARC_SPINE_NOW. `publish` reads the
+   * decision from the spine by request id and takes no decision file (PR 5c round 2: a
+   * hand-written file published, and the real inbox receipt never could). <out.json> keeps
+   * {id, decides, verdict, recorded_at} so a test can name the request it publishes against.
+   * <approval.json> is read only to prove the caller proposed first.
    */
+  /** request-for <approval.json> -> the id of the legal request on $ARC_SPINE_ROOT asking about exactly these bytes */
+  case "request-for": {
+    const [approvalFile] = rest;
+    const { bytesHash } = await import(new URL("../.claude/scripts/legal/lib/canonical.mjs", import.meta.url).href);
+    const sha = bytesHash(readFileSync(approvalFile, "utf8"));
+    const hit = spineEvents().filter((e) => e.kind === "approval.requested" && e.payload && e.payload.gate === "legal" && e.payload.sha === sha).pop();
+    if (!hit) die("no legal approval.requested on the spine asks about these bytes");
+    console.log(hit.id);
+    break;
+  }
+
+  /** foreign-request <approval.json> -> raise an approval.requested for these SAME bytes on another gate; prints its id */
+  case "foreign-request": {
+    const [approvalFile] = rest;
+    const { bytesHash } = await import(new URL("../.claude/scripts/legal/lib/canonical.mjs", import.meta.url).href);
+    const sha = bytesHash(readFileSync(approvalFile, "utf8"));
+    console.log(emitEvent("approval.requested", { what: "a design pick, not a legal full read", gate: "design", subject: "design.pick", sha }, []));
+    break;
+  }
+
+  /** decide-id <request id> <verdict> <recorded_at> -> record a decision on that exact request; prints the decision id */
+  case "decide-id": {
+    const [decides, verdict, recordedAt] = rest;
+    console.log(emitDecision(decides, verdict, recordedAt));
+    break;
+  }
+
   case "decision": {
-    const [approvalFile, outFile, verdict = "approve", recordedAt = "2026-08-13T00:00:00Z", ...flags] = rest;
-    const approval = JSON.parse(readFileSync(approvalFile, "utf8"));
-    const at = (name, fallback) => {
-      const i = flags.indexOf(name);
-      return i >= 0 && flags[i + 1] !== undefined ? flags[i + 1] : fallback;
-    };
-    const receipt = {
-      kind: "decision.recorded",
-      id: "01TESTDECISION0000000000000",
-      decides: "01TESTREQUEST00000000000000",
-      subject: approval.subject,
-      verdict,
-      recorded_at: recordedAt,
-      facts_sha256: at("--facts", approval.facts_sha256),
-      template_set_sha: at("--set", approval.template_set_sha),
-    };
+    const [approvalFile, outFile, verdict = "approve", recordedAt = "2026-08-13T00:00:00Z"] = rest;
+    JSON.parse(readFileSync(approvalFile, "utf8"));
+    // Only the gate's own questions: a request raised on another gate (foreign-request) is never the one decided here.
+    const requests = spineEvents().filter((e) => e.kind === "approval.requested" && e.payload && e.payload.gate === "legal");
+    if (!requests.length) die("no legal approval.requested on the spine -- propose first");
+    const decides = requests[requests.length - 1].id;
+    const id = emitDecision(decides, verdict, recordedAt);
     mkdirSync(dirname(outFile), { recursive: true });
-    writeFileSync(outFile, JSON.stringify(receipt, null, 2) + "\n", "utf8");
-    console.log("decision:" + receipt.verdict);
+    writeFileSync(outFile, JSON.stringify({ id, decides, verdict, recorded_at: recordedAt }, null, 2) + "\n", "utf8");
+    console.log("decision:" + verdict);
     break;
   }
 

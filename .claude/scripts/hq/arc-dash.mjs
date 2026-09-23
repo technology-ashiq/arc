@@ -66,6 +66,8 @@ import * as reads from "./lib/face/reads.mjs";
 // live beside the door, the route table stays here.
 import { createWorkDoor, runTool, WORK_STATUS } from "./lib/face/work-door.mjs";
 import { OpError } from "./face-ops.mjs";
+// The leads lane's own list of the variables that steer a send (vendor host, config, warm-up attestation, rehearsal).
+import { ENV_LOCAL_FORBIDDEN as LEADS_STEERING } from "../leads/lib/mail.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_BRIEF = join(HERE, "arc-brief.mjs");
@@ -947,7 +949,12 @@ function boot(argv) {
       // The Context Pack runs a program from these (context-pack.mjs); "Open the next slice" is the first door verb that
       // builds a pack, so a test door that names a program is refused like the rest (PR 4 shell attack).
       "ARC_CODEGRAPH_CMD", "ARC_CODEGRAPH_ARGS"];
-    const testDoors = Object.keys(process.env).filter((k) => TEST_DOORS.includes(k.toUpperCase()) || k.toUpperCase().startsWith("ARC_MOCK_"));
+    // ...and every variable the leads lane itself refuses to take from a file because it STEERS a send: the vendor host
+    // (the Bearer key and recipients go wherever it names), the config, the warm-up attestation, rehearsal. Two of the
+    // family were refused here and the rest reached a real send through the door (PR 5c round-2 shell attack). Imported,
+    // not copied, so the lane's list is the one list. The store's location is the operator's to choose, so it stays.
+    const STEERING = LEADS_STEERING.map((n) => n.toUpperCase()).filter((n) => n !== "ARC_LEADS_STORE");
+    const testDoors = Object.keys(process.env).filter((k) => TEST_DOORS.includes(k.toUpperCase()) || STEERING.includes(k.toUpperCase()) || k.toUpperCase().startsWith("ARC_MOCK_"));
     if (testDoors.length) {
       process.stderr.write(`arc-dash: ERROR BAD_SPINE_ENV -- ${testDoors.join(", ")} set; those are the spine's test-only doors, and a live door writes the real company's receipts. Unset them, or run a fixture with --spine <path>\n`);
       process.exit(1);

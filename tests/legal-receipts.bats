@@ -9,15 +9,16 @@
 # a publish gate is defined by what it declines. The happy-path tests exist so the refusals
 # cannot be passing because publishing is broken outright.
 #
-# The decision receipts come from `legal-probe.mjs decision`, the offline FAKE for the spine: the
-# real receipt is written by `arc-inbox approve` on the canonical clone, which no test can reach,
-# because the spine is gitignored and CI has none at all. The fake takes overrides on purpose --
-# one that could only mint VALID receipts could not test a gate whose whole job is refusing
-# invalid ones.
+# The decisions come from `legal-probe.mjs decision`, which records one on the SANDBOX spine through
+# the real arc-event, with the payload, idem and process `arc-inbox approve` writes. publish reads the
+# request and its decision from that spine by --request and takes no decision file: a hand-written
+# file published, and the real inbox receipt never could (PR 5c round-2 logic attack).
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 REQ="01TESTREQUEST00000000000000"
+# The request id a recorded decision decides, read from the probe's record of it.
+_decides() { node "$ARC_ROOT/tests/legal-probe.mjs" field "$1" decides; }
 
 teardown() { _arc_legal_teardown; }
 
@@ -29,11 +30,14 @@ _proposed() {
   return 0
 }
 
-# Publish, capturing the exit code without errexit aborting the function first.
+# Publish against the request the decision in $1 decides (or the request named in $2), capturing the
+# exit code without errexit aborting the function first.
 _publish() {
+  local req="${2:-}"
+  [ -n "$req" ] || req="$(_decides "$1")" || return 1
   PUBLISH_STATUS=0
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    --decision "$1" --request "${2:-$REQ}" >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
+    --request "$req" >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
   return 0
 }
 
@@ -123,24 +127,52 @@ _publish() {
 @test "legal receipts: a decision about a DIFFERENT request is refused" {
   # The first cut of this check passed `decision.decides` in as the expected value, comparing the
   # field against itself -- it could never fire, and any recorded approval anywhere would have
-  # published. The expected value now comes from the caller, so this test can fail.
+  # published. Now a SECOND question is raised and approved, and this one never was: the approval
+  # on the spine is about the other request, so publishing this one finds no decision.
   _proposed
-  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  run _arc_legal_propose "fixture-gateway-nogst" "$SANDBOX/other"
   [ "$status" -eq 0 ]
-  _publish "$SANDBOX/d.json" "01SOMEOTHERREQUEST000000000"
+  local mine
+  mine="$(node "$ARC_ROOT/tests/legal-probe.mjs" request-for "$SANDBOX/out/_approval.json")"
+  [ -n "$mine" ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/other/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  [ "$(_decides "$SANDBOX/d.json")" != "$mine" ]
+  _publish "$SANDBOX/d.json" "$mine"
   [ "$PUBLISH_STATUS" -eq 2 ]
   run cat "$SANDBOX/pub.txt"
-  [[ "$output" == *"DECIDES_MISMATCH"* ]]
+  [[ "$output" == *"NO_DECISION"* ]]
 }
 
 @test "legal receipts: publish without a decision is refused, not defaulted" {
+  # The question was raised and nobody answered it: a request on the spine is not consent.
   _proposed
-  PUBLISH_STATUS=0
-  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
+  local mine
+  mine="$(node "$ARC_ROOT/tests/legal-probe.mjs" request-for "$SANDBOX/out/_approval.json")"
+  [ -n "$mine" ]
+  _publish "" "$mine"
   [ "$PUBLISH_STATUS" -eq 2 ]
   run cat "$SANDBOX/pub.txt"
-  [[ "$output" == *"REQ-06"* ]]
+  [[ "$output" == *"NO_DECISION"* ]]
+  [ ! -f "$SANDBOX/out/_published.json" ]
+}
+
+@test "legal receipts: a decision FILE handed to publish is refused -- a hand-written approve is not evidence" {
+  # PR 5c round-2 logic attack: a hand-written decision.recorded, verdict approve, published 7 pages
+  # at exit 0 against a question nobody had answered. publish takes no --decision at all now.
+  _proposed
+  local mine
+  mine="$(node "$ARC_ROOT/tests/legal-probe.mjs" request-for "$SANDBOX/out/_approval.json")"
+  [ -n "$mine" ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" write "$SANDBOX/forged.json" '{"kind":"decision.recorded","verdict":"approve"}'
+  [ "$status" -eq 0 ]
+  PUBLISH_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
+    --decision "$SANDBOX/forged.json" --request "$mine" >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"publish takes no --decision"* ]]
+  [ ! -f "$SANDBOX/out/_published.json" ]
 }
 
 @test "legal receipts: publish without --request is refused" {
@@ -150,7 +182,7 @@ _publish() {
   [ "$status" -eq 0 ]
   PUBLISH_STATUS=0
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    --decision "$SANDBOX/d.json" >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
+    >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
   [ "$PUBLISH_STATUS" -eq 2 ]
   # Asserting the exit code ALONE was a hole: any unexpected crash maps to 2, so a TypeError
   # satisfied this test. The message pins which refusal it was.
@@ -188,7 +220,7 @@ _publish() {
   mkdir -p "$SANDBOX/empty"
   PUBLISH_STATUS=0
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/empty" \
-    --decision "$SANDBOX/nope.json" --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
+    --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
   [ "$PUBLISH_STATUS" -eq 3 ]
 }
 
@@ -214,19 +246,19 @@ _publish() {
   [[ "$output" == *"TEMPLATES_CHANGED"* ]]
 }
 
-@test "legal receipts: a decision with no recorded_at is refused, not waved through" {
-  # The same receipt refused when dated 2099 and PUBLISHED when the key was deleted -- and the
-  # CLI printed "recorded (no timestamp)" as it went. Naming the missing evidence and proceeding
-  # anyway is the worst available behaviour.
+@test "legal receipts: an approval file that is not the bytes the question asked about is refused" {
+  # The request on the spine names the sha of the exact _approval.json the human read. One byte
+  # appended -- same JSON, same hashes inside, every other check green -- is another payload.
+  # (The undated-receipt case this replaces cannot arise: a spine event always carries its ts.)
   _proposed
   run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
   [ "$status" -eq 0 ]
-  run node "$ARC_ROOT/tests/legal-probe.mjs" json-del "$SANDBOX/d.json" recorded_at
-  [ "$status" -eq 0 ]
+  printf '\n' >> "$SANDBOX/out/_approval.json"
   _publish "$SANDBOX/d.json"
   [ "$PUBLISH_STATUS" -eq 2 ]
   run cat "$SANDBOX/pub.txt"
-  [[ "$output" == *"DECISION_UNDATED"* ]]
+  [[ "$output" == *"REQUEST_MISMATCH"* ]]
+  [ ! -f "$SANDBOX/out/_published.json" ]
 }
 
 @test "legal receipts: a forged effective_date in the approval file is refused" {
@@ -260,25 +292,27 @@ _publish() {
   [[ "$output" == *"PAGE_UNAPPROVED_FILE"* ]]
 }
 
-@test "legal receipts: a decision whose facts hash is not the published one is refused" {
-  # The probe's `decision` fake grew --facts and --set overrides so a wrong-hash receipt COULD be
-  # minted, and no test ever passed either flag. Deleting the two comparisons in verifyDecision
-  # left the whole suite green: the TOCTOU test mutates the facts AFTER minting, so the receipt
-  # agreed with the payload there and only verifyChain fired.
+@test "legal receipts: a request that is not the legal gate's is refused" {
+  # The decision's hashes are the ones the request's sha binds, so the request itself must be a
+  # legal full-read question: an approved decision on some other gate's request never publishes.
   _proposed
-  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z" --facts "0000000000000000000000000000000000000000000000000000000000000000"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" foreign-request "$SANDBOX/out/_approval.json"
   [ "$status" -eq 0 ]
-  _publish "$SANDBOX/d.json"
+  local foreign="$output"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decide-id "$foreign" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  _publish "" "$foreign"
   [ "$PUBLISH_STATUS" -eq 2 ]
   run cat "$SANDBOX/pub.txt"
-  [[ "$output" == *"facts_sha256 is not the one being published"* ]]
+  [[ "$output" == *"REQUEST_MISMATCH"* ]]
+  [[ "$output" == *"not a legal full-read request"* ]]
 }
 
 _published() {
   _proposed || return 1
   node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z" >/dev/null || return 1
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    --decision "$SANDBOX/d.json" --request "$REQ" >/dev/null 2>&1 || return 1
+    --request "$(_decides "$SANDBOX/d.json")" >/dev/null 2>&1 || return 1
   [ -f "$SANDBOX/out/_published.json" ] || { echo "publish wrote no _published.json" >&2; return 1; }
   return 0
 }

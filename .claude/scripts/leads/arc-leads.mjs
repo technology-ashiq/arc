@@ -10,7 +10,7 @@
 //   0 ok · 2 usage/validation · 3 refused by a gate · 4 provider transport · 5 store error
 
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, writeFileSync, writeSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
@@ -945,25 +945,24 @@ async function cmdDaily(argv) {
   try { unsubscribeHeader(); }
   catch (e) { die(3, `${e.message}. Phase 03 gate row 2 is the dedicated warmed domain, and it is not evidenced (ADR-0413).`); }
 
-  const readEvents = () => readAllEvents({ allowMissing: true });
-  const approved = listDrafts(store, campaign)
-    .filter((d) => approvedShaFor(readEvents(), d.draft_ref))
-    .map((d) => d.draft_ref);
-  // WHAT THE PLAN SHOWED: the campaign, the IST day the cap buckets by, and every approved draft with BOTH the sha the
-  // owner approved and the bytes on disk now. `approvedShaFor` answers with the FIRST request carrying an approve, so a
-  // draft approved, edited and re-approved kept naming the superseded sha -- the plan said one thing and the guard
-  // compared another, and that draft could never be sent (PR 5c round-1 logic attack). The events are read ONCE, so a
-  // decision landing mid-plan cannot make one row disagree with the next.
+  // WHAT THE PLAN SHOWED: the campaign, the IST day the cap buckets by, and every approved draft with the sha the owner
+  // approved, the bytes on disk now, and WHO and WHAT it goes to. The events are read ONCE, so a decision landing
+  // mid-plan cannot make one row disagree with the next -- and the approval is read through `approvedShaFor`, the ONE
+  // helper the send's guard reads: the plan kept its own "latest approval" copy while the send read the first, so an
+  // edited-and-re-approved draft was planned and then refused at every send (PR 5c round-2 logic attack).
   const day = istDay(nowIst());
-  const events = readEvents();
-  const attempts = approved.map((ref) => {
-    // The LATEST approved request for this draft, not the earliest.
-    const approvals = events.filter((e) => e && e.kind === "approval.requested" && e.payload && e.payload.gate === "leads-send" && e.payload.draft_ref === ref);
-    const decided = new Set(events.filter((e) => e && e.kind === "decision.recorded" && e.payload && e.payload.verdict === "approve" && typeof e.payload.decides === "string").map((e) => e.payload.decides));
-    const live = approvals.filter((e) => decided.has(e.id));
-    const approvedSha = live.length ? String(live[live.length - 1].payload.draft_sha) : "";
-    return { ref, approved_sha: approvedSha, current_sha: String(currentSha(store, ref)) };
-  });
+  const events = readAllEvents({ allowMissing: true });
+  const attempts = listDrafts(store, campaign)
+    .map((d) => ({ d, approval: approvedShaFor(events, d.draft_ref) }))
+    .filter((x) => x.approval)
+    .map(({ d, approval }) => ({
+      ref: d.draft_ref, approved_sha: String(approval.approvedSha), current_sha: String(currentSha(store, d.draft_ref)),
+      // The approval's sha binds the BODY only, and the send reads the recipient, touch and subject from the draft
+      // record: a draft rewritten to another lead and subject after the plan kept the same digest and was sent under it
+      // (PR 5c round-2 logic attack). All three are in the digest; the subject as a hash, so the plan prints no PII.
+      lead_id: String(d.lead_id), touch_n: d.touch_n, subject_sha: createHash("sha256").update(String(d.subject || ""), "utf8").digest("hex"),
+    }))
+    .sort((a, b) => (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0));
   // A draft whose body moved since its approval is not sendable: the guard compares the approved sha at the send, so
   // listing it in a plan would promise a send that refuses. Named here instead.
   const edited = attempts.filter((t) => t.approved_sha === "" || t.approved_sha !== t.current_sha);
@@ -982,7 +981,7 @@ async function cmdDaily(argv) {
     // said 0 (PR 5c round-1 shell attack). Written synchronously, and a failed write is a refusal.
     const lines = [
       `arc-leads daily: would attempt ${attempts.length} approved draft(s) for ${campaign} on ${day}`,
-      ...attempts.map((t) => `  attempt  ${t.ref}  approved ${t.approved_sha.slice(0, 12)}`),
+      ...attempts.map((t) => `  attempt  ${t.ref}  touch ${t.touch_n} to lead ${t.lead_id.slice(0, 12)}  approved ${t.approved_sha.slice(0, 12)}`),
       "arc-leads daily: dry run — nothing was sent. The caps, the suppression ledger, the send window and the jurisdiction check run per draft at the send, and each can refuse it there.",
       expectLine(digest),
     ];

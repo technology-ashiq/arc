@@ -128,7 +128,7 @@ teardown() { _arc_legal_teardown; }
 
   BEFORE=0
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    --decision "$SANDBOX/d.json" --request "$REQ" >/dev/null 2>&1 || BEFORE=$?
+    --request "$(node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/d.json" decides)" >/dev/null 2>&1 || BEFORE=$?
   [ "$BEFORE" -eq 0 ]
 
   run node "$ARC_LEGAL_CLI" bump-templates --venture "fixture-gateway-gst" --to v2 --no-guard
@@ -137,7 +137,7 @@ teardown() { _arc_legal_teardown; }
 
   AFTER=0
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    --decision "$SANDBOX/d.json" --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || AFTER=$?
+    --request "$(node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/d.json" decides)" >"$SANDBOX/pub.txt" 2>&1 || AFTER=$?
   [ "$AFTER" -eq 2 ]
   run cat "$SANDBOX/pub.txt"
   [[ "$output" == *"TEMPLATES_CHANGED"* ]]
@@ -176,7 +176,7 @@ teardown() { _arc_legal_teardown; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/legal/rendered/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
   [ "$status" -eq 0 ]
   run node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/legal/rendered" \
-    --decision "$SANDBOX/d.json" --request "$REQ"
+    --request "$(node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/d.json" decides)"
   [ "$status" -eq 0 ]
 
   run node "$ARC_LEGAL_CLI" ci-guard --venture "fixture-gateway-gst" --out "$SANDBOX/ci-guard.sh"
@@ -251,7 +251,7 @@ teardown() { _arc_legal_teardown; }
 
   MUTANT_STATUS=0
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    --decision "$SANDBOX/d.json" --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || MUTANT_STATUS=$?
+    --request "$(node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/d.json" decides)" >"$SANDBOX/pub.txt" 2>&1 || MUTANT_STATUS=$?
   [ "$MUTANT_STATUS" -eq 2 ]
   run cat "$SANDBOX/pub.txt"
   [[ "$output" == *"SET_EDITED_SINCE_APPROVAL"* ]]
@@ -265,7 +265,7 @@ teardown() { _arc_legal_teardown; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
   [ "$status" -eq 0 ]
   run node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    --decision "$SANDBOX/d.json" --request "$REQ"
+    --request "$(node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/d.json" decides)"
   [ "$status" -eq 0 ]
 }
 
@@ -284,7 +284,7 @@ teardown() { _arc_legal_teardown; }
   [ "$status" -eq 0 ]
   MUTANT_STATUS=0
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    --decision "$SANDBOX/d.json" --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || MUTANT_STATUS=$?
+    --request "$(node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/d.json" decides)" >"$SANDBOX/pub.txt" 2>&1 || MUTANT_STATUS=$?
   [ "$MUTANT_STATUS" -eq 2 ]
   run cat "$SANDBOX/pub.txt"
   [[ "$output" == *"SET_NOT_APPROVED"* ]]
@@ -300,7 +300,7 @@ teardown() { _arc_legal_teardown; }
   [ "$status" -eq 0 ]
   MUTANT_STATUS=0
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
-    --decision "$SANDBOX/d.json" --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || MUTANT_STATUS=$?
+    --request "$(node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/d.json" decides)" >"$SANDBOX/pub.txt" 2>&1 || MUTANT_STATUS=$?
   [ "$MUTANT_STATUS" -eq 2 ]
   run cat "$SANDBOX/pub.txt"
   [[ "$output" == *"SET_RECORD_UNREADABLE"* ]]

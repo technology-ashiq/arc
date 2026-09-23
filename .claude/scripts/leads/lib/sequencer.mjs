@@ -65,7 +65,9 @@ export function approvedShaFor(events, draftRef) {
       e.payload?.gate === "leads-send" &&
       e.payload?.draft_ref === draftRef
   );
-  for (const req of requests) {
+  // The LATEST approved request, newest first: a draft approved, edited and approved again named the FIRST request's sha
+  // here, so the guard refused its current body at every send while the plan listed it (PR 5c round-2 logic attack).
+  for (const req of [...requests].reverse()) {
     // LATEST decision wins, and a reject revokes. The first version took the first `approve`
     // and never looked further, so a human who caught a mistake and rejected in the inbox
     // could not stop the send -- `reject` was read nowhere in the send path.
@@ -74,7 +76,7 @@ export function approvedShaFor(events, draftRef) {
     );
     const last = decisions[decisions.length - 1];
     if (last && last.payload.verdict === "approve")
-      return { approvedSha: req.payload.draft_sha, approvalId: req.id, decisionId: last.id };
+      return { approvedSha: req.payload.draft_sha, approvalId: req.id, decisionId: last.id, leadHmac: req.payload.lead_hmac, campaign: req.payload.campaign };
   }
   return null;
 }
@@ -95,6 +97,10 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
 
   const approval = approvedShaFor(events, draftRef);
   if (!approval) return { draftRef, ok: false, step: "approval", why: "no approved decision on the spine for this draft — L1 means every send is individually approved (ADR-0407)" };
+  // The approval named a lead and a campaign; the send reads both from the draft RECORD, which the sha does not cover.
+  // A record rewritten to another lead after approval went out under the body's approval (PR 5c round-2 logic attack).
+  if (approval.leadHmac !== draft.lead_id || approval.campaign !== draft.campaign)
+    return { draftRef, ok: false, step: "approval", why: "the draft's lead or campaign is not the one its approval named — it was rewritten after the human approved it (ADR-0407)" };
 
   try {
     guardSend({

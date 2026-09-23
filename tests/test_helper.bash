@@ -919,6 +919,8 @@ _arc_legal_sandbox() {
     cp "$ARC_ROOT/.claude/scripts/$_f" "$SANDBOX/.claude/scripts/$_f"
   done
   mkdir -p "$SANDBOX/spine/events"
+  # Exported for the whole test: propose raises onto it, legal-probe decides onto it and publish reads both from it.
+  export ARC_SPINE_ROOT="$SANDBOX/spine"
   ARC_LEGAL_CLI="$SANDBOX/.claude/scripts/legal/arc-legal.mjs"
   ARC_LEGAL_PUBLISH_GATE="$SANDBOX/.claude/scripts/legal/publish-gate.mjs"
   # A sandbox that did not actually copy is a silent pass generator: every "no findings"
@@ -961,6 +963,7 @@ _arc_legal_propose() {
 
 _arc_legal_teardown() {
   ARC_LEGAL_CLI=""
+  unset ARC_SPINE_ROOT
   [ -n "${SANDBOX:-}" ] && rm -rf "$SANDBOX" 2>/dev/null || true
 }
 
