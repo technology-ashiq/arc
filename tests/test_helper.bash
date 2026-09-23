@@ -901,17 +901,30 @@ _arc_legal_sandbox() {
   # exactly what happened on CI the first time the gate switched parsers.
   mkdir -p "$SANDBOX/.claude/scripts/hq/lib"
   cp -r "$ARC_ROOT/.claude/scripts/hq/lib/policy"  "$SANDBOX/.claude/scripts/hq/lib/"
+  # arc-legal.mjs binds its approval request to a plan digest (ADR-1340) and reads the spine before it
+  # raises one, so its static imports reach outside legal/. A missing one fails the CLI at import for
+  # EVERY subcommand -- the whole legal suite went red on CI the day these imports landed. This is the
+  # full import closure of legal/*.mjs; a new import outside legal/ belongs on this list.
+  mkdir -p "$SANDBOX/.claude/scripts/core"
+  cp    "$ARC_ROOT/.claude/scripts/core/plan-expect.mjs" "$SANDBOX/.claude/scripts/core/"
+  cp    "$ARC_ROOT/.claude/scripts/hq/spine.mjs"         "$SANDBOX/.claude/scripts/hq/"
+  cp    "$ARC_ROOT/.claude/scripts/hq/lib/spine-io.mjs"  "$SANDBOX/.claude/scripts/hq/lib/"
+  cp    "$ARC_ROOT/.claude/scripts/hq/lib/canonical.mjs" "$SANDBOX/.claude/scripts/hq/lib/"
   ARC_LEGAL_CLI="$SANDBOX/.claude/scripts/legal/arc-legal.mjs"
   ARC_LEGAL_PUBLISH_GATE="$SANDBOX/.claude/scripts/legal/publish-gate.mjs"
   # A sandbox that did not actually copy is a silent pass generator: every "no findings"
-  # assertion downstream would hold against a tree with no engine in it. FOUR copies run, so
-  # all four roots are asserted -- checking one of them left a partial sandbox surfacing as a
+  # assertion downstream would hold against a tree with no engine in it. EVERY copy above is
+  # asserted -- checking one of them left a partial sandbox surfacing as a
   # render failure rather than as the copy that actually failed.
   local _p
   for _p in "$ARC_LEGAL_CLI" \
             "$ARC_LEGAL_PUBLISH_GATE" \
             "$SANDBOX/hq.policy.yaml" \
             "$SANDBOX/.claude/scripts/hq/lib/policy/yaml.mjs" \
+            "$SANDBOX/.claude/scripts/core/plan-expect.mjs" \
+            "$SANDBOX/.claude/scripts/hq/spine.mjs" \
+            "$SANDBOX/.claude/scripts/hq/lib/spine-io.mjs" \
+            "$SANDBOX/.claude/scripts/hq/lib/canonical.mjs" \
             "$SANDBOX/products/legal/templates/v1" \
             "$SANDBOX/products/legal/data" \
             "$SANDBOX/tests/fixtures/legal/ventures" \

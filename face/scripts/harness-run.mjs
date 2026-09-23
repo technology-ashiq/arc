@@ -126,9 +126,22 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     if (!(gen.events > 0)) throw new SetupError(`fixture spine generated no events: ${JSON.stringify(gen)}`);
     log(`fixture: events=${gen.events}`);
 
+    // A scratch leads store holding the campaign the send's flow names: the send must refuse on the leads lane's OWN
+    // gate (no warmed sending domain, ADR-0413), which sits behind the store and campaign checks. Leaning on the
+    // machine's ~/.arc/leads was green where one exists and, on a clean CI runner, refused one gate earlier.
+    const leadsStore = join(tmp, "leads-store");
+    const leadsEnv = { ...process.env, ARC_LEADS_STORE: leadsStore };
+    try {
+      for (const args of [["store", "init"], ["campaign", "init", "browser-flow"]])
+        execFileSync(process.execPath, [join(REPO, ".claude", "scripts", "leads", "arc-leads.mjs"), ...args], { cwd: REPO, env: leadsEnv, stdio: ["ignore", "pipe", "pipe"] });
+    } catch (e) {
+      throw new SetupError(`the scratch leads store could not be made: ${oneLine(String((e && e.stderr) || (e && e.message) || e))}`);
+    }
+    log("fixture: leads store with the browser-flow campaign");
+
     const doorPort = await freePort();
     door = start("arc-dash", [join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "--spine", spine, "--port", String(doorPort)],
-      { cwd: REPO, env: { ...process.env, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal") } });
+      { cwd: REPO, env: { ...leadsEnv, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal") } });
     const headers = { Authorization: `Bearer ${token}` };
     await waitHttp(`http://127.0.0.1:${doorPort}/api/health`, headers, door, 20000, [token]);
     log(`door: up on ${doorPort}`);

@@ -45,6 +45,19 @@ const SPINE_B = join(tmp, "hand", "spine-hand");
 const JOURNAL = join(tmp, "journal");
 for (const d of [SPINE_A, SPINE_B]) mkdirSync(join(d, "events"), { recursive: true });
 
+// ---- the fixture: a scratch leads store holding the campaign this suite names ----
+// The send must refuse on the leads lane's OWN gate (no warmed sending domain, ADR-0413), and that gate sits behind the
+// store and campaign checks. Without a store of its own the suite leaned on the machine's ~/.arc/leads: green on a box
+// that has one, and on a clean CI runner refused one gate earlier ("store not initialised"). Set in THIS process's env
+// so the door and the hand-run both inherit the one store.
+process.env.ARC_LEADS_STORE = join(tmp, "leads-store");
+{
+  const leads = (args) => spawnSync(process.execPath, [join(REPO, ".claude", "scripts", "leads", "arc-leads.mjs"), ...args], { cwd: REPO, encoding: "utf8", env: process.env });
+  const init = leads(["store", "init"]);
+  const camp = leads(["campaign", "init", "work-door"]);
+  check("fixture: a scratch leads store with the work-door campaign (vacuous-pass guard)", init.status === 0 && camp.status === 0, `${init.status}:${String(init.stderr).trim()} | ${camp.status}:${String(camp.stderr).trim()}`);
+}
+
 // ---- the fixture: one real payment in the month before this one, on both spines ----
 // Mid-month, so no zone or boundary question reaches the close; last month, so the close is of a month that ended.
 const now = new Date();
