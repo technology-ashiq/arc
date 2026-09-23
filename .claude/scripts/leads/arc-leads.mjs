@@ -993,7 +993,10 @@ async function cmdDaily(argv) {
   // The causes, named: the plan is bound to the campaign, the IST day, every approved draft with its bytes, and how many
   // sends this campaign already has -- so an IST midnight, or a send that already ran, is a stale plan and not a fault.
   if (stale) die(2, `${stale} — the drafts, their approvals, the IST day (now ${day}) or the sends already recorded moved; nothing was sent`);
+  // Exactly the drafts the plan listed: the digest held, so these are the attempts the owner read.
+  const approved = attempts.map((t) => t.ref);
   if (!approved.length) { console.log("arc-leads daily: no approved drafts — nothing to send"); return; }
+  const readEvents = () => readAllEvents({ allowMissing: true });
 
   const out = await runDaily({
     store, readEvents, drafts: approved, now: nowIst(),

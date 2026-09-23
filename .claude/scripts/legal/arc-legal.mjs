@@ -726,6 +726,11 @@ async function publishMain(args) {
     console.error("publish takes no --decision: the decision is read from the spine by --request, where arc-inbox recorded it. A decision file is not evidence (REQ-06).");
     return 2;
   }
+  // No request, no decision to find: refused before anything is read, citing the rule it enforces.
+  if (!args.request) {
+    console.error("publish needs --request ULID, the approval.requested event this decision decides. There is no publish without a recorded human decision (REQ-06), and without the request there is nothing to bind that decision TO.");
+    return 2;
+  }
 
   const approvalFile = join(args.dir, "_approval.json");
   if (!existsSync(approvalFile)) { console.error("no approval request in --dir. Run propose first."); return 3; }
@@ -747,10 +752,6 @@ async function publishMain(args) {
   // value, which compares the field against itself: DECIDES_MISMATCH could never fire, and a
   // decision recorded about some entirely different request would have published. A check whose
   // expected value comes from the thing being checked is not a check.
-  if (!args.request) {
-    console.error("publish needs --request ULID, the approval.requested event this decision decides. Without it there is nothing to bind the decision TO, and any recorded approval would do.");
-    return 2;
-  }
   // The question and its answer, from the spine: the request must be the legal gate's, about THESE approval bytes, and
   // the decision the one recorded against that request id. A spine it cannot read is "could not check" (exit 3).
   const found = await decisionFromSpine(String(args.request), approvalText);
