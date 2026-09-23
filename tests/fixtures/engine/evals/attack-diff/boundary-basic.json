@@ -1,0 +1,23 @@
+{
+  "note": "Eval fixture (ADR-0226). The diff builds a git command as a shell string from a branch name, the boundary surface's home ground. `expected` asserts the SHAPE of an attack result and the one planted finding; wording is free. An empty findings list would be schema-valid and is the negative the harness must be able to tell apart.",
+  "input": {
+    "classification": "external-ok",
+    "surface": "boundary",
+    "diff": "diff --git a/push.mjs b/push.mjs\nnew file mode 100644\n--- /dev/null\n+++ b/push.mjs\n@@ -0,0 +1,3 @@\n+import { execSync } from \"node:child_process\";\n+const branch = process.argv[2];\n+execSync(\"git push origin \" + branch);\n",
+    "defect_patterns": "",
+    "prior_findings": ""
+  },
+  "expected": {
+    "surface": "boundary",
+    "findings": [
+      {
+        "id": "B1",
+        "severity": "critical",
+        "where": "push.mjs:3",
+        "breaking_input": "a branch argument of: main; rm -rf ~",
+        "why": "the branch name is interpolated into a shell string, so the shell runs the rest",
+        "fix": "execFileSync with an args array: [\"push\", \"origin\", branch]"
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{ "head": "1111111111111111111111111111111111111111", "branchName": "feat/x",
+  "list": [ { "databaseId": 20, "headSha": "1111111111111111111111111111111111111111", "status": "in_progress", "conclusion": "", "workflowName": "arc-ci", "createdAt": "2026-09-23T10:00:00Z", "attempt": 1 } ],
+  "view": { "20": { "headSha": "1111111111111111111111111111111111111111", "status": "in_progress", "conclusion": "",
+    "jobs": [ { "databaseId": 201, "name": "selftest (ubuntu-latest, 20)", "status": "completed", "conclusion": "failure" },
+              { "databaseId": 202, "name": "selftest (macos-latest, 20, shard 1/3)", "status": "in_progress", "conclusion": "" },
+              { "databaseId": 203, "name": "ci-tier", "status": "completed", "conclusion": "success" } ] } } }

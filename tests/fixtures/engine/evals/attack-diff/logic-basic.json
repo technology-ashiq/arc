@@ -1,0 +1,33 @@
+{
+  "note": "Eval fixture (ADR-0226). The diff plants two known defects: a flag parser that silently ignores an unknown flag, and a main guard comparing argv[1].endsWith -- the second is a twin of a carried fixed-defects pattern, so a logic attacker that reads defect_patterns must report it with twin_of. `expected` asserts the SHAPE of an attack result and the two planted findings; wording is free.",
+  "input": {
+    "classification": "external-ok",
+    "surface": "logic",
+    "diff": "diff --git a/tool.mjs b/tool.mjs\nnew file mode 100644\n--- /dev/null\n+++ b/tool.mjs\n@@ -0,0 +1,9 @@\n+const args = process.argv.slice(2);\n+let out = \"report.json\";\n+for (let i = 0; i < args.length; i++) {\n+  if (args[i] === \"--out\") out = args[++i];\n+}\n+function main() { console.log(out); }\n+if (process.argv[1].endsWith(\"tool.mjs\")) main();\n",
+    "defect_patterns": "Main guard compared argv[1].endsWith(...) -- every new script with a main(): realpath BOTH argv[1] and import.meta.url\nNo unknown-flag guard; near-miss flags fell through to the worst default -- every CLI refuses an unknown flag by name with exit 2",
+    "prior_findings": ""
+  },
+  "expected": {
+    "surface": "logic",
+    "findings": [
+      {
+        "id": "L1",
+        "severity": "medium",
+        "where": "tool.mjs:4",
+        "breaking_input": "tool.mjs --outt x.json",
+        "why": "the near-miss flag is ignored and the run writes report.json",
+        "fix": "refuse an unknown flag by name with exit 2",
+        "twin_of": "No unknown-flag guard; near-miss flags fell through to the worst default"
+      },
+      {
+        "id": "L2",
+        "severity": "medium",
+        "where": "tool.mjs:7",
+        "breaking_input": "invoke through a symlink named other.mjs",
+        "why": "argv[1] no longer ends with tool.mjs, so main never runs and the process exits 0",
+        "fix": "realpath both argv[1] and import.meta.url and compare",
+        "twin_of": "Main guard compared argv[1].endsWith(...)"
+      }
+    ]
+  }
+}

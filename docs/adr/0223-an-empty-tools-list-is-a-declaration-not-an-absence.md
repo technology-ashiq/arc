@@ -1,6 +1,6 @@
 # ADR 0223 — an empty tools list is a declaration, not an absence, and the narrowest process in the repo was the only one the gate refused
 
-**Status:** accepted
+**Status:** accepted — clause 4 amended by ADR-0226 (2026-09-23): an explicit `tools: []` now dispatches on claude-code as `--tools "" --strict-mcp-config` instead of being refused
 **Date:** 2026-08-18
 **Product:** `engine` — Cycle 7, executor v1. Corrects the reading of `tools:` in the Phase-01 headless gate (REQ-02); applies ADR-0220's root split to the CLI drivers. Decides nothing new about policy levels.
 **Reversibility:** two-way

@@ -732,7 +732,7 @@
     }
   },
   "commands": {
-    "$comment": "27; (G) = generated from a process file, never hand-edited",
+    "$comment": "28; (G) = generated from a process file, never hand-edited",
     "map": {
       "arc": "toolbelt",
       "arc-toolcheck": "toolbelt",
@@ -760,7 +760,8 @@
       "arc-capability": "develop",
       "arc-design-critique": "design-studio",
       "arc-face-module": "design-studio",
-      "arc-absorb": "absorb"
+      "arc-absorb": "absorb",
+      "arc-attack": "review-ship"
     }
   },
   "agents": {
@@ -799,7 +800,7 @@
     }
   },
   "processes": {
-    "$comment": "6 live + face-ask lands in Phase 07",
+    "$comment": "7 live + face-ask lands in Phase 07",
     "map": {
       "commit-msg-draft": "engine-room",
       "review-diff": "engine-room",
@@ -807,6 +808,7 @@
       "build-in-public-draft": "engine-room",
       "brief-materialize": "engine-room",
       "day-close-roll": "engine-room",
+      "attack-diff": "engine-room",
       "face-ask (Phase 07)": "ask-arc"
     }
   },

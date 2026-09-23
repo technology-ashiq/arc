@@ -16,7 +16,7 @@
 import { execFileSync } from "node:child_process";
 
 import { canonicalDoc, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
-import { renderAllowedTools } from "../adapters/claude-code.mjs";
+import { dispatchToolArgs } from "../adapters/claude-code.mjs";
 
 const CLI = process.env.ARC_CLAUDE_CLI || "claude";
 // The work root -- the child cwd, and nothing else. The canonical process file is read from the
@@ -35,17 +35,12 @@ await runDriver("claude-code", async ({ processName, input }) => {
   if (!read.ok) throw new Error(`canonical file does not parse: ${read.what}`);
   const doc = read.doc;
 
-  // Reuse, never re-derive. If this ever cannot be reused, that is the named finding.
-  const allowed = doc.permissions === "declared" ? renderAllowedTools(doc.tools) : null;
-  // AND REUSE THE ADAPTER REFUSAL, NOT ONLY ITS MAPPING. `adapters/claude-code.mjs` THROWS on
-  // an empty grant under `declared`, because an ABSENT --allowedTools is UNRESTRICTED: the most
-  // restrictive declaration a process can make otherwise reaches the CLI byte-identical to the
-  // most permissive one. This driver took the mapping and left the rule behind, so the rule held
-  // at compile time and not at dispatch -- the twin-fix shape, and the drift this file's own
-  // header warns about. Found by the adversarial pass on ADR-0223, which made `tools: []`
-  // dispatchable and so made this reachable.
-  if (doc.permissions === "declared" && !allowed)
-    throw new Error("claude-code driver: `permissions: declared` produced an empty grant set — an absent --allowedTools means UNRESTRICTED, so this run would silently widen the process");
+  // Reuse, never re-derive -- the MAPPING and the RULE both. This driver once took the adapter's
+  // mapping and left its refusal behind, so the rule held at compile time and not at dispatch
+  // (ADR-0223 clause 4). The whole decision now lives in `dispatchToolArgs`, including ADR-0226's
+  // amendment: an explicit `tools: []` reaches the CLI as its real zero instead of a refusal.
+  // Computed BEFORE the prompt, so a refusal still dies here and never at the CLI.
+  const toolArgs = dispatchToolArgs(doc);
 
   const prompt = [
     doc.body,
@@ -57,15 +52,17 @@ await runDriver("claude-code", async ({ processName, input }) => {
     "Reply with ONE JSON document matching this process's output contract, and nothing else.",
   ].join("\n");
 
-  const args = ["-p", prompt, "--output-format", "json"];
-  if (allowed) args.push("--allowedTools", allowed);
+  // The prompt goes on STDIN, not argv (ADR-0226): `-p` with no argument reads it from stdin, and
+  // an argv prompt is capped at ~32 KB on Windows -- an attack prompt carrying a PR diff is not.
+  const args = ["-p", "--output-format", "json"];
+  args.push(...toolArgs);
   // The tier reaches the model here, or the run is unpinned and the receipt says so.
   const model = pinnedModel();
   if (model) args.push("--model", model);
 
   let raw;
   try {
-    raw = execFileSync(CLI, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: WORK_ROOT });
+    raw = execFileSync(CLI, args, { input: prompt, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: WORK_ROOT });
   } catch (e) {
     throw new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
   }
@@ -89,7 +86,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // driver is its own adapter code; which model answered is the MP-F fingerprint's job, and
   // shelling out to `claude --version` would make an offline provenance field depend on a
   // binary that is not installed on any CI leg. Bump this when this file's behaviour changes.
-  version: () => "claude-code@1.0.0",
+  version: () => "claude-code@1.1.0",
 });
 
 settle();
