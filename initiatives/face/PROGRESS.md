@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
 phase: 05
 appetite: 24d
-burn: 4d
+burn: 7d
 blocked-on: —
 depends-on: —
 
@@ -29,12 +29,12 @@ depends-on: —
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
 | 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | ✅ **CLOSED 2026-09-18** — 1.5d of 7d; 36/36 modules in both moods on every L3 leg (34 served module rooms + the 2 exempt extras, headings 36 checked, 0 errors); five ring PRs merged — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242) · money `969d9634` (#244) · company `d8386216` (#246); `main` re-verified 19/19 (run 35336492657), suite 1..3414; receipts `01M2T38JEG2AWDY61X7QAARNYF` · `01M2T38JSWD6QSHTYA7S0M1R1W` |
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | ✅ **CLOSED 2026-09-18** — 0.5d of 3d; 18 routes served, 35 of 50 panels (39 tables), residue 15 panels on 10 routes approved by the owner (ADR-1338); four attacker rounds, `phase04-folds` 141 checks; merged `0a4cb262` (#248), PR head 19/19 (run 35367884908), `main` re-verified 19/19 (run 35369459599), suite 1..3415; live door 19 of 19 routes 200; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` · `01M2TPXZGPTN08BN98G6TCRZ5J` |
-| 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | **OPEN 2026-09-19** — §13 item 4 ruled A and widened to every verb (ADR-1339); day-1 CLI probe done (`evidence/phase-05/cli-probe.md`: 46 verbs, 2 READY · 15 SMALL-GAP · 14 BIG-GAP · 15 SESSION · 0 NEEDS-KIND); five PRs: door + six · live rooms · kernel · factory · money + company |
+| 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | **OPEN 2026-09-19** — §13 item 4 ruled A and widened to every verb (ADR-1339); day-1 CLI probe done (`evidence/phase-05/cli-probe.md`: 46 verbs, 2 READY · 15 SMALL-GAP · 14 BIG-GAP · 15 SESSION · 0 NEEDS-KIND); five PRs: door + six · live rooms · kernel · factory · money + company -- **all merged by 2026-09-23** (#252 · #253 · #254/#255 · #257 · #258/#259/#261); 31 ops in the registry; close audit next |
 | 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | spec'd |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 4d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
-C · verbs (05–06) 0/15d — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
+**Appetite burn: 7d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
+C · verbs (05–06) 3/15d (Phase 05 worked 2026-09-19, -20 and -23) — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
 3d unallocated. Tripwires: Block A day 3 · Block B day 5 · Block C at Phase 05 day 5 (burn 9d) · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
 35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
@@ -353,7 +353,7 @@ stay bespoke folds.
 
 ## Now
 
-**RESUME HERE (2026-09-19):** **Phase 05 is OPEN.** The owner ruled PLAN-face-v2 §13 item 4 as option A and, in the
+**RESUME HERE (2026-09-23):** **Phase 05 is OPEN; all eight of its PRs are merged.** The owner ruled PLAN-face-v2 §13 item 4 as option A and, in the
 same message, widened it: every room works, live, not read-only (ADR-1339, Done log 2026-09-19). The day-1 CLI probe
 is done (`evidence/phase-05/cli-probe.md`): of 46 verbs, 2 READY, 15 SMALL-GAP, 14 BIG-GAP, 15 SESSION, 0 NEEDS-KIND.
 Phase 05 is now 10d in five PRs -- (1) the door machinery, `arc-event --dry-run` and the flagship six, (2) live rooms
@@ -368,11 +368,19 @@ checkpoint --receipt`, `arc-growth seal`), face-coverage's op half (117 selftest
 also through the dock in a real browser. **PR 1 MERGED** as `56ba17b0` (#252), CI 19/19 on the PR and on a main
 dispatch. **PR 2 MERGED** as `600a94d1` (#253): live rooms (`GET /api/pulse`, every read of the open room re-read on a
 change, 922 ms measured in Chrome), the browser flows, round 2 of PR 1's attackers and PR 2's own two attackers (27
-fixes, fixed-defects.md); CI 19/19 on the PR and on a main dispatch. **PR 3 (kernel ring) ships as 3a + 3b under
-ADR-1340:** 3a -- register job, driver switch, tier proposal, cap proposal, evolve open/measure/conclude, and the
-proposal-branch writer -- is open as #254 (CI running, two fresh attackers out); 3b -- bench propose from a run's
-evidence, absorb pin and trial through proposal branches -- is built on `feat/face-v2-05-kernel-b`, waiting on 3a.
-**Next:** 3a's CI and attackers, merge; rebase 3b onto main, push, attack, merge; then PR 4 -- the factory ring.
+fixes, fixed-defects.md); CI 19/19 on the PR and on a main dispatch. **PR 3 (kernel ring)** shipped as 3a `b4c38038`
+(#254) and 3b `d8e25f8e` (#255) under ADR-1340; **PR 4 (factory ring)** `536d3b2b` (#257); **PR 5a (money ring)**
+`106e6219` (#258); **PR 5b (company ring)** `6c34f7ee` (#259). **PR 5c (live lanes)** MERGED 2026-09-23 as `aa797081`
+(#261), ADR-1344: the leads daily send bound to its plan, and the legal full-read gate raised into the inbox. Its round
+2 (two fresh attackers) found two HIGH -- legal `publish` took a caller's decision FILE (a forged approve published,
+the real inbox receipt never could), and the send's digest did not bind who the mail goes to -- both fixed: publish now
+reads the request and its decision from the spine by `--request`, and the digest binds lead, touch and subject (ADR-1344
+amended; three LOW rows on the debt ledger, one filed to leads). PR head 19/19 (run 35864152369). **The registry now
+holds 31 ops -- the count REQ-07 names.**
+**Next:** the Phase 05 close audit -- map the 31 ops one-to-one onto the 31 work verbs in `cli-probe.md` (anything
+unmatched becomes a residue row), write `evidence/phase-05/residue.md` and the registry-equals-residue fixture, check the
+DoD rows still open (human-run ops refuse every path but a click; nothing writes `router.yaml` or `hq.policy.yaml`;
+`/api/decide` parity), then `/arc-phase-done 05` from the main clone.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
