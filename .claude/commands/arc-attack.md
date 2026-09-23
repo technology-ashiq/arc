@@ -13,11 +13,17 @@ gave one). Non-zero exit → print what it printed and STOP. In lane-mode echo `
 **Where this runs.** Not in the session that wrote the code — that session ends at push
 (CLAUDE.md). Run it from the **main clone**: `arc-run` writes no receipt from a linked worktree.
 
-1. **Run both surfaces, one command** (default `--base main` if I named neither `--base` nor
-   `--since`; always quote values):
+1. **Run both surfaces, one command.** Fetch first, and default to `--base "origin/main"` if I named
+   neither `--base` nor `--since` -- local `main` lags merges in the main clone, and a stale base
+   hands the attacker other lanes' already-merged code. Always quote values:
    ```bash
-   node .claude/scripts/engine/arc-attack.mjs --base "main" --lane "<lane>"
+   git fetch -q origin
+   node .claude/scripts/engine/arc-attack.mjs --base "origin/main" --lane "<lane>" --classification "<internal-only|external-ok>"
    ```
+   **Classification defaults to `internal-only`, and internal-only is refused (exit 2)**: the data
+   boundary (ADR-0219) sends internal-only input to no model at all, so neither surface can run.
+   Pass `external-ok` only when this repo's code is public anyway (arc's is; a venture repo such as
+   LexOS is not). If unsure, leave it out and say the attack cannot run on this repo.
    - **boundary** runs on the router class `attack-diff` (balanced-workhorse, claude-code), with
      no tools at all: the attacker sees its input and nothing else.
    - **logic** runs `--driver generic-api --trial-model $ARC_ATTACK_TRIAL_MODEL` — an ADR-0069(g)

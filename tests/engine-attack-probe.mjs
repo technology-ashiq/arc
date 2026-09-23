@@ -62,7 +62,7 @@ if (cmd === "condense") {
     if (a[0] === "run" && a[1] === "view") return JSON.stringify(fx.view[a[2]]);
     throw new Error(`unexpected gh call: ${a.join(" ")}`);
   };
-  const out = digest({ gh, head: fx.head, branch: fx.branchName ?? null, tail: 40 });
+  const out = digest({ gh, head: fx.head, branch: fx.branchName ?? null, upstream: fx.upstream ?? null, tail: 40 });
   console.log(`CODE=${out.code}`);
   for (const l of out.lines) console.log(`OUT ${l}`);
   for (const c of calls) console.log(`GH ${c}`);

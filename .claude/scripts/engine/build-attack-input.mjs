@@ -87,7 +87,7 @@ function usage(msg) {
 }
 
 export function parseArgs(argv) {
-  const opts = { base: null, since: null, surface: null, out: null, lane: "", laneGiven: false, laneDup: false, prior: null, classification: "external-ok", root: null };
+  const opts = { base: null, since: null, surface: null, out: null, lane: "", laneGiven: false, laneDup: false, prior: null, classification: "internal-only", root: null };
   const FLAGS = { "--base": "base", "--since": "since", "--surface": "surface", "--out": "out", "--lane": "lane", "--prior": "prior", "--classification": "classification", "--root": "root" };
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {

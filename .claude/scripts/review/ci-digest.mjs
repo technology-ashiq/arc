@@ -42,7 +42,7 @@ export const safeLine = (s) => String(s ?? "").replace(ANSI, "").replace(CONTROL
  * recorded JSON and the exact code path the CLI runs is the one under test.
  * Returns { code, lines }.
  */
-export function digest({ gh, head, branch, tail = 40 }) {
+export function digest({ gh, head, branch, upstream = null, tail = 40 }) {
   const lines = [];
   const say = (s) => lines.push(s);
   if (!SHA_RE.test(head)) return { code: 2, lines: [`ci-digest: \`${head}\` is not a full commit SHA`] };
@@ -58,7 +58,15 @@ export function digest({ gh, head, branch, tail = 40 }) {
     if (branch) {
       const onBranch = JSON.parse(gh(["run", "list", "--branch", branch, "--limit", "1", "--json", listFields]) || "[]");
       if (onBranch.length && onBranch[0].headSha !== head) {
-        say(`SHA MISMATCH: the newest run on ${branch} is for ${onBranch[0].headSha.slice(0, 12)}, local HEAD is ${head.slice(0, 12)}.`);
+        // PUSHED BUT NOT YET PICKED UP is PENDING, not a mismatch. For the seconds after a push the
+        // branch's newest run is still the previous commit's; calling that 4 told a poll loop to stop
+        // and "push HEAD" that was already pushed (review W3). 4 is kept for the case it means:
+        // what CI can see on the branch is not this commit.
+        if (upstream && upstream === head) {
+          say(`PENDING: HEAD ${head.slice(0, 12)} is pushed, and GitHub has not created its run yet (newest run on ${branch} is for ${onBranch[0].headSha.slice(0, 12)}).`);
+          return { code: 3, lines };
+        }
+        say(`SHA MISMATCH: the newest run on ${branch} is for ${onBranch[0].headSha.slice(0, 12)}, local HEAD is ${head.slice(0, 12)}${upstream ? `, and the branch upstream is at ${upstream.slice(0, 12)}` : ""}.`);
         say("Push HEAD, or check out the commit CI ran -- a green run on another commit says nothing about this one.");
         return { code: 4, lines };
       }
@@ -168,8 +176,14 @@ function main(argv) {
     process.stderr.write(`ci-digest: \`${p.opts.sha || "HEAD"}\` does not name a commit here\n`);
     return 2;
   }
+  // What the branch holds upstream, if it tracks one. Absent (no upstream, detached) stays null,
+  // and null never proves "pushed" -- so it can never turn a real mismatch into pending.
+  let upstream = null;
+  try {
+    upstream = execFileSync("git", ["rev-parse", "--verify", "--quiet", "@{u}^{commit}"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null;
+  } catch { upstream = null; }
   let out;
-  try { out = digest({ gh: realGh, head, branch, tail: p.opts.tail }); }
+  try { out = digest({ gh: realGh, head, branch, upstream, tail: p.opts.tail }); }
   catch (e) {
     process.stderr.write(`ci-digest: gh failed: ${String(e.message).split("\n")[0]}\n`);
     return 2;

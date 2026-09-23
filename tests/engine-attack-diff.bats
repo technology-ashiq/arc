@@ -90,7 +90,7 @@ setup() {
 
 @test "build-attack-input: writes the input with classification declared and every defect row carried" {
   cd "$REPO"
-  run --separate-stderr node .claude/scripts/engine/build-attack-input.mjs --base HEAD~1 --surface logic --out in.json
+  run --separate-stderr node .claude/scripts/engine/build-attack-input.mjs --base HEAD~1 --surface logic --out in.json --classification external-ok
   [ "$status" -eq 0 ] || { echo "$output $stderr"; false; }
   [[ "$output" == *"wrote in.json (logic,"* ]] || { echo "$output"; false; }
   [[ "$stderr" == *"3 row(s) in, 3 line(s) out"* ]] || { echo "$stderr"; false; }
@@ -105,8 +105,9 @@ setup() {
   mv fd.bak fixed-defects.md
   [ "$status" -eq 0 ] || { echo "$output $stderr"; false; }
   [[ "$stderr" == *"defect patterns: NONE"* ]] || { echo "the missing list was silent: $stderr"; false; }
-  run node -e 'const d=JSON.parse(require("fs").readFileSync("in2.json","utf8"));console.log(JSON.stringify(d.defect_patterns))'
-  [ "$output" = '""' ] || { echo "$output"; false; }
+  run node -e 'const d=JSON.parse(require("fs").readFileSync("in2.json","utf8"));console.log(JSON.stringify(d.defect_patterns), d.classification)'
+  # And with no --classification the input is internal-only: fail closed (review W2).
+  [ "$output" = '"" internal-only' ] || { echo "$output"; false; }
 }
 
 @test "build-attack-input: every operator error is refused by name" {
@@ -134,7 +135,7 @@ setup() {
   # Past the 128 KB single-argument ceiling and thousands of base64-shaped runs: before ADR-0226
   # this died at "Argument list too long" or "too many base64 candidates", whichever came first.
   cd "$REPO"
-  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 1 --driver mock
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 1 --driver mock
   [[ "$output" == *"arc-attack @ "* ]] || { echo "never reached the summary: $output"; false; }
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   local sha; sha=$(git rev-parse --short=7 HEAD)
@@ -147,25 +148,25 @@ setup() {
 
 @test "arc-attack: evidence is never overwritten, a partial round completes, round 2 needs one prior per surface" {
   cd "$REPO"
-  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 2 --driver mock
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 2 --driver mock
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   local sha; sha=$(git rev-parse --short=7 HEAD)
   local f="docs/evidence/phase-02/attack-$sha-r1-logic.json" g="docs/evidence/phase-02/attack-$sha-r1-boundary.json"
   local before; before=$(cat "$f")
-  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 2 --driver mock
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 2 --driver mock
   [ "$status" -eq 2 ] && [[ "$output" == *"already recorded for both surfaces"* ]] || { echo "rerun: $status $output"; false; }
   [ "$(cat "$f")" = "$before" ]
   # A PARTIAL round (one surface failed last time) is completed by the same command, and the
   # surface that already succeeded is kept, not re-run (logic attack L2: it used to deadlock).
   rm "$g"
-  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 2 --driver mock
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 2 --driver mock
   [ "$status" -eq 0 ] || { echo "partial rerun: $status $output"; false; }
   [[ "$output" == *"LOGIC: already recorded for round 1"* ]] || { echo "$output"; false; }
   [ -f "$g" ] || { echo "the missing surface was not completed"; false; }
   [ "$(cat "$f")" = "$before" ] || { echo "the recorded surface was overwritten"; false; }
-  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 2 --round 2 --driver mock
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 2 --round 2 --driver mock
   [ "$status" -eq 0 ] || { echo "round 2 with its prior: $status $output"; false; }
-  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 3 --round 2 --driver mock
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 3 --round 2 --driver mock
   [ "$status" -eq 2 ] && [[ "$output" == *"found 0"* ]] || { echo "round 2 with no prior: $status $output"; false; }
 }
 
@@ -173,7 +174,7 @@ setup() {
   cd "$REPO"
   # The boundary surface routes to claude-code; a CLI that does not exist makes it fail fast
   # without reaching any provider. The assertion is about the LOGIC surface.
-  run env ARC_CLAUDE_CLI=definitely-not-a-real-cli node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 4
+  run env ARC_CLAUDE_CLI=definitely-not-a-real-cli node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 4
   [[ "$output" == *"arc-attack @ "* ]] || { echo "never reached the summary: $output"; false; }
   # EXACTLY 1, not merely non-zero: the boundary surface FAILED, and a failure outranks the logic
   # surface's NOT RUN (7). With max() arithmetic the 7 came first and hid the outage (logic attack L1).
@@ -185,7 +186,7 @@ setup() {
 
 @test "arc-attack: a result that answers the wrong surface is refused and not written" {
   cd "$REPO"
-  run env ARC_MOCK_DIR="$MOCK_WRONG" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 5 --driver mock
+  run env ARC_MOCK_DIR="$MOCK_WRONG" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 5 --driver mock
   [[ "$output" == *"arc-attack @ "* ]] || { echo "$output"; false; }
   [ "$status" -eq 1 ] || { echo "$status $output"; false; }
   [[ "$output" == *"LOGIC: REFUSED -- asked for the logic surface"* ]] || { echo "$output"; false; }
@@ -197,7 +198,7 @@ setup() {
 @test "arc-attack: a newline inside a model finding cannot forge a line of output" {
   # Boundary attack B3: a `why` carrying "\n" printed a forged summary header and a forged finding.
   cd "$REPO"
-  run env ARC_MOCK_DIR="$ARC_ROOT/tests/fixtures/engine/attack-diff-mock-newline" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 7 --driver mock
+  run env ARC_MOCK_DIR="$ARC_ROOT/tests/fixtures/engine/attack-diff-mock-newline" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 7 --driver mock
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"real reason"* ]] || { echo "the finding was not printed at all: $output"; false; }
   local headers; headers=$(printf '%s\n' "$output" | grep -c '^BOUNDARY:')
@@ -207,7 +208,7 @@ setup() {
 
 @test "arc-attack: --driver names only mock; any other driver is refused before anything runs" {
   cd "$REPO"
-  run node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 6 --driver codex
+  run node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 6 --driver codex
   [ "$status" -eq 2 ] && [[ "$output" == *"accepts only"* ]] || { echo "$status $output"; false; }
   [ ! -d docs/evidence/phase-06 ]
 }
@@ -352,7 +353,7 @@ EOF
   local sha; sha=$(git rev-parse --short=7 HEAD)
   mkdir -p docs/evidence/phase-10
   printf '{"surf' > "docs/evidence/phase-10/attack-$sha-r1-boundary.json"
-  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 10 --driver mock
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 10 --driver mock
   [[ "$output" == *"arc-attack @ "* ]] || { echo "$output"; false; }
   [ "$status" -eq 1 ] || { echo "$status $output"; false; }
   [[ "$output" == *"exists but is not a valid result"* ]] || { echo "a cut-short file read as recorded: $output"; false; }
@@ -368,7 +369,7 @@ EOF
   printf '{"surface":"logic","findings":[]}' > docs/evidence/phase-11/attack-aaaaaaa-r1-logic.json
   printf '{"surface":"logic","findings":[]}' > docs/evidence/phase-11/attack-bbbbbbb-r1-logic.json
   printf '{"surface":"boundary","findings":[]}' > docs/evidence/phase-11/attack-aaaaaaa-r1-boundary.json
-  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 11 --round 2 --driver mock
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 11 --round 2 --driver mock
   [[ "$output" == *"arc-attack @ "* ]] || { echo "$output"; false; }
   [ "$status" -eq 2 ] || { echo "$status $output"; false; }
   [[ "$output" == *"LOGIC: NOT RUN -- round 2 needs exactly one round-1 logic result"*"found 2"* ]] || { echo "$output"; false; }
@@ -385,16 +386,60 @@ EOF
   [[ "$output" == *"could not prepare the driver input: no temp dir"* ]] || { echo "$output"; false; }
   [[ "$output" != *"    at "* ]] || { echo "a stack trace escaped: $output"; false; }
   run env TMPDIR="$nowhere" TMP="$nowhere" TEMP="$nowhere" ARC_MOCK_DIR="$MOCK" \
-    node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 12 --driver mock
+    node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 12 --driver mock
   [ "$status" -eq 1 ] || { echo "$status $output"; false; }
   [[ "$output" == *"arc-attack: could not create a temp dir"* ]] || { echo "$output"; false; }
   [[ "$output" != *"    at "* ]] || { echo "a stack trace escaped: $output"; false; }
+}
+
+# ---------------------------------------------------------------------------
+# review fixes (code-reviewer, PR #265)
+# ---------------------------------------------------------------------------
+
+@test "arc-attack: with no classification the diff is internal-only and is refused before anything runs" {
+  # Review W2: this script is synced into private venture repos, and a hard-coded external-ok sent
+  # their diffs to a model. ADR-0219's boundary sends internal-only input to NO driver, so the only
+  # honest answer is an up-front refusal -- measured: letting it run gave two RUN FAILED lines.
+  cd "$REPO"
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 13 --driver mock
+  [ "$status" -eq 2 ] || { echo "expected 2 (refused), got $status: $output"; false; }
+  [[ "$output" == *"this diff is internal-only (the default)"* ]] || { echo "$output"; false; }
+  [ ! -d docs/evidence/phase-13 ] || { echo "an internal-only run wrote evidence"; ls -R docs/evidence/phase-13; false; }
+  # NEGATIVE CONTROL: the same command, declared external-ok, runs both surfaces.
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 13 --driver mock
+  [ "$status" -eq 0 ] || { echo "$status $output"; false; }
+  [ -f "docs/evidence/phase-13/attack-$(git rev-parse --short=7 HEAD)-r1-logic.json" ]
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --phase 13 --classification public --driver mock
+  [ "$status" -eq 2 ] && [[ "$output" == *"--classification must be"* ]] || { echo "$status $output"; false; }
+}
+
+@test "arc-attack: a surface whose input cannot be built is reported, and the summary still prints" {
+  # Review W4: an early return on a build failure dropped every line already gathered.
+  cd "$REPO"
+  cp fixed-defects.md fd.keep
+  cp "$ARC_ROOT/tests/fixtures/engine/attack-defects/star-marker.md" fixed-defects.md
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 14 --driver mock
+  mv fd.keep fixed-defects.md
+  [[ "$output" == *"arc-attack @ "* ]] || { echo "the summary was dropped: $output"; false; }
+  [ "$status" -eq 1 ] || { echo "$status $output"; false; }
+  [[ "$output" == *"LOGIC: INPUT NOT BUILT (build-attack-input exit 2)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"BOUNDARY: INPUT NOT BUILT (build-attack-input exit 2)"* ]] || { echo "$output"; false; }
+}
+
+@test "ci-digest: pushed but not yet picked up is PENDING (3), not a mismatch (4)" {
+  # Review W3: in the seconds after a push the branch's newest run is the previous commit's.
+  run node "$(PROBE)" digest "$DIGEST/lag"
+  [[ "$output" == *"PROBE-RAN digest"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"CODE=3"* ]] && [[ "$output" == *"is pushed, and GitHub has not created its run yet"* ]] || { echo "lag: $output"; false; }
+  # NEGATIVE CONTROL: the upstream elsewhere is still the mismatch it always was.
+  run node "$(PROBE)" digest "$DIGEST/mismatch"
+  [[ "$output" == *"CODE=4"* ]] && [[ "$output" == *"the branch upstream is at 222222222222"* ]] || { echo "mismatch: $output"; false; }
 }
 
 # LAST, and it must stay last. bats silently drops a @test it cannot register (a non-ASCII name was
 # the Cycle 7 case), and a suite running fewer tests than it declares looks exactly like a pass.
 @test "suite: every declared test in this file was registered and reached" {
   local declared; declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$declared" -ge 24 ] || { echo "declared=$declared"; false; }
+  [ "$declared" -ge 27 ] || { echo "declared=$declared"; false; }
   [ "$BATS_TEST_NUMBER" -eq "$declared" ] || { echo "registered index $BATS_TEST_NUMBER, declared $declared"; false; }
 }
