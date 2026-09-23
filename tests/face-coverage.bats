@@ -93,6 +93,10 @@ load 'test_helper'
   [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
   local arms; arms=$(printf '%s\n' "$output" | grep -c "^mutant ")
   [ "$arms" -ge 8 ] || { echo "only $arms mutant arms: $output"; false; }
+  # REQ-04 names the bar: more than 93 selftest arms, every one PASS (117 at the Phase 05 close). Asserted here, where
+  # a deleted arm shows, rather than claimed in the tracker (spec-fidelity at the Phase 05 close).
+  local passing; passing=$(printf '%s\n' "$output" | grep -c ": PASS$")
+  [ "$passing" -gt 93 ] || { echo "only $passing selftest arms PASS -- REQ-04 needs more than 93: $output"; false; }
 }
 
 @test "face-coverage REFUSES a tree with a real gap (negative arm on disk, not in memory)" {
