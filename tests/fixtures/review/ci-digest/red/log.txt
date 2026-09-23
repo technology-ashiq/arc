@@ -1,3 +1,4 @@
+selftest	Run bats	not ok 7 planted early failure
 selftest	run bats	log line 1
 selftest	run bats	log line 2
 selftest	run bats	log line 3

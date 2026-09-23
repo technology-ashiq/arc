@@ -60,7 +60,7 @@ setup() {
 @test "condense: three rows in, three lines out, none empty -- a wrapped row stays one row" {
   run node "$(PROBE)" condense "$REPO/fixed-defects.md"
   [[ "$output" == *"PROBE-RAN condense"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ROWS=3 LINES=3 EMPTY=0"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ROWS=3 LINES=3 BULLETS=3 EMPTY=0"* ]] || { echo "$output"; false; }
   [[ "$output" == *"LINE Wrapped row -> rule two."* ]] || { echo "a wrapped row was split or lost: $output"; false; }
   [[ "$output" == *"LINE No bold here."* ]] || { echo "a row with no bold lead was dropped: $output"; false; }
 }
@@ -296,8 +296,11 @@ EOF
 
   run node "$(PROBE)" digest "$DIGEST/red"
   [[ "$output" == *"CODE=1"* ]] || { echo "red: $output"; false; }
-  # The fixture log is 100 numbered lines plus two hostile ones (a bare CR, ANSI colour).
-  [[ "$output" == *"last 40 of 102 failed-log line(s)"* ]] || { echo "$output"; false; }
+  # The fixture log is one early `not ok` line, 100 numbered lines, then two hostile ones (a bare CR, ANSI colour).
+  [[ "$output" == *"last 40 of 103 failed-log line(s)"* ]] || { echo "$output"; false; }
+  # The failing test named far above the tail is still surfaced (PR #265's first red run: the tail
+  # held none of the five failures).
+  [[ "$output" == *"1 failing test line(s)"* ]] && [[ "$output" == *"not ok 7 planted early failure"* ]] || { echo "an early failure was lost to the tail: $output"; false; }
   [[ "$output" == *"log line 100"* ]] && [[ "$output" == *"log line 63"* ]] || { echo "the tail is not the last 40: $output"; false; }
   [[ "$output" != *"log line 62"* ]] || { echo "the tail was not capped at 40: $output"; false; }
   # Round-2 attack B9: a CI log is untrusted. The bare CR must not let the log print a verdict of

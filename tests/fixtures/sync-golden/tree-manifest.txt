@@ -348,7 +348,7 @@
 .claude/scripts/review/arc-scan/rules/arc-min.yaml	eab4577b490925067303060f68acc89b4dff546585b1c5441c3d4c1e12589747
 .claude/scripts/review/arc-scan/version-gate.sh	0be56189fbcc9f3bc249758ec431138545280c56bf567f990557a663e094f6d0
 .claude/scripts/review/arc-tools-image.sh	12d5f9e42d8db5c659a93c8cc41191f8ada396e3be31767b2b699d04a6594131
-.claude/scripts/review/ci-digest.mjs	04d5bf402b5d8d8386cd3510eb09f29173a39b2438d19ce5b10bc2c3d00f35b3
+.claude/scripts/review/ci-digest.mjs	1138c0fb0920f1aa99f677d3c1de59ee4ab9b6894bc2795a74f8f9c9839790f2
 .claude/scripts/review/coverage-gate.sh	6de7155965fb7cfc391081ad157b5d68551cb62161411d7c304bdd0a820cc281
 .claude/scripts/review/docs-drift.sh	58350eacf21af4597089ce4408fdbfe872d4d78155f1f635004648ce9091ec69
 .claude/scripts/review/rls-gate.sh	89546ffad7a827260c7bfe9d926bd800a2b128b87d3dd2547bf836a788f21f8f

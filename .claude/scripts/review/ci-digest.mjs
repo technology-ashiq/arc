@@ -108,6 +108,14 @@ export function digest({ gh, head, branch, tail = 40 }) {
     try { log = gh(["run", "view", String(run.databaseId), "--job", String(job.databaseId), "--log-failed"]); }
     catch (e) { log = `(could not fetch the failed log: ${String(e.message).split("\n")[0]})`; }
     const rows = String(log).replace(/\s+$/, "").split(/\r?\n/);
+    // THE FAILING TESTS, FROM ANYWHERE IN THE LOG. bats prints `not ok N` mid-run and its summary
+    // last, so on the first real red run (PR #265) the 40-line tail held none of the five failures
+    // and the full log had to be fetched by hand -- the exact step this script exists to remove.
+    const notOk = rows.filter((l) => /\bnot ok \d+\b/.test(l));
+    if (notOk.length) {
+      say(`--- ${safeLine(job.name)}: ${notOk.length} failing test line(s)${notOk.length > 20 ? ", first 20" : ""}`);
+      for (const l of notOk.slice(0, 20)) say(`  ${safeLine(l)}`);
+    }
     say(`--- ${safeLine(job.name)}: last ${Math.min(tail, rows.length)} of ${rows.length} failed-log line(s)`);
     for (const l of rows.slice(-tail)) say(`  ${safeLine(l)}`);
   }
