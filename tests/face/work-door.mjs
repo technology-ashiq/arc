@@ -166,6 +166,61 @@ const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows
 check("every registry op is driven by this suite",
   OPS_MOD.OPS.length > 0 && OPS_MOD.OPS.every((o) => Object.hasOwn(INPUTS, o.id)) && Object.keys(INPUTS).length === OPS_MOD.OPS.length,
   OPS_MOD.OPS.map((o) => o.id).join(","));
+// A VERB CAN NEITHER VANISH NOR BE INVENTED (Phase 05 DoD, REQ-07): the residue file maps every non-SESSION verb of the
+// day-1 probe to the op that ships it, or names it as residue. Its op ids equal the registry's both ways, and its row
+// count equals the probe's own non-SESSION count -- read from the probe's ring tables, never typed here.
+{
+  const EV = join(REPO, "initiatives", "face", "evidence", "phase-05");
+  const tableRows = (text, header) => {
+    const lines = text.split(/\r?\n/);
+    const rows = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!header.test(lines[i])) continue;
+      for (let j = i + 2; j < lines.length && lines[j].startsWith("|"); j++) rows.push(lines[j].split("|").slice(1, -1).map((c) => c.trim()));
+    }
+    return rows;
+  };
+  const probeRows = tableRows(readFileSync(join(EV, "cli-probe.md"), "utf8"), /^\| room \| verb \| CLI \| bucket \|/);
+  const workVerbs = probeRows.filter((r) => r[3] !== "SESSION");
+  const mapped = tableRows(readFileSync(join(EV, "residue.md"), "utf8"), /^\| ring \| probe verb \(room\) \| bucket \| op id \|/);
+  const ids = (rows) => rows.map((r) => r[3].replace(/`/g, "")).filter((x) => x && x !== "RESIDUE");
+  const registry = new Set(OPS_MOD.OPS.map((o) => o.id));
+  const sameBothWays = (list) => list.length === registry.size && new Set(list).size === list.length && list.every((id) => registry.has(id));
+  check("fixture: the probe's ring tables and the residue mapping both parse (vacuous-pass guard)", probeRows.length >= 40 && mapped.length > 0, `${probeRows.length} probe rows, ${mapped.length} mapped`);
+  check("every non-SESSION probe verb is a residue-file row, and the counts agree", workVerbs.length === mapped.length, `${workVerbs.length} work verbs, ${mapped.length} rows`);
+  check("the residue file's op ids equal the registry both ways (a verb can neither vanish nor be invented)", sameBothWays(ids(mapped)), ids(mapped).filter((id) => !registry.has(id)).join(",") || [...registry].filter((id) => !ids(mapped).includes(id)).join(","));
+  check("MUTANT CONTROL: a mapping with one op dropped is caught", !sameBothWays(ids(mapped).slice(1)));
+  check("MUTANT CONTROL: a mapping naming an op the registry does not hold is caught", !sameBothWays([...ids(mapped).slice(1), "invented.verb"]));
+}
+// HUMAN-RUN OPS APPLY ONLY FROM A CLICK (Phase 05 DoD): close month, the leads send, growth publish and the legal stamp
+// are applied by the door's apply with the owner's confirmation, and by no other path. The click half (apply without the
+// confirmation -> CONFIRM_REQUIRED) and the replay half (a repeat apply replays, runs nothing) are driven per op below;
+// here the other two paths are shut: Ask is a process with no tools, and no scheduled job's script names the apply
+// script of any of the four, or the door's op routes.
+{
+  const FOUR = ["money.close-month", "leads.daily-send", "growth.publish", "legal.full-read"];
+  const ops = FOUR.map((id) => OPS_MOD.OPS.find((o) => o.id === id));
+  check("the four human-run ops are in the registry, each human-run", ops.every((o) => o && o.humanRun === true), FOUR.join(","));
+  // The tool that does the op's work: its apply script, or -- for an op that applies by emitting what its plan printed
+  // ("emit-plan": close month, growth publish) -- the plan's script, since the emitter itself is every job's to use.
+  const applyScripts = ops.filter(Boolean).map((o) => {
+    const v = OPS_MOD.validateInput(o, INPUTS[o.id]);
+    return (typeof o.apply === "function" ? o.apply(v) : o.plan(v)).script;
+  });
+  const askTools = (yaml) => { const m = /^tools:\s*(.*)$/m.exec(yaml); return m ? m[1].trim() : null; };
+  const askYaml = readFileSync(join(REPO, "initiatives", "face", "contracts", "face-ask.process.yaml"), "utf8");
+  check("Ask cannot apply: the face-ask process declares no tools at all", askTools(askYaml) === "[]", String(askTools(askYaml)));
+  check("MUTANT CONTROL: an Ask process granted a tool is caught", askTools(askYaml.replace(/^tools:.*$/m, "tools: [Bash]")) !== "[]");
+  const jobEntries = (yaml) => [...yaml.matchAll(/^\s*entry:\s*(\S+)\s*$/gm)].map((m) => m[1]);
+  // By file NAME, not path: a job that joins the path from parts (join("leads", "arc-leads.mjs")) names it all the same.
+  const reaches = (src) => applyScripts.some((s) => src.includes(s.split("/").pop())) || /\/api\/op\b/.test(src);
+  const jobsYaml = readFileSync(join(REPO, "hq.jobs.yaml"), "utf8");
+  const entries = jobEntries(jobsYaml);
+  check("fixture: the schedule names its jobs' scripts, and each is readable (vacuous-pass guard)", entries.length > 0 && entries.every((e) => existsSync(join(REPO, e))), entries.join(","));
+  check("a schedule cannot apply: no scheduled job's script names a human-run op's apply script or the door's op routes",
+    entries.every((e) => !reaches(readFileSync(join(REPO, e), "utf8"))), entries.filter((e) => existsSync(join(REPO, e)) && reaches(readFileSync(join(REPO, e), "utf8"))).join(","));
+  check("MUTANT CONTROL: a job script that runs the leads send is caught", reaches(`spawnSync("node", [".claude/scripts/${applyScripts[1]}", "daily", "pilot"])`) && applyScripts.length === 4, applyScripts.join(","));
+}
 // THE EFFECT IS DERIVED FROM THE TOOL, never read off the flag it is meant to verify. The first cut asserted "every op
 // flagged touchesFiles applies through a proposal tool" -- with the flag dropped from a row, that held vacuously, and a
 // sim door wrote a real branch (PR 3a logic attack). Now: the branch writers are every script that imports
