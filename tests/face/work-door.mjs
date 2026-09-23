@@ -633,6 +633,28 @@ try {
     let expired = null;
     try { door.apply("fixture.count", { planId: p2.planId }); } catch (e) { expired = e.code; }
     check("an expired plan -> PLAN_EXPIRED, and the tool was not run", expired === "PLAN_EXPIRED" && readFileSync(counter, "utf8") === "xxx", `code=${expired} count=${readFileSync(counter, "utf8").length}`);
+    // THE CLICK, for each of the four human-run ops (Phase 05 DoD): under each op's REAL id and its REAL humanRun flag
+    // from the registry, over the counting tool -- so the send and the legal stamp, which refuse or are refused
+    // SIM_EFFECT before the door's confirmation rule on this tree, are held to it too (spec-fidelity at the close).
+    for (const id of ["money.close-month", "leads.daily-send", "growth.publish", "legal.full-read"]) {
+      const real = OPS_MOD.OPS.find((o) => o.id === id);
+      const reg = [{ ...registry[0], id, humanRun: real ? real.humanRun : false }];
+      const hd = DOOR_MOD.createWorkDoor({ mode: "sim", root: SPINE_C, repo: fx }, { registry: reg, now: () => clock });
+      const before = readFileSync(counter, "utf8").length;
+      const hp = await hd.plan(id, { input: {} });
+      const refusedAs = (body) => { try { hd.apply(id, body); return "APPLIED"; } catch (e) { return e.code; } };
+      const bare = refusedAs({ planId: hp.planId });
+      const other = refusedAs({ planId: hp.planId, confirm: "today.capture-idea" });
+      const ranBeforeClick = readFileSync(counter, "utf8").length - before;
+      const clicked = hd.apply(id, { planId: hp.planId, confirm: id });
+      const again = hd.apply(id, { planId: hp.planId, confirm: id });
+      await hd.settled();
+      check(`${id}: human-run in the registry, and without the owner's click the door refuses and runs nothing`,
+        !!real && real.humanRun === true && hp.ok === true && bare === "CONFIRM_REQUIRED" && other === "CONFIRM_REQUIRED" && ranBeforeClick === 1,
+        `humanRun=${real && real.humanRun} bare=${bare} other=${other} runsBeforeClick=${ranBeforeClick - 1}`);
+      check(`${id}: the click runs it once, and a repeat replays`,
+        clicked.replayed !== true && again.replayed === true && readFileSync(counter, "utf8").length - before === 2, `count+${readFileSync(counter, "utf8").length - before}`);
+    }
     delete process.env.ARC_SPINE_ROOT;
   }
 

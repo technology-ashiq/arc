@@ -23,23 +23,23 @@ SESSION verbs are Phase 06's).
 ## Exit criteria (Definition of Done)
 
 - [x] **Day-1 CLI probe, before any door code:** every §5.2 verb recorded in `initiatives/face/evidence/phase-05/cli-probe.md` — the CLI's path, its dry-run/plan mode, whether its output is machine-readable, and the kind it emits against `validate.mjs` KINDS (2026-09-19: 2 READY · 15 SMALL-GAP · 14 BIG-GAP · 15 SESSION · 0 NEEDS-KIND; assumptions ledger row 6 FIRED, routed by ADR-1339).
-- [ ] **Owning-lane changes are additive and measured (ADR-1339):** each gap is closed in the owning lane's own script — a plan/dry-run flag, `--json`, a receipt of an existing kind, a thin CLI over that lane's existing library, or a bug the probe found — as its own commit; a fixture pins the current behaviour BEFORE the change and stays green after it; a LIVE lane's file is checked with `git log origin/main -5 -- <path>` first; no change weakens that lane's non-negotiables. An op with no honest route this way is a residue row, never door logic.
-- [ ] Server ops registry beside the door (`.claude/scripts/hq/face-ops.mjs`, ADR-1319): each op names the exact script or emitter a hand-run calls; its main-guard realpaths both sides.
-- [ ] Binding table per op (ADR-1334): v0.7 kind → the existing kind the real CLI emits | NOT SHIPPABLE; written from each CLI, never from the v0.7 name.
-- [ ] `POST /api/op/:id/plan` → command line + file diff + ₹ estimate; `POST /api/op/:id/apply` → runs, streams, emits a receipt of a kind in `validate.mjs` KINDS.
-- [ ] Per-op **no-second-path fixture**: the door's invocation equals the hand-run invocation; an op without it green does not ship and its module renders read-only with an honest badge.
-- [ ] **`main`-untouchable fixture:** a file-touching op writes only to a `feat/face-*` branch, shows the diff and stops; no merge exists.
-- [ ] A tool's own refusal (send-window, cap, budget, lint) renders verbatim.
-- [ ] Module `ops.mjs` filled for shipped ops; `face-coverage` op half: a module `ops[]` id missing from the server registry FAILs, and vice versa; selftest arms > 93.
-- [ ] `face/scripts/flows.mjs` ported: button text, placeholders, `data-*`, h1 frozen; event assertions read receipts through the door; runs from `tests/face-browser.bats` on every Node ≥20.19 leg; a planted change to a frozen string FAILs.
-- [ ] `POST /api/decide` byte-parity fixture green (former REQ-08, ADR-1333); route-enumeration fixture proves no bulk write path appeared.
-- [ ] **Block C gate:** if the six flagship ops cannot all be made green, the door does not ship — every module read-only with a no-verbs badge — and the door moves to its own cycle.
-- [ ] **Block C tripwire (day 5, burn 9d):** PR 1 not green on CI → every BIG-GAP verb not yet shipped becomes a residue row filed to its lane; the rings re-plan; no extension (ADR-1339).
-- [ ] **Every work verb (REQ-07):** each of the 31 ships with its no-second-path fixture green, or is a row in `evidence/phase-05/residue.md` naming the missing piece and the lane it is filed to; `tests/face/` holds the residue equal to the ops registry both ways (a verb can neither vanish nor be invented); the owner approves the residue as a whole at `/arc-phase-done 05`.
-- [ ] **Proposals stay proposals:** driver switch and terminate write a `feat/face-*` branch by git plumbing (never a checkout), show the diff and raise `approval.requested`; the cap proposal raises the `policy.promotion` approval and writes no branch, because `hq.policy.yaml` is an un-grantable target (amended 2026-09-19, ADR-1340); nothing in the face writes `engine/router.yaml` or `hq.policy.yaml`, and a fixture proves it.
-- [ ] **Human-run ops apply only on the owner's click:** close month, the leads send, growth publish and the legal stamp are applied by `apply` from a click and never from Ask, a schedule or a replay; a fixture proves each refuses the other three paths.
-- [ ] **Live rooms (REQ-11):** the door signals a change when the spine or a declared file changes; the open room re-reads within 5 s, proven by a browser-harness fixture that appends a spine event and times the panel; an op's receipt appears in its room within 5 s of `apply`; every room re-reads on change because the host re-reads all of an open room's reads on the door's pulse (no module can opt out; the planted mutant is a host that stops re-reading, which the browser live flow FAILs).
-- [ ] Two fresh attackers per PR (door decision logic · shell/git boundary), each carrying the fixed-defect list; CI green per job on every PR; `/arc-phase-done 05` from the main clone.
+- [x] **Owning-lane changes are additive and measured (ADR-1339):** each gap is closed in the owning lane's own script — a plan/dry-run flag, `--json`, a receipt of an existing kind, a thin CLI over that lane's existing library, or a bug the probe found — as its own commit; a fixture pins the current behaviour BEFORE the change and stays green after it; a LIVE lane's file is checked with `git log origin/main -5 -- <path>` first; no change weakens that lane's non-negotiables. An op with no honest route this way is a residue row, never door logic. **-- ticked NARROWER than written: see the 2026-09-23 close note.**
+- [x] Server ops registry beside the door (`.claude/scripts/hq/face-ops.mjs`, ADR-1319): each op names the exact script or emitter a hand-run calls; its main-guard realpaths both sides.
+- [x] Binding table per op (ADR-1334): v0.7 kind → the existing kind the real CLI emits | NOT SHIPPABLE; written from each CLI, never from the v0.7 name.
+- [x] `POST /api/op/:id/plan` → command line + file diff + ₹ estimate; `POST /api/op/:id/apply` → runs, streams, emits a receipt of a kind in `validate.mjs` KINDS.
+- [x] Per-op **no-second-path fixture**: the door's invocation equals the hand-run invocation; an op without it green does not ship and its module renders read-only with an honest badge. **-- ticked NARROWER than written: see the 2026-09-23 close note.**
+- [x] **`main`-untouchable fixture:** a file-touching op writes only to a `feat/face-*` branch, shows the diff and stops; no merge exists. **-- ticked NARROWER than written: see the 2026-09-23 close note.**
+- [x] A tool's own refusal (send-window, cap, budget, lint) renders verbatim. **-- ticked NARROWER than written: see the 2026-09-23 close note.**
+- [x] Module `ops.mjs` filled for shipped ops; `face-coverage` op half: a module `ops[]` id missing from the server registry FAILs, and vice versa; selftest arms > 93.
+- [x] `face/scripts/flows.mjs` ported: button text, placeholders, `data-*`, h1 frozen; event assertions read receipts through the door; runs from `tests/face-browser.bats` on every Node ≥20.19 leg; a planted change to a frozen string FAILs. **-- ticked NARROWER than written: see the 2026-09-23 close note.**
+- [x] `POST /api/decide` byte-parity fixture green (former REQ-08, ADR-1333); route-enumeration fixture proves no bulk write path appeared.
+- [x] **Block C gate:** if the six flagship ops cannot all be made green, the door does not ship — every module read-only with a no-verbs badge — and the door moves to its own cycle.
+- [x] **Block C tripwire (day 5, burn 9d):** PR 1 not green on CI → every BIG-GAP verb not yet shipped becomes a residue row filed to its lane; the rings re-plan; no extension (ADR-1339).
+- [x] **Every work verb (REQ-07):** each of the 31 ships with its no-second-path fixture green, or is a row in `evidence/phase-05/residue.md` naming the missing piece and the lane it is filed to; `tests/face/` holds the residue equal to the ops registry both ways (a verb can neither vanish nor be invented); the owner approves the residue as a whole at `/arc-phase-done 05`.
+- [x] **Proposals stay proposals:** driver switch and terminate write a `feat/face-*` branch by git plumbing (never a checkout), show the diff and raise `approval.requested`; the cap proposal raises the `policy.promotion` approval and writes no branch, because `hq.policy.yaml` is an un-grantable target (amended 2026-09-19, ADR-1340); nothing in the face writes `engine/router.yaml` or `hq.policy.yaml`, and a fixture proves it.
+- [x] **Human-run ops apply only on the owner's click:** close month, the leads send, growth publish and the legal stamp are applied by `apply` from a click and never from Ask, a schedule or a replay; a fixture proves each refuses the other three paths.
+- [x] **Live rooms (REQ-11):** the door signals a change when the spine or a declared file changes; the open room re-reads within 5 s, proven by a browser-harness fixture that appends a spine event and times the panel; an op's receipt appears in its room within 5 s of `apply`; every room re-reads on change because the host re-reads all of an open room's reads on the door's pulse (no module can opt out; the planted mutant is a host that stops re-reading, which the browser live flow FAILs). **-- ticked NARROWER than written: see the 2026-09-23 close note.**
+- [x] Two fresh attackers per PR (door decision logic · shell/git boundary), each carrying the fixed-defect list; CI green per job on every PR; `/arc-phase-done 05` from the main clone.
 
 ## Verification plan
 
@@ -139,6 +139,29 @@ direct writes to `engine/router.yaml` or `hq.policy.yaml` → never.
   - Retired with their ops: model-policy's "Propose a tier change" and evolve's "Open an experiment". The policy
     room's card ("Propose a cap, or demote a pair") and the scheduler's ("Register a job" -- a reviewed diff to
     hq.jobs.yaml, a different verb from registering a row with the OS) stay: neither op is all of its card.
+- **2026-09-19 to 2026-09-20, PRs 4, 5a, 5b, 5c** depart from the letter above under their own ADRs, not notes here:
+  ADR-1341 (factory: the develop slice ledger and the design scaffold written in the owner's own tree; the toolbelt pin
+  and the council question built by the door's registry over `arc-event`, no owning-lane CLI existing), ADR-1342 (money:
+  revenue recorded by hand, a kill as a question, a venture as a branch), ADR-1343 (company: a status is a header, a word
+  is a contract edit), ADR-1344 (the live lanes; amended at round 2: legal `publish` reads its decision from the spine).
+- **2026-09-23, the close -- spec-fidelity found drift; each item dispositioned** (`evidence/phase-05/spec-fidelity.md`):
+  - FIXED at the close: all four human-run ops are held to the click by the door's own rule under their real ids and
+    flags (the send and the legal stamp had only reached it statically); `face-coverage.bats` asserts more than 93
+    selftest arms, every one PASS (117), instead of the tracker claiming it.
+  - DECLARED, the owner may rule: `develop.slice` writes the lane's task ledger in place on the checkout it runs in,
+    never committing (ADR-1341 §1) -- from the main clone that is `main`'s working tree, exactly as the hand-run
+    `develop.mjs next` is; PLAN's non-negotiable "file changes land on a `feat/face-*` branch" was not resynced to name
+    the exception. The legal and evolve pinning fixtures were REWRITTEN, not kept green: legal's by ADR-1344 (publish
+    reads the spine), evolve's because an attacker proved its interval math wrong (ADR-0311 correction) -- past
+    experiment verdicts may read differently. Five new CLIs of 250-320 lines (`lane-status`, `venture-register`,
+    `concept-define`, `agent-scaffold`, `ledger-ingest`) are thicker than "a thin CLI over the lane's library".
+  - NARROWER THAN WRITTEN, recorded: "door equals hand" is proven as an identical refusal for the ops that refuse on
+    a CI tree, and their receipts are proven in the ring suites by running the tools directly; the hand-run is built
+    from the same registry row, so the fixture proves the door adds nothing to the registry, not that the registry
+    matches what a person would type. A refusal is compared on its first line, paths normalised. The frozen strings
+    are the dock's two buttons, with placeholders read from the registry. REQ-11's "receipt in its room within 5 s of
+    apply" is not timed (flows read the receipt with a 180 s cap), and the "host stops re-reading" mutant is a unit
+    check on `readsToLoad`, not a mutant host in the browser. Each is a row on the debt ledger with its trigger.
 
 ## Your-setup / pending
 
