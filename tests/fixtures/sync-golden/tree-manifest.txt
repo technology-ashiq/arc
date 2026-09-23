@@ -213,7 +213,7 @@
 .claude/scripts/growth/lib/templates.mjs	98def91a9638bb0f544587fbf5aa14e95e0fc449524e23be43e57e0bc7492d01
 .claude/scripts/growth/lib/text.mjs	699f00fb5caf44c43a7e0b082bcf1c07243f42e6b51bda5058c8910dcfdfcf01
 .claude/scripts/hq/arc-brief.mjs	5e28a3ea0a78e67d3ce77b6a5c1e59ba7eb4f229e6e4c9368c2104f5734b107f
-.claude/scripts/hq/arc-dash.mjs	1b1172433d5289ded74bf8770293c51d51a7b00de5047df61b60f64680e7e0ea
+.claude/scripts/hq/arc-dash.mjs	e35fae94e0153f26ca283261389a531c1c1a02c2e7e919ae8518d3ff769f656f
 .claude/scripts/hq/arc-event.mjs	a1f8353efe971fa13dec4664d998ff33b7fffdce0e4e9850a12d6c26834cea05
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	00b09e6fa03156cdadc04870216c34b037f4ea90e4a938ad7d89de839b9aec19
@@ -225,7 +225,7 @@
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/face-module.mjs	4dffb1452c051fb97512a0a92b30ddc7724c3197db549ca7980005692c27685a
 .claude/scripts/hq/face-modules-contract.mjs	5f98ea1ebcb15edf9e19ed5a3d331c8bca4b8b63addf8200a5cc67bf4f02c918
-.claude/scripts/hq/face-ops.mjs	08c8056a81f523a48a60e2e38e3968a6530eebb83be06e07ce4758eb16e855f2
+.claude/scripts/hq/face-ops.mjs	e0dc095db511767641799ef4a4fef0c25ed4de6596ca8bca1e97f0cdc87054f9
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
 .claude/scripts/hq/jobs/day-close-roll.mjs	cf47ce763a261eba34350385555119025b29a1050469606dc728994996628523
@@ -233,7 +233,7 @@
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	db5fc5a85baa049ea71073e74e9f387263e187713091ac39b5b79df33f875884
 .claude/scripts/hq/lib/face/reads.mjs	795c65d4c1a71ebbf43e3a9d000efd197f0a78aee6beb1156cb4543677dffd1c
-.claude/scripts/hq/lib/face/work-door.mjs	abadde9e4cbc1de6024a506e0f2652bbe3d168f43ec009466c4342f422e7238d
+.claude/scripts/hq/lib/face/work-door.mjs	f228552ec9f8effaa6ffbcba07338d4d1dc96024f98a7396a57ce6103378c81d
 .claude/scripts/hq/lib/jobs/audit.mjs	f44b1a1ea933ff7e80f4cf7429307b636342f6658b22360fddb602957416f8fd
 .claude/scripts/hq/lib/jobs/cadence.mjs	b6373ced54530a19858148308f54daccea88c4474a51f7b3fa07301ea97642bb
 .claude/scripts/hq/lib/jobs/delegate.mjs	da71f1138f59439d5aaa0a95377cfd876c180e7029ad31d0668f0fbe3a08efb1
@@ -282,7 +282,7 @@
 .claude/scripts/hq/policy-promote.mjs	d594a4169c11a96f4bba24eb53b0937d02d53525085c674fda34089cb6a7ed20
 .claude/scripts/hq/spine.mjs	11a9da5fea85c5880b14372949e95351da86af917c4b6a55ea7d2597ef7b8ad9
 .claude/scripts/hq/venture-register.mjs	1ab4ad2eaaf34a888b2e8d11f9901dce4621bbdafceef57f6d484f0efa60a019
-.claude/scripts/leads/arc-leads.mjs	74a64cda1ad500959bc3fe7e9c9dc803433d98fea1cf676b7a9c94d07d7f4047
+.claude/scripts/leads/arc-leads.mjs	31444c1f302d32be90dfa5a011bb0ed8fa3cb208c628646137123e1eb03d8a7c
 .claude/scripts/leads/lib/caps.mjs	4e6bbf03ba53dd72b6a6e571b31f85c03783549cd04b890e62b3fa19ed9d2d4b
 .claude/scripts/leads/lib/deps.mjs	eebf5ab87ee1cdcf1f7a3371ebbe900356ddabab64970ba457004bc4b7de6f40
 .claude/scripts/leads/lib/drafts.mjs	a0be00c5fc56539f632f4cdb0737c03d4f471ce8666ebcc3ef5824a6d0dde305
@@ -295,12 +295,12 @@
 .claude/scripts/leads/lib/preflight.mjs	a3198a13cb0e5ed97f853d4555f286d16794ca5100284060f7b6119fff21ecef
 .claude/scripts/leads/lib/replies.mjs	778bd253da4b9892559a852051fdbbfcd9c85dc02e0cc08fef659606c1b2c70d
 .claude/scripts/leads/lib/research-lint.mjs	21a235740db4364f9289a9bead42db338b9760d133f954c3c104e6dfe053911a
-.claude/scripts/leads/lib/sequencer.mjs	3e1bf136049ceac079082633397b7b260293a11ab8b090bab207d6e6095429ce
+.claude/scripts/leads/lib/sequencer.mjs	6fd43d6e07e745ecf9e3a0a13bef4c72792c3f12228cf90cc6649ab547f2686c
 .claude/scripts/leads/lib/spine-read.mjs	3348841fe60e26077bf034535bd0e011df115eaf064fc17f9620def4570a7ed7
 .claude/scripts/leads/lib/store.mjs	cb5b381ec5b6b261285da3c59876914fff4c2ccfa08cfe1923a58eebdc62aaaf
 .claude/scripts/leads/pii-tripwire.sh	7b61af67a2c17015dea50d156e67d574bc5584f98274c9457e2dd42a5b5d83aa
 .claude/scripts/leads/rehearsal-check.mjs	a99362516bca3b212052f2231d670e960c09613732d5db22a05289227e9c8929
-.claude/scripts/legal/arc-legal.mjs	c60e3be10f01557e57efacc5b4bc38120ed2e880212afc7fa4e301e0e1f016d3
+.claude/scripts/legal/arc-legal.mjs	bd1041d442fdd2990707e3faf1595651c5ca221b5224673a1afb1c9b76a2cf34
 .claude/scripts/legal/lib/canonical.mjs	f2813dd3fa4c71a411eef9f0237008c521e6d10d54517b9e127a069898a6709f
 .claude/scripts/legal/lib/checklist.mjs	c3ff19d076a8d8cc965ace2b7e0c38cd01a4918c421a80090b5bec5916e408ad
 .claude/scripts/legal/lib/lints.mjs	3ccf0f5c304a4512fa55a2e7e6e7685ed204879bb4ae216e2e6a26272259f2ce

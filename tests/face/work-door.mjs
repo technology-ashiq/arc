@@ -45,6 +45,19 @@ const SPINE_B = join(tmp, "hand", "spine-hand");
 const JOURNAL = join(tmp, "journal");
 for (const d of [SPINE_A, SPINE_B]) mkdirSync(join(d, "events"), { recursive: true });
 
+// ---- the fixture: a scratch leads store holding the campaign this suite names ----
+// The send must refuse on the leads lane's OWN gate (no warmed sending domain, ADR-0413), and that gate sits behind the
+// store and campaign checks. Without a store of its own the suite leaned on the machine's ~/.arc/leads: green on a box
+// that has one, and on a clean CI runner refused one gate earlier ("store not initialised"). Set in THIS process's env
+// so the door and the hand-run both inherit the one store.
+process.env.ARC_LEADS_STORE = join(tmp, "leads-store");
+{
+  const leads = (args) => spawnSync(process.execPath, [join(REPO, ".claude", "scripts", "leads", "arc-leads.mjs"), ...args], { cwd: REPO, encoding: "utf8", env: process.env });
+  const init = leads(["store", "init"]);
+  const camp = leads(["campaign", "init", "work-door"]);
+  check("fixture: a scratch leads store with the work-door campaign (vacuous-pass guard)", init.status === 0 && camp.status === 0, `${init.status}:${String(init.stderr).trim()} | ${camp.status}:${String(camp.stderr).trim()}`);
+}
+
 // ---- the fixture: one real payment in the month before this one, on both spines ----
 // Mid-month, so no zone or boundary question reaches the close; last month, so the close is of a month that ended.
 const now = new Date();
@@ -133,6 +146,9 @@ const INPUTS = {
   "money.ingest": { provider: "razorpay", export: join(tmp, "no-export.csv"), venture: "lexos", interval: "monthly" },
   "ventures.register": { slug: "work-door-probe", days: "60", floor: "50", repository: "acme/work-door-probe" },
   "ventures.kill-review": { venture: "lexos", reason: "the work door suite asks for a review" },
+  // The live lanes (ADR-1344): no leads store on this tree, and a FIXTURE venture for the legal gate.
+  "leads.daily-send": { campaign: "work-door" },
+  "legal.full-read": { venture: "fixture-gateway-gst" },
   // The company ring (ADR-1343): branch writers, planned where there is a main and refused SIM_EFFECT at apply.
   "org.lane-status": { lane: "face", status: "QUEUED" },
   "concepts.define-term": { term: "work door probe", room: "today", station: "needs-you cards" },
@@ -142,7 +158,8 @@ const INPUTS = {
 // NO_EVOLVE_SECTION and measure and conclude answer NOT_OPEN; an effect op refuses its dry run where it cannot plan at
 // all (no main in a CI checkout, no Windows scheduler) and otherwise plans, and a sim door then refuses SIM_EFFECT.
 const REFUSES_ON_THIS_TREE = new Map([["evolve.open-experiment", /NO_EVOLVE_SECTION/], ["evolve.measure", /NOT_OPEN/], ["evolve.conclude", /NOT_OPEN/], ["develop.slice", /unknown lane/],
-  ["money.ingest", /the export cannot be found/], ["ventures.register", /NO_BASE|no approved criteria receipt/], ["ventures.kill-review", /UNRECEIPTED/]]);
+  ["money.ingest", /the export cannot be found/], ["ventures.register", /NO_BASE|no approved criteria receipt/], ["ventures.kill-review", /UNRECEIPTED/],
+  ["leads.daily-send", /no sending_domain configured/]]);
 const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows/], ["engine-room.driver-switch", /NO_BASE/], ["model-policy.tier-proposal", /NO_BASE/], ["absorb.pin-source", /NO_BASE/], ["absorb.trial", /NO_BASE/],
   ["design-studio.open-brief", /NO_BASE/], ["executor.terminate", /NO_BASE/], ["agents.add-agent", /NO_BASE/], ["factory.switch-profile", /already strict/],
   ["org.lane-status", /NO_BASE/], ["concepts.define-term", /NO_BASE/]]);
@@ -171,14 +188,26 @@ const WRITERS = (() => {
 })();
 check("the branch writers are found by what they import (vacuous-pass guard)", ["engine/propose.mjs", "absorb/pin.mjs", "absorb/trial.mjs", "design/open-brief.mjs", "engine/agent-scaffold.mjs"].every((w) => WRITERS.has(w)), [...WRITERS].join(","));
 // touchesTree: the one tool that writes a lane's own tracker in place (ADR-1341 §1) -- develop next, applied.
+// leavesMachine: the fourth kind (ADR-1344) -- an apply that acts outside the spine and outside a branch. The send
+// leaves this machine; the legal gate writes its pages and payload into this checkout. Both had NO flag, so a sim door
+// ran them for real (PR 5c round-1 attacks); the derivation names them, so a row cannot quietly drop one again.
 const effectOfScript = (o) => {
-  if (typeof o.apply !== "function") return { files: false, os: false, tree: false };
+  if (typeof o.apply !== "function") return { files: false, os: false, tree: false, world: false };
   const cmd = o.apply(INPUTS[o.id]);
-  return { files: WRITERS.has(cmd.script), os: cmd.script === "hq/arc-jobs.mjs" && cmd.args[0] === "register", tree: cmd.script === "develop/develop.mjs" && cmd.args[0] === "next" && !cmd.args.includes("--dry-run") };
+  return {
+    files: WRITERS.has(cmd.script),
+    os: cmd.script === "hq/arc-jobs.mjs" && cmd.args[0] === "register",
+    tree: cmd.script === "develop/develop.mjs" && cmd.args[0] === "next" && !cmd.args.includes("--dry-run"),
+    world: (cmd.script === "leads/arc-leads.mjs" && cmd.args[0] === "daily") || (cmd.script === "legal/arc-legal.mjs" && cmd.args[0] === "propose"),
+  };
 };
-const flagMismatch = (ops) => ops.filter((o) => { const e = effectOfScript(o); return (o.touchesFiles === true) !== e.files || (o.touchesOs === true) !== e.os || (o.touchesTree === true) !== e.tree; }).map((o) => o.id);
-check("every op's effect flags are what its apply script IS, both ways (touchesFiles <-> a branch writer, touchesOs <-> register, touchesTree <-> develop next)",
+const flagMismatch = (ops) => ops.filter((o) => { const e = effectOfScript(o); return (o.touchesFiles === true) !== e.files || (o.touchesOs === true) !== e.os || (o.touchesTree === true) !== e.tree || (o.leavesMachine === true) !== e.world; }).map((o) => o.id);
+check("every op's effect flags are what its apply script IS, both ways (touchesFiles <-> a branch writer, touchesOs <-> register, touchesTree <-> develop next, leavesMachine <-> a send or a rendered gate)",
   flagMismatch(OPS_MOD.OPS).length === 0, flagMismatch(OPS_MOD.OPS).join(","));
+{
+  const mutant = OPS_MOD.OPS.map((o) => (o.id === "leads.daily-send" ? { ...o, leavesMachine: false } : o));
+  check("MUTANT CONTROL: the send with its leavesMachine dropped is caught by the derivation", flagMismatch(mutant).includes("leads.daily-send"));
+}
 {
   const mutant = OPS_MOD.OPS.map((o) => (o.id === "develop.slice" ? { ...o, touchesTree: false } : o));
   check("MUTANT CONTROL: a row with its touchesTree dropped is caught by the derivation", flagMismatch(mutant).includes("develop.slice"));
@@ -187,7 +216,7 @@ check("every op's effect flags are what its apply script IS, both ways (touchesF
   const mutant = OPS_MOD.OPS.map((o) => (o.id === "engine-room.driver-switch" ? { ...o, touchesFiles: false } : o));
   check("MUTANT CONTROL: a row with its touchesFiles dropped is caught by the derivation", flagMismatch(mutant).includes("engine-room.driver-switch"));
 }
-check("every effect op is human-run", OPS_MOD.OPS.filter((o) => o.touchesFiles || o.touchesOs || o.touchesTree).every((o) => o.humanRun === true));
+check("every effect op is human-run", OPS_MOD.OPS.filter((o) => o.touchesFiles || o.touchesOs || o.touchesTree || o.leavesMachine).every((o) => o.humanRun === true));
 // Every op's receipt is a kind the spine has (ADR-1334).
 {
   const V = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "validate.mjs")).href);
@@ -323,7 +352,7 @@ try {
     if (REFUSES_ON_THIS_TREE.has(op.id)) { check(`${op.id}: refuses on this tree, by name`, false, `${plan.status} ${JSON.stringify(plan.body).slice(0, 300)}`); continue; }
     // An effect op that PLANNED (a clone with a main, a Windows leg): the plan wrote nothing, and a sim door refuses the
     // apply by name before anything runs -- no task registered, no branch written (ADR-1340).
-    if (op.touchesFiles || op.touchesOs || op.touchesTree) {
+    if (op.touchesFiles || op.touchesOs || op.touchesTree || op.leavesMachine) {
       check(`${op.id}: the effect op's plan answers ok and wrote nothing`, plan.status === 200 && plan.body.ok === true && spineFingerprint(SPINE_A) === before, `${plan.status} ${plan.body.error || ""}`);
       {
         const printed = DOOR_TEXT(String(plan.body.output || "")).trim().split(/\r?\n/).pop() || "";
@@ -496,6 +525,12 @@ try {
     for (const k of ["ARC_DRIVER_FAKE", "ARC_MOCK_DIR", "arc_leads_fake"]) {
       const f = boot(["--port", String(PORT + 1)], { [k]: "1" });
       check(`a live door with ${k} set refuses to start -> BAD_SPINE_ENV`, f.status === 1 && /BAD_SPINE_ENV/.test(f.stderr), `${f.status} ${String(f.stderr).slice(0, 200)}`);
+    }
+    // PR 5c round-2 shell attack: the variables that steer a real send -- the vendor host the Bearer key goes to, the
+    // config, the warm-up attestation, rehearsal -- reached a live door's send; the leads lane's own list refuses them.
+    for (const k of ["LEADS_PROVIDER_BASE_URL", "leads_config", "LEADS_WARMUP_APPROVED", "ARC_LEADS_REHEARSAL", "ARC_LEADS_MAIL_BASE_URL"]) {
+      const f = boot(["--port", String(PORT + 1)], { [k]: "x" });
+      check(`a live door with ${k} set refuses to start -> BAD_SPINE_ENV, naming it`, f.status === 1 && /BAD_SPINE_ENV/.test(f.stderr) && f.stderr.includes(k), `${f.status} ${String(f.stderr).slice(0, 200)}`);
     }
     // PR 2 shell attack: a port that is not decimal 1..65535 is refused, never NaN into listen() and an exit 0.
     for (const bad of ["abc", "0x10", "70000", "1.5"]) {

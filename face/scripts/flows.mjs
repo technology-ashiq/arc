@@ -77,6 +77,10 @@ export function flowInputs(ctx) {
     "money.ingest": { provider: "razorpay", export: join(ctx.tmp, "no-export.csv"), venture: "lexos", interval: "monthly" },
     "ventures.register": { slug: "browser-flow-probe", days: "60", floor: "50", repository: "acme/browser-flow-probe" },
     "ventures.kill-review": { venture: "lexos", reason: "a browser flow asks for a review" },
+    // The live lanes (ADR-1344). No warmed sending domain exists yet, so the send ends on the leads lane's own gate
+    // (ADR-0402/0413) wherever it runs; the legal gate renders a FIXTURE venture and raises its question for real.
+    "leads.daily-send": { campaign: "browser-flow" },
+    "legal.full-read": { venture: "fixture-gateway-gst" },
     // The company ring (ADR-1343): both write a proposal branch, so a sim door refuses them at apply.
     "org.lane-status": { lane: "face", status: "QUEUED" },
     "concepts.define-term": { term: "browser flow probe", room: "today", station: "needs-you cards" },
@@ -118,6 +122,12 @@ export const REFUSALS = Object.freeze({
   // (main CI after PR 5a: green on the PR, where NO_BASE came first).
   "ventures.register": "SIM_EFFECT|NO_BASE|no approved criteria receipt|torn line",
   "ventures.kill-review": "UNRECEIPTED",
+  // A send needs a warmed sending domain, and none is evidenced yet (ADR-0413): the leads lane's own gate is what the
+  // card must show, wherever this runs. The plan and its binding are proven on a scratch config in
+  // tests/face/live-work.mjs; a real send waits for that lane's Phase 03.
+  "leads.daily-send": "SIM_EFFECT|no sending_domain configured",
+  // The legal gate plans anywhere (a fixture venture) and its apply acts outside the spine, so a sim door refuses it.
+  "legal.full-read": "SIM_EFFECT",
   // The company ring: branch writers, refused SIM_EFFECT at apply, or NO_BASE where a CI checkout has no main.
   // Or, on a checkout WITH a main, the fixture spine's deliberate torn line: an unknown read is never "nothing
   // requested" (the register's twin -- main CI after PR 5a).

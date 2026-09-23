@@ -26,7 +26,6 @@ import { countedOn, holdsCount, kindCount, laneBadge, laneKpi, laneRoom } from "
  *   chain: import("../../../lib/registry.mjs").NotServed,
  *   modeVerb: { isVerbPending: true, verb: string, sentence: string },
  *   lintVerb: { isVerbPending: true, verb: string, sentence: string },
- *   stampVerb: { isVerbPending: true, verb: string, sentence: string },
  *   whoMay: string[],
  * }} Folded
  */
@@ -92,10 +91,8 @@ export function fold(payloads, ctx) {
       "Run the legal lints",
       "The publish gate, claims that need a source, the PII tripwire and the hash-chain verify, each result landing as a receipt. It arrives with the work door.",
     ),
-    stampVerb: verbPending(
-      "Stamp the full-read gate",
-      "Nothing ships under the owner's name until a person has read it in full and stamped it; the stamp is the gate. It arrives with the work door.",
-    ),
+    // "Stamp the full-read gate" is LIVE since face v2 Phase 05 (ADR-1344): the work door's legal.full-read op raises
+    // the question, and the stamp is the decision in the inbox room. Its card is retired.
     whoMay: [
       "gate modes -- a reviewed repo diff, never an agent's action",
       "autonomy ceilings -- declared by a person, never by a process",

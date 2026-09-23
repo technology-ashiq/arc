@@ -83,7 +83,7 @@ const tok = (fn) => { try { return "NO-REFUSAL:" + fn(); } catch (e) { return St
 const draftOf = (s, id) => writeDraft(s, {campaign: "pilot", lead_id: id, touch_n: 1,
   body: "Hi there, this is the body.", cites: [], lintStatus: "PASS"});
 const approvals = (r) => [
-  {id: "01APPROVAL", kind: "approval.requested", payload: {gate: "leads-send", draft_ref: r.draft_ref, draft_sha: r.draft_sha}},
+  {id: "01APPROVAL", kind: "approval.requested", payload: {gate: "leads-send", draft_ref: r.draft_ref, lead_hmac: r.lead_id, campaign: r.campaign, draft_sha: r.draft_sha}},
   {id: "01DECISION", kind: "decision.recorded", payload: {decides: "01APPROVAL", verdict: "approve", reason: "ok"}}];
 const step = (s, id, env) => { try {
     guardSend({events: [], store: s, now: NOW, config: CFG, env,

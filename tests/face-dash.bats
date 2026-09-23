@@ -88,6 +88,16 @@ load 'test_helper'
   [[ "$output" == *"ok register, applied: the branch holds the new venture"* ]] || { echo "$output"; false; }
 }
 
+@test "live lanes: the daily send bound to its plan, and the legal full-read gate raised into the inbox" {
+  run node "$ARC_ROOT/tests/face/live-work.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok leads daily, planned: the approved draft and the sha the owner approved"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok legal propose, applied: the payload written"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok legal propose refuses the same bytes a second time"* ]] || { echo "$output"; false; }
+}
+
 @test "company ring: a lane's status and a term's definition APPLIED in scratch, each on a proposal branch with its request" {
   run node "$ARC_ROOT/tests/face/company-work.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

@@ -36,7 +36,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           <HPanel title="Research a lead" hint="geography rides on every lead · the jurisdiction guard">
             <div className="space-y-2.5">
               <VerbPending item={f.researchVerb} />
-              <VerbPending item={f.sendVerb} />
               <VerbPending item={f.moveVerb} />
               <VerbPending item={f.suppressVerb} />
             </div>
