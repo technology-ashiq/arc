@@ -303,7 +303,21 @@ export async function runDriver(name, produce, opts = {}) {
       return;
     }
 
-    const input = JSON.parse(inputJson || "{}");
+    // An input of `-` means "read it from the file named in ARC_DRIVER_INPUT_FILE" (ADR-0226). One
+    // argv element is capped at 128 KB on Linux and the whole command line at ~32 KB on Windows,
+    // so a PR diff never reached a driver ("Argument list too long"). NOT `@<path>`: the MSYS/Cygwin
+    // runtime under Windows `bash` expands any `@file` argument as a RESPONSE FILE -- it read the
+    // JSON and word-split it into separate arguments, so the driver saw `surface:logic` as its
+    // budget. The path travels in the environment, where no runtime rewrites it. `-` is never valid
+    // JSON, so a literal argument still works exactly as before.
+    let input;
+    if (inputJson === "-") {
+      const file = process.env.ARC_DRIVER_INPUT_FILE;
+      if (!file) throw new Error("input `-` given but ARC_DRIVER_INPUT_FILE is not set");
+      input = JSON.parse(readFileSync(file, "utf8"));
+    } else {
+      input = JSON.parse(inputJson || "{}");
+    }
     const { output, cost } = await produce({ processName, input, budget });
     if (cost) writeCost(cost);
     process.stdout.write(`${JSON.stringify(output)}\n`);

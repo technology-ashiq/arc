@@ -229,6 +229,7 @@
           "engine"
         ],
         "processes": [
+          "attack-diff",
           "brief-materialize",
           "build-in-public-draft",
           "commit-msg-draft",
@@ -254,7 +255,7 @@
           "0200"
         ]
       },
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "model-policy",
@@ -628,6 +629,7 @@
           "ship.done"
         ],
         "commands": [
+          "arc-attack",
           "arc-audit",
           "arc-canary",
           "arc-commit (G)",
@@ -665,7 +667,7 @@
           "workflow:weigh-tests"
         ]
       },
-      "itemCount": 31
+      "itemCount": 32
     },
     {
       "id": "design-studio",

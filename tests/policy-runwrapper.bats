@@ -500,13 +500,15 @@ EOF
   [ "$output" = "8 false | 0 true" ]
 }
 
-@test "BYPASS -- a declared process with an EMPTY grant is refused by the driver, not silently widened" {
-  # ADR-0223 clause 4. `adapters/claude-code.mjs` throws on this, because an absent --allowedTools
-  # means UNRESTRICTED: the most restrictive declaration a process can make otherwise reaches the
-  # CLI byte-identical to the most permissive one. `drivers/claude-code.mjs` reused the adapter's
-  # MAPPING and not its RULE, so the rule held at compile time and not at dispatch -- and for a
-  # baseline-waived process arc-compile never renders the command, so the compile-time refusal
-  # never runs at all. The run gate was the only thing standing there, and ADR-0223 moved it.
+@test "BYPASS -- a declared grant that RENDERS to nothing is refused by the driver, not silently widened" {
+  # ADR-0223 clause 4, as amended by ADR-0226. An absent --allowedTools means UNRESTRICTED, so a
+  # declared process whose tool list maps to NO token (`[ask.human]`) would otherwise reach the CLI
+  # byte-identical to the most permissive one. `drivers/claude-code.mjs` once reused the adapter's
+  # MAPPING and not its RULE; both now live in one function, `dispatchToolArgs`.
+  #
+  # What ADR-0226 changed: an EXPLICIT `tools: []` is no longer refused -- it dispatches as the CLI's
+  # real zero (`--tools "" --strict-mcp-config`), pinned in tests/engine-attack-diff.bats. The case
+  # below is the one that still has no honest zero: a list that says "these tools" and maps to none.
   #
   # ARC_DRIVER_FAKE is deliberately NOT used: `fakeResponse` returns BEFORE produce(), so a fake
   # recording would make this pass without the refusal ever being reached.
@@ -518,7 +520,8 @@ name: empty-grant
 version: 1.0.0
 permissions: declared
 inputs: []
-tools: []
+tools:
+  - ask.human
 output:
   type: object
 body: |
@@ -530,6 +533,24 @@ EOF
   [[ "$output" == *"empty grant set"* ]] || { echo "the driver did not refuse the empty grant: $output"; false; }
   # It must die at the REFUSAL, not at the CLI -- otherwise this passes on any missing binary.
   [[ "$output" != *"claude CLI failed"* ]] || { echo "the driver reached the CLI before refusing: $output"; false; }
+
+  # ADR-0226: an explicit `tools: []` now REACHES the CLI (it dies there, on the missing binary)
+  # instead of being refused -- the refusal above is for a mapping gap, not a declaration of zero.
+  cat > "$d/processes/no-tools.process.yaml" <<'EOF'
+name: no-tools
+version: 1.0.0
+permissions: declared
+inputs: []
+tools: []
+output:
+  type: object
+body: |
+  BODY
+EOF
+  run env ARC_CLAUDE_CLI=definitely-not-a-real-cli \
+    bash "$d/.claude/scripts/engine/drivers/claude-code.sh" run no-tools '{}' ''
+  [[ "$output" == *"claude CLI failed"* ]] || { echo "an explicit tools: [] did not reach the CLI: $output"; false; }
+  [[ "$output" != *"empty grant set"* ]] || { echo "an explicit tools: [] is still refused: $output"; false; }
 
   # NEGATIVE CONTROL: the refusal is conditional. A process that declares real tools must sail past
   # it and die at the CLI instead, or the assertion above is satisfied by a driver that refuses

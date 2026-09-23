@@ -1,0 +1,14 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": "tool.mjs:4",
+      "breaking_input": "tool.mjs --outt x.json",
+      "why": "a near-miss flag is ignored and the default output path is used",
+      "fix": "refuse an unknown flag by name with exit 2",
+      "twin_of": "No unknown-flag guard; near-miss flags fell through to the worst default"
+    }
+  ]
+}

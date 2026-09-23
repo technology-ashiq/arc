@@ -263,6 +263,46 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### OUT-OF-CYCLE — the PR loop's attacker pass and CI read become governed engine work — 2026-09-23
+
+**Classification: a decision → ADR-0226, plus a scoped build**, routed through `/arc-change --lane
+engine` on 2026-09-23 (owner-ruled, ADR-0220 precedent). Cycle 7 is closed, so this is charged to no
+cycle's appetite. **Appetite 1.5d. Kill at 1d:** if `attack-diff` does not run end-to-end on the
+mock driver, cut to `ci-digest` + the CLAUDE.md lines. Branch `feat/engine-attack-diff`. ADR number
+`0226` claimed after sweeping every `origin/*` branch and all 33 worktrees (highest found: 0225).
+
+**Scope.** `processes/attack-diff.process.yaml` + two eval fixtures · `engine/router.yaml` class
+`attack-diff` (balanced-workhorse, claude-code, `fallback: []`) · `build-attack-input.mjs` ·
+`arc-attack.mjs` + hand-written `/arc-attack` · `review/ci-digest.mjs` · the `generic-api` prompt fix
+(owner ruling 2026-09-23 — the driver never sent a process body) · product manifests + sync golden ·
+three CLAUDE.md lines. The logic surface runs `--driver generic-api --trial-model` under
+ADR-0069(g)/ADR-0220: no router row and no ADR-0069 amendment in this change. Fix slices stay in the
+interactive session via `/arc-develop`.
+
+**This PR's adversarial pass is the bootstrap exception** (owner ruling (a), 2026-09-23): two fresh
+general-purpose agents, one last time, because the tool is not on `main` and `arc-run` emits no
+receipts from a worktree. First real `/arc-attack` runs from the main clone after merge.
+
+**Four engine limits surfaced while building, each routed to the owner and ruled in-session
+(ADR-0226 Decisions 7–10):** `generic-api` never sent a process body · claude-code refused an
+explicit `tools: []` (ADR-0223 clause 4 amended: it now dispatches as `--tools ""
+--strict-mcp-config`) · arc-run's pre-dispatch secret scan capped at 200 base64 candidates while a
+real feature PR carries 600–1,811 (the ceiling now scales with the text) · driver input rode one
+argv element, over both the Linux 128 KB and the Windows ~32 KB ceilings (now a file, path in
+`ARC_DRIVER_INPUT_FILE`; `@<path>` was tried first and is expanded as a response file by MSYS bash).
+
+**Kill check: MET on day 1.** `arc-attack --driver mock` runs both surfaces end to end on a 76 KB
+real diff and on a 300 KiB fixture, writes both evidence files, refuses a wrong-surface answer and
+never overwrites. `ci-digest` read PR #264's head live: 19/19 jobs green, exit 0.
+
+**Owed by the owner (deny-listed for the session):** the `process:attack-diff` row in
+`hq.policy.yaml` — `tests/kickoff-lint.bats` asserts `0 ungoverned` on the real tree and goes red
+without it. **Adversarial pass (bootstrap exception, 2 rounds × 2 fresh agents, the cap): 18 findings, 17
+distinct (round-2 L6 and B6 are one): 15 fixed and pinned, L9 fixed but pinned only for its
+temp-dir half, B5 rejected with reason, B4 recorded as debt** — details in ADR-0226
+Consequences. **Tests run on CI per job only.** Status: built and attacked; nothing committed,
+awaiting the owner's commit approval.
+
 ### OUT-OF-CYCLE — `main` red since 2026-09-01: the hire's tenure expired, and it took bench's probe and three REQ-06 tests with it — 2026-09-15
 
 **Classification: a bug**, routed through `/arc-change` on 2026-09-15. Cycle 7 is closed, so this is

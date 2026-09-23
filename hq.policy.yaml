@@ -193,3 +193,20 @@ kinds:
     publish: { level: L0 }
     deploy: { level: L0 }
     spend: { level: L0 }
+
+  # --- engine, out-of-cycle (ADR-0226) ------------------------------------------------------
+  # The attacker declares `tools: []` (ADR-0223), so it asks for no capability and nothing below
+  # can deny it; `read` stays L3 only because spawning any run reads its own process file. Every
+  # other ceiling is L0 -- the honest narrowing: an attacker that could write, shell or reach the
+  # network would no longer be seeing only its input. The HTTP call generic-api makes is the
+  # runner starting a driver, not an action the process takes.
+  "process:attack-diff":
+    e2: []
+    read: { level: L3 }
+    write: { level: L0 }
+    shell: { level: L0 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }

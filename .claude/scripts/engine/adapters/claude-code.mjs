@@ -81,6 +81,27 @@ export function renderAllowedTools(tools) {
 }
 
 /**
+ * The tool argv a HEADLESS dispatch hands the CLI -- one decision, importable, so the driver
+ * cannot hold a second copy of it (ADR-0223 clause 4, amended by ADR-0226).
+ *
+ * `unrestricted` -> no tool argv (nobody narrowed the file; the CLI default applies).
+ * `declared` + a grant -> `--allowedTools`.
+ * `declared` + an EXPLICIT `tools: []` -> `--tools "" --strict-mcp-config`: the CLI's real zero,
+ *   no built-in tool and no MCP server. The most restrictive declaration reaches the CLI as the
+ *   most restrictive argv. (A generated COMMAND has no such zero -- `allowed-tools:` absent means
+ *   unrestricted -- which is why the compile path above still refuses it.)
+ * `declared` + a non-empty list that renders to nothing (`[ask.human]`) -> THROW. That is a
+ *   mapping gap, not a declaration of zero, and an absent `--allowedTools` is UNRESTRICTED.
+ */
+export function dispatchToolArgs(doc) {
+  if (doc.permissions !== "declared") return [];
+  const allowed = renderAllowedTools(Array.isArray(doc.tools) ? doc.tools : []);
+  if (allowed) return ["--allowedTools", allowed];
+  if (Array.isArray(doc.tools) && doc.tools.length === 0) return ["--tools", "", "--strict-mcp-config"];
+  throw new Error("claude-code driver: `permissions: declared` produced an empty grant set — an absent --allowedTools means UNRESTRICTED, so this run would silently widen the process");
+}
+
+/**
  * Placeholders back to dialect. A SINGLE required input with no default is the whole
  * argument string, which is what `$ARGUMENTS` means; anything else is positional.
  */

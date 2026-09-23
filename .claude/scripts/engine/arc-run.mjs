@@ -49,7 +49,7 @@ import { dirname, join, resolve } from "node:path";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
 import { sha256Hex } from "../hq/lib/canonical.mjs";
-import { scanSecrets } from "../hq/lib/redact.mjs";
+import { scanSecrets, sizeScaledCap } from "../hq/lib/redact.mjs";
 import { MODEL_RE } from "../hq/lib/validate.mjs";
 
 // The runtime identity grammar. Alphanumerics plus the punctuation `hermes@sha256:<digest>+cfg.<hash>`
@@ -855,7 +855,10 @@ function scrub(label, text, parsed) {
   for (const obj of objects) {
     let verdict;
     try {
-      verdict = scanSecrets(String(text), obj);
+      // The candidate ceiling scales with the text (ADR-0226): arc-run scans DOCUMENTS -- a PR diff
+      // carries far more base64-shaped runs than a spine event -- and the flat 200 refused every
+      // real attack input. Still exhaustive, still fails closed on overflow.
+      verdict = scanSecrets(String(text), obj, { maxCandidates: sizeScaledCap(text) });
     }
     catch (e) { fail("secret-scan", `secret scan could not run over ${label}: ${e.message}`, { driver }); return; }
     if (verdict.hit) {
@@ -1218,13 +1221,34 @@ function invoke(name) {
     }
     return { code: 77, stdout: "", stderr: detail, cost: null, policyDenied: true, spawned: false };
   }
-  const tmp = mkdtempSync(join(tmpdir(), "arc-run-"));
+  // The temp dir is guarded like the write inside it (ADR-0226, round-2 attacks B6/L6): a bad TMPDIR
+  // threw out of invoke() with a bare stack and no receipt -- the shape emitEvent already closed.
+  let tmp;
+  try { tmp = mkdtempSync(join(tmpdir(), "arc-run-")); }
+  catch (e) {
+    return { code: 1, stdout: "", stderr: `could not prepare the driver input: no temp dir (${e.code || e.message})`, cost: null, spawned: false };
+  }
   const costFile = join(tmp, "cost.json");
   const rem = msRemaining();
   // Math.floor: a float `min` produced a non-integer timeout and spawnSync threw a raw
   // RangeError before any scrub or receipt could run.
   const timeoutMs = rem === undefined ? undefined : Math.max(1, Math.floor(rem));
-  const res = spawnSync("bash", [sh, "run", processName, JSON.stringify(input), budgetStr], {
+  // The input travels as a FILE, not an argv element (ADR-0226): one argument is capped at 128 KB
+  // on Linux and the command line at ~32 KB on Windows, and a PR diff is bigger than both. The
+  // argv slot carries `-` and the path rides ARC_DRIVER_INPUT_FILE -- never `@<path>`, which the
+  // MSYS runtime under Windows bash expands as a response file. The file lives in this call's
+  // private temp dir and is removed with it.
+  const inputFile = join(tmp, "input.json");
+  // A write that throws here would crash arc-run with a bare stack: no receipt, and the temp dir --
+  // which now holds the whole input -- orphaned (boundary attack B1). It is a driver-side failure
+  // that never spawned, reported the way every other one is, and the dir is removed first.
+  try { writeFileSync(inputFile, JSON.stringify(input), "utf8"); }
+  catch (e) {
+    try { rmSync(tmp, { recursive: true, force: true }); }
+    catch (rmErr) { process.stderr.write(`arc-run: WARN could not remove ${JSON.stringify(tmp)}: ${rmErr.message}\n`); }
+    return { code: 1, stdout: "", stderr: `could not prepare the driver input: the file did not write (${e.code || e.message})`, cost: null, spawned: false };
+  }
+  const res = spawnSync("bash", [sh, "run", processName, "-", budgetStr], {
     // cwd follows workRoot, not root: a driver that shells out to git must land in the repo it
     // was pointed at. The driver SCRIPT path is already absolute (resolved from root above), so
     // moving cwd cannot make arc-run fail to find its own machinery.
@@ -1257,6 +1281,9 @@ function invoke(name) {
     env: {
       ...bashEnv(),
       ARC_DRIVER_COST_FILE: costFile,
+      // Where input `-` is read from (ADR-0226). Always set, so an ambient value can never point
+      // a driver at some other file.
+      ARC_DRIVER_INPUT_FILE: inputFile,
       ARC_ROOT: root,
       ARC_WORK_ROOT: workRoot,
       ARC_DRIVER_MODEL: effectiveModel ?? "",
@@ -1284,7 +1311,10 @@ function invoke(name) {
   if (existsSync(costFile)) {
     try { cost = JSON.parse(readFileSync(costFile, "utf8")); } catch { cost = null; }
   }
-  rmSync(tmp, { recursive: true, force: true });
+  // A cleanup that throws (EBUSY from a scanner holding a handle on Windows) must never erase the
+  // receipt for work already done and paid for (round-2 attack B7). `force` only covers ENOENT.
+  try { rmSync(tmp, { recursive: true, force: true }); }
+  catch (e) { process.stderr.write(`arc-run: WARN could not remove ${JSON.stringify(tmp)}: ${e.code || e.message}\n`); }
   const timedOut = res.error && res.error.code === "ETIMEDOUT";
   // ARC-RUN'S OWN CEILING IS NOT A DRIVER FAULT. Only ETIMEDOUT was ever inspected, so a
   // maxBuffer overflow -- which arrives as `status: null, signal: SIGKILL, error.code: ENOBUFS`

@@ -1,0 +1,5 @@
+{ "head": "1111111111111111111111111111111111111111", "branchName": "feat/x",
+  "list": [ { "databaseId": 10, "headSha": "1111111111111111111111111111111111111111", "status": "completed", "conclusion": "success", "workflowName": "arc-ci", "createdAt": "2026-09-23T10:00:00Z", "attempt": 1 } ],
+  "view": { "10": { "headSha": "1111111111111111111111111111111111111111", "status": "completed", "conclusion": "success", "url": "https://example.invalid/runs/10",
+    "jobs": [ { "databaseId": 101, "name": "selftest (ubuntu-latest, 20)", "status": "completed", "conclusion": "success" },
+              { "databaseId": 102, "name": "selftest (windows-latest, 20, shard 1/12)", "status": "completed", "conclusion": "skipped" } ] } } }

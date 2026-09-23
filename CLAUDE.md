@@ -69,7 +69,9 @@
 - A phase closes ONLY via `/arc-phase-done <n>`: tests green + live demo + tracker updated. Evidence over assertion.
 - **After a push, read CI per-JOB before reporting the work done.** I reported a phase built on the
   strength of local gates twice while CI was red — once with a test that had never passed at all.
-  `gh run view <id> --json jobs`, and confirm the run's head SHA is the local HEAD.
+  → `node .claude/scripts/review/ci-digest.mjs` (per-job, head SHA asserted); never poll CI in-session.
+- **A building session ends at push.** The next one starts with `/arc-resume` — attack, review and CI
+  read never run in the session that wrote the code (ADR-0226).
 - **"Tests green" means green on CI. Never run a suite on this box** — and read per-JOB conclusions,
   not the watcher's exit code → `.claude/rules/testing.md` § where tests run.
 - Offline-first: every external dependency gets an interface + fake + real impl.
@@ -89,7 +91,8 @@
   where two attacked one gate they shared the root cause and almost none of the findings. A
   single agent's blind spot is structural, not a matter of effort. Fresh = has not seen the
   implementation (`gate-author-cannot-be-its-attacker`: the author's own 26 breaking inputs
-  found 0 holes; an unanchored agent found 9).
+  found 0 holes; an unanchored agent found 9). → run it with `/arc-attack` (processes/attack-diff,
+  ADR-0226); never as general-purpose agents inside the building session.
 - **A test that passes proves the assertion held, not that the code ran.** Assert it RAN before
   asserting what it printed → `.claude/rules/testing.md` § the vacuous pass. Cycle 6 shipped
   this three times, twice inside the suites written to prevent it.
@@ -161,7 +164,7 @@
 - **GENERATED commands** → `.claude/commands/{arc-commit,arc-review,arc-kickoff}.md` are compiled
   from `processes/*.process.yaml` (engine Cycle 6, ADR-0201/0202). **Do not edit them** — the next
   regeneration deletes the edit. Change the process file, routed through `/arc-change`, then
-  `node .claude/scripts/engine/arc-compile.mjs --write --all --target claude-code`. The other 24
+  `node .claude/scripts/engine/arc-compile.mjs --write --all --target claude-code`. The other 25
   commands are still hand-written and unaffected.
 - Company board       → `PORTFOLIO.md` (every lane in priority order — a view, not the truth)
 - Lanes / workspaces  → `.claude/rules/lanes.md` (`--lane` is the ONLY way to name a lane)
