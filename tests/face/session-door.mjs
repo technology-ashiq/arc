@@ -322,7 +322,10 @@ process.env.LEADS_CONFIG = "planted-leads-config";
     `dropped=${big.bytesDropped} lines=${JSON.stringify(big.lines.map((l) => l.slice(0, 12)))}`);
   const cap = await d.read("000000002keycap0");
   // The marker itself may be cut at 8192; what must hold is that the key was replaced before the cut, not after.
-  check("a key straddling the line cap is redacted whole, then cut", cap.lines[0].includes("[anthropic-key") && !cap.lines[0].includes("api03") && !cap.lines[0].includes("CCCCCCCC"), cap.lines[0].slice(-80));
+  // The key sits across character 8192, so the cut lands inside the redaction marker (CI: "[anthr [line cut...").
+  // What must hold: the line was cut, and no byte of the key -- its prefix or its body -- survived to be served.
+  check("a key straddling the line cap is redacted whole, then cut",
+    /\[line cut at 8192 characters\]$/.test(cap.lines[0]) && cap.lines[0].includes("[anth") && !cap.lines[0].includes("sk-ant") && !cap.lines[0].includes("CCCC"), cap.lines[0].slice(-80));
   const torn = await d.read("000000003tornex0");
   check("a torn exit.json reads UNKNOWN (read again), never a terminal answer", torn.state === "unknown" && typeof torn.note === "string", torn.state);
   const forged = await d.read("000000004nullex0");
