@@ -295,13 +295,19 @@ argv element, over both the Linux 128 KB and the Windows ~32 KB ceilings (now a 
 real diff and on a 300 KiB fixture, writes both evidence files, refuses a wrong-surface answer and
 never overwrites. `ci-digest` read PR #264's head live: 19/19 jobs green, exit 0.
 
-**Owed by the owner (deny-listed for the session):** the `process:attack-diff` row in
-`hq.policy.yaml` — `tests/kickoff-lint.bats` asserts `0 ungoverned` on the real tree and goes red
-without it. **Adversarial pass (bootstrap exception, 2 rounds × 2 fresh agents, the cap): 18 findings, 17
+**The owner's `process:attack-diff` row in `hq.policy.yaml` landed** with the merge. kickoff-lint
+reads `7 process(es) … 0 ungoverned` on `main`. **Adversarial pass (bootstrap exception, 2 rounds × 2 fresh agents, the cap): 18 findings, 17
 distinct (round-2 L6 and B6 are one): 15 fixed and pinned, L9 fixed but pinned only for its
 temp-dir half, B5 rejected with reason, B4 recorded as debt** — details in ADR-0226
-Consequences. **Tests run on CI per job only.** Status: built and attacked; nothing committed,
-awaiting the owner's commit approval.
+Consequences. **Tests run on CI per job only.**
+
+**Status: MERGED as PR #265 (`851fc05b`, 2026-09-23), and the merged tree was verified by dispatch
+35959814088 on 2026-09-24: 19/19 jobs green.** The first attempt came back 18/19. The one red was
+Windows shard 1, `tests/face/proposal-branch.mjs` "three writers of one plan at once" (one writer
+got `GIT_FAILED` instead of `BRANCH_EXISTS`). That is a face-owned race that #265 never touched. It
+failed the same way on three face PRs on 2026-09-19, and PR #255's lock-wait did not fully close it.
+It passed when the shard was re-run. The flake belongs to the face lane and is not engine debt.
+**Owed next:** the first real `/arc-attack`, run from the MAIN clone (a worktree emits no receipts).
 
 ### OUT-OF-CYCLE — `main` red since 2026-09-01: the hire's tenure expired, and it took bench's probe and three REQ-06 tests with it — 2026-09-15
 
