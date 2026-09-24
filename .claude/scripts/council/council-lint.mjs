@@ -16,8 +16,8 @@
  * Roster grows per phase: Phase 0 = advocate/skeptic/neutral; Phase 1 adds verifier; Phase 2 adds
  * researcher; Phase 3 adds the 7 domain experts.
  */
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, existsSync, openSync, fstatSync, closeSync, realpathSync } from "node:fs";
+import { join, dirname, basename, extname } from "node:path";
 import { createHash } from "node:crypto";
 
 const args = process.argv.slice(2);
@@ -73,23 +73,61 @@ function isValidISODate(s) {
 
 // ------------------------------------------------------------------ payload mode (ADR-1345)
 // The council.verdict receipt, in the spine's CLOSED shape (validate.mjs: session_id · question_hash · call ·
-// confidence), derived from a saved verdict file -- never typed by hand into a shell string. The call maps the
-// decision: YES and CONDITIONAL are a call to proceed, NO and WAIT a call to hold (the reading calibrate.mjs scores
-// by). Prints ONE line of JSON on success; exit 1 names what the file lacks.
-const payloadFile = flagVal("--payload");
-if (payloadFile) {
-  if (!existsSync(payloadFile)) { console.error(`council-lint: --payload ${payloadFile}: no such file`); process.exit(1); }
-  const text = readFileSync(payloadFile, "utf8").replace(/\r\n?/g, "\n");
+// confidence), derived from a SAVED verdict -- never typed by hand into a shell string. The call maps the decision:
+// YES and CONDITIONAL are a call to proceed, NO and WAIT a call to hold (the reading calibrate.mjs scores by). Prints
+// ONE line of JSON on success; exit 1 names what the file lacks; exit 2 names a usage error.
+//
+// Hardened by attack eaa9168: the mode is entered on the FLAG, not on a truthy value (an empty or `=`-form value is a
+// usage error, never a fall-through to another mode); it never shares a run with another mode; the file must be a
+// plain file directly under docs/council/sessions (or --sessions-dir, for fixtures), read once through its descriptor
+// with a size cap and a FATAL UTF-8 decode; the heading's date must be a real day; every message quotes the path.
+function payloadMode() {
+  const usage = (msg) => { console.error(`council-lint: --payload: ${msg}`); process.exitCode = 2; };
+  const refuse = (file, msgs) => { for (const m of msgs) console.error(`council-lint: --payload ${JSON.stringify(file)}: ${m}`); process.exitCode = 1; };
+  if (args.some((a) => a.startsWith("--payload="))) return usage("takes its file as the next argument, not --payload=FILE");
+  const at = args.flatMap((a, i) => (a === "--payload" ? [i] : []));
+  if (at.length > 1) return usage("given more than once -- one verdict per receipt");
+  const others = ["--verdict", "--brief", "--juror-artifact"].filter((f) => args.includes(f));
+  if (others.length) return usage(`cannot run with ${others.join(", ")} -- it would answer for a file the other mode never linted`);
+  const file = args[at[0] + 1];
+  if (typeof file !== "string" || file === "" || file.startsWith("-")) return usage("needs the saved verdict's path as its value");
+  if (/[\p{Cc}\p{Zl}\p{Zp}]/u.test(file)) return usage(`the path ${JSON.stringify(file)} holds a control character or a line break`);
+  // A UNC or device path reaches out of the machine or into a stream; a colon past a drive letter names an NTFS stream.
+  if (/^[\\/]{2}/.test(file) || file.indexOf(":", /^[A-Za-z]:/.test(file) ? 2 : 0) !== -1) return usage(`the path ${JSON.stringify(file)} is a UNC, device or stream path`);
+  const sessionsArg = flagVal("--sessions-dir");
+  const sessionsDir = sessionsArg && !sessionsArg.startsWith("-") ? sessionsArg : join(root, "docs", "council", "sessions");
+  let real, dirReal;
+  try { real = realpathSync.native(file); dirReal = realpathSync.native(sessionsDir); }
+  catch (e) { return refuse(file, [`cannot be resolved (${e.code || "error"})`]); }
+  if (dirname(real) !== dirReal) return refuse(file, [`is not a saved session directly under ${JSON.stringify(sessionsDir)}`]);
+  const ext = extname(real);
+  if (ext.toLowerCase() !== ".md") return refuse(file, ["is not a .md verdict"]);
+  let buf;
+  let fd;
+  try {
+    fd = openSync(real, "r");
+    const st = fstatSync(fd);
+    if (!st.isFile()) return refuse(file, ["is not a plain file"]);
+    if (st.size > 1024 * 1024) return refuse(file, [`is ${st.size} bytes -- past the 1 MiB a verdict can be`]);
+    buf = readFileSync(fd);
+  } catch (e) { return refuse(file, [`could not be read (${e.code || "error"})`]); }
+  finally { if (fd !== undefined) try { closeSync(fd); } catch { /* already closed */ } }
+  let text;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { return refuse(file, ["is not valid UTF-8 -- the question's hash would be taken over replacement characters"]); }
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  text = text.replace(/\r\n?/g, "\n");
   const why = [];
   const h1 = /^# arc-council — (.+) \((\d{4}-\d{2}-\d{2})\)\s*$/m.exec(text);
-  if (!h1) why.push('no "# arc-council — <question> (<YYYY-MM-DD>)" heading to take the question from');
+  if (!h1) why.push('has no "# arc-council — <question> (<YYYY-MM-DD>)" heading to take the question from');
+  else if (!isValidISODate(h1[2])) why.push(`heading date ${h1[2]} is not a real day`);
   const dec = [...text.matchAll(/^[ \t]*DECISION:\s*(YES|NO|CONDITIONAL|WAIT)\s*$/gim)];
-  if (dec.length !== 1) why.push(`${dec.length} filled DECISION line(s); a verdict has exactly one`);
+  if (dec.length !== 1) why.push(`has ${dec.length} filled DECISION line(s); a verdict has exactly one`);
   const conf = [...text.matchAll(/^[ \t]*CONFIDENCE:\s*(High|Medium|Low)\s*$/gim)];
-  if (conf.length !== 1) why.push(`${conf.length} filled CONFIDENCE line(s); a verdict has exactly one`);
-  const base = payloadFile.replace(/\\/g, "/").split("/").pop().replace(/\.md$/, "");
-  if (!/^[A-Za-z0-9._-]{1,62}$/.test(base)) why.push(`the file name ${JSON.stringify(base)} cannot be a session id (c-<name>, name [A-Za-z0-9._-], at most 62)`);
-  if (why.length) { for (const w of why) console.error(`council-lint: --payload ${payloadFile}: ${w}`); process.exit(1); }
+  if (conf.length !== 1) why.push(`has ${conf.length} filled CONFIDENCE line(s); a verdict has exactly one`);
+  // The id is the name the FILESYSTEM holds, extension stripped case-blind -- never the caller's spelling.
+  const base = basename(real, ext);
+  if (!/^[A-Za-z0-9._-]{1,62}$/.test(base)) why.push(`its name ${JSON.stringify(base)} cannot be a session id (c-<name>, name [A-Za-z0-9._-], at most 62)`);
+  if (why.length) return refuse(file, why);
   const decision = dec[0][1].toUpperCase();
   const c = conf[0][1];
   console.log(JSON.stringify({
@@ -98,11 +136,15 @@ if (payloadFile) {
     call: decision === "YES" || decision === "CONDITIONAL" ? "proceed" : "hold",
     confidence: c[0].toUpperCase() + c.slice(1).toLowerCase(),
   }));
-  process.exit(0);
+  process.exitCode = 0;
 }
 
+// The flag is the mode, whatever its value: an empty or `=` value is refused inside, never a fall-through (B4).
+const payloadRequested = args.some((x) => x === "--payload" || x.startsWith("--payload="));
+if (payloadRequested) payloadMode();
+
 // ------------------------------------------------------------------ verdict mode
-if (verdictFile) {
+if (verdictFile && !payloadRequested) {
   if (!existsSync(verdictFile)) {
     fail(`verdict file not found: ${verdictFile}`);
     report();
@@ -356,7 +398,7 @@ if (verdictFile) {
 }
 
 // ------------------------------------------------------------------ brief mode
-if (briefFile) {
+if (briefFile && !payloadRequested) {
   if (!existsSync(briefFile)) {
     fail(`brief file not found: ${briefFile}`);
     report();
@@ -384,6 +426,8 @@ if (briefFile) {
   report();
 }
 
+// Static mode runs only when no other mode answered: payload mode sets its exit code and must not be followed by it.
+if (!payloadRequested) {
 // ------------------------------------------------------------------ static mode
 const read = (p) => readFileSync(join(root, p), "utf8");
 const exists = (p) => existsSync(join(root, p));
@@ -433,3 +477,5 @@ for (const name of [...CORE_AGENTS, ...DOMAIN_AGENTS]) {
 }
 
 report();
+}
+

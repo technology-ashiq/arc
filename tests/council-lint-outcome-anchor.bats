@@ -71,6 +71,7 @@ setup() {
   [ "$output" -eq 1 ]
 }
 
+
 # ADR-1345 (face v2 Phase 06): /arc-council wrote {decision, confidence, session}, which the spine's CLOSED
 # council.verdict shape rejects -- no council had ever landed the receipt calibration reads. The payload is now DERIVED
 # from the saved verdict by council-lint --payload. RED on the old shape (BAD_COUNCIL), green on every saved session.
@@ -79,7 +80,7 @@ setup() {
   mkdir -p "$ARC_SPINE_ROOT/events"
   local n=0 f payload
   for f in "$ARC_ROOT"/docs/council/sessions/*.md; do
-    run node "$LINT" --payload "$f"
+    run node "$LINT" --payload "$f" --sessions-dir "$ARC_ROOT/docs/council/sessions"
     [ "$status" -eq 0 ] || { echo "derive $f: $output"; false; }
     payload="$output"
     [[ "$payload" == *'"session_id":"c-'* ]] && [[ "$payload" == *'"call":"'* ]] || { echo "shape $f: $payload"; false; }
@@ -91,9 +92,32 @@ setup() {
   # NEGATIVE CONTROL: the payload the command used to write is refused by the same validator.
   run node "$ARC_ROOT/.claude/scripts/hq/arc-event.mjs" emit council.verdict --payload '{"decision":"YES","confidence":"Medium","session":"001-x"}' --strict --dry-run
   [ "$status" -ne 0 ] && [[ "$output" == *"BAD_COUNCIL"* ]] || { echo "old shape: $status $output"; false; }
-  # The command emits the derived payload, and no longer spells the old one.
-  grep -q 'council-lint.mjs --payload docs/council/sessions/NNN-slug.md' "$ARC_ROOT/.claude/commands/arc-council.md"
   ! grep -q '"decision":"<YES' "$ARC_ROOT/.claude/commands/arc-council.md"
+}
+
+# The seam the command actually crosses: step 9's OWN two lines, run through bash and the .sh wrapper, with the slug
+# substituted -- once for a real saved session (the event must land and read back), once for a session that does not
+# exist (nothing lands, the step exits non-zero). Attack eaa9168 B1/B12: the derivation passing proves nothing about the
+# `$(...)` composition, and an ungated emit ran with an empty payload and exited 0.
+@test "council step 9: the command's own lines emit the derived receipt, and a refused derivation emits nothing" {
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine9"
+  mkdir -p "$ARC_SPINE_ROOT/events"
+  local step
+  step="$(grep -E '^   (payload="\$\(node \.claude/scripts/council/council-lint\.mjs --payload|bash \.claude/scripts/hq/arc-event\.sh emit council\.verdict --payload "\$payload")' "$ARC_ROOT/.claude/commands/arc-council.md" | sed 's/^   //')"
+  [ "$(printf '%s\n' "$step" | grep -c .)" -eq 2 ] || { echo "step 9 is not the two gated lines: $step"; false; }
+  printf '%s\n' "$step" | sed 's/NNN-slug/001-ai-writing-assistant-trains-on-user-docs/' > "$BATS_TEST_TMPDIR/step9-ok.sh"
+  cd "$ARC_ROOT"
+  run bash "$BATS_TEST_TMPDIR/step9-ok.sh"
+  [ "$status" -eq 0 ] || { echo "step 9 on a real session: $status $output"; false; }
+  run grep -rh '"kind":"council.verdict"' "$ARC_SPINE_ROOT/events"
+  [[ "$output" == *'"session_id":"c-001-ai-writing-assistant-trains-on-user-docs"'* ]] && [[ "$output" == *'"call":"proceed"'* ]] || { echo "no receipt read back: $output"; false; }
+  printf '%s\n' "$step" | sed 's/NNN-slug/no-such-session/' > "$BATS_TEST_TMPDIR/step9-bad.sh"
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine9-bad"
+  mkdir -p "$ARC_SPINE_ROOT/events"
+  run bash "$BATS_TEST_TMPDIR/step9-bad.sh"
+  [ "$status" -ne 0 ] && [[ "$output" == *"council.verdict NOT emitted"* ]] || { echo "a refused derivation: $status $output"; false; }
+  run grep -rc 'council.verdict' "$ARC_SPINE_ROOT/events"
+  [[ "$output" != *":1"* ]] || { echo "a receipt landed for a refused derivation: $output"; false; }
 }
 
 @test "council-lint --payload: the call maps YES and CONDITIONAL to proceed, NO and WAIT to hold; a verdict missing its core is refused" {
@@ -102,7 +126,7 @@ setup() {
     sed "s/^DECISION: .*$/DECISION: $d/" "$SESSION" > "$WORK/map-$d.md"
     run grep -c "^DECISION: $d$" "$WORK/map-$d.md"
     [ "$output" -eq 1 ] || { echo "fixture for $d did not take"; false; }
-    run node "$LINT" --payload "$WORK/map-$d.md"
+    run node "$LINT" --payload "$WORK/map-$d.md" --sessions-dir "$WORK"
     [ "$status" -eq 0 ] || { echo "$d: $output"; false; }
     case "$d" in
       YES|CONDITIONAL) [[ "$output" == *'"call":"proceed"'* ]] || { echo "$d: $output"; false; } ;;
@@ -110,6 +134,38 @@ setup() {
     esac
   done
   grep -v '^DECISION:' "$SESSION" > "$WORK/no-decision.md"
-  run node "$LINT" --payload "$WORK/no-decision.md"
+  run node "$LINT" --payload "$WORK/no-decision.md" --sessions-dir "$WORK"
   [ "$status" -eq 1 ] && [[ "$output" == *"DECISION"* ]] || { echo "no decision: $status $output"; false; }
+}
+
+@test "council-lint --payload: usage, containment, encoding and date are refused by name, never a fall-through" {
+  # Usage: an empty value, the = form, a repeat, and a second mode are exit 2 -- never another mode's exit 0 (B3/B4).
+  run node "$LINT" --payload ""
+  [ "$status" -eq 2 ] || { echo "empty: $status $output"; false; }
+  run node "$LINT" --payload="$SESSION"
+  [ "$status" -eq 2 ] || { echo "= form: $status $output"; false; }
+  run node "$LINT" --payload "$SESSION" --payload "$SESSION"
+  [ "$status" -eq 2 ] || { echo "repeat: $status $output"; false; }
+  run node "$LINT" --payload "$SESSION" --verdict "$SESSION"
+  [ "$status" -eq 2 ] && [[ "$output" != *'"session_id"'* ]] || { echo "with --verdict: $status $output"; false; }
+  # Containment: a well-formed verdict OUTSIDE the sessions directory is not a saved session (B5).
+  cp "$SESSION" "$WORK/outside.md"
+  run node "$LINT" --payload "$WORK/outside.md" --sessions-dir "$ARC_ROOT/docs/council/sessions"
+  [ "$status" -eq 1 ] && [[ "$output" == *"not a saved session"* ]] || { echo "outside: $status $output"; false; }
+  # A directory is refused by name, never a stack (B2).
+  run node "$LINT" --payload "$WORK" --sessions-dir "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 1 ] && [[ "$output" != *"    at "* ]] || { echo "dir: $status $output"; false; }
+  # Encoding: a BOM is stripped; invalid UTF-8 is refused (B7).
+  { printf '\357\273\277'; cat "$SESSION"; } > "$WORK/bom.md"
+  run node "$LINT" --payload "$WORK/bom.md" --sessions-dir "$WORK"
+  [ "$status" -eq 0 ] || { echo "bom: $status $output"; false; }
+  { cat "$SESSION"; printf 'bad byte \377\n'; } > "$WORK/badutf.md"
+  run node "$LINT" --payload "$WORK/badutf.md" --sessions-dir "$WORK"
+  [ "$status" -eq 1 ] && [[ "$output" == *"UTF-8"* ]] || { echo "bad utf8: $status $output"; false; }
+  # A heading date that is no real day is refused, as --verdict would refuse it (B11).
+  sed 's/^\(# arc-council — .*\) ([0-9-]*)$/\1 (2026-02-31)/' "$SESSION" > "$WORK/badday.md"
+  run grep -c '(2026-02-31)$' "$WORK/badday.md"
+  [ "$output" -eq 1 ] || { echo "the bad-day fixture did not take"; false; }
+  run node "$LINT" --payload "$WORK/badday.md" --sessions-dir "$WORK"
+  [ "$status" -eq 1 ] && [[ "$output" == *"not a real day"* ]] || { echo "bad day: $status $output"; false; }
 }
