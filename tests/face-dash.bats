@@ -47,12 +47,17 @@ load 'test_helper'
   run node "$ARC_ROOT/tests/face/session-door.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
-  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok every row reached a spawn (the loop above judged 15 real starts, not 15 refusals)"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok MUTANT FAILs driver-only: the harness claude as the command"* ]] || { echo "$output"; false; }
+  # A failed check prints a line STARTING "FAIL ". Matched at the line start, never as a bare *FAIL* glob: an ok line
+  # naming a mutant once read every green run as red (attack 60c13e9 B1).
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok every other row reached a spawn (the loop judged real starts, not refusals)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by driver-only: the harness claude as the command"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a FRESH door attaches to the run door A started, while it runs"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok its receipt is read back OFF THE SPINE by the id the run printed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok its receipt is read back OFF THE SPINE THE DOOR NAMED, by the id the run printed"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a start with no click is 428 CLICK_REQUIRED"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok review-ship.ship: REFUSED until its deploy stop is enforced"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a checkout on main: BRANCH_REFUSED, nothing started"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a key the run printed is served redacted, never as written"* ]] || { echo "$output"; false; }
 }
 
 @test "live rooms: the pulse holds still, moves with the spine, stays out of the journal; a pulse re-reads every read" {

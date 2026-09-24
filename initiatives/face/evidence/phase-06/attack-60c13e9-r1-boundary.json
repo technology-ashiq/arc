@@ -1,0 +1,136 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "tests/face-dash.bats:50",
+      "breaking_input": "Run the new @test against a fully green suite. Every mutant check prints a line such as `ok MUTANT FAILs driver-only: the harness claude as the command`. The wrapper asserts `[[ \"$output\" != *\"FAIL\"* ]]` and then, two lines later, requires `[[ \"$output\" == *\"ok MUTANT FAILs driver-only: the harness claude as the command\"* ]]`.",
+      "why": "The two assertions contradict each other. The glob `*FAIL*` matches the required `MUTANT FAILs` line, so the no-FAIL assertion fails on a green run. The @test can never pass, and face-dash goes red on every CI leg. The expected-failure label was never separated from the failure marker the wrapper greps for.",
+      "fix": "Rename the mutant labels so they do not contain the FAIL token, for example `ok MUTANT REFUSED by driver-only: ...`. Update the bats assertion to match. Keep the `FAIL` grep for real failures only.",
+      "twin_of": "Selftests printed FAIL while passing -> a selftest's expected failures are labelled as expected."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "session-door.mjs:170 (spawn env) and tests/face/session-door.mjs:~40",
+      "breaking_input": "`arc-dash --spine <fixture dir>` (sim mode), then click, then POST /api/session/review-ship.review/start with driver \"mock\" against a real arc-run. The child gets `childEnv()` with no `ARC_SPINE_ROOT` pinned to `ctx.root`. arc-run therefore emits `run.completed` to whatever spine it resolves by default, which is the operator's real spine. `receiptsOf` then queries `ctx.root` (the fixture), so attach never shows the receipt.",
+      "why": "The door reads receipts from `ctx.root` but never tells the child which spine to write to. In sim mode that is a fixture-door write into the real spine, plus a receipt attach cannot see. The suite hides this by exporting `process.env.ARC_SPINE_ROOT = SPINE` into the ambient environment. Section D's receipt round-trip therefore passes whatever the door does. The test derives what it checks from something the code under test never sets.",
+      "fix": "Set `ARC_SPINE_ROOT` to `ctx.root` explicitly on the child in both modes, or refuse sim starts like the work door does. In the fixture, start with `ARC_SPINE_ROOT` deleted from the ambient env and assert the fake arc-run writes to the door's spine.",
+      "twin_of": "Two spines again (ingest, register)"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "session-door.mjs:176-179",
+      "breaking_input": "Between `spawn()` and `child.on(\"error\")` the door runs `closeSync(fd)` and `writeFileSync(session.json)`. On Windows an AV or indexer lock, or a full disk, makes the write throw EBUSY, EPERM or ENOSPC. The child is already running, but `child.on('error')` and `child.on('exit')` were never attached.",
+      "why": "start() throws INTERNAL with a live detached paid child. session.json still has `pid: null`, so `alive(null)` is false and the session reads as 'ended' while it runs. No exit.json is ever written. A later async spawn `'error'` event has no listener and is thrown as an uncaught exception, which takes down the whole door.",
+      "fix": "Attach 'error' and 'exit' listeners on the line after `spawn()`, before any bookkeeping. Wrap `closeSync` and the pid rewrite in try/catch that records the failure but still returns the started session.",
+      "twin_of": "every spawned child gets an 'error' listener before anything else"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "session-door.mjs:182-185",
+      "breaking_input": "Make `journal()` throw, for example by making the journal file unwritable. (1) The `journal({phase:\"start\"})` call after `child.unref()` throws, so POST start answers 500 INTERNAL although arc-run is running. The owner clicks again, mints a new token, and starts a second paid session. (2) The `journal({phase:\"end\"})` call sits inside the 'exit' handler outside its try/catch, so it throws inside an event callback and crashes the door.",
+      "why": "The line after the effect turns a successful start into a refusal that invites a retry. It also makes journal failure fatal to the process that hosts every other session's bookkeeping.",
+      "fix": "Wrap both journal calls in try/catch that reports to stderr. Return the started-session body regardless of journal outcome.",
+      "twin_of": "An id line that throws after the write -> the line after the effect can be lost; it can never turn the effect into a refusal."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "session-door.mjs:170",
+      "breaking_input": "The door boots with `ARC_DASH_TOKEN` in its env, as the suite's own dash child does. It starts a session on the claude-code driver whose agent runs `echo $ARC_DASH_TOKEN`. The agent then sends POST /api/session-click, and POST /api/session/<id>/start with a forged `Origin: http://127.0.0.1:<port>`, in a loop.",
+      "why": "Sessions are model-driven processes with shell tools, unlike the work door's deterministic CLIs. `childEnv()` is documented only as removing git location variables, and nothing in the diff or fixture shows the door bearer token is removed. If it survives, a session holds the credential that mints clicks and can start further sessions, so 'one session per click' is not enforced against the sessions themselves. Origin is trivially forgeable outside a browser.",
+      "fix": "Give the session child an explicit deny-list (`ARC_DASH_*`, the token, the journal dir). Add a fixture where the fake arc-run prints `Object.keys(process.env)` and the suite asserts the token is absent."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "session-door.mjs:~213 (lines map) and 236 (receipts payload)",
+      "breaking_input": "A driver or harness crash prints `ANTHROPIC_API_KEY=sk-ant-api03-...` or an `Authorization: Bearer ...` echo to stderr. It lands in run.log, and GET /api/session-run/<sid> serves it to the browser. The door's own `#token=` fragment, if echoed, leaks the same way.",
+      "why": "Attach passes raw child stdout and stderr through `scrub()`, which is the repo-path scrubber and not a secret redactor. The same holds for `scrubDeep` on receipt payloads. Provider keys reach the child by design (the `auto` driver), and ADR-1325 says no key in the browser. No fixture plants a key string in run.log.",
+      "fix": "Pass every served line through the shared secret redactor (`redactSecrets`). Add a fixture whose fake arc-run prints a planted key and asserts it is absent from read().",
+      "twin_of": "The door's stderr tail, carrying `#token=`, went into a SetupError and the public CI log -> every child stderr bound for an error passes through `redactSecrets`"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "session-door.mjs:204-207",
+      "breaking_input": "A runaway driver writes 600 MB to run.log. Every poll of the QUIET_OK route calls `readFileSync` on the whole file before slicing the 256 KB tail. `toString('utf8')` on a buffer over about 512 MB throws ERR_STRING_TOO_LONG (files over 2 GB throw ERR_FS_FILE_TOO_LARGE), so attach returns INTERNAL 500 for that session for good. Below that limit each poll allocates the full file. Separately, the log grows between `statSync(size)` and `readFileSync`, so `bytesDropped = size - LOG_TAIL` is computed from a stale size while `buf` is longer.",
+      "why": "The cap is applied after the unbounded read, not before it. The header's 'bytes dropped' figure then comes from a different read than the content it describes. It understates the loss, and the tail served is longer than LOG_TAIL.",
+      "fix": "Open the file, read only the last LOG_TAIL bytes with `readSync` at `max(0, size-LOG_TAIL)`, and take `size` from `fstatSync` on the same descriptor. Compute `bytesDropped` from that. Consider a size ceiling on the log, and decode the head to a character boundary.",
+      "twin_of": "An unbounded fragment beside a capped buffer -> cap the line as well as the buffer."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "session-door.mjs:133-186",
+      "breaking_input": "An authenticated script loops `POST /api/session-click` then `POST /api/session/<id>/start` with driver auto, 200 times. Or, for one row with identical input, two clicks on `develop.close-phase` {lane:'face',phase:'06'} run concurrently.",
+      "why": "Every call spawns a new detached paid arc-run that outlives the door. Nothing counts running sessions, applies a ceiling, or excludes a second start of the same (row, input). Two concurrent phase-close or ship runs race on the same files, branch and deploy. The click token limits the request rate, not the number of live children.",
+      "fix": "Before spawning, derive running sessions from the session directories (`stateOf === running`). Refuse above a small ceiling with a named code. Refuse a second running session with the same row and input digest."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": "face-sessions.mjs:77 and session-door.mjs:133-186",
+      "breaking_input": "Add `processes/ship-run.process.yaml` to the tree (the next PR does this). Then click review-ship.ship. The row carries `confirmStep: \"deploy\"`, but start() never reads it. It spawns `arc-run --process ship-run --driver auto` and the deploy step runs on one click.",
+      "why": "`confirmStep` is dead data. It appears only in `sessionsView`. Neither `sessionCommand`, `driverOnly` nor `start` passes or enforces any stop-before-deploy. The spec requires that no deploy step runs without the owner's confirmation. The moment the process file exists the row flips from NO_PROCESS to an unattended outward action. No fixture pins the requirement.",
+      "fix": "Have start() refuse any row with `confirmStep` unless the door also passes and enforces the confirm-step argument arc-run honours. Otherwise keep the row un-shippable. Add the fixture that a ship start cannot reach the deploy step."
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": "session-door.mjs:170",
+      "breaking_input": "The door runs from a checkout whose HEAD is `main`. The owner clicks a file-writing verb once its process exists: `strategy.record-adr`, `memory.log-lesson` or `org.lane-birth`. Nothing checks the branch, so arc-run's writes land in the working tree of `main`.",
+      "why": "The brief's non-negotiable is branch-only writes: `main` is untouchable and file-touching work goes to a `feat/face-*` branch. The session door spawns with `cwd: ctx.repo` and inherits whatever branch is checked out, with no `git branch --show-current` check before the spawn.",
+      "fix": "In start(), read the current branch through the one bounded git helper. Refuse a row that writes files when the branch is `main` or not a `feat/*` branch, with a named code. Add a fixture for it.",
+      "twin_of": "A guard reading the wrong tree -> check the tree the write is based on."
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": "tests/face/session-door.mjs:29,158,233,258",
+      "breaking_input": "(1) A previous run of this suite crashed mid-E, so `dash.kill()` never ran because there is no finally. The orphan door still holds 8435 with the same TOKEN. On the next run, the new `dash` fails to bind, but `/api/health` is answered by the orphan (stale code, stale journal), so the 'came up' check passes and E judges a stale door. (2) `bare` starts `review-ship.qa` against the real REPO, which today has no `qa-run.process.yaml`. When slice 04 adds that file the check flips red. (3) `tmp` from `mkdtempSync` is never removed.",
+      "why": "The suite has a fixed port with no free-port pre-flight. It never confirms that the child it spawned is the one answering. It also depends on ambient repo state and leaks a temp directory each run.",
+      "fix": "Pick a free port and assert `dash.exitCode === null` when 'up'. Kill in a finally. Use a scratch tree without the process for the NO_PROCESS check. Remove `tmp` at the end and WARN naming the path if that fails.",
+      "twin_of": "Pre-flighted the APP port and not the DOOR port -> any twin resource (two ports, two children, two temp dirs) gets the same check twice."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "face-sessions.mjs:206; tests/face/session-door.mjs:258 and its door-A starter (`process.exit(0)` after `console.log`)",
+      "breaking_input": "Run `face-sessions.mjs --bogus` on Windows with stderr piped. `process.stderr.write(usage)` is followed at once by `process.exit(2)`. Separately, the starter prints its JSON and then calls `process.exit(0)`, and the suite ends with `process.exit(...)` right after the `RAN:` line.",
+      "why": "`process.exit()` behind a pending pipe write can truncate the last line on Windows. A lost `RAN:` line or a torn JSON line makes the suite fail intermittently, or makes the CLI usage message vanish. It is the fixed-defects row reintroduced in a new CLI and a new suite.",
+      "fix": "Set `process.exitCode` and let the loop drain. In the starter, rely on `child.unref()` so the loop ends by itself.",
+      "twin_of": "`process.exit()` raced libuv teardown on Windows -> set `process.exitCode` and let the loop drain."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "face-sessions.mjs:110,47-49,117-119",
+      "breaking_input": "`mkdir processes/qa-run.process.yaml` (a directory), or a symlink to a file outside the tree. `processFileOf` uses `existsSync`, so the row reports `processReady: true` and start() spends the click and spawns arc-run, which then fails. Separately, if `engine/drivers` or `processes` is momentarily unreadable at boot, `sessionDrivers()` and `processNames()` return `[]`. With drivers cached once, every named driver is BAD_DRIVER until the door restarts.",
+      "why": "`existsSync` is true for a directory and follows symlinks. The catch-to-empty turns 'unreadable' into 'no drivers' and 'no processes', which are different results.",
+      "fix": "Require `statSync(p).isFile()` on the realpath, contained in `processes/`. Make an unreadable directory a named error, not `[]`.",
+      "twin_of": "`existsSync` accepted a directory as an executable, and a spawn error was an unhandled `'error'` event -> require `isFile()`"
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": "session-door.mjs:118-130",
+      "breaking_input": "Plant a junction `sessions/AAAAAAAAAAAAAAAA` pointing at another directory that holds a forged `session.json` and `exit.json`. GET /api/sessions serves that record and its state without any containment check, while `dirOf` (used by read) refuses it. Also, every start adds a directory that is never pruned. Each list() parses every `session.json`, sorts them all, and only then slices to 20.",
+      "why": "list() is a second directory walk without the realpath fence that `dirOf` applies. It also does unbounded work that grows with every session ever started.",
+      "fix": "Route list() through the same realpath containment as `dirOf`. Bound the walk (stat and sort by directory name or mtime first, then read only the newest 20).",
+      "twin_of": "The junction twin, again -> round 2's apiSlices line, in the one other directory walk that had it."
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": "session-door.mjs:165,178,181",
+      "breaking_input": "An attach poll lands between the truncate and the write of `writeFileSync(exit.json)` in the exit handler. `readJson` returns null, `alive(pid)` is already false for the exited process, and the session reads `ended` with 'the door did not see this run end', when the door did see it end. The same window on session.json makes read() throw UNKNOWN_RUN 'record is unreadable'.",
+      "why": "The state files are rewritten in place while another reader polls them. A torn read is served as a definitive terminal answer, and a UI that stops polling on 'ended' keeps the wrong state.",
+      "fix": "Write to a temp file in the same directory and `renameSync` over the target. Have `stateOf` treat an unparseable `exit.json` as 'unreadable, retry' rather than falling through to `alive()`."
+    }
+  ]
+}

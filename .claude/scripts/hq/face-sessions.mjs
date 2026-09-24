@@ -20,8 +20,8 @@
 //
 // Exit: 0 printed | 2 bad arguments.
 
-import { existsSync, readdirSync, realpathSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readdirSync, realpathSync, statSync } from "node:fs";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ONE_LINE_SRC } from "../core/one-line.mjs";
@@ -37,16 +37,15 @@ export const SESSION_SCRIPT = "engine/arc-run.mjs";
  */
 export const HARNESS_BINARIES = Object.freeze(["claude", "claude-code", "codex", "hermes", "gemini", "opencode", "aider", "cursor-agent", "goose", "amp"]);
 
-/** The drivers arc-run can select, read off engine/drivers/ -- never written down twice. */
+/**
+ * The drivers arc-run can select, read off engine/drivers/ -- never written down twice. An unreadable directory THROWS:
+ * "could not read" and "there are none" are different answers, and the second would refuse every driver as unknown.
+ */
 export function sessionDrivers() {
-  try {
-    return readdirSync(join(HERE, "..", "engine", "drivers"))
-      .filter((f) => f.endsWith(".mjs") && f !== "common.mjs")
-      .map((f) => f.slice(0, -4))
-      .sort();
-  } catch {
-    return [];
-  }
+  return readdirSync(join(HERE, "..", "engine", "drivers"))
+    .filter((f) => f.endsWith(".mjs") && f !== "common.mjs")
+    .map((f) => f.slice(0, -4))
+    .sort();
 }
 
 const PROCESS_RE = /^[a-z][a-z0-9-]{0,63}$/;
@@ -72,7 +71,8 @@ const row = (id, room, label, process, kind, fields, more = {}) => Object.freeze
   fields: Object.freeze(fields),
   // Every session reaches a model through arc-run's router: it spends unless the driver is mock.
   spends: true,
-  // ship deploys outward: its session stops for the owner's confirmation before the deploy step (phase 06 spec).
+  // ship deploys outward: its session stops for the owner's confirmation before the deploy step (phase 06 spec). The door
+  // refuses such a row (CONFIRM_STEP_UNENFORCED) until that stop is carried to arc-run and enforced there.
   confirmStep: more.confirmStep || null,
   // dispatch runs a process the owner names; every other row runs its own.
   pickProcess: more.pickProcess === true,
@@ -103,11 +103,21 @@ export function sessionById(id) {
   return s;
 }
 
-/** Is `name` a process arc-run can start in `repo`? @param {string} repo @param {string} name */
+/**
+ * Is `name` a process arc-run can start in `repo`? A FILE, resolving inside processes/ -- a directory of that name, or a
+ * link out of the tree, is not a process (existsSync said yes to both).
+ * @param {string} repo @param {string} name
+ */
 export function processFileOf(repo, name) {
-  if (!PROCESS_RE.test(name)) return null;
+  if (typeof name !== "string" || !PROCESS_RE.test(name)) return null;
   const p = join(repo, "processes", `${name}.process.yaml`);
-  return existsSync(p) ? p : null;
+  try {
+    const real = realpathSync(p);
+    if (!real.startsWith(realpathSync(join(repo, "processes")) + sep)) return null;
+    return statSync(real).isFile() ? p : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The processes on this tree, for dispatch's select. @param {string} repo */
@@ -184,7 +194,7 @@ export function driverOnly(cmd, drivers = sessionDrivers()) {
 export function sessionsView(repo) {
   return SESSIONS.map((s) => ({
     id: s.id, room: s.room, label: s.label, process: s.process || null,
-    processReady: s.pickProcess ? processNames(repo).length > 0 : processFileOf(repo, s.process) !== null,
+    processReady: s.confirmStep ? false : s.pickProcess ? processNames(repo).length > 0 : processFileOf(repo, s.process) !== null,
     receipt: s.receipt, fields: s.fields, spends: s.spends, confirmStep: s.confirmStep, pickProcess: s.pickProcess,
   }));
 }
@@ -202,8 +212,10 @@ function isMainModule() {
 if (isMainModule()) {
   const args = process.argv.slice(2);
   if (args.length !== 1 || args[0] !== "--list") {
+    // exitCode, never exit(): exit() behind a pending pipe write can cut the line on Windows.
     process.stderr.write("usage: face-sessions.mjs --list\n");
-    process.exit(2);
+    process.exitCode = 2;
+  } else {
+    process.stdout.write(JSON.stringify({ sessions: sessionsView(join(HERE, "..", "..", "..")), drivers: sessionDrivers() }, null, 2) + "\n");
   }
-  process.stdout.write(JSON.stringify({ sessions: sessionsView(join(HERE, "..", "..", "..")), drivers: sessionDrivers() }, null, 2) + "\n");
 }
