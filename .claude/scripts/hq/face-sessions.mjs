@@ -18,10 +18,10 @@
 // Usage:
 //   face-sessions.mjs --list    the registry as JSON (what face-coverage and the fixtures read)
 //
-// Exit: 0 printed | 2 bad arguments.
+// Exit: 0 printed | 2 bad arguments, or engine/drivers unreadable (said in one line).
 
 import { readdirSync, realpathSync, statSync } from "node:fs";
-import { dirname, join, sep } from "node:path";
+import { dirname, isAbsolute, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ONE_LINE_SRC } from "../core/one-line.mjs";
@@ -180,7 +180,11 @@ export function driverOnly(cmd, drivers = sessionDrivers()) {
     seen.add(flag);
     if (i + 1 >= args.length) return `${flag} has no value`;
     const value = args[i + 1];
+    if (value === "") return `${flag} has an empty value`;
     if (!FREE_VALUE.has(flag) && /\s/.test(value)) return `the value of ${flag} holds whitespace -- a joined argv, not one value per slot`;
+    // A relative or empty transcript path resolves against arc-run's cwd -- the tracked repo root, where raw model
+    // transcripts must never be written (attack 8e389a5 B10).
+    if (flag === "--transcript-dir" && !isAbsolute(value)) return `--transcript-dir "${value}" is not an absolute path`;
     if (flag === "--input") {
       let parsed;
       try { parsed = JSON.parse(value); } catch { return "--input is not JSON"; }
@@ -216,6 +220,13 @@ if (isMainModule()) {
     process.stderr.write("usage: face-sessions.mjs --list\n");
     process.exitCode = 2;
   } else {
-    process.stdout.write(JSON.stringify({ sessions: sessionsView(join(HERE, "..", "..", "..")), drivers: sessionDrivers() }, null, 2) + "\n");
+    // The library throws on an unreadable driver directory; the CLI says so in one line, never as a stack with paths.
+    let drivers = null;
+    try { drivers = sessionDrivers(); }
+    catch (e) {
+      process.stderr.write(`face-sessions: cannot read engine/drivers (${/** @type {any} */ (e).code || "error"})\n`);
+      process.exitCode = 2;
+    }
+    if (drivers) process.stdout.write(JSON.stringify({ sessions: sessionsView(join(HERE, "..", "..", "..")), drivers }, null, 2) + "\n");
   }
 }

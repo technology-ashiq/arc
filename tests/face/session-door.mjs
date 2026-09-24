@@ -28,7 +28,7 @@ import { EventEmitter } from "node:events";
 import { createServer } from "node:net";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -63,23 +63,30 @@ const git = (args) => spawnSync("git", args, { cwd: TREE, encoding: "utf8" });
 const gi = git(["init", "-q"]);
 const gb = git(["symbolic-ref", "HEAD", "refs/heads/feat/session-fixture"]);
 const RELEASE = join(tmp, "release");
-process.env.SESSION_FIXTURE_EVENT = EVENT;
-process.env.SESSION_FIXTURE_RELEASE = RELEASE;
-// It prints two phase lines, says whether it can see the door's token, prints a planted key, writes a real note.logged
-// through arc-event (to whatever spine its env names), names it the way arc-run names its receipt, then waits for the
+// The fake reads its config from a file beside it: the session env is an allow-list, so a SESSION_FIXTURE_* variable
+// would never reach it (and a fixture that widened the allow-list to pass one would test nothing).
+writeFileSync(join(TREE, ".claude", "scripts", "engine", "fixture.json"), JSON.stringify({ event: EVENT, release: RELEASE }));
+// It prints two phase lines; says which of the door's token and the owner's deploy/VCS tokens it can see; prints a
+// planted key; writes two real note.logged receipts through arc-event (to whatever spine its env names) -- the first
+// named the way arc-run names a receipt, the second named as a kind it is not, then printed bare; then waits for the
 // suite to release it -- so the suite can attach while it is provably still running.
 writeFileSync(join(TREE, ".claude", "scripts", "engine", "arc-run.mjs"), [
   "import { spawnSync } from \"node:child_process\";",
-  "import { existsSync } from \"node:fs\";",
+  "import { existsSync, readFileSync } from \"node:fs\";",
+  "const cfg = JSON.parse(readFileSync(new URL(\"./fixture.json\", import.meta.url), \"utf8\"));",
   "console.log(\"phase: one -- \" + process.argv.slice(2, 6).join(\" | \"));",
   "console.log(\"phase: two\");",
-  "console.log(\"dash-token: \" + (process.env.ARC_DASH_TOKEN === undefined ? \"absent\" : \"present\"));",
+  "const seen = [\"ARC_DASH_TOKEN\", \"VERCEL_TOKEN\", \"GH_TOKEN\", \"LEADS_CONFIG\"].filter((k) => process.env[k] !== undefined);",
+  "console.log(\"env-leak: \" + (seen.length ? seen.join(\",\") : \"none\"));",
   "console.log(\"leak: sk-ant-api03-\" + \"A\".repeat(40));",
-  "const r = spawnSync(process.execPath, [process.env.SESSION_FIXTURE_EVENT, \"emit\", \"note.logged\", \"--payload\", JSON.stringify({ note: \"session-fixture\" })], { encoding: \"utf8\" });",
-  "const id = String(r.stdout).trim().split(/\\r?\\n/).pop();",
+  "const emit = () => String(spawnSync(process.execPath, [cfg.event, \"emit\", \"note.logged\", \"--payload\", JSON.stringify({ note: \"session-fixture\" })], { encoding: \"utf8\" }).stdout).trim().split(/\\r?\\n/).pop();",
+  "const id = emit();",
   "console.error(\"arc-run: receipt note.logged \" + id);",
+  "const other = emit();",
+  "console.error(\"arc-run: receipt council.verdict \" + other);",
+  "console.log(\"bare: \" + other);",
   "const until = Date.now() + 20000;",
-  "while (!existsSync(process.env.SESSION_FIXTURE_RELEASE) && Date.now() < until) await new Promise((res) => setTimeout(res, 50));",
+  "while (!existsSync(cfg.release) && Date.now() < until) await new Promise((res) => setTimeout(res, 50));",
   "console.log(\"phase: three\");",
   "",
 ].join("\n"));
@@ -104,6 +111,12 @@ function recorder(pid) {
 }
 const inputFor = (s) => Object.fromEntries(s.fields.filter((f) => f.required).map((f) => [f.name, f.name === "lane" ? "face" : f.name === "phase" ? "06" : f.name === "url" ? "http://localhost:3000" : "a question with spaces"]));
 const door = (repo, journal, o = {}) => DOOR.createSessionDoor({ mode: o.mode || "live", root: SPINE, repo, journalDir: join(tmp, journal) }, { drivers, branch: onFeat, ...o });
+
+// Planted in the door's own env: a session is a model with shell tools, and none of these is its business (attack 8e389a5 B2).
+process.env.ARC_DASH_TOKEN = "planted-dash-token-0123456789";
+process.env.VERCEL_TOKEN = "planted-vercel-token";
+process.env.GH_TOKEN = "planted-gh-token";
+process.env.LEADS_CONFIG = "planted-leads-config";
 
 // ---- A. driver-only, every row ----
 {
@@ -134,8 +147,10 @@ const door = (repo, journal, o = {}) => DOOR.createSessionDoor({ mode: o.mode ||
   const confirmRows = SESS.SESSIONS.filter((s) => s.confirmStep).length;
   check("every other row reached a spawn (the loop judged real starts, not refusals)", confirmRows === 1 && started === 14 && rec.calls.length === 14, `started=${started} spawns=${rec.calls.length}`);
   const env = rec.calls[0] && rec.calls[0].opts.env;
-  check("the child is told the door's spine, and never sees the door's own ARC_DASH_* variables",
-    env && env.ARC_SPINE_ROOT === SPINE && Object.keys(env).every((k) => !k.toUpperCase().startsWith("ARC_DASH_")), JSON.stringify(env && env.ARC_SPINE_ROOT));
+  check("the child is told the door's spine, keeps PATH, and sees none of the door's ARC_DASH_*, the owner's deploy/VCS tokens or the leads steering list",
+    env && env.ARC_SPINE_ROOT === SPINE && Object.keys(env).some((k) => k.toUpperCase() === "PATH")
+    && Object.keys(env).every((k) => !k.toUpperCase().startsWith("ARC_DASH_") && !["VERCEL_TOKEN", "GH_TOKEN", "LEADS_CONFIG"].includes(k.toUpperCase())),
+    JSON.stringify(env && Object.keys(env).filter((k) => /TOKEN|DASH|LEADS/i.test(k))));
   const words = d.start("council.convene", { click: d.click().click, input: { question: "should we --driver claude ship now" }, driver: "codex" });
   const wc = rec.calls[rec.calls.length - 1];
   check("the owner's words stay ONE value: a question holding a flag and a space is the --input JSON, never an argument; the named driver is the --driver value",
@@ -144,7 +159,7 @@ const door = (repo, journal, o = {}) => DOOR.createSessionDoor({ mode: o.mode ||
 
 // ---- B. the mutants driverOnly must refuse ----
 {
-  const good = SESS.sessionCommand("review-diff", "auto", { base: "main" }, "some dir/with space");
+  const good = SESS.sessionCommand("review-diff", "auto", { base: "main" }, join(tmp, "some dir", "with space"));
   check("positive control: the real argv passes, a transcript path with a space included", SESS.driverOnly(good, DRIVERS) === null, SESS.driverOnly(good, DRIVERS) || "");
   const mutants = [
     ["the harness claude as the command", { script: "claude", args: ["-p", "review the diff"] }],
@@ -159,6 +174,8 @@ const door = (repo, journal, o = {}) => DOOR.createSessionDoor({ mode: o.mode ||
     ["--process given twice", { script: "engine/arc-run.mjs", args: [...good.args, "--process", "kickoff-plan"] }],
     ["a flag with no value", { script: "engine/arc-run.mjs", args: ["--process", "review-diff", "--driver", "auto", "--input"] }],
     ["--input that is no JSON object", { script: "engine/arc-run.mjs", args: ["--process", "review-diff", "--driver", "auto", "--input", "[1]"] }],
+    ["an empty --transcript-dir", { script: "engine/arc-run.mjs", args: ["--process", "review-diff", "--driver", "auto", "--transcript-dir", ""] }],
+    ["a relative --transcript-dir (resolves into the tracked repo)", { script: "engine/arc-run.mjs", args: ["--process", "review-diff", "--driver", "auto", "--transcript-dir", ".."] }],
   ];
   // "REFUSED", never the word the bats wrapper reads as a failed check (attack B1).
   for (const [name, cmd] of mutants) check(`MUTANT REFUSED by driver-only: ${name}`, SESS.driverOnly(cmd, DRIVERS) !== null);
@@ -184,6 +201,9 @@ const door = (repo, journal, o = {}) => DOOR.createSessionDoor({ mode: o.mode ||
   d.list();
   check("list() spawns nothing", rec.calls.length === 1);
   check("dispatch takes only a process on this tree", codeOf(() => d.start("executor.dispatch", { click: d.click().click, input: {}, process: "../../etc" })) === "NO_PROCESS" && rec.calls.length === 1);
+  check("positive control: ship-run's process file IS on the scratch tree", existsSync(join(TREE, "processes", "ship-run.process.yaml")));
+  check("dispatch naming ship's process is held back BY NAME: CONFIRM_STEP_UNENFORCED, nothing started",
+    codeOf(() => d.start("executor.dispatch", { click: d.click().click, input: {}, process: "ship-run" })) === "CONFIRM_STEP_UNENFORCED" && rec.calls.length === 1);
 
   // A scratch tree of its own for NO_PROCESS: never the repo, whose processes/ other lanes grow (attack B11).
   const BARE = join(tmp, "bare");
@@ -219,28 +239,30 @@ const door = (repo, journal, o = {}) => DOOR.createSessionDoor({ mode: o.mode ||
   const JOURNAL = join(tmp, "journal-d");
   const starter = join(tmp, "door-a.mjs");
   // No process.exit(): the detached child is unref'd, so the loop ends by itself once the line is written (attack B12).
+  // The starter inherits this suite's env, planted tokens and all: the door must strip them, not the suite.
   writeFileSync(starter, [
-    "process.env.ARC_DASH_TOKEN = \"planted-dash-token-0123456789\";",
     `const DOOR = await import(${JSON.stringify(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "session-door.mjs")).href)});`,
     `const door = DOOR.createSessionDoor({ mode: "live", root: ${JSON.stringify(SPINE)}, repo: ${JSON.stringify(TREE)}, journalDir: ${JSON.stringify(JOURNAL)} }, { drivers: () => ${JSON.stringify(DRIVERS)} });`,
-    "const out = door.start(\"review-ship.review\", { click: door.click().click, input: { base: \"main\" }, driver: \"mock\" });",
+    "const out = door.start(\"memory.log-lesson\", { click: door.click().click, input: { lesson: \"a session is its directory\" }, driver: \"mock\" });",
     "console.log(JSON.stringify(out));",
     "",
   ].join("\n"));
   const a = spawnSync(process.execPath, [starter], { cwd: REPO, encoding: "utf8", env: process.env, timeout: 30_000 });
   let started = null;
   try { started = JSON.parse(String(a.stdout).trim().split(/\r?\n/).pop()); } catch { /* checked below */ }
-  check("door A started a session and ENDED (vacuous-pass guard)", a.status === 0 && started && /^[A-Za-z0-9_-]{16}$/.test(started.sid), `${a.status} ${a.stderr}`);
+  check("door A started a session on the REAL branch reader and ENDED (vacuous-pass guard)",
+    a.status === 0 && started && /^[0-9a-z]{9}[A-Za-z0-9_-]{7}$/.test(started.sid) && started.branch === "feat/session-fixture", `${a.status} ${a.stderr}`);
   if (started) {
     const b = DOOR.createSessionDoor({ mode: "live", root: SPINE, repo: TREE, journalDir: JOURNAL }, { drivers });
     let mid = null;
     for (let i = 0; i < 200; i++) {
       mid = await b.read(started.sid);
-      if (mid.lines.some((l) => l.startsWith("arc-run: receipt"))) break;
+      if (mid.lines.some((l) => l.startsWith("bare: "))) break;
       await sleep(50);
     }
-    check("a FRESH door attaches to the run door A started, while it runs", mid && mid.state === "running" && mid.session === "review-ship.review", JSON.stringify(mid && { state: mid.state, lines: mid.lines }));
+    check("a FRESH door attaches to the run door A started, while it runs", mid && mid.state === "running" && mid.session === "memory.log-lesson" && Number.isInteger(mid.pid), JSON.stringify(mid && { state: mid.state, lines: mid.lines }));
     check("the command it shows is arc-run with --process and --driver", mid && mid.command[1] === ".claude/scripts/engine/arc-run.mjs" && mid.command[2] === "--process" && mid.command[4] === "--driver" && mid.command[5] === "mock", JSON.stringify(mid && mid.command));
+    check("the checkout has not moved, and attach does not claim it has", mid && mid.branch === "feat/session-fixture" && mid.branchMoved === undefined, JSON.stringify(mid && mid.branchMoved));
     writeFileSync(RELEASE, "go");
     let end = null;
     for (let i = 0; i < 200; i++) {
@@ -252,39 +274,63 @@ const door = (repo, journal, o = {}) => DOOR.createSessionDoor({ mode: o.mode ||
     check("the lines stream in the order the run wrote them, stdout and stderr in one file",
       end && idx("phase: one") >= 0 && idx("phase: one") < idx("phase: two") && idx("phase: two") < idx("arc-run: receipt") && idx("arc-run: receipt") < idx("phase: three"), JSON.stringify(end && end.lines));
     check("no door saw the end, and the attach says so rather than inventing an exit", end && end.state === "ended" && end.exit === null && typeof end.note === "string", JSON.stringify(end && { state: end.state, exit: end.exit }));
-    const printed = (end.lines.find((l) => l.startsWith("arc-run: receipt")) || "").split(" ").pop();
-    check("its receipt is read back OFF THE SPINE THE DOOR NAMED, by the id the run printed",
-      end.receipts.length === 1 && end.receipts[0].id === printed && end.receipts[0].kind === "note.logged" && end.receipts[0].named === true, JSON.stringify(end.receipts));
-    check("the run never saw the door's token", end.lines.includes("dash-token: absent"), JSON.stringify(end.lines));
+    const namedLines = end.lines.filter((l) => l.startsWith("arc-run: receipt"));
+    const credited = (namedLines[0] || "").split(" ").pop();
+    const miskinded = (namedLines[1] || "").split(" ").pop();
+    check("fixture: the run named two receipts, one as its own kind and one as a kind it is not (vacuous-pass guard)", namedLines.length === 2 && credited !== miskinded, JSON.stringify(namedLines));
+    check("its receipt is read back OFF THE SPINE THE DOOR NAMED, credited because arc-run's line named the row's own kind",
+      end.receipts.length === 1 && end.receipts[0].id === credited && end.receipts[0].kind === "note.logged" && end.receipts[0].attributedBy === "named-line", JSON.stringify(end.receipts));
+    check("a real event the run named as ANOTHER kind, and printed bare, is unattributed -- never a receipt",
+      Array.isArray(end.unattributed) && end.unattributed.includes(miskinded) && !end.receipts.some((r) => r.id === miskinded), JSON.stringify(end.unattributed));
+    check("the run never saw the door's token, the owner's deploy/VCS tokens or the leads steering list", end.lines.includes("env-leak: none"), JSON.stringify(end.lines.filter((l) => l.startsWith("env-leak"))));
     check("a key the run printed is served redacted, never as written",
       end.lines.every((l) => !l.includes("sk-ant-api03-")) && end.lines.some((l) => l.includes("[anthropic-key redacted]")), JSON.stringify(end.lines));
     const listed = b.list().runs.find((r) => r.sid === started.sid);
-    check("the run is on the fresh door's list, read from disk", listed && listed.session === "review-ship.review");
+    check("the run is on the fresh door's list, read from disk", listed && listed.session === "memory.log-lesson");
+    check("the child was told only its transcript directory, never the door's session directory",
+      !end.command.some((a) => a.includes(`sessions${sep}${started.sid}`) || a.includes(`sessions/${started.sid}`)), JSON.stringify(end.command));
   }
   const c = DOOR.createSessionDoor({ mode: "live", root: SPINE, repo: TREE, journalDir: JOURNAL }, { drivers });
   check("attach refuses an id that is not a session id, and one that is not on disk",
-    (await c.read("../../etc").then(() => null, (e) => e.code)) === "BAD_RUN_ID" && (await c.read("AAAAAAAAAAAAAAAA").then(() => null, (e) => e.code)) === "UNKNOWN_RUN");
+    (await c.read("../../etc").then(() => null, (e) => e.code)) === "BAD_RUN_ID" && (await c.read("000000000AAAAAAA").then(() => null, (e) => e.code)) === "UNKNOWN_RUN");
 }
 
-// ---- E. attach from disk: the tail cap and a torn exit.json ----
+// ---- E. attach from disk: the tail cap, a cut key, torn and forged state, stale and moved sessions ----
 {
   const JOURNAL = join(tmp, "journal-e");
-  const mk = (sid, log, exitRaw) => {
+  const mk = (sid, log, exitRaw, meta = {}) => {
     const d = join(JOURNAL, "sessions", sid);
     mkdirSync(d, { recursive: true });
-    writeFileSync(join(d, "session.json"), JSON.stringify({ sid, session: "review-ship.review", process: "review-diff", driver: "mock", startedAt: Date.now(), pid: 2 ** 30, argv: [] }));
+    writeFileSync(join(d, "session.json"), JSON.stringify({ sid, session: "review-ship.review", process: "review-diff", driver: "mock", startedAt: Date.now(), pid: 2 ** 30, argv: [], ...meta }));
     writeFileSync(join(d, "run.log"), log);
     if (exitRaw !== undefined) writeFileSync(join(d, "exit.json"), exitRaw);
   };
-  // 300 KB of three-byte characters, then one last line: the tail's head lands mid-character on a real cut.
-  mk("BIGLOGBIGLOGBIG0", Buffer.concat([Buffer.from("அ".repeat(100_000) + "\n", "utf8"), Buffer.from("tail-line\n", "utf8")]), JSON.stringify({ exit: 0, signal: null }));
-  mk("TORNEXITTORNEX00", "one\n", "{\"exit\": 0");
-  const d = DOOR.createSessionDoor({ mode: "live", root: SPINE, repo: TREE, journalDir: JOURNAL }, { drivers });
-  const big = await d.read("BIGLOGBIGLOGBIG0");
-  check("a log past the cap: its TAIL, the dropped bytes counted, no torn character at the head",
-    big.bytesDropped > 0 && big.lines[big.lines.length - 1] === "tail-line" && !big.lines[0].startsWith("�") && big.state === "done", `dropped=${big.bytesDropped} first=${JSON.stringify(big.lines[0].slice(0, 4))}`);
-  const torn = await d.read("TORNEXITTORNEX00");
+  const done = JSON.stringify({ exit: 0, signal: null, endedAt: Date.now() });
+  // 300 KB of three-byte characters ending in a planted key, then one last line: the tail's head lands mid-line, and
+  // mid-character, inside the key's line.
+  mk("000000001biglog0", Buffer.from("அ".repeat(100_000) + " sk-ant-api03-" + "B".repeat(40) + "\ntail-line\n", "utf8"), done);
+  // A key straddling the 8192-character line cap: redacted whole BEFORE the cut.
+  mk("000000002keycap0", "y".repeat(8185) + " sk-ant-api03-" + "C".repeat(40) + "\n", done);
+  mk("000000003tornex0", "one\n", "{\"exit\": 0");
+  mk("000000004nullex0", "one\n", "null");
+  mk("000000005stale00", "one\n", undefined, { pid: process.pid, startedAt: Date.now() - 7 * 3_600_000 });
+  mk("000000006moved00", "one\n", undefined, { pid: process.pid, branch: "feat/session-fixture" });
+  const d = DOOR.createSessionDoor({ mode: "live", root: SPINE, repo: TREE, journalDir: JOURNAL }, { drivers, branch: () => "main" });
+  const big = await d.read("000000001biglog0");
+  check("a log past the cap: its TAIL, the partial first line dropped and counted, the key in it never served",
+    big.lines.length === 1 && big.lines[0] === "tail-line" && big.bytesDropped > 256 * 1024 / 8 && big.lines.every((l) => !l.includes("api03")) && big.state === "done",
+    `dropped=${big.bytesDropped} lines=${JSON.stringify(big.lines.map((l) => l.slice(0, 12)))}`);
+  const cap = await d.read("000000002keycap0");
+  // The marker itself may be cut at 8192; what must hold is that the key was replaced before the cut, not after.
+  check("a key straddling the line cap is redacted whole, then cut", cap.lines[0].includes("[anthropic-key") && !cap.lines[0].includes("api03") && !cap.lines[0].includes("CCCCCCCC"), cap.lines[0].slice(-80));
+  const torn = await d.read("000000003tornex0");
   check("a torn exit.json reads UNKNOWN (read again), never a terminal answer", torn.state === "unknown" && typeof torn.note === "string", torn.state);
+  const forged = await d.read("000000004nullex0");
+  check("an exit.json of the wrong shape (null) is not state: UNKNOWN, never done or ended", forged.state === "unknown", forged.state);
+  const stale = await d.read("000000005stale00");
+  check("a live pid past the age ceiling is STALE and holds no slot", stale.state === "stale" && typeof stale.note === "string", stale.state);
+  const moved = await d.read("000000006moved00");
+  check("a running session whose checkout moved off its branch says so", moved.state === "running" && moved.branchMoved && moved.branchMoved.from === "feat/session-fixture" && moved.branchMoved.to === "main", JSON.stringify(moved.branchMoved));
 }
 
 // ---- F. the routes, through arc-dash in sim mode, on a free port ----

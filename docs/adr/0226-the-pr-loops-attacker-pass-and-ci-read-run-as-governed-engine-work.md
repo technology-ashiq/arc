@@ -75,6 +75,9 @@ startup context before it does any work, so each PR round paid that toll twice. 
 **Still binding:** attacks run through `/arc-attack` and never as inline general-purpose agents, and they run from
 the main clone, because `arc-run` writes no receipt from a worktree. CI is read per job through `ci-digest`.
 Changed: `CLAUDE.md` (the session-boundary line) and `.claude/commands/arc-attack.md` ("Where this runs").
+Missed, and fixed 2026-09-24 in face PR #269: that command's step 3 still said "Stop there -- fix in the NEXT
+session". A session followed it after a round-1 attack and handed 15 findings back to the owner. Step 3 now says
+the building session fixes, runs round 2, reads CI and merges, all in the same session.
 
 ## Related
 

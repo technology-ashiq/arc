@@ -40,6 +40,10 @@ Run it from the **main clone**, because `arc-run` writes no receipt from a linke
    Exit codes: `0` both ran · `1` a run failed or answered the wrong surface · `2` usage ·
    `3/4/5` lane · `6` empty diff · `7` logic NOT RUN.
 
-3. **Stop there.** No fixing, no commit, no push. Each finding becomes a fix slice in the NEXT
-   interactive session (`/arc-resume`, then `/arc-develop`), and every fixed hole is appended to the
-   lane's `fixed-defects.md` so the next attacker carries it.
+3. **The attacker only reports; the building session fixes, in this same session** (ADR-0226
+   Amendment 1). Fix every critical, high and medium finding now, as a fix slice of the current
+   phase. Append each fixed hole to the lane's `fixed-defects.md` so the next attacker carries it.
+   Then commit, push, and run `--round 2` against the fixes. After round 2, LOW leftovers go to the
+   debt ledger. Read CI per job with `ci-digest`, fix anything red here too, and merge on green.
+   Never stop at a findings list and hand it to "the next session": a new session costs ~100k tokens
+   and adds no independence.

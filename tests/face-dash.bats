@@ -53,7 +53,10 @@ load 'test_helper'
   [[ "$output" == *"ok every other row reached a spawn (the loop judged real starts, not refusals)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok MUTANT REFUSED by driver-only: the harness claude as the command"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a FRESH door attaches to the run door A started, while it runs"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok its receipt is read back OFF THE SPINE THE DOOR NAMED, by the id the run printed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok its receipt is read back OFF THE SPINE THE DOOR NAMED, credited because"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a real event the run named as ANOTHER kind, and printed bare, is unattributed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok dispatch naming ship's process is held back BY NAME"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok the run never saw the door's token, the owner's deploy/VCS tokens or the leads steering list"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a start with no click is 428 CLICK_REQUIRED"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok review-ship.ship: REFUSED until its deploy stop is enforced"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a checkout on main: BRANCH_REFUSED, nothing started"* ]] || { echo "$output"; false; }
