@@ -195,8 +195,13 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
 9. **Leave the receipt (spine) — deep runs only.** After saving, record the verdict on the spine
    (hook-mode, never blocks; a `quick` run emits nothing — it wrote no verdict to receipt):
    ```bash
-   bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload '{"decision":"<YES|NO|CONDITIONAL|WAIT>","confidence":"<High|Medium|Low>","session":"<NNN-slug>"}'
+   bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload "$(node .claude/scripts/council/council-lint.mjs --payload docs/council/sessions/NNN-slug.md)"
    ```
+   The payload is DERIVED from the saved verdict, never typed: the spine's `council.verdict` shape is closed to
+   `session_id` (`c-NNN-slug`) · `question_hash` (sha256 of the question in the verdict's heading) · `call` ·
+   `confidence`, and anything else is rejected BAD_COUNCIL. `call` is `proceed` for YES and CONDITIONAL, `hold` for NO
+   and WAIT (ADR-1345). If the derivation refuses, the verdict file is missing its heading, DECISION or CONFIDENCE line
+   -- fix the file, never the payload.
 
 ## Standard mode
 `/arc-council standard <question>` — a **verified** answer at a **fixed, predictable price**. It exists

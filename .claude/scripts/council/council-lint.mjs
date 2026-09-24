@@ -29,7 +29,7 @@ const verdictFile = flagVal("--verdict");
 const briefFile = flagVal("--brief");
 const jurorArtifactFile = flagVal("--juror-artifact");
 const consumed = new Set();
-for (const f of ["--verdict", "--brief", "--juror-artifact"]) {
+for (const f of ["--verdict", "--brief", "--juror-artifact", "--payload"]) {
   const i = args.indexOf(f);
   if (i >= 0) consumed.add(i), consumed.add(i + 1);
 }
@@ -69,6 +69,36 @@ function isValidISODate(s) {
   if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
   const dt = new Date(Date.UTC(y, mo - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
+
+// ------------------------------------------------------------------ payload mode (ADR-1345)
+// The council.verdict receipt, in the spine's CLOSED shape (validate.mjs: session_id · question_hash · call ·
+// confidence), derived from a saved verdict file -- never typed by hand into a shell string. The call maps the
+// decision: YES and CONDITIONAL are a call to proceed, NO and WAIT a call to hold (the reading calibrate.mjs scores
+// by). Prints ONE line of JSON on success; exit 1 names what the file lacks.
+const payloadFile = flagVal("--payload");
+if (payloadFile) {
+  if (!existsSync(payloadFile)) { console.error(`council-lint: --payload ${payloadFile}: no such file`); process.exit(1); }
+  const text = readFileSync(payloadFile, "utf8").replace(/\r\n?/g, "\n");
+  const why = [];
+  const h1 = /^# arc-council — (.+) \((\d{4}-\d{2}-\d{2})\)\s*$/m.exec(text);
+  if (!h1) why.push('no "# arc-council — <question> (<YYYY-MM-DD>)" heading to take the question from');
+  const dec = [...text.matchAll(/^[ \t]*DECISION:\s*(YES|NO|CONDITIONAL|WAIT)\s*$/gim)];
+  if (dec.length !== 1) why.push(`${dec.length} filled DECISION line(s); a verdict has exactly one`);
+  const conf = [...text.matchAll(/^[ \t]*CONFIDENCE:\s*(High|Medium|Low)\s*$/gim)];
+  if (conf.length !== 1) why.push(`${conf.length} filled CONFIDENCE line(s); a verdict has exactly one`);
+  const base = payloadFile.replace(/\\/g, "/").split("/").pop().replace(/\.md$/, "");
+  if (!/^[A-Za-z0-9._-]{1,62}$/.test(base)) why.push(`the file name ${JSON.stringify(base)} cannot be a session id (c-<name>, name [A-Za-z0-9._-], at most 62)`);
+  if (why.length) { for (const w of why) console.error(`council-lint: --payload ${payloadFile}: ${w}`); process.exit(1); }
+  const decision = dec[0][1].toUpperCase();
+  const c = conf[0][1];
+  console.log(JSON.stringify({
+    session_id: `c-${base}`,
+    question_hash: createHash("sha256").update(h1[1].trim(), "utf8").digest("hex"),
+    call: decision === "YES" || decision === "CONDITIONAL" ? "proceed" : "hold",
+    confidence: c[0].toUpperCase() + c.slice(1).toLowerCase(),
+  }));
+  process.exit(0);
 }
 
 // ------------------------------------------------------------------ verdict mode

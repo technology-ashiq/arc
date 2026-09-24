@@ -70,3 +70,46 @@ setup() {
   run grep -c '^RESULT: UNRESOLVED$' "$WORK/multiline.md"
   [ "$output" -eq 1 ]
 }
+
+# ADR-1345 (face v2 Phase 06): /arc-council wrote {decision, confidence, session}, which the spine's CLOSED
+# council.verdict shape rejects -- no council had ever landed the receipt calibration reads. The payload is now DERIVED
+# from the saved verdict by council-lint --payload. RED on the old shape (BAD_COUNCIL), green on every saved session.
+@test "council-lint --payload: every saved verdict derives a council.verdict the closed shape accepts, the old one is BAD_COUNCIL" {
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  mkdir -p "$ARC_SPINE_ROOT/events"
+  local n=0 f payload
+  for f in "$ARC_ROOT"/docs/council/sessions/*.md; do
+    run node "$LINT" --payload "$f"
+    [ "$status" -eq 0 ] || { echo "derive $f: $output"; false; }
+    payload="$output"
+    [[ "$payload" == *'"session_id":"c-'* ]] && [[ "$payload" == *'"call":"'* ]] || { echo "shape $f: $payload"; false; }
+    run node "$ARC_ROOT/.claude/scripts/hq/arc-event.mjs" emit council.verdict --payload "$payload" --strict --dry-run
+    [ "$status" -eq 0 ] || { echo "validate $f: $output"; false; }
+    n=$((n + 1))
+  done
+  [ "$n" -ge 2 ] || { echo "only $n saved sessions were derived"; false; }
+  # NEGATIVE CONTROL: the payload the command used to write is refused by the same validator.
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-event.mjs" emit council.verdict --payload '{"decision":"YES","confidence":"Medium","session":"001-x"}' --strict --dry-run
+  [ "$status" -ne 0 ] && [[ "$output" == *"BAD_COUNCIL"* ]] || { echo "old shape: $status $output"; false; }
+  # The command emits the derived payload, and no longer spells the old one.
+  grep -q 'council-lint.mjs --payload docs/council/sessions/NNN-slug.md' "$ARC_ROOT/.claude/commands/arc-council.md"
+  ! grep -q '"decision":"<YES' "$ARC_ROOT/.claude/commands/arc-council.md"
+}
+
+@test "council-lint --payload: the call maps YES and CONDITIONAL to proceed, NO and WAIT to hold; a verdict missing its core is refused" {
+  local d
+  for d in YES CONDITIONAL NO WAIT; do
+    sed "s/^DECISION: .*$/DECISION: $d/" "$SESSION" > "$WORK/map-$d.md"
+    run grep -c "^DECISION: $d$" "$WORK/map-$d.md"
+    [ "$output" -eq 1 ] || { echo "fixture for $d did not take"; false; }
+    run node "$LINT" --payload "$WORK/map-$d.md"
+    [ "$status" -eq 0 ] || { echo "$d: $output"; false; }
+    case "$d" in
+      YES|CONDITIONAL) [[ "$output" == *'"call":"proceed"'* ]] || { echo "$d: $output"; false; } ;;
+      *) [[ "$output" == *'"call":"hold"'* ]] || { echo "$d: $output"; false; } ;;
+    esac
+  done
+  grep -v '^DECISION:' "$SESSION" > "$WORK/no-decision.md"
+  run node "$LINT" --payload "$WORK/no-decision.md"
+  [ "$status" -eq 1 ] && [[ "$output" == *"DECISION"* ]] || { echo "no decision: $status $output"; false; }
+}
