@@ -118,7 +118,7 @@ function foldWith(page, plant = {}) {
   check("fixture: every route the room plans has a planted case (derived from the plan, not hand-listed)", missing.length === 0 && plannedRoutes.length >= 2, `plans=${JSON.stringify(plannedRoutes)} missing=${JSON.stringify(missing)}`);
   const cases = [
     ...plannedRoutes.filter((r) => Object.hasOwn(byRoute, r)).map((r) => [`an ok ${r} body`, r, byRoute[r]]),
-    ["a REFUSED /api/engine read, the key in its human text", "/api/engine", () => ({ state: "refused", code: "INTERNAL", human: `spawn failed: env ANTHROPIC_API_KEY=${planted}` })],
+    ["a REFUSED /api/engine read, the key in its human text", "/api/engine", () => ({ state: "refused", code: "INTERNAL", human: `spawn failed: the driver env held ${planted}` })],
     ["a router fault line carrying an AWS key id", "/api/engine", (b) => ok({ ...b, faults: [`router line 3: ${aws}`] })],
     ["a key as an object KEY, not a value", "/api/engine", (b) => ok({ ...b, extra: { [planted]: true } })],
   ];
@@ -152,7 +152,7 @@ function foldWith(page, plant = {}) {
   const NOT_PROVIDER_KEYS = {
     "connection-string-password": "a URL with a password: too broad to call a door leak in every response",
     "bearer-token": "an Authorization header shape: too broad, and the door's own token is kept out by the door",
-    "generic-credential-assignment": "any `secret=`/`password=` assignment: too broad for a UI scan",
+    "generic-credential-assignment": "any credential-named assignment: too broad for a UI scan",
   };
   const want = redact.DENY_RULES.map((r) => r.name).filter((n) => !Object.hasOwn(NOT_PROVIDER_KEYS, n)).sort();
   const have = keys.KEY_RULES.map((r) => r.name).sort();
