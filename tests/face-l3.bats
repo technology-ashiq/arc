@@ -65,7 +65,7 @@ load 'test_helper'
   local exp got
   exp=$(printf '%s\n' "$output" | sed -n 's/^EXPECTED: \([0-9]\{1,\}\)$/\1/p')
   got=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks$/\1/p')
-  [ -n "$exp" ] && [ "$exp" = "$got" ] && [ "$exp" -ge 25 ] || { echo "EXPECTED $exp, RAN $got"; false; }
+  [ -n "$exp" ] && [ "$exp" = "$got" ] && [ "$exp" -eq 47 ] || { echo "EXPECTED $exp, RAN $got"; false; }
 }
 
 @test "no L3 test or source file carries a byte that makes grep call it binary" {

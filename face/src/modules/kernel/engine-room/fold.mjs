@@ -50,10 +50,15 @@ export function fold(raw, ctx) {
   // when, and on which model. A measurement of what ran, never a probe of the provider.
   // On a PARTIAL page (the door pages oldest-first) a driver's last run on the page is not its current health: the row
   // says so, never a bare "last ok" (attack 57d014d B8).
+  // ONE predicate for "names a driver": visible text. Blank, whitespace-only and zero-width names are no name -- the
+  // rows and the unnamed count use the same test, so a receipt is in exactly one of them (round-2 attack 4010c52 B9).
+  const INVISIBLE = new RegExp(`[\\s${String.fromCharCode(0x200b)}-${String.fromCharCode(0x200d)}${String.fromCharCode(0x2060, 0xfeff)}]`, "g");
+  const named = (/** @type {unknown} */ v) => typeof v === "string" && v.replace(INVISIBLE, "") !== "";
   const health = (runsHomed ? runsBy(base.trail.events, "driver", ["model", "process"], base.trail.isPartial) : [])
+    .filter((r) => named(r.name))
     .map((r) => (base.trail.isPartial ? { ...r, last: r.last.replace(/^last /, "last on this page: ") } : r));
   // Receipts that name no driver are counted and said, never dropped from the health they would change (B9).
-  const unnamed = runsHomed ? base.trail.events.filter((e) => e.kind === "run.completed" && !(typeof e.payload["driver"] === "string" && e.payload["driver"] !== "")).length : 0;
+  const unnamed = runsHomed ? base.trail.events.filter((e) => e.kind === "run.completed" && !named(e.payload["driver"])).length : 0;
   const st = servedRead(payloads, ctx, base.reads, "/api/engine");
   const faults = asArray(st.body["faults"]).map(cell).filter((f) => f !== "");
   const budgetBody = asObject(st.body["budgets"]);

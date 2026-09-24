@@ -15,7 +15,7 @@ import {
 } from '../lib/registry.mjs'
 import type { AttachedModule, Attachment, ModuleContext, ModuleProblem, ModuleViewContext, Payload } from '../lib/registry.mjs'
 import { laneForRoom } from '../lib/rooms.mjs'
-import { keyLeakSentence } from '../lib/keys.mjs'
+import { keyLeakSentence, scrubText } from '../lib/keys.mjs'
 import type { Room } from '../lib/rooms.mjs'
 import GenericRoom from '../rooms/GenericRoom'
 import IndexRoom from '../rooms/IndexRoom'
@@ -94,7 +94,7 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
   }, [m, loaded, ctx, picks])
   // ADR-1325: a read that carried a provider key is named above the room -- the fold was handed it withheld. Memoised
   // with the fold: the scan walks every read, and a room re-renders far more often than its reads change.
-  const leaks = useMemo(() => keyLeaksFor(m, loaded), [m, loaded])
+  const leaks = useMemo(() => keyLeaksFor(m, loaded, ctx), [m, loaded, ctx])
   const plan = useMemo(() => plannedReads(folded.ok ? folded.f : null, m.manifest), [folded, m])
   const planKey = plan.reads.map((r) => r.key).join('\n')
 
@@ -176,7 +176,8 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
   const View = m.View as ComponentType<ViewProps>
   // A re-read that failed while an older answer stays on screen says so, so the owner knows the panel may be behind.
   const stale = Object.entries(loaded).flatMap(([k, v]) => (v.state === 'ok' && v.rereadFailed ? [`re-read of ${k} failed (${v.rereadFailed.code}) -- showing the last answer`] : []))
-  const problems = [...(leaks.length ? [keyLeakSentence(leaks)] : []), ...plan.problems.map((p) => `read refused: ${p}`), ...hostProblems, ...stale]
+  // Text the HOST builds (a refused act, a stale re-read) is scrubbed too: it never passes a fold (round-2 attack B3).
+  const problems = [...(leaks.length ? [keyLeakSentence(leaks)] : []), ...[...plan.problems.map((p) => `read refused: ${p}`), ...hostProblems, ...stale].map(scrubText)]
   return (
     <>
       {problems.length > 0 && (

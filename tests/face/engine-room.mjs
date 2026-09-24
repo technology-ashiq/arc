@@ -95,10 +95,13 @@ function foldWith(page, plant = {}) {
     run("01K00000000000000000000005", "2026-09-23T11:00:00+05:30", "constructor", "m", "ok"),
     run("01K00000000000000000000006", "2026-09-23T12:00:00+05:30", undefined, "m", "ok"),
     run("01K00000000000000000000007", "2026-09-23T13:00:00+05:30", "", "m", "ok"),
+    // Whitespace-only and zero-width names are no name either (round-2 attack 4010c52 B9).
+    run("01K00000000000000000000008", "2026-09-23T14:00:00+05:30", "   ", "m", "ok"),
+    run("01K00000000000000000000009", "2026-09-23T15:00:00+05:30", String.fromCharCode(0x200b), "m", "ok"),
   ])).f;
   expect(2);
   check("HEALTH: hostile driver names group as plain text", hostile.health.some((r) => r.name === "__proto__") && hostile.health.some((r) => r.name === "constructor") && hostile.health.length === 4, JSON.stringify(hostile.health.map((r) => r.name)));
-  check("HEALTH: receipts that name no driver are counted and said, never dropped silently", /^2 run receipts on this page name no driver/.test(hostile.healthNote), hostile.healthNote);
+  check("HEALTH: receipts that name no driver -- absent, empty, blank or invisible -- are counted and said, never a row", /^4 run receipts on this page name no driver/.test(hostile.healthNote), hostile.healthNote);
 }
 
 // ---- 2. no key, in every read, in every state, through the fold AND the read host ----
@@ -116,6 +119,10 @@ function foldWith(page, plant = {}) {
   const missing = plannedRoutes.filter((r) => !Object.hasOwn(byRoute, r));
   expect(1);
   check("fixture: every route the room plans has a planted case (derived from the plan, not hand-listed)", missing.length === 0 && plannedRoutes.length >= 2, `plans=${JSON.stringify(plannedRoutes)} missing=${JSON.stringify(missing)}`);
+  // And the plan against the CONTRACT: every route the manifest declares is planned and planted -- a plan that
+  // dropped a read would shrink the cases and this suite's count together (round-2 attack B6).
+  expect(1);
+  check("fixture: every route the manifest declares is planned and has a planted case", manifest.routes.every((r) => plannedRoutes.includes(r) && Object.hasOwn(byRoute, r)) && manifest.routes.length === 4, JSON.stringify({ declared: manifest.routes, planned: plannedRoutes }));
   const cases = [
     ...plannedRoutes.filter((r) => Object.hasOwn(byRoute, r)).map((r) => [`an ok ${r} body`, r, byRoute[r]]),
     ["a REFUSED /api/engine read, the key in its human text", "/api/engine", () => ({ state: "refused", code: "INTERNAL", human: `spawn failed: the driver env held ${planted}` })],
@@ -128,10 +135,13 @@ function foldWith(page, plant = {}) {
     const hostLeaks = reg.keyLeaksFor({ manifest }, payloads);
     const everywhere = JSON.stringify(f) + JSON.stringify(hostFold);
     expect(1);
+    // Through the production path (host scrubs, then the fold) the room still names the SHAPE, never a bare
+    // "withheld upstream" (round-2 attack B4).
     check(`NO KEY (${name}): named by its read, WITHHELD everywhere in the room -- fold and read host`,
       answered.includes(route) && f.hasKeyLeak && f.keyLeaks.some((l) => l.includes(route.replace(":id", ""))) && hostLeaks.length > 0
+      && hostFold.hasKeyLeak && hostFold.keyLeaks.every((l) => /(anthropic-key|aws-access-key-id)/.test(l))
       && !everywhere.includes(planted) && !everywhere.includes(aws) && !f.keyLeakText.includes("ZZZZ"),
-      JSON.stringify({ leaks: f.keyLeaks, host: hostLeaks, answered }));
+      JSON.stringify({ leaks: f.keyLeaks, host: hostLeaks, hostFold: hostFold.keyLeaks, answered }));
   }
   // Past the scan depth: withheld whole and NAMED, never passed as clean (B3).
   let deep = /** @type {any} */ ({ v: planted });
@@ -139,10 +149,56 @@ function foldWith(page, plant = {}) {
   const d = keys.scrubKeys(deep);
   expect(1);
   check("NO KEY: a value nested past the scan depth is withheld whole and named unscanned", d.found.includes("unscanned-depth") && !JSON.stringify(d.value).includes(planted), JSON.stringify(d.found));
-  // A second pass over withheld output still reports it: a scrubbed leak is never read back as no leak.
+  // A second pass over withheld output still reports it, under its own shape: a scrubbed leak is never read back as
+  // no leak, nor as a shapeless one.
   const twice = keys.withholdKeys(keys.withholdKeys({ r: ok({ x: planted }) }).payloads);
   expect(1);
-  check("NO KEY: a second pass reports what the first withheld (withheld-upstream)", twice.leaks.some((l) => l.includes("withheld-upstream")), JSON.stringify(twice.leaks));
+  check("NO KEY: a second pass reports what the first withheld, under the same shape", twice.leaks.some((l) => l.includes("anthropic-key")), JSON.stringify(twice.leaks));
+}
+
+// ---- 4. the round-2 holes (attack 4010c52) ----
+{
+  const esc = String.fromCharCode(27);
+  const ant = "sk-ant-api03-" + "Y".repeat(48);
+  const oai = "sk-" + "X".repeat(40);
+  const hidden = [
+    ["behind an ANSI colour code", `${esc}[31m${oai}`],
+    ["behind a JSON-escaped newline", `line one\\n${oai}`],
+    ["behind a URL-encoded break", `a=1%0A${oai}`],
+    ["after an underscore (the redactor has no boundary there)", `desk_${ant}`],
+    ["after an ANSI code, anthropic-shaped", `${esc}[1m${ant}`],
+  ];
+  for (const [name, s] of hidden) {
+    const r = keys.scrubKeys({ v: s });
+    expect(1);
+    check(`CAUGHT: a real-length key ${name}`, r.found.length > 0 && !JSON.stringify(r.value).includes("XXXXXXXX") && !JSON.stringify(r.value).includes("YYYYYYYY"), JSON.stringify(r.found));
+  }
+  const sec = "Q".repeat(40);
+  const awsForms = [["an object entry", { env: { aws_secret_access_key: sec } }], ["JSON text in a string", { t: `{"aws_secret_access_key":"${sec}"}` }]];
+  for (const [name, v] of awsForms) {
+    const r = keys.scrubKeys(v);
+    expect(1);
+    check(`CAUGHT: an AWS secret as ${name}`, r.found.includes("aws-secret-access-key") && !JSON.stringify(r.value).includes(sec), JSON.stringify(r.found));
+  }
+  expect(1);
+  check("NOT A LEAK: another writer's '[path withheld]' and '[diff withheld]' are text", keys.keyShapes({ a: "[path withheld]", b: "a diff was withheld: [diff withheld]" }).length === 0, JSON.stringify(keys.keyShapes({ a: "[path withheld]" })));
+  const proto = Object.create(null);
+  Object.defineProperty(proto, "__proto__", { value: ok({ x: ant }), enumerable: true });
+  const wp = keys.withholdKeys(proto);
+  expect(1);
+  check("A read keyed __proto__ is scanned as its own entry, never lost into a prototype", wp.leaks.some((l) => l.startsWith("__proto__:")) && Object.hasOwn(wp.payloads, "__proto__"), JSON.stringify(wp.leaks));
+  const arr = keys.withholdKeys(/** @type {any} */ ([ok({ x: ant })]));
+  expect(1);
+  check("A payloads argument that is no object: named, and NOTHING of it reaches a fold", Object.keys(arr.payloads).length === 0 && arr.leaks.length === 1 && !JSON.stringify(arr.payloads).includes("YYYY"), JSON.stringify(arr));
+  const two = keys.scrubKeys({ [ant]: "a", ["sk-ant-api03-" + "W".repeat(48)]: "b" });
+  expect(1);
+  check("Two keys that scrub to one name are both kept, numbered, and the collision is said", Object.keys(/** @type {object} */ (two.value)).length === 2 && two.found.includes("key-collision"), JSON.stringify(two));
+  // The context a fold reads besides its payloads -- /api/rooms' registry -- is scanned and withheld too (B3).
+  const leakyCtx = { ...ctx, inventories: { ...registry.inventories, note: ant } };
+  const hostFold = reg.foldModule({ manifest, fold }, {}, leakyCtx, {});
+  const ctxLeaks = reg.keyLeaksFor({ manifest }, {}, leakyCtx);
+  expect(1);
+  check("CONTEXT: a key in the registry's inventories never reaches the fold, and the host names context.inventories", !JSON.stringify(hostFold).includes("YYYYYYYY") && ctxLeaks.some((l) => l.startsWith("context.inventories:")), JSON.stringify(ctxLeaks));
 }
 
 // ---- 3. one set of shapes, derived from the redactor ----

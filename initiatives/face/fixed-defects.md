@@ -766,3 +766,15 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **No left boundary**: `task-<32 chars>` read as an OpenAI key -- the face's rules take a left boundary, and near-miss ids are pinned as not-keys. *A prefix rule needs a boundary on the side the prefix starts.*
 - **A circular fixture guard, and a hand floor** -- the planted cases are derived from the room's own planned reads, each must be answered, and the suite prints EXPECTED and must run exactly that many. *A guard over a hand-built list checks the list against itself.*
 - **Health from the oldest page, said as current** -- a partial page says "last on this page", and receipts that name no driver are counted and said. *A paged read labels what it is a page of.*
+
+## Phase 06 slice 05 -- the no-key check (attack 4010c52, round 2, boundary)
+
+- **A boundary added to every rule when one needed it**: an ANSI code, an escaped newline or an underscore before a real key hid it -- only the OpenAI rule is bounded (without lookbehind, which an older engine cannot load), and a normalised view (colour codes, escapes, URL-encoded breaks removed) withholds the whole string. *Fix the rule that misfired; do not tighten the ones that did not.*
+- **An assignment-shaped rule that missed the JSON and object forms** -- the rule takes an optional closing quote, and an object entry is read as `key=value`. *A key=value shape exists as text, as JSON, and as an object entry.*
+- **A second pass that lost the shape**, and **a marker anyone could forge** -- only this scanner's own `[<rule> withheld]` markers count, and each reports its own shape. *A marker is a claim: make it unforgeable and keep what it claims.*
+- **Scanned payloads, unscanned context** -- the fold context's rooms, inventories, needs and lane map are withheld too, host-built problem text is scrubbed, and a leak line's read key is itself scrubbed. *A value reaches a room by every input the fold takes, not only its payloads.*
+- **A count derived from the list it counts** -- the suite pins its manifest's routes and bats pins the exact total. *A derived count needs an independent anchor.*
+- **Redaction left out of the new summary line**, and **a null stderr** -- every stderr line is redacted and stripped of control characters, and a missing stderr reads as empty. *New output from a child passes the same redaction as the old.*
+- **A second copy of "what a name is"** -- health rows and the unnamed count share one visible-name predicate. *Two readers of one fact share one predicate.*
+- **`out[key] =` on a plain object** -- a read keyed `__proto__` moved the prototype; outputs are null-prototype with defineProperty, and a non-object input folds nothing. *Build maps from untrusted keys without a prototype.*
+- **Colliding scrubbed keys overwrote each other** -- the second is numbered and the collision said. *A lossy transform says what it merged.*

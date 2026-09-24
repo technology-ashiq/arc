@@ -613,8 +613,29 @@ export function payloadOf(payloads, read) {
  * The fold itself never sees the key -- foldModule withholds it.
  * @param {AttachedModule} module @param {Record<string, Payload>} loaded @returns {string[]}
  */
-export function keyLeaksFor(module, loaded) {
-  return withholdKeys(payloadsFor(module.manifest, loaded)).leaks;
+export function keyLeaksFor(module, loaded, ctx = undefined) {
+  return [...withholdKeys(payloadsFor(module.manifest, loaded)).leaks, ...(ctx ? contextLeaks(ctx) : [])];
+}
+
+/** The context parts a fold reads besides its payloads -- the registry's rooms, inventories, needs, lane map. */
+const CONTEXT_PARTS = /** @type {const} */ (["rooms", "inventories", "needs", "laneMap"]);
+
+/**
+ * The fold context with its door-served parts withheld too: a key in the /api/rooms body reaches every room through
+ * ctx, never through a payload (round-2 attack 4010c52 B3). @param {FoldContext} fctx
+ */
+function withheldContext(fctx) {
+  const parts = /** @type {Record<string, unknown>} */ ({});
+  for (const k of CONTEXT_PARTS) parts[k] = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (fctx))[k];
+  const { payloads } = withholdKeys(parts);
+  return /** @type {FoldContext} */ ({ ...fctx, ...payloads });
+}
+
+/** One leak line per context part that carried a key. @param {ModuleContext} ctx @returns {string[]} */
+function contextLeaks(ctx) {
+  const parts = /** @type {Record<string, unknown>} */ ({});
+  for (const k of CONTEXT_PARTS) parts[`context.${k}`] = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (ctx))[k];
+  return withholdKeys(parts).leaks;
 }
 
 /**
@@ -624,7 +645,7 @@ export function keyLeaksFor(module, loaded) {
 export function foldModule(module, loaded, ctx, picks) {
   // ADR-1325: every payload of every room passes the no-key check HERE, before any fold sees it -- a key a read
   // carried is withheld, so no room can draw it (face v2 Phase 06, attack 57d014d B1/B4). The host names the leak.
-  return module.fold(withholdKeys(payloadsFor(module.manifest, loaded)).payloads, foldContext(ctx, picks, module.manifest));
+  return module.fold(withholdKeys(payloadsFor(module.manifest, loaded)).payloads, withheldContext(foldContext(ctx, picks, module.manifest)));
 }
 
 /**

@@ -39,6 +39,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { laneHeader, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
+import { DENY_RULES } from "../hq/lib/redact.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/@{}~^-]*$/;
@@ -322,7 +323,11 @@ export function main(argv, env = process.env) {
 
       const r = runSurface({ root, surface, input, driver: o.driver, trialModel, env });
       if (r.status !== 0) {
-        const errLines = r.stderr.trim().split("\n");
+        // Every line of a child's stderr is REDACTED and stripped of control characters before it reaches the summary the
+        // owner pastes into evidence: a gateway error can echo the credential it was sent (round-2 attack 4010c52 B7). A
+        // run that never spawned has no stderr at all (B8).
+        const clean = (/** @type {string} */ l) => DENY_RULES.reduce((s, rule) => s.replace(new RegExp(rule.re.source, `${rule.re.flags.replace("g", "")}g`), `[${rule.name} redacted]`), l.replace(/\r$/, "")).replace(/\p{Cc}|\p{Zl}|\p{Zp}/gu, " ");
+        const errLines = String(r.stderr ?? "").trim().split("\n").map(clean);
         const tail = errLines.slice(-8).join("\n    ");
         // The CAUSE is arc-run's first own line, and the tail alone cut it: a data-boundary refusal ("a secret matching
         // rule ... appeared in --input") was pushed out by the receipt emitter's worktree warning, and a run refused
