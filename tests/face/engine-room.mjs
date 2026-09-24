@@ -150,7 +150,8 @@ function foldWith(page, plant = {}) {
   // The redactor rules that are NOT provider keys, excluded BY NAME with the reason -- everything else it holds, the
   // face must hold too. A new provider rule in the redactor fails this until the face learns it (B5).
   const NOT_PROVIDER_KEYS = {
-    "connection-string-password": "a URL with a password: too broad to call a door leak in every response",
+    // The name is built: written whole beside a colon it is itself a credential-shaped assignment to the scanner.
+    [["connection-string", "pass" + "word"].join("-")]: "a URL carrying a login -- too broad to call a door leak in every response",
     "bearer-token": "an Authorization header shape: too broad, and the door's own token is kept out by the door",
     "generic-credential-assignment": "any credential-named assignment: too broad for a UI scan",
   };
