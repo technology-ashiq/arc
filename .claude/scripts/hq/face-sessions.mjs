@@ -79,7 +79,7 @@ const row = (id, room, label, process, kind, fields, more = {}) => Object.freeze
 });
 
 export const SESSIONS = Object.freeze([
-  row("council.convene", "council", "Convene the council", "council-convene", "council.verdict", [text("question", "The question", "one line -- what the council decides", 500, true)]),
+  row("council.convene", "council-chamber", "Convene the council", "council-convene", "council.verdict", [text("question", "The question", "one line -- what the council decides", 500, true)]),
   row("develop.proof", "develop", "Prove a slice", "develop-proof", "slice.done", [lane, phase]),
   row("develop.close-phase", "develop", "Close a phase", "phase-close", "phase.closed", [lane, phase]),
   row("review-ship.review", "review-ship", "Review the diff", "review-diff", "review.completed", [Object.freeze({ name: "base", label: "Base branch", placeholder: "main", type: "text", max: 100, pattern: "[A-Za-z0-9][A-Za-z0-9._/-]*", required: false })]),

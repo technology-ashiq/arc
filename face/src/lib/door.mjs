@@ -433,4 +433,23 @@ export class Door {
 
   /** A run as it stands: the tool's lines so far, then its result. @param {string} planId @param {AbortSignal} [signal] */
   opRun(planId, signal) { return this.call(`/api/op-run/${encodeURIComponent(planId)}`, { signal }); }
+
+  // ---- the session door (face v2 Phase 06, REQ-08, ADR-1326) ----
+
+  /** The session registry and the newest sessions on the door's disk. A read: it never starts one. @param {AbortSignal} [signal] */
+  sessions(signal) { return this.call("/api/sessions", { signal }); }
+
+  /**
+   * Start one session. Asks the door for a one-shot click token and spends it in the same breath, so ONLY a caller
+   * that means to start calls this -- the dock calls it from the owner's click handler and nowhere else. There is no
+   * way to start a session through this client without a fresh token, and a replayed request carries a spent one.
+   * @param {string} id @param {{ input: Record<string, string>, driver: string, process?: string }} body
+   */
+  async sessionStart(id, body) {
+    const { click } = await this.call("/api/session-click", { method: "POST" });
+    return this.call(`/api/session/${encodeURIComponent(id)}/start`, { method: "POST", body: { click, ...body } });
+  }
+
+  /** Attach: a session as its files and the spine hold it. A read: it never starts one. @param {string} sid @param {AbortSignal} [signal] */
+  sessionRun(sid, signal) { return this.call(`/api/session-run/${encodeURIComponent(sid)}`, { signal }); }
 }

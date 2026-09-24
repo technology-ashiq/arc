@@ -124,6 +124,18 @@ flows_verdict() {
   [ "${BASH_REMATCH[3]}" -le 5000 ] || { echo "the live flow saw the change after ${BASH_REMATCH[3]} ms, past 5000: $line"; return 1; }
 }
 
+# The session flow (face v2 Phase 06, REQ-08): every served room with a session verb opened and reloaded, a running
+# session attached -- and the door journalled 0 start requests; then ONE click made exactly 1. A counter that cannot
+# move proves nothing, so the control is part of the line.
+sessions_verdict() {
+  local out="$1" line
+  line="$(printf '%s\n' "$out" | grep '^sessions: ' | tail -1)"
+  [ -n "$line" ] || { echo "no sessions line"; return 1; }
+  [[ "$line" =~ ^sessions:\ ok\ rooms=([0-9]+)\ reloads=([0-9]+)\ attach=ok\ starts=0\ control=1$ ]] || { echo "the sessions line is not clean: $line"; return 1; }
+  [ "${BASH_REMATCH[1]}" -ge 5 ] && [ "${BASH_REMATCH[2]}" -eq "${BASH_REMATCH[1]}" ] \
+    || { echo "the session flow opened ${BASH_REMATCH[1]} rooms and reloaded ${BASH_REMATCH[2]}: $line"; return 1; }
+}
+
 # The planned rooms' REHEARSAL cards (ADR-1328): what the browser drew EQUALS the derived lists, per room,
 # exactly as the work-door cards -- a planned room's flows are rehearsed, never sent to the door (money ring).
 rehearsal_verdict() {
@@ -302,7 +314,7 @@ heading_verdict() {
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
   # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
   # 10 s -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: served |smoke: verbs-pending|smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW |flows: |flow: )' | sed 's/^/# /' >&3 || true
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: served |smoke: verbs-pending|smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW |flows: |flow: |sessions: )' | sed 's/^/# /' >&3 || true
   # Both moods are judged, each from its own line, before the exit status is trusted: a harness
   # that ran only dark must not pass on dark's line (ADR-1331).
   local mood verdicts=0
@@ -366,7 +378,25 @@ heading_verdict() {
   done
   [ "$verdicts" -eq 2 ] || { echo "judged $verdicts of 2 moods"; false; }
   flows_verdict "$output" "$opsCount" || { echo "(harness exit $status)"; false; }
+  sessions_verdict "$output" || { echo "(harness exit $status)"; false; }
   [ "$status" -eq 0 ]
+}
+
+@test "face-browser: MUTANT CONTROL -- the sessions verdict refuses a start with no click, a dead counter and a short run" {
+  run sessions_verdict "sessions: ok rooms=8 reloads=8 attach=ok starts=0 control=1"
+  [ "$status" -eq 0 ] || { echo "the sessions verdict refused the clean line: $output"; false; }
+  run sessions_verdict "sessions: ok rooms=8 reloads=8 attach=ok starts=1 control=1"
+  [ "$status" -ne 0 ] || { echo "a start with no click passed: $output"; false; }
+  run sessions_verdict "sessions: ok rooms=8 reloads=8 attach=ok starts=0 control=0"
+  [ "$status" -ne 0 ] || { echo "a counter one click could not move passed: $output"; false; }
+  run sessions_verdict "sessions: ok rooms=8 reloads=7 attach=ok starts=0 control=1"
+  [ "$status" -ne 0 ] || { echo "a room left unreloaded passed: $output"; false; }
+  run sessions_verdict "sessions: ok rooms=3 reloads=3 attach=ok starts=0 control=1"
+  [ "$status" -ne 0 ] || { echo "a run over too few rooms passed: $output"; false; }
+  run sessions_verdict "sessions: FAIL rooms=8 reloads=8 attach=FAIL starts=-1 control=-1"
+  [ "$status" -ne 0 ] || { echo "a failed flow passed: $output"; false; }
+  run sessions_verdict ""
+  [ "$status" -ne 0 ] || { echo "no line at all passed: $output"; false; }
 }
 
 @test "face-browser: MUTANT CONTROL -- the flows verdict refuses a short, failed, slow or erroring run" {
