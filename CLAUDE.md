@@ -70,8 +70,9 @@
 - **After a push, read CI per-JOB before reporting the work done.** I reported a phase built on the
   strength of local gates twice while CI was red — once with a test that had never passed at all.
   → `node .claude/scripts/review/ci-digest.mjs` (per-job, head SHA asserted); never poll CI in-session.
-- **A building session ends at push.** The next one starts with `/arc-resume` — attack, review and CI
-  read never run in the session that wrote the code (ADR-0226).
+- **After a push, the building session runs `/arc-attack` and `ci-digest` itself. It never starts a new
+  session for them** (ADR-0226, amended 2026-09-24). The attacker stays fresh because `arc-run` gives it
+  only the diff, and the CI read is a script. A new session adds no independence and costs ~100k tokens.
 - **"Tests green" means green on CI. Never run a suite on this box** — and read per-JOB conclusions,
   not the watcher's exit code → `.claude/rules/testing.md` § where tests run.
 - Offline-first: every external dependency gets an interface + fake + real impl.

@@ -26,7 +26,7 @@ The engine already has the right shape. `arc-run` is headless, one fresh subproc
 3. **Routing.** Boundary surface → router class `attack-diff`, tier `balanced-workhorse`, driver `claude-code`, `fallback: []` (codex is unavailable, and silently swapping an attacker's family is not a fallback). ADR-0069's seat map already places attackers there (`plan-attacker`), so this decides nothing new. Logic surface → explicit `--driver generic-api --trial-model <id>` under ADR-0069(g) / ADR-0220: an explicit driver consults no tier, so the trial is not refused; receipted `model_source: trial`; `generic-api` is in-house, so ADR-0225's grant rule does not apply. No router row for it, no tier change.
 4. **`arc-attack.mjs` + `/arc-attack`** build both inputs, run both, write both validated outputs to the lane's evidence dir as `attack-<sha7>-r<k>-<surface>.json` and print one screen. They never fix and never commit. With `ARC_ATTACK_TRIAL_MODEL` unset the logic surface prints **NOT RUN** and the command exits non-zero — never a faked run (E3). `--driver mock` runs both surfaces on the replay driver; it exists so CI can prove the path end to end.
 5. **`ci-digest.mjs`** turns the CI law into a script: the latest run for HEAD, its head SHA asserted equal to local HEAD, per-job conclusions, failed-job tails capped at 40 lines. Exit 0 green · 1 red · 3 pending · 4 SHA mismatch.
-6. **CLAUDE.md**: both laws name their mechanism; a session-boundary line is added — the building session ends at push, and the next begins with `/arc-resume`.
+6. **CLAUDE.md**: both laws name their mechanism. ~~A session-boundary line is added — the building session ends at push, and the next begins with `/arc-resume`.~~ **Superseded 2026-09-24, see Amendment 1.**
 7. **`generic-api` builds its prompt from the canonical process document**, through the same `canonicalDoc` read `claude-code` uses: body, input, output contract. One reader, so the gate and the prompt see the same bytes.
 8. **Amends ADR-0223 clause 4 (owner ruling 2026-09-23).** Under `permissions: declared`, an explicit `tools: []` no longer makes the claude-code driver throw. It dispatches with `--tools "" --strict-mcp-config` — the CLI's real zero: no built-in tool, no MCP server — so the most restrictive declaration reaches the CLI as the most restrictive argv. A non-empty list that renders to nothing (`[ask.human]`) still throws: that is a mapping gap, not a declaration of zero. The whole decision is one function, `dispatchToolArgs` in `adapters/claude-code.mjs`, so the driver holds no second copy. The compile path is unchanged: a generated command has no such zero, because an absent `allowed-tools:` line is unrestricted.
 
@@ -39,7 +39,7 @@ Fix slices stay in the interactive session on opus (owner ruling 2026-09-23) thr
 
 ## Consequences
 
-**Easier.** The attack, review and CI steps leave the building session's context. A PR round becomes: build session → push → `/arc-attack` + `/arc-review` + `ci-digest` → fix session. Every attack is receipted with its model and cost, which is bench fuel. Every `generic-api` trial now asks the model the actual question.
+**Easier.** The attack, review and CI steps leave the building session's context. A PR round becomes: build → push → `/arc-attack` + `/arc-review` + `ci-digest` → fix, all in one session (Amendment 1). Every attack is receipted with its model and cost, which is bench fuel. Every `generic-api` trial now asks the model the actual question.
 **Harder.** The logic-surface model is unproven. A cheap model may miss what opus caught. Mitigations: the boundary attacker and the opus `code-reviewer` still run; round 2 attacks the fixes; the trial ends at the revisit trigger with a receipted bench verdict, never by default. Any earlier reading of a `generic-api` result is suspect — there are none on record, which is the reason the defect survived.
 
 **The bootstrap pass, as it ran (2026-09-23).** Two rounds, two fresh agents each (the cap). Round 1: 4 logic + 5 boundary findings; round 2, attacking the fixes: 5 logic + 4 boundary. Everything in scope was fixed and pinned in `tests/engine-attack-diff.bats`, except the items below. The shapes that repeated are worth carrying: *an exit code computed with `max()` across unlike facts*, *a whole round refused for one surface's problem* (twice: an existing file, then an ambiguous prior), *an unguarded fs call in a path that owes a receipt* (four sites), and *untrusted text printed without being flattened to one line* (model findings, then CI logs).
@@ -59,6 +59,22 @@ Fix slices stay in the interactive session on opus (owner ruling 2026-09-23) thr
 - **A new kickoff cycle** — face holds the live slot; this is 1.5d and additive.
 - **Trimming fixed-defects by dropping rows** — breaks the carried-list law; each row's pattern and rule are kept instead, none dropped.
 - **Carrying the attacker instructions inside the input** instead of fixing `generic-api` — the prompt would live in two places and drift; the driver defect would stay for every other process.
+
+## Amendment 1 — 2026-09-24: no new session per PR round (owner ruling)
+
+Decision 6 made the building session end at push and required a new session for the attack, the review and the CI
+read. That rule is dropped. **Reason:** it added cost and no independence. Every new session loads ~100k tokens of
+startup context before it does any work, so each PR round paid that toll twice. The owner raised this on
+2026-09-24, and nothing in this ADR had weighed it. Freshness does not depend on the session:
+
+- the attacker is an `arc-run` subprocess with `tools: []` that receives only the diff, so it has not seen the
+  implementation whoever starts it (Decision 1);
+- `ci-digest` is a deterministic script that asserts the head SHA. Reading it involves no judgment for the author
+  to bias.
+
+**Still binding:** attacks run through `/arc-attack` and never as inline general-purpose agents, and they run from
+the main clone, because `arc-run` writes no receipt from a worktree. CI is read per job through `ci-digest`.
+Changed: `CLAUDE.md` (the session-boundary line) and `.claude/commands/arc-attack.md` ("Where this runs").
 
 ## Related
 
