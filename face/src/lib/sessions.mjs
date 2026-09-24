@@ -33,6 +33,7 @@ export const SESSION_IDLE = Object.freeze({ phase: "idle" });
 /** The states after which a run's answer no longer changes. "unknown" and "running" are read again. */
 const FINAL = new Set(["done", "ended", "stale"]);
 
+/** @param {unknown} v */
 const text = (v) => unescapeDoorText(typeof v === "string" ? v : "");
 
 /**
@@ -44,7 +45,7 @@ export function sessionCards(roomId, registry) {
   const rows = registry && typeof registry === "object" && Array.isArray(/** @type {any} */ (registry).sessions) ? /** @type {any[]} */ (/** @type {any} */ (registry).sessions) : [];
   // A row the door served malformed is skipped, and a malformed field is dropped and counted -- never a throw at render,
   // which would take down every room the dock mounts under (attack a320d86 B11).
-  const isField = (f) => f !== null && typeof f === "object" && !Array.isArray(f) && typeof f.name === "string" && f.name !== "";
+  const isField = (/** @type {any} */ f) => f !== null && typeof f === "object" && !Array.isArray(f) && typeof f.name === "string" && f.name !== "";
   return rows.filter((r) => r && typeof r === "object" && r.room === roomId && typeof r.id === "string" && (r.fields === undefined || Array.isArray(r.fields))).map((r) => {
     const ready = r.processReady === true;
     const all = Array.isArray(r.fields) ? r.fields : [];
@@ -99,7 +100,7 @@ export function startBlocked(card, values, process) {
 export function startBody(card, values, driver, process) {
   /** @type {Record<string, string>} */
   const input = {};
-  for (const f of card.fields) if (typeof values[f.name] === "string" && values[f.name] !== "") input[f.name] = values[f.name];
+  for (const f of card.fields) { const v = values[f.name]; if (typeof v === "string" && v !== "") input[f.name] = v; }
   return { input, driver: driver || "auto", ...(card.pickProcess ? { process } : {}) };
 }
 
@@ -121,14 +122,14 @@ export function sessionRunView(p) {
   return {
     sid: p && typeof p.sid === "string" ? p.sid : "",
     state,
-    lines: Array.isArray(p && p.lines) ? p.lines.map((l) => text(l)) : [],
+    lines: Array.isArray(p && p.lines) ? p.lines.map((/** @type {unknown} */ l) => text(l)) : [],
     linesDropped: p && typeof p.linesDropped === "number" ? p.linesDropped : 0,
     bytesDropped: p && typeof p.bytesDropped === "number" ? p.bytesDropped : 0,
-    receipts: Array.isArray(p && p.receipts) ? p.receipts.filter((r) => r && typeof r.id === "string").map((r) => ({ id: r.id, kind: text(r.kind), ts: text(r.ts) })) : [],
-    unattributed: Array.isArray(p && p.unattributed) ? p.unattributed.filter((x) => typeof x === "string") : [],
+    receipts: Array.isArray(p && p.receipts) ? p.receipts.filter((/** @type {any} */ r) => r && typeof r.id === "string").map((/** @type {any} */ r) => ({ id: r.id, kind: text(r.kind), ts: text(r.ts) })) : [],
+    unattributed: Array.isArray(p && p.unattributed) ? p.unattributed.filter((/** @type {unknown} */ x) => typeof x === "string") : [],
     note: text(p && p.note),
     branchMoved: moved,
-    command: Array.isArray(p && p.command) ? p.command.map((a) => text(a)).join(" ") : "",
+    command: Array.isArray(p && p.command) ? p.command.map((/** @type {unknown} */ a) => text(a)).join(" ") : "",
     done: FINAL.has(state),
   };
 }
