@@ -322,8 +322,13 @@ export function main(argv, env = process.env) {
 
       const r = runSurface({ root, surface, input, driver: o.driver, trialModel, env });
       if (r.status !== 0) {
-        const tail = r.stderr.trim().split("\n").slice(-8).join("\n    ");
-        lines.push(`${label}: RUN FAILED (arc-run exit ${r.status ?? "none"}${r.error ? `, ${r.error.message}` : ""})\n    ${tail}`);
+        const errLines = r.stderr.trim().split("\n");
+        const tail = errLines.slice(-8).join("\n    ");
+        // The CAUSE is arc-run's first own line, and the tail alone cut it: a data-boundary refusal ("a secret matching
+        // rule ... appeared in --input") was pushed out by the receipt emitter's worktree warning, and a run refused
+        // for a secret read as a bare RUN FAILED (face Phase 06 slice 05). Said first, whenever the tail lacks it.
+        const cause = errLines.find((l) => /^arc-run: /.test(l) && !/could not emit run\.completed/.test(l));
+        lines.push(`${label}: RUN FAILED (arc-run exit ${r.status ?? "none"}${r.error ? `, ${r.error.message}` : ""})${cause && !errLines.slice(-8).includes(cause) ? `\n    cause: ${cause}` : ""}\n    ${tail}`);
         anyFailed = true;
         continue;
       }

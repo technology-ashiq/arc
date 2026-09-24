@@ -11,6 +11,7 @@
 // Dependency-free like every lib module: node imports it with no install, and a decision here is
 // a decision a test can hold. No room id is spelled in this file -- the shell names no room.
 import { byRing, RING_ORDER } from "./rooms.mjs";
+import { withholdKeys } from "./keys.mjs";
 import { ASOF_ROUTES, DOOR_ROUTES, DoorError, unescapeDoorText } from "./door.mjs";
 import { refusalOf, stamp } from "./inbox.mjs";
 import { ASK_GRANTS, askable, askThrough, readOnly } from "./ask.mjs";
@@ -608,11 +609,22 @@ export function payloadOf(payloads, read) {
 }
 
 /**
+ * The reads of a module that carried a provider key, one line each (ADR-1325): what the host draws above the room.
+ * The fold itself never sees the key -- foldModule withholds it.
+ * @param {AttachedModule} module @param {Record<string, Payload>} loaded @returns {string[]}
+ */
+export function keyLeaksFor(module, loaded) {
+  return withholdKeys(payloadsFor(module.manifest, loaded)).leaks;
+}
+
+/**
  * The one way the host folds a module: its declared payloads only, and the View's picks as a copy.
  * @param {AttachedModule} module @param {Record<string, Payload>} loaded @param {ModuleContext} ctx @param {Record<string, string>} picks
  */
 export function foldModule(module, loaded, ctx, picks) {
-  return module.fold(payloadsFor(module.manifest, loaded), foldContext(ctx, picks, module.manifest));
+  // ADR-1325: every payload of every room passes the no-key check HERE, before any fold sees it -- a key a read
+  // carried is withheld, so no room can draw it (face v2 Phase 06, attack 57d014d B1/B4). The host names the leak.
+  return module.fold(withholdKeys(payloadsFor(module.manifest, loaded)).payloads, foldContext(ctx, picks, module.manifest));
 }
 
 /**

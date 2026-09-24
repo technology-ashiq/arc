@@ -56,9 +56,16 @@ load 'test_helper'
   [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
   [[ "$output" == *"ok HEALTH: the row names the model the driver ran on"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok NO KEY: a key planted in /api/engine FAILs the check"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok NO KEY: a key planted in /api/spine FAILs the check"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok ONE SET: anthropic-key is caught by the face AND by the spine's redactor"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY (an ok /api/engine body): named by its read, WITHHELD everywhere in the room"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY (an ok /api/spine body): named by its read, WITHHELD everywhere in the room"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY (a REFUSED /api/engine read, the key in its human text)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok ONE SET: the face holds every provider-key rule the redactor holds, by name"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO FALSE ALARM: an id holding sk- inside a word is not a key"* ]] || { echo "$output"; false; }
+  # The count is DERIVED by the suite from its own case lists; it must have run exactly that many.
+  local exp got
+  exp=$(printf '%s\n' "$output" | sed -n 's/^EXPECTED: \([0-9]\{1,\}\)$/\1/p')
+  got=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks$/\1/p')
+  [ -n "$exp" ] && [ "$exp" = "$got" ] && [ "$exp" -ge 25 ] || { echo "EXPECTED $exp, RAN $got"; false; }
 }
 
 @test "no L3 test or source file carries a byte that makes grep call it binary" {
