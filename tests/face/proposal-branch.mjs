@@ -300,7 +300,7 @@ await refuse("a path that needs main's file to be a directory", { branch: "feat/
 // the same second gave one commit, and the update-ref catch told all three writers the branch was theirs) ----
 {
   const c = scratch("concurrent");
-  const results = await Promise.all([0, 1, 2].map(() => PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-concurrent", files: [{ path: "engine/router.yaml", content: PROPOSED }] }).then((w) => ({ ok: w.commit }), (e) => ({ code: e.code }))));
+  const results = await Promise.all([0, 1, 2].map(() => PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-concurrent", files: [{ path: "engine/router.yaml", content: PROPOSED }] }).then((w) => ({ ok: w.commit }), (e) => ({ code: e.code, msg: e.message }))));
   const tip = git(c, "rev-parse", "refs/heads/feat/face-concurrent");
   check("three writers of one plan at once: one writes and claims the branch, the others refuse (BRANCH_EXISTS)",
     results.filter((r) => r.ok).length === 1 && results.find((r) => r.ok).ok === tip && results.filter((r) => r.code === "BRANCH_EXISTS").length === 2, JSON.stringify(results));

@@ -46,6 +46,7 @@ const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_FILES = 16;
 const IDENTITY = Object.freeze({ name: "arc face", email: "face@arc.invalid" });
 const GIT_TIMEOUT_MS = 60_000;
+const OBJECT_WRITE_TRIES = 8;
 const MAX_GIT_OUT = 16 * 1024 * 1024;
 const NULL_FILE = process.platform === "win32" ? "NUL" : "/dev/null";
 
@@ -134,6 +135,25 @@ async function git(repo, args, o) {
   }
   const buf = Buffer.concat(out);
   return { buf, out: buf.toString("utf8"), status: r.exit };
+}
+
+/**
+ * A git call that writes a content-addressed object (hash-object -w, write-tree), retried when git exits non-zero.
+ * Writers of one plan write the SAME loose object at once, and on Windows the loser's open is refused ("unable to
+ * write file .git/objects/..: Permission denied") -- the three-writers race that PR 3b's lock-wait never reached,
+ * because it failed here, before update-ref (reproduced 2 of 80 rounds, 2026-09-24). A retry is safe: the object's
+ * name is its content, so a second write of it is the same write. A timeout or an output overrun is not retried.
+ * @param {string} repo @param {string[]} args @param {Parameters<typeof git>[2]} o
+ */
+async function gitObjectWrite(repo, args, o) {
+  for (let attempt = 1; ; attempt++) {
+    try { return await git(repo, args, o); }
+    catch (e) {
+      const exited = e instanceof ProposalError && e.message.startsWith(`git ${args[0]} failed: `);
+      if (!exited || attempt >= OBJECT_WRITE_TRIES) throw e;
+      await new Promise((r) => setTimeout(r, 50 * attempt));
+    }
+  }
 }
 
 /**
@@ -646,10 +666,10 @@ export async function writeProposal({ repo, branch, files, allow, message, base:
         const row = (await git(repo, ["ls-tree", base, "--", f.path], { hooks })).out.trim();
         const mode = /^100755 /.test(row) ? "100755" : "100644";
         // --no-filters: the blob is the bytes the tool computed, never a line-ending conversion of them.
-        const blob = (await git(repo, ["hash-object", "-w", "--no-filters", "--stdin"], { hooks, input: f.content })).out.trim();
+        const blob = (await gitObjectWrite(repo, ["hash-object", "-w", "--no-filters", "--stdin"], { hooks, input: f.content })).out.trim();
         await git(repo, ["update-index", "--add", "--cacheinfo", `${mode},${blob},${f.path}`], { hooks, env });
       }
-      const tree = (await git(repo, ["write-tree"], { hooks, env })).out.trim();
+      const tree = (await gitObjectWrite(repo, ["write-tree"], { hooks, env })).out.trim();
       // A NONCE per call, as a trailer: two writers of one plan in one second computed ONE commit, and the update-ref
       // catch below told each of them the branch was theirs -- three approvals for one branch (PR 3b round-2 shell
       // attack). With the nonce only the writer whose commit the branch holds can claim it.
