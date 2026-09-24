@@ -332,8 +332,9 @@ export function main(argv, env = process.env) {
         // The CAUSE is arc-run's first own line, and the tail alone cut it: a data-boundary refusal ("a secret matching
         // rule ... appeared in --input") was pushed out by the receipt emitter's worktree warning, and a run refused
         // for a secret read as a bare RUN FAILED (face Phase 06 slice 05). Said first, whenever the tail lacks it.
-        // A WARN is not a cause: the transcript-destination warning led the line and hid the gateway's refusal.
-        const cause = errLines.find((l) => /^arc-run: /.test(l) && !/could not emit run\.completed|^arc-run: WARN/.test(l));
+        // The transcript-destination WARN is not a cause: it led the lines and hid the gateway's refusal. ONLY that WARN
+        // is passed over -- another WARN can be the refusal itself (round-2 attack 1d98650 B10).
+        const cause = errLines.find((l) => /^arc-run: /.test(l) && !/could not emit run\.completed|^arc-run: WARN .*NO destination is set/.test(l));
         lines.push(`${label}: RUN FAILED (arc-run exit ${r.status ?? "none"}${r.error ? `, ${r.error.message}` : ""})${cause && !errLines.slice(-8).includes(cause) ? `\n    cause: ${cause}` : ""}\n    ${tail}`);
         anyFailed = true;
         continue;

@@ -196,11 +196,13 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    (hook-mode, never blocks; a `quick` run emits nothing — it wrote no verdict to receipt):
    ```bash
    payload="$(node .claude/scripts/council/council-lint.mjs --payload "docs/council/sessions/NNN-slug.md")" || { echo "council.verdict NOT emitted: the saved verdict refused derivation (see above)" >&2; exit 1; }
-   bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload "$payload"
+   id="$(bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload "$payload" | tail -n 1)"
+   [[ "$id" =~ ^[0-7][0-9A-HJKMNP-TV-Z]{25}$ ]] || { echo "council.verdict NOT recorded: the emitter wrote no receipt (a linked worktree, or its refusal above)" >&2; exit 1; }
    ```
-   Derive, gate, then emit: a refused derivation stops the step and emits nothing -- the emit is hook-mode and would
-   otherwise run with an empty payload and exit 0. `NNN-slug` is the saved file's name, `[A-Za-z0-9._-]` only (step 8
-   builds it that way), and the path stays quoted.
+   Derive, gate, emit, then CHECK: a refused derivation stops the step and emits nothing, and a hook-mode emit that
+   wrote nothing (from a linked worktree it refuses, and exits 0) stops it too -- the step ends only on the receipt's
+   id. Run it from the main clone. `NNN-slug` is the saved file's name, `[A-Za-z0-9._-]` only (step 8 builds it that
+   way), and the path stays quoted.
    The payload is DERIVED from the saved verdict, never typed: the spine's `council.verdict` shape is closed to
    `session_id` (`c-NNN-slug`) · `question_hash` (sha256 of the question in the verdict's heading) · `call` ·
    `confidence`, and anything else is rejected BAD_COUNCIL. `call` is `proceed` for YES and CONDITIONAL, `hold` for NO

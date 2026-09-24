@@ -78,9 +78,10 @@ setup() {
 @test "council-lint --payload: every saved verdict derives a council.verdict the closed shape accepts, the old one is BAD_COUNCIL" {
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
   mkdir -p "$ARC_SPINE_ROOT/events"
+  cd "$ARC_ROOT"
   local n=0 f payload
-  for f in "$ARC_ROOT"/docs/council/sessions/*.md; do
-    run node "$LINT" --payload "$f" --sessions-dir "$ARC_ROOT/docs/council/sessions"
+  for f in docs/council/sessions/*.md; do
+    run node "$LINT" --payload "$f"
     [ "$status" -eq 0 ] || { echo "derive $f: $output"; false; }
     payload="$output"
     [[ "$payload" == *'"session_id":"c-'* ]] && [[ "$payload" == *'"call":"'* ]] || { echo "shape $f: $payload"; false; }
@@ -95,77 +96,126 @@ setup() {
   ! grep -q '"decision":"<YES' "$ARC_ROOT/.claude/commands/arc-council.md"
 }
 
-# The seam the command actually crosses: step 9's OWN two lines, run through bash and the .sh wrapper, with the slug
-# substituted -- once for a real saved session (the event must land and read back), once for a session that does not
-# exist (nothing lands, the step exits non-zero). Attack eaa9168 B1/B12: the derivation passing proves nothing about the
-# `$(...)` composition, and an ungated emit ran with an empty payload and exited 0.
-@test "council step 9: the command's own lines emit the derived receipt, and a refused derivation emits nothing" {
+# The seam the command actually crosses: step 9's OWN block, run through bash and the .sh wrapper with the slug
+# substituted -- for a real saved session (exactly one receipt lands and reads back), for a session that does not
+# exist (nothing lands, non-zero), and for an emitter that writes nothing (non-zero, never a silent exit 0). Attacks
+# eaa9168 B1/B12 and 1d98650 B8.
+@test "council step 9: the command's own block lands exactly one receipt, and a refusal or a silent emitter stops it" {
+  local step
+  step="$(awk '/^9\. \*\*Leave the receipt/{f=1} f&&/^   ```bash/{g=1;next} g&&/^   ```/{exit} g{sub(/^   /,""); print}' "$ARC_ROOT/.claude/commands/arc-council.md")"
+  [ "$(printf '%s\n' "$step" | grep -c .)" -eq 3 ] || { echo "step 9 is not the three gated lines: $step"; false; }
+  printf '%s\n' "$step" | sed 's/NNN-slug/001-ai-writing-assistant-trains-on-user-docs/' > "$BATS_TEST_TMPDIR/step9-ok.sh"
+  printf '%s\n' "$step" | sed 's/NNN-slug/no-such-session/' > "$BATS_TEST_TMPDIR/step9-bad.sh"
+  cd "$ARC_ROOT"
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine9"
   mkdir -p "$ARC_SPINE_ROOT/events"
-  local step
-  step="$(grep -E '^   (payload="\$\(node \.claude/scripts/council/council-lint\.mjs --payload|bash \.claude/scripts/hq/arc-event\.sh emit council\.verdict --payload "\$payload")' "$ARC_ROOT/.claude/commands/arc-council.md" | sed 's/^   //')"
-  [ "$(printf '%s\n' "$step" | grep -c .)" -eq 2 ] || { echo "step 9 is not the two gated lines: $step"; false; }
-  printf '%s\n' "$step" | sed 's/NNN-slug/001-ai-writing-assistant-trains-on-user-docs/' > "$BATS_TEST_TMPDIR/step9-ok.sh"
-  cd "$ARC_ROOT"
   run bash "$BATS_TEST_TMPDIR/step9-ok.sh"
   [ "$status" -eq 0 ] || { echo "step 9 on a real session: $status $output"; false; }
-  run grep -rh '"kind":"council.verdict"' "$ARC_SPINE_ROOT/events"
-  [[ "$output" == *'"session_id":"c-001-ai-writing-assistant-trains-on-user-docs"'* ]] && [[ "$output" == *'"call":"proceed"'* ]] || { echo "no receipt read back: $output"; false; }
-  printf '%s\n' "$step" | sed 's/NNN-slug/no-such-session/' > "$BATS_TEST_TMPDIR/step9-bad.sh"
+  run bash -c "cat \"\$ARC_SPINE_ROOT\"/events/*.jsonl | grep -c '\"kind\":\"council.verdict\"'"
+  [ "$output" = "1" ] || { echo "expected exactly one council.verdict, got: $output"; false; }
+  run bash -c "cat \"\$ARC_SPINE_ROOT\"/events/*.jsonl"
+  [[ "$output" == *'"session_id":"c-001-ai-writing-assistant-trains-on-user-docs"'* ]] && [[ "$output" == *'"call":"proceed"'* ]] || { echo "receipt: $output"; false; }
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine9-bad"
   mkdir -p "$ARC_SPINE_ROOT/events"
   run bash "$BATS_TEST_TMPDIR/step9-bad.sh"
   [ "$status" -ne 0 ] && [[ "$output" == *"council.verdict NOT emitted"* ]] || { echo "a refused derivation: $status $output"; false; }
-  run grep -rc 'council.verdict' "$ARC_SPINE_ROOT/events"
-  [[ "$output" != *":1"* ]] || { echo "a receipt landed for a refused derivation: $output"; false; }
+  run bash -c "cat \"\$ARC_SPINE_ROOT\"/events/*.jsonl 2>/dev/null | grep -c council.verdict"
+  [ "$output" = "0" ] || { echo "a receipt landed for a refused derivation: $output"; false; }
+  # An emitter that writes nothing (its spine is not a directory) exits 0 in hook mode: the step must not.
+  printf 'x' > "$BATS_TEST_TMPDIR/not-a-dir"
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/not-a-dir"
+  run bash "$BATS_TEST_TMPDIR/step9-ok.sh"
+  [ "$status" -ne 0 ] && [[ "$output" == *"council.verdict NOT recorded"* ]] || { echo "a silent emitter: $status $output"; false; }
+}
+
+# Fixtures live in a fixture REPO passed as the root: the fence is <root>/docs/council/sessions, never a flag (B1).
+fixture_repo() {
+  FIX="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$FIX/docs/council/sessions"
+  FS="$FIX/docs/council/sessions"
 }
 
 @test "council-lint --payload: the call maps YES and CONDITIONAL to proceed, NO and WAIT to hold; a verdict missing its core is refused" {
+  fixture_repo
   local d
   for d in YES CONDITIONAL NO WAIT; do
-    sed "s/^DECISION: .*$/DECISION: $d/" "$SESSION" > "$WORK/map-$d.md"
-    run grep -c "^DECISION: $d$" "$WORK/map-$d.md"
+    sed "s/^DECISION: .*$/DECISION: $d/" "$SESSION" > "$FS/map-$d.md"
+    run grep -c "^DECISION: $d$" "$FS/map-$d.md"
     [ "$output" -eq 1 ] || { echo "fixture for $d did not take"; false; }
-    run node "$LINT" --payload "$WORK/map-$d.md" --sessions-dir "$WORK"
+    run node "$LINT" "$FIX" --payload "$FS/map-$d.md"
     [ "$status" -eq 0 ] || { echo "$d: $output"; false; }
     case "$d" in
       YES|CONDITIONAL) [[ "$output" == *'"call":"proceed"'* ]] || { echo "$d: $output"; false; } ;;
       *) [[ "$output" == *'"call":"hold"'* ]] || { echo "$d: $output"; false; } ;;
     esac
   done
-  grep -v '^DECISION:' "$SESSION" > "$WORK/no-decision.md"
-  run node "$LINT" --payload "$WORK/no-decision.md" --sessions-dir "$WORK"
-  [ "$status" -eq 1 ] && [[ "$output" == *"DECISION"* ]] || { echo "no decision: $status $output"; false; }
+  grep -v '^DECISION:' "$SESSION" > "$FS/no-decision.md"
+  run node "$LINT" "$FIX" --payload "$FS/no-decision.md"
+  [ "$status" -eq 1 ] && [[ "$output" == *"0 filled DECISION"* ]] || { echo "no decision: $status $output"; false; }
+  { cat "$SESSION"; printf 'DECISION: NO\n'; } > "$FS/two-decisions.md"
+  run node "$LINT" "$FIX" --payload "$FS/two-decisions.md"
+  [ "$status" -eq 1 ] && [[ "$output" == *"2 filled DECISION"* ]] || { echo "two decisions: $status $output"; false; }
+  grep -v '^CONFIDENCE:' "$SESSION" > "$FS/no-confidence.md"
+  run node "$LINT" "$FIX" --payload "$FS/no-confidence.md"
+  [ "$status" -eq 1 ] && [[ "$output" == *"0 filled CONFIDENCE"* ]] || { echo "no confidence: $status $output"; false; }
+  # A value on the NEXT line is an unfilled line, not a call (1d98650 B6).
+  sed 's/^DECISION: .*$/DECISION:/' "$SESSION" | sed '/^DECISION:$/a WAIT' > "$FS/split-line.md"
+  run node "$LINT" "$FIX" --payload "$FS/split-line.md"
+  [ "$status" -eq 1 ] && [[ "$output" == *"0 filled DECISION"* ]] || { echo "split line: $status $output"; false; }
 }
 
-@test "council-lint --payload: usage, containment, encoding and date are refused by name, never a fall-through" {
-  # Usage: an empty value, the = form, a repeat, and a second mode are exit 2 -- never another mode's exit 0 (B3/B4).
+@test "council-lint --payload: usage, containment, encoding, size and date are refused by name, never a fall-through" {
+  fixture_repo
+  # Usage (exit 2, each by its own words): empty value, the = form, a repeat, a second mode, a stray token (B3/B4).
   run node "$LINT" --payload ""
-  [ "$status" -eq 2 ] || { echo "empty: $status $output"; false; }
+  [ "$status" -eq 2 ] && [[ "$output" == *"needs the saved verdict's path"* ]] || { echo "empty: $status $output"; false; }
   run node "$LINT" --payload="$SESSION"
-  [ "$status" -eq 2 ] || { echo "= form: $status $output"; false; }
+  [ "$status" -eq 2 ] && [[ "$output" == *"not --payload=FILE"* ]] || { echo "= form: $status $output"; false; }
   run node "$LINT" --payload "$SESSION" --payload "$SESSION"
-  [ "$status" -eq 2 ] || { echo "repeat: $status $output"; false; }
-  run node "$LINT" --payload "$SESSION" --verdict "$SESSION"
-  [ "$status" -eq 2 ] && [[ "$output" != *'"session_id"'* ]] || { echo "with --verdict: $status $output"; false; }
-  # Containment: a well-formed verdict OUTSIDE the sessions directory is not a saved session (B5).
-  cp "$SESSION" "$WORK/outside.md"
-  run node "$LINT" --payload "$WORK/outside.md" --sessions-dir "$ARC_ROOT/docs/council/sessions"
+  [ "$status" -eq 2 ] && [[ "$output" == *"more than once"* ]] || { echo "repeat: $status $output"; false; }
+  run node "$LINT" --payload "$SESSION" --brief "$SESSION"
+  [ "$status" -eq 2 ] && [[ "$output" == *"takes no other flag"* ]] || { echo "with --brief: $status $output"; false; }
+  run node "$LINT" --payload "$SESSION" --sessions-dir "$FS"
+  [ "$status" -eq 2 ] && [[ "$output" == *"takes no other flag"* ]] || { echo "a caller-set fence: $status $output"; false; }
+  run node "$LINT" "$FIX" junk --payload "$SESSION"
+  [ "$status" -eq 2 ] && [[ "$output" == *"one repo root at most"* ]] || { echo "stray: $status $output"; false; }
+  # Paths that reach out or hide: UNC, NTFS stream, control character (exit 2, by name).
+  run node "$LINT" --payload "//host/share/001-x.md"
+  [ "$status" -eq 2 ] && [[ "$output" == *"UNC, device or stream"* ]] || { echo "unc: $status $output"; false; }
+  run node "$LINT" --payload "docs/council/sessions/001-x.md:stream"
+  [ "$status" -eq 2 ] && [[ "$output" == *"UNC, device or stream"* ]] || { echo "stream: $status $output"; false; }
+  run node "$LINT" --payload "$(printf 'docs/x\001.md')"
+  [ "$status" -eq 2 ] && [[ "$output" == *"control character"* ]] || { echo "control: $status $output"; false; }
+  # Containment: a well-formed verdict outside the repo's sessions directory is not a saved session (B5).
+  cp "$SESSION" "$BATS_TEST_TMPDIR/outside.md"
+  run node "$LINT" "$FIX" --payload "$BATS_TEST_TMPDIR/outside.md"
   [ "$status" -eq 1 ] && [[ "$output" == *"not a saved session"* ]] || { echo "outside: $status $output"; false; }
-  # A directory is refused by name, never a stack (B2).
-  run node "$LINT" --payload "$WORK" --sessions-dir "$BATS_TEST_TMPDIR"
-  [ "$status" -eq 1 ] && [[ "$output" != *"    at "* ]] || { echo "dir: $status $output"; false; }
+  # A directory named like a verdict is refused by name, never a stack (B2).
+  mkdir -p "$FS/dir.md"
+  run node "$LINT" "$FIX" --payload "$FS/dir.md"
+  [ "$status" -eq 1 ] && [[ "$output" == *"not a plain file"* ]] && [[ "$output" != *"    at "* ]] || { echo "dir: $status $output"; false; }
+  # Size: one byte past 1 MiB is refused.
+  { cat "$SESSION"; head -c 1048577 /dev/zero | tr '\0' 'x'; } > "$FS/huge.md"
+  run node "$LINT" "$FIX" --payload "$FS/huge.md"
+  [ "$status" -eq 1 ] && [[ "$output" == *"past the 1 MiB"* ]] || { echo "huge: $status $output"; false; }
   # Encoding: a BOM is stripped; invalid UTF-8 is refused (B7).
-  { printf '\357\273\277'; cat "$SESSION"; } > "$WORK/bom.md"
-  run node "$LINT" --payload "$WORK/bom.md" --sessions-dir "$WORK"
+  { printf '\357\273\277'; cat "$SESSION"; } > "$FS/bom.md"
+  run node "$LINT" "$FIX" --payload "$FS/bom.md"
   [ "$status" -eq 0 ] || { echo "bom: $status $output"; false; }
-  { cat "$SESSION"; printf 'bad byte \377\n'; } > "$WORK/badutf.md"
-  run node "$LINT" --payload "$WORK/badutf.md" --sessions-dir "$WORK"
+  { cat "$SESSION"; printf 'bad byte \377\n'; } > "$FS/badutf.md"
+  run node "$LINT" "$FIX" --payload "$FS/badutf.md"
   [ "$status" -eq 1 ] && [[ "$output" == *"UTF-8"* ]] || { echo "bad utf8: $status $output"; false; }
-  # A heading date that is no real day is refused, as --verdict would refuse it (B11).
-  sed 's/^\(# arc-council — .*\) ([0-9-]*)$/\1 (2026-02-31)/' "$SESSION" > "$WORK/badday.md"
-  run grep -c '(2026-02-31)$' "$WORK/badday.md"
+  # A heading date that is no real day, and a heading with no question in it (B11, B12).
+  sed 's/^\(# arc-council — .*\) ([0-9-]*)$/\1 (2026-02-31)/' "$SESSION" > "$FS/badday.md"
+  run grep -c '(2026-02-31)$' "$FS/badday.md"
   [ "$output" -eq 1 ] || { echo "the bad-day fixture did not take"; false; }
-  run node "$LINT" --payload "$WORK/badday.md" --sessions-dir "$WORK"
+  run node "$LINT" "$FIX" --payload "$FS/badday.md"
   [ "$status" -eq 1 ] && [[ "$output" == *"not a real day"* ]] || { echo "bad day: $status $output"; false; }
+  sed 's/^# arc-council — .* (\([0-9-]*\))$/# arc-council —    (\1)/' "$SESSION" > "$FS/noquestion.md"
+  run node "$LINT" "$FIX" --payload "$FS/noquestion.md"
+  [ "$status" -eq 1 ] && [[ "$output" == *"no question"* ]] || { echo "no question: $status $output"; false; }
+  # Only the lowercase .md the command writes (B13).
+  cp "$SESSION" "$FS/upper.MD"
+  run node "$LINT" "$FIX" --payload "$FS/upper.MD"
+  [ "$status" -eq 1 ] && [[ "$output" == *"lowercase .md"* ]] || { echo "upper ext: $status $output"; false; }
 }
