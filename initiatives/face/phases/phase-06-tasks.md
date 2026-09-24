@@ -92,10 +92,10 @@ commit: (empty until proven)
 title: The Engine room shows driver, model and health; no key (ADR-1325).
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: tests/face/engine-room.mjs via face-l3.bats: the engine-room fold over a fixture spine page of run.completed receipts draws one health row per driver with its run count, its LAST run's outcome and its model; the face's no-key check (face/src/lib/keys.mjs) is clean on the fixture and FAILs a provider key planted in every read the room holds (/api/engine body, a spine receipt payload, a router fault line, a map key, the lane card and router file when read), naming the read and never the key; keys.mjs and the spine's redactor (hq/lib/redact.mjs DENY_RULES) both catch every provider sample
+tier: contract
 sources: phase-06-spec.md
-decision: (empty until proven)
+decision: health is MEASURED from run.completed receipts grouped by driver (runsBy, the same reader the per-process runs use), never a live probe of a provider -- a probe would spend and would need the key the browser must not hold; the no-key check lives face-side as a fold input over every payload the room holds, so a door defect is drawn as a named refusal (KEY_IN_BROWSER) rather than as data, and its shapes are held equal to the spine redactor's by the same samples
 result: (empty until proven)
 commit: (empty until proven)
 

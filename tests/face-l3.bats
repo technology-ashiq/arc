@@ -50,6 +50,17 @@ load 'test_helper'
   [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start from a new .jsx file"* ]] || { echo "$output"; false; }
 }
 
+@test "face v2: the Engine room shows driver, model and health, and a planted provider key FAILs the no-key check" {
+  run node "$ARC_ROOT/tests/face/engine-room.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok HEALTH: the row names the model the driver ran on"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY: a key planted in /api/engine FAILs the check"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY: a key planted in /api/spine FAILs the check"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok ONE SET: anthropic-key is caught by the face AND by the spine's redactor"* ]] || { echo "$output"; false; }
+}
+
 @test "no L3 test or source file carries a byte that makes grep call it binary" {
   # A literal NUL in a source file makes grep treat the whole file as binary, and a
   # binary-flagged file is SKIPPED silently by every grep-driven gate -- including CI's own

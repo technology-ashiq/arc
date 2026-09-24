@@ -8,6 +8,7 @@
 // ported and never will be: no provider key lives in the browser (ADR-1325).
 import { asArray, asObject, cell, field, projected, refusedPart, servedRead, servedTable } from "../../../lib/served.mjs";
 import { countedOn, hasKind, holdsCount, kindCount, laneBadge, laneKpi, laneRoom, roomLink, runsBy } from "../../../lib/lane-room.mjs";
+import { keyLeaks } from "../../../lib/keys.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 
@@ -19,6 +20,12 @@ import { countedOn, hasKind, holdsCount, kindCount, laneBadge, laneKpi, laneRoom
  *   driversOnDisk: import("../../../lib/served.mjs").ServedTable,
  *   budgets: import("../../../lib/served.mjs").ServedTable,
  *   runs: import("../../../lib/lane-room.mjs").RunRow[],
+ *   health: import("../../../lib/lane-room.mjs").RunRow[],
+ *   hasHealth: boolean,
+ *   showHealthEmpty: boolean,
+ *   keyLeaks: string[],
+ *   hasKeyLeak: boolean,
+ *   keyLeakText: string,
  *   hasRuns: boolean,
  *   showRunsEmpty: boolean,
  *   ask: { canOpen: boolean, room: string },
@@ -34,6 +41,11 @@ export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx, { files: ["router"] });
   const runsHomed = hasKind(base, "run.completed");
   const runs = runsHomed ? runsBy(base.trail.events, "process", ["driver", "model", "duration_ms"], base.trail.isPartial) : [];
+  // Phase 06 (REQ-08): each DRIVER's health, from the same receipts -- how many runs it carried, how the last one ended,
+  // when, and on which model. A measurement of what ran, never a probe of the provider.
+  const health = runsHomed ? runsBy(base.trail.events, "driver", ["model", "process"], base.trail.isPartial) : [];
+  // ADR-1325: a provider key in ANY read this room holds is a door defect, named by the read it arrived in.
+  const leaks = keyLeaks(/** @type {any} */ (payloads));
   const st = servedRead(payloads, ctx, base.reads, "/api/engine");
   const faults = asArray(st.body["faults"]).map(cell).filter((f) => f !== "");
   const budgetBody = asObject(st.body["budgets"]);
@@ -88,6 +100,12 @@ export function fold(payloads, ctx) {
     }),
     runs,
     hasRuns: runs.length > 0,
+    health,
+    hasHealth: health.length > 0,
+    showHealthEmpty: runsHomed && base.trail.isDrawn && health.length === 0,
+    keyLeaks: leaks,
+    hasKeyLeak: leaks.length > 0,
+    keyLeakText: leaks.length === 0 ? "" : `a provider key reached this browser (ADR-1325), in ${leaks.join(" · ")} -- the door must never serve one`,
     showRunsEmpty: runsHomed && base.trail.isDrawn && runs.length === 0,
     ask: roomLink(ctx, "ask-arc"),
   };
