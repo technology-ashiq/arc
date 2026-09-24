@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Door } from '../lib/door.mjs'
 import {
-  SESSION_IDLE, SESSION_POLL_MS, driverChoices, roomRuns, sessionCards, sessionFailed, sessionPolling, sessionRunView, sessionVerdict, startBlocked, startBody,
+  SESSION_IDLE, driverChoices, pollDelay, roomRuns, sessionCards, sessionFailed, sessionPolling, sessionRunView, sessionVerdict, startBlocked, startBody, terminalRefusal,
 } from '../lib/sessions.mjs'
 import type { SessionCard, SessionState } from '../lib/sessions.mjs'
 import { fieldCount } from '../lib/ops.mjs'
@@ -89,6 +89,7 @@ function SessionCardView({ card, door, drivers, processes, onStarted }: { card: 
         {!card.ready ? <Chip tone="amber">not shippable yet</Chip> : null}
         {card.receiptKind ? <Chip mono>{card.receiptKind}</Chip> : null}
       </div>
+      {card.droppedFields > 0 ? <p className="mb-2 text-[12px]" style={{ fontFamily: MONO, color: 'var(--red)' }}>{card.droppedFields} field(s) the door served for this verb could not be read and are not shown</p> : null}
       {!card.ready ? <p data-session-why className="mb-3 text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{card.why}</p> : null}
       <fieldset disabled={st.phase === 'starting' || !card.ready} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 min-w-0 border-0 p-0 m-0">
         {card.fields.map((f) => (
@@ -124,15 +125,27 @@ function RunView({ sid, session, listedState, door }: { sid: string; session: st
   const onAttach = () => {
     door.sessionRun(sid).then((p: unknown) => setSt({ phase: 'attached', run: sessionRunView(p) })).catch((err: unknown) => setSt(sessionFailed(err)))
   }
-  const live = sessionPolling(st)
+  // A failed re-read keeps the last good answer on screen and SAYS it failed; failures back the poll off, and a refusal
+  // no later read can change ends it (attack a320d86 B13).
+  const [failures, setFailures] = useState(0)
+  const [lastFail, setLastFail] = useState('')
+  const live = sessionPolling(st) && !terminalRefusal(lastFail.split(':')[0] ?? '')
   useEffect(() => {
     if (!live) return
     const ac = new AbortController()
-    const t = window.setInterval(() => {
-      door.sessionRun(sid, ac.signal).then((p: unknown) => setSt({ phase: 'attached', run: sessionRunView(p) })).catch(() => { /* the next tick asks again */ })
-    }, SESSION_POLL_MS)
-    return () => { ac.abort(); window.clearInterval(t) }
-  }, [live, sid, door])
+    const t = window.setTimeout(() => {
+      door
+        .sessionRun(sid, ac.signal)
+        .then((p: unknown) => { setSt({ phase: 'attached', run: sessionRunView(p) }); setFailures(0); setLastFail('') })
+        .catch((err: unknown) => {
+          if (ac.signal.aborted) return
+          const f = sessionFailed(err)
+          setFailures((n) => n + 1)
+          setLastFail(f.phase === 'error' ? `${f.code}: ${f.human}` : 'UNREACHABLE')
+        })
+    }, pollDelay(failures))
+    return () => { ac.abort(); window.clearTimeout(t) }
+  }, [live, sid, door, failures, st])
 
   return (
     <div data-session-run={sid} data-session-run-state={st.phase === 'attached' ? st.run.state : listedState} className="rounded-lg border p-3" style={{ borderColor: 'var(--line-2)' }}>
@@ -146,6 +159,7 @@ function RunView({ sid, session, listedState, door }: { sid: string; session: st
         <div className="mt-2">
           <p className="text-[12px]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{st.run.command}</p>
           {st.run.branchMoved ? <p className="text-[12px]" style={{ fontFamily: UI, color: 'var(--red)' }}>{st.run.branchMoved}</p> : null}
+          {lastFail ? <p data-session-read-failed className="text-[12px]" style={{ fontFamily: MONO, color: 'var(--red)' }}>last read failed ({lastFail}) -- showing the answer before it</p> : null}
           {st.run.lines.length ? (
             <pre data-session-lines={st.run.lines.length} className="mt-2 max-h-[240px] overflow-auto rounded-lg p-3 text-[11.5px] leading-[17px] whitespace-pre-wrap break-words" style={{ fontFamily: MONO, background: 'var(--well)', color: 'var(--text-2)' }}>
               {st.run.lines.join('\n')}

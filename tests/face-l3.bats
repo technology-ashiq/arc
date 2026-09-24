@@ -38,6 +38,10 @@ load 'test_helper'
   [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: an auto-start on mount"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start from Ask"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start that skips the click token"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start through door.call on the start route"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start by bracket access"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: an auto-start on mount, no braces"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start from a new .jsx file"* ]] || { echo "$output"; false; }
 }
 
 @test "no L3 test or source file carries a byte that makes grep call it binary" {

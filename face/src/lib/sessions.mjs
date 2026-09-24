@@ -16,7 +16,7 @@ import { unescapeDoorText } from "./door.mjs";
 
 /** @typedef {import("./ops.mjs").OpField} OpField */
 /**
- * @typedef {{ id: string, label: string, process: string, receiptKind: string, fields: OpField[], spends: boolean,
+ * @typedef {{ id: string, label: string, process: string, receiptKind: string, fields: OpField[], droppedFields: number, spends: boolean,
  *   ready: boolean, why: string, pickProcess: boolean }} SessionCard
  * @typedef {{ sid: string, session: string, state: string, startedAt: number }} RunRow
  * @typedef {{ id: string, kind: string, ts: string }} SessionReceipt
@@ -42,14 +42,20 @@ const text = (v) => unescapeDoorText(typeof v === "string" ? v : "");
  */
 export function sessionCards(roomId, registry) {
   const rows = registry && typeof registry === "object" && Array.isArray(/** @type {any} */ (registry).sessions) ? /** @type {any[]} */ (/** @type {any} */ (registry).sessions) : [];
-  return rows.filter((r) => r && r.room === roomId && typeof r.id === "string").map((r) => {
+  // A row the door served malformed is skipped, and a malformed field is dropped and counted -- never a throw at render,
+  // which would take down every room the dock mounts under (attack a320d86 B11).
+  const isField = (f) => f !== null && typeof f === "object" && !Array.isArray(f) && typeof f.name === "string" && f.name !== "";
+  return rows.filter((r) => r && typeof r === "object" && r.room === roomId && typeof r.id === "string" && (r.fields === undefined || Array.isArray(r.fields))).map((r) => {
     const ready = r.processReady === true;
+    const all = Array.isArray(r.fields) ? r.fields : [];
+    const good = all.filter(isField);
     return {
       id: r.id, label: text(r.label), process: typeof r.process === "string" ? r.process : "",
       receiptKind: r.receipt && typeof r.receipt.kind === "string" ? r.receipt.kind : "",
       spends: r.spends === true, pickProcess: r.pickProcess === true, ready,
       why: ready ? "" : r.confirmStep ? `stops for your confirmation before its ${text(r.confirmStep)} step -- not shippable until that stop is enforced` : `processes/${text(r.process)}.process.yaml is not on this tree yet -- not shippable`,
-      fields: (Array.isArray(r.fields) ? r.fields : []).map((/** @type {any} */ f) => ({
+      droppedFields: all.length - good.length,
+      fields: good.map((/** @type {any} */ f) => ({
         name: String(f.name), label: text(f.label), placeholder: text(f.placeholder),
         type: f.type === "select" || f.type === "int" ? f.type : "text",
         options: Array.isArray(f.options) ? f.options.map(String) : [],
@@ -130,6 +136,21 @@ export function sessionRunView(p) {
 /** Is an attached run still worth reading again? @param {SessionState} st */
 export function sessionPolling(st) {
   return st.phase === "attached" && !st.run.done;
+}
+
+/** Refusals that no later read can change: the run is gone, or never was this door's. */
+const TERMINAL = new Set(["UNKNOWN_RUN", "BAD_RUN_ID", "RUN_OUTSIDE", "UNAUTHORIZED", "BAD_TOKEN"]);
+/** @param {string} code */
+export function terminalRefusal(code) { return TERMINAL.has(code); }
+
+/**
+ * The wait before the next read of an attached run: the base interval, doubled per failed read in a row, capped --
+ * a door that stopped answering is not asked every 1.5 s forever (attack a320d86 B13).
+ * @param {number} failures
+ */
+export function pollDelay(failures) {
+  const n = Math.max(0, Math.min(Number.isInteger(failures) ? failures : 0, 5));
+  return Math.min(SESSION_POLL_MS * 2 ** n, 30_000);
 }
 
 /** The run's state, in the owner's words. @param {SessionRun} run */

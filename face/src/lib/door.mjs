@@ -446,8 +446,11 @@ export class Door {
    * @param {string} id @param {{ input: Record<string, string>, driver: string, process?: string }} body
    */
   async sessionStart(id, body) {
+    // A caller never supplies the token: one that tries is refused here, and the fresh one is spread LAST so nothing
+    // in the body can replace it (attack a320d86 B12).
+    if (body && typeof body === "object" && Object.hasOwn(body, "click")) throw new DoorError("BAD_SESSION_BODY", "a start's click token is fetched by the door client, never passed in", 0);
     const { click } = await this.call("/api/session-click", { method: "POST" });
-    return this.call(`/api/session/${encodeURIComponent(id)}/start`, { method: "POST", body: { click, ...body } });
+    return this.call(`/api/session/${encodeURIComponent(id)}/start`, { method: "POST", body: { ...body, click } });
   }
 
   /** Attach: a session as its files and the spine hold it. A read: it never starts one. @param {string} sid @param {AbortSignal} [signal] */

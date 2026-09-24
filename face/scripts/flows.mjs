@@ -14,9 +14,10 @@
 //
 // The flows mutate the fixture spine, so the harness runs them AFTER both moods' smoke has counted it.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { openPage } from "./cdp.mjs";
 import { withChrome, collectErrors, until, redactSecrets, oneLine } from "./smoke.mjs";
@@ -371,17 +372,28 @@ export const SESSION_FROZEN = Object.freeze({ start: "Start session", attach: "A
 
 /**
  * How many START requests the door has journalled -- refused or not, since a start that was refused was still a start
- * the page asked for. The door journals every request to a mutating route (arc-dash's dispatcher), so this counts
- * what the PAGE did, not what the door allowed. @param {string} journalDir
+ * the page asked for. The door journals every request to a mutating route (arc-dash's dispatcher), so this counts what
+ * the PAGE did, not what the door allowed. FAIL-CLOSED (attack a320d86 B5): a torn line that names the start route
+ * counts as a start, the path is compared as a URL's pathname (a query string or a trailing slash still counts), and a
+ * journal that cannot be read answers null -- UNMEASURED, never the passing 0.
+ * @param {string} journalDir @returns {number | null}
  */
 export function startRequests(journalDir) {
+  let files;
+  try { files = readdirSync(journalDir).filter((f) => /^journal-\d{4}-\d{2}-\d{2}\.jsonl$/.test(f)); }
+  catch { return null; }
   let n = 0;
-  let files = [];
-  try { files = readdirSync(journalDir).filter((f) => /^journal-\d{4}-\d{2}-\d{2}\.jsonl$/.test(f)); } catch { return 0; }
   for (const f of files) {
-    for (const line of readFileSync(join(journalDir, f), "utf8").split("\n")) {
+    let text;
+    try { text = readFileSync(join(journalDir, f), "utf8"); } catch { return null; }
+    for (const line of text.split("\n")) {
       if (!line) continue;
-      try { const e = JSON.parse(line); if (typeof e.path === "string" && /^\/api\/session\/[^/]+\/start$/.test(e.path)) n++; } catch { /* a torn line is not a start */ }
+      let e = null;
+      try { e = JSON.parse(line); } catch { if (/\/api\/session\/[^"\s]*\/start/.test(line)) n++; continue; }
+      if (!e || typeof e.path !== "string") continue;
+      let path = e.path;
+      try { path = new URL(e.path, "http://door.invalid").pathname; } catch { /* the raw path is judged */ }
+      if (/^\/api\/session\/[^/]+\/start\/?$/.test(path)) n++;
     }
   }
   return n;
@@ -390,19 +402,22 @@ export function startRequests(journalDir) {
 /** The session dock as the page draws it, read in the page. Self-contained, like pageFlow. */
 function dockState() {
   const dock = document.querySelector("section[data-room] [data-session-dock]");
-  if (!dock) return null;
-  return { cards: dock.querySelectorAll("[data-session]").length, runs: dock.querySelectorAll("[data-session-run]").length, lines: dock.querySelectorAll("[data-session-lines]").length };
+  const mark = /** @type {any} */ (window).__arcSessionFlowMark === 1;
+  if (!dock) return { cards: 0, runs: 0, lines: 0, mark, runState: "" };
+  const run = dock.querySelector("[data-session-run]");
+  return { cards: dock.querySelectorAll("[data-session]").length, runs: dock.querySelectorAll("[data-session-run]").length, lines: dock.querySelectorAll("[data-session-lines]").length, mark, runState: run ? String(run.getAttribute("data-session-run-state")) : "" };
 }
 
-/** Click the button with this text inside the element matching `scope`, in the page. Self-contained. @param {{ scope: string, text: string, pick?: string }} arg */
+/** Mark THIS document, so a reload is proven by the mark being gone. Self-contained. */
+function markDocument() {
+  /** @type {any} */ (window).__arcSessionFlowMark = 1;
+  return "";
+}
+
+/** Click the button with this text inside the element matching `scope`, in the page. Self-contained. @param {{ scope: string, text: string }} arg */
 function clickIn(arg) {
   const el = document.querySelector(arg.scope);
   if (!el) return "no element " + arg.scope;
-  if (arg.pick) {
-    const p = Array.from(el.querySelectorAll("button")).find((b) => b.textContent.trim() === arg.pick);
-    if (!p) return "no option " + arg.pick;
-    p.click();
-  }
   const b = Array.from(el.querySelectorAll("button")).find((x) => x.textContent.trim() === arg.text);
   if (!b) return "no button " + arg.text;
   if (b.disabled) return "the button " + arg.text + " is disabled";
@@ -410,11 +425,19 @@ function clickIn(arg) {
   return "";
 }
 
+/** The refusal a session card shows, read in the page. Self-contained. @param {string} scope */
+function refusalIn(scope) {
+  const el = document.querySelector(scope + " [data-session-refused]");
+  return el ? el.textContent.trim() : "";
+}
+
 /**
  * Open every served room that carries a session verb, reload it, and attach to a running session -- then count the
  * door's start requests: 0. Then the positive control: one click on Start, and the count is exactly 1. A flow whose
- * counter cannot move proves nothing, so the control is part of the pass.
- * @param {{ door: string, base: string, token: string, tmp: string, journal?: string, page: any, errors: any[], current: { room: string } }} o
+ * counter cannot move proves nothing, so the control is part of the pass. The control is DETERMINISTIC: the harness
+ * door is a sim door and the card starts on the default driver (auto), so the door answers SIM_SPEND before any spawn,
+ * on every branch and every runner -- the flow never starts a real session (attack a320d86 B1, B2).
+ * @param {{ door: string, base: string, token: string, tmp: string, repo: string, journal?: string, page: any, errors: any[], current: { room: string } }} o
  * @param {(line: string) => void} log
  */
 export async function sessionFlow(o, log) {
@@ -422,66 +445,99 @@ export async function sessionFlow(o, log) {
   const journal = o.journal ?? join(o.tmp, "journal");
   const headers = { Authorization: `Bearer ${o.token}` };
   const page = o.page;
+  // A page-side exception is thrown, never read as the permissive answer (attack a320d86 B4).
   const evalPage = async (fn, arg) => {
     const r = await page.send("Runtime.evaluate", { expression: `(${fn.toString()})(${arg === undefined ? "" : JSON.stringify(arg)})`, returnByValue: true, awaitPromise: true });
+    if (r.exceptionDetails) throw new Error(`the page threw in ${fn.name}: ${oneLine(redactSecrets(String(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text ?? "an exception"), [o.token]))}`);
     return r.result ? r.result.value : undefined;
   };
+  const clicked = async (arg) => {
+    const v = await evalPage(clickIn, arg);
+    if (typeof v !== "string") throw new Error(`clickIn answered ${JSON.stringify(v)}, not a string`);
+    return v;
+  };
+  // Bounded, and a refusal named by its status and code -- not blamed on the registry (attack a320d86 B7).
+  const getJson = async (path) => {
+    const r = await fetch(new URL(path, o.door), { headers, signal: AbortSignal.timeout(15_000) });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`GET ${path} answered ${r.status} ${body && (body.error || body.code) ? String(body.error || body.code) : ""}`.trim());
+    return body;
+  };
+  /** @type {import("node:child_process").ChildProcess | null} */
+  let holder = null;
   try {
-    const reg = await (await fetch(new URL("/api/sessions", o.door), { headers })).json();
-    const served = new Set(((await (await fetch(new URL("/api/rooms", o.door), { headers })).json()).rooms || []).map((r) => r.id));
-    const rooms = [...new Set((reg.sessions || []).map((s) => s.room))].filter((r) => served.has(r)).sort();
-    if (rooms.length < 5) { res.why = `only ${rooms.length} served rooms carry a session verb`; return res; }
+    // The expected rooms come from the REGISTRY FILE, not from the door under test: every row's room must be served
+    // and swept, and one that is not fails by name (attack a320d86 B8).
+    const { SESSIONS } = await import(pathToFileURL(join(o.repo, ".claude", "scripts", "hq", "face-sessions.mjs")).href);
+    const served = new Set(((await getJson("/api/rooms")).rooms || []).map((r) => r.id));
+    const wanted = [...new Set(SESSIONS.map((s) => s.room))].sort();
+    const unserved = wanted.filter((r) => !served.has(r));
+    if (unserved.length) { res.why = `session rows name rooms the face does not serve: ${unserved.join(", ")}`; return res; }
+    const reg = await getJson("/api/sessions");
+    const regRooms = new Set((reg.sessions || []).map((s) => s.room));
+    const missing = wanted.filter((r) => !regRooms.has(r));
+    if (missing.length) { res.why = `the door's registry is missing rooms the registry file names: ${missing.join(", ")}`; return res; }
 
-    // A RUNNING session to attach to, seeded where the door keeps them: this process's pid, so it reads as running.
+    // A RUNNING session to attach to: a child THIS flow owns and kills, so the door's liveness reads a real process
+    // started for the purpose, never the harness's own pid (attack a320d86 B6).
+    holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 600000)"], { stdio: "ignore", windowsHide: true });
     const sid = `${Date.now().toString(36).padStart(9, "0").slice(-9)}flowrun`;
     const dir = join(journal, "sessions", sid);
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "session.json"), JSON.stringify({ sid, session: "review-ship.review", room: "review-ship", process: "review-diff", driver: "mock", startedAt: Date.now(), digest: "flow", argv: ["node", ".claude/scripts/engine/arc-run.mjs", "--process", "review-diff", "--driver", "mock"], receipt: { kind: "review.completed" }, pid: process.pid }));
+    writeFileSync(join(dir, "session.json"), JSON.stringify({ sid, session: "review-ship.review", room: "review-ship", process: "review-diff", driver: "mock", startedAt: Date.now(), digest: "flow", argv: ["node", ".claude/scripts/engine/arc-run.mjs", "--process", "review-diff", "--driver", "mock"], receipt: { kind: "review.completed" }, pid: holder.pid }));
     writeFileSync(join(dir, "run.log"), "phase: seeded by the browser flow\n");
 
-    for (const room of rooms) {
+    for (const room of wanted) {
       o.current.room = room;
       await page.send("Page.navigate", { url: `${o.base}?sessions=${room}#/${encodeURIComponent(room)}&token=${encodeURIComponent(o.token)}` });
       let st = null;
-      await until(async () => { st = await evalPage(dockState); return st && st.cards > 0; }, 20000);
+      await until(async () => { st = await evalPage(dockState); return st.cards > 0; }, 20000);
       if (!st || st.cards === 0) { res.why = `the ${room} room drew no session dock`; return res; }
       res.rooms++;
+      // A reload counts only once the NEW document has drawn the dock: the mark set on this one must be gone
+      // (attack a320d86 B3 -- the old document answered the predicate before the reload landed).
+      await evalPage(markDocument);
       await page.send("Page.reload", { ignoreCache: false });
       st = null;
-      await until(async () => { st = await evalPage(dockState); return st && st.cards > 0; }, 20000);
-      if (!st || st.cards === 0) { res.why = `the ${room} room drew no session dock after a reload`; return res; }
+      await until(async () => { try { st = await evalPage(dockState); } catch { return false; } return !st.mark && st.cards > 0; }, 20000);
+      if (!st || st.mark || st.cards === 0) { res.why = `the ${room} room did not redraw its session dock after a reload`; return res; }
       res.reloads++;
     }
 
-    // Attach: a read, in the room the seeded run belongs to.
+    // Attach: a read, in the room the seeded run belongs to -- and the run must read RUNNING, or the attach poll (the
+    // path a start-from-poll mutant would use) never ran (attack a320d86 B6).
     o.current.room = "review-ship";
     await page.send("Page.navigate", { url: `${o.base}?sessions=attach#/review-ship&token=${encodeURIComponent(o.token)}` });
-    await until(async () => { const st = await evalPage(dockState); return st && st.runs > 0; }, 20000);
-    const clicked = await evalPage(clickIn, { scope: `[data-session-run="${sid}"]`, text: SESSION_FROZEN.attach });
-    if (clicked) { res.why = `attach: ${clicked}`; return res; }
-    res.attach = await until(async () => { const st = await evalPage(dockState); return st && st.lines > 0; }, 20000);
-    if (!res.attach) { res.why = "attach drew no lines from the seeded run"; return res; }
-    // Past the attach poll's own interval, so a start fired by the poll would be counted too.
-    await sleep(3500);
+    await until(async () => (await evalPage(dockState)).runs > 0, 20000);
+    const attachWhy = await clicked({ scope: `[data-session-run="${sid}"]`, text: SESSION_FROZEN.attach });
+    if (attachWhy) { res.why = `attach: ${attachWhy}`; return res; }
+    let st = null;
+    res.attach = await until(async () => { st = await evalPage(dockState); return st.lines > 0 && st.runState === "running"; }, 20000);
+    if (!res.attach) { res.why = `attach did not show the seeded run RUNNING with its lines (state ${st ? st.runState : "none"})`; return res; }
+    // Past two of the attach poll's own intervals, so a start fired by the poll is counted too.
+    await sleep(4000);
 
-    res.starts = startRequests(journal);
-    if (res.starts !== 0) { res.why = `${res.starts} start request(s) with no click -- across ${res.rooms} rooms, ${res.reloads} reloads and an attach`; return res; }
+    res.starts = startRequests(journal) ?? -1;
+    if (res.starts !== 0) { res.why = res.starts < 0 ? "the door journal could not be read -- UNMEASURED" : `${res.starts} start request(s) with no click -- across ${res.rooms} rooms, ${res.reloads} reloads and an attach`; return res; }
 
-    // THE POSITIVE CONTROL: one click, one start request -- whatever the door answers (a sim door on a detached CI
-    // checkout refuses BRANCH_REFUSED; that is still exactly one start the page asked for).
+    // THE POSITIVE CONTROL: one click on the default driver, one start request, refused SIM_SPEND by name.
     const errorsBefore = o.errors.length;
-    const started = await evalPage(clickIn, { scope: '[data-session="review-ship.review"]', text: SESSION_FROZEN.start, pick: "mock" });
-    if (started) { res.why = `control: ${started}`; return res; }
-    await until(async () => startRequests(journal) >= 1, 20000);
-    await sleep(1500);
-    res.control = startRequests(journal);
-    // The refused start is a 4xx the browser logs as a resource error: THAT one entry is the control's expected outcome.
-    const k = o.errors.findIndex((e, i) => i >= errorsBefore && e.type === "log" && /status of 4\d\d/.test(e.text) && /\/api\/session\/review-ship\.review\/start$/.test(String(e.url || "")));
+    const scope = '[data-session="review-ship.review"]';
+    const startWhy = await clicked({ scope, text: SESSION_FROZEN.start });
+    if (startWhy) { res.why = `control: ${startWhy}`; return res; }
+    let refused = "";
+    await until(async () => { refused = await evalPage(refusalIn, scope); return refused !== ""; }, 20000);
+    res.control = startRequests(journal) ?? -1;
+    // The refused start is a 403 the browser logs as a resource error: THAT one entry is the control's expected outcome.
+    const k = o.errors.findIndex((e, i) => i >= errorsBefore && e.type === "log" && /status of 403/.test(e.text) && /\/api\/session\/review-ship\.review\/start$/.test(String(e.url || "")));
     if (k >= 0) o.errors.splice(k, 1);
+    if (!/SIM_SPEND/.test(refused)) { res.why = `the control was not refused SIM_SPEND: ${oneLine(refused).slice(0, 160) || "no refusal drawn"}`; return res; }
     if (res.control !== 1) { res.why = `one click made ${res.control} start request(s), not 1`; return res; }
     res.ok = true;
   } catch (e) {
     res.why = oneLine(redactSecrets(String(e && e.message ? e.message : e), [o.token]));
+  } finally {
+    if (holder) { try { holder.kill(); } catch { /* already gone */ } }
   }
   if (!res.ok) log(`sessions: FAIL -- ${res.why}`);
   return res;

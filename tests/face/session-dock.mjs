@@ -81,77 +81,127 @@ const registry = {
   check("sessionVerdict: done with none credited says so, never success", /no receipt credited/.test(S.sessionVerdict(S.sessionRunView({ state: "done" }))));
 }
 
+// Round-1 attack fixes (a320d86 B11, B13) held under node.
+{
+  const bad = { sessions: [
+    { id: "x.bad-fields", room: "today", label: "L", fields: [null, 7, { label: "no name" }, { name: "ok", label: "Ok", placeholder: "", type: "text", max: 10, required: false }] },
+    { id: "x.fields-not-list", room: "today", label: "L", fields: "nope" },
+    null,
+  ] };
+  let cards = null, threw = null;
+  try { cards = S.sessionCards("today", bad); } catch (e) { threw = e; }
+  check("a malformed row never throws at render: bad fields are dropped and counted, a row whose fields is no list is skipped",
+    threw === null && cards.length === 1 && cards[0].fields.length === 1 && cards[0].droppedFields === 3, threw ? String(threw) : JSON.stringify(cards));
+  check("pollDelay: the base interval with no failure, doubling per failure, capped at 30 s",
+    S.pollDelay(0) === S.SESSION_POLL_MS && S.pollDelay(1) === S.SESSION_POLL_MS * 2 && S.pollDelay(50) === 30_000 && S.pollDelay(-3) === S.SESSION_POLL_MS);
+  check("terminalRefusal: a run gone or never this door's ends the poll; a transient failure does not",
+    S.terminalRefusal("UNKNOWN_RUN") && S.terminalRefusal("RUN_OUTSIDE") && !S.terminalRefusal("UNREACHABLE") && !S.terminalRefusal("RUN_UNREADABLE"));
+}
+
 // ---- 2. the click-only gate ----
-/** Every .ts/.tsx/.mjs file under face/src, as { rel, text }. */
+// What the gate reads: every file under face/src. A code file is read whatever its spelling of JS or TS; a file of a
+// kind the gate cannot read as code is refused by name unless it is a known non-code asset (attack a320d86 B9).
+const CODE = /\.(tsx?|mts|cts|mjs|cjs|jsx?|vue|svelte|html)$/;
+const ASSET = /\.(css|json|svg|png|jpe?g|webp|gif|ico|woff2?|ttf|md|txt)$/;
+/** @returns {{ rel: string, text: string, code: boolean }[]} */
 function sources(dir = SRC, out = []) {
   for (const n of readdirSync(dir)) {
     const p = join(dir, n);
-    if (statSync(p).isDirectory()) sources(p, out);
-    else if (/\.(tsx?|mjs)$/.test(n)) out.push({ rel: relative(SRC, p).split(sep).join("/"), text: readFileSync(p, "utf8") });
+    if (statSync(p).isDirectory()) { sources(p, out); continue; }
+    const rel = relative(SRC, p).split(sep).join("/");
+    out.push({ rel, text: CODE.test(n) ? readFileSync(p, "utf8") : "", code: CODE.test(n), asset: ASSET.test(n) });
   }
   return out;
 }
 
+/** Comments out, so an identifier is counted only where it is code. */
+const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/[^\n]*/g, "$1");
+
 /**
- * The gate: null when the tree holds, else why not. The rule, whole: the only CALL of `sessionStart(` outside its
- * definition is in shell/SessionDock.tsx, inside `const onStart = () => { ... }`, and `onClick={onStart}` is bound; no
- * `useEffect` in the dock mentions sessionStart; and door.mjs's sessionStart fetches /api/session-click before it
- * posts the start.
- * @param {{ rel: string, text: string }[]} files
+ * The gate: null when the tree holds, else why not. The rule, whole:
+ *   - every file under face/src is code the gate reads or a known asset;
+ *   - the only CALL of `sessionStart` (dotted or bracketed) outside its definition is in shell/SessionDock.tsx, inside
+ *     `const onStart = () => { ... }`;
+ *   - in the dock's code, `onStart` appears exactly twice: its declaration and `onClick={onStart}` -- so no hook of
+ *     any shape, no render body and no other handler can call it (attack a320d86 B10);
+ *   - no file but lib/door.mjs names the start route or the click-token route, so no `door.call` or `fetch` can reach
+ *     them another way;
+ *   - door.mjs's sessionStart refuses a caller's click, fetches a fresh one, and spreads it LAST.
+ * @param {{ rel: string, text: string, code?: boolean, asset?: boolean }[]} files
  */
 function clickOnlyGate(files) {
+  const unread = files.filter((f) => !f.code && !f.asset);
+  if (unread.length) return `the gate cannot read ${unread.map((f) => f.rel).join(", ")} as code, and it is no known asset`;
   const calls = [];
-  for (const f of files) {
+  for (const f of files.filter((x) => x.code)) {
+    const t = code(f.text);
+    if (/\[\s*["'`]sessionStart["'`]\s*\]/.test(t)) return `${f.rel} reaches sessionStart by bracket access`;
     const re = /\bsessionStart\s*\(/g;
     let m;
-    while ((m = re.exec(f.text))) {
-      // The definition in door.mjs (`async sessionStart(id, body) {`) is not a call.
-      const before = f.text.slice(Math.max(0, m.index - 12), m.index);
+    while ((m = re.exec(t))) {
+      const before = t.slice(Math.max(0, m.index - 12), m.index);
       if (f.rel === "lib/door.mjs" && /async\s+$/.test(before)) continue;
       calls.push({ rel: f.rel, at: m.index });
     }
+    if (f.rel !== "lib/door.mjs" && (/\/api\/session-click/.test(t) || /\/api\/session\/[^\n]*\/start/.test(t))) return `${f.rel} names a session route itself -- only door.mjs may`;
   }
   if (calls.length !== 1) return `door.sessionStart is called at ${calls.length} site(s) (${calls.map((c) => c.rel).join(", ")}); the rule is exactly one`;
   const [c] = calls;
   if (c.rel !== "shell/SessionDock.tsx") return `the one call is in ${c.rel}, not the dock`;
-  const dock = files.find((f) => f.rel === "shell/SessionDock.tsx").text;
+  const dock = code(files.find((f) => f.rel === "shell/SessionDock.tsx").text);
   const start = dock.indexOf("const onStart = () => {");
   if (start < 0) return "the dock has no onStart handler";
-  // The handler's body: to the first line that closes it at the handler's own indent.
   const end = dock.indexOf("\n  }\n", start);
   if (!(c.at > start && c.at < end)) return "the call is not inside onStart";
-  if (!/onClick=\{onStart\}/.test(dock)) return "onStart is not bound to a button's onClick";
-  for (const m of dock.matchAll(/useEffect\(\s*\(\)\s*=>\s*\{[\s\S]*?\n\s{2,4}\}\s*,\s*\[[^\]]*\]\s*\)/g)) {
-    if (/sessionStart|onStart\s*\(/.test(m[0])) return "a useEffect in the dock starts a session";
-  }
-  const door = files.find((f) => f.rel === "lib/door.mjs").text;
-  const def = door.slice(door.indexOf("async sessionStart("), door.indexOf("async sessionStart(") + 600);
+  const uses = (dock.match(/\bonStart\b/g) || []).length;
+  if (uses !== 2 || !/onClick=\{onStart\}/.test(dock)) return `onStart appears ${uses} time(s) in the dock's code; the rule is its declaration and onClick={onStart}, nothing else`;
+  const door = code(files.find((f) => f.rel === "lib/door.mjs").text);
+  const from = door.indexOf("async sessionStart(");
+  const def = door.slice(from, door.indexOf("\n  }\n", from));
   const clickAt = def.indexOf("/api/session-click");
   const startAt = def.indexOf("/start`");
-  if (clickAt < 0 || startAt < 0 || clickAt > startAt) return "door.sessionStart does not fetch a fresh click token before it posts the start";
+  if (from < 0 || clickAt < 0 || startAt < 0 || clickAt > startAt) return "door.sessionStart does not fetch a fresh click token before it posts the start";
+  if (!/hasOwn\(body,\s*"click"\)/.test(def) || !/\{\s*\.\.\.body,\s*click\s*\}/.test(def)) return "door.sessionStart lets a caller's click stand (it must refuse one, and spread the fresh token last)";
   return null;
 }
 
 const real = sources();
 check("positive control: the gate reads the real tree, finds the dock and door.mjs (vacuous-pass guard)",
-  real.some((f) => f.rel === "shell/SessionDock.tsx") && real.some((f) => f.rel === "lib/door.mjs") && real.length > 50, `files=${real.length}`);
+  real.some((f) => f.rel === "shell/SessionDock.tsx" && f.code) && real.some((f) => f.rel === "lib/door.mjs" && f.code) && real.filter((f) => f.code).length > 50, `files=${real.length}`);
 check("THE REAL TREE HOLDS: one sessionStart call, inside onStart, bound to onClick; door.mjs fetches a click first", clickOnlyGate(real) === null, clickOnlyGate(real) || "");
 
 /** The real tree with one file's text replaced. @param {string} rel @param {(t: string) => string} edit */
 const mutate = (rel, edit) => real.map((f) => (f.rel === rel ? { ...f, text: edit(f.text) } : f));
+/** The real tree with one file added. */
+const addFile = (rel, text, isCode = true) => [...real, { rel, text, code: isCode, asset: false }];
+const DOCK = "shell/SessionDock.tsx";
+const BEFORE_BLOCKED = "  const blocked = startBlocked(card, values, proc)";
 const mutants = [
-  ["an auto-start on mount (a useEffect in the dock that starts)", mutate("shell/SessionDock.tsx", (t) => t.replace("  const blocked = startBlocked(card, values, proc)", "  useEffect(() => {\n    door.sessionStart(card.id, startBody(card, values, driver, proc))\n  }, [door])\n  const blocked = startBlocked(card, values, proc)"))],
+  ["an auto-start on mount (a useEffect in the dock that starts)", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => {\n    door.sessionStart(card.id, startBody(card, values, driver, proc))\n  }, [door])\n" + BEFORE_BLOCKED))],
+  ["an auto-start on mount, no braces: useEffect(() => onStart(), [])", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => onStart(), [])\n" + BEFORE_BLOCKED))],
+  ["an auto-start on every render: useEffect with no deps", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => { onStart() })\n" + BEFORE_BLOCKED))],
+  ["an auto-start in a layout effect", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useLayoutEffect(() => { onStart() }, [])\n" + BEFORE_BLOCKED))],
+  ["a start from the render body", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  if (!sid) onStart()\n" + BEFORE_BLOCKED))],
   ["a start on reload (the room frame starts one as it mounts)", mutate("shell/RoomFrame.tsx", (t) => t.replace("import SessionDock from './SessionDock'", "import SessionDock from './SessionDock'\nvoid (globalThis as any).door?.sessionStart('review-ship.review', { input: {}, driver: 'auto' })"))],
   ["a start from Ask", mutate("lib/ask.mjs", (t) => `${t}\nexport function askStarts(door) { return door.sessionStart("council.convene", { input: {}, driver: "auto" }); }\n`)],
-  ["a start from the attach poll", mutate("shell/SessionDock.tsx", (t) => t.replace("door.sessionRun(sid).then(", "door.sessionStart(session, { input: {}, driver: 'auto' }); door.sessionRun(sid).then("))],
+  ["a start from the attach poll", mutate(DOCK, (t) => t.replace("door.sessionRun(sid).then(", "door.sessionStart(session, { input: {}, driver: 'auto' }); door.sessionRun(sid).then("))],
+  ["a start through door.call on the start route", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => { door.call('/api/session/review-ship.review/start', { method: 'POST', body: {} }) }, [])\n" + BEFORE_BLOCKED))],
+  ["a click token fetched outside door.mjs", mutate("lib/ask.mjs", (t) => `${t}\nexport const grab = (door) => door.call("/api/session-click", { method: "POST" });\n`)],
+  ["a start by bracket access", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => { door['sessionStart'](card.id, { input: {}, driver: 'auto' }) }, [])\n" + BEFORE_BLOCKED))],
+  ["a start from a new .jsx file", addFile("shell/Boot.jsx", "export default function Boot({ door }) { door.sessionStart('review-ship.review', { input: {}, driver: 'auto' }); return null }\n")],
+  ["a start from a new .js file", addFile("shell/boot.js", "export const boot = (door) => door.sessionStart('org.lane-birth', { input: {}, driver: 'auto' })\n")],
+  ["a file of a kind the gate cannot read", addFile("shell/boot.wasm", "", false)],
   ["a start that skips the click token (door.mjs posts without asking for one)", mutate("lib/door.mjs", (t) => t.replace('const { click } = await this.call("/api/session-click", { method: "POST" });', "const click = \"replayed-token-000000000000\";"))],
-  ["onStart no longer bound to the button (called on render instead)", mutate("shell/SessionDock.tsx", (t) => t.replace("onClick={onStart}", "onClick={() => {}} data-x={String(onStart())}"))],
+  ["a caller's click allowed to override the fresh one (spread order)", mutate("lib/door.mjs", (t) => t.replace("body: { ...body, click } }", "body: { click, ...body } }"))],
+  ["onStart no longer bound to the button (called on render instead)", mutate(DOCK, (t) => t.replace("onClick={onStart}", "onClick={() => {}} data-x={String(onStart())}"))],
 ];
-check("positive control: every mutant actually changed the text it plants into", mutants.every(([, files]) => files.some((f, i) => f.text !== real[i].text)), mutants.filter(([, files]) => files.every((f, i) => f.text === real[i].text)).map(([n]) => n).join(" | "));
+check("positive control: every mutant actually changed the tree it plants into",
+  mutants.every(([, files]) => files.length !== real.length || files.some((f, i) => f.text !== real[i].text)),
+  mutants.filter(([, files]) => files.length === real.length && files.every((f, i) => f.text === real[i].text)).map(([n]) => n).join(" | "));
 for (const [name, files] of mutants) {
   const why = clickOnlyGate(files);
   check(`MUTANT REFUSED by the click-only gate: ${name}`, why !== null, why || "the gate passed it");
 }
 
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran >= 30 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 45 ? 0 : 1;
