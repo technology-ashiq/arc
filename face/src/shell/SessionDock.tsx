@@ -5,7 +5,7 @@
 // that reads the run back -- its lines as it writes them, its state, the receipts the door credited to it.
 //
 // A SESSION STARTS FROM THE START BUTTON'S CLICK AND NOTHING ELSE. Mounting reads the registry; Attach reads a run;
-// neither can start one, and door.sessionStart is called in onStart alone. The browser flow counts the door's start
+// neither can start one; the one start call is in the Start handler alone. The browser flow counts the door's start
 // requests across mount, reload and attach and requires 0 (face/scripts/flows.mjs).
 //
 // Every decision is in lib/sessions.mjs, where node can hold it; this file runs the effects and draws.
@@ -68,7 +68,7 @@ function SessionCardView({ card, door, drivers, processes, onStarted }: { card: 
   const [sid, setSid] = useState('')
   const busy = useRef(false)
 
-  // THE ONLY CALLER OF door.sessionStart. It runs from the Start button's onClick; nothing mounts, polls or replays it.
+  // THE ONLY START CALL. It runs from the Start button's click; nothing mounts, polls or replays it.
   const onStart = () => {
     if (busy.current) return
     busy.current = true

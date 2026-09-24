@@ -5,7 +5,7 @@
 // (shell/SessionDock.tsx) runs the effects and draws.
 //
 // THE RULE THIS FILE EXISTS TO HOLD: a session starts from the owner's click and from nothing else. Nothing here
-// starts one; `startBody` is the only thing that shapes a start, and the dock calls door.sessionStart from its Start
+// starts one; `startBody` is the only thing that shapes a start, and the dock makes its one start call from its Start
 // button's handler alone. Mounting the room, reloading it and attaching to a run are reads (door.sessions,
 // door.sessionRun) -- and the browser flow counts the door's start requests across all three to prove it (0).
 //
@@ -92,7 +92,7 @@ export function startBlocked(card, values, process) {
 }
 
 /**
- * What a start sends, beside the click token door.sessionStart fetches itself: the fields the owner typed (empty ones
+ * What a start sends, beside the click token the door client fetches itself: the fields the owner typed (empty ones
  * left out, nothing trimmed -- the door refuses edge whitespace in its own words), the driver, and dispatch's process.
  * @param {SessionCard} card @param {Record<string, string>} values @param {string} driver @param {string} process
  */

@@ -35,7 +35,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { laneHeader, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
@@ -110,20 +110,43 @@ function evidenceDir(root, lane, phaseArg) {
  * refused: an ambiguity the range does not resolve is never guessed (face Phase 06, PRs #269 and #270).
  * @param {string} dir @param {number} round @param {string} surface @param {(sha: string) => boolean} [inRange]
  */
-function priorFor(dir, round, surface, inRange = () => false) {
+function priorFor(dir, round, surface, inRange) {
   if (round === 1) return { file: null };
   const want = new RegExp(`^attack-([0-9a-f]{7,40})-r${round - 1}-${surface}\\.json$`);
   const hits = existsSync(dir) ? readdirSync(dir).filter((f) => want.test(f)).sort() : [];
-  const inThisDiff = hits.length > 1 ? hits.filter((f) => inRange(/** @type {RegExpExecArray} */ (want.exec(f))[1])) : hits;
+  // EVERY hit is range-checked, one included: a lone prior from ANOTHER PR of the phase was fed to this PR's attacker
+  // as its own findings (round-2 attack d90c3b1 B5). A range question git refuses is a refusal, never a guess.
+  let inThisDiff;
+  try { inThisDiff = inRange ? hits.filter((f) => inRange(/** @type {RegExpExecArray} */ (want.exec(f))[1])) : hits; }
+  catch (e) { return { error: `round ${round}: the round-${round - 1} ${surface} result could not be placed in this diff's range -- ${/** @type {Error} */ (e).message}` }; }
   if (inThisDiff.length !== 1)
-    return { error: `round ${round} needs exactly one round-${round - 1} ${surface} result in ${dir}${hits.length > 1 ? " for this diff's range" : ""}; found ${hits.length}${hits.length ? `: ${hits.join(", ")}` : ""}` };
+    return { error: `round ${round} needs exactly one round-${round - 1} ${surface} result in this diff's range in ${dir}; found ${hits.length} (${inThisDiff.length} in range)${hits.length ? `: ${hits.join(", ")}` : ""}` };
   return { file: join(dir, inThisDiff[0]) };
 }
 
-/** Is `sha` a commit of the range (ref..HEAD] in `root`? False on any git refusal -- a guess is never a prior. */
+/**
+ * Is `sha` a commit of the range (ref..HEAD] in `root`? git's own answer, read by its status: 0 yes, 1 no, anything
+ * else -- a ref it cannot resolve, a spawn error, a timeout -- THROWS, so a refusal is never read as "not an ancestor"
+ * and so "in range" (round-2 attack d90c3b1 B4). Bounded, with git's location variables withheld, so a GIT_DIR from a
+ * hook cannot answer for another repository (B6).
+ */
 function inDiffRange(root, ref, sha) {
-  const anc = (a, b) => spawnSync("git", ["merge-base", "--is-ancestor", a, b], { cwd: root, encoding: "utf8" }).status === 0;
-  return anc(sha, "HEAD") && !anc(sha, ref);
+  if (typeof ref !== "string" || ref === "" || ref.startsWith("-")) throw new Error(`the range's base ${JSON.stringify(ref)} is not a ref`);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.toUpperCase().startsWith("GIT_")));
+  const g = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8", env, timeout: 15_000, windowsHide: true });
+  const why = (r) => `${r.error ? r.error.message : `exit ${r.status}`}: ${String(r.stderr || "").trim().split("\n")[0]}`;
+  // The base must resolve, or no answer about the range means anything.
+  const base = g(["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`]);
+  if (base.status !== 0) throw new Error(`the range's base ${JSON.stringify(ref)} does not resolve to a commit (${why(base)})`);
+  // A prior named for a commit this repository does not hold is not of this diff: out of range, not a refusal.
+  if (g(["cat-file", "-e", `${sha}^{commit}`]).status !== 0) return false;
+  const anc = (a, b) => {
+    const r = g(["merge-base", "--is-ancestor", a, b]);
+    if (r.status === 0) return true;
+    if (r.status === 1) return false;
+    throw new Error(`git merge-base --is-ancestor ${a} ${b} answered ${why(r)}`);
+  };
+  return anc(sha, "HEAD") && !anc(sha, base.stdout.trim());
 }
 
 /**
@@ -281,7 +304,11 @@ export function main(argv, env = process.env) {
       const buildArgs = [join(HERE, "build-attack-input.mjs"), ...(o.base ? ["--base", o.base] : ["--since", o.since]),
         "--surface", surface, "--out", input, "--root", root, "--classification", o.classification];
       if (lane.mode === "lane") buildArgs.push("--lane", lane.lane);
-      if (prior.file) buildArgs.push("--prior", prior.file);
+      if (prior.file) {
+        buildArgs.push("--prior", prior.file);
+        // Named on screen: which prior this round attacks the fixes of is a fact the reader must be able to check.
+        lines.push(`${label}: round ${round} carries its prior ${relative(root, prior.file).split(sep).join("/")}`);
+      }
       const b = spawnSync(process.execPath, buildArgs, { cwd: root, encoding: "utf8", env });
       process.stderr.write(b.stderr || "");
       // Recorded and reported, never an early return: returning here dropped every line already

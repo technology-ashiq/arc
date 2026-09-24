@@ -382,17 +382,25 @@ export function startRequests(journalDir) {
   let files;
   try { files = readdirSync(journalDir).filter((f) => /^journal-\d{4}-\d{2}-\d{2}\.jsonl$/.test(f)); }
   catch { return null; }
+  // The door journals every request it refuses and every mutating one it serves; a journal with NO file is a journal
+  // this flow is not reading -- a wrong directory, never "no starts" (round-2 attack d90c3b1 B8).
+  if (files.length === 0) return null;
   let n = 0;
   for (const f of files) {
     let text;
     try { text = readFileSync(join(journalDir, f), "utf8"); } catch { return null; }
     for (const line of text.split("\n")) {
-      if (!line) continue;
-      let e = null;
-      try { e = JSON.parse(line); } catch { if (/\/api\/session\/[^"\s]*\/start/.test(line)) n++; continue; }
-      if (!e || typeof e.path !== "string") continue;
+      if (!line.trim()) continue;
+      let e;
+      // A line that does not parse cannot be judged either way: the whole count is UNMEASURED (B8).
+      try { e = JSON.parse(line); } catch { return null; }
+      if (e === null || typeof e !== "object" || Array.isArray(e)) return null;
+      // Only the dispatcher's request records carry `method`; each must carry the path it answered. Another writer's
+      // line (the work door's, the session door's own) carries neither and is not a request.
+      if (!("method" in e)) continue;
+      if (typeof e.path !== "string") return null;
       let path = e.path;
-      try { path = new URL(e.path, "http://door.invalid").pathname; } catch { /* the raw path is judged */ }
+      try { path = new URL(e.path, "http://door.invalid").pathname; } catch { return null; }
       if (/^\/api\/session\/[^/]+\/start\/?$/.test(path)) n++;
     }
   }
@@ -403,12 +411,12 @@ export function startRequests(journalDir) {
 function dockState() {
   const dock = document.querySelector("section[data-room] [data-session-dock]");
   const mark = /** @type {any} */ (window).__arcSessionFlowMark === 1;
-  if (!dock) return { cards: 0, runs: 0, lines: 0, mark, runState: "" };
+  if (!dock) return { room: "", cards: 0, runs: 0, lines: 0, mark, runState: "" };
   const run = dock.querySelector("[data-session-run]");
-  return { cards: dock.querySelectorAll("[data-session]").length, runs: dock.querySelectorAll("[data-session-run]").length, lines: dock.querySelectorAll("[data-session-lines]").length, mark, runState: run ? String(run.getAttribute("data-session-run-state")) : "" };
+  return { room: String(dock.getAttribute("data-session-dock")), cards: dock.querySelectorAll("[data-session]").length, runs: dock.querySelectorAll("[data-session-run]").length, lines: dock.querySelectorAll("[data-session-lines]").length, mark, runState: run ? String(run.getAttribute("data-session-run-state")) : "" };
 }
 
-/** Mark THIS document, so a reload is proven by the mark being gone. Self-contained. */
+/** Mark THIS document, so a navigation is proven by the mark being gone. Self-contained. */
 function markDocument() {
   /** @type {any} */ (window).__arcSessionFlowMark = 1;
   return "";
@@ -451,18 +459,34 @@ export async function sessionFlow(o, log) {
     if (r.exceptionDetails) throw new Error(`the page threw in ${fn.name}: ${oneLine(redactSecrets(String(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text ?? "an exception"), [o.token]))}`);
     return r.result ? r.result.value : undefined;
   };
+  // A predicate that throws mid-navigation (the context is being replaced) is "not yet", never the flow's failure.
+  const tryState = async () => { try { return await evalPage(dockState); } catch { return null; } };
   const clicked = async (arg) => {
     const v = await evalPage(clickIn, arg);
     if (typeof v !== "string") throw new Error(`clickIn answered ${JSON.stringify(v)}, not a string`);
     return v;
   };
-  // Bounded, and a refusal named by its status and code -- not blamed on the registry (attack a320d86 B7).
+  // Bounded, and every failure named by its own cause: a status the door refused, or a body that would not read --
+  // never blamed on the registry's contents (attack a320d86 B7, round-2 B10).
   const getJson = async (path) => {
     const r = await fetch(new URL(path, o.door), { headers, signal: AbortSignal.timeout(15_000) });
-    const body = await r.json().catch(() => ({}));
+    let body;
+    try { body = await r.json(); }
+    catch (e) { throw new Error(`GET ${path} (${r.status}) body unreadable: ${e && e.message ? e.message : e}`); }
     if (!r.ok) throw new Error(`GET ${path} answered ${r.status} ${body && (body.error || body.code) ? String(body.error || body.code) : ""}`.trim());
     return body;
   };
+  // Open a room and wait for THIS room's dock on a NEW document: the mark set on the old one must be gone, and the
+  // dock must name the room -- the previous room's dock, or another room's, never counts (round-2 attack B9).
+  const openRoom = async (room, tag) => {
+    await evalPage(markDocument).catch(() => "");
+    await page.send("Page.navigate", { url: `${o.base}?sessions=${tag}#/${encodeURIComponent(room)}&token=${encodeURIComponent(o.token)}` });
+    let st = null;
+    await until(async () => { st = await tryState(); return st !== null && !st.mark && st.room === room && st.cards > 0; }, 20000);
+    return st;
+  };
+  /** Set the reason and hand back the result: every exit is logged below, in finally (round-2 attack B2). */
+  const fail = (why) => { res.why = why; return res; };
   /** @type {import("node:child_process").ChildProcess | null} */
   let holder = null;
   try {
@@ -472,15 +496,19 @@ export async function sessionFlow(o, log) {
     const served = new Set(((await getJson("/api/rooms")).rooms || []).map((r) => r.id));
     const wanted = [...new Set(SESSIONS.map((s) => s.room))].sort();
     const unserved = wanted.filter((r) => !served.has(r));
-    if (unserved.length) { res.why = `session rows name rooms the face does not serve: ${unserved.join(", ")}`; return res; }
+    if (unserved.length) return fail(`session rows name rooms the face does not serve: ${unserved.join(", ")}`);
     const reg = await getJson("/api/sessions");
     const regRooms = new Set((reg.sessions || []).map((s) => s.room));
     const missing = wanted.filter((r) => !regRooms.has(r));
-    if (missing.length) { res.why = `the door's registry is missing rooms the registry file names: ${missing.join(", ")}`; return res; }
+    if (missing.length) return fail(`the door's registry is missing rooms the registry file names: ${missing.join(", ")}`);
 
     // A RUNNING session to attach to: a child THIS flow owns and kills, so the door's liveness reads a real process
-    // started for the purpose, never the harness's own pid (attack a320d86 B6).
+    // started for the purpose (attack a320d86 B6). Its spawn failing is a named failure, never an uncaught 'error', and
+    // no record is seeded without its pid (round-2 attack B3).
     holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 600000)"], { stdio: "ignore", windowsHide: true });
+    const spawnError = new Promise((resolveP) => { /** @type {any} */ (holder).once("error", (e) => resolveP(e)); });
+    const early = await Promise.race([spawnError, new Promise((r) => setTimeout(() => r(null), 300))]);
+    if (early || !Number.isInteger(holder.pid)) return fail(`the seeded run's holder did not start: ${early ? oneLine(String(/** @type {any} */ (early).message)) : "no pid"}`);
     const sid = `${Date.now().toString(36).padStart(9, "0").slice(-9)}flowrun`;
     const dir = join(journal, "sessions", sid);
     mkdirSync(dir, { recursive: true });
@@ -489,63 +517,65 @@ export async function sessionFlow(o, log) {
 
     for (const room of wanted) {
       o.current.room = room;
-      await page.send("Page.navigate", { url: `${o.base}?sessions=${room}#/${encodeURIComponent(room)}&token=${encodeURIComponent(o.token)}` });
-      let st = null;
-      await until(async () => { st = await evalPage(dockState); return st.cards > 0; }, 20000);
-      if (!st || st.cards === 0) { res.why = `the ${room} room drew no session dock`; return res; }
+      let st = await openRoom(room, room);
+      if (!st || st.room !== room || st.cards === 0) return fail(`the ${room} room drew no session dock of its own`);
       res.rooms++;
-      // A reload counts only once the NEW document has drawn the dock: the mark set on this one must be gone
-      // (attack a320d86 B3 -- the old document answered the predicate before the reload landed).
+      // A reload counts only once the NEW document has drawn this room's dock (attack a320d86 B3).
       await evalPage(markDocument);
       await page.send("Page.reload", { ignoreCache: false });
       st = null;
-      await until(async () => { try { st = await evalPage(dockState); } catch { return false; } return !st.mark && st.cards > 0; }, 20000);
-      if (!st || st.mark || st.cards === 0) { res.why = `the ${room} room did not redraw its session dock after a reload`; return res; }
+      await until(async () => { st = await tryState(); return st !== null && !st.mark && st.room === room && st.cards > 0; }, 20000);
+      if (!st || st.mark || st.room !== room || st.cards === 0) return fail(`the ${room} room did not redraw its session dock after a reload`);
       res.reloads++;
+      log(`sessions: room=${room} opened and reloaded`);
     }
 
     // Attach: a read, in the room the seeded run belongs to -- and the run must read RUNNING, or the attach poll (the
     // path a start-from-poll mutant would use) never ran (attack a320d86 B6).
     o.current.room = "review-ship";
-    await page.send("Page.navigate", { url: `${o.base}?sessions=attach#/review-ship&token=${encodeURIComponent(o.token)}` });
-    await until(async () => (await evalPage(dockState)).runs > 0, 20000);
+    const at = await openRoom("review-ship", "attach");
+    if (!at || at.runs === 0) return fail("the review-ship room listed no session to attach to");
     const attachWhy = await clicked({ scope: `[data-session-run="${sid}"]`, text: SESSION_FROZEN.attach });
-    if (attachWhy) { res.why = `attach: ${attachWhy}`; return res; }
+    if (attachWhy) return fail(`attach: ${attachWhy}`);
     let st = null;
-    res.attach = await until(async () => { st = await evalPage(dockState); return st.lines > 0 && st.runState === "running"; }, 20000);
-    if (!res.attach) { res.why = `attach did not show the seeded run RUNNING with its lines (state ${st ? st.runState : "none"})`; return res; }
+    res.attach = await until(async () => { st = await tryState(); return st !== null && st.lines > 0 && st.runState === "running"; }, 20000);
+    if (!res.attach) return fail(`attach did not show the seeded run RUNNING with its lines (state ${st ? st.runState : "none"})`);
     // Past two of the attach poll's own intervals, so a start fired by the poll is counted too.
     await sleep(4000);
 
     res.starts = startRequests(journal) ?? -1;
-    if (res.starts !== 0) { res.why = res.starts < 0 ? "the door journal could not be read -- UNMEASURED" : `${res.starts} start request(s) with no click -- across ${res.rooms} rooms, ${res.reloads} reloads and an attach`; return res; }
+    if (res.starts !== 0) return fail(res.starts < 0 ? "the door journal could not be read whole -- UNMEASURED" : `${res.starts} start request(s) with no click -- across ${res.rooms} rooms, ${res.reloads} reloads and an attach`);
 
     // THE POSITIVE CONTROL: one click on the default driver, one start request, refused SIM_SPEND by name.
     const errorsBefore = o.errors.length;
     const scope = '[data-session="review-ship.review"]';
     const startWhy = await clicked({ scope, text: SESSION_FROZEN.start });
-    if (startWhy) { res.why = `control: ${startWhy}`; return res; }
+    if (startWhy) return fail(`control: ${startWhy}`);
     let refused = "";
-    await until(async () => { refused = await evalPage(refusalIn, scope); return refused !== ""; }, 20000);
+    await until(async () => { try { refused = await evalPage(refusalIn, scope); } catch { refused = ""; } return refused !== ""; }, 20000);
     res.control = startRequests(journal) ?? -1;
     // The refused start is a 403 the browser logs as a resource error: THAT one entry is the control's expected outcome.
     const k = o.errors.findIndex((e, i) => i >= errorsBefore && e.type === "log" && /status of 403/.test(e.text) && /\/api\/session\/review-ship\.review\/start$/.test(String(e.url || "")));
     if (k >= 0) o.errors.splice(k, 1);
-    if (!/SIM_SPEND/.test(refused)) { res.why = `the control was not refused SIM_SPEND: ${oneLine(refused).slice(0, 160) || "no refusal drawn"}`; return res; }
-    if (res.control !== 1) { res.why = `one click made ${res.control} start request(s), not 1`; return res; }
+    if (!/SIM_SPEND/.test(refused)) return fail(`the control was not refused SIM_SPEND: ${oneLine(refused).slice(0, 160) || "no refusal drawn"}`);
+    if (res.control !== 1) return fail(`one click made ${res.control} start request(s), not 1`);
     res.ok = true;
+    return res;
   } catch (e) {
-    res.why = oneLine(redactSecrets(String(e && e.message ? e.message : e), [o.token]));
+    return fail(oneLine(redactSecrets(String(e && e.message ? e.message : e), [o.token])));
   } finally {
-    if (holder) { try { holder.kill(); } catch { /* already gone */ } }
+    if (holder) {
+      const gone = new Promise((r) => { if (holder.exitCode !== null || holder.signalCode !== null) r(null); else holder.once("exit", () => r(null)); });
+      try { holder.kill(); } catch { /* already gone */ }
+      await Promise.race([gone, new Promise((r) => setTimeout(r, 5000))]);
+    }
+    if (!res.ok) log(`sessions: FAIL -- ${res.why}`);
   }
-  if (!res.ok) log(`sessions: FAIL -- ${res.why}`);
-  return res;
 }
 
-/** The session line the browser suite reads. @param {Awaited<ReturnType<typeof sessionFlow>>} s */
+/** The session line the browser suite reads. A failed line carries its reason. @param {Awaited<ReturnType<typeof sessionFlow>>} s */
 export function sessionsLine(s) {
-  return `sessions: ${s.ok ? "ok" : "FAIL"} rooms=${s.rooms} reloads=${s.reloads} attach=${s.attach ? "ok" : "FAIL"} starts=${s.starts} control=${s.control}`;
+  return `sessions: ${s.ok ? "ok" : "FAIL"} rooms=${s.rooms} reloads=${s.reloads} attach=${s.attach ? "ok" : "FAIL"} starts=${s.starts} control=${s.control}${s.ok ? "" : ` -- ${s.why}`}`;
 }
 
 /** The line the browser suite reads. @param {Awaited<ReturnType<typeof runFlows>>} r */

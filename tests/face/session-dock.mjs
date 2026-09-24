@@ -101,66 +101,65 @@ const registry = {
 // ---- 2. the click-only gate ----
 // What the gate reads: every file under face/src. A code file is read whatever its spelling of JS or TS; a file of a
 // kind the gate cannot read as code is refused by name unless it is a known non-code asset (attack a320d86 B9).
+//
+// It judges the RAW text -- no comment stripper. A stripper that did not tokenise strings deleted real code (`'x //
+// y'` hid a call to the line's end, `'/*' ... '*/'` hid everything between), so it transformed exactly what it judged
+// (round-2 attack d90c3b1 B12). Instead the identifiers are kept OUT of prose: outside lib/door.mjs, face/src never
+// names the start method or the handler in a comment, so any raw occurrence is code -- whatever its spelling: `?.(`,
+// `.call(`, `.apply(`, an alias, a bracket (B11).
 const CODE = /\.(tsx?|mts|cts|mjs|cjs|jsx?|vue|svelte|html)$/;
 const ASSET = /\.(css|json|svg|png|jpe?g|webp|gif|ico|woff2?|ttf|md|txt)$/;
-/** @returns {{ rel: string, text: string, code: boolean }[]} */
+/** @returns {{ rel: string, text: string, code: boolean, asset: boolean }[]} */
 function sources(dir = SRC, out = []) {
   for (const n of readdirSync(dir)) {
     const p = join(dir, n);
     if (statSync(p).isDirectory()) { sources(p, out); continue; }
-    const rel = relative(SRC, p).split(sep).join("/");
-    out.push({ rel, text: CODE.test(n) ? readFileSync(p, "utf8") : "", code: CODE.test(n), asset: ASSET.test(n) });
+    // CRLF normalised: a checkout with Windows line endings must be judged the same as the committed text (B13).
+    out.push({ rel: relative(SRC, p).split(sep).join("/"), text: CODE.test(n) ? readFileSync(p, "utf8").replace(/\r\n?/g, "\n") : "", code: CODE.test(n), asset: ASSET.test(n) });
   }
   return out;
 }
 
-/** Comments out, so an identifier is counted only where it is code. */
-const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/[^\n]*/g, "$1");
-
 /**
  * The gate: null when the tree holds, else why not. The rule, whole:
  *   - every file under face/src is code the gate reads or a known asset;
- *   - the only CALL of `sessionStart` (dotted or bracketed) outside its definition is in shell/SessionDock.tsx, inside
- *     `const onStart = () => { ... }`;
- *   - in the dock's code, `onStart` appears exactly twice: its declaration and `onClick={onStart}` -- so no hook of
- *     any shape, no render body and no other handler can call it (attack a320d86 B10);
- *   - no file but lib/door.mjs names the start route or the click-token route, so no `door.call` or `fetch` can reach
- *     them another way;
- *   - door.mjs's sessionStart refuses a caller's click, fetches a fresh one, and spreads it LAST.
- * @param {{ rel: string, text: string, code?: boolean, asset?: boolean }[]} files
+ *   - outside lib/door.mjs the identifier `sessionStart` occurs EXACTLY ONCE in all of face/src, in
+ *     shell/SessionDock.tsx, inside `const onStart = () => { ... }`;
+ *   - in the dock, `onStart` occurs exactly twice: its declaration and `onClick={onStart}` -- so no hook, render body
+ *     or other handler can reach it;
+ *   - no file but lib/door.mjs names the start route or the click-token route;
+ *   - door.mjs's sessionStart refuses a caller's click, fetches a fresh one before it posts, and spreads it last.
+ * A slice boundary that is not found is a refusal, never a slice to the end of the file (B13).
+ * @param {{ rel: string, text: string, code: boolean, asset: boolean }[]} files
  */
 function clickOnlyGate(files) {
   const unread = files.filter((f) => !f.code && !f.asset);
   if (unread.length) return `the gate cannot read ${unread.map((f) => f.rel).join(", ")} as code, and it is no known asset`;
-  const calls = [];
-  for (const f of files.filter((x) => x.code)) {
-    const t = code(f.text);
-    if (/\[\s*["'`]sessionStart["'`]\s*\]/.test(t)) return `${f.rel} reaches sessionStart by bracket access`;
-    const re = /\bsessionStart\s*\(/g;
-    let m;
-    while ((m = re.exec(t))) {
-      const before = t.slice(Math.max(0, m.index - 12), m.index);
-      if (f.rel === "lib/door.mjs" && /async\s+$/.test(before)) continue;
-      calls.push({ rel: f.rel, at: m.index });
-    }
-    if (f.rel !== "lib/door.mjs" && (/\/api\/session-click/.test(t) || /\/api\/session\/[^\n]*\/start/.test(t))) return `${f.rel} names a session route itself -- only door.mjs may`;
+  const uses = [];
+  for (const f of files.filter((x) => x.code && x.rel !== "lib/door.mjs")) {
+    for (const m of f.text.matchAll(/\bsessionStart\b/g)) uses.push({ rel: f.rel, at: /** @type {number} */ (m.index) });
+    if (/\/api\/session-click/.test(f.text) || /\/api\/session\/[^\n]*\/start/.test(f.text)) return `${f.rel} names a session route itself -- only door.mjs may`;
   }
-  if (calls.length !== 1) return `door.sessionStart is called at ${calls.length} site(s) (${calls.map((c) => c.rel).join(", ")}); the rule is exactly one`;
-  const [c] = calls;
-  if (c.rel !== "shell/SessionDock.tsx") return `the one call is in ${c.rel}, not the dock`;
-  const dock = code(files.find((f) => f.rel === "shell/SessionDock.tsx").text);
+  if (uses.length !== 1) return `the start method is named at ${uses.length} place(s) outside door.mjs (${uses.map((u) => u.rel).join(", ")}); the rule is exactly one`;
+  const [u] = uses;
+  if (u.rel !== "shell/SessionDock.tsx") return `the one start call is in ${u.rel}, not the dock`;
+  const dock = files.find((f) => f.rel === "shell/SessionDock.tsx").text;
   const start = dock.indexOf("const onStart = () => {");
   if (start < 0) return "the dock has no onStart handler";
   const end = dock.indexOf("\n  }\n", start);
-  if (!(c.at > start && c.at < end)) return "the call is not inside onStart";
-  const uses = (dock.match(/\bonStart\b/g) || []).length;
-  if (uses !== 2 || !/onClick=\{onStart\}/.test(dock)) return `onStart appears ${uses} time(s) in the dock's code; the rule is its declaration and onClick={onStart}, nothing else`;
-  const door = code(files.find((f) => f.rel === "lib/door.mjs").text);
+  if (end < 0) return "the dock's onStart handler has no end the gate can find";
+  if (!(u.at > start && u.at < end)) return "the start call is not inside onStart";
+  const handlerUses = (dock.match(/\bonStart\b/g) || []).length;
+  if (handlerUses !== 2 || !/onClick=\{onStart\}/.test(dock)) return `onStart occurs ${handlerUses} time(s) in the dock; the rule is its declaration and onClick={onStart}, nothing else`;
+  const door = files.find((f) => f.rel === "lib/door.mjs").text;
   const from = door.indexOf("async sessionStart(");
-  const def = door.slice(from, door.indexOf("\n  }\n", from));
+  if (from < 0) return "door.mjs has no sessionStart";
+  const to = door.indexOf("\n  }\n", from);
+  if (to < 0) return "door.mjs's sessionStart has no end the gate can find";
+  const def = door.slice(from, to);
   const clickAt = def.indexOf("/api/session-click");
   const startAt = def.indexOf("/start`");
-  if (from < 0 || clickAt < 0 || startAt < 0 || clickAt > startAt) return "door.sessionStart does not fetch a fresh click token before it posts the start";
+  if (clickAt < 0 || startAt < 0 || clickAt > startAt) return "door.sessionStart does not fetch a fresh click token before it posts the start";
   if (!/hasOwn\(body,\s*"click"\)/.test(def) || !/\{\s*\.\.\.body,\s*click\s*\}/.test(def)) return "door.sessionStart lets a caller's click stand (it must refuse one, and spread the fresh token last)";
   return null;
 }
@@ -176,18 +175,24 @@ const mutate = (rel, edit) => real.map((f) => (f.rel === rel ? { ...f, text: edi
 const addFile = (rel, text, isCode = true) => [...real, { rel, text, code: isCode, asset: false }];
 const DOCK = "shell/SessionDock.tsx";
 const BEFORE_BLOCKED = "  const blocked = startBlocked(card, values, proc)";
+const plant = (line) => mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, `${line}\n${BEFORE_BLOCKED}`));
 const mutants = [
-  ["an auto-start on mount (a useEffect in the dock that starts)", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => {\n    door.sessionStart(card.id, startBody(card, values, driver, proc))\n  }, [door])\n" + BEFORE_BLOCKED))],
-  ["an auto-start on mount, no braces: useEffect(() => onStart(), [])", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => onStart(), [])\n" + BEFORE_BLOCKED))],
-  ["an auto-start on every render: useEffect with no deps", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => { onStart() })\n" + BEFORE_BLOCKED))],
-  ["an auto-start in a layout effect", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useLayoutEffect(() => { onStart() }, [])\n" + BEFORE_BLOCKED))],
-  ["a start from the render body", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  if (!sid) onStart()\n" + BEFORE_BLOCKED))],
+  ["an auto-start on mount (a useEffect in the dock that starts)", plant("  useEffect(() => {\n    door.sessionStart(card.id, startBody(card, values, driver, proc))\n  }, [door])")],
+  ["an auto-start on mount, no braces: useEffect(() => onStart(), [])", plant("  useEffect(() => onStart(), [])")],
+  ["an auto-start on every render: useEffect with no deps", plant("  useEffect(() => { onStart() })")],
+  ["an auto-start in a layout effect", plant("  useLayoutEffect(() => { onStart() }, [])")],
+  ["a start from the render body", plant("  if (!sid) onStart()")],
+  ["a start by optional call: sessionStart?.(", plant("  useEffect(() => { door.sessionStart?.(card.id, startBody(card, values, driver, proc)) }, [])")],
+  ["a start by .call", plant("  useEffect(() => { door.sessionStart.call(door, card.id, startBody(card, values, driver, proc)) }, [])")],
+  ["a start through an alias", plant("  const s = door.sessionStart.bind(door); useEffect(() => { s(card.id, startBody(card, values, driver, proc)) }, [])")],
+  ["a start hidden behind a string holding // (the stripper's hole)", plant("  const a = 'x // y'; useEffect(() => { door.sessionStart(card.id, startBody(card, values, driver, proc)) }, [])")],
+  ["a start hidden between strings holding /* and */", plant("  const a = '/*'\n  useEffect(() => { door.sessionStart(card.id, startBody(card, values, driver, proc)) }, [])\n  const b = '*/'")],
   ["a start on reload (the room frame starts one as it mounts)", mutate("shell/RoomFrame.tsx", (t) => t.replace("import SessionDock from './SessionDock'", "import SessionDock from './SessionDock'\nvoid (globalThis as any).door?.sessionStart('review-ship.review', { input: {}, driver: 'auto' })"))],
   ["a start from Ask", mutate("lib/ask.mjs", (t) => `${t}\nexport function askStarts(door) { return door.sessionStart("council.convene", { input: {}, driver: "auto" }); }\n`)],
   ["a start from the attach poll", mutate(DOCK, (t) => t.replace("door.sessionRun(sid).then(", "door.sessionStart(session, { input: {}, driver: 'auto' }); door.sessionRun(sid).then("))],
-  ["a start through door.call on the start route", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => { door.call('/api/session/review-ship.review/start', { method: 'POST', body: {} }) }, [])\n" + BEFORE_BLOCKED))],
+  ["a start through door.call on the start route", plant("  useEffect(() => { door.call('/api/session/review-ship.review/start', { method: 'POST', body: {} }) }, [])")],
   ["a click token fetched outside door.mjs", mutate("lib/ask.mjs", (t) => `${t}\nexport const grab = (door) => door.call("/api/session-click", { method: "POST" });\n`)],
-  ["a start by bracket access", mutate(DOCK, (t) => t.replace(BEFORE_BLOCKED, "  useEffect(() => { door['sessionStart'](card.id, { input: {}, driver: 'auto' }) }, [])\n" + BEFORE_BLOCKED))],
+  ["a start by bracket access", plant("  useEffect(() => { door['sessionStart'](card.id, { input: {}, driver: 'auto' }) }, [])")],
   ["a start from a new .jsx file", addFile("shell/Boot.jsx", "export default function Boot({ door }) { door.sessionStart('review-ship.review', { input: {}, driver: 'auto' }); return null }\n")],
   ["a start from a new .js file", addFile("shell/boot.js", "export const boot = (door) => door.sessionStart('org.lane-birth', { input: {}, driver: 'auto' })\n")],
   ["a file of a kind the gate cannot read", addFile("shell/boot.wasm", "", false)],
@@ -203,5 +208,8 @@ for (const [name, files] of mutants) {
   check(`MUTANT REFUSED by the click-only gate: ${name}`, why !== null, why || "the gate passed it");
 }
 
+// The count is DERIVED, never hand-kept: the bats wrapper pins MUTANTS against the number of REFUSED lines, and a
+// hand-written floor that drifted one above the real count made a green suite exit 1 (round-2 attack d90c3b1 B1, B14).
+console.log(`MUTANTS: ${mutants.length}`);
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran >= 45 ? 0 : 1;
+process.exitCode = failed === 0 && ran > mutants.length ? 0 : 1;
