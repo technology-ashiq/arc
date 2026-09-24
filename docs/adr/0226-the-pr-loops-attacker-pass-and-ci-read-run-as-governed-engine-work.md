@@ -79,6 +79,21 @@ Missed, and fixed 2026-09-24 in face PR #269: that command's step 3 still said "
 session". A session followed it after a round-1 attack and handed 15 findings back to the owner. Step 3 now says
 the building session fixes, runs round 2, reads CI and merges, all in the same session.
 
+## Amendment 2 — 2026-09-25: attack the local commit; push once (owner question)
+
+The loop ran push → CI → attack → fix → push → CI → round 2 → fix → push → CI. Each PR bought three or four full CI
+runs (19 jobs, ~30 minutes each), most superseded before they finished, and on 2026-09-25 the runner queue jammed
+until stale runs were cancelled by hand. The owner asked the obvious question: if an attacker round may send the code
+back for fixes, why was CI already running on it?
+
+It never needed to be. `arc-attack` builds its input from the LOCAL HEAD diffed against the base ref; a push adds
+nothing to it. **The order is now: commit, attack round 1, fix, round 2, fix, push once, read CI per job, fix only
+what CI finds, merge on green.** CI stays mandatory -- it catches what a diff-reading attacker cannot: the face's
+`tsc --noEmit`, the three operating systems, a bats wrapper's own glob, a hand-kept `@test` floor (all four happened in
+face Phase 06) -- but it runs on the final code, once, not on each draft.
+
+Changed: `.claude/commands/arc-attack.md` (the heading, "Where and when this runs", step 3).
+
 ## Related
 
 ADR-0069 (a)(g) · ADR-0219 · ADR-0220 · ADR-0223 · ADR-0225 · ADR-1326 (the session door starts `arc-run`, so `/arc-attack` becomes a face button with no face code) · CLAUDE.md attacker and CI laws.
