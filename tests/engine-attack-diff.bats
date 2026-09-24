@@ -376,6 +376,25 @@ EOF
   [ -f "docs/evidence/phase-11/attack-$sha-r2-boundary.json" ] || { echo "the unblocked surface did not run (L5): $output"; false; }
 }
 
+@test "arc-attack: a phase of several PRs -- round 2 takes the round-1 prior whose commit is in this diff's range" {
+  # A phase that lands as several PRs keeps one round-1 result per PR in one evidence dir. Round 2 of the second PR
+  # was refused "found 2" (face Phase 06, #269 and #270); the prior is the one whose commit is in (base..HEAD].
+  cd "$REPO"
+  local sha old; sha=$(git rev-parse --short=7 HEAD); old=$(git rev-parse --short=7 HEAD~1)
+  [ "$sha" != "$old" ] || { echo "the fixture repo needs two commits"; false; }
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 12 --driver mock
+  [ "$status" -eq 0 ] || { echo "round 1: $status $output"; false; }
+  [ -f "docs/evidence/phase-12/attack-$sha-r1-boundary.json" ] || { echo "round 1 wrote no boundary result"; false; }
+  # The earlier PR's round 1, at a commit OUTSIDE this diff's range (an ancestor of the base).
+  cp "docs/evidence/phase-12/attack-$sha-r1-boundary.json" "docs/evidence/phase-12/attack-$old-r1-boundary.json"
+  cp "docs/evidence/phase-12/attack-$sha-r1-logic.json" "docs/evidence/phase-12/attack-$old-r1-logic.json"
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 12 --round 2 --driver mock
+  [ "$status" -eq 0 ] || { echo "round 2 with two priors, one in range: $status $output"; false; }
+  [[ "$output" != *"found 2"* ]] || { echo "$output"; false; }
+  [ -f "docs/evidence/phase-12/attack-$sha-r2-boundary.json" ] && [ -f "docs/evidence/phase-12/attack-$sha-r2-logic.json" ] \
+    || { echo "round 2 did not write both surfaces: $output"; false; }
+}
+
 @test "arc-run and arc-attack: an unusable temp dir is a named failure with an exit code, never a stack" {
   local nowhere="$BATS_TEST_TMPDIR/no-such-dir"
   printf '%s' '{"classification":"external-ok","surface":"logic","diff":"x","defect_patterns":"","prior_findings":""}' > "$BATS_TEST_TMPDIR/in.json"

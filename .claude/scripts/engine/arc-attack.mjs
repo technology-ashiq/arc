@@ -103,14 +103,27 @@ function evidenceDir(root, lane, phaseArg) {
   return { dir: join(root, rel), rel, nn };
 }
 
-/** Round K>1: the ONE prior output for this surface, or an error that names what was found. */
-function priorFor(dir, round, surface) {
+/**
+ * Round K>1: the ONE prior output for this surface, or an error that names what was found. A phase that lands as
+ * several PRs holds one round-(K-1) result PER PR in the same evidence dir, so when more than one is there the prior is
+ * the one whose commit is in THIS diff's range -- reachable from HEAD and not from the base. Still exactly one, or
+ * refused: an ambiguity the range does not resolve is never guessed (face Phase 06, PRs #269 and #270).
+ * @param {string} dir @param {number} round @param {string} surface @param {(sha: string) => boolean} [inRange]
+ */
+function priorFor(dir, round, surface, inRange = () => false) {
   if (round === 1) return { file: null };
-  const want = new RegExp(`^attack-[0-9a-f]{7,40}-r${round - 1}-${surface}\\.json$`);
+  const want = new RegExp(`^attack-([0-9a-f]{7,40})-r${round - 1}-${surface}\\.json$`);
   const hits = existsSync(dir) ? readdirSync(dir).filter((f) => want.test(f)).sort() : [];
-  if (hits.length !== 1)
-    return { error: `round ${round} needs exactly one round-${round - 1} ${surface} result in ${dir}; found ${hits.length}${hits.length ? `: ${hits.join(", ")}` : ""}` };
-  return { file: join(dir, hits[0]) };
+  const inThisDiff = hits.length > 1 ? hits.filter((f) => inRange(/** @type {RegExpExecArray} */ (want.exec(f))[1])) : hits;
+  if (inThisDiff.length !== 1)
+    return { error: `round ${round} needs exactly one round-${round - 1} ${surface} result in ${dir}${hits.length > 1 ? " for this diff's range" : ""}; found ${hits.length}${hits.length ? `: ${hits.join(", ")}` : ""}` };
+  return { file: join(dir, inThisDiff[0]) };
+}
+
+/** Is `sha` a commit of the range (ref..HEAD] in `root`? False on any git refusal -- a guess is never a prior. */
+function inDiffRange(root, ref, sha) {
+  const anc = (a, b) => spawnSync("git", ["merge-base", "--is-ancestor", a, b], { cwd: root, encoding: "utf8" }).status === 0;
+  return anc(sha, "HEAD") && !anc(sha, ref);
 }
 
 /**
@@ -223,7 +236,7 @@ export function main(argv, env = process.env) {
     const skip = recorded || surface !== "logic" ? null
       : o.driver !== "mock" && !trialModel ? "no trial model. Set ARC_ATTACK_TRIAL_MODEL (and ARC_LLM_ENDPOINT, ARC_LLM_API_KEY) to run it (ADR-0226)."
       : null;
-    const prior = recorded || skip ? { file: null } : priorFor(ev.dir, round, surface);
+    const prior = recorded || skip ? { file: null } : priorFor(ev.dir, round, surface, (sha) => inDiffRange(root, o.base || o.since, sha));
     plan.push({ surface, name, target, recorded, corrupt, skip, prior });
   }
   if (plan.every((p) => p.recorded && !p.corrupt))
