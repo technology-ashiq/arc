@@ -109,7 +109,9 @@ function foldWith(plant = {}) {
     "google-api-key": "AIza" + "f".repeat(35),
     "stripe-key": "sk_live_" + "g".repeat(24),
     "slack-token": "xoxb-" + "h".repeat(20),
-    "private-key-block": "-----BEGIN RSA PRIVATE KEY-----",
+    // Built at run time: the literal would itself be a private-key block in the diff, and the attack data boundary
+    // rightly refuses to send one to any model (arc-run: secret rule private-key-block in --input).
+    "private-key-block": "-".repeat(5) + "BEGIN RSA PRIV" + "ATE KEY" + "-".repeat(5),
   };
   check("every face key rule has a sample, and every sample a face rule", keys.KEY_RULES.length === Object.keys(samples).length && keys.KEY_RULES.every((r) => Object.hasOwn(samples, r.name)));
   for (const [name, sample] of Object.entries(samples)) {
