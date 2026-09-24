@@ -29,6 +29,27 @@ load 'test_helper'
   [[ "$output" == *"ok runVerdict: exit 0 with no receipt is said as that, never as success"* ]] || { echo "$output"; false; }
 }
 
+@test "face v2: the session dock's decisions run with no install, and a session starts only from its Start click" {
+  run node "$ARC_ROOT/tests/face/session-dock.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok THE REAL TREE HOLDS: one sessionStart call, inside onStart, bound to onClick"* ]] || { echo "$output"; false; }
+  # The mutant count is DERIVED: the suite prints MUTANTS: n, and exactly n mutants must read REFUSED -- a mutant
+  # dropped from the list, or one the gate passed, moves one number and not the other.
+  local declared refused
+  declared=$(printf '%s\n' "$output" | sed -n 's/^MUTANTS: \([0-9]\{1,\}\)$/\1/p')
+  refused=$(printf '%s\n' "$output" | grep -c '^ok MUTANT REFUSED by the click-only gate: ' || true)
+  [ -n "$declared" ] && [ "$declared" -ge 20 ] && [ "$refused" -eq "$declared" ] || { echo "MUTANTS: $declared declared, $refused refused"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: an auto-start on mount"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start from Ask"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start that skips the click token"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start through door.call on the start route"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start by bracket access"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: an auto-start on mount, no braces"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start from a new .jsx file"* ]] || { echo "$output"; false; }
+}
+
 @test "no L3 test or source file carries a byte that makes grep call it binary" {
   # A literal NUL in a source file makes grep treat the whole file as binary, and a
   # binary-flagged file is SKIPPED silently by every grep-driven gate -- including CI's own

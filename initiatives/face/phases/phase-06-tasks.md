@@ -48,18 +48,18 @@ proof: tests/face/session-door.mjs via tests/face-dash.bats on CI, every job: pa
 tier: integration
 sources: phase-06-spec.md, code:grep-fallback(1304; no .codegraph/), adrs(40), learning(2), retro(15), churn(267)
 decision: the session is its directory (session.json + one run.log for stdout+stderr + exit.json) and the child is spawned detached, so the door holds no session state and a restart loses nothing; one-shot click tokens (60 s) are the only in-memory state; driverOnly() runs on the argv about to be spawned, not on the row; rows whose process file is absent refuse NO_PROCESS rather than borrow a process
-result: (empty until proven)
-commit: (empty until proven)
+result: CI run 36038847731 @ 8e389a5a: GREEN, all 19 jobs, every OS (ci-digest exit 0) -- tests/face/session-door.mjs ran 57+ checks on ubuntu 18/20/22, macOS and 12 Windows shards; run 36034089985 @ 60c13e92 was red ONLY on the bats wrapper's *FAIL* glob (attack B1), all 57 checks ok. Two boundary attack rounds (60c13e9: 15 findings, 8e389a5: 14) fixed in ac6288d2; 2 debts ledgered.
+commit: 60c13e92, 8e389a5a, ac6288d2 (PR #269)
 
 #### slice: 02
 
 title: Click-started only: a fixture proves 0 sessions start on page load, on reload, or on attach.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: tests/face/session-dock.mjs via face-l3.bats -- lib/sessions.mjs decisions, and the click-only gate over the RAW text of every face/src file: outside door.mjs the start method is named exactly once, inside onStart, onStart occurs only as its declaration and onClick, no file but door.mjs names a session route, and door.mjs refuses a caller's click and spreads a fresh one last; the suite prints MUTANTS: n and face-l3.bats requires exactly n REFUSED (22 today: every hook shape, optional call, .call, alias, bracket, string-hidden, door.call on the route, a new .js/.jsx file, an unreadable file kind, the token skipped or overridden, onStart unbound); plus the browser flow (face/scripts/flows.mjs via face-browser.bats): every face-sessions room opened and reloaded on a NEW document naming that room, a seeded running session (a child the flow owns) attached and read RUNNING, the door journal counts 0 start requests (fail-closed: UNMEASURED on any unreadable line), then one Start click makes exactly 1, refused SIM_SPEND by name (sessions_verdict, with its own mutant control)
+tier: e2e-visual
 sources: phase-06-spec.md
-decision: (empty until proven)
+decision: the spawn counter is the door's own journal of START REQUESTS (refused or not), not spawned children: a mutant that auto-starts on a detached CI checkout is refused BRANCH_REFUSED and spawns nothing, but it still asked -- so the request is what is counted; door.sessionStart fetches its click token itself, so no caller can hold one across a mount or replay one
 result: (empty until proven)
 commit: (empty until proven)
 

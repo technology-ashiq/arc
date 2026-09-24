@@ -20,6 +20,7 @@ import GenericRoom from '../rooms/GenericRoom'
 import IndexRoom from '../rooms/IndexRoom'
 import { Failure } from '../ui/legacy'
 import OpsDock from './OpsDock'
+import SessionDock from './SessionDock'
 import { MONO, UI } from '../ui/kit'
 
 type ViewProps = { f: Record<string, unknown>; ctx: ModuleViewContext }
@@ -187,6 +188,9 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
       {/* Phase 05 (ADR-1339): the room's ops, if its ops.mjs names any. A run that lands drops the room's reads, so the
           receipt shows in the room without a reload. */}
       {m.ops.length > 0 ? <OpsDock ops={m.ops} door={door} onApplied={dropAll} /> : null}
+      {/* Phase 06 (REQ-08, ADR-1326): the room's session verbs, if the door's registry names any for it. It reads on
+          mount and starts nothing: a session starts only from its Start button's click. */}
+      <SessionDock roomId={m.id} door={door} />
     </>
   )
 }

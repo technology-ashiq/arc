@@ -78,15 +78,18 @@ const row = (id, room, label, process, kind, fields, more = {}) => Object.freeze
   pickProcess: more.pickProcess === true,
 });
 
+// A row's `room` is a SERVED room: the dock mounts under a module room, and a row pointing at a room the face does not
+// serve is a verb nobody can reach (attack a320d86 B8). The probe's executor verbs therefore sit in engine-room, where
+// the drivers and the router live -- the executor module is a labelled exemption, not a served room (ADR-1337).
 export const SESSIONS = Object.freeze([
-  row("council.convene", "council", "Convene the council", "council-convene", "council.verdict", [text("question", "The question", "one line -- what the council decides", 500, true)]),
+  row("council.convene", "council-chamber", "Convene the council", "council-convene", "council.verdict", [text("question", "The question", "one line -- what the council decides", 500, true)]),
   row("develop.proof", "develop", "Prove a slice", "develop-proof", "slice.done", [lane, phase]),
   row("develop.close-phase", "develop", "Close a phase", "phase-close", "phase.closed", [lane, phase]),
   row("review-ship.review", "review-ship", "Review the diff", "review-diff", "review.completed", [Object.freeze({ name: "base", label: "Base branch", placeholder: "main", type: "text", max: 100, pattern: "[A-Za-z0-9][A-Za-z0-9._/-]*", required: false })]),
   row("review-ship.qa", "review-ship", "Run QA", "qa-run", "qa.completed", [text("url", "URL", "http://localhost:3000", 300, true)]),
   row("review-ship.ship", "review-ship", "Ship", "ship-run", "ship.done", [], { confirmStep: "deploy" }),
-  row("executor.hire", "executor", "Hire (certification)", "hire-certify", null, [text("candidate", "Candidate", "the runtime or agent to certify", 200, true)]),
-  row("executor.dispatch", "executor", "Dispatch a process", "", "run.completed", [], { pickProcess: true }),
+  row("executor.hire", "engine-room", "Hire (certification)", "hire-certify", null, [text("candidate", "Candidate", "the runtime or agent to certify", 200, true)]),
+  row("executor.dispatch", "engine-room", "Dispatch a process", "", "run.completed", [], { pickProcess: true }),
   row("memory.log-lesson", "memory", "Log a lesson", "lesson-log", "note.logged", [text("lesson", "The lesson", "one line -- what was learned", 500, true)]),
   row("memory.promote-rule", "memory", "Promote a rule", "rule-promote", "approval.requested", [text("rule", "The rule", "one line -- the rule to promote", 500, true)]),
   row("absorb.adopt", "absorb", "Adopt from absorb", "absorb-adopt", null, [text("item", "Item", "the absorbed item to adopt", 200, true)]),
