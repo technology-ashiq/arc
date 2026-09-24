@@ -241,13 +241,14 @@ try {
   // route enumeration off the table the server actually dispatches from
   const routes = JSON.parse(execFileSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--routes"], { stdio: ["ignore", "pipe", "inherit"] }).toString());
   const mutating = routes.filter((x) => x.mutates);
-  // Phase 05 (REQ-07, ADR-1339): EXACTLY two mutating routes, as a SET -- the one decision door, and the work door's
-  // apply, which takes one plan id. A third, or either of these renamed, is a change this suite must be told about.
-  check("route enumeration: the mutating routes are exactly /api/decide and /api/op/:id/apply",
-    JSON.stringify(mutating.map((x) => x.path).sort()) === JSON.stringify(["/api/decide", "/api/op/:id/apply"]), mutating.map((x) => x.path).join(","));
-  // No bulk write path appeared: no route is named for a batch, and apply is the only mutating prefix route.
-  check("route enumeration: no bulk write path -- no route names a batch, and apply is the only mutating prefix route",
-    routes.every((x) => !/bulk|batch|all\b/.test(x.path)) && mutating.filter((x) => x.path.includes(":")).map((x) => x.path).join(",") === "/api/op/:id/apply",
+  // Phase 05 (REQ-07, ADR-1339) and Phase 06 (REQ-08, ADR-1326): EXACTLY three mutating routes, as a SET -- the one
+  // decision door, the work door's apply (one plan id) and the session door's start (one session, one click). A fourth,
+  // or any of these renamed, is a change this suite must be told about.
+  check("route enumeration: the mutating routes are exactly /api/decide, /api/op/:id/apply and /api/session/:id/start",
+    JSON.stringify(mutating.map((x) => x.path).sort()) === JSON.stringify(["/api/decide", "/api/op/:id/apply", "/api/session/:id/start"]), mutating.map((x) => x.path).join(","));
+  // No bulk write path appeared: no route is named for a batch, and apply and start are the only mutating prefix routes.
+  check("route enumeration: no bulk write path -- no route names a batch, and apply and start are the only mutating prefix routes",
+    routes.every((x) => !/bulk|batch|all\b/.test(x.path)) && mutating.filter((x) => x.path.includes(":")).map((x) => x.path).sort().join(",") === "/api/op/:id/apply,/api/session/:id/start",
     routes.map((x) => x.path).join(","));
   // The above ALONE is circular -- it reads back the flag it asserts on, so a write route
   // labelled mutates:false (or with the key absent, which filter() silently drops) passes.

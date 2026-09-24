@@ -66,6 +66,9 @@ import * as reads from "./lib/face/reads.mjs";
 // live beside the door, the route table stays here.
 import { createWorkDoor, runTool, WORK_STATUS } from "./lib/face/work-door.mjs";
 import { OpError } from "./face-ops.mjs";
+// Phase 06's session door (REQ-08, ADR-1326): every session starts arc-run --driver, and the door holds no session state.
+import { createSessionDoor, SESSION_STATUS } from "./lib/face/session-door.mjs";
+import { SessionError } from "./face-sessions.mjs";
 // The leads lane's own list of the variables that steer a send (vendor host, config, warm-up attestation, rehearsal).
 import { ENV_LOCAL_FORBIDDEN as LEADS_STEERING } from "../leads/lib/mail.mjs";
 
@@ -160,6 +163,8 @@ const STATUS = Object.freeze({
   SOURCE_OUTSIDE: 403, SOURCE_CHANGING: 503,
   // Phase 05: the work door's own refusals, spelled once in lib/face/work-door.mjs.
   ...WORK_STATUS,
+  // Phase 06: the session door's own refusals, spelled once in lib/face/session-door.mjs.
+  ...SESSION_STATUS,
 });
 
 class DashError extends Error {
@@ -804,6 +809,14 @@ const ROUTES = Object.freeze([
   { method: "POST", prefix: "/api/op/", suffix: "/plan", mutates: false, spineEffect: "none", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.plan(tail, body); } },
   { method: "POST", prefix: "/api/op/", suffix: "/apply", mutates: true, spineEffect: "receipt", proxy: "face-ops.mjs --list: the owning lane's own CLI, one plan per call", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.work.apply(tail, body); } },
   { method: "GET", prefix: "/api/op-run/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => { onlyKeys(url, []); return ctx.work.run(tail); } },
+  // Phase 06 (REQ-08, ADR-1326): the SESSION door. `session-click` mints a one-shot token the face asks for inside the
+  // owner's click; `start` spends it and starts `arc-run --process … --driver …` detached -- a governed subprocess
+  // whose receipt arc-run writes, so "receipt"; `session-run` attaches, reading the session back from its own files and
+  // the spine. start takes ONE session and nothing else: there is no path that starts a list.
+  { method: "GET", path: "/api/sessions", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return ctx.sessions.list(); } },
+  { method: "POST", path: "/api/session-click", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return ctx.sessions.click(); } },
+  { method: "POST", prefix: "/api/session/", suffix: "/start", mutates: true, spineEffect: "receipt", proxy: "face-sessions.mjs --list: arc-run --process NAME --driver NAME, one session per click", handler: (ctx, url, tail, body) => { onlyKeys(url, []); return ctx.sessions.start(tail, body); } },
+  { method: "GET", prefix: "/api/session-run/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => { onlyKeys(url, []); return ctx.sessions.read(tail); } },
 ]);
 
 /**
@@ -827,7 +840,7 @@ function routeName(r) {
 }
 
 /** The routes whose SUCCESSFUL answers are not journalled (see the dispatcher). */
-const QUIET_OK = new Set(ROUTES.filter((r) => r.path === "/api/pulse" || r.prefix === "/api/op-run/"));
+const QUIET_OK = new Set(ROUTES.filter((r) => r.path === "/api/pulse" || r.prefix === "/api/op-run/" || r.prefix === "/api/session-run/"));
 
 // ---------- the static shell (GET /, no data, no auth) ----------
 const SHELL = `<!doctype html>
@@ -984,7 +997,7 @@ function boot(argv) {
   const journalDir = process.env.ARC_DASH_JOURNAL_DIR || join(dirname(root), "face");
   mkdirSync(journalDir, { recursive: true });
 
-  /** @type {{ mode: string, root: string, repo: string, journalDir: string, work?: ReturnType<typeof createWorkDoor> }} */
+  /** @type {{ mode: string, root: string, repo: string, journalDir: string, work?: ReturnType<typeof createWorkDoor>, sessions?: ReturnType<typeof createSessionDoor> }} */
   const ctx = { mode, root, repo, journalDir };
   const selfOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, `http://[::1]:${port}`]);
   const selfHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
@@ -999,6 +1012,7 @@ function boot(argv) {
 
   // The work door journals its own plans and runs: a run outlives the request that started it.
   ctx.work = createWorkDoor(ctx, { journal: (entry) => journal({ ts: formatIst(nowMs()), work: true, ...entry }) });
+  ctx.sessions = createSessionDoor(ctx, { journal: (entry) => journal({ ts: formatIst(nowMs()), session: true, ...entry }) });
 
   const send = (res, status, obj) => {
     // headersSent/writableEnded guard: an error AFTER a partial write would otherwise
@@ -1103,7 +1117,7 @@ function boot(argv) {
           send(res, 200, out);
         })
         .catch((err) => {
-          const code = (err instanceof SpineError || err instanceof DashError || err instanceof reads.ReadError || err instanceof OpError) ? err.code : "INTERNAL";
+          const code = (err instanceof SpineError || err instanceof DashError || err instanceof reads.ReadError || err instanceof OpError || err instanceof SessionError) ? err.code : "INTERNAL";
           // An UNTYPED error's message is never sent: it carries whatever the throwing code put in it -- an OS path
           // with the account name, a stack fragment (face v2 Phase 04 attack). The operator reads it on stderr.
           if (code === "INTERNAL") process.stderr.write(`arc-dash: WARN internal error on ${req.method} ${path} -- ${err && err.message}

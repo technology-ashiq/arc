@@ -43,6 +43,18 @@ load 'test_helper'
   [[ "$output" == *"ok bench.run-model: NO SECOND PATH -- the door's receipt is the hand-run's receipt"* ]] || { echo "$output"; false; }
 }
 
+@test "session door: every session starts arc-run --driver from a click, and attach survives a door restart" {
+  run node "$ARC_ROOT/tests/face/session-door.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok every row reached a spawn (the loop above judged 15 real starts, not 15 refusals)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT FAILs driver-only: the harness claude as the command"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a FRESH door attaches to the run door A started, while it runs"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok its receipt is read back OFF THE SPINE by the id the run printed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a start with no click is 428 CLICK_REQUIRED"* ]] || { echo "$output"; false; }
+}
+
 @test "live rooms: the pulse holds still, moves with the spine, stays out of the journal; a pulse re-reads every read" {
   run node "$ARC_ROOT/tests/face/live-pulse.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
