@@ -310,7 +310,7 @@ export function main(argv, env = process.env) {
 
   process.stdout.write(`arc-attack @ ${sha7}, round ${round}${o.driver === "mock" ? " (mock driver)" : ""}\n`);
   for (const l of lines) process.stdout.write(`${l}\n`);
-  process.stdout.write("Nothing was fixed or committed. Fix slices run in the interactive session via /arc-develop.\n");
+  process.stdout.write("Nothing was fixed or committed by the attacker. Fix them now, in THIS session (ADR-0226 Amendment 1), then --round 2.\n");
   // A failed run outranks a surface that could not start, which outranks one deliberately not started.
   // An empty diff is the first answer: nothing could be attacked at all.
   if (emptyDiff) return 6;

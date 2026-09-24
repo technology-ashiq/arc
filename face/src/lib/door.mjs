@@ -239,6 +239,12 @@ export const DOOR_ROUTES = Object.freeze({
   "/api/op/:id/plan": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: false }),
   "/api/op/:id/apply": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: true }),
   "/api/op-run/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
+  // Phase 06 (REQ-08, ADR-1326): the session door. A start spends a click token the face asks for inside the owner's
+  // click -- no mount, reload or attach can start a session.
+  "/api/sessions": read(),
+  "/api/session-click": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
+  "/api/session/:id/start": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: true }),
+  "/api/session-run/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
 });
 
 /**

@@ -43,6 +43,26 @@ load 'test_helper'
   [[ "$output" == *"ok bench.run-model: NO SECOND PATH -- the door's receipt is the hand-run's receipt"* ]] || { echo "$output"; false; }
 }
 
+@test "session door: every session starts arc-run --driver from a click, and attach survives a door restart" {
+  run node "$ARC_ROOT/tests/face/session-door.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  # A failed check prints a line STARTING "FAIL ". Matched at the line start, never as a bare *FAIL* glob: an ok line
+  # naming a mutant once read every green run as red (attack 60c13e9 B1).
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok every other row reached a spawn (the loop judged real starts, not refusals)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by driver-only: the harness claude as the command"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a FRESH door attaches to the run door A started, while it runs"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok its receipt is read back OFF THE SPINE THE DOOR NAMED, credited because"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a real event the run named as ANOTHER kind, and printed bare, is unattributed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok dispatch naming ship's process is held back BY NAME"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok the run never saw the door's token, the owner's deploy/VCS tokens or the leads steering list"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a start with no click is 428 CLICK_REQUIRED"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok review-ship.ship: REFUSED until its deploy stop is enforced"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a checkout on main: BRANCH_REFUSED, nothing started"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a key the run printed is served redacted, never as written"* ]] || { echo "$output"; false; }
+}
+
 @test "live rooms: the pulse holds still, moves with the spine, stays out of the journal; a pulse re-reads every read" {
   run node "$ARC_ROOT/tests/face/live-pulse.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

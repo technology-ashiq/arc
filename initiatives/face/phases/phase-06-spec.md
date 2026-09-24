@@ -18,7 +18,57 @@
 
 ## Verification plan
 
-Coarse (refined via `/arc-change` when the phase starts): the no-click and driver-only fixtures RED first, green per job; one real council convene from the face as the live demo, its receipt read back from the spine.
+Refined 2026-09-24 via `/arc-change --lane face` at phase open (was: "the no-click and driver-only fixtures RED
+first, green per job; one real council convene from the face as the live demo, its receipt read back from the spine").
+Tests run on CI only, read per job; each fixture asserts it RAN before asserting what it printed.
+
+**Per exit criterion — the check that ticks it:**
+
+1. **Session door start / stream / attach, driver-only.** RED first against a door with no session route: a fixture
+   calls start for every SESSION registry row and asserts the spawned argv begins `node … arc-run.mjs` with
+   `--process <name> --driver <name|auto>`. Mutants the fixture must FAIL: a row whose argv names `claude`, `codex`,
+   `hermes` or any harness binary directly; a row whose argv is built by string join (one arg containing a space);
+   `--driver` missing or empty. Stream: the door relays the run's phase lines in order; attach re-reads the run's own
+   receipts and transcript, and a fixture proves the door keeps no session state (restart the door mid-run → attach
+   still shows the run).
+2. **Click-started only.** A browser-harness fixture opens every room with a session verb, reloads it, and attaches
+   to a running session; the spawn counter reads 0 after each. Mutants: an auto-start on mount, a start on reload,
+   a start from Ask (`ASK_ACTIONS` stays the three), a start from a replayed request with no click token — each FAILs.
+3. **Council convene, the live demo.** Before the demo, the council lane's additive fix makes `/arc-council` emit
+   exactly `session_id · question_hash · call · confidence` (`validate.mjs:316`); its pinning fixture is RED on
+   today's payload (BAD_COUNCIL) and green after. Demo, from the main clone after merge: one convene clicked in the
+   `council` module, its phases streamed, the `council.verdict` receipt read back off the spine by ULID. The spend
+   is the owner's to approve first; a refusal by the council's budget guard renders verbatim and is not a pass.
+4. **Every SESSION verb (15).** Each row below lands in its own PR (grouped by owning lane) with: its process file
+   (existing, or added additively by the engine lane), its door row, a fixture that it starts only through
+   `arc-run --driver`, and its receipt read back as a kind already in `validate.mjs` KINDS. A verb that cannot meet
+   that is a row in `evidence/phase-06/residue.md` naming the missing piece and the lane it is filed to; the owner
+   approves the residue as a whole. REQ-08's "absorb read" and "hire certification" are the probe's `absorb adopt`
+   and `hire` rows.
+
+   | Verb (module) | Process file today | Receipt kind (existing) |
+   |---|---|---|
+   | council convene (council) | none — engine lane adds | `council.verdict` after the payload fix |
+   | develop proof (develop) | none | `slice.done` |
+   | close phase (develop) | none | `phase.closed` |
+   | review (review-ship) | `review-diff` ✓ | `review.completed` |
+   | qa (review-ship) | none | `qa.completed` |
+   | ship (review-ship) | none | `ship.done` — the session stops for the owner's confirm before `vercel --prod`; a fixture proves no deploy step runs without it |
+   | hire (executor) | none | chosen in its PR from KINDS, else residue |
+   | dispatch (executor) | any — the door itself | `run.completed` |
+   | log lesson (memory) | none | `note.logged` (`lesson.logged` is invented, ADR-1334) |
+   | promote rule (memory) | none | `approval.requested` — the owner approves the diff |
+   | absorb adopt (absorb) | none | chosen in its PR from KINDS, else residue |
+   | growth draft (growth) | none | chosen in its PR from KINDS, else residue |
+   | adopt plan (strategy) | `kickoff-plan` ✓ | `kickoff.done` |
+   | record ADR (strategy) | none | `note.logged` or residue (`adr.recorded` is not a kind) |
+   | lane birth (org) | `kickoff-plan` ✓ | `kickoff.done` |
+
+5. **Engine room.** A fixture renders the room from a fixture spine and asserts driver, model and health are shown;
+   a planted provider-key string in any door response the room reads FAILs the no-key check (ADR-1325).
+6. **Attack + close.** Two fresh `/arc-attack` agents per PR — session decision logic, and the process/OS boundary
+   (argv construction, child lifetime, Windows spawn) — each carrying the lane's fixed-defect list; at most two rounds
+   (LOW leftovers to the debt ledger). CI green per job via `ci-digest`; `/arc-phase-done 06` from the main clone.
 
 ## Rabbit holes in this phase
 
