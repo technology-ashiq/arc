@@ -10,8 +10,9 @@ Attack the pushed diff: **$ARGUMENTS**
 `bash .claude/scripts/core/lane-resolve.sh --for attack --print human` (add `--lane <name>` if I
 gave one). Non-zero exit → print what it printed and STOP. In lane-mode echo `Selected lane:` first.
 
-**Where this runs.** Not in the session that wrote the code — that session ends at push
-(CLAUDE.md). Run it from the **main clone**: `arc-run` writes no receipt from a linked worktree.
+**Where this runs.** Run it from the session that pushed; do not start a new session for it. The attacker
+stays fresh because `arc-run` hands it only the diff, with `tools: []` (ADR-0226, amended 2026-09-24).
+Run it from the **main clone**, because `arc-run` writes no receipt from a linked worktree.
 
 1. **Run both surfaces, one command.** Fetch first, and default to `--base "origin/main"` if I named
    neither `--base` nor `--since` -- local `main` lags merges in the main clone, and a stale base

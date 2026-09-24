@@ -263,6 +263,19 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### OUT-OF-CYCLE — ADR-0226 Amendment 1: no new session per PR round — 2026-09-24
+
+**Classification: a decision.** The owner ruled on it on 2026-09-24 and it went through `/arc-change --lane
+engine`. It is charged to no cycle. The owner pointed out that every new session loads ~100k tokens before doing
+any work, and that ADR-0226's rule "the building session ends at push" paid that toll on every PR round for no
+independence: the attacker's freshness comes from `arc-run` and `tools: []`, and `ci-digest` is a script. Changed:
+ADR-0226 (Decision 6 superseded, Amendment 1 added), `CLAUDE.md`, and `.claude/commands/arc-attack.md` (a synced
+file, so the golden manifest was regenerated). Assumptions ledger: nothing fired. **Lint WARNs:** `adr-wired
+0215` is cleared by a cite in `phase-06-spec.md`. `nonneg-drift phase-00` is **accepted, not fixed**: phase 00
+is Cycle 6's spec, parked here, and copying Cycle 7's bullets into it would claim rules Cycle 6 never had.
+kickoff-lint has no parked-phase skip, and adding one is a gate change that needs its own attack pass.
+Branch `feat/engine-0226-session-boundary`.
+
 ### OUT-OF-CYCLE — the PR loop's attacker pass and CI read become governed engine work — 2026-09-23
 
 **Classification: a decision → ADR-0226, plus a scoped build**, routed through `/arc-change --lane
