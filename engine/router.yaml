@@ -232,6 +232,15 @@ classes:
     driver: claude-code
     fallback: []
 
+  # Phase 06 slice 04 (face lane, memory ring). Choosing a rule's home and writing it in that file's style is
+  # production against /arc-retro step 2's fixed homes, and it proposes only: the owner judges the branch before
+  # anything changes. So ADR-0069 block (a)'s balanced-workhorse, not a judgment seat. `fallback: []`: only claude-code
+  # fences its one write.
+  rule-promote:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback: []
+
 # The default for a process with no class row. Deliberately NOT a catch-all that silently
 # works: `arc-run --driver auto` on an unknown class is an error, and this row only supplies
 # the tier for one that is known but unrouted.

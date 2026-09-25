@@ -23,7 +23,8 @@
     ".claude/scripts/memory/lib/fields.mjs",
     ".claude/scripts/memory/lib/observe.mjs",
     ".claude/scripts/memory/lib/tokenize.mjs",
-    ".claude/scripts/memory/memory-index.mjs"
+    ".claude/scripts/memory/memory-index.mjs",
+    ".claude/scripts/memory/rule-propose.mjs"
   ],
   "files": [],
   "docs": [],

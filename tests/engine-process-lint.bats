@@ -327,3 +327,31 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
   grep -q '"question": "quick ' "$f" || { echo "the eval no longer probes the mode-word trap"; false; }
   grep -q '"session_file": "docs/council/sessions/' "$f" || { echo "the eval expects no saved session"; false; }
 }
+
+# ---------------------------------------------------------------------------
+# The memory ring's session verbs (face Phase 06 slice 04): lesson-log and rule-promote. The Node half is
+# tests/memory-session-probe.mjs; rule-propose's apply path is proven in a scratch repo by tests/face/kernel-ring.mjs.
+# ---------------------------------------------------------------------------
+
+@test "memory session verbs: both lint clean and route balanced-workhorse on claude-code" {
+  local p
+  for p in lesson-log rule-promote; do
+    run node "$(LINT)" "$ARC_ROOT/processes/$p.process.yaml" --root "$ARC_ROOT"
+    [ "$status" -eq 0 ] && [[ "$output" == *"all checks passed"* ]] || { echo "$p: $output"; false; }
+    run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" --process "$p" --driver auto --input '{"x":"a probe"}' --dry-run
+    [ "$status" -eq 0 ] || { echo "$p dry-run refused: $output"; false; }
+    [[ "$output" == *"would run \`$p\` on \`claude-code\` (tier balanced-workhorse)"* ]] || { echo "$p routed elsewhere: $output"; false; }
+  done
+}
+
+@test "memory session verbs: exact fenced grants, their door rows, one-turn bodies that tag their receipts" {
+  run node "$ARC_ROOT/tests/memory-session-probe.mjs" checks
+  [[ "$output" == *"PROBE checks: 10 checks, 0 failed"* ]] || { echo "the probe did not run all 10 checks clean: $output"; false; }
+  [ "$status" -eq 0 ]
+}
+
+@test "memory session verbs: the policy gate a live click crosses authorises both" {
+  run node "$ARC_ROOT/tests/memory-session-probe.mjs" gate
+  [[ "$output" == *"PROBE gate: 2 checks, 0 failed"* ]] || { echo "the gate refuses or never ran: $output"; false; }
+  [ "$status" -eq 0 ]
+}

@@ -1471,5 +1471,75 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
 
 }
 
+// ---- memory/rule-propose.mjs, APPLIED, in a scratch repository (face Phase 06 slice 04, the "Promote a rule" session
+// verb): a rule is appended to an EXISTING home on a new branch, the owner's tree and main do not move, the approval
+// names the branch and carries the run's process tag, the apply is bound to its plan, and the text is fenced and
+// secret-scanned before anything is written ----
+{
+  const repo = join(tmp, "rule-repo");
+  cpSync(join(REPO, ".claude", "scripts"), join(repo, ".claude", "scripts"), { recursive: true });
+  mkdirSync(join(repo, ".claude", "rules"), { recursive: true });
+  mkdirSync(join(repo, ".claude", "state", "rule-promote"), { recursive: true });
+  writeFileSync(join(repo, "CLAUDE.md"), "# fixture CLAUDE.md\n\n- one rule\n");
+  writeFileSync(join(repo, ".claude", "rules", "testing.md"), "# Testing Rules\n\n- a rule\n");
+  writeFileSync(join(repo, ".gitignore"), ".claude/state/\n");
+  const g = (...a) => spawnSync("git", a, { cwd: repo, encoding: "utf8" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.name", "fixture"); g("config", "user.email", "fixture@example.invalid"); g("config", "commit.gpgsign", "false");
+  g("add", "-A"); g("commit", "-q", "-m", "scratch");
+  const mainBefore = g("rev-parse", "refs/heads/main").stdout.trim();
+  check("rule-propose: scratch repository committed on main (vacuous-pass guard)", /^[0-9a-f]{40}$/.test(mainBefore));
+  const sp = spine("rule-spine");
+  const rp = (args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", "memory", "rule-propose.mjs"), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  const approvals = () => spineEvents(sp).filter((e) => e.kind === "approval.requested");
+  const clean = () => g("status", "--porcelain").stdout === "" && g("symbolic-ref", "HEAD").stdout.trim() === "refs/heads/main" && g("rev-parse", "refs/heads/main").stdout.trim() === mainBefore;
+  const homes = () => [sha256(readFileSync(join(repo, "CLAUDE.md"))), sha256(readFileSync(join(repo, ".claude", "rules", "testing.md")))].join("|");
+  const homes0 = homes();
+  const textFile = ".claude/state/rule-promote/rule.md";
+  writeFileSync(join(repo, textFile), "A counting grep that expects zero is guarded with || true under set -e.\n");
+  const ARGS = ["--home", ".claude/rules/testing.md", "--text-file", textFile, "--why", "the kernel suite proposes this", "--as-process", "rule-promote@1.0.0"];
+
+  const plan = rp([...ARGS, "--dry-run"]);
+  const digest = lastExpect(plan.stdout);
+  check("rule-propose, planned: the diff appends the rule after a blank line, with a digest, and no branch, no receipt",
+    plan.status === 0 && !!digest && /\n\+A counting grep that expects zero/.test(plan.stdout) && approvals().length === 0 && clean(), `${plan.status} ${plan.stderr}`);
+  const applied = rp([...ARGS, "--expect", digest || "x"]);
+  const branch = (/rule-propose: wrote (\S+) at/.exec(applied.stdout) || [])[1] || "";
+  const appr = approvals().find((e) => e.payload.branch === branch);
+  check("rule-propose, applied with --expect: a feat/face-memory-rule branch changes only the home, and the tree did not move",
+    applied.status === 0 && /^feat\/face-memory-rule-testing-[0-9a-f]{8}$/.test(branch) && g("diff", "--name-only", "main", branch).stdout.trim() === ".claude/rules/testing.md" && clean(), `${applied.status} ${applied.stderr}`);
+  check("rule-propose, applied: the approval names the branch and its commit, gate rule, tagged with the run's process",
+    !!appr && appr.payload.gate === "rule" && appr.payload.commit === g("rev-parse", branch).stdout.trim() && appr.process === "rule-promote@1.0.0" && receiptOf(applied.stdout) === appr.id, JSON.stringify(appr));
+  check("rule-propose: the branch holds main's home plus exactly the rule, the old last line untouched",
+    g("show", `${branch}:.claude/rules/testing.md`).stdout === "# Testing Rules\n\n- a rule\n\nA counting grep that expects zero is guarded with || true under set -e.\n");
+  const unbound = rp(ARGS);
+  check("rule-propose with no plan digest refuses -- an apply is bound to a plan", unbound.status === 2 && /bound to a plan/.test(unbound.stderr), unbound.stderr);
+  const again = rp([...ARGS, "--expect", digest || "x"]);
+  check("rule-propose applied twice: the second refuses and raises nothing", again.status === 2 && approvals().filter((e) => e.payload.branch === branch).length === 1, again.stderr);
+  // Every refusal writes nothing: no branch beyond the one above, no approval beyond the one above.
+  const refusals = [
+    ["a home that is not CLAUDE.md or .claude/rules", ["--home", "README.md", "--text-file", textFile, "--dry-run"], /--home is CLAUDE.md or/],
+    ["a rules file main does not carry", ["--home", ".claude/rules/nope.md", "--text-file", textFile, "--dry-run"], /main carries no/],
+    ["a home climbing out", ["--home", ".claude/rules/../../CLAUDE.md", "--text-file", textFile, "--dry-run"], /--home is CLAUDE.md or/],
+    ["a text file outside .claude/state", ["--home", "CLAUDE.md", "--text-file", "CLAUDE.md", "--dry-run"], /must sit under \.claude\/state/],
+    ["a bad process tag", ["--home", "CLAUDE.md", "--text-file", textFile, "--as-process", "x; rm -rf", "--dry-run"], /--as-process is/],
+    ["--dry-run with --expect", ["--home", "CLAUDE.md", "--text-file", textFile, "--dry-run", "--expect", "0".repeat(64)], /give one/],
+    ["an unknown flag", ["--home", "CLAUDE.md", "--text-file", textFile, "--force"], /unknown argument/],
+  ];
+  for (const [label, args, want] of refusals) {
+    const r = rp(args);
+    check(`rule-propose refuses ${label}, writing nothing`, r.status === 2 && want.test(r.stderr) && approvals().length === 1, `${r.status} ${r.stderr}`);
+  }
+  // A rule carrying a credential never reaches a branch of a public repo. The sample is built from parts, so no literal
+  // key sits in this file.
+  writeFileSync(join(repo, ".claude", "state", "rule-promote", "secret.md"), `Never commit ${"AKIA"}${"IOSFODNN7EXAMPLF"} again.\n`);
+  const secret = rp(["--home", "CLAUDE.md", "--text-file", ".claude/state/rule-promote/secret.md", "--dry-run"]);
+  check("rule-propose refuses a rule matching a secret rule, before any plan", secret.status === 2 && /secret rule/.test(secret.stderr) && !secret.stdout.includes("IOSFODNN7"), `${secret.status} ${secret.stderr}`);
+  writeFileSync(join(repo, ".claude", "state", "rule-promote", "ctl.md"), `a rule${String.fromCharCode(0x2028)}with a hidden line\n`);
+  const ctl = rp(["--home", "CLAUDE.md", "--text-file", ".claude/state/rule-promote/ctl.md", "--dry-run"]);
+  check("rule-propose refuses a rule holding a line-separator character", ctl.status === 2 && /control, format or line-separator/.test(ctl.stderr), ctl.stderr);
+  check("rule-propose: THE HOMES are byte-identical in the tree after every proposal and refusal", homes() === homes0 && clean(), homes());
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exit(failed === 0 && ran >= 80 ? 0 : 1);
