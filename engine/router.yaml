@@ -251,7 +251,7 @@ classes:
     fallback: []
 
   # Phase 06 (face lane, strategy ring). Writing one owner decision into an ADR's fixed sections is production against
-  # an explicit form; the decision is the owner's, and plan/adr-record.mjs picks the number. ADR-0069 block (a)'s
+  # an explicit form; the decision is the owner's, and hq/adr-record.mjs picks the number. ADR-0069 block (a)'s
   # balanced-workhorse. `fallback: []`: only claude-code fences its one write.
   adr-record:
     tier: balanced-workhorse

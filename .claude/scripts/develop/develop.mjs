@@ -29,7 +29,6 @@
 
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,6 +37,7 @@ import { buildPack, renderPack, sourcesField } from "./context-pack.mjs";
 import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger, scoreProblem, setSliceField } from "./ledger.mjs";
 import { RISK_GLOBS } from "./quality.mjs";
 import { scanSecrets, sizeScaledCap } from "../hq/lib/redact.mjs";
+import { withGitReader } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLock } from "../core/plan-expect.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -588,11 +588,12 @@ async function modeProve(ctx, phaseNum, opts) {
   const { proven: p0, total, next } = progress(parsed.slices);
   if (!next) die(`all slices in ${led.file} are proven (${total}/${total}) -- nothing to prove`);
 
-  const result = readProofResult(ctx.root, opts.resultFile);
+  const scratch = readProofResult(ctx.root, opts.resultFile);
+  const result = scratch.text;
   let hit = null;
   try { const v = scanSecrets(result, { result }, { maxCandidates: sizeScaledCap(result) }); if (v.hit) hit = v.rule; } catch { hit = "unscannable"; }
   if (hit) die(`the result matches the secret rule ${hit} -- the ledger is tracked in a public repo, so nothing was written`);
-  const commit = mergedCommit(ctx.root, opts.commit);
+  const commit = await mergedCommit(ctx.root, opts.commit);
 
   // Both fields bound to the block the READER handed out, by line: the heading does not move when a field is written.
   let after = before;
@@ -645,6 +646,8 @@ async function modeProve(ctx, phaseNum, opts) {
         try { unlinkSync(tmp); } catch { /* not made */ }
         stop(`${led.file} could not be written (${e && e.code ? e.code : "error"}) -- nothing was written`);
       }
+      // The result file is CONSUMED: a leftover was read by the next click and stamped on the next slice (B3).
+      try { unlinkSync(scratch.real); } catch { /* the proof stands */ }
       say(`proved slice ${next.id} in ${led.file} at ${commit}`);
       say(`Progress: ${p0 + 1}/${total} proven.`);
       const rec = emitReceipt(arcEvent, "slice.done", doneReceipt, { cwd: ctx.root, timeoutMs: 60_000, flags });
@@ -673,8 +676,13 @@ function readProofResult(root, path) {
   let dir, real;
   try { dir = realpathSync.native(join(root, ...PROOF_SCRATCH)); } catch { die("this clone has no .claude/state/develop-proof directory -- write the result there first"); }
   try { real = realpathSync.native(resolve(root, path)); } catch (e) { die(`--result-file cannot be resolved (${e.code || "error"})`); }
+  // The scratch directory itself resolves inside the repo: a junction on .claude/state sent the read elsewhere (attack
+  // 1f95807 B12). A `:` names an NTFS alternate stream, content no listing of the directory shows (B11).
+  let top;
+  try { top = realpathSync.native(root); } catch { die("the repository root cannot be resolved"); }
+  if (!dir.startsWith(top + sep)) die(".claude/state/develop-proof resolves outside the repository");
   const rel = relative(dir, real);
-  if (!rel || isAbsolute(rel) || rel.startsWith("..") || rel.includes("/") || rel.includes("\\")) die("--result-file must sit directly in .claude/state/develop-proof/");
+  if (!rel || isAbsolute(rel) || rel.startsWith("..") || rel.includes("/") || rel.includes("\\") || rel.includes(":")) die("--result-file must sit directly in .claude/state/develop-proof/");
   let fd, text;
   try {
     // lstat BEFORE open: a FIFO blocks open() for ever waiting for a writer.
@@ -692,20 +700,32 @@ function readProofResult(root, path) {
   if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text)) die("the result holds a control, format or line-break character -- it is ONE line");
   if (text !== text.trim() || text.length < 20 || text.length > RESULT_CAP) die(`the result is one line of 20 to ${RESULT_CAP} characters, not padded`);
   if (text.includes(PLACEHOLDER) || !isFilled(text)) die("the result is still a placeholder -- name the evidence that proved the slice");
-  return text;
+  return { text, real };
 }
 
-/** The commit, resolved and MERGED: an ancestor of HEAD in this clone. Returned as its 8-character short form. */
-function mergedCommit(root, given) {
+/**
+ * The commit, resolved and MERGED: an ancestor of origin/main, the mainline CI ran on -- never of whatever HEAD this
+ * clone has checked out, where a WIP commit on a feature branch passed as "merged" and a stale local main refused a
+ * real merge (attack 1f95807 B8). It must be the commit the caller named (B10). Through the one bounded git reader (B9).
+ * Returned as its 8-character short form, and the ref it was checked against.
+ */
+async function mergedCommit(root, given) {
   if (!/^[0-9a-f]{7,40}$/.test(given || "")) die("prove needs --commit SHA: 7 to 40 lowercase hex characters");
-  const git = (...a) => spawnSync("git", a, { cwd: root, encoding: "utf8" });
-  const full = git("rev-parse", "--verify", "--quiet", `${given}^{commit}`);
-  const sha = full.status === 0 ? full.stdout.trim() : "";
-  if (!/^[0-9a-f]{40,64}$/.test(sha)) die(`${given} is not a commit this clone holds -- nothing was written`);
-  const anc = git("merge-base", "--is-ancestor", sha, "HEAD");
-  if (anc.status === 1) die(`${given} is not merged (not an ancestor of HEAD) -- an unmerged commit is a claim, not a proof`);
-  if (anc.status !== 0) die(`whether ${given} is merged is unknown (git exited ${anc.status}) -- nothing was written`);
-  return sha.slice(0, 8);
+  let answer;
+  try {
+    answer = await withGitReader(root, async (read) => {
+      const main = await read(["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main^{commit}"], { ok: [0, 1] });
+      if (main.status !== 0) return { why: "this clone has no origin/main -- fetch it; a proof is checked against the mainline" };
+      const full = await read(["rev-parse", "--verify", "--quiet", `${given}^{commit}`], { ok: [0, 1] });
+      const sha = full.status === 0 ? full.out.trim() : "";
+      if (!/^[0-9a-f]{40,64}$/.test(sha) || !sha.startsWith(given)) return { why: `${given} is not a commit this clone holds -- nothing was written` };
+      const anc = await read(["merge-base", "--is-ancestor", sha, main.out.trim()], { ok: [0, 1] });
+      if (anc.status === 1) return { why: `${given} is not merged (not an ancestor of origin/main) -- an unmerged commit is a claim, not a proof` };
+      return { sha };
+    });
+  } catch (e) { die(`git could not answer whether ${given} is merged (${e && e.message ? e.message : "error"}) -- nothing was written`); }
+  if (answer.why) die(answer.why);
+  return answer.sha.slice(0, 8);
 }
 
 async function modeStatus(ctx) {
@@ -983,6 +1003,9 @@ if (wantsReceipt && mode !== "checkpoint") { say("STOP: --receipt belongs to che
 if (expectAt !== -1 && mode !== "next") { say("STOP: --expect belongs to next -- the face's apply of opening a slice"); flush(2); }
 if (dryRun && mode !== "next" && mode !== "prove") { say("STOP: --dry-run belongs to next and prove"); flush(2); }
 if (Object.keys(proveAt).length && mode !== "prove") { say("STOP: --result-file, --commit and --as-process belong to prove"); flush(2); }
+// prove writes the ledger of the repository it runs in, never one --root names: a session steered by what it read
+// pointed the one writer at another clone (attack 1f95807 B2).
+if (mode === "prove" && rootArg) { say("STOP: prove takes no --root -- it proves a slice of the repository it runs in"); flush(2); }
 if (dryRun && expectAt !== -1) { say("STOP: --dry-run plans and --expect applies; give one"); flush(2); }
 
 let root = rootArg;

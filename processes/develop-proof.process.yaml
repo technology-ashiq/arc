@@ -33,9 +33,10 @@ tools:
   # ONE write: the result line, into gitignored scratch.
   - fs.write:
       - ".claude/state/develop-proof/result.txt"
+  # ONE shell scope: the prove mode alone. `git log:*` let `--output=<file>` write any file (attack 1f95807 B1), and
+  # `develop.mjs:*` let a steered run start ledgers, open slices or emit other receipts (B2). prove takes no --root.
   - shell.run:
-      - "node .claude/scripts/develop/develop.mjs:*"
-      - "git log:*"
+      - "node .claude/scripts/develop/develop.mjs prove:*"
 output:
   type: object
   additionalProperties: false
@@ -68,15 +69,15 @@ body: |
 
   Your tools are exactly these, and everything else is refused: Read (anything under initiatives/ and docs/, and
   .claude/commands/arc-develop.md); Write on .claude/state/develop-proof/result.txt only; Bash for
-  `node .claude/scripts/develop/develop.mjs` and `git log` only. You never edit the ledger yourself, and you never
-  run a test: tests run on CI, and a proof cites what CI and the evidence already recorded.
+  `node .claude/scripts/develop/develop.mjs prove` only. You never edit the ledger yourself, and you never run a
+  test: tests run on CI, and a proof cites what CI and the evidence already recorded.
 
-  1. Run `node .claude/scripts/develop/develop.mjs status --lane <lane>` and read the lane's
-     initiatives/<lane>/phases/phase-<phase>-tasks.md. The next unproven slice is the one you prove; read its `proof:`
-     line -- it says what evidence proves it.
-  2. Find that evidence: the lane's initiatives/<lane>/PROGRESS.md, initiatives/<lane>/evidence/phase-<phase>/, and
-     `git log --oneline -30` for the merged commit that landed the slice. If nothing recorded shows the proof passed
-     on CI, the slice is not proven: the run has FAILED -- say what is missing and return no output object.
+  1. Read the lane's initiatives/<lane>/phases/phase-<phase>-tasks.md. The first slice whose `result:` or `commit:`
+     is still `(empty until proven)` is the one you prove; read its `proof:` line -- it says what evidence proves it.
+  2. Find that evidence in what the lane recorded: initiatives/<lane>/PROGRESS.md and
+     initiatives/<lane>/evidence/phase-<phase>/, including the merged (squash) commit that landed the slice. If
+     nothing recorded shows the proof passed on CI, or no merged commit is named, the slice is not proven: the run has
+     FAILED -- say what is missing and return no output object.
   3. Write ONE line to .claude/state/develop-proof/result.txt: what proved it and where that is recorded (a CI run
      id and head, an evidence file path, a PR number), 20 to 1500 characters, nothing invented beyond what you read.
   4. Check it: `node .claude/scripts/develop/develop.mjs prove <phase> --lane <lane> --result-file .claude/state/develop-proof/result.txt --commit <sha> --as-process develop-proof@1.0.0 --dry-run`.

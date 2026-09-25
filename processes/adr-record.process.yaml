@@ -10,7 +10,7 @@ permissions: declared
 # The row's kind is note.logged. `adr.recorded` is not a kind (ADR-1334): the spine's vocabulary is closed
 # (ADR-0026), and an ADR is a note with a file.
 #
-# The number is not the model's to pick. plan/adr-record.mjs reads the lane's century from PORTFOLIO.md's band table
+# The number is not the model's to pick. hq/adr-record.mjs reads the lane's century from PORTFOLIO.md's band table
 # and every number this tree, every branch and every sibling worktree already holds, then creates the file
 # exclusively: three lanes once took one century in a week because each looked at its own worktree.
 #
@@ -29,11 +29,11 @@ tools:
       - "docs/adr/**"
       - "initiatives/**"
       - ".claude/commands/arc-change.md"
-  # ONE write: the ADR text, into gitignored scratch. docs/adr/ is written by plan/adr-record.mjs alone.
+  # ONE write: the ADR text, into gitignored scratch. docs/adr/ is written by hq/adr-record.mjs alone.
   - fs.write:
       - ".claude/state/adr-record/adr.md"
   - shell.run:
-      - "node .claude/scripts/plan/adr-record.mjs:*"
+      - "node .claude/scripts/hq/adr-record.mjs:*"
 output:
   type: object
   additionalProperties: false
@@ -62,7 +62,7 @@ body: |
 
   Your tools are exactly these, and everything else is refused: Read (anything under docs/adr/ and initiatives/, and
   .claude/commands/arc-change.md); Write on .claude/state/adr-record/adr.md only; Bash for
-  `node .claude/scripts/plan/adr-record.mjs` only. You never write in docs/adr/ yourself, and you never pick the number.
+  `node .claude/scripts/hq/adr-record.mjs` only. You never write in docs/adr/ yourself, and you never pick the number.
 
   1. Read two recent ADRs of the lane in docs/adr/ for their style, and the lane's initiatives/<lane>/PROGRESS.md
      `## Now` for the context the decision was made in.
@@ -70,7 +70,7 @@ body: |
      the body with a `## Context` section (why a decision was needed, from what you read, nothing invented) and a
      `## Decision` section (the owner's decision, in its own words), and a `## Consequences` section if the context
      names any. No `# ` heading and no Status, Date or Lane line: the script writes those.
-  3. Check it: `node .claude/scripts/plan/adr-record.mjs --lane <lane> --adr-file .claude/state/adr-record/adr.md --as-process adr-record@1.0.0 --dry-run`.
+  3. Check it: `node .claude/scripts/hq/adr-record.mjs --lane <lane> --adr-file .claude/state/adr-record/adr.md --as-process adr-record@1.0.0 --dry-run`.
      If it refuses the file's form, fix the file and check again, at most 3 times; a third refusal, or a refusal of
      the lane or its century, means the run has FAILED: say why and return no output object.
   4. Record it: the same command without `--dry-run`. It prints `adr-record: wrote docs/adr/<file>` and

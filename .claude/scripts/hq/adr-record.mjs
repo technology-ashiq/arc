@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * adr-record.mjs -- write ONE ADR into docs/adr/ at the next free number of a lane's century, and emit its
+ * hq/adr-record.mjs -- write ONE ADR into docs/adr/ at the next free number of a lane's century, and emit its
  * note.logged receipt (face Phase 06, the strategy room's "Record an ADR" session verb).
  *
  *   adr-record.mjs --lane NAME --adr-file PATH [--as-process NAME@VER] [--dry-run]
@@ -17,12 +17,12 @@
  *
  * Exit 0 written (or planned) · 1 the ADR IS written and its receipt did not land · 2 refused, nothing written.
  */
-import { closeSync, fstatSync, openSync, readSync, readFileSync, readdirSync, realpathSync, lstatSync, writeFileSync, existsSync, statSync } from "node:fs";
-import { dirname, join, resolve, relative, isAbsolute } from "node:path";
+import { closeSync, fstatSync, openSync, readSync, readFileSync, readdirSync, realpathSync, lstatSync, writeFileSync, existsSync, unlinkSync, renameSync } from "node:fs";
+import { dirname, join, resolve, relative, isAbsolute, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
 import { emitReceipt, spineRefusal, withExclusiveLock } from "../core/plan-expect.mjs";
-import { scanSecrets, sizeScaledCap } from "../hq/lib/redact.mjs";
+import { withGitReader } from "../core/proposal-branch.mjs";
+import { scanSecrets, sizeScaledCap } from "./lib/redact.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
@@ -65,8 +65,13 @@ function readAdr(path) {
   let dir, real;
   try { dir = realpathSync.native(join(REPO, ...SCRATCH)); } catch { die(2, "this clone has no .claude/state/adr-record directory -- write the ADR there first"); }
   try { real = realpathSync.native(resolve(REPO, path)); } catch (e) { die(2, `--adr-file cannot be resolved (${e.code || "error"})`); }
+  // The scratch directory itself resolves inside the repo: a junction on .claude/state sent the read elsewhere (B12).
+  let top;
+  try { top = realpathSync.native(REPO); } catch { die(2, "the repository root cannot be resolved"); }
+  if (!dir.startsWith(top + sep)) die(2, ".claude/state/adr-record resolves outside the repository");
   const rel = relative(dir, real);
-  if (!rel || isAbsolute(rel) || rel.startsWith("..") || rel.includes("/") || rel.includes("\\")) die(2, "--adr-file must sit directly in .claude/state/adr-record/");
+  // A `:` names an NTFS alternate stream, content no listing of the directory shows (B11).
+  if (!rel || isAbsolute(rel) || rel.startsWith("..") || rel.includes("/") || rel.includes("\\") || rel.includes(":")) die(2, "--adr-file must sit directly in .claude/state/adr-record/");
   let fd;
   try {
     // lstat BEFORE open: a FIFO blocks open() for ever waiting for a writer.
@@ -81,7 +86,7 @@ function readAdr(path) {
     let text;
     try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf.subarray(0, n)); } catch { die(2, "--adr-file is not valid UTF-8"); }
     if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-    return text.replace(/\r\n/g, "\n");
+    return { text: text.replace(/\r\n/g, "\n"), real };
   } finally { if (fd !== undefined) try { closeSync(fd); } catch { /* closed */ } }
 }
 
@@ -128,33 +133,42 @@ export function bandOf(portfolioText, lane) {
 
 const numOf = (name) => { const m = /^(\d{4})-.*\.md$/.exec(name); return m ? Number(m[1]) : null; };
 
-/** Every ADR number this tree, every branch the repository holds and every sibling worktree on disk carries. */
-function takenNumbers() {
+/**
+ * Every ADR number this tree, every branch the repository holds and every sibling worktree on disk carries, through the
+ * one bounded git reader. Git's names are read NUL-separated (-z): a quoted `"1330-na\303\257ve.md"` did not start with
+ * a digit and its number was issued again (attack 1f95807 B5). A ref's docs/adr is asked in ONE batch, and each answer
+ * is present or missing; any other answer, a timeout or an exit fails the run -- a failure to look is not "nothing
+ * taken" (B6).
+ * @param {(args: string[], o?: { ok?: number[], input?: string }) => Promise<{ out: string, status: number }>} read
+ */
+async function takenNumbers(read) {
   const taken = new Set();
   const add = (names) => { for (const n of names) { const v = numOf(n); if (v !== null) taken.add(v); } };
-  const git = (...a) => spawnSync("git", a, { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   try { add(readdirSync(join(REPO, ADR_DIR))); } catch (e) { die(2, `${ADR_DIR} cannot be read (${e.code || "error"})`); }
-  // Branches: one tree object per distinct docs/adr, listed once. A listing that fails is not "nothing taken".
-  const refs = git("for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes");
-  if (refs.status !== 0) die(2, `git cannot list this repository's branches -- the free number is unknown, nothing written`);
+  const refs = (await read(["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"])).out.split("\n").filter((r) => r && !r.endsWith("/HEAD"));
   const trees = new Set();
-  for (const ref of refs.stdout.split("\n").filter(Boolean)) {
-    if (ref.endsWith("/HEAD")) continue;
-    const t = git("rev-parse", "--verify", "--quiet", `${ref}:${ADR_DIR}`);
-    if (t.status === 0 && /^[0-9a-f]{40,64}$/.test(t.stdout.trim())) trees.add(t.stdout.trim());
+  if (refs.length) {
+    const asked = (await read(["cat-file", "--batch-check=%(objectname) %(objecttype)"], { input: refs.map((r) => `${r}:${ADR_DIR}\n`).join("") })).out.split("\n").filter(Boolean);
+    if (asked.length !== refs.length) die(2, `git answered ${asked.length} of ${refs.length} branches -- the free number is unknown, nothing written`);
+    asked.forEach((line, i) => {
+      const m = /^([0-9a-f]{40,64}) tree$/.exec(line);
+      if (m) trees.add(m[1]);
+      else if (line !== `${refs[i]}:${ADR_DIR} missing`) die(2, `git cannot say whether ${refs[i].slice(0, 120)} holds ${ADR_DIR} (${line.slice(0, 120)}) -- the free number is unknown, nothing written`);
+    });
   }
-  for (const tree of trees) {
-    const ls = git("ls-tree", "--name-only", tree);
-    if (ls.status !== 0) die(2, `git cannot list the ADR tree ${tree.slice(0, 12)} -- the free number is unknown, nothing written`);
-    add(ls.stdout.split("\n"));
-  }
-  // Sibling worktrees: a claim written and not yet committed is on disk only.
-  const wt = git("worktree", "list", "--porcelain");
-  if (wt.status !== 0) die(2, "git cannot list this repository's worktrees -- the free number is unknown, nothing written");
-  for (const line of wt.stdout.split("\n")) {
-    if (!line.startsWith("worktree ")) continue;
-    const dir = join(line.slice("worktree ".length).trim(), ADR_DIR);
-    try { if (statSync(dir).isDirectory()) add(readdirSync(dir)); } catch { /* a pruned or unreadable worktree holds no claim we can see */ }
+  for (const tree of trees) add((await read(["ls-tree", "-z", "--name-only", tree])).out.split("\u0000"));
+  // Sibling worktrees: a claim written and not yet committed is on disk only. A worktree git lists and whose ADR
+  // directory is absent holds nothing; one that cannot be READ is not absent, and fails the run (B7).
+  for (const rec of (await read(["worktree", "list", "--porcelain", "-z"])).out.split("\u0000")) {
+    if (!rec.startsWith("worktree ")) continue;
+    const dir = join(rec.slice("worktree ".length), ADR_DIR);
+    let names;
+    try { names = readdirSync(dir); }
+    catch (e) {
+      if (e && (e.code === "ENOENT" || e.code === "ENOTDIR")) continue;
+      die(2, `the worktree ADR directory ${dir} cannot be read (${e && e.code ? e.code : "error"}) -- the free number is unknown, nothing written`);
+    }
+    add(names);
   }
   return taken;
 }
@@ -169,7 +183,8 @@ export function nextNumber(taken, band) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!existsSync(join(REPO, "initiatives", args.lane, "PROGRESS.md"))) die(2, `there is no ${args.lane} lane (initiatives/${args.lane}/PROGRESS.md) -- an ADR is recorded for a born lane`);
-  const adr = checkAdr(readAdr(args.adrFile));
+  const scratch = readAdr(args.adrFile);
+  const adr = checkAdr(scratch.text);
   if (typeof adr === "string") die(2, adr);
   let hit = null;
   try { const v = scanSecrets(adr.body, { title: adr.title, body: adr.body }, { maxCandidates: sizeScaledCap(adr.body) }); if (v.hit) hit = v.rule; } catch { hit = "unscannable"; }
@@ -184,8 +199,8 @@ async function main() {
   const slug = slugOf(adr.title);
   const flags = args.asProcess ? ["--process", args.asProcess] : [];
 
-  const plan = () => {
-    const number = nextNumber(takenNumbers(), band);
+  const plan = async (read) => {
+    const number = nextNumber(await takenNumbers(read), band);
     if (number === null) die(2, `the ${args.lane} lane's century ${band.lo}-${band.hi} is full -- nothing written`);
     const nnnn = String(number).padStart(4, "0");
     const file = `${ADR_DIR}/${nnnn}-${slug}.md`;
@@ -195,26 +210,37 @@ async function main() {
     if (refused) die(2, `the receipt this ADR raises would be refused by the spine, so nothing is written: ${refused}`);
     return { file, text, payload };
   };
+  const git = (fn) => withGitReader(REPO, fn).catch((e) => { if (e instanceof Stop) throw e; die(2, `${e && e.message ? e.message : "git failed"} -- the free number is unknown, nothing written`); });
 
   if (args.dryRun) {
-    const p = plan();
+    const p = await git((read) => plan(read));
     process.stdout.write(`adr-record: would write ${p.file}:\n${p.text.split("\n").slice(0, 8).map((l) => `  ${l}`).join("\n")}\n`);
     process.stdout.write("adr-record: dry run -- nothing written, no receipt\n");
     return;
   }
 
-  // ONE WRITER AT A TIME, beside the spine as every sibling tool's lock: two clicks in one second otherwise read the
-  // same highest number. The number is chosen again INSIDE the lock, and the file is created exclusively.
-  let lockDir;
-  try { const { spineRoot } = await import("../hq/lib/spine-io.mjs"); lockDir = join(spineRoot(), "locks"); }
-  catch (e) { die(2, `the spine cannot be found (${e && e.code ? e.code : "error"}) -- nothing written`); }
-  const held = await withExclusiveLock(lockDir, "adr-record", async () => {
-    const p = plan();
-    try { writeFileSync(join(REPO, p.file), p.text, { encoding: "utf8", flag: "wx" }); }
-    catch (e) { die(2, `${p.file} could not be created (${e.code || "error"}) -- nothing written`); }
+  // ONE WRITER AT A TIME ACROSS EVERY WORKTREE: the lock lives in git's COMMON directory, which all worktrees of this
+  // repository share. Beside each checkout's spine, two worktrees took two locks and both issued one number under two
+  // names (attack 1f95807 B4). The number is chosen again INSIDE the lock, and the file is created exclusively.
+  const common = await git(async (read) => (await read(["rev-parse", "--path-format=absolute", "--git-common-dir"])).out.trim());
+  if (!common || !isAbsolute(common)) die(2, "git named no common directory -- nothing written");
+  const held = await withExclusiveLock(join(common, "arc-locks"), "adr-record", async () => {
+    const p = await git((read) => plan(read));
+    const target = join(REPO, p.file);
+    // Written beside the target, then renamed in: a failed write never leaves a partial ADR in a tracked directory, and
+    // "nothing written" is true of every refusal (B13).
+    const tmp = join(REPO, ADR_DIR, `.adr-record.${process.pid}.tmp`);
+    try { writeFileSync(tmp, p.text, { encoding: "utf8", flag: "wx" }); }
+    catch (e) { try { unlinkSync(tmp); } catch { /* not made */ } die(2, `${p.file} could not be written (${e.code || "error"}) -- nothing written`); }
+    if (existsSync(target)) { try { unlinkSync(tmp); } catch { /* gone */ } die(2, `${p.file} already exists -- nothing written`); }
+    try { renameSync(tmp, target); }
+    catch (e) { try { unlinkSync(tmp); } catch { /* gone */ } die(2, `${p.file} could not be written (${e.code || "error"}) -- nothing written`); }
     written = true;
     process.stdout.write(`adr-record: wrote ${p.file}\n`);
+    // The scratch file is CONSUMED: a leftover was read by the next click and recorded again under its lane (B3).
+    try { unlinkSync(scratch.real); } catch { /* the ADR stands */ }
     const got = emitReceipt(ARC_EVENT, "note.logged", p.payload, { cwd: REPO, timeoutMs: 60_000, flags });
+    if (got.state === "unknown") die(1, `${p.file} IS written, and whether its receipt landed is unknown -- ${got.why}. Look at the spine before recording again`);
     if (got.state !== "landed" || !got.id) die(1, `${p.file} IS written, and its receipt did not land -- ${got.why}`);
     process.stdout.write(`receipt: note.logged ${got.id}\n`);
   });

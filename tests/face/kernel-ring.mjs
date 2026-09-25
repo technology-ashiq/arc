@@ -1628,7 +1628,7 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("lesson-log: THE LOG gained exactly one line across every run", log().split("\n").length === (head + existing).split("\n").length + 1, String(log().split("\n").length));
 }
 
-// ---- plan/adr-record.mjs, in a scratch repository (face Phase 06, the strategy room's "Record an ADR" session verb):
+// ---- hq/adr-record.mjs, in a scratch repository (face Phase 06, the strategy room's "Record an ADR" session verb):
 // the number comes from the lane's century and skips every number this tree, another branch and a sibling worktree's
 // uncommitted file hold; the file is created with the heading block the script writes; the receipt is tagged; a
 // malformed, secret-bearing or out-of-scratch ADR, an unknown lane, a lane with no century and a full century are
@@ -1662,7 +1662,7 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("adr-record: scratch repository on main, a branch claim and a sibling worktree claim (vacuous-pass guard)",
     added.status === 0 && !existsSync(join(repo, "docs", "adr", "1310-on-a-branch.md")) && g("rev-parse", "--verify", "--quiet", "other:docs/adr/1310-on-a-branch.md").status === 0, added.stderr);
   const sp = spine("adr-spine");
-  const ar = (args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", "plan", "adr-record.mjs"), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  const ar = (args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", "hq", "adr-record.mjs"), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
   const notes = () => spineEvents(sp).filter((e) => e.kind === "note.logged");
   const adrs = () => readdirSync(join(repo, "docs", "adr")).sort().join(",");
   const file = ".claude/state/adr-record/adr.md";
@@ -1683,6 +1683,7 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
     one.status === 0 && text1.startsWith(`# ADR 1321 ${String.fromCharCode(0x2014)} Session verbs get one writer script each\n\n**Status:** accepted\n**Date:** `) && /\n\*\*Lane:\*\* face\n/.test(text1) && text1.endsWith(good.slice(good.indexOf("## Context"))), `${one.status} ${one.stderr} ${text1.slice(0, 200)}`);
   check("adr-record, applied: note.logged lands with what adr, the file and number, tagged adr-record@1.0.0, its id the one printed",
     !!n1 && n1.payload.what === "adr" && n1.payload.file === "docs/adr/1321-session-verbs-get-one-writer-script-each.md" && n1.payload.number === "1321" && n1.payload.lane === "face" && n1.process === "adr-record@1.0.0" && receiptOf(one.stdout) === n1.id, JSON.stringify(n1));
+  check("adr-record, applied: the scratch ADR is consumed, so the next click cannot replay it (attack 1f95807 B3)", one.status === 0 && !existsSync(join(repo, file)));
   put(good.replace("Session verbs get one writer script each", "A second decision in the same century"));
   const two = ar(ARGS);
   check("adr-record, applied again: the next number is 1322, never a hole below the highest",

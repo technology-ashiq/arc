@@ -53,22 +53,22 @@ const SPEC = {
     ],
     tag: "--as-process rule-promote@1.0.0",
   },
-  // No Edit on the ledger and no test run: develop.mjs prove is the ledger's one writer, and a proof cites CI.
+  // No Edit on the ledger, no test run and no git: `develop.mjs prove` alone is its shell scope -- `git log:*` wrote
+  // any file through --output, and `develop.mjs:*` reached every mode (attack 1f95807 B1, B2).
   "develop-proof": {
     row: "develop.proof", kind: "slice.done", fields: { lane: LANE_SRC, phase: "[0-9]{2}" },
     grants: [
-      "Bash(git log:*)",
-      "Bash(node .claude/scripts/develop/develop.mjs:*)",
+      "Bash(node .claude/scripts/develop/develop.mjs prove:*)",
       "Edit(.claude/state/develop-proof/result.txt)",
       "Read",
     ],
     tag: "--as-process develop-proof@1.0.0",
   },
-  // No Edit in docs/adr: plan/adr-record.mjs picks the number and is the directory's one writer for this verb.
+  // No Edit in docs/adr: hq/adr-record.mjs picks the number and is the directory's one writer for this verb.
   "adr-record": {
     row: "strategy.record-adr", kind: "note.logged", fields: { lane: LANE_SRC, decision: ONE_LINE_SRC },
     grants: [
-      "Bash(node .claude/scripts/plan/adr-record.mjs:*)",
+      "Bash(node .claude/scripts/hq/adr-record.mjs:*)",
       "Edit(.claude/state/adr-record/adr.md)",
       "Read",
     ],

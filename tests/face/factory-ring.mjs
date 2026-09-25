@@ -473,13 +473,20 @@ function scratchRepo(name, files) {
   writeFileSync(join(t, "initiatives", "develop", "PROGRESS.md"), "# PROGRESS\n\nstatus: LIVE\nphase: 00\n\n## Now\n");
   writeFileSync(join(t, ".gitignore"), ".claude/state/\n");
   const sp = spine("develop-prove-spine");
-  const devIn = (...a) => spawnSync(process.execPath, [S("develop", "develop.mjs"), ...a, "--lane", "develop", "--root", t], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  // Run FROM the scratch lane, never with --root: prove proves the repository it runs in (attack 1f95807 B2).
+  const devIn = (...a) => spawnSync(process.execPath, [S("develop", "develop.mjs"), ...a, "--lane", "develop"], { cwd: t, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
   const st = devIn("start", "0");
   const g = (...a) => spawnSync("git", a, { cwd: t, encoding: "utf8" });
   g("init", "-q", "-b", "main");
   g("config", "user.name", "fixture"); g("config", "user.email", "fixture@example.invalid"); g("config", "commit.gpgsign", "false");
   g("add", "-A"); g("commit", "-q", "-m", "slice 01 landed");
   const merged = g("rev-parse", "HEAD").stdout.trim();
+  // "Merged" is asked of origin/main, the mainline CI ran on, never of the checked-out HEAD (attack 1f95807 B8).
+  g("update-ref", "refs/remotes/origin/main", merged);
+  // A WIP commit on the checked-out branch, never pushed: an ancestor of HEAD, not of origin/main.
+  writeFileSync(join(t, "wip.txt"), "work in progress\n");
+  g("add", "wip.txt"); g("commit", "-q", "-m", "wip, not on origin/main");
+  const wip = g("rev-parse", "HEAD").stdout.trim();
   g("switch", "-q", "-c", "side");
   writeFileSync(join(t, "side.txt"), "not merged\n");
   g("add", "-A"); g("commit", "-q", "-m", "an unmerged commit");
@@ -508,13 +515,15 @@ function scratchRepo(name, files) {
   const diff = bl.map((l, i) => (l === al[i] ? null : i)).filter((i) => i !== null);
   check("develop prove, applied: exactly slice 01's result and commit lines changed, to the result and the merged short commit",
     ap.status === 0 && bl.length === al.length && diff.length === 2 && al[diff[0]] === `result: ${result}` && al[diff[1]] === `commit: ${merged.slice(0, 8)}` && bl.slice(0, diff[0]).some((l) => l === "#### slice: 01") && !bl.slice(0, diff[0]).some((l) => l === "#### slice: 02"), `${ap.status} ${ap.stdout.slice(-300)} ${JSON.stringify(diff)}`);
+  check("develop prove, applied: the result file is consumed, so the next click cannot replay it", ap.status === 0 && !existsSync(join(t, resultFile)));
   check("develop prove, applied: slice.done lands for slice 01 at the merged commit, tagged develop-proof@1.0.0, its id the one printed",
     !!d1 && d1.payload.slice === "01" && d1.payload.phase === "00" && d1.payload.lane === "develop" && d1.payload.commit === merged.slice(0, 8) && d1.process === "develop-proof@1.0.0" && receiptOf(ap.stdout) === d1.id, JSON.stringify(d1));
 
   const held = readFileSync(ledger, "utf8");
   writeFileSync(join(t, ".claude", "state", "other.txt"), `${result}\n`);
   const refusals = [
-    ["an unmerged commit", result, ["--commit", unmerged.slice(0, 12)], /is not merged/],
+    ["a commit on another branch", result, ["--commit", unmerged.slice(0, 12)], /not an ancestor of origin\/main/],
+    ["a WIP commit the checked-out branch holds and origin/main does not", result, ["--commit", wip.slice(0, 12)], /not an ancestor of origin\/main/],
     ["a commit this clone does not hold", result, ["--commit", "deadbeefdeadbeef"], /is not a commit this clone holds/],
     ["a placeholder result", "(empty until proven)", [], /placeholder/],
     ["a result too short to name its evidence", "passed", [], /20 to 1500 characters/],
@@ -539,6 +548,7 @@ function scratchRepo(name, files) {
     ["--commit given twice", [...ARGS, "--commit", merged.slice(0, 12)], /--commit is given once/],
     ["--commit with =", ["prove", "0", "--result-file", resultFile, `--commit=${merged.slice(0, 12)}`], /never with =/],
     ["a bad process tag", ["prove", "0", "--result-file", resultFile, "--commit", merged.slice(0, 12), "--as-process", "x;y"], /--as-process is/],
+    ["--root", [...ARGS, "--root", t], /prove takes no --root/],
   ];
   for (const [label, args, want] of flagRefusals) {
     const r = devIn(...args);
