@@ -122,7 +122,8 @@ async function main() {
   let logText;
   try { logText = readFileSync(logPath, "utf8"); } catch (e) { die(2, `${RETRO_LOG} cannot be read (${e.code || "error"})`); }
   const parsed = parseRetroLog(logText);
-  const hits = findNearDuplicates({ prevention: fields.prevention, tags: fields.tags }, parsed.records);
+  // An ARRAY of tags: normalizeTags iterates what it is given, and a string became its letters, so nothing ever matched.
+  const hits = findNearDuplicates({ prevention: fields.prevention, tags: fields.tags.split(",") }, parsed.records);
   const duplicateOf = hits.map((h) => `${RETRO_LOG}:${h.record.line}`);
   const payload = { what: "lesson", file: RETRO_LOG, appended: duplicateOf.length === 0, duplicate_of: duplicateOf.join(",") };
   const flags = args.asProcess ? ["--process", args.asProcess] : [];

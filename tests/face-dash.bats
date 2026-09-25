@@ -89,6 +89,7 @@ load 'test_helper'
   [[ "$output" == *"ok evolve conclude, applied: the verdict lands on the spine"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok door: a sim door refuses the effect's apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok rule-propose: THE HOMES are byte-identical in the tree after every proposal and refusal"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok lesson-log: THE LOG gained exactly one line across every run"* ]] || { echo "$output"; false; }
 }
 
 @test "factory ring: develop next, open-brief, pick, profile, retire and add-agent APPLIED in scratch repos; touchesTree is SIM_EFFECT" {
