@@ -100,6 +100,10 @@ if (mode === "checks") {
   check("a refused claim is FAILED, and a failed run gives its claim back", doc.body.includes("`--claim` refuses, the run has FAILED") && doc.body.includes("--release <claimed path>"));
   check("each lint gets at most 3 attempts", doc.body.includes("at most 3 attempts"));
   check("the body pins deep mode", doc.body.includes("Never run quick, standard or review mode"));
+  // The first live convene (2026-09-25) ended mid-research: the Chair backgrounded its agents and called
+  // ScheduleWakeup, and a headless turn simply ends there. The body now forbids both, and names its tools.
+  check("the body keeps every agent in the foreground, in one turn",
+    doc.body.includes("never set `run_in_background`") && doc.body.includes("call ScheduleWakeup, Monitor, sleep") && doc.body.includes("THIS RUN IS ONE TURN"));
   check("step 9 runs as plain commands, never $(...) or a pipe", doc.body.includes("never one line with `$(...)` or a") && !/\$\(node|\| tail/.test(doc.body));
 } else if (mode === "gate") {
   // B8: the gate a live click meets. --dry-run exits before it, so it is asked here directly, on the real policy.
