@@ -20,7 +20,7 @@ import { ONE_LINE_SRC } from "../.claude/scripts/core/one-line.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const load = (name) => {
   const p = parseYamlSubset(readFileSync(join(ROOT, "processes", `${name}.process.yaml`), "utf8").replace(/\r\n/g, "\n"));
-  if (!p.ok) { console.log(`FAIL ${name} does not parse`); process.exit(1); }
+  if (!p.ok) { console.log(`FAIL ${name} does not parse`); return null; }
   return p.value;
 };
 let n = 0, failed = 0;
@@ -34,14 +34,13 @@ const grantsOf = (doc) => { const a = dispatchToolArgs(doc); return a[0] === "--
 const SPEC = {
   "lesson-log": {
     row: "memory.log-lesson", kind: "note.logged", field: "lesson",
+    // No Edit on docs/retro-log.md and no raw emit: memory/lesson-log.mjs is the log's one writer (attack 3e97a85 B8).
     grants: [
-      "Bash(bash .claude/scripts/hq/arc-event.sh emit note.logged:*)",
-      "Bash(node .claude/scripts/memory/conflict-check.mjs:*)",
-      "Edit(.claude/state/lesson-log/prevention.txt)",
-      "Edit(docs/retro-log.md)",
+      "Bash(node .claude/scripts/memory/lesson-log.mjs:*)",
+      "Edit(.claude/state/lesson-log/row.txt)",
       "Read",
     ],
-    tag: "--process lesson-log@1.0.0",
+    tag: "--as-process lesson-log@1.0.0",
   },
   "rule-promote": {
     row: "memory.promote-rule", kind: "approval.requested", field: "rule",
@@ -54,9 +53,13 @@ const SPEC = {
   },
 };
 
-const mode = process.argv[2];
-for (const [name, s] of Object.entries(SPEC)) {
+// Exactly one mode argument: `checks gate` used to run checks alone, silently (attack 3e97a85 B7).
+const mode = process.argv.length === 3 ? process.argv[2] : "";
+// exitCode, never process.exit(): an exit right after a console.log can cut the summary line off a piped stdout.
+if (mode !== "checks" && mode !== "gate") { console.log("usage: memory-session-probe.mjs checks|gate"); process.exitCode = 2; }
+for (const [name, s] of (mode === "checks" || mode === "gate") ? Object.entries(SPEC) : []) {
   const doc = load(name);
+  if (!doc) { n += 1; failed += 1; continue; }
   if (mode === "checks") {
     // The whole grant, exactly: a write fenced to its paths, one shell scope per tool, no Task, no bare Write.
     check(`${name}: the CLI is handed exactly its fenced grants`, JSON.stringify(grantsOf(doc)) === JSON.stringify([...s.grants].sort()), grantsOf(doc).join(" | "));
@@ -72,6 +75,6 @@ for (const [name, s] of Object.entries(SPEC)) {
     check(`${name}: hq.policy.yaml authorises it for what it declares`, gate.inForce === true && gate.mayInvoke === true, gate.denials.map((d) => d.reason).join("; ") || gate.reason || "");
   }
 }
-if (mode !== "checks" && mode !== "gate") { console.log("usage: memory-session-probe.mjs checks|gate"); process.exit(2); }
-console.log(`PROBE ${mode}: ${n} checks, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+
+if (mode === "checks" || mode === "gate") console.log(`PROBE ${mode}: ${n} checks, ${failed} failed`);
+if (mode === "checks" || mode === "gate") process.exitCode = failed ? 1 : 0;

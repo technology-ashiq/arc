@@ -1507,7 +1507,7 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   const branch = (/rule-propose: wrote (\S+) at/.exec(applied.stdout) || [])[1] || "";
   const appr = approvals().find((e) => e.payload.branch === branch);
   check("rule-propose, applied with --expect: a feat/face-memory-rule branch changes only the home, and the tree did not move",
-    applied.status === 0 && /^feat\/face-memory-rule-testing-[0-9a-f]{8}$/.test(branch) && g("diff", "--name-only", "main", branch).stdout.trim() === ".claude/rules/testing.md" && clean(), `${applied.status} ${applied.stderr}`);
+    applied.status === 0 && /^feat\/face-memory-rule-rules-testing-[0-9a-f]{8}$/.test(branch) && g("diff", "--name-only", "main", branch).stdout.trim() === ".claude/rules/testing.md" && clean(), `${applied.status} ${applied.stderr}`);
   check("rule-propose, applied: the approval names the branch and its commit, gate rule, tagged with the run's process",
     !!appr && appr.payload.gate === "rule" && appr.payload.commit === g("rev-parse", branch).stdout.trim() && appr.process === "rule-promote@1.0.0" && receiptOf(applied.stdout) === appr.id, JSON.stringify(appr));
   check("rule-propose: the branch holds main's home plus exactly the rule, the old last line untouched",
@@ -1517,11 +1517,19 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   const again = rp([...ARGS, "--expect", digest || "x"]);
   check("rule-propose applied twice: the second refuses and raises nothing", again.status === 2 && approvals().filter((e) => e.payload.branch === branch).length === 1, again.stderr);
   // Every refusal writes nothing: no branch beyond the one above, no approval beyond the one above.
+  // Other files under .claude/state are not the verb's to read (attack 3e97a85 B3). This one exists, so the fence --
+  // not a missing file -- is what refuses it.
+  writeFileSync(join(repo, ".claude", "state", "elsewhere.md"), "a file the rule verb may not read\n");
   const refusals = [
     ["a home that is not CLAUDE.md or .claude/rules", ["--home", "README.md", "--text-file", textFile, "--dry-run"], /--home is CLAUDE.md or/],
     ["a rules file main does not carry", ["--home", ".claude/rules/nope.md", "--text-file", textFile, "--dry-run"], /main carries no/],
     ["a home climbing out", ["--home", ".claude/rules/../../CLAUDE.md", "--text-file", textFile, "--dry-run"], /--home is CLAUDE.md or/],
-    ["a text file outside .claude/state", ["--home", "CLAUDE.md", "--text-file", "CLAUDE.md", "--dry-run"], /must sit under \.claude\/state/],
+    ["a text file outside its scratch directory", ["--home", "CLAUDE.md", "--text-file", "CLAUDE.md", "--dry-run"], /must sit directly in \.claude\/state\/rule-promote/],
+    // Other files under .claude/state are not the verb's to read (attack 3e97a85 B3).
+    ["another file under .claude/state", ["--home", "CLAUDE.md", "--text-file", ".claude/state/elsewhere.md", "--dry-run"], /must sit directly in \.claude\/state\/rule-promote/],
+    // Across two drives path.relative returns the target itself, which no `..` check sees (attack 3e97a85 B1).
+    ["a drive-absolute path", ["--home", "CLAUDE.md", "--text-file", ["C:", "x", "rule.md"].join(String.fromCharCode(92)), "--dry-run"], /not an absolute, drive or UNC path/],
+    ["a UNC path", ["--home", "CLAUDE.md", "--text-file", String.fromCharCode(92).repeat(2) + ["host", "share", "rule.md"].join(String.fromCharCode(92)), "--dry-run"], /not an absolute, drive or UNC path/],
     ["a bad process tag", ["--home", "CLAUDE.md", "--text-file", textFile, "--as-process", "x; rm -rf", "--dry-run"], /--as-process is/],
     ["--dry-run with --expect", ["--home", "CLAUDE.md", "--text-file", textFile, "--dry-run", "--expect", "0".repeat(64)], /give one/],
     ["an unknown flag", ["--home", "CLAUDE.md", "--text-file", textFile, "--force"], /unknown argument/],
@@ -1538,7 +1546,86 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   writeFileSync(join(repo, ".claude", "state", "rule-promote", "ctl.md"), `a rule${String.fromCharCode(0x2028)}with a hidden line\n`);
   const ctl = rp(["--home", "CLAUDE.md", "--text-file", ".claude/state/rule-promote/ctl.md", "--dry-run"]);
   check("rule-propose refuses a rule holding a line-separator character", ctl.status === 2 && /control, format or line-separator/.test(ctl.stderr), ctl.stderr);
+  // CLAUDE.md, applied: the stem is root-claude, never `CLAUDE` and never a rules file's (attack 3e97a85 B6), and the
+  // branch passes the process's own output schema, read from the process file rather than restated here.
+  const rootArgs = ["--home", "CLAUDE.md", "--text-file", textFile, "--as-process", "rule-promote@1.0.0"];
+  const rootPlan = rp([...rootArgs, "--dry-run"]);
+  const rootApply = rp([...rootArgs, "--expect", lastExpect(rootPlan.stdout) || "x"]);
+  const rootBranch = (/rule-propose: wrote (\S+) at/.exec(rootApply.stdout) || [])[1] || "";
+  const schema = (/branch:\s*\n\s*type: string\s*\n\s*pattern: "([^"]+)"/.exec(readFileSync(join(REPO, "processes", "rule-promote.process.yaml"), "utf8").replace(/\r\n/g, "\n")) || [])[1];
+  check("rule-propose, CLAUDE.md applied: a root-claude branch that changes only CLAUDE.md and passes the output schema",
+    rootApply.status === 0 && /^feat\/face-memory-rule-root-claude-[0-9a-f]{8}$/.test(rootBranch) && !!schema && new RegExp(schema.replace(/\\\\/g, "\\")).test(rootBranch)
+      && g("diff", "--name-only", "main", rootBranch).stdout.trim() === "CLAUDE.md" && approvals().length === 2 && clean(), `${rootApply.status} ${rootBranch} ${schema} ${rootApply.stderr}`);
   check("rule-propose: THE HOMES are byte-identical in the tree after every proposal and refusal", homes() === homes0 && clean(), homes());
+}
+
+// ---- memory/lesson-log.mjs, in a scratch repository (face Phase 06 slice 04, the "Log a lesson" session verb): the
+// log's ONE writer appends exactly one validated row, records a near-duplicate instead of appending it, refuses a row
+// that is not the log's form or carries a secret, reads only its own scratch file, and tags its receipt ----
+{
+  const repo = join(tmp, "lesson-repo");
+  cpSync(join(REPO, ".claude", "scripts"), join(repo, ".claude", "scripts"), { recursive: true });
+  mkdirSync(join(repo, "docs"), { recursive: true });
+  mkdirSync(join(repo, ".claude", "state", "lesson-log"), { recursive: true });
+  const head = "# Retro log\n\n> Append-only, ONE line per pattern.\n";
+  const existing = "2026-09-01 | arc | a bats counting assignment failed under set -e | guard a counting grep with or-true when zero is the expected answer | bats,shell,ci\n";
+  writeFileSync(join(repo, "docs", "retro-log.md"), head + existing);
+  const sp = spine("lesson-spine");
+  const ll = (args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", "memory", "lesson-log.mjs"), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  const notes = () => spineEvents(sp).filter((e) => e.kind === "note.logged");
+  const log = () => readFileSync(join(repo, "docs", "retro-log.md"), "utf8");
+  const rowFile = ".claude/state/lesson-log/row.txt";
+  const put = (row) => writeFileSync(join(repo, rowFile), `${row}\n`);
+  const ARGS = ["--row-file", rowFile, "--as-process", "lesson-log@1.0.0"];
+
+  const fresh = "2026-09-25 | arc | a demo council replied with prose before its JSON and the run failed | reply with the JSON object alone and let arc-run say the receipt line | council,headless,json";
+  put(fresh);
+  const dry = ll([...ARGS, "--dry-run"]);
+  check("lesson-log, dry run: says it would append, and writes nothing -- no row, no receipt", dry.status === 0 && /would append/.test(dry.stdout) && log() === head + existing && notes().length === 0, `${dry.status} ${dry.stderr}`);
+  const add = ll(ARGS);
+  const n1 = notes()[0];
+  check("lesson-log, applied: exactly the one row is appended, the rest of the log byte-identical",
+    add.status === 0 && log() === `${head}${existing}${fresh}\n`, `${add.status} ${add.stderr}`);
+  check("lesson-log, applied: note.logged lands, appended true, tagged lesson-log@1.0.0, and its id is the one printed",
+    !!n1 && n1.payload.appended === true && n1.payload.file === "docs/retro-log.md" && n1.process === "lesson-log@1.0.0" && receiptOf(add.stdout) === n1.id, JSON.stringify(n1));
+  // A near-repeat of the row already in the log (>= 2 shared tags AND jaccard >= 0.5) is recorded, never appended.
+  const repeat = "2026-09-25 | arc | a counting grep failed its test under set -e again | guard a counting grep with or-true when zero is the expected answer | bats,shell";
+  put(repeat);
+  const dup = ll(ARGS);
+  const n2 = notes()[1];
+  check("lesson-log, a near-duplicate: NOT appended, the receipt names the row it repeats",
+    dup.status === 0 && !log().includes("again") && !!n2 && n2.payload.appended === false && /docs\/retro-log\.md:\d+/.test(n2.payload.duplicate_of), `${dup.status} ${JSON.stringify(n2)} ${dup.stderr}`);
+  const before = log();
+  const refusals = [
+    ["four fields", "2026-09-25 | arc | a pattern | a prevention"],
+    ["a pipe inside a field", "2026-09-25 | arc | a pattern | guard it with || true | bats,ci"],
+    ["a date that is not a day", "2026-02-30 | arc | a pattern | a prevention | bats,ci"],
+    ["one tag", "2026-09-25 | arc | a pattern | a prevention | bats"],
+    ["an uppercase tag", "2026-09-25 | arc | a pattern | a prevention | Bats,ci"],
+    ["a padded field", "2026-09-25 | arc |  a pattern | a prevention | bats,ci"],
+    ["a line separator hidden in the row", `2026-09-25 | arc | a pattern${String.fromCharCode(0x2028)}2026-09-25 | x | y | z | a,b | a prevention | bats,ci`],
+  ];
+  for (const [label, row] of refusals) {
+    put(row);
+    const r = ll(ARGS);
+    check(`lesson-log refuses ${label}, writing nothing`, r.status === 2 && log() === before && notes().length === 2, `${r.status} ${r.stderr}`);
+  }
+  // A secret in a row never reaches a tracked file; the sample is built from parts, so no literal key sits here.
+  put(`2026-09-25 | arc | a key ${"AKIA"}${"IOSFODNN7EXAMPLF"} was pasted into a log | never paste a key into a log | secrets,ci`);
+  const secret = ll(ARGS);
+  check("lesson-log refuses a row matching a secret rule, writing nothing", secret.status === 2 && /secret rule/.test(secret.stderr) && log() === before && !secret.stderr.includes("IOSFODNN7"), secret.stderr);
+  writeFileSync(join(repo, ".claude", "state", "other.txt"), `${fresh}\n`);
+  const paths = [
+    ["a file outside its scratch directory", "docs/retro-log.md"],
+    ["another file under .claude/state", ".claude/state/other.txt"],
+    ["a drive-absolute path", ["C:", "x", "row.txt"].join(String.fromCharCode(92))],
+    ["a UNC path", String.fromCharCode(92).repeat(2) + ["host", "share", "row.txt"].join(String.fromCharCode(92))],
+  ];
+  for (const [label, p] of paths) {
+    const r = ll(["--row-file", p]);
+    check(`lesson-log refuses ${label}, writing nothing`, r.status === 2 && log() === before && notes().length === 2, `${r.status} ${r.stderr}`);
+  }
+  check("lesson-log: THE LOG gained exactly one line across every run", log().split("\n").length === (head + existing).split("\n").length + 1, String(log().split("\n").length));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

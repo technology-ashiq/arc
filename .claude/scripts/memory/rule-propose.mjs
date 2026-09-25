@@ -27,10 +27,11 @@
 // Exit: 0 done · 1 the branch IS written and its receipt is not (said so, never retried silently) · 2 refused, nothing
 // written.
 
-import { readFileSync, realpathSync, lstatSync } from "node:fs";
-import { dirname, join, resolve, relative, sep } from "node:path";
+import { closeSync, fstatSync, lstatSync, openSync, readSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve, relative } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import { planProposal, proposalBranch, writeProposal, baseText, mainDirNames, ProposalError } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
@@ -40,6 +41,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
 const ARC_EVENT = join(REPO, ".claude", "scripts", "hq", "arc-event.mjs");
 const RULES_DIR = ".claude/rules";
+const SCRATCH = [".claude", "state", "rule-promote"];
 const TEXT_CAP = 4096;
 const LINES_CAP = 40;
 const PROCESS_RE = /^[a-z][a-z0-9-]{0,63}@[0-9]+\.[0-9]+\.[0-9]+$/;
@@ -49,6 +51,9 @@ class Stop extends Error {}
 
 // Set once writeProposal has returned: from then on a failure is "the branch IS written", never "refused".
 let written = false;
+// The branch an apply is about to write: if anything throws after writeProposal moved the ref and before it returned,
+// the exit is decided by looking at what exists, never by the flag above alone (attack 3e97a85 B4).
+let pendingBranch = "";
 
 function parseArgs(argv) {
   const out = { home: "", textFile: "", why: "", asProcess: "", expect: undefined, dryRun: false };
@@ -77,21 +82,35 @@ function parseArgs(argv) {
   return out;
 }
 
-/** The rule's text: a regular file under .claude/state/, strict UTF-8, bounded, no control characters but newlines. */
+/**
+ * The rule's text: a plain file directly in .claude/state/rule-promote/ -- the one scratch file the session verb may
+ * write, and nothing else under .claude/state (attack 3e97a85 B3) -- read through its descriptor with a cap, strict
+ * UTF-8, no control characters but newlines, scanned for secrets.
+ */
 function readRuleText(path) {
-  const stateDir = join(REPO, ".claude", "state");
-  let real;
-  try { real = realpathSync.native(resolve(REPO, path)); } catch (e) { die(2, `--text-file ${JSON.stringify(path).slice(0, 120)} cannot be resolved (${e.code || "error"})`); }
-  let stateReal;
-  try { stateReal = realpathSync.native(stateDir); } catch { die(2, "this clone has no .claude/state directory to read the rule's text from"); }
-  const rel = relative(stateReal, real);
-  if (!rel || rel.startsWith("..") || rel.split(sep).includes("..") || resolve(stateReal, rel) !== real) die(2, "--text-file must sit under .claude/state/ (gitignored scratch), not anywhere else");
-  if (!lstatSync(real).isFile()) die(2, "--text-file is not a plain file");
-  const buf = readFileSync(real);
-  if (buf.length === 0) die(2, "--text-file is empty");
-  if (buf.length > TEXT_CAP) die(2, `--text-file is ${buf.length} bytes -- a rule is at most ${TEXT_CAP}`);
-  let text;
-  try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { die(2, "--text-file is not valid UTF-8"); }
+  // A drive-absolute, UNC or device path is refused before anything resolves it: path.relative across two drives
+  // returns the target itself, which no `..` check sees (attack 3e97a85 B1).
+  if (isAbsolute(path) || /^[\\/]{2}/.test(path) || /^[A-Za-z]:/.test(path)) die(2, "--text-file is a path inside the repo, not an absolute, drive or UNC path");
+  let dir, real;
+  try { dir = realpathSync.native(join(REPO, ...SCRATCH)); } catch { die(2, "this clone has no .claude/state/rule-promote directory -- write the rule there first"); }
+  try { real = realpathSync.native(resolve(REPO, path)); } catch (e) { die(2, `--text-file cannot be resolved (${e.code || "error"})`); }
+  const rel = relative(dir, real);
+  if (!rel || isAbsolute(rel) || rel.startsWith("..") || rel.includes("/") || rel.includes("\\")) die(2, "--text-file must sit directly in .claude/state/rule-promote/");
+  let fd, text;
+  try {
+    // lstat BEFORE open: a FIFO blocks open() for ever waiting for a writer. Then one descriptor: the file that is
+    // measured is the file that is read (B2).
+    if (!lstatSync(real).isFile()) die(2, "--text-file is not a plain file");
+    fd = openSync(real, "r");
+    const st = fstatSync(fd);
+    if (!st.isFile()) die(2, "--text-file is not a plain file");
+    if (st.size === 0) die(2, "--text-file is empty");
+    if (st.size > TEXT_CAP) die(2, `--text-file is ${st.size} bytes -- a rule is at most ${TEXT_CAP}`);
+    const buf = Buffer.alloc(TEXT_CAP + 1);
+    const n = readSync(fd, buf, 0, TEXT_CAP + 1, 0);
+    if (n > TEXT_CAP) die(2, `a rule is at most ${TEXT_CAP} bytes`);
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf.subarray(0, n)); } catch { die(2, "--text-file is not valid UTF-8"); }
+  } finally { if (fd !== undefined) try { closeSync(fd); } catch { /* closed */ } }
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
   text = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "");
   if (!text.trim()) die(2, "--text-file holds only whitespace");
@@ -131,7 +150,10 @@ async function main() {
   const proposed = `${text.replace(/\n*$/, "")}\n\n${rule}\n`;
   const lines = rule.split("\n").length;
   const tag = createHash("sha256").update(rule).digest("hex").slice(0, 8);
-  const branch = proposalBranch("memory-rule", `${args.home.replace(/\.md$/, "").replace(/^\.claude\/rules\//, "")}-${tag}`);
+  // CLAUDE.md is `root-claude` and a rules file `rules-<name>`: a .claude/rules/claude.md can never share a branch stem
+  // with CLAUDE.md (attack 3e97a85 B6).
+  const stem = args.home === "CLAUDE.md" ? "root-claude" : `rules-${args.home.slice(RULES_DIR.length + 1, -3)}`;
+  const branch = proposalBranch("memory-rule", `${stem}-${tag}`);
   const files = [{ path: args.home, content: proposed }];
   const approval = (commit) => approvalPayload({ home: args.home, lines, branch, base, commit, why: args.why });
   const flags = args.asProcess ? ["--process", args.asProcess] : [];
@@ -154,16 +176,36 @@ async function main() {
   if (args.expect === undefined) die(2, "an apply is bound to a plan: run it with --dry-run first, read the diff, then run it again with the --expect it prints");
   const stale = staleReason(args.expect, digest);
   if (stale) die(2, stale);
+  // Only a branch this apply CREATES can make a failure "written": one that existed before it is a refusal
+  // (BRANCH_EXISTS), whatever git says afterwards.
+  if (!refExists(branch)) pendingBranch = branch;
   const w = await writeProposal({ repo: REPO, branch, files, allow: [args.home], message, base,
     beforeRef: (commit) => { const no = spineRefusal(ARC_EVENT, "approval.requested", approval(commit), { cwd: REPO, flags }); if (no) die(2, `the spine would refuse this approval with its real commit, so no branch was written: ${no}`); } });
   written = true;
   process.stdout.write(`rule-propose: wrote ${branch} at ${w.commit.slice(0, 12)} off main ${w.base.slice(0, 12)}\n`);
   process.stdout.write(w.diff.endsWith("\n") ? w.diff : w.diff + "\n");
   const got = emitReceipt(ARC_EVENT, "approval.requested", approval(w.commit), { cwd: REPO, timeoutMs: 60_000, flags });
-  if (got.state === "refused") die(1, `the branch ${branch} IS written, and its approval was not raised -- ${got.why}`);
-  if (got.state === "unknown") die(1, `the branch ${branch} IS written, and whether its approval landed is unknown -- ${got.why}. Look in your inbox before applying again`);
-  if (!got.id) die(1, `the branch ${branch} IS written, and its approval landed without its id -- ${got.why}`);
+  if (got.state !== "landed" || !got.id) {
+    // An apply again is refused (the branch exists), so the way on is named here, exactly: the approval this run meant
+    // to raise, written to the scratch file, and the one command that raises it (attack 3e97a85 B5).
+    let recovery = "";
+    try {
+      const rel = [...SCRATCH, "approval.json"].join("/");
+      writeFileSync(join(REPO, ...SCRATCH, "approval.json"), `${JSON.stringify(approval(w.commit))}\n`);
+      recovery = ` Once you have looked in your inbox, raise it with: node .claude/scripts/hq/arc-event.mjs emit approval.requested --payload-file ${rel}${flags.length ? ` ${flags.join(" ")}` : ""}`;
+    } catch { /* the message below still names the branch */ }
+    const why = got.state === "refused" ? `its approval was not raised -- ${got.why}`
+      : got.state === "unknown" ? `whether its approval landed is unknown -- ${got.why}`
+      : `its approval landed without its id -- ${got.why}`;
+    die(1, `the branch ${branch} IS written, and ${why}.${recovery}`);
+  }
   process.stdout.write(`receipt: approval.requested ${got.id}\n`);
+}
+
+/** Does refs/heads/<branch> exist? Bounded, and asked of git itself. @param {string} branch */
+function refExists(branch) {
+  return spawnSync("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`],
+    { cwd: REPO, stdio: "ignore", timeout: 10_000, windowsHide: true }).status === 0;
 }
 
 // Run only as the CLI. Both sides realpathed: argv[1] beside import.meta.url silently no-ops behind a symlink.
@@ -179,11 +221,13 @@ if (isMainModule()) {
   try { await main(); }
   catch (e) {
     if (e instanceof Stop) { /* exitCode already set */ }
-    else if (!written && e instanceof ProposalError) { process.stderr.write(`rule-propose: ${e.code} -- ${e.message}\n`); process.exitCode = 2; }
     else {
-      const why = e instanceof Error ? e.message : String(e);
-      process.stderr.write(written ? `rule-propose: the branch IS written, and then this failed: ${why}\n` : `rule-propose: nothing was written: ${why}\n`);
-      process.exitCode = written ? 1 : 2;
+      // Did the ref move before the throw? Asked of git, not of the flag: writeProposal can move the ref and then throw
+      // (a diff read denied by a locked file) before `written` is set (attack 3e97a85 B4).
+      const exists = written || (pendingBranch !== "" && refExists(pendingBranch));
+      const why = e instanceof ProposalError ? `${e.code} -- ${e.message}` : (e instanceof Error ? e.message.split("\n")[0] : String(e));
+      process.stderr.write(exists ? `rule-propose: the branch ${pendingBranch} IS written, and then this failed: ${why}\n` : `rule-propose: nothing was written: ${why}\n`);
+      process.exitCode = exists ? 1 : 2;
     }
   }
 }
