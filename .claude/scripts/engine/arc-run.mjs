@@ -49,7 +49,8 @@ import { dirname, join, resolve } from "node:path";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
 import { sha256Hex } from "../hq/lib/canonical.mjs";
-import { scanSecrets, sizeScaledCap } from "../hq/lib/redact.mjs";
+import { liveLine, scanSecrets, sizeScaledCap } from "../hq/lib/redact.mjs";
+import { StringDecoder } from "node:string_decoder";
 import { MODEL_RE } from "../hq/lib/validate.mjs";
 
 // The runtime identity grammar. Alphanumerics plus the punctuation `hermes@sha256:<digest>+cfg.<hash>`
@@ -1098,7 +1099,8 @@ function emitRun(payload) {
  * appends its own receipt mid-run (`council.verdict`) and returns its id as `receipt_id`. The face's door credits a
  * receipt only through arc-run's own `arc-run: receipt <kind> <id>` line, because the model's text shares the log and
  * a line alone proves nothing. So arc-run reads the id back off the spine and says the line only when an event with
- * that id is there, was minted after this run began, and is not a run.completed (arc-run names its own). The kind
+ * that id is there, was minted inside this run (not before it began, not in the future), carries a kind name, was
+ * emitted as THIS process (`--process <name>@<version>`), and is not a run.completed (arc-run names its own). The kind
  * printed is the spine's, never the model's. Anything else is one WARN and no line: an id the model typed is not a
  * receipt. The door then checks the kind against the one its row claims.
  */
@@ -1117,6 +1119,11 @@ function vouchReceipt(output) {
     console.error(`arc-run: WARN receipt ${id} was minted before this run began -- not vouched`);
     return;
   }
+  // Nor minted in the future: an id a model typed can claim any time, and five seconds is past any honest skew (3e77530 B10).
+  if (minted > Date.now() + 5000) {
+    console.error(`arc-run: WARN receipt ${id} is dated in the future -- not vouched`);
+    return;
+  }
   const eventsDir = join(process.env.ARC_SPINE_ROOT || join(root, ".claude/state/hq"), "events");
   let names = [];
   try { names = readdirSync(eventsDir).filter((n) => n.endsWith(".jsonl")); } catch { /* no spine here: not found below */ }
@@ -1129,7 +1136,15 @@ function vouchReceipt(output) {
       let ev;
       try { ev = JSON.parse(line); } catch { continue; }
       if (!ev || ev.id !== id || typeof ev.kind !== "string") continue;
+      // The kind is printed at the start of a line the door parses, so it must be a kind and nothing more (3e77530 B15).
+      if (!/^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/.test(ev.kind)) { console.error(`arc-run: WARN receipt ${id} carries a kind that is not a kind name -- not vouched`); return; }
       if (ev.kind === "run.completed") { console.error(`arc-run: WARN receipt ${id} is a run.completed -- arc-run names its own, so it is not vouched`); return; }
+      // It must be THIS process's receipt: the emit carries --process <name>@<version>, so a receipt another run wrote
+      // in the same window, which the model could name, is not vouched (attack 3e77530 B10).
+      if (typeof ev.process !== "string" || !ev.process.startsWith(`${doc.name}@`)) {
+        console.error(`arc-run: WARN receipt ${id} was not emitted as ${doc.name} (its process is ${JSON.stringify(String(ev.process ?? "none").replace(LINE_BREAKING, " ").slice(0, 80))}) -- not vouched`);
+        return;
+      }
       console.error(`arc-run: receipt ${ev.kind} ${id}`);
       return;
     }
@@ -1229,33 +1244,57 @@ function policyGate(name) {
  * has exited, so a council that ran for twenty minutes showed nothing until its last line. In stream mode the driver's
  * stderr is written through to this process's stderr as each chunk arrives -- under the door that IS the session's
  * run.log -- and a full copy is still kept, because the transcript, the secret scrub and every failure message below
- * read it. The door redacts every line it serves, so the live copy never reaches a browser unscanned.
+ * read it. Each live line passes liveLine first (secrets withheld, control characters cleaned, a line posing as
+ * arc-run's own marked as the driver's), each stream is capped as spawnSync caps it, and the door redacts again.
  *
  * Outside stream mode this is spawnSync, byte for byte: every existing caller and test sees the old path.
  * spawnBounded supplies the tree kill on timeout; a timeout and an overflow come back in spawnSync's own error shape
  * (ETIMEDOUT, ENOBUFS), so the classification below reads both paths the same way.
  */
 const STREAM = process.env.ARC_RUN_STREAM === "1";
+// The live copy is bounded: past this many bytes one line says so and the rest is kept for the transcript only.
+const LIVE_CAP = 8 * 1024 * 1024;
+const LINE_BREAKING = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+
 async function runDriverProcess(file, args, opts) {
   if (!STREAM) return spawnSync(file, args, opts);
+  // Every option this path honours is named; one it would silently drop is refused, so the two paths cannot drift
+  // apart unseen (attack 3e77530 B11).
+  const unsupported = Object.keys(opts).filter((k) => !["cwd", "env", "encoding", "timeout", "maxBuffer", "killSignal"].includes(k));
+  if (unsupported.length) throw new Error(`runDriverProcess: stream mode cannot honour ${unsupported.join(", ")}`);
+  const cap = Number.isFinite(opts.maxBuffer) && opts.maxBuffer > 0 ? opts.maxBuffer : 64 * 1024 * 1024;
   const out = [], err = [];
-  let size = 0, overflowed = false;
+  // spawnSync caps each stream on its own; so does this (attack 3e77530 B6).
+  const size = { out: 0, err: 0 };
+  let overflowed = false, kill = null, live = 0, pending = "";
+  const writeLive = (text) => {
+    if (live >= LIVE_CAP) return;
+    live += text.length;
+    process.stderr.write(live >= LIVE_CAP ? `driver: [live output capped at ${LIVE_CAP} bytes; the rest is in the transcript]\n` : text);
+  };
+  const decoder = new StringDecoder("utf8");
   const r = await spawnBounded(file, args, {
     cwd: opts.cwd, env: opts.env,
     // spawnSync reads an absent timeout as "none"; a setTimeout past 2^31-1 ms fires at once, so "none" is the ceiling.
     timeoutMs: opts.timeout === undefined ? 2147483647 : opts.timeout,
+    onSpawn: (k) => { kill = k; },
     onData: (stream, chunk) => {
-      if (stream === "err") process.stderr.write(chunk);
       if (overflowed) return;
-      size += chunk.length;
-      if (size > opts.maxBuffer) { overflowed = true; return; }
+      size[stream] += chunk.length;
+      if (size[stream] > cap) { overflowed = true; if (kill) kill(); return; }
       (stream === "out" ? out : err).push(chunk);
+      if (stream !== "err") return;
+      pending += decoder.write(chunk);
+      let nl;
+      while ((nl = pending.indexOf("\n")) !== -1) { writeLive(`${liveLine(pending.slice(0, nl))}\n`); pending = pending.slice(nl + 1); }
     },
   });
+  pending += decoder.end();
+  if (pending) writeLive(`${liveLine(pending)}\n`);
   const error = r.timedOut ? Object.assign(new Error("the driver timed out"), { code: "ETIMEDOUT" })
     : overflowed ? Object.assign(new Error("the driver's output passed maxBuffer"), { code: "ENOBUFS" })
-    : r.error ? new Error(r.error) : undefined;
-  return { status: r.exit, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8"), error };
+    : r.error ? Object.assign(new Error(r.error), { code: "ESPAWN" }) : undefined;
+  return { status: r.exit, signal: r.signal ?? null, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8"), error };
 }
 
 async function invoke(name) {

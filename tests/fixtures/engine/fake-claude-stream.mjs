@@ -10,6 +10,8 @@
 //                             old           a real-looking id minted in 2020
 //                             (unset)       no receipt_id in the output at all
 //   FAKE_CLAUDE_PAUSE_MS    the pause after each event (default 400)
+//   FAKE_CLAUDE_FAIL        1: end with an is_error result and exit 1, as the real CLI fails
+//   (FAKE_CLAUDE_RECEIPT also takes other:<kind> -- fresh and on the spine, but emitted by another process)
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -24,17 +26,21 @@ const ulid = (ms) => {
   return t + r;
 };
 
+function land(id, kind, proc) {
+  const dir = join(process.env.ARC_SPINE_ROOT, "events");
+  mkdirSync(dir, { recursive: true });
+  appendFileSync(join(dir, "2099-01-01.jsonl"), `${JSON.stringify({ id, kind, process: proc, ts: new Date().toISOString() })}\n`);
+  return id;
+}
+
 function receiptId() {
   const want = process.env.FAKE_CLAUDE_RECEIPT || "";
   if (want === "absent") return ulid(Date.now());
-  if (want === "old") return ulid(Date.UTC(2020, 0, 1));
-  if (want.startsWith("fresh:")) {
-    const id = ulid(Date.now());
-    const dir = join(process.env.ARC_SPINE_ROOT, "events");
-    mkdirSync(dir, { recursive: true });
-    appendFileSync(join(dir, "2099-01-01.jsonl"), `${JSON.stringify({ id, kind: want.slice(6), ts: new Date().toISOString() })}\n`);
-    return id;
-  }
+  // On the spine, and of the right process, but minted in 2020: refused for its age alone.
+  if (want === "old") return land(ulid(Date.UTC(2020, 0, 1)), "council.verdict", "council-convene@1.0.0");
+  if (want.startsWith("fresh:")) return land(ulid(Date.now()), want.slice(6), "council-convene@1.0.0");
+  // Fresh and on the spine, but another process emitted it: refused for its owner alone.
+  if (want.startsWith("other:")) return land(ulid(Date.now()), want.slice(6), "someone-else@1.0.0");
   return undefined;
 }
 
@@ -56,5 +62,12 @@ process.stdin.on("end", async () => {
   }
   const id = receiptId();
   const output = { session_file: "docs/council/sessions/002-a-slug.md", decision: "YES", confidence: "High", ...(id ? { receipt_id: id } : {}) };
+  // FAKE_CLAUDE_FAIL=1: the CLI's own failure -- an error result (max turns, auth, credit) and exit 1.
+  if (process.env.FAKE_CLAUDE_FAIL === "1") {
+    process.stdout.write(`${JSON.stringify({ type: "result", subtype: "error_max_turns", is_error: true, result: JSON.stringify(output), usage: { input_tokens: 10, output_tokens: 5 } })}\n`);
+    process.stderr.write("fake claude: failing on purpose\n");
+    process.exitCode = 1;
+    return;
+  }
   process.stdout.write(`${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: JSON.stringify(output), usage: { input_tokens: 10, output_tokens: 5 } })}\n`);
 });

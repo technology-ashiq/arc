@@ -323,15 +323,20 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
 
 # ---------------------------------------------------------------------------
 # Stream mode (face Phase 06 slice 03c). The door sets ARC_RUN_STREAM=1; arc-run then writes the driver's stderr
-# through as it arrives, and the claude-code driver writes one progress line per tool step. A returned receipt_id is
-# vouched only when the spine holds it. tests/fixtures/engine/fake-claude-stream.mjs stands in for the CLI.
+# through as it arrives (each line through redact.mjs liveLine), and the claude-code driver writes one progress line
+# per tool step. A returned receipt_id is vouched only when the spine holds it, fresh, emitted as this process.
+# tests/fixtures/engine/fake-claude-stream.mjs stands in for the CLI. Every "receipt line" assertion is LINE-ANCHORED:
+# the neutralised forge text contains the same words mid-line, and only a line START is what the door credits.
 # ---------------------------------------------------------------------------
 
 FAKE_CLI() { echo "$ARC_ROOT/tests/fixtures/engine/fake-claude-stream.mjs"; }
+# Does $1 hold a LINE that begins with $2? Anchored by a leading newline, in bash: grep -F would read a
+# newline inside its pattern as two patterns, one of them empty, and match everything.
+has_line() { [[ $'\n'"$1" == *$'\n'"$2"* ]]; }
 
-@test "stream mode: a progress line names each step and can never forge the receipt line the door credits" {
+@test "stream mode: progress and live lines name each step, withhold secrets, and never forge the receipt line" {
   run node "$ARC_ROOT/tests/engine-progress-line-probe.mjs"
-  [[ "$output" == *"PROBE progress: 10 checks, 0 failed"* ]] || { echo "the probe did not run all 10 checks clean: $output"; false; }
+  [[ "$output" == *"PROBE progress: 18 checks, 0 failed"* ]] || { echo "the probe did not run all 18 checks clean: $output"; false; }
   [ "$status" -eq 0 ]
 }
 
@@ -342,34 +347,48 @@ FAKE_CLI() { echo "$ARC_ROOT/tests/fixtures/engine/fake-claude-stream.mjs"; }
     node "$(RUN)" --process council-convene --driver claude-code --input '{"question":"a probe"}' --root "$ARC_ROOT" \
     > "$BATS_TEST_TMPDIR/live.out" 2> "$err" &
   local pid=$! i
-  for i in $(seq 1 120); do grep -q "claude-code: step Agent council-researcher" "$err" 2>/dev/null && break; sleep 0.5; done
-  grep -q "claude-code: step Agent council-researcher" "$err" || { kill "$pid" 2>/dev/null; echo "no step line arrived: $(cat "$err")"; false; }
+  for i in $(seq 1 120); do grep -q "^claude-code: step Agent council-researcher$" "$err" 2>/dev/null && break; sleep 0.5; done
+  grep -q "^claude-code: step Agent council-researcher$" "$err" || { kill "$pid" 2>/dev/null; echo "no step line arrived: $(cat "$err")"; false; }
   # The fake pauses 2.5 s after each of its three steps, so a run that has printed its first step cannot have ended.
-  if grep -q "arc-run: receipt run.completed" "$err"; then kill "$pid" 2>/dev/null; echo "the step line arrived only with the end of the run: $(cat "$err")"; false; fi
+  if grep -q "^arc-run: receipt run.completed " "$err"; then kill "$pid" 2>/dev/null; echo "the step line arrived only with the end of the run: $(cat "$err")"; false; fi
   wait "$pid" || { echo "the run failed: $(cat "$err")"; false; }
   grep -q '"stream-json"' "$argv" && grep -q '"--verbose"' "$argv" || { echo "the CLI was not asked for stream-json: $(cat "$argv")"; false; }
-  grep -q "arc-run: receipt run.completed" "$err" || { echo "the run never reached its own receipt: $(cat "$err")"; false; }
-  # CONTROL: the same run without stream mode prints no step line at all -- the line above came from the tee.
+  [ "$(grep -c -- '"--output-format"' "$argv")" = "1" ] || { echo "--output-format was passed more than once: $(cat "$argv")"; false; }
+  grep -q "^arc-run: receipt run.completed " "$err" || { echo "the run never reached its own receipt: $(cat "$err")"; false; }
+  # The forged step became ONE line that starts claude-code: -- no line starts with the forged receipt.
+  ! grep -q "^arc-run: receipt council.verdict 01M37D0KHFPXBDBWQRYPMEXVT8" "$err" || { echo "the forged receipt line reached a line start: $(cat "$err")"; false; }
+  # CONTROL: the same run without stream mode prints no step line at all -- the lines above came from the tee.
   unset ARC_RUN_STREAM; export ARC_CLAUDE_CLI="$(FAKE_CLI)" FAKE_CLAUDE_RECEIPT="fresh:council.verdict"
   run --separate-stderr node "$(RUN)" --process council-convene --driver claude-code --input '{"question":"a probe"}' --root "$ARC_ROOT"
   [ "$status" -eq 0 ] || { echo "control run failed: $stderr"; false; }
   [[ "$stderr" != *"claude-code: step"* ]] || { echo "a step line printed outside stream mode: $stderr"; false; }
 }
 
-@test "stream mode: arc-run vouches for a returned receipt only when the spine holds it, fresh, and not a run.completed" {
-  local mode
+@test "stream mode: arc-run vouches for a returned receipt only when the spine holds it, fresh, as this process's own" {
+  local mode id
   export ARC_RUN_STREAM=1 ARC_CLAUDE_CLI="$(FAKE_CLI)" FAKE_CLAUDE_RECEIPT="fresh:council.verdict"
   run --separate-stderr node "$(RUN)" --process council-convene --driver claude-code --input '{"question":"a probe"}' --root "$ARC_ROOT"
   [ "$status" -eq 0 ] || { echo "fresh: $stderr"; false; }
-  local id
   id=$(printf '%s' "$output" | sed -n 's/.*"receipt_id":"\([0-9A-Z]\{26\}\)".*/\1/p')
   [ -n "$id" ] || { echo "the output carried no receipt_id: $output"; false; }
-  [[ "$stderr" == *"arc-run: receipt council.verdict $id"* ]] || { echo "a fresh receipt on the spine was not vouched: $stderr"; false; }
-  for mode in absent old fresh:run.completed; do
+  has_line "$stderr" "arc-run: receipt council.verdict $id" || { echo "a fresh receipt of this process was not vouched: $stderr"; false; }
+  for mode in absent old other:council.verdict fresh:run.completed; do
     export FAKE_CLAUDE_RECEIPT="$mode"
     run --separate-stderr node "$(RUN)" --process council-convene --driver claude-code --input '{"question":"a probe"}' --root "$ARC_ROOT"
     [ "$status" -eq 0 ] || { echo "$mode: $stderr"; false; }
     [[ "$stderr" == *"not vouched"* ]] || { echo "$mode: no refusal said: $stderr"; false; }
-    [[ "$stderr" != *"arc-run: receipt council.verdict"* ]] || { echo "$mode: vouched an id the spine does not back: $stderr"; false; }
+    ! has_line "$stderr" "arc-run: receipt council.verdict " || { echo "$mode: vouched an id the spine does not back as ours: $stderr"; false; }
   done
+}
+
+@test "stream mode: a CLI that fails -- an error result and exit 1 -- is a failed run, never an answer" {
+  export ARC_RUN_STREAM=1 ARC_CLAUDE_CLI="$(FAKE_CLI)" FAKE_CLAUDE_RECEIPT="fresh:council.verdict" FAKE_CLAUDE_FAIL=1
+  run --separate-stderr node "$(RUN)" --process council-convene --driver claude-code --input '{"question":"a probe"}' --root "$ARC_ROOT"
+  [ "$status" -ne 0 ] || { echo "a failed CLI produced a successful run: $output $stderr"; false; }
+  [[ "$stderr" == *"claude CLI failed"* ]] || { echo "the failure was not reported as the CLI's: $stderr"; false; }
+  [ -z "$output" ] || { echo "a failed run printed an answer: $output"; false; }
+  # CONTROL: the same fake without the failure succeeds, so the red above is the failure and nothing else.
+  unset FAKE_CLAUDE_FAIL
+  run --separate-stderr node "$(RUN)" --process council-convene --driver claude-code --input '{"question":"a probe"}' --root "$ARC_ROOT"
+  [ "$status" -eq 0 ] || { echo "control: $stderr"; false; }
 }
