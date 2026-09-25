@@ -1,0 +1,122 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:writeWiki (per-file write loop)",
+      "breaking_input": "Put a hand-written file at a path the renderer will produce, with no banner on line 1. Two ways: run `wiki-build.mjs --out ~/notes` where ~/notes/index.md is hand-written, or hand-write docs/wiki/products/zeta.md and then add product zeta. Run `wiki-build.mjs` (or with `--out`).",
+      "why": "For every rendered path, `sameBytes` is false, so the code writes a temp file and `renameSync(tmp, file)` replaces whatever is there. Only the stale-removal pass consults the banner. The docstring says a hand-written file is never touched, but that holds only for files the renderer does not also produce. The bats 'hand.md' case uses a name the renderer never emits, so it cannot see this.",
+      "fix": "Before the first write, pre-scan every target. If one exists and line 1 does not start with BANNER_PREFIX, return exit 2 naming it and write nothing. Add a test where a hand-written file sits at a rendered path.",
+      "twin_of": "`--out` could rename JSON over a hand-written narrative under docs/wiki/ -> a writer's allowed set inside the tree is an exact path, never a prefix."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:check / sameBytes",
+      "breaking_input": "Make docs/wiki/products a symlink to a directory holding byte-identical pages. Or make docs/wiki/products/alpha.md a symlink to an identical copy. Run `wiki-build.mjs --check`, then plain `wiki-build.mjs`.",
+      "why": "`check` uses `existsSync` and `readFileSync`, which follow links, and never lstats. It prints 'docs/wiki/ is exactly what the renderer writes' and exits 0. `writeWiki` refuses the same tree (linked dir: exit 2, 'refusing to write through it'). The two modes disagree on the same input. The committed tree is a link farm whose bytes can change without a diff in docs/wiki.",
+      "fix": "Put the link refusal in one helper and call it from both check and writeWiki. lstat docs/wiki, each page dir and each page file. Any link is a named DIFFERS/exit 2, wherever it points. Add a mutant test for each link position.",
+      "twin_of": "A link to a directory INSIDE the tree read as \"absent\" at exit 0 -> a path reached through a link is refused, wherever the link points."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:writeWiki (mkdirSync, and unlinkSync in the stale loop)",
+      "breaking_input": "Put a regular file, or a dangling symlink, named docs/wiki/products (any page dir). Run `wiki-build.mjs`. Separately, mark a stale generated page read-only or hold it open on Windows, then run it.",
+      "why": "`mkdirSync(dir,{recursive:true})` is outside any try and throws EEXIST. The `unlinkSync` in the stale loop is also uncaught (EPERM/EBUSY). Unless the entry point wraps main, which this diff does not show, this is an unhandled rejection: a stack trace and exit 1. For the writer, exit 1 is not a defined code. Everything sorted before the failing dir (adr-band dirs, agents/, commands/ ...) is already rewritten, so the wiki is left half-updated.",
+      "fix": "Validate every destination dir (exists as a real dir or is absent) before the first write. Wrap mkdir and unlink so each failure is a named exit 2 that leaves nothing partially written.",
+      "twin_of": "A per-file read error became \"unparsed\" at exit 0 -> only ENOENT/ENOTDIR is absence; every other errno is a named exit 2."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:onDisk and main (arc-tree guard)",
+      "breaking_input": "Run `wiki-build.mjs --check --root <a checkout or worktree from before wiki-coverage.mjs existed, or with a different pageTree signature>`. The main guard only tests for .claude/scripts/core/face-coverage.mjs.",
+      "why": "onDisk dynamically imports `.claude/scripts/docs/wiki-coverage.mjs` from the --root tree. If it is missing, the import rejects with ERR_MODULE_NOT_FOUND. If the signature differs, it throws a TypeError. Neither is caught. `--check` then exits 1 with a raw stack, which CI reads as 'stale wiki'. In writeWiki the failure comes after every page has been written and before stale removal, leaving a half-finished write. The guard covers one dependency of the new code, not both.",
+      "fix": "Extend the 'is an arc tree' guard in main to require wiki-coverage.mjs, exit 2 by name, and catch import and pageTree errors into exit 2. Call onDisk before the first write in writeWiki.",
+      "twin_of": "Fail-closed branches with no case only they decide -> one test per branch, asserting the CLI exit code."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:check and main (--check output)",
+      "breaking_input": "Run `wiki-build.mjs --check --root <tree with an unreadable manifest> > /dev/null` (render returns code 2). Also a tree with an undecided treeWorld key (code 1).",
+      "why": "`check` turns render failures into `lines: [wiki-build: msg]`, and main prints all lines to stdout via say(). The exit-2 reason therefore goes to stdout, while the write and json paths send it to stderr. Redirecting stdout hides why the run failed. An undecided-key failure also returns 1, the same code as 'wiki differs', so exit 1 no longer says which of the two it is.",
+      "fix": "When the render fails, return the message on a stderr channel and keep only the DIFFERS/MISSING/STALE listing on stdout. Reserve exit 1 for 'differs' and map the undecided-key case to a distinct or named code.",
+      "twin_of": "Exit-2 diagnostics on stdout; a failed stdout write said nothing -> diagnostics go to stderr, and a failed write names itself."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:writeWiki (containment check) and main (--out default)",
+      "breaking_input": "From the repo root: `wiki-build.mjs --out .`, or `--out <root>`, or `--out \"\"` (`??` keeps the empty string and resolve(\"\") is the cwd).",
+      "why": "`final` is then exactly `root`. The refusal reads `inside(final, root) && final !== docs/wiki`. If inside() is the usual strict prefix-plus-separator test, root is not inside itself and the guard passes. The writer would then create products/*.md, lanes/, agents/, commands/, rules/, gates/ and index.md at the repo root, next to the source dirs the extractor reads. The only CLI refusal case in the suite is `--out $ARC_ROOT/products`. Nothing covers `--out` equal to the root or an empty value.",
+      "fix": "Refuse `final === root` explicitly and reject an empty --out value in parseArgs. Add a test for `--out <root>` and `--out \"\"`, both exit 2, asserting nothing was written.",
+      "twin_of": "A writer's allowed set inside the tree is an exact path, never a prefix."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:writeWiki (per-file lstat of dir)",
+      "breaking_input": "On Windows, the lstat of a just-created page dir fails with EPERM/EBUSY (antivirus or indexer holding it), or fails with ELOOP.",
+      "why": "`try { if (lstatSync(dir).isSymbolicLink()) return ... } catch { /* just made */ }` maps every lstat error to 'not a link' and goes on to write. Only ENOENT could be 'just made'. The link refusal fails open on any other errno.",
+      "fix": "Catch only ENOENT/ENOTDIR. Any other errno returns a named exit 2.",
+      "twin_of": "`isLink` mapped every lstat error to \"not a link\" -> only ENOENT/ENOTDIR is absence."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:sameBytes and check (existsSync)",
+      "breaking_input": "(a) Windows checkout with core.autocrlf=true and no eol=lf attribute covering docs/wiki: every page reads back with CRLF. (b) A page whose directory is unreadable (EACCES).",
+      "why": "(a) sameBytes compares raw utf8 with no CR or BOM strip, while every read the extractor does strips both. `--check` reports all pages DIFFERS on that leg. (b) `existsSync` returns false and readFileSync errors become 'differs', so an unreadable page is reported MISSING/DIFFERS with 'regenerate' advice instead of a named exit 2.",
+      "fix": "Normalise CR and BOM in sameBytes the same way readText does, or fail with a named exit 2 on CR. Treat only ENOENT/ENOTDIR as missing and every other errno as exit 2.",
+      "twin_of": "A UTF-8 BOM silently emptied facts -> strip BOM and CR on every read; a CRLF+BOM fixture must extract identical bytes."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:code() / cell() used inside facts() table rows",
+      "breaking_input": "A command with frontmatter `argument-hint: \"<start|next|status> [phase]\"`, or a gate whose `check`/`evidence` contains a pipe (`bats x.bats | tee`). Also a description containing a backslash directly before a pipe.",
+      "why": "`facts()` puts `code(f.argumentHint)`, `code(f.check)` and `code(f.evidence)` into `| k | v |` rows. code() escapes nothing, and a GFM table splits on an unescaped pipe even inside a code span. The row gains extra cells. cell() turns `\\|` into `\\\\|`, which is an escaped backslash followed by a live pipe. code() also closes early when the value contains a run of exactly two backticks. Rendering is deterministic, so `--check`, coverage and the link checker all stay green while the published page is malformed.",
+      "fix": "Add a table-safe code() that escapes pipes (`\\|`) for cells and escapes a preceding backslash in cell(). Choose the fence length from the longest backtick run. Add a fixture with pipes and backslashes.",
+      "twin_of": "Unknown flags fell through to the worst default -> refuse an unknown flag by name, exit 2."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/docs/link-check.mjs (link regex, decodeURIComponent) vs wiki-build.mjs repoLink",
+      "breaking_input": "A manifest `files` entry such as `docs/My Notes.md` or a path containing `)` or `%`. repoLink emits `[`docs/My Notes.md`](../../../docs/My Notes.md)` with the raw path.",
+      "why": "That is not a link in GitHub markdown. The checker regex `\\]\\(([^)\\s]+)\\)` never matches a target with a space or `)`, so it is not counted and not broken. A lone `%` makes `decodeURIComponent` throw and the checker crashes with exit 1 and no summary line. The 'N links checked' count silently excludes exactly the links the generator got wrong.",
+      "fix": "Percent-encode the path in repoLink. Make the checker parse targets the way the generator emits them, and fail if the number of `](` occurrences differs from links checked.",
+      "twin_of": "The DOC-A scan was top-level-only and .mjs-only; `scanned >= 1` proved nothing -> a scan asserts it covered the count derived independently."
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": "tests/docs-render.bats (CLI refusal test) and writeWiki branches",
+      "breaking_input": "Mutants that survive all 14 tests: delete `|| opts[\"--out\"]` from the --check refusal; delete the `st?.isSymbolicLink()` return; delete the per-dir lstat return; delete the `!st.isDirectory()` return; delete the missing-parent return; weaken `final !== docs/wiki` to a prefix test so `--out <root>/docs/wiki/products` is accepted.",
+      "why": "Only `--check --json`, `--out <root>/products` and `--render` are exercised. Every other fail-closed branch of the new writer has no case only it decides, and every one asserts nothing about the CLI exit code.",
+      "fix": "Add one test per branch: `--check --out`, `--out` a symlink, `--out` a file, missing parent, a linked page dir, and `--out <root>/docs/wiki/products`. Each must assert exit 2 and that nothing was written.",
+      "twin_of": "New branches (bad id, device name, id length, linked --pages) had no case only they decide -> every fix lands with the input that proves it."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:renderWiki (files Map keyed by `${dir}/${e.id}.md`)",
+      "breaking_input": "Two command or agent files whose stems differ only in case, e.g. `.claude/commands/arc-Docs.md` and `arc-docs.md`. Both are legal on the Linux CI leg.",
+      "why": "The Map keys by exact case, so the renderer emits two pages. On Windows and macOS, and on any checkout there, the second write replaces the first. `--check` then reports one of them DIFFERS forever, and a Windows-generated wiki cannot be committed. The case fold lives only in the coverage gate, not in the renderer.",
+      "fix": "Fold case when inserting into `files` and stop with a named exit 2 on any collision.",
+      "twin_of": "Two ids one case apart pass on Linux and are one file elsewhere -> fold case before trusting a set of file names."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:main and tests/docs-extract.bats (removed 'no --json' assertion)",
+      "breaking_input": "`wiki-build.mjs --out /tmp/w.json` (the old `--json --out FILE` call with `--json` forgotten), or `wiki-build.mjs --root X` in an old script. Before this change both exited 2. Now the first creates a directory named w.json full of pages and the second rewrites docs/wiki and deletes stale banner-carrying files.",
+      "why": "The default for an underspecified call changed from refusal to a destructive write. The only assertion that pinned the old behavior was deleted from docs-extract.bats and replaced with nothing about which flags select which mode.",
+      "fix": "Require an explicit mode (a `--write` flag or the default docs/wiki only when --out is absent). Reject `--out` with a value ending in .json, or add a test that `--out FILE.json` without --json exits 2.",
+      "twin_of": "Unknown flags fell through to the worst default -> refuse an unknown flag by name, exit 2."
+    }
+  ]
+}

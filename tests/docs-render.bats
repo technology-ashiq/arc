@@ -170,6 +170,79 @@ rendered_tree() {
   [ "$status" -eq 2 ] || { echo "unknown flag: status $status: $output"; false; }
 }
 
+@test "docs-render: a hand-written file where a page goes is refused, and nothing is written" {
+  local t; t=$(rendered_tree hand) || { echo "fixture failed"; false; }
+  printf 'my own notes\n' > "$t/docs/wiki/products/alpha.md"
+  local before idx; before=$(cksum < "$t/docs/wiki/products/alpha.md"); idx=$(cksum < "$t/docs/wiki/index.md")
+  mkdir -p "$t/products/zeta" && printf '{"name":"zeta","version":"1.0.0"}\n' > "$t/products/zeta/manifest.json"
+  run node "$(WB "$t")" --root "$t"
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"hand-written"*"products/alpha.md"* ]] || { echo "not named: $output"; false; }
+  [ "$(cksum < "$t/docs/wiki/products/alpha.md")" = "$before" ] || { echo "the hand-written file was overwritten"; false; }
+  [ "$(cksum < "$t/docs/wiki/index.md")" = "$idx" ] || { echo "something was written before the refusal"; false; }
+  [ ! -e "$t/docs/wiki/products/zeta.md" ] || { echo "a page was written before the refusal"; false; }
+}
+
+@test "docs-render: a file where a page directory goes is refused before any write" {
+  local t; t=$(rendered_tree notdir) || { echo "fixture failed"; false; }
+  rm -r "$t/docs/wiki/gates" && printf 'x\n' > "$t/docs/wiki/gates"
+  local idx; idx=$(cksum < "$t/docs/wiki/index.md")
+  run node "$(WB "$t")" --root "$t"
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"gates/ is not a directory"* ]] || { echo "not named: $output"; false; }
+  [ "$(cksum < "$t/docs/wiki/index.md")" = "$idx" ] || { echo "written before the refusal"; false; }
+  run node "$(WB "$t")" --root "$t" --check
+  [ "$status" -eq 2 ] || { echo "--check certified it: status $status: $output"; false; }
+}
+
+@test "docs-render: --check and the writer both refuse a linked page directory and a linked page" {
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) skip "symlinks need privileges on the Windows runner";; esac
+  local t; t=$(rendered_tree links2) || { echo "fixture failed"; false; }
+  cp -r "$t/docs/wiki/rules" "$BATS_TEST_TMPDIR/rules-copy"
+  rm -r "$t/docs/wiki/rules" && ln -s "$BATS_TEST_TMPDIR/rules-copy" "$t/docs/wiki/rules"
+  run node "$(WB "$t")" --root "$t" --check
+  [ "$status" -eq 2 ] || { echo "--check certified a linked dir (status $status): $output"; false; }
+  [[ "$output" == *"rules/ is a symlink"* ]] || { echo "not named: $output"; false; }
+  run node "$(WB "$t")" --root "$t"
+  [ "$status" -eq 2 ] || { echo "the writer wrote through a linked dir (status $status): $output"; false; }
+  rm "$t/docs/wiki/rules" && cp -r "$BATS_TEST_TMPDIR/rules-copy" "$t/docs/wiki/rules"
+  cp "$t/docs/wiki/products/alpha.md" "$BATS_TEST_TMPDIR/alpha-copy.md"
+  rm "$t/docs/wiki/products/alpha.md" && ln -s "$BATS_TEST_TMPDIR/alpha-copy.md" "$t/docs/wiki/products/alpha.md"
+  run node "$(WB "$t")" --root "$t" --check
+  [ "$status" -eq 2 ] || { echo "--check certified a linked page (status $status): $output"; false; }
+  [[ "$output" == *"products/alpha.md is a symlink"* ]] || { echo "not named: $output"; false; }
+}
+
+@test "docs-render: every --out and --check refusal branch is exit 2 and writes nothing" {
+  run node "$(WB "$ARC_ROOT")" --check --out "$BATS_TEST_TMPDIR/x"
+  [ "$status" -eq 2 ] || { echo "--check --out: $status $output"; false; }
+  local cwd="$PWD"
+  cd "$ARC_ROOT" && run node "$(WB "$ARC_ROOT")" --out . ; cd "$cwd"
+  [ "$status" -eq 2 ] || { echo "--out .: $status $output"; false; }
+  run node "$(WB "$ARC_ROOT")" --out "$ARC_ROOT"
+  [ "$status" -eq 2 ] || { echo "--out root: $status $output"; false; }
+  run node "$(WB "$ARC_ROOT")" --out "$ARC_ROOT/docs/wiki/products"
+  [ "$status" -eq 2 ] || { echo "--out inside docs/wiki: $status $output"; false; }
+  printf 'x\n' > "$BATS_TEST_TMPDIR/afile"
+  run node "$(WB "$ARC_ROOT")" --out "$BATS_TEST_TMPDIR/afile"
+  [ "$status" -eq 2 ] || { echo "--out a file: $status $output"; false; }
+  [ "$(cat "$BATS_TEST_TMPDIR/afile")" = "x" ] || { echo "the file was changed"; false; }
+  run node "$(WB "$ARC_ROOT")" --out "$BATS_TEST_TMPDIR/no/such/parent/w"
+  [ "$status" -eq 2 ] || { echo "missing parent: $status $output"; false; }
+  [ ! -e "$BATS_TEST_TMPDIR/no" ] || { echo "a missing parent was created"; false; }
+}
+
+@test "docs-render: a pipe and a backtick in a declared value keep the table intact" {
+  local t; t=$(rendered_tree pipes) || { echo "fixture failed"; false; }
+  printf -- '---\ndescription: Run alpha | beta.\nargument-hint: <start|next> `x`\n---\n\nbody\n' > "$t/.claude/commands/alpha-go.md"
+  run node "$(WB "$t")" --root "$t"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run grep -E '^\| (Does|Arguments) \|' "$t/docs/wiki/commands/alpha-go.md"
+  [ "${#lines[@]}" -eq 2 ] || { echo "rows: $output"; false; }
+  [ "${lines[0]}" = '| Does | Run alpha \| beta. |' ] || { echo "Does row: ${lines[0]}"; false; }
+  [ "${lines[1]}" = '| Arguments | `` <start\|next> `x` `` |' ] || { echo "Arguments row: ${lines[1]}"; false; }
+}
+
 @test "docs-render: this suite registers exactly the tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 14"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 19 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 19"; false; }
 }

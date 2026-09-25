@@ -437,15 +437,20 @@ const SINGULAR = {
 /** GitHub's heading anchor for a TITLES value. */
 const anchor = (key) => TITLES[key].toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, "").replace(/ /g, "-");
 
-/** Text safe inside a table cell or a line: one line, no pipes, no raw angle brackets. */
+/** Text safe inside a table cell or a line: one line, pipes escaped (and a backslash before one), no raw angle brackets. */
 function cell(v) {
   if (v === null || v === undefined || v === "") return "—";
-  return String(v).replace(/\s*\n\s*/g, " ").replace(/\|/g, "\\|").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(v).replace(/\s*\n\s*/g, " ").replace(/\\(?=\|)/g, "\\\\").replace(/\|/g, "\\|").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-/** An inline code span that survives a backtick inside the value. */
+/**
+ * An inline code span, table-safe: the fence is one backtick longer than the longest run inside
+ * the value, and pipes are escaped because GitHub splits table cells before it reads code spans.
+ */
 function code(v) {
-  const s = String(v).replace(/\s*\n\s*/g, " ");
-  return s.includes("`") ? "`` " + s + " ``" : "`" + s + "`";
+  const s = String(v).replace(/\s*\n\s*/g, " ").replace(/\|/g, "\\|");
+  const longest = Math.max(0, ...(s.match(/`+/g) || []).map((m) => m.length));
+  const fence = "`".repeat(longest + 1);
+  return longest ? `${fence} ${s} ${fence}` : `${fence}${s}${fence}`;
 }
 /** The first backticked token, else the first word -- ADR Product fields are prose. */
 function ownerToken(product) {
@@ -703,12 +708,19 @@ export async function render(repo) {
 
 /**
  * What is on disk under a wiki dir, through the coverage gate's own pageTree (the one sanctioned
- * listing): the page paths present, and which of them are GENERATED (line 1 is the banner).
+ * listing): the page paths present, which of them are GENERATED (line 1 is the banner), and the
+ * links pageTree refused to count. Import or listing failures are a GateError-style message.
  */
 async function onDisk(repo, dirAbs) {
-  const fc = await import(pathToFileURL(join(repo, ".claude", "scripts", "core", "face-coverage.mjs")).href);
-  const cov = await import(pathToFileURL(join(repo, ".claude", "scripts", "docs", "wiki-coverage.mjs")).href);
-  const tree = cov.pageTree(fc, { NARRATIVE_DIR }, dirAbs);
+  let fc, cov;
+  try {
+    fc = await import(pathToFileURL(join(repo, ".claude", "scripts", "core", "face-coverage.mjs")).href);
+    cov = await import(pathToFileURL(join(repo, ".claude", "scripts", "docs", "wiki-coverage.mjs")).href);
+  } catch (e) { return { error: `the page lister could not be loaded from ${repo}: ${e.code || e.message}` }; }
+  if (typeof cov.pageTree !== "function") return { error: "wiki-coverage.mjs does not export pageTree" };
+  let tree;
+  try { tree = cov.pageTree(fc, { NARRATIVE_DIR }, dirAbs); }
+  catch (e) { return { error: `cannot list ${dirAbs}: ${e.code || e.message}` }; }
   const present = [];
   for (const stem of tree.rootPages) present.push(`${stem}.md`);
   for (const d of Object.keys(tree.pages)) for (const stem of tree.pages[d]) present.push(`${d}/${stem}.md`);
@@ -718,11 +730,35 @@ async function onDisk(repo, dirAbs) {
     try { first = readFileSync(join(dirAbs, ...rel.split("/")), "utf8").split("\n", 1)[0]; } catch { /* unreadable: not ours to delete */ }
     if (first.startsWith(BANNER_PREFIX)) generated.add(rel);
   }
-  return { present: present.sort(byteOrder), generated };
+  return { present: present.sort(byteOrder), generated, links: (tree.links || []).filter((l) => !l.startsWith(`${NARRATIVE_DIR}/`)) };
 }
 
+/**
+ * Every link or non-directory where the wiki needs a directory, and every link or non-file where
+ * it needs a page -- ONE helper, called by --check and by the writer, so neither can certify or
+ * write through a path the other would refuse.
+ * @returns {string[]} named problems, empty when the paths are clean
+ */
+function pathProblems(dirAbs, rels) {
+  const out = [];
+  const kind = (p) => { try { const s = lstatSync(p); return s.isSymbolicLink() ? "link" : s.isDirectory() ? "dir" : s.isFile() ? "file" : "other"; } catch (e) { return e.code === "ENOENT" ? "absent" : `unreadable (${e.code})`; } };
+  const top = kind(dirAbs);
+  if (top !== "dir" && top !== "absent") return [`${dirAbs} is ${top === "link" ? "a symlink" : `not a directory (${top})`}`];
+  const dirs = new Set(rels.map((r) => r.split("/").slice(0, -1).join("/")).filter(Boolean));
+  for (const d of [...dirs].sort(byteOrder)) {
+    const k = kind(join(dirAbs, ...d.split("/")));
+    if (k !== "dir" && k !== "absent") out.push(`${d}/ is ${k === "link" ? "a symlink" : `not a directory (${k})`}`);
+  }
+  for (const r of rels) {
+    const k = kind(join(dirAbs, ...r.split("/")));
+    if (k !== "file" && k !== "absent") out.push(`${r} is ${k === "link" ? "a symlink" : `not a regular file (${k})`}`);
+  }
+  return out;
+}
+
+/** Raw bytes compared as the extractor reads them: no BOM, LF only. */
 function sameBytes(abs, content) {
-  try { return readFileSync(abs, "utf8") === content; } catch { return false; }
+  try { return readFileSync(abs, "utf8").replace(/^﻿/, "").replace(/\r\n?/g, "\n") === content; } catch { return false; }
 }
 
 /** --check: compare a render with the committed docs/wiki/ without writing. */
@@ -730,13 +766,17 @@ export async function check(repo) {
   const r = await render(repo);
   if (r.code !== 0) return { code: r.code, lines: [`wiki-build: ${r.message}`] };
   const dirAbs = join(repo, ...WIKI_DIR.split("/"));
+  const bad = pathProblems(dirAbs, [...r.files.keys()]);
+  if (bad.length) return { code: 2, lines: bad.map((b) => `wiki-build: refusing to certify ${WIKI_DIR}/: ${b}`) };
+  const disk = await onDisk(repo, dirAbs);
+  if (disk.error) return { code: 2, lines: [`wiki-build: ${disk.error}`] };
   const diffs = [];
+  for (const l of disk.links) diffs.push(`LINK    ${WIKI_DIR}/${l} (pages are regular files, never links)`);
   for (const [rel, content] of r.files) {
     const abs = join(dirAbs, ...rel.split("/"));
     if (!existsSync(abs)) diffs.push(`MISSING ${WIKI_DIR}/${rel}`);
     else if (!sameBytes(abs, content)) diffs.push(`DIFFERS ${WIKI_DIR}/${rel}`);
   }
-  const disk = await onDisk(repo, dirAbs);
   for (const rel of disk.present) if (disk.generated.has(rel) && !r.files.has(rel)) diffs.push(`STALE   ${WIKI_DIR}/${rel} (generated, but nothing in the tree renders it)`);
   if (!diffs.length) return { code: 0, lines: [`wiki-build: check ${r.files.size} generated file(s) -- ${WIKI_DIR}/ is exactly what the renderer writes`] };
   return { code: 1, lines: [`wiki-build: check ${diffs.length} file(s) differ from a fresh render -- regenerate with \`node .claude/scripts/docs/wiki-build.mjs\` and commit the result (ADR-1504)`, ...diffs] };
@@ -744,38 +784,49 @@ export async function check(repo) {
 
 /**
  * Write a render into a directory: the committed docs/wiki/ of this tree, or any directory
- * OUTSIDE the tree. Files are written only when their bytes change, each through an exclusive
- * temp file; a stale GENERATED page is removed; a hand-written file is never touched.
+ * OUTSIDE the tree. Everything is validated BEFORE the first write -- the destination, every
+ * directory and every target file, and that no hand-written file sits where a page would go --
+ * so a refusal leaves nothing half-written. Files are written only when their bytes change, each
+ * through an exclusive temp file; a stale GENERATED page is removed; a hand-written file is never
+ * touched.
  */
 export async function writeWiki(repo, outDir) {
   const r = await render(repo);
   if (r.code !== 0) return { code: r.code, message: r.message };
   const root = realRoot(repo);
   const abs = resolve(outDir);
-  let st = null;
-  try { st = lstatSync(abs); } catch (e) { if (e.code !== "ENOENT") return { code: 2, message: `cannot stat ${outDir}: ${e.code || e.message}` }; }
-  if (st?.isSymbolicLink()) return { code: 2, message: `${outDir} is a symlink; refusing to write through it` };
-  if (st && !st.isDirectory()) return { code: 2, message: `${outDir} is not a directory` };
   let parent;
   try { parent = realpathSync.native(dirname(abs)); } catch (e) { return { code: 2, message: `${outDir}: its parent directory is not there (${e.code || e.message})` }; }
   const final = join(parent, basename(abs));
   if (inside(final, root) && final !== join(root, ...WIKI_DIR.split("/"))) {
     return { code: 2, message: `${outDir} is inside the tree it reads; the only directory the renderer writes in the tree is ${WIKI_DIR}/` };
   }
+  const rels = [...r.files.keys()];
+  const bad = pathProblems(final, rels);
+  if (bad.length) return { code: 2, message: `refusing to write: ${bad.join("; ")}` };
+  const handWritten = rels.filter((rel) => {
+    const p = join(final, ...rel.split("/"));
+    if (!existsSync(p)) return false;
+    try { return !readFileSync(p, "utf8").split("\n", 1)[0].startsWith(BANNER_PREFIX); } catch { return true; }
+  });
+  if (handWritten.length) return { code: 2, message: `refusing to overwrite hand-written file(s) where a generated page goes: ${handWritten.join(", ")}` };
   let written = 0, removed = 0;
-  for (const [rel, content] of r.files) {
-    const file = join(final, ...rel.split("/"));
-    const dir = dirname(file);
-    mkdirSync(dir, { recursive: true });
-    try { if (lstatSync(dir).isSymbolicLink()) return { code: 2, message: `${dir} is a symlink; refusing to write through it` }; } catch { /* just made */ }
-    if (sameBytes(file, content)) continue;
-    const tmp = `${file}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
-    try { writeFileSync(tmp, content, { flag: "wx" }); renameSync(tmp, file); written++; }
-    catch (e) { try { unlinkSync(tmp); } catch { /* none left */ } return { code: 2, message: `cannot write ${file}: ${e.code || e.message}` }; }
-  }
-  const disk = await onDisk(repo, final);
-  for (const rel of disk.present) {
-    if (disk.generated.has(rel) && !r.files.has(rel)) { unlinkSync(join(final, ...rel.split("/"))); removed++; }
+  try {
+    for (const [rel, content] of r.files) {
+      const file = join(final, ...rel.split("/"));
+      mkdirSync(dirname(file), { recursive: true });
+      if (sameBytes(file, content)) continue;
+      const tmp = `${file}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
+      try { writeFileSync(tmp, content, { flag: "wx" }); renameSync(tmp, file); written++; }
+      catch (e) { try { unlinkSync(tmp); } catch { /* none left */ } throw e; }
+    }
+    const disk = await onDisk(repo, final);
+    if (disk.error) return { code: 2, message: disk.error };
+    for (const rel of disk.present) {
+      if (disk.generated.has(rel) && !r.files.has(rel)) { unlinkSync(join(final, ...rel.split("/"))); removed++; }
+    }
+  } catch (e) {
+    return { code: 2, message: `write failed after ${written} file(s): ${e.code || e.message} -- rerun once the cause is fixed; every write is whole-file` };
   }
   return { code: 0, message: `wiki-build: ${r.files.size} file(s) rendered (${written} written, ${removed} stale removed) -> ${outDir}` };
 }
@@ -805,8 +856,8 @@ async function main(argv) {
   if (error) { process.stderr.write(`wiki-build: ${error}\n`); return 2; }
   if (opts["--check"] && (opts["--json"] || opts["--out"])) { process.stderr.write("wiki-build: --check compares docs/wiki/ in place; it takes no --json and no --out\n"); return 2; }
   const repo = resolve(opts["--root"] ?? REPO_DEFAULT);
-  if (!existsSync(join(repo, ".claude", "scripts", "core", "face-coverage.mjs"))) {
-    process.stderr.write(`wiki-build: ${repo} is not an arc tree (no .claude/scripts/core/face-coverage.mjs)\n`);
+  if (!existsSync(join(repo, ".claude", "scripts", "core", "face-coverage.mjs")) || !existsSync(join(repo, ".claude", "scripts", "docs", "wiki-coverage.mjs"))) {
+    process.stderr.write(`wiki-build: ${repo} is not an arc tree with the docs product (needs .claude/scripts/core/face-coverage.mjs and .claude/scripts/docs/wiki-coverage.mjs)\n`);
     return 2;
   }
   if (opts["--check"]) {

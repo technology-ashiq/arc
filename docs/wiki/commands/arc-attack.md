@@ -10,7 +10,7 @@
 | | |
 |---|---|
 | Does | The PR loop's adversarial pass as governed engine work -- two fresh attackers (logic + boundary) run headless through arc-run, carrying the lane's fixed-defect patterns. Reports only; never fixes, never commits (ADR-0226). |
-| Arguments | `[--base REF | --since SHA] [--lane <name>] [--round K] [--phase NN]` |
+| Arguments | `[--base REF \| --since SHA] [--lane <name>] [--round K] [--phase NN]` |
 | Product | [engine](../products/engine.md) |
 | Generated | no -- hand-written |
 

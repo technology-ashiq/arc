@@ -10,7 +10,7 @@
 | | |
 |---|---|
 | Does | Find a tool the harness lacks, and vet it. Reports and refuses — it never installs. |
-| Arguments | `<what you need> | --vet <dir> | --audit` |
+| Arguments | `<what you need> \| --vet <dir> \| --audit` |
 | Product | [develop](../products/develop.md) |
 | Generated | no -- hand-written |
 
