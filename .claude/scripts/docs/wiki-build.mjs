@@ -21,6 +21,7 @@
 import { readFileSync, writeFileSync, renameSync, unlinkSync, existsSync, lstatSync, realpathSync } from "node:fs";
 import { join, dirname, resolve, basename, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { randomBytes } from "node:crypto";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_DEFAULT = join(HERE, "..", "..", "..");
@@ -90,12 +91,19 @@ function namedFile(repo, rel) {
     throw new ReadError(`${rel}: ${e.code || e.message}`);
   }
   if (st.isSymbolicLink()) throw new ReadError(`${rel} is a symlink -- the wiki reads only regular files inside the tree (DOC-I)`);
-  if (!st.isFile()) return null;
+  // Something IS there and it is not a regular file (a directory, a FIFO): that is not absence.
+  if (!st.isFile()) throw new ReadError(`${rel} exists but is not a regular file`);
   let real;
   try { real = realpathSync.native(p); } catch (e) { throw new ReadError(`${rel}: ${e.code || e.message}`); }
   if (!inside(real, realRoot(repo))) throw new ReadError(`${rel} resolves outside the tree (${basename(real)}) -- a linked directory on its path`);
   const tail = real.split(sep).slice(-segs.length);
-  if (tail.join("/") !== rel) return null;
+  if (tail.join("/") !== rel) {
+    // Only a CASE-only difference means "absent" (Linux would not find it either). Any other
+    // difference is a linked directory on the path, inside the tree: the entity is really
+    // another one, and on a checkout without symlinks it would not exist at all.
+    if (tail.join("/").toLowerCase() === rel.toLowerCase()) return null;
+    throw new ReadError(`${rel} is reached through a linked directory (it is really ${tail.join("/")})`);
+  }
   return p;
 }
 
@@ -450,9 +458,14 @@ function writeOut(repo, out, bytes) {
   try { parent = realpathSync.native(dirname(abs)); } catch (e) { return `--out ${out}: its directory is not there (${e.code || e.message})`; }
   const final = join(parent, basename(abs));
   const root = realRoot(repo);
-  if (inside(final, root) && !inside(final, join(root, "docs", "wiki"))) return `--out ${out} is inside the tree it reads; wiki-build writes into the tree only under docs/wiki/`;
-  const tmp = `${final}.tmp-${process.pid}`;
-  try { writeFileSync(tmp, bytes); renameSync(tmp, final); }
+  // Inside the tree, exactly ONE path may be written: docs/wiki/wiki.json. Everything else under
+  // docs/wiki/ is either a generated page (Phase 02 writes those, not --out) or a hand-written
+  // narrative that no script may ever overwrite (ADR-1505).
+  if (inside(final, root) && final !== join(root, "docs", "wiki", "wiki.json")) return `--out ${out} is inside the tree it reads; the only path wiki-build --out writes in the tree is docs/wiki/wiki.json`;
+  // The temp name is unpredictable and created exclusively ('wx'): a planted link or file at the
+  // temp path makes the open fail instead of writing through it.
+  const tmp = `${final}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
+  try { writeFileSync(tmp, bytes, { flag: "wx" }); renameSync(tmp, final); }
   catch (e) {
     try { unlinkSync(tmp); } catch { /* nothing was left */ }
     return `cannot write ${out}: ${e.code || e.message}`;

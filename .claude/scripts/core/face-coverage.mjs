@@ -908,9 +908,11 @@ export async function treeWorld(repo, kinds) {
 }
 
 async function gather(repo) {
-  // Same order as before treeWorld was split out, and it is load-bearing: the vocabulary is
-  // imported FIRST (a tree without validate.mjs fails there, with that message), the contract
-  // SECOND, then the world readers. The key order of the returned object is the old one too.
+  // What is preserved from the pre-split literal: the vocabulary is imported FIRST (a tree
+  // without validate.mjs fails there, with that message), the contract is read BEFORE any world
+  // reader, and the returned object has the old key order. What moved: the six plain listings
+  // (lanes ... processes) now run after the contract instead of before it; none of them can
+  // throw, so no error path changes.
   const kinds = await treeKinds(repo);
   const contract = loadContract(repo);
   const { kinds: _k, lanes, commands, agents, products, rules, processes, ...rest } = await treeWorld(repo, kinds);

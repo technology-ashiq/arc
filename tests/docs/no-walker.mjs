@@ -64,6 +64,22 @@ function codeOnly(src) {
 /** The ONE sanctioned call of a face-coverage enumerator: the ADR files, by face's own helper. */
 const SANCTIONED = ['fc.mdStems(join(repo, "docs", "adr"))'];
 
+/**
+ * The line holds exactly one enumerator, and the sanctioned call sits at the SAME column in the
+ * code (comments and string bodies blanked) as in the raw text -- so the allow-listed words in a
+ * trailing comment or a string cannot launder a different call on that line.
+ */
+function isSanctioned(codeLine, rawLine) {
+  if ((codeLine.match(/\b(dirNames|mdStems|yamlStems)\b/g) || []).length !== 1) return false;
+  for (const s of SANCTIONED) {
+    const at = rawLine.indexOf(s);
+    if (at < 0) continue;
+    const m = /\bmdStems\b/.exec(codeLine);
+    if (m && m.index === at + s.indexOf("mdStems") && codeLine.slice(at, at + 3) === "fc.") return true;
+  }
+  return false;
+}
+
 const FS_SPEC = String.raw`["'](?:node:)?fs(?:\/promises)?["']`;
 
 /** Names bound to the fs module (or its promises) anywhere in the RAW source. */
@@ -95,7 +111,7 @@ function scanFile(root, p, found) {
     const rawLine = rawLines[idx] ?? "";
     for (const [re, why] of rules) {
       if (!re.test(line)) continue;
-      if (why.startsWith("a face-coverage enumerator") && SANCTIONED.some((s) => rawLine.includes(s)) && (line.match(/\b(dirNames|mdStems|yamlStems)\b/g) || []).length === 1) continue;
+      if (why.startsWith("a face-coverage enumerator") && isSanctioned(line, rawLine)) continue;
       found.push(`${rel}:${idx + 1}: ${why}: ${rawLine.trim()}`);
     }
   });

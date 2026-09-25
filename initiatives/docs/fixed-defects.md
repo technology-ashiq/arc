@@ -58,3 +58,11 @@ the fuller source; read it too.
 ## Phase 00 -- the first CI run (90942d6d)
 
 - **`expected-set.json` hand-edited with `sed` left it out of canonical form** — a numeric-looking key (`"1500"`) was appended after `"0900"`, but `JSON.stringify` orders integer keys first, so `agent-scaffold` and `concept-define` refused main as non-canonical and three face ring tests went red on two OS legs — *edit a generator-owned JSON by parse → mutate → `JSON.stringify(v, null, 2) + "\n"`, never by text; then run the generator's own `--check`.*
+
+## Phase 00 -- round 2 (attack fb17189, boundary; logic not run -- round 1's logic transport failed)
+
+- **A link to a directory INSIDE the tree read as "absent" at exit 0** (r2 B1) — `namedFile`: only a case-only tail difference is absence; any other is a named exit 2 — *a path reached through a link is refused, wherever the link points.*
+- **`--out` could rename JSON over a hand-written narrative under docs/wiki/** (r2 B2) — `writeOut`: inside the tree only `docs/wiki/wiki.json` — *a writer's allowed set inside the tree is an exact path, never a prefix.*
+- **An allow-listed call text in a comment laundered a different enumerator on the same line** (r2 B3) — `no-walker.mjs` `isSanctioned` (same column in code and raw) — *an allowlist matches the CODE, never the raw line.*
+- **A predictable temp name was opened with 'w', following a planted link** (r2 B7) — `writeOut` (random suffix, `wx`) — *temp files are unpredictable and exclusive.*
+- **A directory or FIFO at an entity's named path read as "absent"** (r2 B12) — `namedFile` — *something there that is not a regular file is a named failure.*

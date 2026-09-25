@@ -115,6 +115,7 @@ mutant_scan() {
   mutant_scan noext    tool             'const { readdirSync } = require("fs"); readdirSync(".");'
   mutant_scan spawn    wiki-build.mjs   'import { execFileSync } from "node:child_process"; export const __x = () => execFileSync("git", ["ls-files"]);'
   mutant_scan facecov  wiki-build.mjs   'export const __x = (fc, repo) => fc.dirNames(repo);'
+  mutant_scan launder  wiki-build.mjs   'export const __x = (fc, repo, join) => fc.dirNames(repo); // fc.mdStems(join(repo, "docs", "adr"))'
   mutant_scan template wiki-build.mjs   'import { readdirSync } from "node:fs"; export const __x = (d) => `${readdirSync(d)}`;'
 }
 
@@ -207,5 +208,41 @@ mutant_scan() {
 
 @test "docs-extract: this suite registers exactly the tests it declares" {
   # bats silently drops a @test it cannot register; a suite that IS the proof of DOC-A counts itself.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 15"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 18 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 18"; false; }
+}
+
+@test "docs-extract: --out never overwrites a narrative; inside the tree only docs/wiki/wiki.json is writable" {
+  local t; t=$(fixture narr) || { echo "fixture failed"; false; }
+  mkdir -p "$t/docs/wiki/_narrative/products"
+  printf 'hand-written prose\n' > "$t/docs/wiki/_narrative/products/alpha.md"
+  local before; before=$(cksum < "$t/docs/wiki/_narrative/products/alpha.md")
+  run node "$t/.claude/scripts/docs/wiki-build.mjs" --json --root "$t" --out "$t/docs/wiki/_narrative/products/alpha.md"
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"docs/wiki/wiki.json"* ]] || { echo "refusal did not name the one writable path: $output"; false; }
+  [ "$(cksum < "$t/docs/wiki/_narrative/products/alpha.md")" = "$before" ] || { echo "the narrative was overwritten"; false; }
+  run node "$t/.claude/scripts/docs/wiki-build.mjs" --json --root "$t" --out "$t/docs/wiki/wiki.json"
+  [ "$status" -eq 0 ] || { echo "the sanctioned path was refused: $output"; false; }
+  [ -s "$t/docs/wiki/wiki.json" ] || { echo "nothing written at docs/wiki/wiki.json"; false; }
+  run ls "$t/docs/wiki"
+  if [[ "$output" == *".tmp-"* ]]; then echo "a temp file was left behind: $output"; false; fi
+}
+
+@test "docs-extract: an entity file that is a directory is exit 2, not an absent file" {
+  local t; t=$(fixture nonfile) || { echo "fixture failed"; false; }
+  rm "$t/.claude/agents/alpha-helper.md"
+  mkdir -p "$t/.claude/agents/alpha-helper.md.d"
+  mkdir -p "$t/products/alpha/manifest.json.tmp" && rm "$t/products/alpha/manifest.json" && mv "$t/products/alpha/manifest.json.tmp" "$t/products/alpha/manifest.json"
+  run node "$t/.claude/scripts/docs/wiki-build.mjs" --json --root "$t"
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"manifest.json exists but is not a regular file"* ]] || { echo "not named: $output"; false; }
+}
+
+@test "docs-extract: a lane reached through a linked directory inside the tree is exit 2" {
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) skip "symlinks need privileges on the Windows runner";; esac
+  local t; t=$(fixture dirlink) || { echo "fixture failed"; false; }
+  ln -s alpha "$t/initiatives/beta"
+  [ -L "$t/initiatives/beta" ] || { echo "could not create the link"; false; }
+  run node "$t/.claude/scripts/docs/wiki-build.mjs" --json --root "$t"
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"initiatives/beta/PROGRESS.md is reached through a linked directory"* ]] || { echo "not named: $output"; false; }
 }
