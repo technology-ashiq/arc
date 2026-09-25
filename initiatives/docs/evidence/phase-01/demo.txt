@@ -1,0 +1,27 @@
+$ node .claude/scripts/docs/wiki-coverage.mjs --mutant-selftest
+M0 every entity paged -> covered: PASS (exit 0)
+    EXPECTED-FAIL [entity-no-page] product zzz-ghost-product -- expected products/zzz-ghost-product.md
+    EXPECTED-FAIL [entity-no-page] lane zzz-ghost-lane -- expected lanes/zzz-ghost-lane.md
+M1 an unknown product AND an unknown lane, no pages -> FAIL naming both: PASS (exit 1)
+    EXPECTED-FAIL [page-no-entity] docs/wiki/products/absorb.md -- nothing in the tree has id absorb (products)
+M2 product absorb removed, its page kept -> FAIL naming the orphan: PASS (exit 1)
+    EXPECTED-FAIL [narrative-no-entity] docs/wiki/_narrative/lanes/zzz-ghost-narrative.md -- no entity zzz-ghost-narrative to narrate
+M3 a narrative for no entity -> FAIL naming it: PASS (exit 1)
+    EXPECTED-FAIL [empty-inventory] products -- the tree yielded no products; an empty inventory is never covered
+    EXPECTED-FAIL [empty-inventory] lanes -- the tree yielded no lanes; an empty inventory is never covered
+    EXPECTED-FAIL [empty-inventory] processes -- the tree yielded no processes; an empty inventory is never covered
+    EXPECTED-FAIL [empty-inventory] adrBands -- the tree yielded no adrBands; an empty inventory is never covered
+    EXPECTED-FAIL [empty-inventory] commands -- the tree yielded no commands; an empty inventory is never covered
+    EXPECTED-FAIL (+132 more)
+M4 the tree's inventories cut to nothing -> never covered: PASS (exit 1)
+    EXPECTED-FAIL [page-no-entity] docs/wiki/zzz-widgets/ -- not a page directory the wiki defines
+M5 a page directory the wiki does not define -> FAIL naming it: PASS (exit 1)
+mutant-selftest: ran 6 of 6
+exit 0
+
+$ node .claude/scripts/docs/wiki-coverage.mjs   (the real tree: no pages exist until Phase 02, so every entity is named)
+exit 1
+wiki-coverage: 129 finding(s) -- a part of arc with no page, or a page with no part of arc. Regenerate with `node .claude/scripts/docs/wiki-build.mjs`; an orphan narrative is removed or renamed by hand (ADR-1503).
+FAIL [entity-no-page] product absorb -- expected products/absorb.md
+FAIL [entity-no-page] product core -- expected products/core.md
+... (129 FAIL lines)
