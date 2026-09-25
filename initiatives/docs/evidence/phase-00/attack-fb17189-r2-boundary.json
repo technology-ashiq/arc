@@ -1,0 +1,109 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:97",
+      "breaking_input": "Track a directory symlink inside the tree, e.g. initiatives/alias -> docs (or products/alias -> core). On Linux/macOS, face-coverage dirNames follows the link (statSync) and lists 'alias'. namedFile('initiatives/alias/PROGRESS.md') passes lstat, because only the final component is not followed. realpath gives <root>/initiatives/docs/PROGRESS.md, which passes inside(). The tail check then compares initiatives/docs/PROGRESS.md with initiatives/alias/PROGRESS.md, mismatches, and returns null. Lane 'alias' is emitted with unparsed:['progress'] at exit 0. On Windows with core.symlinks=false the link is a plain file, so dirNames excludes it and no 'alias' lane exists.",
+      "why": "The B2/B3 fix only throws when a link leaves the tree. A link that stays inside the tree is silently treated as an absent file, the same as a case mismatch. The comment on namedFile claims a linked parent directory throws. The legs produce different wiki.json at exit 0, which is exactly what ADR-1504's regenerate-and-diff cannot survive, and no test covers it.",
+      "fix": "After a successful lstat, a tail mismatch that is not a case-only difference (compare tail and rel with toLowerCase) must throw ReadError naming the path. Only ENOENT/ENOTDIR and a case-only mismatch count as absent. Also refuse inventory ids whose directory is a link.",
+      "twin_of": "A containment check used `isFile()`, which a symlink passes -> resolve realpaths before any containment decision."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:446",
+      "breaking_input": "node wiki-build.mjs --json --out docs/wiki/_narrative/products/engine.md. The target is a regular file, not a symlink. Its real parent is inside docs/wiki, so the 'only under docs/wiki/' check passes. The temp file is renamed over the hand-written narrative, replacing prose with JSON.",
+      "why": "The B4 carve-out allows the whole docs/wiki/ prefix. ADR-1505 says narrative is hand-written and never rewritten by any script. If it is uncommitted, the overwrite is unrecoverable. The B4 fix still lets the writer clobber a file it does not own.",
+      "fix": "Refuse docs/wiki/_narrative/ and any existing target that does not begin with the GENERATED banner. Or accept only a fixed output basename such as wiki.json. Add a bats case that plants a narrative file and asserts it is byte-identical after the refused run.",
+      "twin_of": "`--out` could overwrite a source file the extractor had just read; non-atomic write -> a writer refuses links, refuses the tree outside its own output dir, and renames a temp file into place."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/docs/no-walker.mjs:101",
+      "breaking_input": "Append to a scratch copy of wiki-build.mjs: `export const q = (fc, repo) => fc.dirNames(repo); // fc.mdStems(join(repo, \"docs\", \"adr\"))`. codeOnly blanks the comment, so the code line holds one enumerator (dirNames) and rule 3 fires. The exemption then tests SANCTIONED against rawLine, which still contains the comment text, and the finding is skipped with `continue`. Same result if the sanctioned text sits in a single-quoted string on the line.",
+      "why": "The B7 fix decides 'sanctioned' from the raw line but counts enumerators on the blanked line. A comment or string carrying the allow-listed text launders a real face-coverage enumerator call. None of the nine mutants attacks the exemption, so DOC-A's proof has a hole exactly where the fix was made.",
+      "fix": "Match SANCTIONED against the blanked code line, or better against the AST-free token sequence. Require exactly one enumerator on the line and that its argument text is the sanctioned one. Add a mutant with the call hidden behind a comment and one behind a string.",
+      "twin_of": "The scan missed face-coverage's own enumerators, child_process, and aliased fs namespaces -> one mutant per spelling, in the suite."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/fixtures/sync-golden/tree-manifest.txt (absent from diff)",
+      "breaking_input": "The head still adds .claude/scripts/docs/wiki-build.mjs, edits face-coverage.mjs and adds products/docs/manifest.json. The diff touches neither tests/fixtures/sync-golden/tree-manifest.txt nor tests/shard-timings.json. Pushing this head as it stands runs the sync byte-identity gate against a stale manifest on every CI leg.",
+      "why": "Prior finding B11 is not fixed in this diff. Regeneration is scheduled as the last step, so it is only a sequencing risk. Nothing in the tree stops the attack-fixed head from being pushed before that step and burning a CI cycle.",
+      "fix": "Regenerate the golden manifest and add the measured docs-extract shard weight in the same commit series before the single push. Confirm the manifest diff lists only the new docs files."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/docs-extract.bats:83",
+      "breaking_input": "Introduce a syntax error in tests/docs/json-hygiene.mjs, or make the printf that creates cr.json fail. The script then exits 1 from an uncaught exception. The test 'the hygiene check itself goes red on a CR and on a checkout path' asserts only `[ \"$status\" -eq 1 ]` and never that the output contains 'FOUND a CR byte' or 'checked'. Both negative controls pass with the checker never running. Likewise the CLI-refusal and writer-refusal tests assert only exit 2, and main() maps every uncaught throw to exit 2. Deleting the `st && !st.isFile()` branch in writeOut leaves the '--out a directory' case green, because renameSync onto a directory fails and also returns exit 2.",
+      "why": "A crash and a real refusal share an exit code, and the assertions do not tell them apart.",
+      "fix": "For each negative control assert the RAN line and the named finding or refusal message before or besides the status. For the directory case assert the 'not a regular file' text.",
+      "twin_of": "Negative controls run under bats `run` in a subshell silently passed -> assert the control RAN, then what it printed."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:95",
+      "breaking_input": "Delete the `inside(real, realRoot(repo))` throw in namedFile, or the `catch` that turns a readFileSync failure into ReadError in readText. The suite stays green. The only symlink test uses a file link, which is caught by the earlier isSymbolicLink branch. No test links a parent directory to a target outside the tree, and no test triggers a non-ENOENT lstat or read errno.",
+      "why": "The 'resolves outside the tree' rule and the read-failure rule each have no case that only they decide. They are the B1/B2 fixes, and removing them turns nothing red.",
+      "fix": "Add a fixture where initiatives/x is a symlink to a directory outside the tree holding a PROGRESS.md, expecting exit 2 and 'resolves outside the tree'. Add a case where the named file is unreadable or a directory, expecting exit 2 for the same reason.",
+      "twin_of": "A rule with no case only it decides -> every rule has a test that fails when only that rule is removed."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:447",
+      "breaking_input": "Pre-plant a tracked symlink docs/wiki/wiki.json.tmp-4242 -> ../../products/core/manifest.json. A run with pid 4242 does writeFileSync(tmp, bytes) with the default 'w' flag. That follows the link and truncates and overwrites the manifest. The refusals for --out itself are all bypassed. Separately, a run killed between the write and the rename leaves wiki.json.tmp-<pid> inside docs/wiki/, which a page-to-entity coverage or dirty-diff check will report as an orphan or extra file.",
+      "why": "The B4 fix refuses links and out-of-scope targets for `final` but not for the predictable temp name. It is also not exclusive, and it is not cleaned on a kill, only on a thrown error.",
+      "fix": "Open the temp file with flag 'wx' and a random suffix, lstat it, and clean stale .tmp-* on start. Or write into os.tmpdir() beside nothing in the tree and rename only when on the same device."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-coverage.mjs:910",
+      "breaking_input": "A tree whose .claude/commands is a regular file (mdStems then throws ENOTDIR from readdirSync), with no initiatives/face/contracts/expected-set.json. Before the split, gather read kinds, lanes, commands and the rest, then the contract, so the ENOTDIR failure came first. Now gather calls loadContract before any of lanes, commands, agents, products, rules or processes, so the missing-contract error comes first.",
+      "why": "The new comment says 'Same order as before treeWorld was split out'. The old literal read contract only after the six inventory readers. Key order was restored, but read order was not, so the claim is still false and the behaviour-preserving assertion in ADR-1501 is untested.",
+      "fix": "Read kinds, then run the six inventory readers, then loadContract, then the world readers, and keep that order in a single function. Or delete the 'same order as before' claim and pin both error paths in tests/face-coverage.bats.",
+      "twin_of": "A \"behaviour-preserving\" comment claimed an order that was false -> a claim of \"as before\" names what was before and keeps it."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:398",
+      "breaking_input": "node wiki-build.mjs --bogus 2>&1 >/dev/null | head -c0, or any consumer that closes stderr before the message is written. say() guards stdout EPIPE, but parseArgs errors, the not-an-arc-tree message, the res.code message, and main's catch all call bare process.stderr.write. EPIPE there is an unhandled 'error' event, so Node exits 1.",
+      "why": "Exit 1 is documented as 'a treeWorld key this wiki has not decided about'. A closed stderr pipe turns a usage error (2) into that code. This is the B5 defect fixed for stdout only.",
+      "fix": "Route every diagnostic through one guarded writer that attaches an 'error' listener and keeps the intended exit code. Add a test that closes the stderr consumer.",
+      "twin_of": "EPIPE on stdout surfaced as exit 1, which means \"undecided inventory\" -> a failed stdout write is its own named exit 2."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:105",
+      "breaking_input": "A tracked manifest.json, PROGRESS.md or ADR saved by Windows PowerShell 5.1 (Out-File or > defaults to UTF-16LE with a BOM). readFileSync(p,'utf8') decodes the bytes as U+FFFD plus NUL-interleaved characters. The BOM strip only matches U+FEFF, so JSON.parse fails, frontmatter and header regexes fail, and the entity is emitted with unparsed fields at exit 0. Invalid UTF-8 bytes (a cp1252 em dash) silently become U+FFFD in wiki.json.",
+      "why": "The B13 fix covers a UTF-8 BOM only. The primary shell on this machine is PowerShell, where the wrong-encoding save is the default. A file that exists but is not UTF-8 is reported as 'unparsed', not as an unreadable file.",
+      "fix": "Detect an FF FE or FE FF BOM, or use TextDecoder('utf-8',{fatal:true}), and throw ReadError naming the path. Add a UTF-16 fixture.",
+      "twin_of": "A UTF-8 BOM silently emptied facts -> strip BOM and CR on every read; a CRLF+BOM fixture must extract identical bytes."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:412",
+      "breaking_input": "In PowerShell: node .claude/scripts/docs/wiki-build.mjs --json > docs/wiki.json. Windows PowerShell 5.1 re-encodes the native output as UTF-16LE with a BOM and CRLF. PowerShell 7 writes UTF-8 but splits and rejoins the lines with CRLF. Either way the file contains CR bytes and is not byte-identical to the --out output. A later JSON.parse of the UTF-16 file fails.",
+      "why": "Stdout mode is advertised as a normal way to get wiki.json. The determinism guarantee (no CR, same bytes on every OS) holds only for --out. The CI check runs from bash and cannot see this path, yet json-hygiene exists to forbid exactly a CR in the file.",
+      "fix": "Make --out the only supported way to produce the file (require it, or refuse stdout output when it is a TTY or a redirected file on win32). Document PowerShell in the usage message and test it with a Windows-shell case."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:93",
+      "breaking_input": "A tracked directory named products/alpha/manifest.json/ (containing any file), or a FIFO or socket at that path. lstat succeeds, isSymbolicLink is false and isFile is false, so namedFile returns null. readProduct emits entity 'alpha' with unparsed:['manifest'] at exit 0. Likewise initiatives/x/PROGRESS.md/ as a directory gives unparsed:['progress'].",
+      "why": "The B1 fix records that only ENOENT/ENOTDIR is absence. A non-file at the named path is neither. Something is there that the wiki refuses to read, and it is reported as missing. A hostile or accidental directory hides a lane's facts without a named error.",
+      "fix": "Throw ReadError('<rel> is not a regular file') when lstat succeeds on a non-file, non-link entry."
+    }
+  ]
+}

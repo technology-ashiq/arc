@@ -1197,7 +1197,7 @@
       "indexes": "lanes",
       "stations": [],
       "holds": {},
-      "itemCount": 16
+      "itemCount": 17
     },
     {
       "id": "concepts",
@@ -1254,6 +1254,9 @@
           "kickoff.done",
           "phase.closed"
         ],
+        "lanes": [
+          "docs"
+        ],
         "commands": [
           "arc-change",
           "arc-kickoff (G)",
@@ -1282,10 +1285,14 @@
           "steel thread"
         ],
         "products": [
+          "docs",
           "plan"
+        ],
+        "adrs": [
+          "1500"
         ]
       },
-      "itemCount": 22
+      "itemCount": 25
     }
   ],
   "inventories": {
@@ -1294,6 +1301,7 @@
       "1100": "growth",
       "1200": "legal",
       "1300": "toolbelt",
+      "1500": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
