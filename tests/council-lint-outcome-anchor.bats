@@ -159,7 +159,7 @@ fixture_repo() {
   run node "$LINT" "$FIX" --payload "$FS/no-confidence.md"
   [ "$status" -eq 1 ] && [[ "$output" == *"0 filled CONFIDENCE"* ]] || { echo "no confidence: $status $output"; false; }
   # A value on the NEXT line is an unfilled line, not a call (1d98650 B6).
-  sed 's/^DECISION: .*$/DECISION:/' "$SESSION" | sed '/^DECISION:$/a WAIT' > "$FS/split-line.md"
+  sed 's/^DECISION: .*$/DECISION:/' "$SESSION" | awk '{ print } /^DECISION:$/ { print "WAIT" }' > "$FS/split-line.md"
   run node "$LINT" "$FIX" --payload "$FS/split-line.md"
   [ "$status" -eq 1 ] && [[ "$output" == *"0 filled DECISION"* ]] || { echo "split line: $status $output"; false; }
 }
