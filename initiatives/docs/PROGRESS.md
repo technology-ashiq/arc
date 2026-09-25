@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-docs (Cycle 17, opened 2026-09-25)
 phase: 00
 appetite: 6.5d
-burn: 0d
+burn: 1d
 blocked-on: —
 depends-on: —
 
@@ -18,7 +18,7 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Steel thread — the extractor: ruling on the spine, `docs` product born, additive `treeWorld` export, `wiki-build --json` → `wiki.json`, REQ-09 import scan + mutant | 1.5d | pending |
+| 00 | Steel thread — the extractor: ruling on the spine, `docs` product born, additive `treeWorld` export, `wiki-build --json` → `wiki.json`, REQ-09 import scan + mutant | 1.5d | built — CI green 19/19 at a1c0f047; close waits on A-08 (owner stamps the ruling) |
 | 01 | The coverage gate before any renderer — `wiki-coverage` both directions, FAIL-FROM-BIRTH, `--mutant-selftest` M0–M4; **day-3 kill checkpoint** | 1.5d | pending |
 | 02 | The renderer — `docs/wiki/**`, banners, regenerate-and-diff, REQ-04 fixture product; the four overlapping docs stubbed + archived | 1d | pending |
 | 03 | Drift BLOCK + stale WARN + `--audit-counts`; three narratives (hand-written or absent); retro and seal | 1.5d | pending |
@@ -31,8 +31,9 @@ _(empty — nothing closed yet)_
 
 ## Appetite burn
 
-0 of 6.5 days used (5.5 planned · 1 slack). Day-3 checkpoint: end of Phase 01.
+1 of 6.5 days used (5.5 planned · 1 slack). Day-3 checkpoint: end of Phase 01.
 
 ## Now
 
-**Current position →** plan **APPROVED 2026-09-25** (`decision.recorded` `01M3BZPEC91SSZ4DCGS7KCFY9B`, deciding approval `01M3BV13NXSWEX377NVVRHWCHW`, verified on the canonical spine, not quarantined). Phase 00 open. **Next step →** record the 2026-09-18 ruling on the spine (owner keystroke), red-first `tests/docs-extract.bats`, then the `treeWorld` export commit.
+**Current position →** Phase 00 BUILT: `wiki-build --json`, the `treeWorld` export, the `docs` product, 18-test suite red-first then green on all 19 CI jobs (`36127560286` @ `a1c0f047`), two boundary attack rounds (27 findings: 22 fixed, 5 LOW in the debt ledger). Logic attack surface did not run (trial model 503). Evidence: `evidence/phase-00/bundle.md`.
+**Next step →** owner stamps the ruling (`node .claude/scripts/hq/arc-inbox.mjs approve 01M3BZYGR7CNYE3E6D1ATC6TG2 --reason ...` from the main clone), merge PR #275, then `/arc-phase-done 00 --lane docs` from the canonical clone. Then Phase 01 — the coverage gate.
