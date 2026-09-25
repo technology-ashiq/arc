@@ -728,7 +728,8 @@
       "model-policy": "model-policy",
       "policy": "policy",
       "portfolio": "board",
-      "scheduler": "scheduler"
+      "scheduler": "scheduler",
+      "docs": "lane"
     }
   },
   "commands": {
@@ -1358,7 +1359,8 @@
       "0600": "absorb",
       "0700": "memory",
       "0800": "scheduler",
-      "0900": "bench"
+      "0900": "bench",
+      "1500": "lane"
     }
   },
   "jobs": {
