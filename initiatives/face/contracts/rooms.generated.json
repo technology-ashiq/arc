@@ -546,6 +546,9 @@
           "council-strategist",
           "council-verifier"
         ],
+        "processes": [
+          "council-convene"
+        ],
         "lints": [
           "council-lint"
         ],
@@ -560,7 +563,7 @@
           "council"
         ]
       },
-      "itemCount": 23
+      "itemCount": 24
     },
     {
       "id": "develop",

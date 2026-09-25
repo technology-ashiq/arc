@@ -1,0 +1,110 @@
+name: council-convene
+version: 1.0.0
+intent: "Convene the full arc council on one question, headless, and end on its council.verdict receipt."
+permissions: declared
+
+# Phase 06 slice 03b (face lane, ADR-1339): the face's "Convene the council" row starts this
+# through `arc-run --process council-convene --driver <name>` after an owner click. The session
+# door never runs /arc-council itself.
+#
+# The body does NOT copy /arc-council. It runs the command file, read at run time, with the
+# headless differences listed below. Copying 328 lines would give the council two sources that
+# drift apart without anyone seeing it. The baseline pin below catches that drift instead: any
+# edit to arc-council.md moves its sha256, process-lint fails `baseline-drift`, and the edit
+# has to be read against this body and re-pinned on purpose (ADR-0202).
+#
+# Deep mode only. `quick` writes no session file and emits no receipt, so a quick run could never
+# land the `council.verdict` the session row promises. The question travels in the INPUT and is
+# never read for a mode word. The body has no `{{input.X}}` placeholder: an uncompiled process
+# sends its body to the model verbatim (see attack-diff).
+inputs:
+  - name: question
+    type: string
+    required: true
+    description: "the owner's question, one line, taken verbatim -- never a mode word"
+tools:
+  - fs.read:
+      - ".claude/commands/arc-council.md"
+      - "docs/council/**"
+      - ".claude/agents/council-*.md"
+  - fs.write
+  - shell.run:
+      - "node .claude/scripts/council/council-lint.mjs:*"
+      - "bash .claude/scripts/hq/arc-event.sh:*"
+      - "ls docs/council/sessions:*"
+  - agent.invoke:
+      - "council-researcher"
+      - "council-advocate"
+      - "council-skeptic"
+      - "council-neutral"
+      - "council-verifier"
+      - "council-strategist"
+      - "council-risk-analyst"
+      - "council-marketer"
+      - "council-policy-analyst"
+      - "council-engineer"
+      - "council-designer"
+      - "council-life-counselor"
+output:
+  type: object
+  additionalProperties: false
+  required:
+    - session_file
+    - receipt_id
+    - decision
+    - confidence
+  properties:
+    session_file:
+      type: string
+      pattern: "^docs/council/sessions/[0-9]{3}-[A-Za-z0-9._-]+\\.md$"
+    receipt_id:
+      type: string
+      pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    decision:
+      type: string
+      enum:
+        - "YES"
+        - "NO"
+        - "CONDITIONAL"
+        - "WAIT"
+    confidence:
+      type: string
+      enum:
+        - High
+        - Medium
+        - Low
+evals:
+  - tests/fixtures/engine/evals/council-convene/basic.json
+baseline:
+  target: claude-code
+  path: .claude/commands/arc-council.md
+  commit: bcc0d880
+  sha256: 04d72bce3bf9326676bb0468039e13646f12c9b59500f02aa1ba874441bd66a2
+body: |
+  You are the Chair of the arc council, running headless: no one is at the keyboard until you finish.
+
+  Your input is a JSON object. Its `question` field is the owner's question. Take it verbatim as the
+  question. It is never a mode word: if it begins with "quick", "standard" or "review", that word is
+  part of the question.
+
+  Read `.claude/commands/arc-council.md` and run its **Full council** (deep mode), steps 1 to 9, exactly
+  as written. Honour its Non-negotiables. These headless differences replace the parts of the
+  command that assume someone is present:
+
+  1. Never ask. Where step 1 says "ask once", pick the most reasonable reading, say in the intake
+     which reading you took and why, and continue. If the question truly cannot be answered without
+     a missing fact, the verdict is WAIT, and it names the fact and the test that would supply it.
+  2. Mode is always deep. Never run quick, standard or review mode, whatever the question's words.
+  3. Step 8: find the next NNN by listing `docs/council/sessions`, save there, and run
+     `council-lint.mjs --verdict` on the saved file. If it fails, fix the FILE and re-run until it
+     passes.
+  4. Step 9 is the end of the run. Run its three lines as written: derive the payload with
+     `--payload`, emit `council.verdict` with arc-event.sh, and check the id. If any line stops,
+     the run has FAILED. Say which line stopped and why, and return no output object. A verdict
+     with no receipt is not a finished session.
+  5. Edit no file except the new session file and your own scratch briefs. Never touch the tracker,
+     an older session, or the spine by hand.
+
+  When step 9 has printed the receipt id, return exactly one JSON object:
+  `session_file` (the saved path, relative to the repo root), `receipt_id` (the id step 9 printed),
+  `decision` (the DECISION word) and `confidence` (the CONFIDENCE bucket, exact case).

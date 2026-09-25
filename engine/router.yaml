@@ -212,6 +212,17 @@ classes:
     driver: claude-code
     fallback: []
 
+  # Phase 06 slice 03b (face lane). This row decides no new tier: it is the Chair's seat, which
+  # ADR-0069 block (a) already covers. The Chair grades the verifier's POINT-IDs, drops the Weak
+  # ones and writes the verdict, and that work fails silently when the model is too weak, the
+  # same reason `council-verifier` sits in high-judgment. Its members keep their own tiers
+  # (balanced-workhorse, from their agent frontmatter); this row sets only the Chair's.
+  # `fallback: []`: moving a verdict to another model family would make it a different council.
+  council-convene:
+    tier: high-judgment
+    driver: claude-code
+    fallback: []
+
 # The default for a process with no class row. Deliberately NOT a catch-all that silently
 # works: `arc-run --driver auto` on an unknown class is an error, and this row only supplies
 # the tier for one that is known but unrouted.

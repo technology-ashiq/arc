@@ -60,20 +60,20 @@ proof: tests/face/session-dock.mjs via face-l3.bats -- lib/sessions.mjs decision
 tier: e2e-visual
 sources: phase-06-spec.md
 decision: the spawn counter is the door's own journal of START REQUESTS (refused or not), not spawned children: a mutant that auto-starts on a detached CI checkout is refused BRANCH_REFUSED and spawns nothing, but it still asked -- so the request is what is counted; door.sessionStart fetches its click token itself, so no caller can hold one across a mount or replay one
-result: (empty until proven)
-commit: (empty until proven)
+result: CI GREEN on all 19 jobs, every OS, at head 42214a06. The browser flow reads `sessions: ok rooms=9 starts=0 control=1` on every OS. Two boundary attack rounds, all fixed.
+commit: 42214a06 (PR #270, squash 44e3f283)
 
 #### slice: 03
 
 title: A council convened from the `council` module streams its phases and lands a `council.verdict` receipt; absorb read and hire certification land receipts of kinds already in `validate.mjs` KINDS, or are labelled NOT SHIPPABLE (ADR-1334). The probe found `/arc-council`'s verdict payload fails the closed `council.verdict` shape (`validate.mjs:316`) — fixed in the council lane, additively, before the demo.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: 03a -- tests/council-lint-outcome-anchor.bats: `council-lint --payload` derives the closed council.verdict shape from a saved verdict and refuses one with no core, and step 9 stops on a refused derivation or on an emit that wrote no receipt. 03b -- tests/engine-process-lint.bats: council-convene lints clean, the face row names it, and arc-run --dry-run routes it high-judgment; one added byte in arc-council.md is baseline-drift (with a clean-copy negative control first); the eval input opens with the mode word "quick" and expects a deep session's shape. face-coverage homes the process in council-chamber. The live convene (the demo) waits on the owner's spend approval and the hq.policy.yaml row.
+tier: contract
 sources: phase-06-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: 03a -- the payload is DERIVED from the saved verdict file, never typed (ADR-1345). 03b -- the process body RUNS arc-council.md with five headless overrides (never ask, deep only, save and lint, step 9 ends the run, edit only the new session file) instead of copying 328 lines, and a baseline pin on the command's sha256 turns any council-lane edit into a red process-lint to be adjudicated; the router row is the Chair's seat, high-judgment under ADR-0069 block (a), fallback [].
+result: 03a -- CI run 36099675822 @ fdb3336d: GREEN, all 19 jobs (the run before was red on a GNU-only `sed a` in the fixture, fixed with awk). 03b -- (empty until proven)
+commit: 03a -- PR #272, squash bcc0d880. 03b -- (empty until proven)
 
 #### slice: 04
 
@@ -96,8 +96,8 @@ proof: tests/face/engine-room.mjs via face-l3.bats: the engine-room fold over a 
 tier: contract
 sources: phase-06-spec.md
 decision: health is MEASURED from run.completed receipts grouped by driver (runsBy, the same reader the per-process runs use), never a live probe of a provider -- a probe would spend and would need the key the browser must not hold; the no-key check lives face-side as a fold input over every payload the room holds, so a door defect is drawn as a named refusal (KEY_IN_BROWSER) rather than as data, and its shapes are held equal to the spine redactor's by the same samples
-result: (empty until proven)
-commit: (empty until proven)
+result: CI run 36098046567 @ 6bc25d96: GREEN, all 19 jobs, every OS (ci-digest). The run before it (36056272351 @ 1f7cf514) was red on 7 jobs from two causes: face-pure caught View.tsx:38 branching on the string f.healthNote, and tsc read keyLeaksFor's ctx as undefined from its "= undefined" default (TS2345), which broke vite build and the browser flow with it. fold() now returns hasHealthNote, and the JSDoc declares ctx an optional ModuleContext. Two boundary attack rounds (57d014d: 11 findings, 4010c52: 12) fixed, 2 debts ledgered.
+commit: 33addf06, d945ca0f, 6bc25d96 (PR #271, squash 26daeec2)
 
 #### slice: 06
 
