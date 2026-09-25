@@ -70,7 +70,7 @@ import { MODEL_RE } from "../hq/lib/validate.mjs";
 const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
-import { bashEnv } from "../core/spawn-bounded.mjs";
+import { bashEnv, spawnBounded } from "../core/spawn-bounded.mjs";
 import { isExpired, routerFaults, RUNTIME_DRIVERS } from "./router-row.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
@@ -1093,6 +1093,50 @@ function emitRun(payload) {
   if (r.id) console.error(`arc-run: receipt run.completed ${r.id}`);
 }
 
+/**
+ * A RECEIPT THE PROCESS WROTE, vouched for by arc-run (face Phase 06 slice 03c). A process such as council-convene
+ * appends its own receipt mid-run (`council.verdict`) and returns its id as `receipt_id`. The face's door credits a
+ * receipt only through arc-run's own `arc-run: receipt <kind> <id>` line, because the model's text shares the log and
+ * a line alone proves nothing. So arc-run reads the id back off the spine and says the line only when an event with
+ * that id is there, was minted after this run began, and is not a run.completed (arc-run names its own). The kind
+ * printed is the spine's, never the model's. Anything else is one WARN and no line: an id the model typed is not a
+ * receipt. The door then checks the kind against the one its row claims.
+ */
+function vouchReceipt(output) {
+  const id = output && typeof output === "object" && !Array.isArray(output) ? output.receipt_id : undefined;
+  if (id === undefined) return;
+  if (typeof id !== "string" || !/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(id)) {
+    console.error("arc-run: WARN the output's receipt_id is not a ULID -- nothing vouched");
+    return;
+  }
+  const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  let minted = 0;
+  for (const ch of id.slice(0, 10)) minted = minted * 32 + CROCKFORD.indexOf(ch);
+  // The same two-second allowance the door gives: the clock that minted the id and this one are one machine's.
+  if (minted < runStartedAt - 2000) {
+    console.error(`arc-run: WARN receipt ${id} was minted before this run began -- not vouched`);
+    return;
+  }
+  const eventsDir = join(process.env.ARC_SPINE_ROOT || join(root, ".claude/state/hq"), "events");
+  let names = [];
+  try { names = readdirSync(eventsDir).filter((n) => n.endsWith(".jsonl")); } catch { /* no spine here: not found below */ }
+  for (const n of names) {
+    let text = "";
+    try { text = readFileSync(join(eventsDir, n), "utf8"); } catch { continue; }
+    if (!text.includes(id)) continue;
+    for (const line of text.split("\n")) {
+      if (!line.includes(id)) continue;
+      let ev;
+      try { ev = JSON.parse(line); } catch { continue; }
+      if (!ev || ev.id !== id || typeof ev.kind !== "string") continue;
+      if (ev.kind === "run.completed") { console.error(`arc-run: WARN receipt ${id} is a run.completed -- arc-run names its own, so it is not vouched`); return; }
+      console.error(`arc-run: receipt ${ev.kind} ${id}`);
+      return;
+    }
+  }
+  console.error(`arc-run: WARN the output names receipt ${id}, and the spine holds no event with that id -- not vouched`);
+}
+
 /** Returns TRUE only if the receipt is provably in today's log. The boolean is the point:
  *  a verifier whose answer nobody reads is a verifier that cannot fail the run. */
 function verifyLanded(id) {
@@ -1179,7 +1223,42 @@ function policyGate(name) {
   }
 }
 
-function invoke(name) {
+/**
+ * STREAM MODE (face Phase 06 slice 03c). The face's session door sets ARC_RUN_STREAM=1 on the runs it starts, and a
+ * session's phases are meant to show while they happen. spawnSync hands the driver's stderr over only when the driver
+ * has exited, so a council that ran for twenty minutes showed nothing until its last line. In stream mode the driver's
+ * stderr is written through to this process's stderr as each chunk arrives -- under the door that IS the session's
+ * run.log -- and a full copy is still kept, because the transcript, the secret scrub and every failure message below
+ * read it. The door redacts every line it serves, so the live copy never reaches a browser unscanned.
+ *
+ * Outside stream mode this is spawnSync, byte for byte: every existing caller and test sees the old path.
+ * spawnBounded supplies the tree kill on timeout; a timeout and an overflow come back in spawnSync's own error shape
+ * (ETIMEDOUT, ENOBUFS), so the classification below reads both paths the same way.
+ */
+const STREAM = process.env.ARC_RUN_STREAM === "1";
+async function runDriverProcess(file, args, opts) {
+  if (!STREAM) return spawnSync(file, args, opts);
+  const out = [], err = [];
+  let size = 0, overflowed = false;
+  const r = await spawnBounded(file, args, {
+    cwd: opts.cwd, env: opts.env,
+    // spawnSync reads an absent timeout as "none"; a setTimeout past 2^31-1 ms fires at once, so "none" is the ceiling.
+    timeoutMs: opts.timeout === undefined ? 2147483647 : opts.timeout,
+    onData: (stream, chunk) => {
+      if (stream === "err") process.stderr.write(chunk);
+      if (overflowed) return;
+      size += chunk.length;
+      if (size > opts.maxBuffer) { overflowed = true; return; }
+      (stream === "out" ? out : err).push(chunk);
+    },
+  });
+  const error = r.timedOut ? Object.assign(new Error("the driver timed out"), { code: "ETIMEDOUT" })
+    : overflowed ? Object.assign(new Error("the driver's output passed maxBuffer"), { code: "ENOBUFS" })
+    : r.error ? new Error(r.error) : undefined;
+  return { status: r.exit, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8"), error };
+}
+
+async function invoke(name) {
   const sh = join(root, ".claude/scripts/engine/drivers", `${name}.sh`);
   if (!existsSync(sh)) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null, spawned: false };
 
@@ -1248,7 +1327,7 @@ function invoke(name) {
     catch (rmErr) { process.stderr.write(`arc-run: WARN could not remove ${JSON.stringify(tmp)}: ${rmErr.message}\n`); }
     return { code: 1, stdout: "", stderr: `could not prepare the driver input: the file did not write (${e.code || e.message})`, cost: null, spawned: false };
   }
-  const res = spawnSync("bash", [sh, "run", processName, "-", budgetStr], {
+  const res = await runDriverProcess("bash", [sh, "run", processName, "-", budgetStr], {
     // cwd follows workRoot, not root: a driver that shells out to git must land in the repo it
     // was pointed at. The driver SCRIPT path is already absolute (resolved from root above), so
     // moving cwd cannot make arc-run fail to find its own machinery.
@@ -1305,6 +1384,8 @@ function invoke(name) {
       // reported as `budget`. Node drops an env key whose value is undefined, so this both sets
       // and clears.
       ARC_DRIVER_DEADLINE_EPOCH_MS: timeoutMs === undefined ? undefined : String(Date.now() + timeoutMs),
+      // Stream mode tells the driver to write its progress, one short line per step, to stderr (see runDriverProcess).
+      ARC_DRIVER_PROGRESS: STREAM ? "1" : "",
     },
   });
   let cost = null;
@@ -1500,9 +1581,9 @@ function storeTranscript(name, streams) {
   }
 }
 
-function attempt(name) {
+async function attempt(name) {
   attemptsMade += 1;
-  const r = invoke(name);
+  const r = await invoke(name);
   if (r.cost && Number.isFinite(r.cost.inr)) inrSpent += r.cost.inr;
   scrub(`the ${name} driver's stdout`, r.stdout);
   scrub(`the ${name} driver's transcript`, r.stderr);
@@ -1684,7 +1765,7 @@ if (refusal) {
 }
 
 const selfCheck = processIsSelfConsistent();
-let a = attempt(driver);
+let a = await attempt(driver);
 
 // Driver-fault fallback: try the next driver in the chain. NOT for a schema fault -- falling
 // back on a broken schema just fails three times instead of once, slower.
@@ -1720,7 +1801,7 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
     effectiveModel = trialModel || pinnedModel;
     modelSource = pinnedModel ? "router" : "none";
   }
-  a = attempt(driver);
+  a = await attempt(driver);
 }
 
 // A policy denial is its own outcome and its own exit. It never reaches the fallback loop above
@@ -1742,7 +1823,7 @@ if (a.verdict === "budget") {
 if (a.verdict === "schema") {
   // ADR-0204's ladder, rung 1: retry ONCE on the same tier.
   console.error(`arc-run: output failed the contract (${a.why}); retrying once on the same tier`);
-  const retry = attempt(driver);
+  const retry = await attempt(driver);
   if (retry.verdict === "ok") {
     // Goes through the SAME path as a first-attempt success. Printing and emitting inline
     // here is how the payload scrub got skipped on one of the two success paths -- a secret
@@ -1812,6 +1893,7 @@ function succeed(r) {
   const payload = JSON.stringify(r.output);
   scrub("the spine payload", payload, r.output);
   console.log(payload);
+  vouchReceipt(r.output);
   emitRun({ outcome: "ok", driver, attempts: attemptsMade, cost: r.cost ?? undefined, fault_hint: "unknown", model: effectiveModel ?? "unpinned" });
   // STILL EXIT 0 ON AN UNRECORDED RECEIPT -- for now, and on purpose.
   //

@@ -13,10 +13,56 @@
  * rather than a silent second implementation.
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 
 import { canonicalDoc, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
-import { dispatchToolArgs } from "../adapters/claude-code.mjs";
+import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
+
+/**
+ * PROGRESS MODE (face Phase 06 slice 03c). arc-run sets ARC_DRIVER_PROGRESS=1 when it streams a session for the face's
+ * door. The CLI then runs with `--output-format stream-json --verbose`, and each tool step the model takes becomes ONE
+ * short stderr line -- which agent it started, which command, which file -- written the moment the CLI reports it, so
+ * the door shows a council's phases while they happen. The final `result` event is the same envelope `json` mode
+ * returns, so everything after it is unchanged. What a line may say is the adapter's `progressLine`, pure and tested.
+ */
+
+/** Run the CLI in stream-json mode, writing a progress line per tool step; resolve with the final result event. */
+/**
+ * The command that runs the CLI. A fixture CLI is a .mjs run under this node: Windows cannot spawn a script file
+ * directly, and the fixture has to run on every CI leg. The real CLI is a binary on PATH and never ends in .mjs.
+ * @param {string[]} cliArgs @returns {[string, string[]]}
+ */
+const cliCommand = (cliArgs) => (CLI.endsWith(".mjs") ? [process.execPath, [CLI, ...cliArgs]] : [CLI, cliArgs]);
+
+function runStreaming(args, prompt) {
+  return new Promise((resolveP, rejectP) => {
+    const [bin, argv] = cliCommand([...args.filter((a) => a !== "json" && a !== "--output-format"), "--output-format", "stream-json", "--verbose"]);
+    const child = spawn(bin, argv, { cwd: WORK_ROOT, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    let buf = "", result = null, errTail = "";
+    const onLine = (line) => {
+      if (!line.trim()) return;
+      let ev;
+      try { ev = JSON.parse(line); } catch { return; }
+      if (ev && ev.type === "assistant" && ev.message && Array.isArray(ev.message.content)) {
+        for (const b of ev.message.content) { const l = progressLine(b); if (l) process.stderr.write(`${l}\n`); }
+      } else if (ev && ev.type === "result") result = ev;
+    };
+    child.stdout.on("data", (c) => {
+      buf += c.toString("utf8");
+      let nl;
+      while ((nl = buf.indexOf("\n")) !== -1) { onLine(buf.slice(0, nl)); buf = buf.slice(nl + 1); }
+    });
+    child.stderr.on("data", (c) => { errTail = (errTail + c.toString("utf8")).slice(-2000); });
+    child.on("error", (e) => rejectP(new Error(`claude CLI failed: ${e.message}`)));
+    child.on("close", (code) => {
+      if (buf) onLine(buf);
+      if (result) return resolveP(result);
+      rejectP(new Error(`claude CLI failed: exit ${code}, no result event${errTail ? ` (${errTail.split("\n").filter(Boolean).pop()})` : ""}`));
+    });
+    child.stdin.on("error", () => {});
+    child.stdin.end(prompt);
+  });
+}
 
 const CLI = process.env.ARC_CLAUDE_CLI || "claude";
 // The work root -- the child cwd, and nothing else. The canonical process file is read from the
@@ -60,14 +106,20 @@ await runDriver("claude-code", async ({ processName, input }) => {
   const model = pinnedModel();
   if (model) args.push("--model", model);
 
-  let raw;
-  try {
-    raw = execFileSync(CLI, args, { input: prompt, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: WORK_ROOT });
-  } catch (e) {
-    throw new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
+  let raw, envelope;
+  if (process.env.ARC_DRIVER_PROGRESS === "1") {
+    envelope = await runStreaming(args, prompt);
+    raw = JSON.stringify(envelope);
+  } else {
+    try {
+      const [bin, argv] = cliCommand(args);
+      raw = execFileSync(bin, argv, { input: prompt, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: WORK_ROOT });
+    } catch (e) {
+      throw new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
+    }
+    envelope = parseModelJson(raw, "the claude CLI envelope");
   }
 
-  const envelope = parseModelJson(raw, "the claude CLI envelope");
   const text = typeof envelope.result === "string" ? envelope.result : raw;
   const output = parseModelJson(text, "the claude CLI result");
 

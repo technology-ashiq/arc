@@ -181,3 +181,24 @@ export function render(doc, { withHeader = false } = {}) {
   // file or Claude Code does not read the frontmatter at all.
   return withHeader ? `${fm}\n${renderHeader(doc)}\n${body}` : `${fm}\n${body}`;
 }
+
+/**
+ * One progress line for one tool step of a streamed headless run (face Phase 06 slice 03c): the driver writes it to
+ * stderr the moment the CLI reports the step, and the face's session door shows it live.
+ *
+ * A line names the step and never its payload: an agent's name, a command's first four words, a file path. Control,
+ * format and line-break characters become spaces and each part is capped, so a model cannot forge a second line, and
+ * every line starts `claude-code: step` -- never `arc-run: receipt`, the one line the door credits. `null` for anything
+ * that is not a tool step.
+ * @param {any} block one content block of a stream-json `assistant` event
+ * @returns {string | null}
+ */
+export function progressLine(block) {
+  if (!block || block.type !== "tool_use" || typeof block.name !== "string") return null;
+  const i = block.input && typeof block.input === "object" ? block.input : {};
+  const what = block.name === "Agent" || block.name === "Task" ? String(i.subagent_type ?? i.description ?? "")
+    : block.name === "Bash" ? String(i.command ?? "").split(/\s+/).slice(0, 4).join(" ")
+    : String(i.file_path ?? i.path ?? i.pattern ?? "");
+  const clean = (s) => s.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ").slice(0, 120);
+  return `claude-code: step ${clean(block.name).slice(0, 40)}${what ? ` ${clean(what)}` : ""}`;
+}
