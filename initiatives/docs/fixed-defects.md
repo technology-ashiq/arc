@@ -98,3 +98,8 @@ the fuller source; read it too.
 - **The tree guard did not require the docs product; pageTree import errors escaped** (P2 B4) — `main`, `onDisk` — *a guard names every module the command imports.*
 - **Pipes in a declared value split table rows; backtick runs broke code spans** (P2 B9) — `cell`, `code` — *escape for the context the text lands in (a table cell is not a paragraph).*
 - **Refusal branches had no case only they decide** (P2 B11) — `tests/docs-render.bats` — *one test per refusal, asserting nothing was written.*
+
+## Phase 02 -- the first CI run (932b370f)
+
+- **The DOC-A scanner read the regex `/`+/` as an unterminated template and blanked the REST of wiki-build.mjs** — every line of the renderer went unscanned while the scan printed "clean"; CI caught it only because a mutant appended after that point survived — `no-walker.mjs` (regex-literal aware; a literal that never closes is a named finding, never absorbed) — *a scanner that tokenises must report where it lost sync, or it certifies what it never read.*
+- **A test link was relative to the wrong directory** (`index.md#...` from `products/`) — `tests/docs-render.bats` — *a fixture's paths are resolved from the page they sit in.*

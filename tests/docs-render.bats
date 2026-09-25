@@ -141,11 +141,11 @@ rendered_tree() {
 
 @test "docs-render: the link checker itself goes red on a broken link and a missing heading" {
   local t; t=$(rendered_tree links) || { echo "fixture failed"; false; }
-  printf '[x](nowhere.md) [y](index.md#no-such-heading)\n' >> "$t/docs/wiki/products/alpha.md"
+  printf '[x](nowhere.md) [y](../index.md#no-such-heading)\n' >> "$t/docs/wiki/products/alpha.md"
   run node "$ARC_ROOT/tests/docs/link-check.mjs" "$t/docs/wiki"
   [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
   [[ "$output" == *"BROKEN products/alpha.md -> nowhere.md (no such file)"* ]] || { echo "file link not named: $output"; false; }
-  [[ "$output" == *"BROKEN products/alpha.md -> index.md#no-such-heading (no such heading)"* ]] || { echo "anchor not named: $output"; false; }
+  [[ "$output" == *"BROKEN products/alpha.md -> ../index.md#no-such-heading (no such heading)"* ]] || { echo "anchor not named: $output"; false; }
 }
 
 @test "docs-render: REQ-08 -- the four overlapping documents are short stubs into the wiki, with archived copies" {
