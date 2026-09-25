@@ -87,3 +87,4 @@ the fuller source; read it too.
 - **The allowlist's own guards had no mutant of their own** (P1r2 B3) — `tests/docs-extract.bats` allowlist mutants (receiver, duplicate, deleted) — *a guard added in a fix gets a test that fails when only that guard is removed.*
 - **New branches (bad id, device name, id length, linked --pages) had no case only they decide** (P1r2 B4) — `tests/docs-coverage.bats` — *every fix lands with the input that proves it.*
 - **`isLink` mapped every lstat error to "not a link"** (P1r2 B5) — `GateError`, named exit 2 — *only ENOENT/ENOTDIR is absence.*
+- **A new script under `.claude/scripts/docs/` was pushed without its `products/docs/manifest.json` line** — `wiki-coverage.mjs`, caught by `product-lint` AFTER the push — *a new file in a product's script dir lands with its manifest line; run `product-lint` before every push, not after.*
