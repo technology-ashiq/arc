@@ -385,18 +385,30 @@ stay bespoke folds.
 
 ## Now
 
-**RESUME HERE (2026-09-25):** Phase 06 IN PROGRESS, as stacked PRs, one per slice.
-- **Merged:** #269 (slice 01, session door), #270 (slice 02, session dock), #271 (slice 05, Engine room), #272
-  (slice 03a: council.verdict in the closed shape, ADR-1345, plus ADR-0226 Amendment 2), #273 (slice 03b:
-  `council-convene`, a headless Full council fenced to its claimed session file, 12 named agents and one emitter
-  kind; `council-lint --claim/--release`; routed high-judgment; the owner's `hq.policy.yaml` row). #273 was green
-  19/19 on its first push, after two local attack rounds.
-- **Owed by slice 03:** the live convene demo (a real council: opus Chair + 12 agents), pending the OWNER's spend
-  approval, and absorb read and hire certification (receipt of an existing kind, or NOT SHIPPABLE, ADR-1334).
-- **Next:** slice 04. The other SESSION verbs' process files, per owning lane, with no cuts. `hq.policy.yaml` is
-  denied to agents by `.claude/settings.json`, so every new process's row is the owner's append.
-- **Logic attacker never ran:** `openrouter/qwen/qwen3.8-27b:free` hits a 429 on every call. The owner should set a
-  paid model in `ARC_ATTACK_TRIAL_MODEL`.
+**RESUME HERE (2026-09-25, evening):** Phase 06 IN PROGRESS. Nothing is open: no PR, no running session, no local-only
+branch holds work.
+- **Merged today:** #273 (slice 03b, council-convene), #274 (slice 03c: a session's phases stream live; arc-run
+  vouches for a receipt a process returns, and says `arc-run: receipt <kind> <id>` itself), #276 (the live convene
+  PASSED on attempt 4 -- `evidence/phase-06/live-demo.md`: clicked, streamed 28 min, council.verdict
+  01M3C89E89QA9XZQW56VA804ZJ credited by the door and read back off the spine), #278 (slice 04, memory ring:
+  lesson-log via memory/lesson-log.mjs, rule-promote via memory/rule-propose.mjs, propose-only).
+- **Slices done:** 01, 02, 03 (demo passed), 05. **Slice 04:** 3 new session verbs shipped (convene, log lesson,
+  promote rule); review, adopt plan and lane birth had process files already.
+- **Next (ask the owner first):** strategy + develop lanes -- `adr-record` (note.logged) and `develop-proof`
+  (slice.done, via develop.mjs next; its receipt needs a --process tag for arc-run's vouch). Then the residue
+  decision: ship (needs arc-run to enforce a stop before deploy; the door refuses CONFIRM_STEP_UNENFORCED today),
+  qa (browser + running app headless), close phase (CI evidence, main clone, owner stamp), hire (no procedure),
+  absorb adopt (needs an A/B decision the row cannot supply), growth draft (row takes one topic, the tool needs
+  cluster/plan/keyword) -- build, or write to `evidence/phase-06/residue.md` for the owner to approve as a whole.
+  Then slice 06: attackers, CI, `/arc-phase-done 06` from the main clone.
+- **How the owner wants it worked (2026-09-25):** LEAN. Report every step; no live demo (paid opus runs) without
+  asking; one attack round per PR; one push per PR; no new mechanism without asking. Every new process needs its
+  `hq.policy.yaml` row, which only the owner can append (`.claude/settings.json` denies it to agents): prepare the
+  rows as one file and hand over a single `! cat <file> >> hq.policy.yaml` line.
+- **Known:** the boundary attacker's answer is refused whole when it quotes a password-bearing URL (ledgered); the
+  logic attacker never runs (free trial model answers 429 -- the owner can set a paid `ARC_ATTACK_TRIAL_MODEL`);
+  Windows shards flake on bench.run-model's CDP timeout and the proposal-branch three-writer race (#267 open) --
+  re-run only the failed jobs.
 - **On resume, check open PRs and sibling worktrees first:** this `## Now` only sees merged work.
 
 **Earlier (2026-09-23):** **Phase 05 is CLOSED** (done log, 2026-09-23): all 31 work verbs run from the face,

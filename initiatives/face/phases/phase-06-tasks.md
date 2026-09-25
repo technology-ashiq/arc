@@ -84,8 +84,8 @@ proof: memory ring -- tests/memory-session-probe.mjs (PROBE checks: 10) via engi
 tier: contract
 sources: phase-06-spec.md
 decision: memory ring -- a lesson is note.logged, not an invented kind (ADR-1334), and a duplicate the near-duplicate check prints is recorded on the receipt and not appended (amending a past row is a judgement a headless run does not make); a rule is PROPOSED, never applied: memory/rule-propose.mjs mirrors engine/propose.mjs over core/proposal-branch.mjs (plan, then an apply bound by --expect; a new branch; approval.requested naming it), with --as-process so arc-run can vouch for the receipt, and its homes are CLAUDE.md or an existing .claude/rules/*.md only.
-result: memory ring -- (empty until proven)
-commit: memory ring -- (empty until proven)
+result: memory ring -- PR #278, CI green on all 19 jobs after a re-run of 2 Windows flakes (bench.run-model CDP timeout; the proposal-branch three-writer race, #267); attack 3e97a85 round 1: 13 findings, the high and 8 mediums fixed, one low ledgered; no round 2 (owner: lean, 2026-09-25).
+commit: memory ring -- PR #278, squash ab425ac6
 
 #### slice: 05
 
