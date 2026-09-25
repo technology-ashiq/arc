@@ -52,6 +52,36 @@ export const NOT_RENDERED = [
   "ops",          // face door ops -- the face app's own structure
 ];
 
+// ---------- where each entity's page lives (the ONE spelling; the gate and the renderer import it) ----------
+
+/** RENDERED key -> the directory its pages live in, under docs/wiki/. */
+export const PAGE_DIRS = {
+  products: "products", lanes: "lanes", processes: "processes", adrBands: "adr",
+  commands: "commands", agents: "agents", rules: "rules", gates: "gates",
+};
+/** An entity's `type` -> its RENDERED key. */
+export const TYPE_KEY = {
+  product: "products", lane: "lanes", process: "processes", adrBand: "adrBands",
+  command: "commands", agent: "agents", rule: "rules", gate: "gates",
+};
+/** Hand-written narrative lives here, under docs/wiki/, one dir per PAGE_DIRS value (ADR-1505). */
+export const NARRATIVE_DIR = "_narrative";
+/** Pages at the root of docs/wiki/ that belong to no entity. */
+export const ROOT_PAGES = ["index"];
+/** An id that can be a file name on every OS: no separators, no dots first, no reserved chars. */
+export const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** `<dir>/<id>.md` relative to docs/wiki/, or null when the id cannot be a file name. */
+export function pagePath(entity) {
+  const key = TYPE_KEY[entity?.type];
+  if (!key || typeof entity.id !== "string" || !SAFE_ID.test(entity.id)) return null;
+  // Long enough for any real id, short enough to leave room for a deep checkout's path.
+  if (entity.id.length > 100) return null;
+  // A Windows device name is a legal id on Linux and an unopenable file on the Windows leg.
+  if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i.test(entity.id)) return null;
+  return `${PAGE_DIRS[key]}/${entity.id}.md`;
+}
+
 // ---------- small, total helpers ----------
 
 /** Byte-order comparison. Never localeCompare: collation differs per OS and per locale. */
@@ -475,11 +505,14 @@ function writeOut(repo, out, bytes) {
 
 /** Realpath BOTH sides: a main guard that compares spellings no-ops behind a symlink. */
 function isMainModule() {
-  try {
-    const invoked = process.argv[1];
-    if (!invoked) return false;
-    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
-  } catch { return false; }
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  const self = fileURLToPath(import.meta.url);
+  // Realpath BOTH sides; and when realpath itself throws (a subst drive, a link cycle), fall back
+  // to the resolved spellings rather than to "not main" -- a gate that silently does nothing
+  // and exits 0 is worse than no gate.
+  try { return realpathSync(invoked) === realpathSync(self); }
+  catch { return resolve(invoked) === resolve(self); }
 }
 
 if (isMainModule()) {

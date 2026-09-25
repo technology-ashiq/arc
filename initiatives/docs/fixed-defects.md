@@ -66,3 +66,25 @@ the fuller source; read it too.
 - **An allow-listed call text in a comment laundered a different enumerator on the same line** (r2 B3) — `no-walker.mjs` `isSanctioned` (same column in code and raw) — *an allowlist matches the CODE, never the raw line.*
 - **A predictable temp name was opened with 'w', following a planted link** (r2 B7) — `writeOut` (random suffix, `wx`) — *temp files are unpredictable and exclusive.*
 - **A directory or FIFO at an entity's named path read as "absent"** (r2 B12) — `namedFile` — *something there that is not a regular file is a named failure.*
+
+## Phase 01 -- the coverage gate (attack 8bc7826, round 1, boundary; logic transport failed again)
+
+- **`isMainModule` mapped a realpath exception to "not main" -- the gate would load, do nothing and exit 0** (P1 B1) — `wiki-coverage.mjs` AND its twin in `wiki-build.mjs` — *when realpath throws, compare resolved spellings; never fall to "not main".*
+- **Plain-object maps keyed by directory names** (`constructor`, `__proto__`) (P1 B2) — `pageTree`, `reverseFindings` (`Object.create(null)`) — *a name read from disk is never a key on an object with a prototype.*
+- **The DOC-A allowlist matched call text anywhere, in any file, any number of times, on any receiver ending in `fc`** (P1 B3, B13) — `no-walker.mjs` (file-bound, exactly once, receiver is `fc`) — *an allowlist entry names its file and must match exactly once.*
+- **Mutant-gate and empty-tree tests passed on ANY non-zero exit** (P1 B4, B5) and **the per-arm check was a glob across lines** (P1 B12) — `tests/docs-coverage.bats` — *assert the exact exit, the arm's own line, and the named finding.*
+- **A bad id crashed both page writers** (P1 B6) — self-test `writePages`, `tests/docs/write-pages.mjs` — *every consumer of pagePath handles null.*
+- **`--pages` and page directories were never contained** (P1 B7) — CLI (relative, no `.`/`..`, realpath inside the tree, not a link) + `pageTree` (links are findings) — *the gate's own input path gets the writer's containment rules.*
+- **Two ids one case apart pass on Linux and are one file elsewhere** (P1 B8) — `forwardFindings` `[id-collision]` — *fold case before trusting a set of file names.*
+- **No id length bound** (P1 B9) — `pagePath` (≤ 100) — *a file name has a budget.*
+- **Exit-2 diagnostics on stdout; a failed stdout write said nothing** (P1 B10) — `report`, `flush` — *diagnostics go to stderr, and a failed write names itself.*
+- **Self-test cleanup could throw over the verdict on Windows** (P1 B11) — `rmSync` retries, caught as a WARN — *cleanup never replaces a result.*
+
+## Phase 01 -- round 2 (attack f3b311d, boundary; the first try was stopped by the secret guard on the attacker's own output)
+
+- **The round-1 link fix skipped a linked directory in pageTree but the reverse loop still indexed it -- a TypeError on exactly the input its own test built** (P1r2 B1) — `reverseFindings` (skip dirs pageTree skipped; `?? []` on every lookup) — *when one function skips an entry, every function that walks the same list skips it too.*
+- **Linked page FILES were counted as pages** (P1r2 B2) — `regularOnly` (lstat every listed page and narrative) — *the twin of a directory rule is the file rule.*
+- **The allowlist's own guards had no mutant of their own** (P1r2 B3) — `tests/docs-extract.bats` allowlist mutants (receiver, duplicate, deleted) — *a guard added in a fix gets a test that fails when only that guard is removed.*
+- **New branches (bad id, device name, id length, linked --pages) had no case only they decide** (P1r2 B4) — `tests/docs-coverage.bats` — *every fix lands with the input that proves it.*
+- **`isLink` mapped every lstat error to "not a link"** (P1r2 B5) — `GateError`, named exit 2 — *only ENOENT/ENOTDIR is absence.*
+- **A new script under `.claude/scripts/docs/` was pushed without its `products/docs/manifest.json` line** — `wiki-coverage.mjs`, caught by `product-lint` AFTER the push — *a new file in a product's script dir lands with its manifest line; run `product-lint` before every push, not after.*

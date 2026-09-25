@@ -61,21 +61,46 @@ function codeOnly(src) {
   return out;
 }
 
-/** The ONE sanctioned call of a face-coverage enumerator: the ADR files, by face's own helper. */
-const SANCTIONED = ['fc.mdStems(join(repo, "docs", "adr"))'];
+/**
+ * The sanctioned calls of a face-coverage enumerator -- the only directory listings the docs
+ * lane makes, all through face's own helpers -- each bound to the ONE file allowed to make it:
+ * the ADR files (wiki-build), and the pages and narratives under docs/wiki/ (wiki-coverage's
+ * pageTree, the reverse direction). Each must appear EXACTLY once in its file when that file is
+ * scanned, so a stale entry fails instead of silently allowing a future line.
+ */
+const SANCTIONED = [
+  ["wiki-build.mjs", 'fc.mdStems(join(repo, "docs", "adr"))'],
+  ["wiki-coverage.mjs", "fc.dirNames(pagesAbs)"],
+  ["wiki-coverage.mjs", "fc.mdStems(pagesAbs)"],
+  ["wiki-coverage.mjs", "fc.mdStems(join(pagesAbs, d))"],
+  ["wiki-coverage.mjs", "fc.dirNames(join(pagesAbs, d))"],
+  ["wiki-coverage.mjs", "fc.dirNames(narrAbs)"],
+  ["wiki-coverage.mjs", "fc.mdStems(narrAbs)"],
+  ["wiki-coverage.mjs", "fc.mdStems(join(narrAbs, d))"],
+  ["wiki-coverage.mjs", "fc.dirNames(join(narrAbs, d))"],
+];
+const sanctionedHits = new Map(SANCTIONED.map(([f, c]) => [f + "\u0000" + c, 0]));
 
 /**
- * The line holds exactly one enumerator, and the sanctioned call sits at the SAME column in the
- * code (comments and string bodies blanked) as in the raw text -- so the allow-listed words in a
- * trailing comment or a string cannot launder a different call on that line.
+ * The line holds exactly one enumerator, the file is the one the call is sanctioned in, the
+ * call sits at the SAME column in the code (comments and strings blanked) as in the raw text,
+ * and its receiver is exactly `fc` (not `myfc`). Allow-listed words in a comment or a string,
+ * or the same call in another file, cannot launder a walker.
  */
-function isSanctioned(codeLine, rawLine) {
-  if ((codeLine.match(/\b(dirNames|mdStems|yamlStems)\b/g) || []).length !== 1) return false;
-  for (const s of SANCTIONED) {
-    const at = rawLine.indexOf(s);
+function isSanctioned(rel, codeLine, rawLine) {
+  const names = codeLine.match(/\b(dirNames|mdStems|yamlStems)\b/g) || [];
+  if (names.length !== 1) return false;
+  for (const [file, call] of SANCTIONED) {
+    if (rel !== file) continue;
+    const at = rawLine.indexOf(call);
     if (at < 0) continue;
-    const m = /\bmdStems\b/.exec(codeLine);
-    if (m && m.index === at + s.indexOf("mdStems") && codeLine.slice(at, at + 3) === "fc.") return true;
+    const name = /(dirNames|mdStems|yamlStems)/.exec(call)[1];
+    const m = new RegExp(String.raw`\b${name}\b`).exec(codeLine);
+    const before = at === 0 ? "" : codeLine[at - 1];
+    if (m && m.index === at + call.indexOf(name) && codeLine.slice(at, at + 3) === "fc." && !/[\w$.]/.test(before)) {
+      sanctionedHits.set(file + "\u0000" + call, sanctionedHits.get(file + "\u0000" + call) + 1);
+      return true;
+    }
   }
   return false;
 }
@@ -111,7 +136,7 @@ function scanFile(root, p, found) {
     const rawLine = rawLines[idx] ?? "";
     for (const [re, why] of rules) {
       if (!re.test(line)) continue;
-      if (why.startsWith("a face-coverage enumerator") && isSanctioned(line, rawLine)) continue;
+      if (why.startsWith("a face-coverage enumerator") && isSanctioned(rel, line, rawLine)) continue;
       found.push(`${rel}:${idx + 1}: ${why}: ${rawLine.trim()}`);
     }
   });
@@ -126,6 +151,7 @@ function scanFile(root, p, found) {
 
 function main(root) {
   const found = [];
+  const scannedNames = new Set();
   let scanned = 0;
   const walk = (d) => {
     let entries;
@@ -138,11 +164,17 @@ function main(root) {
       if (st.isDirectory()) { walk(p); continue; }
       if (!st.isFile()) continue;
       scanned++;
+      scannedNames.add(relative(root, p).split(sep).join("/"));
       scanFile(root, p, found);
     }
   };
   try { lstatSync(root); } catch (e) { process.stderr.write(`no-walker: cannot read ${root}: ${e.code || e.message}\n`); process.exitCode = 2; return; }
   walk(root);
+  for (const [file, call] of SANCTIONED) {
+    if (!scannedNames.has(file)) continue;
+    const n = sanctionedHits.get(file + "\u0000" + call);
+    if (n !== 1) found.push(`${file}: the sanctioned call ${call} appears ${n} time(s), not exactly once`);
+  }
   process.stdout.write(`no-walker: scanned ${scanned} file(s)\n`);
   if (scanned === 0) { process.stderr.write("no-walker: nothing scanned -- a scan of zero files proves nothing\n"); process.exitCode = 2; return; }
   if (expect !== null && scanned !== expect) { process.stderr.write(`no-walker: scanned ${scanned} but the caller expected ${expect}\n`); process.exitCode = 2; return; }

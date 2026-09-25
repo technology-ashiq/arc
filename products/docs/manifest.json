@@ -9,7 +9,8 @@
   "commands": [],
   "agents": [],
   "scripts": [
-    ".claude/scripts/docs/wiki-build.mjs"
+    ".claude/scripts/docs/wiki-build.mjs",
+    ".claude/scripts/docs/wiki-coverage.mjs"
   ],
   "files": [],
   "docs": [],

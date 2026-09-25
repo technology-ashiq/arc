@@ -35,6 +35,10 @@ on an unmerged branch is invisible to a table that only sees `main`.
 ADR, and the 1400 row is corrected to name `design` as its holder (on the unmerged branch), because
 leaving "next lane to be born" on a band that is taken is the defect that caused this sweep.
 
+**Receipt (2026-09-25, Phase 00):** the ruling is on the canonical spine as `decision.recorded`
+`01M3C6WQ3XA2XAGS7KCE6A9JVR`, deciding approval request `01M3BZYGR7CNYE3E6D1ATC6TG2`. The plan's own
+approval is `01M3BZPEC91SSZ4DCGS7KCFY9B`.
+
 ## Consequences
 
 - Every ADR in this lane cites the ruling by its `decision.recorded` event id once Phase 00 lands
