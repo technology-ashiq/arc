@@ -801,7 +801,7 @@
     }
   },
   "processes": {
-    "$comment": "8 live + lesson-log and rule-promote (Phase 06 slice 04; a live run waits on their hq.policy.yaml rows) + face-ask lands in Phase 07",
+    "$comment": "10 live + develop-proof and adr-record (Phase 06; a live run waits on their hq.policy.yaml rows) + face-ask lands in Phase 07",
     "map": {
       "commit-msg-draft": "engine-room",
       "review-diff": "engine-room",
@@ -813,6 +813,8 @@
       "council-convene": "council-chamber",
       "lesson-log": "memory",
       "rule-promote": "memory",
+      "develop-proof": "develop",
+      "adr-record": "strategy",
       "face-ask (Phase 07)": "ask-arc"
     }
   },

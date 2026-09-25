@@ -1628,5 +1628,91 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
   check("lesson-log: THE LOG gained exactly one line across every run", log().split("\n").length === (head + existing).split("\n").length + 1, String(log().split("\n").length));
 }
 
+// ---- hq/adr-record.mjs, in a scratch repository (face Phase 06, the strategy room's "Record an ADR" session verb):
+// the number comes from the lane's century and skips every number this tree, another branch and a sibling worktree's
+// uncommitted file hold; the file is created with the heading block the script writes; the receipt is tagged; a
+// malformed, secret-bearing or out-of-scratch ADR, an unknown lane, a lane with no century and a full century are
+// refused with nothing written ----
+{
+  const repo = join(tmp, "adr-repo");
+  cpSync(join(REPO, ".claude", "scripts"), join(repo, ".claude", "scripts"), { recursive: true });
+  mkdirSync(join(repo, "docs", "adr"), { recursive: true });
+  mkdirSync(join(repo, ".claude", "state", "adr-record"), { recursive: true });
+  for (const lane of ["face", "ghost", "tiny"]) {
+    mkdirSync(join(repo, "initiatives", lane), { recursive: true });
+    writeFileSync(join(repo, "initiatives", lane, "PROGRESS.md"), "# PROGRESS\n\nstatus: LIVE\nphase: 01\n");
+  }
+  writeFileSync(join(repo, "PORTFOLIO.md"), `# Board\n\n| Band | Lane |\n|---|---|\n| 1300${String.fromCharCode(0x2013)}1399 | \`face\` -- claimed |\n| 1700-1701 | \`tiny\` -- claimed |\n`);
+  writeFileSync(join(repo, "docs", "adr", "1300-first.md"), "# ADR 1300\n");
+  writeFileSync(join(repo, "docs", "adr", "1305-second.md"), "# ADR 1305\n");
+  writeFileSync(join(repo, "docs", "adr", "1701-tiny-full.md"), "# ADR 1701\n");
+  writeFileSync(join(repo, ".gitignore"), ".claude/state/\n");
+  const g = (...a) => spawnSync("git", a, { cwd: repo, encoding: "utf8" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.name", "fixture"); g("config", "user.email", "fixture@example.invalid"); g("config", "commit.gpgsign", "false");
+  g("add", "-A"); g("commit", "-q", "-m", "scratch");
+  // 1310 on another branch only; 1320 in a sibling worktree, never committed.
+  g("switch", "-q", "-c", "other");
+  writeFileSync(join(repo, "docs", "adr", "1310-on-a-branch.md"), "# ADR 1310\n");
+  g("add", "-A"); g("commit", "-q", "-m", "a branch claim");
+  g("switch", "-q", "main");
+  const wt = join(tmp, "adr-wt");
+  const added = g("worktree", "add", "-q", wt, "-b", "wt");
+  writeFileSync(join(wt, "docs", "adr", "1320-in-a-sibling.md"), "# ADR 1320\n");
+  check("adr-record: scratch repository on main, a branch claim and a sibling worktree claim (vacuous-pass guard)",
+    added.status === 0 && !existsSync(join(repo, "docs", "adr", "1310-on-a-branch.md")) && g("rev-parse", "--verify", "--quiet", "other:docs/adr/1310-on-a-branch.md").status === 0, added.stderr);
+  const sp = spine("adr-spine");
+  const ar = (args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", "hq", "adr-record.mjs"), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  const notes = () => spineEvents(sp).filter((e) => e.kind === "note.logged");
+  const adrs = () => readdirSync(join(repo, "docs", "adr")).sort().join(",");
+  const file = ".claude/state/adr-record/adr.md";
+  const put = (text) => writeFileSync(join(repo, file), text);
+  const good = "Session verbs get one writer script each\n\n## Context\n\nTwo session verbs needed a tracked write.\n\n## Decision\n\nEach verb gets its own writer script.\n";
+  const ARGS = ["--lane", "face", "--adr-file", file, "--as-process", "adr-record@1.0.0"];
+
+  put(good);
+  const adrs0 = adrs();
+  const dry = ar([...ARGS, "--dry-run"]);
+  check("adr-record, dry run: names 1321 -- past the tree's 1305, the branch's 1310 and the sibling's 1320 -- and writes nothing",
+    dry.status === 0 && /would write docs\/adr\/1321-session-verbs-get-one-writer-script-each\.md/.test(dry.stdout) && adrs() === adrs0 && notes().length === 0, `${dry.status} ${dry.stdout} ${dry.stderr}`);
+  const one = ar(ARGS);
+  const n1 = notes()[0];
+  const path1 = join(repo, "docs", "adr", "1321-session-verbs-get-one-writer-script-each.md");
+  const text1 = existsSync(path1) ? readFileSync(path1, "utf8") : "";
+  check("adr-record, applied: 1321 is written with the heading block, and the body after it byte for byte",
+    one.status === 0 && text1.startsWith(`# ADR 1321 ${String.fromCharCode(0x2014)} Session verbs get one writer script each\n\n**Status:** accepted\n**Date:** `) && /\n\*\*Lane:\*\* face\n/.test(text1) && text1.endsWith(good.slice(good.indexOf("## Context"))), `${one.status} ${one.stderr} ${text1.slice(0, 200)}`);
+  check("adr-record, applied: note.logged lands with what adr, the file and number, tagged adr-record@1.0.0, its id the one printed",
+    !!n1 && n1.payload.what === "adr" && n1.payload.file === "docs/adr/1321-session-verbs-get-one-writer-script-each.md" && n1.payload.number === "1321" && n1.payload.lane === "face" && n1.process === "adr-record@1.0.0" && receiptOf(one.stdout) === n1.id, JSON.stringify(n1));
+  check("adr-record, applied: the scratch ADR is consumed, so the next click cannot replay it (attack 1f95807 B3)", one.status === 0 && !existsSync(join(repo, file)));
+  put(good.replace("Session verbs get one writer script each", "A second decision in the same century"));
+  const two = ar(ARGS);
+  check("adr-record, applied again: the next number is 1322, never a hole below the highest",
+    two.status === 0 && existsSync(join(repo, "docs", "adr", "1322-a-second-decision-in-the-same-century.md")) && notes().length === 2, `${two.status} ${two.stderr}`);
+
+  const before = adrs();
+  writeFileSync(join(repo, ".claude", "state", "elsewhere.md"), good);
+  const refusals = [
+    ["an ADR with no Context section", good.replace("## Context\n\nTwo session verbs needed a tracked write.\n\n", ""), ARGS, /no `## Context` section/],
+    ["an ADR with an empty Decision", good.replace("Each verb gets its own writer script.\n", ""), ARGS, /Decision` section is empty/],
+    ["a title that is a heading", `# ${good}`, ARGS, /title alone/],
+    ["a body restating the Status line", good.replace("## Decision", "**Status:** proposed\n\n## Decision"), ARGS, /restates a header field/],
+    ["a line-separator character", good.replace("each", `each${String.fromCharCode(0x2028)}`), ARGS, /control, format or line-separator/],
+    ["a credential in the body", good.replace("its own writer script.", `its own writer script. ${"AKIA"}${"IOSFODNN7EXAMPLF"}`), ARGS, /secret rule/],
+    ["a lane with no century", good, ["--lane", "ghost", "--adr-file", file], /gives the ghost lane no century/],
+    ["a lane that was never born", good, ["--lane", "nobody", "--adr-file", file], /there is no nobody lane/],
+    ["a full century", good, ["--lane", "tiny", "--adr-file", file], /century 1700-1701 is full/],
+    ["another file under .claude/state", good, ["--lane", "face", "--adr-file", ".claude/state/elsewhere.md"], /must sit directly in \.claude\/state\/adr-record/],
+    ["a drive-absolute path", good, ["--lane", "face", "--adr-file", ["C:", "x", "adr.md"].join(String.fromCharCode(92))], /not an absolute, drive or UNC path/],
+    ["a bad process tag", good, [...ARGS.slice(0, 4), "--as-process", "x; rm -rf"], /--as-process is/],
+    ["an unknown flag", good, [...ARGS, "--number", "1399"], /unknown argument/],
+  ];
+  for (const [label, text, args, want] of refusals) {
+    put(text);
+    const r = ar(args);
+    check(`adr-record refuses ${label}, writing nothing`, r.status === 2 && want.test(r.stderr) && adrs() === before && notes().length === 2 && !r.stderr.includes("IOSFODNN7"), `${r.status} ${r.stderr}`);
+  }
+  check("adr-record: THE ADR DIRECTORY gained exactly the two recorded files", adrs().split(",").length === adrs0.split(",").length + 2, adrs());
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exit(failed === 0 && ran >= 80 ? 0 : 1);

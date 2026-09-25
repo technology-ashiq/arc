@@ -23,8 +23,9 @@
 
 None declared.
 
-## Scripts (72)
+## Scripts (73)
 
+- [`.claude/scripts/hq/adr-record.mjs`](../../../.claude/scripts/hq/adr-record.mjs)
 - [`.claude/scripts/hq/arc-brief.mjs`](../../../.claude/scripts/hq/arc-brief.mjs)
 - [`.claude/scripts/hq/arc-dash.mjs`](../../../.claude/scripts/hq/arc-dash.mjs)
 - [`.claude/scripts/hq/arc-event.mjs`](../../../.claude/scripts/hq/arc-event.mjs)

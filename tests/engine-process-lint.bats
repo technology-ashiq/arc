@@ -329,13 +329,14 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
 }
 
 # ---------------------------------------------------------------------------
-# The memory ring's session verbs (face Phase 06 slice 04): lesson-log and rule-promote. The Node half is
+# The writer-script session verbs (face Phase 06): lesson-log and rule-promote (memory, slice 04), develop-proof and
+# adr-record (develop and strategy). The Node half is
 # tests/memory-session-probe.mjs; rule-propose's apply path is proven in a scratch repo by tests/face/kernel-ring.mjs.
 # ---------------------------------------------------------------------------
 
-@test "memory session verbs: both lint clean and route balanced-workhorse on claude-code" {
+@test "writer-script session verbs: all four lint clean and route balanced-workhorse on claude-code" {
   local p
-  for p in lesson-log rule-promote; do
+  for p in lesson-log rule-promote develop-proof adr-record; do
     run node "$(LINT)" "$ARC_ROOT/processes/$p.process.yaml" --root "$ARC_ROOT"
     [ "$status" -eq 0 ] && [[ "$output" == *"all checks passed"* ]] || { echo "$p: $output"; false; }
     run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" --process "$p" --driver auto --input '{"x":"a probe"}' --dry-run
@@ -344,14 +345,14 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
   done
 }
 
-@test "memory session verbs: exact fenced grants, their door rows, one-turn bodies that tag their receipts" {
+@test "writer-script session verbs: exact fenced grants, their door rows, one-turn bodies that tag their receipts" {
   run node "$ARC_ROOT/tests/memory-session-probe.mjs" checks
-  [[ "$output" == *"PROBE checks: 10 checks, 0 failed"* ]] || { echo "the probe did not run all 10 checks clean: $output"; false; }
+  [[ "$output" == *"PROBE checks: 20 checks, 0 failed"* ]] || { echo "the probe did not run all 20 checks clean: $output"; false; }
   [ "$status" -eq 0 ]
 }
 
-@test "memory session verbs: the policy gate a live click crosses authorises both" {
+@test "writer-script session verbs: the policy gate a live click crosses authorises all four" {
   run node "$ARC_ROOT/tests/memory-session-probe.mjs" gate
-  [[ "$output" == *"PROBE gate: 2 checks, 0 failed"* ]] || { echo "the gate refuses or never ran: $output"; false; }
+  [[ "$output" == *"PROBE gate: 4 checks, 0 failed"* ]] || { echo "the gate refuses or never ran: $output"; false; }
   [ "$status" -eq 0 ]
 }

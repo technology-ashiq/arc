@@ -251,3 +251,31 @@ kinds:
     publish: { level: L0 }
     deploy: { level: L0 }
     spend: { level: L0 }
+
+  # Phase 06 (face lane, develop ring). develop-proof writes one gitignored scratch file and runs develop.mjs prove,
+  # which writes the next slice's result and commit into the lane's ledger and appends a slice.done receipt; it reads
+  # git log. Write and shell L1. It reads no web and moves no money.
+  "process:develop-proof":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  # Phase 06 (face lane, strategy ring). adr-record writes one gitignored scratch file and runs plan/adr-record.mjs,
+  # which creates one new file in docs/adr/ at the lane's next free number and appends a note.logged receipt. Write
+  # and shell L1. It commits nothing.
+  "process:adr-record":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }

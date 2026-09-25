@@ -6,7 +6,7 @@
  * scripts, which is what makes them testable offline (ADR-0047: the runner owns the verdict
  * and the receipt). The markdown wrapper calls this.
  *
- * Modes: start | next | status | checkpoint | handoff
+ * Modes: start | next | prove | status | checkpoint | handoff
  *
  * `next --dry-run` plans the advance -- the next slice and the Context Pack its `sources:` line would record -- and
  * writes nothing: no ledger write, no receipt. Its last line is the digest of that write ({"expect":...}). `next
@@ -28,19 +28,21 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { closeSync, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { laneHeader, parseLaneArgs, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
 import { buildPack, renderPack, sourcesField } from "./context-pack.mjs";
 import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger, scoreProblem, setSliceField } from "./ledger.mjs";
 import { RISK_GLOBS } from "./quality.mjs";
+import { scanSecrets, sizeScaledCap } from "../hq/lib/redact.mjs";
+import { withGitReader } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLock } from "../core/plan-expect.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_ROOT = resolve(HERE, "..", "..", "..");
-const MODES = new Set(["start", "next", "status", "checkpoint", "handoff"]);
+const MODES = new Set(["start", "next", "prove", "status", "checkpoint", "handoff"]);
 /** Every receipt this phase is responsible for, in lifecycle order. */
 const EXPECTED_KINDS = ["develop.started", "slice.done", "handoff.ready"];
 
@@ -343,6 +345,39 @@ async function sliceDoneLanded(lane, phase, slice, commit) {
   } catch { return null; }
 }
 
+/**
+ * The fence every face write to a ledger crosses (next's plan/apply and prove): the ledger resolves inside the repo,
+ * and it is the one the room shows. Returns the ledger's real path, or dies. One function, so a fix made for one verb
+ * is made for both -- "validate one read, compare another" was closed in one file and left open in its twin.
+ * @returns {string}
+ */
+function fenceLedger(ctx, led) {
+  let ledgerReal;
+  // FENCED: the ledger and its phases folder resolve inside the repo. A junction on phases/ sent the write to a file
+  // outside it while the room's own reader refused that file (PR 4 shell attack).
+  try { ledgerReal = realpathSync(led.path); } catch { die(`${led.file} cannot be resolved -- not read, not written`); }
+  let top;
+  try { top = realpathSync(ctx.root); } catch { die("the repository root cannot be resolved -- nothing was written"); }
+  if (!ledgerReal.startsWith(top + sep)) die(`${led.file} resolves outside the repository -- not read, not written`);
+  // The room reads the ledger its lane's header names; the verb must write that one (PR 4 shell attack: the room
+  // showed phase 01 while next planned a write to phase 00).
+  // And only where the room shows a slice at all -- a LIVE lane whose header names a numbered phase. The check ran only
+  // for a numbered header, so a closed cycle ("08 (cycle closed)") had its merged ledger rewritten by one click the
+  // room never showed (PR 4 round-2 logic attack).
+  if (ctx.mode !== "root") {
+    const header = laneHeader(join(ctx.tracker, "PROGRESS.md"));
+    const hp = String(header.phase || "").trim();
+    // EXACTLY as the room compares it: "live" was upper-cased here and passed, while /api/slices lists "LIVE" alone
+    // and hid the lane (PR 4 round-3 logic attack).
+    const st = String(header.status || "").trim();
+    if (st !== "LIVE") die(`the ${ctx.lane} lane is ${st || "not LIVE"} -- the face's next slice runs only in a LIVE lane, the one the room shows; nothing was written`);
+    if (!/^[0-9]{1,3}$/.test(hp)) die(`the ${ctx.lane} lane's header names no phase number (${JSON.stringify(hp)}) -- the room shows no slice for it, so this verb writes none`);
+    if (led.file !== `phase-${hp.padStart(2, "0")}-tasks.md`)
+      die(`the lane's header names phase ${hp}, and the lowest unfinished ledger is ${led.file} -- the room and this verb would read different ledgers; finish or fix ${led.file} first`);
+  }
+  return ledgerReal;
+}
+
 async function modeNext(ctx, bind = {}) {
   const led = findLedger(ctx.tracker);
   if (!led) die("no slice ledger found — run /arc-develop start <n> first");
@@ -351,30 +386,7 @@ async function modeNext(ctx, bind = {}) {
   // A bound run (the face's plan or apply) writes nothing and emits nothing until its digest is checked.
   const bound = bind.dryRun === true || bind.expect !== undefined;
   let ledgerReal = led.path;
-  if (bound) {
-    // FENCED: the ledger and its phases folder resolve inside the repo. A junction on phases/ sent the write to a file
-    // outside it while the room's own reader refused that file (PR 4 shell attack).
-    try { ledgerReal = realpathSync(led.path); } catch { die(`${led.file} cannot be resolved -- not read, not written`); }
-    let top;
-    try { top = realpathSync(ctx.root); } catch { die("the repository root cannot be resolved -- nothing was written"); }
-    if (!ledgerReal.startsWith(top + sep)) die(`${led.file} resolves outside the repository -- not read, not written`);
-    // The room reads the ledger its lane's header names; the verb must write that one (PR 4 shell attack: the room
-    // showed phase 01 while next planned a write to phase 00).
-    // And only where the room shows a slice at all -- a LIVE lane whose header names a numbered phase. The check ran only
-    // for a numbered header, so a closed cycle ("08 (cycle closed)") had its merged ledger rewritten by one click the
-    // room never showed (PR 4 round-2 logic attack).
-    if (ctx.mode !== "root") {
-      const header = laneHeader(join(ctx.tracker, "PROGRESS.md"));
-      const hp = String(header.phase || "").trim();
-      // EXACTLY as the room compares it: "live" was upper-cased here and passed, while /api/slices lists "LIVE" alone
-      // and hid the lane (PR 4 round-3 logic attack).
-      const st = String(header.status || "").trim();
-      if (st !== "LIVE") die(`the ${ctx.lane} lane is ${st || "not LIVE"} -- the face's next slice runs only in a LIVE lane, the one the room shows; nothing was written`);
-      if (!/^[0-9]{1,3}$/.test(hp)) die(`the ${ctx.lane} lane's header names no phase number (${JSON.stringify(hp)}) -- the room shows no slice for it, so this verb writes none`);
-      if (led.file !== `phase-${hp.padStart(2, "0")}-tasks.md`)
-        die(`the lane's header names phase ${hp}, and the lowest unfinished ledger is ${led.file} -- the room and this verb would read different ledgers; finish or fix ${led.file} first`);
-    }
-  }
+  if (bound) ledgerReal = fenceLedger(ctx, led);
   const before = readFileSync(led.path, "utf8");
   const phase = (led.file.match(/phase-(\d+)-tasks/) || [, null])[1];
 
@@ -554,6 +566,166 @@ async function modeNext(ctx, bind = {}) {
 
   say(`Progress: ${p}/${total} proven.`);
   flush(0);
+}
+
+/**
+ * PROVE (face v2 Phase 06, the develop room's "Prove a slice" session verb): write the next unproven slice's `result:`
+ * and `commit:` from a session's scratch file, then its slice.done -- tagged with the session's process so arc-run can
+ * vouch for it, its id printed. The session holds no Edit on the ledger: this is its one writer, through the same fence,
+ * lock and atomic write as next's apply. The commit must already be merged (an ancestor of HEAD); an unmerged SHA is
+ * a claim, not a proof. It never runs a test: "tests green" means green on CI, and the result names that evidence.
+ * @param {{ resultFile: string, commit: string, asProcess: string, dryRun: boolean }} opts
+ */
+async function modeProve(ctx, phaseNum, opts) {
+  if (phaseNum === null) die("prove needs the phase the room shows: prove <n> --result-file PATH --commit SHA");
+  const led = findLedger(ctx.tracker);
+  if (!led) die("no slice ledger found — run /arc-develop start <n> first");
+  const ledgerReal = fenceLedger(ctx, led);
+  const phase = (led.file.match(/phase-(\d+)-tasks/) || [, null])[1];
+  if (phase === null || Number(phase) !== phaseNum) die(`the ledger the room shows is ${led.file}, not phase ${pad(phaseNum)} -- nothing was written`);
+  const before = readFileSync(led.path, "utf8");
+  const parsed = parseLedger(before);
+  const { proven: p0, total, next } = progress(parsed.slices);
+  if (!next) die(`all slices in ${led.file} are proven (${total}/${total}) -- nothing to prove`);
+
+  const scratch = readProofResult(ctx.root, opts.resultFile);
+  const result = scratch.text;
+  let hit = null;
+  try { const v = scanSecrets(result, { result }, { maxCandidates: sizeScaledCap(result) }); if (v.hit) hit = v.rule; } catch { hit = "unscannable"; }
+  if (hit) die(`the result matches the secret rule ${hit} -- the ledger is tracked in a public repo, so nothing was written`);
+  const commit = await mergedCommit(ctx.root, opts.commit);
+
+  // Both fields bound to the block the READER handed out, by line: the heading does not move when a field is written.
+  let after = before;
+  for (const [key, value] of [["result", result], ["commit", commit]]) {
+    const w = setSliceField(after, next.id, key, value, { at: next.line });
+    if (!w.changed) die(`slice ${next.id}'s ${key}: line cannot be written -- ${w.reason}`);
+    after = w.text;
+  }
+  // The write must prove exactly this slice and nothing else: read back, one more proven, and it is this one.
+  const re = parseLedger(after);
+  const mine = re.slices.find((s) => s.line === next.line);
+  if (!mine || mine.id !== next.id || !isProven(mine) || progress(re.slices).proven !== p0 + 1)
+    die(`the written ledger does not read back as slice ${next.id} proven -- nothing was written`);
+
+  const lane = ctx.mode === "root" ? null : ctx.lane;
+  const doneReceipt = { lane, phase, slice: next.id, tier: next.fields.tier ?? null, commit };
+  const flags = opts.asProcess ? ["--process", opts.asProcess] : [];
+  const arcEvent = join(ARC_ROOT, ".claude", "scripts", "hq", "arc-event.mjs");
+  const refused = spineRefusal(arcEvent, "slice.done", doneReceipt, { cwd: ctx.root, flags });
+  if (refused) die(`the spine would refuse slice ${next.id}'s slice.done, so nothing was written: ${refused}`);
+
+  if (opts.dryRun) {
+    say(`would prove slice ${next.id} — ${next.fields.title ?? "(untitled)"} in ${led.file}`);
+    say(`  result: ${result.length > 160 ? `${result.slice(0, 157)}...` : result}`);
+    say(`  commit: ${commit}`);
+    say("dry run -- no ledger write and no receipt");
+    flush(0);
+  }
+
+  const stop = (msg, code = 2) => { say(`STOP: ${msg}`); throw new NextStop(code); };
+  let entered = false;
+  let lockDir;
+  try { const { spineRoot } = await import("../hq/lib/spine-io.mjs"); lockDir = join(spineRoot(), "locks"); }
+  catch (e) { die(`the spine cannot be found (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+  let held;
+  try {
+    // next's lock, by the ledger's real path: a prove and a next apply never write one ledger at once.
+    held = await withExclusiveLock(lockDir, nextLockName(ledgerReal), async () => {
+      entered = true;
+      sweepLeftTemps(dirname(ledgerReal));
+      const due = await sliceDoneLanded(lane, phase, next.id, commit);
+      if (due === null) stop(`a day file of the spine cannot be read, so whether slice ${next.id}'s slice.done is already recorded is unknown -- nothing was written`);
+      if (due === true) stop(`slice ${next.id} at ${commit} already has its slice.done on the spine -- nothing was written`);
+      let now;
+      try { now = readFileSync(led.path, "utf8"); } catch (e) { stop(`${led.file} could not be read again (${e && e.code ? e.code : "error"}) -- nothing was written`); }
+      if (now !== before) stop(`PLAN_STALE -- ${led.file} changed while this prove ran; nothing was written, run it again`);
+      const tmp = join(dirname(ledgerReal), `.${led.file}.${process.pid}.tmp`);
+      try { writeFileSync(tmp, after, { encoding: "utf8", flag: "wx" }); renameSync(tmp, ledgerReal); }
+      catch (e) {
+        try { unlinkSync(tmp); } catch { /* not made */ }
+        stop(`${led.file} could not be written (${e && e.code ? e.code : "error"}) -- nothing was written`);
+      }
+      // The result file is CONSUMED: a leftover was read by the next click and stamped on the next slice (B3).
+      try { unlinkSync(scratch.real); } catch { /* the proof stands */ }
+      say(`proved slice ${next.id} in ${led.file} at ${commit}`);
+      say(`Progress: ${p0 + 1}/${total} proven.`);
+      const rec = emitReceipt(arcEvent, "slice.done", doneReceipt, { cwd: ctx.root, timeoutMs: 60_000, flags });
+      if (rec.state === "unknown") stop(`${led.file} IS written, and whether its slice.done landed is unknown -- ${rec.why}. Look at the spine before proving again`, 1);
+      if (!rec.id) stop(`${led.file} IS written, and its slice.done ${rec.state === "landed" ? "landed without its id" : "was not raised"} -- ${rec.why}`, 1);
+      say(`receipt: slice.done ${rec.id}`);
+    });
+  } catch (e) {
+    if (e instanceof NextStop) flush(e.code);
+    if (entered) throw e;
+    die(`the prove's lock could not be taken -- ${e && e.message ? e.message : "error"}; nothing was written`);
+  }
+  if (held.busy) die("another write to this lane's ledger is running -- nothing was written; wait for it and prove again (a lock left by a killed run clears after ten minutes)");
+  flush(0);
+}
+
+const PROOF_SCRATCH = [".claude", "state", "develop-proof"];
+const RESULT_CAP = 1500;
+
+/** The session's result line: directly under .claude/state/develop-proof/, a plain file, one line, capped. */
+function readProofResult(root, path) {
+  if (!path) die("prove needs --result-file PATH (the result line, written under .claude/state/develop-proof/)");
+  // A drive-absolute, UNC or device path is refused before anything resolves it: path.relative across two drives
+  // returns the target itself, which no `..` check sees (lesson-log and rule-propose's twin, attack 3e97a85 B1).
+  if (isAbsolute(path) || /^[\\/]{2}/.test(path) || /^[A-Za-z]:/.test(path)) die("--result-file is a path inside the repo, not an absolute, drive or UNC path");
+  let dir, real;
+  try { dir = realpathSync.native(join(root, ...PROOF_SCRATCH)); } catch { die("this clone has no .claude/state/develop-proof directory -- write the result there first"); }
+  try { real = realpathSync.native(resolve(root, path)); } catch (e) { die(`--result-file cannot be resolved (${e.code || "error"})`); }
+  // The scratch directory itself resolves inside the repo: a junction on .claude/state sent the read elsewhere (attack
+  // 1f95807 B12). A `:` names an NTFS alternate stream, content no listing of the directory shows (B11).
+  let top;
+  try { top = realpathSync.native(root); } catch { die("the repository root cannot be resolved"); }
+  if (!dir.startsWith(top + sep)) die(".claude/state/develop-proof resolves outside the repository");
+  const rel = relative(dir, real);
+  if (!rel || isAbsolute(rel) || rel.startsWith("..") || rel.includes("/") || rel.includes("\\") || rel.includes(":")) die("--result-file must sit directly in .claude/state/develop-proof/");
+  let fd, text;
+  try {
+    // lstat BEFORE open: a FIFO blocks open() for ever waiting for a writer.
+    if (!lstatSync(real).isFile()) die("--result-file is not a plain file");
+    fd = openSync(real, "r");
+    const st = fstatSync(fd);
+    if (!st.isFile()) die("--result-file is not a plain file");
+    if (st.size > RESULT_CAP * 4) die(`--result-file is ${st.size} bytes -- a result is one line of at most ${RESULT_CAP} characters`);
+    const buf = Buffer.alloc(RESULT_CAP * 4 + 1);
+    const n = readSync(fd, buf, 0, buf.length, 0);
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf.subarray(0, n)); } catch { die("--result-file is not valid UTF-8"); }
+  } finally { if (fd !== undefined) try { closeSync(fd); } catch { /* closed */ } }
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  text = text.replace(/\r?\n$/, "");
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(text)) die("the result holds a control, format or line-break character -- it is ONE line");
+  if (text !== text.trim() || text.length < 20 || text.length > RESULT_CAP) die(`the result is one line of 20 to ${RESULT_CAP} characters, not padded`);
+  if (text.includes(PLACEHOLDER) || !isFilled(text)) die("the result is still a placeholder -- name the evidence that proved the slice");
+  return { text, real };
+}
+
+/**
+ * The commit, resolved and MERGED: an ancestor of origin/main, the mainline CI ran on -- never of whatever HEAD this
+ * clone has checked out, where a WIP commit on a feature branch passed as "merged" and a stale local main refused a
+ * real merge (attack 1f95807 B8). It must be the commit the caller named (B10). Through the one bounded git reader (B9).
+ * Returned as its 8-character short form, and the ref it was checked against.
+ */
+async function mergedCommit(root, given) {
+  if (!/^[0-9a-f]{7,40}$/.test(given || "")) die("prove needs --commit SHA: 7 to 40 lowercase hex characters");
+  let answer;
+  try {
+    answer = await withGitReader(root, async (read) => {
+      const main = await read(["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main^{commit}"], { ok: [0, 1] });
+      if (main.status !== 0) return { why: "this clone has no origin/main -- fetch it; a proof is checked against the mainline" };
+      const full = await read(["rev-parse", "--verify", "--quiet", `${given}^{commit}`], { ok: [0, 1] });
+      const sha = full.status === 0 ? full.out.trim() : "";
+      if (!/^[0-9a-f]{40,64}$/.test(sha) || !sha.startsWith(given)) return { why: `${given} is not a commit this clone holds -- nothing was written` };
+      const anc = await read(["merge-base", "--is-ancestor", sha, main.out.trim()], { ok: [0, 1] });
+      if (anc.status === 1) return { why: `${given} is not merged (not an ancestor of origin/main) -- an unmerged commit is a claim, not a proof` };
+      return { sha };
+    });
+  } catch (e) { die(`git could not answer whether ${given} is merged (${e && e.message ? e.message : "error"}) -- nothing was written`); }
+  if (answer.why) die(answer.why);
+  return answer.sha.slice(0, 8);
 }
 
 async function modeStatus(ctx) {
@@ -800,12 +972,27 @@ const expectAt = rawArgv.indexOf("--expect");
 if (rawArgv.filter((a) => a === "--dry-run").length > 1 || rawArgv.filter((a) => a === "--expect").length > 1) { say("STOP: --dry-run and --expect are each given once"); flush(2); }
 const expectValue = expectAt === -1 ? undefined : rawArgv[expectAt + 1];
 if (expectAt !== -1 && (expectValue === undefined || expectValue.startsWith("-"))) { say("STOP: --expect needs the digest a plan printed"); flush(2); }
-const argv = rawArgv.filter((a, i) => a !== "--receipt" && a !== "--dry-run" && !(expectAt !== -1 && (i === expectAt || i === expectAt + 1)));
+// prove's three valued flags, taken out the same way: each once, each with a value that is not itself a flag.
+const PROVE_FLAGS = ["--result-file", "--commit", "--as-process"];
+if (rawArgv.some((a) => PROVE_FLAGS.some((f) => a.startsWith(`${f}=`)))) { say("STOP: write --result-file, --commit and --as-process with a space, never with ="); flush(2); }
+const proveAt = {};
+for (const f of PROVE_FLAGS) {
+  if (rawArgv.filter((a) => a === f).length > 1) { say(`STOP: ${f} is given once`); flush(2); }
+  const at = rawArgv.indexOf(f);
+  if (at === -1) continue;
+  const v = rawArgv[at + 1];
+  if (v === undefined || v === "" || v.startsWith("-")) { say(`STOP: ${f} needs a value`); flush(2); }
+  proveAt[f] = at;
+}
+const proveValue = (f) => (proveAt[f] === undefined ? "" : rawArgv[proveAt[f] + 1]);
+const provePositions = new Set(Object.values(proveAt).flatMap((at) => [at, at + 1]));
+if (proveValue("--as-process") && !/^[a-z][a-z0-9-]{0,63}@[0-9]+\.[0-9]+\.[0-9]+$/.test(proveValue("--as-process"))) { say("STOP: --as-process is <process>@<major.minor.patch>"); flush(2); }
+const argv = rawArgv.filter((a, i) => a !== "--receipt" && a !== "--dry-run" && !(expectAt !== -1 && (i === expectAt || i === expectAt + 1)) && !provePositions.has(i));
 const { lane, laneGiven, laneDup, root: rootArg, positionals } = parseLaneArgs(argv);
 // EVERY other dash-word is refused, never read as a positional: `start 5 --dry-run` used to write the ledger for real,
 // because the lane parser keeps an unknown flag as a positional and nothing read it (the Phase 05 CLI probe's hazard).
 const strayFlag = positionals.find((p) => /^[-\u2010-\u2015\u2212]/.test(p));
-if (strayFlag) { say(`STOP: unknown flag ${JSON.stringify(strayFlag)} -- develop takes --lane --root --receipt (checkpoint) --dry-run and --expect (next)`); flush(2); }
+if (strayFlag) { say(`STOP: unknown flag ${JSON.stringify(strayFlag)} -- develop takes --lane --root --receipt (checkpoint) --dry-run and --expect (next) --result-file --commit --as-process and --dry-run (prove)`); flush(2); }
 
 const mode = positionals[0];
 if (!mode || !MODES.has(mode)) {
@@ -813,7 +1000,12 @@ if (!mode || !MODES.has(mode)) {
   flush(mode ? 2 : 0);
 }
 if (wantsReceipt && mode !== "checkpoint") { say("STOP: --receipt belongs to checkpoint -- the other modes write their own receipts"); flush(2); }
-if ((dryRun || expectAt !== -1) && mode !== "next") { say("STOP: --dry-run and --expect belong to next -- the face's plan and apply of opening a slice"); flush(2); }
+if (expectAt !== -1 && mode !== "next") { say("STOP: --expect belongs to next -- the face's apply of opening a slice"); flush(2); }
+if (dryRun && mode !== "next" && mode !== "prove") { say("STOP: --dry-run belongs to next and prove"); flush(2); }
+if (Object.keys(proveAt).length && mode !== "prove") { say("STOP: --result-file, --commit and --as-process belong to prove"); flush(2); }
+// prove writes the ledger of the repository it runs in, never one --root names: a session steered by what it read
+// pointed the one writer at another clone (attack 1f95807 B2).
+if (mode === "prove" && rootArg) { say("STOP: prove takes no --root -- it proves a slice of the repository it runs in"); flush(2); }
 if (dryRun && expectAt !== -1) { say("STOP: --dry-run plans and --expect applies; give one"); flush(2); }
 
 let root = rootArg;
@@ -846,6 +1038,8 @@ if (mode === "start") {
   await modeStart(ctx, phaseNum);
 } else if (mode === "next") {
   await modeNext(ctx, { dryRun, expect: expectValue });
+} else if (mode === "prove") {
+  await modeProve(ctx, phaseNum, { resultFile: proveValue("--result-file"), commit: proveValue("--commit"), asProcess: proveValue("--as-process"), dryRun });
 } else if (mode === "status") {
   await modeStatus(ctx);
 } else if (mode === "handoff") {

@@ -1,0 +1,11 @@
+{
+  "note": "Eval fixture (face Phase 06). `expected` asserts the SHAPE of a recorded ADR: a docs/adr path in the lane's century and the note.logged receipt id. Wording is free.",
+  "input": {
+    "lane": "face",
+    "decision": "session verbs that need a new writer script get one per verb, never a shared generic writer"
+  },
+  "expected": {
+    "file": "docs/adr/1342-session-verbs-get-one-writer-script-each.md",
+    "receipt_id": "01M37D0KHFPXBDBWQRYPMEXVT8"
+  }
+}
