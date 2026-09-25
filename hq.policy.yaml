@@ -224,3 +224,30 @@ kinds:
     publish: { level: L0 }
     deploy: { level: L0 }
     spend: { level: L0 }
+
+  # Phase 06 slice 04 (face lane, memory ring). lesson-log appends one row to docs/retro-log.md and writes one
+  # gitignored scratch file, runs the near-duplicate check, and appends a note.logged receipt: write and shell L1. It
+  # reads no web and moves no money.
+  "process:lesson-log":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  # rule-promote writes one gitignored scratch file and runs memory/rule-propose.mjs, which commits a proposal branch
+  # by git plumbing (the owner's tree untouched) and raises approval.requested: write and shell L1. It applies nothing.
+  "process:rule-promote":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
