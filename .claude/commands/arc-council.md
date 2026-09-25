@@ -191,6 +191,9 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
 8. **Save (deep runs only).** Write the full rendered verdict to `docs/council/sessions/NNN-slug.md`
    (NNN = next zero-padded number; slug = short kebab of the question). A `quick` run writes nothing. The
    saved file must pass `node .claude/scripts/council/council-lint.mjs --verdict <file>`.
+   Its FIRST line is exactly `# arc-council — <the question> (<YYYY-MM-DD>)`, today's date: step 9 takes the
+   question it hashes from that line and refuses a file without it. (Hand runs wrote it by habit; a headless run,
+   told only "save the verdict", wrote the bare question and its receipt was refused -- live convene, 2026-09-25.)
 
 9. **Leave the receipt (spine) — deep runs only.** After saving, record the verdict on the spine
    (hook-mode, never blocks; a `quick` run emits nothing — it wrote no verdict to receipt):

@@ -1,0 +1,9 @@
+$ node .claude/scripts/docs/wiki-build.mjs --json --out "$SCRATCH/wiki.json"
+wiki-build: 17 products, 17 lanes, 8 processes, 15 adrBands, 28 commands, 30 agents, 7 rules, 7 gates (308 ADRs, 65 with unparsed headers) -> $SCRATCH/a.json
+exit 0
+
+$ node .claude/scripts/docs/wiki-build.mjs --json --out "$SCRATCH/wiki-2.json" && cmp
+byte-identical
+
+$ node .claude/scripts/core/face-coverage.mjs  (last line)
+face-coverage: 46 kinds, 17 lanes, 28 commands, 30 agents, 17 products, 7 rules, 8 processes, 7 gates, 2 jobs, 1 ventures, 15 ADR bands (308 files), 26 plans, 6 capabilities, 4 planned rooms, 4 CI workflows (171 bats suites), 227 homed contract rows -- all covered

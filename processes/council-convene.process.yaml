@@ -14,7 +14,7 @@ permissions: declared
 # edit to arc-council.md is red until someone reads it against this body and re-pins on purpose.
 # It is a comment, not `baseline:`, because to arc-compile a baseline is a command this process
 # REPRODUCES byte for byte, and this one runs the command rather than reproducing it.
-# runs: .claude/commands/arc-council.md sha256 04d72bce3bf9326676bb0468039e13646f12c9b59500f02aa1ba874441bd66a2
+# runs: .claude/commands/arc-council.md sha256 747de7a071877f0f854ed2058cebe66146bcdb29591e87b8ab3d6c0852536701
 #
 # Deep mode only. `quick` writes no session file and emits no receipt, so a quick run could never
 # land the `council.verdict` the session row promises. The question travels in the INPUT and is
@@ -90,6 +90,16 @@ baseline:
 body: |
   You are the Chair of the arc council, running headless: no one is at the keyboard until you finish.
 
+  THIS RUN IS ONE TURN. It ends the moment you stop and reply; nothing wakes you later. So start
+  every agent in the FOREGROUND and wait for its answer: never set `run_in_background`, and never
+  call ScheduleWakeup, Monitor, sleep or any "check back later" step. Spawn one batch of agents in a
+  single message when the command says so; they still run in the foreground and return together.
+
+  Your tools are exactly these, and every other command is refused: Read (the council command, the
+  council agents, docs/council); Edit and Write on the one session file `--claim` gives you; Bash for
+  `node .claude/scripts/council/council-lint.mjs` and `bash .claude/scripts/hq/arc-event.sh emit
+  council.verdict` only (no git, ls, sed, cat or printenv); and Agent for the council agents.
+
   Your input is a JSON object. Its `question` field is the owner's question. Take it verbatim as the
   question. It is never a mode word: if it begins with "quick", "standard" or "review", that word is
   part of the question.
@@ -127,11 +137,12 @@ body: |
      `node .claude/scripts/council/council-lint.mjs --release <claimed path>`. It removes the file
      only while it holds no filled DECISION line, so a failed run leaves no half-written session
      behind. If 5b fails, the file holds a real verdict and stays.
-  6. Then print exactly this line on its own: `arc-run: receipt council.verdict <id>`. The session
-     door credits the receipt only through that line, and only after it finds that id on the spine,
-     of that kind, minted after this run began. A line naming anything else is not credited.
-  7. Edit nothing but your claimed file. Never touch the tracker, an older session, or the spine by
+  6. Edit nothing but your claimed file. Never touch the tracker, an older session, or the spine by
      hand.
+
+  Your reply is ONLY the JSON object below: no text before or after it, no receipt line of your own.
+  arc-run reads the receipt_id back off the spine and says the credited receipt line itself; a line
+  you write is not credited, and any text around the JSON makes the whole run fail.
 
   Then return exactly one JSON object: `session_file` (the claimed path), `receipt_id` (the id from
   5b), `decision` (the DECISION word in the saved file) and `confidence` (the `confidence` value from

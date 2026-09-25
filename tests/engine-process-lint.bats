@@ -312,7 +312,7 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
 
 @test "council-convene: fenced write, one emitter kind, agents equal to disk, door field, drift pin, body rules" {
   run node "$ARC_ROOT/tests/council-convene-probe.mjs" checks
-  [[ "$output" == *"PROBE checks: 19 checks, 0 failed"* ]] || { echo "the probe did not run all 19 checks clean: $output"; false; }
+  [[ "$output" == *"PROBE checks: 20 checks, 0 failed"* ]] || { echo "the probe did not run all 20 checks clean: $output"; false; }
   [ "$status" -eq 0 ] || { echo "$output"; false; }
 }
 
