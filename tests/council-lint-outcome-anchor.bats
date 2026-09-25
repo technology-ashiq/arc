@@ -219,3 +219,31 @@ fixture_repo() {
   run node "$LINT" "$FIX" --payload "$FS/upper.MD"
   [ "$status" -eq 1 ] && [[ "$output" == *"lowercase .md"* ]] || { echo "upper ext: $status $output"; false; }
 }
+
+@test "council-lint --claim: the next free number is created exclusively, concurrent claims never share one, and a bare claim is no verdict" {
+  local R="$BATS_TEST_TMPDIR/claimroot" S
+  S="$R/docs/council/sessions"
+  mkdir -p "$S"
+  : > "$S/001-a.md"; : > "$S/007-b.md"
+  run node "$LINT" --claim my-question "$R"
+  [ "$status" -eq 0 ] && [ "$output" = "docs/council/sessions/008-my-question.md" ] || { echo "first claim: $status $output"; false; }
+  [ -f "$S/008-my-question.md" ] || { echo "the claim printed a path it never created"; false; }
+  # Six claims at once, one slug: six different files, none overwritten (attack 66a26f0 B2).
+  local i
+  for i in 1 2 3 4 5 6; do node "$LINT" --claim same "$R" > "$BATS_TEST_TMPDIR/c$i.out" 2>&1 & done
+  wait
+  local distinct
+  distinct=$(cat "$BATS_TEST_TMPDIR"/c?.out | sort -u | grep -c '^docs/council/sessions/0[0-9][0-9]-same\.md$' || true)
+  [ "$distinct" = "6" ] || { echo "six claims did not print six distinct paths: $(cat "$BATS_TEST_TMPDIR"/c?.out)"; false; }
+  [ "$(ls "$S" | grep -c -- '-same\.md$')" = "6" ] || { echo "six claims did not leave six files: $(ls "$S")"; false; }
+  # A claim nothing filled carries no DECISION, so it can never become a receipt.
+  run node "$LINT" --payload "$S/008-my-question.md" "$R"
+  [ "$status" -eq 1 ] && [[ "$output" == *"0 filled DECISION"* ]] || { echo "a bare claim derived a payload: $status $output"; false; }
+  # Usage is refused by name: a slug outside the class, a second mode, a stray flag.
+  run node "$LINT" --claim "Bad Slug" "$R"
+  [ "$status" -eq 2 ] && [[ "$output" == *"needs a slug"* ]] || { echo "bad slug: $status $output"; false; }
+  run node "$LINT" --claim x --payload y "$R"
+  [ "$status" -eq 2 ] && [[ "$output" == *"two runs"* ]] || { echo "two modes: $status $output"; false; }
+  run node "$LINT" --claim x --verdict y "$R"
+  [ "$status" -eq 2 ] && [[ "$output" == *"no other flag"* ]] || { echo "stray flag: $status $output"; false; }
+}

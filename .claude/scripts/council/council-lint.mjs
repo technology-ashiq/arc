@@ -12,11 +12,13 @@
  *   node .claude/scripts/council/council-lint.mjs --brief <file>
  *     Brief — a deep Evidence Brief needs >=3 facts, each with a confidence label; in a `live` brief
  *     each High/Med fact needs >=2 independent source URLs or an explicit low-confidence mark. (REQ-04, ADR-0003)
+ *   node .claude/scripts/council/council-lint.mjs --claim <slug> [repo-root]
+ *     Claim -- create docs/council/sessions/NNN-<slug>.md exclusively at the next free number and print its path.
  *
  * Roster grows per phase: Phase 0 = advocate/skeptic/neutral; Phase 1 adds verifier; Phase 2 adds
  * researcher; Phase 3 adds the 7 domain experts.
  */
-import { readFileSync, existsSync, openSync, fstatSync, closeSync, realpathSync, lstatSync } from "node:fs";
+import { readFileSync, existsSync, openSync, fstatSync, closeSync, realpathSync, lstatSync, readdirSync, writeSync } from "node:fs";
 import { join, dirname, basename, extname } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -159,12 +161,57 @@ function payloadMode() {
   process.exitCode = 0;
 }
 
+// A headless council (processes/council-convene) cannot choose its session number from an `ls`: two runs, or one run
+// and a hand /arc-council, read the same highest number and the second Write overwrites the first (attack 66a26f0 B2).
+// --claim does the choosing in one place: it creates <root>/docs/council/sessions/NNN-<slug>.md exclusively ("wx"), steps
+// to the next number when that name is taken, and prints the claimed path. The run then writes its verdict INTO the
+// file it holds. The placeholder carries no DECISION line, so --verdict and --payload refuse a claim nothing filled.
+function claimMode() {
+  const usage = (msg) => { console.error(`council-lint: --claim: ${msg}`); process.exitCode = 2; };
+  if (args.some((a) => a.startsWith("--claim="))) return usage("takes its slug as the next argument, not --claim=SLUG");
+  const at = args.flatMap((a, i) => (a === "--claim" ? [i] : []));
+  if (at.length > 1) return usage("given more than once -- one claim per run");
+  const slug = args[at[0] + 1];
+  if (typeof slug !== "string" || !/^[a-z0-9][a-z0-9-]{0,59}$/.test(slug)) {
+    return usage(`needs a slug of lowercase letters, digits and hyphens, 60 at most, as its value -- not ${JSON.stringify(String(slug)).slice(0, 80)}`);
+  }
+  const rest = args.filter((_, i) => i !== at[0] && i !== at[0] + 1);
+  const stray = rest.filter((a) => a.startsWith("-"));
+  if (stray.length) return usage(`takes no other flag -- ${stray.map((s) => JSON.stringify(s).slice(0, 80)).join(", ")}`);
+  if (rest.length > 1) return usage("takes one repo root at most");
+  const rel = ["docs", "council", "sessions"];
+  let dir;
+  try { dir = realpathSync.native(join(rest.length ? rest[0] : root, ...rel)); } catch (e) { return usage(`the sessions directory cannot be resolved (${e.code || "error"}) -- run from the repo root, or name it`); }
+  let highest = 0;
+  for (const n of readdirSync(dir)) { const m = /^([0-9]{3})-/.exec(n); if (m) highest = Math.max(highest, Number(m[1])); }
+  // A bounded walk: a name taken between the listing and the open is the race this mode exists for, so the next number
+  // is tried; a run of 20 taken names is not a race, and is said rather than walked for ever.
+  for (let n = highest + 1; n <= Math.min(999, highest + 20); n++) {
+    const name = `${String(n).padStart(3, "0")}-${slug}.md`;
+    let fd;
+    try { fd = openSync(join(dir, name), "wx"); }
+    catch (e) { if (e.code === "EEXIST") continue; return usage(`cannot create ${name} (${e.code || "error"})`); }
+    try { writeSync(fd, "<!-- claimed by council-lint --claim: the council writes its verdict here -->\n"); } finally { closeSync(fd); }
+    console.log([...rel, name].join("/"));
+    process.exitCode = 0;
+    return;
+  }
+  process.exitCode = 1;
+  console.error(highest >= 999 ? "council-lint: --claim: session numbers are spent (999) -- NNN is three digits" : "council-lint: --claim: 20 numbers in a row were taken while claiming -- refused rather than walked further");
+}
+
 // The flag is the mode, whatever its value: an empty or `=` value is refused inside, never a fall-through (B4).
 const payloadRequested = args.some((x) => x === "--payload" || x.startsWith("--payload="));
+const claimRequested = args.some((x) => x === "--claim" || x.startsWith("--claim="));
+if (payloadRequested && claimRequested) {
+  console.error("council-lint: --claim and --payload are two runs, not one");
+  process.exit(2);
+}
 if (payloadRequested) payloadMode();
+if (claimRequested) claimMode();
 
 // ------------------------------------------------------------------ verdict mode
-if (verdictFile && !payloadRequested) {
+if (verdictFile && !payloadRequested && !claimRequested) {
   if (!existsSync(verdictFile)) {
     fail(`verdict file not found: ${verdictFile}`);
     report();
@@ -418,7 +465,7 @@ if (verdictFile && !payloadRequested) {
 }
 
 // ------------------------------------------------------------------ brief mode
-if (briefFile && !payloadRequested) {
+if (briefFile && !payloadRequested && !claimRequested) {
   if (!existsSync(briefFile)) {
     fail(`brief file not found: ${briefFile}`);
     report();
@@ -447,7 +494,7 @@ if (briefFile && !payloadRequested) {
 }
 
 // Static mode runs only when no other mode answered: payload mode sets its exit code and must not be followed by it.
-if (!payloadRequested) {
+if (!payloadRequested && !claimRequested) {
 // ------------------------------------------------------------------ static mode
 const read = (p) => readFileSync(join(root, p), "utf8");
 const exists = (p) => existsSync(join(root, p));

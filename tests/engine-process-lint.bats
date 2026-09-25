@@ -296,13 +296,11 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
 
 # ---------------------------------------------------------------------------
 # council-convene (face Phase 06 slice 03b). The face row "Convene the council" names this
-# process; the body RUNS arc-council.md rather than copying it, so the pin is what keeps the two
-# from drifting apart unseen.
+# process; its body RUNS arc-council.md rather than copying it. The Node half is
+# tests/council-convene-probe.mjs, which prints one line per check and a PROBE count.
 # ---------------------------------------------------------------------------
 
-@test "council-convene: the face row names it, it lints clean, and arc-run routes it high-judgment" {
-  grep -q 'row("council.convene", "council-chamber", "Convene the council", "council-convene", "council.verdict"' \
-    "$ARC_ROOT/.claude/scripts/hq/face-sessions.mjs" || { echo "the face row no longer names council-convene"; false; }
+@test "council-convene: it lints clean and arc-run routes it high-judgment" {
   run node "$(LINT)" "$ARC_ROOT/processes/council-convene.process.yaml" --root "$ARC_ROOT"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"all checks passed"* ]] || { echo "lint RAN but did not pass: $output"; false; }
@@ -312,25 +310,20 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
   [[ "$output" == *"tier high-judgment"* ]] || { echo "the Chair is not routed high-judgment: $output"; false; }
 }
 
-@test "council-convene: the pin is live -- one byte added to arc-council.md is baseline-drift" {
-  local d="$BATS_TEST_TMPDIR/pin"
-  mkdir -p "$d/processes" "$d/.claude/commands" "$d/tests/fixtures/engine/evals/council-convene"
-  cp "$ARC_ROOT/processes/council-convene.process.yaml" "$d/processes/"
-  cp "$ARC_ROOT/.claude/commands/arc-council.md" "$d/.claude/commands/"
-  cp "$ARC_ROOT/tests/fixtures/engine/evals/council-convene/basic.json" "$d/tests/fixtures/engine/evals/council-convene/"
-  # Negative control first: the untouched copy passes, so the red below is the edit and nothing else.
-  run node "$(LINT)" --all --root "$d"
-  [ "$status" -eq 0 ] || { echo "the clean copy did not pass: $output"; false; }
-  printf '\n' >> "$d/.claude/commands/arc-council.md"
-  run node "$(LINT)" --all --root "$d"
-  [ "$status" -eq 1 ] || { echo "a moved baseline passed: $output"; false; }
-  [[ "$output" == *"[baseline-drift]"*"council-convene"* ]] || { echo "refused, but not as baseline-drift: $output"; false; }
+@test "council-convene: fenced write, one emitter kind, agents equal to disk, door field, drift pin, body rules" {
+  run node "$ARC_ROOT/tests/council-convene-probe.mjs" checks
+  [[ "$output" == *"PROBE checks: 13 checks, 0 failed"* ]] || { echo "the probe did not run all 13 checks clean: $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "council-convene: the policy gate a live click crosses authorises it (dry-run never reaches this gate)" {
+  run node "$ARC_ROOT/tests/council-convene-probe.mjs" gate
+  [[ "$output" == *"PROBE gate: 2 checks, 0 failed"* ]] || { echo "the gate refuses or never ran: $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
 }
 
 @test "council-convene: the eval input opens with a mode word and expects a deep session's shape" {
   local f="$ARC_ROOT/tests/fixtures/engine/evals/council-convene/basic.json"
   grep -q '"question": "quick ' "$f" || { echo "the eval no longer probes the mode-word trap"; false; }
   grep -q '"session_file": "docs/council/sessions/' "$f" || { echo "the eval expects no saved session"; false; }
-  grep -q 'Never run quick, standard or review mode' "$ARC_ROOT/processes/council-convene.process.yaml" \
-    || { echo "the body no longer pins deep mode"; false; }
 }

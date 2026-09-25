@@ -9,9 +9,12 @@ permissions: declared
 #
 # The body does NOT copy /arc-council. It runs the command file, read at run time, with the
 # headless differences listed below. Copying 328 lines would give the council two sources that
-# drift apart without anyone seeing it. The baseline pin below catches that drift instead: any
-# edit to arc-council.md moves its sha256, process-lint fails `baseline-drift`, and the edit
-# has to be read against this body and re-pinned on purpose (ADR-0202).
+# drift apart without anyone seeing it. The pin on the next line catches that drift instead:
+# tests/engine-process-lint.bats hashes the live command and requires it to equal the pin, so an
+# edit to arc-council.md is red until someone reads it against this body and re-pins on purpose.
+# It is a comment, not `baseline:`, because to arc-compile a baseline is a command this process
+# REPRODUCES byte for byte, and this one runs the command rather than reproducing it.
+# runs: .claude/commands/arc-council.md sha256 04d72bce3bf9326676bb0468039e13646f12c9b59500f02aa1ba874441bd66a2
 #
 # Deep mode only. `quick` writes no session file and emits no receipt, so a quick run could never
 # land the `council.verdict` the session row promises. The question travels in the INPUT and is
@@ -27,11 +30,16 @@ tools:
       - ".claude/commands/arc-council.md"
       - "docs/council/**"
       - ".claude/agents/council-*.md"
-  - fs.write
+  # Writes are fenced to the sessions directory, rendered as Edit(<path>) by the claude-code adapter (attack 66a26f0
+  # B1). The Chair writes only the file --claim created for it; its brief is drafted INTO that file first, so the run
+  # leaves no scratch file behind (B13).
+  - fs.write:
+      - "docs/council/sessions/*.md"
+  # One emitter scope, one kind: the Chair can append council.verdict and nothing else (B3). Claude Code checks every
+  # part of a compound command on its own, so step 9 runs as separate plain commands (see the body).
   - shell.run:
       - "node .claude/scripts/council/council-lint.mjs:*"
-      - "bash .claude/scripts/hq/arc-event.sh:*"
-      - "ls docs/council/sessions:*"
+      - "bash .claude/scripts/hq/arc-event.sh emit council.verdict:*"
   - agent.invoke:
       - "council-researcher"
       - "council-advocate"
@@ -76,10 +84,9 @@ output:
 evals:
   - tests/fixtures/engine/evals/council-convene/basic.json
 baseline:
-  target: claude-code
-  path: .claude/commands/arc-council.md
-  commit: bcc0d880
-  sha256: 04d72bce3bf9326676bb0468039e13646f12c9b59500f02aa1ba874441bd66a2
+  waived: capability-gap
+  why: "no command is reproduced here: the process runs arc-council.md at run time with headless overrides, so a byte pin on its rendering would compare two different things; the drift pin is the runs: comment above"
+  recorded: 2026-09-25
 body: |
   You are the Chair of the arc council, running headless: no one is at the keyboard until you finish.
 
@@ -95,16 +102,29 @@ body: |
      which reading you took and why, and continue. If the question truly cannot be answered without
      a missing fact, the verdict is WAIT, and it names the fact and the test that would supply it.
   2. Mode is always deep. Never run quick, standard or review mode, whatever the question's words.
-  3. Step 8: find the next NNN by listing `docs/council/sessions`, save there, and run
-     `council-lint.mjs --verdict` on the saved file. If it fails, fix the FILE and re-run until it
-     passes.
-  4. Step 9 is the end of the run. Run its three lines as written: derive the payload with
-     `--payload`, emit `council.verdict` with arc-event.sh, and check the id. If any line stops,
-     the run has FAILED. Say which line stopped and why, and return no output object. A verdict
-     with no receipt is not a finished session.
-  5. Edit no file except the new session file and your own scratch briefs. Never touch the tracker,
-     an older session, or the spine by hand.
+  3. Claim your session file ONCE, right after step 1:
+     `node .claude/scripts/council/council-lint.mjs --claim <slug>`, where the slug is a short kebab
+     of the question (lowercase letters, digits and hyphens, 60 at most). It prints the path it
+     created. That file is the only file you ever write. Never choose a number yourself.
+  4. Step 2: write the Evidence Brief into your claimed file and lint it there with `--brief`.
+     Step 8: overwrite the same file with the full verdict and lint it with `--verdict`. Each lint
+     gets at most 3 attempts, fixing the FILE between them. A third refusal means the run has
+     FAILED: say the lint's last message and return no output object.
+  5. Step 9 is the end of the run. Run it as two plain commands, never one line with `$(...)` or a
+     pipe:
+     a. `node .claude/scripts/council/council-lint.mjs --payload <claimed path>` prints one JSON
+        line. If it refuses, the run has FAILED.
+     b. `bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload '<that JSON line>'`
+        prints the receipt id on its last line. If that line is not a 26-character id, the run has
+        FAILED.
+     On a failure, say which command stopped and why, and return no output object. A verdict with
+     no receipt is not a finished session.
+  6. Then print exactly this line on its own: `arc-run: receipt council.verdict <id>`. The session
+     door credits the receipt only through that line, and only after it finds that id on the spine,
+     of that kind, minted after this run began. A line naming anything else is not credited.
+  7. Edit nothing but your claimed file. Never touch the tracker, an older session, or the spine by
+     hand.
 
-  When step 9 has printed the receipt id, return exactly one JSON object:
-  `session_file` (the saved path, relative to the repo root), `receipt_id` (the id step 9 printed),
-  `decision` (the DECISION word) and `confidence` (the CONFIDENCE bucket, exact case).
+  Then return exactly one JSON object: `session_file` (the claimed path), `receipt_id` (the id from
+  5b), `decision` (the DECISION word in the saved file) and `confidence` (the `confidence` value from
+  5a's JSON line, copied, never retyped).

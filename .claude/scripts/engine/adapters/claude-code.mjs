@@ -19,7 +19,11 @@ export const TOOL_MAP = Object.freeze({
   "shell.run": { kind: "scoped", render: (scope) => `Bash(${scope})` },
   // Bare: one fixed token regardless of scope.
   "fs.read": { kind: "bare", token: "Read" },
-  "fs.write": { kind: "bare", token: "Write" },
+  // Declared bare, a write is the one Write token. Declared with paths, each path is an Edit(<path>) grant: the CLI
+  // accepts a Write(<path>) rule and never consults it, and Edit rules are the ones that fence every file-writing
+  // tool, Write included, relative to the working directory (code.claude.com/docs/en/permissions). A path-scoped
+  // write rendered as the bare token would be the unfenced write the scope was declared to prevent (attack 66a26f0 B1).
+  "fs.write": { kind: "bare", token: "Write", scoped: (scope) => `Edit(${scope})` },
   "agent.invoke": { kind: "bare", token: "Task" },
   "web.search": { kind: "bare", token: "WebSearch" },
   "ask.human": { kind: "bare", token: null }, // asking the operator needs no tool grant
@@ -65,16 +69,17 @@ export function renderAllowedTools(tools) {
     const prim = bare ? t : Object.keys(t)[0];
     const spec = TOOL_MAP[prim];
     if (!spec) throw new Error(`claude-code adapter: no mapping for abstract tool \`${prim}\``);
-    if (spec.kind === "bare") {
+    if (spec.kind === "bare" && !(spec.scoped && !bare)) {
       if (spec.token) out.push(spec.token);
       continue;
     }
+    const render = spec.kind === "bare" ? spec.scoped : spec.render;
     if (bare) throw new Error(`claude-code adapter: \`${prim}\` is scope-bearing but was declared bare`);
     for (const scope of t[prim]) {
       if (!SCOPE_OK.test(scope)) {
         throw new Error(`claude-code adapter: scope \`${scope}\` for \`${prim}\` contains ( ) , or a line break — it would forge extra grants`);
       }
-      out.push(spec.render(scope));
+      out.push(render(scope));
     }
   }
   return out.length ? out.join(", ") : null;
