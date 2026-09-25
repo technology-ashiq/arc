@@ -248,7 +248,8 @@ const run = (doc, over={}, events=[]) =>
   [ "$spawns" -eq 1 ] || { echo "expected exactly 1 driver spawn site, found $spawns"; false; }
   local calls; calls="$(grep -c 'runDriverProcess(' "$f")"
   [ "$calls" -eq 2 ] || { echo "runDriverProcess should be defined once and called once, found $calls mentions"; false; }
-  local direct; direct="$(grep -cE '(spawnSync|spawnBounded|spawn)\("bash", \[sh' "$f")"
+  # grep -c exits 1 on a count of 0 -- the very answer wanted here -- so its status is not the test's.
+  local direct; direct="$(grep -cE '(spawnSync|spawnBounded|spawn)\("bash", \[sh' "$f" || true)"
   [ "$direct" -eq 0 ] || { echo "a driver is spawned directly, past the one gated call site ($direct)"; false; }
   local gate_line spawn_line
   gate_line="$(grep -n 'policyGate(name)' "$f" | tail -1 | cut -d: -f1)"
