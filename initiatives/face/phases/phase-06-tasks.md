@@ -72,8 +72,8 @@ proof: 03a -- tests/council-lint-outcome-anchor.bats: `council-lint --payload` d
 tier: contract
 sources: phase-06-spec.md
 decision: 03a -- the payload is DERIVED from the saved verdict file, never typed (ADR-1345). 03b -- the process body RUNS arc-council.md with headless overrides (never ask, deep only, claim one file, capped lints, step 9 as plain commands ending the run) instead of copying 328 lines; a `runs:` sha256 pin, compared by the probe, turns any council-lane edit into a red test to be adjudicated (a `baseline:` would tell arc-compile the process reproduces the command, which it does not); the router row is the Chair's seat, high-judgment under ADR-0069 block (a), fallback [].
-result: 03a -- CI run 36099675822 @ fdb3336d: GREEN, all 19 jobs (the run before was red on a GNU-only `sed a` in the fixture, fixed with awk). 03b -- (empty until proven)
-commit: 03a -- PR #272, squash bcc0d880. 03b -- (empty until proven)
+result: 03a -- CI run 36099675822 @ fdb3336d: GREEN, all 19 jobs (the run before was red on a GNU-only `sed a` in the fixture, fixed with awk). 03b -- CI run 36106455256 @ d2ab4c7f: GREEN, all 19 jobs (ci-digest), first push; the council-convene arms, the --claim/--release arms and policy-runwrapper's every-process gate each ran on every leg. Two boundary rounds before the push (66a26f0: 13 findings, 1be4183: 14); every high and medium fixed, 4 leftovers ledgered. The live convene (the demo) is still owed, pending the owner's spend approval.
+commit: 03a -- PR #272, squash bcc0d880. 03b -- 66a26f0c, 1be41832, 7ff4449f, d2ab4c7f (PR #273, squash 5f373111)
 
 #### slice: 04
 
