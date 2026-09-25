@@ -68,8 +68,8 @@ Phase 02".
 | REQ-04 | A newly born product appears with its real facts and zero hand-written input. | A fixture product added to a scratch tree → rebuild → its page exists carrying its manifest `name`, `version`, `requires` and the `narrative pending` banner; no other file was edited. | 2 | validated |
 | REQ-06 | Generated pages cannot be edited in place. | `tests/docs-render.bats` regenerates into a scratch dir and fails on any byte / missing / extra file vs `docs/wiki/`; a one-byte-edit mutant is asserted RED. | 2 | validated |
 | REQ-08 | The four overlapping documents no longer compete with the wiki. | Each of the four is a ≤ 10-line stub at its original path naming its `docs/wiki/` replacement, with the full original in `docs/archive/`; zero inbound links break; the strategy file map records it in the same commit (ADR-1510). | 2 | validated |
-| REQ-05 | A hand-written paragraph naming a script, driver, command or ADR that no longer exists fails CI. | Mutant narrative citing `ADR-9999` and `drivers/ghost.mjs` → `wiki-drift` exits 1 naming both. | 3 | active |
-| REQ-07 | No count on any page is copied; all are derived. | `wiki-build --audit-counts` re-derives every number on every page from `wiki.json`; a mutant page with one count changed exits 1 naming the page and the number. | 3 | active |
+| REQ-05 | A hand-written paragraph naming a script, driver, command or ADR that no longer exists fails CI. | Mutant narrative citing `ADR-9999` and `drivers/ghost.mjs` → `wiki-drift` exits 1 naming both. | 3 | validated |
+| REQ-07 | No count on any page is copied; all are derived. | `wiki-build --audit-counts` re-derives every number on every page from `wiki.json`; a mutant page with one count changed exits 1 naming the page and the number. | 3 | validated |
 
 ## Appetite
 

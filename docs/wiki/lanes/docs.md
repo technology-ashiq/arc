@@ -11,8 +11,8 @@
 
 | | |
 |---|---|
-| Status | LIVE |
-| Cycle | arc-docs (Cycle 17, opened 2026-09-25) |
+| Status | IDLE |
+| Cycle | arc-docs (Cycle 17, opened 2026-09-25, closed 2026-09-26) |
 | Product | [docs](../products/docs.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
