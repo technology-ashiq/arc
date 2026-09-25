@@ -137,11 +137,12 @@ body: |
      `node .claude/scripts/council/council-lint.mjs --release <claimed path>`. It removes the file
      only while it holds no filled DECISION line, so a failed run leaves no half-written session
      behind. If 5b fails, the file holds a real verdict and stays.
-  6. Then print exactly this line on its own: `arc-run: receipt council.verdict <id>`. The session
-     door credits the receipt only through that line, and only after it finds that id on the spine,
-     of that kind, minted after this run began. A line naming anything else is not credited.
-  7. Edit nothing but your claimed file. Never touch the tracker, an older session, or the spine by
+  6. Edit nothing but your claimed file. Never touch the tracker, an older session, or the spine by
      hand.
+
+  Your reply is ONLY the JSON object below: no text before or after it, no receipt line of your own.
+  arc-run reads the receipt_id back off the spine and says the credited receipt line itself; a line
+  you write is not credited, and any text around the JSON makes the whole run fail.
 
   Then return exactly one JSON object: `session_file` (the claimed path), `receipt_id` (the id from
   5b), `decision` (the DECISION word in the saved file) and `confidence` (the `confidence` value from

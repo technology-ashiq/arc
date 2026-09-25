@@ -93,8 +93,12 @@ if (mode === "checks") {
 
   // B4: the body prints the one line the door credits, with the door's own shape.
   const RECEIPT_LINE = /^arc-run: receipt ([a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+) ([0-7][0-9A-HJKMNP-TV-Z]{25})\s*$/;
-  check("the body prints the receipt line the door credits",
-    doc.body.includes("`arc-run: receipt council.verdict <id>`") && RECEIPT_LINE.test("arc-run: receipt council.verdict 01M37D0KHFPXBDBWQRYPMEXVT8"));
+  // The third live convene (2026-09-25) emitted its receipt and then failed: it "printed" the receipt line the body
+  // asked for, and in -p mode printing IS the reply, so the reply began with text and was not JSON. arc-run vouches
+  // for the receipt_id now; the body asks for the JSON alone and never for a receipt line of the model's own.
+  check("the body's reply is the JSON alone, never a receipt line of its own",
+    doc.body.includes("Your reply is ONLY the JSON object") && !doc.body.includes("print exactly this line") && !/^\s*`?arc-run: receipt/m.test(doc.body)
+      && RECEIPT_LINE.test("arc-run: receipt council.verdict 01M37D0KHFPXBDBWQRYPMEXVT8"));
   // B2, B7 and the mode-word trap, pinned in the body the model reads.
   check("the body claims its file through --claim, never a number of its own", doc.body.includes("--claim <slug>") && doc.body.includes("Never choose a number yourself"));
   check("a refused claim is FAILED, and a failed run gives its claim back", doc.body.includes("`--claim` refuses, the run has FAILED") && doc.body.includes("--release <claimed path>"));
