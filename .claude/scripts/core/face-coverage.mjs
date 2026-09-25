@@ -887,9 +887,9 @@ const WORLD_READERS = [
  * the face reaches the wiki with no wiki change. It never touches expected-set.json, so a tree
  * without the face contract can still be read.
  */
-export async function treeWorld(repo) {
+export async function treeWorld(repo, kinds) {
   return {
-    kinds: await treeKinds(repo),
+    kinds: kinds ?? (await treeKinds(repo)),
     lanes: dirNames(join(repo, "initiatives")),
     commands: mdStems(join(repo, ".claude", "commands")),
     agents: mdStems(join(repo, ".claude", "agents")),
@@ -908,10 +908,13 @@ export async function treeWorld(repo) {
 }
 
 async function gather(repo) {
-  // The contract is read FIRST, as it always was: a tree with no contract fails before any
-  // reader runs, exactly as before treeWorld was split out.
+  // Same order as before treeWorld was split out, and it is load-bearing: the vocabulary is
+  // imported FIRST (a tree without validate.mjs fails there, with that message), the contract
+  // SECOND, then the world readers. The key order of the returned object is the old one too.
+  const kinds = await treeKinds(repo);
   const contract = loadContract(repo);
-  return { ...(await treeWorld(repo)), contract };
+  const { kinds: _k, lanes, commands, agents, products, rules, processes, ...rest } = await treeWorld(repo, kinds);
+  return { kinds, lanes, commands, agents, products, rules, processes, contract, ...rest };
 }
 
 /** @param repoOrData a repo path, or a pre-gathered data object (the selftest's exit arm). */

@@ -2,7 +2,9 @@
   "name": "docs",
   "version": "0.1.0",
   "requires": [
-    "core"
+    "core",
+    "engine",
+    "hq"
   ],
   "commands": [],
   "agents": [],

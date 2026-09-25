@@ -18,8 +18,8 @@
 // Exit: 0 extracted | 1 a treeWorld key this wiki has not decided about (named)
 //       | 2 usage, or an inventory / file that could not be read (named). Never 0 on unreadable.
 
-import { readFileSync, writeFileSync, existsSync, statSync, realpathSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { readFileSync, writeFileSync, renameSync, unlinkSync, existsSync, lstatSync, realpathSync } from "node:fs";
+import { join, dirname, resolve, basename, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -56,13 +56,55 @@ export const NOT_RENDERED = [
 /** Byte-order comparison. Never localeCompare: collation differs per OS and per locale. */
 const byteOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Read a named file as text with LF endings, or null. A CRLF checkout must not change a byte. */
+/**
+ * A named file that exists but could not be read. It is never folded into "unparsed": an
+ * EACCES or an antivirus EBUSY on one CI leg would otherwise print a different wiki.json at
+ * exit 0 and make the regenerate-and-diff check flap (ADR-1504). extract() maps it to code 2.
+ */
+class ReadError extends Error {}
+
+const realCache = new Map();
+function realRoot(repo) {
+  if (!realCache.has(repo)) realCache.set(repo, realpathSync.native(repo));
+  return realCache.get(repo);
+}
+const inside = (p, root) => p === root || p.startsWith(root.endsWith(sep) ? root : root + sep);
+
+/**
+ * The path of a named regular file INSIDE the tree, spelled exactly as asked, or null when it
+ * is absent. Throws ReadError when something is there that the wiki must not read:
+ *  - a symlink (a tracked link could pull in a file from outside the repo, and core.symlinks
+ *    differs per OS, so the same entry would read differently per CI leg);
+ *  - a path whose real location is outside the tree (a linked parent directory);
+ *  - any stat error other than "not there".
+ * A file that exists only under a different CASE (plan.md for PLAN.md) is ABSENT: Linux says
+ * so, and Windows / macOS must agree or the three legs produce three wikis.
+ */
+function namedFile(repo, rel) {
+  const segs = rel.split("/");
+  const p = join(repo, ...segs);
+  let st;
+  try { st = lstatSync(p); }
+  catch (e) {
+    if (e.code === "ENOENT" || e.code === "ENOTDIR") return null;
+    throw new ReadError(`${rel}: ${e.code || e.message}`);
+  }
+  if (st.isSymbolicLink()) throw new ReadError(`${rel} is a symlink -- the wiki reads only regular files inside the tree (DOC-I)`);
+  if (!st.isFile()) return null;
+  let real;
+  try { real = realpathSync.native(p); } catch (e) { throw new ReadError(`${rel}: ${e.code || e.message}`); }
+  if (!inside(real, realRoot(repo))) throw new ReadError(`${rel} resolves outside the tree (${basename(real)}) -- a linked directory on its path`);
+  const tail = real.split(sep).slice(-segs.length);
+  if (tail.join("/") !== rel) return null;
+  return p;
+}
+
+/** Read a named file as text: no BOM, LF endings, or null when absent. Same bytes on every OS. */
 function readText(repo, rel) {
-  const p = join(repo, ...rel.split("/"));
-  try {
-    if (!statSync(p).isFile()) return null;
-    return readFileSync(p, "utf8").replace(/\r\n?/g, "\n");
-  } catch { return null; }
+  const p = namedFile(repo, rel);
+  if (p === null) return null;
+  try { return readFileSync(p, "utf8").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n"); }
+  catch (e) { throw new ReadError(`${rel}: ${e.code || e.message}`); }
 }
 
 /** `key: value` lines between the first two `---` lines. Returns null when there is no block. */
@@ -143,7 +185,7 @@ const LANE_KEYS = ["status", "cycle", "phase", "appetite", "burn", "blocked-on",
 function readLane(repo, name) {
   const source = `initiatives/${name}/PROGRESS.md`;
   const text = readText(repo, source);
-  if (text === null) return entity("lane", name, source, { hasPlan: existsSync(join(repo, "initiatives", name, "PLAN.md")) }, ["progress"]);
+  if (text === null) return entity("lane", name, source, { hasPlan: namedFile(repo, `initiatives/${name}/PLAN.md`) !== null }, ["progress"]);
   // The machine header: `key: value` lines before the first blank-line-separated prose block.
   const header = {};
   for (const line of text.split("\n").slice(0, 30)) {
@@ -153,7 +195,7 @@ function readLane(repo, name) {
   const unparsed = [];
   const facts = pick(header, LANE_KEYS, unparsed);
   facts.title = firstHeading(text);
-  facts.hasPlan = existsSync(join(repo, "initiatives", name, "PLAN.md"));
+  facts.hasPlan = namedFile(repo, `initiatives/${name}/PLAN.md`) !== null;
   return entity("lane", name, source, facts, unparsed);
 }
 
@@ -241,10 +283,16 @@ function readRule(repo, name) {
 function readGates(repo, names, parse) {
   const source = "arc.gates.yaml";
   const text = readText(repo, source);
-  const doc = text === null || !parse ? null : parse(text);
-  const rows = Array.isArray(doc?.gates) ? doc.gates : [];
+  const doc = text === null ? null : parse(text);
+  // treeGates named these gates from this same file through this same parser. If the second
+  // read disagrees -- no file, no list, a name on zero rows or on two -- that is a failure to
+  // report, never a gate with every fact "unparsed".
+  if (!Array.isArray(doc?.gates)) throw new ReadError(`${source} gave treeGates ${names.length} gate name(s) but has no readable gates list on a second read`);
+  const rows = doc.gates;
   return names.map((name) => {
-    const row = rows.find((r) => r && r.name === name);
+    const hits = rows.filter((r) => r && r.name === name);
+    if (hits.length !== 1) throw new ReadError(`${source}: gate "${name}" is on ${hits.length} rows, not exactly one`);
+    const row = hits[0];
     const unparsed = [];
     const facts = pick(row, ["check", "mode", "tier", "runtime", "evidence"], unparsed);
     return entity("gate", name, source, facts, unparsed);
@@ -257,9 +305,18 @@ function readGates(repo, names, parse) {
  * @param {string} repo
  * @param {Record<string, any>} [world]  treeWorld(repo)'s result; injectable so a test can break
  *   one reader or grow an inventory and watch this fail closed (tests/docs/extract-probe.mjs).
+ * @param {{ bands?: any }} [inject]  treeAdrBands(repo)'s result, injectable for the same reason.
  * @returns {Promise<{ code: 0|1|2, message: string, wiki?: object }>}
  */
-export async function extract(repo, world) {
+export async function extract(repo, world, inject = {}) {
+  try { return await extractOrThrow(repo, world, inject); }
+  catch (e) {
+    if (e instanceof ReadError) return { code: 2, message: `unreadable: ${e.message}` };
+    throw e;
+  }
+}
+
+async function extractOrThrow(repo, world, inject) {
   let fc;
   try { fc = await import(pathToFileURL(join(repo, ".claude", "scripts", "core", "face-coverage.mjs")).href); }
   catch (e) { return { code: 2, message: `face-coverage.mjs could not be loaded from ${repo}: ${e.code || e.message}` }; }
@@ -272,7 +329,7 @@ export async function extract(repo, world) {
     return { code: 1, message: `treeWorld returns inventories the wiki has not decided about: ${unknown.join(", ")} -- add each to RENDERED or NOT_RENDERED in wiki-build.mjs, with a reason` };
   }
 
-  const bands = await fc.treeAdrBands(repo);
+  const bands = inject.bands ?? (await fc.treeAdrBands(repo));
   // UNREADABLE is never empty: a reader that could not read its source must stop the build,
   // or wiki.json would carry a 0 that agrees with every other 0.
   const unreadable = [];
@@ -352,17 +409,55 @@ async function main(argv) {
   if (res.code !== 0) { process.stderr.write(`wiki-build: ${res.message}\n`); return res.code; }
   const bytes = serialize(res.wiki);
   if (opts["--out"]) {
-    const out = resolve(opts["--out"]);
-    try {
-      if (existsSync(out) && statSync(out).isDirectory()) { process.stderr.write(`wiki-build: --out ${out} is a directory\n`); return 2; }
-      writeFileSync(out, bytes);
-    } catch (e) { process.stderr.write(`wiki-build: cannot write ${out}: ${e.code || e.message}\n`); return 2; }
+    const err = writeOut(repo, opts["--out"], bytes);
+    if (err) { process.stderr.write(`wiki-build: ${err}\n`); return 2; }
     const s = res.wiki.stats;
-    process.stdout.write(`wiki-build: ${RENDERED.map((k) => `${s[k].count} ${k}`).join(", ")} (${s.adrs.count} ADRs, ${s.adrs.unparsed} with unparsed headers) -> ${opts["--out"]}\n`);
-  } else {
-    process.stdout.write(bytes);
+    return say(`wiki-build: ${RENDERED.map((k) => `${s[k].count} ${k}`).join(", ")} (${s.adrs.count} ADRs, ${s.adrs.unparsed} with unparsed headers) -> ${opts["--out"]}\n`);
   }
-  return 0;
+  return say(bytes);
+}
+
+/**
+ * Write stdout and report a failed write as exit 2 rather than letting an EPIPE surface as an
+ * uncaught exception, whose exit 1 would read as "an undecided inventory".
+ */
+function say(text) {
+  return new Promise((done) => {
+    let failed = false;
+    process.stdout.once("error", (e) => {
+      if (failed) return;
+      failed = true;
+      process.stderr.write(`wiki-build: stdout closed (${e.code || e.message})\n`);
+      done(2);
+    });
+    process.stdout.write(text, (e) => { if (!failed) done(e ? 2 : 0); });
+  });
+}
+
+/**
+ * The writer never writes through a link, never onto a directory, and never into the tree
+ * except under docs/wiki/ -- it reads the tree, so a write elsewhere in it could overwrite the
+ * very source it just read. Temp file + rename, so a crash leaves no half-written wiki.json.
+ * @returns {string|null} an error message, or null on success
+ */
+function writeOut(repo, out, bytes) {
+  const abs = resolve(out);
+  let st = null;
+  try { st = lstatSync(abs); } catch (e) { if (e.code !== "ENOENT") return `cannot stat --out ${out}: ${e.code || e.message}`; }
+  if (st?.isSymbolicLink()) return `--out ${out} is a symlink; refusing to write through it`;
+  if (st && !st.isFile()) return `--out ${out} is not a regular file`;
+  let parent;
+  try { parent = realpathSync.native(dirname(abs)); } catch (e) { return `--out ${out}: its directory is not there (${e.code || e.message})`; }
+  const final = join(parent, basename(abs));
+  const root = realRoot(repo);
+  if (inside(final, root) && !inside(final, join(root, "docs", "wiki"))) return `--out ${out} is inside the tree it reads; wiki-build writes into the tree only under docs/wiki/`;
+  const tmp = `${final}.tmp-${process.pid}`;
+  try { writeFileSync(tmp, bytes); renameSync(tmp, final); }
+  catch (e) {
+    try { unlinkSync(tmp); } catch { /* nothing was left */ }
+    return `cannot write ${out}: ${e.code || e.message}`;
+  }
+  return null;
 }
 
 /** Realpath BOTH sides: a main guard that compares spellings no-ops behind a symlink. */

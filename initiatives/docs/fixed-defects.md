@@ -38,3 +38,19 @@ the fuller source; read it too.
 - **A flag consumed the NEXT flag as its value** (`--transcript-dir --dry-run`) and **a value-taking flag given last spun the arg loop forever** (design v2 Phase 00) — *a value starting `--` or a missing value is exit 2.*
 - **`process.exit()` raced libuv teardown on Windows** — *set `process.exitCode` and let the loop drain.*
 - **A POSIX path interpolated into a node program** went red on the Windows leg only — *pass paths as argv, never inside program text.*
+
+## Phase 00 -- the extractor (attack 65f2423, round 1, boundary; logic surface did not run: 503)
+
+- **A per-file read error became "unparsed" at exit 0** (B1) — `wiki-build.mjs` `readText` — *only ENOENT/ENOTDIR is absence; every other errno is a named exit 2.*
+- **`statSync().isFile()` read through a tracked symlink to a file outside the tree** (B2) — `namedFile` (lstat, refuse links, realpath containment) — *every named read is a regular file inside realpath(repo).*
+- **A file present only under another case was read on Windows/macOS and absent on Linux** (B3) — `namedFile` (real basename must equal the asked spelling), and the `hasPlan` twin — *compare the real spelling, never trust a case-folding disk.*
+- **`--out` could overwrite a source file the extractor had just read; non-atomic write** (B4) — `writeOut` — *a writer refuses links, refuses the tree outside its own output dir, and renames a temp file into place.*
+- **EPIPE on stdout surfaced as exit 1, which means "undecided inventory"** (B5) — `say()` — *a failed stdout write is its own named exit 2.*
+- **The DOC-A scan was top-level-only and .mjs-only; `scanned >= 1` proved nothing** (B6) — `tests/docs/no-walker.mjs` (recursive, every file, `--expect` from `git ls-files`) — *a scan asserts it covered the count derived independently.*
+- **The scan missed face-coverage's own enumerators, child_process, and aliased fs namespaces** (B7) — `no-walker.mjs` — *one mutant per spelling, in the suite.*
+- **`! grep ...` mid-test never failed; the Windows path spelling was never checked** (B8) — `tests/docs-extract.bats` + `json-hygiene.mjs` with its own red controls — *a "must not" is `if ...; then false; fi`, and every spelling of a path is checked.*
+- **A "behaviour-preserving" comment claimed an order that was false** (B9) — `face-coverage.mjs` `gather` (kinds, then contract, then readers; old key order) — *a claim of "as before" names what was before and keeps it.*
+- **`requires` omitted the products owning runtime imports** (B10) — `products/docs/manifest.json` (+engine, +hq) — *requires lists every product whose file is imported, statically or dynamically.*
+- **A UTF-8 BOM silently emptied facts** (B13) — `readText` — *strip BOM and CR on every read; a CRLF+BOM fixture must extract identical bytes.*
+- **Gate names from one read, facts from a second, with no one-row check** (B14) — `readGates` — *every name resolves to exactly one row or the build stops.*
+- **Fail-closed branches with no case only they decide** (B15) — `extract-probe.mjs` (10 checks) + CLI branch tests — *one test per branch, asserting the CLI exit code.*
