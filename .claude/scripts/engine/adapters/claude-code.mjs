@@ -19,8 +19,15 @@ export const TOOL_MAP = Object.freeze({
   "shell.run": { kind: "scoped", render: (scope) => `Bash(${scope})` },
   // Bare: one fixed token regardless of scope.
   "fs.read": { kind: "bare", token: "Read" },
-  "fs.write": { kind: "bare", token: "Write" },
-  "agent.invoke": { kind: "bare", token: "Task" },
+  // Declared bare, a write is the one Write token. Declared with paths, each path is an Edit(<path>) grant: the CLI
+  // accepts a Write(<path>) rule and never consults it, and Edit rules are the ones that fence every file-writing
+  // tool, Write included, relative to the working directory (code.claude.com/docs/en/permissions). A path-scoped
+  // write rendered as the bare token would be the unfenced write the scope was declared to prevent (attack 66a26f0 B1).
+  "fs.write": { kind: "bare", token: "Write", scoped: (scope) => `Edit(${scope})` },
+  // A headless dispatch hands a declared agent list over as Agent(<name>) grants, the rule that fences which subagents
+  // may start; the bare Task would let a steered run start any agent at all (attack 1be4183 B1). A generated COMMAND
+  // keeps Task: its allowed-tools line is compiled and pinned byte for byte, and narrowing it is its own reviewed change.
+  "agent.invoke": { kind: "bare", token: "Task", scopedHeadless: (scope) => `Agent(${scope})` },
   "web.search": { kind: "bare", token: "WebSearch" },
   "ask.human": { kind: "bare", token: null }, // asking the operator needs no tool grant
 });
@@ -58,23 +65,25 @@ function assertInline(value, where) {
  */
 const SCOPE_OK = /^[^\r\n(),]+$/;
 
-export function renderAllowedTools(tools) {
+export function renderAllowedTools(tools, { headless = false } = {}) {
   const out = [];
   for (const t of tools) {
     const bare = typeof t === "string";
     const prim = bare ? t : Object.keys(t)[0];
     const spec = TOOL_MAP[prim];
     if (!spec) throw new Error(`claude-code adapter: no mapping for abstract tool \`${prim}\``);
-    if (spec.kind === "bare") {
+    const scopedBare = bare ? null : (headless && spec.scopedHeadless) || spec.scoped || null;
+    if (spec.kind === "bare" && !scopedBare) {
       if (spec.token) out.push(spec.token);
       continue;
     }
+    const render = spec.kind === "bare" ? scopedBare : spec.render;
     if (bare) throw new Error(`claude-code adapter: \`${prim}\` is scope-bearing but was declared bare`);
     for (const scope of t[prim]) {
       if (!SCOPE_OK.test(scope)) {
         throw new Error(`claude-code adapter: scope \`${scope}\` for \`${prim}\` contains ( ) , or a line break — it would forge extra grants`);
       }
-      out.push(spec.render(scope));
+      out.push(render(scope));
     }
   }
   return out.length ? out.join(", ") : null;
@@ -95,7 +104,7 @@ export function renderAllowedTools(tools) {
  */
 export function dispatchToolArgs(doc) {
   if (doc.permissions !== "declared") return [];
-  const allowed = renderAllowedTools(Array.isArray(doc.tools) ? doc.tools : []);
+  const allowed = renderAllowedTools(Array.isArray(doc.tools) ? doc.tools : [], { headless: true });
   if (allowed) return ["--allowedTools", allowed];
   if (Array.isArray(doc.tools) && doc.tools.length === 0) return ["--tools", "", "--strict-mcp-config"];
   throw new Error("claude-code driver: `permissions: declared` produced an empty grant set — an absent --allowedTools means UNRESTRICTED, so this run would silently widen the process");

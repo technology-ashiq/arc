@@ -293,3 +293,37 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
   [[ "$output" == *"[yaml-excluded]"* ]]
   [[ "$output" == *"[baseline-drift]"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# council-convene (face Phase 06 slice 03b). The face row "Convene the council" names this
+# process; its body RUNS arc-council.md rather than copying it. The Node half is
+# tests/council-convene-probe.mjs, which prints one line per check and a PROBE count.
+# ---------------------------------------------------------------------------
+
+@test "council-convene: it lints clean and arc-run routes it high-judgment" {
+  run node "$(LINT)" "$ARC_ROOT/processes/council-convene.process.yaml" --root "$ARC_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"all checks passed"* ]] || { echo "lint RAN but did not pass: $output"; false; }
+  run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" --process council-convene --driver auto --input '{"question":"a probe"}' --dry-run
+  [ "$status" -eq 0 ] || { echo "dry-run refused: $output"; false; }
+  [[ "$output" == *"would run"*"council-convene"* ]] || { echo "the preview never named the process: $output"; false; }
+  [[ "$output" == *"tier high-judgment"* ]] || { echo "the Chair is not routed high-judgment: $output"; false; }
+}
+
+@test "council-convene: fenced write, one emitter kind, agents equal to disk, door field, drift pin, body rules" {
+  run node "$ARC_ROOT/tests/council-convene-probe.mjs" checks
+  [[ "$output" == *"PROBE checks: 19 checks, 0 failed"* ]] || { echo "the probe did not run all 19 checks clean: $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "council-convene: the policy gate a live click crosses authorises it (dry-run never reaches this gate)" {
+  run node "$ARC_ROOT/tests/council-convene-probe.mjs" gate
+  [[ "$output" == *"PROBE gate: 2 checks, 0 failed"* ]] || { echo "the gate refuses or never ran: $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "council-convene: the eval input opens with a mode word and expects a deep session's shape" {
+  local f="$ARC_ROOT/tests/fixtures/engine/evals/council-convene/basic.json"
+  grep -q '"question": "quick ' "$f" || { echo "the eval no longer probes the mode-word trap"; false; }
+  grep -q '"session_file": "docs/council/sessions/' "$f" || { echo "the eval expects no saved session"; false; }
+}
