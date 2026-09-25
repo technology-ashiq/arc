@@ -113,7 +113,7 @@ export function checkAdr(text) {
 
 /** A filename slug from the title: lowercase ascii words joined by `-`, at most 60 characters. */
 export function slugOf(title) {
-  const words = title.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean);
+  const words = title.toLowerCase().normalize("NFKD").replace(/[^abcdefghijklmnopqrstuvwxyz0123456789]+/g, " ").trim().split(/\s+/).filter(Boolean);
   let s = "";
   for (const w of words) { const next = s ? `${s}-${w}` : w; if (next.length > 60) break; s = next; }
   return s || "decision";
