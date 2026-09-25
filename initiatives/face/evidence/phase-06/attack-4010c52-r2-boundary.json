@@ -1,0 +1,113 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "face/src/lib/keys.mjs:14 (L) and tests/face/engine-room.mjs (ids, ~line 188)",
+      "breaking_input": "A refusal or stderr string in which a full provider key follows an ANSI colour code, e.g. ESC + '[31m' + 'sk-ant-' + 48 chars of [A-Za-z0-9]. The same holds for a JSON-escaped newline (backslash, 'n', then the key), a '%0A' or '%20' before the key, or an underscore prefix such as 'desk_' + 'sk-ant-' + 30 chars. The last one is the test's own 4th id, and it is built and then dropped by ids.slice(0, 3).",
+      "why": "The B6 fix put (?<![A-Za-z0-9_-]) on nine of the eleven rules, but only the openai 'sk-' rule caused the 'task-<id>' false alarm. The char before the key is 'm', 'n', '0' or '_', so the lookbehind fails and no rule matches. scrubKeys returns found=[] and the key is drawn. The spine redactor has no such boundary, so the header's 'one set of shapes' is false for any prefixed key. The tests cross every rule only at position 0 of the string and have no positive control for a prefixed key. The B6 fix traded a false alarm for a fail-open hole in the one check whose job is to find keys.",
+      "fix": "Apply the left boundary only to the rule that needs it (openai 'sk-' when the preceding text is a word), and leave anthropic, ghp_, AKIA, AIza, xox, npm_ and sk_live_ unbounded, as the redactor has them. Or normalise ANSI and escape sequences before scanning. Add positive fixtures: ANSI-prefixed, backslash-n-prefixed and underscore-prefixed real-length keys must be caught; keep task-<40> as the only not-a-key case.",
+      "twin_of": "A zero-count gate where every unreadable outcome equals the pass -> A gate whose pass is 0 must fail closed on every read error."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/src/lib/keys.mjs:22 (aws-secret-access-key) and :56-64 (walk)",
+      "breaking_input": "An ok payload of { env: { aws_secret_access_key: <40 base64 chars> } }, or the same text as JSON inside a string: a quote, aws_secret_access_key, a closing quote, a colon, then a quoted 40-char value.",
+      "why": "The aws-secret rule is assignment-shaped: the key name, an optional 8 spaces, then [:=]. The JSON string form has a closing quote between the name and the colon, so the rule cannot match. The walker also scans each object key and each value as a separate string, so in the object form the name is never adjacent to the value. A bare 40-char base64 value matches no rule. The rule can therefore never fire on structured data, which is exactly what the door serves.",
+      "fix": "In walk, for each object entry also test the joined text `${k}=${v}` against the assignment-shaped rules. Allow an optional closing quote before [:=] in the regex, and pin both forms as fixtures crossed through the redactor as well.",
+      "twin_of": "\"JSON.parse or atob of a literal\" saw only a string directly inside the call -> a text rule judges the text, however it is spelled or reached."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "face/src/lib/registry.mjs:~616-628 (keyLeaksFor, foldModule) and face/src/shell/RoomFrame.tsx:~176-181",
+      "breaking_input": "A key placed in (a) the /api/rooms registry body that becomes ctx.inventories, ctx.needs or ctx.rooms, and drawn by a Catalogue or lane room; (b) the human text of a refused stamp/ask/session action, drawn through actProblem; (c) a re-read error's rereadFailed.code, drawn in the 'stale' line; (d) a room that RoomFrame hands to GenericRoom, IndexRoom or fallbackFor and never folds; (e) a read key that carries an id, which keyLeakSentence prints raw as `${key}: shapes`. None of these is scanned.",
+      "why": "The B1 fix moved the scan to the read host, but it covers only payloadsFor(manifest, loaded). ctx, act results, the frame's own problem strings, the non-module room paths and the read key inside the leak line reach the screen without passing through it. This is the same class, one channel over: the rule now lives in one channel, not where every drawn string passes.",
+      "fix": "Scan ctx (rooms, inventories, needs, laneMap) once where the shell loads it, and scan the act-result and stale strings inside RoomFrame. Route GenericRoom and IndexRoom through the same host check. Build the leak line from a scrubbed key. Add a module-frame arm that fails when any string a room draws did not pass keys.mjs.",
+      "twin_of": "A door-wide rule wired into one room -> A cross-cutting rule lives where every path passes, not in the one path that was asked about."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "face/src/modules/kernel/engine-room/fold.mjs:~41-46 and tests/face/engine-room.mjs:~135-142",
+      "breaking_input": "Any read carrying an anthropic-shaped key, folded through the production path registry.foldModule -> engine-room fold. foldModule scrubs first, so fold(raw) receives '[anthropic-key withheld]'. Its own withholdKeys pass then finds only the WITHHELD marker and reports 'withheld-upstream'.",
+      "why": "In production f.keyLeaks and keyLeakText say '<read>: withheld-upstream' and lose the shape name, while RoomFrame's separate banner (computed from the unscrubbed loaded) names the shape. The user sees two KEY_IN_BROWSER banners that disagree. The test folds fold() directly with raw payloads, so it sees shape names. The foldModule fold it builds is only checked for the absence of the planted bytes. Nothing asserts the production naming.",
+      "fix": "Have foldModule pass the leaks it found to the fold (or into ctx) instead of the fold re-scanning scrubbed data. Alternatively make the fold treat 'withheld-upstream' as already-named and not re-report it. Assert f.keyLeaks and keyLeakText on the hostFold, not just absence.",
+      "twin_of": "A fix in a helper no screen calls -> fold the ROOM in the test, never a helper; a lib function with no production caller is dead code carrying a second copy of the judgment."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "face/src/lib/keys.mjs:35 and :50",
+      "breaking_input": "Any receipt payload, refusal text or stderr containing the literal text '[diff withheld]' or '[path withheld]', for example a tool line that says a diff was withheld. The door's own path scrub uses 'withhold' wording, so if its marker takes this shape every refusal with a scrubbed path trips it.",
+      "why": "WITHHELD = /\\[[a-z0-9-]+ withheld\\]/ makes str() add 'withheld-upstream', so hasKeyLeak becomes true and the room draws KEY_IN_BROWSER 'a provider key reached this browser' with no key present. Any writer of the spine or any refused body can forge or trigger the door-defect banner, and a common word in this codebase's own output is enough. No fixture pins a marker-shaped non-key.",
+      "fix": "Make the marker unforgeable, e.g. a private sentinel character sequence that scrubKeys emits and no other writer uses. Or recognise only the exact set of `[${rule.name} withheld]` names from KEY_RULES plus 'unscanned-depth'. Pin '[path withheld]' and '[diff withheld]' as not-a-leak fixtures.",
+      "twin_of": "A page error carrying a newline printed a forged `smoke: opened=... mood=light mood-miss=0` line -> every free text bound for a parsed log is one line (JSON-escaped); the ids-are-grammar-checked twin."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "tests/face/engine-room.mjs:~40-45 (expect), ~55 (plannedRoutes), ~188-196 and tests/face-l3.bats:~69",
+      "breaking_input": "Change the registry so the room plans only /api/engine and /api/spine (lane and file reads dropped), or delete a check together with its expect(1) line. `cases` shrinks and EXPECTED shrinks by the same amount, so ran === expected still holds. The bats floor `-ge 25` passes at any count from 25 to about 34.",
+      "why": "The B10 fix replaced the hand floor of 20 with an EXPECTED that is incremented at the same call sites as RAN, so the two can differ only on a throw. A case list that shrank or a check that was deleted with its expect passes. The only real floor left is the hand-kept 25 in bats, well below the actual count. Separately, plannedRoutes comes from fold({}, ctx), i.e. the room under test's own plan over an empty page, so a read the fold plans only after data arrives, or one dropped from the plan, is exempt from planting and 'derived' means derived from the code under test.",
+      "fix": "Derive EXPECTED from independent data: the manifest's declared reads and the registry contract for planted routes, and length-of-list constants for the sections. Print those numbers and have bats compare against a pinned constant of the derived total, not `-ge 25`. Assert that each contracted route has a planted case and names its read.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-attack.mjs:~324-331",
+      "breaking_input": "An arc-run leg whose driver fails with a gateway error body that echoes the request credential (for example 'Incorrect API key provided: <key>' on the generic-api driver), so stderr has 10+ lines and the first 'arc-run: ' line is that error. The new `cause:` line prints the line raw. The tail is also raw. A stderr line containing ESC or U+2028 passes through as well.",
+      "why": "The fix adds a second unredacted, un-truncated copy of a child's stderr line to the summary that the owner pastes into evidence in a public repo. Nothing passes it through redactSecrets, and nothing strips terminal controls. The cause line is picked from the whole stderr, not only the last 8 lines that were previously shown. No test covers the new branch, and the exclusion regex depends on the emitter's exact prose.",
+      "fix": "Pass both cause and tail through redactSecrets (redact before slice) and strip \\p{Cc} and line breaks. Add a bats case with stderr of 10 lines whose first arc-run line is the cause, one with a key in it, and one with CRLF.",
+      "twin_of": "The door's stderr tail, carrying `#token=`, went into a SetupError and the public CI log -> every child stderr bound for an error passes through `redactSecrets`; so do page error texts."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:~325",
+      "breaking_input": "arc-run cannot be spawned (node path wrong, ENOENT or EACCES). spawnSync returns error set and stderr === null.",
+      "why": "The template on the next lines reads r.error, so the author expects that case. But r.stderr.trim() runs before it and throws a TypeError, which unwinds the loop and loses the other surface's result and the anyFailed bookkeeping. The changed hunk keeps the unguarded dereference.",
+      "fix": "Use (r.stderr ?? \"\").trim(), and put a spawn error in the RUN FAILED line even when stderr is empty.",
+      "twin_of": "One CDP error mid-run threw away every room already measured; room lines printed only after the loop -> print each finding when it is final, and catch per item so one failure is a finding, not the end of the evidence."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "face/src/modules/kernel/engine-room/fold.mjs:~56",
+      "breaking_input": "run.completed receipts whose payload.driver is ' ' (spaces), '\\u200b', or a newline. `unnamed` counts them as named because it tests only typeof string and !== \"\".",
+      "why": "`unnamed` is a second copy of runsBy's decision about what a driver name is. If runsBy drops or blanks such a name, the receipt vanishes from the health rows and healthNote stays silent. If it groups it, the panel draws a row with an invisible name. The figure beside the table does not count what the table drew, and the fixture only covers '', undefined and two inherited-key names.",
+      "fix": "Take the unnamed count from runsBy's own dropped-rows result, or share the exact name predicate (trim, cell-visible). Pin whitespace and zero-width names as fixtures.",
+      "twin_of": "A KPI counted the raw list beside a table that refused or dropped entries -> a figure beside a table counts what the table drew."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "face/src/lib/keys.mjs:82-92 (withholdKeys)",
+      "breaking_input": "(a) payloads whose own key is '__proto__' (a null-prototype object as in the test's foldWith): `out[key] = ...` on a plain {} sets out's prototype and drops the own property. (b) payloads that is an array or null: the function returns { payloads } with the ORIGINAL value, and foldModule and fold pass that unscanned value on to the fold.",
+      "why": "scrubKeys builds null-prototype objects and defines keys, but withholdKeys assigns onto {}. A read key of '__proto__' silently moves the payload into the prototype, and lookups of 'constructor' or 'toString' then find inherited functions where the earlier null-prototype object gave undefined. The non-object branch names the problem in leaks but still hands the unscanned value on, so the check fails open when its pass condition is 'no leak found'.",
+      "fix": "Use Object.create(null) and Object.defineProperty, or a Map, for out. For a non-object input return an empty object as payloads so nothing unscanned reaches a fold.",
+      "twin_of": "The serializer recursed without a cap and ASSIGNED keys -> cap depth with a sentence; define keys, never assign them."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "face/src/lib/keys.mjs:14-28 (L via new RegExp)",
+      "breaking_input": "Any Safari before 16.3 (or another engine without regex lookbehind) loading the shell. new RegExp('(?<![A-Za-z0-9_-])...') throws SyntaxError at module evaluation of keys.mjs, which registry.mjs and RoomFrame.tsx import.",
+      "why": "Building the pattern from a string hides it from esbuild's target checks, so the build passes. The failure is at load time and takes down every room, not just the leak scan. Vite's default target still includes Safari 14.",
+      "fix": "Avoid lookbehind: match a captured left context (^|[^A-Za-z0-9_-]) and replace it back, or drop the boundary as B1 suggests. Or raise the declared build target and add a smoke on it.",
+      "twin_of": "The colour parser accepted `rgb(255 255, 255)`, which Chrome rejects -> a parser for a browser-read value is exactly as strict as the browser."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "face/src/lib/keys.mjs:63",
+      "breaking_input": "An object whose two keys are different keys of the same shape, or whose keys are '[anthropic-key withheld]' and a real key: { <key1>: 'a', <key2>: 'b' }. Both scrub to the same name.",
+      "why": "o[str(k)] = walk(x) overwrites the earlier entry with the later one, so a value is dropped from the folded room with nothing saying so. The count and content of the object change silently in exactly the leak case the code is there for.",
+      "fix": "On a collision, suffix the name with an index (for example ' #2') or record the collision as a named finding.",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    }
+  ]
+}
