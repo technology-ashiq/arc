@@ -13,18 +13,20 @@
   read with the `mdStems` export Phase 00 already lands. **No new `face-coverage.mjs` export in this
   phase** (No-gos; A-06).
 - Exit `0` covered · `1` finding(s), each printed `FAIL [entity-no-page|page-no-entity|narrative-no-entity] <id or path>` · `2` usage / unreadable input. Unreadable is never 0.
-- `--mutant-selftest`: builds scratch copies (fixture tree + fixture pages), runs the real gate as a
-  child process against each, and requires: **M1** unknown product + unknown lane → exit 1 naming
+- `--mutant-selftest`: writes scratch page trees from the real tree's own wiki, runs each arm through
+  `collect()` -- the same function the CLI runs (a child process would need `child_process`, which
+  the DOC-A scan forbids under `.claude/scripts/docs/`; refined at build, 2026-09-25) -- and requires: **M1** unknown product + unknown lane → exit 1 naming
   BOTH · **M2** product removed, page kept → exit 1 naming the orphan page · **M3** orphan narrative
   → exit 1 naming it · **M4** `treeWorld` wiring cut (entities empty) → exit 1, never "covered" ·
-  **M0** the clean fixture → exit 0. Prints `mutant-selftest: ran 5 of 5` and labels expected
+  **M5** a page directory the wiki does not define → exit 1 naming it (added at build: the reverse
+  direction covers directories, not only files) · **M0** the clean fixture → exit 0. Prints `mutant-selftest: ran 6 of 6` and labels expected
   failures as `EXPECTED-FAIL`. Cleans up on every path, including a thrown error.
 - Page fixtures under `tests/fixtures/docs/pages/` are hand-made minimal files — the renderer does
   not exist yet, which is the point.
 
 ## Exit criteria (Definition of Done)
 - [ ] REQ-02 and REQ-03 green on CI via `tests/docs-coverage.bats`
-- [ ] the suite asserts `ran 5 of 5` BEFORE asserting any verdict (vacuous-pass rule)
+- [ ] the suite asserts `ran 6 of 6` BEFORE asserting any verdict (vacuous-pass rule)
 - [ ] each mutant's failure names exactly what was planted (asserted by id, not by exit code alone)
 - [ ] a mutant of the gate itself (reverse direction deleted from a scratch copy) turns the suite RED — the test is attacked, not only the rule
 - [ ] two-surface attack run, holes fixed and pinned, `fixed-defects.md` appended
@@ -35,7 +37,7 @@
 ## Verification plan
 
 - **Test command:** `bats tests/docs-coverage.bats` — CI only, read per-JOB with `ci-digest.mjs`
-- **Expected failure first:** committed before `wiki-coverage.mjs` exists, every test fails with `Cannot find module '.../wiki-coverage.mjs'`; after a stub that always exits 0 is committed, M1–M4 fail with `expected exit 1, got 0` — the stub is the negative control that proves the suite can go red on a vacuous gate. Both runs' ids recorded.
+- **Expected failure first:** committed before `wiki-coverage.mjs` exists, every test fails with `Cannot find module '.../wiki-coverage.mjs'` (run recorded in evidence). The separate always-exit-0 stub commit is replaced, at build, by two gate mutants INSIDE the suite -- a copy with `reverseFindings` cut and a copy with `coverageFindings` returning nothing -- the same negative control without spending a CI cycle on it.
 - **Live demo scenario:** `node .claude/scripts/docs/wiki-coverage.mjs --mutant-selftest` → prints five labelled cases and `ran 5 of 5`, exit 0; then delete one page from a scratch copy of the fixture pages and run the gate against it → exit 1 naming that entity.
 - **Real-system check:** n/a — fixtures only this phase (real pages exist from Phase 02).
 - **Expected evidence:** `initiatives/docs/evidence/phase-01/` — both red CI runs, the green run, the demo transcript, the kill-checkpoint answer.

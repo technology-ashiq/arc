@@ -61,21 +61,38 @@ function codeOnly(src) {
   return out;
 }
 
-/** The ONE sanctioned call of a face-coverage enumerator: the ADR files, by face's own helper. */
-const SANCTIONED = ['fc.mdStems(join(repo, "docs", "adr"))'];
+/**
+ * The sanctioned calls of a face-coverage enumerator -- the only directory listings the docs
+ * lane makes, all through face's own helpers: the ADR files (wiki-build), and the pages and
+ * narratives that exist under docs/wiki/ (wiki-coverage's pageTree, the reverse direction).
+ * Exact call text; anything else is a walker.
+ */
+const SANCTIONED = [
+  'fc.mdStems(join(repo, "docs", "adr"))',
+  "fc.dirNames(pagesAbs)",
+  "fc.mdStems(pagesAbs)",
+  "fc.mdStems(join(pagesAbs, d))",
+  "fc.dirNames(join(pagesAbs, d))",
+  "fc.dirNames(narrAbs)",
+  "fc.mdStems(narrAbs)",
+  "fc.mdStems(join(narrAbs, d))",
+  "fc.dirNames(join(narrAbs, d))",
+];
 
 /**
- * The line holds exactly one enumerator, and the sanctioned call sits at the SAME column in the
- * code (comments and string bodies blanked) as in the raw text -- so the allow-listed words in a
+ * The line holds exactly one enumerator, and a sanctioned call sits at the SAME column in the
+ * code (comments and string bodies blanked) as in the raw text -- so allow-listed words in a
  * trailing comment or a string cannot launder a different call on that line.
  */
 function isSanctioned(codeLine, rawLine) {
-  if ((codeLine.match(/\b(dirNames|mdStems|yamlStems)\b/g) || []).length !== 1) return false;
+  const names = codeLine.match(/\b(dirNames|mdStems|yamlStems)\b/g) || [];
+  if (names.length !== 1) return false;
   for (const s of SANCTIONED) {
     const at = rawLine.indexOf(s);
     if (at < 0) continue;
-    const m = /\bmdStems\b/.exec(codeLine);
-    if (m && m.index === at + s.indexOf("mdStems") && codeLine.slice(at, at + 3) === "fc.") return true;
+    const name = /(dirNames|mdStems|yamlStems)/.exec(s)[1];
+  const m = new RegExp(String.raw`\b${name}\b`).exec(codeLine);
+    if (m && m.index === at + s.indexOf(name) && codeLine.slice(at, at + 3) === "fc.") return true;
   }
   return false;
 }
