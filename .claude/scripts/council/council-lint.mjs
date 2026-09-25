@@ -16,8 +16,8 @@
  * Roster grows per phase: Phase 0 = advocate/skeptic/neutral; Phase 1 adds verifier; Phase 2 adds
  * researcher; Phase 3 adds the 7 domain experts.
  */
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, existsSync, openSync, fstatSync, closeSync, realpathSync, lstatSync } from "node:fs";
+import { join, dirname, basename, extname } from "node:path";
 import { createHash } from "node:crypto";
 
 const args = process.argv.slice(2);
@@ -29,7 +29,7 @@ const verdictFile = flagVal("--verdict");
 const briefFile = flagVal("--brief");
 const jurorArtifactFile = flagVal("--juror-artifact");
 const consumed = new Set();
-for (const f of ["--verdict", "--brief", "--juror-artifact"]) {
+for (const f of ["--verdict", "--brief", "--juror-artifact", "--payload"]) {
   const i = args.indexOf(f);
   if (i >= 0) consumed.add(i), consumed.add(i + 1);
 }
@@ -71,8 +71,100 @@ function isValidISODate(s) {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
 }
 
+// ------------------------------------------------------------------ payload mode (ADR-1345)
+// The council.verdict receipt, in the spine's CLOSED shape (validate.mjs: session_id · question_hash · call ·
+// confidence), derived from a SAVED verdict -- never typed by hand into a shell string. The call maps the decision:
+// YES and CONDITIONAL are a call to proceed, NO and WAIT a call to hold (the reading calibrate.mjs scores by). Prints
+// ONE line of JSON on success; exit 1 names what the file lacks; exit 2 names a usage error.
+//
+//   node council-lint.mjs [repo-root] --payload <verdict file>
+//
+// Hardened by attacks eaa9168 and 1d98650: the mode is entered on the FLAG, never on a truthy value; it takes only its
+// file and an optional repo root -- any other token is refused by name; the file must be a plain file directly under
+// <root>/docs/council/sessions, with the lowercase .md the command writes -- the fence is the repo's own directory,
+// never a flag the caller sets; it is read once through its descriptor with a size cap and a FATAL UTF-8 decode; the
+// DECISION and CONFIDENCE values must share their line; the question must have a visible character and the heading's
+// date must be a real day; every name a message prints is escaped.
+function payloadMode() {
+  const BS = String.fromCharCode(92);
+  // Every name a message prints: control characters and Unicode line breaks escaped, so no path forges a line (B4).
+  const shown = (s) => JSON.stringify(String(s)).replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, (ch) => `${BS}u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
+  const usage = (msg) => { console.error(`council-lint: --payload: ${msg}`); process.exitCode = 2; };
+  const refuse = (file, msgs) => { for (const m of msgs) console.error(`council-lint: --payload ${shown(file)}: ${m}`); process.exitCode = 1; };
+  if (args.some((a) => a.startsWith("--payload="))) return usage("takes its file as the next argument, not --payload=FILE");
+  const at = args.flatMap((a, i) => (a === "--payload" ? [i] : []));
+  if (at.length > 1) return usage("given more than once -- one verdict per receipt");
+  const file = args[at[0] + 1];
+  if (typeof file !== "string" || file === "" || file.startsWith("-")) return usage("needs the saved verdict's path as its value");
+  // Only the file and ONE optional repo root: any other token -- a second path, an unknown flag, another mode -- is
+  // refused by name, never ignored (B3).
+  const rest = args.filter((_, i) => i !== at[0] && i !== at[0] + 1);
+  const stray = rest.filter((a) => a.startsWith("-"));
+  if (stray.length) return usage(`takes no other flag -- ${stray.map(shown).join(", ")} would answer for a run this mode does not make`);
+  if (rest.length > 1) return usage(`takes one repo root at most, not ${rest.map(shown).join(", ")}`);
+  if (/[\p{Cc}\p{Zl}\p{Zp}]/u.test(file)) return usage(`the path ${shown(file)} holds a control character or a line break`);
+  // A UNC or device path reaches out of the machine or into a stream; a colon past a drive letter names an NTFS stream.
+  if (/^[\\/]{2}/.test(file) || file.indexOf(":", /^[A-Za-z]:/.test(file) ? 2 : 0) !== -1) return usage(`the path ${shown(file)} is a UNC, device or stream path`);
+  const sessionsDir = join(rest.length ? rest[0] : root, "docs", "council", "sessions");
+  let dirReal, real;
+  try { dirReal = realpathSync.native(sessionsDir); } catch (e) { return usage(`the sessions directory ${shown(sessionsDir)} cannot be resolved (${e.code || "error"}) -- run from the repo root, or name it`); }
+  try { real = realpathSync.native(file); } catch (e) { return refuse(file, [`cannot be resolved (${e.code || "error"})`]); }
+  if (dirname(real) !== dirReal) return refuse(file, [`is not a saved session directly under ${shown(sessionsDir)}`]);
+  // The lowercase .md the command writes, and nothing else: two spellings of one name are two files on a
+  // case-sensitive disk and would derive ONE id (B13).
+  if (extname(real) !== ".md") return refuse(file, ["is not a .md verdict (the extension is lowercase .md)"]);
+  // lstat BEFORE open: a FIFO blocks open() for ever waiting for a writer (B7).
+  try { if (!lstatSync(real).isFile()) return refuse(file, ["is not a plain file"]); } catch (e) { return refuse(file, [`cannot be read (${e.code || "error"})`]); }
+  let buf;
+  let fd;
+  try {
+    fd = openSync(real, "r");
+    const st = fstatSync(fd);
+    if (!st.isFile()) return refuse(file, ["is not a plain file"]);
+    if (st.size > 1024 * 1024) return refuse(file, [`is ${st.size} bytes -- past the 1 MiB a verdict can be`]);
+    buf = readFileSync(fd);
+  } catch (e) { return refuse(file, [`could not be read (${e.code || "error"})`]); }
+  finally { if (fd !== undefined) try { closeSync(fd); } catch { /* already closed */ } }
+  let text;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { return refuse(file, ["is not valid UTF-8 -- the question's hash would be taken over replacement characters"]); }
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  // A Unicode line break is a line to no reader but a regex: refused, so this mode and grep read the same lines (B5).
+  if (/[\p{Zl}\p{Zp}]/u.test(text)) return refuse(file, ["holds a Unicode line or paragraph separator -- a DECISION line hidden behind one is a line to nothing else"]);
+  text = text.replace(/\r\n?/g, "\n");
+  const why = [];
+  const h1 = /^# arc-council — (.+) \((\d{4}-\d{2}-\d{2})\)[ \t]*$/m.exec(text);
+  const question = h1 ? h1[1].trim() : "";
+  if (!h1) why.push('has no "# arc-council — <question> (<YYYY-MM-DD>)" heading to take the question from');
+  else {
+    if (!/[\p{L}\p{N}\p{P}\p{S}]/u.test(question)) why.push("has a heading with no question in it -- its hash would be the hash of nothing");
+    if (!isValidISODate(h1[2])) why.push(`heading date ${h1[2]} is not a real day`);
+  }
+  // The value shares its line: `DECISION:` on one line and `WAIT` on the next is an unfilled line, not a call (B6).
+  const dec = [...text.matchAll(/^[ \t]*DECISION:[ \t]*(YES|NO|CONDITIONAL|WAIT)[ \t]*$/gim)];
+  if (dec.length !== 1) why.push(`has ${dec.length} filled DECISION line(s); a verdict has exactly one`);
+  const conf = [...text.matchAll(/^[ \t]*CONFIDENCE:[ \t]*(High|Medium|Low)[ \t]*$/gim)];
+  if (conf.length !== 1) why.push(`has ${conf.length} filled CONFIDENCE line(s); a verdict has exactly one`);
+  // The id is the name the FILESYSTEM holds -- never the caller's spelling.
+  const base = basename(real, ".md");
+  if (!/^[A-Za-z0-9._-]{1,62}$/.test(base)) why.push(`its name ${shown(base)} cannot be a session id (c-<name>, name [A-Za-z0-9._-], at most 62)`);
+  if (why.length) return refuse(file, why);
+  const decision = dec[0][1].toUpperCase();
+  const c = conf[0][1];
+  console.log(JSON.stringify({
+    session_id: `c-${base}`,
+    question_hash: createHash("sha256").update(question, "utf8").digest("hex"),
+    call: decision === "YES" || decision === "CONDITIONAL" ? "proceed" : "hold",
+    confidence: c[0].toUpperCase() + c.slice(1).toLowerCase(),
+  }));
+  process.exitCode = 0;
+}
+
+// The flag is the mode, whatever its value: an empty or `=` value is refused inside, never a fall-through (B4).
+const payloadRequested = args.some((x) => x === "--payload" || x.startsWith("--payload="));
+if (payloadRequested) payloadMode();
+
 // ------------------------------------------------------------------ verdict mode
-if (verdictFile) {
+if (verdictFile && !payloadRequested) {
   if (!existsSync(verdictFile)) {
     fail(`verdict file not found: ${verdictFile}`);
     report();
@@ -326,7 +418,7 @@ if (verdictFile) {
 }
 
 // ------------------------------------------------------------------ brief mode
-if (briefFile) {
+if (briefFile && !payloadRequested) {
   if (!existsSync(briefFile)) {
     fail(`brief file not found: ${briefFile}`);
     report();
@@ -354,6 +446,8 @@ if (briefFile) {
   report();
 }
 
+// Static mode runs only when no other mode answered: payload mode sets its exit code and must not be followed by it.
+if (!payloadRequested) {
 // ------------------------------------------------------------------ static mode
 const read = (p) => readFileSync(join(root, p), "utf8");
 const exists = (p) => existsSync(join(root, p));
@@ -403,3 +497,5 @@ for (const name of [...CORE_AGENTS, ...DOMAIN_AGENTS]) {
 }
 
 report();
+}
+

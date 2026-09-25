@@ -778,3 +778,20 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A second copy of "what a name is"** -- health rows and the unnamed count share one visible-name predicate. *Two readers of one fact share one predicate.*
 - **`out[key] =` on a plain object** -- a read keyed `__proto__` moved the prototype; outputs are null-prototype with defineProperty, and a non-object input folds nothing. *Build maps from untrusted keys without a prototype.*
 - **Colliding scrubbed keys overwrote each other** -- the second is numbered and the collision said. *A lossy transform says what it merged.*
+
+## Phase 06 slice 03a -- the council's receipt (attack eaa9168, round 1, boundary)
+
+- **An ungated emit**: a refused derivation inside `$(...)` left an empty payload, and a hook-mode emit ran and exited 0 -- step 9 derives into a variable, stops on refusal, and only then emits; the bats case runs the command's own two lines through bash and the .sh wrapper, for a real session and a missing one. *A pipeline's inner failure is lost unless the outer step reads it.*
+- **A mode entered on a truthy value, sharing a run with another** -- the flag is the mode; an empty, `=`-form or repeated value, or a second mode, is a named usage error (exit 2). *Enter a mode on the flag, never on its value.*
+- **A caller path opened on existsSync alone** -- UNC, device and stream paths are refused first; the file must sit directly under the sessions directory (realpath both), is read once through its descriptor with a size cap, and is decoded fatally (BOM stripped, invalid UTF-8 refused); the id is the name the filesystem holds. *A path from a caller is a claim about a file; resolve it before trusting it.*
+- **A shape check where the real-day check belongs** -- the heading's date must be a real day, as `--verdict` requires. *Two modes reading one file hold it to one rule.*
+- **process.exit after the one parsed line; a raw path in a message** -- exitCode and a function return; every message quotes the path. *Never exit() behind the line a caller reads.*
+
+## Phase 06 slice 03a -- the council's receipt (attack 1d98650, round 2, boundary)
+
+- **A fence the fenced caller could move**: `--sessions-dir` let any file become a "saved session" -- the flag is gone; the fence is `<root>/docs/council/sessions`, and fixtures pass a fixture repo as the root. *Never take a fence's location from the command line being fenced.*
+- **Extra tokens ignored** -- payload mode takes its file and one optional root; any other token or flag is refused by name. *A mode that ignores what it was given answers a question nobody asked.*
+- **A hook-mode emit that wrote nothing still ended the step 0** (a linked worktree refuses and exits 0) -- step 9 reads the receipt's id back and stops without one; the bats arm runs a silent emitter. *"Emitted" is proven by the receipt, never by the exit code.*
+- **Messages that echoed a forged line** -- every printed name escapes control characters and Unicode line breaks. **A line break only a regex honours** -- a U+2028 in the text is refused. **A value on the next line** -- DECISION's value must share its line. *Read lines the way every other reader of the file reads them.*
+- **A FIFO that blocked open()** -- lstat before open. **A directory blamed on the file** -- the sessions directory is resolved and named on its own. **An empty question hashed** -- a question needs a visible character. **Two spellings of .md** -- only lowercase. *Each failure names the path that failed.*
+- **One WARN excluded too many** -- only the transcript-destination WARN is passed over when naming a cause. *Exclude the one line you mean, not its prefix.*
