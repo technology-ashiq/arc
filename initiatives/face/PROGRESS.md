@@ -385,7 +385,21 @@ stay bespoke folds.
 
 ## Now
 
-**RESUME HERE (2026-09-23):** **Phase 05 is CLOSED** (done log, 2026-09-23): all 31 work verbs run from the face,
+**RESUME HERE (2026-09-25):** Phase 06 IN PROGRESS, as stacked PRs, one per slice.
+- **Merged:** #269 (slice 01, session door), #270 (slice 02, session dock), #271 (slice 05, Engine room; its first
+  run was red on a View deciding a string and an untyped optional `ctx` breaking `tsc`, fixed in `6bc25d96`, 19/19
+  green on run 36098046567).
+- **This PR, #272** (slice 03a: council.verdict in the closed shape, ADR-1345), rebased on main after #271's squash,
+  with a macOS `sed` fixture fix and ADR-0226 Amendment 2 (attack the local commit, push once, one CI run per PR).
+- **Next:** slice 03b. The `council-convene` process is additive in the engine lane: a headless body from
+  arc-council.md, an eval fixture, an `engine/router.yaml` class row (ADR-0069, a reviewed tier) and an
+  `hq.policy.yaml` row. Then the live convene demo, whose spend the OWNER approves first. Then slice 04: the other
+  SESSION verbs' process files, per owning lane, with no cuts.
+- **Logic attacker never ran:** `openrouter/qwen/qwen3.8-27b:free` hits a 429 on every call. The owner should set a
+  paid model in `ARC_ATTACK_TRIAL_MODEL`.
+- **On resume, check open PRs and sibling worktrees first:** this `## Now` only sees merged work.
+
+**Earlier (2026-09-23):** **Phase 05 is CLOSED** (done log, 2026-09-23): all 31 work verbs run from the face,
 residue none, receipts `01M37D0KHFPXBDBWQRYPMEXVT8` · `01M37D0M5F55KH2D8A5ZWJG6TA` (the second waits on the owner's
 stamp). **Phase 06 is next -- the session door** (REQ-08, 5d): council convene, absorb read, hire certification and the
 15 SESSION verbs in `evidence/phase-05/cli-probe.md`, each started only by a click, streamed, and landed as a receipt of
