@@ -800,7 +800,7 @@
     }
   },
   "processes": {
-    "$comment": "7 live + council-convene (Phase 06 slice 03b; a live run waits on its hq.policy.yaml row) + face-ask lands in Phase 07",
+    "$comment": "8 live + lesson-log (Phase 06 slice 04; a live run waits on its hq.policy.yaml row) + face-ask lands in Phase 07",
     "map": {
       "commit-msg-draft": "engine-room",
       "review-diff": "engine-room",
@@ -810,6 +810,7 @@
       "day-close-roll": "engine-room",
       "attack-diff": "engine-room",
       "council-convene": "council-chamber",
+      "lesson-log": "memory",
       "face-ask (Phase 07)": "ask-arc"
     }
   },
