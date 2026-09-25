@@ -3,7 +3,11 @@
 
 [arc reference](../index.md) › [Lanes](../index.md#lanes) › **Lane**
 
-> **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/lanes/portfolio.md` -- hand-written, never generated (ADR-1505, ADR-1508).
+## Why it exists
+
+The portfolio lane built the structure every other lane now lives in: a workspace per lane under `initiatives/` with exactly one live plan each (ADR-0050, ADR-0051), the `--lane` flag as the only way to name one (ADR-0054), and `PORTFOLIO.md` as a board that is a view derived from each lane's `PROGRESS.md`, never the truth (ADR-0051).
+
+Its cycle, "The Conductor", closed on 2026-08-02. The lane is idle because what it built is finished and in daily use by every lane on the board — this one included.
 
 *Cycle 4 · arc-portfolio "The Conductor"*
 

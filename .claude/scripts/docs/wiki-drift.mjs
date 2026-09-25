@@ -23,7 +23,7 @@
 // Exit: 0 nothing dangling | 1 a dangling reference (named) | 2 usage, or the tree unreadable.
 
 import { readFileSync, existsSync, lstatSync, realpathSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { join, dirname, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -61,11 +61,13 @@ export function referencesIn(line) {
   const ticked = [...line.matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim());
   for (const t of ticked) {
     if (/^\/[a-z][a-z0-9-]*$/.test(t)) refs.push([t, "command"]);
-    else if (t.includes("/") && EXT.test(t) && !/^[a-z]+:\/\//i.test(t) && !t.includes(" ")) refs.push([t.replace(/^\.\//, ""), "path"]);
+    // A backslash counts as a separator here, so a Windows spelling is a reference -- and then
+    // refused by dangling() -- rather than silently not a reference at all.
+    else if (/[\\/]/.test(t) && EXT.test(t) && !/^[a-z]+:\/\//i.test(t) && !t.includes(" ")) refs.push([t.replace(/^\.[\\/]/, ""), "path"]);
   }
   const bare = line.replace(/`[^`\n]*`/g, " ");
   for (const m of bare.matchAll(/(?:^|[\s(])(\/arc-[a-z0-9-]+)\b/g)) refs.push([m[1], "command"]);
-  for (const m of bare.matchAll(/(?:^|[\s(])((?:\.claude|products|initiatives|processes|docs|tests)\/[\w./-]+)/g)) {
+  for (const m of bare.matchAll(/(?:^|[\s(])((?:\.claude|products|initiatives|processes|docs|tests)[\\/][\w.\\/~-]+)/g)) {
     const t = m[1].replace(/[.,;:]+$/, "");
     if (EXT.test(t)) refs.push([t, "path"]);
   }
@@ -76,10 +78,25 @@ export function referencesIn(line) {
 export function dangling([token, kind], ctx) {
   if (kind === "adr") return ctx.adrs.has(token.slice(4)) ? null : "no such ADR on this tree";
   if (kind === "command") return ctx.commands.has(token.slice(1)) ? null : "no such command on this tree";
-  if (token.split("/").includes("..")) return "a path with .. is not a reference into this tree";
-  if (ROOTS.some((r) => token.startsWith(r)) && existsSync(join(ctx.repo, ...token.split("/")))) return null;
+  // Repo paths are spelled with / on every OS; anything else resolves differently per CI leg.
+  if (token.includes("\\") || /^[A-Za-z]:/.test(token)) return "a Windows spelling -- cite repo paths with / so every OS reads the same file";
+  const segs = token.split("/");
+  if (segs.some((s) => s === ".." || s === "." || s.includes("~") || /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(s))) return "not a plain path into this tree";
+  if (ROOTS.some((r) => token.startsWith(r)) && isFileSpelledExactly(ctx.repo, segs)) return null;
   if (ctx.declared.some((d) => d === token || d.endsWith(`/${token}`))) return null;
   return "no such file on this tree, and no manifest declares it";
+}
+
+/** A regular file inside the tree whose on-disk spelling is exactly the cited one (case too). */
+function isFileSpelledExactly(repo, segs) {
+  const abs = join(repo, ...segs);
+  try {
+    if (!existsSync(abs) || !lstatSync(abs).isFile()) return false;
+    const real = realpathSync.native(abs);
+    const root = realpathSync.native(repo);
+    if (!real.startsWith(root + sep)) return false;
+    return real.slice(root.length + 1).split(sep).join("/") === segs.join("/");
+  } catch { return false; }
 }
 
 /** Pure over one narrative's text: [{ line, token, why }]. */
@@ -201,6 +218,8 @@ async function main(argv) {
   if (opts["--mutant-selftest"]) code = await selftest(repo, out);
   else {
     const pagesAbs = join(repo, ...WIKI.split("/"));
+    // No docs/wiki/ at all is not "zero narratives, all clean" -- it is a tree this gate cannot read.
+    if (!existsSync(pagesAbs)) { process.stderr.write(`wiki-drift: ${WIKI}/ does not exist -- render it first (node .claude/scripts/docs/wiki-build.mjs)\n`); return 2; }
     try { if (existsSync(pagesAbs) && lstatSync(pagesAbs).isSymbolicLink()) { process.stderr.write(`wiki-drift: ${WIKI} is a symlink\n`); return 2; } }
     catch (e) { process.stderr.write(`wiki-drift: cannot inspect ${WIKI}: ${e.code || e.message}\n`); return 2; }
     const r = await collect({ repo, pagesAbs, label: WIKI });

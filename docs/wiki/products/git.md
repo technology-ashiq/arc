@@ -3,7 +3,11 @@
 
 [arc reference](../index.md) › [Products](../index.md#products) › **Product**
 
-> **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/products/git.md` -- hand-written, never generated (ADR-1505, ADR-1508).
+## Why it exists
+
+git is the smallest product in arc: four commands and not one script of its own. `/arc-commit` groups staged work into conventional commits and never pushes; `/arc-pr` opens the pull request; `/arc-fix-issue` takes a GitHub issue from root cause to fix; `/arc-ship` runs lint, build, tests and deploy in one shot.
+
+It is its own product so that a project can take arc's git habits without the rest of arc — it requires only core.
 
 ## At a glance
 

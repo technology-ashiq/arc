@@ -794,6 +794,10 @@ export async function auditCounts(repo) {
   const r = await render(repo);
   if (r.code !== 0) return { code: r.code, lines: [`wiki-build: ${r.message}`] };
   const dirAbs = join(repo, ...WIKI_DIR.split("/"));
+  // The same refusal check() and the writer use: a linked or non-regular page is never read,
+  // so a correct render kept elsewhere cannot be certified through a link (and a FIFO cannot hang CI).
+  const bad = pathProblems(dirAbs, [...r.files.keys()]);
+  if (bad.length) return { code: 2, lines: bad.map((b) => `wiki-build: refusing to audit ${WIKI_DIR}/: ${b}`) };
   const nums = (line) => line.match(/\d+/g) || [];
   const findings = [];
   let pages = 0, numbers = 0;
@@ -802,7 +806,10 @@ export async function auditCounts(repo) {
     const abs = join(dirAbs, ...rel.split("/"));
     let committed;
     try { committed = readFileSync(abs, "utf8").replace(/^﻿/, "").replace(/\r\n?/g, "\n"); }
-    catch { findings.push(`COUNT ${WIKI_DIR}/${rel}: missing -- nothing to audit`); continue; }
+    catch (e) {
+      if (e.code === "ENOENT" || e.code === "ENOTDIR") { findings.push(`COUNT ${WIKI_DIR}/${rel}: missing -- nothing to audit`); continue; }
+      return { code: 2, lines: [`wiki-build: cannot read ${WIKI_DIR}/${rel}: ${e.code || e.message}`] };
+    }
     pages++;
     const want = content.split("\n"), have = committed.split("\n");
     for (let i = 0; i < Math.max(want.length, have.length); i++) {

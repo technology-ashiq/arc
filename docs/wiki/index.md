@@ -5,17 +5,17 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 
 | Part | Count | With narrative |
 |---|---|---|
-| [Products](#products) | 17 | 0 |
-| [Lanes](#lanes) | 17 | 0 |
+| [Products](#products) | 17 | 2 |
+| [Lanes](#lanes) | 17 | 1 |
 | [Processes](#processes) | 10 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 15 | 0 |
 | [Commands](#commands) | 28 | 0 |
 | [Agents](#agents) | 30 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **131** | **0** |
+| **Total** | **131** | **3** |
 
-Narrative debt: **131 of 131** pages have no narrative yet. ADR headers: 243 of 308 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **128 of 131** pages have no narrative yet. ADR headers: 243 of 308 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 

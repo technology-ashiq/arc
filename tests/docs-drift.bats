@@ -48,10 +48,33 @@ rendered_tree() {
   [[ "$output" == *"wiki-drift: 1 narrative(s), 3 reference(s) checked -- none dangling"* ]] || { echo "summary: $output"; false; }
 }
 
-@test "docs-drift: the drift gate passes on the real tree and says how much it read" {
-  run node "$(DRIFT "$ARC_ROOT")"
-  [[ "$output" == "wiki-drift: "*" narrative(s), "*" reference(s) checked"* ]] || { echo "did not run: $output"; false; }
+@test "docs-drift: the drift gate passes on the real tree and read every narrative wiki-coverage counts" {
+  run node "$ARC_ROOT/.claude/scripts/docs/wiki-coverage.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n; n=$(printf '%s\n' "$output" | sed -n 's/.* pages, \([0-9][0-9]*\) narratives -- all covered.*/\1/p')
+  [ -n "$n" ] || { echo "no narrative count from wiki-coverage: $output"; false; }
+  run node "$(DRIFT "$ARC_ROOT")"
+  [[ "$output" == "wiki-drift: $n narrative(s), "*" reference(s) checked -- none dangling"* ]] || { echo "drift did not read the $n narratives coverage sees: $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "docs-drift: Windows spellings, dot segments and a mis-cased path are dangling, never silently fine" {
+  local t; t=$(rendered_tree spell) || { echo "fixture failed"; false; }
+  printf '%s\n' 'See `products\alpha\manifest.json` and `products/../products/alpha/manifest.json` and `products/Alpha/manifest.json` and docs\gone.md.' > "$t/docs/wiki/_narrative/products/alpha.md"
+  run node "$(DRIFT "$t")" --root "$t"
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *'products\alpha\manifest.json -- a Windows spelling'* ]] || { echo "backslash spelling not refused: $output"; false; }
+  [[ "$output" == *"products/../products/alpha/manifest.json -- not a plain path"* ]] || { echo "dot segments not refused: $output"; false; }
+  [[ "$output" == *"products/Alpha/manifest.json -- no such file"* ]] || { echo "mis-cased path not refused: $output"; false; }
+  [[ "$output" == *'docs\gone.md -- a Windows spelling'* ]] || { echo "bare backslash path not seen: $output"; false; }
+}
+
+@test "docs-drift: no docs/wiki at all is exit 2, not zero narratives clean" {
+  local t="$BATS_TEST_TMPDIR/nowiki"
+  node "$ARC_ROOT/tests/docs/fixture-tree.mjs" "$ARC_ROOT" "$t" >/dev/null || { echo "fixture failed"; false; }
+  run node "$(DRIFT "$t")" --root "$t"
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"docs/wiki/ does not exist"* ]] || { echo "not named: $output"; false; }
 }
 
 @test "docs-drift: stale -- no fingerprint and a moved fact each WARN at exit 0; a matching fingerprint is silent" {
@@ -89,7 +112,7 @@ rendered_tree() {
   ' "$t/docs/wiki/index.md"
   run node "$(WB "$t")" --root "$t" --audit-counts
   [ "$status" -eq 1 ] || { echo "a changed count passed: status $status: $output"; false; }
-  [[ "$output" == *"docs/wiki/index.md"*"7"*"1"* ]] || { echo "page and number not named: $output"; false; }
+  [[ "$output" == *"COUNT docs/wiki/index.md:"*": the page says 7, the tree says 1"* ]] || { echo "page and numbers not named exactly: $output"; false; }
 }
 
 @test "docs-drift: the CLIs refuse unknown flags with exit 2" {
@@ -102,5 +125,5 @@ rendered_tree() {
 }
 
 @test "docs-drift: this suite registers exactly the tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 9 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 9"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 11"; false; }
 }
