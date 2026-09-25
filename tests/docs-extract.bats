@@ -116,6 +116,8 @@ mutant_scan() {
   mutant_scan spawn    wiki-build.mjs   'import { execFileSync } from "node:child_process"; export const __x = () => execFileSync("git", ["ls-files"]);'
   mutant_scan facecov  wiki-build.mjs   'export const __x = (fc, repo) => fc.dirNames(repo);'
   mutant_scan launder  wiki-build.mjs   'export const __x = (fc, repo, join) => fc.dirNames(repo); // fc.mdStems(join(repo, "docs", "adr"))'
+  mutant_scan receiver wiki-build.mjs   'export const __x = (myfc, pagesAbs) => myfc.dirNames(pagesAbs);'
+  mutant_scan wrongfile wiki-build.mjs  'export const __x = (fc, pagesAbs) => fc.dirNames(pagesAbs);'
   mutant_scan template wiki-build.mjs   'import { readdirSync } from "node:fs"; export const __x = (d) => `${readdirSync(d)}`;'
 }
 

@@ -22,7 +22,9 @@ async function main(repo, pages) {
   let n = 0;
   for (const type of wb.RENDERED) {
     for (const e of res.wiki.entities[type]) {
-      const p = join(pages, ...wb.pagePath(e).split("/"));
+      const rel = wb.pagePath(e);
+      if (rel === null) { process.stderr.write(`write-pages: ${e.type} ${JSON.stringify(e.id)} has no page path (a bad id)\n`); process.exitCode = 2; return; }
+      const p = join(pages, ...rel.split("/"));
       mkdirSync(dirname(p), { recursive: true });
       writeFileSync(p, `# ${e.id}\n`);
       n++;

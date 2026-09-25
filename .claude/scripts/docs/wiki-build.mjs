@@ -75,6 +75,8 @@ export const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 export function pagePath(entity) {
   const key = TYPE_KEY[entity?.type];
   if (!key || typeof entity.id !== "string" || !SAFE_ID.test(entity.id)) return null;
+  // Long enough for any real id, short enough to leave room for a deep checkout's path.
+  if (entity.id.length > 100) return null;
   // A Windows device name is a legal id on Linux and an unopenable file on the Windows leg.
   if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i.test(entity.id)) return null;
   return `${PAGE_DIRS[key]}/${entity.id}.md`;
@@ -503,11 +505,14 @@ function writeOut(repo, out, bytes) {
 
 /** Realpath BOTH sides: a main guard that compares spellings no-ops behind a symlink. */
 function isMainModule() {
-  try {
-    const invoked = process.argv[1];
-    if (!invoked) return false;
-    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
-  } catch { return false; }
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  const self = fileURLToPath(import.meta.url);
+  // Realpath BOTH sides; and when realpath itself throws (a subst drive, a link cycle), fall back
+  // to the resolved spellings rather than to "not main" -- a gate that silently does nothing
+  // and exits 0 is worse than no gate.
+  try { return realpathSync(invoked) === realpathSync(self); }
+  catch { return resolve(invoked) === resolve(self); }
 }
 
 if (isMainModule()) {

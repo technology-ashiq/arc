@@ -28,8 +28,9 @@ GATE() { printf '%s' "$1/.claude/scripts/docs/wiki-coverage.mjs"; }
   [[ "$output" == *"mutant-selftest: ran 6 of 6"* ]] || { echo "the self-test did not run all 6 arms: $output"; false; }
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   for arm in M0 M1 M2 M3 M4 M5; do
-    [[ "$output" == *"$arm "*"PASS"* ]] || { echo "arm $arm did not report PASS: $output"; false; }
+    printf '%s\n' "$output" | grep -Eq "^$arm .*: PASS \(exit [0-9]\)$" || { echo "arm $arm's own line is not PASS: $output"; false; }
   done
+  if [[ "$output" == *"FAILED-ARM"* ]]; then echo "an arm failed: $output"; false; fi
   # The expected failures are LABELLED expected, so the self-test's own output never reads as a failure.
   [[ "$output" == *"EXPECTED-FAIL"* ]] || { echo "no labelled expected failure: $output"; false; }
   if [[ "$output" == *$'\nFAIL '* ]]; then echo "an unlabelled FAIL line: $output"; false; fi
@@ -88,9 +89,16 @@ GATE() { printf '%s' "$1/.claude/scripts/docs/wiki-coverage.mjs"; }
 
 @test "docs-coverage: a tree whose inventories are EMPTY is never 'covered'" {
   local t; t=$(covered_tree empty) || { echo "fixture failed"; false; }
-  rm -r "$t/products" "$t/initiatives" "$t/processes" "$t/.claude/commands" "$t/.claude/agents" "$t/.claude/rules"
+  # Empty the inventories but keep their directories, so the tree still EXTRACTS -- the gate must
+  # then say "empty", not merely fail to read.
+  for d in products initiatives processes .claude/commands .claude/agents .claude/rules; do
+    rm -r "${t:?}/$d" && mkdir -p "$t/$d"
+  done
   run node "$(GATE "$t")" --root "$t"
-  [ "$status" -ne 0 ] || { echo "an empty tree passed: $output"; false; }
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  for k in products lanes processes commands agents rules; do
+    [[ "$output" == *"FAIL [empty-inventory] $k"* ]] || { echo "empty $k not named: $output"; false; }
+  done
   if [[ "$output" == *"all covered"* ]]; then echo "an empty tree printed covered: $output"; false; fi
 }
 
@@ -120,7 +128,12 @@ GATE() { printf '%s' "$1/.claude/scripts/docs/wiki-coverage.mjs"; }
     fs.writeFileSync(p, s.replace(a, "export function coverageFindings() { return []; }\nfunction __cut("));
   ' "$(GATE "$t")"
   run node "$(GATE "$t")" --mutant-selftest --root "$t"
-  [ "$status" -ne 0 ] || { echo "a gate that finds nothing passed its own self-test: $output"; false; }
+  [[ "$output" == *"mutant-selftest: ran 6 of 6"* ]] || { echo "the self-test did not run: $output"; false; }
+  [ "$status" -eq 1 ] || { echo "status $status (not the self-test's own verdict): $output"; false; }
+  for arm in M1 M2 M3 M4 M5; do
+    printf '%s\n' "$output" | grep -Eq "^$arm .*: FAILED-ARM" || { echo "arm $arm did not catch the mutant gate: $output"; false; }
+  done
+  printf '%s\n' "$output" | grep -Eq "^M0 .*: PASS" || { echo "M0 should still pass: $output"; false; }
 }
 
 @test "docs-coverage: the CLI refuses unknown flags, missing values and a non-arc root with exit 2" {
@@ -135,6 +148,46 @@ GATE() { printf '%s' "$1/.claude/scripts/docs/wiki-coverage.mjs"; }
   [ "$status" -eq 2 ] || { echo "non-arc root: status $status: $output"; false; }
 }
 
+@test "docs-coverage: page directories named like Object keys are names, not lookups" {
+  local t; t=$(covered_tree proto) || { echo "fixture failed"; false; }
+  for d in constructor __proto__ toString; do
+    mkdir -p "$t/docs/wiki/$d" "$t/docs/wiki/_narrative/$d"
+    printf '# x\n' > "$t/docs/wiki/$d/x.md"
+  done
+  run node "$(GATE "$t")" --root "$t"
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  for d in constructor __proto__ toString; do
+    [[ "$output" == *"FAIL [page-no-entity] docs/wiki/$d/"* ]] || { echo "$d not named: $output"; false; }
+    [[ "$output" == *"FAIL [narrative-no-entity] docs/wiki/_narrative/$d/"* ]] || { echo "narrative $d not named: $output"; false; }
+  done
+}
+
+@test "docs-coverage: two ids one case apart are a collision on every OS" {
+  local t; t=$(covered_tree collide) || { echo "fixture failed"; false; }
+  printf '  - name: Alpha-gate\n    check: true\n    mode: warn\n    tier: ci\n    runtime: native\n    evidence: none\n' >> "$t/arc.gates.yaml"
+  run node "$(GATE "$t")" --root "$t"
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"FAIL [id-collision] gates: Alpha-gate, alpha-gate"* ]] || { echo "collision not named: $output"; false; }
+}
+
+@test "docs-coverage: --pages outside the tree, absolute, or with .. is refused with exit 2" {
+  for bad in ../x /tmp/x "C:/x" "docs/../docs/wiki" "."; do
+    run node "$ARC_ROOT/.claude/scripts/docs/wiki-coverage.mjs" --pages "$bad"
+    [ "$status" -eq 2 ] || { echo "--pages $bad: status $status: $output"; false; }
+  done
+}
+
+@test "docs-coverage: a symlinked page directory is refused, never counted" {
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) skip "symlinks need privileges on the Windows runner";; esac
+  local t; t=$(covered_tree link) || { echo "fixture failed"; false; }
+  mv "$t/docs/wiki/rules" "$BATS_TEST_TMPDIR/rules-elsewhere"
+  ln -s "$BATS_TEST_TMPDIR/rules-elsewhere" "$t/docs/wiki/rules"
+  run node "$(GATE "$t")" --root "$t"
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"FAIL [page-no-entity] docs/wiki/rules/ -- a symlink"* ]] || { echo "link not named: $output"; false; }
+  [[ "$output" == *"FAIL [entity-no-page] rule alpha"* ]] || { echo "the linked page was counted: $output"; false; }
+}
+
 @test "docs-coverage: this suite registers exactly the tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 11"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 15"; false; }
 }

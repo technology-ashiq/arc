@@ -20,8 +20,8 @@
 //
 // Exit: 0 all covered | 1 a finding (each named) | 2 usage, or the tree could not be read.
 
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, realpathSync } from "node:fs";
-import { join, dirname, resolve, sep } from "node:path";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, realpathSync, lstatSync } from "node:fs";
+import { join, dirname, resolve, sep, isAbsolute } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -46,20 +46,30 @@ export function pageTree(fc, wb, pagesAbs) {
   const narrAbs = join(pagesAbs, wb.NARRATIVE_DIR);
   const rootDirs = fc.dirNames(pagesAbs);
   const rootPages = fc.mdStems(pagesAbs);
-  const pages = {}, pageSubdirs = {};
+  // Null-prototype: a directory named constructor or __proto__ is a name, not a key lookup.
+  const pages = Object.create(null), pageSubdirs = Object.create(null);
+  const links = [];
   for (const d of rootDirs) {
     if (d === wb.NARRATIVE_DIR) continue;
+    if (isLink(join(pagesAbs, d))) { links.push(`${d}/`); continue; }
     pages[d] = fc.mdStems(join(pagesAbs, d));
     pageSubdirs[d] = fc.dirNames(join(pagesAbs, d));
   }
   const narrDirs = fc.dirNames(narrAbs);
   const narrRootPages = fc.mdStems(narrAbs);
-  const narratives = {}, narrSubdirs = {};
+  const narratives = Object.create(null), narrSubdirs = Object.create(null);
   for (const d of narrDirs) {
+    if (isLink(join(narrAbs, d))) { links.push(`${wb.NARRATIVE_DIR}/${d}/`); continue; }
     narratives[d] = fc.mdStems(join(narrAbs, d));
     narrSubdirs[d] = fc.dirNames(join(narrAbs, d));
   }
-  return { rootDirs, rootPages, pages, pageSubdirs, narrDirs, narrRootPages, narratives, narrSubdirs };
+  if (isLink(narrAbs)) links.push(`${wb.NARRATIVE_DIR}/`);
+  return { rootDirs, rootPages, pages, pageSubdirs, narrDirs, narrRootPages, narratives, narrSubdirs, links };
+}
+
+/** A symlinked page directory would count pages that live somewhere else. */
+function isLink(p) {
+  try { return lstatSync(p).isSymbolicLink(); } catch { return false; }
 }
 
 /** Forward: every entity has a page. Empty inventories are findings too -- never "covered". */
@@ -69,6 +79,13 @@ export function forwardFindings(wb, wiki, tree) {
     const list = wiki.entities?.[key];
     if (!Array.isArray(list) || list.length === 0) { out.push(`[empty-inventory] ${key} -- the tree yielded no ${key}; an empty inventory is never covered`); continue; }
     const have = new Set(tree.pages[wb.PAGE_DIRS[key]] || []);
+    // Two ids one case apart are two pages on Linux and ONE file on Windows and macOS.
+    const folded = new Map();
+    for (const e of list) {
+      const k = String(e.id).toLowerCase();
+      folded.set(k, [...(folded.get(k) || []), e.id]);
+    }
+    for (const ids of folded.values()) if (ids.length > 1) out.push(`[id-collision] ${key}: ${ids.join(", ")} -- one case apart, so one file on a case-folding disk`);
     for (const e of list) {
       const p = wb.pagePath(e);
       if (p === null) { out.push(`[bad-id] ${e.type} ${JSON.stringify(e.id)} -- this id cannot be a file name on every OS`); continue; }
@@ -81,8 +98,9 @@ export function forwardFindings(wb, wiki, tree) {
 /** Reverse: every page, page directory and narrative belongs to an entity. */
 export function reverseFindings(wb, wiki, tree, label) {
   const out = [];
-  const byDir = {};
+  const byDir = Object.create(null);
   for (const key of wb.RENDERED) byDir[wb.PAGE_DIRS[key]] = new Set((wiki.entities?.[key] || []).map((e) => e.id));
+  for (const l of tree.links || []) out.push(`[page-no-entity] ${label}/${l} -- a symlink; pages are regular files under docs/wiki/`);
   const allowedRoot = new Set(wb.ROOT_PAGES);
   for (const stem of tree.rootPages) if (!allowedRoot.has(stem)) out.push(`[page-no-entity] ${label}/${stem}.md -- not a page the wiki defines`);
   for (const d of tree.rootDirs) {
@@ -134,7 +152,7 @@ export async function collect({ repo, pagesAbs, label, world, bands }) {
 }
 
 function report(r, out) {
-  if (r.code === 2) { out(`wiki-coverage: ${r.message}`); return; }
+  if (r.code === 2) { process.stderr.write(`wiki-coverage: ${r.message}\n`); return; }
   if (r.findings.length) {
     out(`wiki-coverage: ${r.findings.length} finding(s) -- a part of arc with no page, or a page with no part of arc. Regenerate with \`${FIX}\`; an orphan narrative is removed or renamed by hand (ADR-1503).`);
     for (const f of r.findings) out(`FAIL ${f}`);
@@ -162,7 +180,9 @@ async function selftest(repo, out) {
   let ran = 0, failedArms = 0;
   const writePages = (dir) => {
     for (const key of wb.RENDERED) for (const e of clean.wiki.entities[key]) {
-      const p = join(dir, ...wb.pagePath(e).split("/"));
+      const rel = wb.pagePath(e);
+      if (rel === null) continue; // a bad id is the gate's finding ([bad-id]); M0 then reports it
+      const p = join(dir, ...rel.split("/"));
       mkdirSync(dirname(p), { recursive: true });
       writeFileSync(p, `# ${e.id}\n`);
     }
@@ -213,7 +233,8 @@ async function selftest(repo, out) {
     await arm("M5", "a page directory the wiki does not define -> FAIL naming it", m5, {},
       (r) => has(r, `[page-no-entity] ${label}/zzz-widgets/`));
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    try { rmSync(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+    catch (e) { out(`mutant-selftest: WARN scratch ${scratch} was not removed (${e.code || e.message})`); }
   }
   out(`mutant-selftest: ran ${ran} of 6`);
   return failedArms === 0 && ran === 6 ? 0 : 1;
@@ -243,7 +264,7 @@ async function main(argv) {
   const lines = [];
   const out = (s) => lines.push(s);
   const flush = () => new Promise((done) => {
-    process.stdout.once("error", () => done(2));
+    process.stdout.once("error", (e) => { process.stderr.write(`wiki-coverage: stdout write failed (${e.code || e.message})\n`); done(2); });
     process.stdout.write(lines.length ? lines.join("\n") + "\n" : "", (e) => done(e ? 2 : 0));
   });
   const { opts, error } = parseArgs(argv);
@@ -256,8 +277,24 @@ async function main(argv) {
   let code;
   if (opts["--mutant-selftest"]) code = await selftest(repo, out);
   else {
-    const rel = (opts["--pages"] ?? PAGES_DEFAULT).split(/[\\/]/).filter(Boolean).join("/");
-    const r = await collect({ repo, pagesAbs: resolve(repo, rel), label: rel });
+    const raw = opts["--pages"] ?? PAGES_DEFAULT;
+    const segs = raw.split(/[\\/]/).filter(Boolean);
+    if (isAbsolute(raw) || /^[A-Za-z]:/.test(raw) || segs.length === 0 || segs.some((s) => s === "." || s === "..")) {
+      process.stderr.write(`wiki-coverage: --pages ${JSON.stringify(raw)} must be a relative path inside the tree, with no . or .. segments\n`);
+      return 2;
+    }
+    const rel = segs.join("/");
+    const pagesAbs = resolve(repo, rel);
+    if (existsSync(pagesAbs)) {
+      let real;
+      try { real = realpathSync.native(pagesAbs); } catch (e) { process.stderr.write(`wiki-coverage: --pages ${rel}: ${e.code || e.message}\n`); return 2; }
+      const root = realpathSync.native(repo);
+      if (isLink(pagesAbs) || !(real === root || real.startsWith(root + sep))) {
+        process.stderr.write(`wiki-coverage: --pages ${rel} is a link or resolves outside the tree\n`);
+        return 2;
+      }
+    }
+    const r = await collect({ repo, pagesAbs, label: rel });
     report(r, out);
     code = r.code;
   }
@@ -266,11 +303,14 @@ async function main(argv) {
 }
 
 function isMainModule() {
-  try {
-    const invoked = process.argv[1];
-    if (!invoked) return false;
-    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
-  } catch { return false; }
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  const self = fileURLToPath(import.meta.url);
+  // Realpath BOTH sides; and when realpath itself throws (a subst drive, a link cycle), fall back
+  // to the resolved spellings rather than to "not main" -- a gate that silently does nothing
+  // and exits 0 is worse than no gate.
+  try { return realpathSync(invoked) === realpathSync(self); }
+  catch { return resolve(invoked) === resolve(self); }
 }
 
 if (isMainModule()) {

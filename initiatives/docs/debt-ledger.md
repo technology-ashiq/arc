@@ -14,3 +14,8 @@ one line each, with where they came from. Each is paid in a later slice or close
 - **B9** — a closed STDERR turns a usage exit 2 into an uncaught EPIPE exit 1. Pay: guard stderr writes the way `say()` guards stdout.
 - **B10** — only a UTF-8 BOM is handled; a UTF-16 file (PowerShell 5.1's default `Out-File`) parses as garbage facts at exit 0. Pay: refuse a UTF-16 BOM by name.
 - **B11** — stdout mode inherits the console's newline handling; the byte guarantee is proven only for `--out`. Pay: say so in `--help`, or test stdout bytes on the Windows leg.
+
+## Phase 01 (attack 8bc7826, round 1, boundary)
+
+- **P1 B14** — the reverse direction sees only directories and `.md` stems, because face-coverage's helpers list nothing else; a stray `docs/wiki/products/x.mdx` or `docs/wiki/index.html` is invisible to `wiki-coverage`. Covered from Phase 02 by the regenerate-and-diff check (ADR-1504), which compares every byte and every file under `docs/wiki/` except `_narrative/`. Pay fully: a `treeFiles` export in face-coverage, in a cycle that may touch that file.
+- **Logic surface** — failed on transport again for Phase 01 round 1 (same free trial model). Same standing gap as Phase 00.
