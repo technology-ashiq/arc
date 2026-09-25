@@ -35,7 +35,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             {f.trail.isReading && <Reading what="the run receipts" />}
             {f.trail.isRefused && <DoorRefusal code={f.trail.refusal.code} human={f.trail.refusal.human} />}
             {f.trail.isDrawn && <RunRows rows={f.health} isEmpty={f.showHealthEmpty} empty="No run.completed receipt on the page the door sent names a driver." />}
-            {f.healthNote && <p data-health-note className="mt-2 text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.healthNote}</p>}
+            {f.hasHealthNote && <p data-health-note className="mt-2 text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.healthNote}</p>}
           </HPanel>
 
           <HPanel title="Runs by process" hint="run.completed receipts, grouped by the process that ran">
