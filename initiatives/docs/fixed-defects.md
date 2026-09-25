@@ -111,3 +111,7 @@ the fuller source; read it too.
 - **`--audit-counts` read through links and turned every errno into "missing"** (P3 B4, B5) — same `pathProblems` refusal as `--check`; only ENOENT is missing — *every reader of docs/wiki/ refuses what the writer refuses.*
 - **"0 narratives checked" could not tell none-exist from listing-broke** (P3 B9) — the real-tree test cross-checks the count with `wiki-coverage`'s; no `docs/wiki/` is exit 2 — *a count of zero is compared with an independent count.*
 - **The first draft narrative cited `/arc-run`, a command that does not exist** — caught by `wiki-drift` before it shipped — *prose is attacked by the gate, not by review.*
+
+## Cycle close -- the close PR's first CI run (b1dc8d59)
+
+- **A face test pinned the logbook's live data** — newest entry "C11 / memory / 2026-08-12", a glance-row count of 14, a planted chapter dated before real ones — so the FIRST cycle to close after it (this one, C17) turned it red on three OS legs — `tests/face/company-ring.mjs` (derived from the file; the planted chapter dated 2099-12-31) — *a test over a growing, append-only file derives its expectation from the file; it never pins today's contents.*

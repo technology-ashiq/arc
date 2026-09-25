@@ -112,8 +112,12 @@ const byFile = (files, extra = () => undefined) => (read) => (read.route === "/a
   const entries = HISTORY.slice(HISTORY.indexOf("## Entries")).split("\n## ")[0];
   const heads = [...entries.matchAll(/^### (.+)$/gm)].map((m) => m[1]);
   check("STORY: every logbook entry is a chapter, in the file's order", h.isRead && h.entries.length === heads.length && h.entries.length > 0, `story=${h.entries.length} file=${heads.length}`);
+  // The newest entry is whatever the file's first heading says -- read here with a regex of the
+  // test's own, independent of the fold. It was pinned to C11/memory/2026-08-12, which went red
+  // the day the next cycle closed and appended its entry (docs, C17): the logbook grows.
+  const first = /^(C\d+) · .* — [A-Z]+ (\d{4}-\d{2}-\d{2}) · lane `([^`]+)`$/.exec(heads[0] || "") || [];
   check("STORY: an entry's cycle code, closing date and lane are read from its heading",
-    h.entries[0]?.code === "C11" && h.entries[0]?.lane === "memory" && h.entries[0]?.date === "2026-08-12", JSON.stringify(h.entries[0]));
+    first.length === 4 && h.entries[0]?.code === first[1] && h.entries[0]?.lane === first[3] && h.entries[0]?.date === first[2], `${JSON.stringify(h.entries[0])} vs ${JSON.stringify(first.slice(1))}`);
   check("STORY: an entry with no cycle code (a parked engine) is still a chapter, with its status and no invented code",
     h.entries.some((e) => e.code === "" && /PARKED/.test(e.status)), JSON.stringify(h.entries.map((e) => [e.code, e.status])));
   const gone = cr.historyOf(HISTORY.replace("## Entries", "## Logbook"));
@@ -122,7 +126,7 @@ const byFile = (files, extra = () => undefined) => (read) => (read.route === "/a
   const fold = await foldOf("company", "story");
   const full = loaded(fold, ctxFor(roomOf("story"), manifest), byFile({ history: served("history", "docs/HISTORY.md", HISTORY) })).full;
   check("STORY FOLD: the chapters and the newest entry's date come from the file the door served",
-    full.chapters.length === heads.length && full.newest === "2026-08-12", `${full.chapters.length} | ${full.newest}`);
+    full.chapters.length === heads.length && full.newest === first[2], `${full.chapters.length} | ${full.newest} vs ${first[2]}`);
 }
 
 // ── org, and F1: the band map names LANES ─────────────────────────────────────────────────────────────────
@@ -230,20 +234,22 @@ const byFile = (files, extra = () => undefined) => (read) => (read.route === "/a
   // The logbook: an unreadable table or Entries section is never read as none; a code travels with its own date.
   const noColText = HISTORY.replace(/^(\| C\d+ \|[^\n]*?)\| [^|\n]*\|\s*$/gm, "$1|");
   const noCol = cr.historyOf(noColText);
-  check("ATTACK STORY: glance rows with a column removed are COUNTED as unreadable, never dropped", noCol.cyclesMalformed === 14 && noCol.cycles.length === 1, JSON.stringify({ state: noCol.cyclesState, bad: noCol.cyclesMalformed, read: noCol.cycles.length }));
+  // Derived from the file, never pinned: every closed cycle adds a glance row (it was 14, then docs C17 made it 15; the one row read is the un-numbered parked engine).
+  const cutRows = (HISTORY.match(/^\| C\d+ \|[^\n]*\|\s*$/gm) || []).length;
+  check("ATTACK STORY: glance rows with a column removed are COUNTED as unreadable, never dropped", noCol.cyclesMalformed === cutRows && noCol.cycles.length === 1, JSON.stringify({ state: noCol.cyclesState, bad: noCol.cyclesMalformed, read: noCol.cycles.length }));
   const noColFold = loaded(await foldOf("company", "story"), ctxFor(roomOf("story"), await manifestOf("company", "story")), byFile({ history: served("history", "docs/HISTORY.md", noColText) })).full;
   const cyclesKpi = noColFold.kpis.find((k) => k.key === "cycles") || { v: "?", sub: "" };
-  check("ATTACK STORY FOLD: a glance table with unreadable rows prints — and counts them, never the short number", cyclesKpi.v === "—" && /14 rows this reader could not read/.test(cyclesKpi.sub), JSON.stringify(cyclesKpi));
+  check("ATTACK STORY FOLD: a glance table with unreadable rows prints — and counts them, never the short number", cyclesKpi.v === "—" && new RegExp(`${cutRows} rows this reader could not read`).test(cyclesKpi.sub), JSON.stringify(cyclesKpi));
   const noRule = cr.historyOf(HISTORY.replace(/^\|---\|[-|]*\|\s*$/m, ""));
   check("ATTACK STORY: a glance table with no separator row is UNREADABLE", noRule.cyclesState === "unreadable", noRule.cyclesState);
   const deep = cr.historyOf(HISTORY.replace(/^### /gm, "#### "));
   check("ATTACK STORY: entries written as #### are UNREADABLE, never a company with no history", deep.entries.length === 0 && deep.entriesState === "unreadable" && deep.unread === false, deep.entriesState);
-  const moved = HISTORY.replace(/(### C1 · Orchestrator[^\n]*)/, "### C13 · arc-ledger \"the money brain\" — CLOSED 2026-08-13 · lane `ledger`\n\nA chapter filed low.\n\n$1");
+  const moved = HISTORY.replace(/(### C1 · Orchestrator[^\n]*)/, "### C13 · arc-ledger \"the money brain\" — CLOSED 2099-12-31 · lane `ledger`\n\nA chapter filed low.\n\n$1");
   const mh = cr.historyOf(moved);
-  check("ATTACK STORY: the newest chapter is the one with the latest date, and its code travels with it", mh.newestEntry !== null && mh.newestEntry.code === "C13" && mh.newest === "2026-08-13", JSON.stringify(mh.newestEntry && { code: mh.newestEntry.code, date: mh.newestEntry.date }));
+  check("ATTACK STORY: the newest chapter is the one with the latest date, and its code travels with it", mh.newestEntry !== null && mh.newestEntry.code === "C13" && mh.newest === "2099-12-31", JSON.stringify(mh.newestEntry && { code: mh.newestEntry.code, date: mh.newestEntry.date }));
   const storyFold = await foldOf("company", "story");
   const sf = loaded(storyFold, ctxFor(roomOf("story"), await manifestOf("company", "story")), byFile({ history: served("history", "docs/HISTORY.md", moved) })).full;
-  check("ATTACK STORY FOLD: the lag names the newest chapter with ITS date, and counts the rows with no chapter", /C13 arc-ledger "the money brain", closed 2026-08-13/.test(sf.lag) && /have a row and no chapter yet/.test(sf.lag), sf.lag);
+  check("ATTACK STORY FOLD: the lag names the newest chapter with ITS date, and counts the rows with no chapter", /C13 arc-ledger "the money brain", closed 2099-12-31/.test(sf.lag) && /have a row and no chapter yet/.test(sf.lag), sf.lag);
   check("ATTACK STORY: a date that is no calendar day is no date", cr.realDate("2026-19-45") === "" && cr.realDate("2026-02-30") === "" && cr.realDate("closed 2026-08-12 ·") === "2026-08-12");
 
   // F1's band map: a backticked word is a lane only where it stands as the owner, is a lane name, and is on the board.
