@@ -378,6 +378,10 @@
         "lanes": [
           "memory"
         ],
+        "processes": [
+          "lesson-log",
+          "rule-promote"
+        ],
         "concepts": [
           "HISTORICAL DATA fence",
           "golden gate (recall)"
@@ -389,7 +393,7 @@
           "0700"
         ]
       },
-      "itemCount": 5
+      "itemCount": 7
     },
     {
       "id": "evolve",

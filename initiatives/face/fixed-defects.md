@@ -825,3 +825,13 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **One counter for two caps, and no kill on overflow** -- spawnSync caps each stream alone and kills; the tee now does both (spawnBounded's `onSpawn` hands over the tree kill). **Options silently dropped** -- an option stream mode cannot honour is refused by name, and signal and error code pass through. *A drop-in replacement names what it does not replace.*
 - **A live tee that skipped the scrub** -- every live line now passes `liveLine` (redact.mjs): secrets withheld by rule, control characters cleaned, a line posing as `arc-run:` marked as the driver's. **A progress line that printed a credential** -- a command shows its executable and script path only, never an `X=value` prefix or a search pattern. *Anything written where a reader parses is filtered where it is written.*
 - **A vouch that any run's receipt could pass** -- the event must carry this process (`--process council-convene@...`), a kind name, and a time inside the run. *Tie a receipt to its run, not to a time window.*
+
+## Phase 06 slice 04 -- the memory ring's session verbs (attack 3e97a85, round 1, boundary)
+
+- **A containment check that only looks for `..`** -- across two drives `path.relative` returns the target itself; a drive, UNC or device path is refused before anything resolves it, and the text file must sit directly in its verb's own scratch directory. *Refuse an absolute path by its shape, before resolving it.*
+- **Measured on one read, read on another** -- the size cap and type check now come from the descriptor that is read, capped at the read. *The file that is checked is the file that is read.*
+- **A whole-file Edit grant made "append only" a sentence** -- memory/lesson-log.mjs is the log's one writer (form, secret scan, near-duplicate rule, one append, the receipt); the run holds no Edit on the log. *Give a run the tool that does the one change, not the file.*
+- **An exit chosen from a flag instead of from what exists** -- a failure after the ref moved reads "the branch IS written" only for a branch this apply created, asked of git. *Decide the exit by looking.*
+- **A written branch with no way on** -- when the receipt does not land, the approval is written to scratch and the one command that raises it is printed. *A failure after a write names its recovery.*
+- **A branch stem that could collide** -- CLAUDE.md is `root-claude`, a rules file `rules-<name>`. *Namespace generated names by their source.*
+- **A tag list passed as a string** -- normalizeTags iterated the string's letters, so no near-duplicate ever matched; found by the fixture, before any push. *Pass a list where a list is read.*

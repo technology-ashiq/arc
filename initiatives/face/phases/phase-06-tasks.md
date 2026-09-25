@@ -80,12 +80,12 @@ commit: 03a -- PR #272, squash bcc0d880. 03b -- 66a26f0c, 1be41832, 7ff4449f, d2
 title: **Every SESSION verb (ADR-1339):** the 15 in `evidence/phase-05/cli-probe.md` — council convene · develop proof · close phase · review · qa · ship · hire · dispatch · log lesson · promote rule · absorb adopt · growth draft · adopt plan · record ADR · lane birth — each starts from a click through `arc-run --driver` and lands a receipt of an existing kind, or is a residue row approved by the owner as a whole. A verb whose command has no process file (qa, ship and others) gets one from the engine lane, additively; `ship` deploys outward, so its session stops for the owner's confirmation before the deploy step.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: memory ring -- tests/memory-session-probe.mjs (PROBE checks: 10) via engine-process-lint.bats: lesson-log and rule-promote are handed exactly their fenced grants (lesson-log: Edit on docs/retro-log.md and its scratch file, conflict-check and `emit note.logged` only; rule-promote: Edit on its scratch file, rule-propose only), their door rows claim note.logged and approval.requested, their bodies are one turn and tag their receipts with the process; PROBE gate authorises both (red until their hq.policy.yaml rows land); both route balanced-workhorse on a dry run. rule-propose's apply is proven in a scratch repo by tests/face/kernel-ring.mjs (17 checks): plan then --expect, a feat/face-memory-rule branch that changes only the home, the approval tagged rule-promote@1.0.0, refusals that write nothing, a secret or a line separator refused before any plan, the homes byte-identical.
+tier: contract
 sources: phase-06-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: memory ring -- a lesson is note.logged, not an invented kind (ADR-1334), and a duplicate the near-duplicate check prints is recorded on the receipt and not appended (amending a past row is a judgement a headless run does not make); a rule is PROPOSED, never applied: memory/rule-propose.mjs mirrors engine/propose.mjs over core/proposal-branch.mjs (plan, then an apply bound by --expect; a new branch; approval.requested naming it), with --as-process so arc-run can vouch for the receipt, and its homes are CLAUDE.md or an existing .claude/rules/*.md only.
+result: memory ring -- (empty until proven)
+commit: memory ring -- (empty until proven)
 
 #### slice: 05
 
