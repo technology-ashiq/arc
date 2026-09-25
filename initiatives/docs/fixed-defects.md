@@ -79,3 +79,11 @@ the fuller source; read it too.
 - **No id length bound** (P1 B9) — `pagePath` (≤ 100) — *a file name has a budget.*
 - **Exit-2 diagnostics on stdout; a failed stdout write said nothing** (P1 B10) — `report`, `flush` — *diagnostics go to stderr, and a failed write names itself.*
 - **Self-test cleanup could throw over the verdict on Windows** (P1 B11) — `rmSync` retries, caught as a WARN — *cleanup never replaces a result.*
+
+## Phase 01 -- round 2 (attack f3b311d, boundary; the first try was stopped by the secret guard on the attacker's own output)
+
+- **The round-1 link fix skipped a linked directory in pageTree but the reverse loop still indexed it -- a TypeError on exactly the input its own test built** (P1r2 B1) — `reverseFindings` (skip dirs pageTree skipped; `?? []` on every lookup) — *when one function skips an entry, every function that walks the same list skips it too.*
+- **Linked page FILES were counted as pages** (P1r2 B2) — `regularOnly` (lstat every listed page and narrative) — *the twin of a directory rule is the file rule.*
+- **The allowlist's own guards had no mutant of their own** (P1r2 B3) — `tests/docs-extract.bats` allowlist mutants (receiver, duplicate, deleted) — *a guard added in a fix gets a test that fails when only that guard is removed.*
+- **New branches (bad id, device name, id length, linked --pages) had no case only they decide** (P1r2 B4) — `tests/docs-coverage.bats` — *every fix lands with the input that proves it.*
+- **`isLink` mapped every lstat error to "not a link"** (P1r2 B5) — `GateError`, named exit 2 — *only ENOENT/ENOTDIR is absence.*

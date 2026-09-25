@@ -19,3 +19,11 @@ one line each, with where they came from. Each is paid in a later slice or close
 
 - **P1 B14** — the reverse direction sees only directories and `.md` stems, because face-coverage's helpers list nothing else; a stray `docs/wiki/products/x.mdx` or `docs/wiki/index.html` is invisible to `wiki-coverage`. Covered from Phase 02 by the regenerate-and-diff check (ADR-1504), which compares every byte and every file under `docs/wiki/` except `_narrative/`. Pay fully: a `treeFiles` export in face-coverage, in a cycle that may touch that file.
 - **Logic surface** — failed on transport again for Phase 01 round 1 (same free trial model). Same standing gap as Phase 00.
+
+## Phase 01 (attack f3b311d, round 2, boundary)
+
+- **P1r2 B6/B7** — exit-2 stderr writes and the self-test's own diagnostic lines are not EPIPE-guarded / some go to stdout. Pay: one guarded `say()` for both streams.
+- **P1r2 B8** — `collect`'s counts reduce assumes list shapes forwardFindings already validated; a malformed injected world could throw instead of reporting. Only the self-test injects. Pay: reuse forward's shape check.
+- **P1r2 B9** — disk names are interpolated raw into finding lines; a name with a newline could forge a line. Pay: JSON-escape every disk-derived name, as `[bad-id]` already does.
+- **P1r2 B10** — `tests/docs/write-pages.mjs` lets import/extract/write failures escape as unhandled rejections (exit 1). Test helper only. Pay: one try/catch to exit 2.
+- **P1r2 B11** — an unreadable page directory (EACCES) surfaces as an uncaught throw from face-coverage's `readdirSync` (exit 2 with a stack), not a named finding. Not silent; not pretty. Pay with P1 B14's `treeFiles` export.

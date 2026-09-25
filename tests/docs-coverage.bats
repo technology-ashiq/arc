@@ -185,9 +185,51 @@ GATE() { printf '%s' "$1/.claude/scripts/docs/wiki-coverage.mjs"; }
   run node "$(GATE "$t")" --root "$t"
   [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
   [[ "$output" == *"FAIL [page-no-entity] docs/wiki/rules/ -- a symlink"* ]] || { echo "link not named: $output"; false; }
+  if [[ "$output" == *"TypeError"* ]]; then echo "the gate crashed on the link: $output"; false; fi
   [[ "$output" == *"FAIL [entity-no-page] rule alpha"* ]] || { echo "the linked page was counted: $output"; false; }
 }
 
+@test "docs-coverage: a symlinked page FILE is refused, never counted" {
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) skip "symlinks need privileges on the Windows runner";; esac
+  local t; t=$(covered_tree filelink) || { echo "fixture failed"; false; }
+  mv "$t/docs/wiki/products/alpha.md" "$BATS_TEST_TMPDIR/alpha-elsewhere.md"
+  ln -s "$BATS_TEST_TMPDIR/alpha-elsewhere.md" "$t/docs/wiki/products/alpha.md"
+  run node "$(GATE "$t")" --root "$t"
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"FAIL [page-no-entity] docs/wiki/products/alpha.md -- a symlink"* ]] || { echo "link not named: $output"; false; }
+  [[ "$output" == *"FAIL [entity-no-page] product alpha"* ]] || { echo "the linked page was counted: $output"; false; }
+}
+
+@test "docs-coverage: --pages through a linked directory is refused with exit 2" {
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) skip "symlinks need privileges on the Windows runner";; esac
+  local t; t=$(covered_tree pageslink) || { echo "fixture failed"; false; }
+  mv "$t/docs/wiki" "$BATS_TEST_TMPDIR/wiki-elsewhere"
+  ln -s "$BATS_TEST_TMPDIR/wiki-elsewhere" "$t/docs/wiki"
+  run node "$(GATE "$t")" --root "$t"
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"is a link or resolves outside the tree"* ]] || { echo "not named: $output"; false; }
+}
+
+@test "docs-coverage: ids that cannot be a file name on every OS are [bad-id]" {
+  local t; t=$(covered_tree badid) || { echo "fixture failed"; false; }
+  printf -- '---\ndescription: x\n---\n# x\n' > "$t/.claude/rules/my rule.md"
+  run node "$(GATE "$t")" --root "$t"
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *'FAIL [bad-id] rule "my rule"'* ]] || { echo "space id not named: $output"; false; }
+}
+
+@test "docs-coverage: a Windows device name and a 101-char id are [bad-id] (POSIX legs, where the files can exist)" {
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) skip "nul.md and a 104-char name under a deep temp dir cannot be created on Windows -- which is the point";; esac
+  local t; t=$(covered_tree devname) || { echo "fixture failed"; false; }
+  local long; long=$(printf 'r%.0s' $(seq 1 101))
+  printf -- '---\ndescription: x\n---\n# x\n' > "$t/.claude/rules/nul.md"
+  printf -- '---\ndescription: x\n---\n# x\n' > "$t/.claude/rules/$long.md"
+  run node "$(GATE "$t")" --root "$t"
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *'FAIL [bad-id] rule "nul"'* ]] || { echo "device name not named: $output"; false; }
+  [[ "$output" == *"FAIL [bad-id] rule \"$long\""* ]] || { echo "long id not named: $output"; false; }
+}
+
 @test "docs-coverage: this suite registers exactly the tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 15"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 19 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 19"; false; }
 }

@@ -52,7 +52,7 @@ export function pageTree(fc, wb, pagesAbs) {
   for (const d of rootDirs) {
     if (d === wb.NARRATIVE_DIR) continue;
     if (isLink(join(pagesAbs, d))) { links.push(`${d}/`); continue; }
-    pages[d] = fc.mdStems(join(pagesAbs, d));
+    pages[d] = regularOnly(fc.mdStems(join(pagesAbs, d)), join(pagesAbs, d), `${d}/`, links);
     pageSubdirs[d] = fc.dirNames(join(pagesAbs, d));
   }
   const narrDirs = fc.dirNames(narrAbs);
@@ -60,17 +60,39 @@ export function pageTree(fc, wb, pagesAbs) {
   const narratives = Object.create(null), narrSubdirs = Object.create(null);
   for (const d of narrDirs) {
     if (isLink(join(narrAbs, d))) { links.push(`${wb.NARRATIVE_DIR}/${d}/`); continue; }
-    narratives[d] = fc.mdStems(join(narrAbs, d));
+    narratives[d] = regularOnly(fc.mdStems(join(narrAbs, d)), join(narrAbs, d), `${wb.NARRATIVE_DIR}/${d}/`, links);
     narrSubdirs[d] = fc.dirNames(join(narrAbs, d));
   }
   if (isLink(narrAbs)) links.push(`${wb.NARRATIVE_DIR}/`);
   return { rootDirs, rootPages, pages, pageSubdirs, narrDirs, narrRootPages, narratives, narrSubdirs, links };
 }
 
-/** A symlinked page directory would count pages that live somewhere else. */
+/**
+ * A symlinked page directory or page would count pages that live somewhere else. Only "not
+ * there" means "not a link"; any other lstat error stops the gate by name (exit 2), because a
+ * directory that cannot be inspected cannot be certified.
+ */
 function isLink(p) {
-  try { return lstatSync(p).isSymbolicLink(); } catch { return false; }
+  try { return lstatSync(p).isSymbolicLink(); }
+  catch (e) {
+    if (e.code === "ENOENT" || e.code === "ENOTDIR") return false;
+    throw new GateError(`cannot inspect ${p}: ${e.code || e.message}`);
+  }
 }
+
+/** Keep the stems whose file is a regular file; a linked one is recorded, never counted. */
+function regularOnly(stems, dirAbs, prefix, links) {
+  return stems.filter((stem) => {
+    const p = join(dirAbs, `${stem}.md`);
+    let st;
+    try { st = lstatSync(p); } catch (e) { throw new GateError(`cannot inspect ${p}: ${e.code || e.message}`); }
+    if (st.isFile() && !st.isSymbolicLink()) return true;
+    links.push(`${prefix}${stem}.md`);
+    return false;
+  });
+}
+
+class GateError extends Error {}
 
 /** Forward: every entity has a page. Empty inventories are findings too -- never "covered". */
 export function forwardFindings(wb, wiki, tree) {
@@ -100,21 +122,23 @@ export function reverseFindings(wb, wiki, tree, label) {
   const out = [];
   const byDir = Object.create(null);
   for (const key of wb.RENDERED) byDir[wb.PAGE_DIRS[key]] = new Set((wiki.entities?.[key] || []).map((e) => e.id));
-  for (const l of tree.links || []) out.push(`[page-no-entity] ${label}/${l} -- a symlink; pages are regular files under docs/wiki/`);
+  for (const l of tree.links || []) out.push(`[page-no-entity] ${label}/${l} -- a symlink or non-regular file; pages are regular files under docs/wiki/`);
   const allowedRoot = new Set(wb.ROOT_PAGES);
   for (const stem of tree.rootPages) if (!allowedRoot.has(stem)) out.push(`[page-no-entity] ${label}/${stem}.md -- not a page the wiki defines`);
   for (const d of tree.rootDirs) {
     if (d === wb.NARRATIVE_DIR) continue;
+    if (!(d in tree.pages)) continue; // a linked directory: already reported from tree.links
     if (!byDir[d]) { out.push(`[page-no-entity] ${label}/${d}/ -- not a page directory the wiki defines`); continue; }
     for (const stem of tree.pages[d]) if (!byDir[d].has(stem)) out.push(`[page-no-entity] ${label}/${d}/${stem}.md -- nothing in the tree has id ${stem} (${d})`);
-    for (const sub of tree.pageSubdirs[d]) out.push(`[page-no-entity] ${label}/${d}/${sub}/ -- page directories do not nest`);
+    for (const sub of tree.pageSubdirs[d] ?? []) out.push(`[page-no-entity] ${label}/${d}/${sub}/ -- page directories do not nest`);
   }
   const n = `${label}/${wb.NARRATIVE_DIR}`;
   for (const stem of tree.narrRootPages) out.push(`[narrative-no-entity] ${n}/${stem}.md -- a narrative lives in a type directory`);
   for (const d of tree.narrDirs) {
+    if (!(d in tree.narratives)) continue; // a linked directory: already reported from tree.links
     if (!byDir[d]) { out.push(`[narrative-no-entity] ${n}/${d}/ -- not a type directory the wiki defines`); continue; }
-    for (const stem of tree.narratives[d]) if (!byDir[d].has(stem)) out.push(`[narrative-no-entity] ${n}/${d}/${stem}.md -- no entity ${stem} to narrate`);
-    for (const sub of tree.narrSubdirs[d]) out.push(`[narrative-no-entity] ${n}/${d}/${sub}/ -- narrative directories do not nest`);
+    for (const stem of tree.narratives[d] ?? []) if (!byDir[d].has(stem)) out.push(`[narrative-no-entity] ${n}/${d}/${stem}.md -- no entity ${stem} to narrate`);
+    for (const sub of tree.narrSubdirs[d] ?? []) out.push(`[narrative-no-entity] ${n}/${d}/${sub}/ -- narrative directories do not nest`);
   }
   return out;
 }
@@ -143,7 +167,9 @@ export async function collect({ repo, pagesAbs, label, world, bands }) {
   const res = await wb.extract(repo, world, bands ? { bands } : {});
   if (res.code !== 0) return { code: 2, findings: [], message: `the tree could not be extracted: ${res.message}` };
   const wiki = res.wiki;
-  const tree = pageTree(fc, wb, pagesAbs);
+  let tree;
+  try { tree = pageTree(fc, wb, pagesAbs); }
+  catch (e) { if (e instanceof GateError) return { code: 2, findings: [], message: e.message }; throw e; }
   const findings = coverageFindings(wb, wiki, tree, label);
   const entities = wb.RENDERED.reduce((n, k) => n + wiki.entities[k].length, 0);
   const pages = wb.RENDERED.reduce((n, k) => n + (tree.pages[wb.PAGE_DIRS[k]] || []).length, 0);

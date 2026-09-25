@@ -121,6 +121,26 @@ mutant_scan() {
   mutant_scan template wiki-build.mjs   'import { readdirSync } from "node:fs"; export const __x = (d) => `${readdirSync(d)}`;'
 }
 
+# Mutants of the ALLOWLIST itself, planted in wiki-coverage.mjs (whose sanctioned calls they
+# imitate): a wrong receiver, a sanctioned call duplicated, and a sanctioned call deleted.
+mutant_cov() {
+  local name="$1" script="$2" expect="$3"
+  local d="$BATS_TEST_TMPDIR/c-$name"
+  mkdir -p "$d"
+  cp "$ARC_ROOT/.claude/scripts/docs/wiki-coverage.mjs" "$d/wiki-coverage.mjs"
+  node -e "$script" "$d/wiki-coverage.mjs" || { echo "[$name] could not plant the mutant"; return 1; }
+  run node "$(SCAN)" "$d"
+  [[ "$output" == "no-walker: scanned 1 file(s)"* ]] || { echo "[$name] scan did not run: $output"; return 1; }
+  [ "$status" -eq 1 ] || { echo "[$name] mutant survived (status $status): $output"; return 1; }
+  [[ "$output" == *"$expect"* ]] || { echo "[$name] expected '$expect': $output"; return 1; }
+}
+
+@test "docs-extract: allowlist mutants -- wrong receiver, a duplicated and a deleted sanctioned call all turn the scan RED" {
+  mutant_cov receiver 'const f=require("fs"),p=process.argv[1];f.appendFileSync(p,"\nexport const q = (myfc, pagesAbs) => myfc.dirNames(pagesAbs);\n")' "outside the sanctioned site"
+  mutant_cov duplicate 'const f=require("fs"),p=process.argv[1];f.appendFileSync(p,"\nexport const q = (fc, pagesAbs) => fc.dirNames(pagesAbs);\n")' "fc.dirNames(pagesAbs) appears 2 time(s), not exactly once"
+  mutant_cov deleted 'const f=require("fs"),p=process.argv[1];let s=f.readFileSync(p,"utf8");const a="const narrDirs = fc.dirNames(narrAbs);";if(s.split(a).length!==2)process.exit(3);f.writeFileSync(p,s.replace(a,"const narrDirs = [];"))' "fc.dirNames(narrAbs) appears 0 time(s), not exactly once"
+}
+
 @test "docs-extract: the CLI refuses unknown flags, missing values and the --flag=value form with exit 2" {
   run node "$(WB)" --jsn
   [ "$status" -eq 2 ] || { echo "unknown flag: status $status: $output"; false; }
@@ -210,7 +230,7 @@ mutant_scan() {
 
 @test "docs-extract: this suite registers exactly the tests it declares" {
   # bats silently drops a @test it cannot register; a suite that IS the proof of DOC-A counts itself.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 18 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 18"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 19 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, declared 19"; false; }
 }
 
 @test "docs-extract: --out never overwrites a narrative; inside the tree only docs/wiki/wiki.json is writable" {
