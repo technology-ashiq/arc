@@ -210,3 +210,17 @@ kinds:
     publish: { level: L0 }
     deploy: { level: L0 }
     spend: { level: L0 }
+
+  # Phase 06 slice 03b (face lane). The council writes its one claimed session file and the
+  # council.verdict receipt step 9 appends, so write and shell are L1 (shell scoped in the process
+  # file to council-lint and `arc-event.sh emit council.verdict`). Its researchers read the web.
+  "process:council-convene":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L1 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
