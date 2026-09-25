@@ -54,3 +54,7 @@ the fuller source; read it too.
 - **A UTF-8 BOM silently emptied facts** (B13) — `readText` — *strip BOM and CR on every read; a CRLF+BOM fixture must extract identical bytes.*
 - **Gate names from one read, facts from a second, with no one-row check** (B14) — `readGates` — *every name resolves to exactly one row or the build stops.*
 - **Fail-closed branches with no case only they decide** (B15) — `extract-probe.mjs` (10 checks) + CLI branch tests — *one test per branch, asserting the CLI exit code.*
+
+## Phase 00 -- the first CI run (90942d6d)
+
+- **`expected-set.json` hand-edited with `sed` left it out of canonical form** — a numeric-looking key (`"1500"`) was appended after `"0900"`, but `JSON.stringify` orders integer keys first, so `agent-scaffold` and `concept-define` refused main as non-canonical and three face ring tests went red on two OS legs — *edit a generator-owned JSON by parse → mutate → `JSON.stringify(v, null, 2) + "\n"`, never by text; then run the generator's own `--check`.*

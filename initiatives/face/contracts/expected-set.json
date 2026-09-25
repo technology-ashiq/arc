@@ -1351,6 +1351,7 @@
       "1100": "growth",
       "1200": "legal",
       "1300": "toolbelt",
+      "1500": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1360,8 +1361,7 @@
       "0600": "absorb",
       "0700": "memory",
       "0800": "scheduler",
-      "0900": "bench",
-      "1500": "lane"
+      "0900": "bench"
     }
   },
   "jobs": {
