@@ -611,7 +611,7 @@ export function payloadOf(payloads, read) {
 /**
  * The reads of a module that carried a provider key, one line each (ADR-1325): what the host draws above the room.
  * The fold itself never sees the key -- foldModule withholds it.
- * @param {AttachedModule} module @param {Record<string, Payload>} loaded @returns {string[]}
+ * @param {AttachedModule} module @param {Record<string, Payload>} loaded @param {ModuleContext} [ctx] @returns {string[]}
  */
 export function keyLeaksFor(module, loaded, ctx = undefined) {
   return [...withholdKeys(payloadsFor(module.manifest, loaded)).leaks, ...(ctx ? contextLeaks(ctx) : [])];
