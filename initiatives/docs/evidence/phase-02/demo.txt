@@ -1,0 +1,12 @@
+$ node .claude/scripts/docs/wiki-build.mjs
+wiki-build: 132 file(s) rendered (0 written, 0 stale removed) -> <repo>/docs/wiki
+
+$ node .claude/scripts/docs/wiki-build.mjs --check
+wiki-build: check 132 generated file(s) -- docs/wiki/ is exactly what the renderer writes
+
+$ node .claude/scripts/docs/wiki-coverage.mjs
+wiki-coverage: 131 entities, 131 pages, 0 narratives -- all covered
+narrative debt: 131 of 131 entities have no narrative
+
+$ node tests/docs/link-check.mjs docs/wiki
+link-check: 132 page(s), 1891 link(s) checked

@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-docs (Cycle 17, opened 2026-09-25)
-phase: 02
+phase: 03
 appetite: 6.5d
-burn: 2d
+burn: 3d
 blocked-on: —
 depends-on: —
 
@@ -20,8 +20,8 @@ depends-on: —
 |---|---|---|---|
 | 00 | Steel thread — the extractor: ruling on the spine, `docs` product born, additive `treeWorld` export, `wiki-build --json` → `wiki.json`, REQ-09 import scan + mutant | 1.5d | ✅ 2026-09-25 |
 | 01 | The coverage gate before any renderer — `wiki-coverage` both directions, FAIL-FROM-BIRTH, `--mutant-selftest` M0–M4; **day-3 kill checkpoint** | 1.5d | ✅ 2026-09-25 |
-| 02 | The renderer — `docs/wiki/**`, banners, regenerate-and-diff, REQ-04 fixture product; the four overlapping docs stubbed + archived | 1d | in progress |
-| 03 | Drift BLOCK + stale WARN + `--audit-counts`; three narratives (hand-written or absent); retro and seal | 1.5d | pending |
+| 02 | The renderer — `docs/wiki/**`, banners, regenerate-and-diff, REQ-04 fixture product; the four overlapping docs stubbed + archived | 1d | ✅ 2026-09-25 |
+| 03 | Drift BLOCK + stale WARN + `--audit-counts`; three narratives (hand-written or absent); retro and seal | 1.5d | in progress |
 
 ## Done-log
 
@@ -44,11 +44,18 @@ _(empty — nothing closed yet)_
 - One push went out without the new script's manifest line; `product-lint` caught it, the run was cancelled, fixed in `c63d4411`.
 - Time: ~1d of 1.5d. `amendments: 0` · `reopened: n`.
 
+**Phase 02 — closed 2026-09-25.** `wiki-build` renders `docs/wiki/`: an index and 131 entity pages, 1891 relative links all resolving, the do-not-edit banner on every file, and each page's narrative or a visible "narrative pending". `--check` is the dirty-diff gate, backed by an independent `diff -r` render. REQ-08: the four overlapping documents archived whole and stubbed in place — `how-it-works.md` still claimed six products; there are 17. Merged as `88bd23de` (PR #280). Evidence: `initiatives/docs/evidence/phase-02/bundle.md`.
+
+- **CI:** red once, rightly — the DOC-A scanner had lost sync on a regex literal and never scanned the renderer while printing clean — then **19/19** at `fd12c825`.
+- **Design call:** lane pages carry status and cycle only; phase and burn would have made every lane's tracker edit a wiki regeneration. `wiki.json` is on demand, not committed.
+- **Attack:** one round (owner's lean rule) on a code-only view, because an ADR file name reads as an `sk-` key and the secret guard stopped the full diff; 7 medium fixed, 6 low to the ledger. Logic surface did not run.
+- Two pushes (the second fixed a real CI red). Time: ~1d of 1d. `amendments: 0` · `reopened: n`.
+
 ## Appetite burn
 
-2 of 6.5 days used (Phase 00 1d of 1.5d · Phase 01 ~1d of 1.5d). Day-3 checkpoint passed on day 2. (5.5 planned · 1 slack). Day-3 checkpoint: end of Phase 01.
+3 of 6.5 days used (Phase 00 1d · Phase 01 ~1d · Phase 02 ~1d). Day-3 checkpoint passed on day 2. (5.5 planned · 1 slack). Day-3 checkpoint: end of Phase 01.
 
 ## Now
 
-**Current position →** Phase 01 ✅ 2026-09-25 (day-3 kill checkpoint: fails closed — proceed). Phase 02 open: the renderer.
-**Next step →** red-first `tests/docs-render.bats` (regenerate-and-diff, one-byte-edit mutant, REQ-04 fixture product), then pages under `docs/wiki/`, then REQ-08: the four overlapping docs stubbed in place with archived copies and the strategy file map, same commit.
+**Current position →** Phase 02 ✅ 2026-09-25. Phase 03 open: drift BLOCK, stale WARN, `--audit-counts`, and three narratives (hand-written by the owner or absent).
+**Next step →** red-first `tests/docs-drift.bats`, then `wiki-drift` / `wiki-stale` / `--audit-counts`; the three narratives need the owner's words (ADR-1508) — without them they stay absent and the cycle still closes.

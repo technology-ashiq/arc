@@ -1,0 +1,131 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-drift.mjs:79",
+      "breaking_input": "A narrative line containing `docs/..\\..\\..\\outside\\notes.md`. The `\"..\"` guard splits on `/` only, so no segment equals `..`. The token starts with `docs/` and ends in `.md`. On the Windows leg, `existsSync(join(repo, \"docs\", \"..\\..\\..\\outside\\notes.md\"))` normalises `\\` as a separator and answers about a file outside the checkout.",
+      "why": "The lexical traversal guard and the filesystem disagree about what a separator is on Windows. The gate reports a reference as resolving when the file is outside the tree, and the verdict differs between the Windows and Linux CI legs, because on POSIX `\\` is part of a filename.",
+      "fix": "Reject any token containing a backslash or a drive colon. Normalise with path.posix before splitting. Then realpath the joined path and require it to lie inside realpath(repo) and be a regular file.",
+      "twin_of": "A containment check used `isFile()`, which a symlink passes -> resolve realpaths before any containment decision."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-drift.mjs:80",
+      "breaking_input": "A narrative citing `docs/WIKI/index.md` or `.claude/Scripts/docs/wiki-build.mjs`. The ROOTS prefix is matched case-sensitively, but only against `docs/` and `.claude/`, which are already lower-case. `existsSync` then opens the mis-cased tail. The gate exits 0 on Windows and macOS and exits 1 on Linux. `docs/nul.md` (a reserved device name) and `docs/WIKI~1/index.md` (an 8.3 short name) are answered by the OS on Windows in the same way.",
+      "why": "Existence is decided by the filesystem's spelling rules. The developer's Windows box is green and the Linux leg is red, or the reverse. The pattern is the same as the case-folding twin already fixed in the extractor.",
+      "fix": "After `existsSync`, compare the token's tail to `fs.realpathSync.native(abs)`, whose spelling comes from the disk. Reject tokens whose segments match a Windows reserved device name or contain `~`.",
+      "twin_of": "A file present only under another case was read on Windows/macOS and absent on Linux -> compare the real spelling, never trust a case-folding disk."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-drift.mjs:64",
+      "breaking_input": "A narrative with `.claude\\scripts\\docs\\wiki-ghost.mjs`, or the bare text `docs\\gone-file.md`. The ticked branch requires `t.includes(\"/\")`. The bare-path regex is `(?:...)\\/[\\w./-]+`, and `\\w./-` excludes a backslash. `referencesIn` returns zero references and `wiki-drift` exits 0, printing `0 reference(s) checked`.",
+      "why": "The narrative author works in PowerShell and pastes Windows spellings. The gate's only defence against prose naming a deleted script is silently blind to that spelling, so REQ-05 is bypassed by the most natural way of typing a path here.",
+      "fix": "Normalise `\\` to `/` in the line before extraction, or treat any backticked token with a backslash and a known extension as a path reference. Add a mutant arm for the backslash spelling.",
+      "twin_of": "`! grep ...` mid-test never failed; the Windows path spelling was never checked -> a \"must not\" is `if ...; then false; fi`, and every spelling of a path is checked."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:803",
+      "breaking_input": "Replace `docs/wiki/products/engine.md` with a symlink to a correct render kept elsewhere, or make `docs/wiki` itself a symlink to a directory holding a fresh render. `readFileSync` follows the link, every number matches, and `--audit-counts` prints `all match` and exits 0.",
+      "why": "REQ-07 claims every number on every committed page was re-derived, but the auditor certifies bytes that do not live in the tree. It does no lstat on the wiki root or on any page. `wiki-drift` refuses a linked `docs/wiki` and `check()` refuses linked paths; the new audit does neither.",
+      "fix": "Run the same link-refusal function `check()` and the writer use over `docs/wiki` and every page before reading. Exit 2 naming the linked path.",
+      "twin_of": "`--check` followed links and certified pages that live elsewhere -> the certifier and the writer refuse the same paths, through one function."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:804",
+      "breaking_input": "`docs/wiki/products/engine.md` is a directory (EISDIR), is unreadable (EACCES, or EBUSY from a Windows antivirus lock), or on POSIX is a FIFO. The bare `catch {}` turns EISDIR, EACCES and EBUSY into `COUNT ...: missing -- nothing to audit`, exit 1. The FIFO makes `readFileSync` block forever, so the CI job hangs until its timeout.",
+      "why": "Every errno is reported as absence, which hides the real cause behind a misleading message. A non-regular file at a page's named path should be its own named failure, not something read.",
+      "fix": "`lstatSync` each path first. Treat only ENOENT and ENOTDIR as missing. For a non-regular file or any other errno, return exit 2 naming the errno.",
+      "twin_of": "A per-file read error became \"unparsed\" at exit 0 -> only ENOENT/ENOTDIR is absence; every other errno is a named exit 2."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:802",
+      "breaking_input": "Commit a page as `docs/wiki/products/ENGINE.md`, with no lower-case `engine.md`. On Windows or macOS, `--audit-counts` opens `products/engine.md`, finds the ENGINE.md content and passes if its numbers are right. On the Linux leg it reports `missing`.",
+      "why": "The audit opens pages by a constructed name and never compares it with the on-disk spelling, so its verdict depends on whether the checkout's filesystem folds case.",
+      "fix": "Resolve each page with `realpathSync.native` and require its final segment to equal the rendered name byte for byte, or list the directory through the sanctioned lister and compare exact names.",
+      "twin_of": "A file present only under another case was read on Windows/macOS and absent on Linux -> compare the real spelling, never trust a case-folding disk."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-drift.mjs:196",
+      "breaking_input": "`node wiki-drift.mjs --root T`, where T contains only `.claude/scripts/docs/wiki-coverage.mjs`, or a tree whose older `wiki-build.mjs` lacks `NARRATIVE_DIR` or `extract`. The guard passes. `load()` then rejects with ERR_MODULE_NOT_FOUND, or `join(pagesAbs, undefined, ...)` throws a TypeError. `wiki-stale.mjs:131` has the identical guard.",
+      "why": "The guard checks one of the three modules `load()` imports. The result is an exit 2 reached through the rejection handler and a raw stack trace instead of the named 'not an arc tree with the docs product' message. `wiki-build`'s own guard already names both of its modules.",
+      "fix": "Name face-coverage.mjs, wiki-build.mjs and wiki-coverage.mjs in the guard for both scripts. Wrap `load()` and print a one-line diagnostic.",
+      "twin_of": "The tree guard did not require the docs product; pageTree import errors escaped -> a guard names every module the command imports."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-stale.mjs:75",
+      "breaking_input": "Make `docs/wiki` a symlink to a directory elsewhere that holds a `_narrative` tree. `wiki-stale` reads through the link, or on a missing `docs/wiki` prints `0 narrative(s) checked, 0 stale` at exit 0. `wiki-drift` refuses the linked `docs/wiki` in main; `wiki-stale` has no such check.",
+      "why": "The two sibling gates give their input path different containment rules, so `wiki-stale` reports on narratives that are not in this tree.",
+      "fix": "Share the `lstat` symlink refusal from `wiki-drift` main, or hoist it into `pageTree`, so both gates exit 2 on a linked `docs/wiki`.",
+      "twin_of": "`--pages` and page directories were never contained -> the gate's own input path gets the writer's containment rules."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-drift.mjs:99",
+      "breaking_input": "Delete `docs/wiki/_narrative`, or run on today's real tree, which has zero narratives. `wiki-drift` prints `0 narrative(s), 0 reference(s) checked -- none dangling` and exits 0. The bats test at tests/docs-drift.bats:53 accepts exactly that output.",
+      "why": "The real-tree test cannot tell 'read nothing because none exist' from 'read nothing because the listing broke'. This is the vacuous-pass shape, and `refs` and `narratives` are never compared against a count derived independently.",
+      "fix": "Have the test compare `narratives` with the narrative count `wiki-coverage` prints for the same tree. Make the gate exit 2 when `docs/wiki` itself is absent.",
+      "twin_of": "The DOC-A scan was top-level-only and .mjs-only; `scanned >= 1` proved nothing -> a scan asserts it covered the count derived independently."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:895",
+      "breaking_input": "Delete `|| opts[\"--out\"]` or `|| opts[\"--json\"]` from the `--audit-counts` refusal. All 9 tests still pass, since only `--audit-counts --check` is tested. `wiki-build --audit-counts --out /some/dir` then silently ignores `--out`. The `wiki-drift` symlink refusal, `--root` on a non-arc tree, and `wiki-stale --print` with a bad target are untested too.",
+      "why": "Each refusal branch has no test that fails when only that branch is removed.",
+      "fix": "Add one test per refusal: `--audit-counts --json`, `--audit-counts --out X`, a linked `docs/wiki` for drift, a bad `--print` target. Each asserts the exact exit 2 and that nothing was written.",
+      "twin_of": "Refusal branches had no case only they decide -> one test per refusal, asserting nothing was written."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "tests/docs-drift.bats:92",
+      "breaking_input": "A mutant auditor that reports `COUNT docs/wiki/index.md:17: the page says 9, the tree says 1`. The glob `*\"docs/wiki/index.md\"*\"7\"*\"1\"*` matches through the `7` in `:17:`, so the test passes with the wrong number named.",
+      "why": "The REQ-07 mutant assertion is a subsequence match that ordinary line numbers satisfy. It does not pin the page, the pair of numbers or the line.",
+      "fix": "Assert the exact line `docs/wiki/index.md:<n>: the page says 7, the tree says 1`, with `<n>` computed from the anchor's line in the fixture.",
+      "twin_of": "Mutant-gate and empty-tree tests passed on ANY non-zero exit -> assert the exact exit, the arm's own line, and the named finding."
+    },
+    {
+      "id": "B12",
+      "severity": "medium",
+      "where": "tests/shard-timings.json:176",
+      "breaking_input": "The diff adds tests/docs-drift.bats but no entry for it. The hunk updates docs-extract, docs-coverage and docs-render only. Four of its 9 tests each build a fixture tree and a full render, which costs about 46 s per suite on Windows for docs-render, plus the extract in every gate run. The file is scheduled at the 16 s default.",
+      "why": "A missing entry is a default, not an error. The Windows shard is under-weighted and can overrun. The repo already recorded six files riding a 16 s default against real costs up to 123 s.",
+      "fix": "Add a measured entry for docs-drift.bats (estimate at least 60 s until measured). Make the unmeasured-entry count visible.",
+      "twin_of": ""
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-stale.mjs:43",
+      "breaking_input": "`fingerprint({k:{a:1,b:2}})` and `fingerprint({k:{b:2,a:1}})` give different hashes, although the comment says 'canonical JSON, keys in byte order'. Only the top-level keys are sorted; nested object keys keep insertion order. A fact value that is `undefined` makes `createHash.update(undefined)` throw and crash the run.",
+      "why": "The comment claims a canonical form that the code does not produce. Any extractor path whose nested key order depends on read order gives a different fingerprint on one OS leg, so the WARN fires spuriously there.",
+      "fix": "Serialise with a recursive key-sorted stringify. Coerce `undefined` to `null`, or refuse it with a named error.",
+      "twin_of": "A \"behaviour-preserving\" comment claimed an order that was false -> a claim of \"as before\" names what was before and keeps it."
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:794",
+      "breaking_input": "A tree with a treeWorld key the wiki has not decided about. `render()` returns code 1, and `auditCounts` returns that code unchanged. `wiki-build --audit-counts` then exits 1, the same value it uses for 'a page carries a number the tree does not'.",
+      "why": "The audit's exit 1 means both 'undecided inventory' and 'count drift', so a caller cannot tell whether to regenerate or to fix the inventory.",
+      "fix": "Map a render failure to exit 2 with a distinct message, and reserve exit 1 for a found count mismatch.",
+      "twin_of": "EPIPE on stdout surfaced as exit 1, which means \"undecided inventory\" -> a failed stdout write is its own named exit 2."
+    }
+  ]
+}
