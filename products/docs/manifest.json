@@ -10,7 +10,9 @@
   "agents": [],
   "scripts": [
     ".claude/scripts/docs/wiki-build.mjs",
-    ".claude/scripts/docs/wiki-coverage.mjs"
+    ".claude/scripts/docs/wiki-coverage.mjs",
+    ".claude/scripts/docs/wiki-drift.mjs",
+    ".claude/scripts/docs/wiki-stale.mjs"
   ],
   "files": [],
   "docs": [],

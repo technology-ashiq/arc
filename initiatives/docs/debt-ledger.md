@@ -36,3 +36,14 @@ one line each, with where they came from. Each is paid in a later slice or close
 - **P2 B10** — `link-check.mjs` does not parse a link target containing a space or a `)`; the renderer emits none. Pay when a path with either appears.
 - **P2 B12** — two ids one case apart would render two pages (one file on Windows/macOS); `wiki-coverage` already fails `[id-collision]` on exactly that, so CI stops it. Pay: the renderer refuses too.
 - **P2 B13** — `wiki-build` with no flags now writes `docs/wiki/` (it used to refuse). Intended by the Phase 02 spec; the writer refuses everything outside `docs/wiki/` and every hand-written file.
+
+## Phase 03 (attack 4a2ebb9, the one round, boundary)
+
+- **P3 B6** — `--audit-counts` opens pages by constructed name without comparing on-disk case. `--check` and `wiki-coverage`'s case-folded listing both fail first on such a tree.
+- **P3 B7** — `wiki-drift`'s tree guard checks one of the three modules it imports; a missing one exits 2 with a stack, not a sentence.
+- **P3 B8** — `wiki-stale` does not refuse a linked `docs/wiki/` the way `wiki-drift` does (it only warns, never blocks).
+- **P3 B10** — `wiki-build`'s new `--audit-counts` refusal combinations have one test for one combination.
+- **P3 B11** — superseded: the REQ-07 mutant now pins the exact "page says 7, the tree says 1" text.
+- **P3 B13** — the fingerprint comment says "canonical JSON"; it is `JSON.stringify` in the extractor's own key order, which is fixed by construction but not re-sorted.
+- **P3 B14** — `--audit-counts` exit 1 is count drift; an undecided inventory is exit 1 from the extractor first. A caller reads the first line to tell them apart.
+- **docs-drift.bats weight is an estimate (60 s)** until the close measures it.

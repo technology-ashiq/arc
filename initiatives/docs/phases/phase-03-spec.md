@@ -17,7 +17,15 @@
 - [ ] two-surface attack run; CI green per-JOB at head SHA; retro written; tracker updated
 
 ## Verification plan
-Coarse, refined via `/arc-change` when the phase starts: `tests/docs-drift.bats` red-first on CI, and the three narratives pass `wiki-drift`.
+
+Refined at phase start (2026-09-25).
+
+- **Test command:** `bats tests/docs-drift.bats` — CI only, per-JOB.
+- **Expected failure first:** committed before `wiki-drift.mjs`, `wiki-stale.mjs` and `--audit-counts` exist; every test red (module not found / unknown flag). Per the owner's lean rule (one push per PR) the red state is that commit, not a separate CI run.
+- **What the suite proves:** REQ-05 — a narrative citing `ADR-9999`, `drivers/ghost.mjs` and `/arc-ghost` fails `wiki-drift` naming all three, while one citing real ones passes; the gate's own `--mutant-selftest` ran every arm; `wiki-stale` WARNs (exit 0) on a narrative with no fingerprint and on one whose entity's facts moved, and is silent when they match; REQ-07 — `wiki-build --audit-counts` passes on the real tree and names the page and the number when one count on a page is changed; both gates run on the real tree every PR.
+- **Live demo scenario:** `wiki-drift --mutant-selftest`; `wiki-drift` and `wiki-stale` on the real tree; `wiki-build --audit-counts`.
+- **Real-system check:** the three narratives, if the owner supplies them, pass `wiki-drift` on the real tree and render on their pages.
+- **Expected evidence:** `initiatives/docs/evidence/phase-03/` — the green run, the demo, the retro.
 
 ## Rabbit holes in this phase
 Narrative template perfection · NLP-grade reference extraction (a fixed grammar, attacked).

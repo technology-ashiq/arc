@@ -103,3 +103,11 @@ the fuller source; read it too.
 
 - **The DOC-A scanner read the regex `/`+/` as an unterminated template and blanked the REST of wiki-build.mjs** — every line of the renderer went unscanned while the scan printed "clean"; CI caught it only because a mutant appended after that point survived — `no-walker.mjs` (regex-literal aware; a literal that never closes is a named finding, never absorbed) — *a scanner that tokenises must report where it lost sync, or it certifies what it never read.*
 - **A test link was relative to the wrong directory** (`index.md#...` from `products/`) — `tests/docs-render.bats` — *a fixture's paths are resolved from the page they sit in.*
+
+## Phase 03 -- drift, stale, audit (attack 4a2ebb9, the one round, boundary; logic transport failed)
+
+- **A `..` guard split on `/` only; a backslash spelling escaped it and was never even a reference** (P3 B1, B3) — `wiki-drift` treats `\` as a separator when extracting and refuses Windows spellings outright — *a path check normalises separators before it judges segments.*
+- **Existence was decided by the filesystem's spelling rules (case, 8.3 names, device names)** (P3 B2) — `isFileSpelledExactly` (real spelling must match, contained) — *the twin of namedFile's case rule, in the next gate.*
+- **`--audit-counts` read through links and turned every errno into "missing"** (P3 B4, B5) — same `pathProblems` refusal as `--check`; only ENOENT is missing — *every reader of docs/wiki/ refuses what the writer refuses.*
+- **"0 narratives checked" could not tell none-exist from listing-broke** (P3 B9) — the real-tree test cross-checks the count with `wiki-coverage`'s; no `docs/wiki/` is exit 2 — *a count of zero is compared with an independent count.*
+- **The first draft narrative cited `/arc-run`, a command that does not exist** — caught by `wiki-drift` before it shipped — *prose is attacked by the gate, not by review.*

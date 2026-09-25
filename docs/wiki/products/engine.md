@@ -3,7 +3,11 @@
 
 [arc reference](../index.md) › [Products](../index.md#products) › **Product**
 
-> **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/products/engine.md` -- hand-written, never generated (ADR-1505, ADR-1508).
+## Why it exists
+
+The engine is how arc runs a piece of work as a governed, receipted process instead of a prompt pasted into a session. A process is one YAML file with a schema contract and its own version (ADR-0200). Every run goes through `arc-run.mjs`, which hands the process to a driver behind one interface (ADR-0203) — `drivers/claude-code.mjs` today, with hired external runtimes such as `drivers/hermes.mjs` behind the same contract — and every run leaves a `run.completed` receipt on the spine.
+
+Three of arc's commands are compiled from process files rather than written by hand, and a generated file is never edited (ADR-0201). The PR loop's adversarial pass, `/arc-attack`, runs through the engine as well (ADR-0226): that is why the attacker sees only the diff it is handed, and nothing of the session that wrote it.
 
 ## At a glance
 
