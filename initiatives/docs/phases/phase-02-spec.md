@@ -18,7 +18,15 @@
 - [ ] two-surface attack run; CI green per-JOB at head SHA; tracker updated
 
 ## Verification plan
-Coarse, refined via `/arc-change` when the phase starts: `tests/docs-render.bats` on CI red-first, plus a live `wiki-build` → `wiki-coverage` exit 0 on the real tree.
+
+Refined at phase start (2026-09-25), as this spec's coarse line required.
+
+- **Test command:** `bats tests/docs-render.bats` — CI only, read per-JOB with `ci-digest.mjs`.
+- **Expected failure first:** committed before the renderer exists: `wiki-build.mjs --check` is an unknown flag (exit 2), `docs/wiki/` does not exist, and `wiki-coverage` on the real tree exits 1 naming all 129 entities — every test red on the tests-only commit, run id recorded.
+- **What the suite proves:** REQ-06 twice over — `--check` on the committed tree, AND an independent render into scratch diffed with `diff -r` — plus one-byte-edit, deleted-page and stale-page mutants each turning `--check` red by name; REQ-01 as `wiki-coverage` exit 0 on the real tree with counts equal to `wiki.json`'s; REQ-04 as a manifest-only fixture product rendered with its facts and the `narrative pending` banner; the do-not-edit banner on line 1 of every generated file; a narrative included verbatim (and never rewritten); every relative link in every generated page resolving to a real file; determinism (two renders byte-identical, no CR, no checkout path); REQ-08 as four ≤ 10-line stubs, four archive copies, and the file map naming the move.
+- **Live demo scenario:** `node .claude/scripts/docs/wiki-build.mjs` → pages written; `node .claude/scripts/docs/wiki-coverage.mjs` → `129 entities, 129 pages … -- all covered`; open `docs/wiki/index.md` and follow one product, one lane and one ADR band by link.
+- **Real-system check:** the rendered `docs/wiki/` on the merged `main`, verified by a `workflow_dispatch` run.
+- **Expected evidence:** `initiatives/docs/evidence/phase-02/` — the red run, the green run, the demo transcript, the link-check count, the inbound-reference list for the four documents.
 
 ## Rabbit holes in this phase
 Styling · rewriting the four documents' prose into narrative (archive, don't port).

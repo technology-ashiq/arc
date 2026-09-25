@@ -157,6 +157,7 @@
 - `/arc-freeze <dir>` · `/arc-unfreeze` — deterministic edit-boundary while debugging
 - `/arc-diagram <what>`— English → committed Mermaid (into PLAN/ADR/docs)
 - `/arc-resume [--lane <name>]` — rebuild session state from PROGRESS ## Now + last snapshot
+- `node .claude/scripts/docs/wiki-build.mjs` — regenerate `docs/wiki/` after adding or changing a product, lane, process, ADR, command, agent, rule or gate; CI fails on a stale wiki (`--check`) and on a part of arc with no page (`wiki-coverage`)
 - Only the six command lines showing `[--lane <name>]` take the flag; the rest are lane-agnostic.
   A bare first argument is always the command's own (a phase number, a route, a URL, a goal
   sentence) — never a lane name. Omit the flag and the lane is resolved, or you are asked.
@@ -191,7 +192,7 @@
 ---
 
 ## Extended docs — Claude, READ these when the work touches them
-- How this setup works → `docs/how-it-works.md` (mental model + example flow)
+- What exists in arc → `docs/wiki/index.md` (GENERATED; every product, lane, process, ADR band, command, agent, rule, gate). The old hand-kept `docs/how-it-works.md` is archived (ADR-1510)
 - Build process       → `docs/build-playbook.md` (Golden Loop · DoD · 3-layer tracker)
 - Database setup      → `docs/supabase-setup.md`
 - Payments / Stripe   → `docs/stripe-setup.md`

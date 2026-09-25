@@ -118,6 +118,8 @@ mutant_scan() {
   mutant_scan launder  wiki-build.mjs   'export const __x = (fc, repo, join) => fc.dirNames(repo); // fc.mdStems(join(repo, "docs", "adr"))'
   mutant_scan receiver wiki-build.mjs   'export const __x = (myfc, pagesAbs) => myfc.dirNames(pagesAbs);'
   mutant_scan wrongfile wiki-build.mjs  'export const __x = (fc, pagesAbs) => fc.dirNames(pagesAbs);'
+  mutant_scan regex    wiki-build.mjs   'export const __r = /`+/g; import { readdirSync } from "node:fs"; export const __x = () => readdirSync(".");'
+  mutant_scan desync   wiki-build.mjs   'export const __s = "a string that never closes'
   mutant_scan template wiki-build.mjs   'import { readdirSync } from "node:fs"; export const __x = (d) => `${readdirSync(d)}`;'
 }
 
@@ -153,8 +155,6 @@ mutant_cov() {
   [ "$status" -eq 2 ] || { echo "--flag=value form: status $status: $output"; false; }
   run node "$(WB)" --json --json
   [ "$status" -eq 2 ] || { echo "a repeated flag: status $status: $output"; false; }
-  run node "$(WB)"
-  [ "$status" -eq 2 ] || { echo "no --json: status $status: $output"; false; }
 }
 
 @test "docs-extract: the writer refuses a directory, a path inside the tree, and a non-arc root" {

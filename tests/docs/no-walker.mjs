@@ -26,19 +26,54 @@ const dir = args[0];
 let expect = null;
 if (args[1] === "--expect") expect = Number(args[2]);
 
-/** Blank comments and string contents so a sentence ABOUT readdirSync is not a call. */
+/**
+ * Where a `/` starts a regex literal rather than a division: after nothing, after an operator or
+ * opening punctuation, or after a keyword that takes an expression.
+ */
+function regexAllowed(out) {
+  const t = out.replace(/\s+$/, "");
+  if (t === "") return true;
+  if (/[(,=:[!&|?{};+\-*%<>~^]$/.test(t)) return true;
+  return /\b(return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await)$/.test(t);
+}
+
+/** Index of the closing `/` of a regex literal starting at i, or -1 if the line ends first. */
+function regexEnd(src, i) {
+  let j = i + 1, inClass = false;
+  while (j < src.length && src[j] !== "\n") {
+    const ch = src[j];
+    if (ch === "\\") { j += 2; continue; }
+    if (ch === "[") inClass = true;
+    else if (ch === "]") inClass = false;
+    else if (ch === "/" && !inClass) return j;
+    j++;
+  }
+  return -1;
+}
+
+/**
+ * Blank comments, string contents and regex bodies so a sentence ABOUT readdirSync is not a
+ * call. A literal that never closes is a DESYNC -- the rest of the file would be blanked and a
+ * walker after it hidden -- so it is reported, never absorbed. (A regex like /`+/ once read as
+ * an unterminated template here and hid every line of the renderer from this scan.)
+ */
 function codeOnly(src) {
-  let out = "", i = 0;
+  let out = "", i = 0, desync = null;
   const n = src.length;
   while (i < n) {
     const c = src[i], d = src[i + 1];
     if (c === "/" && d === "/") { while (i < n && src[i] !== "\n") { out += " "; i++; } continue; }
+    if (c === "/" && d !== "*" && regexAllowed(out)) {
+      const end = regexEnd(src, i);
+      if (end > i) { out += "/" + " ".repeat(end - i - 1) + "/"; i = end + 1; continue; }
+    }
     if (c === "/" && d === "*") {
       out += "  "; i += 2;
       while (i < n && !(src[i] === "*" && src[i + 1] === "/")) { out += src[i] === "\n" ? "\n" : " "; i++; }
       out += "  "; i += 2; continue;
     }
     if (c === "\"" || c === "'" || c === "`") {
+      const startLine = out.split("\n").length;
       out += c; i++;
       while (i < n && src[i] !== c) {
         if (src[i] === "\\") { out += "  "; i += 2; continue; }
@@ -54,11 +89,12 @@ function codeOnly(src) {
         }
         out += src[i] === "\n" ? "\n" : " "; i++;
       }
+      if (i >= n && desync === null) desync = startLine;
       out += c; i++; continue;
     }
     out += c; i++;
   }
-  return out;
+  return { code: out, desync };
 }
 
 /**
@@ -123,7 +159,9 @@ function fsBindings(raw) {
 function scanFile(root, p, found) {
   const rel = relative(root, p).split(sep).join("/");
   const raw = readFileSync(p, "utf8");
-  const code = codeOnly(raw);
+  const scanned = codeOnly(raw);
+  const code = scanned.code;
+  if (scanned.desync !== null) found.push(`${rel}:${scanned.desync}: a string, template or regex that never closes -- the scan cannot see past it`);
   const codeLines = code.split("\n");
   const rawLines = raw.split("\n");
   const bound = [...fsBindings(raw)].map((n) => n.replace(/\$/g, "\\$"));

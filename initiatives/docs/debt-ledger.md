@@ -27,3 +27,12 @@ one line each, with where they came from. Each is paid in a later slice or close
 - **P1r2 B9** — disk names are interpolated raw into finding lines; a name with a newline could forge a line. Pay: JSON-escape every disk-derived name, as `[bad-id]` already does.
 - **P1r2 B10** — `tests/docs/write-pages.mjs` lets import/extract/write failures escape as unhandled rejections (exit 1). Test helper only. Pay: one try/catch to exit 2.
 - **P1r2 B11** — an unreadable page directory (EACCES) surfaces as an uncaught throw from face-coverage's `readdirSync` (exit 2 with a stack), not a named finding. Not silent; not pretty. Pay with P1 B14's `treeFiles` export.
+
+## Phase 02 (attack e5730ee, the one round, boundary)
+
+- **P2 B5** — a render failure under `--check` prints to stdout, not stderr. Pay with P1r2 B6/B7's guarded writer.
+- **P2 B7** — superseded: the per-dir lstat is now `pathProblems`, which names every non-ENOENT error.
+- **P2 B8** — `sameBytes` now normalises BOM/CR like every other read; a CRLF checkout of `docs/wiki/` is equal, which is the intent. Closed.
+- **P2 B10** — `link-check.mjs` does not parse a link target containing a space or a `)`; the renderer emits none. Pay when a path with either appears.
+- **P2 B12** — two ids one case apart would render two pages (one file on Windows/macOS); `wiki-coverage` already fails `[id-collision]` on exactly that, so CI stops it. Pay: the renderer refuses too.
+- **P2 B13** — `wiki-build` with no flags now writes `docs/wiki/` (it used to refuse). Intended by the Phase 02 spec; the writer refuses everything outside `docs/wiki/` and every hand-written file.

@@ -88,3 +88,18 @@ the fuller source; read it too.
 - **New branches (bad id, device name, id length, linked --pages) had no case only they decide** (P1r2 B4) — `tests/docs-coverage.bats` — *every fix lands with the input that proves it.*
 - **`isLink` mapped every lstat error to "not a link"** (P1r2 B5) — `GateError`, named exit 2 — *only ENOENT/ENOTDIR is absence.*
 - **A new script under `.claude/scripts/docs/` was pushed without its `products/docs/manifest.json` line** — `wiki-coverage.mjs`, caught by `product-lint` AFTER the push — *a new file in a product's script dir lands with its manifest line; run `product-lint` before every push, not after.*
+
+## Phase 02 -- the renderer (attack e5730ee, one round per the owner's lean rule, boundary on a CODE-ONLY view; logic transport failed)
+
+- **The attacker could not take the real diff**: the ADR file name `0103-risk-checkpoints-run-inline-...` reads as an `sk-` key, and every generated page links it, so the secret guard stopped the input — *generated pages are attacked through their generator; hand the attacker the code-only view.*
+- **The writer would overwrite a hand-written file sitting where a page goes** (P2 B1) — `writeWiki` refuses before the first write — *a writer that never touches hand-written files checks for them BEFORE writing, not after.*
+- **`--check` followed links and certified pages that live elsewhere** (P2 B2) — one `pathProblems` helper for check AND writer — *the certifier and the writer refuse the same paths, through one function.*
+- **A file where a page dir goes, or an unlink failure, threw mid-write** (P2 B3) — validated up front; every write failure is a named exit 2 — *validate every destination before the first byte.*
+- **The tree guard did not require the docs product; pageTree import errors escaped** (P2 B4) — `main`, `onDisk` — *a guard names every module the command imports.*
+- **Pipes in a declared value split table rows; backtick runs broke code spans** (P2 B9) — `cell`, `code` — *escape for the context the text lands in (a table cell is not a paragraph).*
+- **Refusal branches had no case only they decide** (P2 B11) — `tests/docs-render.bats` — *one test per refusal, asserting nothing was written.*
+
+## Phase 02 -- the first CI run (932b370f)
+
+- **The DOC-A scanner read the regex `/`+/` as an unterminated template and blanked the REST of wiki-build.mjs** — every line of the renderer went unscanned while the scan printed "clean"; CI caught it only because a mutant appended after that point survived — `no-walker.mjs` (regex-literal aware; a literal that never closes is a named finding, never absorbed) — *a scanner that tokenises must report where it lost sync, or it certifies what it never read.*
+- **A test link was relative to the wrong directory** (`index.md#...` from `products/`) — `tests/docs-render.bats` — *a fixture's paths are resolved from the page they sit in.*
