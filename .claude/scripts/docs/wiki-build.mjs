@@ -15,6 +15,7 @@
 //
 //   wiki-build.mjs [--root DIR] [--out DIR]      render docs/wiki/ (Phase 02; --out elsewhere: outside the tree only)
 //   wiki-build.mjs --check [--root DIR]          compare docs/wiki/ with a fresh render; write nothing
+//   wiki-build.mjs --audit-counts [--root DIR]   re-derive every number on every page (REQ-07)
 //   wiki-build.mjs --json [--root DIR] [--out FILE]
 //
 // Exit: 0 extracted | 1 a treeWorld key this wiki has not decided about (named)
@@ -694,7 +695,8 @@ export function renderWiki(wiki, narrativeOf) {
 function narrativeReader(repo) {
   return (key, id) => {
     const text = readText(repo, `${WIKI_DIR}/${NARRATIVE_DIR}/${PAGE_DIRS[key]}/${id}.md`);
-    return text === null ? null : text;
+    // The wiki-stale fingerprint is metadata for the author, not prose for the reader.
+    return text === null ? null : text.replace(/^<!-- facts:[^\n]*-->\n?/, "");
   };
 }
 
@@ -783,6 +785,42 @@ export async function check(repo) {
 }
 
 /**
+ * --audit-counts (REQ-07): every number on every committed page, re-derived. A fresh render IS
+ * the derivation from wiki.json, so each committed page's numbers are compared, line by line and
+ * in order, with the numbers the render puts on the same line. A copied or hand-tuned count --
+ * the thing ADR-1502 forbids -- shows up as a named page, line and pair of numbers.
+ */
+export async function auditCounts(repo) {
+  const r = await render(repo);
+  if (r.code !== 0) return { code: r.code, lines: [`wiki-build: ${r.message}`] };
+  const dirAbs = join(repo, ...WIKI_DIR.split("/"));
+  const nums = (line) => line.match(/\d+/g) || [];
+  const findings = [];
+  let pages = 0, numbers = 0;
+  for (const [rel, content] of r.files) {
+    if (!rel.endsWith(".md")) continue;
+    const abs = join(dirAbs, ...rel.split("/"));
+    let committed;
+    try { committed = readFileSync(abs, "utf8").replace(/^﻿/, "").replace(/\r\n?/g, "\n"); }
+    catch { findings.push(`COUNT ${WIKI_DIR}/${rel}: missing -- nothing to audit`); continue; }
+    pages++;
+    const want = content.split("\n"), have = committed.split("\n");
+    for (let i = 0; i < Math.max(want.length, have.length); i++) {
+      const w = nums(want[i] ?? ""), h = nums(have[i] ?? "");
+      numbers += w.length;
+      const at = w.findIndex((n, k) => n !== h[k]);
+      if (at >= 0 || h.length !== w.length) {
+        const k = at >= 0 ? at : Math.min(w.length, h.length);
+        findings.push(`COUNT ${WIKI_DIR}/${rel}:${i + 1}: the page says ${h[k] ?? "(nothing)"}, the tree says ${w[k] ?? "(nothing)"}`);
+        break; // one named number per page is enough to act on
+      }
+    }
+  }
+  if (!findings.length) return { code: 0, lines: [`wiki-build: audit-counts ${pages} page(s), ${numbers} number(s) re-derived from wiki.json -- all match`] };
+  return { code: 1, lines: [`wiki-build: audit-counts ${findings.length} page(s) carry a number the tree does not -- regenerate with \`node .claude/scripts/docs/wiki-build.mjs\`; never edit a count by hand (ADR-1502)`, ...findings] };
+}
+
+/**
  * Write a render into a directory: the committed docs/wiki/ of this tree, or any directory
  * OUTSIDE the tree. Everything is validated BEFORE the first write -- the destination, every
  * directory and every target file, and that no hand-written file sits where a page would go --
@@ -833,7 +871,7 @@ export async function writeWiki(repo, outDir) {
 
 // ---------- CLI ----------
 
-const FLAGS = { "--json": "bool", "--root": "value", "--out": "value", "--check": "bool" };
+const FLAGS = { "--json": "bool", "--root": "value", "--out": "value", "--check": "bool", "--audit-counts": "bool" };
 
 /** Strict: unknown flag, `--flag=value`, a repeated flag, or a missing / flag-shaped value is exit 2. */
 function parseArgs(argv) {
@@ -854,11 +892,17 @@ function parseArgs(argv) {
 async function main(argv) {
   const { opts, error } = parseArgs(argv);
   if (error) { process.stderr.write(`wiki-build: ${error}\n`); return 2; }
+  if (opts["--audit-counts"] && (opts["--check"] || opts["--json"] || opts["--out"])) { process.stderr.write("wiki-build: --audit-counts audits docs/wiki/ in place; it takes no --check, --json or --out\n"); return 2; }
   if (opts["--check"] && (opts["--json"] || opts["--out"])) { process.stderr.write("wiki-build: --check compares docs/wiki/ in place; it takes no --json and no --out\n"); return 2; }
   const repo = resolve(opts["--root"] ?? REPO_DEFAULT);
   if (!existsSync(join(repo, ".claude", "scripts", "core", "face-coverage.mjs")) || !existsSync(join(repo, ".claude", "scripts", "docs", "wiki-coverage.mjs"))) {
     process.stderr.write(`wiki-build: ${repo} is not an arc tree with the docs product (needs .claude/scripts/core/face-coverage.mjs and .claude/scripts/docs/wiki-coverage.mjs)\n`);
     return 2;
+  }
+  if (opts["--audit-counts"]) {
+    const a = await auditCounts(repo);
+    const w = await say(a.lines.join("\n") + "\n");
+    return w || a.code;
   }
   if (opts["--check"]) {
     const c = await check(repo);

@@ -23,10 +23,12 @@ None declared.
 
 None declared.
 
-## Scripts (2)
+## Scripts (4)
 
 - [`.claude/scripts/docs/wiki-build.mjs`](../../../.claude/scripts/docs/wiki-build.mjs)
 - [`.claude/scripts/docs/wiki-coverage.mjs`](../../../.claude/scripts/docs/wiki-coverage.mjs)
+- [`.claude/scripts/docs/wiki-drift.mjs`](../../../.claude/scripts/docs/wiki-drift.mjs)
+- [`.claude/scripts/docs/wiki-stale.mjs`](../../../.claude/scripts/docs/wiki-stale.mjs)
 
 ## Source
 
