@@ -1,10 +1,10 @@
 # PROGRESS.md — docs v1 "arc's own reference, generated"
 
-status: LIVE
-cycle: arc-docs (Cycle 17, opened 2026-09-25)
-phase: 03
+status: IDLE
+cycle: arc-docs (Cycle 17, opened 2026-09-25, closed 2026-09-26)
+phase: 03 (cycle closed)
 appetite: 6.5d
-burn: 3d
+burn: 3.5d
 blocked-on: —
 depends-on: —
 
@@ -21,7 +21,7 @@ depends-on: —
 | 00 | Steel thread — the extractor: ruling on the spine, `docs` product born, additive `treeWorld` export, `wiki-build --json` → `wiki.json`, REQ-09 import scan + mutant | 1.5d | ✅ 2026-09-25 |
 | 01 | The coverage gate before any renderer — `wiki-coverage` both directions, FAIL-FROM-BIRTH, `--mutant-selftest` M0–M4; **day-3 kill checkpoint** | 1.5d | ✅ 2026-09-25 |
 | 02 | The renderer — `docs/wiki/**`, banners, regenerate-and-diff, REQ-04 fixture product; the four overlapping docs stubbed + archived | 1d | ✅ 2026-09-25 |
-| 03 | Drift BLOCK + stale WARN + `--audit-counts`; three narratives (hand-written or absent); retro and seal | 1.5d | in progress |
+| 03 | Drift BLOCK + stale WARN + `--audit-counts`; three narratives (hand-written or absent); retro and seal | 1.5d | ✅ 2026-09-26 |
 
 ## Done-log
 
@@ -51,11 +51,15 @@ _(empty — nothing closed yet)_
 - **Attack:** one round (owner's lean rule) on a code-only view, because an ADR file name reads as an `sk-` key and the secret guard stopped the full diff; 7 medium fixed, 6 low to the ledger. Logic surface did not run.
 - Two pushes (the second fixed a real CI red). Time: ~1d of 1d. `amendments: 0` · `reopened: n`.
 
+**Phase 03 — closed 2026-09-26.** `wiki-drift` BLOCKs a narrative naming a gone ADR, command, script or driver (REQ-05); `wiki-stale` WARNs with the moved fact keys; `wiki-build --audit-counts` re-derives all 4185 numbers on 132 pages (REQ-07) and caught its own first drift. Three narratives — `engine`, `git`, the `portfolio` lane — drafted from tree facts and accepted by the owner (ADR-1508); `wiki-drift` stopped the first draft citing a command that does not exist. 19/19 first run (`36174149306`), merged as `e5b0a6bd` (PR #281). Evidence: `initiatives/docs/evidence/phase-03/bundle.md`.
+
+**CYCLE CLOSED 2026-09-26 — 4/4 phases, 9/9 REQ validated, ~3.5d of 6.5d.** Stat line: M | rework 0/4 | amendments 0 | FIRED 1/7 (A-02, as written) | burn ~3.5d of 6.5d | adversarial 6 boundary rounds / 79 findings, logic surface never ran | CI caught 3 real defects no attacker did | sim-blockers-r1 4 | t-to-phase0 0d.
+
 ## Appetite burn
 
-3 of 6.5 days used (Phase 00 1d · Phase 01 ~1d · Phase 02 ~1d). Day-3 checkpoint passed on day 2. (5.5 planned · 1 slack). Day-3 checkpoint: end of Phase 01.
+~3.5 of 6.5 days used — cycle closed at 54% of the cap. Day-3 checkpoint passed on day 2. (5.5 planned · 1 slack). Day-3 checkpoint: end of Phase 01.
 
 ## Now
 
-**Current position →** Phase 02 ✅ 2026-09-25. Phase 03 open: drift BLOCK, stale WARN, `--audit-counts`, and three narratives (hand-written by the owner or absent).
-**Next step →** red-first `tests/docs-drift.bats`, then `wiki-drift` / `wiki-stale` / `--audit-counts`; the three narratives need the owner's words (ADR-1508) — without them they stay absent and the cycle still closes.
+**Current position →** Cycle 17 CLOSED 2026-09-26. `docs/wiki/` is live on `main` and held by CI in both directions.
+**Next step →** none in this lane. Standing: any lane that adds a product, lane, process, ADR, command, agent, rule or gate runs `node .claude/scripts/docs/wiki-build.mjs` in the same PR. Narratives for the other 128 pages are throughput, written by hand when someone has the why. Debt: `debt-ledger.md` (the logic attack surface has never run).
