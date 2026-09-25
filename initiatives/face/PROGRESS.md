@@ -386,15 +386,15 @@ stay bespoke folds.
 ## Now
 
 **RESUME HERE (2026-09-25):** Phase 06 IN PROGRESS, as stacked PRs, one per slice.
-- **Merged:** #269 (slice 01, session door), #270 (slice 02, session dock), #271 (slice 05, Engine room; its first
-  run was red on a View deciding a string and an untyped optional `ctx` breaking `tsc`, fixed in `6bc25d96`, 19/19
-  green on run 36098046567).
-- **This PR, #272** (slice 03a: council.verdict in the closed shape, ADR-1345), rebased on main after #271's squash,
-  with a macOS `sed` fixture fix and ADR-0226 Amendment 2 (attack the local commit, push once, one CI run per PR).
-- **Next:** slice 03b. The `council-convene` process is additive in the engine lane: a headless body from
-  arc-council.md, an eval fixture, an `engine/router.yaml` class row (ADR-0069, a reviewed tier) and an
-  `hq.policy.yaml` row. Then the live convene demo, whose spend the OWNER approves first. Then slice 04: the other
-  SESSION verbs' process files, per owning lane, with no cuts.
+- **Merged:** #269 (slice 01, session door), #270 (slice 02, session dock), #271 (slice 05, Engine room), #272
+  (slice 03a: council.verdict in the closed shape, ADR-1345, plus ADR-0226 Amendment 2), #273 (slice 03b:
+  `council-convene`, a headless Full council fenced to its claimed session file, 12 named agents and one emitter
+  kind; `council-lint --claim/--release`; routed high-judgment; the owner's `hq.policy.yaml` row). #273 was green
+  19/19 on its first push, after two local attack rounds.
+- **Owed by slice 03:** the live convene demo (a real council: opus Chair + 12 agents), pending the OWNER's spend
+  approval, and absorb read and hire certification (receipt of an existing kind, or NOT SHIPPABLE, ADR-1334).
+- **Next:** slice 04. The other SESSION verbs' process files, per owning lane, with no cuts. `hq.policy.yaml` is
+  denied to agents by `.claude/settings.json`, so every new process's row is the owner's append.
 - **Logic attacker never ran:** `openrouter/qwen/qwen3.8-27b:free` hits a 429 on every call. The owner should set a
   paid model in `ARC_ATTACK_TRIAL_MODEL`.
 - **On resume, check open PRs and sibling worktrees first:** this `## Now` only sees merged work.

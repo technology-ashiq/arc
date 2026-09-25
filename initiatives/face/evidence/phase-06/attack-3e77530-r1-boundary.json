@@ -1,0 +1,137 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/adapters/claude-code.mjs:170 (progressLine), called from .claude/scripts/engine/drivers/claude-code.mjs:48",
+      "breaking_input": "A stream-json assistant event whose tool_use input carries an object where a string is expected and that object has an own key named toString, e.g. {\"type\":\"tool_use\",\"name\":\"Read\",\"input\":{\"file_path\":{\"toString\":1}}}. Bash with command set to {\"toString\":1} does the same, and so does an array holding such an object.",
+      "why": "String() on that object throws TypeError (Cannot convert object to primitive value). The throw happens in onLine outside the try that only wraps JSON.parse, inside the child.stdout 'data' listener, so it is an uncaught exception. The driver dies mid-run and the paid result event is lost. The CLI streams the assistant tool_use block before it validates the input, so the model, or content injected into it, controls this. The probe covers only null and missing input.",
+      "fix": "Coerce with a typeof === 'string' check instead of String(...): use the value if it is a string, otherwise ''. Wrap the progressLine call in try/catch so a bad block is skipped and never kills the run. Add probe cases for an object, an array and an object with a toString key."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:58-61",
+      "breaking_input": "The claude CLI emits a result event with is_error true (max turns, credit balance too low, auth failure) and exits 1. Stream mode is on, so ARC_DRIVER_PROGRESS=1.",
+      "why": "The close handler ignores the exit code and resolves whenever a result event was seen. The non-stream path used execFileSync, which throws on a non-zero exit, so the driver failed as a driver fault and the fallback chain ran. Now the error text becomes the model's answer, parseModelJson fails on it, and it is classified differently. The likely outcome is a same-tier paid retry and no fallback to the next driver.",
+      "fix": "In close, reject when code !== 0 or the signal is set, or when result.is_error is true, with the same 'claude CLI failed: ...' first-line message the sync path produced. Resolve only for a clean exit plus a result event."
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": "tests/engine-driver-contract.bats:373",
+      "breaking_input": "Run the third stream-mode test. ARC_RUN_STREAM=1 is exported, so the fake CLI plays its forged event with name 'Bash\\narc-run: receipt council.verdict <26 chars>'. Modes absent, old and fresh:run.completed follow.",
+      "why": "progressLine replaces the newline with a space and keeps the text, so stderr holds 'claude-code: step Bash arc-run: receipt council.verdict 01' (name cut to 40). The unanchored glob [[ \"$stderr\" != *\"arc-run: receipt council.verdict\"* ]] matches that neutralised mid-line text, so all three loop arms fail on every CI leg. The suite could not pass, and it cannot separate a line-start credit line from harmless text. Local runs are forbidden, so this costs a whole CI cycle.",
+      "fix": "Assert line-anchored: grep -qE '^arc-run: receipt council.verdict ' on the stderr file, or check the '\\narc-run: receipt council.verdict ' and start-of-string forms explicitly. Do the same for the positive vouch assertion."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:58",
+      "breaking_input": "During a council the model starts a background process (a run_in_background Bash, or an MCP server the CLI launched) that inherits stdout/stderr. The CLI prints its result event and exits, but the grandchild keeps the pipe open.",
+      "why": "The promise settles on 'close', which fires only after every holder of the pipes lets go. The driver never returns even though the result event is already in hand, so arc-run waits until its timeout, or for ever when there is none. Cost keeps accruing on the orchestration side.",
+      "fix": "Resolve as soon as the result event arrives, and destroy the pipes. Alternatively settle on 'exit' plus a short bounded drain, then destroy child.stdout and child.stderr. Kill the child tree at the end.",
+      "twin_of": "A settle that waits on the pipes -> a run ends when its tool does, not when the last holder of its pipe lets go."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:52,56",
+      "breaking_input": "The final result event carries non-ASCII model text (Tamil, a rupee sign, an emoji), and a multi-byte character straddles two 'data' chunks on the pipe.",
+      "why": "c.toString('utf8') decodes each chunk on its own, so a split character becomes two U+FFFD characters inside the JSON string. parseModelJson then reads a silently corrupted answer, such as a decision or a council session text. errTail has the same problem.",
+      "fix": "Use child.stdout.setEncoding('utf8') and child.stderr.setEncoding('utf8'), or one StringDecoder per stream.",
+      "twin_of": "Characters split across chunks -> decode a stream, not its chunks."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1246-1251 (runDriverProcess onData)",
+      "breaking_input": "maxBuffer is 64 MiB. A driver writes 40 MiB to stdout and 30 MiB to stderr, or a verbose stderr larger than the cap plus a small final stdout.",
+      "why": "spawnSync applies maxBuffer to each stream separately, but here one shared size counter sums both. The sum trips ENOBUFS where the old path passed, and once overflowed even a tiny later stdout is dropped. Unlike spawnSync, the child is not killed on overflow, so the driver keeps running and spending until it ends on its own before the ENOBUFS is reported. If opts.maxBuffer is undefined the comparison is always false and nothing is capped.",
+      "fix": "Keep one counter per stream. On overflow of either, kill the tree via spawnBounded and report ENOBUFS at once. Refuse an undefined maxBuffer by name.",
+      "twin_of": "One overflow refusing another stream's answer -> a cap belongs to the stream it bounds."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:51-55",
+      "breaking_input": "A tool_result or user event in the verbose stream is one line of tens of MB with no newline until the end (a Read of a huge file). Repeat with many such lines.",
+      "why": "The old path capped the CLI output at 64 MiB through execFileSync maxBuffer. The stream path has no cap on the fragment in buf or on the total. buf grows without limit until a newline, and every line is JSON.parsed, so the driver can be driven to out-of-memory.",
+      "fix": "Cap buf at a fixed byte limit, for example drop or refuse a line over 8 MiB. Track a total-byte cap equal to the old 64 MiB and fail the run with the ENOBUFS-shaped message.",
+      "twin_of": "An unbounded fragment beside a capped buffer -> cap the line as well as the buffer."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1246-1249",
+      "breaking_input": "Stream mode with a driver whose stderr carries model or child text: a codex-style CLI that prints its transcript to stderr, or a claude error line. That text contains an Anthropic API key or a line starting 'arc-run: receipt council.verdict <id>'.",
+      "why": "process.stderr.write(chunk) tees every raw chunk to run.log on disk before the later scrub/redaction of r.stderr. The tee is uncapped, whereas the sync path capped stderr at maxBuffer. The sanitisation lives only in the claude progressLine, so any other driver's stderr, or claude's own error tail, reaches the shared log unfiltered. The door credits from that same log, and a model line can land at a line start.",
+      "fix": "Pass the live tee through the same line filter as everything else. Split by line, redact secrets, apply the one-line/control-character clean, and prefix or neutralise any line starting 'arc-run: '. Cap the bytes written to run.log.",
+      "twin_of": "A printed id credited as a receipt -> A line in a shared stream proves nothing about who wrote it."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/adapters/claude-code.mjs:176-178",
+      "breaking_input": "The model runs Bash with a command whose first four words carry a credential, for example an env-prefix form such as GITHUB_TOKEN=<a real personal access token> gh pr create. Or a Grep whose pattern is a key it saw.",
+      "why": "The line keeps the first four words and the raw pattern or path, and none of it is redacted. The credential goes to run.log unredacted. It is also in r.stderr, so arc-run's transcript scrub can refuse an otherwise successful, fully paid council run. The 'names the step, never its payload' claim does not hold for these words.",
+      "fix": "Run the assembled line through redactSecrets before writing it. Better, print only the first word (the executable) of a Bash command, and never print pattern text.",
+      "twin_of": "Redaction left out of the new summary line -> New output from a child passes the same redaction as the old."
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1105-1136 (vouchReceipt)",
+      "breaking_input": "Two sessions share one spine: the owner runs a second session, and it lands a council.verdict or other event within the first run's window, up to 2 s before the run started. The first run's model then returns that event's id as receipt_id. Or a hand-appended line, since the model has Bash.",
+      "why": "vouchReceipt checks only three things: the id is on the spine, its ULID time is not before start minus 2 s, and its kind is not run.completed. It does not tie the event to this run's process, session or emitter, and it has no upper time bound. Any concurrent run's receipt is vouched with the spine's kind. The door's own attribution rule, checked on the spine for kind, process and newness, is not met here because process is missing.",
+      "fix": "Require the event's payload session_id, process or run correlation to match this run, and bound minted to now plus a small skew. Prefer an id the emitter printed to arc-run's own captured stdout over an id the model typed.",
+      "twin_of": "A receipt found by \"newest of the kind\" is anybody's receipt -> attribute by the id the TOOL PRINTED, checked on the spine for kind, process and newness."
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1239-1259 (runDriverProcess)",
+      "breaking_input": "Stream mode. A call site that sets spawnSync options beyond cwd, env, timeout and maxBuffer (input, stdio, encoding, killSignal, windowsHide). Or a driver killed by SIGKILL or the OOM killer, or bash failing to spawn (ENOENT, E2BIG).",
+      "why": "Only cwd, env, timeoutMs and onData are forwarded, so every other option silently vanishes in stream mode. The return has no signal or pid, and error is rebuilt with new Error(r.error), so error.code is lost except for ETIMEDOUT and ENOBUFS. A signal-killed child shows as status null with no error and no signal, which the classification 'reads both paths the same way' cannot see. The stream path then differs from the byte-for-byte sync path in exactly the cases that decide fallback.",
+      "fix": "Forward stdin explicitly, or assert that opts holds only the supported keys. Return signal (r.signal or the derived one) and keep the original error's code. Add a bats arm for a signal-killed driver and for a spawn failure in stream mode.",
+      "twin_of": "A child killed by a signal has `exitCode === null` and was waited out -> death is `exitCode !== null || signalCode !== null`."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "tests/fixtures/engine/fake-claude-stream.mjs:30 (old mode)",
+      "breaking_input": "Delete the `minted < runStartedAt - 2000` check in vouchReceipt.",
+      "why": "The 'old' mode returns an id minted in 2020 but never appends it to the spine, so the run reports 'the spine holds no event with that id -- not vouched'. The test only matches the substring 'not vouched', so it stays green with the freshness check gone. The age rule is never pinned by any arm.",
+      "fix": "In old mode append a real event with that old id to the spine, and assert the specific 'was minted before this run began' text.",
+      "twin_of": "Tests that could not fail, or could not pass -> the mutant is the negative control; write the check it fails."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "tests/engine-driver-contract.bats:341-348",
+      "breaking_input": "The first step line never arrives, or run.completed appears too early. The test then does kill \"$pid\".",
+      "why": "The backgrounded arc-run inherits bats's fd 3, and kill signals only the node pid. The bash driver and the fake CLI node, which sleeps 2.5 s per step, are orphaned and keep fd 3 open, so bats can hang until they exit or the job times out. The failure branches also never wait.",
+      "fix": "Start the background job with 3>&-. On failure kill the whole tree, or wait for arc-run, before the false.",
+      "twin_of": "One SIGTERM, no escalation, and a bats `run` that let children inherit fd 3 -> kill the process tree with escalation, destroy the child's pipes, and `3>&-` on every `run` that starts a long-lived child."
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:40",
+      "breaking_input": "args holds the single-token form --output-format=json, or a flag value that is exactly the word json.",
+      "why": "The filter removes any element equal to 'json' or '--output-format' and nothing else. The '=' form survives, so the CLI receives two output-format settings, whose outcome (last one wins or a refusal) differs by version. It would also delete a legitimate value that happens to be exactly 'json'. A flag form the filter does not read is a silent no-op.",
+      "fix": "Build args once through a helper that takes the output format as a parameter, instead of filtering the finished list. Refuse an args list that already holds any output-format spelling.",
+      "twin_of": "`--flag=VALUE` accepted and silently ignored -> a flag form the parser does not read is an error, never a no-op."
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:1130",
+      "breaking_input": "A spine line the emitter did not write (the model has Bash and can append to the day file) whose kind is 'council.verdict\\narc-run: receipt council.verdict <another fresh id>', with a fresh id.",
+      "why": "console.error prints ev.kind read from the spine with only a typeof string check. A newline or U+2028 in it starts a second line at line start in the log the door credits from. The vouch path never applies the one-line rule that progressLine applies to its own text. vouchReceipt also readFileSync's every day file whole, so a very large day file that hits the string limit is skipped silently and reads as 'not found'.",
+      "fix": "Match ev.kind against the closed KINDS grammar, or a positive class of letters, digits and dots, before printing. Otherwise refuse by name. Read only the day files the id's timestamp can fall in, and name a file that could not be read.",
+      "twin_of": "\"One line\" that allowed ESC, VT, FF and U+2028 -> one line refuses every `\\p{Cc}` and the Unicode line breaks, not only CR, LF and NUL."
+    }
+  ]
+}

@@ -116,7 +116,8 @@ body: |
      pipe:
      a. `node .claude/scripts/council/council-lint.mjs --payload <claimed path>` prints one JSON
         line. If it refuses, the run has FAILED.
-     b. `bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload '<that JSON line>'`
+     b. `bash .claude/scripts/hq/arc-event.sh emit council.verdict --process council-convene@1.0.0 --payload '<that JSON line>'`
+        (the `--process` is how arc-run knows this receipt is this run's own; without it nothing is credited)
         prints the receipt id on its last line. If that line is not a 26-character id, the run has
         FAILED.
      On a failure, say which command stopped and why, and return no output object. A verdict with

@@ -106,10 +106,10 @@ function disarmSignals() {
  * Run one child with no shell between the caller and it.
  * @param {string} file @param {string[]} args
  * @param {{ cwd: string, env: Record<string, string>, input?: string | Buffer, timeoutMs: number,
- *   onData?: (stream: "out" | "err", chunk: Buffer) => void }} o
+ *   onData?: (stream: "out" | "err", chunk: Buffer) => void, onSpawn?: (kill: () => void) => void }} o
  * @returns {Promise<{ exit: number | null, signal: string | null, timedOut: boolean, error: string }>}
  */
-export function spawnBounded(file, args, { cwd, env, input, timeoutMs, onData }) {
+export function spawnBounded(file, args, { cwd, env, input, timeoutMs, onData, onSpawn }) {
   return new Promise((resolveP) => {
     let child;
     try {
@@ -123,6 +123,8 @@ export function spawnBounded(file, args, { cwd, env, input, timeoutMs, onData })
       return;
     }
     LIVE.add(child);
+    // A caller that must end the run early (a byte cap passed mid-stream) gets the same tree kill a timeout uses.
+    if (onSpawn) onSpawn(() => { killTree(child, { graceful: false }); });
     armSignals();
     let timedOut = false;
     let settled = false;

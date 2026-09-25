@@ -238,12 +238,22 @@ const run = (doc, over={}, events=[]) =>
   # The architecture claim, asserted rather than described: one gate, and it is upstream of the
   # only spawnSync. A second driver path is a Phase-4 kill-criterion finding, so it is searched
   # for here rather than hoped about.
+  #
+  # Since face Phase 06 slice 03c the driver is started through runDriverProcess, which is spawnSync outside stream
+  # mode and spawnBounded inside it. So the claim is asserted on its three parts: ONE call site starts a driver, and it
+  # is below the gate; the helper is called from nowhere else; and nothing else in the file spawns a driver's bash.
   cd "$ARC_ROOT"
-  local spawns; spawns="$(grep -c 'spawnSync("bash", \[sh' .claude/scripts/engine/arc-run.mjs)"
+  local f=.claude/scripts/engine/arc-run.mjs
+  local spawns; spawns="$(grep -c 'runDriverProcess("bash", \[sh' "$f")"
   [ "$spawns" -eq 1 ] || { echo "expected exactly 1 driver spawn site, found $spawns"; false; }
+  local calls; calls="$(grep -c 'runDriverProcess(' "$f")"
+  [ "$calls" -eq 2 ] || { echo "runDriverProcess should be defined once and called once, found $calls mentions"; false; }
+  # grep -c exits 1 on a count of 0 -- the very answer wanted here -- so its status is not the test's.
+  local direct; direct="$(grep -cE '(spawnSync|spawnBounded|spawn)\("bash", \[sh' "$f" || true)"
+  [ "$direct" -eq 0 ] || { echo "a driver is spawned directly, past the one gated call site ($direct)"; false; }
   local gate_line spawn_line
-  gate_line="$(grep -n 'policyGate(name)' .claude/scripts/engine/arc-run.mjs | tail -1 | cut -d: -f1)"
-  spawn_line="$(grep -n 'spawnSync("bash", \[sh' .claude/scripts/engine/arc-run.mjs | cut -d: -f1)"
+  gate_line="$(grep -n 'policyGate(name)' "$f" | tail -1 | cut -d: -f1)"
+  spawn_line="$(grep -n 'runDriverProcess("bash", \[sh' "$f" | cut -d: -f1)"
   [ -n "$gate_line" ] && [ "$gate_line" -lt "$spawn_line" ] || {
     echo "the policy gate at line $gate_line is not upstream of the driver spawn at $spawn_line"; false; }
 }
