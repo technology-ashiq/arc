@@ -105,7 +105,9 @@ body: |
   3. Claim your session file ONCE, right after step 1:
      `node .claude/scripts/council/council-lint.mjs --claim <slug>`, where the slug is a short kebab
      of the question (lowercase letters, digits and hyphens, 60 at most). It prints the path it
-     created. That file is the only file you ever write. Never choose a number yourself.
+     created. That file is the only file you ever write. Never choose a number yourself. If
+     `--claim` refuses, the run has FAILED before any spend: say its message and return no output
+     object. Never write a session file it did not print.
   4. Step 2: write the Evidence Brief into your claimed file and lint it there with `--brief`.
      Step 8: overwrite the same file with the full verdict and lint it with `--verdict`. Each lint
      gets at most 3 attempts, fixing the FILE between them. A third refusal means the run has
@@ -119,6 +121,11 @@ body: |
         FAILED.
      On a failure, say which command stopped and why, and return no output object. A verdict with
      no receipt is not a finished session.
+     Whenever the run FAILS after a successful claim (a third lint refusal, or a refused 5a),
+     give the file back before stopping:
+     `node .claude/scripts/council/council-lint.mjs --release <claimed path>`. It removes the file
+     only while it holds no filled DECISION line, so a failed run leaves no half-written session
+     behind. If 5b fails, the file holds a real verdict and stays.
   6. Then print exactly this line on its own: `arc-run: receipt council.verdict <id>`. The session
      door credits the receipt only through that line, and only after it finds that id on the spine,
      of that kind, minted after this run began. A line naming anything else is not credited.

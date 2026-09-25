@@ -18,7 +18,7 @@
  * Roster grows per phase: Phase 0 = advocate/skeptic/neutral; Phase 1 adds verifier; Phase 2 adds
  * researcher; Phase 3 adds the 7 domain experts.
  */
-import { readFileSync, existsSync, openSync, fstatSync, closeSync, realpathSync, lstatSync, readdirSync, writeSync } from "node:fs";
+import { readFileSync, existsSync, openSync, fstatSync, closeSync, realpathSync, lstatSync, readdirSync, writeSync, mkdirSync, unlinkSync } from "node:fs";
 import { join, dirname, basename, extname } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -31,7 +31,7 @@ const verdictFile = flagVal("--verdict");
 const briefFile = flagVal("--brief");
 const jurorArtifactFile = flagVal("--juror-artifact");
 const consumed = new Set();
-for (const f of ["--verdict", "--brief", "--juror-artifact", "--payload"]) {
+for (const f of ["--verdict", "--brief", "--juror-artifact", "--payload", "--claim", "--release"]) {
   const i = args.indexOf(f);
   if (i >= 0) consumed.add(i), consumed.add(i + 1);
 }
@@ -149,6 +149,18 @@ function payloadMode() {
   // The id is the name the FILESYSTEM holds -- never the caller's spelling.
   const base = basename(real, ".md");
   if (!/^[A-Za-z0-9._-]{1,62}$/.test(base)) why.push(`its name ${shown(base)} cannot be a session id (c-<name>, name [A-Za-z0-9._-], at most 62)`);
+  // A headless Chair can read any file in its working directory -- a Read rule adds reads, it never takes the default
+  // ones away (attack 1be4183 B2) -- so a key it quoted would reach a tracked session file in a public repo. The receipt
+  // is where that stops: a verdict carrying a secret derives no payload, and the run ends FAILED. The spine's own
+  // deny-rules do the scan, loaded only here, so a council-only install without the hq lane still lints; without them
+  // this mode refuses rather than derive unscanned, because the receipt it feeds is hq's anyway.
+  if (!redactLib) why.push("cannot scan for secrets (the hq lane's redact.mjs did not load) -- a verdict is never derived unscanned");
+  else {
+    try {
+      const scan = redactLib.scanSecrets(text, { text }, { maxCandidates: redactLib.sizeScaledCap(text) });
+      if (scan.hit) why.push(`carries text matching the secret rule ${shown(scan.rule)} -- remove it from the file; the receipt is never derived from it`);
+    } catch (e) { why.push(`the secret scan could not complete (${e.code || e.message || "error"}) -- a verdict is never derived unscanned`); }
+  }
   if (why.length) return refuse(file, why);
   const decision = dec[0][1].toUpperCase();
   const c = conf[0][1];
@@ -161,38 +173,65 @@ function payloadMode() {
   process.exitCode = 0;
 }
 
+
 // A headless council (processes/council-convene) cannot choose its session number from an `ls`: two runs, or one run
 // and a hand /arc-council, read the same highest number and the second Write overwrites the first (attack 66a26f0 B2).
-// --claim does the choosing in one place: it creates <root>/docs/council/sessions/NNN-<slug>.md exclusively ("wx"), steps
-// to the next number when that name is taken, and prints the claimed path. The run then writes its verdict INTO the
-// file it holds. The placeholder carries no DECISION line, so --verdict and --payload refuse a claim nothing filled.
-function claimMode() {
-  const usage = (msg) => { console.error(`council-lint: --claim: ${msg}`); process.exitCode = 2; };
-  if (args.some((a) => a.startsWith("--claim="))) return usage("takes its slug as the next argument, not --claim=SLUG");
-  const at = args.flatMap((a, i) => (a === "--claim" ? [i] : []));
-  if (at.length > 1) return usage("given more than once -- one claim per run");
-  const slug = args[at[0] + 1];
-  if (typeof slug !== "string" || !/^[a-z0-9][a-z0-9-]{0,59}$/.test(slug)) {
-    return usage(`needs a slug of lowercase letters, digits and hyphens, 60 at most, as its value -- not ${JSON.stringify(String(slug)).slice(0, 80)}`);
-  }
+// --claim does the choosing in one place. The NUMBER is the exclusive resource, not the file name, because two runs with
+// different questions carry different slugs and would both create 008-<their slug>.md (attack 1be4183 B3): each number
+// is taken by a non-recursive mkdir of <root>/.claude/state/council-claims/NNN, which exactly one caller wins. The winner
+// then creates docs/council/sessions/NNN-<slug>.md ("wx") so a hand run's `ls` sees the number is taken, and prints its
+// path. The placeholder carries no DECISION line, so --verdict and --payload refuse a claim nothing filled, and
+// --release removes it again when a run fails before its verdict (B4). The lock stays: .claude/state is gitignored, and a
+// spent number is never handed out twice.
+const CLAIM_PLACEHOLDER = "<!-- claimed by council-lint --claim: the council writes its verdict here -->\n";
+const SESSIONS_REL = ["docs", "council", "sessions"];
+const quoted = (s) => JSON.stringify(String(s)).replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, (ch) => `${String.fromCharCode(92)}u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`).slice(0, 120);
+
+/** The flag's value and the one optional root, or a usage message. The default root is the working directory, said
+ * here rather than borrowed from the shared `root`, whose parser does not know these flags take a value (1be4183 B8). */
+function modeArgs(flag) {
+  if (args.some((a) => a.startsWith(`${flag}=`))) return { error: `takes its value as the next argument, not ${flag}=VALUE` };
+  const at = args.flatMap((a, i) => (a === flag ? [i] : []));
+  if (at.length > 1) return { error: "given more than once -- one per run" };
+  const value = args[at[0] + 1];
   const rest = args.filter((_, i) => i !== at[0] && i !== at[0] + 1);
   const stray = rest.filter((a) => a.startsWith("-"));
-  if (stray.length) return usage(`takes no other flag -- ${stray.map((s) => JSON.stringify(s).slice(0, 80)).join(", ")}`);
-  if (rest.length > 1) return usage("takes one repo root at most");
-  const rel = ["docs", "council", "sessions"];
-  let dir;
-  try { dir = realpathSync.native(join(rest.length ? rest[0] : root, ...rel)); } catch (e) { return usage(`the sessions directory cannot be resolved (${e.code || "error"}) -- run from the repo root, or name it`); }
+  if (stray.length) return { error: `takes no other flag -- ${stray.map(quoted).join(", ")}` };
+  if (rest.length > 1) return { error: "takes one repo root at most" };
+  return { value, repo: rest.length ? rest[0] : process.cwd() };
+}
+
+function claimMode() {
+  const usage = (msg) => { console.error(`council-lint: --claim: ${msg}`); process.exitCode = 2; };
+  const a = modeArgs("--claim");
+  if (a.error) return usage(a.error);
+  if (typeof a.value !== "string" || !/^[a-z0-9][a-z0-9-]{0,59}$/.test(a.value)) {
+    return usage(`needs a slug of lowercase letters, digits and hyphens, 60 at most, as its value -- not ${quoted(a.value)}`);
+  }
+  let dir, locks;
+  try {
+    dir = realpathSync.native(join(a.repo, ...SESSIONS_REL));
+    const repoReal = realpathSync.native(a.repo);
+    // The sessions directory must be the repo's own, not a link out of it (1be4183 B9).
+    if (dir !== join(repoReal, ...SESSIONS_REL)) return usage(`the sessions directory resolves outside ${quoted(a.repo)}`);
+    locks = join(repoReal, ".claude", "state", "council-claims");
+    mkdirSync(locks, { recursive: true });
+  } catch (e) { return usage(`the sessions directory cannot be resolved (${e.code || "error"}) -- run from the repo root, or name it`); }
   let highest = 0;
-  for (const n of readdirSync(dir)) { const m = /^([0-9]{3})-/.exec(n); if (m) highest = Math.max(highest, Number(m[1])); }
-  // A bounded walk: a name taken between the listing and the open is the race this mode exists for, so the next number
-  // is tried; a run of 20 taken names is not a race, and is said rather than walked for ever.
+  try {
+    for (const n of readdirSync(dir)) { const m = /^([0-9]{3})-/.exec(n); if (m) highest = Math.max(highest, Number(m[1])); }
+    for (const n of readdirSync(locks)) if (/^[0-9]{3}$/.test(n)) highest = Math.max(highest, Number(n));
+  } catch (e) { return usage(`cannot list the sessions or their claims (${e.code || "error"})`); }
+  // A bounded walk: a number taken between the listing and the mkdir is the race this mode exists for, so the next one
+  // is tried; 20 taken in a row is not a race, and is said rather than walked for ever.
   for (let n = highest + 1; n <= Math.min(999, highest + 20); n++) {
-    const name = `${String(n).padStart(3, "0")}-${slug}.md`;
+    const nnn = String(n).padStart(3, "0");
+    try { mkdirSync(join(locks, nnn)); } catch (e) { if (e.code === "EEXIST") continue; return usage(`cannot take number ${nnn} (${e.code || "error"})`); }
+    const name = `${nnn}-${a.value}.md`;
     let fd;
-    try { fd = openSync(join(dir, name), "wx"); }
-    catch (e) { if (e.code === "EEXIST") continue; return usage(`cannot create ${name} (${e.code || "error"})`); }
-    try { writeSync(fd, "<!-- claimed by council-lint --claim: the council writes its verdict here -->\n"); } finally { closeSync(fd); }
-    console.log([...rel, name].join("/"));
+    try { fd = openSync(join(dir, name), "wx"); } catch (e) { return usage(`took number ${nnn} but cannot create ${name} (${e.code || "error"})`); }
+    try { writeSync(fd, CLAIM_PLACEHOLDER); } finally { closeSync(fd); }
+    console.log([...SESSIONS_REL, name].join("/"));
     process.exitCode = 0;
     return;
   }
@@ -200,18 +239,49 @@ function claimMode() {
   console.error(highest >= 999 ? "council-lint: --claim: session numbers are spent (999) -- NNN is three digits" : "council-lint: --claim: 20 numbers in a row were taken while claiming -- refused rather than walked further");
 }
 
+// --release <path>: a run that FAILED gives its claimed file back. Only a file directly in the sessions directory, and
+// only while it holds no filled DECISION line -- a verdict is never deleted, whatever asks.
+function releaseMode() {
+  const usage = (msg) => { console.error(`council-lint: --release: ${msg}`); process.exitCode = 2; };
+  const a = modeArgs("--release");
+  if (a.error) return usage(a.error);
+  if (typeof a.value !== "string" || !/^docs\/council\/sessions\/[0-9]{3}-[a-z0-9][a-z0-9-]{0,59}\.md$/.test(a.value)) {
+    return usage(`needs the claimed path, as --claim printed it, as its value -- not ${quoted(a.value)}`);
+  }
+  let dir, real;
+  try {
+    dir = realpathSync.native(join(a.repo, ...SESSIONS_REL));
+    real = realpathSync.native(join(a.repo, a.value));
+  } catch (e) { return usage(`${quoted(a.value)} cannot be resolved (${e.code || "error"})`); }
+  if (dirname(real) !== dir || !lstatSync(real).isFile()) return usage(`${quoted(a.value)} is not a plain file in the sessions directory`);
+  const body = readFileSync(real, "utf8");
+  if (/^[ \t]*DECISION:[ \t]*\S/im.test(body)) {
+    process.exitCode = 1;
+    return console.error(`council-lint: --release: ${quoted(a.value)} holds a filled DECISION -- a verdict is never released`);
+  }
+  unlinkSync(real);
+  console.log(`released ${a.value}`);
+  process.exitCode = 0;
+}
+
 // The flag is the mode, whatever its value: an empty or `=` value is refused inside, never a fall-through (B4).
 const payloadRequested = args.some((x) => x === "--payload" || x.startsWith("--payload="));
 const claimRequested = args.some((x) => x === "--claim" || x.startsWith("--claim="));
-if (payloadRequested && claimRequested) {
-  console.error("council-lint: --claim and --payload are two runs, not one");
-  process.exit(2);
-}
-if (payloadRequested) payloadMode();
-if (claimRequested) claimMode();
+const releaseRequested = args.some((x) => x === "--release" || x.startsWith("--release="));
+// The spine's deny-rules, for --payload only (see its secret scan). Loaded dynamically so a council-only install, which
+// has no hq lane, still runs every other mode.
+let redactLib = null;
+if (payloadRequested) { try { redactLib = await import("../hq/lib/redact.mjs"); } catch { redactLib = null; } }
+if ([payloadRequested, claimRequested, releaseRequested].filter(Boolean).length > 1) {
+  console.error("council-lint: --payload, --claim and --release are separate runs, one per call");
+  process.exitCode = 2;
+} else if (payloadRequested) payloadMode();
+else if (claimRequested) claimMode();
+else if (releaseRequested) releaseMode();
+const modeTaken = payloadRequested || claimRequested || releaseRequested;
 
 // ------------------------------------------------------------------ verdict mode
-if (verdictFile && !payloadRequested && !claimRequested) {
+if (verdictFile && !modeTaken) {
   if (!existsSync(verdictFile)) {
     fail(`verdict file not found: ${verdictFile}`);
     report();
@@ -465,7 +535,7 @@ if (verdictFile && !payloadRequested && !claimRequested) {
 }
 
 // ------------------------------------------------------------------ brief mode
-if (briefFile && !payloadRequested && !claimRequested) {
+if (briefFile && !modeTaken) {
   if (!existsSync(briefFile)) {
     fail(`brief file not found: ${briefFile}`);
     report();
@@ -494,7 +564,7 @@ if (briefFile && !payloadRequested && !claimRequested) {
 }
 
 // Static mode runs only when no other mode answered: payload mode sets its exit code and must not be followed by it.
-if (!payloadRequested && !claimRequested) {
+if (!modeTaken) {
 // ------------------------------------------------------------------ static mode
 const read = (p) => readFileSync(join(root, p), "utf8");
 const exists = (p) => existsSync(join(root, p));

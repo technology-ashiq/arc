@@ -18,6 +18,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "../.claude/scripts/engine/yaml-subset.mjs";
 import { dispatchToolArgs } from "../.claude/scripts/engine/adapters/claude-code.mjs";
+import { render as codexRender } from "../.claude/scripts/engine/adapters/codex.mjs";
+import { toolsetsFor } from "../.claude/scripts/engine/drivers/hermes.mjs";
 import { authorizeRun } from "../.claude/scripts/hq/lib/policy/run-gate.mjs";
 import { sessionById } from "../.claude/scripts/hq/face-sessions.mjs";
 import { ONE_LINE_SRC } from "../.claude/scripts/core/one-line.mjs";
@@ -59,11 +61,24 @@ if (mode === "checks") {
   check("the emitter is granted for council.verdict only",
     emits.length === 1 && emits[0] === "bash .claude/scripts/hq/arc-event.sh emit council.verdict:*", JSON.stringify(emits));
 
-  // B5: the agents the Chair may invoke are exactly the council agents on disk, both directions.
-  const onDisk = readdirSync(join(ROOT, ".claude", "agents")).filter((f) => /^council-[a-z-]+\.md$/.test(f)).map((f) => f.slice(0, -3)).sort();
+  // B5: the agents the Chair may invoke are exactly the council agents on disk, both directions -- read with the same
+  // glob the process's fs.read names (council-*.md), not a narrower class (1be4183 B14).
+  const onDisk = readdirSync(join(ROOT, ".claude", "agents")).filter((f) => f.startsWith("council-") && f.endsWith(".md")).map((f) => f.slice(0, -3)).sort();
   const invoked = [...(toolScopes("agent.invoke") || [])].sort();
   check("agent.invoke lists every council-*.md agent on disk and nothing else",
     onDisk.length > 0 && JSON.stringify(onDisk) === JSON.stringify(invoked), `disk ${onDisk.join(",")} | process ${invoked.join(",")}`);
+  // 1be4183 B1: and that list is what reaches the CLI -- one Agent(<name>) grant each, no bare Task.
+  const agentGrants = grants.filter((g) => /^(Task|Agent)\b/.test(g)).sort();
+  check("the CLI is handed exactly one Agent(<name>) per council agent, and no bare Task",
+    JSON.stringify(agentGrants) === JSON.stringify(invoked.map((a) => `Agent(${a})`).sort()), agentGrants.join(", "));
+  const bareAgents = { ...doc, tools: doc.tools.map((t) => (typeof t === "object" && t !== null && Object.keys(t)[0] === "agent.invoke" ? "agent.invoke" : t)) };
+  check("CONTROL: with the agent list dropped, the CLI gets the unfenced Task", dispatchToolArgs(bareAgents)[1].split(", ").includes("Task"));
+
+  // 1be4183 B6: a driver that cannot fence a path refuses the process rather than widen it.
+  const refuses = (fn) => { try { fn(); return false; } catch (e) { return /cannot fence a path/.test(String(e.message)); } };
+  check("the codex adapter refuses a path-scoped write", refuses(() => codexRender(doc)));
+  check("the hermes driver refuses a path-scoped write", refuses(() => toolsetsFor(doc)));
+  check("CONTROL: codex still renders the same process with a bare write", !refuses(() => codexRender(bareDoc)));
 
   // B6: the process input schema has no length or line keywords, so the door's field is the fence a click crosses.
   const row = sessionById("council.convene");
@@ -82,6 +97,7 @@ if (mode === "checks") {
     doc.body.includes("`arc-run: receipt council.verdict <id>`") && RECEIPT_LINE.test("arc-run: receipt council.verdict 01M37D0KHFPXBDBWQRYPMEXVT8"));
   // B2, B7 and the mode-word trap, pinned in the body the model reads.
   check("the body claims its file through --claim, never a number of its own", doc.body.includes("--claim <slug>") && doc.body.includes("Never choose a number yourself"));
+  check("a refused claim is FAILED, and a failed run gives its claim back", doc.body.includes("`--claim` refuses, the run has FAILED") && doc.body.includes("--release <claimed path>"));
   check("each lint gets at most 3 attempts", doc.body.includes("at most 3 attempts"));
   check("the body pins deep mode", doc.body.includes("Never run quick, standard or review mode"));
   check("step 9 runs as plain commands, never $(...) or a pipe", doc.body.includes("never one line with `$(...)` or a") && !/\$\(node|\| tail/.test(doc.body));

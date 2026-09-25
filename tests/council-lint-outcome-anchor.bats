@@ -220,30 +220,57 @@ fixture_repo() {
   [ "$status" -eq 1 ] && [[ "$output" == *"lowercase .md"* ]] || { echo "upper ext: $status $output"; false; }
 }
 
-@test "council-lint --claim: the next free number is created exclusively, concurrent claims never share one, and a bare claim is no verdict" {
+@test "council-lint --claim: each number goes to one claim, whatever the slugs, from the working directory by default" {
   local R="$BATS_TEST_TMPDIR/claimroot" S
   S="$R/docs/council/sessions"
   mkdir -p "$S"
   : > "$S/001-a.md"; : > "$S/007-b.md"
-  run node "$LINT" --claim my-question "$R"
+  # No root argument: the form the process body prescribes, run from the repo (attack 1be4183 B8).
+  run bash -c 'cd "$1" && node "$2" --claim my-question' _ "$R" "$LINT"
   [ "$status" -eq 0 ] && [ "$output" = "docs/council/sessions/008-my-question.md" ] || { echo "first claim: $status $output"; false; }
   [ -f "$S/008-my-question.md" ] || { echo "the claim printed a path it never created"; false; }
-  # Six claims at once, one slug: six different files, none overwritten (attack 66a26f0 B2).
+  [ -d "$R/.claude/state/council-claims/008" ] || { echo "the number was not taken as a lock"; false; }
+  # Six claims at once with SIX DIFFERENT slugs: six different numbers (attack 66a26f0 B2, 1be4183 B3).
   local i
-  for i in 1 2 3 4 5 6; do node "$LINT" --claim same "$R" > "$BATS_TEST_TMPDIR/c$i.out" 2>&1 & done
+  for i in 1 2 3 4 5 6; do node "$LINT" --claim "q$i" "$R" > "$BATS_TEST_TMPDIR/c$i.out" 2>&1 & done
   wait
-  local distinct
-  distinct=$(cat "$BATS_TEST_TMPDIR"/c?.out | sort -u | grep -c '^docs/council/sessions/0[0-9][0-9]-same\.md$' || true)
-  [ "$distinct" = "6" ] || { echo "six claims did not print six distinct paths: $(cat "$BATS_TEST_TMPDIR"/c?.out)"; false; }
-  [ "$(ls "$S" | grep -c -- '-same\.md$')" = "6" ] || { echo "six claims did not leave six files: $(ls "$S")"; false; }
+  local nums
+  nums=$(cat "$BATS_TEST_TMPDIR"/c?.out | sed -n 's#^docs/council/sessions/\([0-9][0-9][0-9]\)-q[1-6]\.md$#\1#p' | sort -u | wc -l | tr -d ' ')
+  [ "$nums" = "6" ] || { echo "six claims did not take six numbers: $(cat "$BATS_TEST_TMPDIR"/c?.out)"; false; }
+  [ "$(ls "$S" | grep -c -- '-q[1-6]\.md$')" = "6" ] || { echo "six claims did not leave six files: $(ls "$S")"; false; }
   # A claim nothing filled carries no DECISION, so it can never become a receipt.
   run node "$LINT" --payload "$S/008-my-question.md" "$R"
   [ "$status" -eq 1 ] && [[ "$output" == *"0 filled DECISION"* ]] || { echo "a bare claim derived a payload: $status $output"; false; }
-  # Usage is refused by name: a slug outside the class, a second mode, a stray flag.
+  # Usage is refused by name: a slug outside the class, two modes, a stray flag.
   run node "$LINT" --claim "Bad Slug" "$R"
   [ "$status" -eq 2 ] && [[ "$output" == *"needs a slug"* ]] || { echo "bad slug: $status $output"; false; }
   run node "$LINT" --claim x --payload y "$R"
-  [ "$status" -eq 2 ] && [[ "$output" == *"two runs"* ]] || { echo "two modes: $status $output"; false; }
+  [ "$status" -eq 2 ] && [[ "$output" == *"separate runs"* ]] || { echo "two modes: $status $output"; false; }
   run node "$LINT" --claim x --verdict y "$R"
   [ "$status" -eq 2 ] && [[ "$output" == *"no other flag"* ]] || { echo "stray flag: $status $output"; false; }
+}
+
+@test "council-lint --release gives back an unfilled claim and never a verdict; --payload refuses a verdict carrying a secret" {
+  local R="$BATS_TEST_TMPDIR/relroot" S
+  S="$R/docs/council/sessions"
+  mkdir -p "$S"
+  run node "$LINT" --claim failed-run "$R"
+  [ "$status" -eq 0 ] && [ -f "$R/$output" ] || { echo "claim: $status $output"; false; }
+  local claimed="$output"
+  run bash -c 'cd "$1" && node "$2" --release "$3"' _ "$R" "$LINT" "$claimed"
+  [ "$status" -eq 0 ] && [[ "$output" == "released $claimed" ]] || { echo "release: $status $output"; false; }
+  [ ! -e "$R/$claimed" ] || { echo "release said released and left the file"; false; }
+  # A real verdict is never released, however it is asked (1be4183 B4).
+  cp "$SESSION" "$S/002-kept.md"
+  run node "$LINT" --release docs/council/sessions/002-kept.md "$R"
+  [ "$status" -eq 1 ] && [[ "$output" == *"never released"* ]] && [ -f "$S/002-kept.md" ] || { echo "a verdict was released: $status $output"; false; }
+  run node "$LINT" --release ../../etc/passwd "$R"
+  [ "$status" -eq 2 ] || { echo "release took a path outside the sessions directory: $status $output"; false; }
+  # Control first: the unmodified verdict derives. Then the same verdict carrying a key derives nothing (1be4183 B2).
+  run node "$LINT" --payload "$S/002-kept.md" "$R"
+  [ "$status" -eq 0 ] && [[ "$output" == *'"session_id":"c-002-kept"'* ]] || { echo "control did not derive: $status $output"; false; }
+  local key="AKIA""IOSFODNN7EXAMPLF"
+  printf '\nA note that quotes %s by mistake.\n' "$key" >> "$S/002-kept.md"
+  run node "$LINT" --payload "$S/002-kept.md" "$R"
+  [ "$status" -eq 1 ] && [[ "$output" == *"secret rule"* ]] && [[ "$output" != *"$key"* ]] || { echo "a verdict carrying a key derived, or echoed it: $status $output"; false; }
 }

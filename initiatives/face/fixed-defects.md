@@ -806,3 +806,12 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **An uncapped retry on a paid model** -- each lint gets at most 3 attempts, then the run FAILS naming the lint. *Every loop on a meter needs a terminal state.*
 - **A routing proof that stops before the gate** -- `--dry-run` exits before the policy gate, so the probe asks `authorizeRun` directly. *Test the gate the live path crosses, not the preview.*
 - **Step 9's one-liner under a per-part permission check** -- `$(...)`, a pipe and `[[ ]]` are each checked alone headless, so the step runs as two plain commands. *A command written for a person's shell is not a command a fenced run can execute.*
+
+## Phase 06 slice 03b -- council-convene, the headless council (attack 1be4183, round 2, boundary)
+
+- **A fence on one tool left open on its twin** -- the write fence was fixed and the agent fence was not: a declared agent list reached the CLI as a bare `Task`. A headless dispatch now renders it as one `Agent(<name>)` grant per agent; a generated command keeps `Task`, pinned byte for byte. *Fix the pattern on every tool it touches, not the one the finding named.*
+- **A read scope that fences nothing** -- a `Read(<path>)` rule adds reads and never removes the working directory's default ones, so the exit is fenced instead: `--payload` runs the spine's deny-rules over the verdict and derives no receipt from one carrying a secret. *When the input cannot be fenced, fence the output.*
+- **An exclusive create keyed on the wrong thing** -- `wx` on `NNN-slug.md` serialised only claims with the same slug. The number is now the lock: a non-recursive `mkdir` of `.claude/state/council-claims/NNN`. *Lock the resource that must be unique, not the name that contains it.*
+- **A claim nothing gave back** -- a failed run left a placeholder in a tracked directory. `--release` removes a claimed file while it holds no filled DECISION, and the body calls it on every failure after a claim. *A reservation needs a release path as much as a take path.*
+- **A default taken from a parser that did not know the flag** -- `root` was the first bare argument, which after `--claim` is the slug. The mode resolves its own default to the working directory, and the bats arm runs the form the body prescribes. *Test the invocation that will run, not a convenient neighbour.*
+- **A fence one driver draws and the others widen** -- codex and hermes would hand a path-scoped write over as every write. Both now refuse it by name. *A fence that holds on one adapter is a fence on one adapter.*

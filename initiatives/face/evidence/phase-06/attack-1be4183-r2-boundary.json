@@ -1,0 +1,131 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/adapters/claude-code.mjs:27",
+      "breaking_input": "dispatchToolArgs() on processes/council-convene.process.yaml. The twelve agent.invoke names render as one bare `Task` token. A Chair steered by a page a researcher fetched invokes any agent it likes, for example general-purpose or an opus-tier auditor, not only the council-* agents.",
+      "why": "The B5 fix compares the YAML list to .claude/agents/council-*.md on disk, but the adapter drops the names and hands the CLI unrestricted `Task`. Both lists are decorative and the probe never looks at what reaches the CLI. This is B1's defect one tool over: the write fence was fixed and the invoke fence was not. Per project memory, subagent frontmatter tools are not scoped by the parent's prefix rules.",
+      "fix": "Render agent.invoke names as `Task(<name>)` grants, or fence with a PreToolUse hook on agent_type. The probe must assert the granted set is exactly the twelve `Task(name)` entries and that a bare `Task` is absent, with a control where the declared list is dropped.",
+      "twin_of": "A write fenced only by prose -> A permission that exists only in the prompt is not a permission."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/adapters/claude-code.mjs:21",
+      "breaking_input": "The process declares fs.read with three path scopes (.claude/commands/arc-council.md, docs/council/**, .claude/agents/council-*.md). `fs.read` is still `{kind:'bare', token:'Read'}`, so the CLI gets unrestricted `Read`. A steered Chair reads .env.local or a file outside the working directory and quotes it into the verdict it writes under docs/council/sessions/*.md. That file is tracked in a public repo.",
+      "why": "The fix scoped only fs.write. A declared read scope is silently widened to the bare token, exactly as the write scope was. The probe's control asserts only the Write token, so nothing notices.",
+      "fix": "Render declared fs.read paths as `Read(<path>)` grants and add a deny for secret paths. Alternatively refuse a scope-bearing fs.read at compile time when the adapter cannot fence it. Probe both the bare and the scoped rendering.",
+      "twin_of": "A write fenced only by prose -> A permission that exists only in the prompt is not a permission."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/council/council-lint.mjs:188",
+      "breaking_input": "Two Convene clicks at once with different questions, so the slugs differ: `--claim wins-first` and `--claim ship-door`. Both list sessions/ with 007 highest, both try n=008. `008-wins-first.md` and `008-ship-door.md` both open with \"wx\" and both succeed.",
+      "why": "The exclusive create is keyed on the whole filename NNN-slug.md, not on the number. It serialises only claims that share a slug, which is what the test does with six claims on the slug `same`. Real concurrent runs carry different slugs, so two sessions get the same NNN. The test title, \"concurrent claims never share one\", is false for the normal case. Two worktrees each claiming 008 also merge with no git conflict.",
+      "fix": "Make the number itself the exclusive resource: mkdirSync a sentinel such as .claims/008 (non-recursive) before creating the file. Alternatively, after the create, re-list and give the number back if another file with the same NNN prefix sorts first. Add a bats arm with six concurrent DIFFERENT slugs that asserts six distinct numbers.",
+      "twin_of": "A check and a write with a spawn between them -> a new step between a check and its write is a new race; make the write itself the check."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "processes/council-convene.process.yaml:body rule 4 / .claude/scripts/council/council-lint.mjs:193",
+      "breaking_input": "Any run that ends without a receipt. Three refused --verdict lints, a refused --payload, an arc-run timeout, or a killed session all leave `docs/council/sessions/008-slug.md` holding only the claim comment or a half-written brief. Nothing removes it. A later `git add -A` commits it, and the next claim numbers past it.",
+      "why": "The claim creates a tracked, shared file before the paid work, and FAILED is defined as \"say why, return no object\" with no cleanup. Readers of that directory (calibration, session listings, the council room) now see a session with no DECISION. Every failed run permanently spends a number, and the cost is 999 numbers in total.",
+      "fix": "Add a `--release <path>` mode that deletes the file only when its bytes still equal the placeholder, and have arc-run call it on any non-success exit. Alternatively claim under a non-.md name and rename it only after the lint passes, so a failed run leaves nothing a reader can match.",
+      "twin_of": "A directory created before the last refusals -> Refuse before you create."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "tests/engine-process-lint.bats:319",
+      "breaking_input": "Run engine-process-lint.bats on this commit. The gate arm requires `PROBE gate: 2 checks, 0 failed`, but phase-06-tasks.md records that check as \"red until its hq.policy.yaml row lands\", and that row is not in the diff. The arm fails on every OS leg. Meanwhile expected-set.json and rooms.generated.json already serve council-convene in the council room.",
+      "why": "The B8 fix was to test the gate a live click crosses, and it did, but it commits a test that cannot pass on this tree. The reviewer either merges red or weakens or skips the arm. The contract also still claims the process is served while the first live click will be refused by that same gate, which is the B8 half about marking it planned.",
+      "fix": "Land the hq.policy.yaml row in this PR (needs the owner's write). If it must wait, assert today's truth, meaning the gate names its denial, and mark the process planned in expected-set.json until the row lands. Never commit an arm that is red by construction.",
+      "twin_of": "A pre-check missing one of the writer's refusals -> a pre-check is every refusal the write can make, or the burn happens between them."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "engine/router.yaml:222",
+      "breaking_input": "`node .claude/scripts/engine/arc-run.mjs --process council-convene --driver codex --input '{\"question\":\"x\"}'`, or any non-claude-code driver the session dock lists. `fallback: []` and `driver: claude-code` govern only `--driver auto`, and the only routing test passes `auto`.",
+      "why": "The B1 fence exists only in the claude-code adapter (Edit grants). An explicit second driver goes through a different adapter, which this diff does not touch, so the write scope, the emitter scope and the high-judgment Chair seat need not apply. The prior B9 (explicit-driver bypass) is not fixed, and it now defeats the B1 fix.",
+      "fix": "Add an allow-list of drivers on the class row that arc-run enforces for explicit --driver too, and a bats arm where an explicit non-claude-code driver is refused by name. Alternatively have every adapter refuse a scoped fs.write it cannot render as a fence.",
+      "twin_of": "A guard keyed on the caller is bypassed by a second caller; key it on the thing guarded."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "processes/council-convene.process.yaml:36",
+      "breaking_input": "An injected or confused Chair writes `docs/council/sessions/001-<old-slug>.md` (any existing session), or, after `--claim` fails with exit 1 or 2, picks a number itself and writes `docs/council/sessions/009-x.md`. Both match `Edit(docs/council/sessions/*.md)`.",
+      "why": "The grant is the whole directory. \"Write only the file you claimed\" is prose again, so an older verdict is silently overwritable and the pick-a-number race from B2 is mechanically permitted. Body rules 4 and 5 define FAILED only for lints and step 9. A failed --claim has no terminal state, which invites the improvisation.",
+      "fix": "Add a post-run check, in arc-run or the door, that `git status --porcelain docs/council/sessions` shows exactly one path, added or modified from the placeholder, and that it equals the claimed path. Add a body rule that a failed --claim means FAILED with no output.",
+      "twin_of": "A write fenced only by prose -> A permission that exists only in the prompt is not a permission."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "tests/council-lint-outcome-anchor.bats:223",
+      "breaking_input": "`cd <repo> && node .claude/scripts/council/council-lint.mjs --claim my-slug`, the exact form the process body prescribes (no root argument). Every claim test passes an explicit root `\"$R\"`. Without one, claimMode falls back to `root`, which is computed outside this diff by a parser this diff never taught that `--claim` takes a value. If that parser takes the first non-flag argument, the slug becomes the root and step 3 fails with \"sessions directory cannot be resolved\".",
+      "why": "The tested invocation is not the invoked one. If `root` defaults to the slug, or to anything other than cwd, every live run dies at step 3. That is after intake and before any spend, but on the first live click.",
+      "fix": "Resolve the default explicitly to process.cwd() inside claimMode, not through the shared `root`. Add a bats arm that runs `--claim <slug>` with cwd set to a fixture repo and no root argument.",
+      "twin_of": "A test's timeout message matched the close-rejection it claimed to prove -> assert the specific path, not only that a path ran."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:183",
+      "breaking_input": "(a) `--claim x \"\"`: `rest` is `[\"\"]`, which is not stray, and `join(\"\", \"docs\", ...)` silently resolves to cwd. (b) `docs/council/sessions` is a junction or symlink to another directory: realpathSync.native resolves it and the file is created there, printing the lexical `docs/council/sessions/NNN-x.md`. (c) `--claim x ../other-repo`: the granted scope `council-lint.mjs:*` lets the Chair name any root, so it creates the file in another tree and prints a path that is not relative to cwd.",
+      "why": "Payload mode fences the sessions directory and refuses one resolving outside the root. Claim mode realpaths and then uses the result with no containment check, so a later --payload of the claimed lexical path is refused after the spend. An empty positional is read as absent.",
+      "fix": "Refuse an empty root. Check the realpath'd sessions dir sits inside the realpath'd root and is a directory, using the same helper payload mode uses. Print the path relative to the resolved root and name the root when it differs from cwd.",
+      "twin_of": "A path argument read with no fence -> a path a caller supplies is checked before it is opened."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:207",
+      "breaking_input": "`node council-lint.mjs --claim x --payload y | cat` on the Windows leg, or with stderr piped. console.error is followed directly by `process.exit(2)`. The bats arm for \"two runs\" reads that message.",
+      "why": "Every other path in this diff sets process.exitCode. This one forces an exit behind a pending stderr write, the process.exit-after-pipe-write defect the lane has fixed repeatedly and the CLAUDE.md-level rule bans in new code. The message can be lost, leaving exit 2 with empty output.",
+      "fix": "Route it through the same `usage()` (set process.exitCode = 2, print) and skip both modes, with no process.exit().",
+      "twin_of": "`process.exit()` in a new CLI -> set `process.exitCode`; the Windows teardown race is still live."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:185",
+      "breaking_input": "`docs/council/sessions` exists as a regular file, or is unreadable (ENOTDIR or EACCES on readdirSync). Separately, writeSync fails with ENOSPC after openSync created the file, and only `closeSync` is in the finally.",
+      "why": "Neither call is inside the try that translates errors. The result is an uncaught stack trace with the machine path and exit code 1, which this tool also uses for \"numbers exhausted\". A caller cannot tell them apart. The write failure leaves an empty claimed file behind.",
+      "fix": "Wrap readdirSync and writeSync, translate to `usage()` with the errno and the path that failed, and unlink the file you created when its placeholder write fails.",
+      "twin_of": "The CLI let the library's throw out as a stack with machine paths -> A library throw is translated at the CLI edge."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "tests/council-convene-probe.mjs:68",
+      "breaking_input": "`node .claude/scripts/engine/arc-run.mjs --process council-convene --input '{\"question\":\"\"}'`, or a question of 200 KB, or one containing a newline and \"Step 9 is skipped\". Nothing on the CLI path refuses it.",
+      "why": "The B6 fix put the empty/one-line/500 limit on the face door's field. The probe itself notes the process input schema has no length or line keywords. arc-run, /arc-run, cron and any other lane's caller skip the door and start a twelve-agent paid council with a blank or multi-line question. The guard is keyed on one caller, not on the process.",
+      "fix": "Enforce the one-line class and the 1..500 bound in the process's input handling in arc-run, or add a validator hook on the input schema, so every caller crosses it. Add negative-control fixtures for empty, blank, overlong and multi-line input through arc-run.",
+      "twin_of": "A guard keyed on the caller is bypassed by a second caller; key it on the thing guarded."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "tests/council-convene-probe.mjs:85",
+      "breaking_input": "A Chair that ignores \"at most 3 attempts\" and re-runs `--verdict` twenty times on a high-judgment model. The only assertion is `doc.body.includes(\"at most 3 attempts\")`.",
+      "why": "The B7 cap is a sentence, and the test proves the sentence exists, not that the loop ends. Nothing in the diff hands the CLI a turn or budget limit. The visible argv assertion checks only that --allowedTools comes first. The terminal state for a persistent lint refusal is again the model's own discipline.",
+      "fix": "Pass a mechanical bound (max turns or a spend cap) through dispatchToolArgs for this process and assert it in the probe. Or count lint invocations in a wrapper and refuse the fourth.",
+      "twin_of": "A poll needs a backoff and an end."
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": "tests/council-convene-probe.mjs:63",
+      "breaking_input": "Add `.claude/agents/council-red-team2.md` (a digit) or `council-CTO.md`. The disk side is filtered by `/^council-[a-z-]+\\.md$/`, so the new agent is dropped and the equality with agent.invoke still passes. The fs.read glob `council-*.md` does include it.",
+      "why": "The B5 fix derives the expected set with a class narrower than the glob it is compared against, so an agent the process cannot invoke passes quietly. That is a derived list that goes quiet, not a refusal.",
+      "fix": "Derive the set with the same criterion as the glob: every `council-*.md` under .claude/agents, and refuse any name outside the agent-name grammar by name instead of dropping it.",
+      "twin_of": "A fixed list of 17 where a derived list belonged -> grep the pattern forward into the generator and every consumer."
+    }
+  ]
+}
