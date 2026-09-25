@@ -44,7 +44,7 @@ function isMainModule() {
 }
 
 // ---------- tree truths (derived, never copied -- ADR-0107) ----------
-async function treeKinds(repo) {
+export async function treeKinds(repo) {
   // The vocabulary is whatever validate.mjs says it is, imported, not re-listed. A copy
   // here would be exactly the stale-count defect the design source itself reproduced.
   // pathToFileURL: a bare Windows path (c:\...) is rejected by the ESM loader as an
@@ -52,16 +52,16 @@ async function treeKinds(repo) {
   const mod = await import(pathToFileURL(join(repo, ".claude/scripts/hq/lib/validate.mjs")).href);
   return [...mod.KINDS];
 }
-function dirNames(p) {
+export function dirNames(p) {
   if (!existsSync(p)) return [];
   return readdirSync(p).filter((n) => { try { return statSync(join(p, n)).isDirectory(); } catch { return false; } });
 }
-function mdStems(p) {
+export function mdStems(p) {
   if (!existsSync(p)) return [];
   return readdirSync(p).filter((n) => n.endsWith(".md")).map((n) => n.slice(0, -3));
 }
 /** processes/<name>.process.yaml -> "<name>". The contract keys them by the bare name. */
-function yamlStems(p) {
+export function yamlStems(p) {
   if (!existsSync(p)) return [];
   const suffix = ".process.yaml";
   return readdirSync(p).filter((n) => n.endsWith(suffix)).map((n) => n.slice(0, -suffix.length));
@@ -843,7 +843,7 @@ function loadContract(repo) {
   return JSON.parse(readFileSync(p, "utf8"));
 }
 
-function treeProducts(repo) {
+export function treeProducts(repo) {
   const dir = join(repo, "products");
   return dirNames(dir).map((name) => {
     const mpath = join(dir, name, "manifest.json");
@@ -880,7 +880,14 @@ const WORLD_READERS = [
   ["lints", (repo) => treeLints(repo)],
 ];
 
-async function gather(repo) {
+/**
+ * Everything arc IS, read from disk -- every inventory `gather` hands the gate, minus the face's
+ * own contract. Exported for the docs wiki (ADR-1501): the wiki and this gate read the tree
+ * through ONE assembly, so they cannot disagree about what exists, and a reader added here for
+ * the face reaches the wiki with no wiki change. It never touches expected-set.json, so a tree
+ * without the face contract can still be read.
+ */
+export async function treeWorld(repo) {
   return {
     kinds: await treeKinds(repo),
     lanes: dirNames(join(repo, "initiatives")),
@@ -889,7 +896,6 @@ async function gather(repo) {
     products: treeProducts(repo),
     rules: mdStems(join(repo, ".claude", "rules")),
     processes: yamlStems(join(repo, "processes")),
-    contract: loadContract(repo),
     // ADR-1317 -- each walks its own source of truth on disk, so the gate fails when ARC
     // grows rather than when the contract does.
     // Built from WORLD_READERS, so the wiring is DATA the selftest can cross-check rather
@@ -899,6 +905,13 @@ async function gather(repo) {
     modules: treeModules(repo),
     ops: await treeOps(repo),
   };
+}
+
+async function gather(repo) {
+  // The contract is read FIRST, as it always was: a tree with no contract fails before any
+  // reader runs, exactly as before treeWorld was split out.
+  const contract = loadContract(repo);
+  return { ...(await treeWorld(repo)), contract };
 }
 
 /** @param repoOrData a repo path, or a pre-gathered data object (the selftest's exit arm). */

@@ -1285,13 +1285,14 @@
           "steel thread"
         ],
         "products": [
+          "docs",
           "plan"
         ],
         "adrs": [
           "1500"
         ]
       },
-      "itemCount": 24
+      "itemCount": 25
     }
   ],
   "inventories": {

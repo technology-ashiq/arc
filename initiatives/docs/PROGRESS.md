@@ -27,6 +27,8 @@ depends-on: —
 
 _(empty — nothing closed yet)_
 
+**Phase 00 notes (in flight).** A-02 FIRED as written: of 308 ADRs, 65 carry no `**Product:**` line (all predate ADR-0053), 16 no Reversibility, 3 no Status/Date. Per its trigger the parse is reported partial and the count is printed by `wiki-build` and carried in `wiki.json` `stats.adrs.unparsed`, never hidden. The first ADRs wrote the date into the status line (`accepted · 2026-07-09`); that declared date is read. A-03 held: all 17 PROGRESS headers parse.
+
 ## Appetite burn
 
 0 of 6.5 days used (5.5 planned · 1 slack). Day-3 checkpoint: end of Phase 01.

@@ -1341,7 +1341,8 @@
       "growth": "growth",
       "leads": "leads",
       "legal": "legal",
-      "memory": "memory"
+      "memory": "memory",
+      "docs": "lane"
     }
   },
   "adrs": {
