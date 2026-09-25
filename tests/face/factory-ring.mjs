@@ -463,5 +463,89 @@ function scratchRepo(name, files) {
     unc.status === 1 && /share or device path/.test(unc.stderr) && dots.status === 1 && /\. or \.\. segment/.test(dots.stderr), `${unc.status} ${unc.stderr} | ${dots.status} ${dots.stderr}`);
 }
 
+// ---- develop prove (face Phase 06, the develop room's "Prove a slice" session verb): the next unproven slice gets
+// the session's result and a MERGED commit, written through next's fence and lock, and its slice.done is tagged with
+// the run's process and printed; an unmerged or unknown commit, a placeholder, a padded or two-line result, a secret,
+// a file outside the scratch directory and the wrong phase are refused with nothing written ----
+{
+  const t = join(tmp, "develop-prove");
+  cpSync(join(REPO, "tests", "fixtures", "develop", "fake-phase"), t, { recursive: true });
+  writeFileSync(join(t, "initiatives", "develop", "PROGRESS.md"), "# PROGRESS\n\nstatus: LIVE\nphase: 00\n\n## Now\n");
+  writeFileSync(join(t, ".gitignore"), ".claude/state/\n");
+  const sp = spine("develop-prove-spine");
+  const devIn = (...a) => spawnSync(process.execPath, [S("develop", "develop.mjs"), ...a, "--lane", "develop", "--root", t], { cwd: REPO, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  const st = devIn("start", "0");
+  const g = (...a) => spawnSync("git", a, { cwd: t, encoding: "utf8" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.name", "fixture"); g("config", "user.email", "fixture@example.invalid"); g("config", "commit.gpgsign", "false");
+  g("add", "-A"); g("commit", "-q", "-m", "slice 01 landed");
+  const merged = g("rev-parse", "HEAD").stdout.trim();
+  g("switch", "-q", "-c", "side");
+  writeFileSync(join(t, "side.txt"), "not merged\n");
+  g("add", "-A"); g("commit", "-q", "-m", "an unmerged commit");
+  const unmerged = g("rev-parse", "HEAD").stdout.trim();
+  g("switch", "-q", "main");
+  mkdirSync(join(t, ".claude", "state", "develop-proof"), { recursive: true });
+  const ledger = join(t, "initiatives", "develop", "phases", "phase-00-tasks.md");
+  check("develop prove: scratch lane on main, one merged and one unmerged commit (vacuous-pass guard)",
+    st.status === 0 && existsSync(ledger) && /^[0-9a-f]{40}$/.test(merged) && /^[0-9a-f]{40}$/.test(unmerged) && merged !== unmerged, `${st.status} ${st.stdout.slice(-200)}`);
+  const resultFile = ".claude/state/develop-proof/result.txt";
+  const put = (text) => writeFileSync(join(t, resultFile), text);
+  const dones = () => spineEvents(sp).filter((e) => e.kind === "slice.done");
+  const result = "CI run 101 at head abc12345: GREEN on all 19 jobs; evidence/phase-00/demo.md records the demo";
+  const ARGS = ["prove", "0", "--result-file", resultFile, "--commit", merged.slice(0, 12), "--as-process", "develop-proof@1.0.0"];
+  put(`${result}\n`);
+  const before = readFileSync(ledger, "utf8");
+
+  const dry = devIn(...ARGS, "--dry-run");
+  check("develop prove, dry run: names slice 01 and the merged commit, the ledger unchanged and no slice.done",
+    dry.status === 0 && /would prove slice 01/.test(dry.stdout) && dry.stdout.includes(`commit: ${merged.slice(0, 8)}`) && readFileSync(ledger, "utf8") === before && dones().length === 0, `${dry.status} ${dry.stdout.slice(-300)}`);
+  const ap = devIn(...ARGS);
+  const after = readFileSync(ledger, "utf8");
+  const d1 = dones()[0];
+  // Exactly two lines differ, and they are slice 01's result and commit.
+  const bl = before.split("\n"), al = after.split("\n");
+  const diff = bl.map((l, i) => (l === al[i] ? null : i)).filter((i) => i !== null);
+  check("develop prove, applied: exactly slice 01's result and commit lines changed, to the result and the merged short commit",
+    ap.status === 0 && bl.length === al.length && diff.length === 2 && al[diff[0]] === `result: ${result}` && al[diff[1]] === `commit: ${merged.slice(0, 8)}` && bl.slice(0, diff[0]).some((l) => l === "#### slice: 01") && !bl.slice(0, diff[0]).some((l) => l === "#### slice: 02"), `${ap.status} ${ap.stdout.slice(-300)} ${JSON.stringify(diff)}`);
+  check("develop prove, applied: slice.done lands for slice 01 at the merged commit, tagged develop-proof@1.0.0, its id the one printed",
+    !!d1 && d1.payload.slice === "01" && d1.payload.phase === "00" && d1.payload.lane === "develop" && d1.payload.commit === merged.slice(0, 8) && d1.process === "develop-proof@1.0.0" && receiptOf(ap.stdout) === d1.id, JSON.stringify(d1));
+
+  const held = readFileSync(ledger, "utf8");
+  writeFileSync(join(t, ".claude", "state", "other.txt"), `${result}\n`);
+  const refusals = [
+    ["an unmerged commit", result, ["--commit", unmerged.slice(0, 12)], /is not merged/],
+    ["a commit this clone does not hold", result, ["--commit", "deadbeefdeadbeef"], /is not a commit this clone holds/],
+    ["a placeholder result", "(empty until proven)", [], /placeholder/],
+    ["a result too short to name its evidence", "passed", [], /20 to 1500 characters/],
+    ["a padded result", `  ${result}`, [], /not padded/],
+    ["a two-line result", `${result}\nresult: forged`, [], /ONE line/],
+    ["a credential in the result", `${result} ${"AKIA"}${"IOSFODNN7EXAMPLF"}`, [], /secret rule/],
+    ["another file under .claude/state", result, ["--result-file", ".claude/state/other.txt"], /must sit directly in \.claude\/state\/develop-proof/],
+    ["a drive-absolute path", result, ["--result-file", ["C:", "x", "result.txt"].join(String.fromCharCode(92))], /not an absolute, drive or UNC path/],
+  ];
+  for (const [label, text, over, want] of refusals) {
+    put(`${text}\n`);
+    const args = [...ARGS];
+    for (let i = 0; i < over.length; i += 2) args[args.indexOf(over[i]) + 1] = over[i + 1];
+    const r = devIn(...args);
+    check(`develop prove refuses ${label}, writing nothing`, r.status === 2 && want.test(r.stdout) && readFileSync(ledger, "utf8") === held && dones().length === 1 && !r.stdout.includes("IOSFODNN7"), `${r.status} ${r.stdout.slice(-240)}`);
+  }
+  put(`${result}\n`);
+  const flagRefusals = [
+    ["the wrong phase", ["prove", "1", "--result-file", resultFile, "--commit", merged.slice(0, 12)], /not phase 01/],
+    ["no phase", ["prove", "--result-file", resultFile, "--commit", merged.slice(0, 12)], /prove needs the phase/],
+    ["--commit given to next", ["next", "--dry-run", "--commit", merged.slice(0, 12)], /belong to prove/],
+    ["--commit given twice", [...ARGS, "--commit", merged.slice(0, 12)], /--commit is given once/],
+    ["--commit with =", ["prove", "0", "--result-file", resultFile, `--commit=${merged.slice(0, 12)}`], /never with =/],
+    ["a bad process tag", ["prove", "0", "--result-file", resultFile, "--commit", merged.slice(0, 12), "--as-process", "x;y"], /--as-process is/],
+  ];
+  for (const [label, args, want] of flagRefusals) {
+    const r = devIn(...args);
+    check(`develop prove refuses ${label}, writing nothing`, r.status === 2 && want.test(r.stdout) && readFileSync(ledger, "utf8") === held && dones().length === 1, `${r.status} ${r.stdout.slice(-240)}`);
+  }
+  check("develop prove: THE LEDGER changed only by the one applied proof", readFileSync(ledger, "utf8") === after && dones().length === 1);
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exit(failed === 0 && ran >= 45 ? 0 : 1);

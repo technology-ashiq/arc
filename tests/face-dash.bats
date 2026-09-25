@@ -90,6 +90,8 @@ load 'test_helper'
   [[ "$output" == *"ok door: a sim door refuses the effect's apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok rule-propose: THE HOMES are byte-identical in the tree after every proposal and refusal"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok lesson-log: THE LOG gained exactly one line across every run"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok adr-record: THE ADR DIRECTORY gained exactly the two recorded files"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok adr-record, applied: note.logged lands with what adr, the file and number, tagged adr-record@1.0.0, its id the one printed"* ]] || { echo "$output"; false; }
 }
 
 @test "factory ring: develop next, open-brief, pick, profile, retire and add-agent APPLIED in scratch repos; touchesTree is SIM_EFFECT" {
@@ -98,6 +100,8 @@ load 'test_helper'
   [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
   [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok agent-scaffold, applied: the golden holds its line -- sha256 of the bytes, CR stripped -- in byte order"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok develop prove: THE LEDGER changed only by the one applied proof"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok develop prove, applied: slice.done lands for slice 01 at the merged commit, tagged develop-proof@1.0.0, its id the one printed"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok door: a sim door refuses a touchesTree apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
 }
 

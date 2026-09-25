@@ -95,7 +95,7 @@ export const SESSIONS = Object.freeze([
   row("absorb.adopt", "absorb", "Adopt from absorb", "absorb-adopt", null, [text("item", "Item", "the absorbed item to adopt", 200, true)]),
   row("growth.draft", "growth", "Draft an article", "growth-draft", null, [text("topic", "Topic", "one line -- what the article is about", 300, true)]),
   row("strategy.adopt-plan", "strategy", "Adopt a plan", "kickoff-plan", "kickoff.done", [text("goal", "Goal", "one line -- the project goal", 500, true)]),
-  row("strategy.record-adr", "strategy", "Record an ADR", "adr-record", "note.logged", [text("decision", "Decision", "one line -- what was decided", 500, true)]),
+  row("strategy.record-adr", "strategy", "Record an ADR", "adr-record", "note.logged", [lane, text("decision", "Decision", "one line -- what was decided", 500, true)]),
   row("org.lane-birth", "org", "Birth a lane", "kickoff-plan", "kickoff.done", [text("goal", "Goal", "one line -- the lane's goal", 500, true)]),
 ]);
 

@@ -31,8 +31,9 @@
 - [product-challenger](../agents/product-challenger.md) — Pre-kickoff product interrogation. Challenges the framing with forcing questions, finds the sharper product, and writes its conclusions straight into PLAN.md. Run before /arc-kickoff on a fuzzy idea.
 - [question-planner](../agents/question-planner.md) — Designs the kickoff fork questions for /arc-kickoff step 2. Fresh context reads the goal, premise answers and Current state, then returns the ≤5 highest-information fork questions with recommended defaults. Exists because the planning thread asks questions that confirm its own assumptions — a fresh context asks about its blind spots.
 
-## Scripts (3)
+## Scripts (4)
 
+- [`.claude/scripts/plan/adr-record.mjs`](../../../.claude/scripts/plan/adr-record.mjs)
 - [`.claude/scripts/plan/arc-bytediff.sh`](../../../.claude/scripts/plan/arc-bytediff.sh)
 - [`.claude/scripts/plan/arc-evidence.sh`](../../../.claude/scripts/plan/arc-evidence.sh)
 - [`.claude/scripts/plan/kickoff-lint.mjs`](../../../.claude/scripts/plan/kickoff-lint.mjs)

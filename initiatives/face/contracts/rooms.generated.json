@@ -601,6 +601,9 @@
           "pattern-miner",
           "spec-fidelity"
         ],
+        "processes": [
+          "develop-proof"
+        ],
         "lints": [
           "capability-vet",
           "develop-lint"
@@ -617,7 +620,7 @@
           "0100"
         ]
       },
-      "itemCount": 18
+      "itemCount": 19
     },
     {
       "id": "review-ship",
@@ -1155,6 +1158,9 @@
         "trigger table"
       ],
       "holds": {
+        "processes": [
+          "adr-record"
+        ],
         "concepts": [
           "Build-out Mandate",
           "pull trigger"
@@ -1188,7 +1194,7 @@
           "PLAN-trader"
         ]
       },
-      "itemCount": 28
+      "itemCount": 29
     },
     {
       "id": "org",

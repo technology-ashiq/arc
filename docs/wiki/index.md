@@ -7,15 +7,15 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 |---|---|---|
 | [Products](#products) | 17 | 0 |
 | [Lanes](#lanes) | 17 | 0 |
-| [Processes](#processes) | 10 | 0 |
+| [Processes](#processes) | 12 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 15 | 0 |
 | [Commands](#commands) | 28 | 0 |
 | [Agents](#agents) | 30 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **131** | **0** |
+| **Total** | **133** | **0** |
 
-Narrative debt: **131 of 131** pages have no narrative yet. ADR headers: 243 of 308 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **133 of 133** pages have no narrative yet. ADR headers: 243 of 308 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -35,7 +35,7 @@ Narrative debt: **131 of 131** pages have no narrative yet. ADR headers: 243 of 
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
 | [memory](products/memory.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
-| [plan](products/plan.md) | 1.0.0 | [core](products/core.md) | 5 | 5 | 3 |
+| [plan](products/plan.md) | 1.0.0 | [core](products/core.md) | 5 | 5 | 4 |
 | [qa](products/qa.md) | 1.0.0 | [core](products/core.md) | 3 | 2 | 0 |
 | [review](products/review.md) | 1.0.0 | [core](products/core.md) | 4 | 2 | 22 |
 
@@ -65,12 +65,14 @@ Narrative debt: **131 of 131** pages have no narrative yet. ADR headers: 243 of 
 
 | Process | Version | Intent |
 |---|---|---|
+| [adr-record](processes/adr-record.md) | 1.0.0 | Record one owner decision as an ADR at the next free number of the lane's century, and end on its note.logged receipt. |
 | [attack-diff](processes/attack-diff.md) | 1.0.0 | Adversarially attack one surface of a diff with concrete breaking inputs, carrying the lane's fixed-defect patterns. |
 | [brief-materialize](processes/brief-materialize.md) | 1.0.0 | Render the day's brief into instance state so the morning read is zero-effort. |
 | [build-in-public-draft](processes/build-in-public-draft.md) | 1.0.0 | Draft one build-in-public post from an approved context pack. L1 only -- a draft, never a publication. |
 | [commit-msg-draft](processes/commit-msg-draft.md) | 1.0.0 | Stage related changes and write a conventional commit. |
 | [council-convene](processes/council-convene.md) | 1.0.0 | Convene the full arc council on one question, headless, and end on its council.verdict receipt. |
 | [day-close-roll](processes/day-close-roll.md) | 1.0.0 | Seal every unsealed day up to yesterday, oldest first, idempotently. |
+| [develop-proof](processes/develop-proof.md) | 1.0.0 | Prove the next unproven slice of a LIVE lane from evidence already recorded, and end on its slice.done receipt. |
 | [kickoff-plan](processes/kickoff-plan.md) | 1.0.0 | Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated. |
 | [lesson-log](processes/lesson-log.md) | 1.0.0 | Log one lesson as a docs/retro-log.md row, after the near-duplicate check, and end on its note.logged receipt. |
 | [review-diff](processes/review-diff.md) | 1.0.0 | Review the current branch's diff with the code-reviewer subagent; findings archived to docs/reviews/. |
