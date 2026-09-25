@@ -89,7 +89,7 @@ rendered_tree() {
 @test "docs-render: REQ-04 -- a manifest-only product appears with its facts and the pending banner" {
   local t; t=$(rendered_tree req04) || { echo "fixture failed"; false; }
   mkdir -p "$t/products/zeta"
-  printf '{"name":"zeta","version":"9.8.7","requires":["core"],"commands":[],"agents":[],"scripts":[],"files":[],"docs":[]}\n' > "$t/products/zeta/manifest.json"
+  printf '{"name":"zeta","version":"9.8.7","requires":["alpha"],"commands":[],"agents":[],"scripts":[],"files":[],"docs":[]}\n' > "$t/products/zeta/manifest.json"
   run node "$(WB "$t")" --root "$t"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   local p="$t/docs/wiki/products/zeta.md"
@@ -98,7 +98,7 @@ rendered_tree() {
   [[ "${lines[0]}" == "$BANNER"* ]] || { echo "line 1 is not the banner: ${lines[0]}"; false; }
   [[ "$output" == *"# zeta"* ]] || { echo "no title: $output"; false; }
   [[ "$output" == *"9.8.7"* ]] || { echo "version missing: $output"; false; }
-  [[ "$output" == *"[core](core.md)"* ]] || { echo "requires not linked: $output"; false; }
+  [[ "$output" == *"[alpha](alpha.md)"* ]] || { echo "requires not linked: $output"; false; }
   [[ "$output" == *"Narrative pending."* ]] || { echo "no pending banner: $output"; false; }
   run node "$(COV "$t")" --root "$t"
   [ "$status" -eq 0 ] || { echo "the new product is not covered: $output"; false; }

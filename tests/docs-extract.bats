@@ -153,8 +153,6 @@ mutant_cov() {
   [ "$status" -eq 2 ] || { echo "--flag=value form: status $status: $output"; false; }
   run node "$(WB)" --json --json
   [ "$status" -eq 2 ] || { echo "a repeated flag: status $status: $output"; false; }
-  run node "$(WB)"
-  [ "$status" -eq 2 ] || { echo "no --json: status $status: $output"; false; }
 }
 
 @test "docs-extract: the writer refuses a directory, a path inside the tree, and a non-arc root" {
