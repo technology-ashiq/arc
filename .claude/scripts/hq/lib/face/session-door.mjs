@@ -101,6 +101,9 @@ function sessionEnv(ctx) {
   const env = Object.fromEntries(Object.entries(childEnv()).filter(([k]) => envAllowed(k)));
   // The door names the spine; the child never inherits one from wherever the door was started (attack 60c13e9 B2).
   env.ARC_SPINE_ROOT = ctx.root;
+  // A session's phases show while they happen: arc-run writes its driver's progress into run.log as each step lands,
+  // instead of all at once when the run ends (Phase 06 slice 03c). Set by the door, never inherited.
+  env.ARC_RUN_STREAM = "1";
   return env;
 }
 

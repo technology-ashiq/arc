@@ -215,3 +215,19 @@ export function scanSecrets(canonicalText, parsed, { joinFrom = parsed, maxCandi
   }
   return { hit: false };
 }
+
+/**
+ * One line of a child's output, made safe to write live into a log a reader parses (face Phase 06 slice 03c, attack
+ * 3e77530 B8): control, format and line-break characters become spaces, a line matching a secret rule is withheld by
+ * name, and a line that would begin with `arc-run:` -- the prefix of the one receipt line the face's door credits -- is
+ * marked as the driver's. arc-run's own lines are written by arc-run itself, never through here.
+ * @param {string} line @returns {string}
+ */
+export function liveLine(line) {
+  const clean = String(line).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ");
+  let hit = null;
+  try { const v = scanSecrets(clean, { clean }, { maxCandidates: sizeScaledCap(clean) }); if (v.hit) hit = v.rule; }
+  catch { hit = "unscannable"; }
+  if (hit) return `driver: [a line withheld -- it matched the secret rule ${hit}]`;
+  return /^\s*arc-run:/i.test(clean) ? `driver: ${clean}` : clean;
+}
