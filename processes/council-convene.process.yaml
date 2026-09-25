@@ -14,7 +14,7 @@ permissions: declared
 # edit to arc-council.md is red until someone reads it against this body and re-pins on purpose.
 # It is a comment, not `baseline:`, because to arc-compile a baseline is a command this process
 # REPRODUCES byte for byte, and this one runs the command rather than reproducing it.
-# runs: .claude/commands/arc-council.md sha256 04d72bce3bf9326676bb0468039e13646f12c9b59500f02aa1ba874441bd66a2
+# runs: .claude/commands/arc-council.md sha256 747de7a071877f0f854ed2058cebe66146bcdb29591e87b8ab3d6c0852536701
 #
 # Deep mode only. `quick` writes no session file and emits no receipt, so a quick run could never
 # land the `council.verdict` the session row promises. The question travels in the INPUT and is
