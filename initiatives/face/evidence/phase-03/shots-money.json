@@ -1,0 +1,149 @@
+{
+  "comment": "Candidate shots for the money ring shot review (face v2 Phase 03). PNGs are local, under the owner box scratch directory; this manifest pins them by sha256. Same contract as evidence/phase-00/baseline-shots.json.",
+  "capturedAt": "2026-09-18T08:13:12.260Z",
+  "capture": {
+    "script": "face/scripts/harness-run.mjs --shots",
+    "browser": "Chrome/153.0.8010.48",
+    "viewport": {
+      "width": 1440,
+      "height": 1000,
+      "deviceScaleFactor": 1
+    },
+    "waitMs": 900,
+    "moods": [
+      "dark",
+      "light"
+    ]
+  },
+  "ring": "money",
+  "shots": [
+    {
+      "room": "money",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-money.png",
+      "bytes": 258063,
+      "sha256": "4b4435e1225228ba4429951c3953d236165a965738a8f4d4d87ba0dd83646309"
+    },
+    {
+      "room": "ventures",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-ventures.png",
+      "bytes": 246787,
+      "sha256": "5e1acec7e1719b5ddd7d43360ea610b88ef120e1871dfdec7874faefdfd5f99e"
+    },
+    {
+      "room": "growth",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-growth.png",
+      "bytes": 223720,
+      "sha256": "6735d28cc37ba1695ee1f53501a29f25925912ffdadf002f6d9d5e729cda64ab"
+    },
+    {
+      "room": "leads",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-leads.png",
+      "bytes": 218434,
+      "sha256": "0a5f4c36de10cfad683a34955496d48efde3c50aa22ae3e353723f6060e4987f"
+    },
+    {
+      "room": "legal",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-legal.png",
+      "bytes": 240016,
+      "sha256": "8a0303278a166faa9b2427af6e8ba11a923caf314ed3765ec3fd95a99db22d25"
+    },
+    {
+      "room": "ops",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-ops.png",
+      "bytes": 244408,
+      "sha256": "93d03edaf4d01ffff3a0a97f32f740d1068e94ee3eb0b105fa1c5f633c06584d"
+    },
+    {
+      "room": "trader",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-trader.png",
+      "bytes": 229006,
+      "sha256": "702f0bd2761dec9e38832ca146849fe3d9cf140513e2231f43e5b9674e949470"
+    },
+    {
+      "room": "discover",
+      "mood": "dark",
+      "render": "module",
+      "file": "dark-discover.png",
+      "bytes": 237843,
+      "sha256": "37e01c7598a2224cf235343785d0c5c7d3ef2257e83944d1d63d088be5b209fe"
+    },
+    {
+      "room": "money",
+      "mood": "light",
+      "render": "module",
+      "file": "light-money.png",
+      "bytes": 252316,
+      "sha256": "106d073449548c1f25b969d8208795ef17d1d3565747ba732a4e96a2b518c474"
+    },
+    {
+      "room": "ventures",
+      "mood": "light",
+      "render": "module",
+      "file": "light-ventures.png",
+      "bytes": 246615,
+      "sha256": "7d39c8ed8d712307d3a35cf3145dcead56ed75569e37ff7cd3ab78dc71276f18"
+    },
+    {
+      "room": "growth",
+      "mood": "light",
+      "render": "module",
+      "file": "light-growth.png",
+      "bytes": 224529,
+      "sha256": "480abe28ecb83a1524e92cb471ddcf9b373832e89359edddc18719c0aa934c0f"
+    },
+    {
+      "room": "leads",
+      "mood": "light",
+      "render": "module",
+      "file": "light-leads.png",
+      "bytes": 218214,
+      "sha256": "3f3ec52b8d1f502b17baf09e5af016eed30dec0f8210664cb9c52e416306e98d"
+    },
+    {
+      "room": "legal",
+      "mood": "light",
+      "render": "module",
+      "file": "light-legal.png",
+      "bytes": 238500,
+      "sha256": "203594d824cb30cca94799702ec61a21273a407937f9da57acddb40a6cea2b2f"
+    },
+    {
+      "room": "ops",
+      "mood": "light",
+      "render": "module",
+      "file": "light-ops.png",
+      "bytes": 243794,
+      "sha256": "d90d550738979e3d14fdeac9cc7557e92ca086a13c80ba11ad5628e45fcfb775"
+    },
+    {
+      "room": "trader",
+      "mood": "light",
+      "render": "module",
+      "file": "light-trader.png",
+      "bytes": 229661,
+      "sha256": "46e46fd167116d1540edaed3c6904031e77b02ac28bb2ca15464186d9a106883"
+    },
+    {
+      "room": "discover",
+      "mood": "light",
+      "render": "module",
+      "file": "light-discover.png",
+      "bytes": 236502,
+      "sha256": "b245970111218a97785002a94ee1fd6640b6de4724167c8951147553de636fa1"
+    }
+  ]
+}

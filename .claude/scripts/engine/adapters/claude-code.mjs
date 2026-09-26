@@ -19,8 +19,15 @@ export const TOOL_MAP = Object.freeze({
   "shell.run": { kind: "scoped", render: (scope) => `Bash(${scope})` },
   // Bare: one fixed token regardless of scope.
   "fs.read": { kind: "bare", token: "Read" },
-  "fs.write": { kind: "bare", token: "Write" },
-  "agent.invoke": { kind: "bare", token: "Task" },
+  // Declared bare, a write is the one Write token. Declared with paths, each path is an Edit(<path>) grant: the CLI
+  // accepts a Write(<path>) rule and never consults it, and Edit rules are the ones that fence every file-writing
+  // tool, Write included, relative to the working directory (code.claude.com/docs/en/permissions). A path-scoped
+  // write rendered as the bare token would be the unfenced write the scope was declared to prevent (attack 66a26f0 B1).
+  "fs.write": { kind: "bare", token: "Write", scoped: (scope) => `Edit(${scope})` },
+  // A headless dispatch hands a declared agent list over as Agent(<name>) grants, the rule that fences which subagents
+  // may start; the bare Task would let a steered run start any agent at all (attack 1be4183 B1). A generated COMMAND
+  // keeps Task: its allowed-tools line is compiled and pinned byte for byte, and narrowing it is its own reviewed change.
+  "agent.invoke": { kind: "bare", token: "Task", scopedHeadless: (scope) => `Agent(${scope})` },
   "web.search": { kind: "bare", token: "WebSearch" },
   "ask.human": { kind: "bare", token: null }, // asking the operator needs no tool grant
 });
@@ -58,26 +65,49 @@ function assertInline(value, where) {
  */
 const SCOPE_OK = /^[^\r\n(),]+$/;
 
-export function renderAllowedTools(tools) {
+export function renderAllowedTools(tools, { headless = false } = {}) {
   const out = [];
   for (const t of tools) {
     const bare = typeof t === "string";
     const prim = bare ? t : Object.keys(t)[0];
     const spec = TOOL_MAP[prim];
     if (!spec) throw new Error(`claude-code adapter: no mapping for abstract tool \`${prim}\``);
-    if (spec.kind === "bare") {
+    const scopedBare = bare ? null : (headless && spec.scopedHeadless) || spec.scoped || null;
+    if (spec.kind === "bare" && !scopedBare) {
       if (spec.token) out.push(spec.token);
       continue;
     }
+    const render = spec.kind === "bare" ? scopedBare : spec.render;
     if (bare) throw new Error(`claude-code adapter: \`${prim}\` is scope-bearing but was declared bare`);
     for (const scope of t[prim]) {
       if (!SCOPE_OK.test(scope)) {
         throw new Error(`claude-code adapter: scope \`${scope}\` for \`${prim}\` contains ( ) , or a line break — it would forge extra grants`);
       }
-      out.push(spec.render(scope));
+      out.push(render(scope));
     }
   }
   return out.length ? out.join(", ") : null;
+}
+
+/**
+ * The tool argv a HEADLESS dispatch hands the CLI -- one decision, importable, so the driver
+ * cannot hold a second copy of it (ADR-0223 clause 4, amended by ADR-0226).
+ *
+ * `unrestricted` -> no tool argv (nobody narrowed the file; the CLI default applies).
+ * `declared` + a grant -> `--allowedTools`.
+ * `declared` + an EXPLICIT `tools: []` -> `--tools "" --strict-mcp-config`: the CLI's real zero,
+ *   no built-in tool and no MCP server. The most restrictive declaration reaches the CLI as the
+ *   most restrictive argv. (A generated COMMAND has no such zero -- `allowed-tools:` absent means
+ *   unrestricted -- which is why the compile path above still refuses it.)
+ * `declared` + a non-empty list that renders to nothing (`[ask.human]`) -> THROW. That is a
+ *   mapping gap, not a declaration of zero, and an absent `--allowedTools` is UNRESTRICTED.
+ */
+export function dispatchToolArgs(doc) {
+  if (doc.permissions !== "declared") return [];
+  const allowed = renderAllowedTools(Array.isArray(doc.tools) ? doc.tools : [], { headless: true });
+  if (allowed) return ["--allowedTools", allowed];
+  if (Array.isArray(doc.tools) && doc.tools.length === 0) return ["--tools", "", "--strict-mcp-config"];
+  throw new Error("claude-code driver: `permissions: declared` produced an empty grant set — an absent --allowedTools means UNRESTRICTED, so this run would silently widen the process");
 }
 
 /**
@@ -150,4 +180,34 @@ export function render(doc, { withHeader = false } = {}) {
   // The header sits AFTER the frontmatter: the `---` fence must be the first bytes of the
   // file or Claude Code does not read the frontmatter at all.
   return withHeader ? `${fm}\n${renderHeader(doc)}\n${body}` : `${fm}\n${body}`;
+}
+
+/**
+ * One progress line for one tool step of a streamed headless run (face Phase 06 slice 03c): the driver writes it to
+ * stderr the moment the CLI reports the step, and the face's session door shows it live.
+ *
+ * A line names the step and never its payload: an agent's name, a command's executable and script path, a file path. Control,
+ * format and line-break characters become spaces and each part is capped, so a model cannot forge a second line, and
+ * every line starts `claude-code: step` -- never `arc-run: receipt`, the one line the door credits. `null` for anything
+ * that is not a tool step.
+ * @param {any} block one content block of a stream-json `assistant` event
+ * @returns {string | null}
+ */
+export function progressLine(block) {
+  if (!block || block.type !== "tool_use" || typeof block.name !== "string") return null;
+  const i = block.input && typeof block.input === "object" ? block.input : {};
+  // Strings only: String() on an object the model shaped ({"toString": 1}) throws, and a throw here would end a paid
+  // run mid-stream (attack 3e77530 B1).
+  const str = (v) => (typeof v === "string" ? v : "");
+  // A command shows its executable and, when the next word is a script path, that path -- never its arguments, and
+  // never an `X=value` prefix, where a credential rides (B9). A search pattern is never shown at all.
+  const command = () => {
+    const words = str(i.command).trim().split(/\s+/).filter((w) => w && !w.includes("="));
+    return words.slice(0, words.length > 1 && /[\\/]/.test(words[1]) ? 2 : 1).join(" ");
+  };
+  const what = block.name === "Agent" || block.name === "Task" ? str(i.subagent_type) || str(i.description)
+    : block.name === "Bash" ? command()
+    : str(i.file_path) || str(i.path);
+  const clean = (s) => s.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ").slice(0, 120);
+  return `claude-code: step ${clean(block.name).slice(0, 40)}${what ? ` ${clean(what)}` : ""}`;
 }

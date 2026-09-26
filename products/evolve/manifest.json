@@ -14,7 +14,8 @@
     ".claude/scripts/evolve/calibrate.mjs",
     ".claude/scripts/evolve/canon.mjs",
     ".claude/scripts/evolve/lineage.mjs",
-    ".claude/scripts/evolve/verdict.mjs"
+    ".claude/scripts/evolve/verdict.mjs",
+    ".claude/scripts/evolve/wire.mjs"
   ],
   "files": [],
   "docs": [],

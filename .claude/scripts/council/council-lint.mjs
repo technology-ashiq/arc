@@ -12,12 +12,14 @@
  *   node .claude/scripts/council/council-lint.mjs --brief <file>
  *     Brief — a deep Evidence Brief needs >=3 facts, each with a confidence label; in a `live` brief
  *     each High/Med fact needs >=2 independent source URLs or an explicit low-confidence mark. (REQ-04, ADR-0003)
+ *   node .claude/scripts/council/council-lint.mjs --claim <slug> [repo-root]
+ *     Claim -- create docs/council/sessions/NNN-<slug>.md exclusively at the next free number and print its path.
  *
  * Roster grows per phase: Phase 0 = advocate/skeptic/neutral; Phase 1 adds verifier; Phase 2 adds
  * researcher; Phase 3 adds the 7 domain experts.
  */
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, existsSync, openSync, fstatSync, closeSync, realpathSync, lstatSync, readdirSync, writeSync, mkdirSync, unlinkSync } from "node:fs";
+import { join, dirname, basename, extname } from "node:path";
 import { createHash } from "node:crypto";
 
 const args = process.argv.slice(2);
@@ -29,7 +31,7 @@ const verdictFile = flagVal("--verdict");
 const briefFile = flagVal("--brief");
 const jurorArtifactFile = flagVal("--juror-artifact");
 const consumed = new Set();
-for (const f of ["--verdict", "--brief", "--juror-artifact"]) {
+for (const f of ["--verdict", "--brief", "--juror-artifact", "--payload", "--claim", "--release"]) {
   const i = args.indexOf(f);
   if (i >= 0) consumed.add(i), consumed.add(i + 1);
 }
@@ -71,8 +73,215 @@ function isValidISODate(s) {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
 }
 
+// ------------------------------------------------------------------ payload mode (ADR-1345)
+// The council.verdict receipt, in the spine's CLOSED shape (validate.mjs: session_id · question_hash · call ·
+// confidence), derived from a SAVED verdict -- never typed by hand into a shell string. The call maps the decision:
+// YES and CONDITIONAL are a call to proceed, NO and WAIT a call to hold (the reading calibrate.mjs scores by). Prints
+// ONE line of JSON on success; exit 1 names what the file lacks; exit 2 names a usage error.
+//
+//   node council-lint.mjs [repo-root] --payload <verdict file>
+//
+// Hardened by attacks eaa9168 and 1d98650: the mode is entered on the FLAG, never on a truthy value; it takes only its
+// file and an optional repo root -- any other token is refused by name; the file must be a plain file directly under
+// <root>/docs/council/sessions, with the lowercase .md the command writes -- the fence is the repo's own directory,
+// never a flag the caller sets; it is read once through its descriptor with a size cap and a FATAL UTF-8 decode; the
+// DECISION and CONFIDENCE values must share their line; the question must have a visible character and the heading's
+// date must be a real day; every name a message prints is escaped.
+function payloadMode() {
+  const BS = String.fromCharCode(92);
+  // Every name a message prints: control characters and Unicode line breaks escaped, so no path forges a line (B4).
+  const shown = (s) => JSON.stringify(String(s)).replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, (ch) => `${BS}u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
+  const usage = (msg) => { console.error(`council-lint: --payload: ${msg}`); process.exitCode = 2; };
+  const refuse = (file, msgs) => { for (const m of msgs) console.error(`council-lint: --payload ${shown(file)}: ${m}`); process.exitCode = 1; };
+  if (args.some((a) => a.startsWith("--payload="))) return usage("takes its file as the next argument, not --payload=FILE");
+  const at = args.flatMap((a, i) => (a === "--payload" ? [i] : []));
+  if (at.length > 1) return usage("given more than once -- one verdict per receipt");
+  const file = args[at[0] + 1];
+  if (typeof file !== "string" || file === "" || file.startsWith("-")) return usage("needs the saved verdict's path as its value");
+  // Only the file and ONE optional repo root: any other token -- a second path, an unknown flag, another mode -- is
+  // refused by name, never ignored (B3).
+  const rest = args.filter((_, i) => i !== at[0] && i !== at[0] + 1);
+  const stray = rest.filter((a) => a.startsWith("-"));
+  if (stray.length) return usage(`takes no other flag -- ${stray.map(shown).join(", ")} would answer for a run this mode does not make`);
+  if (rest.length > 1) return usage(`takes one repo root at most, not ${rest.map(shown).join(", ")}`);
+  if (/[\p{Cc}\p{Zl}\p{Zp}]/u.test(file)) return usage(`the path ${shown(file)} holds a control character or a line break`);
+  // A UNC or device path reaches out of the machine or into a stream; a colon past a drive letter names an NTFS stream.
+  if (/^[\\/]{2}/.test(file) || file.indexOf(":", /^[A-Za-z]:/.test(file) ? 2 : 0) !== -1) return usage(`the path ${shown(file)} is a UNC, device or stream path`);
+  const sessionsDir = join(rest.length ? rest[0] : root, "docs", "council", "sessions");
+  let dirReal, real;
+  try { dirReal = realpathSync.native(sessionsDir); } catch (e) { return usage(`the sessions directory ${shown(sessionsDir)} cannot be resolved (${e.code || "error"}) -- run from the repo root, or name it`); }
+  try { real = realpathSync.native(file); } catch (e) { return refuse(file, [`cannot be resolved (${e.code || "error"})`]); }
+  if (dirname(real) !== dirReal) return refuse(file, [`is not a saved session directly under ${shown(sessionsDir)}`]);
+  // The lowercase .md the command writes, and nothing else: two spellings of one name are two files on a
+  // case-sensitive disk and would derive ONE id (B13).
+  if (extname(real) !== ".md") return refuse(file, ["is not a .md verdict (the extension is lowercase .md)"]);
+  // lstat BEFORE open: a FIFO blocks open() for ever waiting for a writer (B7).
+  try { if (!lstatSync(real).isFile()) return refuse(file, ["is not a plain file"]); } catch (e) { return refuse(file, [`cannot be read (${e.code || "error"})`]); }
+  let buf;
+  let fd;
+  try {
+    fd = openSync(real, "r");
+    const st = fstatSync(fd);
+    if (!st.isFile()) return refuse(file, ["is not a plain file"]);
+    if (st.size > 1024 * 1024) return refuse(file, [`is ${st.size} bytes -- past the 1 MiB a verdict can be`]);
+    buf = readFileSync(fd);
+  } catch (e) { return refuse(file, [`could not be read (${e.code || "error"})`]); }
+  finally { if (fd !== undefined) try { closeSync(fd); } catch { /* already closed */ } }
+  let text;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { return refuse(file, ["is not valid UTF-8 -- the question's hash would be taken over replacement characters"]); }
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  // A Unicode line break is a line to no reader but a regex: refused, so this mode and grep read the same lines (B5).
+  if (/[\p{Zl}\p{Zp}]/u.test(text)) return refuse(file, ["holds a Unicode line or paragraph separator -- a DECISION line hidden behind one is a line to nothing else"]);
+  text = text.replace(/\r\n?/g, "\n");
+  const why = [];
+  const h1 = /^# arc-council — (.+) \((\d{4}-\d{2}-\d{2})\)[ \t]*$/m.exec(text);
+  const question = h1 ? h1[1].trim() : "";
+  if (!h1) why.push('has no "# arc-council — <question> (<YYYY-MM-DD>)" heading to take the question from');
+  else {
+    if (!/[\p{L}\p{N}\p{P}\p{S}]/u.test(question)) why.push("has a heading with no question in it -- its hash would be the hash of nothing");
+    if (!isValidISODate(h1[2])) why.push(`heading date ${h1[2]} is not a real day`);
+  }
+  // The value shares its line: `DECISION:` on one line and `WAIT` on the next is an unfilled line, not a call (B6).
+  const dec = [...text.matchAll(/^[ \t]*DECISION:[ \t]*(YES|NO|CONDITIONAL|WAIT)[ \t]*$/gim)];
+  if (dec.length !== 1) why.push(`has ${dec.length} filled DECISION line(s); a verdict has exactly one`);
+  const conf = [...text.matchAll(/^[ \t]*CONFIDENCE:[ \t]*(High|Medium|Low)[ \t]*$/gim)];
+  if (conf.length !== 1) why.push(`has ${conf.length} filled CONFIDENCE line(s); a verdict has exactly one`);
+  // The id is the name the FILESYSTEM holds -- never the caller's spelling.
+  const base = basename(real, ".md");
+  if (!/^[A-Za-z0-9._-]{1,62}$/.test(base)) why.push(`its name ${shown(base)} cannot be a session id (c-<name>, name [A-Za-z0-9._-], at most 62)`);
+  // A headless Chair can read any file in its working directory -- a Read rule adds reads, it never takes the default
+  // ones away (attack 1be4183 B2) -- so a key it quoted would reach a tracked session file in a public repo. The receipt
+  // is where that stops: a verdict carrying a secret derives no payload, and the run ends FAILED. The spine's own
+  // deny-rules do the scan, loaded only here, so a council-only install without the hq lane still lints; without them
+  // this mode refuses rather than derive unscanned, because the receipt it feeds is hq's anyway.
+  if (!redactLib) why.push("cannot scan for secrets (the hq lane's redact.mjs did not load) -- a verdict is never derived unscanned");
+  else {
+    try {
+      const scan = redactLib.scanSecrets(text, { text }, { maxCandidates: redactLib.sizeScaledCap(text) });
+      if (scan.hit) why.push(`carries text matching the secret rule ${shown(scan.rule)} -- remove it from the file; the receipt is never derived from it`);
+    } catch (e) { why.push(`the secret scan could not complete (${e.code || e.message || "error"}) -- a verdict is never derived unscanned`); }
+  }
+  if (why.length) return refuse(file, why);
+  const decision = dec[0][1].toUpperCase();
+  const c = conf[0][1];
+  console.log(JSON.stringify({
+    session_id: `c-${base}`,
+    question_hash: createHash("sha256").update(question, "utf8").digest("hex"),
+    call: decision === "YES" || decision === "CONDITIONAL" ? "proceed" : "hold",
+    confidence: c[0].toUpperCase() + c.slice(1).toLowerCase(),
+  }));
+  process.exitCode = 0;
+}
+
+
+// A headless council (processes/council-convene) cannot choose its session number from an `ls`: two runs, or one run
+// and a hand /arc-council, read the same highest number and the second Write overwrites the first (attack 66a26f0 B2).
+// --claim does the choosing in one place. The NUMBER is the exclusive resource, not the file name, because two runs with
+// different questions carry different slugs and would both create 008-<their slug>.md (attack 1be4183 B3): each number
+// is taken by a non-recursive mkdir of <root>/.claude/state/council-claims/NNN, which exactly one caller wins. The winner
+// then creates docs/council/sessions/NNN-<slug>.md ("wx") so a hand run's `ls` sees the number is taken, and prints its
+// path. The placeholder carries no DECISION line, so --verdict and --payload refuse a claim nothing filled, and
+// --release removes it again when a run fails before its verdict (B4). The lock stays: .claude/state is gitignored, and a
+// spent number is never handed out twice.
+const CLAIM_PLACEHOLDER = "<!-- claimed by council-lint --claim: the council writes its verdict here -->\n";
+const SESSIONS_REL = ["docs", "council", "sessions"];
+const quoted = (s) => JSON.stringify(String(s)).replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, (ch) => `${String.fromCharCode(92)}u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`).slice(0, 120);
+
+/** The flag's value and the one optional root, or a usage message. The default root is the working directory, said
+ * here rather than borrowed from the shared `root`, whose parser does not know these flags take a value (1be4183 B8). */
+function modeArgs(flag) {
+  if (args.some((a) => a.startsWith(`${flag}=`))) return { error: `takes its value as the next argument, not ${flag}=VALUE` };
+  const at = args.flatMap((a, i) => (a === flag ? [i] : []));
+  if (at.length > 1) return { error: "given more than once -- one per run" };
+  const value = args[at[0] + 1];
+  const rest = args.filter((_, i) => i !== at[0] && i !== at[0] + 1);
+  const stray = rest.filter((a) => a.startsWith("-"));
+  if (stray.length) return { error: `takes no other flag -- ${stray.map(quoted).join(", ")}` };
+  if (rest.length > 1) return { error: "takes one repo root at most" };
+  return { value, repo: rest.length ? rest[0] : process.cwd() };
+}
+
+function claimMode() {
+  const usage = (msg) => { console.error(`council-lint: --claim: ${msg}`); process.exitCode = 2; };
+  const a = modeArgs("--claim");
+  if (a.error) return usage(a.error);
+  if (typeof a.value !== "string" || !/^[a-z0-9][a-z0-9-]{0,59}$/.test(a.value)) {
+    return usage(`needs a slug of lowercase letters, digits and hyphens, 60 at most, as its value -- not ${quoted(a.value)}`);
+  }
+  let dir, locks;
+  try {
+    dir = realpathSync.native(join(a.repo, ...SESSIONS_REL));
+    const repoReal = realpathSync.native(a.repo);
+    // The sessions directory must be the repo's own, not a link out of it (1be4183 B9).
+    if (dir !== join(repoReal, ...SESSIONS_REL)) return usage(`the sessions directory resolves outside ${quoted(a.repo)}`);
+    locks = join(repoReal, ".claude", "state", "council-claims");
+    mkdirSync(locks, { recursive: true });
+  } catch (e) { return usage(`the sessions directory cannot be resolved (${e.code || "error"}) -- run from the repo root, or name it`); }
+  let highest = 0;
+  try {
+    for (const n of readdirSync(dir)) { const m = /^([0-9]{3})-/.exec(n); if (m) highest = Math.max(highest, Number(m[1])); }
+    for (const n of readdirSync(locks)) if (/^[0-9]{3}$/.test(n)) highest = Math.max(highest, Number(n));
+  } catch (e) { return usage(`cannot list the sessions or their claims (${e.code || "error"})`); }
+  // A bounded walk: a number taken between the listing and the mkdir is the race this mode exists for, so the next one
+  // is tried; 20 taken in a row is not a race, and is said rather than walked for ever.
+  for (let n = highest + 1; n <= Math.min(999, highest + 20); n++) {
+    const nnn = String(n).padStart(3, "0");
+    try { mkdirSync(join(locks, nnn)); } catch (e) { if (e.code === "EEXIST") continue; return usage(`cannot take number ${nnn} (${e.code || "error"})`); }
+    const name = `${nnn}-${a.value}.md`;
+    let fd;
+    try { fd = openSync(join(dir, name), "wx"); } catch (e) { return usage(`took number ${nnn} but cannot create ${name} (${e.code || "error"})`); }
+    try { writeSync(fd, CLAIM_PLACEHOLDER); } finally { closeSync(fd); }
+    console.log([...SESSIONS_REL, name].join("/"));
+    process.exitCode = 0;
+    return;
+  }
+  process.exitCode = 1;
+  console.error(highest >= 999 ? "council-lint: --claim: session numbers are spent (999) -- NNN is three digits" : "council-lint: --claim: 20 numbers in a row were taken while claiming -- refused rather than walked further");
+}
+
+// --release <path>: a run that FAILED gives its claimed file back. Only a file directly in the sessions directory, and
+// only while it holds no filled DECISION line -- a verdict is never deleted, whatever asks.
+function releaseMode() {
+  const usage = (msg) => { console.error(`council-lint: --release: ${msg}`); process.exitCode = 2; };
+  const a = modeArgs("--release");
+  if (a.error) return usage(a.error);
+  if (typeof a.value !== "string" || !/^docs\/council\/sessions\/[0-9]{3}-[a-z0-9][a-z0-9-]{0,59}\.md$/.test(a.value)) {
+    return usage(`needs the claimed path, as --claim printed it, as its value -- not ${quoted(a.value)}`);
+  }
+  let dir, real;
+  try {
+    dir = realpathSync.native(join(a.repo, ...SESSIONS_REL));
+    real = realpathSync.native(join(a.repo, a.value));
+  } catch (e) { return usage(`${quoted(a.value)} cannot be resolved (${e.code || "error"})`); }
+  if (dirname(real) !== dir || !lstatSync(real).isFile()) return usage(`${quoted(a.value)} is not a plain file in the sessions directory`);
+  const body = readFileSync(real, "utf8");
+  if (/^[ \t]*DECISION:[ \t]*\S/im.test(body)) {
+    process.exitCode = 1;
+    return console.error(`council-lint: --release: ${quoted(a.value)} holds a filled DECISION -- a verdict is never released`);
+  }
+  unlinkSync(real);
+  console.log(`released ${a.value}`);
+  process.exitCode = 0;
+}
+
+// The flag is the mode, whatever its value: an empty or `=` value is refused inside, never a fall-through (B4).
+const payloadRequested = args.some((x) => x === "--payload" || x.startsWith("--payload="));
+const claimRequested = args.some((x) => x === "--claim" || x.startsWith("--claim="));
+const releaseRequested = args.some((x) => x === "--release" || x.startsWith("--release="));
+// The spine's deny-rules, for --payload only (see its secret scan). Loaded dynamically so a council-only install, which
+// has no hq lane, still runs every other mode.
+let redactLib = null;
+if (payloadRequested) { try { redactLib = await import("../hq/lib/redact.mjs"); } catch { redactLib = null; } }
+if ([payloadRequested, claimRequested, releaseRequested].filter(Boolean).length > 1) {
+  console.error("council-lint: --payload, --claim and --release are separate runs, one per call");
+  process.exitCode = 2;
+} else if (payloadRequested) payloadMode();
+else if (claimRequested) claimMode();
+else if (releaseRequested) releaseMode();
+const modeTaken = payloadRequested || claimRequested || releaseRequested;
+
 // ------------------------------------------------------------------ verdict mode
-if (verdictFile) {
+if (verdictFile && !modeTaken) {
   if (!existsSync(verdictFile)) {
     fail(`verdict file not found: ${verdictFile}`);
     report();
@@ -326,7 +535,7 @@ if (verdictFile) {
 }
 
 // ------------------------------------------------------------------ brief mode
-if (briefFile) {
+if (briefFile && !modeTaken) {
   if (!existsSync(briefFile)) {
     fail(`brief file not found: ${briefFile}`);
     report();
@@ -354,6 +563,8 @@ if (briefFile) {
   report();
 }
 
+// Static mode runs only when no other mode answered: payload mode sets its exit code and must not be followed by it.
+if (!modeTaken) {
 // ------------------------------------------------------------------ static mode
 const read = (p) => readFileSync(join(root, p), "utf8");
 const exists = (p) => existsSync(join(root, p));
@@ -403,3 +614,5 @@ for (const name of [...CORE_AGENTS, ...DOMAIN_AGENTS]) {
 }
 
 report();
+}
+

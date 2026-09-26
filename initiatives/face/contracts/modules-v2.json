@@ -7,11 +7,11 @@
   },
   "counts": {
     "modules": 36,
-    "sameId": 29,
+    "sameId": 31,
     "renamed": 3,
-    "extra": 4,
+    "extra": 2,
     "servedPlanned": 3,
-    "served": 34,
+    "served": 36,
     "servedWithoutModule": 2
   },
   "ringConflicts": [],
@@ -268,7 +268,7 @@
       "id": "factory",
       "alias": null,
       "ring": "factory",
-      "class": "extra",
+      "class": "served",
       "reads": [
         {
           "route": "/api/board",
@@ -445,7 +445,7 @@
       "id": "story",
       "alias": null,
       "ring": "company",
-      "class": "extra",
+      "class": "served",
       "reads": [
         {
           "route": "/api/file/:id",

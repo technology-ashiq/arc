@@ -263,6 +263,65 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### OUT-OF-CYCLE — ADR-0226 Amendment 1: no new session per PR round — 2026-09-24
+
+**Classification: a decision.** The owner ruled on it on 2026-09-24 and it went through `/arc-change --lane
+engine`. It is charged to no cycle. The owner pointed out that every new session loads ~100k tokens before doing
+any work, and that ADR-0226's rule "the building session ends at push" paid that toll on every PR round for no
+independence: the attacker's freshness comes from `arc-run` and `tools: []`, and `ci-digest` is a script. Changed:
+ADR-0226 (Decision 6 superseded, Amendment 1 added), `CLAUDE.md`, and `.claude/commands/arc-attack.md` (a synced
+file, so the golden manifest was regenerated). Assumptions ledger: nothing fired. **Lint WARNs:** `adr-wired
+0215` is cleared by a cite in `phase-06-spec.md`. `nonneg-drift phase-00` is **accepted, not fixed**: phase 00
+is Cycle 6's spec, parked here, and copying Cycle 7's bullets into it would claim rules Cycle 6 never had.
+kickoff-lint has no parked-phase skip, and adding one is a gate change that needs its own attack pass.
+Branch `feat/engine-0226-session-boundary`.
+
+### OUT-OF-CYCLE — the PR loop's attacker pass and CI read become governed engine work — 2026-09-23
+
+**Classification: a decision → ADR-0226, plus a scoped build**, routed through `/arc-change --lane
+engine` on 2026-09-23 (owner-ruled, ADR-0220 precedent). Cycle 7 is closed, so this is charged to no
+cycle's appetite. **Appetite 1.5d. Kill at 1d:** if `attack-diff` does not run end-to-end on the
+mock driver, cut to `ci-digest` + the CLAUDE.md lines. Branch `feat/engine-attack-diff`. ADR number
+`0226` claimed after sweeping every `origin/*` branch and all 33 worktrees (highest found: 0225).
+
+**Scope.** `processes/attack-diff.process.yaml` + two eval fixtures · `engine/router.yaml` class
+`attack-diff` (balanced-workhorse, claude-code, `fallback: []`) · `build-attack-input.mjs` ·
+`arc-attack.mjs` + hand-written `/arc-attack` · `review/ci-digest.mjs` · the `generic-api` prompt fix
+(owner ruling 2026-09-23 — the driver never sent a process body) · product manifests + sync golden ·
+three CLAUDE.md lines. The logic surface runs `--driver generic-api --trial-model` under
+ADR-0069(g)/ADR-0220: no router row and no ADR-0069 amendment in this change. Fix slices stay in the
+interactive session via `/arc-develop`.
+
+**This PR's adversarial pass is the bootstrap exception** (owner ruling (a), 2026-09-23): two fresh
+general-purpose agents, one last time, because the tool is not on `main` and `arc-run` emits no
+receipts from a worktree. First real `/arc-attack` runs from the main clone after merge.
+
+**Four engine limits surfaced while building, each routed to the owner and ruled in-session
+(ADR-0226 Decisions 7–10):** `generic-api` never sent a process body · claude-code refused an
+explicit `tools: []` (ADR-0223 clause 4 amended: it now dispatches as `--tools ""
+--strict-mcp-config`) · arc-run's pre-dispatch secret scan capped at 200 base64 candidates while a
+real feature PR carries 600–1,811 (the ceiling now scales with the text) · driver input rode one
+argv element, over both the Linux 128 KB and the Windows ~32 KB ceilings (now a file, path in
+`ARC_DRIVER_INPUT_FILE`; `@<path>` was tried first and is expanded as a response file by MSYS bash).
+
+**Kill check: MET on day 1.** `arc-attack --driver mock` runs both surfaces end to end on a 76 KB
+real diff and on a 300 KiB fixture, writes both evidence files, refuses a wrong-surface answer and
+never overwrites. `ci-digest` read PR #264's head live: 19/19 jobs green, exit 0.
+
+**The owner's `process:attack-diff` row in `hq.policy.yaml` landed** with the merge. kickoff-lint
+reads `7 process(es) … 0 ungoverned` on `main`. **Adversarial pass (bootstrap exception, 2 rounds × 2 fresh agents, the cap): 18 findings, 17
+distinct (round-2 L6 and B6 are one): 15 fixed and pinned, L9 fixed but pinned only for its
+temp-dir half, B5 rejected with reason, B4 recorded as debt** — details in ADR-0226
+Consequences. **Tests run on CI per job only.**
+
+**Status: MERGED as PR #265 (`851fc05b`, 2026-09-23), and the merged tree was verified by dispatch
+35959814088 on 2026-09-24: 19/19 jobs green.** The first attempt came back 18/19. The one red was
+Windows shard 1, `tests/face/proposal-branch.mjs` "three writers of one plan at once" (one writer
+got `GIT_FAILED` instead of `BRANCH_EXISTS`). That is a face-owned race that #265 never touched. It
+failed the same way on three face PRs on 2026-09-19, and PR #255's lock-wait did not fully close it.
+It passed when the shard was re-run. The flake belongs to the face lane and is not engine debt.
+**Owed next:** the first real `/arc-attack`, run from the MAIN clone (a worktree emits no receipts).
+
 ### OUT-OF-CYCLE — `main` red since 2026-09-01: the hire's tenure expired, and it took bench's probe and three REQ-06 tests with it — 2026-09-15
 
 **Classification: a bug**, routed through `/arc-change` on 2026-09-15. Cycle 7 is closed, so this is

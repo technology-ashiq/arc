@@ -1,11 +1,13 @@
 // fold.mjs -- kernel/model-policy: every decision the model-policy room makes, where node can import it
 // with no install (face v2 Phase 03, ADR-1320, ADR-1324, ADR-1326).
 //
-// The port of v0.7's ModelPolicy onto the door. What is real: the model-policy lane's header and the
-// router file's path and hash. What is not served: the tier table, the process routes and the egress
-// allowlist, which /api/model-policy will parse from that file. Proposing a tier is a verb of the work
-// door (Phase 05); until then the room says so instead of drawing a button that writes nothing.
-import { notServed, verbPending } from "../../../lib/registry.mjs";
+// The port of v0.7's ModelPolicy onto the door. What is real: the model-policy lane's header, the router
+// file's path and hash, and -- through /api/model-policy (Phase 04) -- the tier table and the process routes,
+// parsed from that file by the engine lane's own reader. What is still NOT SERVED: the egress allowlist, which
+// only the egress proxy parses, in Python, so no parser exists for the door to import. Proposing a tier is the
+// work door's model-policy.tier-proposal (face v2 Phase 05 kernel ring, ADR-1340): the room's ops dock draws it.
+import { notServed } from "../../../lib/registry.mjs";
+import { asArray, asObject, cell, field, servedRead, servedTable } from "../../../lib/served.mjs";
 import { holdsCount, laneBadge, laneKpi, laneRoom, roomLink } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
@@ -14,9 +16,8 @@ import { holdsCount, laneBadge, laneKpi, laneRoom, roomLink } from "../../../lib
  * @typedef {import("../../../lib/lane-room.mjs").LaneRoom & {
  *   badge: string,
  *   kpis: { key: string, v: string, l: string, sub: string }[],
- *   tiers: import("../../../lib/registry.mjs").NotServed,
- *   routesTable: import("../../../lib/registry.mjs").NotServed,
- *   propose: { isVerbPending: true, verb: string, sentence: string },
+ *   tiers: import("../../../lib/served.mjs").ServedTable,
+ *   routesTable: import("../../../lib/served.mjs").ServedTable,
  *   egress: import("../../../lib/registry.mjs").NotServed,
  *   bench: { canOpen: boolean, room: string },
  * }} Folded
@@ -32,33 +33,53 @@ export function fold(payloads, ctx) {
     files: ["router"],
     trailEmpty: "The registry homes no receipt kind here. A tier change is a reviewed diff to the router file, and the merge that lands it is its record.",
   });
+  const st = servedRead(payloads, ctx, base.reads, "/api/model-policy");
+  const routerFaults = asArray(st.body["faults"]).map(cell).filter((f) => f !== "");
+  const tiersTable = servedTable(st, {
+    panel: "The tier table",
+    route: "/api/model-policy",
+    columns: ["tier", "implemented by"],
+    listKey: "tiers",
+    empty: "engine/router.yaml declares no tier.",
+    row: (t) => {
+      const tier = field(t, "tier");
+      const models = asArray(t["models"]).map((m) => `${field(asObject(m), "driver")}: ${field(asObject(m), "model")}`);
+      return tier === "" ? null : { key: tier, cells: [tier, models.length > 0 ? models.join(" · ") : "no model pinned -- a driver runs it unpinned and says so"] };
+    },
+    note: "each tier's job description is ADR-0069's prose; the router file names only the model that implements it today",
+  });
+  const processRoutes = servedTable(st, {
+    panel: "Process routes",
+    route: "/api/model-policy",
+    columns: ["process class", "tier", "driver, then fallback", "cap · judge · review by"],
+    listKey: "classes",
+    empty: "engine/router.yaml routes no process class.",
+    row: (c) => {
+      const name = field(c, "name");
+      const chain = [field(c, "driver"), ...asArray(c["fallback"]).map(cell)].filter((d) => d !== "").join(" → ");
+      const terms = field(c, "cap") === "" ? "—" : `${field(c, "cap")} · ${field(c, "judge")} · ${field(c, "review_by")}${c["expired"] === true ? " (past it)" : ""}`;
+      return name === "" ? null : { key: name, cells: [name, field(c, "tier"), chain, terms] };
+    },
+    // The router loader's faults, drawn where they change what a row means -- a wrong-typed fallback becomes no
+    // fallback, and the chain above would read whole without it. The engine room draws the same list from the same
+    // file (Phase 04 round 3).
+    note: routerFaults.length === 0 ? "" : `the router loader reports ${routerFaults.length} fault${routerFaults.length === 1 ? "" : "s"}: ${routerFaults.join(" · ")}`,
+  });
   return {
     ...base,
     badge: laneBadge(base),
     kpis: [
       laneKpi(base),
       { key: "concepts", v: holdsCount(base, "concepts"), l: "Concepts", sub: "homed here by the registry" },
-      { key: "tiers", v: "—", l: "Tiers", sub: "not served yet" },
-      { key: "routes", v: "—", l: "Process routes", sub: "not served yet" },
+      { key: "tiers", v: tiersTable.isDrawn ? String(tiersTable.rows.length) : "—", l: "Tiers", sub: st.isRead ? "in the router file's tier block" : "reading the router" },
+      { key: "routes", v: processRoutes.isDrawn ? String(processRoutes.rows.length) : "—", l: "Process routes", sub: st.isRead ? "task classes, and the default row" : "reading the router" },
     ],
-    tiers: notServed(
-      "The tier table",
-      "/api/model-policy",
-      "Each tier as a job description first and the model that implements it second, parsed from the tier block of engine/router.yaml.",
-    ),
-    routesTable: notServed(
-      "Process routes",
-      "/api/model-policy",
-      "Every process class with its tier, its driver and fallback chain, and a contractor's cap, judge and review-by date, parsed from engine/router.yaml.",
-    ),
-    propose: verbPending(
-      "Propose a tier change",
-      "A tier change is a reviewed diff to the router file citing ADR-0069, raised to your inbox for a stamp; the route keeps its tier until you stamp. The face raises it once the work door exists.",
-    ),
+    tiers: tiersTable,
+    routesTable: processRoutes,
     egress: notServed(
       "Egress allowlist",
       "/api/model-policy",
-      "The exact host and port each driver may reach, parsed from the router file's egress block.",
+      "The exact host and port each driver may reach. The router file carries no egress block; the allowlist is engine/egress-allowlist.txt, which only the egress proxy parses, in Python, so no parser exists for the door to import -- filed to the engine lane.",
     ),
     bench: roomLink(ctx, "bench"),
   };

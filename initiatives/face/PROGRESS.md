@@ -2,16 +2,18 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 03
+phase: 07
 appetite: 24d
-burn: 3d
+burn: 10d
 blocked-on: —
 depends-on: —
 
 > Tracker for the cycle planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done` from the
 > main clone (tests green on CI per job + live demo + exit criteria + evidence). This cycle claims
-> **ADR 1318–1336** from the face band 1300–1399; before writing them the claim was swept across
-> all 25 sibling worktrees and every `origin/*` branch on 2026-09-16 — none held an ADR ≥1318.
+> **ADR 1318–1339** from the face band 1300–1399; before writing them the claim was swept across
+> all 25 sibling worktrees and every `origin/*` branch on 2026-09-16 — none held an ADR ≥1318 (1337 swept
+> again on 2026-09-18, when the owner's §13 item 5 ruling needed it; 1339 swept across every `origin/*` branch and
+> sibling worktree on 2026-09-19 for the item 4 ruling -- none held it).
 > Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`) stay at root
 > (ADR-0053); evidence is lane-scoped at `initiatives/face/evidence/phase-NN/` (ADR-0055).
 > **Cycle 15's record** — PLAN, PROGRESS, its nine phase specs and its evidence bundles — lives at
@@ -25,14 +27,15 @@ depends-on: —
 | 00 | Harness steel thread — v0.7 intake + contract + delta report; `npm ci` + build on every Node ≥20.19 leg; ported smoke opens all 34 served rooms | 2d | ✅ **CLOSED 2026-09-17** — 1d of 2d; 33/33 rooms, 0 errors on every L3 leg; merged `a0e8ee1f` (#233), `main` re-verified 19/19 (run 35194579928); receipts `01M2Q5HZ5REDYHQ0AY8T1PKJA4` · `01M2Q5HZJRBMN98HNR9YA5FR77` |
 | 01 | Tokens + kit — two moods, computed contrast, generated copy, kit on Tailwind v4, 9 bespoke rooms × 2 moods (REQ-02) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; both moods on every L3 leg, 33/33 rooms, 0 errors; merged `4fcb53db` (#235), `main` re-verified 19/19 (run 35211136090, attempt 2); owner read "render aagudhu"; receipts `01M2QGWHBAX0329SNCX8Q2CPAX` · `01M2QGWHNYEBPAC97EEMV55JDH` |
 | 02 | Shell + module frame — v0.7 shell, `face/src/modules/`, two-way reconcile, `face-pure`, `/arc-face-module` (REQ-03) | 2d | ✅ **CLOSED 2026-09-17** — 0.5d of 2d; the v0.7 shell names no room, 9 carried modules + 24 generic rooms reported by id, both moods 33/33 with 0 errors on every L3 leg; merged `d76657d1` (#237), `main` re-verified 19/19 (run 35232834235); receipts `01M2QWMG3CSBD1B4JFSAKWEXYX` · `01M2QWMGM3FBKW5BMBAVAMZGKE` |
-| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | **2 of 5 rings merged** — command `81dcf814` (#239) · kernel `bee88cce` (#240); 14 modules green in both moods on every L3 leg |
-| 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | spec'd |
-| 05 | Work door + verbs + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09) | 4d | spec'd — needs owner rulings §13 items 4, 5 |
-| 06 | Session door — click-started, streamed, receipted (REQ-08) | 2d | spec'd |
+| 03 | The 36 modules read-side — five ring PRs, each with its `NOT SERVED` list (REQ-01, REQ-05) | 7d | ✅ **CLOSED 2026-09-18** — 1.5d of 7d; 36/36 modules in both moods on every L3 leg (34 served module rooms + the 2 exempt extras, headings 36 checked, 0 errors); five ring PRs merged — command `81dcf814` (#239) · kernel `bee88cce` (#240) · factory `98f405f5` (#242) · money `969d9634` (#244) · company `d8386216` (#246); `main` re-verified 19/19 (run 35336492657), suite 1..3414; receipts `01M2T38JEG2AWDY61X7QAARNYF` · `01M2T38JSWD6QSHTYA7S0M1R1W` |
+| 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | ✅ **CLOSED 2026-09-18** — 0.5d of 3d; 18 routes served, 35 of 50 panels (39 tables), residue 15 panels on 10 routes approved by the owner (ADR-1338); four attacker rounds, `phase04-folds` 141 checks; merged `0a4cb262` (#248), PR head 19/19 (run 35367884908), `main` re-verified 19/19 (run 35369459599), suite 1..3415; live door 19 of 19 routes 200; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` · `01M2TPXZGPTN08BN98G6TCRZ5J` |
+| 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | ✅ **CLOSED 2026-09-23** — 3d of 10d; 31 of 31 work verbs ship as ops, residue none (`residue.md`, held both ways by `tests/face/work-door.mjs`); eight PRs (#252 · #253 · #254 · #255 · #257 · #258 · #259 · #261) + the close's #262/#263, 20 attacker rounds, 175 fixed-defect rows; final tree `2fba48f7` 19/19 (run 35870851639), suite 1..3427; live door from the main clone, one real apply receipted (`01M37CDRK7E03P67E45Y1BDT4E`); spec-fidelity drift dispositioned; receipts `01M37D0KHFPXBDBWQRYPMEXVT8` · `01M37D0M5F55KH2D8A5ZWJG6TA` |
+| 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | ✅ **CLOSED 2026-09-26** — 3d of 5d; of 15 SESSION verbs 5 ship with the receipt read back (the live council convene among them), 4 start with the read-back owed, 6 residue filed to their lanes (`residue.md`, held to the registry by `tests/face/session-door.mjs`); PRs #269 · #270 · #271 · #272 · #273 · #274 · #276 · #278 · #282 + the close #285/#286; 13 boundary rounds, 118 fixed-defect rows, the logic surface never ran (debt row); `main` `465f5b82` 19/19 (run 36225129900), suite 1..3545; spec-fidelity drift dispositioned; receipts `01M3EBD91R95PZD0EPQ1QB4TS2` · `01M3EBDGQ70ETM8PXDHNKHSZXJ` |
 | 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 3d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 1/10d ·
-C · verbs (05–06) 0/6d · dogfood (07) 0/2d. Tripwires: Block A day 3 · Block B day 5 · 50% of total
+**Appetite burn: 7d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
+C · verbs (05–06) 3/15d — **Phase 05 CLOSED at 3d of its 10d** (worked 2026-09-19, -20 and -23) — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
+3d unallocated. Tripwires: Block A day 3 · Block B day 5 · Block C at Phase 05 day 5 (burn 9d) · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
 35194579928, every L3 leg) — token work may start; the clause on the 9 rooms in both moods is read at
 Phase 01's exit. **Block A, read on 2026-09-17 during Phase 01 (burn 1d, before the day-3 mark):
@@ -52,6 +55,14 @@ journal line (decided outside the face) · 1 of 5 days carried a decision throug
 **2026-09-18, kernel ring** — unchanged: 6 · 55 · 1 of 5. Nothing was decided through the face on
 either day, which is the number Phase 07's two-day bar has to move; it is a TREND here and is never
 counted toward REQ-10 (ADR-1329).
+**2026-09-18, factory ring** — unchanged: 6 · 55 · 1 of 5, read from the main clone at `98f405f5`
+(the only day through the face is still 2026-08-24). Three rings in, the surface has not yet been the
+place a decision was made; the trend stays flat until the owner decides from it.
+**2026-09-18, money ring** — unchanged: 6 · 55 · 1 of 5, read from the main clone at `969d9634`. The
+money rooms are now on the door, and still no decision has gone through them.
+**2026-09-18, company ring (the Phase 03 close)** — unchanged: 6 · 55 · 1 of 5, read from the main clone at
+`d8386216`. All 36 modules are on the door and the surface has still not been where a decision was made; the
+trend is Phase 07's to move (REQ-10, ADR-1329).
 
 **Block B tripwire (day 5 of 10), read on 2026-09-18 after the command and kernel rings: GREEN — no
 cut.** The clause is "if 14 modules are not green → cut the remaining bespoke folds to generic
@@ -249,38 +260,215 @@ stay bespoke folds.
   amendments: 0 · reopened: n.
   Receipts (main clone spine, landed in `2026-09-17.jsonl`): `phase.closed` `01M2QWMG3CSBD1B4JFSAKWEXYX` ·
   `approval.requested{gate: phase-done}` `01M2QWMGM3FBKW5BMBAVAMZGKE` — the second waits on the owner's stamp.
+- **2026-09-18 — Phase 03 CLOSED (`/arc-phase-done 03` from the main clone).** The 36 modules read-side, in
+  five ring PRs: command (6), kernel (8), factory (5, then its three extras), money (8) and company (6); every
+  served room now draws through a v0.7 module on the door, and chat-mcp stays the generic planned room. A module
+  is four files and decides nothing in its View; it declares the door routes it reads, and a panel no route fills
+  is a `NOT SERVED` panel naming the route -- five derived lists, 50 panels, 22 distinct route strings, which are
+  Phase 04's work, and five verbs-pending lists, which are Phase 05's. **F1** (org's ADR band map names lanes,
+  from PORTFOLIO.md, held against the board), **F2** (the scheduler's promises each drawn or named) and **F3** (a
+  planned room never wears LIVE, judged by room id) closed in their rings. The last two Cycle 15 renderers are
+  deleted. The owner's section 13 item 5 ruling (ADR-1337): story and factory earned served-registry rows,
+  executor and agents stay exemptions drawn from rows the door serves. Merged as `81dcf814` (#239), `bee88cce`
+  (#240), `98f405f5` (#242), `969d9634` (#244) and `d8386216` (#246).
+  **Tests:** red first on every ring (`evidence/phase-03/red-first.md`); each ring PR's head 19/19 read per job
+  (command run 35248578768 on `f8e43338`; kernel 35263610481; factory 35272310975; money 35323854485; company
+  35334544298, code head 35334146777); `main` re-verified by dispatch after every ring, the last run 35336492657,
+  19/19, full suite `1..3414` with 0 not ok on ubuntu Node 20 (`evidence/phase-03/ci-jobs.json`). Every L3 leg:
+  `opened=35 openable=35 errors=0` and `heading rings=command,kernel,factory,money,company checked=36 miss=0` in
+  both moods, `extras expected=2 opened=2`, `planned rooms=4 expected=4 live=0`; the Windows runner's
+  socket-buffer class counted on its own line (a debt row, never folded into a zero).
+  **Attackers:** two fresh agents per ring (decision logic · shell/OS), every hole fixed and pinned
+  (`fixed-defects.md`; the company ring alone 23). **Shot reviews:** five, each 0 VIOLATION and 0 BELOW-BAR on
+  the pixels that merged; two needed a re-read (money after its WEAKNESS rows were paid; company after its first
+  read quoted baseline pixels as candidate findings, ruled not present by crops and a fresh re-read).
+  **Spec-fidelity: drift found**, every finding dispositioned (`evidence/phase-03/spec-fidelity.md`): typed
+  numbers and names in folds FIXED at this close, with four twins found by grepping the pattern (the board's "1 in
+  4" among them -- now a NOT SERVED base rate); the shell's two-source room list DECLARED in ADR-1337; the runner
+  ceiling DEBT. **Predictions:** 3 hit · 2 miss (`evidence/phase-03/handoff.md`).
+  **Assumptions adjudicated by measurement:** the route gap "~17 ±5" -- 22 distinct route strings, at the bound,
+  NOT fired (the trigger is more than 22); Phase 04 re-measures its appetite against the parsers first. Cycle
+  15's open question (the owner decided in the CLI because the surface arrived late) -- not yet evaluable: no
+  decision has gone through the face on any day since the command ring. **ADR revisit triggers:** ADR-1327's
+  (the owner rules on story/factory) MET and answered in the same change by ADR-1337, as the trigger requires;
+  1320 (0 face-pure exemptions), 1321 (no blank room, no ungated folder), 1331 (0 errors in light every ring) and
+  1335 (no leg red for a reason outside the product) not met; 1324 and 1337 are evaluable only after Phase 04 and
+  a whole cycle. No ADR DEFERRED.
+  Evidence: `initiatives/face/evidence/phase-03/` (handoff, spec-fidelity, red-first, attacker reports, the five
+  shot reviews and shot manifests, the derived lists, ci-jobs) with its sha256 manifest from
+  `arc-evidence.sh bundle 03 --lane face`.
+  amendments: 1 (the 2026-09-17 verification-plan refinement, trivial) · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-18.jsonl`): `phase.closed` `01M2T38JEG2AWDY61X7QAARNYF` ·
+  `approval.requested{gate: phase-done}` `01M2T38JSWD6QSHTYA7S0M1R1W` — the second waits on the owner's stamp.
+
+- **2026-09-18 — Phase 04 CLOSED (`/arc-phase-done 04` from the main clone).** Door read routes: the union of Phase
+  03's five NOT SERVED lists -- 22 route strings, 50 panels -- is served where a parser exists to import. **18 routes**
+  (17 new GET routes in `.claude/scripts/hq/lib/face/reads.mjs`, each lazily importing its lane's own parser; and
+  `/api/pnl?by=day` from an additive `deriveDaily` in the ledger's `pnl.mjs`); **35 of 50 panels served** (39 tables,
+  `evidence/phase-04/served.md`); **15 panels on 10 routes are residue** (`residue.md`), each gap named with its lane.
+  That was over REQ-06's three-route bound, so the owner ruled: "un recommand A pannu machi" -- ADR-1338 amends
+  REQ-06, and assumption row 5 is recorded FIRED. Merged as `0a4cb262` (#248).
+  **Tests:** PR head `d62ea4b6` 19/19 read per job (run 35367884908); `main` re-verified by dispatch 19/19 (run
+  35369459599), full suite `1..3415` with 0 not ok on ubuntu Node 20 (`evidence/phase-04/ci-jobs.json`);
+  `tests/face/phase04-folds.mjs` 141 checks on every leg. One Windows shard on an earlier head hit the spine lock's
+  documented `LOCK_TIMEOUT` flake and passed on re-run; its second occurrence on the same emit index is recorded in
+  `tests/spine-concurrency.bats` and filed to the spine lane.
+  **Live demo (the real place):** the door in live mode from the main clone at `0a4cb262`, over the canonical spine
+  (1,359 events): 19 of 19 Phase 04 routes answered 200 (`evidence/phase-04/live-demo.md`).
+  **Attackers:** four rounds, a fresh decision-logic + HTTP/OS-boundary pair each, every one carrying
+  `fixed-defects.md`; every reproduced hole fixed and pinned or a debt row with its trigger
+  (`evidence/phase-04/attackers.md`). Round 3 found the Phase 04 defect classes on the door's older routes (closed as
+  a current-phase note, ADR-1312 being door-wide); round 4 found a round-3 fix in a helper no room called (deleted;
+  the room is tested). The round-4 fixes were not attacked again -- recorded, not implied away.
+  **Spec-fidelity: drift found**, every item dispositioned (`evidence/phase-04/spec-fidelity.md`) and written into
+  the spec as a current-phase note for the owner: three receipt joins folded in the door (DEBT); two additive exports
+  in owning lanes, `deriveDaily` and absorb's `judgeRegistry`, against ADR-1338's residue for three lints' inline
+  parsers (DECLARED, the owner may rule); the reader and panel changes the attacks drove (DECLARED).
+  **Predictions:** none were written before the build, so none is scored (`evidence/phase-04/handoff.md`). The
+  verification plan was still the coarse one-liner and was refined at the close.
+  **Assumptions and triggers:** row 5 FIRED and routed (ADR-1338); no other trigger fired; no ADR DEFERRED.
+  Evidence: `initiatives/face/evidence/phase-04/` (served, residue, live-demo, spec-fidelity, attackers, handoff,
+  ci-jobs) with its sha256 manifest from `arc-evidence.sh bundle 04 --lane face`.
+  amendments: 3 (ADR-1338's residue ruling; the round-3 current-phase note; the spec-fidelity note) · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-18.jsonl`): `phase.closed` `01M2TPXZ16FDQ07K3SWBJ6V44M` ·
+  `approval.requested{gate: phase-done}` `01M2TPXZGPTN08BN98G6TCRZ5J` — the second waits on the owner's stamp.
+- **2026-09-19 — main red on face-coverage, fixed (#251).** `docs/strategy/plans/PLAN-docs.md` reached `main` as a
+  direct push (`5c85573f`, no PR, so no CI) with no room in the contract: `FAIL [plan] "PLAN-docs"`, face-coverage
+  exit 1 in the main clone. Homed in the strategy room, `rooms.generated.json` regenerated by `face-sections.mjs`;
+  PR head 19/19 (run 35422908768), merged `0b2ec0cb`, `main` re-verified 19/19 (run 35423596554). The same gap as
+  #226/#227 on 2026-09-16, by a route no PR-side guard sees.
+- **2026-09-19 — §13 item 4 ruled, and the scope widened (`/arc-change --lane face`, ADR-1339).** The owner: "A pannu
+  machi, enaku ella products realtime la work aganum machi ... engine la koda check pannen like readonly maari tha
+  iruku, enaku full working product venum machi". Option A fixes the flagship six (`bench-a-model` · `close month` ·
+  `growth publish` · `ledger criteria` · `capture-idea` · `develop checkpoint`); the rest of the message makes every
+  §5.2 verb Phase 05's or Phase 06's, and the rooms live. Measured first: 0 of 36 modules declare an op, 31 of 36 read
+  once and never again (5 poll every 45 s), and the day-1 probe of all 46 verbs (`evidence/phase-05/cli-probe.md`,
+  three read-only agents, nine claims re-read by hand) found **2 READY · 15 SMALL-GAP · 14 BIG-GAP · 15 SESSION ·
+  0 NEEDS-KIND**. Assumptions row 6 **FIRED** — four of the six lacked a plan mode or a receipt as they stand — and is
+  routed by ADR-1339: gaps close additively in the owning lanes, each change pinned by a fixture first. REQ-07 and
+  REQ-08 amended to every verb, REQ-11 (live rooms) added — 6 active of 10. Block C re-banked: Phase 05 4d → 10d,
+  Phase 06 2d → 5d, from the 12d Blocks A and B left; the closed specs now state their actual spend, so the plan sums
+  to 21d of 24d. A Block C tripwire added at Phase 05 day 5 (burn 9d). The legal `propose` bug (it prints a script
+  that does not exist) was found by the probe and is PR 5's.
+
+- **2026-09-23 — Phase 05 CLOSED (`/arc-phase-done 05` from the main clone).** The work door: every one of the 31 work
+  verbs in the day-1 probe runs from its room -- plan (command, diff, ₹), confirm, apply, receipt -- through the real
+  tool, each proven to call what a hand-run calls. **Residue none** (`evidence/phase-05/residue.md`, the 31 mapped
+  one-to-one and held equal to the registry both ways by `tests/face/work-door.mjs`). Live rooms re-read on the door's
+  pulse (922 ms measured in Chrome). Eight PRs: door + six `56ba17b0` (#252) · live rooms `600a94d1` (#253) · kernel
+  `b4c38038` (#254) + `d8e25f8e` (#255) · factory `536d3b2b` (#257) · money `106e6219` (#258) · company `6c34f7ee`
+  (#259) · live lanes `aa797081` (#261); the close added the tracker (#262) and two fixtures (#263).
+  **Tests:** final tree `2fba48f7` 19/19 read per job (run 35870851639, attempt 2 -- one Node 18 leg's Chrome handshake
+  timed out and passed on the re-run, the Chrome-flake debt row), full suite `1..3427`, 0 not ok on ubuntu Node 20
+  (`evidence/phase-05/ci-jobs.json`); `face-coverage --selftest` 117 arms, now asserted > 93 in bats.
+  **Live demo (the real place):** the door in live mode from the main clone at `2fba48f7` over the canonical spine
+  (1,379 events): 31 ops served, five plans read back at ₹0, one tool refusal shown in its own words, ONE real apply --
+  `idea.captured` `01M37CDRK7E03P67E45Y1BDT4E` -- read back off the spine, and the pulse moved with it
+  (`evidence/phase-05/live-demo.md`).
+  **Attackers:** 20 rounds across eight PRs, a fresh decision-logic + shell/OS pair each, carrying `fixed-defects.md`;
+  175 fixed-defect rows; round 2 of PR 5c found two HIGH (a forged decision file published; the send digest did not
+  bind the recipient), both fixed and ADR-1344 amended (`evidence/phase-05/attackers.md`).
+  **Spec-fidelity: drift found**, every item dispositioned (`evidence/phase-05/spec-fidelity.md` and the spec's close
+  note): FIXED at the close -- all four human-run ops held to the click under their real ids, and > 93 arms asserted;
+  DECLARED for the owner -- `develop.slice` writes its ledger in place (ADR-1341, PLAN's non-negotiable not resynced),
+  legal's and evolve's pinning fixtures rewritten (ADR-1344; an attacker-proven math fix), five CLIs thicker than
+  "thin"; NARROWER THAN WRITTEN -- four debt rows (no-second-path for CI-refusing ops, refusal first line, frozen
+  strings, receipt-in-room timing and the browser mutant host). Six DoD rows are ticked with that marker in the spec.
+  **Predictions:** none were written before the build, so none is scored (`evidence/phase-05/handoff.md`).
+  **Assumptions and triggers:** row 6 FIRED and routed (ADR-1339); no other trigger fired; no ADR DEFERRED.
+  REQ-04 · REQ-07 · REQ-09 · REQ-11 validated (9 of 11). Evidence: `initiatives/face/evidence/phase-05/` with its sha256
+  manifest from `arc-evidence.sh bundle 05 --lane face`.
+  amendments: 5 (ADR-1339's widening; ADR-1340 for the kernel ring; ADRs 1341-1343 for the factory, money and company
+  rings; ADR-1344 and its round-2 amendment; the close note) · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-23.jsonl`): `phase.closed` `01M37D0KHFPXBDBWQRYPMEXVT8` ·
+  `approval.requested{gate: phase-done}` `01M37D0M5F55KH2D8A5ZWJG6TA` — the second waits on the owner's stamp.
+
+- **2026-09-26 — Phase 06 CLOSED (`/arc-phase-done 06`; receipts from the main clone).** The session door: a room's
+  Start click runs `arc-run --process <file> --driver`, and nothing else. The session streams, can be reattached after
+  a door restart, and ends on a receipt the door reads back off the spine. Of the 15 SESSION verbs, **5 ship with the
+  receipt read back** (council convene, develop proof, log lesson, promote rule, record ADR). **4 start** from a click,
+  but the read-back is owed (review, dispatch, adopt plan, lane birth; each one's process emits its kind, and a debt
+  row covers the read-back). **6 are residue**, filed to their lanes by the owner's ruling (ship, qa, hire → engine;
+  close phase → develop; absorb adopt → absorb; growth draft → growth). Everything is in
+  `evidence/phase-06/residue.md`, and `tests/face/session-door.mjs` holds that file to the registry both ways. The
+  Engine room shows driver, model and health with no key. PRs: door `4e759e16` (#269) · dock `44e3f283` (#270) ·
+  Engine room `26daeec2` (#271) · council shape `bcc0d880` (#272) · council-convene `5f373111` (#273) · streaming
+  `b4c443b8` (#274) · the live convene's fixes `ecbb3e29` (#276) · memory ring `ab425ac6` (#278) · develop-proof and
+  adr-record `3b85a8c8` (#282). The close added the residue file (#285) and its fixture (#286).
+  **Tests:** the merged tree `465f5b82` passed the main dispatch 19/19 (run 36225129900). The close fixture `ea347dfc`
+  passed 19/19 (run 36227021580) with suite `1..3545`, declared equal to executed, 0 not ok
+  (`evidence/phase-06/ci-jobs.json`). Its first run was red on every OS with a TypeError in the new residue check
+  (a row's receipt is `{ kind }`); that was fixed in the same PR.
+  **Live demo (the real place):** council convene from the face, on attempt 4. It was clicked, streamed for 28 min,
+  and `council.verdict` `01M3C89E89QA9XZQW56VA804ZJ` was credited by the door and read back off the spine by id
+  (`evidence/phase-06/live-demo.md`). Attempts 1-3 each found a defect the fixtures had not.
+  **Attackers:** 13 boundary rounds across 8 PRs, with 175 findings (12 high, 96 medium, 67 low) and 118
+  fixed-defect rows. **The logic surface never ran**: the free trial model answered 429. That is a debt row, and it
+  is DECLARED at the stamp (`evidence/phase-06/attackers.md`).
+  **Spec-fidelity: drift found**, and every item is dispositioned (`evidence/phase-06/spec-fidelity.md`, plus the
+  spec's close note):
+  - FIXED at the close: four verbs moved out of "ships" into the start-only table, with an emits check.
+  - DECLARED: the read-backs, the logic attacker, one PR for four registry rows, and `ship`'s confirm stop enforced
+    as a refusal.
+  - Two DoD rows are ticked NARROWER than written.
+  **Predictions:** left empty in `phase-06-tasks.md`, so none is scored (`evidence/phase-06/handoff.md`).
+  **Assumptions and triggers:** no new trigger fired, and no ADR is DEFERRED. REQ-08 is validated (10 of 11). Evidence:
+  `initiatives/face/evidence/phase-06/`, with its sha256 manifest from `arc-evidence.sh bundle 06 --lane face` (20
+  artifacts, verified).
+  amendments: 3 (the 2026-09-24 verification-plan refinement; ADR-1345 for the council payload; the 2026-09-26 residue
+  ruling) · reopened: n.
+  Receipts (main clone spine, landed in `2026-09-26.jsonl`): `phase.closed` `01M3EBD91R95PZD0EPQ1QB4TS2` ·
+  `approval.requested{gate: phase-done}` `01M3EBDGQ70ETM8PXDHNKHSZXJ`. The second waits on the owner's stamp, which
+  also approves `residue.md` as a whole.
 
 ## Now
 
-**RESUME HERE (2026-09-17):** **Phase 02 is CLOSED** (done log, 2026-09-17), and with it Block A at 2d of
-6d. The next phase is **Phase 03 — the 36 modules read-side** (`phases/phase-03-spec.md`, REQ-01 +
-REQ-05, 7d appetite), in five ring PRs in order: `feat/face-v2-03-command` · `-kernel` · `-factory` ·
-`-money` · `-company`. Its Preconditions line is satisfied by the Phase 02 row above once this close merges.
+**RESUME HERE (2026-09-26, afternoon):** **Phase 06 is CLOSED** (done log, 2026-09-26). **Phase 07 is next: dogfood
+2 real days + the cycle retro** (REQ-10, 2d). Open: #267 (the Windows proposal race, green, not face's to merge alone)
+and this close PR. No running session, and no local-only branch holds work.
+- **Closed today:** #284 (handoff), #285 (the residue file and the CLAUDE.md background CI-watch rule), #286 (the
+  residue fixture, attackers.md, spec-fidelity.md, two debt rows), and the close PR (spec ticks, tracker, board,
+  ci-jobs.json, handoff.md, manifest). Receipts from the main clone: `phase.closed` `01M3EBD91R95PZD0EPQ1QB4TS2` ·
+  `approval.requested{gate: phase-done}` `01M3EBDGQ70ETM8PXDHNKHSZXJ`.
+- **The owner's stamp on `01M3EBDGQ70ETM8PXDHNKHSZXJ` decides three things at once:** `residue.md` as a whole (5
+  ship, 4 start-only, 6 residue), the logic-attacker debt row, and the four read-backs debt row.
+- **Next (the owner's days, not an agent's):** Phase 07 opens on `feat/face-v2-07`. Its verification plan is still
+  the coarse one-liner, so the first step is `/arc-change --lane face` to refine it. Then two real days from the MAIN
+  clone (`node .claude/scripts/hq/arc-face.mjs`): every decision goes through the face, and at least one op a day
+  runs from it. `face-dogfood` reads each day. Then the retro, the HISTORY row, and `/arc-phase-done 07`.
+- **Before the dogfood days (debt-row triggers):** the four start-only read-backs, as mock-driver fixtures (face). The
+  logic pass over Phase 06's diff runs when the owner sets a paid `ARC_ATTACK_TRIAL_MODEL`.
+- **How the owner wants it worked (2026-09-25):** LEAN. Report every step; no live demo (paid opus runs) without
+  asking; one attack round per PR; one push per PR; no new mechanism without asking. After every push, watch CI with a
+  background `ci-digest` loop (CLAUDE.md, 2026-09-26). Never ask the owner whether CI finished.
+- **Owner's optional one-liner** (still owed): `! sed -i 's|plan/adr-record.mjs|hq/adr-record.mjs|' hq.policy.yaml`.
+- **Known:** Windows shards flake on bench.run-model's CDP timeout, the proposal-branch three-writer race (#267), and
+  face-browser's ERR_NO_BUFFER_SPACE. Re-run only the failed jobs.
+- **On resume, check open PRs and sibling worktrees first:** this `## Now` only sees merged work.
+
+**Earlier (2026-09-23):** **Phase 05 is CLOSED** (done log, 2026-09-23): all 31 work verbs run from the face,
+residue none, receipts `01M37D0KHFPXBDBWQRYPMEXVT8` · `01M37D0M5F55KH2D8A5ZWJG6TA` (the second waits on the owner's
+stamp). **Phase 06 is next -- the session door** (REQ-08, 5d): council convene, absorb read, hire certification and the
+15 SESSION verbs in `evidence/phase-05/cli-probe.md`, each started only by a click, streamed, and landed as a receipt of
+an existing kind. Burn 7d of 24d; the plan's remaining phases (06 5d, 07 2d) fit.
+**2026-09-24: Phase 06 OPEN** on `feat/face-v2-06` -- its verification plan refined through `/arc-change --lane face`
+(check per exit criterion, the 15 SESSION verbs as a table with process file and receipt kind; 3 of 15 have a process
+file today, the rest come from the engine lane additively, and each new process needs its `hq.policy.yaml` row or
+kickoff-lint's birth-rule fails).
+**Next:** Phase 06's first PR: the session door's start / stream / attach beside the work door, with the no-click and
+driver-only fixtures RED first; then the council payload fix in the council lane before the convene demo.
 
 **Approval on record:** Cycle 16 is approved by the owner's `decision.recorded`
 `01M2NS8Y48Y91RFZJVA32VNH17` (verdict approve, reason "Face V2 Kickoff approved"), answering
 `approval.requested{gate: kickoff}` `01M2NS0AK4KN8JR10QDT2F72HP`; the kickoff merged as `c5dabfbc`
 (#232) before the first Phase 00 commit. Standing instruction from the owner (2026-09-17): build
 every phase through to the end without waiting, push and merge per phase on green CI, run nothing
-locally, and ask only at owner-only gates.
+locally, and ask only at owner-only gates. **Owner, 2026-09-18: "entha cut panna kodathu, fulla work
+pannanum"** — nothing in Phase 03 was cut; every ring shipped in full, with its debts paid where the
+ledger said. **Owner ruling, 2026-09-18 — PLAN-face-v2 §13 item 5: "Both registry row"** (ADR-1337): `story`
+and `factory` are served rooms; `executor` and `agents` stay labelled exemptions.
 
-**Waiting on the owner, none of it blocking Phase 03's first ring:** the stamps on
-`approval.requested{gate: phase-done}` `01M2QWMGM3FBKW5BMBAVAMZGKE` (Phase 02),
-`01M2QGWHNYEBPAC97EEMV55JDH` (Phase 01), `01M2Q5HZJRBMN98HNR9YA5FR77` (Phase 00) and
-`01M2NJ5F736X7PNRD68H5DVYPG` (Cycle 15 Phase 09) — from the main clone,
-`node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`. PLAN-face-v2 §13 items 4 and 5
-(the six flagship ops; story/factory registry rows vs exemption) are due by the Phase 04 close and are
-raised at the Block B reading.
-
-**What Phase 03 inherits:** the module frame — `/arc-face-module RING/ID` scaffolds a green module in one
-command, and `face-pure` + face-coverage's module half FAIL from birth; the nine CARRIED modules (today,
-inbox, map, spine, board, ask-arc in command; council-chamber in factory; money, ventures in money) whose
-Views each ring replaces with the v0.7 port, deleting the Cycle 15 renderer it no longer mounts; the host
-handing `fold()` `{}` until the command ring loads declared routes (debt row, REQ-05); the shell's missing
-route to the ADR-1327 rows, due with the factory ring's first exemption (debt row); the render verdict
-already reading the gate's attachment, so each ring's module count is judged against its folders; the
-Cycle 15 findings F1–F3; the shot-review contract against Phase 00's baseline; debts in `debt-ledger.md`.
-
-**Next step:** `/arc-develop start 03 --lane face` on `feat/face-v2-03-command` cut from `main` after this
-close merges — the command ring first (today · inbox · map · spine · board · ask-arc · chat-mcp generic).
-Tests first per the spec's Verification plan (the ring's module count RED before its modules exist), on CI only.
+**Waiting on the owner:** the stamp on `approval.requested{gate: phase-done}` `01M3EBDGQ70ETM8PXDHNKHSZXJ` (Phase 06).
+Every earlier one (Phases 00-05 and Cycle 15's Phase 09) has a `decision.recorded` on the main clone's spine, checked
+2026-09-26. Stamp it from the main clone with `node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "..."`,
+or from the face's inbox room.

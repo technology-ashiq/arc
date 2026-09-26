@@ -3,12 +3,14 @@
 //
 // The port of v0.7's Scheduler onto the door. The lede promises four things, and each is either shown or
 // named NOT SERVED (Cycle 15 finding F2): the JOBS are the registry's, and every job a run receipt names;
-// the LAST OUTCOME is each job's newest run.completed on the page the door sent; the NEXT FIRE needs the
-// cadence parsed from hq.jobs.yaml, and the HEARTBEAT needs the clock's own judgement of overdue -- both
-// arrive with /api/jobs. What the door does hold is the last fire ON THE PAGE IT SENT, and the room says
-// exactly that: the door pages from the oldest receipt, so a page with more past it is never called the
-// newest (Phase 03 attack). Firing, pausing and registering are work-door verbs (Phase 05).
-import { notServed, verbPending } from "../../../lib/registry.mjs";
+// the LAST OUTCOME is each job's newest run.completed on the page the door sent; the NEXT FIRE and the
+// HEARTBEAT come from /api/jobs (Phase 04), which runs the brief's own jobs panel -- the cadence parsed from
+// hq.jobs.yaml, each job judged against it across every day the spine holds. What the trail holds is the last
+// fire ON THE PAGE IT SENT, and the room says exactly that: the door pages from the oldest receipt, so a page
+// with more past it is never called the newest (Phase 03 attack). Firing, pausing and registering are
+// work-door verbs (Phase 05).
+import { verbPending } from "../../../lib/registry.mjs";
+import { field, servedRead, servedTable } from "../../../lib/served.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { countedOn, hasKind, kindCount, laneBadge, laneKpi, laneRoom, runsBy } from "../../../lib/lane-room.mjs";
 
@@ -22,11 +24,11 @@ import { countedOn, hasKind, kindCount, laneBadge, laneKpi, laneRoom, runsBy } f
  *   jobs: RunRow[],
  *   jobsTitle: string,
  *   showJobsEmpty: boolean,
- *   nextFire: import("../../../lib/registry.mjs").NotServed,
+ *   nextFire: import("../../../lib/served.mjs").ServedTable,
  *   fireVerb: { isVerbPending: true, verb: string, sentence: string },
  *   register: { isVerbPending: true, verb: string, sentence: string },
  *   lastFire: { hasFire: boolean, line: string, detail: string },
- *   heartbeat: import("../../../lib/registry.mjs").NotServed,
+ *   heartbeat: import("../../../lib/served.mjs").ServedTable,
  * }} Folded
  */
 
@@ -61,6 +63,9 @@ export function fold(payloads, ctx) {
   for (const r of ran) if (!registered.includes(r.key)) jobs.push({ ...r, detail: ["not in the served registry", r.detail].filter((s) => s !== "").join(" · ") });
   const runTotal = base.trail.events.filter((e) => e.kind === "run.completed" && typeof e.payload["job"] === "string" && e.payload["job"] !== "").length;
   const newest = ran[0];
+  const jobsSt = servedRead(payloads, ctx, base.reads, "/api/jobs");
+  const slots = typeof jobsSt.body["overdueSlots"] === "number" ? jobsSt.body["overdueSlots"] : null;
+  const observedFrom = field(jobsSt.body, "observedFrom");
 
   return {
     ...base,
@@ -80,11 +85,18 @@ export function fold(payloads, ctx) {
     jobs,
     jobsTitle: `The jobs — ${fmtInt(jobs.length)} on the clock`,
     showJobsEmpty: jobs.length === 0,
-    nextFire: notServed(
-      "Next fire and cadence",
-      "/api/jobs",
-      "Each job's cadence — daily or weekdays at a time, in IST — its next fire, and its overdue mark at twice the cadence, parsed from hq.jobs.yaml.",
-    ),
+    nextFire: servedTable(jobsSt, {
+      panel: "Next fire and cadence",
+      route: "/api/jobs",
+      columns: ["job", "cadence", "next fire", "on the clock"],
+      listKey: "jobs",
+      empty: "hq.jobs.yaml registers no job.",
+      row: (j) => {
+        const name = field(j, "name");
+        return name === "" ? null : { key: name, cells: [name, field(j, "cadence"), field(j, "nextExpected") || "—", j["enabled"] === true ? "enabled" : "disabled"] };
+      },
+      note: slots === null ? "" : `overdue is more than ${slots} slots missed, measured in IST`,
+    }),
     fireVerb: verbPending(
       "Fire now, pause or resume a job",
       "A fire is idempotent per slot, and a pause lets the slot pass with no catch-up. Both are verbs of the work door; today the clock runs from hq.jobs.yaml alone.",
@@ -104,10 +116,27 @@ export function fold(payloads, ctx) {
         : `${newest.name} fired at ${newest.when} · ${newest.last}${base.trail.isPartial ? " — the newest on the page the door sent, which has more past it" : ""}`,
       detail: newest === undefined ? "" : newest.detail,
     },
-    heartbeat: notServed(
-      "The heartbeat",
-      "/api/jobs",
-      "The clock's own proof of life: each job judged against its cadence, and a silent clock raised as an incident rather than inferred from the newest receipt.",
-    ),
+    heartbeat: servedTable(jobsSt, {
+      panel: "The heartbeat",
+      route: "/api/jobs",
+      columns: ["job", "state", "slots missed", "last run"],
+      listKey: "jobs",
+      empty: "hq.jobs.yaml registers no job, so nothing is judged.",
+      row: (j) => {
+        const name = field(j, "name");
+        // The lane counts missed slots only for an enabled job with a readable cadence; for any other the question is
+        // not asked, which is "—", never the 0 a row starts with (panel.mjs; Phase 04 round 3).
+        // Round 4: nor for an unreadable last receipt, nor a never-run job with no window the spine witnesses.
+        const state = field(j, "state");
+        const asked = j["enabled"] === true && state !== "unreadable-cadence" && state !== "unreadable-receipt"
+          && !(state === "never-run" && !/^\d{4}-\d{2}-\d{2}$/.test(observedFrom));
+        const missed = asked && typeof j["missed"] === "number" ? String(j["missed"]) : "—";
+        return name === "" ? null : { key: name, cells: [name, j["overdue"] === true ? "overdue" : field(j, "state"), missed, field(j, "lastRun") || "never on this spine"] };
+      },
+      note: [
+        observedFrom !== "" ? `each job judged against its cadence across every day the spine holds, from ${observedFrom}` : "",
+        "the operating system's own clock check is not read through the door, so a silent clock shows here as missed slots, not as an incident",
+      ].filter((x) => x !== "").join(" · "),
+    }),
   };
 }

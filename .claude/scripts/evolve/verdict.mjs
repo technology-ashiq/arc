@@ -12,8 +12,10 @@
 //     algebraically equal to the half-width, substituting it changes the answer by 1 ULP.
 //   * `l` and `u` are clamped into [0,1] AFTER the roots, so no negative probability and no
 //     u > 1 reaches the difference step.
-//   * `upper` is NOT clamped to [-1,1]. Newcombe's method does not guarantee containment;
-//     truncating it would be changing the method.
+//   * The difference is NOT clamped to [-1,1]. It needs no clamp: U <= u2 - l1 and L >= l2 - u1
+//     by the triangle inequality. A clamp would only hide a formula error, and that is how the
+//     first term pairing survived -- its upper reached 2.03 on n=1 and was read as "Newcombe's
+//     method does not guarantee containment" (corrected 2026-09-19; see newcombeWilsonDifferenceAtZ).
 //
 // Reordering two multiplications in here is a reviewed change that re-records the vectors.
 
@@ -57,14 +59,27 @@ export function wilson(x, n, z) {
  * and arm 1 the CHAMPION. Returns {p1, p2, l1, u1, l2, u2, d, lower, upper}.
  */
 export function newcombeWilsonDifference(x1, n1, x2, n2, alpha = 0.05) {
-  const z = zFor(alpha);
+  return newcombeWilsonDifferenceAtZ(x1, n1, x2, n2, zFor(alpha));
+}
+
+/**
+ * The same interval at an explicit z. Exported so the method can be held against a PUBLISHED
+ * worked example (Newcombe 1998, at the two-sided z of 1.96), not only against vectors derived
+ * for this file: two independent derivations of those vectors made the same mistake below.
+ */
+export function newcombeWilsonDifferenceAtZ(x1, n1, x2, n2, z) {
   const a1 = wilson(x1, n1, z);
   const a2 = wilson(x2, n2, z);
   const d = a2.p - a1.p;
+  // The LOWER bound of p2 - p1 is reached when p2 sits at its own lower root and p1 at its upper
+  // one, so it takes (p2 - l2) and (u1 - p1); the UPPER bound takes (u2 - p2) and (p1 - l1).
+  // The first version paired the terms for p1 - p2 instead: its lower bound was too HIGH, 0.0661
+  // on Newcombe's own example where the published value is 0.0524, and it called a verdict on
+  // 2/20 vs 6/20 whose true bound is negative (face v2 Phase 05 PR 3a logic attack).
   // Literal subtractions. See the header: substituting the half-width here is valid algebra and
   // a different number.
-  const loTerm = Math.sqrt((a1.p - a1.l) ** 2 + (a2.u - a2.p) ** 2);
-  const hiTerm = Math.sqrt((a1.u - a1.p) ** 2 + (a2.p - a2.l) ** 2);
+  const loTerm = Math.sqrt((a2.p - a2.l) ** 2 + (a1.u - a1.p) ** 2);
+  const hiTerm = Math.sqrt((a2.u - a2.p) ** 2 + (a1.p - a1.l) ** 2);
   return {
     p1: a1.p, p2: a2.p, l1: a1.l, u1: a1.u, l2: a2.l, u2: a2.u,
     d, lower: d - loTerm, upper: d + hiTerm,
@@ -101,7 +116,7 @@ export function decide(input) {
   try {
     return decideInner(input);
   } catch (e) {
-    return { outcome: "no-verdict", reasons: [`the verdict gate could not evaluate this input: ${e?.message ?? e}`], stats: null, missing_windows: null };
+    return { outcome: "no-verdict", reasons: [`the verdict gate could not evaluate this input: ${e?.message ?? e}`], outcomeReasons: [], stats: null, missing_windows: null };
   }
 }
 
@@ -117,6 +132,9 @@ function decideInner(input) {
     guardrails, cohortViolations = 0, missingWindows = 0, computedBefore = false,
   } = input;
   const reasons = [];
+  // The reasons that REPORT the computed test (its bound, its delta), kept apart from the ones that gate it: a caller
+  // that refuses an uncomputable test must not print the result it just refused to record (PR 3b logic attack).
+  const outcomeReasons = [];
 
   // Fixed-horizon, compute-once. Peeking at a running experiment and stopping when it looks good
   // inflates the false-positive rate far above alpha; refusing the SECOND compute is what makes
@@ -161,8 +179,9 @@ function decideInner(input) {
 
       if (reasons.length === 0) {
         stats = newcombeWilsonDifference(s1, u1, s2, u2, alpha);
-        if (!(stats.lower >= effectFloor)) reasons.push(`bound ${stats.lower} does not clear effect_floor ${effectFloor}`);
-        if (!(stats.d >= mde)) reasons.push(`point delta ${stats.d} does not reach the MDE ${mde}`);
+        if (!(stats.lower >= effectFloor)) outcomeReasons.push(`bound ${stats.lower} does not clear effect_floor ${effectFloor}`);
+        if (!(stats.d >= mde)) outcomeReasons.push(`point delta ${stats.d} does not reach the MDE ${mde}`);
+        reasons.push(...outcomeReasons);
       }
     }
   }
@@ -197,6 +216,7 @@ function decideInner(input) {
   return {
     outcome: reasons.length === 0 ? "verdict" : "no-verdict",
     reasons,
+    outcomeReasons,
     stats,
     missing_windows: missingWindows,
   };
@@ -216,8 +236,8 @@ export function tryConfigHash(cfg) {
  * The hash a verdict carries so a replay re-derives the SAME decision.
  *
  * Every input that can change what a verdict MEANS is in the preimage — alpha and effect_floor
- * above all (ADR-0310), plus the test id, the floor, the MDE, the arm order, the split, and each
- * guardrail's FULL definition. Anything omitted is a knob that can be turned after the fact
+ * above all (ADR-0310), plus the test id, the floor, the MDE, the arm order, the split, each
+ * guardrail's FULL definition, and the primary metric with its direction. Anything omitted is a knob that can be turned after the fact
  * without the verdict looking different, which is the same class of failure as a free-form
  * payload.
  *
@@ -238,6 +258,9 @@ export function configHash(cfg) {
   return digest("evolve/config/v1", [
     TEST_ID, cfg.alpha ?? null, cfg.effectFloor ?? null, cfg.floor ?? null, cfg.mde ?? null,
     cfg.arms ?? null, cfg.split ?? null, guardrails,
+    // The primary metric and its DIRECTION: a lower-is-better metric scored as higher-is-better called the worse arm
+    // the winner, and the hash could not tell the two verdicts apart (face v2 Phase 05 PR 3a logic attack).
+    cfg.metric ?? null, cfg.direction ?? null,
   ]);
 }
 

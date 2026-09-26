@@ -1,0 +1,12 @@
+{
+  "note": "Eval fixture (Phase 06 slice 03b). `input` is keyed by the process's inputs[].name; `expected` asserts the SHAPE of a finished council session: a saved session file, the id of the council.verdict receipt step 9 printed, and the DECISION and CONFIDENCE read off the verdict. The question opens with the word quick on purpose: a run that read it as a mode word would write no session file and emit no receipt, so it could not produce this shape.",
+  "input": {
+    "question": "quick wins first: should arc ship the face session door before the remaining SESSION verbs have process files?"
+  },
+  "expected": {
+    "session_file": "docs/council/sessions/002-ship-face-session-door-first.md",
+    "receipt_id": "01M37D0KHFPXBDBWQRYPMEXVT8",
+    "decision": "CONDITIONAL",
+    "confidence": "Medium"
+  }
+}

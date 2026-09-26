@@ -103,3 +103,30 @@ is written down here rather than discovered later.
 in doubles. Any promote rule keyed on `LOWER` against a threshold near the point estimate is
 decided by a rounding bit. This is an argument for the per-arm floor being large, and it is why
 `effect_floor = 0` (ADR-0310) is a plain-superiority test rather than a knife-edge comparison.
+
+## Correction, 2026-09-19 (face v2 Phase 05 PR 3a)
+
+The independent cross-check did not catch a wrong formula, because both independent derivations
+made the same mistake: they paired Newcombe's terms for `p1 - p2` while the test is on
+`d = p2 - p1`. The code followed them. Every lower bound with unequal arms was too high: 0.0661 on
+Newcombe (1998)'s own worked example, whose published value is 0.0524. On 2/20 against 6/20 it
+called a verdict whose true bound is negative. The face lane's logic attacker found it the first
+time anything emitted a verdict through this code, so no verdict on any spine was computed with it.
+
+What changed:
+
+- **The formula.** `lower = d - sqrt((p2 - l2)² + (u1 - p1)²)` and
+  `upper = d + sqrt((u2 - p2)² + (p1 - l1)²)`. Every other rule of the expression tree is unchanged.
+- **The vectors.** They are re-recorded against the corrected tree. The `independent_*` values now
+  come from `tests/fixtures/evolve/newcombe-exact.mjs`, which computes each case in 120-digit
+  fixed-point arithmetic, shares no code with `verdict.mjs`, and refuses to run unless it
+  reproduces the published example.
+- **An external anchor.** `tests/evolve-verdict.bats` holds the method to the published example at
+  z = 1.96, with a mutant control proving that the old pairing misses it.
+- **Two consequences removed.** First, the "UPPER may exceed 1" note was a symptom of the wrong
+  pairing, not a property of the method: by the triangle inequality, `U <= u2 - l1` and
+  `L >= l2 - u1`. Second, the "sharpest consequence" above is gone too. At `n = 1` (case G) the
+  lower bound is -0.033, not 1, so one unit per arm can never carry a verdict.
+
+The lesson for this ADR's method: two derivations agreeing is evidence that they agree, not that
+they are right. A published worked example is the anchor, and it runs first.

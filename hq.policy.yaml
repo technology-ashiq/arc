@@ -193,3 +193,89 @@ kinds:
     publish: { level: L0 }
     deploy: { level: L0 }
     spend: { level: L0 }
+
+  # --- engine, out-of-cycle (ADR-0226) ------------------------------------------------------
+  # The attacker declares `tools: []` (ADR-0223), so it asks for no capability and nothing below
+  # can deny it; `read` stays L3 only because spawning any run reads its own process file. Every
+  # other ceiling is L0 -- the honest narrowing: an attacker that could write, shell or reach the
+  # network would no longer be seeing only its input. The HTTP call generic-api makes is the
+  # runner starting a driver, not an action the process takes.
+  "process:attack-diff":
+    e2: []
+    read: { level: L3 }
+    write: { level: L0 }
+    shell: { level: L0 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  # Phase 06 slice 03b (face lane). The council writes its one claimed session file and the
+  # council.verdict receipt step 9 appends, so write and shell are L1 (shell scoped in the process
+  # file to council-lint and `arc-event.sh emit council.verdict`). Its researchers read the web.
+  "process:council-convene":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L1 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  # Phase 06 slice 04 (face lane, memory ring). lesson-log appends one row to docs/retro-log.md and writes one
+  # gitignored scratch file, runs the near-duplicate check, and appends a note.logged receipt: write and shell L1. It
+  # reads no web and moves no money.
+  "process:lesson-log":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  # rule-promote writes one gitignored scratch file and runs memory/rule-propose.mjs, which commits a proposal branch
+  # by git plumbing (the owner's tree untouched) and raises approval.requested: write and shell L1. It applies nothing.
+  "process:rule-promote":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  # Phase 06 (face lane, develop ring). develop-proof writes one gitignored scratch file and runs develop.mjs prove,
+  # which writes the next slice's result and commit into the lane's ledger and appends a slice.done receipt; it reads
+  # git log. Write and shell L1. It reads no web and moves no money.
+  "process:develop-proof":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  # Phase 06 (face lane, strategy ring). adr-record writes one gitignored scratch file and runs plan/adr-record.mjs,
+  # which creates one new file in docs/adr/ at the lane's next free number and appends a note.logged receipt. Write
+  # and shell L1. It commits nothing.
+  "process:adr-record":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }

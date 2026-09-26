@@ -3,26 +3,26 @@
   "alpha": 0.05,
   "sided": "one-sided-lower",
   "z": 1.6448536269514722,
-  "provenance": "Derived TWICE, independently, by two agents that saw no implementation (none existed) and did not see each other. Committed BEFORE any verdict code was written, per REQ-04 as strengthened by the kickoff attack panel: expected values taken from the code under test prove only that the code agrees with itself.",
+  "provenance": "First derived TWICE, independently, by two agents that saw no implementation (none existed) and did not see each other, and committed BEFORE any verdict code was written, per REQ-04 as strengthened by the kickoff attack panel. CORRECTED 2026-09-19 (face v2 Phase 05 PR 3a logic attack): both derivations, and the code written against them, paired Newcombe's terms for p1 - p2 while the test is on d = p2 - p1, so every lower bound with unequal arms was too high -- 0.0661 on Newcombe (1998)'s own worked example, whose published value is 0.0524. Two derivations that share a misreading agree with each other and prove nothing. The `independent_*` values are now EXACT: tests/fixtures/evolve/newcombe-exact.mjs computes each case in 120-digit fixed-point arithmetic with no code shared with verdict.mjs, rounds once to the nearest double, and refuses to run unless it reproduces the published example.",
   "form": "F-2np",
   "form_note": "centre = (2np + z^2) / (2(n + z^2)); halfw = z*sqrt(z^2 + 4np(1-p)) / (2(n + z^2)). z^2 is z*z, never a literal. The half-width uses 4*n*p*(1-p), NOT 4*x*(n-x)/n. p-l and u-p are literal subtractions, never replaced by halfw. l and u are clamped into [0,1] AFTER the roots are computed. Every one of those rules changes the last bits if broken - see ADR-0311.",
-  "disagreement": "The two independent derivations agreed bit-for-bit on only 2 of 8 cases (B and G). Elsewhere they differed by 1-24 ULP because one used the algebraically identical p-form. Checked against 60-digit exact arithmetic, NEITHER form is correctly rounded; both sit 5-20 ULP from the true value. Bit-for-bit across independent implementations is therefore not achievable, which is what ADR-0311 records and what the `strict` flag below marks.",
+  "disagreement": "The pinned expression tree (ADR-0311) is not correctly rounded: against the exact values it sits 0-22 ULP away on the well-conditioned cases and 228 ULP away on D, where a near-1 root passes through a cancellation. Bit-for-bit agreement with an independent implementation is therefore not achievable, which is what ADR-0311 records and what the `strict` flag below marks.",
   "assertions": {
     "bit_for_bit": "every case must reproduce `lower` and `upper` exactly, against the pinned tree",
     "independent_tolerance_ulp": 64,
-    "strict_cases": "cases with strict:true were reproduced bit-for-bit by BOTH independent derivations, so they are the only values known to be reproducible by an implementation sharing no code with this one",
+    "strict_cases": "cases with strict:true reproduce the EXACT derivation bit-for-bit, so they are the only values known to be reproducible by any correct implementation",
     "independent_absolute_tolerance": 1e-15,
     "tolerance_note": "TWO bands, because ULP is the wrong measure near zero. The DECISION-relevant question is whether the bound crosses effect_floor, so the absolute band (1e-15) is the primary assertion and applies to every case. The ULP band (64) is a tighter secondary check that catches a real formula error on the well-conditioned cases; cases whose arithmetic passes through a near-0 or near-1 cancellation carry their own `max_ulp` with the reason, because there the two forms provably diverge while remaining the same number to 19 decimal places."
   },
   "invariants": {
     "bounds": "0 <= l <= p <= u <= 1 for every arm, AFTER clamping",
     "containment": "lower <= d <= upper for every case",
-    "upper_not_clamped": "UPPER may exceed 1 (cases E and G). Newcombe's method does not guarantee containment in [-1,1]; truncating it would change the method."
+    "within_unit": "-1 <= lower and upper <= 1 for every case, by the method itself: U <= u2 - l1 and L >= l2 - u1 by the triangle inequality. Nothing clamps the difference; a clamp would hide a formula error, which is how the first pairing (whose upper reached 2.03 on case G) survived."
   },
   "cases": [
     {
       "id": "A",
-      "note": "the realistic case: a ~2pp lift at n~1900 per arm",
+      "note": "the realistic case: a ~2pp lift at n~1900 per arm. The bound clears 0, narrowly.",
       "n1": 1900,
       "x1": 190,
       "n2": 1874,
@@ -30,15 +30,16 @@
       "p1": 0.1,
       "p2": 0.1200640341515475,
       "d": 0.02006403415154749,
-      "lower": 0.0032658850161879326,
-      "upper": 0.03682357488854329,
-      "lower_hex64_le": "b8e5c8aa0ec16a3f",
+      "lower": 0.0033044934145516867,
+      "upper": 0.036862183286907046,
+      "lower_hex64_le": "78aea66406126b3f",
       "strict": false,
-      "independent_lower": 0.003265885016187943
+      "independent_lower": 0.0033044934145516833,
+      "independent_upper": 0.036862183286907046
     },
     {
       "id": "B",
-      "note": "both derivations agreed bit-for-bit here",
+      "note": "a 10-point lift at n=100 per arm: the bound is negative, so no verdict. The first pairing put it at -0.0118; the method puts it at -0.0155.",
       "n1": 100,
       "x1": 50,
       "n2": 100,
@@ -46,11 +47,12 @@
       "p1": 0.5,
       "p2": 0.6,
       "d": 0.09999999999999998,
-      "lower": -0.01181532317477553,
-      "upper": 0.2155030624198413,
-      "lower_hex64_le": "88c604d5a13288bf",
-      "strict": true,
-      "independent_lower": -0.01181532317477553
+      "lower": -0.01550306241984134,
+      "upper": 0.21181532317477547,
+      "lower_hex64_le": "8005a6d011c08fbf",
+      "strict": false,
+      "independent_lower": -0.015503062419841302,
+      "independent_upper": 0.21181532317477553
     },
     {
       "id": "C",
@@ -65,14 +67,13 @@
       "lower": -0.0026982432397605217,
       "upper": 0.0026982432397605217,
       "lower_hex64_le": "e4e8154fa01a66bf",
-      "strict": false,
-      "independent_lower": -0.0026982432397605212,
-      "max_ulp": 1024,
-      "max_ulp_reason": "x=0 in BOTH arms - the mirror of D, and the same near-zero cancellation. Absolute disagreement 5e-19."
+      "strict": true,
+      "independent_lower": -0.0026982432397605217,
+      "independent_upper": 0.0026982432397605217
     },
     {
       "id": "D",
-      "note": "all successes in BOTH arms. NOT the mirror of C: |lower| differs from C by 228 ULP, a pure floating-point asymmetry between computing near 0 and near 1. An implementation asserting LOWER(n,0,n,0) == -LOWER(n,n,n,n) will fail.",
+      "note": "all successes in BOTH arms. The exact values are the mirror of C, but the pinned double is not: the upper Wilson root lands a hair either side of 1 and the (u - p) cancellation amplifies that into 228 ULP near 0.0027.",
       "n1": 1000,
       "x1": 1000,
       "n2": 1000,
@@ -84,13 +85,14 @@
       "upper": 0.002698243239760423,
       "lower_hex64_le": "00e8154fa01a66bf",
       "strict": false,
-      "independent_lower": -0.002698243239760645,
+      "independent_lower": -0.0026982432397605217,
+      "independent_upper": 0.0026982432397605217,
       "max_ulp": 1024,
-      "max_ulp_reason": "x=n in BOTH arms. The upper Wilson root lands either side of 1 depending on the form (0.9999999999999998 vs 1.0000000000000002), and that 2 ULP at ~1.0 is amplified through the (u-p) cancellation into ~512 ULP at ~0.0027. The ABSOLUTE disagreement is 2.2e-19: the two derivations agree to 19 decimal places and disagree in the ULP measure only because the result is near zero."
+      "max_ulp_reason": "x=n in BOTH arms. The upper Wilson root lands either side of 1 depending on rounding, and that 2 ULP at ~1.0 is amplified through the (u-p) cancellation into 228 ULP at ~0.0027. The ABSOLUTE difference from the exact value is 9.9e-17."
     },
     {
       "id": "E",
-      "note": "small n, huge effect. UPPER exceeds 1 and is NOT clamped.",
+      "note": "small n, huge effect: d 0.8 at n=10 per arm, and the lower bound is 0.45 -- the width small n buys.",
       "n1": 10,
       "x1": 1,
       "n2": 10,
@@ -98,11 +100,12 @@
       "p1": 0.1,
       "p2": 0.9,
       "d": 0.8,
-      "lower": 0.6905892386729602,
-      "upper": 1.15032709899936,
-      "lower_hex64_le": "a43c629a4e19e63f",
+      "lower": 0.4496729010006401,
+      "upper": 0.9094107613270399,
+      "lower_hex64_le": "137eecd870c7dc3f",
       "strict": false,
-      "independent_lower": 0.69058923867296
+      "independent_lower": 0.44967290100064006,
+      "independent_upper": 0.9094107613270399
     },
     {
       "id": "F",
@@ -117,12 +120,13 @@
       "lower": -0.016479984017081468,
       "upper": 0.016479984017081468,
       "lower_hex64_le": "f55f910121e090bf",
-      "strict": true,
-      "independent_lower": -0.016479984017081468
+      "strict": false,
+      "independent_lower": -0.016479984017081475,
+      "independent_upper": 0.016479984017081475
     },
     {
       "id": "G",
-      "note": "n=1 knife-edge. In EXACT arithmetic LOWER == d == 1; in doubles it lands one ULP below. Any promote rule keyed on LOWER against a threshold near the point estimate is decided by a rounding bit. Both derivations agreed bit-for-bit.",
+      "note": "n=1 knife-edge: one failure against one success. The bound is NEGATIVE (-0.033): one unit per arm can never carry a verdict. The first pairing put this bound at 0.9999999999999999, a verdict on two units.",
       "n1": 1,
       "x1": 0,
       "n2": 1,
@@ -130,11 +134,12 @@
       "p1": 0,
       "p2": 1,
       "d": 1,
-      "lower": 0.9999999999999999,
-      "upper": 2.0325654775800026,
-      "lower_hex64_le": "ffffffffffffef3f",
-      "strict": true,
-      "independent_lower": 0.9999999999999999
+      "lower": -0.03256547758000261,
+      "upper": 1,
+      "lower_hex64_le": "40955e1a6caca0bf",
+      "strict": false,
+      "independent_lower": -0.032565477580002535,
+      "independent_upper": 1
     },
     {
       "id": "H",
@@ -146,11 +151,12 @@
       "p1": 0.05,
       "p2": 0.0505,
       "d": 0.0005000000000000004,
-      "lower": -0.010921857997678544,
-      "upper": 0.01191880168164307,
-      "lower_hex64_le": "48ed4af7325e86bf",
+      "lower": -0.010918801681643069,
+      "upper": 0.011921857997678545,
+      "lower_hex64_le": "09c612c1985c86bf",
       "strict": false,
-      "independent_lower": -0.010921857997678553
+      "independent_lower": -0.010918801681643072,
+      "independent_upper": 0.011921857997678548
     }
   ]
 }

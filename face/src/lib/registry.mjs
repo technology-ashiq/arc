@@ -10,8 +10,9 @@
 //
 // Dependency-free like every lib module: node imports it with no install, and a decision here is
 // a decision a test can hold. No room id is spelled in this file -- the shell names no room.
-import { byRing } from "./rooms.mjs";
-import { ASOF_ROUTES, DOOR_ROUTES, DoorError } from "./door.mjs";
+import { byRing, RING_ORDER } from "./rooms.mjs";
+import { withholdKeys } from "./keys.mjs";
+import { ASOF_ROUTES, DOOR_ROUTES, DoorError, unescapeDoorText } from "./door.mjs";
 import { refusalOf, stamp } from "./inbox.mjs";
 import { ASK_GRANTS, askable, askThrough, readOnly } from "./ask.mjs";
 
@@ -38,8 +39,10 @@ const KEY = /^\.\/modules\/([^/\\?#]+)\/([^/\\?#]+)\/(module\.mjs|fold\.mjs|ops\
  * @property {Record<string, Record<string, string>> | null | undefined} inventories
  * @property {Record<string, string> | undefined} laneMap
  * @property {Record<string, string>} [picks]  what the View picked (a lane, a filter, an open receipt), a copy
+ * @property {ModuleManifest} [manifest]  the manifest the host checks this module's reads against, handed to
+ *   the fold so a shared fold refuses a read the manifest cannot make instead of planning one the host drops
  *
- * @typedef {Omit<FoldContext, "picks"> & { door: import("./door.mjs").Door, onOpen: (id: string) => void }} ModuleContext
+ * @typedef {Omit<FoldContext, "picks" | "manifest"> & { door: import("./door.mjs").Door, onOpen: (id: string) => void, pulse?: string }} ModuleContext
  *   what the shell hands the frame for a room
  *
  * @typedef {ModuleContext & { picks: Record<string, string>, onPick: (key: string, value: string) => void,
@@ -48,7 +51,7 @@ const KEY = /^\.\/modules\/([^/\\?#]+)\/([^/\\?#]+)\/(module\.mjs|fold\.mjs|ops\
  *
  * @typedef {{ route: string, param?: string, query?: Record<string, string | number>, poll?: boolean, act?: boolean }} Read
  *   one door read a fold asks for (or, with `act`, the log of one act route)
- * @typedef {{ state: "loading" } | { state: "pending" } | { state: "ok", data: any } | { state: "refused", code: string, human: string }} Payload
+ * @typedef {{ state: "loading" } | { state: "pending" } | { state: "ok", data: any, rereadFailed?: { code: string, human: string } } | { state: "refused", code: string, human: string }} Payload
  * @typedef {Read & { key: string, path: string }} PlannedRead
  * @typedef {{ n: number, body: Record<string, unknown>, result: Payload }} ActRecord
  * @typedef {{ isNotServed: true, panel: string, route: string, sentence: string }} NotServed
@@ -191,6 +194,95 @@ export function attachModules(registry, collected, exempted = []) {
   return { attached, generic, problems, extras };
 }
 
+/** The one ADR an exemption row may cite (face-coverage holds the same rule on the tree). */
+const EXEMPTION_ADR = "ADR-1327";
+/** The allow-listed file the door serves the exemption rows as. */
+export const EXEMPTION_FILE = "module-exemptions";
+
+/** Characters a person cannot see: a name made only of them is no name (money ring attack, company ring twin). */
+const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;
+
+/**
+ * @typedef {{ rooms: import("./rooms.mjs").Room[], ids: string[], problem: string, isLoading: boolean, isRead: boolean }} ExtraRooms
+ */
+
+/**
+ * The rooms arc does not serve but the face keeps (ADR-1327), read from the exemption rows the door serves as a
+ * file. The registry has nothing for these rooms, so each row carries what the shell draws it from -- its ring,
+ * name, sentence and lede (company ring, ADR-1337). A row that cannot be drawn whole is refused, never drawn half,
+ * and the refusal is said rather than the room silently missing.
+ * @param {Payload | null | undefined} p  the `/api/file/module-exemptions` payload
+ * @returns {ExtraRooms}
+ */
+export function extraRooms(p) {
+  /** @param {string} problem @param {boolean} [isLoading] @returns {ExtraRooms} */
+  const none = (problem, isLoading = false) => ({ rooms: [], ids: [], problem, isLoading, isRead: false });
+  if (!p || p.state === "loading" || p.state === "pending") return none("the exemption rows have not been read yet", true);
+  if (p.state === "refused") return none(`the door refused the exemption rows (${p.code})`);
+  if (p.state !== "ok") return none("the exemption rows could not be read");
+  const body = p.data !== null && typeof p.data === "object" && !Array.isArray(p.data) ? p.data : {};
+  // Every field read ONCE into a copy, and the file held to what the door always sends: its id, path, hash and text.
+  const copy = { id: body.id, path: body.path, sha256: body.sha256, text: body.text };
+  if (copy.id !== EXEMPTION_FILE) return none(`the door answered with ${JSON.stringify(copy.id ?? null)}, not the exemption rows`);
+  if (typeof copy.path !== "string" || copy.path === "" || typeof copy.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(copy.sha256)) return none("the door answered without the file's path or hash");
+  if (typeof copy.text !== "string") return none("the door answered without the file's text");
+  /** @type {unknown} */
+  let parsed;
+  try { parsed = JSON.parse(unescapeDoorText(copy.text)); } catch { return none("the exemption file does not parse"); }
+  const list = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? /** @type {Record<string, unknown>} */ (parsed)["exemptions"] : undefined;
+  if (!Array.isArray(list)) return none("the exemption file carries no exemptions list");
+  /** @type {import("./rooms.mjs").Room[]} */
+  const rooms = [];
+  /** @type {string[]} */
+  const problems = [];
+  const seen = new Set();
+  for (const raw of list) {
+    const row = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? /** @type {Record<string, unknown>} */ (raw) : {};
+    const id = typeof row["id"] === "string" ? row["id"] : "";
+    if (!NAME.test(id)) { problems.push("a row with no room id"); continue; }
+    if (seen.has(id)) { problems.push(`"${id}" is listed twice`); continue; }
+    seen.add(id);
+    const ring = row["ring"];
+    const name = typeof row["name"] === "string" ? row["name"].replace(INVISIBLE, "").trim() : "";
+    const sentence = typeof row["sentence"] === "string" ? row["sentence"].replace(INVISIBLE, "").trim() : "";
+    const lede = row["lede"];
+    if (row["adr"] !== EXEMPTION_ADR) { problems.push(`"${id}" cites ${JSON.stringify(row["adr"] ?? null)}, not ${EXEMPTION_ADR}`); continue; }
+    if (typeof ring !== "string" || !RING_ORDER.includes(ring)) { problems.push(`"${id}" names no ring the shell draws`); continue; }
+    if (name === "" || sentence === "") { problems.push(`"${id}" carries no name or no sentence`); continue; }
+    if (lede !== undefined && typeof lede !== "string") { problems.push(`"${id}" carries a lede that is not text`); continue; }
+    rooms.push({
+      id, name, ring, status: "extra", extra: true, sentence, lede: typeof lede === "string" ? lede.trim() : "",
+      render: "bespoke", stations: [], holds: {}, itemCount: 0,
+      live: { kindsHomed: 0, kindsFired: 0, receipts: 0, state: "file-borne" },
+    });
+  }
+  return { rooms, ids: rooms.map((r) => r.id), problem: problems.join("; "), isLoading: false, isRead: true };
+}
+
+/**
+ * The room list the shell draws: the served registry, then each exempted extra in its ring. A row naming a room the
+ * registry serves never replaces it -- the served registry is the only room list for what it serves (ADR-1306). With
+ * the modules the bundle found, an extra is drawn only where its module lives: a row with no module, or naming another
+ * ring than its module's, is the row face-coverage refuses, and the shell refuses it too rather than drawing an
+ * invented room (company ring attack: two readers of one question). Every row left out is named.
+ * @template {{ rooms?: import("./rooms.mjs").Room[] }} R
+ * @param {R} registry @param {ExtraRooms} extras
+ * @param {readonly { id: string, ring: string }[] | null} [modules]
+ * @returns {R & { rooms: import("./rooms.mjs").Room[], extrasDropped: string[] }}
+ */
+export function withExtras(registry, extras, modules = null) {
+  const rooms = registry && Array.isArray(registry.rooms) ? registry.rooms : [];
+  const served = new Set(rooms.map((r) => r.id));
+  /** @type {string[]} */
+  const extrasDropped = [];
+  const add = (extras && Array.isArray(extras.rooms) ? extras.rooms : []).filter((r) => {
+    if (served.has(r.id)) { extrasDropped.push(`${r.id} (a room the registry serves)`); return false; }
+    if (modules !== null && !modules.some((m) => m.id === r.id && m.ring === r.ring)) { extrasDropped.push(`${r.id} (no module in the ${r.ring} ring)`); return false; }
+    return true;
+  });
+  return { ...registry, rooms: [...rooms, ...add], extrasDropped };
+}
+
 /**
  * What draws a room: its module, or the generic module.
  * @param {string} roomId @param {Attachment} attachment
@@ -273,16 +365,21 @@ export function asOfReaches(room, manifest) {
 
 /**
  * What fold() is handed: the context's data, and never the door or a handler -- a fold that could
- * call the door would not be a fold.
- * @param {ModuleContext} ctx
+ * call the door would not be a fold. The manifest is the one the host checks every read against, so a
+ * shared fold judges a read by the same rule and the same routes the host will (money ring, the factory
+ * ring's debt row).
+ * @param {ModuleContext} ctx @param {Record<string, string>} [picks] @param {ModuleManifest} [manifest]
  * @returns {FoldContext}
  */
-export function foldContext(ctx, picks = {}) {
-  return {
+export function foldContext(ctx, picks = {}, manifest = undefined) {
+  /** @type {FoldContext} */
+  const out = {
     room: ctx.room, rooms: ctx.rooms, mode: ctx.mode, token: ctx.token,
     needs: ctx.needs, needsUnplaced: ctx.needsUnplaced, inventories: ctx.inventories, laneMap: ctx.laneMap,
     picks: { ...picks },
   };
+  if (manifest !== undefined) out.manifest = manifest;
+  return out;
 }
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -293,6 +390,12 @@ export function foldContext(ctx, picks = {}) {
 
 /** How often a read a fold marks `poll` is read again. The brief is not polled: it shells the CLI. */
 export const POLL_MS = 45_000;
+
+/**
+ * How often the shell asks the door's pulse whether anything under the rooms changed (REQ-11: a change shows within
+ * 5 s). The pulse is stats alone, so asking often is cheap; a changed pulse re-reads the open room, all of its reads.
+ */
+export const PULSE_MS = 2_000;
 
 /** @type {Payload} */
 export const LOADING = Object.freeze({ state: "loading" });
@@ -439,12 +542,39 @@ function snapshotRead(r) {
 
 /**
  * Which planned reads the host starts now: every one neither loaded nor in flight, and -- when a poll is
- * due -- every polled one again, keeping its last payload on screen while it reads.
+ * due -- every polled one again, keeping its last payload on screen while it reads. When the door's PULSE changed
+ * (face v2 Phase 05, REQ-11), every read is due again, polled or not: something under the room changed, and a read
+ * that asked once and never again is how a room goes stale in front of the owner.
  * @param {PlannedRead[]} planned @param {Record<string, Payload>} loaded @param {Set<string>} inflight @param {boolean} pollDue
+ * @param {boolean} [pulseDue]
+ * @param {ReadonlySet<string> | null} [force]  keys due again whatever else is true: a read that was IN FLIGHT when the
+ *   pulse moved, and has landed since (see pulseDirty)
  * @returns {PlannedRead[]}
  */
-export function readsToLoad(planned, loaded, inflight, pollDue) {
-  return planned.filter((r) => !inflight.has(r.key) && (!Object.hasOwn(loaded, r.key) || (pollDue && r.poll === true)));
+export function readsToLoad(planned, loaded, inflight, pollDue, pulseDue = false, force = null) {
+  return planned.filter((r) => !inflight.has(r.key) && (!Object.hasOwn(loaded, r.key) || pulseDue === true || (force !== null && force.has(r.key)) || (pollDue && r.poll === true)));
+}
+
+/**
+ * The planned reads a pulse cannot start because they are already in flight. A read that began BEFORE the change can
+ * land with the old answer; the host marks it and reads it again once it lands, or the room keeps a stale answer with
+ * nothing left to correct it (PR 2 logic attack: the Today brief).
+ * @param {PlannedRead[]} planned @param {ReadonlySet<string>} inflight @returns {string[]}
+ */
+export function pulseDirty(planned, inflight) {
+  return planned.filter((r) => inflight.has(r.key)).map((r) => r.key);
+}
+
+/**
+ * What a failed RE-read leaves on screen: the last good answer, marked, rather than the refusal in its place. A pulse
+ * re-reads exactly while files are being written, so it meets a half-written source far more often than a first read
+ * does, and swapping a good panel for "SOURCE_CHANGING" every time arc writes would be a room that flickers into
+ * errors. A read that never answered well still shows its refusal.
+ * @param {Payload | undefined} prev @param {Payload} refused @returns {Payload}
+ */
+export function keepOnRereadFailure(prev, refused) {
+  if (prev && prev.state === "ok" && refused.state === "refused") return { state: "ok", data: prev.data, rereadFailed: { code: refused.code, human: refused.human } };
+  return refused;
 }
 
 /**
@@ -479,11 +609,43 @@ export function payloadOf(payloads, read) {
 }
 
 /**
+ * The reads of a module that carried a provider key, one line each (ADR-1325): what the host draws above the room.
+ * The fold itself never sees the key -- foldModule withholds it.
+ * @param {AttachedModule} module @param {Record<string, Payload>} loaded @param {ModuleContext} [ctx] @returns {string[]}
+ */
+export function keyLeaksFor(module, loaded, ctx = undefined) {
+  return [...withholdKeys(payloadsFor(module.manifest, loaded)).leaks, ...(ctx ? contextLeaks(ctx) : [])];
+}
+
+/** The context parts a fold reads besides its payloads -- the registry's rooms, inventories, needs, lane map. */
+const CONTEXT_PARTS = /** @type {const} */ (["rooms", "inventories", "needs", "laneMap"]);
+
+/**
+ * The fold context with its door-served parts withheld too: a key in the /api/rooms body reaches every room through
+ * ctx, never through a payload (round-2 attack 4010c52 B3). @param {FoldContext} fctx
+ */
+function withheldContext(fctx) {
+  const parts = /** @type {Record<string, unknown>} */ ({});
+  for (const k of CONTEXT_PARTS) parts[k] = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (fctx))[k];
+  const { payloads } = withholdKeys(parts);
+  return /** @type {FoldContext} */ ({ ...fctx, ...payloads });
+}
+
+/** One leak line per context part that carried a key. @param {ModuleContext} ctx @returns {string[]} */
+function contextLeaks(ctx) {
+  const parts = /** @type {Record<string, unknown>} */ ({});
+  for (const k of CONTEXT_PARTS) parts[`context.${k}`] = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (ctx))[k];
+  return withholdKeys(parts).leaks;
+}
+
+/**
  * The one way the host folds a module: its declared payloads only, and the View's picks as a copy.
  * @param {AttachedModule} module @param {Record<string, Payload>} loaded @param {ModuleContext} ctx @param {Record<string, string>} picks
  */
 export function foldModule(module, loaded, ctx, picks) {
-  return module.fold(payloadsFor(module.manifest, loaded), foldContext(ctx, picks));
+  // ADR-1325: every payload of every room passes the no-key check HERE, before any fold sees it -- a key a read
+  // carried is withheld, so no room can draw it (face v2 Phase 06, attack 57d014d B1/B4). The host names the leak.
+  return module.fold(withholdKeys(payloadsFor(module.manifest, loaded)).payloads, withheldContext(foldContext(ctx, picks, module.manifest)));
 }
 
 /**
@@ -630,6 +792,17 @@ export function verbPending(verb, sentence) {
 }
 
 /**
+ * A flow a PLANNED room rehearses (ADR-1328): v0.7 drew it as a working form, the lane is not born, so the
+ * face draws the flow and says REHEARSAL -- it is never a work-door verb, because nothing here will ever send
+ * it anywhere until `/arc-kickoff --lane` births the lane and its manifest takes over.
+ * @param {string} verb  the flow, as the owner would run it  @param {string} sentence  what it rehearses, and why it writes nothing
+ * @returns {{ isRehearsal: true, verb: string, sentence: string }}
+ */
+export function rehearsal(verb, sentence) {
+  return Object.freeze({ isRehearsal: true, verb: String(verb), sentence: String(sentence) });
+}
+
+/**
  * Every marked entry of one shape in a fold's output, nested anywhere, in document order. The two lists
  * this shell derives -- NOT SERVED panels and verbs pending the work door -- are the same walk over the
  * same rules: data properties only (a getter is never called), Maps and Sets by value, a depth cap, and
@@ -670,12 +843,33 @@ export function verbPendingOf(folded) {
 }
 
 /**
+ * Every flow a fold marks as a planned room's REHEARSAL, nested anywhere, in document order -- the list the
+ * REHEARSAL evidence file is held equal to, by the same walk as the other two.
+ * @param {unknown} folded
+ * @returns {{ isRehearsal: true, verb: string, sentence: string }[]}
+ */
+export function rehearsalOf(folded) {
+  return /** @type {{ isRehearsal: true, verb: string, sentence: string }[]} */ (/** @type {unknown} */ (markedIn(folded, "isRehearsal", ["verb", "sentence"])));
+}
+
+/**
  * Every NOT SERVED entry in a fold's output, nested anywhere, in document order.
  * @param {unknown} folded
  * @returns {NotServed[]}
  */
 export function notServedOf(folded) {
   return /** @type {NotServed[]} */ (/** @type {unknown} */ (markedIn(folded, "isNotServed", ["route", "panel", "sentence"])));
+}
+
+/**
+ * Every panel a Phase 04 door route fills (served.mjs), nested anywhere, in document order -- the list the
+ * phase-04 SERVED evidence file is held equal to, by the same walk, so a NOT SERVED panel that flips to live
+ * leaves one list and joins the other rather than vanishing from both (face v2 Phase 04, REQ-06).
+ * @param {unknown} folded
+ * @returns {{ isServed: true, panel: string, route: string }[]}
+ */
+export function servedOf(folded) {
+  return /** @type {{ isServed: true, panel: string, route: string }[]} */ (/** @type {unknown} */ (markedIn(folded, "isServed", ["route", "panel"])));
 }
 
 /**

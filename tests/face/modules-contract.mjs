@@ -33,7 +33,7 @@ const base = { registryText, servedJson, planText };
 // ---- control ----
 const control = mod.derive(base);
 check("the control derivation loads the real inputs", control.orphans.length === 0 && control.contract.counts.modules === 36
-  && control.contract.counts.renamed === 3 && control.contract.counts.extra === 4, JSON.stringify(control.contract.counts));
+  && control.contract.counts.renamed === 3 && control.contract.counts.extra === 2, JSON.stringify(control.contract.counts));
 check("every module carries a reads array, never null", control.contract.modules.every((m) => Array.isArray(m.reads)));
 
 const lines = registryText.split(/\r?\n/);

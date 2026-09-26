@@ -17,8 +17,12 @@
 //     complete -- not a count, not a last fire, not "all time";
 //   - a registry value this shell cannot use is NAMED, never silently dropped: a kind it cannot ask
 //     for, a lane name it cannot request, an ADR band it cannot read, a second lane it did not draw;
-//   - what the registry never carried and what it carried unreadably are different sentences.
-import { payloadOf } from "./registry.mjs";
+//   - what the registry never carried and what it carried unreadably are different sentences;
+//   - a read the module's MANIFEST cannot make is refused HERE, by the host's own rule (readProblem) and
+//     against the manifest the host hands the fold -- a registry that grows a lane or a kind under a shipped
+//     manifest must turn a panel into a named refusal, never a "reading…" nothing is in flight for (money
+//     ring, the factory ring's debt row). A fold handed no manifest fails closed: it may read nothing.
+import { payloadOf, readProblem } from "./registry.mjs";
 import { unescapeDoorText } from "./door.mjs";
 import { fmtInt, timeOfDay } from "./inbox.mjs";
 import { LANE_UNREAD, RECEIPT_CLOSED, laneCard, receiptView, trailRead, trailView } from "./spine.mjs";
@@ -34,6 +38,23 @@ const KIND_NAME = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
 /** A receipt timestamp this shell can read a clock out of. */
 const TS_HEAD = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+/** A room id as the served registry writes one: the grammar the smoke and the door hold every id to. */
+const ROOM_ID = /^[a-z0-9][a-z0-9-]*$/;
+
+/**
+ * A timestamp this shell can read: the spine's shape AND a real instant. "2026-99-99T99:99" has the shape and is
+ * no time at all; it neither wins "newest" nor is printed as a clock (money ring attack).
+ * @param {string} ts
+ */
+const validTs = (ts) => typeof ts === "string" && TS_HEAD.test(ts) && Number.isFinite(Date.parse(ts));
+
+/**
+ * When a receipt happened, from its validated timestamp alone -- never the wrapper's day beside it, which is a
+ * second reading of the same fact (money ring attack).
+ * @param {string} ts
+ */
+const stampOf = (ts) => (validTs(ts) ? `${ts.slice(0, 10)} ${timeOfDay(ts)}`.trim() : "time unreadable");
 
 /** A sha256 as the door writes it. */
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -73,6 +94,7 @@ const HOLDS_DRAWN_ELSEWHERE = Object.freeze(["kinds", "lanes", "adrs"]);
  *
  * @typedef {object} Trail
  * @property {boolean} isHomed      the registry homes at least one kind this shell can ask for
+ * @property {boolean} isUnread     the registry carried this room's kinds unreadably and none could be asked for
  * @property {boolean} isPartial    the door said there are receipts past the page it sent
  * @property {boolean} isDrawn      the rows below are what the door sent, and may be drawn
  * @property {boolean} showEmpty    the door answered and the page held no receipt of these kinds
@@ -137,26 +159,57 @@ const refusedBy = (code, human) => ({ isReading: false, isRefused: true, refusal
  * @returns {{ lists: Record<string, string[]>, unreadable: string[] }}
  */
 export function heldBy(room) {
-  const holds = asObject(asObject(room)["holds"]);
+  const raw = asObject(room)["holds"];
   /** @type {Record<string, string[]>} */
   const lists = Object.create(null);
   /** @type {string[]} */
   const unreadable = [];
+  // A holds value that is not an object -- a string, a list, a number -- is the registry carrying this room's
+  // holds unreadably. It is NAMED, never read as "this room holds nothing" (money ring attack).
+  if (raw !== undefined && raw !== null && (typeof raw !== "object" || Array.isArray(raw))) {
+    unreadable.push("holds");
+    return { lists, unreadable };
+  }
+  const holds = asObject(raw);
   for (const key of Object.keys(holds)) {
     // A key named after an object's own machinery is not a kind of thing a room holds.
     if (key === "__proto__" || key === "constructor" || key === "prototype") { unreadable.push(key); continue; }
     const value = holds[key];
     if (!Array.isArray(value)) { unreadable.push(key); continue; }
+    /** @type {string[]} */
     const list = [];
-    // An entry that renders as nothing -- empty, or only spaces and zero-width characters -- is not a
-    // thing arc holds; counting it inflates every figure derived from this list (Phase 03 attack).
-    for (const item of value) if (typeof item === "string" && unescapeDoorText(item).trim() !== "") list.push(unescapeDoorText(item).trim());
+    const seen = new Set();
+    let repeats = 0;
+    for (const item of value) {
+      if (typeof item !== "string") continue;
+      // An entry that renders as nothing -- empty, or only spaces and zero-width characters -- is not a thing
+      // arc holds; counting it inflates every figure derived from this list (Phase 03 attack). `trim()` leaves a
+      // zero-width space, a word joiner and a soft hyphen standing, so they are removed first (money ring attack).
+      const name = visibleText(item);
+      if (name === "") continue;
+      // A name listed twice is ONE thing held: drawn once and counted once, never a duplicate row (money ring).
+      if (seen.has(name)) { repeats += 1; continue; }
+      seen.add(name);
+      list.push(name);
+    }
     // A list that lost an element is kept -- the names that ARE readable are still worth drawing -- but the
     // key is marked, so its count reads as unread rather than as a short number nobody served (code review).
-    if (list.length !== value.length) unreadable.push(key);
+    if (list.length + repeats !== value.length) unreadable.push(key);
     lists[key] = list;
   }
   return { lists, unreadable };
+}
+
+/** Characters that render as nothing: the zero-width space and joiners, the word joiner, the BOM, the soft hyphen. */
+const INVISIBLE = /[​-‍⁠﻿­]/g;
+
+/**
+ * A served string as a person would read it: the door's escapes undone once, every invisible character gone, the
+ * ends trimmed.
+ * @param {string} s
+ */
+export function visibleText(s) {
+  return unescapeDoorText(s).replace(INVISIBLE, "").trim();
 }
 
 /** @param {Record<string, string[]>} lists @param {string} key @returns {string[]} */
@@ -179,7 +232,11 @@ export function sourceFile(id, p) {
   const shaRaw = body["sha256"];
   const sha = typeof shaRaw === "string" && SHA256.test(shaRaw) ? shaRaw : "";
   const text = typeof body["text"] === "string" ? body["text"] : null;
-  if (typeof servedId === "string" && servedId !== id)
+  // The door always names the file it served. A body that names none, or names another, is not this file --
+  // drawing it under the id asked for failed open (money ring attack).
+  if (typeof servedId !== "string")
+    return { id, ...refusedBy("BAD_BODY", `the door answered for ${id} without naming the file it served`), isRead: false, path: "", sha: "", size: "" };
+  if (servedId !== id)
     return { id, ...refusedBy("WRONG_FILE", `this room asked the door for ${id} and the body it answered with is ${servedId}`), isRead: false, path: "", sha: "", size: "" };
   if (path === "" || sha === "" || text === null)
     return { id, ...refusedBy("BAD_BODY", "the door answered, but not with a file: no path, hash or text"), isRead: false, path: "", sha: "", size: "" };
@@ -206,6 +263,22 @@ export function laneRoom(payloads, ctx, opts = {}) {
   /** @type {Read[]} */
   const reads = [];
   const { lists, unreadable } = heldBy(room);
+  /**
+   * Plan a read the manifest may make, or say why it may not -- the host's own sentence, so the panel and
+   * the host can never disagree about a read (money ring).
+   * @param {Read} read @returns {string | null}
+   */
+  const ask = (read) => {
+    const why = readProblem(read, ctx.manifest);
+    if (why === null) reads.push(read);
+    return why;
+  };
+
+  // What the registry carried unreadably is NAMED where it would otherwise read as an absence: "the registry homes
+  // no lane here" and "the registry's lanes could not be read" are different sentences (money ring attack).
+  const holdsUnread = unreadable.includes("holds");
+  const lanesUnread = holdsUnread || unreadable.includes("lanes");
+  const kindsUnread = holdsUnread || unreadable.includes("kinds");
 
   // ── the lane ───────────────────────────────────────────────────────────────────────────────────
   const lanes = listOf(lists, "lanes");
@@ -215,15 +288,19 @@ export function laneRoom(payloads, ctx, opts = {}) {
   // hundreds of kilobytes for a header and a list of titles. The trail is what moves; the header is read
   // once per open, and the shell's re-read control takes it again (code review).
   const laneRead = laneUsable ? { route: "/api/lane/:id", param: laneName } : null;
-  if (laneRead !== null) reads.push(laneRead);
-  const laneP = laneRead === null ? null : payloadOf(payloads, laneRead);
+  const laneRefused = laneRead === null ? null : ask(laneRead);
+  const laneP = laneRead === null || laneRefused !== null ? null : payloadOf(payloads, laneRead);
   const card = laneP !== null && laneP.state === "ok" ? laneCard(laneP.data) : LANE_UNREAD;
-  const laneState = laneName === ""
+  const laneState = laneName === "" && lanesUnread
+    ? refusedBy("UNREAD_LANES", "the served registry carried this room's lanes in a shape this shell could not read, so no lane is drawn -- and none is claimed absent")
+    : laneName === ""
     // Not a refusal: the council chamber and review-and-ship are rooms the registry gives no lane, and
     // "there is no lane here" is a different sentence from "the lane could not be read" (factory ring).
     ? { isReading: false, isRefused: false, refusal: NO_REFUSAL }
     : !laneUsable
       ? refusedBy("BAD_LANE_NAME", `the served registry names ${JSON.stringify(laneName)} as this room's lane, which is not a name the door will take`)
+      : laneRefused !== null
+        ? refusedBy("READ_REFUSED", laneRefused)
       : laneP === null
         ? refusedBy("NO_LANE", "the served registry names no lane for this room")
         // A 200 that is not a lane, or is another lane, is a refusal with a code -- not a card that
@@ -239,8 +316,8 @@ export function laneRoom(payloads, ctx, opts = {}) {
   const kinds = homedKinds.filter((k) => KIND_NAME.test(k));
   const rejectedKinds = homedKinds.filter((k) => !KIND_NAME.test(k));
   const tRead = trailRead(kinds);
-  if (tRead !== null) reads.push(tRead);
-  const trailP = tRead === null ? null : payloadOf(payloads, tRead);
+  const trailRefused = tRead === null ? null : ask(tRead);
+  const trailP = tRead === null || trailRefused !== null ? null : payloadOf(payloads, tRead);
   // A body with no events ARRAY is a page this shell cannot read, and "empty because unreadable" is not
   // "empty because nothing happened" -- the reader coerces either into zero rows, so the shape is checked
   // before the count becomes a sentence about the spine (Phase 03 attack).
@@ -248,17 +325,31 @@ export function laneRoom(payloads, ctx, opts = {}) {
   // A page carrying a kind this room did not ask for is not this room's trail: WRONG_LANE and
   // WRONG_FILE were built for the other two bodies, and the spine body -- the one that fills every
   // ring room's trail -- had no equivalent (Phase 03 attack).
+  // The kind is compared EXACTLY as the counts compare it: a receipt whose kind is missing, not a string, or
+  // spelled with a space the check trimmed away is not a receipt of a homed kind. Trimming here and not in the
+  // count validated one reading and counted another (money ring attack).
   const foreign = trailP !== null && trailP.state === "ok" && !trailBadBody
-    ? [...new Set(asArrayOf(asObject(trailP.data)["events"]).map((w) => asText(asObject(asObject(w)["event"])["kind"]) ?? "").filter((k) => k !== "" && !kinds.includes(k)))]
+    ? [...new Set(asArrayOf(asObject(trailP.data)["events"]).map((w) => {
+      const k = asObject(asObject(w)["event"])["kind"];
+      return typeof k === "string" ? k : "(a receipt with no kind)";
+    }).filter((k) => !kinds.includes(k)))]
     : [];
-  const trail = trailP !== null && trailP.state === "ok" && !trailBadBody && foreign.length === 0 ? trailView(trailP.data, TRAIL_ROWS) : null;
-  const trailState = trailP === null
+  const view = trailP !== null && trailP.state === "ok" && !trailBadBody && foreign.length === 0 ? trailView(trailP.data, TRAIL_ROWS) : null;
+  // A page whose count is SMALLER than the receipts it carries contradicts itself: its hint would say one number
+  // and its figures another (money ring attack). It is refused rather than drawn either way.
+  const undercount = view !== null && view.count < view.events.length;
+  const trail = undercount ? null : view;
+  const trailState = trailRefused !== null
+    ? refusedBy("READ_REFUSED", trailRefused)
+    : trailP === null
     ? { isReading: false, isRefused: false, refusal: NO_REFUSAL }
     : trailBadBody
       ? refusedBy("BAD_BODY", "the door answered, but not with a page of receipts: no events list in the body it sent")
       : foreign.length > 0
         ? refusedBy("WRONG_KINDS", `this room asked for ${kinds.join(", ")} and the page it answered with carries ${foreign.join(", ")}`)
-        : panelState(trailP);
+        : undercount && view !== null
+          ? refusedBy("BAD_BODY", `the door counted ${fmtInt(view.count)} receipts on a page that carries ${fmtInt(view.events.length)}`)
+          : panelState(trailP);
   const kindWord = kinds.join(", ");
 
   // ── the files ──────────────────────────────────────────────────────────────────────────────────
@@ -266,7 +357,8 @@ export function laneRoom(payloads, ctx, opts = {}) {
   /** @type {SourceFile[]} */
   const sources = files.map((id) => {
     const read = { route: "/api/file/:id", param: id };
-    reads.push(read);
+    const why = ask(read);
+    if (why !== null) return { id, ...refusedBy("READ_REFUSED", why), isRead: false, path: "", sha: "", size: "" };
     return sourceFile(id, payloadOf(payloads, read));
   });
 
@@ -284,18 +376,24 @@ export function laneRoom(payloads, ctx, opts = {}) {
     lede: String(room.lede ?? ""),
     laneName,
     hasLane: laneName !== "",
-    laneAbsent: laneName === "" ? "the served registry homes no lane in this room" : "",
+    laneAbsent: laneName === "" && !lanesUnread ? "the served registry homes no lane in this room" : "",
     lane: {
       ...laneState,
       isDrawn: laneName !== "" && !laneState.isRefused,
       // A lane panel over a room the registry gives no lane says so, instead of a titled panel over
       // nothing at all (Phase 03 attack).
-      absent: laneName === "" ? "the served registry homes no lane in this room" : "",
+      absent: laneName === "" && !lanesUnread ? "the served registry homes no lane in this room" : "",
       card,
-      note: lanes.length > 1 ? `the registry homes ${fmtInt(lanes.length)} lanes in this room (${lanes.join(", ")}); this card is the first` : "",
+      note: [
+        lanes.length > 1 ? `the registry homes ${fmtInt(lanes.length)} lanes in this room (${lanes.join(", ")}); this card is the first` : "",
+        laneName !== "" && lanesUnread ? "the registry's lane list for this room was not read in full; this card is the first name that could be read" : "",
+      ].filter((s) => s !== "").join(" · "),
     },
     trail: {
       isHomed: tRead !== null,
+      // The registry carried this room's kinds unreadably and none could be asked for: an unread trail, never a
+      // room with no trail of its own.
+      isUnread: tRead === null && kindsUnread,
       // A page whose count exceeds the receipts it carries is partial too: a door that truncates without
       // setting `more` must not have its page called the whole truth (Phase 03 attack).
       isPartial: trail !== null && (trail.more || trail.count > trail.events.length),
@@ -306,12 +404,14 @@ export function laneRoom(payloads, ctx, opts = {}) {
       events,
       kinds,
       hint: tRead === null ? "this room homes no receipt kind" : trail === null ? `receipts of ${kindWord}` : trail.hint,
-      empty: tRead === null
+      empty: tRead === null && kindsUnread
+        ? "The served registry carried this room's kinds in a shape this shell could not read, so no trail was asked for -- which is not a room with no trail."
+        : tRead === null
         ? (opts.trailEmpty ?? "The served registry homes no receipt kind in this room, so it has no trail of its own.")
         : `No receipt of ${kindWord} on the page the door sent.`,
       note: [
         rejectedKinds.length > 0 ? `the registry homes ${rejectedKinds.length === 1 ? "a kind" : "kinds"} this shell will not ask the door for: ${rejectedKinds.map((k) => JSON.stringify(k)).join(", ")}` : "",
-        unreadable.includes("kinds") ? "the registry's kinds for this room are not a list of names, so some of them were not read" : "",
+        kindsUnread ? "the registry's kinds for this room are not a list of names, so some of them were not read" : "",
       ].filter((s) => s !== "").join(" · "),
       count: trail === null ? 0 : trail.count,
     },
@@ -359,10 +459,23 @@ export function hasKind(base, kind) {
  * @returns {string}
  */
 export function countedOn(base, what) {
+  if (base.trail.isUnread) return "the registry's kinds here were not read";
   if (!base.trail.isHomed) return "the registry homes no such kind here";
-  if (base.trail.isRefused) return `${what} · the door refused its receipts`;
+  // Who refused is part of the sentence: the door, the module's own manifest, or this shell reading a page that
+  // was not this room's are three different facts (money ring attack).
+  if (base.trail.isRefused) return `${what} · ${whoRefused(base.trail.refusal.code)}`;
   if (!base.trail.isDrawn) return "reading the page";
   return base.trail.isPartial ? `${what} · oldest page, more past it` : `${what} · the page the door sent`;
+}
+
+/**
+ * Who refused a panel's read, in a few words for a two-line subtitle.
+ * @param {string} code
+ */
+function whoRefused(code) {
+  if (code === "READ_REFUSED") return "this module may not read them";
+  if (code === "BAD_BODY" || code === "WRONG_KINDS" || code === "WRONG_LANE" || code === "WRONG_FILE") return "the page sent was not this room's";
+  return "the door refused its receipts";
 }
 
 /**
@@ -409,7 +522,7 @@ export function runsBy(events, field, detailFields, isPartial = false) {
         name,
         runs: `${fmtInt(g.runs)} run${g.runs === 1 ? "" : "s"}${isPartial ? " on that page" : ""}`,
         last: outcome === "" ? "no outcome recorded" : `last ${unescapeDoorText(outcome)}`,
-        when: TS_HEAD.test(g.last.ts) ? `${g.last.day} ${timeOfDay(g.last.ts)}`.trim() : "time unreadable",
+        when: stampOf(g.last.ts),
         detail: detailFields
           .map((k) => /** @type {[string, unknown]} */ ([k, p[k]]))
           .filter(([, v]) => (typeof v === "string" && v !== "") || (typeof v === "number" && Number.isFinite(v)))
@@ -420,19 +533,54 @@ export function runsBy(events, field, detailFields, isPartial = false) {
 }
 
 /**
+ * @typedef {object} CountRow
+ * @property {string} key
+ * @property {string} name
+ * @property {string} count
+ * @property {string} when
+ */
+
+/**
+ * Receipts of ONE kind among a trail's, counted by one payload field (a channel, a gate, a stage) -- most first,
+ * then by name. The same rules as runsBy: a receipt without the field is not guessed into a group, the name is
+ * decoded once so the registry's spelling and the receipt's compare as one, a partial page says the count is that
+ * page's, and the newest receipt of a group is newest by timestamp, never by position (money ring).
+ * @param {FeedEvent[]} events @param {string} kind @param {string} field @param {boolean} [isPartial]
+ * @returns {CountRow[]}
+ */
+export function countedBy(events, kind, field, isPartial = false) {
+  /** @type {Map<string, { n: number, last: FeedEvent }>} */
+  const groups = new Map();
+  for (const e of events) {
+    if (e.kind !== kind) continue;
+    const v = e.payload[field];
+    if (typeof v !== "string" || v.trim() === "") continue;
+    const name = unescapeDoorText(v).trim();
+    const had = groups.get(name);
+    const last = had === undefined || newer(e.ts, had.last.ts) ? e : had.last;
+    groups.set(name, { n: (had === undefined ? 0 : had.n) + 1, last });
+  }
+  return [...groups.entries()]
+    .sort((a, b) => b[1].n - a[1].n || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([name, g]) => ({
+      key: name,
+      name,
+      count: `${fmtInt(g.n)}${isPartial ? " on that page" : ""}`,
+      // On a partial page the newest receipt of a group is the newest ON THAT PAGE, and it says so: the door
+      // pages from the oldest, so it is not the channel's last publication (money ring attack).
+      when: validTs(g.last.ts) ? `${isPartial ? "newest on that page" : "last"} ${stampOf(g.last.ts)}` : "time unreadable",
+    }));
+}
+
+/**
  * Is `a` a later timestamp than `b`? Both are compared as the spine writes them, and a timestamp this
  * shell cannot read is never "later" -- it sorts last rather than winning by string order.
  * @param {string} a @param {string} b
  */
 function newer(a, b) {
-  const okA = TS_HEAD.test(a);
-  const okB = TS_HEAD.test(b);
-  if (!okA) return false;
-  if (!okB) return true;
-  const ta = Date.parse(a);
-  const tb = Date.parse(b);
-  if (Number.isFinite(ta) && Number.isFinite(tb)) return ta > tb;
-  return a > b;
+  if (!validTs(a)) return false;
+  if (!validTs(b)) return true;
+  return Date.parse(a) > Date.parse(b);
 }
 
 /**
@@ -441,6 +589,8 @@ function newer(a, b) {
  * @returns {string}
  */
 export function laneBadge(base, whenNoLane = "no lane of its own") {
+  // A lane list the registry carried unreadably is not "no lane of its own" (money ring attack).
+  if (base.laneName === "" && base.lane.isRefused) return "lane not read";
   if (base.laneName === "") return whenNoLane;
   if (base.lane.isRefused) return `${base.laneName} lane · not read`;
   return base.lane.card.isRead ? `${base.laneName} lane · ${base.lane.card.status}` : `${base.laneName} lane · reading`;
@@ -467,44 +617,80 @@ export function laneKpi(base) {
 }
 
 /**
- * What every room in the served registry holds under one key, as rows a catalogue can draw: the thing
- * itself, and the room that holds it. This is the registry the shell already read -- no route, no
- * bundle -- and it is how the toolbelt indexes arc without naming a single room in a shell file.
- * @param {FoldContext} ctx @param {string} key
- * @returns {{ rows: { key: string, name: string, room: string, roomName: string, canOpen: boolean }[], unreadable: string[] }}
+ * @typedef {{ key: string, name: string, room: string, roomName: string, canOpen: boolean }} CatalogueRow
+ * @typedef {{ rows: CatalogueRow[], unreadable: string[] }} CatalogueSection
  */
-export function heldAcrossRooms(ctx, key) {
-  const out = [];
-  const seen = new Set();
-  /** @type {string[]} */
-  const unreadable = [];
-  for (const room of ctx.rooms || []) {
+
+/**
+ * What every room in the served registry holds under each of `keys`, as rows a catalogue can draw: the
+ * thing itself, and the room that holds it. This is the registry the shell already read -- no route, no
+ * bundle -- and it is how the toolbelt indexes arc without naming a single room in a shell file.
+ *
+ * Built in ONE pass: each room's holds are read once for every section at once, and a row's room link is
+ * answered from a map built once, never by searching the rooms again per row. Nine passes and a search per
+ * row made the find box quadratic in the registry -- 1.6 s a keystroke at 3,000 rooms (money ring, the
+ * factory ring's debt row).
+ * @param {FoldContext | { rooms?: unknown[] }} ctx @param {string[]} keys
+ * @returns {Record<string, CatalogueSection>}
+ */
+export function catalogueOf(ctx, keys) {
+  const wanted = [...new Set(keys.filter((k) => typeof k === "string" && k !== ""))];
+  /** @type {Record<string, CatalogueSection>} */
+  const out = Object.create(null);
+  /** @type {Record<string, Set<string>>} */
+  const seen = Object.create(null);
+  for (const k of wanted) { out[k] = { rows: [], unreadable: [] }; seen[k] = new Set(); }
+  const rooms = Array.isArray(ctx.rooms) ? ctx.rooms : [];
+  // Every id read ONCE, before anything is built: the link map and the rows are made from the same reading, so a
+  // getter cannot name a room one thing in the map and another in the row (money ring attack).
+  const snaps = idSnapshots(rooms);
+  const links = linkMap(snaps);
+  for (const { room, id } of snaps) {
     // EVERY room, including the lane-room template and the planned ones: the template holds four real
     // commands, and dropping it made the catalogue count four fewer than arc has. A row whose room
     // cannot be opened says so through canOpen rather than being left out (factory ring).
-    if (!room) continue;
-    const id = asText(room.id);
-    // A row whose room this shell cannot name is DROPPED and counted, never drawn as "undefined" with a
-    // live click handler behind it (Phase 03 attack).
-    if (id === null) { unreadable.push("a room with no id"); continue; }
+    const r = /** @type {Record<string, unknown>} */ (room);
+    // A row whose room this shell cannot name is DROPPED and counted, never drawn as "undefined" with a live
+    // click handler behind it (Phase 03 attack) -- and an id outside the room-id grammar ("board " with a space)
+    // is not a room this shell can name either (money ring attack).
+    if (id === null) { for (const k of wanted) out[k]?.unreadable.push("a room with no id"); continue; }
     const { lists, unreadable: bad } = heldBy(room);
-    // What a room carried here unreadably is named, so a catalogue that shrank says why.
-    if (bad.includes(key)) unreadable.push(id);
-    for (const name of listOf(lists, key)) {
-      const rowKey = `${name}@${room.id}`;
-      if (seen.has(rowKey)) continue;
-      seen.add(rowKey);
-      const link = roomLink(ctx, id);
-      const roomName = asText(room.name) ?? id;
-      out.push({ key: rowKey, name, room: link.room, roomName, canOpen: link.canOpen });
+    const link = links.get(id) ?? { canOpen: false, room: "" };
+    const roomName = asText(r["name"]) ?? id;
+    for (const k of wanted) {
+      const section = out[k];
+      const seenKeys = seen[k];
+      if (section === undefined || seenKeys === undefined) continue;
+      // What a room carried here unreadably is named, so a catalogue that shrank says why.
+      if (bad.includes(k) || bad.includes("holds")) section.unreadable.push(id);
+      for (const name of listOf(lists, k)) {
+        const rowKey = `${name}@${id}`;
+        if (seenKeys.has(rowKey)) continue;
+        seenKeys.add(rowKey);
+        section.rows.push({ key: rowKey, name, room: link.room, roomName, canOpen: link.canOpen });
+      }
     }
   }
   // One alphabet: the find box folds case, so the list is ordered the same way rather than putting
   // ARC-SHIP, Arc-Ship and arc-ship in three places (Phase 03 attack).
   /** @param {string} s */
   const fold = (s) => s.toLowerCase();
-  out.sort((a, b) => (fold(a.name) < fold(b.name) ? -1 : fold(a.name) > fold(b.name) ? 1 : a.roomName < b.roomName ? -1 : a.roomName > b.roomName ? 1 : 0));
-  return { rows: out, unreadable: [...new Set(unreadable)] };
+  for (const k of wanted) {
+    const section = out[k];
+    if (section === undefined) continue;
+    section.rows.sort((a, b) => (fold(a.name) < fold(b.name) ? -1 : fold(a.name) > fold(b.name) ? 1 : a.roomName < b.roomName ? -1 : a.roomName > b.roomName ? 1 : 0));
+    section.unreadable = [...new Set(section.unreadable)];
+  }
+  return out;
+}
+
+/**
+ * One section of the catalogue: the same one-pass build, asked for a single key.
+ * @param {FoldContext | { rooms?: unknown[] }} ctx @param {string} key
+ * @returns {CatalogueSection}
+ */
+export function heldAcrossRooms(ctx, key) {
+  return catalogueOf(ctx, [key])[key] ?? { rows: [], unreadable: [] };
 }
 
 /**
@@ -524,7 +710,52 @@ export function holdsCount(base, key) {
  * @returns {{ canOpen: boolean, room: string }}
  */
 export function roomLink(ctx, id) {
-  const hit = (ctx.rooms || []).find((r) => r && r.id === id);
-  const openable = hit !== undefined && hit.planned !== true && hit.status !== "planned" && hit.template !== true && hit.status !== "template";
+  // A rooms value that is not a list opens nothing, rather than throwing the whole room into a Failure.
+  const rooms = Array.isArray(ctx.rooms) ? ctx.rooms : [];
+  const hit = idSnapshots(rooms).find((s) => s.id !== null && s.id === id);
+  const openable = hit !== undefined && isOpenable(hit.room);
   return { canOpen: openable, room: openable ? id : "" };
+}
+
+/**
+ * Each room with its id read once and held to the room-id grammar (null when it is not a room id).
+ * @param {unknown[]} rooms
+ * @returns {{ room: object, id: string | null }[]}
+ */
+function idSnapshots(rooms) {
+  /** @type {{ room: object, id: string | null }[]} */
+  const out = [];
+  for (const room of rooms) {
+    if (!room || typeof room !== "object") continue;
+    const raw = /** @type {Record<string, unknown>} */ (room)["id"];
+    out.push({ room, id: typeof raw === "string" && ROOM_ID.test(raw) ? raw : null });
+  }
+  return out;
+}
+
+/**
+ * The one answer to "can the rail open this room": served, built, not the lane-room template.
+ * @param {unknown} r
+ */
+function isOpenable(r) {
+  if (!r || typeof r !== "object") return false;
+  const o = /** @type {Record<string, unknown>} */ (r);
+  return o["planned"] !== true && o["status"] !== "planned" && o["template"] !== true && o["status"] !== "template";
+}
+
+/**
+ * Every room's link, keyed by id, built once from the id snapshots: the FIRST room with an id answers for it,
+ * exactly as roomLink's search does, so the catalogue and a single link cannot disagree.
+ * @param {{ room: object, id: string | null }[]} snaps
+ * @returns {Map<string, { canOpen: boolean, room: string }>}
+ */
+function linkMap(snaps) {
+  /** @type {Map<string, { canOpen: boolean, room: string }>} */
+  const map = new Map();
+  for (const { room, id } of snaps) {
+    if (id === null || map.has(id)) continue;
+    const openable = isOpenable(room);
+    map.set(id, { canOpen: openable, room: openable ? id : "" });
+  }
+  return map;
 }

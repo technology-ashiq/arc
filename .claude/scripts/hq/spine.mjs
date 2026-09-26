@@ -21,7 +21,7 @@
 //   spine cursor                       # the id of the newest event, for a consumer to store
 //   spine days                         # the days that exist
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { SpineError, ULID_RE } from "./lib/canonical.mjs";
 import { dayFile, listDays, spineRoot, derivedDir, quarantineDir, readIdemIndex, isDayClosed } from "./lib/spine-io.mjs";
 import { join } from "node:path";
@@ -46,17 +46,21 @@ export function chooseEngine(root, requested) {
 
 /**
  * Read every event in append order.
- * Returns { events, torn } -- torn lines are REPORTED, never silently dropped: a line the
+ * Returns { events, torn, unreadable } -- torn lines and unopenable day files are REPORTED, never dropped: a line the
  * reader cannot parse is exactly the kind of damage that must not look like an empty day.
  */
 export function scanAll(root) {
   const events = [];
   const torn = [];
+  // A day FILE that cannot be opened -- held exclusively by another process (EBUSY), unreadable, a directory where the
+  // file belongs -- is REPORTED like a torn line, never skipped: skipping it served 55 of 90 receipts beside a torn
+  // count of zero, which is damage dressed as a smaller day (face v2 Phase 04 round 3).
+  const unreadable = [];
   let seq = 0;
   for (const day of listDays(root)) {
     const file = dayFile(root, day);
     let text;
-    try { text = readFileSync(file, "utf8"); } catch { continue; }
+    try { text = readFileSync(file, "utf8"); } catch (e) { unreadable.push({ day, code: String((e && e.code) || "UNREADABLE") }); continue; }
     const lines = text.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -66,10 +70,17 @@ export function scanAll(root) {
         torn.push({ day, line: i + 1 });
         continue;
       }
+      // A line that parses to something that is not an object -- `null`, a number, a string, an array -- is not an
+      // event either. It used to be kept as one, and every consumer that read `.kind` off it threw: one such line
+      // turned /api/health, /api/spine and ten Phase 04 door routes into 500s (face v2 Phase 04 attack). It is torn.
+      if (event === null || typeof event !== "object" || Array.isArray(event)) {
+        torn.push({ day, line: i + 1 });
+        continue;
+      }
       events.push({ event, day, seq: seq++, line });
     }
   }
-  return { events, torn };
+  return { events, torn, unreadable };
 }
 
 /**
@@ -95,10 +106,13 @@ export async function readAll(root, engine) {
         const torn = db.prepare("SELECT day, line FROM torn ORDER BY day, line").all()
           .map((t) => ({ day: t.day, line: t.line }));
         for (const r of rows) {
-          try { events.push({ event: JSON.parse(r.line), day: r.day, seq: r.seq, line: r.line }); }
-          catch { torn.push({ day: r.day, line: r.seq }); }
+          let event;
+          try { event = JSON.parse(r.line); } catch { torn.push({ day: r.day, line: r.seq }); continue; }
+          // The canonical scan's rule, applied here too, so the two engines tell the same story about a non-object line.
+          if (event === null || typeof event !== "object" || Array.isArray(event)) { torn.push({ day: r.day, line: r.seq }); continue; }
+          events.push({ event, day: r.day, seq: r.seq, line: r.line });
         }
-        return { events, torn, engine: "sqlite" };
+        return { events, torn, unreadable: [], engine: "sqlite" };
       } finally { db.close(); }
     } catch (e) {
       if (process.env.ARC_SPINE_ENGINE === "sqlite")
@@ -130,8 +144,43 @@ export function applyFilters(events, { kind, since, venture, date, limit } = {})
 }
 
 export async function query(root, filters = {}) {
-  const { events, torn, engine } = await readAll(root, filters.engine);
-  return { events: applyFilters(events, filters), torn, engine };
+  // unreadable is carried through: a caller asking "is it already on the spine?" must know a day it could not read --
+  // pick raised a second pick past an unreadable day file (PR 4 shell attack).
+  const { events, torn, unreadable, engine } = await readAll(root, filters.engine);
+  return { events: applyFilters(events, filters), torn, unreadable: unreadable || [], engine };
+}
+
+/**
+ * The spine's STAT fingerprint (face v2 Phase 05, REQ-11): one line per entry of events/ and of the quarantine --
+ * name, size, modification time -- and never a byte of any of them. The face's pulse hashes it to ask "did anything
+ * change?" every two seconds. Here, beside spineHealth and for the same reason: the door never lists events/ itself
+ * (ADR-0030, held by spine-reader-lint).
+ * @param {string} root @returns {string[]}
+ */
+export function spineStamp(root) {
+  /** @type {string[]} */
+  const parts = [];
+  /** @param {string} label @param {string} p */
+  const stamp = (label, p) => {
+    try { const s = statSync(p); parts.push(`${label}|${s.size}|${s.mtimeMs}`); }
+    catch { parts.push(`${label}|absent`); }
+  };
+  const ev = join(root, "events");
+  /** @type {string[]} */
+  let names = [];
+  try { names = readdirSync(ev).sort(); } catch { parts.push("events|unreadable"); }
+  // A CLOSED day's bytes are pinned for ever (ADR-0029), so its name is its whole fingerprint: the listing already says
+  // it is closed, and statting every closed day on every pulse cost 327 ms a pulse on a five-year spine, on the door's
+  // one thread, every two seconds per open tab (PR 2 logic attack). Only open days, and anything else here, are statted.
+  const closed = new Set(names.filter((n) => /^\d{4}-\d{2}-\d{2}\.closed$/.test(n)).map((n) => n.slice(0, 10)));
+  for (const n of names) {
+    const day = /^(\d{4}-\d{2}-\d{2})\.(jsonl|closed)$/.exec(n);
+    if (day && closed.has(day[1])) parts.push(`events/${n}|closed`);
+    else stamp(`events/${n}`, join(ev, n));
+  }
+  const q = quarantineDir(root);
+  try { for (const n of readdirSync(q).sort()) stamp(`quarantine/${n}`, join(q, n)); } catch { /* no quarantine yet */ }
+  return parts;
 }
 
 /**

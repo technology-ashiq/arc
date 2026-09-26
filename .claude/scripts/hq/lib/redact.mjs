@@ -112,6 +112,24 @@ function hasJwt(view) {
 
 const ZERO_WIDTH = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g;
 const MAX_BASE64_CANDIDATES = 200;
+
+/**
+ * A candidate cap that grows with the text being scanned (ADR-0226), for callers whose payloads are
+ * documents rather than events. The flat 200 was sized for spine events; a real PR diff carries
+ * 600-1,800 base64-shaped runs (paths, hashes), so arc-run refused every attack input on a feature
+ * PR. The scan stays EXHAUSTIVE -- every candidate is still decoded and scanned.
+ *
+ * WHAT THIS CEILING NOW MEANS, said plainly rather than implied: candidates are mined from the first
+ * four views only, each no longer than the text, and a run is >= 24 characters plus a separator --
+ * so no text can yield more than ~4*len/25 of them, which is under len/6. Above the flat 200 this
+ * ceiling is therefore unreachable by construction; what bounds the work is that it is linear in
+ * the text. A first cut used len/64, which a hex-dense diff (the sync-golden manifest carries one
+ * run per ~60 bytes) could still overflow -- a ceiling that fires on real input is the defect this
+ * function exists to remove. Measured 2026-09-23: 1,811 candidates over a 336 KB diff, 237 ms.
+ */
+export function sizeScaledCap(text) {
+  return Math.max(MAX_BASE64_CANDIDATES, Math.ceil(String(text ?? "").length / 6) + 8);
+}
 const BASE64_RUN = /[A-Za-z0-9+/]{24,4096}={0,2}/g;
 
 function collectStringValues(value, out, depth = 0) {
@@ -122,8 +140,12 @@ function collectStringValues(value, out, depth = 0) {
     for (const k of Object.keys(value)) collectStringValues(value[k], out, depth + 1);
 }
 
-// Each view is a different way the same secret could be hiding.
-function buildViews(canonicalText, parsed) {
+// Each view is a different way the same secret could be hiding. `joinFrom` is the value whose strings are joined for
+// the adjacency views (default: all of `parsed`). The emitter passes its event WITHOUT the fields it generates from the
+// clock (id, ts, idem): joined beside a caller's string they made the verdict random -- one payload judged 48 times was
+// refused twice, and a dry-run's ACCEPT did not predict the real emit (PR 3b attacks). Those fields are still scanned
+// whole, in every canonical view.
+function buildViews(canonicalText, parsed, joinFrom = parsed, maxCandidates = MAX_BASE64_CANDIDATES) {
   const views = [canonicalText];
   const stripZw = (s) => s.replace(ZERO_WIDTH, "");
 
@@ -133,7 +155,7 @@ function buildViews(canonicalText, parsed) {
   views.push(stripZw(canonicalText).replace(/\s+/g, ""));
 
   const strings = [];
-  if (parsed !== undefined) collectStringValues(parsed, strings);
+  if (joinFrom !== undefined) collectStringValues(joinFrom, strings);
   if (strings.length) {
     // Adjacency in ONE order is not adjacency: swapping two fields defeated the original
     // single concatenation, so join in several orders.
@@ -153,7 +175,7 @@ function buildViews(canonicalText, parsed) {
       const run = m[0];
       if (seen.has(run)) continue;
       seen.add(run);
-      if (++decoded > MAX_BASE64_CANDIDATES)
+      if (++decoded > maxCandidates)
         // Silently skipping the rest would turn a padded payload into a clean bill of
         // health -- exactly the fail-open this scanner exists to prevent.
         throw new SpineError("REDACT_FAIL", "too many base64 candidates to scan exhaustively");
@@ -169,12 +191,16 @@ function buildViews(canonicalText, parsed) {
  * Throws SpineError("REDACT_FAIL") if the scan itself could not complete -- the caller
  * must then drop the payload (never emit it unscanned).
  */
-export function scanSecrets(canonicalText, parsed) {
+export function scanSecrets(canonicalText, parsed, { joinFrom = parsed, maxCandidates = MAX_BASE64_CANDIDATES } = {}) {
+  // A cap that is not a positive integer is refused, not coerced: `++decoded > NaN` is always
+  // false, so a bad value would silently mean "no ceiling at all".
+  if (!Number.isInteger(maxCandidates) || maxCandidates < 1)
+    throw new SpineError("REDACT_FAIL", `maxCandidates must be a positive integer (got ${String(maxCandidates)})`);
   let views;
   try {
     const structural = scanStructural(parsed);
     if (structural) return { hit: true, rule: structural };
-    views = buildViews(canonicalText, parsed);
+    views = buildViews(canonicalText, parsed, joinFrom, maxCandidates);
   } catch (e) {
     if (e instanceof SpineError && e.code === "REDACT_FAIL") throw e;
     throw new SpineError("REDACT_FAIL", `secret scan could not build its views: ${e.message}`);
@@ -188,4 +214,20 @@ export function scanSecrets(canonicalText, parsed) {
     throw new SpineError("REDACT_FAIL", `secret scan failed: ${e.message}`);
   }
   return { hit: false };
+}
+
+/**
+ * One line of a child's output, made safe to write live into a log a reader parses (face Phase 06 slice 03c, attack
+ * 3e77530 B8): control, format and line-break characters become spaces, a line matching a secret rule is withheld by
+ * name, and a line that would begin with `arc-run:` -- the prefix of the one receipt line the face's door credits -- is
+ * marked as the driver's. arc-run's own lines are written by arc-run itself, never through here.
+ * @param {string} line @returns {string}
+ */
+export function liveLine(line) {
+  const clean = String(line).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ");
+  let hit = null;
+  try { const v = scanSecrets(clean, { clean }, { maxCandidates: sizeScaledCap(clean) }); if (v.hit) hit = v.rule; }
+  catch { hit = "unscannable"; }
+  if (hit) return `driver: [a line withheld -- it matched the secret rule ${hit}]`;
+  return /^\s*arc-run:/i.test(clean) ? `driver: ${clean}` : clean;
 }

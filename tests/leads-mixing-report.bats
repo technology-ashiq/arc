@@ -407,6 +407,9 @@ _has_campaign() {   # campaign-name, JSON on stdin
   rm "$ARC_SPINE_ROOT/events/restored.jsonl.orig"
   : > "$ARC_SPINE_ROOT/events/2026-08-04.closed"
   mkdir -p "$ARC_SPINE_ROOT/events/_quarantine"
+  # The NAMED locks withLock takes in events/ -- a killed evolve apply leaves its lock behind (PR 3b shell attack).
+  : > "$ARC_SPINE_ROOT/events/.evolve-apply.lock"
+  : > "$ARC_SPINE_ROOT/events/.job-nightly-digest.lock"
   run --separate-stderr _report --campaign pilot --from "$FROM" --to "$TO"
   [ "$status" -eq 0 ] || { echo "a known marker was treated as unclassifiable: $stderr"; false; }
   n="$(printf '%s' "$output" | _field rehearsal)"

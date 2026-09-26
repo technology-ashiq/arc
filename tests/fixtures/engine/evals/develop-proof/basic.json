@@ -1,0 +1,12 @@
+{
+  "note": "Eval fixture (face Phase 06). `expected` asserts the SHAPE of a proved slice: the slice id, the 8-character merged commit develop.mjs prove printed, and the slice.done receipt id. Wording is free.",
+  "input": {
+    "lane": "face",
+    "phase": "06"
+  },
+  "expected": {
+    "slice": "04",
+    "commit": "ab425ac6",
+    "receipt_id": "01M37D0KHFPXBDBWQRYPMEXVT8"
+  }
+}

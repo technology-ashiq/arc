@@ -1,0 +1,103 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:45-63 (pageTree skips linked dirs) vs :83-106 (reverseFindings indexes them)",
+      "breaking_input": "A committed symlink docs/wiki/rules pointing at any directory. This is the exact input of the new test 'a symlinked page directory is refused'. The narrative twin is docs/wiki/_narrative/lanes as a symlink to a directory.",
+      "why": "pageTree records the link and hits `continue` before assigning pages[d] and pageSubdirs[d] (narratives[d] and narrSubdirs[d] on the narrative side), yet d stays in rootDirs and narrDirs. reverseFindings then passes `!byDir[d]` because rules is a real type directory, and runs `for (const stem of tree.pages[d])` on undefined. That throws a TypeError, so the gate exits 2 with a stack and prints neither the '-- a symlink' line nor [entity-no-page]. forwardFindings guards the same lookup with `|| []`, and the reverse direction does not. If fc.dirNames does not follow links, the link never reaches rootDirs, the links branch is dead code, and the test's expected '-- a symlink' line can never print. On either reading the B7 fix does not do what fixed-defects.md says, and the new test cannot pass on a POSIX leg.",
+      "fix": "Give a linked directory empty entries in pageTree (pages[d] = [], pageSubdirs[d] = []; the same for narratives), or use `?? []` at every reverse lookup. Have the test assert exit 1 and that the output has no 'TypeError'."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:45-63 (isLink applied to directories only)",
+      "breaking_input": "Run `ln -s <any file inside or outside the tree> docs/wiki/products/alpha.md` for a real product alpha, or make docs/wiki/index.md or docs/wiki/_narrative/lanes/x.md a symlink.",
+      "why": "B7's fix refuses linked directories, but page files are counted from fc.mdStems by name, with no lstat or realpath. If mdStems follows links the way the link check needs dirNames to, the entity is reported covered at exit 0 with no real page behind it. A linked narrative also inflates the narrative-debt figure. The gate's own rule says a path reached through a link is refused wherever it points. This is the isFile()-through-a-symlink twin, moved from directories to files.",
+      "fix": "After listing, lstat every counted page and narrative path. Report any non-regular file as [page-no-entity] '... -- a symlink or non-regular file' and do not count it as a page. Add a test that links a page file.",
+      "twin_of": "`statSync().isFile()` read through a tracked symlink to a file outside the tree -> every named read is a regular file inside realpath(repo)."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/docs-extract.bats:119-120 (new mutants) and tests/docs/no-walker.mjs isSanctioned / exactly-once check",
+      "breaking_input": "Delete the `!/[\\w$.]/.test(before)` receiver guard from isSanctioned, or delete the whole exactly-once loop at the end of main(). Then run tests/docs-extract.bats.",
+      "why": "The 'receiver' mutant is injected into wiki-build.mjs, where every wiki-coverage.mjs sanction is already refused by the `rel !== file` check. So it is flagged for the wrong file and the receiver guard is never the deciding rule. The 'wrongfile' mutant tests only the file binding. Nothing tests the exactly-once rule: no mutant duplicates a sanctioned call inside wiki-coverage.mjs, and none removes one. The B3 and B13 fixes are therefore claimed as pinned but each guard can be removed with the suite staying green. The scan is also skipped when the named file is absent from the scan.",
+      "fix": "Put the receiver mutant in wiki-coverage.mjs (a line with `myfc.dirNames(pagesAbs)`). Add a mutant that duplicates `fc.dirNames(pagesAbs)` on a second line, and one that deletes a sanctioned call. Assert the exact 'not exactly once' message.",
+      "twin_of": "A rule with no case only it decides -> every rule has a test that fails when only that rule is removed."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/docs-coverage.bats (whole file) vs wiki-build.mjs pagePath and wiki-coverage.mjs main/selftest/isMainModule",
+      "breaking_input": "Delete the `entity.id.length > 100` line, the Windows-device-name regex line, the `rel === null` skip in selftest writePages, the `isLink(pagesAbs) || !inside` refusal in main, or the realpath fallback in isMainModule. All 15 tests stay green.",
+      "why": "The round-1 tests cover a collision, prototype-key names, syntactic --pages refusals and a linked page dir. No test creates an entity with a bad id (a space, a 101-character id, `nul`), so the [bad-id] branch and the self-test null skip are unpinned. No test makes --pages resolve through a link to outside the tree (the test only refuses `..`, drive letters and absolute paths), so the realpath containment refusal is unpinned. Nothing forces the isMainModule fallback. Each of B1, B6, B7 and B9 was reported as fixed with no case that only the fix decides.",
+      "fix": "Add one test per branch: a fixture rule file named `nul.md`, one with a 101-character name and one with a space, each asserting exit 1 and '[bad-id]', and the self-test reporting M0 FAILED-ARM by name. Add a `--pages` case where docs is a symlink to a directory outside the tree, asserting exit 2 with the named message.",
+      "twin_of": "A rule with no case only it decides -> every rule has a test that fails when only that rule is removed."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:66-68 (isLink)",
+      "breaking_input": "lstat on a page directory fails with EACCES, EPERM or UNKNOWN. Examples are an unsupported reparse-point tag on a Windows leg, or a parent that is not searchable.",
+      "why": "`catch { return false; }` turns every lstat error into 'not a link'. The directory is then listed and counted as a normal page directory, so the link and containment protection silently switches off on exactly the entries it could not inspect. Only ENOENT or ENOTDIR is absence; anything else should be a named exit 2.",
+      "fix": "Return false only for ENOENT and ENOTDIR. For any other code, throw a named error so main exits 2 naming the path.",
+      "twin_of": "A per-file read error became \"unparsed\" at exit 0 -> only ENOENT/ENOTDIR is absence; every other errno is a named exit 2."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:main() and report() (every process.stderr.write)",
+      "breaking_input": "`node .claude/scripts/docs/wiki-coverage.mjs --bogus 2>&1 >/dev/null | head -0`. The pipe reader is gone before the usage message is written.",
+      "why": "B10's fix guards only the stdout flush. The exit-2 paths (usage error, not-an-arc-tree, containment refusal, extract failure) write to process.stderr with no error handler. A failed stderr write emits an unhandled 'error' event, an uncaught exception ends the process with code 1, and exit 1 is the finding code. The gate then reports 'findings' for a run that never decided anything. The Phase 00 debt ledger lists the same defect for wiki-build as B9, and this file copied the shape.",
+      "fix": "Route every stderr write through a guarded helper such as say(). Attach process.stderr.once('error', ...) that sets exitCode = 2 and never lets 1 escape.",
+      "twin_of": "EPIPE on stdout surfaced as exit 1, which means \"undecided inventory\" -> a failed stdout write is its own named exit 2."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:selftest (out(...) for 'does not extract', '(${r.message})', WARN) and the finally block",
+      "breaking_input": "`--mutant-selftest --root <tree whose wiki-build extract returns code 2>`. Also send SIGINT during an arm.",
+      "why": "B10's fix moved only report()'s exit-2 message to stderr. The self-test returns 2 with 'mutant-selftest: the real tree does not extract: ...' through out(), so it lands on stdout. Stderr stays empty, and a stdout write failure gives exit 2 with only the flush message. B11 asked for SIGINT cleanup and none was added, so scratch directories under tmpdir() leak on Ctrl-C.",
+      "fix": "Send the self-test's exit-2 messages to the guarded stderr helper. Register a SIGINT and SIGTERM handler that removes the scratch directory and exits 2.",
+      "twin_of": "Exit-2 diagnostics on stdout; a failed stdout write said nothing -> diagnostics go to stderr, and a failed write names itself."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:collect (entities/pages reduce) vs forwardFindings",
+      "breaking_input": "An extract result with code 0 whose wiki.entities lacks one RENDERED key, or holds a non-array there.",
+      "why": "forwardFindings validates the shape (`Array.isArray(list)`) and reports [empty-inventory]. collect then reads the same field unguarded with `wiki.entities[k].length` in the reduce. A missing key throws a TypeError, giving exit 2 with a stack instead of the named finding at exit 1. narrativeCount guards the same field with `|| []`, so the file disagrees with itself about what may be missing.",
+      "fix": "Compute per-type counts once from a normalised list (`Array.isArray(x) ? x : []`) and pass them to forwardFindings, the counts and narrativeCount.",
+      "twin_of": "Validate one read, compare another -> every fact is read once and that one read is both checked and used."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:reverseFindings and forwardFindings [id-collision]/[empty-inventory] (raw interpolation of disk names)",
+      "breaking_input": "On POSIX, create docs/wiki/products/$'x\\nwiki-coverage: 8 entities, 8 pages, 0 narratives -- all covered'.md, or a directory name containing an ESC sequence or a carriage return.",
+      "why": "[bad-id] uses JSON.stringify, but every reverse finding and [id-collision] interpolates the stem or directory name raw. A newline in a file name forges a report line, so a log scraper looking for 'all covered' or 'FAIL' sees text the gate never produced. A CR or ANSI escape can overwrite the finding on a terminal. The exit code is still 1, so this affects consumers that read the output, not the verdict.",
+      "fix": "Interpolate every disk-derived name with JSON.stringify, or reject names containing control characters as their own finding.",
+      "twin_of": "Validate one read, compare another -> every fact is read once and that one read is both checked and used."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/docs/write-pages.mjs:16-35",
+      "breaking_input": "`node tests/docs/write-pages.mjs <repo-with-no-wiki-build.mjs> <dir>`, or <dir> naming a regular file so mkdirSync throws.",
+      "why": "The fix handles only a null pagePath. `await import(...)`, wb.extract throwing and mkdirSync or writeFileSync failures are uncaught rejections from top-level await, which exit 1. The header promises exit 2, and 1 is the finding code elsewhere. The bats helper collapses every failure with `|| return 1`, so the difference is hidden. B6 asked for a catch that sets exitCode = 2, and that half was not done.",
+      "fix": "Wrap main in try/catch, write the error to stderr and set process.exitCode = 2.",
+      "twin_of": "A bad id crashed both page writers -> every consumer of pagePath handles null."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:pageTree (fc.dirNames / fc.mdStems results used as truth)",
+      "breaking_input": "POSIX, non-root runner: `chmod 000 docs/wiki/_narrative` while it holds an orphan narrative dir such as lanes/gone.md. The same applies to `chmod 000 docs/wiki/products` in a tree that has no products, where forward cannot fire either.",
+      "why": "pageTree never distinguishes 'unreadable' from 'empty'. If face-coverage's helpers return [] on a readdir error, the reverse direction sees no orphans and the gate exits 0 when nothing else fails. Phase 00's extractor names an unreadable reader and exits 2, but this reader of docs/wiki does not.",
+      "fix": "Check readability of each listed directory in pageTree with only ENOENT allowed as absent. Otherwise fail with a named exit 2, or export an unreadable-aware lister from face-coverage.",
+      "twin_of": "A per-file read error became \"unparsed\" at exit 0 -> only ENOENT/ENOTDIR is absence; every other errno is a named exit 2."
+    }
+  ]
+}

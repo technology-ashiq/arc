@@ -21,6 +21,53 @@ load 'test_helper'
   [ -n "$n" ] && [ "$n" -ge 215 ] || { echo "only $n checks ran: $output"; false; }
 }
 
+@test "face v2: the ops dock's decisions run with no install, and every check passes" {
+  run node "$ARC_ROOT/tests/face/ops-logic.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok runVerdict: exit 0 with no receipt is said as that, never as success"* ]] || { echo "$output"; false; }
+}
+
+@test "face v2: the session dock's decisions run with no install, and a session starts only from its Start click" {
+  run node "$ARC_ROOT/tests/face/session-dock.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok THE REAL TREE HOLDS: one sessionStart call, inside onStart, bound to onClick"* ]] || { echo "$output"; false; }
+  # The mutant count is DERIVED: the suite prints MUTANTS: n, and exactly n mutants must read REFUSED -- a mutant
+  # dropped from the list, or one the gate passed, moves one number and not the other.
+  local declared refused
+  declared=$(printf '%s\n' "$output" | sed -n 's/^MUTANTS: \([0-9]\{1,\}\)$/\1/p')
+  refused=$(printf '%s\n' "$output" | grep -c '^ok MUTANT REFUSED by the click-only gate: ' || true)
+  [ -n "$declared" ] && [ "$declared" -ge 20 ] && [ "$refused" -eq "$declared" ] || { echo "MUTANTS: $declared declared, $refused refused"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: an auto-start on mount"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start from Ask"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start that skips the click token"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start through door.call on the start route"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start by bracket access"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: an auto-start on mount, no braces"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start from a new .jsx file"* ]] || { echo "$output"; false; }
+}
+
+@test "face v2: the Engine room shows driver, model and health, and a planted provider key FAILs the no-key check" {
+  run node "$ARC_ROOT/tests/face/engine-room.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok HEALTH: the row names the model the driver ran on"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY (an ok /api/engine body): named by its read, WITHHELD everywhere in the room"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY (an ok /api/spine body): named by its read, WITHHELD everywhere in the room"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY (a REFUSED /api/engine read, the key in its human text)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok ONE SET: the face holds every provider-key rule the redactor holds, by name"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO FALSE ALARM: an id holding sk- inside a word is not a key"* ]] || { echo "$output"; false; }
+  # The count is DERIVED by the suite from its own case lists; it must have run exactly that many.
+  local exp got
+  exp=$(printf '%s\n' "$output" | sed -n 's/^EXPECTED: \([0-9]\{1,\}\)$/\1/p')
+  got=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks$/\1/p')
+  [ -n "$exp" ] && [ "$exp" = "$got" ] && [ "$exp" -eq 47 ] || { echo "EXPECTED $exp, RAN $got"; false; }
+}
+
 @test "no L3 test or source file carries a byte that makes grep call it binary" {
   # A literal NUL in a source file makes grep treat the whole file as binary, and a
   # binary-flagged file is SKIPPED silently by every grep-driven gate -- including CI's own
@@ -430,17 +477,137 @@ load 'test_helper'
              "UNDECLARED: a payload for a route the manifest does not declare FAILs the fold (REQ-05)" \
              "a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)" \
              "SHIPPED RING command: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-command.md: the list names exactly what the folds render, both ways" \
-             "VERBS PENDING LIST verbs-pending-command.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING kernel: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-kernel.md: the list names exactly what the folds render, both ways" \
-             "NOT SERVED LIST not-served-kernel.md: every row grep counts parses here too" \
-             "VERBS PENDING LIST verbs-pending-kernel.md: the list names exactly what the folds render, both ways" \
              "SHIPPED RING factory: its module folders are modules-v2.json's ids for the ring" \
-             "NOT SERVED LIST not-served-factory.md: the list names exactly what the folds render, both ways" \
-             "VERBS PENDING LIST verbs-pending-factory.md: the list names exactly what the folds render, both ways" \
-             "F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it" \
-             "F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat"; do
+             "SHIPPED RING money: its module folders are modules-v2.json's ids for the ring" \
+             "REHEARSAL LIST rehearsal-money.md: the list names exactly what the folds render, both ways" \
+             "F3: MUTANT -- a fold that returns a LIVE pill anywhere in its output is caught" \
+             "F3: trader with every read it asks for answered wears no LIVE pill anywhere in what it returns" \
+             "F3: trader's View marks the room data-planned and draws no live tone" \
+             "F3: chat-mcp's rail and head badge says planned, never live, whatever its kinds did" \
+             "F3: MUTANT -- a built room whose kinds fired still reads live, so the planned badge is not a blanket" \
+             "F2: the scheduler fold, handed its manifest, asks the door for its trail (vacuous-pass guard)" \
+             "F2: NEXT FIRE -- served by /api/jobs, and no longer named NOT SERVED" \
+             "F2: HEARTBEAT -- served by /api/jobs, and the trail's last fire is still drawn as a fire, not as a beat" \
+             "F2: a body answering another route is WRONG_ROUTE, never a table" \
+             "NOT SERVED LIST residue.md: the list names exactly what the folds render, both ways" \
+             "NOT SERVED LIST residue.md: every row grep counts parses here too" \
+             "SERVED LIST served.md: the list names exactly what the folds render, both ways" \
+             "SERVED: every route a served panel names is a door route" \
+             "PHASE 04 INPUT: every panel Phase 03 named NOT SERVED is now served or in the residue, none dropped" \
+             "VERBS PENDING LIST verbs-pending.md: the list names exactly what the folds render, both ways" \
+             "PHASE 05: the pending cards are Phase 03's minus exactly the cards an op retired" \
+             "PHASE 05: every retirement names a card Phase 03 drew" \
+             "PHASE 05: an op retires a card only in its own room"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: the shared lane-room fold answers every loaded-page branch, and its seven toolbelt mutants FAIL" {
+  # The factory ring's debt row, paid in the money ring: module-frame folds with nothing loaded, so what a
+  # fold ANSWERS over a served page had no negative control until this suite (face v2 Phase 03).
+  run node "$ARC_ROOT/tests/face/lane-room.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 50 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm i
+  for arm in "LANE WRONG_LANE: the strip asks isRefused FIRST and never draws the other lane's status" \
+             "TRAIL WRONG_KINDS: a page carrying a kind this room never asked for is not its trail" \
+             "TRAIL PARTIAL: a count larger than the page it came with is partial even when more is false" \
+             "RUNS: a timestamp this shell cannot read says so rather than being sliced into a clock" \
+             "FILE WRONG_FILE: another file's body under this id is refused by name" \
+             "MANIFEST: a trail the manifest cannot read is REFUSED by the shared fold, with the host's own rule" \
+             "MANIFEST: a fold handed NO manifest fails closed -- every read refused, none planned" \
+             "CATALOGUE: every section is built from one pass -- each room's holds read ONCE, not once per section" \
+             "KIT: a phase's spec and its Build Brief are ONE row, the spec's title, the brief named beside it" \
+             "TOOLBELT: the real fold passes every catalogue check" \
+             "all seven mutants were built and run"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+  for i in 1 2 3 4 5 6 7; do
+    [[ "$output" == *"ok MUTANT $i ("*") is FAILED by the catalogue checks"* ]] || { echo "mutant $i survived or never ran"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: the money ring's shared folds answer every loaded branch -- substance, gate, kill panel, planned row" {
+  # The money ring attacker's seventeen surviving mutants, each pinned by a check that fails when its decision is
+  # removed: WRONG_SUBSTANCE, green without the gate or on a simulated door, an unread health body, the
+  # unreceipted kill panel, the planned row guessed, the seal word printed, a LIVE pill in any case (face v2 Phase 03).
+  run node "$ARC_ROOT/tests/face/money-ring.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 45 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "READS: a fold handed no manifest reads nothing, and says so in every panel" \
+             "SUBSTANCE: the real read answered with model.mode \"SIMULATED\" is refused WRONG_SUBSTANCE, never drawn as real" \
+             "GATE: a door reading a SIMULATED spine never spends green, whatever kinds its spine holds" \
+             "HEALTH: a health body with no kinds LIST is refused, and the gate says health did not answer -- never 'has never fired'" \
+             "VENTURES: an unreceipted criteria file measures nothing -- no roster, every count unread, never 0" \
+             "PLANNED: two rows for one room are refused -- choosing one would be a guess" \
+             "PLANNED: the file's text is un-escaped ONCE -- a literal entity in it stays literal" \
+             "F3: trader with its file read returns no LIVE pill in any case"              "MONEY: a day read answered with the month model is refused, never drawn"              "MONEY: fourteen days per substance, each in its own table -- real, simulated, and cost lines counted, never summed"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: Phase 04 served panels answer every loaded branch, and the door refuses a hostile tree by name" {
+  # The Phase 04 attackers' surviving mutants, each pinned by a check that fails when its decision is removed: an
+  # empty table for a body with no list, a sum across substances or currencies, the overdue flag ignored, a seal drawn
+  # as quoted, a Definition of Done blind to refused slices -- and at the door, a wrong-shaped file read as empty, a
+  # junction off the tree, an address where a lead id belongs, a null spine line, an env var swapping a file.
+  run node "$ARC_ROOT/tests/face/phase04-folds.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 141 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "SERVED: a body with no list where the rows live is BAD_BODY -- never an empty table" \
+             "SERVED: unreadable, blank and repeated entries are COUNTED in the note, and never drawn" \
+             "MONEY DAY: the real cell holds the real amount alone -- never real + simulated" \
+             "MONEY DAY: cost lines counted per currency and never totalled, the unmeasurable one counted on its day" \
+             "SCHEDULER: a job whose overdue flag is set reads overdue, whatever its state string says" \
+             "LEGAL: a seal the policy file does not quote is drawn as drifted, never as quoted" \
+             "DEVELOP: a task file with a heading the parser refused does NOT prove its close" \
+             "DAILY: the day's cash-in equals the month model's rows recorded that day" \
+             "DOOR: a directory that resolves off the tree is SOURCE_OUTSIDE -- no off-tree ADR is served" \
+             "DOOR: a lead_id that is not an HMAC id never reaches the wire, and is counted as withheld" \
+             "DOOR: a null line on the spine is torn -- counted, never a 500" \
+             "SERIALIZER: a payload nested past the cap is served as a sentence, never a stack overflow" \
+             "PNL DOOR: ARC_VENTURES_FILE in the door's env withholds the kill panel by name" \
+             "GATES DOOR: a resolver echoing anything but warn or block leaves the gate unresolved -- an address never reaches the wire" \
+             "SLICES DOOR: a lane whose directory resolves off the tree is NAMED in the table, not read and not dropped" \
+             "LEARN DOOR: a row dated 2026-09-31 is a rule and never this week's; the malformed row is counted" \
+             "PNL DOOR: a directory where ventures.yaml belongs withholds the kill panel by name and keeps the P&L -- no 500, no path" \
+             "FILE DOOR: an allow-listed id whose path resolves off the tree is SOURCE_OUTSIDE, never another tree's bytes" \
+             "SPINE: a day file the reader cannot open is reported, and the door counts it under the table" \
+             "EVOLVE: a closed experiment reads closed with its outcome, whatever verdict came before -- as the lane's board renders it" \
+             "DAILY: a receipt on 2026-06-31 is unplaceable -- counted, never a silent gap in fourteen days" \
+             "SPINE ROOM: a door that does not say whether every day file opened is unknown, never zero"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: the company ring reads its files -- F1 names lanes, the constitution and logbook are read, the extras drawn" {
+  # The company ring and the four extra rooms the owner's section 13 item 5 ruling unblocked (ADR-1337): the folds
+  # answer over the door's real bodies and over mutants of them; F1's arm FAILs Cycle 15's band -> room map.
+  run node "$ARC_ROOT/tests/face/company-ring.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 40 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "F1: the face band 1300-1399 names the lane face, not the room toolbelt" \
+             "F1: MUTANT -- the Cycle 15 band map (bands homed to ROOMS) fails the same lane check" \
+             "ORG FOLD: the band map it draws names lanes (F1 in the module that renders it)" \
+             "LAW: a file whose eternal section is renamed reads that section as UNREAD, never as zero articles" \
+             "STORY: a logbook with no Entries section reads as UNREAD, never as a company with no history" \
+             "EXTRAS: a row that cites no ADR-1327 is refused, and draws nothing"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }

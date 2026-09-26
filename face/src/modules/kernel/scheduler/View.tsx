@@ -2,14 +2,14 @@
 // v2 Phase 03, ADR-1320).
 //
 // Declared deltas from the reference: the jobs are the served registry's, each with its last run from the
-// door's run.completed receipts; the next fire and the heartbeat are NOT SERVED panels until /api/jobs
-// (ADR-1324), and the heartbeat panel shows the last fire the spine recorded under that name, never a beat
+// door's run.completed receipts; the next fire and the heartbeat are read from /api/jobs, which runs the
+// brief's own jobs panel over hq.jobs.yaml (Phase 04), and the heartbeat panel keeps the last fire the spine recorded, never a beat
 // the clock did not send; Register, Fire now, Pause and Resume are verb-pending cards (ADR-1326); the
 // grammar panel states the two cadence forms in words.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { MONO, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, Reading, ReceiptDrawer, RoomHead, RunRows, SourcesPanel, TrailPanel, VerbPending } from '../../../ui/bits'
+import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, Reading, ReceiptDrawer, RoomHead, RunRows, ServedTable, SourcesPanel, TrailPanel, VerbPending } from '../../../ui/bits'
 export { Clock as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -25,7 +25,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             <div className="space-y-2.5">
               {f.trail.isRefused && <DoorRefusal code={f.trail.refusal.code} human={f.trail.refusal.human} />}
               <RunRows rows={f.jobs} isEmpty={f.showJobsEmpty} empty="The served registry homes no job in this room, and no run receipt names one." />
-              <NotServed item={f.nextFire} />
+              <ServedTable item={f.nextFire} />
               <VerbPending item={f.fireVerb} />
             </div>
           </HPanel>
@@ -46,7 +46,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                 <div className="text-[12.5px] leading-[19px] break-words" style={{ fontFamily: UI, color: 'var(--text-1)' }}>{f.lastFire.line}</div>
                 {f.lastFire.hasFire && <div className="text-[11px] mt-0.5 break-words" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{f.lastFire.detail}</div>}
               </div>
-              <NotServed item={f.heartbeat} />
+              <ServedTable item={f.heartbeat} />
             </div>
           </HPanel>
 

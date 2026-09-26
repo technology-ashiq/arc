@@ -10,7 +10,7 @@
     "company"
   ],
   "rooms": {
-    "$comment": "32 rooms + the lane-room template. status: built = lane/product exists, planned = dotted from planned-rooms.json",
+    "$comment": "34 rooms + the lane-room template. status: built = lane/product exists, planned = dotted from planned-rooms.json",
     "template": {
       "id": "lane",
       "name": "Lane room",
@@ -228,6 +228,16 @@
         ]
       },
       {
+        "id": "factory",
+        "name": "Factory",
+        "ring": "factory",
+        "status": "built",
+        "sources": [
+          "PORTFOLIO.md",
+          "initiatives/*/PROGRESS.md"
+        ]
+      },
+      {
         "id": "money",
         "name": "Money",
         "ring": "money",
@@ -373,6 +383,15 @@
           "glossary inventory",
           "manifests face: concepts"
         ]
+      },
+      {
+        "id": "story",
+        "name": "Story",
+        "ring": "company",
+        "status": "built",
+        "sources": [
+          "docs/HISTORY.md"
+        ]
       }
     ]
   },
@@ -419,13 +438,15 @@
       "kickoff.done": {
         "group": "progress",
         "homes": [
-          "lane"
+          "lane",
+          "factory"
         ]
       },
       "phase.closed": {
         "group": "progress",
         "homes": [
-          "lane"
+          "lane",
+          "factory"
         ]
       },
       "review.completed": {
@@ -707,11 +728,12 @@
       "model-policy": "model-policy",
       "policy": "policy",
       "portfolio": "board",
-      "scheduler": "scheduler"
+      "scheduler": "scheduler",
+      "docs": "lane"
     }
   },
   "commands": {
-    "$comment": "27; (G) = generated from a process file, never hand-edited",
+    "$comment": "28; (G) = generated from a process file, never hand-edited",
     "map": {
       "arc": "toolbelt",
       "arc-toolcheck": "toolbelt",
@@ -739,7 +761,8 @@
       "arc-capability": "develop",
       "arc-design-critique": "design-studio",
       "arc-face-module": "design-studio",
-      "arc-absorb": "absorb"
+      "arc-absorb": "absorb",
+      "arc-attack": "review-ship"
     }
   },
   "agents": {
@@ -778,7 +801,7 @@
     }
   },
   "processes": {
-    "$comment": "6 live + face-ask lands in Phase 07",
+    "$comment": "10 live + develop-proof and adr-record (Phase 06; a live run waits on their hq.policy.yaml rows) + face-ask lands in Phase 07",
     "map": {
       "commit-msg-draft": "engine-room",
       "review-diff": "engine-room",
@@ -786,6 +809,12 @@
       "build-in-public-draft": "engine-room",
       "brief-materialize": "engine-room",
       "day-close-roll": "engine-room",
+      "attack-diff": "engine-room",
+      "council-convene": "council-chamber",
+      "lesson-log": "memory",
+      "rule-promote": "memory",
+      "develop-proof": "develop",
+      "adr-record": "strategy",
       "face-ask (Phase 07)": "ask-arc"
     }
   },
@@ -1289,6 +1318,14 @@
       "arc dash (L2)": {
         "room": "spine",
         "station": "L2 door"
+      },
+      "cycle": {
+        "room": "story",
+        "station": "the cycles"
+      },
+      "logbook": {
+        "room": "story",
+        "station": "the logbook"
       }
     }
   },
@@ -1310,7 +1347,8 @@
       "growth": "growth",
       "leads": "leads",
       "legal": "legal",
-      "memory": "memory"
+      "memory": "memory",
+      "docs": "lane"
     }
   },
   "adrs": {
@@ -1320,6 +1358,7 @@
       "1200": "legal",
       "1300": "toolbelt",
       "1400": "design-studio",
+      "1500": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1354,6 +1393,7 @@
       "PLAN-design": "strategy",
       "PLAN-develop": "strategy",
       "PLAN-discover": "strategy",
+      "PLAN-docs": "strategy",
       "PLAN-engine-process-layer": "strategy",
       "PLAN-evolve": "strategy",
       "PLAN-executor": "strategy",

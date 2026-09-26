@@ -1,7 +1,7 @@
 # Phase 02 — Shell + module frame: the v0.7 shell, the module tree, `face-pure`, the scaffold
 
 **Goal (one line):** REQ-03 — the v0.7 shell reads only the served registry, every module is four files whose decisions run under node, and `face-pure` FAILs drift before a single one of the 36 modules is written (ADR-1320).
-**Appetite:** 2 days
+**Appetite:** 0.5 days spent of 2 days allotted, the rest banked forward (ADR-1339)
 **Depends on:** phase-01
 **Serves:** REQ-03
 **Branch:** `feat/face-v2-02`

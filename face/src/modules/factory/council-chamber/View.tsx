@@ -2,14 +2,14 @@
 // (face v2 Phase 03, ADR-1320, ADR-1322).
 //
 // Declared deltas from the reference: the Cycle 15 renderer this module carried through Phase 02 is
-// gone, and so is `face/src/rooms/CouncilRoom.tsx`; the verdict ledger and the calibration number are
-// NOT SERVED panels until /api/council (ADR-1324); Convene and the HIT/MISS scoring buttons are
+// gone, and so is `face/src/rooms/CouncilRoom.tsx`; the verdict ledger and the calibration number are read
+// from /api/council (Phase 04), with no figure below the scoring floor; Convene and the HIT/MISS scoring buttons are
 // work-door cards (ADR-1326); the twelve seats are the agents the served registry homes in this room,
 // so a seat added to the registry appears here without an edit.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { MONO, UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, NotServed, ReceiptDrawer, RoomHead, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, ReceiptDrawer, RoomHead, ServedTable, TrailPanel, VerbPending } from '../../../ui/bits'
 export { Users as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -26,7 +26,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="The verdict ledger" hint="a call is scored HIT or MISS on its review-by date">
-            <NotServed item={f.ledger} />
+            <ServedTable item={f.ledger} />
           </HPanel>
 
           <TrailPanel trail={f.trail} onReceipt={(id) => ctx.onPick('receipt', id)} />
@@ -46,7 +46,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="Calibration">
-            <NotServed item={f.calibration} />
+            <ServedTable item={f.calibration} />
           </HPanel>
 
           <HPanel title="How a verdict is earned">

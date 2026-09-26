@@ -69,6 +69,9 @@ export function render(doc) {
     const spec = TOOL_MAP[prim];
     if (!spec) throw new Error(`codex adapter: no mapping for abstract tool \`${prim}\``);
     if (prim === "agent.invoke") { delegates = true; continue; }
+    // This dialect states grants in prose; a path-scoped write would reach codex as "write files", everywhere. Refused,
+    // never widened -- only claude-code renders the paths as Edit(<path>) grants (attack 1be4183 B6).
+    if (prim === "fs.write" && !bare) throw new Error("codex adapter: fs.write is declared with paths, and this dialect cannot fence a path -- run this process on claude-code");
     if (spec.kind === "bare") { if (spec.token) grants.push(spec.token); continue; }
     if (bare) { grants.push(`run ${prim === "git.op" ? "git" : "shell"} commands`); continue; }
     for (const scope of t[prim]) grants.push(`\`${spec.render(scope)}\``);

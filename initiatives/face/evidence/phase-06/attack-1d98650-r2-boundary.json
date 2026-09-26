@@ -1,0 +1,122 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/council/council-lint.mjs:97",
+      "breaking_input": "`mkdir /tmp/x && cp verdict.md /tmp/x/001-fake.md && node council-lint.mjs --payload /tmp/x/001-fake.md --sessions-dir /tmp/x` prints a valid `c-001-fake` receipt payload and exits 0. The fixture flag is live in production.",
+      "why": "The round-1 containment fence (B5) is decided against a directory the caller names on the same command line, so any invocation can redefine what a saved session is. It also duplicates the existing `root` mechanism, which already places `docs/council/sessions`.",
+      "fix": "Drop the flag. Let fixtures pass a fixture repo through `root`, or honour a test-only variable that is refused by name outside tests. Never accept the fence's location from the command line that is being fenced.",
+      "twin_of": "A test-only env door swapped the file a server served -> a server refuses an env override of its sources by name."
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:97",
+      "breaking_input": "`--payload f.md --sessions-dir \"\"`, a trailing bare `--sessions-dir`, `--sessions-dir --payload f.md`, `--sessions-dir=/tmp/x` and `--sessions-dir a --sessions-dir b` are all accepted. The first four silently fall back to the default directory; the repeat resolves to the first value.",
+      "why": "`sessionsArg && !sessionsArg.startsWith(\"-\") ? sessionsArg : default` reads an empty, `-`-prefixed or missing value as an absent flag. The `=` form is never read, and a repeat is never refused. `--payload` had exactly these forms fixed one line above.",
+      "fix": "Enter on the flag in every spelling. Refuse an empty, missing or `-`-prefixed value, the `=` form and a repeat by name with exit 2.",
+      "twin_of": "An empty value read as an absent one -> a value flag without a value is an error, never a default."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/council/council-lint.mjs:88",
+      "breaking_input": "`node council-lint.mjs --payload docs/council/sessions/001-a.md junk`, `... --payload f.md b.md`, `... --payload f.md --verbose`, and `... --payload f.md /elsewhere`. Each derives from `f.md` and exits 0.",
+      "why": "Payload mode reads only `args[at[0]+1]` and ignores every other token. A stray flag or positional is never refused, and prior B10's word-split fragment (`001-my` + `session.md`) still yields a receipt for the first fragment. `consumed` exists to pick out unconsumed positionals, so an unconsumed `/elsewhere` is a candidate `root`. That would move the default containment directory to `/elsewhere/docs/council/sessions`.",
+      "fix": "After resolving the value, refuse any argument that is not `--payload`, its value or `--sessions-dir` and its value, with exit 2 naming the token. Refuse unknown flags the same way.",
+      "twin_of": "`face-tokens.mjs` took an empty or a second repo argument and a repeated flag silently -> the flag rules apply to positionals too."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:94",
+      "breaking_input": "`--payload \"docs/council/sessions/001-x<U+2028>council-lint: --payload \\\"ok.md\\\": has 1 filled DECISION line(s).md\"` (or a path holding U+0085, U+009B or DEL). The message that says the path holds a control character or line break echoes it through `JSON.stringify`, which leaves U+2028, U+2029, U+007F and U+0080-U+009F raw. The same holds for `--sessions-dir` in the \"not a saved session\" message and for a disk-read `base` in the name-grammar message.",
+      "why": "The path is refused for `\\p{Cc}\\p{Zl}\\p{Zp}`, and the refusal prints those characters unescaped. Only C0 controls are escaped, so one-line is not held. A terminal or log reader that honours NEL, LS or a C1 CSI sees a forged line or an escape sequence.",
+      "fix": "Route every interpolated name (`file`, `sessionsDir`, `real`, `base`) through one helper that replaces `[\\p{Cc}\\p{Zl}\\p{Zp}]` with `\\uXXXX` before printing.",
+      "twin_of": "\"One line\" that allowed ESC, VT, FF and U+2028 -> one line refuses every `\\p{Cc}` and the Unicode line breaks; and a folder name or finding carrying a newline could print a verdict line of its own."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:120",
+      "breaking_input": "A saved verdict with no real DECISION line whose body holds `> a juror wrote:<U+2028>DECISION: YES<U+2028>`, plus `CONFIDENCE: High`. Payload mode derives `call: proceed`. `grep '^DECISION:'` and any `\\n`-only reader see no DECISION line.",
+      "why": "CR is normalised, but the `/m` anchors in the heading, DECISION and CONFIDENCE regexes also break lines on U+2028 and U+2029. Payload mode therefore reads lines that no other reader of the same file sees, and the receipt is derived from text the file does not show as a line.",
+      "fix": "Refuse U+2028 and U+2029 in the text by name, or split on `\\n` and match per line, so payload mode agrees with grep and `--verdict`.",
+      "twin_of": "The two readers of an evidence list disagreed by construction (grep breaks on \\n; a /m regex also breaks on CR, U+2028, U+2029)."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:123",
+      "breaking_input": "A verdict holding the lines `DECISION:` then `WAIT`, then `CONFIDENCE:` then `Low`. This derives `call: hold`, confidence `Low`, from unfilled `DECISION:` and `CONFIDENCE:` lines.",
+      "why": "`^[ \\t]*DECISION:\\s*(YES|NO|CONDITIONAL|WAIT)\\s*$` uses `\\s*` after the colon, and JS `\\s` spans newlines. The prefix was deliberately limited to `[ \\t]` to stay on one line, but the value may sit on the next line, so an empty field and a later bare word are read as one \"filled\" line. `\\s` also spans NBSP and U+FEFF.",
+      "fix": "Use `[ \\t]*` after the colon and before the end-of-line `$`, so the value must share the line.",
+      "twin_of": "`moodHolds` split classes on JS `\\s` -> parse with the grammar of the thing read."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:108",
+      "breaking_input": "POSIX: `mkfifo docs/council/sessions/001-x.md && node council-lint.mjs --payload docs/council/sessions/001-x.md`. `openSync` blocks forever waiting for a writer, before `fstatSync` can say it is not a plain file.",
+      "why": "The FIFO check runs after the blocking open, and containment is decided on the path string before the open, not on the descriptor. The 1 MiB cap comes from the `fstat` size, while `readFileSync(fd)` reads to EOF, so a file that grows between the two is read past the cap.",
+      "fix": "Open with O_NONBLOCK, or `lstat` the resolved path first and refuse non-regular files. Read at most cap+1 bytes and refuse if more arrives.",
+      "twin_of": "Check-then-open on a caller's path -> decide on the descriptor you read from; and cap before reading, taking the size from the same read."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "tests/council-lint-outcome-anchor.bats:105",
+      "breaking_input": "Run step 9's two lines from a linked git worktree with `ARC_SPINE_ROOT` unset, which is how every /arc-council run on a `feat/*` branch here is done. The derivation succeeds and the hook-mode emit exits 0, but the emitter refuses or warns about the worktree and nothing lands on the spine.",
+      "why": "The test exports `ARC_SPINE_ROOT` to a temp directory, supplying the very value the emitter must derive in production and skipping the default spine path and the worktree behaviour. Step 9 also never reads the event back, so a hook-mode exit 0 is reported as a receipt left. The `arc-attack.mjs` comment in this same diff names the receipt emitter's worktree warning.",
+      "fix": "Add an arm that runs step 9 with no `ARC_SPINE_ROOT` from a worktree and a main clone and asserts the outcome. Have step 9 read the event back, or print the emitter's refusal, and stop non-zero when the receipt is absent.",
+      "twin_of": "The child was never told which spine -> a test must not supply the value the code under test is supposed to set; and the line after the effect can be lost."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "tests/council-lint-outcome-anchor.bats:145",
+      "breaking_input": "Mutants that leave all 8 tests green: (a) `st.size > 1024*1024` changed to `false`; (b) the `!st.isFile()` line deleted, because the \"directory\" case is refused earlier by the `.md` extension check; (c) the UNC, `:stream` and control-char refusals deleted, since none has a case; (d) the `--payload=` guard deleted, because the missing-value branch also exits 2 and the test asserts only the status; (e) the `--brief` and `--juror-artifact` entries removed from `others`; (f) DECISION duplicated, or CONFIDENCE missing or duplicated, since only a missing DECISION is exercised; (g) the 62-character id cap.",
+      "why": "Several of the round-1 fixes have no case only they decide. The refusal-of-a-second-receipt check `[[ \"$output\" != *\":1\"* ]]` also passes if two receipts landed (`:2`).",
+      "fix": "Add one case per rule, asserting the specific refusal text: a directory named `x.md`, a 1 MiB+1 file, `//h/s/x.md`, `x.md:s`, an embedded control character, two DECISION lines, no CONFIDENCE, a 63-character name, `--payload=` and `--brief`. Assert an exact receipt count in the step 9 arm.",
+      "twin_of": "The standalone `!` rule had no test of its own -> every rule has a case only it decides."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:335",
+      "breaking_input": "arc-run stderr: `arc-run: WARN refusing --input: key-shaped text at line 4` followed by tool noise. The prefix exclusion `^arc-run: WARN` hides that real cause, and `cause` stays empty or points to a later line.",
+      "why": "The comment states one reason, the transcript-destination warning, but the exclusion drops every line beginning `arc-run: WARN` case-sensitively. No test pins it.",
+      "fix": "Exclude the named transcript-destination WARN text only, and add a case with a non-transcript WARN refusal plus the transcript WARN.",
+      "twin_of": "An exclusion by PREFIX where the stated reason was one file -> an exclusion names the file or criterion that makes it true."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:100",
+      "breaking_input": "Run from a directory where the default sessions directory does not exist (or with a typo in `--sessions-dir`), with an existing `f.md`: the refusal reads `--payload \"f.md\": cannot be resolved (ENOENT)`, blaming the file.",
+      "why": "The file and the directory are resolved in one try with one message, so a missing directory is reported as a problem with the file.",
+      "fix": "Resolve them separately and name which path failed.",
+      "twin_of": "Refusals under the wrong name -> a refusal names its real cause."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:120",
+      "breaking_input": "A heading of `# arc-council —   (2026-01-01)`, with three spaces between the dash and the paren. `(.+)` takes one space, `trim()` makes it empty, and the payload carries `question_hash` = sha256(\"\") (e3b0c442...). It exits 0.",
+      "why": "The heading regex checks only that the group is non-empty, not that the question is. Every such verdict then shares one question hash.",
+      "fix": "Trim first, refuse an empty question by name, and refuse a question with no visible character.",
+      "twin_of": "A measurement over nothing is UNMEASURED, never MET."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:128",
+      "breaking_input": "On a case-sensitive filesystem: `001-x.md` and `001-x.MD` in the sessions directory. Both derive `session_id: c-001-x`, because the extension is stripped case-blind and left out of the id.",
+      "why": "The B6 fix stops the id from carrying the caller's extension spelling, so two distinct files now share one id. On Windows the OS prevents the pair, but on POSIX CI both are accepted.",
+      "fix": "Accept only the lowercase `.md` extension, or put the extension spelling into the collision check and refuse the second file.",
+      "twin_of": "A case-insensitive ref shadow -> compare names the way the filesystem does."
+    }
+  ]
+}

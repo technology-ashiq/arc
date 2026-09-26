@@ -202,16 +202,49 @@ const read = (query = []) => Object.freeze({ method: "GET", param: false, query:
 /** @type {Readonly<Record<string, DoorRoute>>} */
 export const DOOR_ROUTES = Object.freeze({
   "/api/health": read(),
-  "/api/spine": read(["since", "kind", "venture", "date", "limit"]),
+  "/api/spine": read(["since", "kind", "venture", "date", "limit", "note"]),
   "/api/brief": read(),
   "/api/inbox": read(),
-  "/api/pnl": read(["simulated", "venture", "month"]),
+  "/api/pnl": read(["simulated", "venture", "month", "by"]),
   "/api/board": read(),
   "/api/rooms": read(),
   "/api/lane/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
   "/api/file/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
+  // Phase 04 (REQ-06): the routes Phase 03's NOT SERVED lists named, each a plain read that takes no query.
+  "/api/engine": read(),
+  "/api/model-policy": read(),
+  "/api/policy": read(),
+  "/api/jobs": read(),
+  "/api/evolve": read(),
+  "/api/memory": read(),
+  "/api/bench": read(),
+  "/api/roster": read(),
+  "/api/council": read(),
+  "/api/slices": read(),
+  "/api/gates": read(),
+  "/api/learn": read(),
+  "/api/adrs": read(),
+  "/api/growth": read(),
+  "/api/leads": read(),
+  "/api/legal": read(),
+  "/api/ventures": read(),
+  "/api/absorb": read(),
   "/api/decide": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: true }),
   "/api/ask": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
+  // Phase 05 (REQ-07, ADR-1339): the work door. No module declares these in its `routes` -- the host's ops dock
+  // reaches them through the methods below, for the ops a module names in its ops.mjs.
+  "/api/ops": read(),
+  // REQ-11: what changed, as one fingerprint -- the shell asks it every two seconds and re-reads the open room on a change.
+  "/api/pulse": read(),
+  "/api/op/:id/plan": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: false }),
+  "/api/op/:id/apply": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: true }),
+  "/api/op-run/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
+  // Phase 06 (REQ-08, ADR-1326): the session door. A start spends a click token the face asks for inside the owner's
+  // click -- no mount, reload or attach can start a session.
+  "/api/sessions": read(),
+  "/api/session-click": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
+  "/api/session/:id/start": Object.freeze({ method: "POST", param: true, query: Object.freeze([]), rereads: true }),
+  "/api/session-run/:id": Object.freeze({ method: "GET", param: true, query: Object.freeze([]), rereads: false }),
 });
 
 /**
@@ -374,4 +407,52 @@ export class Door {
 
   /** @param {string} q */
   ask(q) { return this.call("/api/ask", { method: "POST", body: { q } }); }
+
+  // ---- the work door (face v2 Phase 05, ADR-1339) ----
+
+  /** The pulse: a fingerprint of everything the rooms read, from stats alone (REQ-11). @param {AbortSignal} [signal] */
+  pulse(signal) { return this.call("/api/pulse", { signal }); }
+
+  /** The op registry this door serves: ids, rooms, fields, receipts. @param {AbortSignal} [signal] */
+  ops(signal) { return this.call("/api/ops", { signal }); }
+
+  /**
+   * Plan one op: the door runs its dry run, which writes nothing, and holds the result under a one-shot plan id.
+   * @param {string} id @param {Record<string, string>} input
+   */
+  opPlan(id, input) { return this.call(`/api/op/${encodeURIComponent(id)}/plan`, { method: "POST", body: { input } }); }
+
+  /**
+   * Apply a held plan -- ONE plan id, never a list. `confirm` is the op's own id, sent only by the owner's confirming
+   * click on a human-run op; the door refuses a human-run apply without it.
+   * @param {string} id @param {string} planId @param {string | null} [confirm]
+   */
+  opApply(id, planId, confirm) {
+    return this.call(`/api/op/${encodeURIComponent(id)}/apply`, { method: "POST", body: confirm ? { planId, confirm } : { planId } });
+  }
+
+  /** A run as it stands: the tool's lines so far, then its result. @param {string} planId @param {AbortSignal} [signal] */
+  opRun(planId, signal) { return this.call(`/api/op-run/${encodeURIComponent(planId)}`, { signal }); }
+
+  // ---- the session door (face v2 Phase 06, REQ-08, ADR-1326) ----
+
+  /** The session registry and the newest sessions on the door's disk. A read: it never starts one. @param {AbortSignal} [signal] */
+  sessions(signal) { return this.call("/api/sessions", { signal }); }
+
+  /**
+   * Start one session. Asks the door for a one-shot click token and spends it in the same breath, so ONLY a caller
+   * that means to start calls this -- the dock calls it from the owner's click handler and nowhere else. There is no
+   * way to start a session through this client without a fresh token, and a replayed request carries a spent one.
+   * @param {string} id @param {{ input: Record<string, string>, driver: string, process?: string }} body
+   */
+  async sessionStart(id, body) {
+    // A caller never supplies the token: one that tries is refused here, and the fresh one is spread LAST so nothing
+    // in the body can replace it (attack a320d86 B12).
+    if (body && typeof body === "object" && Object.hasOwn(body, "click")) throw new DoorError("BAD_SESSION_BODY", "a start's click token is fetched by the door client, never passed in", 0);
+    const { click } = await this.call("/api/session-click", { method: "POST" });
+    return this.call(`/api/session/${encodeURIComponent(id)}/start`, { method: "POST", body: { ...body, click } });
+  }
+
+  /** Attach: a session as its files and the spine hold it. A read: it never starts one. @param {string} sid @param {AbortSignal} [signal] */
+  sessionRun(sid, signal) { return this.call(`/api/session-run/${encodeURIComponent(sid)}`, { signal }); }
 }

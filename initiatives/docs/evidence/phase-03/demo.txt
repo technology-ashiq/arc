@@ -1,0 +1,22 @@
+$ node .claude/scripts/docs/wiki-drift.mjs --mutant-selftest
+M0 real references only -> clean: PASS (exit 0)
+    EXPECTED-FAIL [dangling] docs/wiki/_narrative/products/absorb.md:1: ADR-9999 -- no such ADR on this tree
+M1 a gone ADR -> FAIL naming it: PASS (exit 1)
+    EXPECTED-FAIL [dangling] docs/wiki/_narrative/products/absorb.md:1: drivers/ghost.mjs -- no such file on this tree, and no manifest declares it
+M2 a ghost driver -> FAIL naming it: PASS (exit 1)
+    EXPECTED-FAIL [dangling] docs/wiki/_narrative/products/absorb.md:1: /arc-ghost -- no such command on this tree
+M3 a ghost command -> FAIL naming it: PASS (exit 1)
+mutant-selftest: ran 4 of 4
+
+$ node .claude/scripts/docs/wiki-drift.mjs
+wiki-drift: 3 narrative(s), 15 reference(s) checked -- none dangling
+
+$ node .claude/scripts/docs/wiki-stale.mjs
+wiki-stale: 3 narrative(s) checked, 0 stale
+
+$ node .claude/scripts/docs/wiki-build.mjs --audit-counts
+wiki-build: audit-counts 132 page(s), 4185 number(s) re-derived from wiki.json -- all match
+
+$ node .claude/scripts/docs/wiki-coverage.mjs
+wiki-coverage: 131 entities, 131 pages, 3 narratives -- all covered
+narrative debt: 128 of 131 entities have no narrative

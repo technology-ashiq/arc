@@ -22,6 +22,7 @@
  * @property {string} [indexes]
  * @property {boolean} [planned]
  * @property {boolean} [template]
+ * @property {boolean} [extra]   a room arc does not serve, drawn from its exemption row (ADR-1327)
  * @property {string[]} stations
  * @property {Record<string, string[]>} holds
  * @property {number} itemCount
@@ -99,6 +100,25 @@ export function byRing(rooms, order = RING_ORDER) {
  * @returns {{ label: string, tone: "live"|"sim"|"file"|"index", title: string }}
  */
 export function stateBadge(room) {
+  // A PLANNED room is not a liveness reading, whatever its homed kinds did. Cycle 15's trader wore `● LIVE`
+  // here because day.closed -- a kind it homes and the whole company fires -- had fired (F3, ADR-1328). The
+  // room's state is that it is planned, and that is the only badge it wears, in the rail and in its head.
+  if (room.planned === true || room.status === "planned") {
+    return {
+      label: "planned",
+      tone: "sim",
+      title: "planned, drawn dotted: the lane is not born, so nothing that fires across the company is counted as this room's",
+    };
+  }
+  // A room the registry does not serve is not a liveness reading either: the face keeps it (ADR-1327), drawn from
+  // its exemption row, and nothing on the spine is counted as its (company ring, ADR-1337).
+  if (room.extra === true || room.status === "extra") {
+    return {
+      label: "not in registry",
+      tone: "file",
+      title: "a room arc does not serve: the face keeps it by name (ADR-1327), drawn from its exemption row, and the spine has nothing to say about it",
+    };
+  }
   switch (room.live.state) {
     case "live":
       return {

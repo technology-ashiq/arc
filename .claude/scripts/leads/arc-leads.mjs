@@ -10,8 +10,8 @@
 //   0 ok · 2 usage/validation · 3 refused by a gate · 4 provider transport · 5 store error
 
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, writeFileSync, writeSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,9 @@ import { inbound } from "./lib/deps.mjs";
 // validator the payload stamps went through, so a window bound and the receipts it is compared
 // against can never be judged by two different grammars (D5).
 import { leadsIdem, assertTs } from "../hq/lib/validate-leads.mjs";
+// The IST day the cap buckets by, and the house plan-and-apply binding (ADR-1344): a send is what its plan showed.
+import { istDay } from "./lib/caps.mjs";
+import { planDigest, expectLine, staleReason } from "../core/plan-expect.mjs";
 import { readAllEvents, dayFileCount, quarantineCount, idemKeys, UNFOLDABLE_REMEDY } from "./lib/spine-read.mjs";
 import { initCampaign, assertCampaignStore, CAMPAIGN_NAME_RE, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
 import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
@@ -894,8 +897,32 @@ function loadCredentials() {
   return envInfo;
 }
 
-async function cmdDaily(campaign) {
-  if (!campaign) die(2, "usage: arc-leads daily <campaign>");
+async function cmdDaily(argv) {
+  // A SEND IS BOUND TO A PLAN (face v2 Phase 05 PR 5c, ADR-1344): the face's work door plans first and the owner's
+  // keystroke sends exactly what the card showed -- never whatever the store holds by the time the click lands.
+  const rest = Array.isArray(argv) ? argv : argv === undefined ? [] : [argv];
+  const campaign = rest[0];
+  let expect;
+  let dryRun = false;
+  for (let i = 1; i < rest.length; i++) {
+    const t = rest[i];
+    if (t === "--dry-run") { if (dryRun) die(2, "--dry-run was given twice — repeating it plans nothing twice, and an argv list nobody meant to write is an operator error"); dryRun = true; continue; }
+    if (t.startsWith("--dry-run=")) die(2, "--dry-run takes no value — write it bare");
+    if (t === "--expect" || t.startsWith("--expect=")) {
+      if (expect !== undefined) die(2, "--expect was given twice — two digests cannot both be the plan this send is bound to");
+      const v = t === "--expect" ? rest[++i] : t.slice("--expect=".length);
+      if (typeof v !== "string" || !/^[0-9a-f]{64}$/.test(v)) die(2, "--expect takes the 64-hex digest the dry run printed");
+      expect = v;
+      continue;
+    }
+    die(2, `unknown argument ${JSON.stringify(t)} — daily takes <campaign> [--dry-run | --expect DIGEST]`);
+  }
+  // A FLAG IS NOT A CAMPAIGN: `daily --dry-run` took the flag as the campaign and then said "run it with --dry-run
+  // first", which is what the operator had just done (PR 5c round-1 shell attack).
+  if (!campaign || campaign.startsWith("-")) die(2, "usage: arc-leads daily <campaign> (--dry-run | --expect DIGEST) — the campaign comes first, before the flags");
+  if (dryRun && expect !== undefined) die(2, "--dry-run plans and --expect sends — give one");
+  if (!dryRun && expect === undefined)
+    die(2, "a send is bound to a plan: run it with --dry-run first, read what would go out, then run it again with the --expect it prints — nothing was sent");
   // BEFORE the store opens and long before the provider is asked, so a poisoned credential file
   // refuses the run rather than being discovered three frames into a send.
   try { loadCredentials(); }
@@ -918,11 +945,58 @@ async function cmdDaily(campaign) {
   try { unsubscribeHeader(); }
   catch (e) { die(3, `${e.message}. Phase 03 gate row 2 is the dedicated warmed domain, and it is not evidenced (ADR-0413).`); }
 
-  const readEvents = () => readAllEvents({ allowMissing: true });
-  const approved = listDrafts(store, campaign)
-    .filter((d) => approvedShaFor(readEvents(), d.draft_ref))
-    .map((d) => d.draft_ref);
+  // WHAT THE PLAN SHOWED: the campaign, the IST day the cap buckets by, and every approved draft with the sha the owner
+  // approved, the bytes on disk now, and WHO and WHAT it goes to. The events are read ONCE, so a decision landing
+  // mid-plan cannot make one row disagree with the next -- and the approval is read through `approvedShaFor`, the ONE
+  // helper the send's guard reads: the plan kept its own "latest approval" copy while the send read the first, so an
+  // edited-and-re-approved draft was planned and then refused at every send (PR 5c round-2 logic attack).
+  const day = istDay(nowIst());
+  const events = readAllEvents({ allowMissing: true });
+  const attempts = listDrafts(store, campaign)
+    .map((d) => ({ d, approval: approvedShaFor(events, d.draft_ref) }))
+    .filter((x) => x.approval)
+    .map(({ d, approval }) => ({
+      ref: d.draft_ref, approved_sha: String(approval.approvedSha), current_sha: String(currentSha(store, d.draft_ref)),
+      // The approval's sha binds the BODY only, and the send reads the recipient, touch and subject from the draft
+      // record: a draft rewritten to another lead and subject after the plan kept the same digest and was sent under it
+      // (PR 5c round-2 logic attack). All three are in the digest; the subject as a hash, so the plan prints no PII.
+      lead_id: String(d.lead_id), touch_n: d.touch_n, subject_sha: createHash("sha256").update(String(d.subject || ""), "utf8").digest("hex"),
+    }))
+    .sort((a, b) => (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0));
+  // A draft whose body moved since its approval is not sendable: the guard compares the approved sha at the send, so
+  // listing it in a plan would promise a send that refuses. Named here instead.
+  const edited = attempts.filter((t) => t.approved_sha === "" || t.approved_sha !== t.current_sha);
+  if (dryRun && edited.length)
+    die(2, `${edited.length} approved draft(s) changed since they were approved (${edited.map((t) => t.ref).join(", ")}) — review each again; nothing was planned`);
+  // WHAT A SEND CHANGES is in the digest too: a sent draft keeps its approval, so without this the same digest applied
+  // again and again, each run re-entering the send path -- only the provider's idem key and the caps stood between a
+  // replayed digest and a second send (PR 5c round-1 shell attack). The count of sends already recorded for this
+  // campaign moves the moment one lands, so a used plan is stale.
+  const sentBefore = events.filter((e) => e && e.kind === "outreach.sent" && e.payload && e.payload.campaign === campaign).length;
+  const digest = planDigest({ campaign, day, attempts, sent_before: sentBefore });
+  if (dryRun) {
+    // A plan with nothing to send is a refusal, not a green run: it prints no digest, so nothing can be bound to it.
+    if (!attempts.length) die(2, `no approved drafts for ${campaign} — nothing to plan; approve a draft first`);
+    // A PLAN NOBODY COULD READ WHOLE IS NOT A PLAN: piped through `head`, the digest line was lost and the exit still
+    // said 0 (PR 5c round-1 shell attack). Written synchronously, and a failed write is a refusal.
+    const lines = [
+      `arc-leads daily: would attempt ${attempts.length} approved draft(s) for ${campaign} on ${day}`,
+      ...attempts.map((t) => `  attempt  ${t.ref}  touch ${t.touch_n} to lead ${t.lead_id.slice(0, 12)}  approved ${t.approved_sha.slice(0, 12)}`),
+      "arc-leads daily: dry run — nothing was sent. The caps, the suppression ledger, the send window and the jurisdiction check run per draft at the send, and each can refuse it there.",
+      expectLine(digest),
+    ];
+    try { writeSync(1, `${lines.join("\n")}\n`); }
+    catch { die(2, "the plan could not be printed whole, so nothing can be bound to it — run it again with stdout open"); }
+    return;
+  }
+  const stale = staleReason(expect, digest);
+  // The causes, named: the plan is bound to the campaign, the IST day, every approved draft with its bytes, and how many
+  // sends this campaign already has -- so an IST midnight, or a send that already ran, is a stale plan and not a fault.
+  if (stale) die(2, `${stale} — the drafts, their approvals, the IST day (now ${day}) or the sends already recorded moved; nothing was sent`);
+  // Exactly the drafts the plan listed: the digest held, so these are the attempts the owner read.
+  const approved = attempts.map((t) => t.ref);
   if (!approved.length) { console.log("arc-leads daily: no approved drafts — nothing to send"); return; }
+  const readEvents = () => readAllEvents({ allowMissing: true });
 
   const out = await runDaily({
     store, readEvents, drafts: approved, now: nowIst(),
@@ -1653,7 +1727,7 @@ try {
   else if (cmd === "ingest-reply") await cmdIngestReply(rest);
   else if (cmd === "reconcile") await cmdReconcile();
   else if (cmd === "unlock") cmdUnlock();
-  else if (cmd === "daily") await cmdDaily(rest[0]);
+  else if (cmd === "daily") await cmdDaily(rest);
   else if (cmd === "preflight") await cmdPreflight();
   else if (cmd === "mail") await cmdMail(rest);
   else if (cmd === "notify") await cmdNotify(rest);

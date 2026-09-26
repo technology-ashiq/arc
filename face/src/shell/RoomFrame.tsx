@@ -10,15 +10,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
 import {
-  actCall, actProblem, actRereads, actSettled, actStarted, dropReads, fallbackFor, foldModule, plannedReads,
-  POLL_MS, problemsFor, readsToLoad, refusedPayload, renderFor, routeDeclared,
+  actCall, actProblem, actRereads, actSettled, actStarted, dropReads, fallbackFor, foldModule, keyLeaksFor, plannedReads,
+  keepOnRereadFailure, POLL_MS, problemsFor, pulseDirty, readsToLoad, refusedPayload, renderFor, routeDeclared,
 } from '../lib/registry.mjs'
 import type { AttachedModule, Attachment, ModuleContext, ModuleProblem, ModuleViewContext, Payload } from '../lib/registry.mjs'
 import { laneForRoom } from '../lib/rooms.mjs'
+import { keyLeakSentence, scrubText } from '../lib/keys.mjs'
 import type { Room } from '../lib/rooms.mjs'
 import GenericRoom from '../rooms/GenericRoom'
 import IndexRoom from '../rooms/IndexRoom'
 import { Failure } from '../ui/legacy'
+import OpsDock from './OpsDock'
+import SessionDock from './SessionDock'
 import { MONO, UI } from '../ui/kit'
 
 type ViewProps = { f: Record<string, unknown>; ctx: ModuleViewContext }
@@ -43,10 +46,24 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
   const loadedRef = useRef(loaded)
   loadedRef.current = loaded
   const inflight = useRef(new Set<string>())
+  // Reads that were in flight when the pulse moved: read again once they land (PR 2 logic attack -- a read begun before
+  // the change can land with the old answer, and nothing else would ever correct it).
+  const dirty = useRef(new Set<string>())
+  const [redo, setRedo] = useState(0)
   // Every read carries the epoch it started in; one that answers after its reads were dropped is thrown
   // away, so a poll that left before a stamp cannot bring the stamped approval back (face v2 Phase 03 attack).
   const readEpoch = useRef(0)
   const polledAt = useRef(0)
+  // The door's pulse (REQ-11): when it changes, every read of this room is due again. The first pulse the room sees is
+  // where it starts, not a change -- the room has just read everything.
+  const [pulseTick, setPulseTick] = useState(0)
+  const pulsedAt = useRef(0)
+  const lastPulse = useRef<string | undefined>(ctx.pulse)
+  useEffect(() => {
+    if (ctx.pulse === undefined || ctx.pulse === lastPulse.current) return
+    lastPulse.current = ctx.pulse
+    setPulseTick((n) => n + 1)
+  }, [ctx.pulse])
   const actCount = useRef<Record<string, number>>({})
   // One controller per door: a new door is a new as-of or token, and a read still in flight must not land
   // on it. Acts are NOT tied to it: a stamp that reached the door happened, whatever the scrub did since.
@@ -55,6 +72,7 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
   const dropAll = useCallback(() => {
     readEpoch.current += 1
     inflight.current = new Set()
+    dirty.current = new Set()
     setLoaded((prev) => dropReads(prev))
     setGeneration((g) => g + 1)
   }, [])
@@ -74,6 +92,9 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
       return { ok: false, error }
     }
   }, [m, loaded, ctx, picks])
+  // ADR-1325: a read that carried a provider key is named above the room -- the fold was handed it withheld. Memoised
+  // with the fold: the scan walks every read, and a room re-renders far more often than its reads change.
+  const leaks = useMemo(() => keyLeaksFor(m, loaded, ctx), [m, loaded, ctx])
   const plan = useMemo(() => plannedReads(folded.ok ? folded.f : null, m.manifest), [folded, m])
   const planKey = plan.reads.map((r) => r.key).join('\n')
 
@@ -87,9 +108,14 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
     if (!ac || ac.signal.aborted) return
     const pollDue = pollTick !== polledAt.current
     polledAt.current = pollTick
+    const pulseDue = pulseTick !== pulsedAt.current
+    pulsedAt.current = pulseTick
     const epoch = readEpoch.current
     const landed = () => !ac.signal.aborted && epoch === readEpoch.current
-    for (const r of readsToLoad(plan.reads, loadedRef.current, inflight.current, pollDue)) {
+    if (pulseDue) for (const k of pulseDirty(plan.reads, inflight.current)) dirty.current.add(k)
+    const force = new Set([...dirty.current].filter((k) => !inflight.current.has(k)))
+    for (const k of force) dirty.current.delete(k)
+    for (const r of readsToLoad(plan.reads, loadedRef.current, inflight.current, pollDue, pulseDue, force)) {
       const flight = inflight.current
       flight.add(r.key)
       door
@@ -98,12 +124,16 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
           if (landed()) setLoaded((prev) => ({ ...prev, [r.key]: { state: 'ok', data } }))
         })
         .catch((err: unknown) => {
-          if (landed()) setLoaded((prev) => ({ ...prev, [r.key]: refusedPayload(err) }))
+          // A failed RE-read keeps the last good answer, marked; only a read that never answered shows the refusal.
+          if (landed()) setLoaded((prev) => ({ ...prev, [r.key]: keepOnRereadFailure(prev[r.key], refusedPayload(err)) }))
         })
-        .finally(() => flight.delete(r.key))
+        .finally(() => {
+          flight.delete(r.key)
+          if (landed() && dirty.current.has(r.key)) setRedo((n) => n + 1)
+        })
     }
     // plan.reads is read through planKey: the same key list is the same plan.
-  }, [planKey, pollTick, door, generation])
+  }, [planKey, pollTick, pulseTick, redo, door, generation])
 
   const onPick = useCallback((key: string, value: string) => {
     setPicks((prev) => ({ ...prev, [key]: value }))
@@ -144,7 +174,10 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
 
   if (!folded.ok) return <Failure error={folded.error} what={`the ${m.key} module's fold`} />
   const View = m.View as ComponentType<ViewProps>
-  const problems = [...plan.problems.map((p) => `read refused: ${p}`), ...hostProblems]
+  // A re-read that failed while an older answer stays on screen says so, so the owner knows the panel may be behind.
+  const stale = Object.entries(loaded).flatMap(([k, v]) => (v.state === 'ok' && v.rereadFailed ? [`re-read of ${k} failed (${v.rereadFailed.code}) -- showing the last answer`] : []))
+  // Text the HOST builds (a refused act, a stale re-read) is scrubbed too: it never passes a fold (round-2 attack B3).
+  const problems = [...(leaks.length ? [keyLeakSentence(leaks)] : []), ...[...plan.problems.map((p) => `read refused: ${p}`), ...hostProblems, ...stale].map(scrubText)]
   return (
     <>
       {problems.length > 0 && (
@@ -157,14 +190,23 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
         </p>
       )}
       <View f={folded.f} ctx={viewCtx} />
+      {/* Phase 05 (ADR-1339): the room's ops, if its ops.mjs names any. A run that lands drops the room's reads, so the
+          receipt shows in the room without a reload. */}
+      {m.ops.length > 0 ? <OpsDock ops={m.ops} door={door} onApplied={dropAll} /> : null}
+      {/* Phase 06 (REQ-08, ADR-1326): the room's session verbs, if the door's registry names any for it. It reads on
+          mount and starts nothing: a session starts only from its Start button's click. */}
+      <SessionDock roomId={m.id} door={door} />
     </>
   )
 }
 
 function GenericModule({ room, ctx, problems }: { room: Room; ctx: ModuleContext; problems: ModuleProblem[] }) {
   const which = fallbackFor(room)
+  // A planned room drawn through the generic module is marked exactly as a planned module is, so the smoke
+  // holds it to the same F3 rule: planned, and never a LIVE word on it (ADR-1328).
+  const planned = room.planned === true || room.status === 'planned'
   return (
-    <>
+    <div data-planned={planned ? room.id : undefined}>
       <p className="mb-3 flex flex-wrap items-center gap-2 text-[12px] leading-[18px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>
         <span className="inline-flex items-center h-[20px] px-2 rounded-full text-[10.5px] uppercase tracking-[0.06em]" style={{ fontWeight: 600, color: 'var(--text-2)', background: 'var(--bg-4)', border: '1px solid var(--line-1)' }}>
           generic module
@@ -179,10 +221,10 @@ function GenericModule({ room, ctx, problems }: { room: Room; ctx: ModuleContext
         ))}
       </p>
       {which === 'index' ? (
-        <IndexRoom room={room} rooms={ctx.rooms} door={ctx.door} />
+        <IndexRoom room={room} rooms={ctx.rooms} door={ctx.door} pulse={ctx.pulse} />
       ) : (
-        <GenericRoom room={room} door={ctx.door} lane={laneForRoom(room.id, ctx.laneMap)} />
+        <GenericRoom room={room} door={ctx.door} lane={laneForRoom(room.id, ctx.laneMap)} pulse={ctx.pulse} />
       )}
-    </>
+    </div>
   )
 }

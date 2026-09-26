@@ -13,7 +13,7 @@
  * second kill criterion anticipates.
  */
 
-import { parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
+import { canonicalDoc, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
 
 const ENDPOINT = process.env.ARC_LLM_ENDPOINT || "";
 const API_KEY = process.env.ARC_LLM_API_KEY || "";
@@ -50,11 +50,28 @@ await runDriver("generic-api", async ({ processName, input }) => {
     throw new Error("ARC_LLM_ENDPOINT, ARC_LLM_API_KEY and ARC_LLM_MODEL must all be set (see phase-02-spec, Your-setup)");
   }
 
+  // THE PROCESS BODY IS THE QUESTION, and until ADR-0226 this driver never sent it: the request
+  // was a one-line system message plus the bare input, so every trial through here measured a
+  // model answering a question it was never asked. Same `canonicalDoc` read the policy gate
+  // validated, and the same prompt shape as the claude-code and codex drivers.
+  const read = await canonicalDoc(processName);
+  if (read.missing) throw new Error(`canonical file not found: ${read.path}`);
+  if (!read.ok) throw new Error(`canonical file does not parse: ${read.what}`);
+  const prompt = [
+    read.doc.body,
+    "",
+    "---",
+    "INPUT (JSON):",
+    JSON.stringify(input),
+    "",
+    "Reply with ONE JSON document matching this process's output contract, and nothing else.",
+  ].join("\n");
+
   const body = {
     model: MODEL,
     messages: [
       { role: "system", content: `You are executing the arc process \`${processName}\`. Reply with ONE JSON document and nothing else — no prose, no code fence.` },
-      { role: "user", content: JSON.stringify(input) },
+      { role: "user", content: prompt },
     ],
   };
 

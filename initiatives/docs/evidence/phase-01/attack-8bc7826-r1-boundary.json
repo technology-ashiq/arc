@@ -1,0 +1,121 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:262 (isMainModule)",
+      "breaking_input": "Run `node .claude/scripts/docs/wiki-coverage.mjs` from a location where Node's JS `realpathSync` throws on the script path. Examples: an lstat/readlink error such as EISDIR, EPERM or UNKNOWN on a Windows subst or network-mapped drive, or ELOOP on a link cycle in a parent.",
+      "why": "`catch { return false; }` turns any realpath exception into 'not the main module'. The file loads, defines functions, prints nothing and exits 0, so the completeness gate becomes a silent pass. That is the same silent no-op the memory note on realpathing both sides of the main guard describes. The gate's contract is that unreadable is never 0.",
+      "fix": "Never map an exception to false when `argv[1]` is set. Fall back to comparing `resolve(argv[1])` with `fileURLToPath(import.meta.url)`, and if that also fails, run main and exit 2. Only return false when `argv[1]` is undefined.",
+      "twin_of": "Main guard compared `argv[1]` without realpath -> realpath BOTH `argv[1]` and `import.meta.url`."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:83-90 and 100-106 (byDir plain object, `pages`/`narratives` plain objects)",
+      "breaking_input": "Create a directory named `constructor`, `valueOf`, `toString` or `hasOwnProperty` under `docs/wiki/` or `docs/wiki/_narrative/`, holding only a non-.md file or nothing tracked, e.g. `docs/wiki/constructor/x.png`. For `docs/wiki/constructor/x.md` the gate crashes instead. A directory named `__proto__` makes `pages['__proto__'] = [...]` swap the prototype of `tree.pages`.",
+      "why": "`byDir` is `{}`, so `byDir['constructor']` is the inherited `Object` function and `!byDir[d]` is false. The unknown directory is never reported as `[page-no-entity]`. If it holds a .md file, `byDir[d].has(stem)` throws a TypeError, giving exit 2 plus a stack instead of a named finding. The author used `Object.hasOwn(FLAGS, a)` for flags but not for disk-derived keys.",
+      "fix": "Build `byDir`, `pages`, `pageSubdirs`, `narratives` and `narrSubdirs` as `Map`s or `Object.create(null)`, and test membership with `has` or `Object.hasOwn`. Add a suite case per prototype-key name."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/docs/no-walker.mjs:64-95 (SANCTIONED, isSanctioned)",
+      "breaking_input": "In `.claude/scripts/docs/wiki-build.mjs` (not wiki-coverage.mjs) add `const pagesAbs = repo;` and `const all = fc.dirNames(pagesAbs);`. Or write `const d = \"..\"; fc.mdStems(join(pagesAbs, d))`.",
+      "why": "The old sanction was one call with a literal `docs/adr` path. The new entries take variable arguments, and the match is by call text alone, with no file or function binding. Any docs script can spell an unbounded tree walk with those exact strings and pass the REQ-09 scan. The scan cannot know what `pagesAbs`, `narrAbs` or `d` hold.",
+      "fix": "Bind each sanctioned call to a (file, enclosing function) pair. Assert each sanctioned site exists exactly once, so stale allow-list entries fail. Also require that any `pagesAbs` binding comes from the `--pages` parameter."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/docs-coverage.bats: 'a gate that always exits 0 fails its own self-test'",
+      "breaking_input": "Make the copied gate fail for any other reason, e.g. the scratch tree fails `wb.extract` so the self-test returns 2, or the mutated file hits a SyntaxError so Node exits 1. The test still passes.",
+      "why": "The only assertion is `[ \"$status\" -ne 0 ]`. It never checks that the self-test ran (`ran 6 of 6`), that it exited 1, or that any arm printed `FAILED-ARM`. Exit 2 or a crash satisfies it. This is the 'assert the control RAN, then what it printed' rule the suite's own header claims to follow.",
+      "fix": "Assert `status -eq 1`, output containing `ran 6 of 6`, and `FAILED-ARM` for M1, M2, M3, M4 and M5 by name. Assert M0 is not FAILED-ARM."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "tests/docs-coverage.bats: \"a tree whose inventories are EMPTY is never 'covered'\"",
+      "breaking_input": "`rm -r` of products, initiatives, processes, .claude/commands, .claude/agents and .claude/rules makes `wb.extract` return code 2 (unreadable readers). The gate exits 2 with 'the tree could not be extracted', and the test passes without `[empty-inventory]` ever being produced.",
+      "why": "The assertions are `status -ne 0` and 'output lacks all covered'. Both are satisfied by a usage error, a crash or an extract failure. The CLI-level `[empty-inventory]` branch of forwardFindings has no test that only it decides. M4 injects the world in-process, so it proves nothing about the CLI path.",
+      "fix": "Assert `status -eq 1` and a `FAIL [empty-inventory]` line for each emptied type. Build the emptied tree so the extractor succeeds with empty inventories rather than failing to read."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:~163 (writePages in selftest) and tests/docs/write-pages.mjs:25",
+      "breaking_input": "A real-tree entity whose id fails SAFE_ID or the Windows device-name check, e.g. a rule file `.claude/rules/my rules.md` (space) or a command `nul.md`. `wb.pagePath(e)` returns null and `.split(\"/\")` throws.",
+      "why": "The CLI reports `[bad-id]` at exit 1 for this tree, but the self-test, which runs on the real tree, crashes with a TypeError before arm M0 (exit 2, no arm labelled). A tree defect the gate is meant to name kills the negative control. In write-pages.mjs an uncaught top-level-await rejection exits 1, not the documented 2, and 1 is the finding code.",
+      "fix": "In both writers, check `pagePath` for null. In the self-test, skip and count bad-id entities, or fail with a named message and exit 2. In write-pages, catch and set `exitCode = 2`."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:45-63 (pageTree) and 244 (`--pages` handling)",
+      "breaking_input": "Commit `docs/wiki` (or `docs/wiki/products`) as a symlink to a directory outside `docs/wiki` that holds matching pages. Or run `--pages ../other-tree/docs/wiki`. Or run `--pages C:\\\\x`, which is honoured as an absolute path on Windows but becomes `<repo>/C:/x` on POSIX. Also `--pages /`, whose empty rel resolves to the repo root.",
+      "why": "`pagesAbs` and every entry are never realpath'd or checked for containment inside realpath(repo). Coverage can be satisfied by pages living outside the tree, or via a linked directory or page file that the helpers list. The `--pages` normalisation strips a leading slash and keeps `..`, so the same argument means different roots per OS and can leave the repo.",
+      "fix": "Realpath `pagesAbs` and each listed directory. Refuse (exit 2, named) any link or any path whose realpath is not inside realpath(repo)/docs/wiki. Reject `..`, drive letters and an empty rel in `--pages`.",
+      "twin_of": "A link to a directory INSIDE the tree read as \"absent\" at exit 0 -> a path reached through a link is refused, wherever the link points."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs pagePath, and wiki-coverage.mjs:66-77 (forwardFindings)",
+      "breaking_input": "Two entities of one type whose ids differ only by case, e.g. gate names `Lint` and `lint` from a names list. pagePath returns `gates/Lint.md` and `gates/lint.md`.",
+      "why": "On Linux both pages can exist and the gate passes. On the Windows and macOS legs one file overwrites the other, so the tree fails with `[entity-no-page]` for one id. The verdict differs by OS, and pagePath and forwardFindings never detect the case-fold collision on the leg that could.",
+      "fix": "In forwardFindings, group ids per type by `id.toLowerCase()` and emit `[id-collision]` on every OS when a group has more than one member.",
+      "twin_of": "Case-insensitive match on one OS leg only -> compare bytes; never trust a locale or a case-folding filesystem."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:79-81 (pagePath)",
+      "breaking_input": "An entity whose id is 300 characters of `[a-z]`, e.g. from a gate names list, or a long id under a deep Windows checkout path.",
+      "why": "SAFE_ID has no length bound. pagePath returns a path, so the gate reports `[entity-no-page] ... expected <path>` forever instead of `[bad-id]`. The renderer will then hit ENAMETOOLONG or the Windows MAX_PATH limit.",
+      "fix": "Reject ids longer than 100 characters in pagePath as bad-id, leaving budget for the directory and `.md`."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:~236-243 (flush) and report() code===2 branch",
+      "breaking_input": "Run the gate with stdout closed early (`| head -0`), or on a tree that cannot be extracted.",
+      "why": "All diagnostics, including the 'tree could not be extracted' message, go to stdout only, and a failed stdout write returns 2 silently. The exit code is right, but the run leaves no reason on stderr. A stdout-only capture that dropped the write sees nothing.",
+      "fix": "Send exit-2 diagnostics to stderr. On a stdout write error, write one named line to stderr (`wiki-coverage: stdout write failed`) before returning 2."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:~207 (selftest finally)",
+      "breaking_input": "Windows leg: Defender or the search indexer holds one of the freshly written scratch .md files when `rmSync(scratch, {recursive:true, force:true})` runs, giving EBUSY or EPERM.",
+      "why": "`force` only ignores ENOENT and `maxRetries` is unset. The throw escapes `finally`, replaces the selftest's own result, and exits 2 after every arm passed. It is a flake on one OS leg only. A SIGINT also leaks the scratch directory.",
+      "fix": "Pass `maxRetries` and `retryDelay` to `rmSync`, catch its error and report it as a warning without changing the arm verdict. Register a cleanup for SIGINT."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "tests/docs-coverage.bats:23-25 (per-arm loop)",
+      "breaking_input": "Arm M3 prints `M3 ... : FAILED-ARM (exit 1)` while M4 or M5 prints PASS.",
+      "why": "`[[ \"$output\" == *\"$arm \"*\"PASS\"* ]]` is a glob across newlines, so `M3 ` followed by any later PASS satisfies it. Only the exit-status assertion catches a failed arm; the per-arm check is decorative for M0-M4.",
+      "fix": "Match each arm's own line, e.g. `grep -E \"^$arm .*: PASS \\(exit\"` on `$output`, or assert `[[ \"$output\" != *FAILED-ARM* ]]`."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "tests/docs/no-walker.mjs:80-95 (isSanctioned)",
+      "breaking_input": "`import * as myfc from \"./other.mjs\"; ... myfc.dirNames(pagesAbs)`. Raw text contains `fc.dirNames(pagesAbs)` at column `at`, `codeLine.slice(at, at+3)` is `fc.`, and `m.index === at + offset`.",
+      "why": "The guard checks the three characters `fc.` but not that the receiver is exactly `fc`. Any identifier ending in `fc` (`myfc`, `wbfc`) passes as the sanctioned face-coverage helper, so a different module's enumerator with the same name is laundered.",
+      "fix": "Require a non-identifier character (or start of line) before `fc.` in codeLine, or match the receiver with `/(^|[^\\w$.])fc\\.$/`.",
+      "twin_of": "An allow-listed call text in a comment laundered a different enumerator on the same line -> an allowlist matches the CODE, never the raw line."
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-coverage.mjs:45-63, 80-106 (reverse direction lists only dirs and .md stems)",
+      "breaking_input": "Add `docs/wiki/products/ghost.mdx`, `docs/wiki/index.html`, `docs/wiki/products/ghost.md.orig`, or a regular file named `docs/wiki/_narrative`.",
+      "why": "REQ-03 claims every page, page directory and narrative belongs to an entity. Anything that is neither a directory nor a `*.md` stem is invisible to the reverse direction, so an orphan artifact ships under docs/wiki at exit 0.",
+      "fix": "Add a raw non-md, non-dir listing through the sanctioned helper (or an explicit 'other files' export) and report `[page-no-entity]` for any entry that is not an expected page, directory or the allowed root pages."
+    }
+  ]
+}

@@ -69,7 +69,12 @@
 - A phase closes ONLY via `/arc-phase-done <n>`: tests green + live demo + tracker updated. Evidence over assertion.
 - **After a push, read CI per-JOB before reporting the work done.** I reported a phase built on the
   strength of local gates twice while CI was red — once with a test that had never passed at all.
-  `gh run view <id> --json jobs`, and confirm the run's head SHA is the local HEAD.
+  → `node .claude/scripts/review/ci-digest.mjs` (per-job, head SHA asserted). Right after the push, WATCH it
+  yourself: a `run_in_background` loop re-runs ci-digest every 120s while it exits 3 (pending), and the harness
+  wakes you when it ends — zero tokens while waiting. Never poll in the foreground, and never ask me whether CI finished.
+- **After a push, the building session runs `/arc-attack` and `ci-digest` itself. It never starts a new
+  session for them** (ADR-0226, amended 2026-09-24). The attacker stays fresh because `arc-run` gives it
+  only the diff, and the CI read is a script. A new session adds no independence and costs ~100k tokens.
 - **"Tests green" means green on CI. Never run a suite on this box** — and read per-JOB conclusions,
   not the watcher's exit code → `.claude/rules/testing.md` § where tests run.
 - Offline-first: every external dependency gets an interface + fake + real impl.
@@ -89,7 +94,8 @@
   where two attacked one gate they shared the root cause and almost none of the findings. A
   single agent's blind spot is structural, not a matter of effort. Fresh = has not seen the
   implementation (`gate-author-cannot-be-its-attacker`: the author's own 26 breaking inputs
-  found 0 holes; an unanchored agent found 9).
+  found 0 holes; an unanchored agent found 9). → run it with `/arc-attack` (processes/attack-diff,
+  ADR-0226); never as general-purpose agents inside the building session.
 - **A test that passes proves the assertion held, not that the code ran.** Assert it RAN before
   asserting what it printed → `.claude/rules/testing.md` § the vacuous pass. Cycle 6 shipped
   this three times, twice inside the suites written to prevent it.
@@ -153,6 +159,7 @@
 - `/arc-freeze <dir>` · `/arc-unfreeze` — deterministic edit-boundary while debugging
 - `/arc-diagram <what>`— English → committed Mermaid (into PLAN/ADR/docs)
 - `/arc-resume [--lane <name>]` — rebuild session state from PROGRESS ## Now + last snapshot
+- `node .claude/scripts/docs/wiki-build.mjs` — regenerate `docs/wiki/` after adding or changing a product, lane, process, ADR, command, agent, rule or gate; CI fails on a stale wiki (`--check`) and on a part of arc with no page (`wiki-coverage`)
 - Only the six command lines showing `[--lane <name>]` take the flag; the rest are lane-agnostic.
   A bare first argument is always the command's own (a phase number, a route, a URL, a goal
   sentence) — never a lane name. Omit the flag and the lane is resolved, or you are asked.
@@ -161,7 +168,7 @@
 - **GENERATED commands** → `.claude/commands/{arc-commit,arc-review,arc-kickoff}.md` are compiled
   from `processes/*.process.yaml` (engine Cycle 6, ADR-0201/0202). **Do not edit them** — the next
   regeneration deletes the edit. Change the process file, routed through `/arc-change`, then
-  `node .claude/scripts/engine/arc-compile.mjs --write --all --target claude-code`. The other 24
+  `node .claude/scripts/engine/arc-compile.mjs --write --all --target claude-code`. The other 25
   commands are still hand-written and unaffected.
 - Company board       → `PORTFOLIO.md` (every lane in priority order — a view, not the truth)
 - Lanes / workspaces  → `.claude/rules/lanes.md` (`--lane` is the ONLY way to name a lane)
@@ -187,7 +194,7 @@
 ---
 
 ## Extended docs — Claude, READ these when the work touches them
-- How this setup works → `docs/how-it-works.md` (mental model + example flow)
+- What exists in arc → `docs/wiki/index.md` (GENERATED; every product, lane, process, ADR band, command, agent, rule, gate). The old hand-kept `docs/how-it-works.md` is archived (ADR-1510)
 - Build process       → `docs/build-playbook.md` (Golden Loop · DoD · 3-layer tracker)
 - Database setup      → `docs/supabase-setup.md`
 - Payments / Stripe   → `docs/stripe-setup.md`

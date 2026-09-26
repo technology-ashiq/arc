@@ -1,0 +1,18 @@
+{
+  "head": "1111111111111111111111111111111111111111",
+  "branchName": "feat/x",
+  "list": [],
+  "branch": [
+    {
+      "databaseId": 40,
+      "headSha": "2222222222222222222222222222222222222222",
+      "status": "completed",
+      "conclusion": "success",
+      "workflowName": "arc-ci",
+      "createdAt": "2026-09-23T09:00:00Z",
+      "attempt": 1
+    }
+  ],
+  "view": {},
+  "upstream": "2222222222222222222222222222222222222222"
+}

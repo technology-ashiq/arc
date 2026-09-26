@@ -2,11 +2,13 @@
 // install (face v2 Phase 03, ADR-1320, ADR-1324, ADR-1326).
 //
 // The port of v0.7's Evolve onto the door. What is real: the evolve lane's header and the experiment
-// receipts the registry homes here, counted by kind. What is not served: the experiments themselves --
-// each surface, its arms against the sample floor, its verdict -- and the experiment contract, which
-// /api/evolve will fold. Opening, measuring and concluding are work-door verbs (Phase 05). The reference's
-// batches were simulated; none is drawn here, simulated or otherwise.
-import { notServed, verbPending } from "../../../lib/registry.mjs";
+// receipts the registry homes here, counted by kind, and -- through /api/evolve (Phase 04) -- the experiments
+// themselves, folded from their receipts by the evolve lane's own board (each surface, its arms counted over
+// complete windows, its verdict), and every manifest's declared evolve section, judged by the lint that owns it.
+// A hypothesis is not drawn: the experiment.opened grammar carries none. Opening, measuring and concluding are the
+// room's ops (face v2 Phase 05 kernel ring, ADR-1340): the ops dock draws them. The reference's batches were
+// simulated; none is drawn here, simulated or otherwise.
+import { asArray, asObject, cell, field, servedRead, servedTable } from "../../../lib/served.mjs";
 import { countedOn, kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
@@ -15,9 +17,8 @@ import { countedOn, kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib
  * @typedef {import("../../../lib/lane-room.mjs").LaneRoom & {
  *   badge: string,
  *   kpis: { key: string, v: string, l: string, sub: string }[],
- *   experiments: import("../../../lib/registry.mjs").NotServed,
- *   openVerb: { isVerbPending: true, verb: string, sentence: string },
- *   contract: import("../../../lib/registry.mjs").NotServed,
+ *   experiments: import("../../../lib/served.mjs").ServedTable,
+ *   contract: import("../../../lib/served.mjs").ServedTable,
  * }} Folded
  */
 
@@ -28,6 +29,11 @@ import { countedOn, kindCount, laneBadge, laneKpi, laneRoom } from "../../../lib
  */
 export function fold(payloads, ctx) {
   const base = laneRoom(payloads, ctx);
+  const st = servedRead(payloads, ctx, base.reads, "/api/evolve");
+  const superseded = typeof st.body["superseded"] === "number" ? st.body["superseded"] : 0;
+  // Receipts the evolve lane's own screen (admit) set aside as damage: counted, never folded, and said.
+  const damaged = typeof st.body["damaged"] === "number" ? st.body["damaged"] : 0;
+  const manifests = typeof st.body["manifestsRead"] === "number" ? st.body["manifestsRead"] : null;
   return {
     ...base,
     badge: laneBadge(base),
@@ -38,19 +44,54 @@ export function fold(payloads, ctx) {
       { key: "promoted", v: kindCount(base, "experiment.promoted"), l: "Promoted", sub: countedOn(base, "experiment.promoted") },
       { key: "rolled", v: kindCount(base, "experiment.rolled_back"), l: "Rolled back", sub: countedOn(base, "experiment.rolled_back") },
     ],
-    experiments: notServed(
-      "Experiments",
-      "/api/evolve",
-      "Each experiment's declared surface, metric and hypothesis, both arms against the sample floor, the holdout, and the verdict once both arms reach the floor, folded from its receipts.",
-    ),
-    openVerb: verbPending(
-      "Open an experiment",
-      "One declared surface, one metric, one hypothesis, written before the first batch. Opening, measuring and concluding arrive with the work door.",
-    ),
-    contract: notServed(
-      "Experiment contract",
-      "/api/evolve",
-      "The evolve section of a process manifest: its surface, metric, sample floor and holdout, as the manifest declares them.",
-    ),
+    experiments: servedTable(st, {
+      panel: "Experiments",
+      route: "/api/evolve",
+      columns: ["experiment", "surface", "units per arm, complete windows", "verdict"],
+      listKey: "experiments",
+      empty: "No experiment has been opened on this spine.",
+      row: (x) => {
+        const id = field(x, "id");
+        const arms = asArray(x["metrics"]).map((m) => {
+          const mm = asObject(m);
+          const perArm = asArray(mm["arms"]).map((a) => `${field(asObject(a), "arm")} ${cell(asObject(a)["units"])}`).join(" / ");
+          return `${field(mm, "metric")}: ${perArm} (${cell(mm["complete"])} of ${cell(mm["windows"])} windows complete)`;
+        });
+        const verdict = asObject(x["verdict"]);
+        const closed = asObject(x["closed"]);
+        // CLOSED outranks the verdict, as the lane's own board renders it (board.mjs renderBoard checks closed first): an
+        // experiment killed after a no-verdict read "no-verdict", and its closing never appeared (Phase 04 round 3).
+        const isClosed = x["closed"] !== null && typeof x["closed"] === "object" && !Array.isArray(x["closed"]);
+        const state = isClosed ? `closed${field(closed, "outcome") !== "" ? ` ${field(closed, "outcome")}` : ""}`
+          : field(verdict, "outcome") !== "" ? field(verdict, "outcome") : "open";
+        // Units set aside -- one measured under an arm it was not assigned, or under an arm the experiment never declared --
+        // are said on the row, so a thin count is never read as the whole of what was measured (Phase 04 attack).
+        const conflicts = typeof x["conflicts"] === "number" ? x["conflicts"] : 0;
+        const stray = asArray(x["strayArms"]).map(cell).filter((a) => a !== "");
+        const aside = [
+          conflicts > 0 ? `${conflicts} unit${conflicts === 1 ? "" : "s"} measured under an arm it was not assigned, set aside` : "",
+          stray.length > 0 ? `measurements under undeclared arm${stray.length === 1 ? "" : "s"} ${stray.join(", ")}, set aside` : "",
+        ].filter((a) => a !== "").join(" · ");
+        const measured = arms.length > 0 ? arms.join(" · ") : "no measurement yet";
+        return id === "" ? null : { key: id, cells: [id, field(x, "surface"), aside !== "" ? `${measured} -- ${aside}` : measured, state] };
+      },
+      note: [
+        superseded > 0 ? `${superseded} superseded receipt${superseded === 1 ? "" : "s"} set aside by the board's own supersede rule` : "",
+        damaged > 0 ? `${damaged} experiment receipt${damaged === 1 ? "" : "s"} the evolve lane's own screen refused as damaged, not folded` : "",
+        "a hypothesis is not drawn: the experiment.opened grammar does not carry one",
+      ].filter((n) => n !== "").join(" · "),
+    }),
+    contract: servedTable(st, {
+      panel: "Experiment contract",
+      route: "/api/evolve",
+      columns: ["product", "metrics", "experiments", "the lint's findings"],
+      listKey: "contracts",
+      empty: manifests === null ? "No product manifest declares an evolve section." : `None of the ${manifests} product manifests declares an evolve section, so no experiment has a contract yet.`,
+      row: (c) => {
+        const product = field(c, "product");
+        const findings = asArray(c["findings"]).map(cell).filter((f) => f !== "");
+        return product === "" ? null : { key: product, cells: [product, asArray(c["metrics"]).map(cell).join(", ") || "none", cell(c["experiments"]), findings.length === 0 ? "none -- the section is valid" : findings.join(" · ")] };
+      },
+    }),
   };
 }

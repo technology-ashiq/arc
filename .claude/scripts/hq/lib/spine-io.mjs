@@ -17,6 +17,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
+import { hostname } from "node:os";
 import { SpineError, canonicalize, formatIst, nowMs } from "./canonical.mjs";
 
 // The critical section is a few file appends -- single-digit milliseconds. A stale
@@ -174,7 +175,9 @@ export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS, lockName = 
   if (typeof lockName !== "string" || !/^\.[a-z0-9.-]+$/.test(lockName))
     throw new SpineError("LOCK_FAILED", `lockName ${JSON.stringify(lockName)} is not a safe lock filename`);
   const lock = join(dir, lockName);
-  const token = `${process.pid}:${randomBytes(8).toString("hex")}`;
+  // The HOST is in the token: a lock is judged by its pid only on the machine that pid belongs to. A pid-only token
+  // read another machine's fresh lock as a dead local writer's and broke it (PR 3b round-6 logic attack).
+  const token = `${hostname()}|${process.pid}|${randomBytes(8).toString("hex")}`;
   const deadline = Date.now() + timeoutMs;
   let fd = null;
   let lastCode = "EEXIST";
@@ -213,8 +216,18 @@ export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS, lockName = 
       // A killed emitter leaves its lock behind. Break it once it is provably stale, or the
       // next session inherits a wedged spine (the crash window is exactly when telemetry
       // must not block a human).
+      //
+      // PROVABLY: the holder is GONE -- the pid its token names has exited on this machine, or
+      // (a token naming no pid, or a pid running for more than ten minutes, which is a reused pid,
+      // not a writer) the lock is older than the threshold. And the token is read AGAIN right
+      // before the unlink: a waiter whose stale look predated another waiter's break-and-take
+      // deleted that FRESH lock, and two writers shared the critical section (PR 3b round-5 shell
+      // attack: 4 of 6 forced runs). The window left between that read and the unlink is named
+      // in the face lane's debt ledger; closing it renames the lock files other readers know.
       try {
-        if (Date.now() - statSync(lock).mtimeMs > staleMs) { unlinkSync(lock); continue; }
+        const seen = readLockToken(lock);
+        const age = Date.now() - statSync(lock).mtimeMs;
+        if (holderGone(seen, age, staleMs) && readLockToken(lock) === seen) { unlinkSync(lock); continue; }
       } catch { /* the holder released it between our check and now -- retry */ }
       if (Date.now() > deadline)
         throw new SpineError("LOCK_TIMEOUT", `spine lock held for more than ${timeoutMs}ms (last open: ${lastCode})`);
@@ -244,6 +257,24 @@ function readLockToken(lock) {
   try { return readFileSync(lock, "utf8").trim(); } catch { return null; }
 }
 
+/**
+ * Whether a lock's holder is gone: on THIS machine (the token is `<host>|<pid>|<hex>`), its pid has exited, or it is still
+ * running a minute on (reused by another program); another machine's token, or one naming no pid, by age alone.
+ * @param {string | null} token @param {number} age @param {number} staleMs
+ */
+function holderGone(token, age, staleMs) {
+  const m = /^([^|]*)\|([1-9][0-9]{0,9})\|[0-9a-f]+$/.exec(token || "");
+  if (m && m[1] === hostname()) {
+    let running = false;
+    try { process.kill(Number(m[2]), 0); running = true; } catch (e) { running = !!e && e.code === "EPERM"; }
+    // Live while its process runs, up to a minute: no writer holds the spine for seconds, so a running pid past that is
+    // another program's -- the ten minutes round 5 allowed dropped every hook receipt behind a reused pid (round 6).
+    return running ? age > Math.max(staleMs, 60_000) : true;
+  }
+  // Another machine's writer, or a token from an older emitter: by age alone, as before round 5.
+  return age > staleMs;
+}
+
 // One line, one write, then fsync: the whole line reaches the page cache in a single call,
 // so a kill between events can never leave half a line behind.
 //
@@ -266,13 +297,32 @@ function appendLine(file, line) {
   } catch { /* no file yet, or unreadable -- the append below surfaces the real error */ }
 
   const fd = openSync(file, "a");
+  // Past the write the line IS in the file and every reader sees it. A flush or close that fails after it (EIO on a
+  // network share, a failing disk) is a durability warning, never a refusal: refused, the event was quarantined while it
+  // sat on the spine, and its caller raised the same approval again (PR 3b round-4 logic attack). The index rule, one
+  // call earlier.
+  let wrote = false;
+  let unsynced = null;
   try {
-    writeSync(fd, Buffer.from(prefix + line, "utf8"));
+    // EVERY byte, or an error: writeSync may write fewer than asked, and a short write was counted as landed while it
+    // left a torn line the next append "healed" into garbage (PR 3b round-5 shell attack).
+    const bytes = Buffer.from(prefix + line, "utf8");
+    let off = 0;
+    while (off < bytes.length) {
+      const n = writeSync(fd, bytes, off, bytes.length - off);
+      if (!(n > 0)) throw Object.assign(new Error("the write made no progress"), { code: "EIO" });
+      off += n;
+    }
+    wrote = true;
     fsyncSync(fd);
+  } catch (e) {
+    if (!wrote) throw e;
+    unsynced = (e && e.code) || "error";
   } finally {
-    closeSync(fd);
+    // A failed close after a failed write must not replace the write's own error, which is the one that matters.
+    try { closeSync(fd); } catch (e) { if (wrote && unsynced === null) unsynced = (e && e.code) || "error"; }
   }
-  return prefix !== "";
+  return { healed: prefix !== "", unsynced };
 }
 
 export function isDayClosed(root, day) {
@@ -329,7 +379,7 @@ export function appendEventUnlocked(root, event, canonicalLine) {
   // because truth is the JSONL and replay rebuilds the index from it. The reverse order
   // would leave an index entry with no event, and a legitimate retry would be refused as a
   // duplicate forever: a silently LOST receipt. Prefer a duplicate you can supersede.
-  const healed = appendLine(dayFile(root, day), canonicalLine + "\n");
+  const { healed, unsynced } = appendLine(dayFile(root, day), canonicalLine + "\n");
 
   // Past this point the receipt EXISTS. An index failure is a derived-state problem, and
   // reporting failure here would be a lie that makes the caller retry and duplicate it.
@@ -340,7 +390,7 @@ export function appendEventUnlocked(root, event, canonicalLine) {
   } catch {
     indexed = false;
   }
-  return { day, file: dayFile(root, day), healed, indexed };
+  return { day, file: dayFile(root, day), healed, indexed, unsynced };
 }
 
 /**

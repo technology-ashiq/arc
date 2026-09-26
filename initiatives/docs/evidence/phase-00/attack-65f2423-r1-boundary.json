@@ -1,0 +1,133 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/docs/wiki-build.mjs:62",
+      "breaking_input": "Any read failure other than 'file absent'. On POSIX, chmod 000 products/core/manifest.json. On Windows, a transient EBUSY/EPERM sharing violation from an antivirus scan or editor lock, or ENAMETOOLONG in a deep worktree. readText's bare `catch { return null; }` treats every errno as 'no file'. readProduct then returns `{facts:{}, unparsed:['manifest']}`, readAdr returns `adr.unparsed=['file']`, and wiki-build exits 0.",
+      "why": "The header promises 'Never 0 on unreadable', but only inventories are checked. Per-file read errors become 'unparsed' at exit 0. On a flaky Windows leg, two runs over the same tree emit different wiki.json bytes, so the regenerate-and-diff check (ADR-1504) flaps. A page can also silently claim a product has no commands.",
+      "fix": "Return null only for ENOENT or a non-file. For every other errno, throw a named error that extract maps to code 2, naming the path."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:65",
+      "breaking_input": "A git-tracked symlink such as `.claude/agents/x.md -> C:/Users/ashiq/.claude/CLAUDE.md`, or `.claude/rules/r.md -> ../state/hq/events/day.md`. Another case is `initiatives/evil -> /` with a PROGRESS.md behind it, since dirNames also follows links. `statSync(p).isFile()` follows the link and readFileSync reads outside the repo. The target's `# ` heading or frontmatter lands in wiki.json. With core.symlinks=false on the Windows leg, the same entry is a plain text file holding the link target, so wiki.json differs per OS.",
+      "why": "This is the isFile()-passes-a-symlink defect again, now with content read from outside the tree. It breaks DOC-I (git-tracked files only, no .claude/state) and the cross-OS byte determinism the dirty-diff gate needs.",
+      "fix": "Use lstat and refuse symlinks (record `unparsed` with a reason). Or realpath the file and require it to sit under realpath(repo) before reading.",
+      "twin_of": "A containment check used `isFile()`, which a symlink passes"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:148",
+      "breaking_input": "`initiatives/foo/plan.md` (lowercase), `initiatives/foo/progress.md`, or `products/x/Manifest.json`. `existsSync(join(...,'PLAN.md'))` and readText succeed on Windows and macOS (hasPlan true, facts parsed). They fail on Linux (hasPlan false, `unparsed:['progress']`). The three CI legs produce different wiki.json.",
+      "why": "Every named-file read uses the literal spelling and trusts a case-folding filesystem. The line-158 hasPlan check has the same problem.",
+      "fix": "After the stat succeeds, require `basename(realpathSync.native(p))` to equal the expected name exactly, otherwise treat the file as absent. Apply this in readText and to the PLAN.md check.",
+      "twin_of": "Case-insensitive match on one OS leg only"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:~372",
+      "breaking_input": "`node wiki-build.mjs --json --out products/core/manifest.json`, `--out .claude/scripts/docs/wiki-build.mjs`, or a tracked symlink `docs/wiki.json -> ../initiatives/docs/PLAN.md`. Only `resolve()`, existsSync and isDirectory are checked. writeFileSync then truncates and overwrites a tracked source file the extractor just read.",
+      "why": "The destination is never realpath'd and never compared against the tree it reads. The write is also non-atomic, so a crash or ENOSPC leaves a truncated wiki.json that a later CI step could diff or read.",
+      "fix": "realpath the destination, or its parent when the file is missing. Refuse symlinks and refuse any path inside the repo except an explicit output dir. Write to a temp file and rename.",
+      "twin_of": "A writer wrote through a symlink onto its own source"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:~376",
+      "breaking_input": "`node wiki-build.mjs --json | head -c 1`, or a consumer that exits early. wiki.json for 300+ ADRs is far larger than a 64 KB pipe buffer. stdout emits EPIPE after main() has already returned 0, and no 'error' listener exists, so it surfaces as an uncaught exception. Node exits 1.",
+      "why": "Exit 1 is documented as 'a treeWorld key this wiki has not decided about'. A closed pipe is reported as an unmapped-inventory finding, and the .then/.catch handlers cannot see the async error.",
+      "fix": "Attach `process.stdout.on('error', ...)` before writing. Map EPIPE to a named exit-2 message, or write with fs.writeSync(1) inside try/catch."
+    },
+    {
+      "id": "B6",
+      "severity": "high",
+      "where": "tests/docs/no-walker.mjs:67",
+      "breaking_input": "Add `.claude/scripts/docs/lib/walk.mjs` containing `import {readdirSync} from 'node:fs'; export const all=(d)=>readdirSync(d);` and import it from wiki-build.mjs. The scanner runs `readdirSync(root).filter(/\\.(mjs|js|cjs)$/)` on the top level only, so lib/ is never opened. It prints 'scanned N file(s)' and exits 0. The same bypass works for `wiki-x.mts`, `.ts`, and an extensionless node-shebang script.",
+      "why": "DOC-A's proof is non-recursive and extension-filtered. 'scanned >= 1' proves nothing about the files that matter, and the mutant test only ever puts the walker in a top-level .mjs.",
+      "fix": "Recurse over every regular file under root regardless of extension. Cross-check the scanned count against an independent `git ls-files .claude/scripts/docs` count. Add a mutant with the walker in a subdirectory."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/docs/no-walker.mjs:60",
+      "breaking_input": "(a) wiki-build already calls `fc.mdStems(join(repo,'docs','adr'))`. Adding `fc.dirNames(join(repo,'docs'))` or `fc.yamlStems(...)` is not in RULES, and those are the very helpers this diff exports. (b) `execFileSync('git',['ls-files','products'])` or `execSync('find . -name *.md')`, since child_process is never scanned. (c) `import * as nodeFs from 'node:fs'; nodeFs['read'+'dirSync']('.')` or `require('fs')['readd'+'irSync']`, because the computed-access rule only recognises the identifiers fs, fsp and promises. All three scan clean.",
+      "why": "DOC-A's scan recognises spellings of the fs API but not the enumerators exported for this lane, nor a process-spawned walker, nor an aliased fs namespace.",
+      "fix": "Add dirNames, mdStems, yamlStems and treeKinds to RULES, with an allowlist of exactly the one sanctioned call site. Flag any child_process import. Flag computed member access on any identifier bound from an fs import. Add mutants for each."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "tests/docs-extract.bats:~57",
+      "breaking_input": "Make serialize() emit CRLF. `! grep -q $'\\r' a.json` returns 1, but bash errexit ignores a negated command that is not the last one in the test, so the CR assertion never fails the test. The last line, `! grep -qF \"$ARC_ROOT\" a.json`, uses the MSYS spelling /c/Users/... On the Windows leg a leaked native path `C:\\\\Users\\\\...` (JSON-escaped) never matches it either.",
+      "why": "The CRLF and absolute-path claims, which are the Windows determinism guarantees, are unfalsifiable. The negative control was never shown able to fail.",
+      "fix": "Use `if grep -q $'\\r' f; then false; fi`, or `run grep -c ...; [ \"$output\" = 0 ]`. Check both the POSIX and native spellings of ARC_ROOT. Add a positive control that plants a CR and a path and asserts the check goes red.",
+      "twin_of": "Negative controls run under bats `run` in a subshell silently passed"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-coverage.mjs:~910",
+      "breaking_input": "Run `node face-coverage.mjs <fixture tree with no initiatives/face/contracts/expected-set.json and no .claude/scripts/hq/lib/validate.mjs>`. Before this diff the object literal evaluated `kinds: await treeKinds(repo)` first, so the failure was validate.mjs's import error. Now loadContract runs first and dies with a different message and path. `contract` also moves from mid-object to the last key.",
+      "why": "The new comment says 'The contract is read FIRST, as it always was'. That is false: `kinds` was read first and `contract` came after `processes`. ADR-1501's 'behaviour-preserving, exactly as before' claim rests on an untested ordering. Any consumer using Object.keys or entries of `data` sees a reordered object.",
+      "fix": "Preserve the old order: read kinds first, then the contract, then the rest. Or delete the false claim and pin the missing-contract and missing-validate error paths with a face-coverage.bats case."
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": "products/docs/manifest.json:4",
+      "breaking_input": "`sync-to-project.sh <dir> --products docs`. Manifests resolve to docs plus core only. wiki-build dynamically imports `.claude/scripts/engine/yaml-subset.mjs`, and face-coverage's treeKinds imports `.claude/scripts/hq/lib/validate.mjs`. If those paths are owned by the engine and hq manifests (as their directories suggest), they are absent from the installed tree. extract returns code 2, 'the canonical YAML parser could not be loaded'.",
+      "why": "ADR-1512 justifies the product boundary by selective installs, yet `requires` omits the products that own the files the script imports at runtime. The product cannot run standalone.",
+      "fix": "Declare the owning products in `requires`, or move the dependency. Add a manifest-level test that every static and dynamic import path of a listed script is owned by the product or a required one."
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": "tests/fixtures/sync-golden/tree-manifest.txt (absent from diff)",
+      "breaking_input": "The diff adds `.claude/scripts/docs/wiki-build.mjs`, edits `face-coverage.mjs` and adds `products/docs/manifest.json`, all inside the default full-sync payload. It does not touch the golden manifest. `bash sync-to-project.sh $SCRATCH && _arc_tree_manifest $SCRATCH` would list the new file, so the committed manifest no longer matches byte for byte.",
+      "why": "The sync byte-identity gate is invisible locally and red on every CI leg. If this commit is pushed as-is it burns a full CI cycle on a known failure. The tests/shard-timings.json entry is also missing.",
+      "fix": "Regenerate the golden manifest as the last step before push, per the phase spec's step 8. Confirm its diff lists only the new docs files. Do not push this commit alone."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "tests/docs/extract-probe.mjs:22",
+      "breaking_input": "`node extract-probe.mjs` with no argument on the Windows leg with stderr piped. `process.stderr.write(usage); process.exit(2);` can truncate or lose the message.",
+      "why": "The same process.exit-races-teardown pattern was already fixed elsewhere by using process.exitCode.",
+      "fix": "Set `process.exitCode = 2` and skip the rest with if/else instead of calling process.exit.",
+      "twin_of": "`process.exit()` raced libuv teardown on Windows"
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:66",
+      "breaking_input": "A manifest.json, command, agent or ADR saved by Windows PowerShell 5.1 with a UTF-8 BOM. JSON.parse throws, so readProduct emits `facts:{}` and `unparsed:['manifest']`. `frontmatter()`'s `startsWith('---\\n')` fails, so description and model are unparsed. An ADR whose line 1 is `\\uFEFF# ADR ...` loses its title. All of this happens with exit 0.",
+      "why": "readText normalises CRLF but not a BOM. Whether the face's treeProducts reads the same file the same way is unverified. If it does not, the wiki and the gate disagree about one file, silently.",
+      "fix": "Strip a leading U+FEFF in readText, or fail with a named error. Add a fixture with a BOM.",
+      "twin_of": "Check and `--write` disagreed on CRLF"
+    },
+    {
+      "id": "B14",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:~250",
+      "breaking_input": "arc.gates.yaml contains a construct that face-coverage's own YAML reader (the one behind treeGates) accepts but yaml-subset.parseYamlSubset rejects (`r.ok` false). Alternatively it has two rows with the same `name:`. treeGates lists every gate name, but readGates re-parses the file itself and gets `doc = null`, so `rows = []`. Every gate becomes an entity with all five keys unparsed at exit 0. With duplicate names, `rows.find` silently takes the first.",
+      "why": "Names come from one read and facts from a second parse of the same file. Nothing asserts that each name found exactly one row.",
+      "fix": "Have treeGates export its rows, or assert that every name resolves to exactly one row and return code 2 otherwise.",
+      "twin_of": "Validate one read, compare another -> every fact is read once and that one read is both checked and used."
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": "tests/docs/extract-probe.mjs:57",
+      "breaking_input": "Delete the `[\"adrBands\", bands]` pair from the unreadable-check loop in extract, or delete the `!Array.isArray(w[k])` loop, the `typeof fc.treeWorld !== 'function'` guard, the '--out is a directory' branch, or the '--root is not an arc tree' branch. The probe and bats suite stay green.",
+      "why": "Only `gates` unreadable and an unmapped key are exercised. The code-to-exit-code mapping in main, and every other fail-closed branch, has no case that only it decides.",
+      "fix": "Add one case per branch. Cover adrBands unreadable, a non-list inventory, a missing export, `--out` pointing at a directory or unwritable path, and `--root` not an arc tree. Assert the CLI exit code, not just extract's return code.",
+      "twin_of": "A rule with no case only it decides -> every rule has a test that fails when only that rule is removed."
+    }
+  ]
+}

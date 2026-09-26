@@ -5,7 +5,9 @@
     "core",
     "hq"
   ],
-  "commands": [],
+  "commands": [
+    ".claude/commands/arc-attack.md"
+  ],
   "scripts": [
     ".claude/scripts/engine/yaml-subset.mjs",
     ".claude/scripts/engine/schema-subset.mjs",
@@ -14,9 +16,13 @@
     ".claude/scripts/engine/arc-run.mjs",
     ".claude/scripts/engine/calibrate-budget.mjs",
     ".claude/scripts/engine/build-pack-input.mjs",
+    ".claude/scripts/engine/build-attack-input.mjs",
+    ".claude/scripts/engine/arc-attack.mjs",
     ".claude/scripts/engine/egress-proxy.py",
     ".claude/scripts/engine/egress-session.sh",
     ".claude/scripts/engine/arc-bench.mjs",
+    ".claude/scripts/engine/propose.mjs",
+    ".claude/scripts/engine/agent-scaffold.mjs",
     ".claude/scripts/engine/adapters/claude-code.mjs",
     ".claude/scripts/engine/adapters/codex.mjs",
     ".claude/scripts/engine/drivers/common.mjs",

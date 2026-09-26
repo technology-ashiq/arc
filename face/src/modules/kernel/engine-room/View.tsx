@@ -1,15 +1,15 @@
 // View.tsx -- kernel/engine-room: v0.7's EngineRoom, drawing what fold() returned and deciding nothing
 // (face v2 Phase 03, ADR-1320).
 //
-// Declared deltas from the reference: the driver list is a NOT SERVED panel until /api/engine parses the
-// router file (ADR-1324); the key field, Save + test and Remove key are not ported, because no provider
+// Declared deltas from the reference: the driver list, the router rows and the budgets are read from /api/engine, which parses the
+// router file with the engine lane's own readers (Phase 04); the key field, Save + test and Remove key are not ported, because no provider
 // key lives in the browser (ADR-1325) -- the brain panel says where the key lives instead; the data-source
 // picker and the workspace export are gone, the face always reads the door; runs are the door's
 // run.completed receipts, grouped by process.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Btn, UI, YoursBadge } from '../../../ui/kit'
-import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, Reading, ReceiptDrawer, RoomHead, RunRows, SourcesPanel, TrailPanel } from '../../../ui/bits'
+import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, LanePanel, Reading, ReceiptDrawer, RoomHead, RunRows, SectionLabel, ServedTable, SourcesPanel, TrailPanel } from '../../../ui/bits'
 export { Gear as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -19,10 +19,23 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
       <KpiStrip items={f.kpis} />
 
+      {f.hasKeyLeak && <DoorRefusal code="KEY_IN_BROWSER" human={f.keyLeakText} />}
+
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4 items-start">
         <div className="min-w-0">
           <HPanel title="Drivers, routers and budgets" hint="any driver plugs in · the router picks per task class">
-            <NotServed item={f.drivers} />
+            <ServedTable item={f.drivers} />
+            <SectionLabel className="mt-4">Drivers on disk</SectionLabel>
+            <ServedTable item={f.driversOnDisk} />
+            <SectionLabel className="mt-4">Budgets</SectionLabel>
+            <ServedTable item={f.budgets} />
+          </HPanel>
+
+          <HPanel title="Driver health" hint="each driver's runs, how the last one ended, when, and on which model">
+            {f.trail.isReading && <Reading what="the run receipts" />}
+            {f.trail.isRefused && <DoorRefusal code={f.trail.refusal.code} human={f.trail.refusal.human} />}
+            {f.trail.isDrawn && <RunRows rows={f.health} isEmpty={f.showHealthEmpty} empty="No run.completed receipt on the page the door sent names a driver." />}
+            {f.hasHealthNote && <p data-health-note className="mt-2 text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.healthNote}</p>}
           </HPanel>
 
           <HPanel title="Runs by process" hint="run.completed receipts, grouped by the process that ran">

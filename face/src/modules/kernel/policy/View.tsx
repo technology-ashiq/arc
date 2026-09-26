@@ -1,14 +1,14 @@
 // View.tsx -- kernel/policy: v0.7's Policy, drawing what fold() returned and deciding nothing (face v2
 // Phase 03, ADR-1320).
 //
-// Declared deltas from the reference: the subject table and the ladder are NOT SERVED panels until
-// /api/policy parses hq.policy.yaml (ADR-1324); Propose cap, Demote, Promote and Declare are verb-pending
+// Declared deltas from the reference: the subject table and the ladder are read from /api/policy, which
+// parses hq.policy.yaml with the policy lane's own reducer (Phase 04); Propose cap, Demote, Promote and Declare are verb-pending
 // cards until the work door (ADR-1326); the figures count the receipts the registry homes here, and no
 // figure wears amber or red -- a count of past level changes is not a thing waiting on you.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { UI, YoursBadge } from '../../../ui/kit'
-import { HPanel, HoldsPanel, KpiStrip, LanePanel, NotServed, ReceiptDrawer, RoomHead, SourcesPanel, TrailPanel, VerbPending } from '../../../ui/bits'
+import { HPanel, HoldsPanel, KpiStrip, LanePanel, ReceiptDrawer, RoomHead, ServedTable, SourcesPanel, TrailPanel, VerbPending } from '../../../ui/bits'
 export { ShieldCheck as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -22,7 +22,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
         <div className="min-w-0">
           <HPanel title="The subject table" hint="ceiling · cap · effective is the lower of the two">
             <div className="space-y-2.5">
-              <NotServed item={f.subjects} />
+              <ServedTable item={f.subjects} />
               <VerbPending item={f.capVerb} />
             </div>
           </HPanel>
@@ -32,7 +32,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           </HPanel>
 
           <HPanel title="The ladder" hint="per capability · trial-ledger evidence">
-            <NotServed item={f.ladder} />
+            <ServedTable item={f.ladder} />
           </HPanel>
 
           <TrailPanel trail={f.trail} onReceipt={(id) => ctx.onPick('receipt', id)} />

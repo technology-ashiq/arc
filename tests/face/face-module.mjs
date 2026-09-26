@@ -64,7 +64,7 @@ try {
     const r = run(root, `${target.ring}/${target.id}`);
     check(`scaffolds ${target.ring}/${target.id} in one command with exit 0`, r.status === 0, out(r));
     check("reports face-pure green on the tree it wrote into", /face-pure: modules=\d+ folds=\d+ views=\d+ files=\d+ findings=0/.test(r.stdout), out(r));
-    check("reports face-coverage's module half green", /face-coverage \(module half\): folders=\d+ generic=\d+ orphans=0 exemptions=0/.test(r.stdout), out(r));
+    check("reports face-coverage's module half green", /face-coverage \(module half\): folders=\d+ generic=\d+ orphans=0 exemptions=\d+/.test(r.stdout), out(r));
     check("ends on the GREEN verdict line", new RegExp(`face-module: GREEN on face-pure and face-coverage -- ${target.ring}/${target.id}`).test(r.stdout), out(r));
     const dir = join(root, "face", "src", "modules", target.ring, target.id);
     const files = existsSync(dir) ? readdirSync(dir).sort() : [];
@@ -91,6 +91,15 @@ try {
   {
     const root = makeRoot("refusals");
     const extras = JSON.parse(readFileSync(join(CONTRACTS, "modules-v2.json"), "utf8")).modules.filter((m) => m.class === "extra");
+    // The real tree carries the extras' rows and folders since the owner's section 13 item 5 ruling (ADR-1337); the
+    // refusal is tested on a copy with the first extra's row and folder taken out, so it has neither.
+    if (extras[0]) {
+      const exFile = join(root, "initiatives", "face", "contracts", "module-exemptions.json");
+      const ex = JSON.parse(readFileSync(exFile, "utf8"));
+      ex.exemptions = (ex.exemptions || []).filter((e) => e.id !== extras[0].id);
+      writeFileSync(exFile, JSON.stringify(ex, null, 2) + "\n");
+      rmSync(join(root, "face", "src", "modules", extras[0].ring, extras[0].id), { recursive: true, force: true });
+    }
     const template = registry.rooms.find((r) => r.status === "template");
     const planned = registry.rooms.find((r) => r.status !== "template" && !hasModule(r.id));
     const wrongRing = planned ? registry.rings.find((g) => g !== planned.ring) : null;

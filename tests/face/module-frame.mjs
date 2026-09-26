@@ -220,10 +220,22 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
     }
   }
   check("the real tree holds module folders (vacuous-pass guard)", folders > 0, `folders=${folders}`);
-  const a = reg.attachModules(registry, reg.collectModules(found));
-  check("every real module folder attaches, with no problem", Object.keys(a.attached).length === folders && a.problems.length === 0, show(a));
-  const openable = registry.rooms.filter((r) => r.status !== "template").length;
-  check("attached + generic = every openable served room", Object.keys(a.attached).length + a.generic.length === openable, `${Object.keys(a.attached).length}+${a.generic.length} vs ${openable}`);
+  // The exemption rows, as the shell receives them: the door serves the file, and the shell draws each row as a
+  // room arc does not serve (ADR-1327, company ring). The gate and the browser read the SAME file.
+  const exemptFile = readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8");
+  // As the shell receives it: the door escapes every string once (company ring attack: the raw text skipped that step).
+  const doorEscaped = exemptFile.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const extrasServed = typeof reg.extraRooms === "function"
+    ? reg.extraRooms({ state: "ok", data: { id: "module-exemptions", path: "initiatives/face/contracts/module-exemptions.json", sha256: "e".repeat(64), text: doorEscaped } })
+    : { rooms: [], ids: [], problem: "registry.mjs exports no extraRooms" };
+  check("the shell reads the exemption rows the door serves, with no problem (company ring)", extrasServed.problem === "" && extrasServed.ids.length > 0, JSON.stringify({ problem: extrasServed.problem, ids: extrasServed.ids }));
+  const shellRegistry = typeof reg.withExtras === "function" ? reg.withExtras(registry, extrasServed) : registry;
+  const a = reg.attachModules(shellRegistry, reg.collectModules(found));
+  check("every real module folder attaches, with no problem -- an exempted extra through its row, never as an orphan", Object.keys(a.attached).length === folders && a.problems.length === 0, show(a));
+  const openable = shellRegistry.rooms.filter((r) => r.status !== "template").length;
+  check("attached + generic = every openable room the shell draws (served, plus the exempted extras)", Object.keys(a.attached).length + a.generic.length === openable, `${Object.keys(a.attached).length}+${a.generic.length} vs ${openable}`);
+  check("an exempted extra is drawn as an extra, never as a served room: the rail marks it", extrasServed.rooms.every((r) => r.status === "extra" && r.extra === true && typeof r.sentence === "string" && r.sentence !== ""),
+    JSON.stringify(extrasServed.rooms.map((r) => ({ id: r.id, status: r.status }))));
 
   check("face-coverage exports its module half", typeof coverage.treeModules === "function" && typeof coverage.moduleFindings === "function");
   const tree = coverage.treeModules(REPO);
@@ -232,7 +244,20 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
   check("face-coverage's module half finds nothing on the real tree", half.findings.length === 0, JSON.stringify(half.findings));
   check("the generic rooms the gate REPORTS are exactly the ones the browser renders generic",
     JSON.stringify(half.generic) === JSON.stringify(a.generic), `coverage=${half.generic.join(",")} frame=${a.generic.join(",")}`);
-  check("the exemption list is EMPTY until the factory and company rings add their rows (ADR-1327)", half.exemptions === 0, `exemptions=${half.exemptions}`);
+  // The owner's ruling on PLAN-face-v2 section 13 item 5 (2026-09-18, ADR-1337): story and factory earn registry
+  // rows, so the list names exactly the two extras the ruling left exempt.
+  check("the exemption list names exactly executor and agents (ADR-1327, ADR-1337)", half.exemptions === 2 && JSON.stringify([...(half.exempted || [])].sort()) === JSON.stringify(["agents", "executor"]),
+    `exemptions=${half.exemptions} exempted=${JSON.stringify(half.exempted)}`);
+  const servedIds = registry.rooms.map((r) => r.id);
+  check("story and factory are SERVED rooms now, each in its ring with a sentence (ADR-1337)",
+    ["story", "factory"].every((id) => { const r = registry.rooms.find((x) => x.id === id); return r !== undefined && typeof r.sentence === "string" && r.sentence !== "" && r.status !== "planned"; })
+    && registry.rooms.find((r) => r.id === "story")?.ring === "company" && registry.rooms.find((r) => r.id === "factory")?.ring === "factory",
+    JSON.stringify(registry.rooms.filter((r) => r.id === "story" || r.id === "factory")));
+  const contract = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "modules-v2.json"), "utf8"));
+  const classOf = (id) => (contract.modules.find((m) => m.id === id) || {}).class;
+  check("modules-v2.json classes story and factory as served and executor and agents as extra (ADR-1337)",
+    classOf("story") === "served" && classOf("factory") === "served" && classOf("executor") === "extra" && classOf("agents") === "extra" && servedIds.includes("story") && !servedIds.includes("executor"),
+    JSON.stringify({ story: classOf("story"), factory: classOf("factory"), executor: classOf("executor"), agents: classOf("agents") }));
 
   // The two readers AGREE on an exemption too (face v2 Phase 02 attack): a folder for an ADR-1327
   // extra with its row is fine for the gate and an extra -- not an orphan -- for the browser, while
@@ -240,8 +265,11 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
   const extra = (tree.extras || [])[0];
   check("the real contracts name an ADR-1327 extra to test the agreement with (vacuous-pass guard)", Boolean(extra), JSON.stringify(tree.extras));
   if (extra) {
-    const withFolder = { ...tree, folders: [...tree.folders, { ring: extra.ring, id: extra.id }] };
-    const withRow = { ...withFolder, exemptions: [{ id: extra.id, adr: "ADR-1327" }] };
+    // The real tree carries this extra's row and folder since the ruling (ADR-1337): the agreement is tested from a tree
+    // without either, then with a whole row -- the facts the shell draws the room from -- and the folder.
+    const bare = { ...tree, folders: tree.folders.filter((f) => f.id !== extra.id), exemptions: (tree.exemptions || []).filter((e) => !e || e.id !== extra.id) };
+    const withFolder = { ...bare, folders: [...bare.folders, { ring: extra.ring, id: extra.id }] };
+    const withRow = { ...withFolder, exemptions: [...bare.exemptions, { id: extra.id, adr: "ADR-1327", name: extra.id, ring: extra.ring, sentence: "a sentence", lede: "" }] };
     const foundExtra = { ...found,
       [`./modules/${extra.ring}/${extra.id}/module.mjs`]: { default: { id: extra.id, ring: extra.ring, routes: [], asOf: true } },
       [`./modules/${extra.ring}/${extra.id}/fold.mjs`]: { fold: () => ({}) },
@@ -261,7 +289,12 @@ const coverage = await import(pathToFileURL(join(REPO, ".claude", "scripts", "co
 }
 
 // ── the shell names no room ──
-const servedIds = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms.map((r) => r.id);
+// The rooms the shell draws: every served id, and the exempted extras the shell draws from their rows (company ring
+// attack: a shell file calling onOpen('executor') named a room the scan did not know).
+const servedIds = [
+  ...JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8")).rooms.map((r) => r.id),
+  ...(JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8")).exemptions || []).map((e) => e.id),
+];
 /** Every quoted literal whose whole value is a served id, or a route to one (`/id`, `#/id`, `#id`). */
 const namedRooms = (text) => {
   const hits = [];
@@ -276,7 +309,7 @@ const namedRooms = (text) => {
   // parts are excluded BY NAME, each for the reason that makes it true:
   const ROOM_OWNED = new Map([
     ["modules", "a module names its own room: that is what a module is"],
-    ["rooms", "the Cycle 15 renderers the carried modules mount, each naming its own room (Phase 03 deletes them)"],
+    ["rooms", "the generic and index renderers the generic module draws through (Phase 03 deleted the carried room renderers)"],
     ["face", "the unmounted face stage"],
     ["ui", "the kit's tone vocabulary shares words with room ids ('money' is a tone)"],
     ["lib/rooms.mjs", "the Cycle 15 room decisions, which name the rooms they decide for"],
@@ -329,8 +362,10 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
   // DOOR_ROUTES is read off arc-dash's own ROUTES table, method for method -- a route the face thinks
   // exists and the door does not serve is how a panel would wait forever.
   const dash = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "utf8");
-  const served = [...dash.matchAll(/\{ method: "(GET|POST)", (path|prefix): "(\/api\/[a-z/-]*)"/g)]
-    .map((m) => `${m[1]} ${m[2] === "prefix" ? `${m[3]}:id` : m[3]}`).sort();
+  // A prefix route may carry a SUFFIX (Phase 05's /api/op/:id/plan and /apply share one prefix): it is part of the
+  // route's name, or the two would read as one route and the face could not tell a plan from an apply.
+  const served = [...dash.matchAll(/\{ method: "(GET|POST)", (path|prefix): "(\/api\/[a-z/-]*)"(?:, suffix: "(\/[a-z-]+)")?/g)]
+    .map((m) => `${m[1]} ${m[2] === "prefix" ? `${m[3]}:id${m[4] || ""}` : m[3]}`).sort();
   const named = Object.entries(R).map(([route, spec]) => `${spec.method} ${route}`).sort();
   check("DOOR_ROUTES names exactly the routes arc-dash serves, method for method", served.length >= 10 && JSON.stringify(served) === JSON.stringify(named), `dash=${served.join(",")} face=${named.join(",")}`);
 
@@ -350,15 +385,15 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
   try { reg.payloadsFor(manifest, { "not a key": { state: "ok", data: 1 } }); } catch (e) { threwKey = e; }
   check("UNDECLARED: a payload under a key that is not a read key FAILs too", threwKey !== null);
 
-  const bad = reg.collectModules({ ...ns("command", "policy"), "./modules/command/policy/module.mjs": { default: { id: "policy", ring: "command", routes: ["/api/policy"], asOf: true } } });
-  check("a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)", bad.modules.length === 0 && bad.problems.some((p) => p.kind === "manifest" && p.why.includes("/api/policy")), JSON.stringify(bad.problems));
+  const bad = reg.collectModules({ ...ns("command", "policy"), "./modules/command/policy/module.mjs": { default: { id: "policy", ring: "command", routes: ["/api/secrets"], asOf: true } } });
+  check("a manifest declaring a route the door does not serve does not attach (a NOT SERVED panel, never a route)", bad.modules.length === 0 && bad.problems.some((p) => p.kind === "manifest" && p.why.includes("/api/secrets")), JSON.stringify(bad.problems));
 
   const refuse = (name, read, needle) => {
     const why = reg.readProblem(read, manifest);
     check(`READ REFUSED: ${name}`, typeof why === "string" && why.includes(needle), String(why));
   };
   refuse("a route this module does not declare", { route: "/api/inbox" }, "/api/inbox");
-  refuse("a route the door does not serve", { route: "/api/policy" }, "/api/policy");
+  refuse("a route the door does not serve", { route: "/api/secrets" }, "/api/secrets");
   refuse("a param route with no id", { route: "/api/lane/:id" }, "id");
   refuse("a plain route given an id", { route: "/api/board", param: "x" }, "id");
   refuse("a query key the route does not take", { route: "/api/spine", query: { secret: "1" } }, "secret");
@@ -461,7 +496,7 @@ if (door.DOOR_ROUTES && typeof reg.readKey === "function") {
 }
 
 // ── shipped rings (face v2 Phase 03): a ring listed here is PORTED, and its NOT SERVED list is derived ──
-const SHIPPED_RINGS = ["command", "kernel", "factory"];
+const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
 {
   const contract = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "modules-v2.json"), "utf8"));
   const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
@@ -482,29 +517,40 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
    */
   const listCheck = (name, file, re, shape, derivedRows, label) => {
     const raw = existsSync(file) ? readFileSync(file, "utf8") : null;
-    check(`${label} LIST: evidence/phase-03/${name} exists`, raw !== null);
+    check(`${label} LIST: ${relative(REPO, file).split(sep).join("/")} exists`, raw !== null);
     if (raw === null) return;
     check(`${label} LIST ${name}: every line break is a newline, so grep and this file read the same rows`,
       !/[\r\u2028\u2029]/.test(raw), JSON.stringify((/[\r\u2028\u2029]/.exec(raw) || [])[0] || ""));
+    // The browser suite reads every list of a kind in ONE stream (cat), so a file that does not end in a newline
+    // glues its last line to the next file's first row, and that row disappears there alone (money ring attack).
+    check(`${label} LIST ${name}: the file ends with a newline, so no row of the next list is glued to its last line`, raw.endsWith("\n"));
     const grepped = raw.split("\n").filter((l) => l.startsWith("| `")).length;
     const parsed = [...raw.matchAll(re)].map(shape);
     check(`${label} LIST ${name}: every row grep counts parses here too`, grepped === parsed.length, `grep=${grepped} parsed=${parsed.length}`);
     check(`${label} LIST ${name}: no row is listed twice`, new Set(parsed).size === parsed.length,
       parsed.filter((r, i) => parsed.indexOf(r) !== i).join(" ; "));
-    const derived = [...new Set(derivedRows)].sort();
+    // A MULTISET, not a set: a card a fold returns twice is drawn twice, and a de-duplicated comparison could not
+    // see it (money ring attack). The list itself may not repeat a row (the check above), so a repeat in the
+    // folds is a mismatch here.
+    const derived = derivedRows.slice().sort();
     check(`${label} LIST ${name}: the list names exactly what the folds render, both ways`,
-      JSON.stringify([...new Set(parsed)].sort()) === JSON.stringify(derived),
+      JSON.stringify(parsed.slice().sort()) === JSON.stringify(derived),
       `listed-only=${parsed.filter((r) => !derived.includes(r)).join(" ; ")} derived-only=${derived.filter((r) => !parsed.includes(r)).join(" ; ")}`);
   };
   const allRows = [];
+  const allServedRows = [];
   const allVerbRows = [];
+  /** @type {string[]} */
+  const ringsWithPlanned = [];
   for (const ring of SHIPPED_RINGS) {
     const want = contract.modules.filter((m) => m.ring === ring && (m.class !== "extra" || exemptions.includes(m.id))).map((m) => m.id).sort();
     const ringDir = join(MODULES, ring);
     const have = existsSync(ringDir) ? readdirSync(ringDir).filter((id) => statSync(join(ringDir, id)).isDirectory()).sort() : [];
     check(`SHIPPED RING ${ring}: its module folders are modules-v2.json's ids for the ring`, want.length > 0 && JSON.stringify(have) === JSON.stringify(want), `have=${have.join(",")} want=${want.join(",")}`);
     const rows = [];
+    const servedRows = [];
     const verbRows = [];
+    const rehearsalRows = [];
     for (const id of have) {
       const dir = join(ringDir, id);
       const viewText = existsSync(join(dir, "View.tsx")) ? readFileSync(join(dir, "View.tsx"), "utf8") : "";
@@ -512,8 +558,12 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
       const manifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
       const notDoor = (manifest.routes || []).filter((r) => !Object.hasOwn(door.DOOR_ROUTES || {}, r));
       check(`SHIPPED RING ${ring}: ${id} declares only door routes`, Array.isArray(manifest.routes) && notDoor.length === 0, notDoor.join(","));
-      const room = registry.rooms.find((r) => r.id === id) || { id, ring, name: id, sentence: "", lede: "", holds: { kinds: [] } };
-      const fctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {} };
+      const exemptRow = (JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "module-exemptions.json"), "utf8")).exemptions || []).find((e) => e.id === id);
+      const room = registry.rooms.find((r) => r.id === id)
+        || (exemptRow ? { id, ring, name: exemptRow.name, sentence: exemptRow.sentence, lede: exemptRow.lede ?? "", status: "extra", extra: true, holds: {} } : { id, ring, name: id, sentence: "", lede: "", holds: { kinds: [] } });
+      // The host hands a fold the manifest it checks reads against (registry.foldContext), so a shared fold
+      // refuses a read the manifest cannot make instead of planning one the host then drops (money ring).
+      const fctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {}, manifest };
       let folded = null;
       try { folded = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold({}, fctx); } catch (e) { check(`SHIPPED RING ${ring}: ${id}'s fold runs with nothing loaded yet`, false, e.message); continue; }
       check(`SHIPPED RING ${ring}: ${id}'s fold runs with nothing loaded yet`, folded !== null && typeof folded === "object");
@@ -531,23 +581,110 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
       check(`SHIPPED RING ${ring}: ${id}'s asOf claim matches whether the scrub reaches its routes`,
         (manifest.asOf === true) === reachable, `asOf=${String(manifest.asOf)} reachable=${reachable}`);
       for (const ns of (typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [])) rows.push(`${id} | ${ns.panel} | ${ns.route} | ${ns.sentence}`);
+      for (const s of (typeof reg.servedOf === "function" ? reg.servedOf(folded) : [])) servedRows.push(`${id} | ${s.panel} | ${s.route}`);
       for (const v of (typeof reg.verbPendingOf === "function" ? reg.verbPendingOf(folded) : [])) verbRows.push(`${id} | ${v.verb} | ${v.sentence}`);
+      for (const v of (typeof reg.rehearsalOf === "function" ? reg.rehearsalOf(folded) : [])) rehearsalRows.push(`${id} | ${v.verb} | ${v.sentence}`);
     }
-    // The evidence lists are what Phase 04 and Phase 05 build; each must be what the folds actually
-    // render, both ways, INCLUDING the sentence the file promises -- a typed column drifts (it already had).
-    listCheck(`not-served-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `not-served-${ring}.md`),
-      /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm,
-      (m) => `${m[1]} | ${m[2]} | ${m[3]} | ${m[4]}`, rows, "NOT SERVED");
-    listCheck(`verbs-pending-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `verbs-pending-${ring}.md`),
-      /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm,
-      (m) => `${m[1]} | ${m[2]} | ${m[3]}`, verbRows, "VERBS PENDING");
+    // The evidence lists are what Phase 05 builds; each must be what the folds actually render, both ways,
+    // INCLUDING the sentence the file promises -- a typed column drifts (it already had). Phase 03's NOT SERVED
+    // lists were Phase 04's INPUT and stay frozen as it found them; what is still NOT SERVED after Phase 04, and
+    // what Phase 04 served, are held below against phase-04's two lists, across every ring at once.
+    // Phase 05 (ADR-1339): the verb-pending cards are held against ONE list across every ring,
+    // evidence/phase-05/verbs-pending.md, below -- Phase 03's per-ring lists stay frozen as that phase left them.
+    // A planned room's flows are REHEARSAL and never reach the work door (ADR-1328), so they are a list of
+    // their own rather than rows among the verbs Phase 05 builds -- derived from the folds the same way, and
+    // required for exactly the rings whose MODULES include a planned room. A planned room the ring leaves to the
+    // generic module (command's chat-mcp) has no fold to rehearse anything, and is held by F3's badge arm instead.
+    const plannedHere = registry.rooms.some((r) => r.ring === ring && (r.planned === true || r.status === "planned") && have.includes(r.id));
+    if (plannedHere) ringsWithPlanned.push(ring);
+    if (plannedHere || rehearsalRows.length > 0) {
+      listCheck(`rehearsal-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `rehearsal-${ring}.md`),
+        /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm,
+        (m) => `${m[1]} | ${m[2]} | ${m[3]}`, rehearsalRows, "REHEARSAL");
+      check(`REHEARSAL LIST rehearsal-${ring}.md: the ring's planned rooms rehearse at least one flow (vacuous-pass guard)`, rehearsalRows.length > 0, `rows=${rehearsalRows.length}`);
+    }
     allRows.push(...rows);
+    allServedRows.push(...servedRows);
     allVerbRows.push(...verbRows);
+  }
+  // Phase 05 (REQ-07, ADR-1339): the VERBS still PENDING -- Phase 03's cards minus each one a work-door op retired.
+  // Held equal to the folds both ways, AND to Phase 03's rows minus the registry's `retires`, so a card can neither
+  // leave a fold without an op that retires it nor be invented; and every retirement names a real Phase 03 card and
+  // an op its module declares.
+  {
+    const VERB_RE = /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm;
+    listCheck("verbs-pending.md", join(REPO, "initiatives", "face", "evidence", "phase-05", "verbs-pending.md"),
+      VERB_RE, (m) => `${m[1]} | ${m[2]} | ${m[3]}`, allVerbRows, "VERBS PENDING");
+    const P03 = join(REPO, "initiatives", "face", "evidence", "phase-03");
+    const phase03 = readdirSync(P03).filter((n) => /^verbs-pending-.+\.md$/.test(n))
+      .flatMap((n) => [...readFileSync(join(P03, n), "utf8").matchAll(VERB_RE)].map((m) => ({ module: m[1], verb: m[2], row: `${m[1]} | ${m[2]} | ${m[3]}` })));
+    const opsReg = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "face-ops.mjs")).href);
+    const retirements = opsReg.OPS.filter((o) => o.retires).map((o) => ({ op: o.id, room: o.room, module: o.retires.module, verb: o.retires.verb }));
+    const retiredKeys = new Set(retirements.map((r) => `${r.module} | ${r.verb}`));
+    const expected = phase03.filter((c) => !retiredKeys.has(`${c.module} | ${c.verb}`)).map((c) => c.row).sort();
+    check("PHASE 05: the pending cards are Phase 03's minus exactly the cards an op retired",
+      phase03.length >= 40 && JSON.stringify(allVerbRows.slice().sort()) === JSON.stringify(expected),
+      `phase03=${phase03.length} retired=${retirements.length} folds=${allVerbRows.length} expected=${expected.length}`);
+    const phantom = retirements.filter((r) => !phase03.some((c) => c.module === r.module && c.verb === r.verb));
+    check("PHASE 05: every retirement names a card Phase 03 drew", retirements.length > 0 && phantom.length === 0, phantom.map((r) => `${r.op}->${r.module}/${r.verb}`).join(" ; "));
+    const foreign = retirements.filter((r) => r.room !== r.module);
+    check("PHASE 05: an op retires a card only in its own room", foreign.length === 0, foreign.map((r) => `${r.op} (${r.room}) -> ${r.module}`).join(" ; "));
+  }
+
+  // Phase 04 (REQ-06): the RESIDUE -- every panel still NOT SERVED, with the route it needs -- and the SERVED list --
+  // every panel a door route now fills -- each held equal to the folds both ways. A panel that flips leaves the
+  // first and joins the second; one that vanished from both is a mismatch in the second.
+  const P04 = join(REPO, "initiatives", "face", "evidence", "phase-04");
+  listCheck("residue.md", join(P04, "residue.md"),
+    /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm,
+    (m) => `${m[1]} | ${m[2]} | ${m[3]} | ${m[4]}`, allRows, "NOT SERVED");
+  listCheck("served.md", join(P04, "served.md"),
+    /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \|$/gm,
+    (m) => `${m[1]} | ${m[2]} | ${m[3]}`, allServedRows, "SERVED");
+  // A panel is in EXACTLY one of the two lists: drawn both as a served table and as NOT SERVED, the list pair would
+  // agree with the folds while the room contradicted itself (Phase 04 attack: engine-room "Budgets" in both passed).
+  {
+    const panelOf = (r) => r.split(" | ").slice(0, 2).join(" | ");
+    const residuePanels = new Set(allRows.map(panelOf));
+    const both = allServedRows.map(panelOf).filter((k) => residuePanels.has(k));
+    check("PHASE 04: no panel is both served and NOT SERVED", allServedRows.length > 0 && both.length === 0, both.join(" ; "));
+  }
+  // Every route a served panel names is a route the door serves; a panel naming one it does not would read "…" for ever.
+  const servedRoutes = [...new Set(allServedRows.map((r) => r.split(" | ")[2]))];
+  const unrouted = servedRoutes.filter((r) => !Object.hasOwn(door.DOOR_ROUTES || {}, r));
+  check("SERVED: every route a served panel names is a door route", servedRoutes.length > 0 && unrouted.length === 0, unrouted.join(","));
+  // The Phase 03 lists were Phase 04's input: every panel they named is now either served or residue, by module and
+  // panel -- none quietly dropped on the way (REQ-06's "the union drops to 0, or to a named residue").
+  {
+    const input = readdirSync(join(REPO, "initiatives", "face", "evidence", "phase-03"))
+      .filter((n) => /^not-served-.+\.md$/.test(n))
+      .flatMap((n) => [...readFileSync(join(REPO, "initiatives", "face", "evidence", "phase-03", n), "utf8")
+        .matchAll(/^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm)].map((m) => `${m[1]} | ${m[2]}`));
+    const accounted = new Set([...allRows, ...allServedRows].map((r) => r.split(" | ").slice(0, 2).join(" | ")));
+    const dropped = input.filter((r) => !accounted.has(r));
+    check("PHASE 04 INPUT: the Phase 03 lists name panels to account for (vacuous-pass guard)", input.length >= 40, `input=${input.length}`);
+    check("PHASE 04 INPUT: every panel Phase 03 named NOT SERVED is now served or in the residue, none dropped", dropped.length === 0, dropped.join(" ; "));
   }
   // Two empty lists agree with each other. A ring may legitimately render no verb-pending card (the
   // command ring does not), so the floor is across the shipped rings, not per file (code review).
-  check("DERIVED LISTS: the shipped rings render NOT SERVED panels and work-door cards at all (vacuous-pass guard)",
-    allRows.length > 0 && allVerbRows.length > 0, `notServed=${allRows.length} verbsPending=${allVerbRows.length}`);
+  // The browser suite globs every list of a kind; module-frame reads only the shipped rings'. A stray list -- a ring
+  // not shipped, or a rehearsal list for a ring with no planned module -- would widen what the browser is judged
+  // against without any fold behind its rows (money ring attack).
+  {
+    const listDir = join(REPO, "initiatives", "face", "evidence", "phase-03");
+    const files = readdirSync(listDir).filter((n) => /^(not-served|verbs-pending|rehearsal)-.+\.md$/.test(n));
+    const stray = files.filter((n) => {
+      const m = /^(not-served|verbs-pending|rehearsal)-(.+)\.md$/.exec(n);
+      if (!m) return true;
+      if (!SHIPPED_RINGS.includes(m[2] ?? "")) return true;
+      return m[1] === "rehearsal" && !ringsWithPlanned.includes(m[2] ?? "");
+    });
+    check("LISTS: every derived list names a shipped ring, and a rehearsal list a ring with planned modules -- no stray file widens the browser's judgement",
+      files.length > 0 && stray.length === 0, `files=${files.join(",")} stray=${stray.join(",")}`);
+  }
+  // The residue may legitimately be empty (REQ-06's target), so the floor is on what Phase 04 served.
+  check("DERIVED LISTS: the shipped rings render served panels and work-door cards at all (vacuous-pass guard)",
+    allServedRows.length > 0 && allVerbRows.length > 0, `served=${allServedRows.length} notServed=${allRows.length} verbsPending=${allVerbRows.length}`);
 }
 
 // ── F2 (Cycle 15 room sweep): the scheduler's lede promises only what the module shows ──
@@ -563,7 +700,8 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
   check("F2: the served scheduler lede promises exactly the four things this arm pins",
     promises.every((p) => lede.includes(p)), `lede=${lede}`);
   if (existsSync(join(dir, "fold.mjs"))) {
-    const ctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {} };
+    const schedulerManifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
+    const ctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {}, manifest: schedulerManifest };
     const folded = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold({}, ctx);
     const ns = typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [];
     const homed = (room && room.holds && Array.isArray(room.holds.jobs) ? room.holds.jobs : []).slice().sort();
@@ -572,22 +710,47 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
       homed.length > 0 && JSON.stringify(drawn) === JSON.stringify(homed), `drawn=${drawn.join(",")} homed=${homed.join(",")}`);
     check("F2: LAST OUTCOME -- every job row carries one, and says it is unread rather than inventing it",
       Array.isArray(folded.jobs) && folded.jobs.every((j) => typeof j.last === "string" && j.last !== ""), JSON.stringify(drawn));
-    const nsFor = (re) => ns.filter((n) => re.test(n.panel) && n.route === "/api/jobs");
-    check("F2: NEXT FIRE -- not served by the door, and named as NOT SERVED against the route that would serve it",
-      nsFor(/next fire/i).length === 1, ns.map((n) => `${n.panel}=${n.route}`).join(" ; "));
-    check("F2: HEARTBEAT -- named as NOT SERVED, and what the door DOES hold is drawn as the last fire, not as a beat",
-      nsFor(/heartbeat/i).length === 1 && folded.lastFire !== undefined && typeof folded.lastFire.hasFire === "boolean"
+    // Phase 04 served both: /api/jobs runs the brief's own jobs panel. They are SERVED panels against that route now,
+    // and neither is NOT SERVED any more -- a panel in both lists would be drawn twice.
+    const sv = typeof reg.servedOf === "function" ? reg.servedOf(folded) : [];
+    const svFor = (re) => sv.filter((n) => re.test(n.panel) && n.route === "/api/jobs");
+    check("F2: NEXT FIRE -- served by /api/jobs, and no longer named NOT SERVED",
+      svFor(/next fire/i).length === 1 && ns.every((n) => !/next fire/i.test(n.panel)), sv.map((n) => `${n.panel}=${n.route}`).join(" ; "));
+    check("F2: HEARTBEAT -- served by /api/jobs, and the trail's last fire is still drawn as a fire, not as a beat",
+      svFor(/heartbeat/i).length === 1 && ns.every((n) => !/heartbeat/i.test(n.panel)) && folded.lastFire !== undefined && typeof folded.lastFire.hasFire === "boolean"
       && folded.lastFire.hasFire === false && !/heartbeat/i.test(String(folded.lastFire.line)),
       `lastFire=${JSON.stringify(folded.lastFire)}`);
+    // ... and with /api/jobs ANSWERED, so the arm asserts the rows a person reads, not the loading state.
+    {
+      const jobsRead = reg.plannedReads(folded, schedulerManifest).reads.filter((r) => r.route === "/api/jobs");
+      check("F2: the scheduler fold asks the door for /api/jobs (vacuous-pass guard)", jobsRead.length === 1, JSON.stringify(jobsRead));
+      const loaded = Object.create(null);
+      for (const r of jobsRead) loaded[r.key] = { state: "ok", data: { route: "/api/jobs", overdueSlots: 2, observedFrom: "2026-09-01", jobs: [
+        { name: "brief-materialize", enabled: true, cadence: "weekdays@06:00", nextExpected: "2026-09-21T06:00:00+05:30", missed: 3, overdue: true, state: "overdue", lastRun: "2026-09-10T06:00:04+05:30" },
+      ] } };
+      const f2 = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold(loaded, ctx);
+      check("F2: NEXT FIRE drawn from the served row -- the job, its cadence and its next fire",
+        f2.nextFire.isDrawn === true && f2.nextFire.rows.length === 1 && f2.nextFire.rows[0].cells.join("|") === "brief-materialize|weekdays@06:00|2026-09-21T06:00:00+05:30|enabled",
+        JSON.stringify(f2.nextFire.rows));
+      check("F2: HEARTBEAT drawn from the served row -- overdue, and how many slots it missed",
+        f2.heartbeat.isDrawn === true && f2.heartbeat.rows[0].cells[1] === "overdue" && f2.heartbeat.rows[0].cells[2] === "3",
+        JSON.stringify(f2.heartbeat.rows));
+      const wrong = Object.create(null);
+      for (const r of jobsRead) wrong[r.key] = { state: "ok", data: { route: "/api/policy", jobs: [] } };
+      const f3 = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold(wrong, ctx);
+      check("F2: a body answering another route is WRONG_ROUTE, never a table", f3.nextFire.isRefused === true && f3.nextFire.refusal.code === "WRONG_ROUTE" && f3.nextFire.isDrawn === false,
+        JSON.stringify(f3.nextFire.refusal));
+    }
     // ... and with a page that HAS a fire on it, so the arm asserts the sentence a person reads rather
     // than blessing the loading state (code review). The door pages oldest-first, so a page with more
     // past it must not call its newest receipt the newest fire.
     {
       const fire = (id, job, ts, outcome) => ({ day: ts.slice(0, 10), seq: 1, event: { id, ts, kind: "run.completed", venture: "arc", actor: `scheduler:${job}`, outcome, payload: { job, outcome, duration_ms: 12 } } });
       const page = (more) => ({ count: 2, more, events: [fire("01K00000000000000000000001", "day-close-roll", "2026-09-16T23:59:00+05:30", "ok"), fire("01K00000000000000000000002", "brief-materialize", "2026-09-17T06:00:00+05:30", "failed")] });
-      const manifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
       const loadedWith = (body) => {
-        const planned = reg.plannedReads(folded, manifest).reads.filter((r) => r.route === "/api/spine");
+        const planned = reg.plannedReads(folded, schedulerManifest).reads.filter((r) => r.route === "/api/spine");
+        // The loaded fold below is only a test of the sentence if the fold ASKED for its page at all.
+        check("F2: the scheduler fold, handed its manifest, asks the door for its trail (vacuous-pass guard)", planned.length === 1, JSON.stringify(planned));
         const out = Object.create(null);
         for (const r of planned) out[r.key] = { state: "ok", data: body };
         return out;
@@ -604,6 +767,84 @@ const SHIPPED_RINGS = ["command", "kernel", "factory"];
         JSON.stringify({ line: partial.lastFire.line, labels: partial.kpis.map((k) => k.l) }));
     }
   } else check("F2: the scheduler module exists to be folded", false, dir);
+}
+
+// ── F3 (Cycle 15 room sweep, ADR-1328): a planned room never wears LIVE ──
+// Cycle 15's trader showed `● LIVE` because a company-wide kind it homes had fired: the pill measured the
+// kinds, not whether the room exists. A planned room is drawn dotted and says REHEARSAL, whatever the door
+// sends -- so each is folded twice, with nothing loaded and with every read it asks for FILLED, including a
+// page of receipts of the very kinds it homes, which is the state that lit the pill.
+{
+  const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
+  const plannedText = readFileSync(join(REPO, "initiatives", "face", "contracts", "planned-rooms.json"), "utf8");
+  /** Every string a fold returned, nested anywhere: what the View could ever print. */
+  const stringsIn = (v, out = [], seen = new Set()) => {
+    if (typeof v === "string") { out.push(v); return out; }
+    if (!v || typeof v !== "object" || seen.has(v)) return out;
+    seen.add(v);
+    for (const child of Object.values(v)) stringsIn(child, out, seen);
+    return out;
+  };
+  // The same rule the smoke holds the page to (livePill): a SHORT text -- a badge, a chip, a label -- saying live as a
+  // word of its own, in ANY case. A case-sensitive LIVE let "● Live" and "● live" through (money ring attack); prose
+  // may still say "once two ventures are live". A boolean named for liveness is a pill waiting for a View to draw it.
+  const smokeRules = await import(pathToFileURL(join(REPO, "face", "scripts", "smoke.mjs")).href);
+  const liveKeys = (v, out = [], seen = new Set()) => {
+    if (!v || typeof v !== "object" || seen.has(v)) return out;
+    seen.add(v);
+    for (const [k, x] of Object.entries(v)) { if (/live/i.test(k) && x === true) out.push(k); liveKeys(x, out, seen); }
+    return out;
+  };
+  const wearsLive = (folded) => [...stringsIn(folded).filter((t) => smokeRules.livePill(t)), ...liveKeys(folded)];
+  check("F3: MUTANT -- a fold that returns a LIVE pill anywhere in its output is caught",
+    wearsLive({ head: { badge: "● LIVE" } }).length === 1 && wearsLive({ badge: "paper-live · planned" }).length === 0);
+  check("F3: MUTANT -- a Live pill in any case, and a boolean named isLive, are caught; prose that says live is not",
+    wearsLive({ b: "● Live" }).length === 1 && wearsLive({ b: "live" }).length === 1 && wearsLive({ isLive: true }).length === 1
+    && wearsLive({ p: "once two ventures are live, support stops being one person" }).length === 0);
+  const planned = registry.rooms.filter((r) => (r.planned === true || r.status === "planned") && SHIPPED_RINGS.includes(r.ring));
+  check("F3: the shipped rings hold planned rooms to fold (vacuous-pass guard)", planned.length >= 3, planned.map((r) => r.id).join(","));
+  // The badge every room wears in the rail and in a generic room's head: for a planned room it is never a liveness
+  // reading, even when the door reports its homed kinds as fired -- the exact state Cycle 15's trader was in.
+  const roomsLib = await import(pathToFileURL(join(LIB, "rooms.mjs")).href);
+  const lit = { state: "live", kindsHomed: 1, kindsFired: 1, receipts: 39 };
+  for (const room of registry.rooms.filter((r) => r.planned === true || r.status === "planned")) {
+    const badge = roomsLib.stateBadge({ ...room, live: lit });
+    check(`F3: ${room.id}'s rail and head badge says planned, never live, whatever its kinds did`,
+      badge.label === "planned" && badge.tone !== "live" && wearsLive(badge).length === 0 && !/\blive\b/i.test(badge.label), JSON.stringify(badge));
+  }
+  check("F3: MUTANT -- a built room whose kinds fired still reads live, so the planned badge is not a blanket",
+    roomsLib.stateBadge({ ...registry.rooms.find((r) => !r.planned && r.status !== "planned" && r.status !== "template"), live: lit }).label === "live");
+  for (const room of planned) {
+    const dir = join(SRC, "modules", room.ring, room.id);
+    // A planned room with no module draws through the generic module, held by the badge check above and by the
+    // smoke's planned line; only a module has a fold to put through the arms below.
+    if (!existsSync(join(dir, "fold.mjs"))) continue;
+    const manifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
+    const foldFile = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold;
+    const ctx = { room, rooms: registry.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: registry.inventories, laneMap: undefined, picks: {}, manifest };
+    const bare = foldFile({}, ctx);
+    // Every read the fold asks for, answered: the planned-rooms file with its real text, and a page carrying a
+    // receipt of each kind the registry homes here -- the Cycle 15 trigger.
+    const kinds = room.holds && Array.isArray(room.holds.kinds) ? room.holds.kinds : [];
+    const page = { count: kinds.length, more: false, events: kinds.map((kind, i) => ({ day: "2026-09-18", seq: i + 1, event: { id: `01K0000000000000000000000${i}`, ts: "2026-09-18T09:00:00+05:30", kind, venture: "arc", actor: "sim", payload: {} } })) };
+    const loaded = Object.create(null);
+    for (const r of reg.plannedReads(bare, manifest).reads) {
+      loaded[r.key] = r.route === "/api/file/:id"
+        ? { state: "ok", data: { id: r.param, path: "initiatives/face/contracts/planned-rooms.json", sha256: "0".repeat(64), text: plannedText } }
+        : r.route === "/api/spine" ? { state: "ok", data: page } : { state: "ok", data: {} };
+    }
+    const full = foldFile(loaded, ctx);
+    for (const [label, f] of [["with nothing loaded", bare], ["with every read it asks for answered", full]]) {
+      check(`F3: ${room.id} ${label} is PLANNED and DOTTED, and says REHEARSAL`,
+        f.isPlanned === true && f.isDotted === true && f.showRehearsal === true, JSON.stringify({ isPlanned: f.isPlanned, isDotted: f.isDotted, showRehearsal: f.showRehearsal }));
+      check(`F3: ${room.id} ${label} wears no LIVE pill anywhere in what it returns`, wearsLive(f).length === 0, wearsLive(f).join(" ; "));
+    }
+    check(`F3: ${room.id} draws its planned line from planned-rooms.json once the file is read`,
+      Array.isArray(full.line) && full.line.length > 0 && full.line.every((s) => typeof s.name === "string" && s.name !== ""), JSON.stringify(full.line));
+    const viewText = existsSync(join(dir, "View.tsx")) ? readFileSync(join(dir, "View.tsx"), "utf8") : "";
+    check(`F3: ${room.id}'s View marks the room data-planned and draws no live tone`,
+      /data-planned/.test(viewText) && !/tone=["'{]+live/i.test(viewText) && !/['"]live['"]/i.test(viewText) && !/>\s*[●•]?\s*live\s*</i.test(viewText), dir);
+  }
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

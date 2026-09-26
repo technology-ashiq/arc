@@ -919,17 +919,45 @@ _arc_legal_sandbox() {
   # exactly what happened on CI the first time the gate switched parsers.
   mkdir -p "$SANDBOX/.claude/scripts/hq/lib"
   cp -r "$ARC_ROOT/.claude/scripts/hq/lib/policy"  "$SANDBOX/.claude/scripts/hq/lib/"
+  # arc-legal.mjs binds its approval request to a plan digest (ADR-1340) and reads the spine before it
+  # raises one, so its static imports reach outside legal/. A missing one fails the CLI at import for
+  # EVERY subcommand -- the whole legal suite went red on CI the day these imports landed. This is the
+  # full import closure of legal/*.mjs; a new import outside legal/ belongs on this list.
+  mkdir -p "$SANDBOX/.claude/scripts/core"
+  cp    "$ARC_ROOT/.claude/scripts/core/plan-expect.mjs" "$SANDBOX/.claude/scripts/core/"
+  cp    "$ARC_ROOT/.claude/scripts/hq/spine.mjs"         "$SANDBOX/.claude/scripts/hq/"
+  cp    "$ARC_ROOT/.claude/scripts/hq/lib/spine-io.mjs"  "$SANDBOX/.claude/scripts/hq/lib/"
+  cp    "$ARC_ROOT/.claude/scripts/hq/lib/canonical.mjs" "$SANDBOX/.claude/scripts/hq/lib/"
+  # propose's apply RAISES its question through the sandbox's own arc-event.mjs (ADR-1344), onto the sandbox's own
+  # spine -- so the emitter and ITS import closure come too. Never the real spine: _arc_legal_propose names this one.
+  local _f
+  for _f in core/evolve-manifest.mjs core/one-line.mjs core/variant-grammar.mjs hq/arc-event.mjs hq/lib/redact.mjs \
+            hq/lib/validate.mjs hq/lib/validate-absorb.mjs hq/lib/validate-content.mjs hq/lib/validate-experiment.mjs \
+            hq/lib/validate-leads.mjs hq/lib/validate-ledger.mjs hq/lib/validate-policy.mjs; do
+    cp "$ARC_ROOT/.claude/scripts/$_f" "$SANDBOX/.claude/scripts/$_f"
+  done
+  mkdir -p "$SANDBOX/spine/events"
+  # Exported for the whole test: propose raises onto it, legal-probe decides onto it and publish reads both from it.
+  export ARC_SPINE_ROOT="$SANDBOX/spine"
   ARC_LEGAL_CLI="$SANDBOX/.claude/scripts/legal/arc-legal.mjs"
   ARC_LEGAL_PUBLISH_GATE="$SANDBOX/.claude/scripts/legal/publish-gate.mjs"
   # A sandbox that did not actually copy is a silent pass generator: every "no findings"
-  # assertion downstream would hold against a tree with no engine in it. FOUR copies run, so
-  # all four roots are asserted -- checking one of them left a partial sandbox surfacing as a
+  # assertion downstream would hold against a tree with no engine in it. EVERY copy above is
+  # asserted -- checking one of them left a partial sandbox surfacing as a
   # render failure rather than as the copy that actually failed.
   local _p
   for _p in "$ARC_LEGAL_CLI" \
             "$ARC_LEGAL_PUBLISH_GATE" \
             "$SANDBOX/hq.policy.yaml" \
             "$SANDBOX/.claude/scripts/hq/lib/policy/yaml.mjs" \
+            "$SANDBOX/.claude/scripts/core/plan-expect.mjs" \
+            "$SANDBOX/.claude/scripts/hq/spine.mjs" \
+            "$SANDBOX/.claude/scripts/hq/lib/spine-io.mjs" \
+            "$SANDBOX/.claude/scripts/hq/lib/canonical.mjs" \
+            "$SANDBOX/.claude/scripts/hq/arc-event.mjs" \
+            "$SANDBOX/.claude/scripts/hq/lib/validate.mjs" \
+            "$SANDBOX/.claude/scripts/core/variant-grammar.mjs" \
+            "$SANDBOX/spine/events" \
             "$SANDBOX/products/legal/templates/v1" \
             "$SANDBOX/products/legal/data" \
             "$SANDBOX/tests/fixtures/legal/ventures" \
@@ -938,8 +966,22 @@ _arc_legal_sandbox() {
   done
 }
 
+# propose is bound to a plan (ADR-1344): a --dry-run prints the digest as its last line, and --expect DIGEST writes the
+# payload and raises ONE approval.requested -- onto the sandbox spine, never the real one. Usage (under `run` or not):
+#   _arc_legal_propose VENTURE OUT
+# Exits with the apply's status; a plan that printed no digest is a failure of its own, never a skipped apply.
+_arc_legal_propose() {
+  local _plan _digest
+  _plan="$(ARC_SPINE_ROOT="$SANDBOX/spine" node "$ARC_LEGAL_CLI" propose --venture "$1" --out "$2" --dry-run)" || {
+    echo "propose --dry-run failed" >&2; return 1; }
+  _digest="$(printf '%s\n' "$_plan" | tail -n 1 | sed -n 's/^{"expect":"\([0-9a-f]\{64\}\)"}$/\1/p')"
+  [ -n "$_digest" ] || { echo "propose --dry-run printed no digest: $_plan" >&2; return 1; }
+  ARC_SPINE_ROOT="$SANDBOX/spine" node "$ARC_LEGAL_CLI" propose --venture "$1" --out "$2" --expect "$_digest"
+}
+
 _arc_legal_teardown() {
   ARC_LEGAL_CLI=""
+  unset ARC_SPINE_ROOT
   [ -n "${SANDBOX:-}" ] && rm -rf "$SANDBOX" 2>/dev/null || true
 }
 

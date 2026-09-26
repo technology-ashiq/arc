@@ -244,7 +244,7 @@ export function refuseUnknownFlags(argv, known) {
 function portValue(argv, name, fallback) {
   const raw = flagValue(argv, name);
   if (raw === null) return fallback;
-  const n = Number(raw);
+  const n = /^[0-9]{1,5}$/.test(raw) ? Number(raw) : NaN;
   if (!Number.isInteger(n) || n < 1 || n > 65535) {
     process.stderr.write(`arc-face: ${name} ${raw} is not a port (want an integer 1-65535). Refusing rather than handing a child a value it will die on.
 `);
@@ -257,8 +257,16 @@ function portValue(argv, name, fallback) {
 function flagValue(argv, name) {
   const i = argv.indexOf(name);
   if (i === -1) return null;
+  // A repeat is two answers to one question, and an EMPTY value is an unset variable that was quoted: `--spine ""` read
+  // as absent and the door booted LIVE over the canonical spine for a caller who asked for a fixture -- the twin of the
+  // arc-dash flag fix, one file over (PR 2 logic attack).
+  if (argv.indexOf(name, i + 1) !== -1) {
+    process.stderr.write(`arc-face: ${name} given twice; pick one.
+`);
+    process.exit(2);
+  }
   const v = argv[i + 1];
-  if (v === undefined || v.startsWith("--")) {
+  if (v === undefined || v === "" || v.startsWith("--")) {
     process.stderr.write(`arc-face: ${name} needs a value. An unquoted empty value silently eats the next flag.\n`);
     process.exit(2);
   }

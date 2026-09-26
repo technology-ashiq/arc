@@ -41,7 +41,8 @@
     ".claude/scripts/review/docs-drift.sh",
     ".claude/scripts/review/coverage-gate.sh",
     ".claude/scripts/review/rls-gate.sh",
-    ".claude/scripts/review/spine-reader-lint.sh"
+    ".claude/scripts/review/spine-reader-lint.sh",
+    ".claude/scripts/review/ci-digest.mjs"
   ],
   "face": {
     "room": "review-ship",

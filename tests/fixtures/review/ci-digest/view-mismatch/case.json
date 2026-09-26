@@ -1,0 +1,3 @@
+{ "head": "1111111111111111111111111111111111111111", "branchName": "feat/x",
+  "list": [ { "databaseId": 50, "headSha": "1111111111111111111111111111111111111111", "status": "completed", "conclusion": "success", "workflowName": "arc-ci", "createdAt": "2026-09-23T10:00:00Z", "attempt": 1 } ],
+  "view": { "50": { "headSha": "2222222222222222222222222222222222222222", "status": "completed", "conclusion": "success", "jobs": [ { "databaseId": 501, "name": "ci-tier", "status": "completed", "conclusion": "success" } ] } } }

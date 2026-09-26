@@ -25,7 +25,9 @@
     ".claude/scripts/design/design-lint.mjs",
     ".claude/scripts/design/design-render-serve.mjs",
     ".claude/scripts/design/design-render.sh",
-    ".claude/scripts/design/design-sources-lint.mjs"
+    ".claude/scripts/design/design-sources-lint.mjs",
+    ".claude/scripts/design/open-brief.mjs",
+    ".claude/scripts/design/pick.mjs"
   ],
   "files": [
     ".claude/hooks/PreToolUse-edit.d/10-design-critic.sh",

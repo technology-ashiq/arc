@@ -44,7 +44,7 @@ function isMainModule() {
 }
 
 // ---------- tree truths (derived, never copied -- ADR-0107) ----------
-async function treeKinds(repo) {
+export async function treeKinds(repo) {
   // The vocabulary is whatever validate.mjs says it is, imported, not re-listed. A copy
   // here would be exactly the stale-count defect the design source itself reproduced.
   // pathToFileURL: a bare Windows path (c:\...) is rejected by the ESM loader as an
@@ -52,16 +52,16 @@ async function treeKinds(repo) {
   const mod = await import(pathToFileURL(join(repo, ".claude/scripts/hq/lib/validate.mjs")).href);
   return [...mod.KINDS];
 }
-function dirNames(p) {
+export function dirNames(p) {
   if (!existsSync(p)) return [];
   return readdirSync(p).filter((n) => { try { return statSync(join(p, n)).isDirectory(); } catch { return false; } });
 }
-function mdStems(p) {
+export function mdStems(p) {
   if (!existsSync(p)) return [];
   return readdirSync(p).filter((n) => n.endsWith(".md")).map((n) => n.slice(0, -3));
 }
 /** processes/<name>.process.yaml -> "<name>". The contract keys them by the bare name. */
-function yamlStems(p) {
+export function yamlStems(p) {
   if (!existsSync(p)) return [];
   const suffix = ".process.yaml";
   return readdirSync(p).filter((n) => n.endsWith(suffix)).map((n) => n.slice(0, -suffix.length));
@@ -461,6 +461,15 @@ export function moduleFindings(tree) {
     if (served.has(row.id)) { findings.push(`[module-exemption] "${row.id}" is served by /api/rooms, so it needs no exemption`); ok = false; }
     else if (!extras.has(row.id)) { findings.push(`[module-exemption] "${row.id}" is not one of the ${MODULE_EXEMPTION_ADR} extra rooms (${[...extras.keys()].join(", ")}) -- a fifth, unnamed exemption`); ok = false; }
     if (!tree.folders.some((f) => f.id === row.id)) { findings.push(`[module-exemption] "${row.id}" exempts a module folder that does not exist`); ok = false; }
+    // The shell draws an exempted room from its row -- the registry serves nothing for it (company ring, ADR-1337) --
+    // so a row is also the room's facts: its ring, which must be the ring its module lives in, a name and a sentence.
+    const extra = extras.get(row.id);
+    if (extra && row.ring !== extra.ring) { findings.push(`[module-exemption] "${row.id}" says ring ${JSON.stringify(row.ring ?? null)}, and its module lives in "${extra.ring}" -- the shell would draw it in a ring its folder is not in`); ok = false; }
+    // Invisible characters are no name: a row of them passed both this gate and the shell (company ring attack).
+    const visible = (v) => (typeof v === "string" ? v.replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "").trim() : "");
+    if (visible(row.name) === "") { findings.push(`[module-exemption] "${row.id}" carries no name -- the rail draws the room by it`); ok = false; }
+    if (visible(row.sentence) === "") { findings.push(`[module-exemption] "${row.id}" carries no sentence -- every room opens with one, and this row is the only place it can come from`); ok = false; }
+    if (row.lede !== undefined && typeof row.lede !== "string") { findings.push(`[module-exemption] "${row.id}" carries a lede that is not text`); ok = false; }
     if (ok) exempt.add(row.id);
   }
 
@@ -502,14 +511,97 @@ export function moduleFindings(tree) {
   return { findings, generic, folders: tree.folders.length, served: openable.length, orphans, exemptions: tree.exemptions.length, exempted: [...exempt].sort() };
 }
 
+// ---------- the op half (face v2 Phase 05, REQ-04, ADR-1326, ADR-1339) ----------
+//
+// A module's ops.mjs names op ids; the WORK door's server registry (.claude/scripts/hq/face-ops.mjs) holds each op's
+// fields and command. The two are reconciled both ways, the way module folders are with the served registry: an id
+// a module names that the door does not serve is a button that plans nothing, and a registry op no module names is an
+// undeclared op -- a write path no room shows. And every op's receipt is a kind the spine already has: an op that
+// would need a new one does not ship (ADR-0026, ADR-1334).
+
+const OP_ID = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
+
+/**
+ * Each module's ops.mjs list, and the server registry's rows. Unreadable -- never empty -- when either cannot be read.
+ * @param {string} repo
+ */
+export async function treeOps(repo) {
+  const root = join(repo, "face", "src", "modules");
+  const modules = [];
+  try {
+    for (const ring of readdirSync(root).sort()) {
+      const rp = join(root, ring);
+      if (!lstatSync(rp).isDirectory()) continue;
+      for (const id of readdirSync(rp).sort()) {
+        const file = join(rp, id, "ops.mjs");
+        if (!existsSync(file)) continue;
+        const ns = await import(pathToFileURL(file).href);
+        if (!Array.isArray(ns.ops)) return { unreadable: `face/src/modules/${ring}/${id}/ops.mjs exports no ops list` };
+        modules.push({ ring, id, ops: [...ns.ops] });
+      }
+    }
+  } catch (e) {
+    return { unreadable: `a module's ops.mjs could not be read (${e.code ?? e.message})` };
+  }
+  let registry;
+  try {
+    const reg = await import(pathToFileURL(join(repo, ".claude", "scripts", "hq", "face-ops.mjs")).href);
+    if (!Array.isArray(reg.OPS)) return { unreadable: "face-ops.mjs exports no OPS table" };
+    registry = reg.OPS.map((o) => ({ id: o && o.id, room: o && o.room, kind: o && o.receipt && o.receipt.kind }));
+  } catch (e) {
+    return { unreadable: `the work door's registry (face-ops.mjs) could not be read (${e.code ?? e.message})` };
+  }
+  return { modules, registry };
+}
+
+/**
+ * The op half's findings.
+ * @param {Awaited<ReturnType<typeof treeOps>> | undefined} tree @param {string[]} kinds  the spine's closed KINDS
+ */
+export function opFindings(tree, kinds) {
+  const findings = [];
+  if (!tree || tree.unreadable) {
+    findings.push(`[op] could not be read from the tree -- ${tree ? tree.unreadable : "no op tree was gathered"}. A source that cannot be read is not a source with nothing in it`);
+    return findings;
+  }
+  const kindSet = new Set(kinds);
+  const byId = new Map();
+  for (const r of tree.registry) {
+    if (typeof r.id !== "string" || !OP_ID.test(r.id)) { findings.push(`[op] the server registry carries an op id ${JSON.stringify(r.id ?? null)} that is not ROOM.VERB`); continue; }
+    if (byId.has(r.id)) { findings.push(`[op] "${r.id}" is in the server registry twice`); continue; }
+    byId.set(r.id, r);
+    // The id's ROOM half is the room: `money.close-month` placed in growth passed every other check (Phase 05 attack).
+    if (r.id.split(".")[0] !== r.room) findings.push(`[op] "${r.id}" is placed in room ${JSON.stringify(r.room ?? null)} -- an op id's first half names its room`);
+    if (!kindSet.has(r.kind)) findings.push(`[op] "${r.id}" writes ${JSON.stringify(r.kind ?? null)}, which is not a spine kind -- an op that needs a new kind does not ship (ADR-1334)`);
+  }
+  const named = new Map();
+  for (const m of tree.modules) {
+    const where = `face/src/modules/${m.ring}/${m.id}/ops.mjs`;
+    for (const op of m.ops) {
+      if (typeof op !== "string") { findings.push(`[op] ${where} names an op that is not an id string -- ops.mjs names ids, the registry holds the rest`); continue; }
+      if (named.has(op)) { findings.push(`[op] "${op}" is named by ${named.get(op)} and ${where} -- an op belongs to one room`); continue; }
+      named.set(op, where);
+      const row = byId.get(op);
+      if (!row) { findings.push(`[op] ${where} names "${op}", which the work door's registry does not serve -- a button that would plan nothing`); continue; }
+      if (row.room !== m.id) findings.push(`[op] ${where} names "${op}", which the registry places in room "${row.room}"`);
+    }
+  }
+  for (const id of byId.keys())
+    if (!named.has(id)) findings.push(`[op] "${id}" is in the work door's registry and no module's ops.mjs names it -- an undeclared op, a write path no room shows`);
+  return findings;
+}
+
 // ---------- the check (pure: tree facts + contract -> findings) ----------
 export function coverageFindings({ kinds, lanes, commands, agents, products, rules, processes, contract,
   // ADR-1317: seven inventories derived from the WORLD rather than from the contract.
   gates, jobs, ventures, adrBands, plans, capabilities, plannedRooms, ci, hooks, lints,
   // face v2 Phase 02: module folders reconciled with the served registry (ADR-1321, ADR-1327).
-  modules }) {
+  modules,
+  // face v2 Phase 05: module ops reconciled with the work door's registry (REQ-04, ADR-1339).
+  ops }) {
   const findings = [];
   findings.push(...moduleFindings(modules).findings);
+  findings.push(...opFindings(ops, kinds));
   const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
   // The room ids are the vocabulary everything else points at, so they are validated FIRST
@@ -751,7 +843,7 @@ function loadContract(repo) {
   return JSON.parse(readFileSync(p, "utf8"));
 }
 
-function treeProducts(repo) {
+export function treeProducts(repo) {
   const dir = join(repo, "products");
   return dirNames(dir).map((name) => {
     const mpath = join(dir, name, "manifest.json");
@@ -788,16 +880,22 @@ const WORLD_READERS = [
   ["lints", (repo) => treeLints(repo)],
 ];
 
-async function gather(repo) {
+/**
+ * Everything arc IS, read from disk -- every inventory `gather` hands the gate, minus the face's
+ * own contract. Exported for the docs wiki (ADR-1501): the wiki and this gate read the tree
+ * through ONE assembly, so they cannot disagree about what exists, and a reader added here for
+ * the face reaches the wiki with no wiki change. It never touches expected-set.json, so a tree
+ * without the face contract can still be read.
+ */
+export async function treeWorld(repo, kinds) {
   return {
-    kinds: await treeKinds(repo),
+    kinds: kinds ?? (await treeKinds(repo)),
     lanes: dirNames(join(repo, "initiatives")),
     commands: mdStems(join(repo, ".claude", "commands")),
     agents: mdStems(join(repo, ".claude", "agents")),
     products: treeProducts(repo),
     rules: mdStems(join(repo, ".claude", "rules")),
     processes: yamlStems(join(repo, "processes")),
-    contract: loadContract(repo),
     // ADR-1317 -- each walks its own source of truth on disk, so the gate fails when ARC
     // grows rather than when the contract does.
     // Built from WORLD_READERS, so the wiring is DATA the selftest can cross-check rather
@@ -805,7 +903,20 @@ async function gather(repo) {
     // them printed "0 plans ... all covered" past every control this gate had.
     ...Object.fromEntries(await Promise.all(WORLD_READERS.map(async ([key, read]) => [key, await read(repo)]))),
     modules: treeModules(repo),
+    ops: await treeOps(repo),
   };
+}
+
+async function gather(repo) {
+  // What is preserved from the pre-split literal: the vocabulary is imported FIRST (a tree
+  // without validate.mjs fails there, with that message), the contract is read BEFORE any world
+  // reader, and the returned object has the old key order. What moved: the six plain listings
+  // (lanes ... processes) now run after the contract instead of before it; none of them can
+  // throw, so no error path changes.
+  const kinds = await treeKinds(repo);
+  const contract = loadContract(repo);
+  const { kinds: _k, lanes, commands, agents, products, rules, processes, ...rest } = await treeWorld(repo, kinds);
+  return { kinds, lanes, commands, agents, products, rules, processes, contract, ...rest };
 }
 
 /** @param repoOrData a repo path, or a pre-gathered data object (the selftest's exit arm). */
@@ -818,6 +929,11 @@ async function run(repoOrData, quiet = false) {
   const half = moduleFindings(data.modules);
   if (!data.modules?.unreadable) {
     process.stdout.write(oneLine(`face-coverage: module half folders=${half.folders} served=${half.served} generic=${half.generic.length} orphans=${half.orphans} exemptions=${half.exemptions} generic-rooms=${half.generic.join(",") || "none"} -- a served room with no module renders through the generic module (ADR-1321)`) + "\n");
+  }
+  // What the op half REPORTS (face v2 Phase 05): the registry's ops and the rooms that name them.
+  if (data.ops && !data.ops.unreadable) {
+    const rooms = data.ops.modules.filter((m) => m.ops.length > 0).map((m) => m.id);
+    process.stdout.write(oneLine(`face-coverage: op half registry=${data.ops.registry.length} named=${data.ops.modules.reduce((n, m) => n + m.ops.length, 0)} rooms=${rooms.join(",") || "none"} -- every op a room names is served, and every served op is named (REQ-04)`) + "\n");
   }
   if (findings.length) {
     for (const f of findings) process.stderr.write(`FAIL  ${oneLine(f)}\n`);
@@ -914,13 +1030,29 @@ async function selftest(repo) {
     ["an ADR-1327 extra exempted by name passes", withExemptedExtra(clean, "ADR-1327"), null, (findings) => {
       const extra = clean.modules?.extras?.[0];
       if (!extra) return false;
-      const bare = coverageFindings(withModuleFolder(clean, extra.ring, extra.id)).findings.some((f) => f.includes(`"${extra.id}"`) && f.includes("orphan"));
+      const bare = coverageFindings(withModuleFolder(withoutExtra(clean, extra.id), extra.ring, extra.id)).findings.some((f) => f.includes(`"${extra.id}"`) && f.includes("orphan"));
       return bare && !findings.some((f) => f.includes(`"${extra.id}"`));
     }],
+    ["an exemption row whose ring is not its module's", withExemptedExtra(clean, "ADR-1327", { ring: "money" }), "would draw it in a ring its folder is not in"],
+    ["an exemption row with no sentence", withExemptedExtra(clean, "ADR-1327", { sentence: " " }), "carries no sentence"],
+    ["an exemption row with no name", withExemptedExtra(clean, "ADR-1327", { name: undefined }), "carries no name"],
     ["an exemption for a room that is not an extra", withExemptionRow(withModuleFolder(clean, firstServedRing(clean), "ghost-extra"), { id: "ghost-extra", adr: "ADR-1327" }), "a fifth, unnamed exemption"],
     ["an exemption citing another ADR", withExemptedExtra(clean, "ADR-9999"), "not ADR-1327"],
     ["an exemption for a served room", withExemptionRow(clean, { id: clean.modules?.served?.find((r) => !r.template)?.id ?? "?", adr: "ADR-1327" }), "needs no exemption"],
     ["an unreadable module tree", { ...clean, modules: { unreadable: "the selftest made it unreadable" } }, "[module] could not be read"],
+
+    // ---- the op half (face v2 Phase 05, REQ-04, ADR-1339) -----------------------------------
+    //
+    // Each direction gets its own arm, and each arm names its own ghost: a module naming an op the door does not
+    // serve, a registry op no module names, an op named in the wrong room, an op named twice, an op writing a kind the
+    // spine does not have, and an op tree that could not be read.
+    ["a module op the registry does not serve", withModuleOp(clean, "ghost.op-unserved"), "ghost.op-unserved"],
+    ["a registry op no module names", withRegistryOp(clean, { id: "ghost.op-undeclared", room: "ghost", kind: firstKind(clean) }), "ghost.op-undeclared"],
+    ["an op named in another room's module", withMovedOp(clean), "which the registry places in room"],
+    ["an op named by two modules", withDoubledOp(clean), "an op belongs to one room"],
+    ["an op writing a kind the spine lacks", withOpKind(clean, "ghost.kind-op"), "ghost.kind-op"],
+    ["an op id whose room half is not its room", withRegistryOp(clean, { id: "ghostroom.op-misplaced", room: "otherroom", kind: firstKind(clean) }), "an op id's first half names its room"],
+    ["an unreadable op tree", { ...clean, ops: { unreadable: "the selftest made it unreadable" } }, "[op] could not be read"],
   ];
 
   let allArmsWiring = true;
@@ -961,6 +1093,17 @@ async function selftest(repo) {
     const populated = Boolean(direct?.unreadable) || (direct?.folders?.length ?? 0) > 0;
     if (!populated) allArmsWiring = false;
     lines.push(`wiring ${"modules".padEnd(26)} reads something: ${populated ? "PASS" : "FAIL (read no module folder on a tree that has some)"}`);
+  }
+  // And the op reader (face v2 Phase 05): gather's op tree is what treeOps reads directly, and on this tree the
+  // registry has ops and some module names one -- two disconnected halves also agree, so the floor is on both.
+  {
+    const direct = await treeOps(repo);
+    const same = JSON.stringify(clean.ops) === JSON.stringify(direct);
+    if (!same) allArmsWiring = false;
+    lines.push(`wiring ${"ops".padEnd(26)} gather==reader: ${same ? "PASS" : "FAIL (gather and treeOps disagree)"}`);
+    const populated = Boolean(direct?.unreadable) || ((direct?.registry?.length ?? 0) > 0 && (direct?.modules ?? []).some((m) => m.ops.length > 0));
+    if (!populated) allArmsWiring = false;
+    lines.push(`wiring ${"ops".padEnd(26)} reads something: ${populated ? "PASS" : "FAIL (read no op on a tree that has some)"}`);
   }
   let allArms = allArmsWiring;
   for (const [label, mutant, needle, judgeArm] of arms) {
@@ -1010,6 +1153,8 @@ async function selftest(repo) {
     ["an unreadable inventory source", withUnreadable(clean, "gates")],
     ["a contract inventory nothing derives", withUnderivedInventory(clean)],
     ["orphan module folder", withModuleFolder(clean, firstServedRing(clean), "ghost-module")],
+    ["module op the door does not serve", withModuleOp(clean, "ghost.op-unserved")],
+    ["registry op no module names", withRegistryOp(clean, { id: "ghost.op-undeclared", room: "ghost", kind: firstKind(clean) })],
   ];
   let allExits = true;
   for (const [label, mutant] of exitArms) {
@@ -1076,6 +1221,47 @@ function withUnderivedInventory(data) {
 function firstServedRing(data) {
   return data.modules?.rings?.[0] ?? "command";
 }
+/** The first spine kind, for an op row that must be valid on every axis but the one its arm corrupts. */
+function firstKind(data) {
+  return data.kinds?.[0] ?? "note.logged";
+}
+/** An op id added to the FIRST module that names any op (or the first module), as if its ops.mjs grew one. */
+function withModuleOp(data, op) {
+  const o = data.ops || {};
+  const mods = (o.modules || []).map((m) => ({ ...m, ops: [...m.ops] }));
+  const target = mods.find((m) => m.ops.length > 0) || mods[0];
+  if (target) target.ops.push(op);
+  return { ...data, ops: { ...o, modules: mods } };
+}
+/** A row added to the work door's registry, as gathered. */
+function withRegistryOp(data, row) {
+  const o = data.ops || {};
+  return { ...data, ops: { ...o, registry: [...(o.registry || []), row] } };
+}
+/** The first named op moved to a DIFFERENT module's ops.mjs. */
+function withMovedOp(data) {
+  const o = data.ops || {};
+  const mods = (o.modules || []).map((m) => ({ ...m, ops: [...m.ops] }));
+  const from = mods.find((m) => m.ops.length > 0);
+  const to = mods.find((m) => m !== from);
+  if (from && to) to.ops.push(/** @type {string} */ (from.ops.shift()));
+  return { ...data, ops: { ...o, modules: mods } };
+}
+/** The first named op named again by a second module. */
+function withDoubledOp(data) {
+  const o = data.ops || {};
+  const mods = (o.modules || []).map((m) => ({ ...m, ops: [...m.ops] }));
+  const from = mods.find((m) => m.ops.length > 0);
+  const to = mods.find((m) => m !== from);
+  if (from && to) to.ops.push(from.ops[0]);
+  return { ...data, ops: { ...o, modules: mods } };
+}
+/** The first registry op's receipt kind changed to `kind`. */
+function withOpKind(data, kind) {
+  const o = data.ops || {};
+  const reg = (o.registry || []).map((r, i) => (i === 0 ? { ...r, kind } : r));
+  return { ...data, ops: { ...o, registry: reg } };
+}
 /** A module folder added to the tree the gather read. */
 function withModuleFolder(data, ring, id) {
   const m = data.modules || {};
@@ -1086,11 +1272,21 @@ function withExemptionRow(data, row) {
   const m = data.modules || {};
   return { ...data, modules: { ...m, exemptions: [...(m.exemptions || []), row] } };
 }
-/** The first ADR-1327 extra given a folder in its own ring AND a row citing `adr`. */
-function withExemptedExtra(data, adr) {
+/**
+ * An extra's folder and row taken OUT of the tree as gathered. The real tree carries exempted extras (ADR-1337), so an
+ * arm that adds one must start from a tree without it -- adding a second row and a second folder would test "listed
+ * twice", not the arm it names.
+ */
+function withoutExtra(data, id) {
+  const m = data.modules || {};
+  return { ...data, modules: { ...m, folders: (m.folders || []).filter((f) => f.id !== id), exemptions: (m.exemptions || []).filter((r) => !r || r.id !== id) } };
+}
+/** The first ADR-1327 extra given a folder in its own ring AND a complete row citing `adr`, with `over` applied. */
+function withExemptedExtra(data, adr, over = {}) {
   const extra = data.modules?.extras?.[0];
   if (!extra) return data;
-  return withExemptionRow(withModuleFolder(data, extra.ring, extra.id), { id: extra.id, adr });
+  const row = { id: extra.id, adr, name: extra.id, ring: extra.ring, sentence: "a sentence", lede: "", ...over };
+  return withExemptionRow(withModuleFolder(withoutExtra(data, extra.id), extra.ring, extra.id), row);
 }
 /** The first real module folder moved to another served ring. */
 function withMisplacedFolder(data) {

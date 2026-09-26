@@ -20,7 +20,7 @@ export const RAIL_W = 240
 export const HEAD_H = 56
 
 export default function Rail({
-  groups, current, onOpen, onPalette, attachment, ringCount,
+  groups, current, onOpen, onPalette, attachment, ringCount, extrasNote = '',
 }: {
   groups: Group[]
   current: string | null
@@ -28,6 +28,8 @@ export default function Rail({
   onPalette: () => void
   attachment: Attachment
   ringCount: number
+  /** why some exempted extra rooms are not drawn, or empty when every row was */
+  extrasNote?: string
 }) {
   const roomCount = groups.reduce((n, g) => n + g.rooms.length, 0)
   const moduleCount = Object.keys(attachment.attached).length
@@ -63,6 +65,7 @@ export default function Rail({
             {g.rooms.map((r) => {
               const isActive = current === r.id
               const planned = Boolean(r.planned)
+              const extra = Boolean(r.extra)
               const attached = attachment.attached[r.id]
               const Icon = ((attached && attached.Icon) || CircleDashed) as ComponentType<IconProps>
               const badge = stateBadge(r)
@@ -79,6 +82,7 @@ export default function Rail({
                   <Icon size={16} weight={isActive ? 'fill' : 'regular'} color={isActive ? 'var(--accent)' : planned ? 'var(--text-3)' : 'var(--text-2)'} aria-hidden="true" />
                   <span className="text-[13px] truncate" style={{ fontFamily: UI, fontWeight: isActive ? 600 : 500, color: isActive ? 'var(--text-1)' : planned ? 'var(--text-3)' : 'var(--text-2)' }}>{r.name}</span>
                   {planned ? <span className="ml-auto text-[9.5px] uppercase tracking-[0.06em]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-3)' }}>planned</span> : null}
+                  {extra ? <span className="ml-auto text-[9.5px] uppercase tracking-[0.06em]" title={badge.title} style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-3)' }}>extra</span> : null}
                   <span className="sr-only">{badge.label}</span>
                 </button>
               )
@@ -92,6 +96,7 @@ export default function Rail({
           <span className="truncate">{roomCount} rooms · {ringCount} rings</span>
           <span className="shrink-0" style={{ fontFamily: MONO }}>{moduleCount} modules</span>
         </div>
+        {extrasNote ? <div className="mt-0.5 truncate" title={extrasNote} data-extras-note="">extra rooms not all drawn</div> : null}
         <div className="mt-0.5">j k move · g home · ⌘K find</div>
       </div>
     </nav>

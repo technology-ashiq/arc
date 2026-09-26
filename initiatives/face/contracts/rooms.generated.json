@@ -229,6 +229,7 @@
           "engine"
         ],
         "processes": [
+          "attack-diff",
           "brief-materialize",
           "build-in-public-draft",
           "commit-msg-draft",
@@ -254,7 +255,7 @@
           "0200"
         ]
       },
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "model-policy",
@@ -377,6 +378,10 @@
         "lanes": [
           "memory"
         ],
+        "processes": [
+          "lesson-log",
+          "rule-promote"
+        ],
         "concepts": [
           "HISTORICAL DATA fence",
           "golden gate (recall)"
@@ -388,7 +393,7 @@
           "0700"
         ]
       },
-      "itemCount": 5
+      "itemCount": 7
     },
     {
       "id": "evolve",
@@ -545,6 +550,9 @@
           "council-strategist",
           "council-verifier"
         ],
+        "processes": [
+          "council-convene"
+        ],
         "lints": [
           "council-lint"
         ],
@@ -559,7 +567,7 @@
           "council"
         ]
       },
-      "itemCount": 23
+      "itemCount": 24
     },
     {
       "id": "develop",
@@ -593,6 +601,9 @@
           "pattern-miner",
           "spec-fidelity"
         ],
+        "processes": [
+          "develop-proof"
+        ],
         "lints": [
           "capability-vet",
           "develop-lint"
@@ -609,7 +620,7 @@
           "0100"
         ]
       },
-      "itemCount": 18
+      "itemCount": 19
     },
     {
       "id": "review-ship",
@@ -628,6 +639,7 @@
           "ship.done"
         ],
         "commands": [
+          "arc-attack",
           "arc-audit",
           "arc-canary",
           "arc-commit (G)",
@@ -665,7 +677,7 @@
           "workflow:weigh-tests"
         ]
       },
-      "itemCount": 31
+      "itemCount": 32
     },
     {
       "id": "design-studio",
@@ -794,6 +806,24 @@
         ]
       },
       "itemCount": 34
+    },
+    {
+      "id": "factory",
+      "name": "Factory",
+      "ring": "factory",
+      "status": "built",
+      "sentence": "Cycles, phases, gates — the floor.",
+      "lede": "the current cycle and what each phase is waiting on",
+      "render": "bespoke",
+      "copySource": "the owner's reference, adapted",
+      "stations": [],
+      "holds": {
+        "kinds": [
+          "kickoff.done",
+          "phase.closed"
+        ]
+      },
+      "itemCount": 2
     },
     {
       "id": "money",
@@ -1133,6 +1163,9 @@
         "trigger table"
       ],
       "holds": {
+        "processes": [
+          "adr-record"
+        ],
         "concepts": [
           "Build-out Mandate",
           "pull trigger"
@@ -1147,6 +1180,7 @@
           "PLAN-design-v2",
           "PLAN-develop",
           "PLAN-discover",
+          "PLAN-docs",
           "PLAN-engine-process-layer",
           "PLAN-evolve",
           "PLAN-executor",
@@ -1165,7 +1199,7 @@
           "PLAN-trader"
         ]
       },
-      "itemCount": 27
+      "itemCount": 29
     },
     {
       "id": "org",
@@ -1178,7 +1212,7 @@
       "indexes": "lanes",
       "stations": [],
       "holds": {},
-      "itemCount": 16
+      "itemCount": 17
     },
     {
       "id": "concepts",
@@ -1186,12 +1220,33 @@
       "ring": "company",
       "status": "built",
       "sentence": "Every word arc uses, and the room it lives in.",
-      "lede": "107 terms, each anchored to a room and a station — this is what the command palette searches",
+      "lede": "every term, each anchored to a room and a station — this is what the command palette searches",
       "render": "index",
       "indexes": "concepts",
       "stations": [],
       "holds": {},
-      "itemCount": 107
+      "itemCount": 109
+    },
+    {
+      "id": "story",
+      "name": "Story",
+      "ring": "company",
+      "status": "built",
+      "sentence": "How it got here.",
+      "lede": "the cycles, in order",
+      "render": "bespoke",
+      "copySource": "the owner's reference, adapted",
+      "stations": [
+        "the cycles",
+        "the logbook"
+      ],
+      "holds": {
+        "concepts": [
+          "cycle",
+          "logbook"
+        ]
+      },
+      "itemCount": 2
     },
     {
       "id": "lane",
@@ -1213,6 +1268,9 @@
         "kinds": [
           "kickoff.done",
           "phase.closed"
+        ],
+        "lanes": [
+          "docs"
         ],
         "commands": [
           "arc-change",
@@ -1242,10 +1300,14 @@
           "steel thread"
         ],
         "products": [
+          "docs",
           "plan"
+        ],
+        "adrs": [
+          "1500"
         ]
       },
-      "itemCount": 22
+      "itemCount": 25
     }
   ],
   "inventories": {
@@ -1255,6 +1317,7 @@
       "1200": "legal",
       "1300": "toolbelt",
       "1400": "design-studio",
+      "1500": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",

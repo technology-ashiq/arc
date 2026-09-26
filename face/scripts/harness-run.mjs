@@ -23,7 +23,8 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runSmoke, summaryLines, renderLine, notServedLine, verbsPendingLine, headingLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable } from "./smoke.mjs";
+import { runFlows, flowsLine } from "./flows.mjs";
+import { runSmoke, summaryLines, renderLine, notServedLine, servedLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, extrasLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds, expectedExtras } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FACE_DEFAULT = resolve(HERE, "..");
@@ -105,6 +106,10 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
   const chrome = findChrome();
   if (!chrome.path) throw new SetupError(`Chrome not found. Looked at: ${chrome.tried.join(" | ")}`);
   const expected = expectedOpenable();
+  // How many planned rooms the contract names (F3, ADR-1328): read here, from the contract, never the door.
+  const plannedIds = expectedPlannedIds(REPO);
+  // The exempted extras (ADR-1327) and the sentence each must open with: the contract file, never the door.
+  const extras = expectedExtras(REPO);
   // The frozen opening sentences the heading check holds each shipped module room to -- the contract, never
   // the door under test.
   const sentences = Object.fromEntries(Object.entries(JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "room-copy.json"), "utf8")).rooms ?? {}).map(([id, r]) => [id, String(r && r.sentence ? r.sentence : "")]));
@@ -121,9 +126,22 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     if (!(gen.events > 0)) throw new SetupError(`fixture spine generated no events: ${JSON.stringify(gen)}`);
     log(`fixture: events=${gen.events}`);
 
+    // A scratch leads store holding the campaign the send's flow names: the send must refuse on the leads lane's OWN
+    // gate (no warmed sending domain, ADR-0413), which sits behind the store and campaign checks. Leaning on the
+    // machine's ~/.arc/leads was green where one exists and, on a clean CI runner, refused one gate earlier.
+    const leadsStore = join(tmp, "leads-store");
+    const leadsEnv = { ...process.env, ARC_LEADS_STORE: leadsStore };
+    try {
+      for (const args of [["store", "init"], ["campaign", "init", "browser-flow"]])
+        execFileSync(process.execPath, [join(REPO, ".claude", "scripts", "leads", "arc-leads.mjs"), ...args], { cwd: REPO, env: leadsEnv, stdio: ["ignore", "pipe", "pipe"] });
+    } catch (e) {
+      throw new SetupError(`the scratch leads store could not be made: ${oneLine(String((e && e.stderr) || (e && e.message) || e))}`);
+    }
+    log("fixture: leads store with the browser-flow campaign");
+
     const doorPort = await freePort();
     door = start("arc-dash", [join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "--spine", spine, "--port", String(doorPort)],
-      { cwd: REPO, env: { ...process.env, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal") } });
+      { cwd: REPO, env: { ...leadsEnv, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal") } });
     const headers = { Authorization: `Bearer ${token}` };
     await waitHttp(`http://127.0.0.1:${doorPort}/api/health`, headers, door, 20000, [token]);
     log(`door: up on ${doorPort}`);
@@ -151,6 +169,8 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
           token,
           exclude: opts.exclude,
           expected,
+          expectedPlannedIds: plannedIds,
+          extras,
           roomTimeoutMs: 15000,
           mood,
           sentences,
@@ -164,12 +184,33 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
       for (const line of summaryLines(report)) log(line);
       log(renderLine(report));
       log(notServedLine(report));
+      log(servedLine(report));
       log(verbsPendingLine(report));
+      log(rehearsalLine(report));
+      log(plannedLine(report));
+      log(extrasLine(report));
+      log(runnerLine(report));
+      log(largestBodyLine(report));
       log(headingLine(report));
       if (report.shots) { shotFiles.push(...report.shots.files); shotChrome = shotChrome ?? report.shots.chrome; }
       log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined, shots: undefined })}`);
       const verdict = judge(report);
       if (!verdict.ok) { failedMoods++; log(`smoke: FAIL mood=${mood} -- ${oneLine(verdict.reasons.join("; "))}`); }
+    }
+    // THE FLOWS (face v2 Phase 05, REQ-09, REQ-11): every op driven through its room's dock, its receipt read back
+    // through the door, then the live flow -- once, after every mood's smoke has counted the fixture, because the
+    // flows write receipts to it.
+    let flowsFailed = false;
+    if (setupFailed === 0) {
+      try {
+        const fr = await runFlows({ base: `http://127.0.0.1:${appPort}/`, door: `http://127.0.0.1:${doorPort}`, token, spine, repo: REPO, tmp, journal: join(tmp, "journal") }, log);
+        log(flowsLine(fr));
+        // Phase 06 (REQ-08): the session flow's own verdict -- 0 starts with no click, exactly 1 from one click.
+        flowsFailed = fr.ops === 0 || fr.failed.length > 0 || !fr.live.ok || fr.errors > 0 || !fr.sessions || !fr.sessions.ok;
+      } catch (e) {
+        flowsFailed = true;
+        log(`flows: SETUP-FAIL -- ${oneLine(redactSecrets(e?.message ?? e, [token]))}`);
+      }
     }
     // Light is never optional (ADR-1331): a run that left a mood out is not a pass, however clean.
     const missing = MOODS.filter((m) => !moods.includes(m));
@@ -180,7 +221,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     }
     if (missing.length) log(`face-browser: PARTIAL -- mood(s) ${missing.join(",")} not run; a partial run never exits 0`);
     if (setupFailed) return 2;
-    return failedMoods === 0 && missing.length === 0 ? 0 : 1;
+    return failedMoods === 0 && missing.length === 0 && !flowsFailed ? 0 : 1;
   } finally {
     await stopTree(preview);
     await stopTree(door);

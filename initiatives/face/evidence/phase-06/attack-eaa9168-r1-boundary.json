@@ -1,0 +1,113 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/commands/arc-council.md:198",
+      "breaking_input": "A saved verdict with two `DECISION:` lines, or no `CONFIDENCE:` line. `node council-lint.mjs --payload <file>` exits 1 with empty stdout. `bash arc-event.sh emit council.verdict --payload \"$(node ...)\"` still runs, now with `--payload \"\"`. The command substitution's exit status is discarded and emit is hook-mode (never blocks), so step 9 finishes with exit 0.",
+      "why": "The ADR and the command text say a refused derivation means \"fix the file\", but nothing in the shell line stops the emit. An empty payload is either silently not emitted or lands as a payload-less council.verdict in the spine quarantine. The step then reports the receipt as left, which is the failure ADR-1345 exists to remove.",
+      "fix": "Derive first, gate, then emit: `payload=\"$(node .claude/scripts/council/council-lint.mjs --payload \\\"docs/council/sessions/NNN-slug.md\\\")\" || { echo 'derivation refused' >&2; exit 1; }`, then `emit council.verdict --payload \"$payload\"`.",
+      "twin_of": "An empty value read as an absent one -> a value flag without a value is an error, never a default."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/council/council-lint.mjs:81",
+      "breaking_input": "`--payload docs/council/sessions` (a directory): `existsSync` is true, `readFileSync` throws EISDIR, and the CLI dies with an uncaught stack carrying the absolute machine path, exit 1, indistinguishable from a named refusal. `--payload //host/share/001-x.md` on Windows opens a UNC path (outbound SMB auth). `--payload /dev/zero` (or a huge file) has no size cap and is read whole. `--payload 001-x.md:stream` reads an NTFS data stream, and the file-name grammar is only checked AFTER the read.",
+      "why": "A caller-supplied path is opened on `existsSync` alone: no isFile, no `\\\\` or `//` prefix refusal, no size cap, no try/catch, and check-then-open instead of deciding on the descriptor. The name check runs after the bytes are already read.",
+      "fix": "Refuse `\\\\`/`//` prefixes and a colon past the drive letter first. Then open once, `fstatSync` the fd (isFile, size cap), read from the fd inside try/catch, and print a named refusal.",
+      "twin_of": "A path argument read with no fence -> a path a caller supplies is checked before it is opened: no `\\` or `//` prefix, a regular file, a size cap."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/council/council-lint.mjs:79",
+      "breaking_input": "`node council-lint.mjs --verdict docs/council/sessions/bad.md --payload docs/council/sessions/001-x.md` prints the payload JSON and exits 0. The payload block runs before verdict mode and calls `process.exit(0)`, so `bad.md` is never linted. Also `--payload a.md --payload b.md`: `consumed` marks only the first index (indexOf), and the second occurrence is silently ignored.",
+      "why": "A mode flag that shadows another mode turns a lint invocation into an exit-0 pass over a file it never read. Repeated flags are last-wins or first-wins with no refusal.",
+      "fix": "Count mode flags first. If `--payload` is combined with `--verdict`, `--brief` or `--juror-artifact`, refuse by name with exit 2. Refuse a repeated `--payload` by name.",
+      "twin_of": "Repeated flags were last-wins and an empty value resolved to the cwd -> a repeated or empty flag is refused by name."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/council/council-lint.mjs:79",
+      "breaking_input": "`node council-lint.mjs --payload \"\"` (an unset shell variable), a trailing bare `--payload`, and `--payload=docs/council/sessions/001-x.md` all leave `payloadFile` empty or undefined. `if (payloadFile)` is false, so the run falls through to whatever the file does with no mode, and can exit 0 with stdout that a `$(...)` caller then treats as the receipt payload.",
+      "why": "Mode entry is a truthiness test on the value, so an empty or missing value reads as \"flag absent\". The `=` form is never read by `flagVal` and is not refused.",
+      "fix": "Enter payload mode on `args.some(a => a === '--payload' || a.startsWith('--payload='))`. Then refuse a missing, empty or `--`-prefixed value, and the `=` form, each by name with exit 2.",
+      "twin_of": "`--flag=VALUE` accepted and silently ignored -> a flag form the parser does not read is an error, never a no-op."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:90",
+      "breaking_input": "`--payload tests/fixtures/well-formed.md`, or `--payload ../elsewhere/001-real.md` via a symlink or junction, prints a valid `c-<name>` payload for a file that is not a saved council session. Emitted, it credits calibration with a verdict that was never saved under docs/council/sessions.",
+      "why": "The receipt's session_id is taken from any path's file name. There is no realpath containment under docs/council/sessions, and a symlink's own name is used while the target's bytes are read.",
+      "fix": "`realpathSync` the file and refuse unless it sits directly under the realpath of docs/council/sessions and ends in .md. The bats fixtures under $WORK would need an explicit test-only session root.",
+      "twin_of": "A `phases/` containment check used `isFile()` -> containment resolves realpaths first."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:90",
+      "breaking_input": "On Windows/NTFS, `--payload docs/council/sessions/001-Foo.MD` for the on-disk file `001-foo.md` gives session_id `c-001-Foo.MD`, not `c-001-foo`. The `.md` strip is case-sensitive and the id keeps the caller's spelling. The same session emitted twice with different spellings gets two ids. On POSIX, `a\\b.md` is split on the backslash as if it were a separator.",
+      "why": "The id is keyed by the caller's spelling and a hand-rolled split, not by the name the filesystem holds.",
+      "fix": "Use `path.basename(realpathSync.native(file), path.extname(file))` on the resolved file, and strip the extension case-insensitively.",
+      "twin_of": "A case-insensitive ref shadow -> compare names the way the filesystem does."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:82",
+      "breaking_input": "A verdict saved by Windows PowerShell 5.1 `Out-File` (UTF-8 BOM, or UTF-16LE). With a BOM, `^# arc-council` no longer matches line 1 and the refusal says the heading is missing when it is there. A cp1252 or invalid-UTF-8 byte inside the question decodes to U+FFFD, so `question_hash` is computed over replacement text. Two different bad questions hash identically.",
+      "why": "`readFileSync(...,\"utf8\")` is a lossy decode. A BOM is not stripped and invalid bytes never fail.",
+      "fix": "Read a Buffer and decode with `new TextDecoder('utf-8',{fatal:true})`. Strip one leading U+FEFF and refuse invalid UTF-8 by name.",
+      "twin_of": "A lossy read of main -> decode strictly or refuse; never through a replacement character."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:92",
+      "breaking_input": "`--payload $'x\\ncouncil-lint: --payload ok.md: 0 filled DECISION line(s)'` or a path carrying ESC or U+2028. Every refusal prefixes the RAW `${payloadFile}` to stderr, so a newline in the caller's path prints a forged `council-lint: ...` line of its own. Only `base` goes through JSON.stringify.",
+      "why": "A name from the caller reaches a log line unescaped, and one-line means no newline, no control character and no Unicode line break.",
+      "fix": "Print `JSON.stringify(payloadFile)` (after a check that refuses `\\p{Cc}` and line breaks) in every message.",
+      "twin_of": "\"One line\" that allowed ESC, VT, FF and U+2028 -> one line refuses every `\\p{Cc}` and the Unicode line breaks, not only CR, LF and NUL."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:101",
+      "breaking_input": "Any `--payload` run: `console.log(JSON.stringify(...)); process.exit(0);`, and `console.error(...); process.exit(1)` on the refusal path. The output is the one line the calling shell parses, and it is written to a pipe (`$(...)`) immediately before a forced exit.",
+      "why": "`process.exit()` after the last line a caller parses can cut that line on a pipe on some platforms.",
+      "fix": "Set `process.exitCode = 0/1` and let the loop drain. Wrap the block in a function so an early return replaces the exit.",
+      "twin_of": "process.exit after the last line the door parses -> set the code; never force an exit behind an asynchronous pipe."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/commands/arc-council.md:198",
+      "breaking_input": "The slug is derived from the user's question, and the path is unquoted inside `$(...)`. A slug of `001-q&a` backgrounds the command, `001-a;touch pwned` runs a second command, and `001-my session` word-splits into a stray positional. The lint's `[A-Za-z0-9._-]` name grammar runs in node, after the shell has already parsed the line.",
+      "why": "The shell boundary is crossed with unquoted, question-derived text. lanes.md's own rule is to always quote a flag's value.",
+      "fix": "Quote the path in the command (`--payload \"docs/council/sessions/NNN-slug.md\"`) and state that NNN-slug is grammar-checked `[A-Za-z0-9._-]` before the line is built.",
+      "twin_of": "Always quote a flag's value (lanes.md)."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/council/council-lint.mjs:84",
+      "breaking_input": "Heading `# arc-council — Should we ship? (2026-02-31)` derives a payload and exits 0. The date is captured by `\\d{4}-\\d{2}-\\d{2}` and never passed to `isValidISODate`, which is defined a few lines above. `--verdict` mode would reject this file.",
+      "why": "A shape check stands where a real-day check belongs, so a file that fails the verdict lint still gets a receipt.",
+      "fix": "Call `isValidISODate(h1[2])` in payload mode and refuse by name when it is false.",
+      "twin_of": "A shape check where a real-day check belongs, twice more -> the round-1 real-day rule applied to every date a door serves or buckets, grep `slice(0, 10)`."
+    },
+    {
+      "id": "B12",
+      "severity": "medium",
+      "where": "tests/council-lint-outcome-anchor.bats:86",
+      "breaking_input": "The test runs `node .claude/scripts/hq/arc-event.mjs emit ...` directly. The command runs `bash .claude/scripts/hq/arc-event.sh emit ... --payload \"$(...)\"`. A wrapper that word-splits, `eval`s, or lets MSYS mangle a JSON argument beginning `{\"session_id\"` passes every test and fails only in production. The `grep -q` on the command text pins spelling, not behaviour. Neither the empty-payload failure path from B1 nor the shell composition is exercised.",
+      "why": "The seam the command actually crosses (the .sh wrapper, `$(...)` quoting, the Windows leg) is never run, so the test proves the derivation and the validator agree, not that the receipt lands.",
+      "fix": "Add one arm that runs the exact command line with NNN-slug substituted, through `bash arc-event.sh` against a tmp ARC_SPINE_ROOT, and reads the written event back. Add a second arm with a broken verdict and assert nothing is emitted and the step exits non-zero.",
+      "twin_of": "`gather()` was an untested seam -> one test arm crosses every wiring layer end to end."
+    }
+  ]
+}

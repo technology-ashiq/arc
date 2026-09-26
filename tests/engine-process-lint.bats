@@ -293,3 +293,66 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
   [[ "$output" == *"[yaml-excluded]"* ]]
   [[ "$output" == *"[baseline-drift]"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# council-convene (face Phase 06 slice 03b). The face row "Convene the council" names this
+# process; its body RUNS arc-council.md rather than copying it. The Node half is
+# tests/council-convene-probe.mjs, which prints one line per check and a PROBE count.
+# ---------------------------------------------------------------------------
+
+@test "council-convene: it lints clean and arc-run routes it high-judgment" {
+  run node "$(LINT)" "$ARC_ROOT/processes/council-convene.process.yaml" --root "$ARC_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"all checks passed"* ]] || { echo "lint RAN but did not pass: $output"; false; }
+  run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" --process council-convene --driver auto --input '{"question":"a probe"}' --dry-run
+  [ "$status" -eq 0 ] || { echo "dry-run refused: $output"; false; }
+  [[ "$output" == *"would run"*"council-convene"* ]] || { echo "the preview never named the process: $output"; false; }
+  [[ "$output" == *"tier high-judgment"* ]] || { echo "the Chair is not routed high-judgment: $output"; false; }
+}
+
+@test "council-convene: fenced write, one emitter kind, agents equal to disk, door field, drift pin, body rules" {
+  run node "$ARC_ROOT/tests/council-convene-probe.mjs" checks
+  [[ "$output" == *"PROBE checks: 20 checks, 0 failed"* ]] || { echo "the probe did not run all 20 checks clean: $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "council-convene: the policy gate a live click crosses authorises it (dry-run never reaches this gate)" {
+  run node "$ARC_ROOT/tests/council-convene-probe.mjs" gate
+  [[ "$output" == *"PROBE gate: 2 checks, 0 failed"* ]] || { echo "the gate refuses or never ran: $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "council-convene: the eval input opens with a mode word and expects a deep session's shape" {
+  local f="$ARC_ROOT/tests/fixtures/engine/evals/council-convene/basic.json"
+  grep -q '"question": "quick ' "$f" || { echo "the eval no longer probes the mode-word trap"; false; }
+  grep -q '"session_file": "docs/council/sessions/' "$f" || { echo "the eval expects no saved session"; false; }
+}
+
+# ---------------------------------------------------------------------------
+# The writer-script session verbs (face Phase 06): lesson-log and rule-promote (memory, slice 04), develop-proof and
+# adr-record (develop and strategy). The Node half is
+# tests/memory-session-probe.mjs; rule-propose's apply path is proven in a scratch repo by tests/face/kernel-ring.mjs.
+# ---------------------------------------------------------------------------
+
+@test "writer-script session verbs: all four lint clean and route balanced-workhorse on claude-code" {
+  local p
+  for p in lesson-log rule-promote develop-proof adr-record; do
+    run node "$(LINT)" "$ARC_ROOT/processes/$p.process.yaml" --root "$ARC_ROOT"
+    [ "$status" -eq 0 ] && [[ "$output" == *"all checks passed"* ]] || { echo "$p: $output"; false; }
+    run node "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs" --process "$p" --driver auto --input '{"x":"a probe"}' --dry-run
+    [ "$status" -eq 0 ] || { echo "$p dry-run refused: $output"; false; }
+    [[ "$output" == *"would run \`$p\` on \`claude-code\` (tier balanced-workhorse)"* ]] || { echo "$p routed elsewhere: $output"; false; }
+  done
+}
+
+@test "writer-script session verbs: exact fenced grants, their door rows, one-turn bodies that tag their receipts" {
+  run node "$ARC_ROOT/tests/memory-session-probe.mjs" checks
+  [[ "$output" == *"PROBE checks: 20 checks, 0 failed"* ]] || { echo "the probe did not run all 20 checks clean: $output"; false; }
+  [ "$status" -eq 0 ]
+}
+
+@test "writer-script session verbs: the policy gate a live click crosses authorises all four" {
+  run node "$ARC_ROOT/tests/memory-session-probe.mjs" gate
+  [[ "$output" == *"PROBE gate: 4 checks, 0 failed"* ]] || { echo "the gate refuses or never ran: $output"; false; }
+  [ "$status" -eq 0 ]
+}

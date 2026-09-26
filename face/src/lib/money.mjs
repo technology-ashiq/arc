@@ -1,9 +1,11 @@
 // money.mjs -- every decision the Money and Ventures rooms make, in one dependency-free file.
 //
-// MoneyRoom.tsx and VenturesRoom.tsx are markup. THIS is where the branches live, for the
-// reason README.md gives: CI never runs `npm install`, so a branch inside a .tsx is a branch
-// nobody tests. Which colour a rupee is allowed to wear, which of the four kinds of nothing a
-// blank cell means, whether a total may be printed at all -- all of it is here.
+// The money and ventures modules' folds (face/src/modules/money/, through lib/money-room.mjs) and their
+// Views are markup and wiring; THIS is where the branches live, for the reason README.md gives: CI never
+// runs `npm install`, so a branch inside a .tsx is a branch nobody tests. Which colour a rupee is allowed
+// to wear, which of the four kinds of nothing a blank cell means, whether a total may be printed at all --
+// all of it is here. (The Cycle 15 renderers that first drew it, MoneyRoom.tsx and VenturesRoom.tsx, were
+// deleted by face v2's money ring.)
 //
 // It imports door.mjs and inbox.mjs (both dependency-free) and NOTHING else. No React, no
 // vite, no three, and -- by ADR-1316 -- nothing from `.claude/**`.
@@ -936,6 +938,12 @@ export function readKill(raw) {
     refusal: null,
     badge: KILL_BADGE,
   };
+
+  // The door withheld the panel by name -- a criteria file off this tree, or one an env var swapped in -- which
+  // is its own sentence, never the generic "did not arrive" (face v2 Phase 04 re-attack).
+  const withheld = asText(body["killRefused"]);
+  if ((k === undefined || k === null) && withheld !== "")
+    return { ...base, refusal: { code: "KILL_REFUSED", human: `The door withheld the kill panel: ${withheld}. No distance is drawn.` } };
 
   if (k === undefined || k === null || typeof k !== "object" || Array.isArray(k))
     return {

@@ -111,6 +111,119 @@ list_distribution() {
   printf '%s\n%s\n' "$total" "${dist:-none}"
 }
 
+# The flows (face v2 Phase 05, REQ-09, REQ-11): every op the registry holds was driven through its room's dock, its
+# receipt read back through the door, and the live flow saw a receipt appended behind the page within 5 s. Judged from
+# the ONE line flows.mjs prints, against the registry's own op count -- a run that drove fewer ops cannot pass.
+flows_verdict() {
+  local out="$1" ops="$2" line
+  line="$(printf '%s\n' "$out" | grep '^flows: ' | tail -1)"
+  [ -n "$line" ] || { echo "no flows line"; return 1; }
+  [[ "$line" =~ ^flows:\ ops=([0-9]+)\ ok=([0-9]+)\ fail=0\ live=ok\ live-ms=([0-9]+)\ page-errors=0$ ]] || { echo "the flows line is not clean: $line"; return 1; }
+  [ "$ops" -gt 0 ] && [ "${BASH_REMATCH[1]}" -eq "$ops" ] && [ "${BASH_REMATCH[2]}" -eq "$ops" ] \
+    || { echo "flows ran ${BASH_REMATCH[1]} ops with ${BASH_REMATCH[2]} ok, and the registry holds $ops: $line"; return 1; }
+  [ "${BASH_REMATCH[3]}" -le 5000 ] || { echo "the live flow saw the change after ${BASH_REMATCH[3]} ms, past 5000: $line"; return 1; }
+}
+
+# The session flow (face v2 Phase 06, REQ-08): every served room with a session verb opened and reloaded, a running
+# session attached -- and the door journalled 0 start requests; then ONE click made exactly 1. A counter that cannot
+# move proves nothing, so the control is part of the line.
+sessions_verdict() {
+  local out="$1" line
+  line="$(printf '%s\n' "$out" | grep '^sessions: ' | tail -1)"
+  [ -n "$line" ] || { echo "no sessions line"; return 1; }
+  [[ "$line" =~ ^sessions:\ ok\ rooms=([0-9]+)\ reloads=([0-9]+)\ attach=ok\ starts=0\ control=1$ ]] || { echo "the sessions line is not clean: $line"; return 1; }
+  [ "${BASH_REMATCH[1]}" -ge 5 ] && [ "${BASH_REMATCH[2]}" -eq "${BASH_REMATCH[1]}" ] \
+    || { echo "the session flow opened ${BASH_REMATCH[1]} rooms and reloaded ${BASH_REMATCH[2]}: $line"; return 1; }
+}
+
+# The planned rooms' REHEARSAL cards (ADR-1328): what the browser drew EQUALS the derived lists, per room,
+# exactly as the work-door cards -- a planned room's flows are rehearsed, never sent to the door (money ring).
+rehearsal_verdict() {
+  local out="$1" mood="$2" dir="$3" line cards rooms expected roomsExpected dist
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  dist="$(list_distribution "$dir" "rehearsal-*.md")"
+  expected="$(printf '%s\n' "$dist" | head -1)"
+  roomsExpected="$(printf '%s\n' "$dist" | tail -1)"
+  line="$(printf '%s\n' "$out" | grep "^smoke: rehearsal mood=$mood cards=" | tail -1)"
+  cards="$(printf '%s\n' "$line" | sed -n "s/^smoke: rehearsal mood=$mood cards=\([0-9][0-9]*\) rooms=.*/\1/p")"
+  rooms="$(printf '%s\n' "$line" | sed -n "s/^smoke: rehearsal mood=$mood cards=[0-9]* rooms=\(.*\)\$/\1/p")"
+  [ -n "$cards" ] && [ "$expected" -gt 0 ] && [ "$cards" = "$expected" ] \
+    || { echo "mood=$mood: the browser drew '$cards' rehearsal cards, the lists name $expected"; return 1; }
+  [ "$rooms" = "$roomsExpected" ] \
+    || { echo "mood=$mood: rehearsal cards per room read '$rooms', the lists name '$roomsExpected'"; return 1; }
+  echo "rehearsal verdict: mood=$mood cards=$cards rooms=$rooms"
+}
+
+# F3 where the owner sees it (Cycle 15 room sweep, ADR-1328): every planned room the CONTRACT names opened marked
+# data-planned, and not one of them drew a LIVE pill. The smoke reads the expected rooms from the contract file,
+# never from the door it judges, and its own verdict compares them by id; this holds the printed counts.
+planned_verdict() {
+  local out="$1" mood="$2" line rooms expected live
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  line="$(printf '%s\n' "$out" | grep "^smoke: planned mood=$mood rooms=" | tail -1)"
+  rooms="$(printf '%s\n' "$line" | sed -n "s/^smoke: planned mood=$mood rooms=\([0-9][0-9]*\) expected=[0-9]* live=[0-9]* planned-rooms=.*/\1/p")"
+  expected="$(printf '%s\n' "$line" | sed -n "s/^smoke: planned mood=$mood rooms=[0-9]* expected=\([0-9][0-9]*\) live=[0-9]* planned-rooms=.*/\1/p")"
+  live="$(printf '%s\n' "$line" | sed -n "s/^smoke: planned mood=$mood rooms=[0-9]* expected=[0-9]* live=\([0-9][0-9]*\) planned-rooms=.*/\1/p")"
+  [ -n "$expected" ] && [ "$expected" -ge 3 ] && [ "$rooms" = "$expected" ] \
+    || { echo "mood=$mood: planned rooms drawn '$rooms', the contract names '$expected': $line"; return 1; }
+  [ "$live" = "0" ] || { echo "mood=$mood: a planned room drew LIVE: $line"; return 1; }
+  echo "planned verdict: mood=$mood rooms=$rooms live=0"
+}
+
+# The one error class the windows runner raises on its own is COUNTED on its own line, never folded into a clean
+# zero: it may be non-zero on the windows leg alone, and even there at most two -- one failed resource in one
+# room (debt-ledger, money ring). The OS is an argument, so the mutant control below can hold both branches.
+runner_verdict() {
+  local out="$1" mood="$2" os="$3" line count
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  line="$(printf '%s\n' "$out" | grep "^smoke: runner-errors mood=$mood count=" | tail -1)"
+  count="$(printf '%s\n' "$line" | sed -n "s/^smoke: runner-errors mood=$mood count=\([0-9][0-9]*\) rooms=.*/\1/p")"
+  [ -n "$count" ] || { echo "mood=$mood: no runner-errors count on the line: '$line'"; return 1; }
+  case "$os" in
+    MINGW*|MSYS*|CYGWIN*) [ "$count" -le 2 ] || { echo "mood=$mood: $count runner-class errors -- more than one failed resource is not the runner's"; return 1; } ;;
+    *) [ "$count" = "0" ] || { echo "mood=$mood: $count runner-class errors on $os, where the class does not apply"; return 1; } ;;
+  esac
+  echo "runner verdict: mood=$mood count=$count os=$os"
+}
+
+# The rooms arc does not serve but the face keeps (ADR-1327): the smoke reads them from the exemption file, never
+# from the door it judges, opens each, and prints what it opened against what the file lists. Every one opened with
+# no error, and at least the two the owner's ruling left exempt (ADR-1337: executor, agents) -- in both moods.
+extras_verdict() {
+  local out="$1" mood="$2" line expected opened errors rooms named
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  line="$(printf '%s\n' "$out" | grep "^smoke: extras mood=$mood expected=" | tail -1)"
+  # Counts carry no leading zero, and the rooms field names exactly as many rooms as were opened (company ring attack).
+  expected="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=\([1-9][0-9]*\) opened=[0-9]* errors=[0-9]* rooms=.*/\1/p")"
+  opened="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=[0-9]* opened=\([1-9][0-9]*\) errors=[0-9]* rooms=.*/\1/p")"
+  errors="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=[0-9]* opened=[0-9]* errors=\([0-9][0-9]*\) rooms=.*/\1/p")"
+  rooms="$(printf '%s\n' "$line" | sed -n "s/^smoke: extras mood=$mood expected=[0-9]* opened=[0-9]* errors=[0-9]* rooms=\([a-z][a-z0-9,-]*\)$/\1/p")"
+  named="$(printf '%s\n' "$rooms" | tr ',' '\n' | grep -c '^[a-z][a-z0-9-]*$')"
+  [ -n "$expected" ] && [ "$expected" -ge 2 ] && [ "$opened" = "$expected" ] \
+    || { echo "mood=$mood: extras opened '$opened', the exemption file lists '$expected': $line"; return 1; }
+  [ "$errors" = "0" ] || { echo "mood=$mood: an extra room logged errors: $line"; return 1; }
+  [ -n "$rooms" ] && [ "$rooms" != "none" ] && [ "$named" = "$opened" ] || { echo "mood=$mood: the rooms field names '$rooms', not the $opened rooms opened: $line"; return 1; }
+  echo "extras verdict: mood=$mood opened=$opened errors=0 rooms=$rooms"
+}
+
+# The heading verdict: the LAST heading line for the mood decides, as every other verdict's last line does, and every
+# ring's module rooms were checked with none missed -- thirty-six and up (29 served, 3 renamed, 2 extras given
+# registry rows and 2 exempt, ADR-1337). A line carrying a carriage return is refused on every OS: Git Bash's grep
+# accepted one that Linux grep rejected (company ring attack).
+heading_verdict() {
+  # Pure bash, no grep and no command substitution: Git Bash strips a carriage return in both, Linux keeps it, and
+  # the same forged line must fail on every leg (company ring attack).
+  local out="$1" mood="$2" l line="" re
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  while IFS= read -r l || [ -n "$l" ]; do
+    case "$l" in "smoke: heading mood=$mood "*) line="$l" ;; esac
+  done <<< "$out"
+  case "$line" in *$'\r'*) echo "mood=$mood: the heading line carries a carriage return"; return 1 ;; esac
+  re="^smoke: heading mood=$mood rings=command,kernel,factory,money,company checked=(3[6-9]|[4-9][0-9]|[1-9][0-9][0-9]+) miss=0\$"
+  [[ "$line" =~ $re ]] || { echo "mood=$mood: heading check missing, too few checked, or a miss: '$line'"; return 1; }
+  echo "heading verdict: mood=$mood"
+}
+
 @test "face-browser: the node floor is reported, and only Node 18 may skip" {
   run node "$ARC_ROOT/face/scripts/node-floor.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -191,13 +304,17 @@ list_distribution() {
   run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT"
   half="$(printf '%s\n' "$output" | grep '^face-coverage: module half ' | tail -1)"
   [ -n "$half" ] || { echo "face-coverage printed no module-half line (exit $status): $output"; false; }
+  # How many ops the work door's registry holds -- what the flows line is judged against (REQ-09).
+  local opsCount
+  opsCount="$(node "$ARC_ROOT/.claude/scripts/hq/face-ops.mjs" --list | grep -c '^    "id": ' || true)"
+  [ "$opsCount" -gt 0 ] || { echo "the registry listed no op"; false; }
   run node "$ARC_ROOT/face/scripts/harness-run.mjs" --face "$dst" 3>&-
   echo "$output"
   [[ "$output" == *"face-browser: RAN leg="* ]] || { echo "the harness never started (exit $status)"; false; }
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
   # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
   # 10 s -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: verbs-pending |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW )' | sed 's/^/# /' >&3 || true
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: served |smoke: verbs-pending|smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW |flows: |flow: |sessions: )' | sed 's/^/# /' >&3 || true
   # Both moods are judged, each from its own line, before the exit status is trusted: a harness
   # that ran only dark must not pass on dark's line (ADR-1331).
   local mood verdicts=0
@@ -214,17 +331,34 @@ list_distribution() {
     # cannot see a panel deleted in one room and duplicated in another -- the Phase 03 attacker shipped
     # exactly that mutant past a sum -- so the room:count distribution is what is compared, in both
     # directions, against the lists module-frame holds equal to the folds.
-    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-03" "not-served-*.md" > "$BATS_TEST_TMPDIR/ns-expected"
-    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-03" "verbs-pending-*.md" > "$BATS_TEST_TMPDIR/vp-expected"
+    # Phase 04 (REQ-06): the NOT SERVED panels are the RESIDUE -- which may be empty -- and the panels a door route
+    # now fills are a list of their own; both are held equal to the folds by module-frame, and to the page here.
+    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-04" "residue.md" > "$BATS_TEST_TMPDIR/ns-expected"
+    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-04" "served.md" > "$BATS_TEST_TMPDIR/sv-expected"
+    # Phase 05 (ADR-1339): Phase 03's cards minus the ones a work-door op retired -- the one list module-frame holds
+    # equal to the folds AND to Phase 03's rows minus the registry's retirements.
+    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-05" "verbs-pending.md" > "$BATS_TEST_TMPDIR/vp-expected"
     local nsPanels nsRooms nsExpected nsRoomsExpected vpCards vpRooms vpExpected vpRoomsExpected
     nsPanels="$(printf '%s\n' "$output" | grep "^smoke: not-served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: not-served mood=$mood panels=\([0-9][0-9]*\) rooms=.*/\1/p")"
     nsRooms="$(printf '%s\n' "$output" | grep "^smoke: not-served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: not-served mood=$mood panels=[0-9]* rooms=\(.*\)\$/\1/p")"
     nsExpected="$(head -1 "$BATS_TEST_TMPDIR/ns-expected")"
     nsRoomsExpected="$(tail -1 "$BATS_TEST_TMPDIR/ns-expected")"
-    [ -n "$nsPanels" ] && [ "$nsExpected" -gt 0 ] && [ "$nsPanels" = "$nsExpected" ] \
-      || { echo "mood=$mood: the browser drew '$nsPanels' NOT SERVED panels, the shipped rings' lists name $nsExpected"; false; }
+    # The residue may be 0, so its floor is gone -- the served count below carries the vacuous-pass guard instead.
+    [ -n "$nsPanels" ] && [ -n "$nsExpected" ] && [ "$nsPanels" = "$nsExpected" ] \
+      || { echo "mood=$mood: the browser drew '$nsPanels' NOT SERVED panels, the residue list names $nsExpected"; false; }
     [ "$nsRooms" = "$nsRoomsExpected" ] \
-      || { echo "mood=$mood: NOT SERVED panels per room read '$nsRooms', the lists name '$nsRoomsExpected'"; false; }
+      || { echo "mood=$mood: NOT SERVED panels per room read '$nsRooms', the residue list names '$nsRoomsExpected'"; false; }
+    printf '%s\n' "$output" | grep -qE "^smoke: served mood=$mood panels=[0-9]+ rooms=[a-z0-9:,-]+\$" \
+      || { echo "no served line for mood=$mood (harness exit $status)"; false; }
+    local svPanels svRooms svExpected svRoomsExpected
+    svPanels="$(printf '%s\n' "$output" | grep "^smoke: served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: served mood=$mood panels=\([0-9][0-9]*\) rooms=.*/\1/p")"
+    svRooms="$(printf '%s\n' "$output" | grep "^smoke: served mood=$mood panels=" | tail -1 | sed -n "s/^smoke: served mood=$mood panels=[0-9]* rooms=\(.*\)\$/\1/p")"
+    svExpected="$(head -1 "$BATS_TEST_TMPDIR/sv-expected")"
+    svRoomsExpected="$(tail -1 "$BATS_TEST_TMPDIR/sv-expected")"
+    [ -n "$svPanels" ] && [ "$svExpected" -gt 0 ] && [ "$svPanels" = "$svExpected" ] \
+      || { echo "mood=$mood: the browser drew '$svPanels' served panels, the served list names $svExpected"; false; }
+    [ "$svRooms" = "$svRoomsExpected" ] \
+      || { echo "mood=$mood: served panels per room read '$svRooms', the served list names '$svRoomsExpected'"; false; }
     vpCards="$(printf '%s\n' "$output" | grep "^smoke: verbs-pending mood=$mood cards=" | tail -1 | sed -n "s/^smoke: verbs-pending mood=$mood cards=\([0-9][0-9]*\) rooms=.*/\1/p")"
     vpRooms="$(printf '%s\n' "$output" | grep "^smoke: verbs-pending mood=$mood cards=" | tail -1 | sed -n "s/^smoke: verbs-pending mood=$mood cards=[0-9]* rooms=\(.*\)\$/\1/p")"
     vpExpected="$(head -1 "$BATS_TEST_TMPDIR/vp-expected")"
@@ -233,14 +367,122 @@ list_distribution() {
       || { echo "mood=$mood: the browser drew '$vpCards' verb-pending cards, the shipped rings' lists name $vpExpected"; false; }
     [ "$vpRooms" = "$vpRoomsExpected" ] \
       || { echo "mood=$mood: verb-pending cards per room read '$vpRooms', the lists name '$vpRoomsExpected'"; false; }
-    # The shipped rings' module rooms open with the contract's frozen sentence as their heading: at least the
-    # six command and eight kernel modules were checked and none missed (a blank room is not an opened one).
-    printf '%s\n' "$output" | grep -qE "^smoke: heading mood=$mood rings=command,kernel,factory checked=(19|[2-9][0-9]|[1-9][0-9][0-9]+) miss=0\$" \
-      || { echo "heading check missing, too few checked, or a miss for mood=$mood (harness exit $status)"; false; }
+    rehearsal_verdict "$output" "$mood" "$ARC_ROOT/initiatives/face/evidence/phase-03" || { echo "(harness exit $status)"; false; }
+    planned_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
+    runner_verdict "$output" "$mood" "$(uname -s)" || { echo "(harness exit $status)"; false; }
+    extras_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
+    # Every ring has shipped, so every module room opens with the contract's frozen sentence as its heading -- an
+    # exempted extra with its exemption row's -- and none missed (a blank room is not an opened one).
+    heading_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done
   [ "$verdicts" -eq 2 ] || { echo "judged $verdicts of 2 moods"; false; }
+  flows_verdict "$output" "$opsCount" || { echo "(harness exit $status)"; false; }
+  sessions_verdict "$output" || { echo "(harness exit $status)"; false; }
   [ "$status" -eq 0 ]
+}
+
+@test "face-browser: MUTANT CONTROL -- the sessions verdict refuses a start with no click, a dead counter and a short run" {
+  run sessions_verdict "sessions: ok rooms=8 reloads=8 attach=ok starts=0 control=1"
+  [ "$status" -eq 0 ] || { echo "the sessions verdict refused the clean line: $output"; false; }
+  run sessions_verdict "sessions: ok rooms=8 reloads=8 attach=ok starts=1 control=1"
+  [ "$status" -ne 0 ] || { echo "a start with no click passed: $output"; false; }
+  run sessions_verdict "sessions: ok rooms=8 reloads=8 attach=ok starts=0 control=0"
+  [ "$status" -ne 0 ] || { echo "a counter one click could not move passed: $output"; false; }
+  run sessions_verdict "sessions: ok rooms=8 reloads=7 attach=ok starts=0 control=1"
+  [ "$status" -ne 0 ] || { echo "a room left unreloaded passed: $output"; false; }
+  run sessions_verdict "sessions: ok rooms=3 reloads=3 attach=ok starts=0 control=1"
+  [ "$status" -ne 0 ] || { echo "a run over too few rooms passed: $output"; false; }
+  run sessions_verdict "sessions: FAIL rooms=8 reloads=8 attach=FAIL starts=-1 control=-1"
+  [ "$status" -ne 0 ] || { echo "a failed flow passed: $output"; false; }
+  run sessions_verdict ""
+  [ "$status" -ne 0 ] || { echo "no line at all passed: $output"; false; }
+}
+
+@test "face-browser: MUTANT CONTROL -- the flows verdict refuses a short, failed, slow or erroring run" {
+  run flows_verdict "flows: ops=6 ok=6 fail=0 live=ok live-ms=2300 page-errors=0" 6
+  [ "$status" -eq 0 ] || { echo "the flows verdict refused the clean line: $output"; false; }
+  run flows_verdict "flows: ops=5 ok=5 fail=0 live=ok live-ms=2300 page-errors=0" 6
+  [ "$status" -ne 0 ] || { echo "a run that drove fewer ops than the registry holds passed: $output"; false; }
+  run flows_verdict "flows: ops=6 ok=5 fail=1 live=ok live-ms=2300 page-errors=0" 6
+  [ "$status" -ne 0 ] || { echo "a failed op passed: $output"; false; }
+  run flows_verdict "flows: ops=6 ok=6 fail=0 live=FAIL live-ms=none page-errors=0" 6
+  [ "$status" -ne 0 ] || { echo "a live flow that never saw the change passed: $output"; false; }
+  run flows_verdict "flows: ops=6 ok=6 fail=0 live=ok live-ms=7200 page-errors=0" 6
+  [ "$status" -ne 0 ] || { echo "a live change seen past 5 s passed: $output"; false; }
+  run flows_verdict "flows: ops=6 ok=6 fail=0 live=ok live-ms=2300 page-errors=2" 6
+  [ "$status" -ne 0 ] || { echo "a run with page errors passed: $output"; false; }
+  run flows_verdict "" 6
+  [ "$status" -ne 0 ] || { echo "no line at all passed: $output"; false; }
+  run flows_verdict "flows: ops=0 ok=0 fail=0 live=ok live-ms=2300 page-errors=0" 0
+  [ "$status" -ne 0 ] || { echo "a registry with no op passed: $output"; false; }
+}
+
+@test "face-browser: MUTANT CONTROL -- the rehearsal, planned and runner verdicts refuse what they must" {
+  # Each verdict fed forged smoke lines, with no Chrome and no build: the line the real run would print passes, and
+  # every mutant of it the money ring's attacker named fails (face v2 Phase 03).
+  local dir="$BATS_TEST_TMPDIR/lists"
+  mkdir -p "$dir"
+  printf '%s\n' '| `ops` | a | b |' '| `ops` | c | d |' '| `trader` | e | f |' > "$dir/rehearsal-money.md"
+  run rehearsal_verdict "smoke: rehearsal mood=dark cards=3 rooms=ops:2,trader:1" dark "$dir"
+  [ "$status" -eq 0 ] || { echo "the rehearsal verdict refused the clean line: $output"; false; }
+  run rehearsal_verdict "smoke: rehearsal mood=dark cards=3 rooms=ops:1,trader:2" dark "$dir"
+  [ "$status" -ne 0 ] || { echo "a card moved between rooms passed: $output"; false; }
+  run rehearsal_verdict "smoke: rehearsal mood=dark cards=unread rooms=none" dark "$dir"
+  [ "$status" -ne 0 ] || { echo "an unread count passed: $output"; false; }
+  run rehearsal_verdict "" dark "$dir"
+  [ "$status" -ne 0 ] || { echo "no line at all passed: $output"; false; }
+  run planned_verdict "smoke: planned mood=dark rooms=4 expected=4 live=0 planned-rooms=chat-mcp,discover,ops,trader" dark
+  [ "$status" -eq 0 ] || { echo "the planned verdict refused the clean line: $output"; false; }
+  run planned_verdict "smoke: planned mood=dark rooms=3 expected=4 live=0 planned-rooms=discover,ops,trader" dark
+  [ "$status" -ne 0 ] || { echo "a planned room that lost its mark passed: $output"; false; }
+  run planned_verdict "smoke: planned mood=dark rooms=4 expected=4 live=1 planned-rooms=chat-mcp,discover,ops,trader" dark
+  [ "$status" -ne 0 ] || { echo "a LIVE pill on a planned room passed: $output"; false; }
+  run planned_verdict "smoke: planned mood=dark rooms=unread expected=4 live=0 planned-rooms=none" dark
+  [ "$status" -ne 0 ] || { echo "an unread planned count passed: $output"; false; }
+  run planned_verdict "smoke: planned mood=dark rooms=2 expected=2 live=0 planned-rooms=ops,trader" dark
+  [ "$status" -ne 0 ] || { echo "a contract naming fewer than three planned rooms passed: $output"; false; }
+  run runner_verdict "smoke: runner-errors mood=dark count=0 rooms=none" dark Linux
+  [ "$status" -eq 0 ] || { echo "the runner verdict refused a clean linux line: $output"; false; }
+  run runner_verdict "smoke: runner-errors mood=dark count=1 rooms=engine-room:1" dark Linux
+  [ "$status" -ne 0 ] || { echo "a runner-class error on linux passed: $output"; false; }
+  run runner_verdict "smoke: runner-errors mood=dark count=2 rooms=engine-room:2" dark MINGW64_NT-10.0
+  [ "$status" -eq 0 ] || { echo "the runner verdict refused two on windows: $output"; false; }
+  run runner_verdict "smoke: runner-errors mood=dark count=3 rooms=engine-room:3" dark MINGW64_NT-10.0
+  [ "$status" -ne 0 ] || { echo "three runner-class errors on windows passed: $output"; false; }
+  run runner_verdict "smoke: runner-errors mood=dark count=unread rooms=none" dark Linux
+  [ "$status" -ne 0 ] || { echo "an unread runner count passed: $output"; false; }
+  run runner_verdict "" dark Linux
+  [ "$status" -ne 0 ] || { echo "no runner line at all passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=2 opened=2 errors=0 rooms=agents,executor" dark
+  [ "$status" -eq 0 ] || { echo "the real extras line failed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=2 opened=1 errors=0 rooms=agents" dark
+  [ "$status" -ne 0 ] || { echo "an extra left unopened passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=2 opened=2 errors=1 rooms=agents,executor" dark
+  [ "$status" -ne 0 ] || { echo "an extra that logged an error passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=0 opened=0 errors=0 rooms=none" dark
+  [ "$status" -ne 0 ] || { echo "an exemption file listing nothing passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=light expected=2 opened=2 errors=0 rooms=agents,executor" dark
+  [ "$status" -ne 0 ] || { echo "the other mood's line passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=2 opened=2 errors=0 rooms=none" dark
+  [ "$status" -ne 0 ] || { echo "a rooms field naming none passed: $output"; false; }
+  run extras_verdict "smoke: extras mood=dark expected=02 opened=02 errors=0 rooms=agents,executor" dark
+  [ "$status" -ne 0 ] || { echo "zero-padded counts passed: $output"; false; }
+  local head="smoke: heading mood=dark rings=command,kernel,factory,money,company checked=36 miss=0"
+  run heading_verdict "$head" dark
+  [ "$status" -eq 0 ] || { echo "the real heading line failed: $output"; false; }
+  run heading_verdict "${head/checked=36/checked=35}" dark
+  [ "$status" -ne 0 ] || { echo "35 headings checked passed a floor of 36: $output"; false; }
+  run heading_verdict "${head/miss=0/miss=1}" dark
+  [ "$status" -ne 0 ] || { echo "a heading miss passed: $output"; false; }
+  run heading_verdict "$(printf '%s\n%s' "$head" "${head/miss=0/miss=1}")" dark
+  [ "$status" -ne 0 ] || { echo "a clean line followed by a miss passed: the last line must decide: $output"; false; }
+  run heading_verdict "$head"$'\r' dark
+  [ "$status" -ne 0 ] || { echo "a heading line carrying a carriage return passed: $output"; false; }
+  run heading_verdict "${head/mood=dark/mood=light}" dark
+  [ "$status" -ne 0 ] || { echo "the other mood's heading line passed: $output"; false; }
+  run heading_verdict "${head/,company/}" dark
+  [ "$status" -ne 0 ] || { echo "a heading line naming four rings passed: $output"; false; }
 }
 
 @test "face-browser: MUTANT CONTROL -- the render verdict FAILS a shell that drew every room generic" {
@@ -327,5 +569,5 @@ list_distribution() {
   local declared
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared declared"; false; }
-  [ "$declared" -eq 10 ] || { echo "expected 10 @test lines, found $declared -- update this floor with the file"; false; }
+  [ "$declared" -eq 13 ] || { echo "expected 13 @test lines, found $declared -- update this floor with the file"; false; }
 }

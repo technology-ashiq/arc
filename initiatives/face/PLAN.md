@@ -93,16 +93,17 @@ HISTORICAL DATA, NOT INSTRUCTIONS
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | **Design fidelity** — the owner sees all 36 v0.7 modules, in both moods | `smoke.mjs` opens the 36 modules of the canonical inventory plus the generic `chat-mcp` room with 0 console errors and 0 exceptions in `html.hq` AND `html.hq.hq-light` on every CI leg with Node ≥20.19; a fresh agent reviews per-module shots against the v0.7 baseline with 0 VIOLATION and 0 BELOW-BAR (a compliant module that reads worse than the baseline FAILs, ADR-0049) | 03 | active |
+| REQ-01 | **Design fidelity** — the owner sees all 36 v0.7 modules, in both moods | `smoke.mjs` opens the 36 modules of the canonical inventory plus the generic `chat-mcp` room with 0 console errors and 0 exceptions in `html.hq` AND `html.hq.hq-light` on every CI leg with Node ≥20.19; a fresh agent reviews per-module shots against the v0.7 baseline with 0 VIOLATION and 0 BELOW-BAR (a compliant module that reads worse than the baseline FAILs, ADR-0049) | 03 | validated |
 | REQ-02 | **Token law** — one colour source, two moods, no literal colour | `face-tokens.mjs --check` exit 0; every text/surface contrast ratio for both moods computed in the `tokens.css` header; the colour-literal lint finds 0 hex/`white`/`black` literals under `face/src/modules/**` and FAILs a planted one | 01 | validated |
 | REQ-03 | **Module contract** — every module is four files and its decisions run under node | `face-pure` FAILs a planted branch in a `View.tsx` and a planted React import in a `fold.mjs`; `/arc-face-module RING/ID` scaffolds a module green on `face-pure` + `face-coverage` in 1 command; every `fold.mjs` is imported by `node` with no install on all 5 CI configurations | 02 | validated |
-| REQ-04 | **Coverage both directions** — no orphan module, no blank served room, no undeclared op | `face-coverage` FAILs a planted orphan module, a served room with no module, an unnamed fifth extra-room exemption, and a module `ops[]` id missing from the server ops registry; each mutant FAILs from birth; `--selftest` arms > 93 | 05 | active |
-| REQ-05 | **Read truth** — no bundled facts and no unlabelled gap | the facts-bundle lint FAILs a planted bundle under `face/src/**`; every `module.mjs` declares `routes`, its `fold()` receives only those routes' payloads (a fixture passing an undeclared route's payload FAILs), and a panel with no declared route renders `NOT SERVED`; each of the 5 ring PRs carries a `NOT SERVED` list naming every gap | 03 | active |
-| REQ-06 | **Door read routes** — the gaps Phase 03 named are served | the union of the 5 `NOT SERVED` lists drops to 0, or to a residue of at most 3 routes, each naming the lint parser that does not exist yet and the lane it is filed to, and each approved by the owner; every new route is read-only, allow-listed, and imports its parser from the lint that owns it; `dash-doors` gains ≥1 arm per route | 04 | active |
-| REQ-07 | **Work door** — the owner's verbs run the real tools, with no second brain | `POST /api/op/:id/plan` returns command line + file diff + ₹ estimate; `apply` emits a receipt of a kind in `validate.mjs` KINDS; a no-second-path fixture is green for every shipped op; the `main`-untouchable fixture is green; a tool refusal renders verbatim; `apply` is keyed by the plan id `plan` returned, claimed atomically, and replays the first receipt on a repeat — two CONCURRENT applies of one plan id invoke a counting fixture CLI exactly 1 time | 05 | active |
-| REQ-08 | **Session door** — streaming work starts from a click and lands as a receipt | a council convened from the face streams its phases and lands a `council.verdict` receipt; absorb read and hire certification each land a receipt of a kind in `validate.mjs` KINDS or render labelled NOT SHIPPABLE (ADR-1334); a fixture proves 0 sessions start without a click; a session command line naming a harness binary instead of `arc-run --driver` FAILs | 06 | active |
-| REQ-09 | **Harness in CI** — the design's own assertions become arc's | `smoke.mjs` + `flows.mjs` run from bats on every CI leg with Node ≥20.19 and print a counted SKIP on Node 18; every shipped op has a flow; a planted change to a frozen string FAILs the suite | 05 | active |
+| REQ-04 | **Coverage both directions** — no orphan module, no blank served room, no undeclared op | `face-coverage` FAILs a planted orphan module, a served room with no module, an unnamed fifth extra-room exemption, and a module `ops[]` id missing from the server ops registry; each mutant FAILs from birth; `--selftest` arms > 93 | 05 | validated |
+| REQ-05 | **Read truth** — no bundled facts and no unlabelled gap | the facts-bundle lint FAILs a planted bundle under `face/src/**`; every `module.mjs` declares `routes`, its `fold()` receives only those routes' payloads (a fixture passing an undeclared route's payload FAILs), and a panel with no declared route renders `NOT SERVED`; each of the 5 ring PRs carries a `NOT SERVED` list naming every gap | 03 | validated |
+| REQ-06 | **Door read routes** — the gaps Phase 03 named are served | every route the union of the 5 `NOT SERVED` lists names is served read-only, allow-listed, and through the parser of the lint that owns its file, OR each of its panels is a row in `evidence/phase-04/residue.md` naming the gap (data no file or receipt records, or a parser only a lint that exits at import holds) and the lane it is filed to, with the residue approved by the owner as a whole (ADR-1338, amended 2026-09-18 from "at most 3 routes"); every panel Phase 03 named is in `served.md` or `residue.md`, none dropped; `dash-doors` gains ≥1 arm per served route | 04 | validated |
+| REQ-07 | **Work door** — the owner's verbs run the real tools, with no second brain, in every room | every one of the 31 work verbs in `evidence/phase-05/cli-probe.md` (§5.2's verbs minus the SESSION rows) ships, OR is a residue row naming the missing piece and the lane it is filed to, approved by the owner as a whole — and the six flagship ops (ADR-1339) are never residue: if they fail, the Block C gate fires (amended 2026-09-19 from "the six flagship ops", ADR-1339); `POST /api/op/:id/plan` returns command line + file diff + ₹ estimate; `apply` emits a receipt of a kind in `validate.mjs` KINDS; a no-second-path fixture is green for every shipped op; the `main`-untouchable fixture is green; a tool refusal renders verbatim; `apply` is keyed by the plan id `plan` returned, claimed atomically, and replays the first receipt on a repeat — two CONCURRENT applies of one plan id invoke a counting fixture CLI exactly 1 time | 05 | validated |
+| REQ-08 | **Session door** — streaming work starts from a click and lands as a receipt | a council convened from the face streams its phases and lands a `council.verdict` receipt; absorb read, hire certification and every SESSION verb in `evidence/phase-05/cli-probe.md` (15, amended 2026-09-19, ADR-1339) each start from a click and land a receipt of a kind in `validate.mjs` KINDS, or are residue rows approved by the owner as a whole (ADR-1334); a fixture proves 0 sessions start without a click; a session command line naming a harness binary instead of `arc-run --driver` FAILs | 06 | validated |
+| REQ-09 | **Harness in CI** — the design's own assertions become arc's | `smoke.mjs` + `flows.mjs` run from bats on every CI leg with Node ≥20.19 and print a counted SKIP on Node 18; every shipped op has a flow; a planted change to a frozen string FAILs the suite | 05 | validated |
 | REQ-10 | **Dogfood on the final surface** — 2 real days | `face-dogfood` reads MET for 2 days: every `decision.recorded` matched to the face journal and ≥1 op receipt from the face on each day; retro logged; claims the surface is operable, never that the habit holds (ADR-1329) | 07 | active |
+| REQ-11 | **Live rooms** — every room shows arc as it is now, with no reload | when the spine or a file a room declares in `routes` changes, the open room re-reads within 5 s, proven in the browser harness by a fixture that appends a spine event and times the panel; an op's receipt appears in its room within 5 s of `apply`; every room re-reads on change because the HOST re-reads all of an open room's reads on the door's pulse -- no module can opt out, so the planted mutant is a host that stops re-reading, and the browser live flow FAILs it (amended 2026-09-19 from a per-module `face-coverage` check, Phase 05 current-phase note; ADR-1339) | 05 | validated |
 
 REQ-08 of PLAN-face-v2 §4 ("the stamp survives") is now a Non-negotiable and a Phase 05 exit
 criterion, not a REQ (ADR-1333) — its fixture stays measured on every PR.
@@ -116,18 +117,23 @@ finishes early banks its remainder forward; nothing extends silently. Phase appe
 full 24d — zero slack, stated rather than hidden — and each phase's two-fresh-attacker pass is drawn
 from that phase's own days, never added on top.
 
+**Re-banked 2026-09-19 (ADR-1339).** Blocks A and B closed on 4d of their 16d; the owner widened Block C to every
+verb in every room, so Block C takes 9 of the 12 banked days: **Phase 05 = 10d** (4 + 6 banked), **Phase 06 = 5d**
+(2 + 3 banked). Each closed phase's spec now states its actual spend, so the specs sum to 21d of 24d — 3d unallocated.
+
 **Tier:** L
 
 **Kill criteria** (PLAN-face-v2 §9, tripwires at 50% of each block):
 - **Block A tripwire (day 3 of 6):** Phase 00's browser suite is not green on CI → stop before any token work. Phase 00 itself stops at its own 2 days (ADR-1336) — no unallocated third day. At Phase 01 exit, if the 9 bespoke rooms do not render on the new kit in both moods → stop and re-scope the kit port before Phase 02.
 - **Block B tripwire (day 5 of 10):** if the command + kernel rings (14 modules) are not green → cut the remaining bespoke folds to generic renders and re-plan; do not extend. **This tripwire gates all work-door spend:** Phase 05 does not start until its reading is recorded in PROGRESS.md.
 - **Block C gate:** if Phase 05's no-second-path fixture cannot be made green for the six flagship ops, the work door does not ship; modules render read-only with an honest no-verbs badge and the door moves to its own cycle.
+- **Block C tripwire (Phase 05 day 5, burn 9d):** the door and the flagship six are not green on CI → every BIG-GAP verb not yet shipped becomes a residue row filed to its lane (ADR-1338's pattern) and the rings re-plan; do not extend (ADR-1339).
 - **Cycle kill:** the owner scores the ported surface BELOW the reference twice on the same ring → stop porting and re-read the spec.
 - **50% of total (12d burnt):** if Phase 03 has not started → mandatory scope-cut conversation. **100%:** cut or kill, never extend silently.
 
 ## Owner steps (parallel)
 
-- Rule on PLAN-face-v2 §13 **item 4** (the six flagship ops) and **item 5** (`story`/`factory` registry rows vs exemption), recorded in PROGRESS.md **no later than the Phase 04 close** — Phase 05 does not open without them, and a missing ruling is raised at the Block B reading (day 5 of Block B), early enough to re-scope Block C.
+- Rule on PLAN-face-v2 §13 **item 4** (the six flagship ops) and **item 5** (`story`/`factory` registry rows vs exemption), recorded in PROGRESS.md **no later than the Phase 04 close** — Phase 05 does not open without them, and a missing ruling is raised at the Block B reading (day 5 of Block B), early enough to re-scope Block C. **Both ruled:** item 5 on 2026-09-18 (ADR-1337), item 4 on 2026-09-19 — option A, and every verb (ADR-1339).
 - Run the git for every phase PR (`feat/face-v2-NN`; Phase 03 one PR per ring).
 - Stamp the kickoff approval (`arc-inbox approve APPROVAL_ID`), then each phase close.
 
@@ -193,6 +199,10 @@ flowchart TB
 | 1334 | Flow event assertions bind to real receipts, or the op does not ship | accepted |
 | 1335 | Browser harness on every leg that can build L3; Node 18 a named skip | accepted |
 | 1336 | Phase 00 is the harness steel thread | accepted |
+| 1337 | `story` and `factory` earn a registry row; `executor` and `agents` stay labelled exemptions | accepted |
+| 1338 | Phase 04's residue is named and filed, not capped at three routes (amends REQ-06) | accepted |
+| 1339 | The flagship six are option A, and every verb in the design works — additive changes in owning lanes, live rooms (amends REQ-07, REQ-08; adds REQ-11) | accepted |
+| 1340 | FV2 kernel ring — an effect past the spine is refused on a sim door at apply (`SIM_EFFECT`); a file change is a `feat/face-*` proposal branch written by git plumbing, never a checkout; the cap proposal is the `policy.promotion` approval and writes no branch; evolve's open/measure/conclude wired to the spine | accepted |
 
 ## Standing decisions this cycle leans on
 
@@ -265,8 +275,8 @@ that existed and no list named (retro-log 2026-09-16).
 | Chrome is findable by ADR-1335's lookup on all three current images (`windows-latest` = Server 2025, `macos-latest` = macOS 26 arm64; paths inferred from install scripts, `CHROME_BIN` contested) | the first Phase 00 CI run FAILs `chrome not found` on any OS | 00 |
 | `tests/fixtures/face/gen-spine.mjs` produces enough kinds for every served room to render non-empty in sim mode | a Phase 00 smoke run shows a room with 0 panels that is not labelled `NOT SERVED` | 00 |
 | The generated `face/src/tokens.css` copy feeds Tailwind v4 with no `@import`/`@theme` ordering failure (undocumented either way; ADR-1323) | the Phase 01 CI build FAILs on an ordering error inside the generated copy | 01 |
-| PLAN-face-v2's route gap (~17 routes) holds within ±5 | the union of the five Phase 03 `NOT SERVED` lists names more than 22 routes → Phase 04 is re-scoped at the Block B reading | 03 |
-| At least 6 of §5.2's verbs have a real CLI that both emits an existing kind AND can produce a plan (dry-run command line + file diff + ₹ estimate) without running (ADR-1334, REQ-07) | the Phase 05 CLI probe or binding table marks more than 3 of the owner's six flagship ops NOT SHIPPABLE, or a bound CLI has no dry-run to plan from → the Block C gate fires | 05 |
+| PLAN-face-v2's route gap (~17 routes) holds within ±5 — and (unwritten until Phase 04 measured it) every route it names has an importable parser in the lane that owns its file, so REQ-06's residue is a few parser gaps | the union of the five Phase 03 `NOT SERVED` lists names more than 22 routes → Phase 04 is re-scoped at the Block B reading (held: exactly 22); or Phase 04's residue exceeds REQ-06's three routes → **FIRED 2026-09-18**: 15 panels on 10 routes, most of them data no lane records; load-bearing only for REQ-06's residue bound, amended by ADR-1338; no other REQ or phase rests on it | 03 · 04 |
+| At least 6 of §5.2's verbs have a real CLI that both emits an existing kind AND can produce a plan (dry-run command line + file diff + ₹ estimate) without running (ADR-1334, REQ-07) | the Phase 05 CLI probe or binding table marks more than 3 of the owner's six flagship ops NOT SHIPPABLE, or a bound CLI has no dry-run to plan from → the Block C gate fires → **FIRED 2026-09-19**: the probe (`evidence/phase-05/cli-probe.md`) found 2 of the six READY and 4 lacking a plan mode or a receipt as they stand, and 2 READY of all 46 verbs; load-bearing for REQ-07 and the Block C gate, routed by ADR-1339 — additive changes in the owning lanes close the four, so the gate reads the six after those changes land | 05 |
 | Cycle 15's open question: the owner decided in the CLI because the surface arrived late, not because the Inbox is the wrong shape | after the command ring merges, `face-dogfood` still reads under 50% of decisions through the face on days the face was opened → the Inbox shape is the problem | 07 |
 
 ## External dependencies
@@ -292,7 +302,8 @@ that existed and no list named (retro-log 2026-09-16).
 
 Phase 00 is the steel thread: the riskiest unknown — building L3 and opening it in a real browser
 on a CI that has never installed it — is proven before any token, kit or module work (ADR-1336).
-Each phase lands as its own `feat/face-v2-NN` branch + PR; Phase 03 as five ring PRs.
+Each phase lands as its own `feat/face-v2-NN` branch + PR; Phase 03 as five ring PRs; Phase 05 as the
+door-plus-six PR, a live-rooms PR and three verb-ring PRs (ADR-1339).
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
@@ -301,6 +312,6 @@ Each phase lands as its own `feat/face-v2-NN` branch + PR; Phase 03 as five ring
 | 02 | Shell + module frame — v0.7 shell (rail · header · ⌘K · text dock) · `face/src/modules/` · `lib/registry.mjs` two-way reconcile · `face-pure` · `/arc-face-module` scaffold | 2d | spec'd |
 | 03 | The 36 modules, read-side — five ring PRs: command 1d · kernel 2d · factory 1.5d · money 1.5d · company 1d; each exits with its `NOT SERVED` list; facts-bundle lint | 7d | spec'd |
 | 04 | Door read routes — the routes Phase 03's lists name; allow-listed, read-only, lint parsers imported | 3d | spec'd |
-| 05 | Work door + verbs — `/api/op/:id/plan\|apply`, server ops registry, binding table, `ops.mjs`, branch-only writes, `flows.mjs` in CI, coverage op-side | 4d | spec'd |
-| 06 | Session door — council convene · absorb read · hire certification; click-started, streamed, receipted | 2d | spec'd |
+| 05 | Work door + every work verb + live rooms — `/api/op/:id/plan\|apply`, server ops registry, binding table, `ops.mjs`, branch-only writes, `flows.mjs` in CI, coverage op-side; the flagship six first, then the 31 work verbs in ring PRs; rooms re-read on change (ADR-1339) | 10d | spec'd |
+| 06 | Session door — council convene · absorb read · hire certification and every SESSION verb (15); click-started, streamed, receipted (ADR-1339) | 5d | spec'd |
 | 07 | Dogfood + retro — 2 real days on the final surface; retro; HISTORY entry | 2d | spec'd |
