@@ -82,6 +82,8 @@ load 'test_helper'
   [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok the write left HEAD, the index, the working tree and main as they were"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok refused: hq.policy.yaml, even when the caller allows it -> UNGRANTABLE"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok object-write retry: two lost races then a win"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok object-write retry: a full disk is NOT the race"* ]] || { echo "$output"; false; }
 }
 
 @test "kernel ring: the owning-lane tools -- jobs flags, engine proposals, policy promotion, evolve to a verdict, SIM_EFFECT" {
