@@ -45,7 +45,7 @@
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
-import { appendFileSync, existsSync, linkSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -58,7 +58,9 @@ const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 // Pass the grammar and still break mkdir on the Windows leg (lanes.md, same list).
 const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
-const IMAGE_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/avif": "avif", "image/gif": "gif" };
+// "image/jpg" is non-standard, and real CDNs send it (nicelydone, Phase 02 real build); the magic
+// bytes below still decide whether the body IS a jpeg.
+const IMAGE_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/avif": "avif", "image/gif": "gif" };
 const MAX_HOPS = 3;
 const SEAMS = ["--registry", "--robots-file", "--robots-status", "--fixture"];
 
@@ -68,7 +70,7 @@ function fail(code, msg) {
 }
 
 function parseArgs(argv) {
-  const known = new Set(["--brief", "--source", "--url", "--principle", "--avoid", "--stage", ...SEAMS]);
+  const known = new Set(["--brief", "--source", "--url", "--principle", "--avoid", "--stage", "--staged", ...SEAMS]);
   const opts = {};
   for (let i = 0; i < argv.length; i += 2) {
     const k = argv[i];
@@ -235,6 +237,10 @@ async function main(argv) {
   if (o["--stage"] != null && o["--stage"] !== "1") fail(1, "--stage takes 1");
   const stage = o["--stage"] === "1";
   if (stage && (o["--principle"] != null || o["--avoid"] != null)) fail(1, "a call is a --stage OR an add: a staged screen carries no principle yet");
+  // --staged <16 hex>: the add is bound to the bytes the curator looked at. A host that serves
+  // one image to the stage and another to the add is refused, not recorded under a principle
+  // written about the first (staging attack, B8).
+  if (o["--staged"] != null && (stage || !/^[0-9a-f]{16}$/.test(o["--staged"]))) fail(1, "--staged takes the 16-hex sha prefix a --stage printed, on an add only");
   const id = o["--source"];
   if (!validId(brief)) fail(1, `--brief must match ${ID} and not be a reserved device name, got '${field(brief)}'`);
   if (!validId(id)) fail(1, `--source must match ${ID} and not be a reserved device name, got '${field(id)}'`);
@@ -352,9 +358,17 @@ async function main(argv) {
     const staged = join(stagedDir, `${id}-${sha.slice(0, 16)}.${ext}`);
     if (!resolve(staged).startsWith(resolve(stagedDir) + sep)) fail(1, `refused: the staged path left the staging directory: ${staged}`);
     mkdirSync(stagedDir, { recursive: true });
-    writeFileSync(staged, res.body);
-    console.log(`staged: ${relative(ROOT, staged).split("\\").join("/")} (sha256 ${sha}) -- Read it, then add it with --principle and --avoid`);
+    // Whole or not at all: a private temp name, then a rename, so a reader never opens a
+    // half-written file under a name that promises its sha (staging attack, B9).
+    const tmp = `${staged}.${process.pid}.${Date.now()}.tmp`;
+    writeFileSync(tmp, res.body);
+    try { renameSync(tmp, staged); } catch (e) { try { unlinkSync(tmp); } catch { /* gone */ } fail(5, `the screen could not be staged: ${field(e.message)}`); }
+    console.log(`staged: ${relative(ROOT, staged).split("\\").join("/")} (sha256 ${sha}) -- Read it, then add it with --principle, --avoid and --staged ${sha.slice(0, 16)}`);
     process.exit(0);
+  }
+  if (o["--staged"] != null && sha.slice(0, 16) !== o["--staged"]) {
+    record(current, "FETCH-FAILED", "the screen changed since it was staged");
+    fail(5, `refused: the screen fetched now (sha ${sha.slice(0, 16)}) is not the one staged (${o["--staged"]}); stage it again and look again`);
   }
   const image = join(stateDir, `${id}-${sha.slice(0, 16)}.${ext}`);
   if (!resolve(image).startsWith(resolve(stateDir) + sep)) fail(1, `refused: the image path left the pack directory: ${image}`);

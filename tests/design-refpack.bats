@@ -396,3 +396,37 @@ Disallow: /')"
       --principle "p" --avoid "a" --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
   [ "$status" -eq 1 ] || { echo "--stage with a principle was accepted: $status $output"; false; }
 }
+
+@test "refpack --staged: an add is bound to the bytes that were staged (staging attack B8)" {
+  _pack_sandbox
+  rf="$(_robots_file 'User-agent: *
+Allow: /')"
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --stage 1 \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 0 ] || { echo "stage failed: $output"; false; }
+  local pre; pre="$(printf '%s' "$output" | sed -n 's/.*--staged \([0-9a-f]\{16\}\).*/\1/p')"
+  [ -n "$pre" ] || { echo "the stage did not print a --staged prefix: $output"; false; }
+  # The host now serves different bytes: the add refuses, and writes no row.
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --staged "$pre" \
+      --principle "the status line owns the top-left" --avoid "the four identical buttons" \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture b)"
+  [ "$status" -eq 5 ] && printf '%s' "$output" | grep -q "is not the one staged" || { echo "a changed screen was added: $status $output"; false; }
+  [ ! -f "$(_sources_md)" ] || { echo "a row was written for a screen that changed"; false; }
+  # Paired: the same bytes add cleanly.
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --staged "$pre" \
+      --principle "the status line owns the top-left" --avoid "the four identical buttons" \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 0 ] || { echo "the staged bytes were refused: $output"; false; }
+}
+
+@test "preflight: a padded robots.txt answers in linear time (staging attack B1)" {
+  _pack_sandbox
+  rf="$SANDBOX/robots-padded.txt"
+  { head -c 300000 /dev/zero | tr '\0' '\n'; printf 'User-agent: *\nAllow: /\n'; } > "$rf"
+  [ "$(wc -c < "$rf" | tr -d ' ')" -gt 300000 ] || { echo "fixture not padded"; false; }
+  local t0 t1; t0="$(date +%s)"
+  run node "$(_robots)" --url https://example.test/x --ua ClaudeBot --robots-file "$rf"
+  t1="$(date +%s)"
+  [ "$status" -eq 0 ] || { echo "a padded allow-all file was not ALLOW: $status $output"; false; }
+  [ $((t1 - t0)) -lt 10 ] || { echo "the padded file took $((t1 - t0)) s"; false; }
+}

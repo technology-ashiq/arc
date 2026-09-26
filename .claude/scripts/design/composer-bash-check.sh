@@ -199,36 +199,58 @@ _crefuse() {
   echo "A curator runs one command through Bash -- node .claude/scripts/design/design-refpack.mjs --brief <id> --source <registry id> --url \"<https url>\" --principle \"<sentence>\" --avoid \"<sentence>\" -- and fetches only an active registry host whose robots.txt allows it." >&2
   exit 2
 }
+# The project root, or a refusal. A failed probe used to fall back to pwd, so the root became the
+# hook's own directory and every comparison against it was vacuous (staging attack, B4).
 _croot() {
-  if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then printf '%s' "$CLAUDE_PROJECT_DIR"
-  else git rev-parse --show-toplevel 2>/dev/null || pwd; fi
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then printf '%s' "$CLAUDE_PROJECT_DIR"; return 0; fi
+  git rev-parse --show-toplevel 2>/dev/null
 }
-# One spelling for a path, for COMPARISON only: forward slashes, no trailing slash, an MSYS
-# `/c/` drive as `c:/`, lower case. Never used to open anything.
+# One spelling for a path, for COMPARISON only: forward slashes, no trailing slash, an MSYS `/c/`
+# drive as `c:/`. Case is folded only where the filesystem folds it: on a case-sensitive one,
+# `/work/Arc` and `/work/arc` are two checkouts (staging attack, B13). Never used to open anything.
 _normp() {
-  printf '%s' "$1" | tr '\\' '/' | sed 's#/*$##; s#^/\([A-Za-z]\)/#\1:/#; s#^/\([A-Za-z]\)$#\1:#' \
-    | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz'
+  _o="$(printf '%s' "$1" | tr '\\' '/' | sed 's#/*$##; s#^/\([A-Za-z]\)/#\1:/#; s#^/\([A-Za-z]\)$#\1:#')"
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*) _o="$(printf '%s' "$_o" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')";;
+  esac
+  printf '%s' "$_o"
+}
+# A relative path in a curator call names a file only from the project root, so a call whose
+# working directory is elsewhere is refused -- for Bash (attack r2, B10) and for the reads alike
+# (staging attack, B3). An absent cwd is accepted: the harness always sends one.
+_cpin() {
+  _field cwd '["cwd"]' '.cwd' 4096 || _crefuse "the call's working directory cannot be read exactly."
+  [ -n "$FIELD" ] || return 0
+  _pr="$(_croot)"; [ -n "$_pr" ] || _crefuse "the project root cannot be found, so where this call runs cannot be judged."
+  [ "$(_normp "$FIELD")" = "$(_normp "$_pr")" ] || _crefuse "a curator's call runs from the project root; this one would run in '${FIELD:0:120}'."
 }
 # The curator's reads (attack r2, B1): its Read, Grep and Glob were ungoverned, so a fetched page
-# could tell it to read a secret and carry the text out through a principle. It reads the registry
-# and the design docs (the brief), nothing else: no dot-directory, no env file, no climbing, and
-# no whole-tree search.
+# could tell it to read a secret and carry the text out through a principle. It reads the registry,
+# the design docs (the brief) and the screens it staged, nothing else. The path key is chosen by
+# the tool -- Read's file_path, Grep's and Glob's path -- and the other key present is a refusal,
+# so the hook never judges one field while the tool uses another (staging attack, B5).
 _curator_read() {
   _tool="$1"
-  _field file_path '["tool_input","file_path"]' '.tool_input.file_path' 1024 || _crefuse "the path of a curator $_tool cannot be read exactly."
+  _cpin
+  if [ "$_tool" = "Read" ]; then _pk=file_path; _ok=path; else _pk=path; _ok=file_path; fi
+  _field "$_ok" "[\"tool_input\",\"$_ok\"]" ".tool_input.$_ok" 1024 || _crefuse "the input of a curator $_tool cannot be read exactly."
+  [ -z "$FIELD" ] || _crefuse "a curator's $_tool carries $_ok, which $_tool does not use."
+  _field "$_pk" "[\"tool_input\",\"$_pk\"]" ".tool_input.$_pk" 1024 || _crefuse "the path of a curator $_tool cannot be read exactly."
   _p="$FIELD"
-  if [ -z "$_p" ]; then
-    _field path '["tool_input","path"]' '.tool_input.path' 1024 || _crefuse "the path of a curator $_tool cannot be read exactly."
-    _p="$FIELD"
-  fi
-  if [ "$_tool" != "Read" ]; then
-    _field pattern '["tool_input","pattern"]' '.tool_input.pattern' 1024 || _crefuse "the pattern of a curator $_tool cannot be read exactly."
-    case "$(printf '%s' "$FIELD" | tr '\\' '/')" in
-      /*|[A-Za-z]:*|..|../*|*/..|*/../*) _crefuse "a curator's $_tool pattern stays relative and never climbs.";;
+  # A Glob pattern is a path, so it is held to a plain alphabet: no braces, groups, classes or
+  # negation that could expand into a climb, never absolute, never `..`. A Grep pattern is a
+  # regex over contents, not a path, and only its path is bound (staging attack, B6 and B7).
+  if [ "$_tool" = "Glob" ]; then
+    _field pattern '["tool_input","pattern"]' '.tool_input.pattern' 256 || _crefuse "the pattern of a curator Glob cannot be read exactly."
+    case "$FIELD" in
+      ""|/*|*[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._*/-]*) _crefuse "a curator's Glob pattern uses letters, digits and . _ * / - only, and is relative.";;
+      ..|../*|*/..|*/../*) _crefuse "a curator's Glob pattern never climbs.";;
     esac
   fi
   [ -n "$_p" ] || _crefuse "a curator's $_tool names a path: design.sources.yaml or something under docs/design/."
-  _np="$(_normp "$_p")"; _nr="$(_normp "$(_croot)")"
+  _np="$(_normp "$_p")"; _pr="$(_croot)"
+  [ -n "$_pr" ] || _crefuse "the project root cannot be found, so the path cannot be judged."
+  _nr="$(_normp "$_pr")"
   [ -n "$_np" ] && [ -n "$_nr" ] || _crefuse "the path could not be normalised."
   case "$_np" in "$_nr"/*) _np="${_np#"$_nr"/}";; esac
   while :; do case "$_np" in ./*) _np="${_np#./}";; *) break;; esac; done
@@ -243,12 +265,17 @@ _curator_read() {
   esac
   _crefuse "'${_p:0:120}' is outside what a curator reads: design.sources.yaml, docs/design/, and the screens it staged."
 }
+# A URL is a request to the registry host, and a query is text the host receives. Capped, and no
+# fragment: a fetched page could otherwise have the curator read a brief and send it out 1 KB at
+# a time (staging attack, B2).
+_curl_ok() {
+  case "$1" in *'#'*) _crefuse "a curator's URL carries no fragment.";; esac
+  case "$1" in
+    *'?'*) _q="${1#*\?}"; [ "${#_q}" -le 64 ] || _crefuse "a curator's URL query is at most 64 bytes.";;
+  esac
+}
 _curator_bash() {
-  # The command's relative path names the builder only from the project root (attack r2, B10).
-  _field cwd '["cwd"]' '.cwd' 4096 || _crefuse "the call's working directory cannot be read exactly."
-  if [ -n "$FIELD" ] && [ "$(_normp "$FIELD")" != "$(_normp "$(_croot)")" ]; then
-    _crefuse "a curator's Bash runs from the project root; this one would run in '${FIELD:0:120}'."
-  fi
+  _cpin
   # The status is captured in a conditional, so no errexit in force can end the script on it and
   # hand the dispatcher a code it reads as allow (attack r1, B7).
   if _field command '["tool_input","command"]' '.tool_input.command' 2000; then _frc=0; else _frc=$?; fi
@@ -306,6 +333,7 @@ _curator_bash() {
     case "$1" in
       --brief|--source|--url|--principle|--avoid) ;;
       --stage) [ "$2" = "1" ] || _crefuse "--stage takes 1.";;
+      --staged) case "$2" in [0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef]) ;; *) _crefuse "--staged takes the 16-hex prefix the stage printed.";; esac;;
       *) _crefuse "the flag '${1:0:40}' is not one a curator's refpack call takes (a test seam never is).";;
     esac
     case "$2" in --*) _crefuse "the flag '$1' has no value.";; esac
@@ -321,7 +349,8 @@ _curator_bash() {
         [ "${#2}" -le 1024 ] || _crefuse "--url is longer than 1024 bytes."
         # The registry binds hosts: no port and no userinfo in the authority (attack r2, B4).
         _auth="${2#https://}"; _auth="${_auth%%/*}"; _auth="${_auth%%\?*}"; _auth="${_auth%%#*}"
-        case "$_auth" in *:*|*@*) _crefuse "--url carries a port or userinfo; the registry binds hosts.";; esac;;
+        case "$_auth" in *:*|*@*) _crefuse "--url carries a port or userinfo; the registry binds hosts.";; esac
+        _curl_ok "$2";;
       --principle|--avoid)
         # Free text is capped and must say something: a sentence is not a channel for whatever a
         # fetched page told the curator to read (attack r2, B1 and B6).
@@ -334,9 +363,10 @@ _curator_bash() {
   # Two shapes: a --stage (fetch to look at it, no row) or an add (with its principle).
   case "$_seen" in
     *" --stage "*)
-      case "$_seen" in *" --principle "*|*" --avoid "*) _crefuse "a call is a stage OR add: a staged screen carries no principle yet.";; esac
+      case "$_seen" in *" --principle "*|*" --avoid "*|*" --staged "*) _crefuse "a call is a stage OR add: a staged screen carries no principle yet.";; esac
       _need="--brief --source --url";;
-    *) _need="--brief --source --url --principle --avoid";;
+    # An add is bound to the bytes the curator looked at (staging attack, B8).
+    *) _need="--brief --source --url --principle --avoid --staged";;
   esac
   for _f in $_need; do
     case "$_seen" in *" $_f "*) ;; *) _crefuse "a refpack call needs $_f.";; esac
@@ -347,8 +377,9 @@ _curator_fetch() {
   _field url '["tool_input","url"]' '.tool_input.url' 1024 || _crefuse "the URL of a WebFetch cannot be read exactly, or is longer than 1024 bytes."
   [ -n "$FIELD" ] || _crefuse "the WebFetch carries no URL."
   _url="$FIELD"
-  _root="${CLAUDE_PROJECT_DIR:-}"
-  [ -n "$_root" ] || _root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  _curl_ok "$_url"
+  _root="$(_croot)"
+  [ -n "$_root" ] || _crefuse "the project root cannot be found, so the preflight cannot run."
   [ -f "$_root/.claude/scripts/design/design-refpack.mjs" ] \
     || _crefuse "design-refpack.mjs is missing, so a curator's fetch cannot be preflighted."
   set -- --check-browse "$_url"

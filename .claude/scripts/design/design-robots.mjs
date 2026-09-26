@@ -305,15 +305,29 @@ export async function preflight({ url, ua = DEFAULT_UA, transport, guard = null 
     // Judged on the text with comments removed: a file of comments only (Cloudflare's
     // content-signals preamble, with no rule) is an EMPTY robots.txt, which RFC 9309 reads as
     // allow-all. Checked before stripping, it read as UNREADABLE (Phase 02 real build, collectui).
-    const bare = text.replace(/#.*$/gm, "");
-    if (bare.trim() && !/^\s*(user-agent|allow|disallow|sitemap|crawl-delay|content-signal)\s*:/im.test(bare)) {
-      return { verdict: "UNREADABLE", reason: "robots.txt has no directive a robots file carries; permission unknown" };
+    // One pass over the lines, each trimmed on its own: a multiline regex anchored with `^\s*`
+    // lets `\s` cross line breaks and rescans every blank line from every line start, which is
+    // quadratic on a padded file and holds the hook past its budget (staging attack, B1).
+    let directive = false, signalNo = false, content = false;
+    for (const raw of text.split(/\r\n|\r|\n/)) {
+      const line = raw.replace(/#.*$/, "").trim();
+      if (!line) continue;
+      content = true;
+      const colon = line.indexOf(":");
+      const key = colon > 0 ? line.slice(0, colon).trim().toLowerCase() : "";
+      if (["user-agent", "allow", "disallow", "sitemap", "crawl-delay", "content-signal"].includes(key)) directive = true;
+      // A content signal is an express reservation of rights. Our use -- reading a screen into a
+      // model to write its principle -- is `ai-input`, so `ai-input=no` refuses. `ai-train` and
+      // `search` are not our use.
+      if (key === "content-signal" && line.slice(colon + 1).split(",").some((p) => p.replace(/\s+/g, "").toLowerCase() === "ai-input=no")) signalNo = true;
     }
-    // A content signal is an express reservation of rights. Our use -- reading a screen into a
-    // model to write its principle -- is `ai-input`, so `ai-input=no` anywhere in the file is a
-    // refusal. `ai-train` is not our use, and search is not either.
-    const signal = bare.match(/^\s*content-signal\s*:.*\bai-input\s*=\s*no\b.*$/im);
-    if (signal) return { verdict: "DISALLOW", reason: `robots.txt content signal refuses our use: ${signal[0].trim()} (ai-input=no)` };
+    // A file of comments only (Cloudflare's content-signals preamble, with no rule) is an EMPTY
+    // robots.txt, which RFC 9309 reads as allow-all; judged before stripping comments, it read as
+    // UNREADABLE (Phase 02 real build, collectui).
+    if (content && !directive) return { verdict: "UNREADABLE", reason: "robots.txt has no directive a robots file carries; permission unknown" };
+    // The reason is fixed text: the remote line is never echoed, so robots.txt cannot become an
+    // instruction channel into the curator's context (staging attack, B10).
+    if (signalNo) return { verdict: "DISALLOW", reason: "robots.txt content signal refuses our use (ai-input=no)" };
     return decide(text, u, ua);
   }
   return { verdict: "UNREADABLE", reason: `robots.txt returned ${Number.isFinite(s) ? s : "no status"}; permission unknown, nothing fetched` };
