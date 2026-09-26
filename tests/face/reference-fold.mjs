@@ -108,5 +108,20 @@ const loading = foldAt("", false);
 check("loading: before the door answers, the room says it is reading, and draws no page",
   loading.isReading === true && loading.isIndex === false && loading.isRead === false);
 
+// ---- the per-room Reference link (ADR-1346 §6): counted, and every one lands on a page ----
+{
+  const shell = await import(u(join(REPO, "face", "src", "lib", "shell.mjs")));
+  const targets = registry.rooms.map((r) => ({ id: r.id, at: shell.referenceAt(r) }));
+  const linked = targets.filter((x) => x.at !== null);
+  const unlinked = targets.filter((x) => x.at === null);
+  const broken = linked.filter((x) => { const [k, ...rest] = x.at.split("/"); return !ids(k).includes(rest.join("/")) || !body.pages[x.at]; });
+  console.log(`reference links: ${linked.length} rooms link to a page, ${unlinked.length} do not (${unlinked.map((x) => x.id).join(",")})`);
+  check("links: every room that links lands on a page the extract holds; with + without = every served room",
+    linked.length >= 15 && broken.length === 0 && linked.length + unlinked.length === registry.rooms.length
+    && targets.find((x) => x.id === "reference").at === null, `linked=${linked.length} broken=${broken.map((x) => `${x.id}->${x.at}`).join(",")}`);
+  const opened = foldAt(linked[0].at);
+  check("links: a room's link opens the Reference room ON that page (the pick the hash seeds)", opened.isEntity === true && opened.crumbs[2].at === linked[0].at, linked[0].at);
+}
+
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 10 ? 0 : 1;
+process.exitCode = failed === 0 && ran === 12 ? 0 : 1;

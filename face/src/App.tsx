@@ -18,7 +18,7 @@ import './index.css'
 import { ASOF_ROUTES, Door, DoorError, decodeRegistry, tokenFromHash, unescapeDoorText } from './lib/door.mjs'
 import { findRoom, errorSentence } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
-import { buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash } from './lib/shell.mjs'
+import { buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash, referenceAt } from './lib/shell.mjs'
 import { asOfReaches, attachModules, collectModules, EXEMPTION_FILE, extraRooms, homeRoom, modeChip, PULSE_MS, railGroups, refusedPayload, roomHoldingKind, withExtras } from './lib/registry.mjs'
 import type { ExtraRooms, ModuleContext } from './lib/registry.mjs'
 import { needsYouByRoom } from './lib/map.mjs'
@@ -71,6 +71,7 @@ export default function App() {
   }, [mood])
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [asOf, setAsOf] = useState<string | null>(() => parseHash(window.location.hash).asOf)
+  const [at, setAt] = useState<string | null>(() => parseHash(window.location.hash).at)
   const [today, setToday] = useState<string | null>(null)
   const [concepts, setConcepts] = useState<Record<string, { room: string; station: string }>>({})
   const [contract, setContract] = useState<Contract>({})
@@ -199,11 +200,12 @@ export default function App() {
   const attachment = useMemo(() => attachModules(shell ?? { rooms: [] }, collected), [shell, collected])
 
   const open = useCallback(
-    (id: string) => {
+    (id: string, nextAt: string | null = null) => {
       setRoomId(id)
+      setAt(nextAt)
       // Replace, not push: holding j through the company should not bury the back button under
       // thirty entries. A room is a view, not a destination you navigate back through.
-      window.history.replaceState(null, '', buildHash(id, token, asOf))
+      window.history.replaceState(null, '', buildHash(id, token, asOf, nextAt))
     },
     [token, asOf],
   )
@@ -214,6 +216,7 @@ export default function App() {
       const h = parseHash(window.location.hash)
       if (h.room) setRoomId(h.room)
       setAsOf(h.asOf)
+      setAt(h.at)
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
@@ -331,6 +334,8 @@ export default function App() {
         }}
         groups={groups}
         current={openable ? openable.id : null}
+        reference={{ at: openable ? referenceAt(openable) : null, served: (shell?.rooms ?? []).some((r) => r.id === 'reference') }}
+        onReference={(a) => open('reference', a)}
       />
 
       {/* No z-index here on purpose: a room's drawers (z-50, fixed) must stack above the rail and
@@ -348,7 +353,7 @@ export default function App() {
           >
             {openable && ctx ? (
               <div key={openable.id} className="room-enter">
-                <RoomFrame room={openable} attachment={attachment} ctx={ctx} />
+                <RoomFrame key={`${openable.id}|${at ?? ''}`} room={openable} attachment={attachment} ctx={ctx} seed={at ? { at } : undefined} />
               </div>
             ) : (
               <NoSuchRoom id={shownId ?? ''} extrasNote={extras.isLoading ? 'the exemption rows are still being read' : extrasNote} />
