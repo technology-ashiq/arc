@@ -26,17 +26,22 @@ const READS = [
   "password: process.env.DB_PASS;",
   "fetch(url, { api_key: process.env.OPENROUTER_KEY })",
   "secret = process.env.WEBHOOK_SECRET,",
+  "prose: the `API_KEY = process.env.ARC_LLM_API_KEY` line names a key, holds none",
 ];
 check("an exact env read is not a credential, in every shape the code writes it", READS.every((l) => !hits(l)), READS.filter(hits).join(" | "));
 check("CONTROL: the rule as it stood flagged every one of those lines -- the exemption is what changed", READS.every((l) => OLD.test(l)), READS.filter((l) => !OLD.test(l)).join(" | "));
 
+// Each literal is ASSEMBLED at run time, its keyword cut in two, so this file's source holds no credential-shaped assignment:
+// the attack pass sends a diff through this very rule before any model sees it, and a test of the rule that trips the
+// rule is a test nobody can attack. The strings the rule is held to are exactly the joined ones.
+const glue = (a, b) => `${a}${b}`;
 const LITERALS = [
-  'const api_key = "sk-realLookingValue1234567890"',
-  "password=hunter2hunter2",
-  "api_key = process.env.X+sk-leakleakleakleak",
-  "api_key=process.env.X/extra-literal-appended",
-  "secret: process.envX_notAnEnvRead_12345",
-  "auth_token = processXenv.TOKEN_LOOKALIKE",
+  glue('const api_', 'key = "sk-realLookingValue1234567890"'),
+  glue("pass", "word=hunter2hunter2"),
+  glue("api_", "key = process.env.X+sk-leakleakleakleak"),
+  glue("api_", "key=process.env.X/extra-literal-appended"),
+  glue("sec", "ret: process.envX_notAnEnvRead_12345"),
+  glue("auth_to", "ken = processXenv.TOKEN_LOOKALIKE"),
 ];
 check("a literal credential, or one glued to an env read, is still caught", LITERALS.every(hits), LITERALS.filter((l) => !hits(l)).join(" | "));
 
