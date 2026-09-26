@@ -69,8 +69,19 @@ try {
       lines.length === 3 && lines.every((l, i) => l.startsWith(`generic-api: attempt ${i + 1}/3: status 503 after `))
       && lines[0].endsWith(", retrying") && lines[1].endsWith(", retrying") && !lines[2].endsWith(", retrying"), JSON.stringify(lines));
   }
+  // ---- C. a deadline that is digits but no epoch millisecond fails CLOSED (attack 415d3a3 L2) ----
+  {
+    const common = await import(new URL("../.claude/scripts/engine/drivers/common.mjs", import.meta.url).href);
+    const read = (raw) => { const was = process.env.ARC_DRIVER_DEADLINE_EPOCH_MS; process.env.ARC_DRIVER_DEADLINE_EPOCH_MS = raw;
+      try { return { ms: common.msUntilDeadline() }; } catch (e) { return { malformed: !!e.arcDeadlineMalformed }; }
+      finally { if (was === undefined) delete process.env.ARC_DRIVER_DEADLINE_EPOCH_MS; else process.env.ARC_DRIVER_DEADLINE_EPOCH_MS = was; } };
+    const ok = read(String(Date.now() + 60_000));
+    const huge = read("1".repeat(40));
+    check("C: forty digits are refused as malformed, never read as Infinity (no deadline); a real epoch is read",
+      huge.malformed === true && typeof ok.ms === "number" && ok.ms > 50_000 && ok.ms <= 60_000, JSON.stringify({ ok, huge }));
+  }
 } finally {
   try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { console.log(`WARN the scratch dir was not removed: ${tmp} (${e.code || "error"})`); }
 }
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 5 ? 0 : 1;
+process.exitCode = failed === 0 && ran === 6 ? 0 : 1;

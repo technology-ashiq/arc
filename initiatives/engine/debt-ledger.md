@@ -1,0 +1,10 @@
+# Debt ledger — lane `engine`
+
+> Intentional shortcuts are debts; unrecorded debts are forgotten forever. Every deliberate compromise gets a row:
+> **what · where · why accepted · cost of leaving it · pay-down trigger.** Opened 2026-09-27 with the out-of-cycle
+> driver-deadline bug's first attack round.
+
+| what | where | why accepted | cost of leaving it | pay-down trigger |
+|---|---|---|---|---|
+| Six LOW findings on the attack watch stay open. (1) A heartbeat as fast as 50 ms is allowed, with no coalescing of identical lines (L5). (2) The deadline shows HH:MM without a date, so a run crossing midnight reads ambiguously (L6). (3) generic-api prints ", retrying" before the deadline check that may cancel the retry (L7). (4) An INVALID nullable pair also disables the keyword-applies-to-type lint on that node; the pair itself is refused, so the file fails either way (L8). (5) The grace is not scaled to the minutes (L9). (6) A run that fails before any surface never touches the status file, so a watcher reads the previous run's last line (B6) | `.claude/scripts/engine/arc-attack.mjs` (timing, runWatched, main) · `.claude/scripts/engine/drivers/generic-api.mjs` · `.claude/scripts/engine/schema-subset.mjs`; attack 415d3a3 | LOW, one round per PR (owner, 2026-09-25). Each misreports a corner, never a silent hang; the deadline and the per-attempt lines, which the bug was about, hold | A watcher can misread a stale or ambiguous line in a corner case | The next engine PR that touches arc-attack's watch or generic-api's retry loop pays all six with a fixture each; B6 at once if a watcher is ever misled in practice |
+| The output-overflow refusal (L4) and the Windows rename fallback (B5) have no fixture: 64 MiB of output and a file held open without delete-sharing are too heavy or too OS-specific for the shared CI legs | `.claude/scripts/engine/arc-attack.mjs` (runWatched, writeStatus) | The code paths are small and read-reviewed; a fixture for each would dominate the suite's time or pass vacuously on two of three OSes | A regression in either path would be seen only in a real run | A CI leg or a test seam that can make either condition cheaply |

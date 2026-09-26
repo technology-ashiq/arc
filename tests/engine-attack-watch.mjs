@@ -62,6 +62,40 @@ try {
     check("B: a child that exits is reported with its own code, and no watchdog fired", w.r.killed === false && w.r.status === 3, JSON.stringify({ killed: w.r.killed, status: w.r.status }));
     check("B: the status file's last word is the exit", /^LOGIC: ended after 0m0\ds \(exit 3\)$/.test(w.last.trim()), JSON.stringify(w.last));
   }
+  // ---- D. a grandchild holding the pipes dies with the tree, and the watch settles (attack 415d3a3 B1) ----
+  {
+    const status = join(tmp, "d.status");
+    const code = "const { spawn } = require('node:child_process'); spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e9)'], { stdio: 'inherit' }); setInterval(() => {}, 1e9);";
+    const t0 = Date.now();
+    const w = await watched(code, { minutes: 0.01, heartbeatMs: 100, graceMs: 0 }, status);
+    check("D: a child whose own child holds the pipes open is ended as a tree, and the watch settles within the backstop",
+      w.r.killed === true && Date.now() - t0 < 15_000 && /ended by the watchdog/.test(w.last), `killed=${w.r.killed} ms=${Date.now() - t0}`);
+  }
+  // ---- E. stdin is closed: a reader sees EOF at once, not the watchdog (B2) ----
+  {
+    const status = join(tmp, "e.status");
+    const w = await watched("process.stdin.resume(); process.stdin.on('end', () => process.exit(4));", { minutes: 1, heartbeatMs: 60_000, graceMs: 0 }, status);
+    check("E: a child that reads stdin to EOF gets EOF at once and exits on its own", w.r.killed === false && w.r.status === 4 && w.r.ms < 10_000, JSON.stringify({ status: w.r.status, ms: w.r.ms }));
+  }
+  // ---- F. a line split across two writes is never quoted as a fragment (L3) ----
+  {
+    const status = join(tmp, "f.status");
+    const code = "process.stderr.write('generic-api: attempt 1/3: tim'); setTimeout(() => process.stderr.write('eout after 1s\\n'), 400); setInterval(() => {}, 1e9);";
+    const w = await watched(code, { minutes: 0.02, heartbeatMs: 100, graceMs: 0 }, status);
+    const beats = w.said.filter((l) => l.startsWith("LOGIC: running "));
+    check("F: no heartbeat ever quotes half a line; once the line completes, the whole line is quoted",
+      beats.length >= 3 && beats.every((l) => !/· last: generic-api: attempt 1\/3: tim$/.test(l)) && beats.some((l) => l.endsWith("· last: generic-api: attempt 1/3: timeout after 1s")), JSON.stringify(beats.slice(0, 6)));
+  }
+  // ---- G. a secret-shaped line never reaches the heartbeat or the status file (B3) ----
+  {
+    const status = join(tmp, "g.status");
+    // Assembled at run time: this file's source must pass the same rule it proves (see tests/redact-env-read.mjs).
+    const fake = ["pass", "word=hunter2hunter2hunter2"].join("");
+    const w = await watched(`process.stderr.write(${JSON.stringify(fake)} + '\\n'); setInterval(() => {}, 1e9);`, { minutes: 0.01, heartbeatMs: 100, graceMs: 0 }, status);
+    const everything = [...w.said, ...w.samples, w.last].join("\n");
+    check("G: a child's line matching a secret rule is withheld from every heartbeat and every status-file sample",
+      w.said.filter((l) => l.startsWith("LOGIC: running ")).length >= 1 && !everything.includes("hunter2hunter2"), everything.slice(0, 300));
+  }
   // ---- C. malformed timing is refused ----
   {
     const bad = ["abc", "0", "-5", "1e400", "241"].map((v) => AA.timing({ ARC_ATTACK_MINUTES: v }));
@@ -77,4 +111,4 @@ try {
   try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { console.log(`WARN the scratch dir was not removed: ${tmp} (${e.code || "error"})`); }
 }
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 10 ? 0 : 1;
+process.exitCode = failed === 0 && ran === 14 ? 0 : 1;

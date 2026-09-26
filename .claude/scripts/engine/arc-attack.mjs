@@ -40,13 +40,13 @@
  * 6 the diff is empty · 7 the logic surface was NOT RUN (the boundary result is still written).
  */
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { laneHeader, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
-import { DENY_RULES } from "../hq/lib/redact.mjs";
+import { DENY_RULES, liveLine } from "../hq/lib/redact.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/@{}~^-]*$/;
@@ -208,6 +208,8 @@ export function timing(env) {
   const num = (name, dflt, lo, hi) => {
     const raw = env[name];
     if (raw === undefined || raw === "") return dflt;
+    // Blank is not zero: Number("   ") is 0, which a 0-bounded grace accepted (attack 415d3a3 B8).
+    if (!String(raw).trim()) return { error: `${name}=${JSON.stringify(raw)} is blank, not a number` };
     const v = Number(raw);
     if (!Number.isFinite(v) || v < lo || v > hi) return { error: `${name}=${JSON.stringify(raw)} is not a number from ${lo} to ${hi}` };
     return v;
@@ -219,12 +221,24 @@ export function timing(env) {
   return { minutes: /** @type {number} */ (minutes), heartbeatMs: /** @type {number} */ (heartbeatMs), graceMs: /** @type {number} */ (graceMs) };
 }
 
-/** Overwrite the ONE status line, whole: a reader never sees half of one (temp + rename). A failure is a WARN, not a stop. */
+/** Files whose status write already warned: a watcher that holds the file open would otherwise get a WARN per beat. */
+const statusWarned = new Set();
+/**
+ * Overwrite the ONE status line, whole: temp + rename, so a reader never sees half of one. Where the rename is refused
+ * (Windows, a watcher holding the file open without delete-sharing), the line is written in place instead and the temp
+ * is removed -- the last word must never stay a stale "running" for a run that has ended (attack 415d3a3 B5).
+ */
 function writeStatus(file, line) {
   if (!file) return;
   const tmpFile = `${file}.${process.pid}.tmp`;
-  try { writeFileSync(tmpFile, `${line}\n`); renameSync(tmpFile, file); }
-  catch (e) { process.stderr.write(`arc-attack: WARN the status file could not be written (${e.code || "error"})\n`); }
+  try { writeFileSync(tmpFile, `${line}\n`); renameSync(tmpFile, file); return; }
+  catch { try { unlinkSync(tmpFile); } catch { /* never created */ } }
+  try { writeFileSync(file, `${line}\n`); }
+  catch (e) {
+    if (statusWarned.has(file)) return;
+    statusWarned.add(file);
+    try { process.stderr.write(`arc-attack: WARN the status file could not be written (${e.code || "error"})\n`); } catch { /* stderr closed */ }
+  }
 }
 
 /**
@@ -250,39 +264,67 @@ function runSurface({ root, surface, input, driver, trialModel, env, label, time
  *   time: { minutes: number, heartbeatMs: number, graceMs: number }, statusFile: string | null }} p
  */
 export function runWatched({ argv: args, cwd: root, env: childEnv, label, time, statusFile }) {
+  // A closed stderr (a reader that stopped, `| head`) must not crash the pass mid-run: EPIPE on a heartbeat is ignored,
+  // the status file still carries the line (attack 415d3a3 B4).
+  const say = (line) => { try { process.stderr.write(`${line}\n`); } catch { /* stderr closed */ } writeStatus(statusFile, line); };
   const started = Date.now();
   const deadline = started + time.minutes * 60_000;
-  const first = `${label}: started ${clock(started)} · deadline ${clock(deadline)} (${time.minutes}m)`;
-  process.stderr.write(`${first}\n`);
-  writeStatus(statusFile, first);
+  say(`${label}: started ${clock(started)} · deadline ${clock(deadline)} (${time.minutes}m)`);
   return new Promise((done) => {
     /** @type {Buffer[]} */ const out = []; /** @type {Buffer[]} */ const err = [];
-    let outBytes = 0, errBytes = 0, killed = false, error = null;
+    let outBytes = 0, errBytes = 0, killed = false, overflowed = false, settled = false, error = null;
     let child;
-    try { child = spawn(process.execPath, args, { cwd: root, env: childEnv, windowsHide: true }); }
-    catch (e) { done({ status: null, stdout: "", stderr: "", error: e, killed: false, ms: 0 }); return; }
-    child.stdout.on("data", (c) => { outBytes += c.length; if (outBytes <= CHILD_CAP) out.push(c); });
-    let lastLine = "";
+    // stdin is CLOSED, as spawnSync's was: a descendant that reads stdin to EOF must see EOF, not block until the
+    // watchdog (B2). Its own process group on POSIX, so the watchdog can end every descendant, not only arc-run (B1).
+    try { child = spawn(process.execPath, args, { cwd: root, env: childEnv, windowsHide: true, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" }); }
+    catch (e) { done({ status: null, stdout: "", stderr: "", error: e, killed: false, overflowed: false, ms: 0 }); return; }
+    // Bytes past the cap are counted and NAMED, never dropped silently into a truncated answer (L4).
+    child.stdout.on("data", (c) => { outBytes += c.length; if (outBytes <= CHILD_CAP) out.push(c); else overflowed = true; });
+    let lastLine = "", partial = "";
     child.stderr.on("data", (c) => {
       errBytes += c.length;
-      if (errBytes <= CHILD_CAP) err.push(c);
-      const seen = String(c).split(/\r?\n/).map((l) => oneLine(l).trim()).filter(Boolean);
-      if (seen.length) lastLine = seen[seen.length - 1].slice(0, 120);
+      if (errBytes <= CHILD_CAP) err.push(c); else overflowed = true;
+      // Only COMPLETE lines are quoted: a chunk can end mid-line (L3). Each passes liveLine -- a line matching a secret
+      // rule is withheld by name -- before it reaches the screen or the file on disk (B3).
+      const parts = (partial + String(c)).split(/\r?\n/);
+      partial = parts.pop().slice(-4096);
+      const lines = parts.map((l) => oneLine(liveLine(l)).trim()).filter(Boolean);
+      if (lines.length) lastLine = lines[lines.length - 1].slice(0, 120);
     });
-    const beat = setInterval(() => {
-      const line = `${label}: running ${elapsed(Date.now() - started)} · deadline ${clock(deadline)}${lastLine ? ` · last: ${lastLine}` : ""}`;
-      process.stderr.write(`${line}\n`);
-      writeStatus(statusFile, line);
-    }, time.heartbeatMs);
-    const watchdog = setTimeout(() => { killed = true; try { child.kill("SIGKILL"); } catch { /* already gone */ } }, time.minutes * 60_000 + time.graceMs);
-    child.on("error", (e) => { error = e; });
-    child.on("close", (code) => {
+    // The whole tree, not one pid: a driver CLI arc-run started can outlive it and hold the pipes open, and 'close'
+    // then never fires (B1). taskkill /T on Windows, the process group elsewhere; one pid only as the last resort.
+    const killTree = () => {
+      try {
+        if (process.platform === "win32") spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { windowsHide: true, timeout: 10_000, stdio: "ignore" });
+        else process.kill(-child.pid, "SIGKILL");
+      } catch { try { child.kill("SIGKILL"); } catch { /* already gone */ } }
+    };
+    // The parent leaving mid-run takes the surface's tree with it: a run nobody is waiting for must not keep spending.
+    const onExit = () => killTree();
+    process.once("exit", onExit);
+    let backstop = null;
+    const finish = (code) => {
+      if (settled) return;
+      settled = true;
       clearInterval(beat);
       clearTimeout(watchdog);
+      if (backstop) clearTimeout(backstop);
+      process.removeListener("exit", onExit);
       const ms = Date.now() - started;
       writeStatus(statusFile, `${label}: ended after ${elapsed(ms)}${killed ? " -- ended by the watchdog at the deadline" : ` (exit ${code})`}`);
-      done({ status: killed ? null : code, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8"), error, killed, ms });
-    });
+      done({ status: killed ? null : code, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8"), error, killed, overflowed, ms });
+    };
+    const beat = setInterval(() => {
+      say(`${label}: running ${elapsed(Date.now() - started)} · deadline ${clock(deadline)}${lastLine ? ` · last: ${lastLine}` : ""}`);
+    }, time.heartbeatMs);
+    const watchdog = setTimeout(() => {
+      killed = true;
+      killTree();
+      // If a descendant still holds a pipe, 'close' may never come: settle anyway, streams released (B1).
+      backstop = setTimeout(() => { try { child.stdout.destroy(); child.stderr.destroy(); } catch { /* gone */ } finish(null); }, 5000);
+    }, time.minutes * 60_000 + time.graceMs);
+    child.on("error", (e) => { error = e; });
+    child.on("close", (code) => finish(code));
   });
 }
 
@@ -413,6 +455,11 @@ export async function main(argv, env = process.env) {
 
       const r = await runSurface({ root, surface, input, driver: o.driver, trialModel, env, label, time, statusFile: o.statusFile });
       const took = ` (took ${elapsed(r.ms)})`;
+      if (r.overflowed) {
+        lines.push(`${label}: RUN FAILED -- its output passed the ${CHILD_CAP / 1024 / 1024} MiB cap; the answer would be read cut, so it is not read at all`);
+        anyFailed = true;
+        continue;
+      }
       if (r.killed) {
         lines.push(`${label}: RUN FAILED -- still running ${elapsed(r.ms)} after it started, past its ${time.minutes}-minute deadline and the grace; ended by the watchdog`);
         anyFailed = true;

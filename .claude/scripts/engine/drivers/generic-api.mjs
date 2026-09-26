@@ -20,7 +20,11 @@ const API_KEY = process.env.ARC_LLM_API_KEY || "";
 // The router pins the model; ARC_LLM_MODEL is only a fallback for an UNROUTED run, and
 // an unrouted run is recorded as unpinned rather than quietly using whatever env says.
 const MODEL = pinnedModel() || process.env.ARC_LLM_MODEL || "";
-const TIMEOUT_MS = Number(process.env.ARC_LLM_TIMEOUT_MS || 60_000);
+// A per-attempt cap that is not a positive number is REFUSED at the first attempt, never used: NaN or 0 made every
+// attempt abort at once and the run report "timeout" for a request never given time (attack 415d3a3 B7).
+const TIMEOUT_RAW = process.env.ARC_LLM_TIMEOUT_MS;
+const TIMEOUT_MS = TIMEOUT_RAW === undefined || TIMEOUT_RAW === "" ? 60_000 : Number(TIMEOUT_RAW);
+const TIMEOUT_BAD = !(Number.isFinite(TIMEOUT_MS) && TIMEOUT_MS >= 1000 && TIMEOUT_MS <= 3_600_000);
 const MAX_TRANSPORT_RETRIES = 2;
 // An attempt ends this long before the RUN's deadline, so the driver says what happened and exits on its own terms
 // rather than being killed mid-line by arc-run's timeout at the same instant.
@@ -48,6 +52,7 @@ async function callOnce(body, capMs) {
 }
 
 await runDriver("generic-api", async ({ processName, input }) => {
+  if (TIMEOUT_BAD) throw new Error(`ARC_LLM_TIMEOUT_MS=${JSON.stringify(TIMEOUT_RAW)} is not a per-attempt cap from 1000 to 3600000 ms -- refused, not used`);
   if (!ENDPOINT || !API_KEY || !MODEL) {
     // Named, not guessed. An absent endpoint is a setup fact the operator must see, and
     // "not configured" must never be reported as "the model answered badly".

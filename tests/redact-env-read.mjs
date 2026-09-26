@@ -42,6 +42,11 @@ const LITERALS = [
   glue("api_", "key=process.env.X/extra-literal-appended"),
   glue("sec", "ret: process.envX_notAnEnvRead_12345"),
   glue("auth_to", "ken = processXenv.TOKEN_LOOKALIKE"),
+  // A literal FALLBACK after the read: the exemption once covered the read and let the fallback through (attack
+  // 415d3a3 L1). Also as the whitespace-stripped view writes it.
+  glue("const API_", 'KEY = process.env.ARC_LLM_API_KEY || "sk-realLookingValue1234567890"'),
+  glue("api_", 'key=process.env.X??"hunter2hunter2hunter2"'),
+  glue("sec", "ret = process.env.X && hunter2hunter2hunter2"),
 ];
 check("a literal credential, or one glued to an env read, is still caught", LITERALS.every(hits), LITERALS.filter((l) => !hits(l)).join(" | "));
 

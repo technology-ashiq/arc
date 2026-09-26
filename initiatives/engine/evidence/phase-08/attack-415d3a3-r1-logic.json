@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "critical",
+      "where": ".claude/scripts/hq/lib/redact.mjs:91",
+      "breaking_input": "const API_KEY = process.env.ARC_LLM_API_KEY || \"sk-realLookingValue1234567890\" — the lookahead fires at the value start (`process.env.ARC_LLM_API_KEY`), exempts it, and the rule matches only the first value; the `||`-fallback literal credential is never reached and the line passes the gate.",
+      "why": "The exemption is anchored only at the START of the matched value. Anything after the env name — `||`, `;`, `)`, `,`, a space, `&&` — is not in the negative-lookahead set (only [A-Za-z0-9_+/=.-] is excluded), so a credential glued after any delimiter that is not in that set sails through. PROGRESS.md claims the exemption covers 'plus a closing ; , or )', but those characters are exactly the ones that let an exemption succeed where a literal follows. `secret = process.env.X; const v = \"hunter2hunter2\"` on one line is also exempt.",
+      "fix": "Anchor the exemption to the whole match, not the value head: require the remainder of the captured value to be exactly the env read (e.g. consume `process.env.[A-Za-z_][A-Za-z0-9_]*` then end-of-value), or apply the rule to every assignment-shaped segment split on `;`, `&&`, `||`, `,` before testing.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/drivers/common.mjs:139",
+      "breaking_input": "ARC_DRIVER_DEADLINE_EPOCH_MS set to a 40-digit digit string (matches /^\\d+$/): Number(...) is Infinity, msUntilDeadline returns Infinity, and every attempt cap is Math.min(TIMEOUT_MS, Infinity)=TIMEOUT_MS with the run 'unbounded' — the exact fail-open the fix's comment claims was eliminated.",
+      "why": "The tightened validator fails closed on garbage but fails OPEN on an over-long digit string: /^\\d+$/ accepts values Number() coerces to Infinity, which behaves identically to 'no deadline' in generic-api (cap=TIMEOUT_MS) and makes rem never reach <=0. Same for a digit string of leading zeros or any value far beyond any sane epoch.",
+      "fix": "Bound the parse: require the value to be finite AND within a sane epoch window (e.g. Number.isFinite(v) && v>0 && v < Date.now()+24*3600_000), else throw the malformed error.",
+      "twin_of": null
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-attack.mjs:269",
+      "breaking_input": "A child whose stderr chunk boundary falls mid-line (e.g. writes 'generic-api: attempt 1/3: timeout aft' then 'er 420s\\n' in two writes): lastLine keeps the truncated fragment 'timeout aft' and every heartbeat thereafter quotes the garbled fragment; and when a later transport attempt starts silently, the stale old line keeps being replayed as 'last:' for the rest of the run, so a watcher reads progress that no longer exists.",
+      "why": "lastLine is derived per data-chunk, not per completed line, and is never cleared or invalidated — a heartbeat that quotes a stale/truncated line is a false 'where it is' signal, the very failure mode (silent 1.5h run) this change exists to fix.",
+      "fix": "Buffer stderr into complete lines (split on \\n, keep the trailing partial in a residual buffer) and only promote a full line to lastLine; consider a 'stale' marker when no new line arrived for N beats.",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-attack.mjs:257",
+      "breaking_input": "A chatty child (e.g. a model echoing a huge diff) emitting >64 MiB on stdout: every chunk past CHILD_CAP is counted (outBytes grows) but not stored — Buffer.concat yields truncated output, parseModelJson fails on cut JSON, and the evidence shows a parse failure with no indication the cap ate the data.",
+      "why": "The cap silently discards data without setting any flag on the result; the run's verdict then attributes the loss to the child/model, not the watcher. validate-one-read/use-another class: bytes were received and charged, then used as if absent.",
+      "fix": "Set a truncated flag when a chunk is dropped, surface it in the failure line ('RUN FAILED -- stdout exceeded 64 MiB'), and include the cap in the result object.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:236",
+      "breaking_input": "ARC_ATTACK_HEARTBEAT_MS=50 (the minimum) with a run that lasts an hour: 72,000 heartbeat lines plus 72,000 status-file writes (temp+rename each) — the stderr stream the operator reads becomes indistinguishable from the log the feature promised to replace, and rename-sync pressure on Windows can starve the actual reader.",
+      "why": "The minimum bound admits a heartbeat rate that defeats the design goal ('a watcher reads one line instead of a log'); nothing caps total beats or coalesces identical status content.",
+      "fix": "Raise the floor (e.g. 1000 ms) or coalesce: skip the stderr write when the composed line is byte-identical to the previous one.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:231",
+      "breaking_input": "A run started 23:58 with a 30-minute budget: the started line says 'started 23:58 · deadline 00:28' — correct — but `clock()` renders only HH:MM with no day marker, and a killed-vs-exit comparison across midnight (or a multi-day hanging watchdog) makes deadline lines ambiguous to any watcher diffing status files.",
+      "why": "Deadline communication loses the date; the heartbeat's promise 'says where it is' is ambiguous exactly in the long-run case the change targets.",
+      "fix": "Include an epoch or day offset in the started/heartbeat lines (e.g. 'deadline in 28m07s' plus absolute HH:MM).",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:99",
+      "breaking_input": "First attempt returns a non-retryable status but the response body read itself hangs: the abort timer uses `cap`, fine — but if `rem` is between 1 and 1500 (deadline 1.5s away), cap=rem, the fetch is aborted at the deadline and reported as 'timeout after 1s' with '0m00s left, retrying' — the next loop iteration then breaks, yet the retry clause in the line promised a retry that never happens.",
+      "why": "The ', retrying' suffix is printed before the next iteration's rem check; a reader of the heartbeat trusts a retry that the deadline then cancels — one-read/another-use between the printed promise and the loop's own guard.",
+      "fix": "Decide retryability against left() before composing the line, and omit ', retrying' when rem <= pause.",
+      "twin_of": null
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/schema-subset.mjs:78",
+      "breaking_input": "A schema node { type: [\"string\",\"number\"], minLength: 1 }: baseType returns null, so the APPLIES_TO lint for minLength runs with t=null and is skipped (no 'minLength does not apply' finding), and the only error reported is the generic 'not a nullable pair' — the unenforced-keyword error class ADR-0227 says must stay refused is silently unreported on the same node.",
+      "why": "The keyword-lint reads the pair's real type via baseType, so an INVALID pair disables the very keyword enforcement the lint exists for — one defect masks a second on the same node.",
+      "fix": "When the pair is invalid, still run each keyword's applies-to check against every non-null entry in the list (worst case), or emit an explicit 'keywords skipped: unparseable type' finding.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:479",
+      "breaking_input": "ARC_ATTACK_MINUTES=0.01 (the accepted minimum, 600 ms) with the default grace 60 s: the watchdog fires at 600ms+60000ms, so a child that ends itself on-budget at 600 ms is fine, but a child one millisecond late is 'ended by the watchdog' a full grace later — while a watcher reading the status file sees 'running' for 60 s after a 0.01-minute deadline it was told to trust.",
+      "why": "Grace is not scaled or bounded relative to minutes; at extreme minute values the watchdog grace dwarfs the deadline and the status file reports a running state far past the stated deadline, contradicting 'says where it is'.",
+      "fix": "Clamp grace to a fraction of the deadline (e.g. min(graceMs, minutes*60000/10)).",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:279",
+      "breaking_input": "Two arc-attack processes (same lane, two checkouts) are both invoked with --status-file pointing at a shared NFS/FAT path or the same path: each writes `<file>.<pid>.tmp` then renames — safe per-process, but a reader sampling between an unlink-happy watcher and renames can hit ENOENT on the rename target; on Windows renameSync over a file another process holds open throws EPERM, leaving the last 'running' line stale forever with only a WARN.",
+      "why": "A watcher that trusts the one-line contract reads a stale 'running' status after the run ended; failure mode is a WARN on the parent's stderr the watcher never sees.",
+      "fix": "Retry the rename with a short backoff, and on final failure write the line directly (non-atomic) so the status never goes stale.",
+      "twin_of": null
+    }
+  ]
+}

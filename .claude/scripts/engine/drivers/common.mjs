@@ -136,7 +136,9 @@ export function msUntilDeadline() {
   // run with "0ms left". MAX_BUFFER above validates and falls back to a SAFE value; this one
   // validated and fell back to NO GUARD. Twin readers of the same rule, one failing closed and
   // one failing open, which is the defect this cycle has now hit four times.
-  if (!/^\d+$/.test(String(raw).trim())) {
+  // A digit string is not yet an epoch millisecond: forty digits pass /^\d+$/ and become Infinity, which every
+  // caller reads as "no deadline" -- failing OPEN again (attack 415d3a3 L2). A safe integer or it is refused.
+  if (!/^\d+$/.test(String(raw).trim()) || !Number.isSafeInteger(Number(String(raw).trim()))) {
     const e = new Error(`ARC_DRIVER_DEADLINE_EPOCH_MS is ${JSON.stringify(raw)}, which is not an epoch millisecond — refusing to run without the clock the caller believes it set`);
     e.arcDeadlineMalformed = true;
     throw e;

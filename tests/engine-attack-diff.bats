@@ -484,7 +484,7 @@ EOF
 @test "arc-attack watches each surface: started line, heartbeat, one-line status file, watchdog past the deadline" {
   run node "$ARC_ROOT/tests/engine-attack-watch.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"RAN: 10 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  [[ "$output" == *"RAN: 14 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
   [[ "$output" == *"ok A: heartbeats while it ran, each quoting the child's latest line"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok A: the watchdog ended the child just past its deadline -- not before, not minutes after"* ]] || { echo "$output"; false; }
