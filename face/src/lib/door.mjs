@@ -229,6 +229,8 @@ export const DOOR_ROUTES = Object.freeze({
   "/api/legal": read(),
   "/api/ventures": read(),
   "/api/absorb": read(),
+  // Phase 07 (REQ-12, ADR-1346): the docs wiki's own extract, build-time facts only, for the Reference room.
+  "/api/reference": read(),
   "/api/decide": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: true }),
   "/api/ask": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
   // Phase 05 (REQ-07, ADR-1339): the work door. No module declares these in its `routes` -- the host's ops dock

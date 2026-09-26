@@ -62,6 +62,7 @@ import { laneHeader, validLaneName } from "../core/lane-resolve.mjs";
 import { askOffline } from "./lib/face/ask-offline.mjs";
 // Phase 04's read routes (REQ-06). The handlers live beside the door; THIS file keeps the one route table.
 import * as reads from "./lib/face/reads.mjs";
+import { apiReference } from "./lib/face/reference/route.mjs";
 // Phase 05's work door (REQ-07, ADR-1339): the op registry and the plan/apply/run verbs. Same rule -- the handlers
 // live beside the door, the route table stays here.
 import { createWorkDoor, runTool, WORK_STATUS } from "./lib/face/work-door.mjs";
@@ -796,6 +797,8 @@ const ROUTES = Object.freeze([
   { method: "GET", path: "/api/legal", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiLegal(ctx, url) },
   { method: "GET", path: "/api/ventures", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiVentures(ctx, url) },
   { method: "GET", path: "/api/absorb", mutates: false, spineEffect: "none", handler: (ctx, url) => reads.apiAbsorb(ctx, url) },
+  // Phase 07 (REQ-12, ADR-1346): wiki-build's own extract and narrative, imported -- build-time facts, never the spine.
+  { method: "GET", path: "/api/reference", mutates: false, spineEffect: "none", handler: (ctx, url) => apiReference(ctx, url) },
   { method: "POST", path: "/api/decide", mutates: true, spineEffect: "write", handler: (ctx, url, tail, body) => apiDecide(ctx, body) },
   { method: "POST", path: "/api/ask", mutates: false, spineEffect: "receipt", proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiAsk(ctx, body) },
   // Phase 05 (REQ-07, ADR-1339): the WORK door. `plan` runs an op's dry run, which writes nothing (the per-op fixture

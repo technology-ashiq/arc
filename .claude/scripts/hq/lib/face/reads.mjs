@@ -299,7 +299,7 @@ function readCopy(ctx, rel, parse) {
  * @param {string} parser @param {{ path: string, sha256: string }[]} sources @param {Record<string, unknown>} body
  * @param {{ torn: number, skipped: number } | null} [unread]
  */
-function answer(ctx, route, badge, parser, sources, body, unread = null) {
+export function answer(ctx, route, badge, parser, sources, body, unread = null) {
   return {
     mode: ctx.mode, route, badge, parser,
     sources: sources.map((s) => ({ path: s.path, sha256: s.sha256 })),
