@@ -152,3 +152,16 @@ load 'test_helper'
 # _reconcile step compares declared-vs-executed TAP counts and scans for `# bats warning` on
 # every leg, which catches non-execution globally and actually works. Deleted rather than
 # kept as a comfort.
+
+@test "reference door: one wiki extract, build-time facts only, refused whole on a new schema, no second walker, read-only" {
+  run node "$ARC_ROOT/tests/face/reference-door.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  # A failed check prints a line STARTING "FAIL "; ok lines name mutants, so never a bare *FAIL* glob (attack 60c13e9 B1).
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok A: the route's entity ids equal wiki-build --json's, both ways"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok B: a marker planted in the spine and in .claude/state/ is nowhere in the body (ADR-1509)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok C: an extract of schema 2 is refused whole (SOURCE_INVALID), never rendered in part"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok D: MUTANT CONTROL -- a copy of the route that lists a directory is caught by the same gate"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok E: every file of the tree the route read is byte-identical, and none was added, after two runs (ADR-1504)"* ]] || { echo "$output"; false; }
+}

@@ -692,7 +692,7 @@ export function renderWiki(wiki, narrativeOf) {
 }
 
 /** Read every entity's narrative by NAMED path (no listing); null when absent. */
-function narrativeReader(repo) {
+export function narrativeReader(repo) {
   return (key, id) => {
     const text = readText(repo, `${WIKI_DIR}/${NARRATIVE_DIR}/${PAGE_DIRS[key]}/${id}.md`);
     // The wiki-stale fingerprint is metadata for the author, not prose for the reader.
