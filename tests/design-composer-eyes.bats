@@ -239,7 +239,10 @@ teardown() { _arc_teardown; }
 # unreadable. For Grep and Glob an absent path MEANS "everything", and the two must not
 # share a branch.
 
-_payload() { printf '{"tool_name":"%s","tool_input":%s}' "$1" "$2"; }
+# A composer's call: ADR-1419 binds the read and write boundaries to agent_type ui-composer, so
+# every refusal case below is a composer's. The main session's call is _main_payload.
+_payload() { printf '{"agent_id":"c1","agent_type":"ui-composer","tool_name":"%s","tool_input":%s}' "$1" "$2"; }
+_main_payload() { printf '{"session_id":"s","tool_name":"%s","tool_input":%s}' "$1" "$2"; }
 
 @test "composer scope: a Grep that NAMES a sibling variant is refused" {
   _composer_sandbox; _arm
@@ -1130,4 +1133,79 @@ _first_release() { printf '%s\n' "$1" | sed -n 's/^  [^:]*release[^:]*: //p' | h
   # The paired positive for every branch above: a future marker is described, and still refuses.
   _read_sep Read '{"file_path":"README.md"}'
   [ "$status" -eq 2 ] || { echo "a future-dated marker relaxed the boundary: $status"; false; }
+}
+
+# ---------- ADR-1419: the boundaries bind only a ui-composer caller ----------
+#
+# The read and write checks enforced against EVERY caller while a marker was armed, so an armed or
+# abandoned compose locked the operator out of the tree (lexos-p01/variant-a, three weeks). They
+# now ask the Bash check's identity parser who is calling -- one parser, never a second copy -- and
+# only a ui-composer call is judged. Each allowed case is paired with the composer's refusal on the
+# same path, so a check that simply stopped enforcing fails here too.
+
+_main_read() {
+  run --separate-stderr bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" <<< "$(_main_payload "$1" "$2")"
+}
+_main_write() {
+  run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" "$(_main_payload "$1" "$2")"
+}
+
+@test "ADR-1419: the main session reads and writes a sibling while a composer is armed" {
+  _composer_sandbox; _arm
+  _main_read Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 0 ] || { echo "main-session Read of a sibling refused: $status $stderr"; false; }
+  _main_read Grep '{"pattern":"page"}'
+  [ "$status" -eq 0 ] || { echo "main-session unscoped Grep refused: $status $stderr"; false; }
+  _main_write Write '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}'
+  [ "$status" -eq 0 ] || { echo "main-session Write of a sibling refused: $status $stderr"; false; }
+  # Paired: the same calls, as the composer, still refuse.
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 2 ] || { echo "composer Read of a sibling allowed: $status"; false; }
+  _write_sep Write '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}'
+  [ "$status" -eq 2 ] || { echo "composer Write of a sibling allowed: $status"; false; }
+}
+
+@test "ADR-1419: a composer reads and writes a sibling and is refused, namespaced or not" {
+  _composer_sandbox; _arm
+  local body='{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "{\"agent_type\":\"arc:UI-Composer\",\"tool_name\":\"Read\",\"tool_input\":$body}"
+  [ "$status" -eq 2 ] || { echo "namespaced composer Read allowed: $status $output"; false; }
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "{\"agent_type\":\"arc:UI-Composer\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"docs/design/explore/lexos-v1/variant-b/x.html\",\"content\":\"x\"}}"
+  [ "$status" -eq 2 ] || { echo "namespaced composer Write allowed: $status $output"; false; }
+  # Its own directory stays open to it.
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html"}'
+  [ "$status" -eq 0 ] || { echo "composer refused its own page: $status $stderr"; false; }
+}
+
+@test "ADR-1419: a payload naming ui-composer whose identity cannot be read exactly is refused" {
+  _composer_sandbox; _arm
+  # Two agent_type keys: which one the harness meant cannot be read exactly (the Bash check's BL-7).
+  local dup='{"agent_type":"ui-composer","agent_type":"Explore","tool_name":"%s","tool_input":%s}'
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "$(printf "$dup" Read '{"file_path":"README.md"}')"
+  [ "$status" -eq 2 ] || { echo "unreadable identity Read allowed: $status $output"; false; }
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(printf "$dup" Write '{"file_path":"README.md","content":"x"}')"
+  [ "$status" -eq 2 ] || { echo "unreadable identity Write allowed: $status $output"; false; }
+  # Paired: another agent, readable, passes the same read.
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< '{"agent_type":"Explore","tool_name":"Read","tool_input":{"file_path":"README.md"}}'
+  [ "$status" -eq 0 ] || { echo "a readable non-composer agent was refused: $status $output"; false; }
+}
+
+@test "ADR-1419: two armed markers refuse a composer only" {
+  _composer_sandbox
+  bash "$(_csc)" --begin lexos-v1 variant-a >/dev/null
+  bash "$(_csc)" --begin lexos-v1 variant-b >/dev/null
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html"}'
+  [ "$status" -eq 2 ] || { echo "a composer passed with two boundaries armed: $status"; false; }
+  printf '%s\n' "$stderr" | grep -q "armed at once" || { echo "no serial-composition reason: $stderr"; false; }
+  _write_sep Write '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html","content":"x"}'
+  [ "$status" -eq 2 ] || { echo "a composer wrote with two boundaries armed: $status"; false; }
+  _main_read Read '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html"}'
+  [ "$status" -eq 0 ] || { echo "main session refused with two boundaries armed: $status $stderr"; false; }
+  _main_write Write '{"file_path":"README.md","content":"x"}'
+  [ "$status" -eq 0 ] || { echo "main-session write refused with two boundaries armed: $status $stderr"; false; }
 }
