@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/wiki-build.mjs:494",
+      "breaking_input": "A product manifest.json with \"requires\": [\"constructor\"] (also \"toString\", \"valueOf\", \"hasOwnProperty\" or \"__proto__\"). The same input in an ADR whose `Product:` first token is one of those words breaks the adrsFor accumulator at :501. Then run `wiki-build.mjs --check` or GET /api/reference.",
+      "why": "The old code used Maps. relationsOf now accumulates into plain `{}` objects, and `requiredBy[r] || []` on an inherited member returns a function or Object.prototype, which is truthy. `[...(fn), p.id]` then throws `TypeError: not iterable`, so the whole extract-to-pages build and the door answer die on one odd id. `__proto__` is worse: the read throws, and an assignment would set the prototype and drop the key. This is a regression introduced by moving from Map to plain objects so the result can cross the door as JSON.",
+      "fix": "Accumulate with Maps or `Object.create(null)` and convert with `Object.fromEntries` at the end. Read only with `Object.hasOwn`. Refuse or name ids like `__proto__` rather than dropping them.",
+      "twin_of": "Attaching modules used a plain object -> the `FILE_ALLOW[id]` twin: a lookup by an id from outside uses own keys only. Also `out[key] =` on a plain object -> Build maps from untrusted keys without a prototype."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:75",
+      "breaking_input": "An extract whose manifest facts have a wrong shape: a product with \"requires\": 5 or {}, an ADR band whose `facts` has no `adrs`, or a stub wiki with `entities: {}` and the real relationsOf. `\"requires\": \"core\"` is silently wrong: it iterates characters and creates requiredBy keys `c`, `o`, `r`, `e`.",
+      "why": "`w.relationsOf(wk)` runs in the door after only an exports-kind check on WANT. `for (const p of E.products)`, `for (const r of p.facts.requires || [])` and `b.facts.adrs.map` are unguarded loops over shapes the door never checked. The TypeError leaves referenceBody as an unnamed INTERNAL 500 instead of a named SOURCE_INVALID. Before this change renderWiki ran only at build time, so the same input could not reach a request.",
+      "fix": "Shape-check each container (array, array of strings, band with an `adrs` array) inside relationsOf or before the call. Wrap the call so a throw becomes the door's named SOURCE_INVALID refusal with a scrubbed message, never a 500.",
+      "twin_of": "A wrong shape rendered instead of refused -> Shape-check a parsed source before the first loop over it; a wrong shape is SOURCE_INVALID, never a TypeError. Also: A lane's fold threw and the door answered 500."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "face/src/modules/company/reference/fold.mjs:150",
+      "breaking_input": "A product manifest whose `faceRoom` names a registry row that is not openable, for example the `lane` row (status \"template\") in rooms.generated.json or any row with status \"planned\". `served = ctx.rooms.some(r => r.id === room)` is true, so `canOpen: true` and the View draws an enabled \"Open the live room: lane\" button that calls ctx.onOpen(\"lane\").",
+      "why": "The check is presence in the registry only. The rail treats planned and template rooms as not openable, so the button opens a room the shell itself refuses to link. `room` is free text from a manifest and is never checked against the room-id grammar. This is the `roomLink` planned/template defect again, in a new reader of the same question.",
+      "fix": "Use the same predicate the rail uses (status built or served, not planned or template, id matches the room grammar). Ideally import that one predicate rather than re-spelling it.",
+      "twin_of": "`roomLink` counted planned and template rooms as openable, the fourth reader of that question and the only one without the filter -> same predicate as the rail."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/src/modules/company/reference/fold.mjs:137",
+      "breaking_input": "An entity id that names an inherited Object member: a command file `.claude/commands/constructor.md`, an agent `toString.md`, or a product directory `valueOf`. On the JSON-parsed body, `asObject(rel.commandOwner)[eid]`, `productLane[eid]` (:144) and `rel.requiredBy[eid]` read the inherited function, not an own key.",
+      "why": "The maps are ordinary JSON-parsed objects. `str(Object)` gives \"function Object() { [native code] }\", which is truthy. A command page then draws an \"Owning product\" row with that text as an unresolvable link. A product page draws a \"Lane\" row for a lane that does not exist. This is a lookup by an id from outside using inherited keys, and it depends on asObject not returning a null-prototype copy.",
+      "fix": "Look up with `Object.hasOwn(map, eid) ? map[eid] : undefined`. Alternatively copy each relation map onto `Object.create(null)` once, at the top of fold.",
+      "twin_of": "Attaching modules used a plain object -> the `FILE_ALLOW[id]` twin: a lookup by an id from outside uses own keys only."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/docs/wiki-build.mjs:478",
+      "breaking_input": "A manifest.json listing a command as \".claude\\\\commands\\\\arc-x.md\" (Windows separators), or `\"commands\": [null]`. With the backslash form `stemOfPath` returns \".claude\\\\commands\\\\arc-x\", so commandOwner gets the wrong key and the command's page shows no owning product, silently. With `null` it returns null, so `commandOwner[null]` writes the key \"null\", and a command file named `null.md` is then attributed to that product.",
+      "why": "The stem is taken by splitting on `/` only. There are now three copies of the same stem function (`stemOfPath` here, the surviving `stemOf` in renderWiki, and `stem` in fold.mjs), and each has the same blind spots. Malformed entries become a key or a miss instead of a named finding.",
+      "fix": "Keep one exported stem function. Split on both separators, or refuse a backslash path by name. Skip and report non-string entries instead of keying them.",
+      "twin_of": "The same day-cut logic lived twice, byte-identical -> import the one implementation; never copy it. Also: A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/src/modules/company/reference/fold.mjs:91",
+      "breaking_input": "Once PR B2 puts the entity in the hash, `at=<a key present in body.entities but absent from body.rendered>/<any id in it>`. `isType` (:90) and `has()` (:82) both require `rendered.includes(key)`, but `entity = list(key).find(...)` does not.",
+      "why": "Two reads of one question disagree. The room draws a full entity page, with facts and ADRs, for a type the door lists as not rendered. That page has no `pages[at]` entry, so the Meta panel is blank. It is latent today because picks are React state, but B2 is announced to feed this pick from the URL hash.",
+      "fix": "Gate `entity` on `rendered.includes(key)` the same way `isType` and `has` are gated. Derive all three from one predicate.",
+      "twin_of": "The loaderId filter guarded `requestWillBeSent` but not `loadingFinished`/`loadingFailed` -> a filter on one event of a pair applies to its twin."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/face/reference-fold.mjs:91",
+      "breaking_input": "State one: the tree has zero `_narrative` files. The \"draws the owner's own words\" check becomes `check(..., true)`, an unconditional pass that still counts toward the pinned `RAN: 10`. State two: every paged entity has a narrative, which is exactly the goal ADR-1508 works toward. Then `without` is undefined, and `without.split(\"/\")` throws inside the argument list of `check`, so the suite dies with a stack before its RAN line.",
+      "why": "The arm reads the live tree's narrative state. When empty it passes vacuously and counts as a run. When full it crashes instead of failing or skipping, so CI goes red when the narrative debt is finally paid. The bats wrapper cannot tell either case apart from a real result.",
+      "fix": "Build a fixture body for the pending and present cases (one entity with narrative, one without) instead of finding them on the tree. If the tree is used, report UNMEASURED by name for the empty state and guard `without`.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran -> Assert it RAN before asserting what it printed."
+    }
+  ]
+}

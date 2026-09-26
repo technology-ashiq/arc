@@ -112,7 +112,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             {f.entity.hasAdrs && (
               <ul className="divide-y" style={{ borderColor: 'var(--line-1)' }}>
                 {f.entity.adrs.map((a) => (
-                  <li key={a.number} className="py-1.5 flex flex-wrap gap-x-3 text-[12.5px]" style={{ fontFamily: UI }}>
+                  <li key={a.key} className="py-1.5 flex flex-wrap gap-x-3 text-[12.5px]" style={{ fontFamily: UI }}>
                     <span style={{ fontFamily: MONO, color: 'var(--text-1)' }}>ADR {a.number}</span>
                     <span style={{ color: 'var(--text-1)' }}>{a.title}</span>
                     <span style={{ color: 'var(--text-3)' }}>{a.status} · {a.date}</span>

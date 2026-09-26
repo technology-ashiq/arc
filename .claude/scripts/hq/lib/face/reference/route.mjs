@@ -72,7 +72,13 @@ export async function referenceBody(repo, inject = {}) {
     }
   }
   // The cross-links the markdown draws, from the SAME function renderWiki draws them with (ADR-1346 §1).
-  const relations = w.relationsOf(wk);
+  let relations;
+  try { relations = w.relationsOf(wk); }
+  catch (err) { throw new ReadError("SOURCE_INVALID", `the wiki's cross-links could not be computed: ${scrub(String(err && err.message || err), repo)}`); }
+  const RELATION_KEYS = ["requiredBy", "commandOwner", "agentOwner", "adrsFor", "productLane"];
+  const relOk = relations !== null && typeof relations === "object"
+    && RELATION_KEYS.every((k) => relations[k] !== null && typeof relations[k] === "object" && !Array.isArray(relations[k]));
+  if (!relOk) throw new ReadError("SOURCE_INVALID", `the wiki's cross-links are not the five maps the room reads (${RELATION_KEYS.join(", ")}) -- refused whole, never drawn as "none"`);
   return { schema: wk.schema, stats: wk.stats, entities: wk.entities, pages, narrative, unpaged, relations, pageDirs: w.PAGE_DIRS, typeKey: w.TYPE_KEY, rendered: w.RENDERED, titles: w.TITLES, singular: w.SINGULAR };
 }
 

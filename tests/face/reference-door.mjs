@@ -107,6 +107,16 @@ try {
     check("C: an extract of schema 2 is refused whole (SOURCE_INVALID), never rendered in part", !!s2 && s2.code === "SOURCE_INVALID" && s2.message.includes("schema 2"), JSON.stringify(s2));
     const bad = await refusal(() => R.referenceBody(REPO, { wiki: stub({ extract: async () => ({ code: 1, message: "an inventory the wiki has not decided about" }) }) }));
     check("C: an extract that did not complete is refused, with its reason", !!bad && bad.code === "SOURCE_INVALID" && bad.message.includes("not decided"), JSON.stringify(bad));
+    // The cross-links: a relationsOf that throws, or answers the wrong shape, is a NAMED refusal (attack 53ee223 B2, L4).
+    const threw = await refusal(() => R.referenceBody(REPO, { wiki: stub({ relationsOf: () => { throw new TypeError("not iterable"); } }) }));
+    const shape = await refusal(() => R.referenceBody(REPO, { wiki: stub({ relationsOf: () => ({ requiredBy: {} }) }) }));
+    check("C: cross-links that throw, or come back the wrong shape, are SOURCE_INVALID -- never a 500, never drawn as 'none'",
+      !!threw && threw.code === "SOURCE_INVALID" && !!shape && shape.code === "SOURCE_INVALID", JSON.stringify([threw, shape]));
+    // wiki-build's relationsOf on hostile ids: `constructor` / `__proto__` are keys, not the prototype (L5, B1).
+    const wbh = await import(pathToFileURL(join(REPO, ".claude/scripts/docs/wiki-build.mjs")).href);
+    const hostile = wbh.relationsOf({ entities: { products: [{ id: "a", facts: { requires: ["constructor", "__proto__"] } }, { id: "b", facts: { requires: "core" } }], lanes: [], adrBands: [{ id: "0000", facts: {} }] } });
+    check("C: relationsOf keeps 'constructor' and '__proto__' as plain keys, ignores a non-list, and never throws",
+      JSON.stringify(hostile.requiredBy) === JSON.stringify(JSON.parse('{"constructor":["a"],"__proto__":["a"]}')) && Object.getPrototypeOf(hostile.requiredBy) === null, JSON.stringify(hostile));
     const gone = stub({}); delete gone.narrativeReader;
     const miss = await refusal(() => R.referenceBody(REPO, { wiki: gone }));
     check("C: a wiki-build that stopped exporting narrativeReader is refused (PARSER_UNAVAILABLE), never re-derived here",
@@ -166,4 +176,4 @@ try {
   try { rmSync(tmp, { recursive: true, force: true }); } catch { console.log(`WARN the scratch dir was not removed: ${tmp}`); }
 }
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran >= 27 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 29 ? 0 : 1;
