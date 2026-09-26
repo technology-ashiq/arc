@@ -163,5 +163,5 @@ load 'test_helper'
   [[ "$output" == *"ok B: a marker planted in the spine and in .claude/state/ is nowhere in the body (ADR-1509)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok C: an extract of schema 2 is refused whole (SOURCE_INVALID), never rendered in part"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok D: MUTANT CONTROL -- a copy of the route that lists a directory is caught by the same gate"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok E: every tracked docs/wiki file is byte-identical after the route ran twice (ADR-1504)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok E: every file of the tree the route read is byte-identical, and none was added, after two runs (ADR-1504)"* ]] || { echo "$output"; false; }
 }
