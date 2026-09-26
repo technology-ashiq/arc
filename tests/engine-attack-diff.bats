@@ -473,13 +473,6 @@ EOF
   [[ "$output" == *"CODE=4"* ]] && [[ "$output" == *"the branch upstream is at 222222222222"* ]] || { echo "mismatch: $output"; false; }
 }
 
-# LAST, and it must stay last. bats silently drops a @test it cannot register (a non-ASCII name was
-# the Cycle 7 case), and a suite running fewer tests than it declares looks exactly like a pass.
-@test "suite: every declared test in this file was registered and reached" {
-  local declared; declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$declared" -ge 27 ] || { echo "declared=$declared"; false; }
-  [ "$BATS_TEST_NUMBER" -eq "$declared" ] || { echo "registered index $BATS_TEST_NUMBER, declared $declared"; false; }
-}
 
 @test "arc-attack watches each surface: started line, heartbeat, one-line status file, watchdog past the deadline" {
   run node "$ARC_ROOT/tests/engine-attack-watch.mjs"
@@ -499,4 +492,12 @@ EOF
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
   [[ "$output" == *"ok CONTROL: the rule as it stood flagged every one of those lines -- the exemption is what changed"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a literal credential, or one glued to an env read, is still caught"* ]] || { echo "$output"; false; }
+}
+
+# LAST, and it must stay last. bats silently drops a @test it cannot register (a non-ASCII name was
+# the Cycle 7 case), and a suite running fewer tests than it declares looks exactly like a pass.
+@test "suite: every declared test in this file was registered and reached" {
+  local declared; declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
+  [ "$declared" -ge 27 ] || { echo "declared=$declared"; false; }
+  [ "$BATS_TEST_NUMBER" -eq "$declared" ] || { echo "registered index $BATS_TEST_NUMBER, declared $declared"; false; }
 }

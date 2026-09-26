@@ -32,7 +32,9 @@ const run = (port, budgetMin, spine) => new Promise((ok) => {
   const child = spawn(process.execPath, [join(REPO, ".claude/scripts/engine/arc-run.mjs"), "--process", "commit-msg-draft", "--driver", "generic-api",
     "--trial-model", "deepseek/deepseek-v4-flash-0731", "--budget", `min=${budgetMin}`, "--root", REPO], {
     env: { ...process.env, ARC_LLM_ENDPOINT: `http://127.0.0.1:${port}/v1/chat/completions`, ARC_LLM_API_KEY: "test-key-not-a-secret",
-      ARC_LLM_TIMEOUT_MS: "60000", ARC_SPINE_ROOT: spine, ARC_DRIVER_FAKE: "" },
+      ARC_LLM_TIMEOUT_MS: "60000", ARC_SPINE_ROOT: spine, ARC_DRIVER_FAKE: "",
+      // Stream mode, as arc-attack runs it: the driver's lines reach this stderr as they happen, whatever the verdict.
+      ARC_RUN_STREAM: "1" },
     windowsHide: true,
   });
   let err = "";
@@ -43,6 +45,9 @@ const run = (port, budgetMin, spine) => new Promise((ok) => {
   child.on("error", () => { clearTimeout(guard); ok({ code: null, err, ms: Date.now() - t0, spawned: false }); });
 });
 
+// Every attempt line, wherever arc-run placed it (live, or inside its final `arc-run: <why>`), once each, in order.
+const attempts = (text) => [...new Set([...String(text).matchAll(/generic-api: attempt \d\/3[^\r\n]*/g)].map((m) => m[0].trim()))];
+
 const tmp = mkdtempSync(join(tmpdir(), "engine-driver-deadline-"));
 try {
   // ---- A. never answers: the deadline, not the 60 s cap, ends the run ----
@@ -51,7 +56,7 @@ try {
     const s = await serve(() => { hits++; /* accept, never answer */ });
     const r = await run(s.address().port, 0.1, join(tmp, "spine-a"));
     s.closeAllConnections?.(); s.close();
-    const lines = r.err.split(/\r?\n/).filter((l) => l.startsWith("generic-api: attempt "));
+    const lines = attempts(r.err);
     check("fixture: arc-run spawned and the endpoint was reached (vacuous-pass guard)", r.spawned && hits >= 1, `spawned=${r.spawned} hits=${hits}`);
     check("A: a never-answering endpoint ends on the run's ~6 s deadline, far inside one 60 s attempt cap", r.ms < 30_000 && r.code !== 0, `ms=${r.ms} code=${r.code}`);
     check("A: the driver said so as it happened -- a timeout line naming the attempt and the time left",
@@ -63,7 +68,7 @@ try {
     const s = await serve((req, res) => { hits++; res.writeHead(503, { "content-type": "application/json" }); res.end("{}"); });
     const r = await run(s.address().port, 2, join(tmp, "spine-b"));
     s.close();
-    const lines = r.err.split(/\r?\n/).filter((l) => l.startsWith("generic-api: attempt "));
+    const lines = attempts(r.err);
     check("fixture: the 503 endpoint was hit three times (vacuous-pass guard)", r.spawned && hits === 3, `hits=${hits}`);
     check("B: one line per failed attempt, each with its status, the first two retrying and the last not",
       lines.length === 3 && lines.every((l, i) => l.startsWith(`generic-api: attempt ${i + 1}/3: status 503 after `))
