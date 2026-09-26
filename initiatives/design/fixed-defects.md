@@ -22,3 +22,14 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **Remote text reached a tab-separated log verbatim** (B11) — `design-refpack.mjs` — *strip control characters from every logged field.*
 - **A Windows reserved device name passed the id grammar** (B12) — `design-refpack.mjs` — *the lane-name reserved list applies to every id that becomes a directory.*
 - **A full URL with its query string went into a committed file** in a public repo (B13) — `design-refpack.mjs` — *drop query and fragment before anything is committed.*
+
+## Phase 02 slice B, attack round 2 (2026-09-26)
+
+- **A seam gate added to one CLI and not its sibling** (B1) — `design-robots.mjs` — *a fix to one entry point is checked in every entry point that shares the seam.*
+- **A plain-object lookup keyed by remote text** found an inherited property (`constructor`) (B2) — `design-refpack.mjs` — *use `Object.hasOwn` or a Map for any lookup keyed by untrusted input.*
+- **An IPv4-in-IPv6 address in the URL parser's hex spelling** passed the private check (B3) — `design-robots.mjs` — *parse addresses to bytes before classifying; never match their text.*
+- **The second gate on a redirect was added to one redirect loop only** (robots hops unbound) (B4) — `design-robots.mjs` — *every loop that follows a redirect carries the same guards.*
+- **A failing probe command read as "not applicable"** (git rev-parse error skipped the mark) (B5) — `design-refpack.mjs` — *only a positive "absent" skips; an error is a failure.*
+- **Cleanup deleted a content-addressed file an earlier run owned** (B6) — `design-refpack.mjs` — *clean up only what this run created.*
+- **A non-text 2xx parsed as an empty rule set** and became ALLOW (B8) — `design-robots.mjs` — *check the content type and shape before a body is trusted as the format it claims.*
+- **Emptiness checked before sanitising** (B7) — `design-refpack.mjs` — *validate the value that will be written, after every transform.*

@@ -42,7 +42,7 @@
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, linkSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -87,6 +87,21 @@ function field(v) {
 function cell(v) {
   return field(v).replace(/\|/g, "\\|");
 }
+
+// A URL as it may be written anywhere: no userinfo, no query, no fragment. A signed CDN query
+// is a credential, and the logs sit one `git add -f` away from a public repo (attack r2 B10).
+function shown(u) {
+  return `${u.origin}${u.pathname}`;
+}
+
+// The first bytes of each cached type. A real response must be what its content-type claims.
+const MAGIC = {
+  png: (b) => b.length > 8 && b[0] === 0x89 && b.toString("latin1", 1, 4) === "PNG",
+  jpg: (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  gif: (b) => b.length > 6 && b.toString("latin1", 0, 4) === "GIF8",
+  webp: (b) => b.length > 12 && b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP",
+  avif: (b) => b.length > 12 && b.toString("latin1", 4, 8) === "ftyp" && /^avi[fs]$/.test(b.toString("latin1", 8, 12)),
+};
 
 function validId(v) {
   return ID.test(v) && !RESERVED.test(v);
@@ -157,10 +172,10 @@ async function main(argv) {
     fail(2, `refused: source '${id}' has a hosts list that is empty or not bare host names`);
   }
   if (hosts === null && !fake) fail(2, `refused: source '${id}' names no hosts, so a URL cannot be bound to it; the owner adds hosts to its registry row`);
+  const outsideHosts = (u) => (hosts !== null && !hostAllowed(u.hostname, hosts) ? `is not one of source '${id}' hosts [${hosts.join(", ")}]` : null);
   const bind = (u) => {
-    if (hosts !== null && !hostAllowed(u.hostname, hosts)) {
-      fail(2, `refused: ${u.hostname} is not one of source '${id}' hosts [${hosts.join(", ")}]`);
-    }
+    const why = outsideHosts(u);
+    if (why) fail(2, `refused: ${u.hostname} ${why}`);
   };
   bind(url);
 
@@ -172,25 +187,27 @@ async function main(argv) {
   mkdirSync(stateDir, { recursive: true });
   const transport = {
     async get(target, opts) {
-      appendFileSync(attemptsLog, `${new Date().toISOString()}\t${id}\t${via}\tGET\t${field(target)}\n`);
+      appendFileSync(attemptsLog, `${new Date().toISOString()}\t${id}\t${via}\tGET\t${field(shown(new URL(target)))}\n`);
       return inner.get(target, opts);
     },
   };
   const record = (u, verdict, reason) => {
-    appendFileSync(availabilityLog, `${new Date().toISOString()}\t${id}\t${via}\t${field(u.href)}\t${verdict}\t${field(reason)}\n`);
+    appendFileSync(availabilityLog, `${new Date().toISOString()}\t${id}\t${via}\t${field(shown(u))}\t${verdict}\t${field(reason)}\n`);
   };
 
-  // 3. robots preflight, recorded whatever it says.
+  // 3. robots preflight, recorded whatever it says. A robots.txt redirect is held to the same
+  // host binding as the screen (attack r2 B4).
   const check = async (u) => {
-    const d = await preflight({ url: u, ua: DEFAULT_UA, transport });
+    const d = await preflight({ url: u, ua: DEFAULT_UA, transport, guard: outsideHosts });
     record(u, d.verdict, d.reason);
-    if (d.verdict !== "ALLOW") fail(EXIT[d.verdict], `${d.verdict} ${field(u.href)} -- ${field(d.reason)}`);
+    if (d.verdict !== "ALLOW") fail(EXIT[d.verdict], `${d.verdict} ${field(shown(u))} -- ${field(d.reason)}`);
   };
   await check(url);
 
-  // 4. a row without a principle is not evidence.
-  const principle = (o["--principle"] || "").trim();
-  const avoid = (o["--avoid"] || "").trim();
+  // 4. a row without a principle is not evidence -- judged on the text that would be written,
+  // so a principle of control characters alone is empty (attack r2 B7).
+  const principle = field(o["--principle"] || "");
+  const avoid = field(o["--avoid"] || "");
   if (!principle) fail(1, "--principle is required: a row with no adaptable principle is not evidence");
   if (!avoid) fail(1, "--avoid is required: every row names what not to copy");
 
@@ -207,17 +224,20 @@ async function main(argv) {
     let next;
     try { next = parseHttpUrl(new URL(res.location, current.href).href); } catch { next = null; }
     if (!next) { record(current, "FETCH-FAILED", "redirect to a non-http(s) location"); fail(5, "the screen redirected to something that is not an http(s) URL"); }
-    if (current.protocol === "https:" && next.protocol === "http:") { record(next, "FETCH-FAILED", "https to http downgrade"); fail(5, `refused: redirect from https to http (${field(next.href)})`); }
+    if (current.protocol === "https:" && next.protocol === "http:") { record(next, "FETCH-FAILED", "https to http downgrade"); fail(5, `refused: redirect from https to http (${field(shown(next))})`); }
     bind(next);
     await check(next);
     current = next;
   }
   const type = String(res.contentType || "").split(";")[0].trim().toLowerCase();
-  const ext = IMAGE_EXT[type];
+  // Own keys only: `constructor` or `__proto__` as a content-type must not find an inherited
+  // property and pass as an image (attack r2 B2).
+  const ext = Object.hasOwn(IMAGE_EXT, type) ? IMAGE_EXT[type] : null;
   const bad = res.tooLarge ? "larger than the size cap"
     : !(res.status >= 200 && res.status < 300) ? `HTTP ${res.status}`
     : !ext ? `not an image (content-type '${type || "none"}')`
-    : res.body.length === 0 ? "an empty body" : null;
+    : res.body.length === 0 ? "an empty body"
+    : !fake && !MAGIC[ext](res.body) ? `the bytes are not a ${ext} image, whatever the content-type says` : null;
   if (bad) {
     record(current, "FETCH-FAILED", bad);
     fail(5, `the screen was not cached: ${field(bad)}`);
@@ -225,29 +245,38 @@ async function main(argv) {
   const sha = createHash("sha256").update(res.body).digest("hex");
   const image = join(stateDir, `${id}-${sha.slice(0, 16)}.${ext}`);
   if (!resolve(image).startsWith(resolve(stateDir) + sep)) fail(1, `refused: the image path left the pack directory: ${image}`);
+  // The path is content-addressed, so the same screen twice lands on the same file. Only an
+  // image THIS run created may be removed on a later failure (attack r2 B6).
+  const existed = existsSync(image);
   writeFileSync(image, res.body);
 
-  // The header is created exclusively, so two builders starting one brief cannot truncate each
-  // other's first row (B7). If the row cannot be written, the image does not stay behind.
+  // The header appears complete or not at all: written to a private temp file, then linked into
+  // place, so two builders starting one brief cannot truncate or interleave with each other
+  // (attack r1 B7, r2 B15). If the row cannot be written, an image this run created goes too.
   try {
     mkdirSync(dirname(sourcesMd), { recursive: true });
-    try {
-      writeFileSync(sourcesMd, `# Reference pack -- ${brief}\n\nProvenance only (ADR-1404): the images are cached under \`.claude/state/design/refpacks/${brief}/\` and never committed. Query strings are dropped from every URL.\n\n| url | fetched | sha256 | source | adaptable principle | avoid this |\n|---|---|---|---|---|---|\n`, { flag: "wx" });
-    } catch (e) {
-      if (e.code !== "EEXIST") throw e;
+    if (!existsSync(sourcesMd)) {
+      const tmp = `${sourcesMd}.${process.pid}.${Date.now()}.tmp`;
+      writeFileSync(tmp, `# Reference pack -- ${brief}\n\nProvenance only (ADR-1404): the images are cached under \`.claude/state/design/refpacks/${brief}/\` and never committed. Query strings are dropped from every URL.\n\n| url | fetched | sha256 | source | adaptable principle | avoid this |\n|---|---|---|---|---|---|\n`, { flag: "wx" });
+      try { linkSync(tmp, sourcesMd); } catch (e) { if (e.code !== "EEXIST") throw e; } finally { try { unlinkSync(tmp); } catch { /* already gone */ } }
     }
-    const shown = `${current.origin}${current.pathname}`;
-    const redirected = current.href === url.href ? "" : ` (redirected from ${url.origin}${url.pathname})`;
-    appendFileSync(sourcesMd, `| ${cell(shown + redirected)} | ${new Date().toISOString()} | ${sha} | ${cell(fake ? `${id} (fixture)` : id)} | ${cell(principle)} | ${cell(avoid)} |\n`);
+    const redirected = current.href === url.href ? "" : ` (redirected from ${shown(url)})`;
+    appendFileSync(sourcesMd, `| ${cell(shown(current) + redirected)} | ${new Date().toISOString()} | ${sha} | ${cell(fake ? `${id} (fixture)` : id)} | ${cell(principle)} | ${cell(avoid)} |\n`);
   } catch (e) {
-    try { unlinkSync(image); } catch { /* already gone */ }
-    fail(5, `the provenance row could not be written, so the image was removed: ${field(e.message)}`);
+    if (!existed) { try { unlinkSync(image); } catch { /* already gone */ } }
+    fail(5, `the provenance row could not be written${existed ? "" : ", so the new image was removed"}: ${field(e.message)}`);
   }
 
-  // Mark sources.md for commit. Outside a git work tree there is nothing to mark.
+  // Mark sources.md for commit. Only a checkout with no .git at all is outside a work tree; a
+  // git that cannot run, or refuses this repo, is a failure to mark, not a reason to skip
+  // (attack r2 B5).
   const rel = relative(ROOT, sourcesMd).split("\\").join("/");
   const inTree = spawnSync("git", ["-C", ROOT, "rev-parse", "--is-inside-work-tree"], { encoding: "utf8" });
-  if (inTree.status === 0 && String(inTree.stdout).trim() === "true") {
+  const isTree = !inTree.error && inTree.status === 0 && String(inTree.stdout).trim() === "true";
+  if (!isTree && (inTree.error || existsSync(join(ROOT, ".git")))) {
+    fail(6, `${rel} was written but git could not be asked about this checkout (${field(inTree.error ? inTree.error.message : inTree.stderr || `exit ${inTree.status}`)}); add it by hand before the pack is used`);
+  }
+  if (isTree) {
     let marked = false;
     for (let attempt = 0; attempt < 2 && !marked; attempt++) {
       const r = spawnSync("git", ["-C", ROOT, "add", "-N", "--", rel], { encoding: "utf8" });
@@ -256,7 +285,7 @@ async function main(argv) {
     if (!marked) fail(6, `${rel} was written but could not be marked for commit (git add -N failed twice); add it by hand before the pack is used`);
   }
 
-  console.log(`added ${field(current.href)} from ${id} -> ${relative(ROOT, image).split("\\").join("/")} (sha256 ${sha})`);
+  console.log(`added ${field(shown(current))} from ${id} -> ${relative(ROOT, image).split("\\").join("/")} (sha256 ${sha})`);
 }
 
 await main(process.argv.slice(2));

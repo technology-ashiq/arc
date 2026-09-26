@@ -179,16 +179,52 @@ export function fakeTransport({ robotsFile = null, robotsStatus = null, fixture 
   };
 }
 
+function privateV4(x, y) {
+  return x === 0 || x === 10 || x === 127 || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31)
+    || (x === 192 && y === 168) || (x === 100 && y >= 64 && y <= 127) || x >= 224;
+}
+
+// Eight 16-bit groups, or null. Handles `::` and a trailing dotted quad.
+function ipv6Groups(a) {
+  // A trailing dotted quad becomes its two hex groups, so one parser handles both spellings.
+  let bad = false;
+  const s = a.replace(/(\d+\.\d+\.\d+\.\d+)$/, (q) => {
+    if (!isIPv4(q)) { bad = true; return q; }
+    const o = q.split(".").map(Number);
+    return ((o[0] << 8) | o[1]).toString(16) + ":" + ((o[2] << 8) | o[3]).toString(16);
+  });
+  if (bad) return null;
+  const parts = s.split("::");
+  if (parts.length > 2) return null;
+  const head = parts[0] ? parts[0].split(":") : [];
+  const rest = parts.length === 2 && parts[1] ? parts[1].split(":") : [];
+  const known = head.length + rest.length;
+  if ((parts.length === 1 && known !== 8) || known > 8) return null;
+  const fill = parts.length === 2 ? new Array(8 - known).fill("0") : [];
+  const groups = [...head, ...fill, ...rest].map((h) => (/^[0-9a-f]{1,4}$/.test(h) ? parseInt(h, 16) : NaN));
+  return groups.length === 8 && groups.every((n) => Number.isInteger(n)) ? groups : null;
+}
+
 // Loopback, private, link-local, CGNAT, multicast and unspecified -- nothing a gallery lives on.
+// An IPv6 address that carries an IPv4 one (mapped, compatible, NAT64, 6to4) is judged by the
+// IPv4 it carries, in whatever spelling the URL parser chose (attack r2 B3: `[::ffff:7f00:1]`).
+// Anything that cannot be parsed is treated as private.
 export function isPrivateAddress(ip) {
-  const a = String(ip).toLowerCase();
-  if (a.startsWith("::ffff:")) return isPrivateAddress(a.slice(7));
+  const a = String(ip).toLowerCase().replace(/^\[|\]$/g, "").replace(/%.*$/, "");
   if (isIPv4(a)) {
     const [x, y] = a.split(".").map(Number);
-    return x === 0 || x === 10 || x === 127 || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31)
-      || (x === 192 && y === 168) || (x === 100 && y >= 64 && y <= 127) || x >= 224;
+    return privateV4(x, y);
   }
-  return a === "::" || a === "::1" || /^f[cd]/.test(a) || /^fe[89ab]/.test(a) || a.startsWith("ff");
+  const g = ipv6Groups(a);
+  if (!g) return true;
+  // The embedded IPv4's first two octets are the high group; that is all privateV4 reads.
+  const v4 = (hi) => privateV4(hi >> 8, hi & 0xff);
+  const zero = (from, to) => g.slice(from, to).every((n) => n === 0);
+  if (zero(0, 5) && g[5] === 0xffff) return v4(g[6], g[7]);                       // ::ffff:a.b.c.d
+  if (zero(0, 6)) return (g[6] === 0 && (g[7] === 0 || g[7] === 1)) || v4(g[6], g[7]); // ::, ::1, ::a.b.c.d
+  if (g[0] === 0x64 && g[1] === 0xff9b && zero(2, 6)) return v4(g[6], g[7]);       // NAT64
+  if (g[0] === 0x2002) return v4(g[1], g[2]);                                      // 6to4
+  return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00;
 }
 
 async function refusePrivate(hostname) {
@@ -232,7 +268,10 @@ export function realTransport({ ua = DEFAULT_UA } = {}) {
 // Fetch the origin's robots.txt through `transport` and decide. Never throws: a transport
 // failure is UNREADABLE, because an error is not an answer from them. robots.txt redirects are
 // followed up to five hops (RFC 9309 2.3.1.2); the body past 512 KiB is not read (B1).
-export async function preflight({ url, ua = DEFAULT_UA, transport }) {
+//
+// `guard(url)` is asked about every redirect hop and returns null or a reason; a refused hop is
+// UNREADABLE (attack r2 B4). design-refpack.mjs passes its host binding and downgrade check.
+export async function preflight({ url, ua = DEFAULT_UA, transport, guard = null }) {
   const u = typeof url === "string" ? parseHttpUrl(url) : url;
   let target = `${u.protocol}//${u.host}/robots.txt`;
   let res;
@@ -246,12 +285,28 @@ export async function preflight({ url, ua = DEFAULT_UA, transport }) {
     let next;
     try { next = parseHttpUrl(new URL(res.location, target).href); } catch { next = null; }
     if (!next) return { verdict: "UNREADABLE", reason: "robots.txt redirected to something that is not an http(s) URL; permission unknown" };
+    if (new URL(target).protocol === "https:" && next.protocol === "http:") {
+      return { verdict: "UNREADABLE", reason: "robots.txt redirected from https to http; permission unknown" };
+    }
+    const why = guard ? guard(next) : null;
+    if (why) return { verdict: "UNREADABLE", reason: `robots.txt redirected to ${next.host}, which ${why}; permission unknown` };
     target = next.href;
   }
   const s = Number(res.status);
   if (res.tooLarge) return { verdict: "UNREADABLE", reason: "robots.txt could not be read within the byte cap; permission unknown" };
   if (s === 404 || s === 410) return { verdict: "ALLOW", reason: `robots.txt returned ${s}: no robots.txt is permission (RFC 9309)` };
-  if (s >= 200 && s < 300) return decide(res.body.subarray(0, ROBOTS_MAX_BYTES).toString("utf8"), u, ua);
+  if (s >= 200 && s < 300) {
+    // A WAF interstitial or an SPA fallback page answers 200 with HTML. Parsed as robots it has
+    // no groups, which would read as ALLOW (attack r2 B8). So a 2xx must be plain text, and a
+    // non-empty body must carry at least one directive; an empty body is an empty robots.txt.
+    const type = String(res.contentType || "").split(";")[0].trim().toLowerCase();
+    if (type && type !== "text/plain") return { verdict: "UNREADABLE", reason: `robots.txt came back as ${type}, not text/plain; permission unknown` };
+    const text = res.body.subarray(0, ROBOTS_MAX_BYTES).toString("utf8");
+    if (text.trim() && !/^\s*(user-agent|allow|disallow|sitemap|crawl-delay)\s*:/im.test(text)) {
+      return { verdict: "UNREADABLE", reason: "robots.txt has no directive a robots file carries; permission unknown" };
+    }
+    return decide(text, u, ua);
+  }
   return { verdict: "UNREADABLE", reason: `robots.txt returned ${Number.isFinite(s) ? s : "no status"}; permission unknown, nothing fetched` };
 }
 
@@ -279,9 +334,12 @@ async function main(argv) {
   if (opts["--robots-status"] != null && !/^[1-5][0-9][0-9]$/.test(opts["--robots-status"])) usage("--robots-status must be an HTTP status");
   const ua = opts["--ua"] || DEFAULT_UA;
   const fake = opts["--robots-file"] != null || opts["--robots-status"] != null;
+  // The same seam gate design-refpack.mjs has (attack r2 B1): a verdict about a real host that
+  // no request reached must not be printable without saying so.
+  if (fake && process.env.ARC_DESIGN_OFFLINE !== "1") usage("--robots-file and --robots-status are test seams; set ARC_DESIGN_OFFLINE=1 to use them");
   const transport = fake ? fakeTransport({ robotsFile: opts["--robots-file"] ?? null, robotsStatus: opts["--robots-status"] ?? null }) : realTransport({ ua });
   const d = await preflight({ url: u, ua, transport });
-  console.log(`${d.verdict} ${u.href} -- ${d.reason}`);
+  console.log(`${d.verdict} ${u.origin}${u.pathname} -- ${d.reason}${fake ? " (fixture)" : ""}`);
   process.exit(EXIT[d.verdict]);
 }
 
