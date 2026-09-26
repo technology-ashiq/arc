@@ -16,7 +16,7 @@
 import { canonicalDoc, msUntilDeadline, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
 
 const ENDPOINT = process.env.ARC_LLM_ENDPOINT || "";
-const API_KEY = process.env.ARC_LLM_API_KEY || "";
+const LLM_KEY = process.env.ARC_LLM_API_KEY || "";
 // The router pins the model; ARC_LLM_MODEL is only a fallback for an UNROUTED run, and
 // an unrouted run is recorded as unpinned rather than quietly using whatever env says.
 const MODEL = pinnedModel() || process.env.ARC_LLM_MODEL || "";
@@ -36,7 +36,7 @@ async function callOnce(body, capMs) {
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${API_KEY}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${LLM_KEY}` },
       body: JSON.stringify(body),
       signal: ctl.signal,
     });
@@ -48,7 +48,7 @@ async function callOnce(body, capMs) {
 }
 
 await runDriver("generic-api", async ({ processName, input }) => {
-  if (!ENDPOINT || !API_KEY || !MODEL) {
+  if (!ENDPOINT || !LLM_KEY || !MODEL) {
     // Named, not guessed. An absent endpoint is a setup fact the operator must see, and
     // "not configured" must never be reported as "the model answered badly".
     throw new Error("ARC_LLM_ENDPOINT, ARC_LLM_API_KEY and ARC_LLM_MODEL must all be set (see phase-02-spec, Your-setup)");
