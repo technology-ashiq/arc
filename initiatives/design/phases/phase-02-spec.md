@@ -14,7 +14,7 @@ of git and whose provenance goes in.
       `id` · `kind[]` · `access` · `allowed_use[]` · `auth` · optional `credential_ref` · `cost`
       · `status` · `availability` · `approved_by` · `added`. Arrays are arrays
 - [ ] Initial rows match [ADR-1412](../../../docs/adr/1412-gallery-eligibility-is-decided-by-robots-and-terms-not-by-taste.md)
-      exactly: Lapa Ninja + SaaSFrame `active`; Awwwards `link-only`; Godly, Dribbble, Behance,
+      exactly, as amended 2026-09-27 (Lapa Ninja and SaaSFrame `off` after the first real build; nicelydone and collectui `active`, owner): Awwwards `link-only`; Godly, Dribbble, Behance,
       Land-book, Page Collective `off`
 - [ ] Registry lint exits 0 on the real file, and **fails** on: a singular `kind`, an unknown
       `access`, a hand-set `availability`, and an entry added by anyone but the owner

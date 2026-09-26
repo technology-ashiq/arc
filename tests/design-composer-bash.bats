@@ -700,13 +700,13 @@ REFPACK_OK='node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --s
   # hook's source instead -- forwarding is gated on BOTH variables.
   grep -q 'ARC_DESIGN_OFFLINE:-}" = "1" \] && \[ "${ARC_DESIGN_HOOK_SEAMS:-}" = "1"' \
     "$ARC_ROOT/.claude/scripts/design/composer-bash-check.sh" || { echo "seam forwarding is not gated on the hook switch"; false; }
-  _fetch design-curator "https://lapa.ninja:8443/category/saas"
+  _fetch design-curator "https://nicelydone.club:8443/apps"
   [ "$status" -eq 2 ] || { echo "a non-default port was allowed: $status"; false; }
   printf '%s' "$stderr" | grep -q "no port and no userinfo" || { echo "refused, but not for the port: $stderr"; false; }
-  _fetch design-curator "https://user:pw@lapa.ninja/category/saas"
+  _fetch design-curator "https://user:pw@nicelydone.club/apps"
   [ "$status" -eq 2 ] || { echo "userinfo was allowed: $status"; false; }
   # A fixture answer is stamped as one in the log.
-  _fetch design-curator "https://lapa.ninja/category/saas"
+  _fetch design-curator "https://nicelydone.club/apps"
   [ "$status" -eq 0 ] || { echo "control: an allowed page was refused: $stderr"; false; }
   tail -1 "$SANDBOX/.claude/state/design/curator-browse.log" | grep -q $'\tfixture\t' || { echo "a fixture allow is not stamped fixture in the log"; false; }
 }
@@ -714,35 +714,37 @@ REFPACK_OK='node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --s
 @test "ADR-1420 r1 B3: robots is asked as every token the fetch answers to" {
   _curator_sandbox
   printf 'User-agent: Claude-User\nDisallow: /\n\nUser-agent: *\nAllow: /\n' > "$SANDBOX/robots.txt"
-  _fetch design-curator "https://lapa.ninja/category/saas"
+  _fetch design-curator "https://nicelydone.club/apps"
   [ "$status" -eq 2 ] || { echo "a site disallowing Claude-User was browsed: $status"; false; }
   printf '%s' "$stderr" | grep -q "as Claude-User" || { echo "refused, but not for the Claude-User group: $stderr"; false; }
 }
 
 @test "ADR-1420: a curator's WebFetch needs an active registry host and a robots ALLOW" {
   _curator_sandbox
-  _fetch design-curator "https://www.lapa.ninja/category/saas"
+  _fetch design-curator "https://nicelydone.club/apps"
   [ "$status" -eq 0 ] || { echo "an allowed gallery page was refused: $stderr"; false; }
   _fetch design-curator "https://example.com/anything"
   [ "$status" -eq 2 ] || { echo "an off-registry host was fetched: $status"; false; }
   printf '%s' "$stderr" | grep -qi "registry" || { echo "refused, but not by the host binding: $stderr"; false; }
-  _fetch design-curator "https://lapa.ninja/private/drafts"
+  _fetch design-curator "https://nicelydone.club/private/drafts"
   [ "$status" -eq 2 ] || { echo "a robots DISALLOW path was fetched: $status"; false; }
   printf '%s' "$stderr" | grep -q "DISALLOW" || { echo "refused, but not by robots: $stderr"; false; }
-  _fetch design-curator "http://lapa.ninja/category/saas"
+  _fetch design-curator "http://nicelydone.club/apps"
   [ "$status" -eq 2 ] || { echo "a plain-http fetch was allowed: $status"; false; }
   # awwwards is active and fetchable but link-only: it may be linked, not browsed for a pack.
   _fetch design-curator "https://www.awwwards.com/websites/"
   [ "$status" -eq 2 ] || { echo "a link-only source was browsed: $status"; false; }
-  # godly is off: no fetch at all.
+  # godly is off: no fetch at all. lapa-ninja went off on 2026-09-27, and is refused the same way.
   _fetch design-curator "https://godly.website/"
   [ "$status" -eq 2 ] || { echo "an off source was browsed: $status"; false; }
+  _fetch design-curator "https://lapa.ninja/category/saas"
+  [ "$status" -eq 2 ] || { echo "lapa-ninja, now off, was browsed: $status"; false; }
 }
 
 @test "ADR-1420: an unreadable robots.txt refuses a curator fetch, and says UNREADABLE" {
   _curator_sandbox
   unset ARC_DESIGN_ROBOTS_FILE; export ARC_DESIGN_ROBOTS_STATUS=403
-  _fetch design-curator "https://saasframe.io/examples"
+  _fetch design-curator "https://collectui.com/challenges"
   [ "$status" -eq 2 ] || { echo "a 403 robots.txt was read as permission: $status"; false; }
   printf '%s' "$stderr" | grep -q "UNREADABLE" || { echo "refused, but not as UNREADABLE: $stderr"; false; }
 }

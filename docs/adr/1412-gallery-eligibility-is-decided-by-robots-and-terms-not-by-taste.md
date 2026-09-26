@@ -61,3 +61,21 @@ two** qualifying sources and zero margin — if either breaks, that acceptance c
 is why it is carried as an assumption-ledger row with a real trigger rather than as a safe
 assumption. The curator therefore performs a **robots.txt preflight per fetch and refuses on
 disallow**, so permission is enforced mechanically rather than by this table staying current.
+
+## Amendment 2026-09-27 — the zero margin was spent on the first real build
+
+The assumption-ledger row fired on the first real pack build (Phase 02, 0 screens added):
+
+- **Lapa Ninja** — its Cloudflare answers `robots.txt` with **403** to `ClaudeBot` and
+  `Claude-User`, while a browser agent gets through. That is the site refusing Claude. A borrowed
+  agent string would be evasion, so the row goes **off**.
+- **SaaSFrame** — pages browse fine, but every screenshot is served from Webflow's shared CDN
+  (`cdn.prod.website-files.com`), whose `robots.txt` answers **403 AccessDenied**. Permission is
+  unknown for every image the gallery shows, and adding a host shared by every Webflow site to one
+  row's binding would bind nothing. The row goes **off**.
+
+The owner chose the replacements on 2026-09-27, on the same test this ADR applies, run by probe
+the same day: **nicelydone.club** and **collectui.com** go **active**. Each serves `robots.txt`
+as plain text allowing `ClaudeBot` and `Claude-User` on both the page host and the image host, and
+neither publishes terms at the usual paths. The rule did not change; the table did, which is the
+mechanism working. The preflight per fetch still decides every request.

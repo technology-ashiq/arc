@@ -93,7 +93,10 @@ teardown() { _arc_teardown 2>/dev/null || true; }
     // never be cached, and that is an allowed_use fact, not a status -- ADR-1408 freezes the
     // status enum and says a new access pattern is a schema bump, not a free-text column.
     const want = {
-      "lapa-ninja": "active", "saasframe": "active", "awwwards": "active",
+      // ADR-1412 amendment 2026-09-27: lapa-ninja and saasframe went off on the first real
+      // build (a Claude block, a shared CDN); nicelydone and collectui replaced them.
+      "lapa-ninja": "off", "saasframe": "off", "nicelydone": "active", "collectui": "active",
+      "awwwards": "active",
       "godly": "off", "dribbble": "off", "behance": "off",
       "land-book": "off", "page-collective": "off",
     };
