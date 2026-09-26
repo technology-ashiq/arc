@@ -249,7 +249,9 @@ EX="$ARC_MF_EXPLORE"; VARIANT="$ARC_MF_VARIANT"
 TOOL=""
 PATTERN=""
 if [ -z "$TARGET" ] && [ -n "$STDIN" ]; then
-  if command -v jq >/dev/null 2>&1; then
+  # jq only once it answers a probe: a jq that is found and broken read every target as empty,
+  # and an empty Read target is allowed (the Bash check's BL-3, left open here; ADR-1419 CI).
+  if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | jq -r .k 2>/dev/null | tr -d '\r')" = "v" ]; then
     TARGET="$(printf '%s' "$STDIN" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)"
     TOOL="$(printf '%s' "$STDIN" | jq -r '.tool_name // empty' 2>/dev/null)"
     PATTERN="$(printf '%s' "$STDIN" | jq -r '.tool_input.pattern // empty' 2>/dev/null)"

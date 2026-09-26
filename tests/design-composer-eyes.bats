@@ -154,9 +154,12 @@ teardown() { _arc_teardown; }
 @test "composer scope: an unreadable target does not block" {
   _composer_sandbox; _arm
   # If the payload carries no path there is nothing to judge, and blocking on "cannot tell"
-  # would break every unrelated read in the session.
-  run bash "$(_csc)"
-  [ "$status" -eq 0 ]
+  # would break every unrelated read in the session. A composer's Read with no file_path, since
+  # ADR-1419: an EMPTY payload is no longer "no path" but an unreadable caller (attack r1 B3).
+  run bash "$(_csc)" <<< "$(_payload Read '{}')"
+  [ "$status" -eq 0 ] || { echo "a composer Read with no path was refused: $status $output"; false; }
+  run bash "$(_csc)" < /dev/null
+  [ "$status" -eq 2 ] || { echo "an empty payload was not refused as unreadable: $status $output"; false; }
 }
 
 # ---------- 4. the hook fragment actually delegates ----------
