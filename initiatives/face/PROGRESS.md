@@ -385,7 +385,7 @@ stay bespoke folds.
 
 ## Now
 
-**RESUME HERE (2026-09-26):** Phase 06 IN PROGRESS. Open: only this handoff PR and #267 (Windows proposal race). No
+**RESUME HERE (2026-09-26):** Phase 06 IN PROGRESS. Open: #267 (Windows proposal race) and the residue PR. No
 running session, no local-only branch holds work.
 - **Merged 2026-09-26:** #282 (squash 3b85a8c8) -- `develop-proof` (develop room, `slice.done`: `develop.mjs prove`
   writes result + commit, the commit must be an ancestor of origin/main) and `adr-record` (strategy room, now with a
@@ -394,11 +394,11 @@ running session, no local-only branch holds work.
   `withGitReader` now in core/proposal-branch.mjs.
 - **Session verbs:** 7 of 15 built (council convene, log lesson, promote rule, develop proof, record ADR; review,
   adopt plan, lane birth already had process files); dispatch is the door itself.
-- **Next (owner decision first):** the residue -- ship (arc-run must enforce the stop before deploy;
-  CONFIRM_STEP_UNENFORCED today), qa (browser + running app headless), close phase (CI evidence, main clone, owner
-  stamp), hire (no procedure), absorb adopt (an A/B decision the row cannot supply), growth draft (the row takes one
-  topic, the tool needs cluster/plan/keyword). My recommendation: write all six to `evidence/phase-06/residue.md` for
-  the owner to approve as a whole. Then slice 06: attackers, CI, `/arc-phase-done 06` from the main clone.
+- **Residue decided (owner, 2026-09-26): "All six to residue.md".** `evidence/phase-06/residue.md` holds 9 shipped
+  verbs and 6 residue rows (ship, qa, close phase, hire, absorb adopt, growth draft), each with the door's refusal
+  code, the missing piece and the lane it is filed to (engine · develop · absorb · growth). The owner's stamp at
+  `/arc-phase-done 06` approves the list as a whole.
+- **Next:** slice 06 -- the attackers' reading for the phase, CI per job, `/arc-phase-done 06` from the main clone.
 - **Owner's optional one-liner:** the hq.policy.yaml comment on `process:adr-record` still says `plan/adr-record.mjs`
   (the script moved to hq during the attack fixes): `! sed -i 's|plan/adr-record.mjs|hq/adr-record.mjs|' hq.policy.yaml`.
 - **How the owner wants it worked (2026-09-25):** LEAN. Report every step; no live demo (paid opus runs) without
