@@ -263,6 +263,37 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### OUT-OF-CYCLE BUG — a driver that ignores the run's deadline, a silent retry ladder, and a nullable twin_of — 2026-09-26
+
+**Classification: a bug** (`/arc-change --lane engine`, the owner's OK 2026-09-26; the lane is IDLE and Cycle 7 is
+closed, so this is its tracked home, the #267 pattern). **What happened:** in the face lane, a logic attack through the
+`generic-api` driver on OpenRouter ran for about 1.5 h with no output and no result. The ladder was 3 tries × 3
+transport attempts × a 10-minute `ARC_LLM_TIMEOUT_MS`, and `generic-api.mjs:79-92` prints nothing until every attempt
+has failed. Separately, PR A's first boundary run died after 24 minutes on `$.findings[11].twin_of: expected type
+string, found null`, and the one same-tier retry failed the same way.
+
+**Root cause.** arc-run already hands every driver the run's absolute deadline (`ARC_DRIVER_DEADLINE_EPOCH_MS`,
+arc-run.mjs:1409), and `drivers/hermes.mjs` honours it (`msUntilDeadline`, :530). `drivers/generic-api.mjs` never reads
+it, so each transport attempt starts a fresh clock. That is **A-03's defect class at a new enforcement point** (the
+pre-mortem's #3). A-03 is **not marked FIRED**: its trigger is "exceeding the STATED cap", and `attack-diff` runs with
+no `--budget`, so there was no cap to exceed. `arc-attack` never passes one, which is the other half of the bug.
+`twin_of` cannot be made nullable without changing `schema-subset.mjs`, whose `type` is a single string by design.
+
+**Fix (one PR, branch `feat/engine-driver-deadline`):**
+1. `drivers/common.mjs` exports the deadline reader (moved from hermes, where it stays in use). `generic-api` gives
+   each attempt `min(ARC_LLM_TIMEOUT_MS, time left)`, stops retrying once the deadline has passed, and prints ONE
+   stderr line per failed attempt (`generic-api: attempt 2/3: timeout after 420s -- 12m left`).
+2. `arc-attack` passes each surface `--budget min=<ARC_ATTACK_MINUTES, default 30>` and prints each surface's start
+   time and deadline before it runs and its elapsed time after it ends. A LIVE heartbeat during the run is not in
+   scope: `arc-attack` runs a surface through `spawnSync`, so the bounded deadline and the per-attempt lines are the
+   progress signal.
+3. `attack-diff`'s body states the rule precisely ("omit `twin_of` unless it names a pattern; never null"). That
+   REDUCES the failure but cannot rule it out. A nullable type is a schema-subset change, which stays out of scope
+   unless it recurs.
+Tests: an `engine-driver-contract.bats` arm where a fake endpoint that never answers, under a 5 s deadline, ends in
+under 10 s with one line per attempt; and an `engine-attack-diff.bats` arm where arc-attack's argv carries
+`--budget min=`. Estimate: 0.5d, not charged to the closed Cycle 7.
+
 ### OUT-OF-CYCLE — ADR-0226 Amendment 1: no new session per PR round — 2026-09-24
 
 **Classification: a decision.** The owner ruled on it on 2026-09-24 and it went through `/arc-change --lane
