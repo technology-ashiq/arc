@@ -468,13 +468,17 @@ try {
       const re = await route("/api/reference");
       const entities = re.body && re.body.entities ? Object.values(re.body.entities).reduce((n, list) => n + (Array.isArray(list) ? list.length : 0), 0) : 0;
       check("P07 reference: named, schema 1, and at least 100 wiki entities served", re.named && re.body.schema === 1 && entities >= 100, `schema=${re.body && re.body.schema} entities=${entities}`);
-      const spineIds = readFileSync(join(SPINE, "events", readdirSync(join(SPINE, "events")).filter((n) => n.endsWith(".jsonl")).sort()[0]), "utf8")
-        .split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l).id; } catch { return null; } }).filter((x) => typeof x === "string");
+      // EVERY day file of the spine the door was handed, not a sample of one (attack 94ffba3 L7); an absent events dir
+      // is an empty list, which the check below refuses by name instead of crashing the suite (L6).
+      const days = existsSync(join(SPINE, "events")) ? readdirSync(join(SPINE, "events")).filter((n) => n.endsWith(".jsonl")) : [];
+      const spineIds = days.flatMap((d) => readFileSync(join(SPINE, "events", d), "utf8").split("\n").filter(Boolean)
+        .map((l) => { try { return JSON.parse(l).id; } catch { return null; } })).filter((x) => typeof x === "string");
       const text = JSON.stringify(re.body);
       check("P07 reference: no receipt id from the spine the door was handed appears in the body (ADR-1509)",
-        spineIds.length > 0 && spineIds.every((id) => !text.includes(id)), `spineIds=${spineIds.length}`);
+        days.length >= 2 && spineIds.length > 100 && spineIds.every((id) => !text.includes(id)), `days=${days.length} spineIds=${spineIds.length}`);
       const post = await j("/api/reference", { method: "POST", headers: { ...H, "Content-Type": "application/json" }, body: "{}" });
-      check("P07 reference: a POST is refused -- the route is GET-only (ADR-1504)", post.status >= 400 && post.status < 500, `${post.status} ${post.body && post.body.error}`);
+      // UNKNOWN_ROUTE, not any 4xx: a POST handler that merely rejected the body would also be a 4xx (attack 94ffba3 B10).
+      check("P07 reference: a POST is UNKNOWN_ROUTE -- no POST handler exists, the route is GET-only (ADR-1504)", post.status === 404 && post.body.error === "UNKNOWN_ROUTE", `${post.status} ${post.body && post.body.error}`);
       const q = await j("/api/reference?type=lanes", { headers: H });
       check("P07 reference: a query key is BAD_ARGS", q.status === 400 && q.body.error === "BAD_ARGS", `${q.status} ${q.body.error}`);
       const noTok = await j("/api/reference");

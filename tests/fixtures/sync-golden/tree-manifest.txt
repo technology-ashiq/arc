@@ -253,7 +253,7 @@
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	db5fc5a85baa049ea71073e74e9f387263e187713091ac39b5b79df33f875884
 .claude/scripts/hq/lib/face/reads.mjs	dd206a37132509c754eb89ccc34f7eae2d09dcb228954ff233f66b9c332c6241
-.claude/scripts/hq/lib/face/reference/route.mjs	6b58c6b0165128309171bedd6aca6143fa9c46c9e83bbc5a7dc4455f1372bf58
+.claude/scripts/hq/lib/face/reference/route.mjs	7ee3048e99d1525736cd6c51e963b3ae7a75e8d9e44c285f1d89a75bf8dacd32
 .claude/scripts/hq/lib/face/session-door.mjs	f1e95bbda2066ca6b6172fa020745b407d740919db08aeab32ebf754c64e608f
 .claude/scripts/hq/lib/face/work-door.mjs	f228552ec9f8effaa6ffbcba07338d4d1dc96024f98a7396a57ce6103378c81d
 .claude/scripts/hq/lib/jobs/audit.mjs	f44b1a1ea933ff7e80f4cf7429307b636342f6658b22360fddb602957416f8fd

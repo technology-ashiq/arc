@@ -844,3 +844,15 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **"Merged" asked of the checked-out HEAD** -- a WIP commit on a feature branch passed as merged; prove checks ancestry against origin/main and refuses when that ref is missing (B8), and the resolved sha must start with the one named (B10). *Merged means on the mainline CI ran on.*
 - **A private spawnSync("git") per caller** -- adr-record and develop prove read git through `withGitReader` in core/proposal-branch.mjs: GIT_* dropped, hooks off, bounded, capped (B9). *One bounded git reader, used by every caller.*
 - **A partial file left where "nothing written" was claimed** -- adr-record writes a temp beside the target and renames it in (B13); its unknown receipt state names the recovery (B14). *Only a rename makes a tracked file appear.*
+
+## Phase 07 PR A -- the Reference door (attack 94ffba3, round 1: logic L1-L9, boundary B1-B14)
+
+- **`in` read as "exported"** -- the route's check for wiki-build's exports accepted an inherited member, and the missing one then threw as a 500 (L1). *An export is an OWN member of the right kind (`Object.hasOwn` + type); check the kind, not the name.*
+- **A wrong shape rendered instead of refused** -- `entities: null` or a list holding a non-entity crashed the render loop (L2). *Shape-check a parsed source before the first loop over it; a wrong shape is SOURCE_INVALID, never a TypeError.*
+- **Another reader's message forwarded raw** -- the extract's failure text rode the refusal unscrubbed (L2m). *Every refusal built from a message the door did not write passes scrub.*
+- **An id trusted as a key** -- a slash, newline or `..` id became a served key and a link (L4), and a page path's containment was never checked (L5). *A key the client links by exists only for an id with a contained `<dir>/<id>.md` page; the rest are counted (`unpaged`).*
+- **A foreign error class read as a crash** -- wiki-build refuses a symlinked or non-file narrative with ITS OWN ReadError, which the door's dispatcher does not know, so it answered 500 (B1). *Catch a lane module's refusal at the boundary and re-raise it as this door's named error.*
+- **The measured value was not the served value** -- tests held the pre-scrub body equal to the CLI while the door sent the scrubbed one (B3); the scrub could cut prose silently (B2). *Measure what is sent; a transform says what it changed (`scrubbed: { narrative, factsAltered }`).*
+- **The full extract per request, unbounded** -- 30 concurrent GETs ran 30 extracts (B4). *Concurrent reads of one build-time fact share one in-flight computation.*
+- **"Read-only" measured on tracked files only** -- a write to a NEW file was invisible, and the check had no mutant (B5). *Digest every file of a scratch tree, and prove the measure with a mutant that writes one.*
+- **A mutant caught by any exit 1** -- a crash satisfied the MUTANT CONTROL (B9); a POST answered any 4xx passed "GET-only" (B10); one day file of the spine stood for the spine (L7, B11), with no guard when absent (L6). *A control asserts the NAMED refusal; a sample is never the whole.*

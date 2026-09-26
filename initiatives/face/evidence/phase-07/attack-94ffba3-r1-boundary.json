@@ -1,0 +1,131 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:51",
+      "breaking_input": "Commit docs/wiki/_narrative/products/hq.md as a symlink (or Windows junction) whose target is .claude/state/hq/events/<day>.jsonl, or any file outside the repo such as an env file. Git tracks symlinks, so a PR branch on this public repo can carry one. Open the Reference room from that checkout. `narrativeOf('products','hq')` follows the link and the target's bytes come back in `narrative['products/hq']`, minus the fingerprint line. A directory named `hq.md` instead of a file is a second input.",
+      "why": "The route reads narrative by a named path per entity and does no realpath containment or type check. It relies entirely on wiki-build's readText, and the test never checks that. Check B plants its marker only in regular files, so a symlink into the spine passes. Spine or state content in the body breaks the route's own ADR-1509 line, and the path scrub does not redact secrets.",
+      "fix": "Before serving each narrative, realpath the file and require it to sit inside realpath(repo)/docs/wiki/_narrative/<dir>/. Also require lstat().isFile(), and refuse a link or non-file by name. Add a fixture with a symlink into .claude/state and a directory named <id>.md, and assert refusal or absence.",
+      "twin_of": "Directory walks with no containment and no type check -> every file AND directory a route reads is realpath-contained and type-checked, exactly as `lanePhases` is."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:63",
+      "breaking_input": "Narrative file text: 'The room reads /api/spine and folds it. Live counts stay elsewhere.' Any narrative or extract field naming a route or slash command is an absolute-path-shaped token, and so is a Windows drive path. scrubDeep withholds from the first such token to the end of the string. The room shows 'The room reads ' as the owner's whole narrative, with no marker.",
+      "why": "The Reference room is about routes and commands, so its prose will name them routinely. The truncation is silent: the body has no field recording that anything was withheld, no count, and no per-key list. The owner reads a chopped sentence as accepted narrative.",
+      "fix": "Have the route diff scrubDeep's output against its input and serve `scrubbed: [<at keys>]` (or refuse the key whole). Or exempt route and command tokens repo-relative by grammar, so only real filesystem paths are withheld. Either way the room must be told what was dropped.",
+      "twin_of": "Output dropped by a cap with nothing saying so -> every body carries what its cap dropped, and the page draws it."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/face/reference-door.mjs:39",
+      "breaking_input": "Any entity or narrative string that scrubDeep alters, such as an entity description containing an absolute-path-shaped token, or two keys that collide once scrubbed. Checks A and B call `R.referenceBody`, which returns before scrubDeep runs. The live arm asserts only `entities >= 100` and one spine-id absence, so the served body can differ from `wiki-build --json` and both suites stay green.",
+      "why": "The 'one extract, byte for byte' and 'no marker in body' guarantees are proven over an intermediate value. What the door sends is `scrubDeep(referenceBody(...))` inside `answer()`. The transform sits between the measured value and the served one, and nothing measures what it destroys.",
+      "fix": "Run A and B over `apiReference(ctx, new URL('http://x/api/reference'))` output (its `.body`). Or assert scrubDeep(body) deep-equals body on the real tree and on the fixture tree, and print the differing key when it does not.",
+      "twin_of": "Judging a draft instead of the payload -> judge the receipt itself, before the effect; a stand-in is a different receipt."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:39",
+      "breaking_input": "With a valid token, fire 30 concurrent GET /api/reference. Each request re-runs the full extract over the tree, then one narrative read per entity (134 files on this tree) and a full scrubDeep. There is no cache, in-flight coalescing, or deadline. If treeWorld's fs calls are synchronous, the door's event loop is held for the whole batch, so POST /api/decide, /api/ask and shutdown stall behind it.",
+      "why": "The room re-reads on the shell's normal cadence, and the data is build-time facts that change only on a checkout. The route pays the maximum cost on every call and has no bound on either time or concurrency.",
+      "fix": "Share one in-flight promise across concurrent callers. Cache the result for a short TTL, or key it on a cheap fingerprint of the inputs (file stats, not a directory stamp). Wrap the call in a settle-within deadline that answers a named refusal.",
+      "twin_of": "Uncapped receipts and a full spine scan on every poll -> A per-poll path gets the same cap as the lines, and a side lookup never takes down the main answer."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "tests/face/reference-door.mjs:109",
+      "breaking_input": "Mutant referenceBody that writes a NEW file, e.g. writeFileSync(join(repo,'docs/wiki/.route-cache.json'), ...), mkdirs docs/wiki/_narrative/x, or writes under .claude/state or initiatives. `git ls-files docs/wiki` never lists it, so digest() is unchanged and check E ('read-only, ADR-1504') passes.",
+      "why": "E hashes only files git already tracks. Creating, renaming into, or writing anywhere else is invisible. The read-only rule protects the wiki and the repo, but the test can see one narrow slice. Unlike D, E has no mutant control proving it can fail.",
+      "fix": "Assert before and after with `git status --porcelain=v1 -z --untracked-files=all` (empty both times), or a recursive listing with size and mtime of docs/wiki. Add a mutant control that writes an untracked file in a scratch copy and asserts E's check goes red.",
+      "twin_of": "Tests that could not fail, or could not pass -> the mutant is the negative control; write the check it fails."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:51",
+      "breaking_input": "Commit docs/wiki/_narrative/agents/<id>.md at 300 MB, or as a non-text blob. The route reads it whole into memory, then JSON-serialises and scrubs it on the door thread before the response is sized. The door either OOMs or stalls for many seconds.",
+      "why": "There is no per-file or total cap before the read, only whatever the door's transport applies after the body exists. An external PR on a public repo can add the file.",
+      "fix": "Stat before reading and refuse a narrative over a fixed cap (say 64 KiB) by name, with a total budget across all narratives. Serve a `narrativeRefused` list rather than dropping silently.",
+      "twin_of": "The cap applied after an unbounded read -> Cap before reading, and take the size from the same read."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:19",
+      "breaking_input": "Start the door while wiki-build.mjs is being swapped by a branch switch or locked by antivirus (EBUSY or EPERM on the Windows leg), so the first import rejects. The rejection is memoised as `{ e }` in `wikiBuild` and every later GET answers PARSER_UNAVAILABLE until the door restarts. The opposite also holds: a successful import is never reloaded, so an edited wiki-build serves an old parser over the new tree.",
+      "why": "The memo is keyed on the module load, not on its outcome. A transient failure becomes permanent, and the route offers no way back short of a restart.",
+      "fix": "Clear `wikiBuild` when the import rejects, and retry on the next request with a cache-busting query on the URL so Node's loader does not replay the failed job. Optionally re-import when the file's mtime changes.",
+      "twin_of": ""
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/face/reference-door.mjs:36",
+      "breaking_input": "Four spawnSync calls (wiki-build --json at :36, fixture-tree at :52, no-walker at :96 and :103) plus execFileSync git ls-files at :109 carry no timeout. One hung child, as in the ~66 min Windows shard hangs with an empty log, blocks the leg until the job timeout with no FAIL line and no RAN line. The git call also inherits the caller's GIT_DIR and GIT_WORK_TREE. Run under a hook or another repo's environment, `-C REPO` is overridden and it lists another tree's files.",
+      "why": "Every unbounded child in a harness is a possible silent hang. The git child reads the caller's env instead of running in the isolated env the door uses for the same reason.",
+      "fix": "Add `timeout` (say 120000) and `killSignal` to each spawn, and report `.error` and `.signal` in the check detail. Run the git call with GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE removed from the env.",
+      "twin_of": "Unbounded fetches, and a door refusal blamed on the registry -> Every awaited call in a harness is bounded and names its own failure."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "tests/face/reference-door.mjs:103",
+      "breaking_input": "Break no-walker so it crashes on an aliased import `import { readdirSync as listMe }` (uncaught TypeError, Node exit code 1). `caught.status === 1` still reads true, so the MUTANT CONTROL passes without the gate ever having identified the walker.",
+      "why": "Exit 1 is what an uncaught exception, a usage error and a real finding all produce. The check is satisfied by any refusal, not the named one. The mutant proves the gate would fail, not why.",
+      "fix": "Also require `caught.stdout` to name the mutant file and the listing call (for example the `listMe` or readdirSync finding line), and require that stderr has no stack.",
+      "twin_of": "Tests keyed on the flag they verify; refusals accepted by any name -> a test derives what it checks from somewhere the code under test does not set."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/face/dash-doors.mjs:477",
+      "breaking_input": "Register a POST /api/reference handler that answers 400 BAD_BODY for the `{}` the test sends. `post.status >= 400 && post.status < 500` passes, so a mutating door on a read-only route goes undetected. A 401 or 403 from a header slip in the test would also satisfy it.",
+      "why": "Any 4xx is accepted, including the ones that mean the request was served and merely rejected, so the test cannot tell 'route is GET-only' from 'route exists and refused this body'.",
+      "fix": "Assert the door's named method refusal (405 and its code) and that POST returns the same status and code as an unregistered path would for a different verb.",
+      "twin_of": "Tests keyed on the flag they verify; refusals accepted by any name -> a test derives what it checks from somewhere the code under test does not set."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "tests/face/dash-doors.mjs:471",
+      "breaking_input": "gen-spine writes more than one day file. Only `.sort()[0]` is read, so a leak of ids from any later day file is never compared. If the events dir has no .jsonl file, `[0]` is undefined and readFileSync throws a bare TypeError, which crashes the suite instead of failing the check.",
+      "why": "The 'no receipt id from the spine appears in the body' check covers one arbitrary day file. The ids under the later day files are exactly the ones a leaking route could read.",
+      "fix": "Read every *.jsonl day file, require at least two files and a floor on id count as a positive control, and fail by name when the directory is empty.",
+      "twin_of": ""
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "tests/face/reference-door.mjs:121",
+      "breaking_input": "The file declares 18 checks but the exit floor is `ran >= 17`. A block that stops early and drops one check, such as an early return in C or E, still exits 0. In tests/face/dash-doors.mjs this diff adds 5 checks (P07) and does not touch the pinned floor of 143 that file keeps. That floor is now 5 below the real count, or red if it is an equality.",
+      "why": "A hand-kept floor that is not the real count either fails a good run or lets checks vanish unnoticed. Only five checks are pinned by name in the bats wrapper, so the other 13 can go missing.",
+      "fix": "Derive the expected count (for example a `const EXPECTED = <number the file prints once>` compared with `ran ===`), or pin every check by name in the wrapper. Update dash-doors' floor with the five new checks.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "tests/face/reference-door.mjs:118",
+      "breaking_input": "On the Windows leg an EBUSY or EPERM on rmSync(tmp) (an indexer or AV holding the extract). The WARN prints only `the scratch dir was not removed: <path>` and the error class that would say which lock is lost. rmSync also gets no retry options.",
+      "why": "The catch discards the error, so a surviving directory is named but its cause is not.",
+      "fix": "Log `${e.code} ${e.message}` in the WARN, and pass maxRetries and retryDelay to rmSync for the Windows case.",
+      "twin_of": "A temp directory that would not delete was dropped silently -> a surviving directory is a WARN naming the path and error."
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": "tests/face/reference-door.mjs:65",
+      "breaking_input": "A narrative checked out on Windows with core.autocrlf=true, or saved with a UTF-8 BOM, so it begins `<!-- facts:… -->\\r\\n`. If narrativeReader's strip anchors on a bare LF, the fingerprint line, which is author metadata, reaches the body. Check B writes only LF, so the `startsWith(NARR)` and no-fingerprint assertions never run on that input.",
+      "why": "The line-ending and encoding boundary is exercised on one spelling only. The repo is developed on Windows, and CI runs Windows, Linux and macOS legs.",
+      "fix": "Add an arm writing the narrative with CRLF and with a BOM, asserting the fingerprint is stripped and the served text starts at the prose. Or normalise before the strip in wiki-build's reader.",
+      "twin_of": "Check and `--write` disagreed on CRLF and on markers outside a comment -> a writer re-reads what it wrote before writing it, and both modes normalise the same way."
+    }
+  ]
+}
