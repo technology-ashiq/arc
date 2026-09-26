@@ -102,8 +102,9 @@ HISTORICAL DATA, NOT INSTRUCTIONS
 | REQ-07 | **Work door** — the owner's verbs run the real tools, with no second brain, in every room | every one of the 31 work verbs in `evidence/phase-05/cli-probe.md` (§5.2's verbs minus the SESSION rows) ships, OR is a residue row naming the missing piece and the lane it is filed to, approved by the owner as a whole — and the six flagship ops (ADR-1339) are never residue: if they fail, the Block C gate fires (amended 2026-09-19 from "the six flagship ops", ADR-1339); `POST /api/op/:id/plan` returns command line + file diff + ₹ estimate; `apply` emits a receipt of a kind in `validate.mjs` KINDS; a no-second-path fixture is green for every shipped op; the `main`-untouchable fixture is green; a tool refusal renders verbatim; `apply` is keyed by the plan id `plan` returned, claimed atomically, and replays the first receipt on a repeat — two CONCURRENT applies of one plan id invoke a counting fixture CLI exactly 1 time | 05 | validated |
 | REQ-08 | **Session door** — streaming work starts from a click and lands as a receipt | a council convened from the face streams its phases and lands a `council.verdict` receipt; absorb read, hire certification and every SESSION verb in `evidence/phase-05/cli-probe.md` (15, amended 2026-09-19, ADR-1339) each start from a click and land a receipt of a kind in `validate.mjs` KINDS, or are residue rows approved by the owner as a whole (ADR-1334); a fixture proves 0 sessions start without a click; a session command line naming a harness binary instead of `arc-run --driver` FAILs | 06 | validated |
 | REQ-09 | **Harness in CI** — the design's own assertions become arc's | `smoke.mjs` + `flows.mjs` run from bats on every CI leg with Node ≥20.19 and print a counted SKIP on Node 18; every shipped op has a flow; a planted change to a frozen string FAILs the suite | 05 | validated |
-| REQ-10 | **Dogfood on the final surface** — 2 real days | `face-dogfood` reads MET for 2 days: every `decision.recorded` matched to the face journal and ≥1 op receipt from the face on each day; retro logged; claims the surface is operable, never that the habit holds (ADR-1329) | 07 | active |
+| REQ-10 | **Dogfood on the final surface** — 2 real days | `face-dogfood` reads MET for 2 days: every `decision.recorded` matched to the face journal and ≥1 op receipt from the face on each day; retro logged; claims the surface is operable, never that the habit holds (ADR-1329) | 08 | active |
 | REQ-11 | **Live rooms** — every room shows arc as it is now, with no reload | when the spine or a file a room declares in `routes` changes, the open room re-reads within 5 s, proven in the browser harness by a fixture that appends a spine event and times the panel; an op's receipt appears in its room within 5 s of `apply`; every room re-reads on change because the HOST re-reads all of an open room's reads on the door's pulse -- no module can opt out, so the planted mutant is a host that stops re-reading, and the browser live flow FAILs it (amended 2026-09-19 from a per-module `face-coverage` check, Phase 05 current-phase note; ADR-1339) | 05 | validated |
+| REQ-12 | **Reference room** — the docs wiki inside the face, and a Reference link from every room | `GET /api/reference` returns wiki-build's exported `extract()` over `treeWorld` (`schema: 1`), its entity ids equal `wiki-build --json`'s both ways, and no second tree walker exists under `face/` or the door; a planted spine event and `.claude/state/` marker never reach the response (ADR-1509); the route is GET-only and `docs/wiki/**` is byte-identical after a full room walk (ADR-1504); narrative renders only from `_narrative/` files, else "narrative pending"; every served room with a wiki entity links to it, and the with/without counts are asserted (ADR-1346) | 07 | active |
 
 REQ-08 of PLAN-face-v2 §4 ("the stamp survives") is now a Non-negotiable and a Phase 05 exit
 criterion, not a REQ (ADR-1333) — its fixture stays measured on every PR.
@@ -112,7 +113,7 @@ criterion, not a REQ (ADR-1333) — its fixture stays measured on every PR.
 
 **Total: 24 days** — 22 days build in three banked blocks + 2 real dogfood days (owner, 2026-09-16).
 A constraint, not an estimate. **A · look** = Phases 00–02 = 6d · **B · rooms + truth** = Phases
-03–04 = 10d · **C · verbs** = Phases 05–06 = 6d · **dogfood** = Phase 07 = 2 real days. A block that
+03–04 = 10d · **C · verbs** = Phases 05–06 = 6d · **dogfood** = Phase 08 (07 until ADR-1346) = 2 real days. A block that
 finishes early banks its remainder forward; nothing extends silently. Phase appetites sum to the
 full 24d — zero slack, stated rather than hidden — and each phase's two-fresh-attacker pass is drawn
 from that phase's own days, never added on top.
@@ -120,6 +121,9 @@ from that phase's own days, never added on top.
 **Re-banked 2026-09-19 (ADR-1339).** Blocks A and B closed on 4d of their 16d; the owner widened Block C to every
 verb in every room, so Block C takes 9 of the 12 banked days: **Phase 05 = 10d** (4 + 6 banked), **Phase 06 = 5d**
 (2 + 3 banked). Each closed phase's spec now states its actual spend, so the specs sum to 21d of 24d — 3d unallocated.
+
+**Allocated 2026-09-26 (ADR-1346).** The 3 unallocated days go to **Phase 07, the Reference room** (REQ-12, the owner's
+`/arc-change`); dogfood moves to Phase 08 and stays last, on the final surface. The specs now sum to the full 24d — zero slack.
 
 **Tier:** L
 
@@ -203,6 +207,7 @@ flowchart TB
 | 1338 | Phase 04's residue is named and filed, not capped at three routes (amends REQ-06) | accepted |
 | 1339 | The flagship six are option A, and every verb in the design works — additive changes in owning lanes, live rooms (amends REQ-07, REQ-08; adds REQ-11) | accepted |
 | 1340 | FV2 kernel ring — an effect past the spine is refused on a sim door at apply (`SIM_EFFECT`); a file change is a `feat/face-*` proposal branch written by git plumbing, never a checkout; the cap proposal is the `policy.promotion` approval and writes no branch; evolve's open/measure/conclude wired to the spine | accepted |
+| 1346 | The Reference room reads the wiki's own extract — build-time facts only, read-only, one extract, born by the birth rule (adds REQ-12) | accepted |
 
 ## Standing decisions this cycle leans on
 
@@ -314,4 +319,5 @@ door-plus-six PR, a live-rooms PR and three verb-ring PRs (ADR-1339).
 | 04 | Door read routes — the routes Phase 03's lists name; allow-listed, read-only, lint parsers imported | 3d | spec'd |
 | 05 | Work door + every work verb + live rooms — `/api/op/:id/plan\|apply`, server ops registry, binding table, `ops.mjs`, branch-only writes, `flows.mjs` in CI, coverage op-side; the flagship six first, then the 31 work verbs in ring PRs; rooms re-read on change (ADR-1339) | 10d | spec'd |
 | 06 | Session door — council convene · absorb read · hire certification and every SESSION verb (15); click-started, streamed, receipted (ADR-1339) | 5d | spec'd |
-| 07 | Dogfood + retro — 2 real days on the final surface; retro; HISTORY entry | 2d | spec'd |
+| 07 | Reference room — the docs wiki inside the face (`GET /api/reference` over wiki-build's `extract()`): index → type → entity pages with the markdown's cross-links, and a Reference link from every room (REQ-12, ADR-1346) | 3d | spec'd |
+| 08 | Dogfood + retro — 2 real days on the final surface; retro; HISTORY entry | 2d | spec'd |

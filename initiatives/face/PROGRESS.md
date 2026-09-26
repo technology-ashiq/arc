@@ -31,7 +31,8 @@ depends-on: —
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | ✅ **CLOSED 2026-09-18** — 0.5d of 3d; 18 routes served, 35 of 50 panels (39 tables), residue 15 panels on 10 routes approved by the owner (ADR-1338); four attacker rounds, `phase04-folds` 141 checks; merged `0a4cb262` (#248), PR head 19/19 (run 35367884908), `main` re-verified 19/19 (run 35369459599), suite 1..3415; live door 19 of 19 routes 200; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` · `01M2TPXZGPTN08BN98G6TCRZ5J` |
 | 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | ✅ **CLOSED 2026-09-23** — 3d of 10d; 31 of 31 work verbs ship as ops, residue none (`residue.md`, held both ways by `tests/face/work-door.mjs`); eight PRs (#252 · #253 · #254 · #255 · #257 · #258 · #259 · #261) + the close's #262/#263, 20 attacker rounds, 175 fixed-defect rows; final tree `2fba48f7` 19/19 (run 35870851639), suite 1..3427; live door from the main clone, one real apply receipted (`01M37CDRK7E03P67E45Y1BDT4E`); spec-fidelity drift dispositioned; receipts `01M37D0KHFPXBDBWQRYPMEXVT8` · `01M37D0M5F55KH2D8A5ZWJG6TA` |
 | 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | ✅ **CLOSED 2026-09-26** — 3d of 5d; of 15 SESSION verbs 5 ship with the receipt read back (the live council convene among them), 4 start with the read-back owed, 6 residue filed to their lanes (`residue.md`, held to the registry by `tests/face/session-door.mjs`); PRs #269 · #270 · #271 · #272 · #273 · #274 · #276 · #278 · #282 + the close #285/#286; 13 boundary rounds, 118 fixed-defect rows, the logic surface never ran (debt row); `main` `465f5b82` 19/19 (run 36225129900), suite 1..3545; spec-fidelity drift dispositioned; receipts `01M3EBD91R95PZD0EPQ1QB4TS2` · `01M3EBDGQ70ETM8PXDHNKHSZXJ` |
-| 07 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
+| 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 3d | spec'd — /arc-change 2026-09-26, awaiting the owner's OK |
+| 08 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
 **Appetite burn: 7d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
 C · verbs (05–06) 3/15d — **Phase 05 CLOSED at 3d of its 10d** (worked 2026-09-19, -20 and -23) — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
@@ -423,16 +424,21 @@ stay bespoke folds.
 
 ## Now
 
-**RESUME HERE (2026-09-26, afternoon):** **Phase 06 is CLOSED** (done log, 2026-09-26). **Phase 07 is next: dogfood
-2 real days + the cycle retro** (REQ-10, 2d). Open: #267 (the Windows proposal race, green, not face's to merge alone)
-and this close PR. No running session, and no local-only branch holds work.
+**RESUME HERE (2026-09-26, evening):** **Phase 06 is CLOSED** (done log, 2026-09-26) and stamped by the owner.
+**Phase 07 is next: the Reference room** (REQ-12, 3d), then Phase 08, dogfood (REQ-10, 2d). Open: #267 (the Windows
+proposal race: a face PR whose attack round, review and CI read never ran; it needs a rebase onto #282) and this
+`/arc-change` PR. The Phase 06 logic-attacker pay-down runs from detached worktrees `wt-logic-60c13e9` and
+`wt-logic-1f95807` (not branches).
 - **Closed today:** #284 (handoff), #285 (the residue file and the CLAUDE.md background CI-watch rule), #286 (the
   residue fixture, attackers.md, spec-fidelity.md, two debt rows), and the close PR (spec ticks, tracker, board,
   ci-jobs.json, handoff.md, manifest). Receipts from the main clone: `phase.closed` `01M3EBD91R95PZD0EPQ1QB4TS2` ·
   `approval.requested{gate: phase-done}` `01M3EBDGQ70ETM8PXDHNKHSZXJ`.
 - **The owner's stamp on `01M3EBDGQ70ETM8PXDHNKHSZXJ` decides three things at once:** `residue.md` as a whole (5
   ship, 4 start-only, 6 residue), the logic-attacker debt row, and the four read-backs debt row.
-- **Next (the owner's days, not an agent's):** Phase 07 opens on `feat/face-v2-07`. Its verification plan is still
+- **Change routed (2026-09-26, `/arc-change --lane face`):** a Reference room -- the docs wiki inside the face, and a
+  Reference link from every room -- is **Phase 07** (REQ-12, ADR-1346, 3d: the days ADR-1339 left unallocated). Dogfood
+  moves to **Phase 08** and stays last, on the final surface. Waiting on the owner's OK before any code.
+- **Then dogfood (Phase 08, the owner's days):** opens on `feat/face-v2-08`. Its verification plan is still
   the coarse one-liner, so the first step is `/arc-change --lane face` to refine it. Then two real days from the MAIN
   clone (`node .claude/scripts/hq/arc-face.mjs`): every decision goes through the face, and at least one op a day
   runs from it. `face-dogfood` reads each day. Then the retro, the HISTORY row, and `/arc-phase-done 07`.
