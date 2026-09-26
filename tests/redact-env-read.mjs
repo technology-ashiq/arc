@@ -46,10 +46,12 @@ const LITERALS = [
 check("a literal credential, or one glued to an env read, is still caught", LITERALS.every(hits), LITERALS.filter((l) => !hits(l)).join(" | "));
 
 // Through the scanner every caller uses, not only the rule: arc-run refuses --input on any hit.
+// EVERY read passes EVERY view the scanner builds -- the whitespace-stripped view put `})` right after the name and
+// refused the first narrowing (attack round, 2026-09-27) -- and every literal is refused by this rule's name.
 const scan = (line) => R.scanSecrets(JSON.stringify({ v: line }), { v: line });
-check("scanSecrets passes the env read and refuses the literal, by this rule's name",
-  scan(READS[0]).hit === false && scan(LITERALS[0]).hit === true && scan(LITERALS[0]).rule === "generic-credential-assignment",
-  JSON.stringify([scan(READS[0]), scan(LITERALS[0])]));
+check("scanSecrets, over all its views, passes every env read and refuses every literal by this rule's name",
+  READS.every((l) => scan(l).hit === false) && LITERALS.every((l) => scan(l).hit === true && scan(l).rule === "generic-credential-assignment"),
+  JSON.stringify([...READS.map((l) => [l.slice(0, 40), scan(l)]).filter((x) => x[1].hit), ...LITERALS.map((l) => [l.slice(0, 40), scan(l)]).filter((x) => !x[1].hit)]));
 
 console.log(`RAN: ${ran} checks`);
 process.exitCode = failed === 0 && ran === 5 ? 0 : 1;

@@ -86,10 +86,11 @@ export const DENY_RULES = Object.freeze([
   { name: "bearer-token", re: /\bbearer\s{1,8}[A-Za-z0-9._-]{16,512}/i },
   // An ENVIRONMENT READ is not a credential: `API_KEY = process.env.ARC_LLM_API_KEY` names where a key comes from and
   // holds none, and it refused every attack diff whose context reached that line of drivers/generic-api.mjs (engine
-  // bug, 2026-09-26). The exception is exact -- the value must be `process.env.<NAME>` and nothing else, save a
-  // closing `;`, `,` or `)`, then a space, a quote, a backtick (the end of a code span in prose) or the end -- so a
-  // literal glued to the read is still caught.
-  { name: "generic-credential-assignment", re: /\b(?:api[_-]?key|secret|password|passwd|passphrase|access[_-]?token|auth[_-]?token)\b['"]?\s{0,8}[:=]\s{0,8}['"]?(?!process\.env\.[A-Za-z_][A-Za-z0-9_]{0,127}[;,)]*(?:[\s'"`]|$))[^\s'"]{8,512}/i },
+  // bug, 2026-09-26). The exception is exact -- the value must be `process.env.<NAME>` NOT followed by a character
+  // that could continue a value (a letter, digit, `_`, `+`, `/`, `=`, `.` or `-`) -- so a literal glued to the read
+  // (`process.env.X+sk-...`, `process.env.X/...`) is still caught, in every view the scanner builds, including the
+  // whitespace-stripped ones where `})` or `||` sits right after the name.
+  { name: "generic-credential-assignment", re: /\b(?:api[_-]?key|secret|password|passwd|passphrase|access[_-]?token|auth[_-]?token)\b['"]?\s{0,8}[:=]\s{0,8}['"]?(?!process\.env\.[A-Za-z_][A-Za-z0-9_]{0,127}(?![A-Za-z0-9_+/=.-]))[^\s'"]{8,512}/i },
 ]);
 
 // Linear, backtracking-free JWT detection. A regex for this shape is a ReDoS waiting to
