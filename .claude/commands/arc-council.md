@@ -191,12 +191,26 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
 8. **Save (deep runs only).** Write the full rendered verdict to `docs/council/sessions/NNN-slug.md`
    (NNN = next zero-padded number; slug = short kebab of the question). A `quick` run writes nothing. The
    saved file must pass `node .claude/scripts/council/council-lint.mjs --verdict <file>`.
+   Its FIRST line is exactly `# arc-council — <the question> (<YYYY-MM-DD>)`, today's date: step 9 takes the
+   question it hashes from that line and refuses a file without it. (Hand runs wrote it by habit; a headless run,
+   told only "save the verdict", wrote the bare question and its receipt was refused -- live convene, 2026-09-25.)
 
 9. **Leave the receipt (spine) — deep runs only.** After saving, record the verdict on the spine
    (hook-mode, never blocks; a `quick` run emits nothing — it wrote no verdict to receipt):
    ```bash
-   bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload '{"decision":"<YES|NO|CONDITIONAL|WAIT>","confidence":"<High|Medium|Low>","session":"<NNN-slug>"}'
+   payload="$(node .claude/scripts/council/council-lint.mjs --payload "docs/council/sessions/NNN-slug.md")" || { echo "council.verdict NOT emitted: the saved verdict refused derivation (see above)" >&2; exit 1; }
+   id="$(bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload "$payload" | tail -n 1)"
+   [[ "$id" =~ ^[0-7][0-9A-HJKMNP-TV-Z]{25}$ ]] || { echo "council.verdict NOT recorded: the emitter wrote no receipt (a linked worktree, or its refusal above)" >&2; exit 1; }
    ```
+   Derive, gate, emit, then CHECK: a refused derivation stops the step and emits nothing, and a hook-mode emit that
+   wrote nothing (from a linked worktree it refuses, and exits 0) stops it too -- the step ends only on the receipt's
+   id. Run it from the main clone. `NNN-slug` is the saved file's name, `[A-Za-z0-9._-]` only (step 8 builds it that
+   way), and the path stays quoted.
+   The payload is DERIVED from the saved verdict, never typed: the spine's `council.verdict` shape is closed to
+   `session_id` (`c-NNN-slug`) · `question_hash` (sha256 of the question in the verdict's heading) · `call` ·
+   `confidence`, and anything else is rejected BAD_COUNCIL. `call` is `proceed` for YES and CONDITIONAL, `hold` for NO
+   and WAIT (ADR-1345). If the derivation refuses, the verdict file is missing its heading, DECISION or CONFIDENCE line
+   -- fix the file, never the payload.
 
 ## Standard mode
 `/arc-council standard <question>` — a **verified** answer at a **fixed, predictable price**. It exists

@@ -1,0 +1,125 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-robots.mjs:138",
+      "breaking_input": "A host serves /robots.txt with status 200 and a 20 MB body (or a content-length over 15 MB). The first bytes are a 'User-agent: ClaudeBot' group with 'Disallow: /'. realTransport returns status 200, an empty body and tooLarge:true. preflight ignores tooLarge and calls decide() on the empty body, so the verdict is ALLOW ('no group applies to this agent').",
+      "why": "An oversize robots.txt turns their DISALLOW into a recorded ALLOW, so the permission check fails open. RFC 9309 says to parse the first 500 KiB, and the ROBOTS_MAX_BYTES slice in preflight never gets to see those bytes. The body is also fully buffered with arrayBuffer() before the size check, so a chunked response with no content-length can pull gigabytes into memory within the 15 s window.",
+      "fix": "Stream the body and stop reading at a byte cap, then hand the first 512 KiB to decide(). In preflight, treat res.tooLarge as UNREADABLE or use the truncated prefix. Never pass an emptied body through as a 2xx."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-refpack.mjs:105",
+      "breaking_input": "Pass --source with the id of an active, reference-pack, fetch registry row, and --url with an image on a link-only source such as https://www.awwwards.com/x.png, or on an internal host such as http://127.0.0.1:8080/x.png.",
+      "why": "The registry gate reads only the --source label. Nothing ties url.hostname to that row, so the licence check is made on one input and the fetch is made on another. The robots preflight runs against whatever host --url names. The committed sources.md row then credits the wrong source. This also makes the builder an SSRF primitive against loopback and private addresses.",
+      "fix": "Require the registry row to carry its host, and refuse before any network call unless url.hostname equals it or is a subdomain of it. Refuse loopback, link-local and private addresses. Apply the same check to every redirect hop."
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-robots.mjs:136",
+      "breaking_input": "An allowed origin returns a 302 for the screen URL to a different origin whose robots.txt disallows ClaudeBot, or to a metadata endpoint on a private address.",
+      "why": "realTransport uses redirect:'follow' and the preflight covers only the origin of the original URL. The redirect target is fetched with no robots check, no registry check, and no line in attempts.log, which claims to prove every attempt. sources.md records the pre-redirect URL next to the sha of bytes that came from somewhere else. The redirected request is made, and only the content-type check stops the body from being cached.",
+      "fix": "Use redirect:'manual' and follow a bounded number of hops inside the transport. For each hop, log the attempt, re-run the registry host binding and the robots preflight, and refuse http downgrade. Record the final URL in the provenance row."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:114",
+      "breaking_input": "Run with --fixture pointing at any local file, plus --url https://real-site.example/shot.png. Or run with --registry pointing at a scratch yaml that has an active, reference-pack, fetch row.",
+      "why": "The offline-first test seams --fixture, --robots-file, --robots-status and --registry ship in the production CLI with no gate. --fixture never touches the network but writes an availability.log line 'ALLOW ... robots.txt returned 404' for a host that was never contacted. It forces the content type to image/png, so any file is cached under a png name. It then commits a sources.md row saying a real URL was fetched, carrying that file's sha. --registry lets the caller issue its own licence.",
+      "fix": "Gate the seams behind an explicit env such as ARC_DESIGN_OFFLINE=1, and stamp fake-transport rows 'fixture' in the logs and in sources.md. Refuse --registry paths outside the repo unless the offline env is set."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-robots.mjs:87",
+      "breaking_input": "A hostile robots.txt in the 'User-agent: *' group with 'Disallow: /*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*b', checked against a screen URL whose path is a long run of the letter a.",
+      "why": "Rule paths from the remote file are compiled into a regex with '.*' per '*'. A non-matching tail causes polynomial or exponential backtracking in a synchronous call. AbortSignal.timeout cannot interrupt it, and up to 512 KiB of such rules is allowed. The process hangs with no verdict logged and blocks the curator.",
+      "fix": "Replace the regex with a linear wildcard matcher (two-pointer or DP). Cap the '*' count and the rule length."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-robots.mjs:87",
+      "breaking_input": "robots.txt has 'Disallow: /caf%C3%A9/' or the unencoded 'Disallow: /café/'. The screen URL is https://x.example/caf%c3%a9/a.png, where the WHATWG parser keeps the lowercase hex as written.",
+      "why": "The rule text and url.pathname are compared without percent-encoding normalisation. Hex case differences, unencoded non-ASCII in the rule, and an encoded unreserved character such as %70 for p all make the regex miss. A DISALLOW becomes ALLOW, so the check fails open.",
+      "fix": "Normalise both sides before matching: percent-encode non-ASCII octets in the rule, uppercase all hex digits, and decode encoded unreserved characters."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:158",
+      "breaking_input": "Two design-curator calls for a new brief run at the same time. Both see existsSync(sourcesMd) false. One writes the header and appends its row. The other then runs writeFileSync(header) and truncates the file.",
+      "why": "Check-then-create with a truncating write loses the first row. Its image stays in the state dir with no provenance row. The image write at line 155 also happens before any provenance exists, so any failure between the two leaves an orphan image.",
+      "fix": "Create the header with writeFileSync(..., {flag:'wx'}) and ignore EEXIST, then append. Write the provenance row before the image, or delete the image if the row write fails."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:162",
+      "breaking_input": "Another worktree session holds .git/index.lock while `git add -N` runs. Or git is not on PATH, or the path is ignored.",
+      "why": "spawnSync uses stdio:'ignore' and neither result.status nor result.error is read. The command prints 'added' and exits 0 while sources.md is still untracked. That is the exact forgotten-provenance failure the header says this step prevents. The repo already records parallel sessions and Windows git object-write races.",
+      "fix": "Check status and error. Retry once, then print a one-line warning and exit non-zero (or a distinct code) naming the untracked path."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:154",
+      "breaking_input": "A registry row (via --registry, or one the lint let through) with id '../../../hooks/x', or 'a:b' on Windows, or an id containing a tab and a newline.",
+      "why": "The ID grammar is applied only to --brief. The source id is used raw in join(stateDir, `${id}-${sha}.${ext}`) and in the attempts.log and availability.log lines. '..' writes outside the pack directory. A colon writes an NTFS alternate data stream. A tab or newline forges log rows. This is validate-one-read, use-another: the lint validates the registry, but the builder trusts it.",
+      "fix": "Require ID.test(id) before the lookup can succeed, and assert that resolve(image) is inside stateDir. Strip or refuse control characters in anything written to a log."
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:105",
+      "breaking_input": "A registry with two rows of the same id: the first active with reference-pack and fetch, a later one status: blocked (or without reference-pack).",
+      "why": "sources.find() returns the first match and ignores the rest. A later restriction of the same id is never seen, so the gate fails open. The builder must not depend on a lint having caught the duplicate.",
+      "fix": "Count matches and refuse with exit 2 unless exactly one row has the id."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-robots.mjs:110",
+      "breaking_input": "A robots.txt rule line containing a tab, ANSI escape bytes, or instruction-like text. Also a response content-type header carrying such text.",
+      "why": "Remote-controlled text (best.line in d.reason, the type in 'not an image (content-type ...)', and e.message) is written verbatim to the tab-separated availability.log and printed to stderr. The curator agent reads that stderr. This adds extra log columns, terminal escape injection, and an indirect prompt-injection channel from a third-party site.",
+      "fix": "Strip control characters and cap the length of every remote-derived string before logging or printing it."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:118",
+      "breaking_input": "--brief nul, con, aux, prn or com1.",
+      "why": "These pass the ID grammar but are Windows reserved device names. mkdirSync of .../refpacks/con then throws on Windows. The exception is uncaught and exits 1 with a stack trace, the same code as a usage error, after the registry gate and before the preflight. lanes.md already documents this failure for lane names, and the brief id has no such guard.",
+      "fix": "Reject Windows reserved names in the brief check (as lanes.md does), and wrap the mkdir and log-append calls so failure maps to a clean, distinct exit."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:161",
+      "breaking_input": "--url is an image URL whose query string carries a signature or token parameter. Or the URL carries userinfo (user and password before the @).",
+      "why": "The full url.href goes into sources.md, which is committed, and this repo is public. A signed CDN query string is a live credential and lands in git history. Userinfo is accepted by parseHttpUrl and written to both logs before fetch rejects it.",
+      "fix": "Refuse URLs with userinfo. Redact or refuse query parameters that look like credentials before writing sources.md and the logs. Keep the sha as the reproducibility anchor."
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:72",
+      "breaking_input": "A consumer venture repo synced with the design product but without the engine product.",
+      "why": "The builder imports .claude/scripts/engine/yaml-subset.mjs, yet design declares its dependencies as core and hq only. The diff itself adds a cp of that file to the test sandbox, which shows the dependency is real. In such a consumer every call exits 1 with 'cannot load the repo yaml subset parser'.",
+      "fix": "Declare engine as a dependency in products/design/manifest.json, or move the parser into core."
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:118",
+      "breaking_input": "A registry refusal (exit 2) on a brief that has never run: for example --source with status: paused.",
+      "why": "mkdirSync(stateDir) sits after the registry gate, so no state dir and no attempts.log exist. The header says attempts.log proves the refusal made zero attempts, but a missing file proves nothing and passes a [ ! -s attempts.log ] check vacuously. The refusal is also not written to availability.log, which the header says is what prevents a silent skip.",
+      "fix": "Create the state dir first and append a REFUSED row to availability.log for every registry refusal. Have tests assert the log exists and that its attempts count is zero."
+    }
+  ]
+}

@@ -98,6 +98,15 @@
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/PreToolUse.sh"
           }
         ]
+      },
+      {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/PreToolUse-read.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [

@@ -1471,5 +1471,248 @@ const receiptOf = (stdout) => (/receipt: \S+ ([0-9A-HJKMNP-TV-Z]{26})/.exec(Stri
 
 }
 
+// ---- memory/rule-propose.mjs, APPLIED, in a scratch repository (face Phase 06 slice 04, the "Promote a rule" session
+// verb): a rule is appended to an EXISTING home on a new branch, the owner's tree and main do not move, the approval
+// names the branch and carries the run's process tag, the apply is bound to its plan, and the text is fenced and
+// secret-scanned before anything is written ----
+{
+  const repo = join(tmp, "rule-repo");
+  cpSync(join(REPO, ".claude", "scripts"), join(repo, ".claude", "scripts"), { recursive: true });
+  mkdirSync(join(repo, ".claude", "rules"), { recursive: true });
+  mkdirSync(join(repo, ".claude", "state", "rule-promote"), { recursive: true });
+  writeFileSync(join(repo, "CLAUDE.md"), "# fixture CLAUDE.md\n\n- one rule\n");
+  writeFileSync(join(repo, ".claude", "rules", "testing.md"), "# Testing Rules\n\n- a rule\n");
+  writeFileSync(join(repo, ".gitignore"), ".claude/state/\n");
+  const g = (...a) => spawnSync("git", a, { cwd: repo, encoding: "utf8" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.name", "fixture"); g("config", "user.email", "fixture@example.invalid"); g("config", "commit.gpgsign", "false");
+  g("add", "-A"); g("commit", "-q", "-m", "scratch");
+  const mainBefore = g("rev-parse", "refs/heads/main").stdout.trim();
+  check("rule-propose: scratch repository committed on main (vacuous-pass guard)", /^[0-9a-f]{40}$/.test(mainBefore));
+  const sp = spine("rule-spine");
+  const rp = (args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", "memory", "rule-propose.mjs"), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  const approvals = () => spineEvents(sp).filter((e) => e.kind === "approval.requested");
+  const clean = () => g("status", "--porcelain").stdout === "" && g("symbolic-ref", "HEAD").stdout.trim() === "refs/heads/main" && g("rev-parse", "refs/heads/main").stdout.trim() === mainBefore;
+  const homes = () => [sha256(readFileSync(join(repo, "CLAUDE.md"))), sha256(readFileSync(join(repo, ".claude", "rules", "testing.md")))].join("|");
+  const homes0 = homes();
+  const textFile = ".claude/state/rule-promote/rule.md";
+  writeFileSync(join(repo, textFile), "A counting grep that expects zero is guarded with || true under set -e.\n");
+  const ARGS = ["--home", ".claude/rules/testing.md", "--text-file", textFile, "--why", "the kernel suite proposes this", "--as-process", "rule-promote@1.0.0"];
+
+  const plan = rp([...ARGS, "--dry-run"]);
+  const digest = lastExpect(plan.stdout);
+  check("rule-propose, planned: the diff appends the rule after a blank line, with a digest, and no branch, no receipt",
+    plan.status === 0 && !!digest && /\n\+A counting grep that expects zero/.test(plan.stdout) && approvals().length === 0 && clean(), `${plan.status} ${plan.stderr}`);
+  const applied = rp([...ARGS, "--expect", digest || "x"]);
+  const branch = (/rule-propose: wrote (\S+) at/.exec(applied.stdout) || [])[1] || "";
+  const appr = approvals().find((e) => e.payload.branch === branch);
+  check("rule-propose, applied with --expect: a feat/face-memory-rule branch changes only the home, and the tree did not move",
+    applied.status === 0 && /^feat\/face-memory-rule-rules-testing-[0-9a-f]{8}$/.test(branch) && g("diff", "--name-only", "main", branch).stdout.trim() === ".claude/rules/testing.md" && clean(), `${applied.status} ${applied.stderr}`);
+  check("rule-propose, applied: the approval names the branch and its commit, gate rule, tagged with the run's process",
+    !!appr && appr.payload.gate === "rule" && appr.payload.commit === g("rev-parse", branch).stdout.trim() && appr.process === "rule-promote@1.0.0" && receiptOf(applied.stdout) === appr.id, JSON.stringify(appr));
+  check("rule-propose: the branch holds main's home plus exactly the rule, the old last line untouched",
+    g("show", `${branch}:.claude/rules/testing.md`).stdout === "# Testing Rules\n\n- a rule\n\nA counting grep that expects zero is guarded with || true under set -e.\n");
+  const unbound = rp(ARGS);
+  check("rule-propose with no plan digest refuses -- an apply is bound to a plan", unbound.status === 2 && /bound to a plan/.test(unbound.stderr), unbound.stderr);
+  const again = rp([...ARGS, "--expect", digest || "x"]);
+  check("rule-propose applied twice: the second refuses and raises nothing", again.status === 2 && approvals().filter((e) => e.payload.branch === branch).length === 1, again.stderr);
+  // Every refusal writes nothing: no branch beyond the one above, no approval beyond the one above.
+  // Other files under .claude/state are not the verb's to read (attack 3e97a85 B3). This one exists, so the fence --
+  // not a missing file -- is what refuses it.
+  writeFileSync(join(repo, ".claude", "state", "elsewhere.md"), "a file the rule verb may not read\n");
+  const refusals = [
+    ["a home that is not CLAUDE.md or .claude/rules", ["--home", "README.md", "--text-file", textFile, "--dry-run"], /--home is CLAUDE.md or/],
+    ["a rules file main does not carry", ["--home", ".claude/rules/nope.md", "--text-file", textFile, "--dry-run"], /main carries no/],
+    ["a home climbing out", ["--home", ".claude/rules/../../CLAUDE.md", "--text-file", textFile, "--dry-run"], /--home is CLAUDE.md or/],
+    ["a text file outside its scratch directory", ["--home", "CLAUDE.md", "--text-file", "CLAUDE.md", "--dry-run"], /must sit directly in \.claude\/state\/rule-promote/],
+    // Other files under .claude/state are not the verb's to read (attack 3e97a85 B3).
+    ["another file under .claude/state", ["--home", "CLAUDE.md", "--text-file", ".claude/state/elsewhere.md", "--dry-run"], /must sit directly in \.claude\/state\/rule-promote/],
+    // Across two drives path.relative returns the target itself, which no `..` check sees (attack 3e97a85 B1).
+    ["a drive-absolute path", ["--home", "CLAUDE.md", "--text-file", ["C:", "x", "rule.md"].join(String.fromCharCode(92)), "--dry-run"], /not an absolute, drive or UNC path/],
+    ["a UNC path", ["--home", "CLAUDE.md", "--text-file", String.fromCharCode(92).repeat(2) + ["host", "share", "rule.md"].join(String.fromCharCode(92)), "--dry-run"], /not an absolute, drive or UNC path/],
+    ["a bad process tag", ["--home", "CLAUDE.md", "--text-file", textFile, "--as-process", "x; rm -rf", "--dry-run"], /--as-process is/],
+    ["--dry-run with --expect", ["--home", "CLAUDE.md", "--text-file", textFile, "--dry-run", "--expect", "0".repeat(64)], /give one/],
+    ["an unknown flag", ["--home", "CLAUDE.md", "--text-file", textFile, "--force"], /unknown argument/],
+  ];
+  for (const [label, args, want] of refusals) {
+    const r = rp(args);
+    check(`rule-propose refuses ${label}, writing nothing`, r.status === 2 && want.test(r.stderr) && approvals().length === 1, `${r.status} ${r.stderr}`);
+  }
+  // A rule carrying a credential never reaches a branch of a public repo. The sample is built from parts, so no literal
+  // key sits in this file.
+  writeFileSync(join(repo, ".claude", "state", "rule-promote", "secret.md"), `Never commit ${"AKIA"}${"IOSFODNN7EXAMPLF"} again.\n`);
+  const secret = rp(["--home", "CLAUDE.md", "--text-file", ".claude/state/rule-promote/secret.md", "--dry-run"]);
+  check("rule-propose refuses a rule matching a secret rule, before any plan", secret.status === 2 && /secret rule/.test(secret.stderr) && !secret.stdout.includes("IOSFODNN7"), `${secret.status} ${secret.stderr}`);
+  writeFileSync(join(repo, ".claude", "state", "rule-promote", "ctl.md"), `a rule${String.fromCharCode(0x2028)}with a hidden line\n`);
+  const ctl = rp(["--home", "CLAUDE.md", "--text-file", ".claude/state/rule-promote/ctl.md", "--dry-run"]);
+  check("rule-propose refuses a rule holding a line-separator character", ctl.status === 2 && /control, format or line-separator/.test(ctl.stderr), ctl.stderr);
+  // CLAUDE.md, applied: the stem is root-claude, never `CLAUDE` and never a rules file's (attack 3e97a85 B6), and the
+  // branch passes the process's own output schema, read from the process file rather than restated here.
+  const rootArgs = ["--home", "CLAUDE.md", "--text-file", textFile, "--as-process", "rule-promote@1.0.0"];
+  const rootPlan = rp([...rootArgs, "--dry-run"]);
+  const rootApply = rp([...rootArgs, "--expect", lastExpect(rootPlan.stdout) || "x"]);
+  const rootBranch = (/rule-propose: wrote (\S+) at/.exec(rootApply.stdout) || [])[1] || "";
+  const schema = (/branch:\s*\n\s*type: string\s*\n\s*pattern: "([^"]+)"/.exec(readFileSync(join(REPO, "processes", "rule-promote.process.yaml"), "utf8").replace(/\r\n/g, "\n")) || [])[1];
+  check("rule-propose, CLAUDE.md applied: a root-claude branch that changes only CLAUDE.md and passes the output schema",
+    rootApply.status === 0 && /^feat\/face-memory-rule-root-claude-[0-9a-f]{8}$/.test(rootBranch) && !!schema && new RegExp(schema.replace(/\\\\/g, "\\")).test(rootBranch)
+      && g("diff", "--name-only", "main", rootBranch).stdout.trim() === "CLAUDE.md" && approvals().length === 2 && clean(), `${rootApply.status} ${rootBranch} ${schema} ${rootApply.stderr}`);
+  check("rule-propose: THE HOMES are byte-identical in the tree after every proposal and refusal", homes() === homes0 && clean(), homes());
+}
+
+// ---- memory/lesson-log.mjs, in a scratch repository (face Phase 06 slice 04, the "Log a lesson" session verb): the
+// log's ONE writer appends exactly one validated row, records a near-duplicate instead of appending it, refuses a row
+// that is not the log's form or carries a secret, reads only its own scratch file, and tags its receipt ----
+{
+  const repo = join(tmp, "lesson-repo");
+  cpSync(join(REPO, ".claude", "scripts"), join(repo, ".claude", "scripts"), { recursive: true });
+  mkdirSync(join(repo, "docs"), { recursive: true });
+  mkdirSync(join(repo, ".claude", "state", "lesson-log"), { recursive: true });
+  const head = "# Retro log\n\n> Append-only, ONE line per pattern.\n";
+  const existing = "2026-09-01 | arc | a bats counting assignment failed under set -e | guard a counting grep with or-true when zero is the expected answer | bats,shell,ci\n";
+  writeFileSync(join(repo, "docs", "retro-log.md"), head + existing);
+  const sp = spine("lesson-spine");
+  const ll = (args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", "memory", "lesson-log.mjs"), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  const notes = () => spineEvents(sp).filter((e) => e.kind === "note.logged");
+  const log = () => readFileSync(join(repo, "docs", "retro-log.md"), "utf8");
+  const rowFile = ".claude/state/lesson-log/row.txt";
+  const put = (row) => writeFileSync(join(repo, rowFile), `${row}\n`);
+  const ARGS = ["--row-file", rowFile, "--as-process", "lesson-log@1.0.0"];
+
+  const fresh = "2026-09-25 | arc | a demo council replied with prose before its JSON and the run failed | reply with the JSON object alone and let arc-run say the receipt line | council,headless,json";
+  put(fresh);
+  const dry = ll([...ARGS, "--dry-run"]);
+  check("lesson-log, dry run: says it would append, and writes nothing -- no row, no receipt", dry.status === 0 && /would append/.test(dry.stdout) && log() === head + existing && notes().length === 0, `${dry.status} ${dry.stderr}`);
+  const add = ll(ARGS);
+  const n1 = notes()[0];
+  check("lesson-log, applied: exactly the one row is appended, the rest of the log byte-identical",
+    add.status === 0 && log() === `${head}${existing}${fresh}\n`, `${add.status} ${add.stderr}`);
+  check("lesson-log, applied: note.logged lands, appended true, tagged lesson-log@1.0.0, and its id is the one printed",
+    !!n1 && n1.payload.appended === true && n1.payload.file === "docs/retro-log.md" && n1.process === "lesson-log@1.0.0" && receiptOf(add.stdout) === n1.id, JSON.stringify(n1));
+  // A near-repeat of the row already in the log (>= 2 shared tags AND jaccard >= 0.5) is recorded, never appended.
+  const repeat = "2026-09-25 | arc | a counting grep failed its test under set -e again | guard a counting grep with or-true when zero is the expected answer | bats,shell";
+  put(repeat);
+  const dup = ll(ARGS);
+  const n2 = notes()[1];
+  check("lesson-log, a near-duplicate: NOT appended, the receipt names the row it repeats",
+    dup.status === 0 && !log().includes("again") && !!n2 && n2.payload.appended === false && /docs\/retro-log\.md:\d+/.test(n2.payload.duplicate_of), `${dup.status} ${JSON.stringify(n2)} ${dup.stderr}`);
+  const before = log();
+  const refusals = [
+    ["four fields", "2026-09-25 | arc | a pattern | a prevention"],
+    ["a pipe inside a field", "2026-09-25 | arc | a pattern | guard it with || true | bats,ci"],
+    ["a date that is not a day", "2026-02-30 | arc | a pattern | a prevention | bats,ci"],
+    ["one tag", "2026-09-25 | arc | a pattern | a prevention | bats"],
+    ["an uppercase tag", "2026-09-25 | arc | a pattern | a prevention | Bats,ci"],
+    ["a padded field", "2026-09-25 | arc |  a pattern | a prevention | bats,ci"],
+    ["a line separator hidden in the row", `2026-09-25 | arc | a pattern${String.fromCharCode(0x2028)}2026-09-25 | x | y | z | a,b | a prevention | bats,ci`],
+  ];
+  for (const [label, row] of refusals) {
+    put(row);
+    const r = ll(ARGS);
+    check(`lesson-log refuses ${label}, writing nothing`, r.status === 2 && log() === before && notes().length === 2, `${r.status} ${r.stderr}`);
+  }
+  // A secret in a row never reaches a tracked file; the sample is built from parts, so no literal key sits here.
+  put(`2026-09-25 | arc | a key ${"AKIA"}${"IOSFODNN7EXAMPLF"} was pasted into a log | never paste a key into a log | secrets,ci`);
+  const secret = ll(ARGS);
+  check("lesson-log refuses a row matching a secret rule, writing nothing", secret.status === 2 && /secret rule/.test(secret.stderr) && log() === before && !secret.stderr.includes("IOSFODNN7"), secret.stderr);
+  writeFileSync(join(repo, ".claude", "state", "other.txt"), `${fresh}\n`);
+  const paths = [
+    ["a file outside its scratch directory", "docs/retro-log.md"],
+    ["another file under .claude/state", ".claude/state/other.txt"],
+    ["a drive-absolute path", ["C:", "x", "row.txt"].join(String.fromCharCode(92))],
+    ["a UNC path", String.fromCharCode(92).repeat(2) + ["host", "share", "row.txt"].join(String.fromCharCode(92))],
+  ];
+  for (const [label, p] of paths) {
+    const r = ll(["--row-file", p]);
+    check(`lesson-log refuses ${label}, writing nothing`, r.status === 2 && log() === before && notes().length === 2, `${r.status} ${r.stderr}`);
+  }
+  check("lesson-log: THE LOG gained exactly one line across every run", log().split("\n").length === (head + existing).split("\n").length + 1, String(log().split("\n").length));
+}
+
+// ---- hq/adr-record.mjs, in a scratch repository (face Phase 06, the strategy room's "Record an ADR" session verb):
+// the number comes from the lane's century and skips every number this tree, another branch and a sibling worktree's
+// uncommitted file hold; the file is created with the heading block the script writes; the receipt is tagged; a
+// malformed, secret-bearing or out-of-scratch ADR, an unknown lane, a lane with no century and a full century are
+// refused with nothing written ----
+{
+  const repo = join(tmp, "adr-repo");
+  cpSync(join(REPO, ".claude", "scripts"), join(repo, ".claude", "scripts"), { recursive: true });
+  mkdirSync(join(repo, "docs", "adr"), { recursive: true });
+  mkdirSync(join(repo, ".claude", "state", "adr-record"), { recursive: true });
+  for (const lane of ["face", "ghost", "tiny"]) {
+    mkdirSync(join(repo, "initiatives", lane), { recursive: true });
+    writeFileSync(join(repo, "initiatives", lane, "PROGRESS.md"), "# PROGRESS\n\nstatus: LIVE\nphase: 01\n");
+  }
+  writeFileSync(join(repo, "PORTFOLIO.md"), `# Board\n\n| Band | Lane |\n|---|---|\n| 1300${String.fromCharCode(0x2013)}1399 | \`face\` -- claimed |\n| 1700-1701 | \`tiny\` -- claimed |\n`);
+  writeFileSync(join(repo, "docs", "adr", "1300-first.md"), "# ADR 1300\n");
+  writeFileSync(join(repo, "docs", "adr", "1305-second.md"), "# ADR 1305\n");
+  writeFileSync(join(repo, "docs", "adr", "1701-tiny-full.md"), "# ADR 1701\n");
+  writeFileSync(join(repo, ".gitignore"), ".claude/state/\n");
+  const g = (...a) => spawnSync("git", a, { cwd: repo, encoding: "utf8" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.name", "fixture"); g("config", "user.email", "fixture@example.invalid"); g("config", "commit.gpgsign", "false");
+  g("add", "-A"); g("commit", "-q", "-m", "scratch");
+  // 1310 on another branch only; 1320 in a sibling worktree, never committed.
+  g("switch", "-q", "-c", "other");
+  writeFileSync(join(repo, "docs", "adr", "1310-on-a-branch.md"), "# ADR 1310\n");
+  g("add", "-A"); g("commit", "-q", "-m", "a branch claim");
+  g("switch", "-q", "main");
+  const wt = join(tmp, "adr-wt");
+  const added = g("worktree", "add", "-q", wt, "-b", "wt");
+  writeFileSync(join(wt, "docs", "adr", "1320-in-a-sibling.md"), "# ADR 1320\n");
+  check("adr-record: scratch repository on main, a branch claim and a sibling worktree claim (vacuous-pass guard)",
+    added.status === 0 && !existsSync(join(repo, "docs", "adr", "1310-on-a-branch.md")) && g("rev-parse", "--verify", "--quiet", "other:docs/adr/1310-on-a-branch.md").status === 0, added.stderr);
+  const sp = spine("adr-spine");
+  const ar = (args) => spawnSync(process.execPath, [join(repo, ".claude", "scripts", "hq", "adr-record.mjs"), ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: sp }, timeout: 120_000 });
+  const notes = () => spineEvents(sp).filter((e) => e.kind === "note.logged");
+  const adrs = () => readdirSync(join(repo, "docs", "adr")).sort().join(",");
+  const file = ".claude/state/adr-record/adr.md";
+  const put = (text) => writeFileSync(join(repo, file), text);
+  const good = "Session verbs get one writer script each\n\n## Context\n\nTwo session verbs needed a tracked write.\n\n## Decision\n\nEach verb gets its own writer script.\n";
+  const ARGS = ["--lane", "face", "--adr-file", file, "--as-process", "adr-record@1.0.0"];
+
+  put(good);
+  const adrs0 = adrs();
+  const dry = ar([...ARGS, "--dry-run"]);
+  check("adr-record, dry run: names 1321 -- past the tree's 1305, the branch's 1310 and the sibling's 1320 -- and writes nothing",
+    dry.status === 0 && /would write docs\/adr\/1321-session-verbs-get-one-writer-script-each\.md/.test(dry.stdout) && adrs() === adrs0 && notes().length === 0, `${dry.status} ${dry.stdout} ${dry.stderr}`);
+  const one = ar(ARGS);
+  const n1 = notes()[0];
+  const path1 = join(repo, "docs", "adr", "1321-session-verbs-get-one-writer-script-each.md");
+  const text1 = existsSync(path1) ? readFileSync(path1, "utf8") : "";
+  check("adr-record, applied: 1321 is written with the heading block, and the body after it byte for byte",
+    one.status === 0 && text1.startsWith(`# ADR 1321 ${String.fromCharCode(0x2014)} Session verbs get one writer script each\n\n**Status:** accepted\n**Date:** `) && /\n\*\*Lane:\*\* face\n/.test(text1) && text1.endsWith(good.slice(good.indexOf("## Context"))), `${one.status} ${one.stderr} ${text1.slice(0, 200)}`);
+  check("adr-record, applied: note.logged lands with what adr, the file and number, tagged adr-record@1.0.0, its id the one printed",
+    !!n1 && n1.payload.what === "adr" && n1.payload.file === "docs/adr/1321-session-verbs-get-one-writer-script-each.md" && n1.payload.number === "1321" && n1.payload.lane === "face" && n1.process === "adr-record@1.0.0" && receiptOf(one.stdout) === n1.id, JSON.stringify(n1));
+  check("adr-record, applied: the scratch ADR is consumed, so the next click cannot replay it (attack 1f95807 B3)", one.status === 0 && !existsSync(join(repo, file)));
+  put(good.replace("Session verbs get one writer script each", "A second decision in the same century"));
+  const two = ar(ARGS);
+  check("adr-record, applied again: the next number is 1322, never a hole below the highest",
+    two.status === 0 && existsSync(join(repo, "docs", "adr", "1322-a-second-decision-in-the-same-century.md")) && notes().length === 2, `${two.status} ${two.stderr}`);
+
+  const before = adrs();
+  writeFileSync(join(repo, ".claude", "state", "elsewhere.md"), good);
+  const refusals = [
+    ["an ADR with no Context section", good.replace("## Context\n\nTwo session verbs needed a tracked write.\n\n", ""), ARGS, /no `## Context` section/],
+    ["an ADR with an empty Decision", good.replace("Each verb gets its own writer script.\n", ""), ARGS, /Decision` section is empty/],
+    ["a title that is a heading", `# ${good}`, ARGS, /title alone/],
+    ["a body restating the Status line", good.replace("## Decision", "**Status:** proposed\n\n## Decision"), ARGS, /restates a header field/],
+    ["a line-separator character", good.replace("each", `each${String.fromCharCode(0x2028)}`), ARGS, /control, format or line-separator/],
+    ["a credential in the body", good.replace("its own writer script.", `its own writer script. ${"AKIA"}${"IOSFODNN7EXAMPLF"}`), ARGS, /secret rule/],
+    ["a lane with no century", good, ["--lane", "ghost", "--adr-file", file], /gives the ghost lane no century/],
+    ["a lane that was never born", good, ["--lane", "nobody", "--adr-file", file], /there is no nobody lane/],
+    ["a full century", good, ["--lane", "tiny", "--adr-file", file], /century 1700-1701 is full/],
+    ["another file under .claude/state", good, ["--lane", "face", "--adr-file", ".claude/state/elsewhere.md"], /must sit directly in \.claude\/state\/adr-record/],
+    ["a drive-absolute path", good, ["--lane", "face", "--adr-file", ["C:", "x", "adr.md"].join(String.fromCharCode(92))], /not an absolute, drive or UNC path/],
+    ["a bad process tag", good, [...ARGS.slice(0, 4), "--as-process", "x; rm -rf"], /--as-process is/],
+    ["an unknown flag", good, [...ARGS, "--number", "1399"], /unknown argument/],
+  ];
+  for (const [label, text, args, want] of refusals) {
+    put(text);
+    const r = ar(args);
+    check(`adr-record refuses ${label}, writing nothing`, r.status === 2 && want.test(r.stderr) && adrs() === before && notes().length === 2 && !r.stderr.includes("IOSFODNN7"), `${r.status} ${r.stderr}`);
+  }
+  check("adr-record: THE ADR DIRECTORY gained exactly the two recorded files", adrs().split(",").length === adrs0.split(",").length + 2, adrs());
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exit(failed === 0 && ran >= 80 ? 0 : 1);

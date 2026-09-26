@@ -10,16 +10,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
 import {
-  actCall, actProblem, actRereads, actSettled, actStarted, dropReads, fallbackFor, foldModule, plannedReads,
+  actCall, actProblem, actRereads, actSettled, actStarted, dropReads, fallbackFor, foldModule, keyLeaksFor, plannedReads,
   keepOnRereadFailure, POLL_MS, problemsFor, pulseDirty, readsToLoad, refusedPayload, renderFor, routeDeclared,
 } from '../lib/registry.mjs'
 import type { AttachedModule, Attachment, ModuleContext, ModuleProblem, ModuleViewContext, Payload } from '../lib/registry.mjs'
 import { laneForRoom } from '../lib/rooms.mjs'
+import { keyLeakSentence, scrubText } from '../lib/keys.mjs'
 import type { Room } from '../lib/rooms.mjs'
 import GenericRoom from '../rooms/GenericRoom'
 import IndexRoom from '../rooms/IndexRoom'
 import { Failure } from '../ui/legacy'
 import OpsDock from './OpsDock'
+import SessionDock from './SessionDock'
 import { MONO, UI } from '../ui/kit'
 
 type ViewProps = { f: Record<string, unknown>; ctx: ModuleViewContext }
@@ -90,6 +92,9 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
       return { ok: false, error }
     }
   }, [m, loaded, ctx, picks])
+  // ADR-1325: a read that carried a provider key is named above the room -- the fold was handed it withheld. Memoised
+  // with the fold: the scan walks every read, and a room re-renders far more often than its reads change.
+  const leaks = useMemo(() => keyLeaksFor(m, loaded, ctx), [m, loaded, ctx])
   const plan = useMemo(() => plannedReads(folded.ok ? folded.f : null, m.manifest), [folded, m])
   const planKey = plan.reads.map((r) => r.key).join('\n')
 
@@ -171,7 +176,8 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
   const View = m.View as ComponentType<ViewProps>
   // A re-read that failed while an older answer stays on screen says so, so the owner knows the panel may be behind.
   const stale = Object.entries(loaded).flatMap(([k, v]) => (v.state === 'ok' && v.rereadFailed ? [`re-read of ${k} failed (${v.rereadFailed.code}) -- showing the last answer`] : []))
-  const problems = [...plan.problems.map((p) => `read refused: ${p}`), ...hostProblems, ...stale]
+  // Text the HOST builds (a refused act, a stale re-read) is scrubbed too: it never passes a fold (round-2 attack B3).
+  const problems = [...(leaks.length ? [keyLeakSentence(leaks)] : []), ...[...plan.problems.map((p) => `read refused: ${p}`), ...hostProblems, ...stale].map(scrubText)]
   return (
     <>
       {problems.length > 0 && (
@@ -187,6 +193,9 @@ function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleCon
       {/* Phase 05 (ADR-1339): the room's ops, if its ops.mjs names any. A run that lands drops the room's reads, so the
           receipt shows in the room without a reload. */}
       {m.ops.length > 0 ? <OpsDock ops={m.ops} door={door} onApplied={dropAll} /> : null}
+      {/* Phase 06 (REQ-08, ADR-1326): the room's session verbs, if the door's registry names any for it. It reads on
+          mount and starts nothing: a session starts only from its Start button's click. */}
+      <SessionDock roomId={m.id} door={door} />
     </>
   )
 }

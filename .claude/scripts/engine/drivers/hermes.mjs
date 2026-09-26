@@ -256,6 +256,11 @@ export function toolsetsFor(doc) {
       token = String(raw ?? "");
     }
     token = token.replace(/:$/, "").trim();
+    // A path-scoped write is a fence the `file` toolset cannot draw: it would hand over every write the runtime has.
+    // Refused, never widened -- only claude-code renders the paths as Edit(<path>) grants (attack 1be4183 B6).
+    if (token === "fs.write" && raw && typeof raw === "object") {
+      throw new Error("hermes driver: fs.write is declared with paths, and the `file` toolset cannot fence a path -- run this process on claude-code");
+    }
     const sets = Object.prototype.hasOwnProperty.call(TOOLSET_FOR, token) ? TOOLSET_FOR[token] : undefined;
     if (!Array.isArray(sets)) return "";  // an unclassified token widens, it never narrows
     for (const s of sets) if (!out.includes(s)) out.push(s);

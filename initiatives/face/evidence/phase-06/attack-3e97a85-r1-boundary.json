@@ -1,0 +1,122 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/memory/rule-propose.mjs:85-86 (readRuleText containment)",
+      "breaking_input": "On Windows with the repo on C:, run `rule-propose.mjs --home CLAUDE.md --text-file E:\\Work_Hub\\notes\\any.md --dry-run`. A UNC path such as `\\\\host\\share\\x.md` also works. For a path on another drive, `path.win32.relative(stateReal, real)` returns `real` itself as an absolute path. That value does not start with `..` and has no `..` segment. `resolve(stateReal, rel)` returns the same absolute path, so `=== real` is true and the fence passes. The file is read and, if it is at most 4096 bytes, valid UTF-8, at most 40 lines and clean of secrets, printed in the diff and committed to a proposal branch.",
+      "why": "The stated rule is that --text-file must sit under .claude/state/. The relative-path arithmetic only catches same-root escapes. For a UNC path, `realpathSync.native` does network I/O before any containment decision is made, which is a credential-leak vector. The kernel-ring test only tries `CLAUDE.md` on the same drive, so nothing pins this.",
+      "fix": "Refuse `path.isAbsolute(rel)` after the relative() call. Also require `real` to start with `stateReal + sep`, compared case-insensitively on win32. Refuse any argument starting with `\\\\`, `//` or a `\\\\?\\` prefix before calling realpath. Add kernel-ring cases for another drive, UNC and a junction escape.",
+      "twin_of": "A path argument read with no fence -> a path a caller supplies is checked before it is opened: no `\\` or `//` prefix, a regular file, a size cap"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/memory/rule-propose.mjs:87-90",
+      "breaking_input": "`--text-file .claude/state/hq/events/<day>.jsonl` where that file is hundreds of MB. Or race the file: swap the checked path for a FIFO or another file between `lstatSync(real).isFile()` and `readFileSync(real)`.",
+      "why": "The cap is applied after the whole file is in memory (`buf.length > TEXT_CAP`). The type check and the read are two separate operations on a path, not on one descriptor. A swapped-in FIFO blocks the CLI forever, with no timeout. A file of about 2 GiB or more surfaces as a generic error instead of a named refusal.",
+      "fix": "`openSync(real, 'r')`, then `fstatSync(fd)`. Require `isFile()` and `size <= TEXT_CAP`. Then `readSync` at most TEXT_CAP+1 bytes from that descriptor and refuse if more came back.",
+      "twin_of": "The cap applied after an unbounded read -> Cap before reading, and take the size from the same read. Check-then-open on a caller's path -> decide on the descriptor you read from."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/memory/rule-propose.mjs:80,85 versus processes/rule-promote.process.yaml (fs.write)",
+      "breaking_input": "`--text-file .claude/state/hq/events/2026-09-25.jsonl`, or any other small UTF-8 file under .claude/state (run logs, lock files, the door's state).",
+      "why": "The process is granted one scratch file, `.claude/state/rule-promote/rule.md`. The tool accepts anything under the whole `.claude/state/` tree, which holds spine events and run artefacts. A prompt-steered run can move that content into a proposal diff for a public repo, and only the secret scanner stands in the way.",
+      "fix": "Fence to `.claude/state/rule-promote/`, or better, to that exact file. The kernel-ring fixtures already live in that subdirectory, so nothing else needs to change.",
+      "twin_of": "Scope a grant to the one thing the process may do, not the tool it does it with"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/memory/rule-propose.mjs:155-157 and the catch at 176-186",
+      "breaking_input": "`writeProposal` moves the ref and then throws or rejects before returning. One way is the diff read it does afterwards timing out or being denied on a locked Windows file. The `feat/face-memory-rule-...` branch now exists but `written` is still false.",
+      "why": "`written` becomes true only after `writeProposal` returns. Every ProposalError or other throw before that is reported as `nothing was written`, exit 2, which the header defines as refused with nothing written. A branch exists with no approval, and a retry hits BRANCH_EXISTS. This is exactly the half-seal case.",
+      "fix": "In apply mode, on any non-Stop error, check whether `refs/heads/<branch>` exists using the same bounded git helper. If it does, exit 1 with `the branch IS written`. Name the exit only after looking at what exists.",
+      "twin_of": "\"Nothing sealed\" after a half seal -> after a failure, look at what exists before naming the exit"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/memory/rule-propose.mjs:160-163",
+      "breaking_input": "Apply succeeds, then `emitReceipt` returns `refused` (a spine lock timeout) or `unknown`. The tool exits 1 and the branch stays. The owner clicks again with the same `--expect`.",
+      "why": "The retry is refused because the branch already exists, and that refusal is an exit 2 class error. No mode raises the approval for an already-written proposal branch. The message for `refused` does not tell the owner how to recover, so orphan branches with no approval pile up. The process body just says the run FAILED.",
+      "fix": "On apply, if the branch exists and its tree equals the one this plan would write, and no approval.requested on the spine names it, raise only the approval. Otherwise print the exact `arc-event emit approval.requested` recovery command.",
+      "twin_of": "A duplicate guard keyed on the calendar -> key on the state that makes the second request redundant"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/memory/rule-propose.mjs:132 and processes/rule-promote.process.yaml output.branch pattern",
+      "breaking_input": "`--home CLAUDE.md` with any valid rule text, planned then applied. The branch stem is `CLAUDE` (uppercase) plus the hash.",
+      "why": "If `proposalBranch` keeps case, the branch is created and the approval raised, and then rule-promote's output schema `^feat/face-memory-rule-[a-z0-9-]+$` rejects the run's own answer. If `proposalBranch` refuses uppercase, the default home named in the process body can never be used. Either way CLAUDE.md is a dead or self-contradicting path. The stem `claude` from `.claude/rules/claude.md` would also collide with it on case-insensitive refs. Only `.claude/rules/testing.md` is ever applied in kernel-ring or the eval fixture.",
+      "fix": "Lowercase the stem and prefix it, for example `root-claude` for CLAUDE.md, so it cannot collide with a rules file. Add an applied kernel-ring case with `--home CLAUDE.md`, and check the branch against the schema regex in the test.",
+      "twin_of": "A case-insensitive ref shadow -> compare names the way the filesystem does"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/memory-session-probe.mjs:77 (and the exit calls in load() and the usage branch); also the final `process.exit` after `RAN:` in tests/face/kernel-ring.mjs",
+      "breaking_input": "Run `node tests/memory-session-probe.mjs checks` with stdout captured through bats `run`, which uses a pipe, on the Windows CI leg. `console.log(\"PROBE checks: 10 checks, 0 failed\")` is followed immediately by `process.exit(...)`. Also `node tests/memory-session-probe.mjs checks gate` silently runs only `checks`.",
+      "why": "`process.exit()` right behind a pipe write races libuv teardown on Windows. The bats assertion matches that exact last line, so a truncated pipe gives a false red, and the exit code no longer says whether the checks ran. The probe reads only `argv[2]` and validates the mode after doing the work, so extra tokens are accepted silently.",
+      "fix": "Set `process.exitCode` and return. Validate the mode and reject extra argv before loading anything.",
+      "twin_of": "`process.exit()` in a new CLI -> set `process.exitCode`; the Windows teardown race is still live"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "processes/lesson-log.process.yaml (tools.fs.write, body step 4)",
+      "breaking_input": "Click Log a lesson while the door's checkout is on `main`, or while a parallel session has uncommitted edits to docs/retro-log.md. The run holds `Edit(docs/retro-log.md)` for the whole file.",
+      "why": "The whole log file is writable, and the append-only rule (\"change nothing else in the file\") exists only in the prompt. The edit lands in place in the live checkout on whatever branch it is on, with no branch check in the process or probe. It races the owner's own edits and can rewrite or delete past rows. The probe pins exactly this grant as correct.",
+      "fix": "Append through a small script that checks the branch, appends one validated row under a lock and refuses any other change, and grant only that script. Or produce a proposal branch the way rule-promote does.",
+      "twin_of": "Sessions could write on `main` -> Check the branch the write lands on, not only the request. A write fenced only by prose -> A permission that exists only in the prompt is not a permission."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": "processes/lesson-log.process.yaml (tools.fs.read) and tests/memory-session-probe.mjs SPEC grants (`\"Read\"`)",
+      "breaking_input": "A lesson-log run reads `.env.local` or any tracked or untracked secret file with its bare `Read` grant, then puts a fragment of it into the `<pattern>` or `<prevention>` field of the row.",
+      "why": "The declared `fs.read` paths compile to a bare `Read`, and the probe asserts the bare `Read` as the exact expected grant, so the test protects the leak. The row goes into a tracked file of a public repo. rule-promote's text passes a secret scan, but lesson-log's row does not, and only the spine receipt payload is scanned.",
+      "fix": "Run the row through `scanSecrets` in a CLI that does the append. Make the probe fail on a bare `Read` for any process that writes a tracked file.",
+      "twin_of": "A read scope that fences nothing -> When the input cannot be fenced, fence the output"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/memory/rule-propose.mjs:22-23,68 and processes/rule-promote.process.yaml shell.run",
+      "breaking_input": "Inside a rule-promote run, execute `node .claude/scripts/memory/rule-propose.mjs ... --as-process lesson-log@1.0.0 ...`. Or apply twice in one run with two different rule files. The Bash scope is the tool with `:*`, so every flag is free.",
+      "why": "`--as-process` accepts any well-formed name and version, and the header says a hand run just leaves it off, which nothing enforces. The tag names a process, not a run. One click can raise several approvals, and any hand run can mint a receipt tagged as this process. The vouch then rests on the printed id plus a name.",
+      "fix": "Have arc-run pass the process tag and a run id through an env var the tool reads, instead of a flag the model can choose. Refuse a second apply per run id.",
+      "twin_of": "A vouch that any run's receipt could pass -> Tie a receipt to its run, not to a time window"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/memory/rule-propose.mjs:181-185",
+      "breaking_input": "Make the file vanish or become unreadable between realpath and read (a delete race, or EACCES on Windows). Or trigger any git failure inside `writeProposal`.",
+      "why": "The generic catch prints `e.message` verbatim. Node's fs errors embed the absolute path, for example the `lstat 'C:\\Users\\...'` form. A ProposalError message may carry git stderr. Both go to stderr, into run logs, the door and possibly public CI logs. The CLI forwards a message it did not write.",
+      "fix": "Print the error class and `e.code` only, or scrub the REPO prefix and absolute paths before writing.",
+      "twin_of": "The CLI let the library's throw out as a stack with machine paths -> A library throw is translated at the CLI edge"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "tests/face/kernel-ring.mjs (the added rule-propose block, refusals loop and 'applied twice' check)",
+      "breaking_input": "Mutant 1: a refusal that writes a `feat/face-memory-rule-*` branch but raises no approval. Mutant 2: the `applied twice` refusal comes from any exit-2 cause other than an existing branch.",
+      "why": "The loop asserts only `approvals().length === 1` and the exit code. It never lists refs, so a refusal that leaves a branch passes. Five of the seven refusals and the secret and separator cases use `--dry-run`, which cannot write anyway, so 'writing nothing' can never fail there. The `applied twice` check accepts any exit 2. Untested guards: `--dry-run=1`, a repeated flag, a value starting with `--`, an empty value, a stale digest after main moves or the text changes, an oversized or invalid-UTF-8 file, a symlink or junction escape, another drive, and an applied CLAUDE.md home.",
+      "fix": "After each refusal, assert `git for-each-ref refs/heads` and the spine are unchanged. Pin the reason for the second apply. Add apply-path stale cases and one case per parser guard.",
+      "twin_of": "Tests keyed on the flag they verify; refusals accepted by any name -> a test derives what it checks from somewhere the code under test does not set"
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/memory/rule-propose.mjs:168-173 (isMainModule)",
+      "breaking_input": "Any invocation where either `realpathSync` call throws. The JS realpath lstats every path component, so EPERM or EACCES on one parent directory is enough.",
+      "why": "`catch { return false; }` turns the failure into `not the main module`. The CLI then exits 0 having done nothing and printed nothing. The process body only treats a non-zero exit as failure, so a headless run cannot tell this from success.",
+      "fix": "On a realpath failure, fall back to comparing `resolve(argv[1])` with `fileURLToPath(import.meta.url)`. If neither can be resolved, write the reason to stderr and set `process.exitCode = 2`. Never go quiet.",
+      "twin_of": "Main guard compared `argv[1].endsWith(...)` -> every new script with a `main()`: realpath BOTH `argv[1]` and `import.meta.url`"
+    }
+  ]
+}

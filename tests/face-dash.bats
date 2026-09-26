@@ -43,6 +43,29 @@ load 'test_helper'
   [[ "$output" == *"ok bench.run-model: NO SECOND PATH -- the door's receipt is the hand-run's receipt"* ]] || { echo "$output"; false; }
 }
 
+@test "session door: every session starts arc-run --driver from a click, and attach survives a door restart" {
+  run node "$ARC_ROOT/tests/face/session-door.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  # A failed check prints a line STARTING "FAIL ". Matched at the line start, never as a bare *FAIL* glob: an ok line
+  # naming a mutant once read every green run as red (attack 60c13e9 B1).
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok every other row reached a spawn (the loop judged real starts, not refusals)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok residue: shipped + residue rows equal the registry both ways"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok residue: every residue row still refuses (no process file, or a confirm stop)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok residue: every start-only row's process body emits the row's own kind"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by driver-only: the harness claude as the command"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a FRESH door attaches to the run door A started, while it runs"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok its receipt is read back OFF THE SPINE THE DOOR NAMED, credited because"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a real event the run named as ANOTHER kind, and printed bare, is unattributed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok dispatch naming ship's process is held back BY NAME"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok the run never saw the door's token, the owner's deploy/VCS tokens or the leads steering list"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a start with no click is 428 CLICK_REQUIRED"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok review-ship.ship: REFUSED until its deploy stop is enforced"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a checkout on main: BRANCH_REFUSED, nothing started"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a key the run printed is served redacted, never as written"* ]] || { echo "$output"; false; }
+}
+
 @test "live rooms: the pulse holds still, moves with the spine, stays out of the journal; a pulse re-reads every read" {
   run node "$ARC_ROOT/tests/face/live-pulse.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -68,6 +91,10 @@ load 'test_helper'
   [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok evolve conclude, applied: the verdict lands on the spine"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok door: a sim door refuses the effect's apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok rule-propose: THE HOMES are byte-identical in the tree after every proposal and refusal"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok lesson-log: THE LOG gained exactly one line across every run"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok adr-record: THE ADR DIRECTORY gained exactly the two recorded files"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok adr-record, applied: note.logged lands with what adr, the file and number, tagged adr-record@1.0.0, its id the one printed"* ]] || { echo "$output"; false; }
 }
 
 @test "factory ring: develop next, open-brief, pick, profile, retire and add-agent APPLIED in scratch repos; touchesTree is SIM_EFFECT" {
@@ -76,6 +103,8 @@ load 'test_helper'
   [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
   [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok agent-scaffold, applied: the golden holds its line -- sha256 of the bytes, CR stripped -- in byte order"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok develop prove: THE LEDGER changed only by the one applied proof"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok develop prove, applied: slice.done lands for slice 01 at the merged commit, tagged develop-proof@1.0.0, its id the one printed"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok door: a sim door refuses a touchesTree apply -> SIM_EFFECT, and the tool never ran"* ]] || { echo "$output"; false; }
 }
 

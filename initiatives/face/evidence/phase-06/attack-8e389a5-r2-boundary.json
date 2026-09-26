@@ -1,0 +1,129 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "session-door.mjs:243-250 (start) with the executor.dispatch row in face-sessions.mjs",
+      "breaking_input": "Once processes/ship-run.process.yaml exists (the next PR adds it): POST /api/session-click, then POST /api/session/executor.dispatch/start with {click, input:{}, driver:\"auto\", process:\"ship-run\"}. processFileOf accepts the name and the dispatch row has confirmStep null, so nothing refuses. arc-run --process ship-run --driver auto starts and its deploy step runs on one click.",
+      "why": "The B9 fix guards the ROW (`if (s.confirmStep)`), but dispatch lets the caller name any process. The held-back process is therefore reachable through an unguarded row. The suite only dispatches the first row's process and never dispatches ship-run.",
+      "fix": "Build the held-back set from the rows (every row with confirmStep contributes its process). Refuse those processes in start() whichever row names them, dispatch included. Add a fixture: dispatch with process ship-run is CONFIRM_STEP_UNENFORCED.",
+      "twin_of": "One test door refused, four left open -> refuse the CLASS the comment names, not the member the attacker used."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "session-door.mjs:116-119 (sessionEnv)",
+      "breaking_input": "The door is launched from a shell holding VERCEL_TOKEN, GH_TOKEN or a mail-vendor key from the leads steering list (ENV_LOCAL_FORBIDDEN). Start review-ship.review on the claude-code driver. A prompt-injected line in the reviewed diff makes the agent run `vercel --prod`, `gh pr merge` or a send with the inherited credential, past the door's confirm stop and branch guard.",
+      "why": "Round 1 removed only the ARC_DASH_ prefix. A model with shell tools still gets every other variable of the door's environment. The fixture asserts only that ARC_DASH_* is absent, so it cannot see a leaked deploy or VCS token.",
+      "fix": "Use an allow-list: OS basics (PATH, SystemRoot, TEMP, HOME/USERPROFILE) plus the provider keys the chosen driver declares. Strip the leads steering list and deploy/VCS tokens. Add a fixture whose fake arc-run prints its env keys and asserts a planted VERCEL_TOKEN and GH_TOKEN are absent.",
+      "twin_of": "A session child held the door's token -> A child that runs a model gets less env than a deterministic CLI."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "session-door.mjs:187-198 (newest) and 222-227 (running)",
+      "breaking_input": "Start a long council (running for hours). Then let 64 other sessions start and finish, or 20 for the list. Each finished session's exit.json rename bumps its directory mtime to the completion time. The long runner keeps its start-time mtime, sorts behind them, and falls out of newest(64) and newest(20).",
+      "why": "running() bounds its scan by directory mtime, not by liveness. The long runner stops counting toward RUNNING_CAP, and the same-input SESSION_RUNNING refusal stops seeing it, so it can be started again. It also vanishes from GET /api/sessions runs, so the owner loses the way back to attach. Separately, newest() runs realpath and stat on EVERY directory ever created before it slices, because sessions are never pruned. That is O(N) sync fs work per start and per list.",
+      "fix": "Put the start time in the sid (or record it in a small index) and sort by NAME, taking the newest N before any fs call. Make running() scan by state: every directory without an exit.json, up to a hard ceiling that is reported when hit."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "session-door.mjs:96-100 (readJson), 201-209 (stateOf), 301-321 (tail), and the transcript path handed to the child",
+      "breaking_input": "The child is a model with shell tools, and its own argv (--transcript-dir <journal>/sessions/<sid>/transcript) names the session directory. It runs `echo {\"exit\":0} > <journal>/sessions/<sid>/exit.json`. Attach then reads `done` while the run continues, and running() drops it, so the cap and the duplicate refusal are bypassed. Or it replaces run.log with a link to .env.local: tail() opens by path and serves the last 256 KB.",
+      "why": "The door trusts three files, session.json, exit.json and run.log, that live in a directory the child knows and can write. Realpath containment covers only the directory, not the files inside it, and no file's shape is validated. `null` or a string in exit.json reads as absent. The junction fix stopped one level too high.",
+      "fix": "Keep the trusted state (session.json, exit.json) in a sibling tree the child is never told about. Open run.log with an lstat isFile check and a realpath inside the session directory, and decide on the descriptor you read from. Validate exit.json and session.json shape (object, integer exit, integer pid).",
+      "twin_of": "Check-then-open on a caller's path -> decide on the descriptor you read from."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "session-door.mjs:~347-366 (receiptsOf)",
+      "breaking_input": "During a run the model prints `arc-run: receipt council.verdict <ULID of the owner's decision.recorded minted after startedAt>`, or a bare ULID of another writer's event. The spine holds it and it is newer than startedAt-2000, so read() returns it as this session's receipt with `named: true` and its full payload.",
+      "why": "stdout and stderr share one file, so the model's text is indistinguishable from arc-run's own line. receiptsOf checks only that the id exists and is new. It never compares ev.kind to the kind named beside the id, or to the row's claimed receipt.kind, and it never compares ev.process to meta.process. Any concurrent writer's event, or a hallucinated id, counts as proof that the session landed a receipt.",
+      "fix": "Accept a receipt only when ev.kind equals the named kind and the row's claimed kind (or the run.completed kind arc-run emits) and ev.process equals the session's process. Report the rest as `unattributed`, not as a receipt.",
+      "twin_of": "A receipt found by \"newest of the kind\" is anybody's receipt -> attribute by the id the TOOL PRINTED, checked on the spine for kind, process and newness"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "session-door.mjs:109-113 (alive), 201-209 (stateOf), 222 (running)",
+      "breaking_input": "Three sessions started, then the door restarts while their runs finish. No exit.json is ever written. Windows reuses those pids for unrelated processes, so alive(pid) reads true for each and all three read `running` indefinitely. The same happens when a driver hangs on a prompt (stdin is ignored). Every later start is SESSIONS_BUSY, and the same input is SESSION_RUNNING.",
+      "why": "A slot is held by pid existence alone, with no start-time identity and no wall-clock bound. The door offers no stop, and attach does not even return the pid. The owner cannot free a slot except by hand-killing a process found in session.json.",
+      "fix": "Record the process start time next to the pid and compare it. Treat a session older than a ceiling (arc-run's own budget) as not counting toward the cap. Return the pid in attach and add a click-gated stop verb that ends the tree.",
+      "twin_of": "A pause that did not shrink with depth -> each level ends its own tree before the level above ends it."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "session-door.mjs:253-254 (branch check) and 278 (spawn cwd)",
+      "breaking_input": "Click develop.close-phase on feat/face-v2-06. Ten minutes into the run the owner, or a parallel session in the same directory, runs `git checkout main`. The session's file writes and commits then land on main, which the door promised is untouchable (ADR-1326). The branch was read once, before the spawn.",
+      "why": "The branch guard is a check-then-act against a long-lived writer in the owner's live checkout. It holds only at the instant of the spawn, yet the run lasts minutes to hours.",
+      "fix": "Run the session in a dedicated worktree of a feat branch the door creates, so the guard is a property of the tree. Or record the HEAD ref at start and have attach and exit flag a changed ref loudly.",
+      "twin_of": "A write in place that loses the session's edit -> the tree the owner works in is shared with a live session; re-check at the last moment, and never write what was not read."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "session-door.mjs:324-339 (read) and ~347-366 (receiptsOf)",
+      "breaking_input": "(a) The model prints 5000 lines, each holding a real event id from a spine listing. Every poll of the QUIET_OK attach route returns 5000 payloads, and each poll runs query(ctx.root,{engine:\"scan\"}), a full spine scan, whenever one id is present. (b) The spine is briefly unreadable (EBUSY on rotation) while the run has printed its receipt. query throws, read() rejects, and the whole attach answers an error with no lines and no state.",
+      "why": "The lines are capped at 400 but the receipts list is not, and a full scan per poll is unbounded work in the process that serves every room. A receipt-lookup failure replaces a good answer instead of degrading it.",
+      "fix": "Cap receipts (say 50) and report how many were dropped. Cache the scan by spine mtime, or query by id. Wrap receiptsOf in try/catch and return receipts:[] with receiptsError:<code> beside the lines and state.",
+      "twin_of": "An unbounded fragment beside a capped buffer -> cap the line as well as the buffer."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "session-door.mjs:301-321 (tail) and 332 (lines map)",
+      "breaking_input": "The run prints a provider key across the 256 KB tail boundary. tail() skips only UTF-8 continuation bytes, not the partial first line, so the first served line is the back half of the key without its `sk-ant-` prefix. No deny-rule matches it and it is served raw. The same happens when a key straddles character 8192: the line is cut BEFORE redactLine, leaving a prefix shorter than the rule's minimum length.",
+      "why": "Redaction is line-anchored, and both cuts happen before it and can remove the anchor. The path scrub and DENY_RULES never see a whole secret.",
+      "fix": "When from > 0, drop the first partial line and count its bytes in bytesDropped. Apply redactLine to the full line, then cut to LINE_CAP. Add a fixture with a planted key across each boundary."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "face-sessions.mjs:~146 (driverOnly value loop, FREE_VALUE)",
+      "breaking_input": "driverOnly({script:\"engine/arc-run.mjs\", args:[\"--process\",\"review-diff\",\"--driver\",\"auto\",\"--transcript-dir\",\"\"]}, drivers) returns null. So does `--transcript-dir` with `.`, `C:\\` or a relative `..\\..`. A builder bug that empties the path therefore passes the guard, and arc-run resolves it to its cwd (the tracked repo root), where raw model transcripts are written.",
+      "why": "FREE_VALUE exempts --input and --transcript-dir from the whitespace check, but neither is checked for being empty or for containment. The mutants list has no empty-value case, and the guard exists precisely to catch builder bugs.",
+      "fix": "Refuse an empty value for every flag. Require --transcript-dir to be absolute and, when the door passes it, to sit under the door's own sessions directory. Add mutants for an empty and a relative transcript path.",
+      "twin_of": "Repeated flags were last-wins and an empty value resolved to the cwd -> a repeated or empty flag is refused by name."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "session-door.mjs:260-269 (start, mkdir before checks)",
+      "breaking_input": "The hq product is synced to a tree without engine/arc-run.mjs (or with .claude/scripts/engine linked outside the tree). Click any row. The click is spent, mkdirSync has already created sessions/<sid>/transcript, then realpathSync(arcRun) throws ENOENT and the answer is a bare INTERNAL 500. Every click leaves an empty session directory, and a driverOnly refusal does the same.",
+      "why": "The directory and session.json come before the last two refusals. Refusals that write nothing should run before anything is created, and an ENOENT is not named.",
+      "fix": "Run driverOnly and the arc-run realpath containment first, mapping ENOENT to a named code. Create the directory only once a spawn is certain.",
+      "twin_of": "A pre-check missing one of the writer's refusals -> a pre-check is every refusal the write can make, or the burn happens between them."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "session-door.mjs:123-128 (currentBranch) and 253-254",
+      "breaking_input": "git is not on PATH, or git refuses with `dubious ownership` (exit 128), or the 10 s timeout fires on a slow disk. spawnSync gives status null or 128, currentBranch returns null, and the door answers `this checkout is on no branch`. That is the wrong cause. Meanwhile the event loop is blocked for up to 10 s, stalling every poll.",
+      "why": "This is a new raw spawnSync around git, not the one bounded git helper. The refusal is named for detached HEAD when git's own refusal is the cause, and a sync call in the door blocks every other request.",
+      "fix": "Use the shared bounded git helper, or an async execFile with a timeout. Return git's stderr, scrubbed, when it exits non-zero, and name a detached HEAD only when symbolic-ref exits 1.",
+      "twin_of": "spawnSync around git -> one bounded spawn, used by every caller: the fix is made once."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "session-door.mjs:103-107 (writeJsonAtomic) and 287-290 (exit handler)",
+      "breaking_input": "(a) An attach poll runs after the kernel reaps the child but before libuv delivers 'exit' (an event loop busy with a scan): exit.json is absent and alive(pid) is false, so the run reads `ended` with the note `the door did not see this run end`, and a UI that stops polling on `ended` keeps it. (b) On Windows an AV lock makes renameSync throw EPERM in the exit handler. The catch swallows it with no stderr line, so exit.json is never written, and the orphaned .tmp is left in the directory.",
+      "why": "exit.json is the only evidence that the door saw the end, yet its absence right after a death and its silent write failure both fall through to `ended`. The failed rename also leaves litter unreported.",
+      "fix": "When !alive and exit.json is absent, report `unknown, read again` for a grace window (or hold a live map of children this door spawned). On a failed exit.json write, retry once and write a stderr WARN naming the sid, and unlink the temp file in a catch.",
+      "twin_of": "A temp directory that would not delete was dropped silently -> a surviving directory is a WARN naming the path and error."
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": "face-sessions.mjs:~37-43 (sessionDrivers) and ~213 (--list main)",
+      "breaking_input": "Run `node face-sessions.mjs --list` in a tree whose .claude/scripts/engine/drivers is missing or unreadable. sessionDrivers() throws inside the top-level branch. The result is an uncaught ENOENT stack with the machine path and exit 1, although the header documents exit 0 or 2 only, and face-coverage or the fixtures reading --list get a stack instead of a named answer.",
+      "why": "The throw is correct in the library but the CLI does not translate it. It lets a stack with owner paths reach output, and the exit code is undocumented.",
+      "fix": "Catch in the CLI branch, print `face-sessions: cannot read engine/drivers (<code>)` on one scrubbed line, set process.exitCode = 2, and document it in the header.",
+      "twin_of": "An unreadable exemption or extras list became \"not exempt\" -> unreadable is exit 2 naming the file, never a default."
+    }
+  ]
+}

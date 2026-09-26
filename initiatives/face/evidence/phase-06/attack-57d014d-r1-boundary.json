@@ -1,0 +1,104 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/src/modules/kernel/engine-room/fold.mjs:48",
+      "breaking_input": "A run.completed receipt whose payload carries a provider key (a Anthropic-shaped key with a 20+ char tail) is sent on /api/spine. Open any room other than engine-room (board, spine, ask-arc, a lane room). Those folds never call keyLeaks, so no KEY_IN_BROWSER refusal appears and the key is drawn in that room's receipt rows.",
+      "why": "ADR-1325 is a door-wide rule (no key in the browser), but the check is wired into one room's fold. keys.mjs is generic, yet nothing makes every room's payloads pass through it, and no gate fails a module that skips it. This is the lane's 'Phase 04 rules held on Phase 04's routes only' class.",
+      "fix": "Run keyLeaks in the shared read host or registry layer that every room's payloads pass through, and surface the refusal from the frame. Add a module-frame arm that fails when any manifest's payloads are not scanned.",
+      "twin_of": "Phase 04's rules held on Phase 04's routes only -> a door-wide rule (ADR-1312) is checked on every route of the door, not on the routes a phase added."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/src/lib/keys.mjs:52",
+      "breaking_input": "payloads[\"/api/engine\"] = { state: \"refused\", code: \"INTERNAL\", human: \"spawn failed: env ANTHROPIC_API_KEY=<an Anthropic-shaped key>\" }. The same applies to any read in a state other than \"ok\", and to any field other than .data (human, error, body). keyLeaks returns [], while the room's DoorRefusal draws the refusal text on screen.",
+      "why": "`if (!p || p.state !== \"ok\") continue` scans only ok reads' .data. The door forwards refusal, stderr and loader text, and the lane has already leaked a token through an error path. A non-object `payloads` also becomes {} and reads as clean. A gate whose pass is 'zero found' fails open on every state and shape it does not read.",
+      "fix": "Scan the whole payload object, whatever its state (JSON.stringify or a walk of every field). Treat a non-object payloads argument, or a payload with no readable state, as a named finding, not an empty clean result.",
+      "twin_of": "A zero-count gate where every unreadable outcome equals the pass -> A gate whose pass is 0 must fail closed on every read error."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "face/src/lib/keys.mjs:35",
+      "breaking_input": "A receipt payload nested 66 objects deep, holding a value with a provider key shape: JSON.parse accepts it and the door serves it. `walk` hits `if (depth > 64) return;` and drops the subtree without a word. keyShapes returns [] and the room draws no refusal.",
+      "why": "The scanner stops silently at its cap. A hostile or accidentally deep body hides a key from the very check that exists to find one. The lane's rule is that a scanner reports when it stops scanning and caps depth with a sentence.",
+      "fix": "Past the cap, record a named finding such as 'depth-cap-exceeded' and return it from keyShapes/keyLeaks, so the room says 'unscanned', never 'clean'. Add a depth-65 fixture.",
+      "twin_of": "A text scanner's comment stripper ... -> a parser reports when it stops scanning; it never goes quiet. / The serializer recursed without a cap -> cap depth with a sentence."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/face/engine-room.mjs:~92 and face/src/modules/kernel/engine-room/fold.mjs:~44-104",
+      "breaking_input": "A run.completed receipt with payload.model set to a key-shaped string (or the planted classes[0].judge case). The fold sets hasKeyLeak and keyLeakText, but health[].detail, runs[].detail and the router table still hold and draw the key text. The test checks only `!f.keyLeakText.includes(planted)`, never the rest of the fold output.",
+      "why": "The banner names the read but does not stop the key being drawn in the same page. The phase decision says 'drawn as a refusal rather than as data'; the room does both, so a screenshot or an outward-shared page still shows the key. 'Never the key' is asserted for one string of the fold's output.",
+      "fix": "When leaks are found, withhold the rows built from the leaking read, or scrub them before drawing. In the test, assert that JSON.stringify(f), apart from the leak sentence, never contains the planted value.",
+      "twin_of": "Judging a draft instead of the payload -> judge the receipt itself, before the effect; a stand-in is a different receipt."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "tests/face/engine-room.mjs:~108-124 (section 3)",
+      "breaking_input": "Add a provider rule (for example an npm or Hugging Face token) to redact.mjs DENY_RULES, or change the spine's sk-ant length from {20,} to {30,}. Section 3 still passes: it iterates only the face's KEY_RULES, looks each name up in the spine, and tests one 40-char sample per rule.",
+      "why": "The expected set comes from the code under test (face KEY_RULES), so a spine-only shape is never demanded. One long sample per rule cannot see a minimum-length or charset drift. The header claim 'one cannot learn a shape the other misses' is true in only one direction.",
+      "fix": "Derive the expected set from the redactor's provider-key rules (an explicit list of names, with the non-key rules excluded by name and reason). Compare `re.source` and flags between the two lists, or cross boundary-length samples (min-1, min) through both.",
+      "twin_of": "A completeness gate's expected set was its own contract keys -> derive the expected set from the source on disk. / Round-trip tests ran a codec against itself."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "face/src/lib/keys.mjs:15",
+      "breaking_input": "Any receipt field, path, branch or id containing 'task-', 'risk-', 'disk-' or 'desk-' followed by 32 or more [A-Za-z0-9_-] characters, such as a kebab-case task id or a long slug. `sk-` matches inside 'task-', the 32-char tail matches, and the room draws 'a provider key reached this browser' for an ordinary id.",
+      "why": "The openai-key, aws (AKIA), google and slack rules have no left boundary, so a key-like substring inside a longer word counts. The result is a false door-defect banner on routine engine-room reads. The lane has already fixed a grep that matched inside a longer path ('arcface/src').",
+      "fix": "Anchor the left edge: (?<![A-Za-z0-9_-]) for the sk-, AKIA, AIza and xox prefixes, keeping it identical to whatever the redactor does. Pin near-misses ('task-<slug>') as negative fixtures.",
+      "twin_of": "A `grep 'face/src'` matched `arcface/src` inside a reference path -> a path grep is bounded on the left."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/face/engine-room.mjs:~76-92",
+      "breaking_input": "Change the registry so the room reads /api/lane/engine (a resolved path) or a route spelled differently from '/api/lane/:id'. `reads.includes(other)` is false, so the lane and file planted cases are silently not created. The guard 'planted cases reach every route the room reads' still passes.",
+      "why": "The guard checks that `cases` contains /api/engine and /api/spine, but `cases` was hand-built with exactly those, so the check is circular and can never fail. Lane and file coverage exists only if a string in `reads` matches exactly, and its absence is silent. The task proof claims 'every read the room holds'.",
+      "fix": "Derive the required set from `reads` itself, i.e. every read route that can carry text. Fail when any such route has no planted case. Also assert that each planted route appeared in `answered` for that fold.",
+      "twin_of": "The route-enumeration gate was circular -> a gate never derives its expectation from the thing under test."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "face/src/modules/kernel/engine-room/fold.mjs:~44 and tests/face/engine-room.mjs:~53",
+      "breaking_input": "A spine page {more:true, events:[an old ok run for claude-code]} while the door holds 500 later failing receipts beyond the page. The door pages oldest-first, so the panel drew 'last ok' as the driver's current health. The only fixture has more:false.",
+      "why": "Health, a signal about the present, is derived from the OLDEST page. The test never sets more:true or partial, so whether the newest-on-this-page label and the '+' count survive in the new panel is unpinned. The same class was fixed before in 'last fire'.",
+      "fix": "When trail.isPartial, label each row 'last on this page' (never a bare 'last ok'). Add a more:true fixture that asserts the label and the count '+'.",
+      "twin_of": "A partial page (`more: true`, and the door pages from the OLDEST receipt) was drawn as complete: a \"last fire\" ... -> every figure derived from a page now says which page it is a figure of."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "face/src/modules/kernel/engine-room/fold.mjs:~46 (runsBy(..., \"driver\", ...)) and tests/face/engine-room.mjs fixture",
+      "breaking_input": "Receipts with payload.driver of \"__proto__\", \"constructor\", \"toString\", \"\" or a case variant (\"Claude-Code\"), plus one run.completed with no driver at all among receipts that do have one. The fixture uses only three well-formed names.",
+      "why": "health groups by a receipt-controlled string, a new grouping key for runsBy that only had 'process' before. Neither an inherited-key name nor a missing driver is exercised. A receipt with no driver may vanish from the panel, which then shows fewer runs than 'Runs by process' with no note saying why.",
+      "fix": "Group with a Map or a null-prototype object. Count and draw receipts that name no driver ('N receipts name no driver'). Pin the hostile names and the missing-driver case as fixtures.",
+      "twin_of": "`FILE_ALLOW[id]` resolved inherited keys -> allow-list lookups use `Object.hasOwn`. / A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/face/engine-room.mjs:125",
+      "breaking_input": "Remove four or five checks, for example the lane/file planted cases or half of the section-3 samples. `ran` stays at or above 20 and the suite still exits 0.",
+      "why": "The floor is hand-kept at 20, while the suite runs 23 or more checks depending on the registry. A silently shrinking suite still passes.",
+      "fix": "Print an expected count derived from the case arrays and the samples, and fail when `ran` differs from it. The bats test should pin the marker, not a loose floor.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "face/src/modules/kernel/engine-room/fold.mjs:48",
+      "breaking_input": "keyLeaks(/** @type {any} */ (payloads)) where the real Payload type has states or fields not in {state, data?}, for example a state carrying its text in another field. The cast means strict checkJs never reports the mismatch.",
+      "why": "Project law says strict TypeScript with no `any`. The `any` cast hides a type mismatch between the room's Payload and keyLeaks's parameter type, and it is also what allowed B2 to go unnoticed.",
+      "fix": "Type keyLeaks's parameter with the registry's Payload (import the typedef) and remove the cast.",
+      "twin_of": "strict checkJs on a new face lib -> A new .mjs under face/src is TypeScript-checked; write it as such."
+    }
+  ]
+}

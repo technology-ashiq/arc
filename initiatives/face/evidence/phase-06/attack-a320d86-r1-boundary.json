@@ -1,0 +1,131 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "face/scripts/flows.mjs:401-409,473",
+      "breaking_input": "The control calls clickIn with {pick:'mock', text:'Start session'}. p.click() and b.click() run in one synchronous Runtime.evaluate. React commits setDriver('mock') in a microtask after the script returns, so the Start click runs the previous render's onStart, whose closure still holds driver='auto'. The door receives {driver:'auto'}.",
+      "why": "The flow believes it is starting a mock session, but nothing verifies the pick took effect. On a checkout that is not detached and not main (a workflow_dispatch on a feat/* branch, or a local run), the door can start a real, possibly paid, driver from a test.",
+      "fix": "Click the driver pick in one evalPage. Wait until the pick has rendered (poll for its selected state or a data attribute), then click Start in a second evalPage. Assert the journalled start body says driver 'mock'.",
+      "twin_of": "A test must not supply the value the code under test is supposed to set."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:470-482",
+      "breaking_input": "Run the browser harness via workflow_dispatch on a feat/* branch, or locally on feat/face-v2-06b. The checkout is neither detached nor main, so the door does not answer BRANCH_REFUSED. The control click makes it spawn a real detached arc-run child whose run.log lives under <tmp>/journal/sessions/<sid>.",
+      "why": "The comment only plans for the detached-CI refusal. A successful start leaves a detached child that the harness never kills or waits on. It outlives the harness, and on the Windows leg it holds handles inside tmp, so tmp removal fails with EBUSY. The control's outcome is 'whatever the door answers', which hides which branch ran.",
+      "fix": "Make the control's outcome deterministic, for example a door mode or stub that cannot spawn. Otherwise read the started sid from the registry and kill and await its tree before returning. Assert a named refusal code, or a reaped child.",
+      "twin_of": "A descendant outliving a settled run -> a run is over when its tree is."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:449-453",
+      "breaking_input": "Page.reload resolves as soon as the reload is issued. The old document still has the dock drawn (cards>0), so the next evalPage sees it, the until() passes at once and res.reloads++ runs. The loop then navigates away before the reloaded document mounts. A start-on-reload mutant (one keyed on the navigation type being 'reload', or a sessionStorage flag set on first load) never runs its mount effect: starts=0, reloads=N, pass.",
+      "why": "The predicate is judged on the old document, so the 'reload' leg proves nothing. bats then requires reloads==rooms, which only counts the loop iterations.",
+      "fix": "Set a window marker before the reload and require it to be absent in the predicate, or wait for the new loaderId or Page.loadEventFired after Page.reload. Only count a reload once the new document has drawn the dock.",
+      "twin_of": "A finish held during navigation moved the clock even when its request belonged to the old document -> a held event is judged by the SAME filter once its key is known."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:425-428,460-461,473-474",
+      "breaking_input": "Any page-side exception in clickIn or dockState, such as an invalid selector or a missing querySelector target throwing. CDP returns exceptionDetails with result.value undefined, and evalPage returns undefined. clickIn's contract is that '' means clicked and a non-empty string means refused, so `if (clicked)` and `if (started)` read undefined as success.",
+      "why": "An exception is read as the permissive answer. The attach and control failures then surface only later as 'attach drew no lines' or 'one click made 0 start requests', naming the wrong cause. A control that never clicked is indistinguishable from a click the door ignored.",
+      "fix": "Throw on r.exceptionDetails with its text passed through oneLine and redactSecrets. Have callers require typeof result === 'string' before treating '' as success.",
+      "twin_of": "Unreadable read as released -> unknown is never the permissive answer"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:377-388",
+      "breaking_input": "(a) An auto-start's journal line is torn or partial at read time, or interleaved by a concurrent append. JSON.parse throws, the catch swallows it as 'a torn line is not a start', and starts stays 0. (b) readdirSync fails (EACCES, or the journal dir is absent because the door wrote elsewhere), and `return 0` reports 'no starts'. (c) The journal records path with a query string or a trailing slash, and the end-anchored regex misses it.",
+      "why": "This is a zero-count gate where every unreadable outcome equals the passing value. The door itself treats a torn journal line as a reason, not a footnote.",
+      "fix": "Count an unparseable line that contains '/api/session/' and '/start' as a start. Treat a readdir error other than ENOENT as a throw. Parse the recorded path with URL and compare pathname. Return UNMEASURED, never 0, when the directory cannot be read.",
+      "twin_of": "A torn SPINE line was a footnote while a torn JOURNAL line was a reason -> the same corruption is handled the same way on both inputs."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:436-440,459-465",
+      "breaking_input": "The seeded session.json carries pid: process.pid, the harness's own pid. If the door's liveness needs a second fact (start-time match, cmdline, heartbeat) or otherwise classifies this pid as not an arc-run, the run reads 'stale' or 'ended'. Those are FINAL, so sessionPolling is false and the 1.5 s attach poll never runs. The flow asserts only lines>0 (from run.log), passes, and the 3.5 s sleep 'past the poll interval' covered no poll.",
+      "why": "The mutant 'start from the attach poll' is exercised only if the run reads as running. The flow never asserts that state, so the poll leg can be vacuous.",
+      "fix": "After attach, require data-session-run-state==='running' and a second /api/session-run read for the sid, else fail naming the observed state. Make the seeded liveness fact real (a live child the harness owns) instead of borrowing its own pid.",
+      "twin_of": "Tests that could not fail, or could not pass -> the mutant is the negative control; write the check it fails."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:430-433",
+      "breaking_input": "The door accepts the connection but never answers GET /api/sessions (a full scan on a slow Windows runner). fetch has no AbortSignal, so the flow waits until the job timeout with nothing logged. Separately, a 401 or 500 JSON body without 'sessions' yields rooms=[] and the message 'only 0 served rooms carry a session verb', blaming the registry for a door refusal.",
+      "why": "Awaited child-process I/O has no timeout, and a non-2xx is never checked. The failure is named after the wrong cause, and a hang leaves no evidence.",
+      "fix": "Pass signal: AbortSignal.timeout(15000) to both fetches. Check res.ok and name the status and the door's code in res.why.",
+      "twin_of": "Refusals under the wrong name -> a refusal names its real cause"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:431-433",
+      "breaking_input": "A SESSIONS row whose room is not served, exactly the council.convene row with room 'council' that this same diff corrects to 'council-chamber'. `.filter((r) => served.has(r))` drops it silently. With 8 other rooms the `rooms.length < 5` floor and the bats `-ge 5` hold. The verb is never mounted, reloaded or clicked, and the sweep is green.",
+      "why": "The expected room set comes from the door under test (the registry filtered by the door's own room list), and the floor is a hand count. A registry row pointing at a non-served room passes silently.",
+      "fix": "Import SESSIONS from .claude/scripts/hq/face-sessions.mjs and require every row's room to be served and swept. Print the rooms that were filtered out and fail on any.",
+      "twin_of": "A smoke judged the door's room list against itself -> the expected set is read from the contract file, never from the service under test."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": "tests/face/session-dock.mjs:72-90",
+      "breaking_input": "clickOnlyGate returns null for any of these, with onClick={onStart} untouched. (1) In SessionDock.tsx: `useEffect(() => { door.call('/api/session/review-ship.review/start', { method: 'POST', body: {} }) }, [])`. (2) `door['sessionStart']('review-ship.review', ...)`, where the regex for `sessionStart` followed by an open paren does not match because a quote and bracket sit between. (3) A new face/src/shell/Boot.jsx, Boot.js or Boot.mts calling either form, since sources() only reads .ts, .tsx and .mjs.",
+      "why": "The gate counts one spelling of one method, in a subset of extensions. It does not cover the start route reached through door.call or fetch, nor bracket access, nor files it skips. None of the six mutants uses another spelling.",
+      "fix": "Also forbid the literals for '/api/session/' plus '/start' and for the click-token route outside door.mjs, and forbid bracket access to sessionStart. Scan every file kind under face/src, or refuse by name any extension the gate does not read. Add a mutant per spelling.",
+      "twin_of": "The fetch rule read only a literal's text -> a network rule covers every way the page can reach the network."
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": "tests/face/session-dock.mjs:100-107",
+      "breaking_input": "Keep the legitimate onClick={onStart} and add in SessionCardView one of: `useEffect(() => onStart(), [])` (no braces), `useLayoutEffect(() => { onStart() }, [])`, `useEffect(() => { onStart() })` (no deps array, runs every render), or a render-body `if (!sid) onStart()`. The effect regex needs 'useEffect(() => {' up to a closing brace line and a literal deps array, so none of these match. sessionStart still appears once, inside onStart, and the click binding holds, so the gate returns null.",
+      "why": "An auto-start from mount passes the structural gate because the effect check recognises one formatting of one hook. Only the browser flow would catch it.",
+      "fix": "Judge the identifier, not the hook shape. Require that `onStart` appears exactly twice in the dock (its declaration and onClick={onStart}), and forbid the hook names useEffect, useLayoutEffect and useInsertionEffect from mentioning it. Add mutants for the no-brace, no-deps and layout-effect forms.",
+      "twin_of": "A text rule judges the text, however it is spelled or reached."
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": "face/src/lib/sessions.mjs:53-54",
+      "breaking_input": "Registry body {\"sessions\":[{\"id\":\"x.y\",\"room\":\"today\",\"fields\":[null]}]}. `String(f.name)` throws a TypeError inside sessionCards, which SessionDock runs at render and again through roomRuns. RoomFrame's ModuleView renders SessionDock under every room, so one malformed row takes the room to a Failure.",
+      "why": "An unreadable field row is neither dropped nor counted, and it throws in render. A door bug in one session row breaks every room that mounts the dock.",
+      "fix": "Filter fields to entries that are objects with a string name. Drop the rest and say how many were dropped in the card's note. Also skip a row whose fields is not an array instead of coercing it to [].",
+      "twin_of": "`laneCard` threw on `phases: [null]`, taking the whole room to a Failure -> unreadable rows are dropped and counted in the panel's note."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "face/src/lib/door.mjs:449",
+      "breaking_input": "door.sessionStart('review-ship.review', { input: {}, driver: 'auto', click: '<a spent token>' }). The body is built as `{ click, ...body }`, so body.click overrides the token just fetched.",
+      "why": "The doc says no caller can start without a fresh token or replay one. The spread order lets any caller supply the click, and the click-only gate never checks it.",
+      "fix": "Build the body as `{ ...body, click }`, and refuse a body that already carries a click key.",
+      "twin_of": ""
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "face/src/shell/SessionDock.tsx:105-112",
+      "breaking_input": "Attach a running session, then restart the door or delete the run directory. Every 1.5 s tick rejects (UNREACHABLE or 404) and is swallowed by `.catch(() => {})`. The card keeps 'running -- its lines stream in as it writes them' forever and re-requests every 1.5 s with no backoff and no stop.",
+      "why": "A failed re-read leaves a stale 'running' on screen with no message, and a permanent refusal never ends the poll. Polling is bounded only by the state staying non-final.",
+      "fix": "Keep the last good answer and show 'last read failed: <code> at <time>'. Stop the poll on a terminal refusal (unknown session), and back off on other failures.",
+      "twin_of": "A failed re-read replacing a good answer -> a re-read that fails keeps the last good answer and says so."
+    },
+    {
+      "id": "B14",
+      "severity": "medium",
+      "where": "tests/face-browser.bats:~386 (new @test) and tests/face-l3.bats:32",
+      "breaking_input": "The diff adds one @test to face-browser.bats (the sessions MUTANT CONTROL) and one to face-l3.bats, and edits no @test-count floor line in either. If the browser suite's floor is an exact or minimum count that was last set for the previous test total, the added test leaves it stale.",
+      "why": "If the floor is exact, every browser job goes red on the count, as in the earlier fix batch. If it is a lower bound, dropping the new sessions control (or bats losing it on a Windows shard) is invisible, and the sessions verdict loses its only negative control silently.",
+      "fix": "Bump the floor to the new @test count in the same commit, and confirm the floor line in face-browser.bats matches grep -c '^@test' of the file.",
+      "twin_of": "The browser suite's own @test floor still said 10 after the batch added its eleventh test"
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-robots.mjs:281",
+      "breaking_input": "Run `node design-robots.mjs --url https://www.awwwards.com/x --robots-status 404` with ARC_DESIGN_OFFLINE unset. The same happens with `--robots-file` pointing at a file that says `User-agent: *` then `Allow: /`. It prints `ALLOW https://www.awwwards.com/x -- robots.txt returned 404: no robots.txt is permission (RFC 9309)` and exits 0 without contacting the host.",
+      "why": "The seam gate was added to design-refpack.mjs only. This CLI's main() builds fakeTransport from the flags with no env check and no fixture stamp, so a fabricated ALLOW looks identical to a real preflight to anyone reading the exit code or the line. That is the 'test seams shipped ungated' defect left standing in the sibling script.",
+      "fix": "Apply the same ARC_DESIGN_OFFLINE=1 requirement in this main() and refuse the seam flags without it. Stamp the verdict line `(fixture)` when the fake transport answered.",
+      "twin_of": "Test seams shipped ungated in a production CLI -> a fake transport needs an explicit env and stamps what it produced."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:216",
+      "breaking_input": "A hostile host answers the screen URL with 200, an HTML or executable body, and the header `Content-Type: constructor` (or `__proto__`, `toString`, `valueOf`).",
+      "why": "`IMAGE_EXT[type]` is a plain-object lookup on a remote-controlled key. Inherited properties are truthy, so `!ext` is false and the 'not an image' refusal is skipped. The body is cached under a name like `<id>-<sha16>.function Object() { [native code] }` and a provenance row is committed for it. The content-type allowlist therefore accepts anything.",
+      "fix": "Use `Object.hasOwn(IMAGE_EXT, type)` or a Map, and also check the magic bytes match the claimed type before writing."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-robots.mjs:185",
+      "breaking_input": "`design-robots.mjs --url http://[::ffff:127.0.0.1]:9200/x`. The WHATWG parser serialises the host as `[::ffff:7f00:1]`. Other forms that slip through: `[::7f00:1]`, NAT64 `[64:ff9b::7f00:1]`, and 6to4 `[2002:7f00:1::]`.",
+      "why": "isPrivateAddress strips `::ffff:` and recurses on `7f00:1`. That string is not IPv4, so it falls to the IPv6 tests and returns false. The hex-mapped loopback or link-local address, which is the only form URL parsing ever emits, passes refusePrivate. The preflight then GETs `http://[::ffff:7f00:1]:9200/robots.txt` from the local machine.",
+      "fix": "Parse the IPv6 address to 16 bytes. Unwrap v4-mapped, v4-compatible, NAT64 and 6to4 to the embedded IPv4 and test that. Add fixtures for the hex forms."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-robots.mjs:239",
+      "breaking_input": "`https://lapa.ninja/robots.txt` answers 302 to `http://other.example/robots.txt`, or to `http://[::ffff:a9fe:a9fe]/robots.txt`. The final hop returns `User-agent: *` then `Allow: /`.",
+      "why": "The robots redirect loop follows up to five hops to any host with no registry host binding and no https-to-http downgrade refusal, unlike the screen loop. Preflight returns only a verdict, so design-refpack cannot bind those hops. The ALLOW recorded for the bound host is decided by an unbound or plaintext origin. With B3 this also reaches loopback or metadata addresses through a bound host.",
+      "fix": "Let preflight take an optional per-hop guard callback. design-refpack passes `bind` plus a downgrade check, and a refused hop returns UNREADABLE.",
+      "twin_of": "Redirects were followed by the HTTP client -> redirects are manual, and each hop passes every gate the first request did."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:250",
+      "breaking_input": "Run the builder in a real checkout where `git rev-parse --is-inside-work-tree` fails: git not on the child's PATH (`inTree.error` set, status null), or exit 128 from 'detected dubious ownership' on a repo owned by another Windows user or drive.",
+      "why": "Any non-zero or errored rev-parse is read as 'outside a git work tree', so the marking block is skipped. The builder prints `added` and exits 0 with sources.md untracked. That is the forgotten-provenance failure the exit-6 fix was meant to close, moved one call earlier.",
+      "fix": "Skip only when the error text is 'not a git repository' and no `.git` exists at ROOT. If `.git` exists, or `inTree.error` is set, exit 6.",
+      "twin_of": "A subprocess result was ignored -> read status and error of every spawn whose failure matters."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:243",
+      "breaking_input": "Add the same screen twice (or two URLs serving identical bytes). On the second run the append to sources.md throws, for example a Windows EBUSY or EPERM because an editor or scanner holds the file, or a read-only attribute.",
+      "why": "The image path is content-addressed (`<id>-<sha16>.<ext>`), so the second run overwrites the first run's image. The failure cleanup then unlinks it. The first run's committed row now points at a deleted image, and nothing checks whether the file pre-existed.",
+      "fix": "Record `existsSync(image)` before writing and unlink only an image this run created. Otherwise leave it and report the row failure."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:192",
+      "breaking_input": "`--principle` and `--avoid` each set to a lone U+0001 or U+007F character (or a run of them).",
+      "why": "The emptiness check runs on the raw trimmed value. `cell()` then runs `field()`, which turns control characters into spaces and trims, so the committed cell is empty. The 'row with no adaptable principle is not evidence' gate passes on one read and the file gets another.",
+      "fix": "Sanitise with `field()` first, then test for empty. Consider a minimum count of letters."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-robots.mjs:254",
+      "breaking_input": "`/robots.txt` on a bound host returns 200 with `Content-Type: text/html`. The body is a WAF interstitial, an SPA fallback page or a captive-portal page. The host's real file would say `User-agent: ClaudeBot` then `Disallow: /`.",
+      "why": "The transport returns contentType but preflight never reads it. An HTML body parses to zero groups, so decide() returns ALLOW 'no group applies to this agent'. This is the 'could not read it' case that ADR-1412 says must not collapse into permission. ALLOW is logged for a file that was never read.",
+      "fix": "Return UNREADABLE for a 2xx whose content-type is not text/plain, or whose non-empty body has no recognised directive line. Keep an empty body as ALLOW."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:82",
+      "breaking_input": "A response whose Content-Type header carries bytes 0x9b, 0x85 or 0x2028-range characters, or a redirect Location carrying U+202E. The header text is latin1-decoded, so C1 characters survive into the log line.",
+      "why": "field() strips only U+0000-U+001F and U+007F. U+009B (CSI on some terminals), U+0085, U+2028, U+2029 and bidi overrides pass into availability.log and stderr. Line-splitting readers such as Python `splitlines` still forge rows, and terminals still interpret the escapes. The control-character fix for remote text is only partial.",
+      "fix": "Strip `[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]` and cap the field length.",
+      "twin_of": "Remote text reached a tab-separated log verbatim -> strip control characters from every logged field."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:175",
+      "breaking_input": "`--url` is an https URL whose userinfo part carries a password and whose query string carries a signature parameter. A redirect Location with a signed query does the same.",
+      "why": "Only sources.md drops the query. The full href, including userinfo and query, still goes to attempts.log, to availability.log (`u.href`), to stderr on DISALLOW, and to stdout in `added ${current.href}`. If those logs are copied into `initiatives/design/evidence/phase-02/` as the phase proof, the credential lands in this public repo. The prior fix to refuse userinfo was never applied, and parseHttpUrl still accepts it.",
+      "fix": "Refuse userinfo in parseHttpUrl. Log and print `origin + pathname` everywhere, never `href`.",
+      "twin_of": "A full URL with its query string went into a committed file -> drop query and fragment before anything is committed."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:97",
+      "breaking_input": "A consumer venture repo synced with the design product but not the engine product, run as `design-refpack.mjs ...`.",
+      "why": "Prior finding B14 is neither fixed nor listed in fixed-defects.md. The builder imports engine/yaml-subset.mjs and the diff adds a `cp` of it to the test sandbox, which shows the dependency is real. The manifest diff only adds two script rows and does not add engine as a requirement. Every call exits 1 with 'cannot load the repo yaml subset parser', the same code as a usage error.",
+      "fix": "Declare engine in the design manifest requires, or move yaml-subset.mjs into core. Add it to fixed-defects.md."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:172",
+      "breaking_input": "`--source` names a row with `status: paused`, on a brief that has never run.",
+      "why": "Prior finding B15 was answered by rewriting the header to say 'no state directory, no attempts.log, is how zero reads'. That is the vacuous pass. A missing file is also what a crash before the network leaves, so `[ ! -e attempts.log ]` cannot tell a refusal from a bug. No REFUSED row reaches availability.log, so a registry refusal is a silent skip. The check was moved, not fixed.",
+      "fix": "mkdir the state dir first and append a REFUSED row to availability.log for every registry or host refusal. Tests assert that the log exists, that it has the refusal row, and that attempts.log has zero lines."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-robots.mjs:194",
+      "breaking_input": "A hostname under a bound registry host that a third party controls (user-content or takeover subdomain). It has a short-TTL DNS record that answers a public IP to refusePrivate's lookup and 127.0.0.1 to the lookup inside fetch.",
+      "why": "refusePrivate resolves the name, then fetch resolves it again independently. The address that was checked is not the address connected to (DNS rebinding), so the private-address refusal can be bypassed.",
+      "fix": "Resolve once and connect to that address with the Host header preserved (a custom undici dispatcher lookup), or re-check the socket's remote address."
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:160",
+      "breaking_input": "`--url http://lapa.ninja:8080/a.png` or `https://lapa.ninja:6379/a.png` with `--source lapa-ninja`.",
+      "why": "The binding compares hostname only. Scheme and port are not bound, so a plaintext first hop is allowed (the downgrade check applies to redirects only). Any port on the licensed host is reachable, and robots.txt is then fetched from that odd origin. The licence covers the site, not every service on its host.",
+      "fix": "Require https and port 443 (or an explicit `ports:` list on the row) for the URL and for every hop.",
+      "twin_of": "The licence was checked on one input and the fetch made on another -> every permission check binds to the exact value that is then used."
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:235",
+      "breaking_input": "Two curator calls start a new brief within the same millisecond. Process A opens sources.md with `wx`, which leaves an empty file. Process B gets EEXIST and appends its row at offset 0. Process A's header write then lands at offset 0 on its own non-append descriptor.",
+      "why": "The header write overwrites B's row, which is shorter than the header. The image stays with no provenance row and nothing reports it. `wx` fixed the truncation, but create-then-write is still two steps with a visible empty file between them.",
+      "fix": "Write the header (and the first row) to a temp file in the same directory, then `linkSync` it to sources.md and ignore EEXIST. The file then appears complete or not at all.",
+      "twin_of": "Check-then-create with a truncating write -> create exclusively (`wx`) and append; never exists()-then-write."
+    }
+  ]
+}

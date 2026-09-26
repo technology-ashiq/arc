@@ -29,6 +29,45 @@ load 'test_helper'
   [[ "$output" == *"ok runVerdict: exit 0 with no receipt is said as that, never as success"* ]] || { echo "$output"; false; }
 }
 
+@test "face v2: the session dock's decisions run with no install, and a session starts only from its Start click" {
+  run node "$ARC_ROOT/tests/face/session-dock.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok THE REAL TREE HOLDS: one sessionStart call, inside onStart, bound to onClick"* ]] || { echo "$output"; false; }
+  # The mutant count is DERIVED: the suite prints MUTANTS: n, and exactly n mutants must read REFUSED -- a mutant
+  # dropped from the list, or one the gate passed, moves one number and not the other.
+  local declared refused
+  declared=$(printf '%s\n' "$output" | sed -n 's/^MUTANTS: \([0-9]\{1,\}\)$/\1/p')
+  refused=$(printf '%s\n' "$output" | grep -c '^ok MUTANT REFUSED by the click-only gate: ' || true)
+  [ -n "$declared" ] && [ "$declared" -ge 20 ] && [ "$refused" -eq "$declared" ] || { echo "MUTANTS: $declared declared, $refused refused"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: an auto-start on mount"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start from Ask"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start that skips the click token"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start through door.call on the start route"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start by bracket access"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: an auto-start on mount, no braces"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT REFUSED by the click-only gate: a start from a new .jsx file"* ]] || { echo "$output"; false; }
+}
+
+@test "face v2: the Engine room shows driver, model and health, and a planted provider key FAILs the no-key check" {
+  run node "$ARC_ROOT/tests/face/engine-room.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok HEALTH: the row names the model the driver ran on"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY (an ok /api/engine body): named by its read, WITHHELD everywhere in the room"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY (an ok /api/spine body): named by its read, WITHHELD everywhere in the room"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO KEY (a REFUSED /api/engine read, the key in its human text)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok ONE SET: the face holds every provider-key rule the redactor holds, by name"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok NO FALSE ALARM: an id holding sk- inside a word is not a key"* ]] || { echo "$output"; false; }
+  # The count is DERIVED by the suite from its own case lists; it must have run exactly that many.
+  local exp got
+  exp=$(printf '%s\n' "$output" | sed -n 's/^EXPECTED: \([0-9]\{1,\}\)$/\1/p')
+  got=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks$/\1/p')
+  [ -n "$exp" ] && [ "$exp" = "$got" ] && [ "$exp" -eq 47 ] || { echo "EXPECTED $exp, RAN $got"; false; }
+}
+
 @test "no L3 test or source file carries a byte that makes grep call it binary" {
   # A literal NUL in a source file makes grep treat the whole file as binary, and a
   # binary-flagged file is SKIPPED silently by every grep-driven gate -- including CI's own

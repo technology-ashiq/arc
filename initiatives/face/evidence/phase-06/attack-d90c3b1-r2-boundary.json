@@ -1,0 +1,131 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "tests/face/session-dock.mjs:207",
+      "breaking_input": "Run `node tests/face/session-dock.mjs` on the unmodified tree with every check printing ok. Count the check() calls: 21 in the decisions block (the done/ended/stale loop counts 3), 3 in the round-1 block (B11/B13), 3 gate controls (positive control, REAL TREE HOLDS, every-mutant-changed) and 17 mutants, which is 44. The last line is `process.exitCode = failed === 0 && ran >= 45 ? 0 : 1`, so the exit code is 1 with `RAN: 44 checks`.",
+      "why": "The hand-written floor is one above the real count. face-l3.bats requires `[ \"$status\" -eq 0 ]`, so this test would be red on every leg with no FAIL line to explain it. Any hand-kept floor also drifts against the checks it guards, and a deleted mutant only trips it by luck. If the recount is off by one, the magic number is still unpinned.",
+      "fix": "Pin the expected count to what the file declares, in one named constant beside the checks (decisions + 3 + mutants.length). Print `RAN: n of N` and fail on any mismatch. Recount before the push.",
+      "twin_of": "The browser suite's own @test floor still said 10 after the batch added its eleventh test"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:sessionFlow, the try/catch/finally near its end (every `return res` inside the try)",
+      "breaking_input": "Any named failure inside the try makes it set `res.why` and `return res`. Examples: rooms the face does not serve, a registry missing rooms, no dock drawn, no redraw after reload, attach not RUNNING, starts != 0, the control not refused SIM_SPEND, one click making 2 starts. A `return` inside `try` leaves the function after `finally`, so `if (!res.ok) log(`sessions: FAIL -- ${res.why}`)` after the block never runs. Only the catch path reaches it. runFlows then prints `sessionsLine(sessions)`, which carries no `why`.",
+      "why": "The output is `sessions: FAIL rooms=3 reloads=2 attach=FAIL starts=-1 control=-1` with no cause. That defeats the round-1 fixes for B4, B7 and B8, which are all 'fail by name'. The bats verdict prints only that line, so a red job has nothing to read. No per-room line is printed either.",
+      "fix": "Log the reason at the point it is set. Wrap the body so every exit goes through one place that logs `res.why`, or put the log in `finally`. Add `why` to sessionsLine. Print a `sessions: room=<id> ok` line per room as it finishes.",
+      "twin_of": "One CDP error mid-run threw away every room already measured; room lines printed only after the loop -> print each finding when it is final, and catch per item so one failure is a finding, not the end of the evidence."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:sessionFlow, `holder = spawn(process.execPath, [\"-e\", ...])`",
+      "breaking_input": "spawn fails asynchronously (EAGAIN/EMFILE on a loaded Windows shard, or EACCES on the node binary). The ChildProcess emits 'error' with no listener attached, so it is an uncaught exception. `holder.pid` is also undefined, so session.json is written without a pid.",
+      "why": "The process dies with a stack before the try/finally, withChrome cleanup or tmp removal can run, so Chrome and the door are orphaned. The fix for B6 introduced a child the flow owns but skipped the rule that every spawned child gets an 'error' listener first.",
+      "fix": "Attach `holder.on('error', ...)` immediately after spawn and turn it into a named res.why. Refuse to seed session.json when `holder.pid` is undefined. Also await the child's 'exit' after kill, so the flow ends when its child does.",
+      "twin_of": "`existsSync` accepted a directory as an executable, and a spawn error was an unhandled `'error'` event -> require `isFile()`, and every spawned child gets an `'error'` listener before anything else."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-attack.mjs:124-126 (inDiffRange), call site :239",
+      "breaking_input": "`arc-attack --round 2 --base <ref>` where `git merge-base --is-ancestor <sha> <ref>` is refused (exit 128 or 129) although HEAD resolves. Examples: the ref is not fetched in this worktree, the value starts with a single dash such as `-h`, or neither `--base` nor `--since` is set so `o.base || o.since` is undefined and spawns as the string 'undefined'. `anc(sha,'HEAD')` is true and `anc(sha, ref)` is false because status !== 0, so `!anc(...)` is true and every prior reachable from HEAD counts as in this diff's range.",
+      "why": "The doc says 'False on any git refusal -- a guess is never a prior', but the negated second call turns a git error into 'not an ancestor of the base'. With one reachable and one unreachable prior, the old PR's prior is picked silently. Exit 1 (not an ancestor) and exit 128 (git failed) are the same value here.",
+      "fix": "Read the status of both calls: 0 is yes, 1 is no, anything else (or a null status or a spawn error) is a refusal naming git's stderr. Refuse a missing or dash-leading ref and pass `--end-of-options`.",
+      "twin_of": "Unreadable read as released -> unknown is never the permissive answer"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-attack.mjs:117 (`hits.length > 1 ? hits.filter(inRange) : hits`)",
+      "breaking_input": "The phase evidence dir holds only another PR's result for one surface. This session's own case: PR #270's logic leg failed on the spine emit and never wrote attack-a320d86-r1-logic.json, while attack-60c13e9-r1-logic.json from PR #269 exists. `--round 2` then takes hits.length === 1, skips the range check, and feeds PR #269's logic findings to the attacker as prior_findings against PR #270's diff. Boundary resolves correctly at the same time. Separately, after a squash-merge and rebase every r1 sha is unreachable, so two hits give 0 in range and the run is refused with a message that only says 'found 2'.",
+      "why": "The range rule applies only on the ambiguous branch. A single out-of-range prior is accepted, which is the shortcut branch skipping the guard the long branch obeys. The refusal text does not say how many were in range, so a rebase looks the same as a true tie.",
+      "fix": "Range-check the single hit too, and refuse with 'no round-K-1 result in this diff's range' when it fails. Print in-range vs total counts. Record the head sha or diff digest inside the result JSON so identity survives a rebase.",
+      "twin_of": "`*` accepted a prerelease and a 17-digit version compared equal to its neighbour -> a shortcut branch obeys the guards the long branch obeys"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:125 (anc)",
+      "breaking_input": "An ad-hoc `spawnSync('git', ...)` with no timeout, no maxBuffer and no env scrub, run once per candidate sha per surface. It inherits GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE, for example when arc-attack is launched from a hook or from the main clone's environment. A git that blocks (a network drive, a lock) hangs arc-attack forever. With GIT_DIR pointing elsewhere every call answers 128, so a legitimate round 2 is refused as 'found 2'.",
+      "why": "This is the ledgered rule that git spawns go through one bounded spawn, made once. This is a second, unbounded git call site added beside the file's existing one.",
+      "fix": "Reuse the file's own bounded git helper, or add timeout, an env with GIT_* location variables stripped, and `windowsHide`. Surface `r.error` as a named refusal.",
+      "twin_of": "spawnSync around git -> one bounded spawn, used by every caller: the fix is made once."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/engine-attack-diff.bats:390-395 (new @test)",
+      "breaking_input": "The test copies attack-$sha-r1-*.json to attack-$old-r1-*.json byte for byte. A mutant priorFor that picks the OUT-of-range file (`filter((f) => !inRange(...))` with the same file set) still exits 0, writes both r2 files and prints no 'found 2'. The attacker's prior_findings are identical either way.",
+      "why": "The assertions are exit 0, no 'found 2', and files exist. None of them checks which prior was chosen, because the two candidates are indistinguishable. The test would pass with the resolver inverted, and it never covers one-hit-out-of-range or an unresolvable base.",
+      "fix": "Give the out-of-range copy a distinct marker finding id and assert the round-2 input or output carries only the in-range prior's marker. Add cases for a single out-of-range hit and for an unresolvable base.",
+      "twin_of": "Tests that could not fail, or could not pass -> the mutant is the negative control; write the check it fails."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:startRequests",
+      "breaking_input": "(a) A journal line cut inside the path, for example `...\"path\":\"/api/session/review-ship.review/sta`, or before the path field. JSON.parse throws and the torn-line regex needs the full `/start`, so the line is skipped and the count stays 0. (b) A valid JSON record with no string `path` (the door's refusal record uses another field name) hits `continue` and is skipped. (c) The directory always exists once the flow has mkdir'd `<journal>/sessions/<sid>`, so the 'unreadable -> null' arm cannot fire for a wrong journal dir.",
+      "why": "B5's fix was 'a gate whose pass is 0 fails closed on every read error'. A line that cannot be read is skipped unless it happens to name the whole route, and a record of a shape the reader does not know counts as zero starts. Only the positive control stands between this and a false zero.",
+      "fix": "Any non-empty unparseable line makes the count UNMEASURED (null). Any parsed record that is not an object with a string path makes it null, or is counted. Match the door's journal field names against the writer in one place.",
+      "twin_of": "A torn SPINE line was a footnote while a torn JOURNAL line was a reason -> the same corruption is handled the same way on both inputs."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": "face/scripts/flows.mjs:sessionFlow room loop and attach navigation (until on dockState right after Page.navigate)",
+      "breaking_input": "B3 was fixed for the reload leg only. After `Page.navigate` to `?sessions=<room>`, the first `until(... st.cards > 0)` and the attach `until(... runs > 0)` have no mark and no room check. dockState reads the first `[data-session-dock]` in the document and never compares its data-session-dock value to `room`. Case 1: the predicate is evaluated against the previous room's document, which has cards. Case 2: a room id that falls back to another room draws that room's dock. Either way `res.rooms++` counts a room whose own dock never drew. These two `until` predicates are also unguarded, unlike the reload one (which try/catches), so a transient 'context destroyed' throws out and fails the whole flow.",
+      "why": "A navigation is proven only by something the old page had and the new one lacks. Here it is proven by the presence of any dock. The bats `reloads == rooms` check only counts iterations.",
+      "fix": "Return the dock's data-session-dock value from dockState and require it to equal the room. Set the mark before each navigation and require it gone. Wrap the predicates in try/catch like the reload one.",
+      "twin_of": "A reload proven by the OLD document -> Prove a navigation by something the old page had and the new one cannot."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "face/scripts/flows.mjs:sessionFlow getJson",
+      "breaking_input": "The door sends headers with a 200, then stalls or truncates the body of /api/rooms or /api/sessions past the 15 s AbortSignal.timeout. `r.json()` rejects and `.catch(() => ({}))` turns it into `{}`. `r.ok` is still true, so nothing is thrown. `served` is empty and the flow reports 'session rows name rooms the face does not serve: ...'. A 200 with a non-JSON body gives the same result.",
+      "why": "B7's fix named non-2xx refusals but the body read still blames the registry contents for a timeout or a bad body. The refusal names the wrong cause, and B2 means it is not printed anyway.",
+      "fix": "Treat a body read or parse failure as its own named error (`GET <path> body unreadable: <reason>`) and rethrow it. Only fall back to `{}` when the status is not ok and you are building the message.",
+      "twin_of": "Unbounded fetches, and a door refusal blamed on the registry -> Every awaited call in a harness is bounded and names its own failure."
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": "tests/face/session-dock.mjs:~106-112 (clickOnlyGate, `\\bsessionStart\\s*\\(`)",
+      "breaking_input": "In SessionDock.tsx keep `onClick={onStart}` and add `useEffect(() => { door.sessionStart?.(card.id, startBody(card, values, driver, proc)) }, [])`. Other spellings that also pass: `door.sessionStart.call(door, ...)`, `.apply(`, `Reflect.apply(door.sessionStart, ...)`, or `const s = door.sessionStart; s(...)`. None of them has `sessionStart` immediately followed by `(`, so calls stays at 1. onStart still appears twice and no route literal is present, so the gate returns null.",
+      "why": "The B9/B10 fix judges one spelling of the call, not the identifier. No mutant plants these forms. Only the browser flow would catch an auto-start.",
+      "fix": "Count every occurrence of the identifier `sessionStart` (word-bounded, in comment-stripped code) outside door.mjs's own definition and require exactly one, inside onStart. Add mutants for `?.(`, `.call(` and alias forms.",
+      "twin_of": "A structural gate that knew one spelling -> Judge the identifier and the route, not one formatting of one hook."
+    },
+    {
+      "id": "B12",
+      "severity": "medium",
+      "where": "tests/face/session-dock.mjs:~98 (`code()` comment stripper)",
+      "breaking_input": "In SessionDock.tsx add `const a = 'x // y'; useEffect(() => { door.sessionStart(card.id, startBody(card, values, driver, proc)) }, [])` on one line. The `//` is preceded by a space, so the stripper deletes everything to LF, including the call. The block-comment arm has the same hole: `const a = '/*'` ... auto-start ... `const b = '*/'` hides everything between. A `//` comment followed by U+2028 or a lone CR and then a call is also hidden, although JS ends the comment there.",
+      "why": "The gate transforms the text it judges and its transform deletes real code. This is the stripper that reads `/*` and `//` inside strings, and the one that ends a line comment only at LF.",
+      "fix": "Use a real tokenizer for strings, template literals, regex literals and comments. Failing that, refuse a file whose stripped code differs from a string-aware pass. End line comments at every JS line terminator (LF, CR, U+2028, U+2029). Add a mutant for each.",
+      "twin_of": "A text scanner's comment stripper read `/*` inside a path, a `//` comment and a string -> a parser reports when it stops scanning; it never goes quiet."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "tests/face/session-dock.mjs:~118, ~132 (`indexOf(\"\\n  }\\n\", ...)`)",
+      "breaking_input": "Run the suite on a checkout with CRLF endings (Windows autocrlf, without a .gitattributes eol=lf). The `\\n  }\\n` terminator never matches, since `}` is followed by `\\r`. For SessionDock.tsx, end is -1 and the real tree is refused with 'the call is not inside onStart'. For door.mjs, `slice(from, -1)` makes `def` run to the end of the file, so the hasOwn and spread-last checks are satisfied by text outside sessionStart.",
+      "why": "The gate's function slicing is line-ending sensitive and does not fail loudly on -1. Nobody runs it locally (CI only), so a CRLF-only red or a weakened door.mjs check would surface late.",
+      "fix": "Normalise CRLF before slicing, and refuse when either indexOf returns -1 instead of passing the value on to slice.",
+      "twin_of": "Check and `--write` disagreed on CRLF and on markers outside a comment -> a writer re-reads what it wrote before writing it, and both modes normalise the same way."
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": "initiatives/face/phases/phase-06-tasks.md (slice 02 proof line) vs tests/face-l3.bats:32-44",
+      "breaking_input": "The proof line still says 'six planted mutants REFUSED'. session-dock.mjs plants 17. face-l3.bats pins names for 8 of the 17 (no auto-start-on-mount variants with no deps, layout effect or render body, and none of reload, attach poll, .js, wasm, click-token-outside, spread order or unbound). Delete any of the unpinned mutants from the array and only the floor notices, and the floor is hand-kept (see B1).",
+      "why": "The DoD evidence names a number the code no longer has, and the bats pin does not cover the mutants the round-1 fixes added. A removed mutant is invisible.",
+      "fix": "Derive both from one list. Have the suite print `MUTANTS: <n>` and pin n in bats. Update the proof line when a mutant is added.",
+      "twin_of": "An exclusion by PREFIX where the stated reason was one file -> an exclusion names the file or criterion that makes it true, and its numbers are grepped across docs AND comments when retired."
+    }
+  ]
+}

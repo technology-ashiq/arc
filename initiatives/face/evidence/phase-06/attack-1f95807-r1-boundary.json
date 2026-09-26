@@ -1,0 +1,140 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "processes/develop-proof.process.yaml:38",
+      "breaking_input": "Bash(git log:*) is a prefix grant, so the session (which reads ledgers, evidence and commit text) can run `git log -1 --output=docs/adr/1342-x.md`, or `--output=.claude/scripts/hq/arc-event.mjs`, or `--output=initiatives/face/phases/phase-06-tasks.md`. git writes the log text to that path.",
+      "why": "`--output=<file>` is a git-log option. The 'ONE write' fence (Edit on result.txt only) is bypassed: any file the user can write can be overwritten or created, including tracked files, the emitter and the ledger, without the ledger fence, secret scan or number rules. tests/memory-session-probe.mjs pins exactly `Bash(git log:*)` as the required grant, so the probe enforces the hole.",
+      "fix": "Drop the git log grant. Have `develop.mjs status` (or a new read-only mode of it) print the recent merged commits. If a shell grant must stay, pin the exact command (`git log --oneline -30`) with no wildcard, and add a PreToolUse check that refuses --output. Update the probe's expected grants to match.",
+      "twin_of": "A whole-file Edit grant made \"append only\" a sentence -> Give a run the tool that does the one change, not the file."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "processes/develop-proof.process.yaml:37",
+      "breaking_input": "The grant `node .claude/scripts/develop/develop.mjs:*` allows every mode. The session can run `develop.mjs start 7 --lane face`, `develop.mjs next --lane face --expect <digest>`, `develop.mjs checkpoint --lane face --receipt` or `develop.mjs handoff`, or `--root <other clone>`. The same holds for `plan/adr-record.mjs:*` with `--lane <any lane>`.",
+      "why": "The process is meant to do one thing (`prove`), but its shell scope is the whole tool. A run steered by text it read can create ledgers, open slices and emit other receipts outside its one verb. The grant is scoped to the tool, not to the effect.",
+      "fix": "Add a narrow entry point: a dedicated `develop-prove.mjs` wrapper (or a PreToolUse hook on agent_type) that accepts only `prove <n> --lane --result-file --commit --as-process [--dry-run]`. Pin the probe to that shape.",
+      "twin_of": "An emitter scope that was a prefix over every kind -> Scope a grant to the one thing the process may do, not the tool it does it with."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/develop/develop.mjs:592",
+      "breaking_input": "Click 1 proves slice 01 with result.txt. Click 2 proves slice 02, but the session's Write/Edit of result.txt does not happen (refused, or the model skips it). `prove 0 ... --result-file .claude/state/develop-proof/result.txt` reads slice 01's leftover line, passes every check and stamps it on slice 02. The same replay happens with a leftover adr.md in adr-record.mjs:172, which records a stale ADR under the new click's lane and century.",
+      "why": "Neither reader checks that the scratch file was written by this run, and neither consumes it after use. Evidence for one slice becomes the 'proof' of the next, which defeats the whole evidence rule.",
+      "fix": "After a successful write, unlink or rename the scratch file inside the lock. Also require its mtime to be newer than the run's start, or bind the file to the target by requiring the slice id (or a run nonce) on line 1.",
+      "twin_of": "Measured on one read, read on another -> The file that is checked is the file that is read."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/plan/adr-record.mjs:210",
+      "breaking_input": "Two sessions in two worktrees (the stated collision scenario) each run adr-record for the same lane while the lock lives under each checkout's own spine root. Both scan (neither file exists yet) and both pick 1342. They write 1342-a.md in wtA and 1342-b.md in wtB. The wx flag only guards the same filename, so both succeed and the number is duplicated. takenNumbers spawns git once per ref inside the lock, so the window is seconds wide.",
+      "why": "The lock sits beside the caller (the spine), not beside the resource that must be unique: the ADR number space is shared across every worktree of the repository. wx on `NNNN-slug.md` locks the name, not the number.",
+      "fix": "Take the lock in the git common dir (`git rev-parse --git-common-dir`), shared by all worktrees. Or create a per-number sentinel file `docs/adr/.claim-NNNN` exclusively in the main clone. Shrink the work inside the lock.",
+      "twin_of": "An exclusive create keyed on the wrong thing -> Lock the resource that must be unique, not the name that contains it. / A mutex that was not over the thing it protects -> a lock belongs beside the resource, not beside the caller"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/plan/adr-record.mjs:149",
+      "breaking_input": "Another branch holds docs/adr/1330-naïve-choice.md as its highest number. `git ls-tree --name-only <tree>` prints it C-quoted as `\"1330-na\\303\\257ve-choice.md\"` (core.quotePath defaults to true), which starts with a double quote. numOf's `^(\\d{4})-` fails, 1330 is not taken, and the script issues 1330 again.",
+      "why": "Git's own output quoting is parsed as a plain name list. The same applies to `git worktree list --porcelain` paths, which the code trims and joins.",
+      "fix": "Use `git ls-tree -z --name-only` and split on NUL. Pass `-c core.quotePath=false` and `-z` to worktree list as well.",
+      "twin_of": "Text edits of structured files -> parse, change, re-serialise; refuse what is not in the generator's form."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/plan/adr-record.mjs:144",
+      "breaking_input": "`git rev-parse --verify --quiet refs/remotes/origin/feat/x:docs/adr` exits 128 (dubious ownership, a missing object in a partial or shallow clone, a corrupt ref). `t.status === 0` is false, so the ref is skipped as 'no ADR dir on this ref', and its numbers are never counted.",
+      "why": "Exit 1 (absent) and exit 128 (git failed) are collapsed into one 'nothing taken' outcome. A failure to look is read as an empty result, and the script proceeds to write. The listing steps around it do fail closed; this one does not.",
+      "fix": "Treat status 1 as absent, and status 0 as present. Any other status, or a spawn error, is die(2, 'cannot read <ref>'). Prefer `git cat-file -e ref:docs/adr` or `ls-tree` with explicit status handling.",
+      "twin_of": "git's refusal read as \"not an ancestor\", so every prior counted as in range -> A boolean from an exit code has three answers, not two."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/plan/adr-record.mjs:157",
+      "breaking_input": "A sibling worktree's docs/adr cannot be read (EACCES, a network drive offline, or a path C-quoted or mangled by the porcelain output). `catch { /* ... */ }` drops it. Its uncommitted 1320 is invisible, and the script issues 1320 again.",
+      "why": "The comment claims a 'pruned or unreadable worktree holds no claim we can see'. Unreadable is not absent: the whole point of this scan is that on-disk claims exist nowhere else. Only ENOENT for a genuinely missing directory is 'no claim'.",
+      "fix": "Skip only ENOENT and ENOTDIR (and worktrees git marks `prunable`). Any other error should die(2) and name the path.",
+      "twin_of": "An unreadable exemption or extras list became \"not exempt\" -> unreadable is exit 2 naming the file, never a default."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/develop/develop.mjs:707",
+      "breaking_input": "The worktree is on feat/face-x. Commit C is a WIP commit on that branch, unpushed or in an open PR with red CI. `prove 6 --commit C` passes `merge-base --is-ancestor C HEAD` (exit 0), so slice.done is recorded for a commit that is not merged and has no CI. In the other direction, running from a stale local main, a commit squash-merged on origin/main is not an ancestor of HEAD and is refused as 'not merged'.",
+      "why": "'Merged' is tested against whatever HEAD is checked out, not against the mainline. The error message and comment call it merged. The proof rule ('CI green') is only meaningful for commits on the mainline.",
+      "fix": "Test ancestry against the mainline tip (`origin/main`, refusing if that ref is missing or unreadable), not HEAD. Alternatively require the branch to be main, and report which ref was used.",
+      "twin_of": "\"Merged\" asked of the bytes instead of the patch -> when the merge strategy rewrites history, identity is a patch question"
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/develop/develop.mjs:702",
+      "breaking_input": "With GIT_DIR, GIT_WORK_TREE or GIT_INDEX_FILE inherited (a hook, or a door whose env was not scrubbed), `git rev-parse` and `merge-base` in develop.mjs, and the ~N sequential `rev-parse` calls in adr-record.mjs:135, answer about another repository or worktree. A hung git (index lock, network home directory) blocks forever: there is no timeout, and adr-record's calls run inside the held lock.",
+      "why": "Each script builds its own private `spawnSync(\"git\")` with no timeout, no env scrub, no maxBuffer (develop) and no error-listener discipline. The defect list says one bounded git spawn should serve every caller. Here is a second and third copy.",
+      "fix": "Import one bounded git helper: timeout, git location variables stripped (the door's childEnv), `-c` overrides for owner config, error mapped to a named refusal. Use it in both files.",
+      "twin_of": "spawnSync around git -> one bounded spawn, used by every caller: the fix is made once."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/develop/develop.mjs:703",
+      "breaking_input": "`--commit abcdef1` while a branch or tag named `abcdef1` exists and points at a different merged commit. `rev-parse abcdef1^{commit}` resolves the ref (refs win over abbreviated object names), so the ledger records the ref's 8-character commit, not the object the caller named.",
+      "why": "The input is validated as hex, but the resolved sha is never compared with it. The recorded commit is one the caller did not name.",
+      "fix": "Require `sha.startsWith(given)` after resolving. Better, use `git rev-parse --verify --quiet --end-of-options ${given}^{commit}` with the full 40-character sha only, and refuse a shorter given that is ambiguous with a ref.",
+      "twin_of": "Validate one read, compare another (a value checked in one form and used in another)."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/develop/develop.mjs:673",
+      "breaking_input": "`--result-file .claude/state/develop-proof/result.txt:hidden` (and `--adr-file .claude/state/adr-record/adr.md:hidden`). The drive check is anchored at the start and looks only for `X:`. The `:` past the drive letter is an NTFS alternate data stream. It resolves to a name with no slash directly in the scratch directory, passes `relative`, `lstat` and `isFile`, and is read.",
+      "why": "A stream is content that `ls`, the Edit grant's path match and any other reader of the scratch dir never see. The listed defect pattern is not applied to these two new readers.",
+      "fix": "Refuse any `:` in the path after the first two characters, and any name whose basename contains `:`. Check the basename against `^[A-Za-z0-9._-]+$`.",
+      "twin_of": "A data stream behind a file name -> a colon past the drive letter is a stream, not a file."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/develop/develop.mjs:675",
+      "breaking_input": ".claude/state/develop-proof is a junction (or symlink) to a directory outside the repo, e.g. a private folder. `dir` becomes that outside path and `--result-file` names a file in it; `relative(dir, real)` is a bare name and passes. The file's first line (20 to 1500 characters, no credential shape) is copied into the tracked, public ledger. adr-record.mjs:66 does the same with adr-record/adr.md into docs/adr.",
+      "why": "The containment check compares the file against the resolved scratch directory, but the scratch directory itself is never checked to be inside the repo root. The ledger gets a repo fence (fenceLedger) and the scratch path gets none.",
+      "fix": "After realpath, require `dir` to start with realpath(root) + sep, and refuse a scratch directory that is a reparse point. Apply the same to adr-record's SCRATCH and to docs/adr before writing.",
+      "twin_of": "A `phases/` containment check used `isFile()` -> containment resolves realpaths first."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/plan/adr-record.mjs:212",
+      "breaking_input": "The disk fills (ENOSPC) or the write is interrupted after `wx` created docs/adr/1321-x.md. writeFileSync throws with a torn file left on disk. The catch reports 'could not be created -- nothing written' (exit 2) and does not remove it. The next run picks 1322 and the torn ADR stays.",
+      "why": "The message and exit code claim nothing was written, but a partial file exists in a tracked directory. Only EEXIST means 'nothing written'.",
+      "fix": "On any error other than EEXIST, try unlinkSync on the path and report what could not be cleaned. Otherwise write to a temp file in the directory and link or rename it into place.",
+      "twin_of": "\"Nothing was written\" after writing, again"
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": ".claude/scripts/plan/adr-record.mjs:217",
+      "breaking_input": "emitReceipt returns state \"unknown\" (timeout at 60 s, killed child). The message says the ADR IS written and its receipt 'did not land', exit 1, and names no next step. A retry from the door then writes a second ADR at the next number and a second note.logged, and the first receipt may already be on the spine.",
+      "why": "unknown is reported as not-landed, and no recovery is named. develop.mjs's prove treats the same three states separately ('look at the spine before proving again'). adr-record collapses them.",
+      "fix": "Branch on got.state: for unknown, say whether it may have landed and that the spine must be checked before recording again. Print the file and number so the check is one grep. Also refuse or warn when the same title's slug already exists in docs/adr.",
+      "twin_of": "A written branch with no way on -> A failure after a write names its recovery."
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": ".claude/scripts/develop/develop.mjs:682",
+      "breaking_input": "The scratch file is locked by an editor or antivirus, or removed between realpath and open. `lstatSync(real)` or `openSync(real, \"r\")` throws EBUSY, EPERM or ENOENT, and `readSync` can throw EISDIR. The try has only a `finally`, so the raw Error escapes readProofResult. In adr-record the top-level catch prints `e.message.split(\"\\n\")[0]`, which carries the absolute owner path.",
+      "why": "Library throws are not translated to a named refusal at the CLI edge. Machine paths reach stderr, and the run's exit code and message stop matching the documented 0/1/2 contract.",
+      "fix": "Wrap the open, stat and read in a catch that calls die with `e.code` only (no message). Keep the try/finally for the fd.",
+      "twin_of": "The CLI let the library's throw out as a stack with machine paths -> A library throw is translated at the CLI edge."
+    }
+  ]
+}

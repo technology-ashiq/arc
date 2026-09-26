@@ -203,9 +203,10 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     let flowsFailed = false;
     if (setupFailed === 0) {
       try {
-        const fr = await runFlows({ base: `http://127.0.0.1:${appPort}/`, door: `http://127.0.0.1:${doorPort}`, token, spine, repo: REPO, tmp }, log);
+        const fr = await runFlows({ base: `http://127.0.0.1:${appPort}/`, door: `http://127.0.0.1:${doorPort}`, token, spine, repo: REPO, tmp, journal: join(tmp, "journal") }, log);
         log(flowsLine(fr));
-        flowsFailed = fr.ops === 0 || fr.failed.length > 0 || !fr.live.ok || fr.errors > 0;
+        // Phase 06 (REQ-08): the session flow's own verdict -- 0 starts with no click, exactly 1 from one click.
+        flowsFailed = fr.ops === 0 || fr.failed.length > 0 || !fr.live.ok || fr.errors > 0 || !fr.sessions || !fr.sessions.ok;
       } catch (e) {
         flowsFailed = true;
         log(`flows: SETUP-FAIL -- ${oneLine(redactSecrets(e?.message ?? e, [token]))}`);

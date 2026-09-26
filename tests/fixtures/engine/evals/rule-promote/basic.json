@@ -1,0 +1,11 @@
+{
+  "note": "Eval fixture (face Phase 06 slice 04). `expected` asserts the SHAPE of a proposed rule: an existing home, the proposal branch rule-propose wrote, and the approval.requested receipt id. Nothing is applied.",
+  "input": {
+    "rule": "a counting grep that expects zero is guarded with || true under set -e"
+  },
+  "expected": {
+    "home": ".claude/rules/testing.md",
+    "branch": "feat/face-memory-rule-testing-1a2b3c4d",
+    "receipt_id": "01M37D0KHFPXBDBWQRYPMEXVT8"
+  }
+}

@@ -368,12 +368,47 @@ EOF
   mkdir -p docs/evidence/phase-11
   printf '{"surface":"logic","findings":[]}' > docs/evidence/phase-11/attack-aaaaaaa-r1-logic.json
   printf '{"surface":"logic","findings":[]}' > docs/evidence/phase-11/attack-bbbbbbb-r1-logic.json
-  printf '{"surface":"boundary","findings":[]}' > docs/evidence/phase-11/attack-aaaaaaa-r1-boundary.json
+  # The boundary prior is at a REAL commit of this diff's range: a lone prior is range-checked like any other (round-2
+  # attack d90c3b1 B5), and this test is about the logic surface's ambiguity, not the boundary's.
+  printf '{"surface":"boundary","findings":[]}' > "docs/evidence/phase-11/attack-$sha-r1-boundary.json"
   run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 11 --round 2 --driver mock
   [[ "$output" == *"arc-attack @ "* ]] || { echo "$output"; false; }
   [ "$status" -eq 2 ] || { echo "$status $output"; false; }
   [[ "$output" == *"LOGIC: NOT RUN -- round 2 needs exactly one round-1 logic result"*"found 2"* ]] || { echo "$output"; false; }
   [ -f "docs/evidence/phase-11/attack-$sha-r2-boundary.json" ] || { echo "the unblocked surface did not run (L5): $output"; false; }
+}
+
+@test "arc-attack: a phase of several PRs -- round 2 takes the round-1 prior whose commit is in this diff's range" {
+  # A phase that lands as several PRs keeps one round-1 result per PR in one evidence dir. Round 2 of the second PR
+  # was refused "found 2" (face Phase 06, #269 and #270); the prior is the one whose commit is in (base..HEAD].
+  cd "$REPO"
+  local sha old; sha=$(git rev-parse --short=7 HEAD); old=$(git rev-parse --short=7 HEAD~1)
+  [ "$sha" != "$old" ] || { echo "the fixture repo needs two commits"; false; }
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 20 --driver mock
+  [ "$status" -eq 0 ] || { echo "round 1: $status $output"; false; }
+  [ -f "docs/evidence/phase-20/attack-$sha-r1-boundary.json" ] || { echo "round 1 wrote no boundary result"; false; }
+  # The earlier PR's round 1, at a commit OUTSIDE this diff's range (an ancestor of the base).
+  cp "docs/evidence/phase-20/attack-$sha-r1-boundary.json" "docs/evidence/phase-20/attack-$old-r1-boundary.json"
+  cp "docs/evidence/phase-20/attack-$sha-r1-logic.json" "docs/evidence/phase-20/attack-$old-r1-logic.json"
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 20 --round 2 --driver mock
+  [ "$status" -eq 0 ] || { echo "round 2 with two priors, one in range: $status $output"; false; }
+  [[ "$output" != *"found 2"* ]] || { echo "$output"; false; }
+  [ -f "docs/evidence/phase-20/attack-$sha-r2-boundary.json" ] && [ -f "docs/evidence/phase-20/attack-$sha-r2-logic.json" ] \
+    || { echo "round 2 did not write both surfaces: $output"; false; }
+  # WHICH prior: the in-range one, named on screen -- a mutant that took the out-of-range copy exits 0 too (B7).
+  [[ "$output" == *"BOUNDARY: round 2 carries its prior docs/evidence/phase-20/attack-$sha-r1-boundary.json"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"attack-$old-r1-boundary.json"* ]] || { echo "the out-of-range prior was used: $output"; false; }
+}
+
+@test "arc-attack: a lone round-1 prior from outside this diff's range is refused, never carried" {
+  # Another PR's result alone in the phase dir was fed to this PR's attacker as its own findings (round-2 attack B5).
+  cd "$REPO"
+  local old; old=$(git rev-parse --short=7 HEAD~1)
+  mkdir -p docs/evidence/phase-21
+  printf '{"surface":"boundary","findings":[]}' > "docs/evidence/phase-21/attack-$old-r1-boundary.json"
+  run env ARC_MOCK_DIR="$MOCK" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 21 --round 2 --driver mock
+  [[ "$output" == *"BOUNDARY: NOT RUN -- round 2 needs exactly one round-1 boundary result in this diff's range"*"found 1 (0 in range)"* ]] || { echo "$status $output"; false; }
+  [ ! -f "docs/evidence/phase-21/attack-$(git rev-parse --short=7 HEAD)-r2-boundary.json" ] || { echo "a round 2 ran on another PR's prior"; false; }
 }
 
 @test "arc-run and arc-attack: an unusable temp dir is a named failure with an exit code, never a stack" {

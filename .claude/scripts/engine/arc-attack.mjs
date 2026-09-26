@@ -35,10 +35,11 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { laneHeader, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
+import { DENY_RULES } from "../hq/lib/redact.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/@{}~^-]*$/;
@@ -103,14 +104,50 @@ function evidenceDir(root, lane, phaseArg) {
   return { dir: join(root, rel), rel, nn };
 }
 
-/** Round K>1: the ONE prior output for this surface, or an error that names what was found. */
-function priorFor(dir, round, surface) {
+/**
+ * Round K>1: the ONE prior output for this surface, or an error that names what was found. A phase that lands as
+ * several PRs holds one round-(K-1) result PER PR in the same evidence dir, so when more than one is there the prior is
+ * the one whose commit is in THIS diff's range -- reachable from HEAD and not from the base. Still exactly one, or
+ * refused: an ambiguity the range does not resolve is never guessed (face Phase 06, PRs #269 and #270).
+ * @param {string} dir @param {number} round @param {string} surface @param {(sha: string) => boolean} [inRange]
+ */
+function priorFor(dir, round, surface, inRange) {
   if (round === 1) return { file: null };
-  const want = new RegExp(`^attack-[0-9a-f]{7,40}-r${round - 1}-${surface}\\.json$`);
+  const want = new RegExp(`^attack-([0-9a-f]{7,40})-r${round - 1}-${surface}\\.json$`);
   const hits = existsSync(dir) ? readdirSync(dir).filter((f) => want.test(f)).sort() : [];
-  if (hits.length !== 1)
-    return { error: `round ${round} needs exactly one round-${round - 1} ${surface} result in ${dir}; found ${hits.length}${hits.length ? `: ${hits.join(", ")}` : ""}` };
-  return { file: join(dir, hits[0]) };
+  // EVERY hit is range-checked, one included: a lone prior from ANOTHER PR of the phase was fed to this PR's attacker
+  // as its own findings (round-2 attack d90c3b1 B5). A range question git refuses is a refusal, never a guess.
+  let inThisDiff;
+  try { inThisDiff = inRange ? hits.filter((f) => inRange(/** @type {RegExpExecArray} */ (want.exec(f))[1])) : hits; }
+  catch (e) { return { error: `round ${round}: the round-${round - 1} ${surface} result could not be placed in this diff's range -- ${/** @type {Error} */ (e).message}` }; }
+  if (inThisDiff.length !== 1)
+    return { error: `round ${round} needs exactly one round-${round - 1} ${surface} result in this diff's range in ${dir}; found ${hits.length} (${inThisDiff.length} in range)${hits.length ? `: ${hits.join(", ")}` : ""}` };
+  return { file: join(dir, inThisDiff[0]) };
+}
+
+/**
+ * Is `sha` a commit of the range (ref..HEAD] in `root`? git's own answer, read by its status: 0 yes, 1 no, anything
+ * else -- a ref it cannot resolve, a spawn error, a timeout -- THROWS, so a refusal is never read as "not an ancestor"
+ * and so "in range" (round-2 attack d90c3b1 B4). Bounded, with git's location variables withheld, so a GIT_DIR from a
+ * hook cannot answer for another repository (B6).
+ */
+function inDiffRange(root, ref, sha) {
+  if (typeof ref !== "string" || ref === "" || ref.startsWith("-")) throw new Error(`the range's base ${JSON.stringify(ref)} is not a ref`);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.toUpperCase().startsWith("GIT_")));
+  const g = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8", env, timeout: 15_000, windowsHide: true });
+  const why = (r) => `${r.error ? r.error.message : `exit ${r.status}`}: ${String(r.stderr || "").trim().split("\n")[0]}`;
+  // The base must resolve, or no answer about the range means anything.
+  const base = g(["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`]);
+  if (base.status !== 0) throw new Error(`the range's base ${JSON.stringify(ref)} does not resolve to a commit (${why(base)})`);
+  // A prior named for a commit this repository does not hold is not of this diff: out of range, not a refusal.
+  if (g(["cat-file", "-e", `${sha}^{commit}`]).status !== 0) return false;
+  const anc = (a, b) => {
+    const r = g(["merge-base", "--is-ancestor", a, b]);
+    if (r.status === 0) return true;
+    if (r.status === 1) return false;
+    throw new Error(`git merge-base --is-ancestor ${a} ${b} answered ${why(r)}`);
+  };
+  return anc(sha, "HEAD") && !anc(sha, base.stdout.trim());
 }
 
 /**
@@ -223,7 +260,7 @@ export function main(argv, env = process.env) {
     const skip = recorded || surface !== "logic" ? null
       : o.driver !== "mock" && !trialModel ? "no trial model. Set ARC_ATTACK_TRIAL_MODEL (and ARC_LLM_ENDPOINT, ARC_LLM_API_KEY) to run it (ADR-0226)."
       : null;
-    const prior = recorded || skip ? { file: null } : priorFor(ev.dir, round, surface);
+    const prior = recorded || skip ? { file: null } : priorFor(ev.dir, round, surface, (sha) => inDiffRange(root, o.base || o.since, sha));
     plan.push({ surface, name, target, recorded, corrupt, skip, prior });
   }
   if (plan.every((p) => p.recorded && !p.corrupt))
@@ -268,7 +305,11 @@ export function main(argv, env = process.env) {
       const buildArgs = [join(HERE, "build-attack-input.mjs"), ...(o.base ? ["--base", o.base] : ["--since", o.since]),
         "--surface", surface, "--out", input, "--root", root, "--classification", o.classification];
       if (lane.mode === "lane") buildArgs.push("--lane", lane.lane);
-      if (prior.file) buildArgs.push("--prior", prior.file);
+      if (prior.file) {
+        buildArgs.push("--prior", prior.file);
+        // Named on screen: which prior this round attacks the fixes of is a fact the reader must be able to check.
+        lines.push(`${label}: round ${round} carries its prior ${relative(root, prior.file).split(sep).join("/")}`);
+      }
       const b = spawnSync(process.execPath, buildArgs, { cwd: root, encoding: "utf8", env });
       process.stderr.write(b.stderr || "");
       // Recorded and reported, never an early return: returning here dropped every line already
@@ -282,8 +323,19 @@ export function main(argv, env = process.env) {
 
       const r = runSurface({ root, surface, input, driver: o.driver, trialModel, env });
       if (r.status !== 0) {
-        const tail = r.stderr.trim().split("\n").slice(-8).join("\n    ");
-        lines.push(`${label}: RUN FAILED (arc-run exit ${r.status ?? "none"}${r.error ? `, ${r.error.message}` : ""})\n    ${tail}`);
+        // Every line of a child's stderr is REDACTED and stripped of control characters before it reaches the summary the
+        // owner pastes into evidence: a gateway error can echo the credential it was sent (round-2 attack 4010c52 B7). A
+        // run that never spawned has no stderr at all (B8).
+        const clean = (/** @type {string} */ l) => DENY_RULES.reduce((s, rule) => s.replace(new RegExp(rule.re.source, `${rule.re.flags.replace("g", "")}g`), `[${rule.name} redacted]`), l.replace(/\r$/, "")).replace(/\p{Cc}|\p{Zl}|\p{Zp}/gu, " ");
+        const errLines = String(r.stderr ?? "").trim().split("\n").map(clean);
+        const tail = errLines.slice(-8).join("\n    ");
+        // The CAUSE is arc-run's first own line, and the tail alone cut it: a data-boundary refusal ("a secret matching
+        // rule ... appeared in --input") was pushed out by the receipt emitter's worktree warning, and a run refused
+        // for a secret read as a bare RUN FAILED (face Phase 06 slice 05). Said first, whenever the tail lacks it.
+        // The transcript-destination WARN is not a cause: it led the lines and hid the gateway's refusal. ONLY that WARN
+        // is passed over -- another WARN can be the refusal itself (round-2 attack 1d98650 B10).
+        const cause = errLines.find((l) => /^arc-run: /.test(l) && !/could not emit run\.completed|^arc-run: WARN .*NO destination is set/.test(l));
+        lines.push(`${label}: RUN FAILED (arc-run exit ${r.status ?? "none"}${r.error ? `, ${r.error.message}` : ""})${cause && !errLines.slice(-8).includes(cause) ? `\n    cause: ${cause}` : ""}\n    ${tail}`);
         anyFailed = true;
         continue;
       }
@@ -310,7 +362,7 @@ export function main(argv, env = process.env) {
 
   process.stdout.write(`arc-attack @ ${sha7}, round ${round}${o.driver === "mock" ? " (mock driver)" : ""}\n`);
   for (const l of lines) process.stdout.write(`${l}\n`);
-  process.stdout.write("Nothing was fixed or committed. Fix slices run in the interactive session via /arc-develop.\n");
+  process.stdout.write("Nothing was fixed or committed by the attacker. Fix them now, in THIS session (ADR-0226 Amendment 1), then --round 2.\n");
   // A failed run outranks a surface that could not start, which outranks one deliberately not started.
   // An empty diff is the first answer: nothing could be attacked at all.
   if (emptyDiff) return 6;

@@ -1,0 +1,88 @@
+{
+  "phase": "06",
+  "commit": "ac4a2674f92b37441070e76f1953c9c829dc3ec2",
+  "short": "ac4a2674",
+  "generated": "2026-09-26T07:55:20Z",
+  "files": [
+    {
+      "name": "attack-1be4183-r2-boundary.json",
+      "sha256": "f16dfb90235397f5bff9cd6133b42472152292b1dfed133bcea19aa601c24f11"
+    },
+    {
+      "name": "attack-1d98650-r2-boundary.json",
+      "sha256": "079a3311a201e753ddf82608b75fdc921e1594558cd95e5ce357215b28edce65"
+    },
+    {
+      "name": "attack-1f95807-r1-boundary.json",
+      "sha256": "d1f411c81a6feb141d3ec352584ba3ddbfe7f759cd85789d5bce21a54246dbf8"
+    },
+    {
+      "name": "attack-3e77530-r1-boundary.json",
+      "sha256": "515e93a501764220e69cc1794ac13039926c56b2737d8265ea293a6d56fc4e5b"
+    },
+    {
+      "name": "attack-3e97a85-r1-boundary.json",
+      "sha256": "ea0bda21a3f0a14e2fe033b9ba4d9d6e214203ec29684fc0b2027b8713ac81d9"
+    },
+    {
+      "name": "attack-4010c52-r2-boundary.json",
+      "sha256": "717bc97d1e7ee2595b55574758dadf1173842f6496f8990fe7f3d9de9732e781"
+    },
+    {
+      "name": "attack-57d014d-r1-boundary.json",
+      "sha256": "82ecfa946cc5bf2db84fd6293b602a637dca4070f8c671f6dae7393e0c3b49ef"
+    },
+    {
+      "name": "attack-60c13e9-r1-boundary.json",
+      "sha256": "9b4228580ae63d354eb7226bf8d00bb6a1dc9636181dc1a8091200cd75435b23"
+    },
+    {
+      "name": "attack-66a26f0-r1-boundary.json",
+      "sha256": "d77ea804ab7dd09f55762df71d091e40a6531a6324877107a774f11fac0cac06"
+    },
+    {
+      "name": "attack-8e389a5-r2-boundary.json",
+      "sha256": "2479b3f54b5c4f9892a804a1675cde5f2d6357fbd4278da5c66379fffffc4688"
+    },
+    {
+      "name": "attack-a320d86-r1-boundary.json",
+      "sha256": "822df64a7fcf516d42a3bdd15b976ea7192f58a548acea25e61537a5daa6c315"
+    },
+    {
+      "name": "attack-d90c3b1-r2-boundary.json",
+      "sha256": "f6bd73a93e50c60ced3c4e39f0cfc091a6ad5ab90606e3df89451806a3b3c8f6"
+    },
+    {
+      "name": "attack-eaa9168-r1-boundary.json",
+      "sha256": "f4136ccb92b526a86641c0b53b30e403a7cc76e06973521ad76474cb02522803"
+    },
+    {
+      "name": "attackers.md",
+      "sha256": "b433a5f5c948eb61d600482b572a5ce4f2fd7d0c946607c91bdf6435ae31de90"
+    },
+    {
+      "name": "ci-jobs.json",
+      "sha256": "9d13baa36ae7ecb95ad690d3da0a9dc2c88f1a2217944967e50aded83627d271"
+    },
+    {
+      "name": "handoff.md",
+      "sha256": "53ebc891f775f3320595124cc65e0d2e6d325cdada44c422584b0bee3e4207c1"
+    },
+    {
+      "name": "live-demo-attempt2-verdict.md",
+      "sha256": "79036c5cca10d470af7ada9ccc7146aac2a54c5b02e90b8d92013fb2f5508196"
+    },
+    {
+      "name": "live-demo.md",
+      "sha256": "e6e5e9f26e84dd5468e938bb88d2dd49ab76d422acafaa4a386f3696644e3942"
+    },
+    {
+      "name": "residue.md",
+      "sha256": "fc941e5f28ba8a716d01192dfe165e04d836a3450729f16dbf925667e7db1355"
+    },
+    {
+      "name": "spec-fidelity.md",
+      "sha256": "578aea48e8bf01541454544106a32f6987cb38c5a8a0866ee6e16da32d37bf24"
+    }
+  ]
+}

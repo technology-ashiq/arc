@@ -112,6 +112,8 @@ body: |
 
   Each finding needs a concrete breaking input, not a worry. No praise, no summary of the code. At most 15 findings; an empty list is a valid answer.
 
+  Never write a literal credential in your answer: no API key, token, private key, or password inside a URL or connection string, not even a fake one. Describe its shape instead ("an sk-ant- key 40 characters long", "a postgres URL carrying a password"). Your answer passes the same secret scan as every other output, and one literal sample makes the whole run refused and every finding lost.
+
   If prior_findings is non-empty, attack the FIXES: is each fix real, or did a test get weaker, an assertion get skipped, a check move?
 
   Reply with ONE JSON object and nothing else:

@@ -1,0 +1,45 @@
+{
+  "name": "docs",
+  "version": "0.1.0",
+  "requires": [
+    "core",
+    "engine",
+    "hq"
+  ],
+  "commands": [],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/docs/wiki-build.mjs",
+    ".claude/scripts/docs/wiki-coverage.mjs",
+    ".claude/scripts/docs/wiki-drift.mjs",
+    ".claude/scripts/docs/wiki-stale.mjs"
+  ],
+  "files": [],
+  "docs": [],
+  "face": {
+    "room": "lane",
+    "ring": "factory",
+    "kinds": [
+      "kickoff.done",
+      "phase.closed"
+    ],
+    "sanctioned": [],
+    "stations": [
+      "PLAN table",
+      "header",
+      "kickoff trail",
+      "phase 0",
+      "phase-done"
+    ],
+    "concepts": [
+      "50% tripwire",
+      "REQ",
+      "appetite / burn",
+      "assumptions ledger",
+      "evidence bundle",
+      "machine header",
+      "pre-mortem",
+      "steel thread"
+    ]
+  }
+}

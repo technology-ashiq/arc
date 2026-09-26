@@ -57,7 +57,7 @@ approves its own edits has verified nothing (ADR-0034).
 
 `design-critique.sh begin` has already rendered the page and printed the paths. You get:
 
-- the **route** under critique and its **rendered PNG** (`.claude/state/design/renders/<slug>.png`)
+- the **route** under critique and its **rendered PNG** (`.claude/state/design/renders/design-critic/<slug>.png`)
 - its render meta (`<slug>.json`) — screenshot hash, viewport, determinism recipe
 - the **brief** if one exists, else `docs/templates/design-brief-template.md` for the shape
   of the four contracts. **No brief = judge against the four contracts as declared intent is

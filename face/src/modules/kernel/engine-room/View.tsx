@@ -19,6 +19,8 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
       <KpiStrip items={f.kpis} />
 
+      {f.hasKeyLeak && <DoorRefusal code="KEY_IN_BROWSER" human={f.keyLeakText} />}
+
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4 items-start">
         <div className="min-w-0">
           <HPanel title="Drivers, routers and budgets" hint="any driver plugs in · the router picks per task class">
@@ -27,6 +29,13 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             <ServedTable item={f.driversOnDisk} />
             <SectionLabel className="mt-4">Budgets</SectionLabel>
             <ServedTable item={f.budgets} />
+          </HPanel>
+
+          <HPanel title="Driver health" hint="each driver's runs, how the last one ended, when, and on which model">
+            {f.trail.isReading && <Reading what="the run receipts" />}
+            {f.trail.isRefused && <DoorRefusal code={f.trail.refusal.code} human={f.trail.refusal.human} />}
+            {f.trail.isDrawn && <RunRows rows={f.health} isEmpty={f.showHealthEmpty} empty="No run.completed receipt on the page the door sent names a driver." />}
+            {f.hasHealthNote && <p data-health-note className="mt-2 text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.healthNote}</p>}
           </HPanel>
 
           <HPanel title="Runs by process" hint="run.completed receipts, grouped by the process that ran">

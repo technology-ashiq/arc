@@ -1,0 +1,11 @@
+{
+  "note": "Eval fixture (face Phase 06 slice 04). `expected` asserts the SHAPE of a logged lesson: one retro-log row in the log's five-field form, no duplicate, and the note.logged receipt id. Wording is free.",
+  "input": {
+    "lesson": "grep -c exits 1 on a zero count, so a bats assignment that wants zero fails under set -e"
+  },
+  "expected": {
+    "row": "2026-09-25 | arc | a grep -c that wanted zero failed its bats test under set -e | guard a counting grep with || true when zero is the expected answer | bats,shell,ci",
+    "duplicate_of": "",
+    "receipt_id": "01M37D0KHFPXBDBWQRYPMEXVT8"
+  }
+}

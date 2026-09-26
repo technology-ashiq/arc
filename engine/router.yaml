@@ -212,6 +212,52 @@ classes:
     driver: claude-code
     fallback: []
 
+  # Phase 06 slice 03b (face lane). This row decides no new tier: it is the Chair's seat, which
+  # ADR-0069 block (a) already covers. The Chair grades the verifier's POINT-IDs, drops the Weak
+  # ones and writes the verdict, and that work fails silently when the model is too weak, the
+  # same reason `council-verifier` sits in high-judgment. Its members keep their own tiers
+  # (balanced-workhorse, from their agent frontmatter); this row sets only the Chair's.
+  # `fallback: []`: moving a verdict to another model family would make it a different council.
+  council-convene:
+    tier: high-judgment
+    driver: claude-code
+    fallback: []
+
+  # Phase 06 slice 04 (face lane, memory ring). One lesson becomes one retro-log row against the log's fixed
+  # five-field form, and the near-duplicate check decides whether it is appended: structured production against an
+  # explicit contract, which ADR-0069 block (a) seats in balanced-workhorse. It grades nothing, so it is not a judgment
+  # seat. `fallback: []`: only claude-code fences the write to the two paths the process names.
+  lesson-log:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback: []
+
+  # Phase 06 slice 04 (face lane, memory ring). Choosing a rule's home and writing it in that file's style is
+  # production against /arc-retro step 2's fixed homes, and it proposes only: the owner judges the branch before
+  # anything changes. So ADR-0069 block (a)'s balanced-workhorse, not a judgment seat. `fallback: []`: only claude-code
+  # fences its one write.
+  rule-promote:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback: []
+
+  # Phase 06 (face lane, develop ring). Proving a slice cites evidence CI and the lane already recorded against the
+  # slice's own `proof:` line, and develop.mjs prove checks the commit is merged: structured production against an
+  # explicit contract, ADR-0069 block (a)'s balanced-workhorse. The pass/fail verdict is CI's, not the model's, so it is
+  # not a judgment seat. `fallback: []`: only claude-code fences its one write.
+  develop-proof:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback: []
+
+  # Phase 06 (face lane, strategy ring). Writing one owner decision into an ADR's fixed sections is production against
+  # an explicit form; the decision is the owner's, and hq/adr-record.mjs picks the number. ADR-0069 block (a)'s
+  # balanced-workhorse. `fallback: []`: only claude-code fences its one write.
+  adr-record:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback: []
+
 # The default for a process with no class row. Deliberately NOT a catch-all that silently
 # works: `arc-run --driver auto` on an unknown class is an error, and this row only supplies
 # the tier for one that is known but unrouted.

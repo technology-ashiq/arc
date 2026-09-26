@@ -531,6 +531,21 @@ async function proposalRefs(repo, prefix, hooks) {
 }
 
 /**
+ * READ-ONLY git for a caller outside this file, through the one bounded runner every writer here uses: inherited GIT_*
+ * dropped, no system or global config, every hook disabled, a timeout that ends git and what it started, capped output.
+ * adr-record's taken numbers and develop prove's merged check each built a private spawnSync("git") with none of that
+ * (attack 1f95807 B9: "one bounded spawn, used by every caller"). `fn` gets `read(args, { ok, input })`; an exit not in
+ * `ok` (default [0]), a timeout or a spawn error throws GIT_FAILED -- a failure to look is never an empty answer.
+ * @template T
+ * @param {string} repo
+ * @param {(read: (args: string[], o?: { ok?: number[], input?: string }) => Promise<{ buf: Buffer, out: string, status: number }>) => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+export function withGitReader(repo, fn) {
+  return withHooks(repo, (hooks) => fn((args, o = {}) => git(repo, args, { hooks, ok: o.ok, input: o.input })));
+}
+
+/**
  * Whether MAIN holds a path -- a file, or anything under a directory -- and main's commit. A guard that asked the owner's
  * checkout let a proposal cut from main write over what main held (open-brief over a merged explore: PR 4 attacks, the
  * trial and pin twins).

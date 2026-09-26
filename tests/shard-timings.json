@@ -173,6 +173,10 @@
     "spine-brief.bats": 9,
     "engine-hermes-smoke.bats": 9,
     "council-lint-outcome-anchor.bats": 9,
+    "docs-extract.bats": 49,
+    "docs-coverage.bats": 35,
+    "docs-render.bats": 46,
+    "docs-drift.bats": 20,
     "scan-summary.bats": 8,
     "spine-equivalence.bats": 7,
     "spine-cursor.bats": 4

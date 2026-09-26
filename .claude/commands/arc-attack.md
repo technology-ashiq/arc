@@ -4,14 +4,18 @@ argument-hint: [--base REF | --since SHA] [--lane <name>] [--round K] [--phase N
 allowed-tools: Bash, Read
 ---
 
-Attack the pushed diff: **$ARGUMENTS**
+Attack the committed diff, BEFORE it is pushed: **$ARGUMENTS**
 
 **Lane first** (`.claude/rules/lanes.md`): run
 `bash .claude/scripts/core/lane-resolve.sh --for attack --print human` (add `--lane <name>` if I
 gave one). Non-zero exit → print what it printed and STOP. In lane-mode echo `Selected lane:` first.
 
-**Where this runs.** Not in the session that wrote the code — that session ends at push
-(CLAUDE.md). Run it from the **main clone**: `arc-run` writes no receipt from a linked worktree.
+**Where and when this runs.** Run it from the building session, on the LOCAL commit, before any push; do not
+start a new session for it. The attacker stays fresh because `arc-run` hands it only the diff, with `tools: []`
+(ADR-0226, amended 2026-09-24). It diffs the local HEAD against the base ref, so it never needs a push -- and every
+push buys a full CI run, so pushing per round wasted three or four runs per PR (Amendment 2). The order is: commit,
+round 1, fix, round 2, fix, **push once**, read CI per job, fix only what CI finds, merge on green. Run it from the
+**main clone** when a receipt matters, because `arc-run` writes no receipt from a linked worktree.
 
 1. **Run both surfaces, one command.** Fetch first, and default to `--base "origin/main"` if I named
    neither `--base` nor `--since` -- local `main` lags merges in the main clone, and a stale base
@@ -39,6 +43,12 @@ gave one). Non-zero exit → print what it printed and STOP. In lane-mode echo `
    Exit codes: `0` both ran · `1` a run failed or answered the wrong surface · `2` usage ·
    `3/4/5` lane · `6` empty diff · `7` logic NOT RUN.
 
-3. **Stop there.** No fixing, no commit, no push. Each finding becomes a fix slice in the NEXT
-   interactive session (`/arc-resume`, then `/arc-develop`), and every fixed hole is appended to the
-   lane's `fixed-defects.md` so the next attacker carries it.
+3. **The attacker only reports; the building session fixes, in this same session** (ADR-0226
+   Amendment 1). Fix every critical, high and medium finding now, as a fix slice of the current
+   phase. Append each fixed hole to the lane's `fixed-defects.md` so the next attacker carries it.
+   Then commit (locally) and run `--round 2` against the fixes. After round 2, LOW leftovers go to the
+   debt ledger. THEN push once, read CI per job with `ci-digest`, fix anything red here too, and merge
+   on green. CI is still required: it sees what an attacker reading a diff cannot (the typecheck, three
+   operating systems, a test wrapper's own bugs, hand-kept count floors).
+   Never stop at a findings list and hand it to "the next session": a new session costs ~100k tokens
+   and adds no independence.

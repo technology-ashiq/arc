@@ -728,7 +728,8 @@
       "model-policy": "model-policy",
       "policy": "policy",
       "portfolio": "board",
-      "scheduler": "scheduler"
+      "scheduler": "scheduler",
+      "docs": "lane"
     }
   },
   "commands": {
@@ -800,7 +801,7 @@
     }
   },
   "processes": {
-    "$comment": "7 live + face-ask lands in Phase 07",
+    "$comment": "10 live + develop-proof and adr-record (Phase 06; a live run waits on their hq.policy.yaml rows) + face-ask lands in Phase 07",
     "map": {
       "commit-msg-draft": "engine-room",
       "review-diff": "engine-room",
@@ -809,6 +810,11 @@
       "brief-materialize": "engine-room",
       "day-close-roll": "engine-room",
       "attack-diff": "engine-room",
+      "council-convene": "council-chamber",
+      "lesson-log": "memory",
+      "rule-promote": "memory",
+      "develop-proof": "develop",
+      "adr-record": "strategy",
       "face-ask (Phase 07)": "ask-arc"
     }
   },
@@ -832,7 +838,8 @@
       "PostToolUse": "toolbelt",
       "PreCompact": "toolbelt",
       "_dispatch.sh": "toolbelt",
-      "policy-decide.sh": "policy"
+      "policy-decide.sh": "policy",
+      "PreToolUse-read": "toolbelt"
     }
   },
   "rules": {
@@ -877,7 +884,8 @@
       "spine-reader-lint": "spine",
       "capability-vet": "develop",
       "arc-bytediff": "toolbelt",
-      "face-coverage": "toolbelt"
+      "face-coverage": "toolbelt",
+      "design-sources-lint": "design-studio"
     }
   },
   "concepts": {
@@ -1339,7 +1347,8 @@
       "growth": "growth",
       "leads": "leads",
       "legal": "legal",
-      "memory": "memory"
+      "memory": "memory",
+      "docs": "lane"
     }
   },
   "adrs": {
@@ -1348,6 +1357,8 @@
       "1100": "growth",
       "1200": "legal",
       "1300": "toolbelt",
+      "1400": "design-studio",
+      "1500": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",

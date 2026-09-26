@@ -378,6 +378,10 @@
         "lanes": [
           "memory"
         ],
+        "processes": [
+          "lesson-log",
+          "rule-promote"
+        ],
         "concepts": [
           "HISTORICAL DATA fence",
           "golden gate (recall)"
@@ -389,7 +393,7 @@
           "0700"
         ]
       },
-      "itemCount": 5
+      "itemCount": 7
     },
     {
       "id": "evolve",
@@ -546,6 +550,9 @@
           "council-strategist",
           "council-verifier"
         ],
+        "processes": [
+          "council-convene"
+        ],
         "lints": [
           "council-lint"
         ],
@@ -560,7 +567,7 @@
           "council"
         ]
       },
-      "itemCount": 23
+      "itemCount": 24
     },
     {
       "id": "develop",
@@ -594,6 +601,9 @@
           "pattern-miner",
           "spec-fidelity"
         ],
+        "processes": [
+          "develop-proof"
+        ],
         "lints": [
           "capability-vet",
           "develop-lint"
@@ -610,7 +620,7 @@
           "0100"
         ]
       },
-      "itemCount": 18
+      "itemCount": 19
     },
     {
       "id": "review-ship",
@@ -708,6 +718,7 @@
         "lints": [
           "design-gate",
           "design-lint",
+          "design-sources-lint",
           "render-hash"
         ],
         "concepts": [
@@ -719,9 +730,12 @@
         ],
         "products": [
           "design"
+        ],
+        "adrs": [
+          "1400"
         ]
       },
-      "itemCount": 21
+      "itemCount": 23
     },
     {
       "id": "toolbelt",
@@ -753,6 +767,7 @@
           "PreCompact",
           "PreToolUse",
           "PreToolUse-edit",
+          "PreToolUse-read",
           "SessionEnd",
           "SessionStart",
           "_dispatch.sh"
@@ -790,7 +805,7 @@
           "skill:seo-article-writer"
         ]
       },
-      "itemCount": 33
+      "itemCount": 34
     },
     {
       "id": "factory",
@@ -1148,6 +1163,9 @@
         "trigger table"
       ],
       "holds": {
+        "processes": [
+          "adr-record"
+        ],
         "concepts": [
           "Build-out Mandate",
           "pull trigger"
@@ -1181,7 +1199,7 @@
           "PLAN-trader"
         ]
       },
-      "itemCount": 28
+      "itemCount": 29
     },
     {
       "id": "org",
@@ -1194,7 +1212,7 @@
       "indexes": "lanes",
       "stations": [],
       "holds": {},
-      "itemCount": 16
+      "itemCount": 17
     },
     {
       "id": "concepts",
@@ -1251,6 +1269,9 @@
           "kickoff.done",
           "phase.closed"
         ],
+        "lanes": [
+          "docs"
+        ],
         "commands": [
           "arc-change",
           "arc-kickoff (G)",
@@ -1279,10 +1300,14 @@
           "steel thread"
         ],
         "products": [
+          "docs",
           "plan"
+        ],
+        "adrs": [
+          "1500"
         ]
       },
-      "itemCount": 22
+      "itemCount": 25
     }
   ],
   "inventories": {
@@ -1291,6 +1316,8 @@
       "1100": "growth",
       "1200": "legal",
       "1300": "toolbelt",
+      "1400": "design-studio",
+      "1500": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
