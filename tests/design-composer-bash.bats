@@ -796,3 +796,19 @@ REFPACK_OK='node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --s
   _hook_raw "{\"agent_type\":\"design-curator\",\"cwd\":\"$root/docs\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}"
   [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "runs from the project root" || { echo "a curator call from a subdirectory was allowed: $status $stderr"; false; }
 }
+
+@test "Phase 02 real build: a curator stages a screen to look at it, and may read only what it staged" {
+  _curator_sandbox
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief lexos-case-workspace --source nicelydone --url "https://assets.nicelydone.club/elements/full/a.png" --stage 1'
+  [ "$status" -eq 0 ] || { echo "a staging call was refused: $stderr"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source nicelydone --url "https://nicelydone.club/a.png" --stage yes'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q -- "--stage takes 1" || { echo "--stage with another value was allowed: $status $stderr"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source nicelydone --url "https://nicelydone.club/a.png" --stage 1 --principle "p" --avoid "a"'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "stage OR add" || { echo "a staging call carrying a principle was allowed: $status $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Read","tool_input":{"file_path":".claude/state/design/refpacks/lexos-case-workspace/staged/abc.png"}}'
+  [ "$status" -eq 0 ] || { echo "the curator could not read its staged screen: $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Read","tool_input":{"file_path":".claude/state/design/refpacks/lexos-case-workspace/attempts.log"}}'
+  [ "$status" -eq 2 ] || { echo "the curator read outside staged/: $status"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Read","tool_input":{"file_path":".claude/state/design/refpacks/lexos-case-workspace/staged/../../../composer-session--x"}}'
+  [ "$status" -eq 2 ] || { echo "the curator climbed out of staged/: $status"; false; }
+}

@@ -342,3 +342,57 @@ Allow: /')"
   echo "$output" | grep -q "sources.md" || { echo "sources.md should be a tracked change and is not: $output"; false; }
   true
 }
+
+# ---------- Phase 02 real-build fixes (2026-09-27) ----------
+#
+# The first real pack build met two things the fixtures never had. collectui.com's robots.txt is
+# ALL comments -- Cloudflare's content-signals preamble with no rule -- and the parser looked for a
+# directive before stripping comments, so an allow-all file read as UNREADABLE. And the curator
+# could not SEE a screen before writing its principle, so --stage fetches it for viewing first.
+
+@test "preflight: a robots.txt of comments only is an empty file, and ALLOW (RFC 9309)" {
+  _pack_sandbox
+  rf="$(_robots_file '# As a condition of accessing this website, you agree to abide by the following
+# content signals:
+
+# ai-train: training or fine-tuning AI models.')"
+  run node "$(_robots)" --url https://example.test/x --ua ClaudeBot --robots-file "$rf"
+  [ "$status" -eq 0 ] || { echo "a comments-only robots.txt was not ALLOW: $status $output"; false; }
+}
+
+@test "preflight: a content signal ai-input=no refuses, and ai-input=yes does not" {
+  _pack_sandbox
+  rf="$(_robots_file 'User-agent: *
+Content-Signal: search=yes, ai-input=no
+Allow: /')"
+  run node "$(_robots)" --url https://example.test/x --ua ClaudeBot --robots-file "$rf"
+  [ "$status" -eq 3 ] || { echo "an ai-input=no signal was not a refusal: $status $output"; false; }
+  echo "$output" | grep -q "ai-input=no" || { echo "refused without naming the signal: $output"; false; }
+  rf="$(_robots_file 'User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+Allow: /')"
+  run node "$(_robots)" --url https://example.test/x --ua ClaudeBot --robots-file "$rf"
+  [ "$status" -eq 0 ] || { echo "ai-input=yes (with ai-train=no) was refused: $status $output"; false; }
+}
+
+@test "refpack --stage: fetches for viewing, writes no provenance row, and still passes every check" {
+  _pack_sandbox
+  rf="$(_robots_file 'User-agent: *
+Allow: /')"
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --stage 1 \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 0 ] || { echo "a staged fetch was refused: $output"; false; }
+  ls "$SANDBOX/.claude/state/design/refpacks/lexos/staged/"*.png >/dev/null 2>&1 \
+    || { echo "nothing staged: $(ls -AR "$SANDBOX/.claude/state/design/refpacks/lexos/" 2>&1)"; false; }
+  echo "$output" | grep -q "staged: .claude/state/design/refpacks/lexos/staged/" || { echo "the staged path was not printed: $output"; false; }
+  [ ! -f "$(_sources_md)" ] || { echo "staging wrote a provenance row"; false; }
+  # Paired: staging is not a way around the registry or robots.
+  rf="$(_robots_file 'User-agent: *
+Disallow: /')"
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-2 --stage 1 \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 3 ] || { echo "a DISALLOW was staged anyway: $status $output"; false; }
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --stage 1 \
+      --principle "p" --avoid "a" --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 1 ] || { echo "--stage with a principle was accepted: $status $output"; false; }
+}
