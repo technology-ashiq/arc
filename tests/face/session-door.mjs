@@ -153,12 +153,12 @@ process.env.LEADS_CONFIG = "planted-leads-config";
   // The start-only rows (receipt not yet READ BACK) at least carry a process that says it emits the row's kind. This
   // narrows the debt-ledger row; it does not pay it -- a sentence in a body is not a receipt on the spine.
   const startOnly = tableRows(text, /^\| row id \| process file \| receipt kind \| not yet shown \|/).map(idOf).filter((id) => registry.has(id));
-  const emitsKind = (s) => s.pickProcess || new RegExp(`emit ${s.receipt.replace(/\./g, "\\.")}\\b`).test(readFileSync(join(REPO, "processes", `${s.process}.process.yaml`), "utf8"));
+  const emitsKind = (s) => s.pickProcess || s.receipt && new RegExp(`emit ${s.receipt.kind.replace(/\./g, "\\.")}\\b`).test(readFileSync(join(REPO, "processes", `${s.process}.process.yaml`), "utf8"));
   const silent = startOnly.filter((id) => hasFile(row(id)) || row(id).pickProcess).filter((id) => !emitsKind(row(id)));
   check("residue: the start-only table parses (vacuous-pass guard)", startOnly.length === 4, `rows=${startOnly.length}`);
   check("residue: every start-only row's process body emits the row's own kind", silent.length === 0, silent.join(","));
   check("MUTANT CONTROL: a row claiming a kind its process never emits is caught",
-    !emitsKind({ ...row(startOnly.find((id) => !row(id).pickProcess) || "review-ship.review"), receipt: "council.verdict" }));
+    !emitsKind({ ...row(startOnly.find((id) => !row(id).pickProcess) || "review-ship.review"), receipt: { kind: "council.verdict" } }));
   check("MUTANT CONTROL: a residue file with one row dropped is caught", !sameBothWays([...ships, ...residue].slice(1)));
   check("MUTANT CONTROL: a residue file naming a row the registry does not hold is caught", !sameBothWays([...[...ships, ...residue].slice(1), "invented.verb"]));
 }
