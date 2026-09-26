@@ -105,6 +105,26 @@ sources:
     # UI collections by pattern (dashboards, tables, settings). robots.txt allows ClaudeBot and
     # Claude-User with no blanket disallow; most images are on its own host. Some shots are
     # concept work, so the curator prefers shipped products. No terms page at the usual paths.
+    # Observed 2026-09-27: a client-rendered app, so a plain fetch reaches no screen URL.
+
+  - id: saasui
+    kind:
+      - inspiration
+    access: fetch
+    hosts:
+      - saasui.design
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: none
+    cost: free
+    status: active
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-09-27
+    # SaaS product screens. Added by the owner on 2026-09-27 when collectui proved unreachable by
+    # a plain fetch: robots.txt is plain text allowing ClaudeBot and Claude-User, and every image
+    # on its homepage (51 of 51) is served from its own host.
 
   # ---- active, but citation only: permitted to link, never to cache ----
   - id: awwwards

@@ -524,13 +524,38 @@ consumer projects — it carries the owner's approvals.
      that is now unreadable, and the read, write and critic checks chose jq by `command -v`,
      so a broken jq failed a composer's Read open (the Bash check's BL-3 twin). Both fixed.
    - **Merged 2026-09-26 as #289** (`3cb0c0cb`), run 36254900364 green 19/19 on the head.
-1a. **The curator, next.** `agent-scaffold.mjs` refuses a scoped `Bash(…)` grant, and a plain
-   WebFetch would browse galleries with no robots preflight. Routed through `/arc-change`
-   2026-09-26: [ADR-1420](../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md)
-   (owner "Hook-la scope") plus a Phase 02 exit criterion. Order: red-first boundary cases,
-   the boundary in `composer-bash-check.sh`, attack, merge; then `agent-scaffold.mjs` from the
-   main clone (a proposal branch plus `approval.requested`, which the owner merges); then the
-   real pack.
+1a. **The curator — built, and the first real pack exists.** Working mode reset by the owner
+   2026-09-26: **every remaining phase on one branch `feat/arc-design-v2-c16-rest` (PR #292,
+   draft), pushed freely, merged ONCE when all phases are done; no local tests, CI only; ask
+   only when truly blocked.**
+   - [ADR-1420](../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md)
+     (owner "Hook-la scope"): the curator's Bash runs only `design-refpack.mjs`, its WebFetch
+     only an active registry host with a robots ALLOW, its reads only the registry,
+     `docs/design/` and its own `staged/`. Red-first on CI (run 36259855277), two attack rounds,
+     green 19/19 at `1e212582`; a staging attack round after that, fixed at `b43e1062`.
+   - `design-curator` landed through this PR as a reviewed diff citing ADR-0069, using the four
+     files `agent-scaffold.mjs --dry-run` computed, not a separate proposal branch.
+   - **Gallery assumption FIRED 2026-09-27** (PLAN ledger): Lapa Ninja blocks Claude, SaaSFrame's
+     images sit on a shared CDN. Owner: both `off`; `nicelydone`, `collectui` and then `saasui`
+     `active` (ADR-1412 amendment). collectui is a client-rendered app with no fetchable screen.
+   - Fixed on the way: a comments-only robots.txt read as UNREADABLE, content signals honoured,
+     `image/jpg` accepted, and `--stage` / `--staged` so the curator LOOKS before it writes and
+     the add is bound to the bytes it looked at.
+   - Evidence: [`evidence/phase-02/live-demo-real-pack.md`](evidence/phase-02/live-demo-real-pack.md).
+     The session opened every image; one principle overstated its screen and was removed. The
+     owner delegated his two-row principle reading to that image check (2026-09-27).
+   - **Session closed 2026-09-27 ~03:00 with two things unfinished.** (a) PR #292 is
+     `CONFLICTING` with main, so GitHub started NO CI run for `b43e1062` onward: merge
+     `origin/main` first (shared files: golden manifest, face contract, wiki), re-derive the
+     golden manifest on the merged tree, push, then read CI. (b) A curator run adding `saasui`
+     screens and re-adding the Dock row with a corrected principle was in flight at the close;
+     check `docs/design/refpacks/lexos-case-workspace/sources.md` (5 rows committed) for rows it
+     added, look at each new image, and commit them.
+   - **Resume here:** read CI per job at the branch head; confirm the pack holds 5-8 screens
+     from ≥2 sources (nicelydone + saasui); then `/arc-phase-done 02 --lane design`; then
+     Phase 03, starting with `/arc-change` to refine its coarse spec into slices (there is no
+     jury runner today: N-item pack assembly, ranking collection and deviation logging all have
+     to be built). Phase 03's gate is the owner's blind 0-100 score, in person.
 2. ~~**Phase 02 Slice B.**~~ Done: the robots.txt preflight and the pack builder landed at
    `a0c0cfee`, two attack rounds closed at `77dc42bf` and `873fdab1`, and the refpack 14 are
    green. **PR #222 was merged by the owner 2026-09-26** at `1a8bf012` with 19/19 jobs green,
