@@ -64,7 +64,7 @@
 - [`.claude/scripts/core/variant-grammar.mjs`](../../../.claude/scripts/core/variant-grammar.mjs)
 - [`.claude/scripts/core/wip-line.sh`](../../../.claude/scripts/core/wip-line.sh)
 
-## Files (28)
+## Files (29)
 
 - [`.claude/hooks/PostToolUse.d/00-format.sh`](../../../.claude/hooks/PostToolUse.d/00-format.sh)
 - [`.claude/hooks/PostToolUse.sh`](../../../.claude/hooks/PostToolUse.sh)
@@ -72,6 +72,7 @@
 - [`.claude/hooks/PreCompact.sh`](../../../.claude/hooks/PreCompact.sh)
 - [`.claude/hooks/PreToolUse-edit.d/00-freeze.sh`](../../../.claude/hooks/PreToolUse-edit.d/00-freeze.sh)
 - [`.claude/hooks/PreToolUse-edit.sh`](../../../.claude/hooks/PreToolUse-edit.sh)
+- [`.claude/hooks/PreToolUse-read.sh`](../../../.claude/hooks/PreToolUse-read.sh)
 - [`.claude/hooks/PreToolUse.d/00-destructive.sh`](../../../.claude/hooks/PreToolUse.d/00-destructive.sh)
 - [`.claude/hooks/PreToolUse.d/50-deploy.sh`](../../../.claude/hooks/PreToolUse.d/50-deploy.sh)
 - [`.claude/hooks/PreToolUse.sh`](../../../.claude/hooks/PreToolUse.sh)

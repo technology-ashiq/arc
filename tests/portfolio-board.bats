@@ -578,9 +578,20 @@ teardown() { _arc_teardown; }
   [ -f "$idx" ]
   grep -q "docs/archive/"  "$idx"
   grep -q "docs/evidence/" "$idx"
-  # Link, never copy: no archive or evidence tree may exist inside the lane.
-  [ ! -d "$ARC_ROOT/initiatives/design/archive" ]
-  [ ! -d "$ARC_ROOT/initiatives/design/evidence" ]
+  # Link, never copy -- asserted as a COPY check rather than as "these directories must not
+  # exist". The original form pinned "design is IDLE forever" as an invariant and broke the
+  # moment Cycle 16 opened: ADR-0055 REQUIRES a live lane to hold initiatives/<lane>/evidence/,
+  # and HISTORY-INDEX.md itself says a lane-local archive/ "would only ever hold cycles closed
+  # AFTER portfolio adoption" -- which develop and engine both already do. What ADR-0058
+  # actually forbids is a SECOND copy of the frozen pre-portfolio records, so that is what is
+  # checked: none of the frozen filenames may be reproduced anywhere inside the lane.
+  for frozen in PLAN-2026-07-30.md PROGRESS-2026-07-30.md; do
+    if find "$ARC_ROOT/initiatives/design" -name "$frozen" 2>/dev/null | grep -q .; then
+      echo "the lane holds a COPY of frozen history: $frozen" >&2
+      return 1
+    fi
+  done
+  [ ! -d "$ARC_ROOT/initiatives/design/phases-design-2026-07-30" ]
   # And every frozen path it points at must actually be there.
   for p in docs/archive/PLAN-2026-07-30.md docs/archive/PROGRESS-2026-07-30.md \
            docs/archive/phases-design-2026-07-30 docs/evidence/phase-02 docs/design; do
@@ -589,8 +600,24 @@ teardown() { _arc_teardown; }
   done
 }
 
-@test "design: an IDLE lane is not counted, so one live cycle still auto-resolves" {
-  [ "$(_arc_lane_header "$ARC_ROOT/initiatives/design/PROGRESS.md" status)" = "IDLE" ]
+@test "an IDLE lane is not counted, so one live cycle still auto-resolves" {
+  # This asserted that the DESIGN lane specifically was IDLE, which stopped being a fact the
+  # moment that lane opened Cycle 16 -- a test hardcoding one lane's transient state, which is
+  # the same rot pattern the band table keeps producing. The law from .claude/rules/lanes.md is
+  # state-agnostic and is what gets checked now: eligibility comes ONLY from status LIVE or
+  # BLOCKED, for every lane, whichever lanes happen to be idle today.
+  local seen=0
+  for d in "$ARC_ROOT"/initiatives/*/; do
+    [ -f "$d/PROGRESS.md" ] || continue
+    local st; st="$(_arc_lane_header "$d/PROGRESS.md" status)"
+    case "$st" in
+      LIVE|BLOCKED) ;;
+      *) seen=$((seen + 1));;
+    esac
+  done
+  # There must be at least one non-eligible lane for this assertion to mean anything -- a
+  # vacuous pass here would look identical to a working rule.
+  [ "$seen" -gt 0 ] || { echo "no IDLE lane exists, so this check proved nothing" >&2; return 1; }
 }
 
 @test "frozen: docs/archive and docs/evidence are still tracked where they always were" {

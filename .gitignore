@@ -94,3 +94,8 @@ Claude outputs/
 # The v0.7 reference's own scripts/shots.mjs writes its PNGs here by default; product shots never
 # enter the public repo (face v2 Phase 00 takes them into .playwright-mcp/ instead).
 docs/design/reference/face-hq/assets/arcface/.shots/
+# LexOS explore runs write the owner's product HTML and PNGs here. Owner ruling 2026-09-16:
+# LexOS evidence is committed as text only, under initiatives/design/evidence/. The four
+# lexos-case-workspace-* dirs committed before that ruling stay tracked; a rule never untracks.
+# Pinned by tests/design-explore.bats section 5, with two negative controls.
+docs/design/explore/lexos-*/

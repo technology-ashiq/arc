@@ -8,14 +8,14 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Products](#products) | 17 | 2 |
 | [Lanes](#lanes) | 17 | 1 |
 | [Processes](#processes) | 12 | 0 |
-| [Decisions (ADR bands)](#decisions-adr-bands) | 15 | 0 |
+| [Decisions (ADR bands)](#decisions-adr-bands) | 16 | 0 |
 | [Commands](#commands) | 28 | 0 |
 | [Agents](#agents) | 30 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **133** | **3** |
+| **Total** | **134** | **3** |
 
-Narrative debt: **130 of 133** pages have no narrative yet. ADR headers: 243 of 308 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 263 of 328 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -24,7 +24,7 @@ Narrative debt: **130 of 133** pages have no narrative yet. ADR headers: 243 of 
 | [absorb](products/absorb.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 8 |
 | [core](products/core.md) | 1.0.0 | — | 5 | 2 | 33 |
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
-| [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 4 | 8 |
+| [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 4 | 15 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
 | [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 4 |
 | [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 31 |
@@ -45,7 +45,7 @@ Narrative debt: **130 of 133** pages have no narrative yet. ADR headers: 243 of 
 |---|---|---|
 | [absorb](lanes/absorb.md) | IDLE | arc-absorb (Cycle 10, closed 2026-08-10) |
 | [bench](lanes/bench.md) | LIVE | arc-bench (Cycle 13, opened 2026-08-12) |
-| [design](lanes/design.md) | IDLE | arc-design (Cycle 3, closed 2026-07-30) |
+| [design](lanes/design.md) | LIVE | arc-design v2 (Cycle 16, opened 2026-08-23) |
 | [develop](lanes/develop.md) | IDLE | arc-develop (Cycle 6, closed 2026-08-03) |
 | [docs](lanes/docs.md) | IDLE | arc-docs (Cycle 17, opened 2026-09-25, closed 2026-09-26) |
 | [engine](lanes/engine.md) | IDLE | arc-engine (Cycle 7, opened 2026-08-12) |
@@ -96,6 +96,7 @@ Narrative debt: **130 of 133** pages have no narrative yet. ADR headers: 243 of 
 | [1100–1199](adr/1100.md) | 21 | 0 |
 | [1200–1299](adr/1200.md) | 14 | 0 |
 | [1300–1399](adr/1300.md) | 46 | 1 |
+| [1400–1499](adr/1400.md) | 20 | 0 |
 | [1500–1599](adr/1500.md) | 13 | 0 |
 
 ## Commands
