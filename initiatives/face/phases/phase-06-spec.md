@@ -9,12 +9,12 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Session door start / stream / attach beside the work door; every session's command line is `arc-run --driver …`; a command line naming a harness binary FAILs the fixture.
-- [ ] Click-started only: a fixture proves 0 sessions start on page load, on reload, or on attach.
-- [ ] A council convened from the `council` module streams its phases and lands a `council.verdict` receipt; absorb read and hire certification land receipts of kinds already in `validate.mjs` KINDS, or are labelled NOT SHIPPABLE (ADR-1334). The probe found `/arc-council`'s verdict payload fails the closed `council.verdict` shape (`validate.mjs:316`) — fixed in the council lane, additively, before the demo.
-- [ ] **Every SESSION verb (ADR-1339):** the 15 in `evidence/phase-05/cli-probe.md` — council convene · develop proof · close phase · review · qa · ship · hire · dispatch · log lesson · promote rule · absorb adopt · growth draft · adopt plan · record ADR · lane birth — each starts from a click through `arc-run --driver` and lands a receipt of an existing kind, or is a residue row approved by the owner as a whole. A verb whose command has no process file (qa, ship and others) gets one from the engine lane, additively; `ship` deploys outward, so its session stops for the owner's confirmation before the deploy step.
-- [ ] The Engine room shows driver, model and health; no key (ADR-1325).
-- [ ] Two fresh attackers (session decision logic · process/OS boundary); CI green per job; `/arc-phase-done 06` from the main clone.
+- [x] Session door start / stream / attach beside the work door; every session's command line is `arc-run --driver …`; a command line naming a harness binary FAILs the fixture.
+- [x] Click-started only: a fixture proves 0 sessions start on page load, on reload, or on attach.
+- [x] A council convened from the `council` module streams its phases and lands a `council.verdict` receipt; absorb read and hire certification land receipts of kinds already in `validate.mjs` KINDS, or are labelled NOT SHIPPABLE (ADR-1334). The probe found `/arc-council`'s verdict payload fails the closed `council.verdict` shape (`validate.mjs:316`) — fixed in the council lane, additively, before the demo.
+- [x] **Every SESSION verb (ADR-1339):** the 15 in `evidence/phase-05/cli-probe.md` — council convene · develop proof · close phase · review · qa · ship · hire · dispatch · log lesson · promote rule · absorb adopt · growth draft · adopt plan · record ADR · lane birth — each starts from a click through `arc-run --driver` and lands a receipt of an existing kind, or is a residue row approved by the owner as a whole. A verb whose command has no process file (qa, ship and others) gets one from the engine lane, additively; `ship` deploys outward, so its session stops for the owner's confirmation before the deploy step. **-- ticked NARROWER than written: see the 2026-09-26 close note.**
+- [x] The Engine room shows driver, model and health; no key (ADR-1325).
+- [x] Two fresh attackers (session decision logic · process/OS boundary); CI green per job; `/arc-phase-done 06` from the main clone. **-- ticked NARROWER than written: see the 2026-09-26 close note.**
 
 ## Verification plan
 
@@ -78,6 +78,26 @@ Tests run on CI only, read per job; each fixture asserts it RAN before asserting
 ## Out of scope for this phase
 
 New drivers or router classes (engine lane) · scheduled sessions (scheduler lane).
+
+## Current-phase notes
+
+**2026-09-26 — the close (`/arc-phase-done 06`).** Two criteria are ticked NARROWER than written, and each is DECLARED
+for the owner's stamp on `approval.requested{gate: phase-done}` `01M3EBDGQ70ETM8PXDHNKHSZXJ`:
+
+- **Every SESSION verb.** Of the 15, **5 ship with their receipt read back**: council convene (the live demo), develop
+  proof, log lesson, promote rule and record ADR. **4 start from a click, but their own receipt has not been read
+  back**: review, dispatch, adopt plan and lane birth. Each one's process body emits the row's kind, and a fixture
+  checks that. **6 are residue**, filed to their lanes: ship, qa, hire, close phase, absorb adopt and growth draft. It
+  is all in `evidence/phase-06/residue.md`, which a fixture holds to the registry both ways. The owner ruled the six
+  residue rows on 2026-09-26. The four read-backs are a debt-ledger row. `ship`'s confirm stop is enforced by refusing
+  the start (`CONFIRM_STEP_UNENFORCED`), not by pausing before the deploy, so it is a residue row, not a pass.
+- **Two fresh attackers.** 13 boundary rounds ran across 8 PRs, with 175 findings and 118 fixed-defect rows
+  (`evidence/phase-06/attackers.md`). The logic surface never ran, because the free trial model answered 429. That is
+  a debt-ledger row, paid by a logic pass over the phase diff once a paid model is set. CI is green per job: the
+  merged tree `465f5b82` passed the main dispatch 19/19 (run 36225129900), and the close's fixture PR `ea347dfc`
+  passed 19/19 (run 36227021580) with suite `1..3545`, 0 not ok.
+
+Spec-fidelity: drift found, and every item is dispositioned in `evidence/phase-06/spec-fidelity.md`.
 
 ## Your-setup / pending
 

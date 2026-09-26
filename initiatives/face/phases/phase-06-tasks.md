@@ -104,9 +104,9 @@ commit: 33addf06, d945ca0f, 6bc25d96 (PR #271, squash 26daeec2)
 title: Two fresh attackers (session decision logic · process/OS boundary); CI green per job; `/arc-phase-done 06` from the main clone.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: tests/face/session-door.mjs via face-dash.bats: residue.md row ids equal the SESSIONS registry both ways; shipped and start-only rows have their process file, residue rows have none or a confirm stop; each start-only row process body emits the row kind; three mutant controls; each ok line pinned in bats
+tier: contract
 sources: phase-06-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: four verbs the fidelity pass found counted as shipped on a declared kind (review, dispatch, adopt plan, lane birth) moved to a start-only table rather than claimed; the read-back and the never-run logic attacker are debt rows DECLARED at the owner stamp, not paid with spend the owner did not approve
+result: main dispatch @ 465f5b82: GREEN 19/19 (run 36225129900). PR #286 @ ea347dfc: GREEN 19/19 (run 36227021580), suite 1..3545 declared = executed, 0 not ok; its first run (888aeb27) was red on every OS from a TypeError in the new check (receipt is { kind }), fixed in the same PR. Attackers: 13 boundary rounds, 175 findings, 118 fixed-defect rows; logic surface never ran (429). Receipts from the main clone: phase.closed 01M3EBD91R95PZD0EPQ1QB4TS2, approval.requested 01M3EBDGQ70ETM8PXDHNKHSZXJ
+commit: PR #285 (squash 465f5b82), PR #286 (squash ac4a2674), and the close PR
