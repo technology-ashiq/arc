@@ -69,7 +69,9 @@
 - A phase closes ONLY via `/arc-phase-done <n>`: tests green + live demo + tracker updated. Evidence over assertion.
 - **After a push, read CI per-JOB before reporting the work done.** I reported a phase built on the
   strength of local gates twice while CI was red — once with a test that had never passed at all.
-  → `node .claude/scripts/review/ci-digest.mjs` (per-job, head SHA asserted); never poll CI in-session.
+  → `node .claude/scripts/review/ci-digest.mjs` (per-job, head SHA asserted). Right after the push, WATCH it
+  yourself: a `run_in_background` loop re-runs ci-digest every 120s while it exits 3 (pending), and the harness
+  wakes you when it ends — zero tokens while waiting. Never poll in the foreground, and never ask me whether CI finished.
 - **After a push, the building session runs `/arc-attack` and `ci-digest` itself. It never starts a new
   session for them** (ADR-0226, amended 2026-09-24). The attacker stays fresh because `arc-run` gives it
   only the diff, and the CI read is a script. A new session adds no independence and costs ~100k tokens.
