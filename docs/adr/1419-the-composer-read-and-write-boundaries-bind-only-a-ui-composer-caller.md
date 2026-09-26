@@ -1,6 +1,6 @@
 # ADR 1419 — The composer read and write boundaries bind only a ui-composer caller
 
-**Status:** proposed
+**Status:** accepted
 **Date:** 2026-09-26
 **Product:** `design`
 **Reversibility:** two-way
