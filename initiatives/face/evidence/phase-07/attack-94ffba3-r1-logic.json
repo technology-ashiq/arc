@@ -1,0 +1,90 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:35",
+      "breaking_input": "referenceBody(repo, { wiki: Object.create({ extract: async()=>({code:0,wiki:{schema:1,entities:{}}}), narrativeReader:()=>()=>null, pagePath:()=>null, RENDERED:[], PAGE_DIRS:{}, TYPE_KEY:{} }) }) — every `name in w` check passes because the members are inherited, then `w.extract(...)` throws a raw TypeError",
+      "why": "`if (!(name in w))` accepts inherited properties; the export check is bypassed exactly for the stub-shaped inject the code documents, turning a designed PARSER_UNAVAILABLE refusal into an uncontrolled throw (door 500 / wrong refusal class).",
+      "fix": "Use Object.hasOwn(w, name) (or typeof w[name] === 'function' for callables) for each required export.",
+      "twin_of": "FILE_ALLOW[id] resolved inherited keys -> allow-list lookups use Object.hasOwn"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:41",
+      "breaking_input": "A wiki-build extract whose entities member is null or a non-object (e.g. { code:0, wiki:{ schema:1, entities:null } }): `wk.entities[key]` throws TypeError, the route answers 500 instead of SOURCE_INVALID",
+      "why": "The route validates schema and res.code but never the shape of wk.entities; a wrong-shaped source crashes the render loop instead of being a named refusal (round-3's BAD_BODY/SOURCE_INVALID class).",
+      "fix": "After the schema check, refuse SOURCE_INVALID unless wk.entities is a plain object whose RENDERED members (if present) are arrays.",
+      "twin_of": "A wrong-shaped source read as empty -> a required list or mapping that is absent is SOURCE_INVALID, never []"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:40",
+      "breaking_input": "extract() resolves { code:1, message:'failed on .claude/state/hq/events/2026-09-26.jsonl (token)' }; that message string is interpolated verbatim into the thrown ReadError and reaches the client",
+      "why": "Another reader's error text is forwarded into a door refusal unscrubbed; internal paths/state names ride a build-time-only route's error.",
+      "fix": "Refuse with a fixed sentence plus a bounded, scrubbed detail, or name only the code — never forward the message you did not write.",
+      "twin_of": "Lane and loader messages forwarded verbatim -> never forward a message you did not write"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:17",
+      "breaking_input": "First call to /api/reference races a transient module-load failure (e.g. EMFILE, a partial checkout); every later call, after the condition clears, still answers PARSER_UNAVAILABLE for the life of the process",
+      "why": "The cached promise stores the rejection object {e} permanently; a failed load is cached as if it were a permanent fact, so a recovery is invisible until restart.",
+      "fix": "Cache only success: reset `wikiBuild = null` when the promise settles on an error, so the next request retries the dynamic import."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:52",
+      "breaking_input": "An entity id of `../../_narrative/products/x` or one containing a newline reaches `at = `${key}/${e.id}`` and becomes a served key `products/../../_narrative/...`; the room folds and links by it, and the one-line rule for names read off disk is broken",
+      "why": "e.id is trusted as a key grammar even though the codebase's own rule is that ids served on the wire must match a grammar (idOf); a slash-bearing or newline-bearing id builds cross-key paths and multi-line output.",
+      "fix": "Validate each e.id against the id grammar wiki-build's own ids follow before placing it in pages/narrative; a non-conforming id is a named finding, never a served key.",
+      "twin_of": "Malformed input is a named finding, never an omission"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reference/route.mjs:56",
+      "breaking_input": "pagePath(e) returns a path like `../../../etc/passwd.md` or an absolute path; `if (page)` stores it and the check `typeof page === 'string'` in the test only demands it end in .md",
+      "why": "The page path served to the room is never checked for containment inside docs/wiki; the route's own header promises 'nothing the door touches outside', but the pages map can carry any string the wiki module returns.",
+      "fix": "Refuse (SOURCE_INVALID) any page path that does not resolve inside docs/wiki, or at least require the pagePath prefix `PAGE_DIRS[key]` plus the id."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "tests/face/dash-doors.mjs:471",
+      "breaking_input": "A fixture spine whose events/ holds only .ndjson files, or where the earliest day file's first line is not JSON: readdirSync/join reads `join(SPINE,'events', undefined)` and the harness dies before printing any RAN line; every other check is lost",
+      "why": "The spine-id check indexes the first .jsonl by sort()[0] with no existence guard; a missing file crashes the whole door suite instead of failing one named check.",
+      "fix": "Guard the file lookup, and skip-with-named-note (or fail that one check) when no .jsonl exists, so the rest of the door suite still reports."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "tests/face/dash-doors.mjs:470",
+      "breaking_input": "Plant the receipt marker in day file 2 of 3 (e.g. events/2026-09-27.jsonl); the check reads only the alphabetically first .jsonl, so the ADR-1509 marker test passes while spine data leaks through the extract on later days",
+      "why": "The no-spine-leak arm samples one day file and calls it the spine; a partial measurement is presented as the whole check.",
+      "fix": "Scan every .jsonl day file in the fixture spine (or the whole spine) for ids before asserting absence.",
+      "twin_of": "A fixture quoted three numbers that could not all be true / measurement over nothing"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "tests/face/reference-door.mjs:121",
+      "breaking_input": "Add a check to section A without touching the floor: `ran >= 17` still passes, and if a harness drops section B (8 checks) the suite exits 0 with only 9 checks run",
+      "why": "The pass floor 17 is hand-kept beside a `ran` counter the code already prints — the hand-kept-floor twin; it also cannot catch a dropped section that still leaves ≥17 checks.",
+      "fix": "Assert the RAN line's exact count and derive per-section expected counts from the checks actually written, or have each section register a minimum."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "tests/face-dash.bats:158",
+      "breaking_input": "reference-door.mjs prints `FAIL X -- {\"code\":…}` with a message containing a leading-space continuation line; grep '^FAIL ' still passes because the FAIL marker moved off the line start via the multi-line detail, while `ok D` lines name mutants so the negated *FAIL* glob is correctly avoided — the grep is the only structural guard and it anchors to `^`, which a `WARN`-prefixed failed block or CR-terminated output evades",
+      "why": "A CRLF or embedded-CR run makes `FAIL ` appear mid-line and the grep misses it; the guard against non-execution depends on exact line-start framing on every platform.",
+      "fix": "Strip CR and check for FAIL as a token at line start after normalising line endings, or parse the RAN/failed counts from structured output instead of grepping."
+    }
+  ]
+}
