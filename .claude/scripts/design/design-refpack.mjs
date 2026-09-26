@@ -39,6 +39,8 @@
 // Usage:  design-refpack.mjs --brief <id> --source <registry id> --url <screen url>
 //           --principle <text> --avoid <text>
 //           [--registry <path>] [--robots-file <path> | --robots-status <n>] [--fixture <path>]
+//         design-refpack.mjs --check-browse <url> [--registry <path>] [--robots-file <path> | --robots-status <n>]
+//           (may a design-curator WebFetch this page -- ADR-1420; see checkBrowse)
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
@@ -133,7 +135,58 @@ function hostAllowed(hostname, hosts) {
   return hosts.some((d) => h === d || h.endsWith("." + d));
 }
 
+// --check-browse <url>: may a design-curator WebFetch this page (ADR-1420)? The curator browses a
+// gallery to choose screens, and a plain WebFetch never passes the preflight the image fetch does,
+// so the Bash boundary's hook asks this before a curator's WebFetch runs. The same registry rules
+// as a pack fetch, applied to ANY eligible row: https only, a host of an active, fetchable row
+// whose allowed_use carries reference-pack, and a robots ALLOW for this exact URL. Every answer
+// is appended to .claude/state/design/curator-browse.log: a refusal not written down is a silent
+// skip. The whole check answers inside 40 s, or refuses: a hook that times out is read as allow.
+// Exit: 0 ALLOW | 1 usage | 2 registry or host refusal | 3 DISALLOW | 4 UNREADABLE.
+const BROWSE_DEADLINE_MS = 40000;
+async function checkBrowse(argv) {
+  const known = new Set(["--check-browse", "--registry", "--robots-file", "--robots-status"]);
+  const o = {};
+  for (let i = 0; i < argv.length; i += 2) {
+    const k = argv[i];
+    if (!known.has(k)) fail(1, `unknown argument '${field(k)}'`);
+    if (i + 1 >= argv.length || argv[i + 1] === "") fail(1, `${k} needs a value`);
+    if (k in o) fail(1, `${k} given twice`);
+    o[k] = argv[i + 1];
+  }
+  const seamsUsed = ["--registry", "--robots-file", "--robots-status"].filter((k) => o[k] != null);
+  if (seamsUsed.length && process.env.ARC_DESIGN_OFFLINE !== "1") fail(1, `${seamsUsed.join(", ")}: test seams; set ARC_DESIGN_OFFLINE=1`);
+  if (o["--robots-status"] != null && !/^[1-5][0-9][0-9]$/.test(o["--robots-status"])) fail(1, "--robots-status must be an HTTP status");
+  const logPath = join(ROOT, ".claude", "state", "design", "curator-browse.log");
+  const answer = (code, verdict, u, reason) => {
+    try {
+      mkdirSync(dirname(logPath), { recursive: true });
+      appendFileSync(logPath, `${new Date().toISOString()}\t${verdict}\t${u ? field(shown(u)) : "-"}\t${field(reason)}\n`);
+    } catch { /* the refusal still stands; an unwritable log never turns one into an allow */ }
+    if (code !== 0) console.error(`design-refpack: ${verdict} -- ${field(reason)}`);
+    process.exit(code);
+  };
+  setTimeout(() => answer(EXIT.UNREADABLE, "UNREADABLE", null, `the preflight did not answer within ${BROWSE_DEADLINE_MS / 1000} s; permission unknown`), BROWSE_DEADLINE_MS);
+  const url = parseHttpUrl(o["--check-browse"]);
+  if (!url) answer(1, "USAGE", null, "--check-browse needs an http(s) URL with a host");
+  if (url.protocol !== "https:") answer(2, "REFUSED", url, "a curator fetches over https only");
+  const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
+  const eligible = sources.filter((s) => s && String(s.status) === "active" && String(s.access) === "fetch"
+    && asList(s.allowed_use).includes("reference-pack"));
+  const hostsOf = (s) => asList(s.hosts).map((h) => h.toLowerCase()).filter((h) => HOST.test(h));
+  const match = eligible.filter((s) => hostsOf(s).length > 0 && hostAllowed(url.hostname, hostsOf(s)));
+  if (match.length === 0) answer(2, "REFUSED", url, `${url.hostname} is not a host of an active registry row whose allowed_use carries reference-pack`);
+  const fake = o["--robots-file"] != null || o["--robots-status"] != null;
+  const transport = fake
+    ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null })
+    : realTransport({ ua: DEFAULT_UA });
+  const allHosts = match.flatMap(hostsOf);
+  const d = await preflight({ url, ua: DEFAULT_UA, transport, guard: (u) => (hostAllowed(u.hostname, allHosts) ? null : "is not a registry host") });
+  answer(d.verdict === "ALLOW" ? 0 : EXIT[d.verdict], d.verdict, url, d.reason);
+}
+
 async function main(argv) {
+  if (argv[0] === "--check-browse") return checkBrowse(argv);
   const o = parseArgs(argv);
   for (const k of ["--brief", "--source", "--url"]) if (!o[k]) fail(1, `${k} is required`);
   const brief = o["--brief"];
