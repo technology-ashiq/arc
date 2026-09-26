@@ -1,0 +1,37 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/proposal-branch.mjs:147-151",
+      "breaking_input": "A `git hash-object -w` that hangs (NFS stale handle, antivirus scanning .git/objects) hits the GIT_TIMEOUT_MS path in git(). If git() builds its timeout ProposalError with the same `git ${args[0]} failed: ...` message shape as an ordinary non-zero exit — nothing in the shown diff proves otherwise — every one of the 8 attempts burns a full 60 s plus backoff: ~8+ minutes per write-tree, and the comment's promise 'a timeout … is not retried' is enforced only by a string shape that is not visible here. Worse, on a run where the timeout message is thrown as a plain Error (not ProposalError) the retry catches nothing, but if git() reuses the message template for the overrun case, a 16 MB cap breach IS retried 8 times, re-sending the full 16 MB each round.",
+      "why": "The retry's only discrimination between 'retryable Permission denied' and 'do-not-retry timeout/overrun' is `e.message.startsWith('git ${args[0]} failed: ')`. If the timeout/overrun throw sites in git() do not use a distinguishable message (or use the same prefix), the documented non-retry guarantee is dead code and the retry loop can turn a 60 s timeout into an 8-minute stall inside a concurrent-writer window, exactly the situation the fix targets.",
+      "fix": "Make retryability explicit and structural, not string-derived: have git() attach a typed property (e.g. `e.kind = 'exit'|'timeout'|'overrun'`) and retry only on `e.kind === 'exit'`. Add a test that a forced timeout of hash-object is NOT retried (one attempt, one error)."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/proposal-branch.mjs:150-151",
+      "breaking_input": "Two writers race on Windows; loser's hash-object fails in ~10 ms each time. Backoff is 50, 100, 150 … 350 ms — total sleep ~1.4 s across 8 tries, so if the winner's own lock hold exceeds ~1.5 s (large repo, cold FS cache, the same 60 s timeout the winner may itself consume), the loser exhausts OBJECT_WRITE_TRIES and still throws the original Permission denied, resurrecting the exact outage this fix claims closed. Round the loop as an attacker: hold a writer open for 3 s and the 'fixed' race fails again.",
+      "why": "The retry budget is time-unbounded in the wrong direction: 8 tries with linear 50 ms backoff caps total patience at ~1.4 s of waiting, far below the 60 s a single contending writer can legally occupy. The retry exists to ride out the other writer's window, but the window it can ride out is much shorter than the window git itself permits.",
+      "fix": "Derive the retry horizon from the resource, e.g. retry until a deadline comparable to GIT_TIMEOUT_MS (with jitter), or take the file lock git offers (`core.fsyncMethod`/opening with FILE_SHARE) instead of guessing a wait."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/proposal-branch.mjs:148-150",
+      "breaking_input": "Content that git's loose-object writer rejects for a deterministic reason — a 0-byte blob is fine, but e.g. hash-object with a corrupted/quarantined .git/objects, or a disk full (`error: unable to write file …: No space left on device`) — exits non-zero. The wrapper retries all 8 times, multiplying the failure latency and, for ENOSPC, re-attempting 8 writes that each flush data, while the resulting error message the caller sees is the FIRST failure's text with no mention that it was retried 7 times.",
+      "why": "`exited` matches every non-zero exit of the named subcommand, so the retry is not actually scoped to the Permission-denied race it documents; disk-full, EPIPE on the stdin pipe (pipes-closed-early twin), and hook-injected failures (the `hooks` option is passed through) are all silently retried, and nothing in the thrown error says how many attempts were made or that the retry path ran at all — the PROGRESS.md diagnosis ('2 of 80 rounds') becomes unreproducible from the error alone.",
+      "fix": "Gate the retry on the failure signature it justifies (message contains 'Permission denied' / EACCES / EPERM on the loose-object path), cap it, and append `after N attempts` to the rethrown error so a surviving failure is distinguishable from a first-try failure."
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": "tests/face/proposal-branch.mjs:303-305",
+      "breaking_input": "The test change only captures `e.message` into results; the assertion on the next lines still counts only `r.code === 'BRANCH_EXISTS'` twice and one ok. Run the suite on a Windows runner where the race fires: a loser can now fail with the retried EACCES after OBJECT_WRITE_TRIES exhaustion (code EACCES, not BRANCH_EXISTS) and the test passes anyway if two other losers happened to hit BRANCH_EXISTS — the new msg capture is dead data in the assertion.",
+      "why": "The diff strengthens the diagnostic payload but no assertion consumes it; the same test cannot fail for the reason the fix exists (a hash-object-level loss that exhausts retries), so the 'reproduced 2 of 80 rounds' regression has no red test — the fix's own negative control is missing, the 'test that could not fail for that reason' twin.",
+      "fix": "Add an arm that pins the retry behaviour: inject/monkeypatch a git() that fails hash-object twice then succeeds, assert the write still lands, and one that fails 8 times, assert the error names the retries and the test fails when the retry wrapper is removed."
+    }
+  ]
+}

@@ -856,3 +856,10 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **The full extract per request, unbounded** -- 30 concurrent GETs ran 30 extracts (B4). *Concurrent reads of one build-time fact share one in-flight computation.*
 - **"Read-only" measured on tracked files only** -- a write to a NEW file was invisible, and the check had no mutant (B5). *Digest every file of a scratch tree, and prove the measure with a mutant that writes one.*
 - **A mutant caught by any exit 1** -- a crash satisfied the MUTANT CONTROL (B9); a POST answered any 4xx passed "GET-only" (B10); one day file of the spine stood for the spine (L7, B11), with no guard when absent (L6). *A control asserts the NAMED refusal; a sample is never the whole.*
+
+## #267 -- the object-write race retry (attack da7d131, round 1: logic L1-L4, boundary B1-B3)
+
+- **Retry-or-not decided by string-matching another function's message** -- a timeout or overrun was kept out only because its text happened to differ (L1, B2). *git() carries its exit as data (`gitExit: { code, stderr }`); a retry decision reads the data, never the message.*
+- **Every non-zero exit retried as if it were the race** -- disk full, a read-only objects dir, a hook's refusal (L3). *Retry only the race's own signature (`OBJECT_WRITE_RACE_RE`); anything else throws at once.*
+- **Patience counted in tries, in lockstep** -- 8 linear waits capped the wait at ~1.4 s against a 60 s window, and losers of one attempt collided again on the same schedule (L2, B3). *Bound a retry by time, and jitter it.*
+- **A flake fix proven only by the flake's absence** -- no arm made the write fail, so deleting the retry left every test green (L4, B1). *An injected runner makes the failure happen on demand: retried-then-won, not-the-race, no-gitExit, never-clears.*
