@@ -54,3 +54,14 @@ a third-party claim, and is treated as the stricter of the two.
 Easier: adding a future tool is one lint-clean entry, and every gate downstream can ask the
 registry rather than a human. Harder: the registry is now a permission surface, so its lint is
 gate-shaped and inherits this repo's adversarial-pass requirement before it ships.
+
+## Amendment 2026-09-26 — an optional `hosts` column
+
+Phase 02 slice B's attacker (r1 B2) found that the builder checked the licence on the `--source`
+row and fetched whatever `--url` named, so one input was checked and another was used. A row may
+now carry `hosts:`, a block list of bare lower-case host names. `design-refpack.mjs` refuses a real
+fetch from a row without it, and binds every URL and every redirect hop to it (the host or a
+subdomain). The lint checks its shape when present. It is optional in the grammar so that
+link-only and off rows, which are never fetched, do not have to name one. The two `active`
+fetch rows carry theirs: `lapa.ninja` and `saasframe.io`. Adding a host is an owner edit, the
+same as adding a row.

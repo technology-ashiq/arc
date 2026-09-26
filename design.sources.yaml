@@ -28,6 +28,8 @@ sources:
     kind:
       - inspiration
     access: fetch
+    hosts:
+      - lapa.ninja
     allowed_use:
       - reference-pack
       - provenance
@@ -44,6 +46,8 @@ sources:
     kind:
       - inspiration
     access: fetch
+    hosts:
+      - saasframe.io
     allowed_use:
       - reference-pack
       - provenance

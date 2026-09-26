@@ -139,6 +139,21 @@ for (const s of sources) {
     fail(id, "credential-ref-orphan", 'auth="none" carries a credential_ref -- one of the two is stale');
   }
 
+  // hosts binds a URL to this row (design-refpack.mjs refuses a real fetch without it). When
+  // present it is a list of bare, lower-case host names: a scheme, a path or a port here would
+  // make the builder's host comparison match nothing, or the wrong thing.
+  if (s.hosts !== undefined) {
+    if (!Array.isArray(s.hosts) || s.hosts.length === 0) {
+      fail(id, "hosts-not-array", "hosts must be a non-empty block sequence of host names");
+    } else {
+      for (const h of s.hosts) {
+        if (typeof h !== "string" || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(h)) {
+          fail(id, "hosts-not-hostname", `hosts carries "${h}" -- a bare lower-case host name, no scheme, path or port`);
+        }
+      }
+    }
+  }
+
   // A source that may not be cached must not also claim the use that caches. link-only exists
   // precisely for Awwwards, whose terms forbid reproduction, and the curator reads this list
   // rather than a comment.

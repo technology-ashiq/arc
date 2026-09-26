@@ -87,6 +87,9 @@ _arc_design_sandbox() {
   # one design-sources-lint.mjs uses, so the builder accepts exactly what the lint passed.
   mkdir -p "$SANDBOX/.claude/scripts/engine"
   cp "$ARC_ROOT"/.claude/scripts/engine/yaml-subset.mjs "$SANDBOX/.claude/scripts/engine/"
+  # The refpack builder's fake transport and scratch registry are test seams, refused without
+  # this (attack r1 B4). Only the sandbox sets it.
+  export ARC_DESIGN_OFFLINE=1
   cp "$ARC_ROOT"/.claude/hooks/PreToolUse-edit.d/10-design-critic.sh \
      "$SANDBOX/.claude/hooks/PreToolUse-edit.d/" 2>/dev/null
   # The composer WRITE boundary and the edit dispatcher that runs it. Both, or the write cases
