@@ -448,6 +448,7 @@ proposal race: a face PR whose attack round, review and CI read never ran; it ne
 - **Change routed (2026-09-26, `/arc-change --lane face`):** a Reference room -- the docs wiki inside the face, and a
   Reference link from every room -- is **Phase 07** (REQ-12, ADR-1346, 3d: the days ADR-1339 left unallocated). Dogfood
   moves to **Phase 08** and stays last, on the final surface. Waiting on the owner's OK before any code.
+- **Phase 07 progress (2026-09-27):** PR A merged (#291, `GET /api/reference`). PR B1 builds the room itself -- born by the birth rule (company ring, an index room over products), the module drawing index → type → entity with the design's Start here · The bigger loop · Reference · Evidence · Meta, the cross-links from wiki-build's own exported `relationsOf` (so the room and the markdown cannot disagree; `wiki-build --check` proves the pages byte-identical). PR B2 is next: the per-room Reference link (the shell's hash carries the entity; the header draws the link once, for every room).
 - **Then dogfood (Phase 08, the owner's days):** opens on `feat/face-v2-08`. Its verification plan is still
   the coarse one-liner, so the first step is `/arc-change --lane face` to refine it. Then two real days from the MAIN
   clone (`node .claude/scripts/hq/arc-face.mjs`): every decision goes through the face, and at least one op a day

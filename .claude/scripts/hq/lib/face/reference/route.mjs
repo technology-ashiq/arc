@@ -35,7 +35,7 @@ export async function referenceBody(repo, inject = {}) {
   const w = inject.wiki ?? await wiki();
   // OWN members of the right kind: `in` accepted an inherited member, and a missing export then threw as a TypeError
   // (a 500) instead of this named refusal (attack 94ffba3 L1).
-  const WANT = { extract: "function", narrativeReader: "function", pagePath: "function", RENDERED: "array", PAGE_DIRS: "object", TYPE_KEY: "object" };
+  const WANT = { extract: "function", narrativeReader: "function", pagePath: "function", relationsOf: "function", RENDERED: "array", PAGE_DIRS: "object", TYPE_KEY: "object", TITLES: "object", SINGULAR: "object" };
   for (const [name, kind] of Object.entries(WANT)) {
     const v = w && Object.hasOwn(w, name) ? w[name] : undefined;
     const ok = kind === "array" ? Array.isArray(v) : kind === "object" ? v !== null && typeof v === "object" && !Array.isArray(v) : typeof v === kind;
@@ -71,7 +71,9 @@ export async function referenceBody(repo, inject = {}) {
       if (typeof text === "string") narrative[at] = text;
     }
   }
-  return { schema: wk.schema, stats: wk.stats, entities: wk.entities, pages, narrative, unpaged, pageDirs: w.PAGE_DIRS, typeKey: w.TYPE_KEY, rendered: w.RENDERED };
+  // The cross-links the markdown draws, from the SAME function renderWiki draws them with (ADR-1346 §1).
+  const relations = w.relationsOf(wk);
+  return { schema: wk.schema, stats: wk.stats, entities: wk.entities, pages, narrative, unpaged, relations, pageDirs: w.PAGE_DIRS, typeKey: w.TYPE_KEY, rendered: w.RENDERED, titles: w.TITLES, singular: w.SINGULAR };
 }
 
 /** A page path the room may link: one directory, one safe id, `.md` -- relative to docs/wiki, never out of it. */

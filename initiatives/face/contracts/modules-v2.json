@@ -11,8 +11,8 @@
     "renamed": 3,
     "extra": 2,
     "servedPlanned": 3,
-    "served": 36,
-    "servedWithoutModule": 2
+    "served": 37,
+    "servedWithoutModule": 3
   },
   "ringConflicts": [],
   "modules": [
@@ -459,6 +459,12 @@
       "id": "chat-mcp",
       "status": "planned",
       "ring": "command",
+      "renders": "generic module, reported"
+    },
+    {
+      "id": "reference",
+      "status": "built",
+      "ring": "company",
       "renders": "generic module, reported"
     },
     {

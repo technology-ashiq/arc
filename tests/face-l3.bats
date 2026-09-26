@@ -592,6 +592,16 @@ load 'test_helper'
   done
 }
 
+@test "reference room: index, type and entity pages from the real extract; links resolve; cross-links equal the markdown" {
+  run node "$ARC_ROOT/tests/face/reference-fold.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: 10 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok entity: every paged entity opens as a page with a path back, and every link it draws resolves to an entity"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok cross-links: each product's 'Required by' in the room equals its docs/wiki page's, for every product"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok lost: a pick naming nothing is LOST with its name, never an empty page that looks real"* ]] || { echo "$output"; false; }
+}
+
 @test "face v2: the company ring reads its files -- F1 names lanes, the constitution and logbook are read, the extras drawn" {
   # The company ring and the four extra rooms the owner's section 13 item 5 ruling unblocked (ADR-1337): the folds
   # answer over the door's real bodies and over mutants of them; F1's arm FAILs Cycle 15's band -> room map.
