@@ -38,3 +38,5 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **An unparseable payload was answered "not a composer" before the fail-closed branch could see it** (r1 B3) — `composer-bash-check.sh --identity` — *"other" is a positive result about a payload that was read; unreadable is its own answer.*
 - **A sibling script's version was checked for completeness, not for the feature asked of it** (r1 B8) — the `--identity` handshake — *check the capability you call, not only that the file is whole.*
 - **A refusal test aimed at a path another rule already refuses** (r1 B5) — `design-composer-eyes.bats` — *aim a gate's test where only that gate can refuse, and assert its reason.*
+- **A verdict code shared with bash's syntax-error code** (2 read as "refuse", locking every caller) (ADR-1419 r2 B2) — `composer-*-check.sh` — *every verdict code is one the runtime never makes; the r1 fix moved one verdict and left its twin.*
+- **A subprocess that failed produced an empty string read as a positive answer** (`tr` in the identity normaliser) (r2 B1) — `composer-bash-check.sh` — *a non-empty input that transforms to empty is a failure, never a value.*

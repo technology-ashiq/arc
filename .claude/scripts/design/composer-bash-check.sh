@@ -29,11 +29,11 @@
 #
 # --identity is how the read and write boundaries learn who is calling (ADR-1419): they judge only
 # a ui-composer call, and they ask THIS parser rather than carrying a second hand-written one (the
-# twin-fix rule). Its exit: 0 a ui-composer call | 10 someone else's | 2 the call may be a
-# composer's and its identity cannot be read exactly, which the caller refuses. "Someone else" is
-# 10, not 1, because 1 is what bash exits with when a script dies (an unbound variable, a failed
-# fork), and a crash must never read as a verdict (attack r1, B2). The caller judges every code it
-# does not know. The next line is the handshake a caller checks before it asks (B8):
+# twin-fix rule). Its exit: 0 a ui-composer call | 10 someone else's | 12 the call may be a
+# composer's and its identity cannot be read exactly, which the caller refuses. Neither verdict is
+# a code bash makes on its own: 1 is what it exits with when a script dies (an unbound variable, a
+# failed fork -- attack r1, B2) and 2 is a syntax error (r2, B2), and a crash must never read as a
+# verdict. The caller judges every code it does not know, and says the parser is at fault. The next line is the handshake a caller checks before it asks (B8):
 # composer-bash-check: speaks --identity
 set -uo pipefail
 # Byte semantics for every string operation below: under a UTF-8 locale bash counts and strips
@@ -46,7 +46,7 @@ IDENTITY=0
 # Not a composer's call: allowed by the Bash boundary, answered "someone else" by --identity.
 _other() { [ "$IDENTITY" -eq 1 ] && exit 10; exit 0; }
 
-[ -t 0 ] && { [ "$IDENTITY" -eq 1 ] && exit 2; exit 0; }
+[ -t 0 ] && { [ "$IDENTITY" -eq 1 ] && exit 12; exit 0; }
 PAYLOAD="$(cat)"
 
 # Cheap first: nearly every call is not a composer's, and they must not pay for the parse. The
@@ -61,7 +61,7 @@ NAMES_COMPOSER=0
 case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*) NAMES_COMPOSER=1;; esac
 
 _refuse() {
-  if [ "$IDENTITY" -eq 1 ]; then echo "ui-composer identity: $1" >&2; exit 2; fi
+  if [ "$IDENTITY" -eq 1 ]; then echo "ui-composer identity: $1" >&2; exit 12; fi
   echo "BLOCKED by ui-composer bash scope: $1" >&2
   echo "A composer runs one command through Bash -- the renderer, on its own variant, into its own session:" >&2
   echo "  bash .claude/scripts/design/design-render.sh docs/design/explore/<id>/<variant>/index.html --mode explore --session <id>--<variant> --iter N --viewport WxH" >&2
@@ -176,6 +176,9 @@ fi
 # rather than silently nobody (BL-9). Letters spelled out: `tr '[:upper:]'` maps I to a dotless i
 # under tr_TR.
 AGENT="$(printf '%s' "$FIELD" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')"
+# A read identity that normalises to nothing is a failed `tr`, not an answer: a fork that fails on
+# the MSYS box leaves AGENT empty, and empty used to be "someone else" (attack r2, B1).
+[ -z "$FIELD" ] || [ -n "$AGENT" ] || _refuse "the agent name could not be normalised."
 AGENT="${AGENT##*:}"
 [ "$AGENT" = "ui-composer" ] || _other
 # The identity is all --identity answers; the tool and the command below are the Bash boundary's.

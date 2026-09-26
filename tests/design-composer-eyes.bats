@@ -1247,10 +1247,13 @@ _stub_parser() {
   _main_read Read "$sib"
   [ "$status" -eq 0 ] || { echo "control: the real parser refused the main session: $stderr"; false; }
   local code
-  for code in 1 7 127; do
+  # 2 is bash's syntax-error code, and was the refusal verdict until attack r2 B2 moved it to 12.
+  for code in 1 2 7 127; do
     _stub_parser "$code"
     _main_read Read "$sib"
     [ "$status" -eq 2 ] || { echo "parser exit $code was read as a verdict (read): $status"; false; }
+    printf '%s' "$stderr" | grep -q "exited $code, which is not an answer" || { echo "exit $code: the parser was not named: $stderr"; false; }
+    printf '%s' "$stderr" | grep -q "cannot be read exactly" && { echo "exit $code was read as the refusal verdict: $stderr"; false; }
     _main_write Write '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}'
     [ "$status" -eq 2 ] || { echo "parser exit $code was read as a verdict (write): $status"; false; }
   done
@@ -1291,4 +1294,34 @@ _stub_parser() {
   # Paired: without jq the composer is still refused on a sibling.
   _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
   [ "$status" -eq 2 ] || { echo "no jq: a composer read a sibling: $status"; false; }
+}
+
+# ---------- ADR-1419, attack round 2 (B1, B2) ----------
+
+@test "ADR-1419 r2 B1: a tr that fails while normalising the identity refuses a composer" {
+  _composer_sandbox; _arm
+  local real_tr; real_tr="$(command -v tr)"
+  [ -n "$real_tr" ] || { echo "no tr to delegate to"; false; }
+  mkdir -p "$SANDBOX/badbin"
+  # Fails only on the upper-to-lower map the identity check uses; every other tr call delegates.
+  printf '#!/bin/sh\ncase "$1" in ABCDEFGHIJKLMNOPQRSTUVWXYZ) exit 127;; esac\nexec "%s" "$@"\n' "$real_tr" > "$SANDBOX/badbin/tr"
+  chmod +x "$SANDBOX/badbin/tr"
+  PATH="$SANDBOX/badbin:$PATH"; export PATH
+  command -v tr | grep -q badbin || { echo "the failing tr is not the one found first"; false; }
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 2 ] || { echo "an unnormalised identity let a composer read a sibling: $status"; false; }
+  printf '%s' "$stderr" | grep -q "cannot be read exactly" || { echo "refused, but not by the identity gate: $stderr"; false; }
+  # Paired: the main session carries no identity, so the failing tr is never reached for it.
+  _main_read Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 0 ] || { echo "the main session was refused by a tr it never needed: $status $stderr"; false; }
+}
+
+@test "ADR-1419 r2 B2: the three composer boundaries parse, so a syntax error never reaches a hook" {
+  local f
+  for f in composer-bash-check composer-scope-check composer-write-check; do
+    run bash -n "$ARC_ROOT/.claude/scripts/design/$f.sh"
+    [ "$status" -eq 0 ] || { echo "$f.sh does not parse: $output"; false; }
+    grep -q '^# composer-bash-check: speaks --identity$' "$ARC_ROOT/.claude/scripts/design/composer-bash-check.sh" \
+      || { echo "the parser lost its handshake line"; false; }
+  done
 }

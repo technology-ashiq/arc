@@ -60,11 +60,15 @@ if [ -z "$TARGET" ]; then
   if [ -f "$_IDC" ] && [ "$(tail -n 1 "$_IDC" 2>/dev/null | tr -d '\r')" = "# composer-bash-check: end" ] \
      && grep -qx '# composer-bash-check: speaks --identity' "$_IDC" 2>/dev/null; then
     printf '%s' "$STDIN" | bash "$_IDC" --identity
-    case $? in
+    _idrc=$?
+    case $_idrc in
+      0) ;;
       10) exit 0;;
-      2) echo "BLOCKED by ui-composer write scope: this call may be ui-composer's, and who is calling cannot be read exactly." >&2
-         if type arc_cm_describe >/dev/null 2>&1; then arc_cm_describe "$ROOT" >&2; fi
-         exit 2;;
+      12) echo "BLOCKED by ui-composer write scope: this call may be ui-composer's, and who is calling cannot be read exactly." >&2
+          if type arc_cm_describe >/dev/null 2>&1; then arc_cm_describe "$ROOT" >&2; fi
+          exit 2;;
+      # Not a verdict (a crash, a parse error, not found): judged, with the parser named.
+      *) echo "ui-composer write scope: composer-bash-check.sh --identity exited $_idrc, which is not an answer; every caller is judged until it is fixed." >&2;;
     esac
   fi
 fi
