@@ -200,15 +200,19 @@ _crefuse() {
   exit 2
 }
 _curator_bash() {
-  _field command '["tool_input","command"]' '.tool_input.command' 2000
-  case $? in
+  # The status is captured in a conditional, so no errexit in force can end the script on it and
+  # hand the dispatcher a code it reads as allow (attack r1, B7).
+  if _field command '["tool_input","command"]' '.tool_input.command' 2000; then _frc=0; else _frc=$?; fi
+  case $_frc in
     0) ;;
     3) _crefuse "the command is longer than 2000 bytes; no refpack call is.";;
     *) _crefuse "the command could not be read from the payload.";;
   esac
   CMD="$FIELD"
   [ -n "$CMD" ] || _crefuse "the call carries no command."
-  case "$CMD" in *[!$CQ\"]*) _crefuse "the command carries a character no refpack call needs (shell syntax, a backslash or a line break).";; esac
+  # The quote goes FIRST: CQ ends in `-`, which must stay last to be a literal. Written after CQ,
+  # the quote made `_-"` a reversed range and emptied the class of `_`, `-` and `"` (attack r1, B1).
+  case "$CMD" in *[!\"$CQ]*) _crefuse "the command carries a character no refpack call needs (shell syntax, a backslash or a line break).";; esac
   # One pass over the characters: words split on single spaces, a quote opens only a word and
   # closes only at its end, and nothing outside quotes leaves CB. Words are joined with a line
   # break, which the alphabet above already excludes from the command itself.
@@ -255,6 +259,16 @@ _curator_bash() {
       *) _crefuse "the flag '${1:0:40}' is not one a curator's refpack call takes (a test seam never is).";;
     esac
     case "$2" in --*) _crefuse "the flag '$1' has no value.";; esac
+    # A second line of defence, not trusting the builder alone to reject a value that becomes a
+    # path (attack r1, B11): ids follow the lane grammar, and the URL is https.
+    case "$1" in
+      --brief|--source)
+        case "$2" in ""|-*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _crefuse "$1 takes lowercase letters, digits and hyphens.";; esac
+        [ "${#2}" -le 64 ] || _crefuse "$1 is longer than 64 characters."
+        case "$2" in con|prn|aux|nul|com[0123456789]|lpt[0123456789]) _crefuse "$1 is a Windows device name.";; esac;;
+      --url)
+        case "$2" in https://?*) ;; *) _crefuse "--url is an https URL.";; esac;;
+    esac
     _seen="$_seen$1 "
     shift 2
   done
@@ -272,9 +286,11 @@ _curator_fetch() {
   [ -f "$_root/.claude/scripts/design/design-refpack.mjs" ] \
     || _crefuse "design-refpack.mjs is missing, so a curator's fetch cannot be preflighted."
   set -- --check-browse "$_url"
-  # The offline seams, for the suite only: the harness never sets ARC_DESIGN_OFFLINE, and a
-  # curator cannot set the hook's environment.
-  if [ "${ARC_DESIGN_OFFLINE:-}" = "1" ]; then
+  # The offline seams, for the suite only. A curator cannot set the hook's environment, but an
+  # operator's shell can leak ARC_DESIGN_OFFLINE into the session, so forwarding needs a second,
+  # hook-specific switch, and the builder stamps a fixture answer `fixture` in its log (attack
+  # r1, B5).
+  if [ "${ARC_DESIGN_OFFLINE:-}" = "1" ] && [ "${ARC_DESIGN_HOOK_SEAMS:-}" = "1" ]; then
     [ -z "${ARC_DESIGN_ROBOTS_FILE:-}" ] || set -- "$@" --robots-file "$ARC_DESIGN_ROBOTS_FILE"
     [ -z "${ARC_DESIGN_ROBOTS_STATUS:-}" ] || set -- "$@" --robots-status "$ARC_DESIGN_ROBOTS_STATUS"
   fi
@@ -294,10 +310,12 @@ case "$AGENT" in
     [ "$IDENTITY" -eq 1 ] && _other
     _field tool_name '["tool_name"]' '.tool_name' 64 name || _crefuse "the tool of a design-curator call cannot be read exactly."
     case "$PAYLOAD" in *'\u00'[01]*) _crefuse "the call carries an escaped control character.";; esac
+    # An explicit list: an absent or empty tool name is not "some other tool" (attack r1, B6).
     case "$FIELD" in
       Bash) _curator_bash;;
       WebFetch) _curator_fetch;;
-      *) exit 0;;
+      Read|Grep|Glob) exit 0;;
+      *) _crefuse "the tool '${FIELD:0:40}' is not one the curator holds.";;
     esac;;
   *) _other;;
 esac

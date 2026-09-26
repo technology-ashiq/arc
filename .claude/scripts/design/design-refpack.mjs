@@ -143,46 +143,84 @@ function hostAllowed(hostname, hosts) {
 // is appended to .claude/state/design/curator-browse.log: a refusal not written down is a silent
 // skip. The whole check answers inside 40 s, or refuses: a hook that times out is read as allow.
 // Exit: 0 ALLOW | 1 usage | 2 registry or host refusal | 3 DISALLOW | 4 UNREADABLE.
+//
+// Attack r1 (ADR-1420) shaped four of its rules:
+// - robots is asked for EVERY token the fetch may be judged under: arc's ClaudeBot and Claude-User,
+//   the token the harness's WebFetch answers to. A site that disallows the fetcher while allowing
+//   `*` must not be read as permission (B3). Every token must ALLOW.
+// - the page is probed once without following redirects. WebFetch follows a same-host redirect on
+//   its own, so a redirect is refused and its target named: the curator asks for that URL, and it
+//   is checked in its own right (B4).
+// - a port or userinfo in the URL is refused: the registry binds hosts, not whatever listens on
+//   another port of one (B9).
+// - only the verdict ALLOW exits 0. Any verdict this file does not know is UNREADABLE (B2).
 const BROWSE_DEADLINE_MS = 40000;
+const BROWSE_UAS = [DEFAULT_UA, "Claude-User"];
 async function checkBrowse(argv) {
-  const known = new Set(["--check-browse", "--registry", "--robots-file", "--robots-status"]);
-  const o = {};
-  for (let i = 0; i < argv.length; i += 2) {
-    const k = argv[i];
-    if (!known.has(k)) fail(1, `unknown argument '${field(k)}'`);
-    if (i + 1 >= argv.length || argv[i + 1] === "") fail(1, `${k} needs a value`);
-    if (k in o) fail(1, `${k} given twice`);
-    o[k] = argv[i + 1];
-  }
-  const seamsUsed = ["--registry", "--robots-file", "--robots-status"].filter((k) => o[k] != null);
-  if (seamsUsed.length && process.env.ARC_DESIGN_OFFLINE !== "1") fail(1, `${seamsUsed.join(", ")}: test seams; set ARC_DESIGN_OFFLINE=1`);
-  if (o["--robots-status"] != null && !/^[1-5][0-9][0-9]$/.test(o["--robots-status"])) fail(1, "--robots-status must be an HTTP status");
   const logPath = join(ROOT, ".claude", "state", "design", "curator-browse.log");
-  const answer = (code, verdict, u, reason) => {
+  let url = null;
+  let via = "network";
+  const answer = (code, verdict, reason) => {
+    const exitCode = verdict === "ALLOW" && code === 0 ? 0 : (code === 0 || code == null ? EXIT.UNREADABLE : code);
     try {
       mkdirSync(dirname(logPath), { recursive: true });
-      appendFileSync(logPath, `${new Date().toISOString()}\t${verdict}\t${u ? field(shown(u)) : "-"}\t${field(reason)}\n`);
+      appendFileSync(logPath, `${new Date().toISOString()}\t${verdict}\t${via}\t${url ? field(shown(url)) : "-"}\t${field(reason)}\n`);
     } catch { /* the refusal still stands; an unwritable log never turns one into an allow */ }
-    if (code !== 0) console.error(`design-refpack: ${verdict} -- ${field(reason)}`);
-    process.exit(code);
+    if (exitCode !== 0) console.error(`design-refpack: ${verdict} -- ${field(reason)}`);
+    process.exit(exitCode);
   };
-  setTimeout(() => answer(EXIT.UNREADABLE, "UNREADABLE", null, `the preflight did not answer within ${BROWSE_DEADLINE_MS / 1000} s; permission unknown`), BROWSE_DEADLINE_MS);
-  const url = parseHttpUrl(o["--check-browse"]);
-  if (!url) answer(1, "USAGE", null, "--check-browse needs an http(s) URL with a host");
-  if (url.protocol !== "https:") answer(2, "REFUSED", url, "a curator fetches over https only");
-  const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
-  const eligible = sources.filter((s) => s && String(s.status) === "active" && String(s.access) === "fetch"
-    && asList(s.allowed_use).includes("reference-pack"));
-  const hostsOf = (s) => asList(s.hosts).map((h) => h.toLowerCase()).filter((h) => HOST.test(h));
-  const match = eligible.filter((s) => hostsOf(s).length > 0 && hostAllowed(url.hostname, hostsOf(s)));
-  if (match.length === 0) answer(2, "REFUSED", url, `${url.hostname} is not a host of an active registry row whose allowed_use carries reference-pack`);
-  const fake = o["--robots-file"] != null || o["--robots-status"] != null;
-  const transport = fake
-    ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null })
-    : realTransport({ ua: DEFAULT_UA });
-  const allHosts = match.flatMap(hostsOf);
-  const d = await preflight({ url, ua: DEFAULT_UA, transport, guard: (u) => (hostAllowed(u.hostname, allHosts) ? null : "is not a registry host") });
-  answer(d.verdict === "ALLOW" ? 0 : EXIT[d.verdict], d.verdict, url, d.reason);
+  setTimeout(() => answer(EXIT.UNREADABLE, "UNREADABLE", `the preflight did not answer within ${BROWSE_DEADLINE_MS / 1000} s; permission unknown`), BROWSE_DEADLINE_MS);
+  try {
+    const known = new Set(["--check-browse", "--registry", "--robots-file", "--robots-status"]);
+    const o = {};
+    for (let i = 0; i < argv.length; i += 2) {
+      const k = argv[i];
+      if (!known.has(k)) answer(1, "USAGE", `unknown argument '${k}'`);
+      if (i + 1 >= argv.length || argv[i + 1] === "") answer(1, "USAGE", `${k} needs a value`);
+      if (k in o) answer(1, "USAGE", `${k} given twice`);
+      o[k] = argv[i + 1];
+    }
+    const seamsUsed = ["--registry", "--robots-file", "--robots-status"].filter((k) => o[k] != null);
+    if (seamsUsed.length && process.env.ARC_DESIGN_OFFLINE !== "1") answer(1, "USAGE", `${seamsUsed.join(", ")}: test seams; set ARC_DESIGN_OFFLINE=1`);
+    if (o["--robots-status"] != null && !/^[1-5][0-9][0-9]$/.test(o["--robots-status"])) answer(1, "USAGE", "--robots-status must be an HTTP status");
+    const fake = o["--robots-file"] != null || o["--robots-status"] != null;
+    if (fake) via = "fixture";
+    url = parseHttpUrl(o["--check-browse"]);
+    if (!url) answer(1, "USAGE", "--check-browse needs an http(s) URL with a host");
+    if (url.protocol !== "https:") answer(2, "REFUSED", "a curator fetches over https only");
+    if (url.port || url.username || url.password) answer(2, "REFUSED", "a curator's URL carries no port and no userinfo; the registry binds hosts");
+    const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
+    const eligible = sources.filter((s) => s && String(s.status) === "active" && String(s.access) === "fetch"
+      && asList(s.allowed_use).includes("reference-pack"));
+    const hostsOf = (s) => asList(s.hosts).map((h) => h.toLowerCase()).filter((h) => HOST.test(h));
+    const match = eligible.filter((s) => hostsOf(s).length > 0 && hostAllowed(url.hostname, hostsOf(s)));
+    if (match.length === 0) answer(2, "REFUSED", `${url.hostname} is not a host of an active registry row whose allowed_use carries reference-pack`);
+    const allHosts = match.flatMap(hostsOf);
+    const guard = (u) => (hostAllowed(u.hostname, allHosts) ? null : "is not a registry host");
+    for (const ua of BROWSE_UAS) {
+      const transport = fake
+        ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null })
+        : realTransport({ ua });
+      const d = await preflight({ url, ua, transport, guard });
+      if (d.verdict !== "ALLOW") answer(Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE, String(d.verdict), `as ${ua}: ${d.reason}`);
+    }
+    const probe = fake
+      ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null })
+      : realTransport({ ua: "Claude-User" });
+    let page;
+    try { page = await probe.get(url.href, { maxBytes: 64 * 1024, truncate: true }); } catch (e) {
+      answer(EXIT.UNREADABLE, "UNREADABLE", `the page could not be reached (${e && e.message ? e.message : "transport error"})`);
+    }
+    const s = Number(page.status);
+    if (s >= 300 && s < 400) {
+      let to = "an unreadable location";
+      try { to = field(shown(new URL(page.location, url.href))); } catch { /* named as unreadable */ }
+      answer(2, "REFUSED", `the page redirects (${s}) to ${to}; ask for that URL, and it is checked in its own right`);
+    }
+    answer(0, "ALLOW", `every token (${BROWSE_UAS.join(", ")}) allowed, and the page does not redirect`);
+  } catch (e) {
+    answer(EXIT.UNREADABLE, "UNREADABLE", `the check failed (${e && e.message ? e.message : "error"}); permission unknown`);
+  }
 }
 
 async function main(argv) {
