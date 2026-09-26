@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/design/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/design/PROGRESS.md)
 
-## Decisions (20)
+## Decisions (21)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -48,6 +48,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1417`](../../../docs/adr/1417-the-stale-duplicate-guard-must-tell-iteration-from-stale-page.md) | The stale-duplicate guard must tell an iteration from a stale page | accepted | 2026-08-23 |
 | [`1418`](../../../docs/adr/1418-an-explore-render-is-confined-to-its-own-variant-directory.md) | An explore render is confined to its own variant directory | accepted | 2026-09-17 |
 | [`1419`](../../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md) | The composer read and write boundaries bind only a ui-composer caller | accepted | 2026-09-26 |
+| [`1420`](../../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md) | The curator's Bash and WebFetch are bounded by the composer boundary's hook | accepted | 2026-09-26 |
 
 ## Source
 

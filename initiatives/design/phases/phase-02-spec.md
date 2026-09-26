@@ -21,6 +21,14 @@ of git and whose provenance goes in.
 - [ ] `design-curator` agent exists at **balanced-workhorse** per
       [ADR-1414](../../../docs/adr/1414-the-curator-sits-at-balanced-workhorse-and-one-juror-at-high-judgment.md),
       shipped as a reviewed diff citing ADR-0069
+- [ ] Per [ADR-1420](../../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md),
+      the curator holds `Read, Grep, Glob, WebFetch, Bash`, bounded in `composer-bash-check.sh`:
+      its Bash runs only `design-refpack.mjs` with its own flags, and its WebFetch runs only on
+      an `active` registry row's host with `design-robots.mjs` answering ALLOW inside a 40 s cap.
+      Red-first on CI, through the real dispatcher: a curator `cat` and a curator `refpack … ;
+      rm` refused, a well-formed refpack call allowed, a WebFetch to an off-registry host and to
+      a DISALLOW path refused, one to an allowed gallery path allowed, and the main session and
+      `ui-composer` unchanged. *(`/arc-change` 2026-09-26, owner "Hook-la scope")*
 - [ ] Curator performs a **robots.txt preflight per fetch** and refuses on `Disallow` — the
       refusal is recorded, never a silent skip
 - [ ] A real pack of 5–8 screens exists for one brief at

@@ -173,6 +173,7 @@ flowchart TB
 | 1417 | The stale-duplicate guard must tell an iteration from a stale page | accepted |
 | 1418 | An explore render is confined to its own variant directory | accepted |
 | 1419 | The composer read and write boundaries bind only a ui-composer caller | accepted |
+| 1420 | The curator's Bash and WebFetch are bounded by the composer boundary's hook | accepted |
 
 ## Non-negotiables
 

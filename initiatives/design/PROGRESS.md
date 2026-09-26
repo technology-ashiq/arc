@@ -523,6 +523,14 @@ consumer projects — it carries the owner's approvals.
    - **CI on the r2 fixes** (run 36253802366) found two more: an old test fed an empty payload
      that is now unreadable, and the read, write and critic checks chose jq by `command -v`,
      so a broken jq failed a composer's Read open (the Bash check's BL-3 twin). Both fixed.
+   - **Merged 2026-09-26 as #289** (`3cb0c0cb`), run 36254900364 green 19/19 on the head.
+1a. **The curator, next.** `agent-scaffold.mjs` refuses a scoped `Bash(…)` grant, and a plain
+   WebFetch would browse galleries with no robots preflight. Routed through `/arc-change`
+   2026-09-26: [ADR-1420](../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md)
+   (owner "Hook-la scope") plus a Phase 02 exit criterion. Order: red-first boundary cases,
+   the boundary in `composer-bash-check.sh`, attack, merge; then `agent-scaffold.mjs` from the
+   main clone (a proposal branch plus `approval.requested`, which the owner merges); then the
+   real pack.
 2. ~~**Phase 02 Slice B.**~~ Done: the robots.txt preflight and the pack builder landed at
    `a0c0cfee`, two attack rounds closed at `77dc42bf` and `873fdab1`, and the refpack 14 are
    green. **PR #222 was merged by the owner 2026-09-26** at `1a8bf012` with 19/19 jobs green,
