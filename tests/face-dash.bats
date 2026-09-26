@@ -51,6 +51,9 @@ load 'test_helper'
   # naming a mutant once read every green run as red (attack 60c13e9 B1).
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
   [[ "$output" == *"ok every other row reached a spawn (the loop judged real starts, not refusals)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok residue: shipped + residue rows equal the registry both ways"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok residue: every residue row still refuses (no process file, or a confirm stop)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok residue: every start-only row's process body emits the row's own kind"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok MUTANT REFUSED by driver-only: the harness claude as the command"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a FRESH door attaches to the run door A started, while it runs"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok its receipt is read back OFF THE SPINE THE DOOR NAMED, credited because"* ]] || { echo "$output"; false; }

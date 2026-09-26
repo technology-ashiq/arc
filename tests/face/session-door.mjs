@@ -26,7 +26,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { createServer } from "node:net";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -117,6 +117,51 @@ process.env.ARC_DASH_TOKEN = "planted-dash-token-0123456789";
 process.env.VERCEL_TOKEN = "planted-vercel-token";
 process.env.GH_TOKEN = "planted-gh-token";
 process.env.LEADS_CONFIG = "planted-leads-config";
+
+// ---- R. the residue file is held to the registry (Phase 06 DoD, ADR-1339) ----
+// evidence/phase-06/residue.md splits the 15 SESSION rows into the ones that ship and the residue the owner approves as a
+// whole. Its row ids equal the registry both ways, and each side is still true of the REAL tree: a shipped row has its
+// process file (dispatch excepted -- it runs the one the owner picks), and a residue row has none, or is held by its
+// confirm stop. When a lane adds a residue row's process file, this fails until the file moves the row. The "ships"
+// header is matched as a prefix on purpose: it also reads the start-only table (receipt not yet shown), whose rows
+// need their process file just the same.
+{
+  const tableRows = (text, header) => {
+    const lines = text.split(/\r?\n/);
+    const rows = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!header.test(lines[i])) continue;
+      for (let j = i + 2; j < lines.length && lines[j].startsWith("|"); j++) rows.push(lines[j].split("|").slice(1, -1).map((c) => c.trim()));
+    }
+    return rows;
+  };
+  const text = readFileSync(join(REPO, "initiatives", "face", "evidence", "phase-06", "residue.md"), "utf8");
+  const idOf = (r) => r[0].replace(/`/g, "");
+  const ships = tableRows(text, /^\| row id \| process file \| receipt kind \|/).map(idOf);
+  const residue = tableRows(text, /^\| row id \| door today \| missing piece \| filed to \|/).map(idOf);
+  const registry = new Set(SESS.SESSIONS.map((s) => s.id));
+  const sameBothWays = (list) => list.length === registry.size && new Set(list).size === list.length && list.every((id) => registry.has(id));
+  check("residue: both tables parse (vacuous-pass guard)", ships.length > 0 && residue.length > 0, `ships=${ships.length} residue=${residue.length}`);
+  check("residue: shipped + residue rows equal the registry both ways", sameBothWays([...ships, ...residue]),
+    [...ships, ...residue].filter((id) => !registry.has(id)).join(",") || [...registry].filter((id) => ![...ships, ...residue].includes(id)).join(","));
+  const hasFile = (s) => existsSync(join(REPO, "processes", `${s.process}.process.yaml`));
+  const row = (id) => SESS.sessionById(id);
+  const badShip = ships.filter((id) => registry.has(id)).filter((id) => !(row(id).pickProcess || hasFile(row(id))));
+  check("residue: every shipped row has its process file in the tree", badShip.length === 0, badShip.join(","));
+  const badResidue = residue.filter((id) => registry.has(id)).filter((id) => !(row(id).confirmStep || !hasFile(row(id))));
+  check("residue: every residue row still refuses (no process file, or a confirm stop) -- a new file moves its row", badResidue.length === 0, badResidue.join(","));
+  // The start-only rows (receipt not yet READ BACK) at least carry a process that says it emits the row's kind. This
+  // narrows the debt-ledger row; it does not pay it -- a sentence in a body is not a receipt on the spine.
+  const startOnly = tableRows(text, /^\| row id \| process file \| receipt kind \| not yet shown \|/).map(idOf).filter((id) => registry.has(id));
+  const emitsKind = (s) => s.pickProcess || new RegExp(`emit ${s.receipt.replace(/\./g, "\\.")}\\b`).test(readFileSync(join(REPO, "processes", `${s.process}.process.yaml`), "utf8"));
+  const silent = startOnly.filter((id) => hasFile(row(id)) || row(id).pickProcess).filter((id) => !emitsKind(row(id)));
+  check("residue: the start-only table parses (vacuous-pass guard)", startOnly.length === 4, `rows=${startOnly.length}`);
+  check("residue: every start-only row's process body emits the row's own kind", silent.length === 0, silent.join(","));
+  check("MUTANT CONTROL: a row claiming a kind its process never emits is caught",
+    !emitsKind({ ...row(startOnly.find((id) => !row(id).pickProcess) || "review-ship.review"), receipt: "council.verdict" }));
+  check("MUTANT CONTROL: a residue file with one row dropped is caught", !sameBothWays([...ships, ...residue].slice(1)));
+  check("MUTANT CONTROL: a residue file naming a row the registry does not hold is caught", !sameBothWays([...[...ships, ...residue].slice(1), "invented.verb"]));
+}
 
 // ---- A. driver-only, every row ----
 {
