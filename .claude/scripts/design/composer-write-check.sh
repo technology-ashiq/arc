@@ -48,6 +48,31 @@ for _mk in "$MARKER_DIR"/composer-session--*; do
 done
 [ "$_MK_N" -eq 0 ] && exit 0
 
+# ONLY A ui-composer CALL IS JUDGED (ADR-1419), asked of the Bash boundary's one identity parser
+# before anything else can refuse -- the reasons are with the same block in composer-scope-check.sh.
+# A path given as argv carries no caller and is judged as a composer's.
+TARGET="${1:-}"
+STDIN=""
+if [ -z "$TARGET" ] && [ ! -t 0 ]; then STDIN="$(cat)"; fi
+if [ -z "$TARGET" ]; then
+  _IDC="$ROOT/.claude/scripts/design/composer-bash-check.sh"
+  # A missing, incomplete or pre-1419 parser answers nothing, and every caller is judged, as before.
+  if [ -f "$_IDC" ] && [ "$(tail -n 1 "$_IDC" 2>/dev/null | tr -d '\r')" = "# composer-bash-check: end" ] \
+     && grep -qx '# composer-bash-check: speaks --identity' "$_IDC" 2>/dev/null; then
+    printf '%s' "$STDIN" | bash "$_IDC" --identity
+    _idrc=$?
+    case $_idrc in
+      0) ;;
+      10) exit 0;;
+      12) echo "BLOCKED by ui-composer write scope: this call may be ui-composer's, and who is calling cannot be read exactly." >&2
+          if type arc_cm_describe >/dev/null 2>&1; then arc_cm_describe "$ROOT" >&2; fi
+          exit 2;;
+      # Not a verdict (a crash, a parse error, not found): judged, with the parser named.
+      *) echo "ui-composer write scope: composer-bash-check.sh --identity exited $_idrc, which is not an answer; every caller is judged until it is fixed." >&2;;
+    esac
+  fi
+fi
+
 # The same marker arms both boundaries, so an abandoned compose locks writes exactly as it locks
 # reads, and a fix on one side alone is the one-side-fixed twin this lane keeps shipping. So the
 # marker reader, the id grammar and the description live ONCE, in core -- arc_cm_load and
@@ -86,10 +111,10 @@ EX="$ARC_MF_EXPLORE"; VARIANT="$ARC_MF_VARIANT"
 
 # ---------- what is being written ----------
 
-TARGET="${1:-}"
-if [ -z "$TARGET" ] && [ ! -t 0 ]; then
-  STDIN="$(cat)"
-  if command -v jq >/dev/null 2>&1; then
+if [ -z "$TARGET" ] && [ -n "$STDIN" ]; then
+  # jq only once it answers a probe: a jq that is found and broken read every target as empty,
+  # and an empty Read target is allowed (the Bash check's BL-3, left open here; ADR-1419 CI).
+  if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | jq -r .k 2>/dev/null | tr -d '\r')" = "v" ]; then
     TARGET="$(printf '%s' "$STDIN" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)"
   else
     TARGET="$(printf '%s' "$STDIN" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"

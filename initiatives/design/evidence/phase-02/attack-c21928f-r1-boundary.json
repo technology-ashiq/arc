@@ -1,0 +1,72 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/composer-bash-check.sh:81-90 (pre-parse size guard), now reached from composer-write-check.sh:57-67 and composer-scope-check.sh:186-199 via --identity",
+      "breaking_input": "With a marker armed, a ui-composer Write to its own page: {\"agent_type\":\"ui-composer\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"docs/design/explore/lexos-v1/variant-a/index.html\",\"content\":\"<a real 40-100 KB HTML page>\"}}. The mirror case is an operator Write or MultiEdit with no agent_type, whose content or path merely contains the text ui-composer (this ADR, .claude/agents/ui-composer.md, a regenerated wiki page) and exceeds the cap.",
+      "why": "The guard refuses any payload that shows a composer identity in raw text and is larger than any render call. It runs before tool_name is read, and it was written for Bash calls only. In --identity mode _refuse exits 2, so the write check now blocks a composer's own legitimate large page and never reaches the path rule. It also re-locks an operator whose payload merely mentions the word. The only Write tests use content \"x\", so nothing exercises a realistic page.",
+      "fix": "In identity mode skip the size guard, or apply it only to the identity fields. Extract agent_type with a bounded-size read, or size-check only tool_input.command when tool_name is Bash. Add a positive-control test: a composer Write of about 100 KB into its own variant is allowed."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "composer-scope-check.sh:~196 and composer-write-check.sh:~63 (`1) exit 0;;`) against composer-bash-check.sh:43 (`_other` exits 1)",
+      "breaking_input": "Any run where the parser exits 1 for a reason other than a positive verdict. Examples: an unbound-variable abort under `set -u` (bash exits 1), or a fork failure on the Windows MSYS box in `PAYLOAD=\"$(cat)\"`, which leaves PAYLOAD empty and falls straight into `_other`. A composer Read of variant-b then gets `1) exit 0`.",
+      "why": "The caller was built so unknown exit codes fall through to being judged, which is fail-closed. But \"someone else's call\" is exit 1, the code bash uses for its own runtime failures. A crash or an unreadable payload is therefore promoted to a positive \"not a composer\" and the boundary is skipped. The ADR contract says only 0/1/2 occur, which cannot be assumed for a script that has no `-e` and runs under `set -u`.",
+      "fix": "Give \"someone else\" a code that bash never produces by accident, for example 10, or a stdout token such as OTHER that the caller must see. Make `case $?` default to judged.",
+      "twin_of": "A failing probe command read as \"not applicable\" -> only a positive \"absent\" skips; an error is a failure."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "composer-scope-check.sh:186-199 and composer-write-check.sh:57-67 (gate placed before the target/tool parse); composer-bash-check.sh:~52 (`*) _other;;` pre-filter)",
+      "breaking_input": "Marker armed; stdin is whitespace only, or a truncated payload with no agent_type and no ui-composer text, such as {\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"docs/design/explore/lexos-v1/variant-b/index.html\"} (missing brace). The identity parser answers 1 and the check exits 0.",
+      "why": "An unreadable payload that never shows the composer text is now positively classified as not a composer and allowed. Before this change the payload reached the target/tool parse below, which the file header says fails closed when it cannot read a path. The gate answers first, so that fail-closed branch is unreachable for these inputs. The Bash boundary accepted this trade-off knowingly, but the read and write boundaries did not.",
+      "fix": "Treat an empty or non-JSON payload as identity-unreadable (exit 2 to the caller). Let \"other\" be a positive result only when a parse succeeded and produced a non-composer agent_type or none.",
+      "twin_of": "Emptiness checked before sanitising -> validate the value that will be written, after every transform."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "composer-scope-check.sh:179-199 and composer-write-check.sh:51-69",
+      "breaking_input": "A composer dispatched so that the harness payload carries no agent_type: an older Claude Code that omits it, or a compose run through a general-purpose subagent with the composer prompt. The Read payload {\"session_id\":\"s\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\".../variant-b/index.html\"}} is byte-identical to the operator's.",
+      "why": "Both boundaries used to be unconditional while a marker was armed. Now they depend entirely on the harness supplying agent_type, and a missing field silently turns them off for the real composer. Nothing checks that a composer call was ever classified. A compose can finish with reads and writes never judged and no signal.",
+      "fix": "Record a counter or receipt each time identity returns 0 during an armed session. Make `--end` or the render step fail a compose session that saw zero composer-classified calls. Alternatively, have the arm step verify that agent_type is present in a probe call."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "tests/design-composer-eyes.bats: test \"a payload naming ui-composer whose identity cannot be read exactly is refused\"",
+      "breaking_input": "Mutant: delete the `2) ... exit 2;;` arm in both checks so identity 2 falls through as judged. The test still passes.",
+      "why": "The test targets README.md, which the ordinary path rule already refuses for a composer. Refusal by the identity gate and refusal by the path rule are indistinguishable, so the test would pass with the gate removed. Nothing pins the guard for a missing or truncated parser, the argv-is-judged rule, the unknown-exit-code fallthrough, or a composer Write to its own directory. That last one is the case B1 breaks.",
+      "fix": "Aim the ambiguous-identity payload at a path the composer is otherwise allowed, its own variant/index.html. Assert the identity message on stderr. Add mutant tests: parser file missing, parser last line changed, parser exiting 7, and a large own-page composer Write that must be allowed."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "composer-bash-check.sh:52 (cheap filter) and 148-152 (_field failure branch); tests/design-composer-eyes.bats `_main_payload`",
+      "breaking_input": "Main session while a marker is armed: an Edit or Grep whose payload contains the text ui-composer, for example file_path .claude/agents/ui-composer.md, or a Grep pattern ui-composer, with no agent_type key.",
+      "why": "Every `_main_payload` in the new tests lacks the substring, so the pre-filter returns \"other\" before jq runs. The one path that decides an operator call, `_field` on an absent agent_type plus the `1:*|0:*ui-composer*` refusal, is never exercised. If `_field` fails on an absent key, or jq is unusable (the `0:*` arm refuses any payload naming the composer), the operator is locked out of exactly the files this lane edits, which is the lock the ADR set out to end.",
+      "fix": "Add tests with an operator payload that names ui-composer in its path or pattern, both with jq working and with jq shimmed away. Make an absent agent_type key a successful empty read."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/design/critic-scope-check.sh (unchanged, next to the three edited files in tests/fixtures/sync-golden/tree-manifest.txt)",
+      "breaking_input": "Arm a critic session marker, then issue a main-session Read of an out-of-scope file, for example README.md. Check whether critic-scope-check.sh still refuses every caller.",
+      "why": "ADR-1419 was applied to the composer read and write checks only. A sibling marker-armed boundary with the same all-callers behaviour keeps the operator lock, and the identity mechanism is not asked there. If it is intentionally out of scope, nothing says so.",
+      "fix": "Check critic-scope-check.sh for the same all-callers refusal. Either bind it to its agent_type through the same --identity parser or record the exclusion in the ADR.",
+      "twin_of": "A seam gate added to one CLI and not its sibling -> a fix to one entry point is checked in every entry point that shares the seam."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "composer-scope-check.sh:~190 and composer-write-check.sh:~60 (the `tail -n 1 ... = \"# composer-bash-check: end\"` guard)",
+      "breaking_input": "A consumer tree where composer-bash-check.sh is the pre-1419 copy, still ending in the end marker, next to the new scope-check and write-check. `--identity` is ignored and the script runs as the Bash boundary.",
+      "why": "The guard proves the file is complete, not that it understands --identity. The old script exits 0 for every non-Bash payload, and the caller reads 0 as \"a ui-composer call\", so every operator call is judged again. That is the old lock, with no error. The dependency on the sibling script's version is unchecked and untested.",
+      "fix": "Have the parser answer a versioned handshake, or require a distinct end marker such as `# composer-bash-check: end v2 identity`. Add a test that a stale parser is refused loudly rather than silently re-locking."
+    }
+  ]
+}
