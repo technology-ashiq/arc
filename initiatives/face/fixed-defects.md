@@ -844,3 +844,10 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **"Merged" asked of the checked-out HEAD** -- a WIP commit on a feature branch passed as merged; prove checks ancestry against origin/main and refuses when that ref is missing (B8), and the resolved sha must start with the one named (B10). *Merged means on the mainline CI ran on.*
 - **A private spawnSync("git") per caller** -- adr-record and develop prove read git through `withGitReader` in core/proposal-branch.mjs: GIT_* dropped, hooks off, bounded, capped (B9). *One bounded git reader, used by every caller.*
 - **A partial file left where "nothing written" was claimed** -- adr-record writes a temp beside the target and renames it in (B13); its unknown receipt state names the recovery (B14). *Only a rename makes a tracked file appear.*
+
+## #267 -- the object-write race retry (attack da7d131, round 1: logic L1-L4, boundary B1-B3)
+
+- **Retry-or-not decided by string-matching another function's message** -- a timeout or overrun was kept out only because its text happened to differ (L1, B2). *git() carries its exit as data (`gitExit: { code, stderr }`); a retry decision reads the data, never the message.*
+- **Every non-zero exit retried as if it were the race** -- disk full, a read-only objects dir, a hook's refusal (L3). *Retry only the race's own signature (`OBJECT_WRITE_RACE_RE`); anything else throws at once.*
+- **Patience counted in tries, in lockstep** -- 8 linear waits capped the wait at ~1.4 s against a 60 s window, and losers of one attempt collided again on the same schedule (L2, B3). *Bound a retry by time, and jitter it.*
+- **A flake fix proven only by the flake's absence** -- no arm made the write fail, so deleting the retry left every test green (L4, B1). *An injected runner makes the failure happen on demand: retried-then-won, not-the-race, no-gitExit, never-clears.*
