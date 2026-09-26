@@ -1,6 +1,6 @@
 # Phase 06 residue -- the session verbs that did not ship
 
-**Residue: 6 of 15.** The phase spec's exit criterion (ADR-1339) asks each of the 15 SESSION verbs in
+**15 verbs: 5 ship with their receipt shown, 4 start but their receipt is not yet shown, 6 are residue.** The phase spec's exit criterion (ADR-1339) asks each of the 15 SESSION verbs in
 `evidence/phase-05/cli-probe.md` to start from a click through `arc-run --driver` and land a receipt of an existing
 kind, OR be a row here, approved by the owner as a whole. Mapped by hand on 2026-09-26 from `SESSIONS` in
 `.claude/scripts/hq/face-sessions.mjs` against `processes/` on `main` at `b94f681b`.
@@ -9,19 +9,32 @@ kind, OR be a row here, approved by the owner as a whole. Mapped by hand on 2026
 the alternative (build some or all now) offered. The approval of THIS list as a whole is the owner's stamp at
 `/arc-phase-done 06`; this file is what that stamp reads.
 
-## What ships (9)
+## What ships, receipt shown (5)
 
 | row id | process file | receipt kind |
 |---|---|---|
-| `council.convene` | `council-convene` | `council.verdict` -- live demo passed (`live-demo.md`) |
-| `develop.proof` | `develop-proof` | `slice.done` (#282) |
-| `review-ship.review` | `review-diff` | `review.completed` |
-| `executor.dispatch` | the one the owner picks | `run.completed` |
-| `memory.log-lesson` | `lesson-log` | `note.logged` (#278) |
+| `council.convene` | `council-convene` | `council.verdict` -- live demo passed, read back off the spine by id (`live-demo.md`) |
+| `develop.proof` | `develop-proof` | `slice.done` (#282, face-dash factory ring read-back) |
+| `memory.log-lesson` | `lesson-log` | `note.logged` (#278; `tests/face/session-door.mjs` credits it off the spine the door named) |
 | `memory.promote-rule` | `rule-promote` | `approval.requested` (#278) |
-| `strategy.adopt-plan` | `kickoff-plan` | `kickoff.done` |
-| `strategy.record-adr` | `adr-record` | `note.logged` (#282) |
-| `org.lane-birth` | `kickoff-plan` | `kickoff.done` |
+| `strategy.record-adr` | `adr-record` | `note.logged` (#282, face-dash kernel ring read-back) |
+
+## Starts from a click, receipt NOT yet shown (4)
+
+Found by the close's spec-fidelity pass (2026-09-26). Each starts `arc-run --process <file> --driver` from its click, and
+the fixtures prove that start. The door credits a receipt by kind the same way for every row, but that crediting is
+proven on `memory.log-lesson` alone. None of these four has had its OWN receipt read back. The criterion asks for that
+read-back, so these rows do not meet it in full. They are listed here for the owner's stamp, not counted as shipped.
+
+| row id | process file | receipt kind | not yet shown |
+|---|---|---|---|
+| `review-ship.review` | `review-diff` | `review.completed` | a read-back of `review.completed` from a door-started run |
+| `executor.dispatch` | the one the owner picks | `run.completed` | a read-back of `run.completed` from a door-started run |
+| `strategy.adopt-plan` | `kickoff-plan` | `kickoff.done` | a read-back of `kickoff.done` from a door-started run |
+| `org.lane-birth` | `kickoff-plan` | `kickoff.done` | the same, from the lane-birth row |
+
+Pay-down: a face PR adds one read-back per row. A live run would cost money, so this should be a mock-driver fixture
+whose process emits the row's kind, filed to face. It is on the debt ledger.
 
 ## The residue (6)
 
