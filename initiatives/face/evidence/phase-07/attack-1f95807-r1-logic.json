@@ -1,0 +1,13 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "adr-record.mjs:222-225",
+      "breaking_input": "--lane face --adr-file .claude/state/adr-record/adr.md --as-process 'x;rm'",
+      "why": "Two spurious spaces break the parse: the loop treats 'x;rm' as a string value that starts with '--'? No, it starts with 'x'. Actually the bug is the value is accepted, and the regex for --as-process uses a fixed pattern. This shows the flag consumer only checks v.startsWith('--'), so a value with a leading dash is refused only if it starts with '--', but a value like '-x' (single dash) is not refused and passes the process regex? No, PROSESS_RE doesn't match '-x'. Still any value starting with dash but not '--' (like -x) would be accepted as a value, then fail the regex later. This is a minor trap. The more serious: the parser consumes the NEXT flag as a value when the next flag is '--dry-run'? No, because it checks v.startsWith('--'), so '--dry-run' would be refused. So this pattern is correctly guarded. Let's find real issues.",
+      "fix": "This is not a real issue; I'll re-evaluate."
+    }
+  ]
+}

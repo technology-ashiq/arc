@@ -117,7 +117,7 @@ count and panel before comparing.
 (01 on 2026-09-17); **Phase 02 is open**, with Slice A in and Slice B's 14 red-first tests on the
 branch. Working mode
 set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-c16`, pushed
-freely, **one PR kept open and merged only when all nine phases are done**. No local test runs at
+freely, **one PR kept open and merged only when all nine phases are done** (superseded 2026-09-26: the owner merged #222 after Phase 02 slice B; see "Resume here" below). No local test runs at
 all -- CI is the only gate. Multiple agents are authorised where they help.
 
 **Spine receipts:** the two kickoff receipts are NOT on the spine
@@ -510,15 +510,26 @@ consumer projects — it carries the owner's approvals.
 **Resume here next (Phase 02), in order:**
 0. ~~**The explore ignore rule**, red-first on CI and then green.~~ Done 2026-09-18 (see the
    update above).
-1. **Routed 2026-09-26, waiting for the owner's OK:** [ADR-1419](../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md)
-   (proposed) and a Phase 02 exit criterion. The read and write checks bind only a `ui-composer`
-   caller, which ends the operator lock. Parallel composition is NOT in it: binding by `agent_id`
-   would let a composer claim a sibling with its first call (BL-8), so composition stays serial
-   until the ADR's revisit trigger holds.
-2. **Phase 02 Slice B.** Turn `tests/design-refpack.bats`' 14 red-first cases green: the curator's
-   robots.txt preflight, the pack builder with provenance rows, and the registry's `status: off`
-   and `allowed_use` refusals. Then the real pack from the two permitted galleries.
-3. **Spine receipts from the main clone:** the kickoff pair, the 2026-09-16 decision, and Phase 01's
+1. **[ADR-1419](../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md)
+   ACCEPTED by the owner 2026-09-26 ("ok").** Built on `feat/arc-design-v2-p02` (PR #289): the
+   read and write checks ask `composer-bash-check.sh --identity` who is calling and judge only a
+   `ui-composer` call, which ends the operator lock. Composition stays serial (BL-8).
+   - **Red-first on CI:** run 36250787461 at `0eb481b3`, 5 red jobs each failing on exactly the
+     three cases where a non-composer must pass, `declared = executed` on every leg.
+   - **Two boundary attack rounds** (logic surface NOT RUN both times: the free trial model's
+     transport failed in r1, so r2 had no r1 logic result): r1 8 findings, r2 4, all critical,
+     high and medium fixed except r1 B4 / r2 B3 (a runtime count of composer-classified calls, a
+     new mechanism waiting for the owner) and the lows, all in `debt-ledger.md`.
+   - **CI on the r2 fixes** (run 36253802366) found two more: an old test fed an empty payload
+     that is now unreadable, and the read, write and critic checks chose jq by `command -v`,
+     so a broken jq failed a composer's Read open (the Bash check's BL-3 twin). Both fixed.
+2. ~~**Phase 02 Slice B.**~~ Done: the robots.txt preflight and the pack builder landed at
+   `a0c0cfee`, two attack rounds closed at `77dc42bf` and `873fdab1`, and the refpack 14 are
+   green. **PR #222 was merged by the owner 2026-09-26** at `1a8bf012` with 19/19 jobs green,
+   which ends the "one PR, merged after all nine phases" mode: the lane now ships in PRs off
+   `main`. Still open in Phase 02: **the real pack** from the two permitted galleries, with a
+   robots.txt refusal exercised on a third.
+3. **Spine receipts from the main clone** (unblocked now that #222 is on `main`): the kickoff pair, the 2026-09-16 decision, and Phase 01's
    `phase.closed` plus its `approval.requested`.
 4. For the owner, not blocking: the dispatchers (`PreToolUse.sh` and its siblings) should refuse
    when `_dispatch.sh` sources but defines no `arc_dispatch`. Today a truncated copy exits 127,

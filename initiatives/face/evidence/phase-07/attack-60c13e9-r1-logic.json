@@ -1,0 +1,131 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "tests/face-dash.bats:50",
+      "breaking_input": "Run the new bats test on a fully green suite: part B prints `ok MUTANT FAILs driver-only: the harness claude as the command`, and assertion 52 REQUIRES that exact line, while assertion 50 requires `[[ \"$output\" != *\"FAIL\"* ]]` — \"FAILs\" contains \"FAIL\", so the test is unsatisfiable and can never pass.",
+      "why": "The phase's own RED-first gate is self-contradictory: one assertion demands the substring FAIL be absent and another demands a line containing FAILs be present. CI is permanently red on a good tree, or someone 'fixes' it by loosening the no-FAIL guard and the vacuous-pass protection dies.",
+      "fix": "Anchor the guard to the refusal prefix, e.g. `!= *'FAIL '*` (FAIL followed by space, which ok-lines never carry), or have the suite print mutants as `ok MUTANT rejected by driver-only: …` and assert that.",
+      "twin_of": "Tests that could not fail, or could not pass -> the mutant is the negative control; write the check it fails."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/face/session-door.mjs:241",
+      "breaking_input": "Session review-ship.review starts; its run.log contains a line where arc-run echoes a foreign spine id (e.g. `waiting on 01M2TPXZ16FDQ07K3SWBJ6V44M`) or a receipt line naming kind `ship.done` for an id the spine holds as `note.logged` from another process. ULID_ANYWHERE/RECEIPT_LINE collect it, newness passes (minted after start), and attach serves it in this session's receipts — named:true, payload scrubbed and shown — though the spine event is another run's, of another kind, from another process.",
+      "why": "Attribution is by printed id + existence + newness only. The kind the receipt line NAMES (stored in `named`) is never compared with ev.kind, and ev.process is passed through without being checked against meta.process — exactly the checks the fixed-defect row demands. Any bare ULID the run prints (observed events, plan ids) is silently promoted to this session's receipt.",
+      "fix": "In receiptsOf, drop ids whose spine event's kind differs from the kind the line named (for RECEIPT_LINE hits), and require ev.process === meta.process before serving; bare-ULID hits are not receipts at all.",
+      "twin_of": "A receipt found by 'newest of the kind' is anybody's receipt -> attribute by the id the TOOL PRINTED, checked on the spine for kind, process and newness; no printed id, no receipt, never a guess."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/session-door.mjs:129",
+      "breaking_input": "Plant a junction/symlink named AAAAAAAAAAAAAAAA inside journalDir/sessions pointing at another tree's session directory whose session.json has a numeric startedAt and a pid. GET /api/sessions lists it with the foreign session/process/driver/startedAt and its state (reading its exit.json and probing its pid with kill(pid,0)), while GET /api/session-run/AAAAAAAAAAAAAAAA refuses the same directory with RUN_OUTSIDE.",
+      "why": "The junction guard the file itself documents lives only in dirOf, which read() uses; list() walks sessionsDir and calls stateOf with no realpath containment or type check, so the door serves metadata and state from a tree it refuses to read.",
+      "fix": "Route list()'s per-run state through the same containment check as dirOf (or a shared containedDirOf), and skip/refuse uncontained entries by name.",
+      "twin_of": "Directory walks with no containment and no type check -> every file AND directory a route reads is realpath-contained and type-checked, exactly as `lanePhases` is."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-sessions.mjs:72",
+      "breaking_input": "Once the engine lane adds processes/ship-run.process.yaml (the phase table's own plan), POST /api/session/review-ship.ship/start with one minted click spawns the whole ship-run process; nothing between the click and the deploy step reads confirmStep — grep the diff: the field is written on the row and surfaced by sessionsView, and no code in session-door.mjs start() or anywhere else ever reads it.",
+      "why": "The row promises 'its session stops for the owner's confirmation before the deploy step', but the confirmStep field is data no code enforces — the ADR-clause-without-a-check class. The spec's exit criterion ('a fixture proves no deploy step runs without it') has no door-side mechanism to fail.",
+      "fix": "Either enforce confirmStep in the door (start refuses past the confirm step without a second spend/token naming the step) or record the field as display-only with the enforcement named where it lives (the process file), and pin whichever with a fixture.",
+      "twin_of": "ADR rules no code enforced -> every clause of the ADR the wiring cites is a check or a refusal, by name."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-sessions.mjs:100",
+      "breaking_input": "`mkdir processes/qa-run.process.yaml` (a directory, not a file). existsSync passes, GET /api/sessions reports qa processReady:true, and start spends its click and spawns arc-run with --process qa-run — which then fails on the unopenable 'file' with an unlabelled engine error instead of NO_PROCESS.",
+      "why": "processFileOf gates the NO_PROCESS refusal with existsSync, which accepts directories; sessionDrivers() and processNames() have the same hole (a directory named mock.mjs or x.process.yaml counts as a driver/process). The twin row was fixed elsewhere with isFile().",
+      "fix": "Use statSync(p).isFile() in processFileOf and filter processNames/sessionDrivers on isFile too.",
+      "twin_of": "`existsSync` accepted a directory as an executable, and a spawn error was an unhandled `'error'` event -> require `isFile()`, and every spawned child gets an `'error'` listener before anything else."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:1018",
+      "breaking_input": "Start any session and read the journal: the line is {\"ts\":…,\"session\":\"council.convene\",\"phase\":\"start\",…}. The wrapper's `session: true` channel marker is overwritten by `...entry` (whose session key is the id) on every session-door journal line, so no line ever carries the marker the code writes it for — unlike the work door, whose `work: true` survives.",
+      "why": "Two sources for one key with the marker dead on arrival: any journal consumer keying the door channel the way `work: true` intends misclassifies every session start/end entry.",
+      "fix": "Name the marker distinctly (e.g. `sessionDoor: true`) or spread the entry first and add the marker after, so the two do not collide.",
+      "twin_of": "Two sources for one fact"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/session-door.mjs:138",
+      "breaking_input": "POST /api/session/review-ship.review/start with body {click:T, input:{}, bogus:1} where T is a live token: the unknown-key loop throws BAD_SESSION_BODY before spend() runs, so the door answers 400 with T still unspent and spendable — the pinned invariant 'a bad body still SPENDS its click: one click can never be retried' holds only for the validateInput arm the fixture covers, not for this one.",
+      "why": "The spend-first rule stated in the comment (and pinned by part C) is ordered after the key-shape check, so the two bad-body paths disagree on the invariant; the fixture never pins the unknown-key path.",
+      "fix": "Move the key-shape check after spend(), or drop the 'always costs the token' claim and pin both paths explicitly.",
+      "twin_of": "A guard that skips on an odd input is a guard that opens on it"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-sessions.mjs:171",
+      "breaking_input": "driverOnly({script:\"engine/arc-run.mjs\", args:[\"--process\",\"p\",\"--driver\",\"auto\",\"--transcript-dir\",\"\"]}, DRIVERS) returns null (accepted); so does a trailing [\"--transcript-dir\",\"--driver\"] — a flag-shaped value. The mutant list pins --driver empty/unknown but the FREE_VALUE flags accept empty and flag-like values.",
+      "why": "The ADR-1326 gate refuses empty values only where the regex happens to catch them; the fixed flag rules require an empty value and a value starting with `--` to be refused for every flag.",
+      "fix": "In the pair loop, refuse an empty value for every flag and refuse any value starting with `--` for FREE_VALUE flags.",
+      "twin_of": "A flag consumed the NEXT flag as its value -> a value that starts with `--` is refused."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/session-door.mjs:214",
+      "breaking_input": "Start memory.promote-rule on a verbose driver: the run prints `arc-run: receipt approval.requested <id>` early, then writes 300 KiB more output. Attach reads only the last 256 KiB, so receiptsOf never sees the line and the response shows receipts: [] for a session whose approval receipt the spine holds, while bytesDropped (~44k) says lines were cut but nothing says the receipts figure covers only the tail.",
+      "why": "Receipts are derived from the trimmed read and presented as THE session's receipts; a measurement over a partial log is drawn as complete for the field the door exists to guarantee.",
+      "fix": "Keep receipt lines out of the trim (scan the whole log for RECEIPT_LINE, or persist printed receipt ids at start-time sidecar) and label the receipts figure with the window it was read from.",
+      "twin_of": "Output dropped by a cap with nothing saying so -> every body carries what its cap dropped, and the page draws it."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/session-door.mjs:207",
+      "breaking_input": "A run appending to run.log while attach polls: statSync reports size S, readFileSync then returns S+G bytes, so bytesDropped = max(0, S−LOG_TAIL) understates the true dropped count by G and the served tail exceeds LOG_TAIL; if the cut offset lands mid-UTF-8 the tail's first character becomes U+FFFD.",
+      "why": "Two reads of a growing file are mixed: the cap figure is computed from one read and the content from another (validate one read, compare another), and the byte cut is character-blind.",
+      "fix": "Compute bytesDropped from buf.length (the read actually served) and align the cut forward to a UTF-8 boundary before decoding.",
+      "twin_of": "The read host checked one read of a getter and keyed another -> copy once, then judge and use the copy."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/session-door.mjs:126",
+      "breaking_input": "Kill the door mid-write so sessions/DDDDDDDDDDDDDDDD/session.json is half-written (or craft startedAt as a string): the run vanishes from GET /api/sessions forever with no unreadable count, while attach by id still serves it — the list and the attach disagree silently.",
+      "why": "Malformed or torn session metadata is dropped by the filter with no named finding; unreadable-because-torn and absent are different results served as one.",
+      "fix": "Collect dropped dirs into an `unreadable` count on the list response, named by sid, like the door's other unreadable-row rules.",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/session-door.mjs:179",
+      "breaking_input": "The second writeFileSync(session.json) (with pid) throws — disk full, or the directory removed right after spawn: the caller gets an untyped 500 INTERNAL, the child is already running detached, session.json keeps pid:null, and the error/exit handlers were never attached, so exit.json is never written and stateOf reports the live run as `ended` forever.",
+      "why": "Anything throwing between the spawn effect and the bookkeeping loses the run's identity: the line after the effect can be lost and can turn a started session into an untracked one.",
+      "fix": "Attach the error/exit handlers and write pid in a path that cannot silently skip them (register handlers before the pid write; on throw, journal a start-with-unknown-pid entry rather than surfacing INTERNAL).",
+      "twin_of": "An id line that throws after the write -> the line after the effect can be lost; it can never turn the effect into a refusal."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-sessions.mjs:204",
+      "breaking_input": "`node .claude/scripts/hq/face-sessions.mjs --help` on the Windows leg: process.exit(2) fires immediately after the stderr usage write, racing libuv teardown — the fixed-defect row for every new CLI in this repo.",
+      "why": "A new CLI was written with process.exit() after the repo fixed the same call in face-tokens, face-coverage and the emitters: exitCode, never exit().",
+      "fix": "Set process.exitCode = 2 and return, letting the loop drain.",
+      "twin_of": "`process.exit()` raced libuv teardown on Windows -> set `process.exitCode` and let the loop drain."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "tests/face/session-door.mjs:258",
+      "breaking_input": "Run `node tests/face/session-door.mjs | cat` on a loaded CI leg: console.log('RAN: … checks') to a pipe is asynchronous and process.exit(...) on the next line can truncate it — the bats wrapper's required RAN guard intermittently reads as 'the suite did not finish' on a green run.",
+      "why": "The one line every caller parses sits behind process.exit — the exact emitter twin already fixed elsewhere; the exit code races the same flush.",
+      "fix": "Set process.exitCode and let stdout drain, or write the RAN line via a flushed synchronous path before exiting.",
+      "twin_of": "The emitter's own id line behind process.exit -> the twin of the process.exit row, in the one line every caller parses."
+    }
+  ]
+}
