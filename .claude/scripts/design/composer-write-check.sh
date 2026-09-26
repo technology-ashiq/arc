@@ -48,6 +48,26 @@ for _mk in "$MARKER_DIR"/composer-session--*; do
 done
 [ "$_MK_N" -eq 0 ] && exit 0
 
+# ONLY A ui-composer CALL IS JUDGED (ADR-1419), asked of the Bash boundary's one identity parser
+# before anything else can refuse -- the reasons are with the same block in composer-scope-check.sh.
+# A path given as argv carries no caller and is judged as a composer's.
+TARGET="${1:-}"
+STDIN=""
+if [ -z "$TARGET" ] && [ ! -t 0 ]; then STDIN="$(cat)"; fi
+if [ -z "$TARGET" ]; then
+  _IDC="$ROOT/.claude/scripts/design/composer-bash-check.sh"
+  # A missing or incomplete parser answers nothing, and every caller is judged, as before.
+  if [ -f "$_IDC" ] && [ "$(tail -n 1 "$_IDC" 2>/dev/null | tr -d '\r')" = "# composer-bash-check: end" ]; then
+    printf '%s' "$STDIN" | bash "$_IDC" --identity
+    case $? in
+      1) exit 0;;
+      2) echo "BLOCKED by ui-composer write scope: this call may be ui-composer's, and who is calling cannot be read exactly." >&2
+         if type arc_cm_describe >/dev/null 2>&1; then arc_cm_describe "$ROOT" >&2; fi
+         exit 2;;
+    esac
+  fi
+fi
+
 # The same marker arms both boundaries, so an abandoned compose locks writes exactly as it locks
 # reads, and a fix on one side alone is the one-side-fixed twin this lane keeps shipping. So the
 # marker reader, the id grammar and the description live ONCE, in core -- arc_cm_load and
@@ -86,9 +106,7 @@ EX="$ARC_MF_EXPLORE"; VARIANT="$ARC_MF_VARIANT"
 
 # ---------- what is being written ----------
 
-TARGET="${1:-}"
-if [ -z "$TARGET" ] && [ ! -t 0 ]; then
-  STDIN="$(cat)"
+if [ -z "$TARGET" ] && [ -n "$STDIN" ]; then
   if command -v jq >/dev/null 2>&1; then
     TARGET="$(printf '%s' "$STDIN" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)"
   else

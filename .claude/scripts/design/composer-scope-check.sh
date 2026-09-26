@@ -164,8 +164,8 @@ esac
 # armed A, then armed B, and the marker simply became B's: composer A was then allowed to read
 # variant-b and REFUSED its own directory. Both halves of the boundary inverted at once.
 #
-# A filesystem marker cannot tell which composer is calling: the hook payload carries no
-# caller identity this script can trust. So the honest contract is SERIAL composition, and
+# A filesystem marker cannot tell which composer is calling: the payload says a ui-composer is,
+# not which variant it owns (BL-8, deferred by ADR-1419). So the honest contract is SERIAL composition, and
 # more than one armed boundary fails CLOSED with a message that says why. Parallel composition
 # needs per-caller identity in the payload, which is a later question and not one to fake here
 # by picking a marker and hoping.
@@ -175,6 +175,32 @@ for _mk in "$MARKER_DIR"/composer-session--*; do
   _MK_N=$((_MK_N + 1)); MARKER="$_mk"
 done
 [ "$_MK_N" -eq 0 ] && exit 0
+
+# ONLY A ui-composer CALL IS JUDGED (ADR-1419). A marker says a compose is armed, not who is
+# calling, so every caller used to be refused -- the operator too, and an abandoned compose locked
+# the whole tree for three weeks. The harness writes agent_type into a subagent's payload, and the
+# Bash boundary already parses it; this asks that one parser (--identity) rather than keeping a
+# second. Asked FIRST, before the marker count, a malformed marker or a stale core: none of those
+# refuses the main session any more. A path given as argv carries no caller, so a direct call is
+# judged as a composer's, which is what every argv case in the suite means.
+TARGET="${1:-}"
+STDIN=""
+if [ -z "$TARGET" ] && [ ! -t 0 ]; then STDIN="$(cat)"; fi
+if [ -z "$TARGET" ]; then
+  _IDC="$ROOT/.claude/scripts/design/composer-bash-check.sh"
+  # A missing or incomplete parser answers nothing, and then every caller is judged, as before
+  # this ADR: a broken install leans closed, never open for a composer.
+  if [ -f "$_IDC" ] && [ "$(tail -n 1 "$_IDC" 2>/dev/null | tr -d '\r')" = "# composer-bash-check: end" ]; then
+    printf '%s' "$STDIN" | bash "$_IDC" --identity
+    case $? in
+      1) exit 0;;
+      2) echo "BLOCKED by ui-composer scope: this call may be ui-composer's, and who is calling cannot be read exactly." >&2
+         if _core_ok; then _refuse; fi
+         exit 2;;
+    esac
+  fi
+fi
+
 # Only now, with a marker armed, does a stale or missing core matter -- and then it is a refusal,
 # because a boundary that cannot read its marker or resolve a path cannot decide anything.
 _core_ok || _core_refuse
@@ -198,7 +224,6 @@ if ! arc_cm_load "$MARKER"; then
 fi
 EX="$ARC_MF_EXPLORE"; VARIANT="$ARC_MF_VARIANT"
 
-TARGET="${1:-}"
 # The TOOL matters as much as the path, and reading only the path is why this boundary
 # covered one of the three read tools the composer holds.
 #
@@ -215,8 +240,7 @@ TARGET="${1:-}"
 #   Glob  + no path         one, and it must fail CLOSED.
 TOOL=""
 PATTERN=""
-if [ -z "$TARGET" ] && [ ! -t 0 ]; then
-  STDIN="$(cat)"
+if [ -z "$TARGET" ] && [ -n "$STDIN" ]; then
   if command -v jq >/dev/null 2>&1; then
     TARGET="$(printf '%s' "$STDIN" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)"
     TOOL="$(printf '%s' "$STDIN" | jq -r '.tool_name // empty' 2>/dev/null)"

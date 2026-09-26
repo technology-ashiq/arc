@@ -23,26 +23,38 @@
 # exactly where the composer is allowed to read.
 #
 #   composer-bash-check.sh     # payload JSON on stdin (the PreToolUse dispatcher's contract)
+#   composer-bash-check.sh --identity   # payload on stdin; answers only WHO is calling
 #
 # Exit: 0 allow | 2 BLOCK. Never any other code. bash-3.2 / POSIX-safe.
+#
+# --identity is how the read and write boundaries learn who is calling (ADR-1419): they judge only
+# a ui-composer call, and they ask THIS parser rather than carrying a second hand-written one (the
+# twin-fix rule). Its exit: 0 a ui-composer call | 1 someone else's | 2 the call may be a
+# composer's and its identity cannot be read exactly, which the caller refuses.
 set -uo pipefail
 # Byte semantics for every string operation below: under a UTF-8 locale bash counts and strips
 # characters, which is slower and made a long string's cost grow faster than its length (eighth
 # attack pass, SH8-1). Every character class in this file is spelled out, so nothing depends on it.
 LC_ALL=C; export LC_ALL
 
-[ -t 0 ] && exit 0
+IDENTITY=0
+[ "${1:-}" = "--identity" ] && IDENTITY=1
+# Not a composer's call: allowed by the Bash boundary, answered "someone else" by --identity.
+_other() { [ "$IDENTITY" -eq 1 ] && exit 1; exit 0; }
+
+[ -t 0 ] && _other
 PAYLOAD="$(cat)"
 
 # Cheap first: nearly every call is not a composer's, and they must not pay for the parse. The
 # letters are matched without case, so `UI-Composer` still reaches the identity check. A payload
 # carrying any JSON escape is parsed too, because an identity spelled with one never shows the
 # word (eighth attack pass, G); without a working jq that case is let go below, not refused.
-case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*'\u'*) ;; *) exit 0;; esac
+case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*'\u'*) ;; *) _other;; esac
 NAMES_COMPOSER=0
 case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*) NAMES_COMPOSER=1;; esac
 
 _refuse() {
+  if [ "$IDENTITY" -eq 1 ]; then echo "ui-composer identity: $1" >&2; exit 2; fi
   echo "BLOCKED by ui-composer bash scope: $1" >&2
   echo "A composer runs one command through Bash -- the renderer, on its own variant, into its own session:" >&2
   echo "  bash .claude/scripts/design/design-render.sh docs/design/explore/<id>/<variant>/index.html --mode explore --session <id>--<variant> --iter N --viewport WxH" >&2
@@ -64,7 +76,7 @@ if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | _jq -j '.k' 2>/dev
 fi
 # Without jq, a payload that only carries an escape cannot be decoded, and the harness never
 # escapes the letters of an agent name, so it is not treated as a composer's.
-[ "$JQ_OK" -eq 1 ] || [ "$NAMES_COMPOSER" -eq 1 ] || exit 0
+[ "$JQ_OK" -eq 1 ] || [ "$NAMES_COMPOSER" -eq 1 ] || _other
 
 # A payload whose raw text shows a composer identity and is larger than any render's call is
 # refused before it is parsed: a composer controls its command's size, and the jq stream count
@@ -136,14 +148,16 @@ if ! _field agent_type '["agent_type"]' '.agent_type' 256 name; then
     1:*|0:*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*)
       _refuse "the calling agent cannot be identified exactly, and this call may be ui-composer's.";;
   esac
-  exit 0
+  _other
 fi
 # Normalised, so a namespaced install (`arc:ui-composer`) or a case change is still the composer
 # rather than silently nobody (BL-9). Letters spelled out: `tr '[:upper:]'` maps I to a dotless i
 # under tr_TR.
 AGENT="$(printf '%s' "$FIELD" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')"
 AGENT="${AGENT##*:}"
-[ "$AGENT" = "ui-composer" ] || exit 0
+[ "$AGENT" = "ui-composer" ] || _other
+# The identity is all --identity answers; the tool and the command below are the Bash boundary's.
+[ "$IDENTITY" -eq 1 ] && exit 0
 _field tool_name '["tool_name"]' '.tool_name' 64 name || _refuse "the tool of a ui-composer call cannot be read exactly."
 [ "$FIELD" = "Bash" ] || exit 0
 
