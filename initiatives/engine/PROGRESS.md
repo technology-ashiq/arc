@@ -263,6 +263,45 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### OUT-OF-CYCLE BUG — a driver that ignores the run's deadline, a silent retry ladder, and a nullable twin_of — 2026-09-26
+
+**Classification: a bug** (`/arc-change --lane engine`, the owner's OK 2026-09-26; the lane is IDLE and Cycle 7 is
+closed, so this is its tracked home, the #267 pattern). **What happened:** in the face lane, a logic attack through the
+`generic-api` driver on OpenRouter ran for about 1.5 h with no output and no result. The ladder was 3 tries × 3
+transport attempts × a 10-minute `ARC_LLM_TIMEOUT_MS`, and `generic-api.mjs:79-92` prints nothing until every attempt
+has failed. Separately, PR A's first boundary run died after 24 minutes on `$.findings[11].twin_of: expected type
+string, found null`, and the one same-tier retry failed the same way.
+
+**Root cause.** arc-run already hands every driver the run's absolute deadline (`ARC_DRIVER_DEADLINE_EPOCH_MS`,
+arc-run.mjs:1409), and `drivers/hermes.mjs` honours it (`msUntilDeadline`, :530). `drivers/generic-api.mjs` never reads
+it, so each transport attempt starts a fresh clock. That is **A-03's defect class at a new enforcement point** (the
+pre-mortem's #3). A-03 is **not marked FIRED**: its trigger is "exceeding the STATED cap", and `attack-diff` runs with
+no `--budget`, so there was no cap to exceed. `arc-attack` never passes one, which is the other half of the bug.
+`twin_of` cannot be made nullable without changing `schema-subset.mjs`, whose `type` is a single string by design.
+
+**Scope: FULL, no cut** (the owner, 2026-09-26: "promise panntha panu, scope cut ila", i.e. "do what you promised,
+no scope cut"; and "attack heartbeat pannum pothu tokens waste pannatha maari", i.e. "the heartbeat must not waste
+tokens"). An earlier draft here proposed a reduced scope, with no live heartbeat and a prompt-only `twin_of`. The owner
+refused it. **Fix (one PR, branch `feat/engine-driver-deadline`):**
+1. `drivers/common.mjs` exports the deadline reader (moved from hermes, which imports it). `generic-api` gives each
+   attempt `min(ARC_LLM_TIMEOUT_MS, time left - 1.5 s)`, starts no attempt once the deadline has passed, and prints
+   ONE stderr line per failed attempt (`generic-api: attempt 2/3: timeout after 420s -- 12m01s left, retrying`).
+2. `arc-attack` runs each surface ASYNC under `--budget min=<ARC_ATTACK_MINUTES, default 30>`, with `ARC_RUN_STREAM=1`
+   so the driver's lines arrive live. It prints a started line, then a heartbeat every `ARC_ATTACK_HEARTBEAT_MS`
+   (default 60 s) quoting the driver's latest line, and overwrites `--status-file` with that ONE line. A watchdog
+   SIGKILLs a child still alive `ARC_ATTACK_GRACE_MS` past its deadline. None of it calls a model. A watcher reads one
+   line, never the log.
+3. ADR-0227: the schema subset gains exactly one union, `type: [<type>, "null"]`. `attack-diff` 1.1.0 makes
+   `twin_of` nullable. Any other list is still `schema-shape`.
+Tests:
+- `tests/engine-driver-deadline.mjs`, against a local never-answering endpoint and a 503 endpoint.
+- `tests/engine-attack-watch.mjs`, against a truly hanging child: the heartbeat, a one-line status file, the watchdog,
+  and malformed timing refused.
+- process-lint hostile fixtures: `accept-nullable-type` ACCEPT, and `type-union-not-nullable` failing
+  `schema-shape`.
+Estimate: 1.5d, not charged to the closed Cycle 7.
+**Found while attacking this PR (2026-09-26):** the data boundary's `generic-credential-assignment` rule refused both surfaces at once, because `const API_KEY = process.env.ARC_LLM_API_KEY` in `drivers/generic-api.mjs` sits in this diff's context. It is an env READ, not a credential. Owner's call: fix the rule, not the code around it. The rule now exempts exactly `process.env.<NAME>` (plus a closing `;`, `,` or `)`), and `tests/redact-env-read.mjs` holds 4 reads passing, 6 literals and glued reads still refused, and the old rule as the control. The gate change is attacked in this PR's own round.
+
 ### OUT-OF-CYCLE — ADR-0226 Amendment 1: no new session per PR round — 2026-09-24
 
 **Classification: a decision.** The owner ruled on it on 2026-09-24 and it went through `/arc-change --lane

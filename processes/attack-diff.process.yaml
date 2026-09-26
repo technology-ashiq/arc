@@ -1,5 +1,5 @@
 name: attack-diff
-version: 1.0.0
+version: 1.1.0
 intent: "Adversarially attack one surface of a diff with concrete breaking inputs, carrying the lane's fixed-defect patterns."
 permissions: declared
 
@@ -90,7 +90,11 @@ output:
             type: string
             minLength: 1
           twin_of:
-            type: string
+            # null or absent when the finding is no twin: a model that wrote null failed the whole run on a
+            # single-string type (engine bug, 2026-09-26); the nullable pair is ADR-0227.
+            type:
+              - string
+              - "null"
 evals:
   - tests/fixtures/engine/evals/attack-diff/logic-basic.json
   - tests/fixtures/engine/evals/attack-diff/boundary-basic.json

@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/engine/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/engine/PROGRESS.md)
 
-## Decisions (24)
+## Decisions (25)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -52,6 +52,7 @@ ADRs whose `Product:` line names this lane first.
 | [`0222`](../../../docs/adr/0222-a-dispatch-gets-a-private-copy-of-the-runtime-home-because-memory-cannot-be-turned-off.md) | a dispatch gets a private copy of the runtime home, because the runtime's memory cannot be turned off | accepted | 2026-08-17 |
 | [`0223`](../../../docs/adr/0223-an-empty-tools-list-is-a-declaration-not-an-absence.md) | an empty tools list is a declaration, not an absence, and the narrowest process in the repo was the only one the gate refused | accepted — clause 4 amended by ADR-0226 (2026-09-23): an explicit `tools: []` now dispatches on claude-code as `--tools "" --strict-mcp-config` instead of being refused | 2026-08-18 |
 | [`0226`](../../../docs/adr/0226-the-pr-loops-attacker-pass-and-ci-read-run-as-governed-engine-work.md) | the PR loop's attacker pass and CI read run as governed engine work, not inside the building session | proposed | 2026-09-23 |
+| [`0227`](../../../docs/adr/0227-the-schema-subset-gains-one-nullable-pair-and-nothing-else.md) | The schema subset gains one nullable pair, and nothing else | accepted | 2026-09-26 |
 
 ## Source
 

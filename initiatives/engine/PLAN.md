@@ -255,6 +255,7 @@ flowchart TB
 | 0218 | EXE-K — arc verifies outcomes and never prescribes the contractor's process | accepted |
 | 0219 | The data boundary is refused above the driver, and ENG-D's three-code exit map stands | accepted |
 | 0220 | The model is a per-invocation trial seam, separate from production routing — **out-of-cycle, not charged to this appetite** (see Appetite) | accepted |
+| 0227 | The schema subset gains one nullable pair (one type or null), and nothing else — **out-of-cycle, not charged to this appetite** | accepted |
 
 ## Non-negotiables
 

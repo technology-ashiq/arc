@@ -392,3 +392,14 @@ has_line() { [[ $'\n'"$1" == *$'\n'"$2"* ]]; }
   run --separate-stderr node "$(RUN)" --process council-convene --driver claude-code --input '{"question":"a probe"}' --root "$ARC_ROOT"
   [ "$status" -eq 0 ] || { echo "control: $stderr"; false; }
 }
+
+@test "generic-api honours the run deadline across its attempts, and says so one line per attempt" {
+  # A never-answering endpoint under a ~6 s budget ends on the deadline, not after 3 x 60 s; a 503 endpoint gives three
+  # attempts and three lines (engine out-of-cycle bug, 2026-09-26). Local server only -- no network, no key.
+  run node "$ARC_ROOT/tests/engine-driver-deadline.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: 6 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok A: a never-answering endpoint ends on the run's ~6 s deadline, far inside one 60 s attempt cap"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok B: one line per failed attempt, each with its status, the first two retrying and the last not"* ]] || { echo "$output"; false; }
+}
