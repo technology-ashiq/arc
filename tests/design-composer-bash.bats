@@ -619,3 +619,87 @@ teardown() { _arc_teardown; }
   grep -q '".claude/hooks/PreToolUse.d/10-design-composer.sh"' "$ARC_ROOT/products/design/manifest.json" || {
     echo "installed, but products/design/manifest.json does not ship it; add the row and regenerate the sync golden"; false; }
 }
+
+# ---------- ADR-1420: the design-curator's Bash and WebFetch ----------
+#
+# The scaffold takes tool NAMES, so the curator holds plain Bash and WebFetch; this boundary is
+# what scopes them. Bash runs only design-refpack.mjs with its own five flags. WebFetch runs only
+# on an active, fetchable registry row's host whose robots.txt answers ALLOW. robots.txt is served
+# by the offline seam: ARC_DESIGN_OFFLINE=1 plus ARC_DESIGN_ROBOTS_FILE, read by the hook's check.
+
+_curator_sandbox() {
+  _bash_sandbox
+  cp "$ARC_ROOT/design.sources.yaml" "$SANDBOX/design.sources.yaml"
+  printf 'User-agent: *\nDisallow: /private/\n' > "$SANDBOX/robots.txt"
+  export ARC_DESIGN_OFFLINE=1 ARC_DESIGN_ROBOTS_FILE="$SANDBOX/robots.txt"
+}
+# A WebFetch payload. $1 = agent_type ("" for the main session), $2 = url.
+_wp() {
+  if [ -n "$1" ]; then
+    printf '{"session_id":"s","agent_id":"k1","agent_type":"%s","hook_event_name":"PreToolUse","tool_name":"WebFetch","tool_input":{"url":"%s","prompt":"list the screens"}}' "$1" "$2"
+  else
+    printf '{"session_id":"s","hook_event_name":"PreToolUse","tool_name":"WebFetch","tool_input":{"url":"%s","prompt":"list the screens"}}' "$2"
+  fi
+}
+_fetch() { run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse.sh" "$(_wp "$1" "$2")"; }
+
+REFPACK_OK='node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --source lapa-ninja --url "https://lapa.ninja/assets/shot-1.png" --principle "Dense tables earn trust: one row, one fact, and the totals line up." --avoid "Do not copy the green palette; it is their brand, not a principle."'
+
+@test "ADR-1420: a curator's Bash runs design-refpack.mjs with its own flags and nothing else" {
+  _curator_sandbox
+  _hook design-curator Bash "$REFPACK_OK"
+  [ "$status" -eq 0 ] || { echo "a well-formed refpack call was refused: $stderr"; false; }
+  # Paired: the same boundary refuses everything else the curator could try.
+  _hook design-curator Bash "cat docs/design/explore/lexos-v1/variant-b/index.html"
+  [ "$status" -eq 2 ] || { echo "a curator cat ran: $status"; false; }
+  _hook design-curator Bash "$REFPACK_OK ; rm -rf docs"
+  [ "$status" -eq 2 ] || { echo "a second command rode along a refpack call: $status"; false; }
+  _hook design-curator Bash "${REFPACK_OK} --registry /tmp/r.yaml"
+  [ "$status" -eq 2 ] || { echo "a curator used a test seam: $status"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja/$(id)" --principle "p" --avoid "a"'
+  [ "$status" -eq 2 ] || { echo "a substitution inside a quoted value ran: $status"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja/x.png" --principle "p" --avoid "unterminated'
+  [ "$status" -eq 2 ] || { echo "an unterminated quote was allowed: $status"; false; }
+  _hook arc:Design-Curator Bash "cat README.md"
+  [ "$status" -eq 2 ] || { echo "a namespaced curator ran cat: $status"; false; }
+}
+
+@test "ADR-1420: a curator's WebFetch needs an active registry host and a robots ALLOW" {
+  _curator_sandbox
+  _fetch design-curator "https://www.lapa.ninja/category/saas"
+  [ "$status" -eq 0 ] || { echo "an allowed gallery page was refused: $stderr"; false; }
+  _fetch design-curator "https://example.com/anything"
+  [ "$status" -eq 2 ] || { echo "an off-registry host was fetched: $status"; false; }
+  printf '%s' "$stderr" | grep -qi "registry" || { echo "refused, but not by the host binding: $stderr"; false; }
+  _fetch design-curator "https://lapa.ninja/private/drafts"
+  [ "$status" -eq 2 ] || { echo "a robots DISALLOW path was fetched: $status"; false; }
+  printf '%s' "$stderr" | grep -q "DISALLOW" || { echo "refused, but not by robots: $stderr"; false; }
+  _fetch design-curator "http://lapa.ninja/category/saas"
+  [ "$status" -eq 2 ] || { echo "a plain-http fetch was allowed: $status"; false; }
+  # awwwards is active and fetchable but link-only: it may be linked, not browsed for a pack.
+  _fetch design-curator "https://www.awwwards.com/websites/"
+  [ "$status" -eq 2 ] || { echo "a link-only source was browsed: $status"; false; }
+  # godly is off: no fetch at all.
+  _fetch design-curator "https://godly.website/"
+  [ "$status" -eq 2 ] || { echo "an off source was browsed: $status"; false; }
+}
+
+@test "ADR-1420: an unreadable robots.txt refuses a curator fetch, and says UNREADABLE" {
+  _curator_sandbox
+  unset ARC_DESIGN_ROBOTS_FILE; export ARC_DESIGN_ROBOTS_STATUS=403
+  _fetch design-curator "https://saasframe.io/examples"
+  [ "$status" -eq 2 ] || { echo "a 403 robots.txt was read as permission: $status"; false; }
+  printf '%s' "$stderr" | grep -q "UNREADABLE" || { echo "refused, but not as UNREADABLE: $stderr"; false; }
+}
+
+@test "ADR-1420: the main session and ui-composer are unchanged by the curator rules" {
+  _curator_sandbox
+  _fetch "" "https://example.com/anything"
+  [ "$status" -eq 0 ] || { echo "the main session's WebFetch was scoped: $stderr"; false; }
+  _hook "" Bash "cat README.md"
+  [ "$status" -eq 0 ] || { echo "the main session's Bash was scoped: $stderr"; false; }
+  _fetch ui-composer "https://example.com/anything"
+  [ "$status" -eq 0 ] || { echo "a composer WebFetch changed behaviour: $stderr"; false; }
+  # Paired: the composer boundary is still live.
+  _live
+}
