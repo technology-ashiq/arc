@@ -595,9 +595,10 @@ load 'test_helper'
 @test "reference room: index, type and entity pages from the real extract; links resolve; cross-links equal the markdown" {
   run node "$ARC_ROOT/tests/face/reference-fold.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"RAN: 12 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  [[ "$output" == *"RAN: 15 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
   [[ "$output" == *"ok links: every room that links lands on a page the extract holds; with + without = every served room"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok lost: every pick outside the grammar is LOST -- never a type list, never someone else's page"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok entity: every paged entity opens as a page with a path back, and every link it draws resolves to an entity"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok cross-links: each product's 'Required by' in the room equals its docs/wiki page's, for every product"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok lost: a pick naming nothing is LOST with its name, never an empty page that looks real"* ]] || { echo "$output"; false; }

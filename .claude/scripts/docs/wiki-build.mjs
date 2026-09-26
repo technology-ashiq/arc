@@ -486,23 +486,31 @@ const stemOfPath = (p) => (typeof p === "string" ? p.replace(/^.*\//, "").replac
  */
 export function relationsOf(wiki) {
   const E = wiki.entities;
-  /** @type {Record<string, string[]>} */ const requiredBy = {};
-  /** @type {Record<string, string>} */ const commandOwner = {};
-  /** @type {Record<string, string>} */ const agentOwner = {};
-  for (const p of E.products) {
-    for (const r of p.facts.requires || []) requiredBy[r] = [...(requiredBy[r] || []), p.id];
-    for (const c of p.facts.commands || []) commandOwner[stemOfPath(c)] = p.id;
-    for (const a of p.facts.agents || []) agentOwner[stemOfPath(a)] = p.id;
+  // NULL-PROTOTYPE accumulators, own-key reads: an id is a directory or a manifest word, and `constructor` or
+  // `__proto__` read through Object.prototype made `[...(requiredBy[r] || [])]` spread a function and throw -- the
+  // whole wiki build with it (attack 53ee223 L5, B1). Lists are iterated only when they ARE lists: a `requires` of
+  // "core" iterated its letters, and a number threw (B2).
+  const bag = () => /** @type {Record<string, any>} */ (Object.create(null));
+  const own = (o, k) => (Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
+  const listOf = (v) => (Array.isArray(v) ? v : []);
+  /** @type {Record<string, string[]>} */ const requiredBy = bag();
+  /** @type {Record<string, string>} */ const commandOwner = bag();
+  /** @type {Record<string, string>} */ const agentOwner = bag();
+  for (const p of listOf(E.products)) {
+    const f = p && p.facts ? p.facts : {};
+    for (const r of listOf(f.requires)) if (typeof r === "string") requiredBy[r] = [...(own(requiredBy, r) || []), p.id];
+    for (const c of listOf(f.commands)) commandOwner[stemOfPath(c)] = p.id;
+    for (const a of listOf(f.agents)) agentOwner[stemOfPath(a)] = p.id;
   }
-  /** @type {Record<string, any[]>} */ const adrsFor = {};
-  for (const a of E.adrBands.flatMap((b) => b.facts.adrs.map((x) => ({ ...x, band: b.id })))) {
+  /** @type {Record<string, any[]>} */ const adrsFor = bag();
+  for (const a of listOf(E.adrBands).flatMap((b) => listOf(b && b.facts ? b.facts.adrs : undefined).map((x) => ({ ...x, band: b.id })))) {
     const o = ownerToken(a.product);
-    if (o) adrsFor[o] = [...(adrsFor[o] || []), a];
+    if (o) adrsFor[o] = [...(own(adrsFor, o) || []), a];
   }
   // A product and a lane that share an id are one another's pages (the pages' Lane / Product rows).
-  /** @type {Record<string, string>} */ const productLane = {};
-  const laneIds = new Set(E.lanes.map((l) => l.id));
-  for (const p of E.products) if (laneIds.has(p.id)) productLane[p.id] = p.id;
+  /** @type {Record<string, string>} */ const productLane = bag();
+  const laneIds = new Set(listOf(E.lanes).map((l) => l.id));
+  for (const p of listOf(E.products)) if (laneIds.has(p.id)) productLane[p.id] = p.id;
   return { requiredBy, commandOwner, agentOwner, adrsFor, productLane };
 }
 

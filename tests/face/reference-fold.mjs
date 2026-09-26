@@ -97,10 +97,23 @@ if (narrated.length) {
   check("narrative: a page with one draws the owner's own words", wf.entity.hasStartHere === true && body.narrative[narrated[0]].includes(wf.entity.startHere[0].slice(0, 40)), narrated[0]);
 } else check("narrative: a page with one draws the owner's own words (no narrative on this tree -- the split below still runs)", true);
 const split = splitNarrative("First part.\n\nSecond.\n\n## The bigger loop\n\nThe loop part.");
+const fenced = splitNarrative("Intro.\n\n```md\n## The bigger loop\n```\n\nStill intro.\n\n## The bigger loop\n\nReal loop.");
+check("narrative: a '## The bigger loop' inside a code fence is the owner's quoted text, not the break (L3)",
+  fenced.loop.length === 1 && fenced.loop[0] === "Real loop." && fenced.start.some((p) => p.includes("Still intro.")), JSON.stringify(fenced));
 check("narrative: '## The bigger loop' divides the owner's text between the two sections, nothing added",
   JSON.stringify(split) === JSON.stringify({ start: ["First part.", "Second."], loop: ["The loop part."] }), JSON.stringify(split));
 
 // ---- lost, and loading ----
+// The pick grammar or LOST: a trailing slash, a padded key, a nested path and a dot segment are never a second
+// spelling of a real page (attack 53ee223 L1, L6).
+const spellings = ["products/", " products", "products//hq", "products/hq/x", "products/../gates", "Products"].map((a) => [a, foldAt(a)]);
+check("lost: every pick outside the grammar is LOST -- never a type list, never someone else's page",
+  spellings.every(([, f]) => f.isLost === true && f.isType === false && f.isEntity === false), spellings.filter(([, f]) => !f.isLost).map(([a]) => JSON.stringify(a)).join(","));
+// The live-room button follows the rail's rule: a product whose room is the lane TEMPLATE opens nothing (L7, B3).
+const onTemplate = ids("products").find((id) => body.entities.products.find((e) => e.id === id).facts.faceRoom === "lane");
+check("links: a live-room button exists only for an openable room -- the lane template never",
+  !!onTemplate && foldAt(`products/${onTemplate}`).entity.faceRoom.canOpen === false
+  && ids("products").some((id) => foldAt(`products/${id}`).entity.faceRoom.canOpen === true), String(onTemplate));
 const lost = foldAt("products/no-such-product-anywhere");
 check("lost: a pick naming nothing is LOST with its name, never an empty page that looks real",
   lost.isLost === true && lost.isEntity === false && lost.isIndex === false && lost.lost.includes("no-such-product-anywhere"));
@@ -124,4 +137,4 @@ check("loading: before the door answers, the room says it is reading, and draws 
 }
 
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 12 ? 0 : 1;
+process.exitCode = failed === 0 && ran === 15 ? 0 : 1;
