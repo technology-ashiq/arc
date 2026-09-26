@@ -510,10 +510,11 @@ consumer projects — it carries the owner's approvals.
 **Resume here next (Phase 02), in order:**
 0. ~~**The explore ignore rule**, red-first on CI and then green.~~ Done 2026-09-18 (see the
    update above).
-1. **Decision queued for the owner.** The read and write boundaries can scope to `ui-composer` by
-   `agent_type`, as the Bash boundary already does. That ends the operator lock (every Read, Grep,
-   Glob and Write refused while a composer is armed) and allows parallel composition. Route it
-   through `/arc-change` with a recommendation.
+1. **Routed 2026-09-26, waiting for the owner's OK:** [ADR-1419](../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md)
+   (proposed) and a Phase 02 exit criterion. The read and write checks bind only a `ui-composer`
+   caller, which ends the operator lock. Parallel composition is NOT in it: binding by `agent_id`
+   would let a composer claim a sibling with its first call (BL-8), so composition stays serial
+   until the ADR's revisit trigger holds.
 2. **Phase 02 Slice B.** Turn `tests/design-refpack.bats`' 14 red-first cases green: the curator's
    robots.txt preflight, the pack builder with provenance rows, and the registry's `status: off`
    and `allowed_use` refusals. Then the real pack from the two permitted galleries.

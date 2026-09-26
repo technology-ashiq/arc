@@ -172,6 +172,7 @@ flowchart TB
 | 1416 | The EXP-A1 prediction is session-authored on the owner's delegation, and says so | accepted |
 | 1417 | The stale-duplicate guard must tell an iteration from a stale page | accepted |
 | 1418 | An explore render is confined to its own variant directory | accepted |
+| 1419 | The composer read and write boundaries bind only a ui-composer caller | proposed |
 
 ## Non-negotiables
 

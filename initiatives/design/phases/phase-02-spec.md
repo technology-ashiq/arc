@@ -37,6 +37,12 @@ of git and whose provenance goes in.
       The second pins the #228 regression, a UTF-16 line that made every trailing-slash path
       read as ignored. The rule does not untrack the four `lexos-case-workspace-*` dirs
       committed before the ruling. *(`/arc-change` 2026-09-18)*
+- [ ] Carried from Phase 01, per [ADR-1419](../../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md):
+      the composer read and write checks enforce only for `agent_type` `ui-composer`, using the
+      Bash check's identity parser. Red-first on CI, four cases: the main session reads and writes
+      a sibling while a marker is armed (allowed), a composer reads and writes a sibling (refused),
+      a payload naming `ui-composer` with an unreadable identity (refused), and two armed markers
+      refuse a composer only. Composition stays serial. *(`/arc-change` 2026-09-26)*
 - [ ] A source with `status: off` produces **zero** fetch attempts
 - [ ] Two-surface adversarial pass by fresh agents on the registry lint and the preflight
 - [ ] tests added & green **on CI, read per JOB at the branch head SHA**
