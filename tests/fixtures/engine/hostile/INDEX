@@ -89,3 +89,5 @@ accept-apostrophe-with-comment.process.yaml	ACCEPT	an apostrophe in a plain scal
 accept-leading-zero-commit.process.yaml	ACCEPT	an all-digit short SHA with a leading zero -- numeric coercion turned 0123456 into 123456 and the lint then reported it MISSING on a correct file
 accept-unicode-prose.process.yaml	ACCEPT	non-ASCII prose in the body (em dash, middot, checkmark)
 accept-whitespace-only-body-line.process.yaml	ACCEPT	a markdown hard line break (two trailing spaces on an otherwise blank line)
+accept-nullable-type.process.yaml	ACCEPT	the one union ADR-0227 allows -- [string, "null"], with a keyword of its real type
+type-union-not-nullable.process.yaml	schema-shape	[string, number] -- any list but a nullable pair stays refused (ADR-0227)

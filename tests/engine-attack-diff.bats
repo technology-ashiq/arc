@@ -198,7 +198,9 @@ setup() {
 @test "arc-attack: a newline inside a model finding cannot forge a line of output" {
   # Boundary attack B3: a `why` carrying "\n" printed a forged summary header and a forged finding.
   cd "$REPO"
-  run env ARC_MOCK_DIR="$ARC_ROOT/tests/fixtures/engine/attack-diff-mock-newline" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 7 --driver mock
+  # --separate-stderr: the summary is STDOUT; the started/heartbeat lines each surface prints go to stderr, and
+  # counting them as headers would read a status line as a forged one.
+  run --separate-stderr env ARC_MOCK_DIR="$ARC_ROOT/tests/fixtures/engine/attack-diff-mock-newline" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 7 --driver mock
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"real reason"* ]] || { echo "the finding was not printed at all: $output"; false; }
   local headers; headers=$(printf '%s\n' "$output" | grep -c '^BOUNDARY:')
@@ -477,4 +479,15 @@ EOF
   local declared; declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   [ "$declared" -ge 27 ] || { echo "declared=$declared"; false; }
   [ "$BATS_TEST_NUMBER" -eq "$declared" ] || { echo "registered index $BATS_TEST_NUMBER, declared $declared"; false; }
+}
+
+@test "arc-attack watches each surface: started line, heartbeat, one-line status file, watchdog past the deadline" {
+  run node "$ARC_ROOT/tests/engine-attack-watch.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: 10 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok A: heartbeats while it ran, each quoting the child's latest line"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok A: the watchdog ended the child just past its deadline -- not before, not minutes after"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok A: the status file was ONE line at every sample, and its last word names the watchdog"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok C: the CLI refuses a malformed ARC_ATTACK_MINUTES before anything runs (exit 2, named)"* ]] || { echo "$output"; false; }
 }

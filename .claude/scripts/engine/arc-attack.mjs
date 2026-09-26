@@ -4,7 +4,14 @@
  *
  *   node .claude/scripts/engine/arc-attack.mjs (--base REF | --since SHA) [--lane NAME]
  *        [--phase NN] [--round K] [--classification internal-only|external-ok] [--driver mock]
- *        [--root PATH]
+ *        [--root PATH] [--status-file PATH]
+ *
+ * EVERY SURFACE HAS A DEADLINE, AND SAYS WHERE IT IS (engine bug, 2026-09-26: a logic run sat silent for ~1.5 h).
+ * Each surface runs arc-run with `--budget min=<ARC_ATTACK_MINUTES, default 30>`, so arc-run and the driver end it at
+ * the deadline. While it runs, one heartbeat line every ARC_ATTACK_HEARTBEAT_MS (default 60 s) goes to stderr --
+ * elapsed, deadline -- and, with --status-file, overwrites that ONE file with the same line, so a watcher reads one
+ * line instead of a log. A watchdog past the deadline plus a grace ends a child that outlives its own budget. None of
+ * this calls a model: the heartbeat costs nothing to produce and nothing to read.
  *
  * CLASSIFICATION IS internal-only UNLESS SAID OTHERWISE (review W2). This script is synced into
  * private venture repos; their diffs must not reach a model by default. ADR-0219's data boundary
@@ -32,8 +39,8 @@
  * error · 3/4/5 lane ambiguous/unknown/invalid (lane-resolve's codes, before anything runs) ·
  * 6 the diff is empty · 7 the logic surface was NOT RUN (the boundary result is still written).
  */
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,8 +61,8 @@ function usage(msg) {
 }
 
 export function parseArgs(argv) {
-  const o = { base: null, since: null, lane: "", laneGiven: false, laneDup: false, phase: null, round: "1", driver: null, root: null, classification: "internal-only" };
-  const FLAGS = { "--base": "base", "--since": "since", "--lane": "lane", "--phase": "phase", "--round": "round", "--driver": "driver", "--root": "root", "--classification": "classification" };
+  const o = { base: null, since: null, lane: "", laneGiven: false, laneDup: false, phase: null, round: "1", driver: null, root: null, classification: "internal-only", statusFile: null };
+  const FLAGS = { "--base": "base", "--since": "since", "--lane": "lane", "--phase": "phase", "--round": "round", "--driver": "driver", "--root": "root", "--status-file": "statusFile", "--classification": "classification" };
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -189,14 +196,94 @@ export function writeEvidence(target, doc) {
   }
 }
 
-function runSurface({ root, surface, input, driver, trialModel, env }) {
-  const args = [join(HERE, "arc-run.mjs"), "--process", "attack-diff", "--root", root, "--input", `@${input}`];
-  const childEnv = { ...env };
+const CHILD_CAP = 64 * 1024 * 1024;
+const clock = (ms) => new Date(ms).toTimeString().slice(0, 5);
+export const elapsed = (ms) => `${Math.floor(ms / 60_000)}m${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}s`;
+
+/**
+ * The timing knobs, read once and refused when malformed: a deadline that parses as nothing must never mean "none".
+ * @param {Record<string, string | undefined>} env
+ */
+export function timing(env) {
+  const num = (name, dflt, lo, hi) => {
+    const raw = env[name];
+    if (raw === undefined || raw === "") return dflt;
+    const v = Number(raw);
+    if (!Number.isFinite(v) || v < lo || v > hi) return { error: `${name}=${JSON.stringify(raw)} is not a number from ${lo} to ${hi}` };
+    return v;
+  };
+  const minutes = num("ARC_ATTACK_MINUTES", 30, 0.01, 240);
+  const heartbeatMs = num("ARC_ATTACK_HEARTBEAT_MS", 60_000, 50, 600_000);
+  const graceMs = num("ARC_ATTACK_GRACE_MS", 60_000, 0, 600_000);
+  for (const v of [minutes, heartbeatMs, graceMs]) if (typeof v === "object") return v;
+  return { minutes: /** @type {number} */ (minutes), heartbeatMs: /** @type {number} */ (heartbeatMs), graceMs: /** @type {number} */ (graceMs) };
+}
+
+/** Overwrite the ONE status line, whole: a reader never sees half of one (temp + rename). A failure is a WARN, not a stop. */
+function writeStatus(file, line) {
+  if (!file) return;
+  const tmpFile = `${file}.${process.pid}.tmp`;
+  try { writeFileSync(tmpFile, `${line}\n`); renameSync(tmpFile, file); }
+  catch (e) { process.stderr.write(`arc-attack: WARN the status file could not be written (${e.code || "error"})\n`); }
+}
+
+/**
+ * One surface, run ASYNC so it can say where it is while it runs. arc-run gets `--budget min=` and ends itself at the
+ * deadline; the watchdog is only the backstop for a child that outlives its own budget by the grace.
+ */
+function runSurface({ root, surface, input, driver, trialModel, env, label, time, statusFile }) {
+  const args = [join(HERE, "arc-run.mjs"), "--process", "attack-diff", "--root", root, "--input", `@${input}`, "--budget", `min=${time.minutes}`];
+  // Stream mode: the driver's own lines (one per transport attempt) reach this process as they happen, not after the
+  // run -- the heartbeat quotes the latest one. arc-run cleans each live line (liveLine) before it is passed on.
+  const childEnv = { ...env, ARC_RUN_STREAM: "1" };
   if (driver === "mock") { args.push("--driver", "mock"); childEnv.ARC_MOCK_FIXTURE = surface; }
   else if (surface === "logic") args.push("--driver", "generic-api", "--trial-model", trialModel);
   else args.push("--driver", "auto");
-  const r = spawnSync(process.execPath, args, { cwd: root, encoding: "utf8", env: childEnv, maxBuffer: 64 * 1024 * 1024 });
-  return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "", error: r.error };
+  return runWatched({ argv: args, cwd: root, env: childEnv, label, time, statusFile });
+}
+
+/**
+ * Any node child, watched: a started line, a heartbeat every `time.heartbeatMs` quoting the child's latest stderr line,
+ * a status file overwritten with the same line, and a watchdog that SIGKILLs the child `time.graceMs` past its deadline.
+ * Exported so the watchdog can be proven on a child that truly hangs -- arc-run under a real budget ends itself first.
+ * @param {{ argv: string[], cwd: string, env: Record<string, string | undefined>, label: string,
+ *   time: { minutes: number, heartbeatMs: number, graceMs: number }, statusFile: string | null }} p
+ */
+export function runWatched({ argv: args, cwd: root, env: childEnv, label, time, statusFile }) {
+  const started = Date.now();
+  const deadline = started + time.minutes * 60_000;
+  const first = `${label}: started ${clock(started)} · deadline ${clock(deadline)} (${time.minutes}m)`;
+  process.stderr.write(`${first}\n`);
+  writeStatus(statusFile, first);
+  return new Promise((done) => {
+    /** @type {Buffer[]} */ const out = []; /** @type {Buffer[]} */ const err = [];
+    let outBytes = 0, errBytes = 0, killed = false, error = null;
+    let child;
+    try { child = spawn(process.execPath, args, { cwd: root, env: childEnv, windowsHide: true }); }
+    catch (e) { done({ status: null, stdout: "", stderr: "", error: e, killed: false, ms: 0 }); return; }
+    child.stdout.on("data", (c) => { outBytes += c.length; if (outBytes <= CHILD_CAP) out.push(c); });
+    let lastLine = "";
+    child.stderr.on("data", (c) => {
+      errBytes += c.length;
+      if (errBytes <= CHILD_CAP) err.push(c);
+      const seen = String(c).split(/\r?\n/).map((l) => oneLine(l).trim()).filter(Boolean);
+      if (seen.length) lastLine = seen[seen.length - 1].slice(0, 120);
+    });
+    const beat = setInterval(() => {
+      const line = `${label}: running ${elapsed(Date.now() - started)} · deadline ${clock(deadline)}${lastLine ? ` · last: ${lastLine}` : ""}`;
+      process.stderr.write(`${line}\n`);
+      writeStatus(statusFile, line);
+    }, time.heartbeatMs);
+    const watchdog = setTimeout(() => { killed = true; try { child.kill("SIGKILL"); } catch { /* already gone */ } }, time.minutes * 60_000 + time.graceMs);
+    child.on("error", (e) => { error = e; });
+    child.on("close", (code) => {
+      clearInterval(beat);
+      clearTimeout(watchdog);
+      const ms = Date.now() - started;
+      writeStatus(statusFile, `${label}: ended after ${elapsed(ms)}${killed ? " -- ended by the watchdog at the deadline" : ` (exit ${code})`}`);
+      done({ status: killed ? null : code, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8"), error, killed, ms });
+    });
+  });
 }
 
 // One line per field, always. A finding is MODEL OUTPUT: a `why` carrying "\n" printed a forged
@@ -215,10 +302,13 @@ function summarize(surface, doc, rel) {
   return out;
 }
 
-export function main(argv, env = process.env) {
+export async function main(argv, env = process.env) {
   const parsed = parseArgs(argv);
   if (parsed.error) return usage(parsed.error);
   const o = parsed.opts;
+  // Timing is read before anything runs: a malformed deadline refuses the pass, it never means "no deadline".
+  const time = timing(env);
+  if ("error" in time) return usage(time.error);
   let root;
   try { root = resolve(o.root || git(process.cwd(), ["rev-parse", "--show-toplevel"])); }
   catch (e) { return usage(e.message); }
@@ -321,7 +411,13 @@ export function main(argv, env = process.env) {
         continue;
       }
 
-      const r = runSurface({ root, surface, input, driver: o.driver, trialModel, env });
+      const r = await runSurface({ root, surface, input, driver: o.driver, trialModel, env, label, time, statusFile: o.statusFile });
+      const took = ` (took ${elapsed(r.ms)})`;
+      if (r.killed) {
+        lines.push(`${label}: RUN FAILED -- still running ${elapsed(r.ms)} after it started, past its ${time.minutes}-minute deadline and the grace; ended by the watchdog`);
+        anyFailed = true;
+        continue;
+      }
       if (r.status !== 0) {
         // Every line of a child's stderr is REDACTED and stripped of control characters before it reaches the summary the
         // owner pastes into evidence: a gateway error can echo the credential it was sent (round-2 attack 4010c52 B7). A
@@ -353,7 +449,9 @@ export function main(argv, env = process.env) {
         anyFailed = true;
         continue;
       }
-      lines.push(...summarize(surface, doc, join(ev.rel, name)));
+      const sum = summarize(surface, doc, join(ev.rel, name));
+      sum[0] += took;
+      lines.push(...sum);
     }
   } finally {
     try { rmSync(tmp, { recursive: true, force: true }); }
@@ -378,6 +476,8 @@ function isMainModule() {
 
 // An uncaught throw exits with Node's own code and a stack, outside the documented set (L7).
 if (isMainModule()) {
-  try { process.exitCode = main(process.argv.slice(2)); }
-  catch (e) { process.stderr.write(`arc-attack: unexpected failure: ${e && e.message}\n`); process.exitCode = 1; }
+  main(process.argv.slice(2)).then(
+    (code) => { process.exitCode = code; },
+    (e) => { process.stderr.write(`arc-attack: unexpected failure: ${e && e.message}\n`); process.exitCode = 1; },
+  );
 }

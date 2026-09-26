@@ -13,7 +13,7 @@
  * second kill criterion anticipates.
  */
 
-import { canonicalDoc, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
+import { canonicalDoc, msUntilDeadline, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
 
 const ENDPOINT = process.env.ARC_LLM_ENDPOINT || "";
 const API_KEY = process.env.ARC_LLM_API_KEY || "";
@@ -22,13 +22,17 @@ const API_KEY = process.env.ARC_LLM_API_KEY || "";
 const MODEL = pinnedModel() || process.env.ARC_LLM_MODEL || "";
 const TIMEOUT_MS = Number(process.env.ARC_LLM_TIMEOUT_MS || 60_000);
 const MAX_TRANSPORT_RETRIES = 2;
+// An attempt ends this long before the RUN's deadline, so the driver says what happened and exits on its own terms
+// rather than being killed mid-line by arc-run's timeout at the same instant.
+const DEADLINE_MARGIN_MS = 1500;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const retryable = (status) => status === 429 || (status >= 500 && status < 600);
 
-async function callOnce(body) {
+/** One attempt's time: its own cap, never past the RUN's deadline (A-03). @param {number} capMs */
+async function callOnce(body, capMs) {
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctl.abort(), capMs);
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
@@ -76,16 +80,39 @@ await runDriver("generic-api", async ({ processName, input }) => {
   };
 
   let last = null;
-  for (let attempt = 0; attempt <= MAX_TRANSPORT_RETRIES; attempt++) {
+  const tries = MAX_TRANSPORT_RETRIES + 1;
+  // The RUN's deadline bounds every attempt and the retries between them: each attempt gets min(its own cap, the time
+  // left), and no attempt starts once the time is gone. Before this, each attempt started a fresh clock, so 3 attempts
+  // of a 10-minute cap ran 30 minutes under a caller that believed it had set a deadline (engine bug, 2026-09-26).
+  const left = () => { const r = msUntilDeadline(); return r === undefined ? undefined : r - DEADLINE_MARGIN_MS; };
+  const mmss = (ms) => `${Math.floor(ms / 60_000)}m${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}s`;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    const rem = left();
+    if (rem !== undefined && rem <= 0) {
+      process.stderr.write(`generic-api: attempt ${attempt + 1}/${tries} not started -- the run's deadline has passed\n`);
+      break;
+    }
+    const cap = rem === undefined ? TIMEOUT_MS : Math.max(1, Math.min(TIMEOUT_MS, rem));
+    const t0 = Date.now();
     try {
-      const res = await callOnce(body);
+      const res = await callOnce(body, cap);
       if (!retryable(res.status)) { last = res; break; }
       last = res;
     } catch (e) {
       // AbortError (timeout) and network errors are transport, same as a 5xx.
-      last = { status: 0, text: String(e.message) };
+      last = { status: 0, text: String(e.message), timedOut: /** @type {any} */ (e).name === "AbortError" };
     }
-    if (attempt < MAX_TRANSPORT_RETRIES) await sleep((attempt + 1) * 1500);
+    // ONE line per failed attempt, as it happens: a retry ladder that said nothing until its last rung failed kept the
+    // operator waiting on silence (engine bug, 2026-09-26). The status or "timeout", the time spent, and what is left.
+    const after = left();
+    const what = last.timedOut ? `timeout after ${Math.round((Date.now() - t0) / 1000)}s` : `status ${last.status} after ${Math.round((Date.now() - t0) / 1000)}s`;
+    process.stderr.write(`generic-api: attempt ${attempt + 1}/${tries}: ${what}${after === undefined ? "" : ` -- ${mmss(Math.max(0, after))} left`}${attempt + 1 < tries ? ", retrying" : ""}\n`);
+    if (attempt + 1 < tries) {
+      const pause = (attempt + 1) * 1500;
+      const r2 = left();
+      if (r2 !== undefined && r2 <= pause) break;
+      await sleep(pause);
+    }
   }
 
   if (!last || last.status < 200 || last.status >= 300) {

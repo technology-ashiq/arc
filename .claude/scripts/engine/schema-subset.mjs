@@ -11,6 +11,8 @@
  * Keywords: type · properties · required · enum · items · additionalProperties ·
  *           minLength · pattern
  * Types:    object · array · string · number · integer · boolean · null
+ * Nullable: `type: [<one type>, "null"]` -- exactly two entries, one of them "null" (ADR-0227). It is the ONLY union:
+ *           [string, number] or three entries are still a lint failure, and anyOf/oneOf stay rejected by name.
  *
  * Deliberately absent, and rejected by name rather than ignored: $ref, oneOf/anyOf/allOf,
  * format, minimum/maximum, additionalItems, patternProperties, definitions. If the output
@@ -35,6 +37,18 @@ const TY = new Set(TYPES);
  * Returns a list of findings; empty means the schema is expressible and fully enforced.
  * `path` is dotted for humans -- "properties.commits.items" beats "node 4".
  */
+/**
+ * The one real type of a node: its `type` string, or the non-null half of a nullable pair. null for anything else --
+ * no type, an unknown name, or a list that is not exactly [<type>, "null"] (ADR-0227).
+ * @param {unknown} t @returns {string | null}
+ */
+export function baseType(t) {
+  if (typeof t === "string") return TY.has(t) ? t : null;
+  if (!Array.isArray(t) || t.length !== 2 || !t.every((x) => typeof x === "string") || new Set(t).size !== 2) return null;
+  const rest = t.filter((x) => x !== "null");
+  return rest.length === 1 && rest[0] !== "null" && TY.has(rest[0]) ? rest[0] : null;
+}
+
 export function validateSchemaDoc(schema, path = "output") {
   const out = [];
   const at = (p, what, expected, found, example) => out.push({ path: p, what, expected, found, example });
@@ -61,7 +75,7 @@ export function validateSchemaDoc(schema, path = "output") {
     properties: ["object"], required: ["object"], additionalProperties: ["object"],
     items: ["array"], minLength: ["string"], pattern: ["string"],
   };
-  const t = typeof schema.type === "string" ? schema.type : null;
+  const t = baseType(schema.type);
   for (const k of keys) {
     const only = APPLIES_TO[k];
     if (!only) continue;
@@ -95,7 +109,11 @@ export function validateSchemaDoc(schema, path = "output") {
 
   if ("type" in schema) {
     const t = schema.type;
-    if (typeof t !== "string" || !TY.has(t)) {
+    if (Array.isArray(t)) {
+      if (baseType(t) === null) {
+        at(`${path}.type`, "a type list is only allowed as a nullable pair", `[<one of ${TYPES.filter((x) => x !== "null").join(", ")}>, "null"] (ADR-0227)`, JSON.stringify(t), 'type: [string, "null"]');
+      }
+    } else if (typeof t !== "string" || !TY.has(t)) {
       at(`${path}.type`, "unknown or non-string `type`", `one of: ${TYPES.join(", ")}`, JSON.stringify(t), "type: object");
     }
   }
@@ -176,7 +194,10 @@ export function validateData(schema, data, path = "$") {
   if (!schema || typeof schema !== "object") return out;
 
   if ("type" in schema) {
-    const t = schema.type;
+    // A nullable pair accepts null and nothing else of the other keywords applies to it; any other value is checked
+    // against the pair's one real type exactly as a plain `type` would be (ADR-0227).
+    if (Array.isArray(schema.type) && data === null && baseType(schema.type) !== null) return out;
+    const t = Array.isArray(schema.type) ? baseType(schema.type) : schema.type;
     const actual = data === null ? "null" : Array.isArray(data) ? "array" : typeof data;
     const ok =
       (t === "integer" && Number.isInteger(data)) ||

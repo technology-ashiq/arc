@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **134** | **3** |
 
-Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 264 of 329 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 265 of 330 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -66,7 +66,7 @@ Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 264 of 
 | Process | Version | Intent |
 |---|---|---|
 | [adr-record](processes/adr-record.md) | 1.0.0 | Record one owner decision as an ADR at the next free number of the lane's century, and end on its note.logged receipt. |
-| [attack-diff](processes/attack-diff.md) | 1.0.0 | Adversarially attack one surface of a diff with concrete breaking inputs, carrying the lane's fixed-defect patterns. |
+| [attack-diff](processes/attack-diff.md) | 1.1.0 | Adversarially attack one surface of a diff with concrete breaking inputs, carrying the lane's fixed-defect patterns. |
 | [brief-materialize](processes/brief-materialize.md) | 1.0.0 | Render the day's brief into instance state so the morning read is zero-effort. |
 | [build-in-public-draft](processes/build-in-public-draft.md) | 1.0.0 | Draft one build-in-public post from an approved context pack. L1 only -- a draft, never a publication. |
 | [commit-msg-draft](processes/commit-msg-draft.md) | 1.0.0 | Stage related changes and write a conventional commit. |
@@ -84,7 +84,7 @@ Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 264 of 
 |---|---|---|
 | [0000–0099](adr/0000.md) | 75 | 62 |
 | [0100–0199](adr/0100.md) | 12 | 0 |
-| [0200–0299](adr/0200.md) | 27 | 2 |
+| [0200–0299](adr/0200.md) | 28 | 2 |
 | [0300–0399](adr/0300.md) | 12 | 0 |
 | [0400–0499](adr/0400.md) | 19 | 0 |
 | [0500–0599](adr/0500.md) | 9 | 0 |
