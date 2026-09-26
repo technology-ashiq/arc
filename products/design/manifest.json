@@ -12,7 +12,8 @@
     ".claude/agents/design-critic.md",
     ".claude/agents/design-director.md",
     ".claude/agents/design-jury.md",
-    ".claude/agents/ui-composer.md"
+    ".claude/agents/ui-composer.md",
+    ".claude/agents/design-curator.md"
   ],
   "scripts": [
     ".claude/scripts/design/composer-bash-check.sh",

@@ -10,12 +10,12 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Processes](#processes) | 12 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 16 | 0 |
 | [Commands](#commands) | 28 | 0 |
-| [Agents](#agents) | 30 | 0 |
+| [Agents](#agents) | 31 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **134** | **3** |
+| **Total** | **135** | **3** |
 
-Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 265 of 330 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **132 of 135** pages have no narrative yet. ADR headers: 265 of 330 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -24,7 +24,7 @@ Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 265 of 
 | [absorb](products/absorb.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 8 |
 | [core](products/core.md) | 1.0.0 | — | 5 | 2 | 33 |
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
-| [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 4 | 15 |
+| [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 5 | 15 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
 | [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 4 |
 | [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 31 |
@@ -152,6 +152,7 @@ Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 265 of 
 | [council-strategist](agents/council-strategist.md) | sonnet | Council domain expert for business & startup questions — a VC + operator lens (market, moat, GTM, unit economics, timing, competition, founder-fit). Convened by the Chair when the decision is about starting or growing a business. |
 | [council-verifier](agents/council-verifier.md) | opus | Council cross-examiner — grades the EVIDENCE behind each member's points (not the conclusions), rating every POINT-ID Supported / Plausible / Weak / Contested. Convened for every non-quick arc-council run to keep the debate honest. |
 | [design-critic](agents/design-critic.md) | sonnet | Read-only design critic. Reads the rendered screenshot back with vision, judges the surface against the brief's four contracts, and writes ONE critique artifact classing every finding VIOLATION / WEAKNESS / POLISH. Never edits product code and never scores. Invoked between design-critique.sh begin and finish. |
+| [design-curator](agents/design-curator.md) | sonnet | Builds a per-brief reference pack of real screens from the registry's active galleries via design-refpack.mjs: robots.txt preflight per fetch, 5-8 screens from 2+ active sources, an adaptable principle and avoid-this per screen. |
 | [design-director](agents/design-director.md) | opus | Explore-mode director. Assigns three DIFFERENT product-structure theses from the brief, fills the IA-difference matrix at assignment time, and after the variants exist writes the explicit ≥3/7 divergence call — rejecting same-app-different-styling with at most one reassignment round. Never touches variant code. |
 | [design-jury](agents/design-jury.md) | sonnet | Explore-mode blind juror. Ranks FOUR unlabelled items — the three variants plus a world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact. |
 | [design-reviewer](agents/design-reviewer.md) | sonnet | UI/UX design reviewer that scores each design dimension 0-10, detects AI slop, then FIXES what it finds with atomic commits and before/after screenshots. Invoked by /arc-design for UI work. |

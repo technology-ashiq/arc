@@ -710,6 +710,7 @@
         ],
         "agents": [
           "design-critic",
+          "design-curator",
           "design-director",
           "design-jury",
           "design-reviewer (legacy)",
@@ -735,7 +736,7 @@
           "1400"
         ]
       },
-      "itemCount": 23
+      "itemCount": 24
     },
     {
       "id": "toolbelt",
