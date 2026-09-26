@@ -23,26 +23,45 @@
 # exactly where the composer is allowed to read.
 #
 #   composer-bash-check.sh     # payload JSON on stdin (the PreToolUse dispatcher's contract)
+#   composer-bash-check.sh --identity   # payload on stdin; answers only WHO is calling
 #
 # Exit: 0 allow | 2 BLOCK. Never any other code. bash-3.2 / POSIX-safe.
+#
+# --identity is how the read and write boundaries learn who is calling (ADR-1419): they judge only
+# a ui-composer call, and they ask THIS parser rather than carrying a second hand-written one (the
+# twin-fix rule). Its exit: 0 a ui-composer call | 10 someone else's | 12 the call may be a
+# composer's and its identity cannot be read exactly, which the caller refuses. Neither verdict is
+# a code bash makes on its own: 1 is what it exits with when a script dies (an unbound variable, a
+# failed fork -- attack r1, B2) and 2 is a syntax error (r2, B2), and a crash must never read as a
+# verdict. The caller judges every code it does not know, and says the parser is at fault. The next line is the handshake a caller checks before it asks (B8):
+# composer-bash-check: speaks --identity
 set -uo pipefail
 # Byte semantics for every string operation below: under a UTF-8 locale bash counts and strips
 # characters, which is slower and made a long string's cost grow faster than its length (eighth
 # attack pass, SH8-1). Every character class in this file is spelled out, so nothing depends on it.
 LC_ALL=C; export LC_ALL
 
-[ -t 0 ] && exit 0
+IDENTITY=0
+[ "${1:-}" = "--identity" ] && IDENTITY=1
+# Not a composer's call: allowed by the Bash boundary, answered "someone else" by --identity.
+_other() { [ "$IDENTITY" -eq 1 ] && exit 10; exit 0; }
+
+[ -t 0 ] && { [ "$IDENTITY" -eq 1 ] && exit 12; exit 0; }
 PAYLOAD="$(cat)"
 
 # Cheap first: nearly every call is not a composer's, and they must not pay for the parse. The
 # letters are matched without case, so `UI-Composer` still reaches the identity check. A payload
 # carrying any JSON escape is parsed too, because an identity spelled with one never shows the
 # word (eighth attack pass, G); without a working jq that case is let go below, not refused.
-case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*'\u'*) ;; *) exit 0;; esac
+# --identity skips the shortcut: it runs only while a composer is armed, and a payload it cannot
+# parse must reach the checks below rather than be waved through as "someone else" (B3).
+[ "$IDENTITY" -eq 1 ] \
+  || case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*'\u'*) ;; *) _other;; esac
 NAMES_COMPOSER=0
 case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*) NAMES_COMPOSER=1;; esac
 
 _refuse() {
+  if [ "$IDENTITY" -eq 1 ]; then echo "ui-composer identity: $1" >&2; exit 12; fi
   echo "BLOCKED by ui-composer bash scope: $1" >&2
   echo "A composer runs one command through Bash -- the renderer, on its own variant, into its own session:" >&2
   echo "  bash .claude/scripts/design/design-render.sh docs/design/explore/<id>/<variant>/index.html --mode explore --session <id>--<variant> --iter N --viewport WxH" >&2
@@ -62,17 +81,32 @@ JQ_OK=0
 if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | _jq -j '.k' 2>/dev/null)" = "v" ]; then
   JQ_OK=1
 fi
+# --identity answers "someone else" only about a payload it could read. An empty one, or with jq
+# one that is not a JSON object, is unreadable: a Write it cannot parse used to reach the write
+# check's fail-closed branch, and the identity question must not open that door (B3). Without jq
+# only the empty case is visible; the harness writes these payloads, so a truncated one is not a
+# composer's to make.
+if [ "$IDENTITY" -eq 1 ]; then
+  [ -n "$(printf '%s' "$PAYLOAD" | tr -d ' \t\r\n')" ] || _refuse "the call carries no payload."
+  if [ "$JQ_OK" -eq 1 ]; then
+    printf '%s' "$PAYLOAD" | _jq -e 'type == "object"' >/dev/null 2>&1 \
+      || _refuse "the payload is not a JSON object."
+  fi
+fi
 # Without jq, a payload that only carries an escape cannot be decoded, and the harness never
 # escapes the letters of an agent name, so it is not treated as a composer's.
-[ "$JQ_OK" -eq 1 ] || [ "$NAMES_COMPOSER" -eq 1 ] || exit 0
+[ "$JQ_OK" -eq 1 ] || [ "$NAMES_COMPOSER" -eq 1 ] || _other
 
 # A payload whose raw text shows a composer identity and is larger than any render's call is
 # refused before it is parsed: a composer controls its command's size, and the jq stream count
 # grows with every JSON leaf (1M leaves: 42 s; the hook budget is 60 s -- ninth attack pass). A
 # render's whole call is under 2 KB. Anyone else's large call is parsed as before.
-if [ "${#PAYLOAD}" -gt 65536 ] \
+# --identity also answers for a composer's Write of its own page, which is 40-100 KB of real HTML,
+# so its cap is 1 MiB (B1): at two bytes a leaf at worst that is under 22 s of stream count.
+_CAP=65536; [ "$IDENTITY" -eq 1 ] && _CAP=1048576
+if [ "${#PAYLOAD}" -gt "$_CAP" ] \
    && printf '%s' "$PAYLOAD" | grep -qE '"agent_type"[[:space:]]*:[[:space:]]*"[^"]*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]'; then
-  _refuse "the call is ${#PAYLOAD} bytes, longer than any render's; nothing over 65536 bytes is checked or run."
+  _refuse "the call is ${#PAYLOAD} bytes, longer than any render's; nothing over $_CAP bytes from a composer is checked or run."
 fi
 
 # `_field <key> <stream path> <jq path> <max bytes> [name]` sets FIELD. Returns 0 read (possibly
@@ -136,14 +170,19 @@ if ! _field agent_type '["agent_type"]' '.agent_type' 256 name; then
     1:*|0:*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*)
       _refuse "the calling agent cannot be identified exactly, and this call may be ui-composer's.";;
   esac
-  exit 0
+  _other
 fi
 # Normalised, so a namespaced install (`arc:ui-composer`) or a case change is still the composer
 # rather than silently nobody (BL-9). Letters spelled out: `tr '[:upper:]'` maps I to a dotless i
 # under tr_TR.
 AGENT="$(printf '%s' "$FIELD" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')"
+# A read identity that normalises to nothing is a failed `tr`, not an answer: a fork that fails on
+# the MSYS box leaves AGENT empty, and empty used to be "someone else" (attack r2, B1).
+[ -z "$FIELD" ] || [ -n "$AGENT" ] || _refuse "the agent name could not be normalised."
 AGENT="${AGENT##*:}"
-[ "$AGENT" = "ui-composer" ] || exit 0
+[ "$AGENT" = "ui-composer" ] || _other
+# The identity is all --identity answers; the tool and the command below are the Bash boundary's.
+[ "$IDENTITY" -eq 1 ] && exit 0
 _field tool_name '["tool_name"]' '.tool_name' 64 name || _refuse "the tool of a ui-composer call cannot be read exactly."
 [ "$FIELD" = "Bash" ] || exit 0
 

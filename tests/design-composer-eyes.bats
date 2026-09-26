@@ -154,9 +154,12 @@ teardown() { _arc_teardown; }
 @test "composer scope: an unreadable target does not block" {
   _composer_sandbox; _arm
   # If the payload carries no path there is nothing to judge, and blocking on "cannot tell"
-  # would break every unrelated read in the session.
-  run bash "$(_csc)"
-  [ "$status" -eq 0 ]
+  # would break every unrelated read in the session. A composer's Read with no file_path, since
+  # ADR-1419: an EMPTY payload is no longer "no path" but an unreadable caller (attack r1 B3).
+  run bash "$(_csc)" <<< "$(_payload Read '{}')"
+  [ "$status" -eq 0 ] || { echo "a composer Read with no path was refused: $status $output"; false; }
+  run bash "$(_csc)" < /dev/null
+  [ "$status" -eq 2 ] || { echo "an empty payload was not refused as unreadable: $status $output"; false; }
 }
 
 # ---------- 4. the hook fragment actually delegates ----------
@@ -239,7 +242,10 @@ teardown() { _arc_teardown; }
 # unreadable. For Grep and Glob an absent path MEANS "everything", and the two must not
 # share a branch.
 
-_payload() { printf '{"tool_name":"%s","tool_input":%s}' "$1" "$2"; }
+# A composer's call: ADR-1419 binds the read and write boundaries to agent_type ui-composer, so
+# every refusal case below is a composer's. The main session's call is _main_payload.
+_payload() { printf '{"agent_id":"c1","agent_type":"ui-composer","tool_name":"%s","tool_input":%s}' "$1" "$2"; }
+_main_payload() { printf '{"session_id":"s","tool_name":"%s","tool_input":%s}' "$1" "$2"; }
 
 @test "composer scope: a Grep that NAMES a sibling variant is refused" {
   _composer_sandbox; _arm
@@ -1130,4 +1136,195 @@ _first_release() { printf '%s\n' "$1" | sed -n 's/^  [^:]*release[^:]*: //p' | h
   # The paired positive for every branch above: a future marker is described, and still refuses.
   _read_sep Read '{"file_path":"README.md"}'
   [ "$status" -eq 2 ] || { echo "a future-dated marker relaxed the boundary: $status"; false; }
+}
+
+# ---------- ADR-1419: the boundaries bind only a ui-composer caller ----------
+#
+# The read and write checks enforced against EVERY caller while a marker was armed, so an armed or
+# abandoned compose locked the operator out of the tree (lexos-p01/variant-a, three weeks). They
+# now ask the Bash check's identity parser who is calling -- one parser, never a second copy -- and
+# only a ui-composer call is judged. Each allowed case is paired with the composer's refusal on the
+# same path, so a check that simply stopped enforcing fails here too.
+
+_main_read() {
+  run --separate-stderr bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" <<< "$(_main_payload "$1" "$2")"
+}
+_main_write() {
+  run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" "$(_main_payload "$1" "$2")"
+}
+
+@test "ADR-1419: the main session reads and writes a sibling while a composer is armed" {
+  _composer_sandbox; _arm
+  _main_read Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 0 ] || { echo "main-session Read of a sibling refused: $status $stderr"; false; }
+  _main_read Grep '{"pattern":"page"}'
+  [ "$status" -eq 0 ] || { echo "main-session unscoped Grep refused: $status $stderr"; false; }
+  _main_write Write '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}'
+  [ "$status" -eq 0 ] || { echo "main-session Write of a sibling refused: $status $stderr"; false; }
+  # Paired: the same calls, as the composer, still refuse.
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 2 ] || { echo "composer Read of a sibling allowed: $status"; false; }
+  _write_sep Write '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}'
+  [ "$status" -eq 2 ] || { echo "composer Write of a sibling allowed: $status"; false; }
+}
+
+@test "ADR-1419: a composer reads and writes a sibling and is refused, namespaced or not" {
+  _composer_sandbox; _arm
+  local body='{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "{\"agent_type\":\"arc:UI-Composer\",\"tool_name\":\"Read\",\"tool_input\":$body}"
+  [ "$status" -eq 2 ] || { echo "namespaced composer Read allowed: $status $output"; false; }
+  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "{\"agent_type\":\"arc:UI-Composer\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"docs/design/explore/lexos-v1/variant-b/x.html\",\"content\":\"x\"}}"
+  [ "$status" -eq 2 ] || { echo "namespaced composer Write allowed: $status $output"; false; }
+  # Its own directory stays open to it.
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html"}'
+  [ "$status" -eq 0 ] || { echo "composer refused its own page: $status $stderr"; false; }
+}
+
+@test "ADR-1419: a payload naming ui-composer whose identity cannot be read exactly is refused" {
+  _composer_sandbox; _arm
+  # Two agent_type keys: which one the harness meant cannot be read exactly (the Bash check's BL-7).
+  # Aimed at the composer's OWN page, which the path rule allows, so only the identity gate can
+  # refuse it, and its reason is asserted (attack r1, B5: README.md was refused by the path rule
+  # whether or not the gate existed).
+  local dup='{"agent_type":"ui-composer","agent_type":"Explore","tool_name":"%s","tool_input":%s}'
+  local own='docs/design/explore/lexos-v1/variant-a/index.html'
+  run --separate-stderr bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "$(printf "$dup" Read "{\"file_path\":\"$own\"}")"
+  [ "$status" -eq 2 ] || { echo "unreadable identity Read allowed: $status $stderr"; false; }
+  printf '%s' "$stderr" | grep -q "who is calling cannot be read exactly" || { echo "refused, not by the identity gate: $stderr"; false; }
+  run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(printf "$dup" Write "{\"file_path\":\"$own\",\"content\":\"x\"}")"
+  [ "$status" -eq 2 ] || { echo "unreadable identity Write allowed: $status $stderr"; false; }
+  printf '%s' "$stderr" | grep -q "who is calling cannot be read exactly" || { echo "write refused, not by the identity gate: $stderr"; false; }
+  # Paired: another agent, readable, passes the same read.
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< '{"agent_type":"Explore","tool_name":"Read","tool_input":{"file_path":"README.md"}}'
+  [ "$status" -eq 0 ] || { echo "a readable non-composer agent was refused: $status $output"; false; }
+}
+
+@test "ADR-1419: two armed markers refuse a composer only" {
+  _composer_sandbox
+  bash "$(_csc)" --begin lexos-v1 variant-a >/dev/null
+  bash "$(_csc)" --begin lexos-v1 variant-b >/dev/null
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html"}'
+  [ "$status" -eq 2 ] || { echo "a composer passed with two boundaries armed: $status"; false; }
+  printf '%s\n' "$stderr" | grep -q "armed at once" || { echo "no serial-composition reason: $stderr"; false; }
+  _write_sep Write '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html","content":"x"}'
+  [ "$status" -eq 2 ] || { echo "a composer wrote with two boundaries armed: $status"; false; }
+  _main_read Read '{"file_path":"docs/design/explore/lexos-v1/variant-a/index.html"}'
+  [ "$status" -eq 0 ] || { echo "main session refused with two boundaries armed: $status $stderr"; false; }
+  _main_write Write '{"file_path":"README.md","content":"x"}'
+  [ "$status" -eq 0 ] || { echo "main-session write refused with two boundaries armed: $status $stderr"; false; }
+}
+
+# ---------- ADR-1419, attack round 1 (B1, B2, B3, B6, B8) ----------
+
+# A parser stand-in that is whole and speaks --identity, then exits with $1: what the callers do
+# with a code they do not know is the fallthrough under test.
+_stub_parser() {
+  printf '#!/usr/bin/env bash\n# composer-bash-check: speaks --identity\ncat >/dev/null\nexit %s\n# composer-bash-check: end\n' "$1" \
+    > "$SANDBOX/.claude/scripts/design/composer-bash-check.sh"
+}
+
+@test "ADR-1419 r1 B1: a composer Write of a real-sized page into its own variant is allowed" {
+  _composer_sandbox; _arm
+  # Through a file, not argv: a 100 KB argument is past the Windows command-line limit.
+  local page own="$BATS_TEST_TMPDIR/own.json" sib="$BATS_TEST_TMPDIR/sib.json"
+  page="$(head -c 100000 /dev/zero | tr '\0' 'a')"
+  _payload Write "{\"file_path\":\"docs/design/explore/lexos-v1/variant-a/index.html\",\"content\":\"$page\"}" > "$own"
+  _payload Write "{\"file_path\":\"docs/design/explore/lexos-v1/variant-b/index.html\",\"content\":\"$page\"}" > "$sib"
+  [ "$(wc -c < "$own" | tr -d ' ')" -gt 100000 ] || { echo "fixture payload is not 100 KB"; false; }
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" < "$own"
+  [ "$status" -eq 0 ] || { echo "a 100 KB own-page write was refused: $status ${output:0:400}"; false; }
+  # Paired: the same size into a sibling is still the path rule's refusal.
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" < "$sib"
+  [ "$status" -eq 2 ] || { echo "a 100 KB sibling write was allowed: $status"; false; }
+}
+
+@test "ADR-1419 r1 B2/B8: a parser that crashes, is stale, or is missing leaves every caller judged" {
+  _composer_sandbox; _arm
+  local sib='{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  # Positive control first: the real parser lets the main session through.
+  _main_read Read "$sib"
+  [ "$status" -eq 0 ] || { echo "control: the real parser refused the main session: $stderr"; false; }
+  local code
+  # 2 is bash's syntax-error code, and was the refusal verdict until attack r2 B2 moved it to 12.
+  for code in 1 2 7 127; do
+    _stub_parser "$code"
+    _main_read Read "$sib"
+    [ "$status" -eq 2 ] || { echo "parser exit $code was read as a verdict (read): $status"; false; }
+    printf '%s' "$stderr" | grep -q "exited $code, which is not an answer" || { echo "exit $code: the parser was not named: $stderr"; false; }
+    printf '%s' "$stderr" | grep -q "cannot be read exactly" && { echo "exit $code was read as the refusal verdict: $stderr"; false; }
+    _main_write Write '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}'
+    [ "$status" -eq 2 ] || { echo "parser exit $code was read as a verdict (write): $status"; false; }
+  done
+  # Whole but pre-1419: no handshake line. It would exit 0 for a Read, and 0 means "a composer".
+  printf '#!/usr/bin/env bash\ncat >/dev/null\nexit 10\n# composer-bash-check: end\n' \
+    > "$SANDBOX/.claude/scripts/design/composer-bash-check.sh"
+  _main_read Read "$sib"
+  [ "$status" -eq 2 ] || { echo "a parser with no handshake was asked anyway: $status"; false; }
+  rm -f "$SANDBOX/.claude/scripts/design/composer-bash-check.sh"
+  _main_read Read "$sib"
+  [ "$status" -eq 2 ] || { echo "a missing parser opened the boundary: $status"; false; }
+}
+
+@test "ADR-1419 r1 B3: an empty or truncated payload is unreadable, not someone else's" {
+  _composer_sandbox; _arm
+  run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" "   "
+  [ "$status" -eq 2 ] || { echo "a blank write payload was allowed: $status $stderr"; false; }
+  run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      '{"tool_name":"Write","tool_input":{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}'
+  [ "$status" -eq 2 ] || { echo "a truncated write payload was allowed: $status $stderr"; false; }
+}
+
+@test "ADR-1419 r1 B6: the main session naming ui-composer in a path or pattern still passes, with jq and without" {
+  _composer_sandbox; _arm
+  _main_write Edit '{"file_path":".claude/agents/ui-composer.md","old_string":"a","new_string":"b"}'
+  [ "$status" -eq 0 ] || { echo "main-session edit of ui-composer.md refused: $stderr"; false; }
+  _main_read Grep '{"pattern":"ui-composer","path":"docs/design/explore/lexos-v1/variant-b"}'
+  [ "$status" -eq 0 ] || { echo "main-session Grep for ui-composer refused: $stderr"; false; }
+  mkdir -p "$SANDBOX/badbin"
+  printf '#!/bin/sh\nexit 127\n' > "$SANDBOX/badbin/jq"
+  chmod +x "$SANDBOX/badbin/jq"
+  PATH="$SANDBOX/badbin:$PATH"; export PATH
+  command -v jq | grep -q badbin || { echo "the broken jq is not the one found first"; false; }
+  _main_write Edit '{"file_path":".claude/agents/ui-composer.md","old_string":"a","new_string":"b"}'
+  [ "$status" -eq 0 ] || { echo "no jq: main-session edit of ui-composer.md refused: $stderr"; false; }
+  _main_read Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/ui-composer-notes.md"}'
+  [ "$status" -eq 0 ] || { echo "no jq: main-session read naming ui-composer refused: $stderr"; false; }
+  # Paired: without jq the composer is still refused on a sibling.
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 2 ] || { echo "no jq: a composer read a sibling: $status"; false; }
+}
+
+# ---------- ADR-1419, attack round 2 (B1, B2) ----------
+
+@test "ADR-1419 r2 B1: a tr that fails while normalising the identity refuses a composer" {
+  _composer_sandbox; _arm
+  local real_tr; real_tr="$(command -v tr)"
+  [ -n "$real_tr" ] || { echo "no tr to delegate to"; false; }
+  mkdir -p "$SANDBOX/badbin"
+  # Fails only on the upper-to-lower map the identity check uses; every other tr call delegates.
+  printf '#!/bin/sh\ncase "$1" in ABCDEFGHIJKLMNOPQRSTUVWXYZ) exit 127;; esac\nexec "%s" "$@"\n' "$real_tr" > "$SANDBOX/badbin/tr"
+  chmod +x "$SANDBOX/badbin/tr"
+  PATH="$SANDBOX/badbin:$PATH"; export PATH
+  command -v tr | grep -q badbin || { echo "the failing tr is not the one found first"; false; }
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 2 ] || { echo "an unnormalised identity let a composer read a sibling: $status"; false; }
+  printf '%s' "$stderr" | grep -q "cannot be read exactly" || { echo "refused, but not by the identity gate: $stderr"; false; }
+  # Paired: the main session carries no identity, so the failing tr is never reached for it.
+  _main_read Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 0 ] || { echo "the main session was refused by a tr it never needed: $status $stderr"; false; }
+}
+
+@test "ADR-1419 r2 B2: the three composer boundaries parse, so a syntax error never reaches a hook" {
+  local f
+  for f in composer-bash-check composer-scope-check composer-write-check; do
+    run bash -n "$ARC_ROOT/.claude/scripts/design/$f.sh"
+    [ "$status" -eq 0 ] || { echo "$f.sh does not parse: $output"; false; }
+    grep -q '^# composer-bash-check: speaks --identity$' "$ARC_ROOT/.claude/scripts/design/composer-bash-check.sh" \
+      || { echo "the parser lost its handshake line"; false; }
+  done
 }

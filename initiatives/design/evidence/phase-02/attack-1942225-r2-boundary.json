@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/composer-bash-check.sh:178-180 (AGENT normalisation, now on the identity path for Read/Grep/Glob/Write/Edit)",
+      "breaking_input": "A composer Read of docs/design/explore/<id>/variant-b/index.html with the marker armed for variant-a, at the moment the `tr` process in `AGENT=\"$(printf '%s' \"$FIELD\" | tr ...)\"` fails to spawn. On the Windows/MSYS box that means a transient fork failure such as EAGAIN while a headless render is running. FIELD is `ui-composer`, AGENT ends up empty, and `[ \"$AGENT\" = \"ui-composer\" ] || _other` exits 10, which both callers read as `exit 0`.",
+      "why": "The r1 fixes closed the fork-failure hole for PAYLOAD, the emptiness probe and the jq type probe. This substitution is the one probe left where a failed subprocess produces an empty string that is then read as a positive 'not a composer'. FIELD was non-empty and the result is empty, and nothing checks that. Before ADR-1419 the read and write boundaries did not depend on this line, so the consequence is new: a composer's sibling read or write goes unjudged with no message and no log.",
+      "fix": "Do not classify on a possibly-empty result. Either lowercase without a subprocess (a bash-3.2 `case` on the spelled-out letters, or a loop over `[Uu][Ii]-[Cc]...` patterns), or add `[ -z \"$FIELD\" ] || [ -n \"$AGENT\" ] || _refuse \"the agent name could not be normalised.\"`. Pin it with a bats case that puts a `tr` shim on PATH which delegates once and then exits 127, and asserts a composer Read is refused. Check that `_field` cannot also return 0 with an empty FIELD when its own jq spawn fails.",
+      "twin_of": "A failing probe command read as \"not applicable\" -> only a positive \"absent\" skips; an error is a failure."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "composer-scope-check.sh:~196-203 and composer-write-check.sh:~60-68 (`2)` arm) against composer-bash-check.sh `_refuse` (identity branch)",
+      "breaking_input": "Any edit to composer-bash-check.sh that leaves a bash parse error before the identity verdict (for example an unbalanced `fi` or `esac`) while the file still ends with the end marker and still carries the handshake line, with a marker armed. bash exits 2 for a syntax error. Every Read, Grep, Glob, Write and Edit then takes the `2)` arm and is refused with 'who is calling cannot be read exactly', the main session included.",
+      "why": "r1 B2 moved 'someone else' from 1 to 10 because 1 is bash's own crash code. The refuse verdict is still 2, and 2 is what bash returns for a syntax error or builtin misuse, so a parse error is read as a verdict. The result is the blanket operator lock ADR-1419 exists to end. The Edit that would repair the parser is refused by the same hook, and the Bash hook running this same file also exits 2. The message points at the payload, not at the broken parser. The B2 test only stubs exit codes 1, 7 and 127, so this collision is untested.",
+      "fix": "Give the refuse verdict a code bash never produces on its own (12, say) and have the callers map only 0, 10 and 12. Send every other code, 2 included, to a distinct 'parser fault' message that still judges the caller. Add a stub case with exit 2 that asserts the parser-fault message. Add a `bash -n` check on the three composer scripts so a broken parser fails in CI before it locks a tree.",
+      "twin_of": "A caller read the parser's \"someone else\" code, 1, which is also bash's crash code -> a verdict gets a code the runtime never produces by accident; every unknown code is judged."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "initiatives/design/debt-ledger.md (new row for r1 B4) with composer-scope-check.sh:~186-203 and composer-write-check.sh:~57-68",
+      "breaking_input": "A compose run by a general-purpose subagent given the composer prompt, or by a harness that omits agent_type. Its Read of variant-b and its Write of variant-b/index.html arrive as {\"session_id\":\"s\",\"tool_name\":\"Read\",...} with no agent_type. The identity answer is 10, both boundaries exit 0, and the compose finishes with every read and write unjudged.",
+      "why": "The B4 'fix' is a debt row, not a change. Its revisit trigger is 'any compose not dispatched as ui-composer', which is exactly the case where nothing is recorded, so the trigger cannot fire. Nothing at compose-done, `--end` or render time notices that zero calls were classified as composer calls. Both boundaries now rest on one harness-written field with no positive control at runtime, so a harness regression fails silently open.",
+      "fix": "When the identity check answers 0 (a composer call) with a marker armed, append one line to a counter file next to the marker. Have compose-done or `--end` fail an armed session whose counter is zero after a render ran. Alternatively have the render step, which is a Bash call and is identified, record the agent_type it saw and compare it with the marker.",
+      "twin_of": "A failing probe command read as \"not applicable\" -> only a positive \"absent\" skips; an error is a failure."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "composer-bash-check.sh:~100-107 (`_CAP=65536; [ \"$IDENTITY\" -eq 1 ] && _CAP=1048576`) and tests/design-composer-eyes.bats 'r1 B1' test",
+      "breaking_input": "Mutant: raise the identity cap to a huge value or drop the identity cap check entirely. Every test still passes. The B1 test sends about 100 KB, which only proves the old 64 KiB cap is gone. No test sends a composer payload at or over 1 MiB and expects a refusal.",
+      "why": "The cap exists to keep the hook inside its time budget, and a hook that times out is a non-blocking error, so the tool call proceeds. The '22 s at two bytes a leaf' figure is scaled from the Bash-mode measurement. Identity mode also runs the `jq -e type` parse, the leaf-stream count in `_field`, the callers' own jq passes and any other hooks in the same dispatch window, and none of that was timed at 1 MiB. The 16-fold increase over the old cap has no fixture on either side of it.",
+      "fix": "Add a fixture at cap+1 bytes from a composer that must be refused, and one at cap-1 that must pass. Time the leaf-dense worst case through the real dispatcher on the Windows leg and assert it stays well under the hook budget. Otherwise lower the cap to the largest real page (measured) plus headroom.",
+      "twin_of": "A size guard written for one tool reached another through a new entry point -> a guard reused by a new caller is re-checked against that caller's real inputs."
+    }
+  ]
+}
