@@ -300,6 +300,7 @@ Tests:
 - process-lint hostile fixtures: `accept-nullable-type` ACCEPT, and `type-union-not-nullable` failing
   `schema-shape`.
 Estimate: 1.5d, not charged to the closed Cycle 7.
+**Found while attacking this PR (2026-09-26):** the data boundary's `generic-credential-assignment` rule refused both surfaces at once, because `const API_KEY = process.env.ARC_LLM_API_KEY` in `drivers/generic-api.mjs` sits in this diff's context. It is an env READ, not a credential. Owner's call: fix the rule, not the code around it. The rule now exempts exactly `process.env.<NAME>` (plus a closing `;`, `,` or `)`), and `tests/redact-env-read.mjs` holds 4 reads passing, 6 literals and glued reads still refused, and the old rule as the control. The gate change is attacked in this PR's own round.
 
 ### OUT-OF-CYCLE — ADR-0226 Amendment 1: no new session per PR round — 2026-09-24
 

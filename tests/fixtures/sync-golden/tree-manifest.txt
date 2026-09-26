@@ -288,7 +288,7 @@
 .claude/scripts/hq/lib/policy/subjects.mjs	e95fe436f1d1db1cb145968c3262037dc4c2d1f3da45631d7f463d8b3bf41072
 .claude/scripts/hq/lib/policy/tool-capabilities.json	f0c1cdd0dac19d7127c327fc251f3a3572eb0817a6be94cd6f8d5a57dd5f8f24
 .claude/scripts/hq/lib/policy/yaml.mjs	43908a3e8bf5ed5f1ea199fd6d9a6beba1a3e63b60a226a9c4f87373794520f7
-.claude/scripts/hq/lib/redact.mjs	e6b6482b1b20b5270604da64e58ddb7bd856c5dac0afb575d2100102b4f92592
+.claude/scripts/hq/lib/redact.mjs	197cccf98d310fe65769f4530f69eaee7119ec669e78ab1c110b1c3af3ecf60e
 .claude/scripts/hq/lib/spine-io.mjs	aaabca21a6332238d3ac6e051aa3dcd5ced0f92b8e29536a14d6541218042fcc
 .claude/scripts/hq/lib/validate-absorb.mjs	2b404b96f3ff5b3b3dd6d21d51b6d871040f8addd4914d5c5ca1cf17507ef14b
 .claude/scripts/hq/lib/validate-content.mjs	bd51b29daa5d4a40a7bafb57e1c94444114fc38ddef9a21f1e876fb68b74e6cc

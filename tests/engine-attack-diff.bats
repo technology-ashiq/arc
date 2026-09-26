@@ -491,3 +491,12 @@ EOF
   [[ "$output" == *"ok A: the status file was ONE line at every sample, and its last word names the watchdog"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok C: the CLI refuses a malformed ARC_ATTACK_MINUTES before anything runs (exit 2, named)"* ]] || { echo "$output"; false; }
 }
+
+@test "data boundary: an exact process.env read is not a credential; a literal, or one glued to a read, still is" {
+  run node "$ARC_ROOT/tests/redact-env-read.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: 5 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok CONTROL: the rule as it stood flagged every one of those lines -- the exemption is what changed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a literal credential, or one glued to an env read, is still caught"* ]] || { echo "$output"; false; }
+}
