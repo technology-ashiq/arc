@@ -83,6 +83,10 @@ _arc_design_sandbox() {
   # fails for a reason that has nothing to do with the behaviour under test.
   cp "$ARC_CORE_SRC"/*.mjs                        "$SANDBOX/.claude/scripts/core/" 2>/dev/null
   cp "$ARC_CORE_SRC"/*.json                       "$SANDBOX/.claude/scripts/core/" 2>/dev/null
+  # design-refpack.mjs reads design.sources.yaml with the repo's one yaml subset parser, the same
+  # one design-sources-lint.mjs uses, so the builder accepts exactly what the lint passed.
+  mkdir -p "$SANDBOX/.claude/scripts/engine"
+  cp "$ARC_ROOT"/.claude/scripts/engine/yaml-subset.mjs "$SANDBOX/.claude/scripts/engine/"
   cp "$ARC_ROOT"/.claude/hooks/PreToolUse-edit.d/10-design-critic.sh \
      "$SANDBOX/.claude/hooks/PreToolUse-edit.d/" 2>/dev/null
   # The composer WRITE boundary and the edit dispatcher that runs it. Both, or the write cases

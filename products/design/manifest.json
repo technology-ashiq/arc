@@ -23,8 +23,10 @@
     ".claude/scripts/design/design-explore.sh",
     ".claude/scripts/design/design-gate.sh",
     ".claude/scripts/design/design-lint.mjs",
+    ".claude/scripts/design/design-refpack.mjs",
     ".claude/scripts/design/design-render-serve.mjs",
     ".claude/scripts/design/design-render.sh",
+    ".claude/scripts/design/design-robots.mjs",
     ".claude/scripts/design/design-sources-lint.mjs",
     ".claude/scripts/design/open-brief.mjs",
     ".claude/scripts/design/pick.mjs"

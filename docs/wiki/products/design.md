@@ -26,7 +26,7 @@
 - [design-jury](../agents/design-jury.md) — Explore-mode blind juror. Ranks FOUR unlabelled items — the three variants plus a world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact.
 - [ui-composer](../agents/ui-composer.md) — Explore-mode composer. Builds exactly ONE variant from the brief and its assigned thesis — its own directory, its own invented visual system, realistic content. Blind to the other variants and never edits the brief, the matrix, or anything outside its own variant dir.
 
-## Scripts (13)
+## Scripts (15)
 
 - [`.claude/scripts/design/composer-bash-check.sh`](../../../.claude/scripts/design/composer-bash-check.sh)
 - [`.claude/scripts/design/composer-scope-check.sh`](../../../.claude/scripts/design/composer-scope-check.sh)
@@ -36,8 +36,10 @@
 - [`.claude/scripts/design/design-explore.sh`](../../../.claude/scripts/design/design-explore.sh)
 - [`.claude/scripts/design/design-gate.sh`](../../../.claude/scripts/design/design-gate.sh)
 - [`.claude/scripts/design/design-lint.mjs`](../../../.claude/scripts/design/design-lint.mjs)
+- [`.claude/scripts/design/design-refpack.mjs`](../../../.claude/scripts/design/design-refpack.mjs)
 - [`.claude/scripts/design/design-render-serve.mjs`](../../../.claude/scripts/design/design-render-serve.mjs)
 - [`.claude/scripts/design/design-render.sh`](../../../.claude/scripts/design/design-render.sh)
+- [`.claude/scripts/design/design-robots.mjs`](../../../.claude/scripts/design/design-robots.mjs)
 - [`.claude/scripts/design/design-sources-lint.mjs`](../../../.claude/scripts/design/design-sources-lint.mjs)
 - [`.claude/scripts/design/open-brief.mjs`](../../../.claude/scripts/design/open-brief.mjs)
 - [`.claude/scripts/design/pick.mjs`](../../../.claude/scripts/design/pick.mjs)
