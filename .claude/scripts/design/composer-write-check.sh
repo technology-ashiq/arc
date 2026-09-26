@@ -56,11 +56,12 @@ STDIN=""
 if [ -z "$TARGET" ] && [ ! -t 0 ]; then STDIN="$(cat)"; fi
 if [ -z "$TARGET" ]; then
   _IDC="$ROOT/.claude/scripts/design/composer-bash-check.sh"
-  # A missing or incomplete parser answers nothing, and every caller is judged, as before.
-  if [ -f "$_IDC" ] && [ "$(tail -n 1 "$_IDC" 2>/dev/null | tr -d '\r')" = "# composer-bash-check: end" ]; then
+  # A missing, incomplete or pre-1419 parser answers nothing, and every caller is judged, as before.
+  if [ -f "$_IDC" ] && [ "$(tail -n 1 "$_IDC" 2>/dev/null | tr -d '\r')" = "# composer-bash-check: end" ] \
+     && grep -qx '# composer-bash-check: speaks --identity' "$_IDC" 2>/dev/null; then
     printf '%s' "$STDIN" | bash "$_IDC" --identity
     case $? in
-      1) exit 0;;
+      10) exit 0;;
       2) echo "BLOCKED by ui-composer write scope: this call may be ui-composer's, and who is calling cannot be read exactly." >&2
          if type arc_cm_describe >/dev/null 2>&1; then arc_cm_describe "$ROOT" >&2; fi
          exit 2;;

@@ -29,8 +29,12 @@
 #
 # --identity is how the read and write boundaries learn who is calling (ADR-1419): they judge only
 # a ui-composer call, and they ask THIS parser rather than carrying a second hand-written one (the
-# twin-fix rule). Its exit: 0 a ui-composer call | 1 someone else's | 2 the call may be a
-# composer's and its identity cannot be read exactly, which the caller refuses.
+# twin-fix rule). Its exit: 0 a ui-composer call | 10 someone else's | 2 the call may be a
+# composer's and its identity cannot be read exactly, which the caller refuses. "Someone else" is
+# 10, not 1, because 1 is what bash exits with when a script dies (an unbound variable, a failed
+# fork), and a crash must never read as a verdict (attack r1, B2). The caller judges every code it
+# does not know. The next line is the handshake a caller checks before it asks (B8):
+# composer-bash-check: speaks --identity
 set -uo pipefail
 # Byte semantics for every string operation below: under a UTF-8 locale bash counts and strips
 # characters, which is slower and made a long string's cost grow faster than its length (eighth
@@ -40,16 +44,19 @@ LC_ALL=C; export LC_ALL
 IDENTITY=0
 [ "${1:-}" = "--identity" ] && IDENTITY=1
 # Not a composer's call: allowed by the Bash boundary, answered "someone else" by --identity.
-_other() { [ "$IDENTITY" -eq 1 ] && exit 1; exit 0; }
+_other() { [ "$IDENTITY" -eq 1 ] && exit 10; exit 0; }
 
-[ -t 0 ] && _other
+[ -t 0 ] && { [ "$IDENTITY" -eq 1 ] && exit 2; exit 0; }
 PAYLOAD="$(cat)"
 
 # Cheap first: nearly every call is not a composer's, and they must not pay for the parse. The
 # letters are matched without case, so `UI-Composer` still reaches the identity check. A payload
 # carrying any JSON escape is parsed too, because an identity spelled with one never shows the
 # word (eighth attack pass, G); without a working jq that case is let go below, not refused.
-case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*'\u'*) ;; *) _other;; esac
+# --identity skips the shortcut: it runs only while a composer is armed, and a payload it cannot
+# parse must reach the checks below rather than be waved through as "someone else" (B3).
+[ "$IDENTITY" -eq 1 ] \
+  || case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*'\u'*) ;; *) _other;; esac
 NAMES_COMPOSER=0
 case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*) NAMES_COMPOSER=1;; esac
 
@@ -74,6 +81,18 @@ JQ_OK=0
 if command -v jq >/dev/null 2>&1 && [ "$(printf '{"k":"v"}' | _jq -j '.k' 2>/dev/null)" = "v" ]; then
   JQ_OK=1
 fi
+# --identity answers "someone else" only about a payload it could read. An empty one, or with jq
+# one that is not a JSON object, is unreadable: a Write it cannot parse used to reach the write
+# check's fail-closed branch, and the identity question must not open that door (B3). Without jq
+# only the empty case is visible; the harness writes these payloads, so a truncated one is not a
+# composer's to make.
+if [ "$IDENTITY" -eq 1 ]; then
+  [ -n "$(printf '%s' "$PAYLOAD" | tr -d ' \t\r\n')" ] || _refuse "the call carries no payload."
+  if [ "$JQ_OK" -eq 1 ]; then
+    printf '%s' "$PAYLOAD" | _jq -e 'type == "object"' >/dev/null 2>&1 \
+      || _refuse "the payload is not a JSON object."
+  fi
+fi
 # Without jq, a payload that only carries an escape cannot be decoded, and the harness never
 # escapes the letters of an agent name, so it is not treated as a composer's.
 [ "$JQ_OK" -eq 1 ] || [ "$NAMES_COMPOSER" -eq 1 ] || _other
@@ -82,9 +101,12 @@ fi
 # refused before it is parsed: a composer controls its command's size, and the jq stream count
 # grows with every JSON leaf (1M leaves: 42 s; the hook budget is 60 s -- ninth attack pass). A
 # render's whole call is under 2 KB. Anyone else's large call is parsed as before.
-if [ "${#PAYLOAD}" -gt 65536 ] \
+# --identity also answers for a composer's Write of its own page, which is 40-100 KB of real HTML,
+# so its cap is 1 MiB (B1): at two bytes a leaf at worst that is under 22 s of stream count.
+_CAP=65536; [ "$IDENTITY" -eq 1 ] && _CAP=1048576
+if [ "${#PAYLOAD}" -gt "$_CAP" ] \
    && printf '%s' "$PAYLOAD" | grep -qE '"agent_type"[[:space:]]*:[[:space:]]*"[^"]*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]'; then
-  _refuse "the call is ${#PAYLOAD} bytes, longer than any render's; nothing over 65536 bytes is checked or run."
+  _refuse "the call is ${#PAYLOAD} bytes, longer than any render's; nothing over $_CAP bytes from a composer is checked or run."
 fi
 
 # `_field <key> <stream path> <jq path> <max bytes> [name]` sets FIELD. Returns 0 read (possibly

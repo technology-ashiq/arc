@@ -189,11 +189,14 @@ if [ -z "$TARGET" ] && [ ! -t 0 ]; then STDIN="$(cat)"; fi
 if [ -z "$TARGET" ]; then
   _IDC="$ROOT/.claude/scripts/design/composer-bash-check.sh"
   # A missing or incomplete parser answers nothing, and then every caller is judged, as before
-  # this ADR: a broken install leans closed, never open for a composer.
-  if [ -f "$_IDC" ] && [ "$(tail -n 1 "$_IDC" 2>/dev/null | tr -d '\r')" = "# composer-bash-check: end" ]; then
+  # this ADR: a broken install leans closed, never open for a composer. So does a whole parser
+  # that predates --identity: it would run as the Bash boundary and exit 0 for a Read, and 0 means
+  # "a composer" here. The handshake line says it understands the question (attack r1, B8).
+  if [ -f "$_IDC" ] && [ "$(tail -n 1 "$_IDC" 2>/dev/null | tr -d '\r')" = "# composer-bash-check: end" ] \
+     && grep -qx '# composer-bash-check: speaks --identity' "$_IDC" 2>/dev/null; then
     printf '%s' "$STDIN" | bash "$_IDC" --identity
     case $? in
-      1) exit 0;;
+      10) exit 0;;
       2) echo "BLOCKED by ui-composer scope: this call may be ui-composer's, and who is calling cannot be read exactly." >&2
          if _core_ok; then _refuse; fi
          exit 2;;

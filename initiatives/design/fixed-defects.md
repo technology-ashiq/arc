@@ -33,3 +33,8 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **Cleanup deleted a content-addressed file an earlier run owned** (B6) — `design-refpack.mjs` — *clean up only what this run created.*
 - **A non-text 2xx parsed as an empty rule set** and became ALLOW (B8) — `design-robots.mjs` — *check the content type and shape before a body is trusted as the format it claims.*
 - **Emptiness checked before sanitising** (B7) — `design-refpack.mjs` — *validate the value that will be written, after every transform.*
+- **A caller read the parser's "someone else" code, 1, which is also bash's crash code** (ADR-1419 r1 B2) — `composer-scope-check.sh`, `composer-write-check.sh` — *a verdict gets a code the runtime never produces by accident; every unknown code is judged.*
+- **A size guard written for one tool reached another through a new entry point** (a composer's own 100 KB page refused) (r1 B1) — `composer-bash-check.sh --identity` — *a guard reused by a new caller is re-checked against that caller's real inputs.*
+- **An unparseable payload was answered "not a composer" before the fail-closed branch could see it** (r1 B3) — `composer-bash-check.sh --identity` — *"other" is a positive result about a payload that was read; unreadable is its own answer.*
+- **A sibling script's version was checked for completeness, not for the feature asked of it** (r1 B8) — the `--identity` handshake — *check the capability you call, not only that the file is whole.*
+- **A refusal test aimed at a path another rule already refuses** (r1 B5) — `design-composer-eyes.bats` — *aim a gate's test where only that gate can refuse, and assert its reason.*

@@ -1182,13 +1182,19 @@ _main_write() {
 @test "ADR-1419: a payload naming ui-composer whose identity cannot be read exactly is refused" {
   _composer_sandbox; _arm
   # Two agent_type keys: which one the harness meant cannot be read exactly (the Bash check's BL-7).
+  # Aimed at the composer's OWN page, which the path rule allows, so only the identity gate can
+  # refuse it, and its reason is asserted (attack r1, B5: README.md was refused by the path rule
+  # whether or not the gate existed).
   local dup='{"agent_type":"ui-composer","agent_type":"Explore","tool_name":"%s","tool_input":%s}'
-  run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
-      <<< "$(printf "$dup" Read '{"file_path":"README.md"}')"
-  [ "$status" -eq 2 ] || { echo "unreadable identity Read allowed: $status $output"; false; }
-  run bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
-      "$(printf "$dup" Write '{"file_path":"README.md","content":"x"}')"
-  [ "$status" -eq 2 ] || { echo "unreadable identity Write allowed: $status $output"; false; }
+  local own='docs/design/explore/lexos-v1/variant-a/index.html'
+  run --separate-stderr bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
+      <<< "$(printf "$dup" Read "{\"file_path\":\"$own\"}")"
+  [ "$status" -eq 2 ] || { echo "unreadable identity Read allowed: $status $stderr"; false; }
+  printf '%s' "$stderr" | grep -q "who is calling cannot be read exactly" || { echo "refused, not by the identity gate: $stderr"; false; }
+  run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      "$(printf "$dup" Write "{\"file_path\":\"$own\",\"content\":\"x\"}")"
+  [ "$status" -eq 2 ] || { echo "unreadable identity Write allowed: $status $stderr"; false; }
+  printf '%s' "$stderr" | grep -q "who is calling cannot be read exactly" || { echo "write refused, not by the identity gate: $stderr"; false; }
   # Paired: another agent, readable, passes the same read.
   run bash "$SANDBOX/.claude/hooks/PreToolUse-read.sh" \
       <<< '{"agent_type":"Explore","tool_name":"Read","tool_input":{"file_path":"README.md"}}'
@@ -1208,4 +1214,81 @@ _main_write() {
   [ "$status" -eq 0 ] || { echo "main session refused with two boundaries armed: $status $stderr"; false; }
   _main_write Write '{"file_path":"README.md","content":"x"}'
   [ "$status" -eq 0 ] || { echo "main-session write refused with two boundaries armed: $status $stderr"; false; }
+}
+
+# ---------- ADR-1419, attack round 1 (B1, B2, B3, B6, B8) ----------
+
+# A parser stand-in that is whole and speaks --identity, then exits with $1: what the callers do
+# with a code they do not know is the fallthrough under test.
+_stub_parser() {
+  printf '#!/usr/bin/env bash\n# composer-bash-check: speaks --identity\ncat >/dev/null\nexit %s\n# composer-bash-check: end\n' "$1" \
+    > "$SANDBOX/.claude/scripts/design/composer-bash-check.sh"
+}
+
+@test "ADR-1419 r1 B1: a composer Write of a real-sized page into its own variant is allowed" {
+  _composer_sandbox; _arm
+  # Through a file, not argv: a 100 KB argument is past the Windows command-line limit.
+  local page own="$BATS_TEST_TMPDIR/own.json" sib="$BATS_TEST_TMPDIR/sib.json"
+  page="$(head -c 100000 /dev/zero | tr '\0' 'a')"
+  _payload Write "{\"file_path\":\"docs/design/explore/lexos-v1/variant-a/index.html\",\"content\":\"$page\"}" > "$own"
+  _payload Write "{\"file_path\":\"docs/design/explore/lexos-v1/variant-b/index.html\",\"content\":\"$page\"}" > "$sib"
+  [ "$(wc -c < "$own" | tr -d ' ')" -gt 100000 ] || { echo "fixture payload is not 100 KB"; false; }
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" < "$own"
+  [ "$status" -eq 0 ] || { echo "a 100 KB own-page write was refused: $status ${output:0:400}"; false; }
+  # Paired: the same size into a sibling is still the path rule's refusal.
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" < "$sib"
+  [ "$status" -eq 2 ] || { echo "a 100 KB sibling write was allowed: $status"; false; }
+}
+
+@test "ADR-1419 r1 B2/B8: a parser that crashes, is stale, or is missing leaves every caller judged" {
+  _composer_sandbox; _arm
+  local sib='{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  # Positive control first: the real parser lets the main session through.
+  _main_read Read "$sib"
+  [ "$status" -eq 0 ] || { echo "control: the real parser refused the main session: $stderr"; false; }
+  local code
+  for code in 1 7 127; do
+    _stub_parser "$code"
+    _main_read Read "$sib"
+    [ "$status" -eq 2 ] || { echo "parser exit $code was read as a verdict (read): $status"; false; }
+    _main_write Write '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}'
+    [ "$status" -eq 2 ] || { echo "parser exit $code was read as a verdict (write): $status"; false; }
+  done
+  # Whole but pre-1419: no handshake line. It would exit 0 for a Read, and 0 means "a composer".
+  printf '#!/usr/bin/env bash\ncat >/dev/null\nexit 10\n# composer-bash-check: end\n' \
+    > "$SANDBOX/.claude/scripts/design/composer-bash-check.sh"
+  _main_read Read "$sib"
+  [ "$status" -eq 2 ] || { echo "a parser with no handshake was asked anyway: $status"; false; }
+  rm -f "$SANDBOX/.claude/scripts/design/composer-bash-check.sh"
+  _main_read Read "$sib"
+  [ "$status" -eq 2 ] || { echo "a missing parser opened the boundary: $status"; false; }
+}
+
+@test "ADR-1419 r1 B3: an empty or truncated payload is unreadable, not someone else's" {
+  _composer_sandbox; _arm
+  run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" "   "
+  [ "$status" -eq 2 ] || { echo "a blank write payload was allowed: $status $stderr"; false; }
+  run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse-edit.sh" \
+      '{"tool_name":"Write","tool_input":{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html","content":"x"}'
+  [ "$status" -eq 2 ] || { echo "a truncated write payload was allowed: $status $stderr"; false; }
+}
+
+@test "ADR-1419 r1 B6: the main session naming ui-composer in a path or pattern still passes, with jq and without" {
+  _composer_sandbox; _arm
+  _main_write Edit '{"file_path":".claude/agents/ui-composer.md","old_string":"a","new_string":"b"}'
+  [ "$status" -eq 0 ] || { echo "main-session edit of ui-composer.md refused: $stderr"; false; }
+  _main_read Grep '{"pattern":"ui-composer","path":"docs/design/explore/lexos-v1/variant-b"}'
+  [ "$status" -eq 0 ] || { echo "main-session Grep for ui-composer refused: $stderr"; false; }
+  mkdir -p "$SANDBOX/badbin"
+  printf '#!/bin/sh\nexit 127\n' > "$SANDBOX/badbin/jq"
+  chmod +x "$SANDBOX/badbin/jq"
+  PATH="$SANDBOX/badbin:$PATH"; export PATH
+  command -v jq | grep -q badbin || { echo "the broken jq is not the one found first"; false; }
+  _main_write Edit '{"file_path":".claude/agents/ui-composer.md","old_string":"a","new_string":"b"}'
+  [ "$status" -eq 0 ] || { echo "no jq: main-session edit of ui-composer.md refused: $stderr"; false; }
+  _main_read Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/ui-composer-notes.md"}'
+  [ "$status" -eq 0 ] || { echo "no jq: main-session read naming ui-composer refused: $stderr"; false; }
+  # Paired: without jq the composer is still refused on a sibling.
+  _read_sep Read '{"file_path":"docs/design/explore/lexos-v1/variant-b/index.html"}'
+  [ "$status" -eq 2 ] || { echo "no jq: a composer read a sibling: $status"; false; }
 }
