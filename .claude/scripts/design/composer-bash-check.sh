@@ -235,8 +235,13 @@ _curator_read() {
   case "$_np" in
     ..|../*|*/..|*/../*) _crefuse "'${_p:0:120}' climbs out of where a curator reads.";;
     design.sources.yaml|docs/design|docs/design/*) exit 0;;
+    # The screens it staged, so it looks before it writes a principle -- the pack's staged/
+    # directory only, never its logs or another state file.
+    .claude/state/design/refpacks/*/staged/?*)
+      _b="${_np#.claude/state/design/refpacks/}"; _b="${_b%%/*}"
+      case "$_b" in ""|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) ;; *) exit 0;; esac;;
   esac
-  _crefuse "'${_p:0:120}' is outside what a curator reads: design.sources.yaml and docs/design/."
+  _crefuse "'${_p:0:120}' is outside what a curator reads: design.sources.yaml, docs/design/, and the screens it staged."
 }
 _curator_bash() {
   # The command's relative path names the builder only from the project root (attack r2, B10).
@@ -300,6 +305,7 @@ _curator_bash() {
     case "$_seen" in *" $1 "*) _crefuse "the flag '${1:0:40}' is given twice.";; esac
     case "$1" in
       --brief|--source|--url|--principle|--avoid) ;;
+      --stage) [ "$2" = "1" ] || _crefuse "--stage takes 1.";;
       *) _crefuse "the flag '${1:0:40}' is not one a curator's refpack call takes (a test seam never is).";;
     esac
     case "$2" in --*) _crefuse "the flag '$1' has no value.";; esac
@@ -325,7 +331,14 @@ _curator_bash() {
     _seen="$_seen$1 "
     shift 2
   done
-  for _f in --brief --source --url --principle --avoid; do
+  # Two shapes: a --stage (fetch to look at it, no row) or an add (with its principle).
+  case "$_seen" in
+    *" --stage "*)
+      case "$_seen" in *" --principle "*|*" --avoid "*) _crefuse "a call is a stage OR add: a staged screen carries no principle yet.";; esac
+      _need="--brief --source --url";;
+    *) _need="--brief --source --url --principle --avoid";;
+  esac
+  for _f in $_need; do
     case "$_seen" in *" $_f "*) ;; *) _crefuse "a refpack call needs $_f.";; esac
   done
   exit 0

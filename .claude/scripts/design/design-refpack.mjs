@@ -39,6 +39,7 @@
 // Usage:  design-refpack.mjs --brief <id> --source <registry id> --url <screen url>
 //           --principle <text> --avoid <text>
 //           [--registry <path>] [--robots-file <path> | --robots-status <n>] [--fixture <path>]
+//         design-refpack.mjs --brief <id> --source <id> --url <url> --stage 1   (fetch for viewing only; no row)
 //         design-refpack.mjs --check-browse <url> [--registry <path>] [--robots-file <path> | --robots-status <n>]
 //           (may a design-curator WebFetch this page -- ADR-1420; see checkBrowse)
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
@@ -67,7 +68,7 @@ function fail(code, msg) {
 }
 
 function parseArgs(argv) {
-  const known = new Set(["--brief", "--source", "--url", "--principle", "--avoid", ...SEAMS]);
+  const known = new Set(["--brief", "--source", "--url", "--principle", "--avoid", "--stage", ...SEAMS]);
   const opts = {};
   for (let i = 0; i < argv.length; i += 2) {
     const k = argv[i];
@@ -230,6 +231,10 @@ async function main(argv) {
   const o = parseArgs(argv);
   for (const k of ["--brief", "--source", "--url"]) if (!o[k]) fail(1, `${k} is required`);
   const brief = o["--brief"];
+  // --stage 1: fetch for viewing, write no row (the curator looks before it writes a principle).
+  if (o["--stage"] != null && o["--stage"] !== "1") fail(1, "--stage takes 1");
+  const stage = o["--stage"] === "1";
+  if (stage && (o["--principle"] != null || o["--avoid"] != null)) fail(1, "a call is a --stage OR an add: a staged screen carries no principle yet");
   const id = o["--source"];
   if (!validId(brief)) fail(1, `--brief must match ${ID} and not be a reserved device name, got '${field(brief)}'`);
   if (!validId(id)) fail(1, `--source must match ${ID} and not be a reserved device name, got '${field(id)}'`);
@@ -301,11 +306,12 @@ async function main(argv) {
   await check(url);
 
   // 4. a row without a principle is not evidence -- judged on the text that would be written,
-  // so a principle of control characters alone is empty (attack r2 B7).
+  // so a principle of control characters alone is empty (attack r2 B7). A staging call writes no
+  // row, so it carries none: its only product is an image the curator can look at.
   const principle = field(o["--principle"] || "");
   const avoid = field(o["--avoid"] || "");
-  if (!principle) fail(1, "--principle is required: a row with no adaptable principle is not evidence");
-  if (!avoid) fail(1, "--avoid is required: every row names what not to copy");
+  if (!stage && !principle) fail(1, "--principle is required: a row with no adaptable principle is not evidence");
+  if (!stage && !avoid) fail(1, "--avoid is required: every row names what not to copy");
 
   // 5. fetch, following redirects by hand; every hop is bound and preflighted again.
   let current = url;
@@ -339,6 +345,17 @@ async function main(argv) {
     fail(5, `the screen was not cached: ${field(bad)}`);
   }
   const sha = createHash("sha256").update(res.body).digest("hex");
+  if (stage) {
+    // Staged for viewing only: a separate directory the curator may Read, no provenance row, no
+    // commit mark. The add that follows fetches again and passes every check again.
+    const stagedDir = join(stateDir, "staged");
+    const staged = join(stagedDir, `${id}-${sha.slice(0, 16)}.${ext}`);
+    if (!resolve(staged).startsWith(resolve(stagedDir) + sep)) fail(1, `refused: the staged path left the staging directory: ${staged}`);
+    mkdirSync(stagedDir, { recursive: true });
+    writeFileSync(staged, res.body);
+    console.log(`staged: ${relative(ROOT, staged).split("\\").join("/")} (sha256 ${sha}) -- Read it, then add it with --principle and --avoid`);
+    process.exit(0);
+  }
   const image = join(stateDir, `${id}-${sha.slice(0, 16)}.${ext}`);
   if (!resolve(image).startsWith(resolve(stateDir) + sep)) fail(1, `refused: the image path left the pack directory: ${image}`);
   // The path is content-addressed, so the same screen twice lands on the same file. Only an

@@ -53,8 +53,17 @@ yourself: the sources you may use are the rows with `status: active`, `access: f
    week; find one case fast; trust the numbers). Every screen you pick must teach something about at least one.
 2. Browse each eligible source. Prefer screens from **shipped products** over concept shots. Take screens from **at
    least two sources**; a pack from one gallery carries one gallery's taste.
-3. For each chosen screen, find its **image URL** (the screenshot file itself, not the page around it) and run the
-   builder once. Read its exit code:
+3. For each chosen screen, find its **image URL** (the screenshot file itself, not the page around it). **Look
+   before you write.** First stage it:
+
+   ```
+   node .claude/scripts/design/design-refpack.mjs --brief <id> --source <registry id> --url "<https image url>" --stage 1
+   ```
+
+   It runs every check, fetches the image, and prints `staged: <path>`. **Read that path** and look at the screen.
+   Write the principle and avoid-this from what you SEE, never from a caption or a category name. If the screen
+   teaches nothing about the brief's jobs, drop it. Otherwise add it with the full command above (no `--stage`).
+   Read the builder's exit code, for the stage and the add alike:
    - `0` added.
    - `2` the registry or host refused; `3` robots DISALLOW; `4` robots UNREADABLE; `5` the fetch failed. The
      builder has already recorded why. Move on to another screen. Do not retry the same URL.
