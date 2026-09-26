@@ -385,30 +385,30 @@ stay bespoke folds.
 
 ## Now
 
-**RESUME HERE (2026-09-25, evening):** Phase 06 IN PROGRESS. Nothing is open: no PR, no running session, no local-only
-branch holds work.
-- **Merged today:** #273 (slice 03b, council-convene), #274 (slice 03c: a session's phases stream live; arc-run
-  vouches for a receipt a process returns, and says `arc-run: receipt <kind> <id>` itself), #276 (the live convene
-  PASSED on attempt 4 -- `evidence/phase-06/live-demo.md`: clicked, streamed 28 min, council.verdict
-  01M3C89E89QA9XZQW56VA804ZJ credited by the door and read back off the spine), #278 (slice 04, memory ring:
-  lesson-log via memory/lesson-log.mjs, rule-promote via memory/rule-propose.mjs, propose-only).
-- **Slices done:** 01, 02, 03 (demo passed), 05. **Slice 04:** 3 new session verbs shipped (convene, log lesson,
-  promote rule); review, adopt plan and lane birth had process files already.
-- **Next (ask the owner first):** strategy + develop lanes -- `adr-record` (note.logged) and `develop-proof`
-  (slice.done, via develop.mjs next; its receipt needs a --process tag for arc-run's vouch). Then the residue
-  decision: ship (needs arc-run to enforce a stop before deploy; the door refuses CONFIRM_STEP_UNENFORCED today),
-  qa (browser + running app headless), close phase (CI evidence, main clone, owner stamp), hire (no procedure),
-  absorb adopt (needs an A/B decision the row cannot supply), growth draft (row takes one topic, the tool needs
-  cluster/plan/keyword) -- build, or write to `evidence/phase-06/residue.md` for the owner to approve as a whole.
-  Then slice 06: attackers, CI, `/arc-phase-done 06` from the main clone.
+**RESUME HERE (2026-09-26):** Phase 06 IN PROGRESS. Open: only this handoff PR and #267 (Windows proposal race). No
+running session, no local-only branch holds work.
+- **Merged 2026-09-26:** #282 (squash 3b85a8c8) -- `develop-proof` (develop room, `slice.done`: `develop.mjs prove`
+  writes result + commit, the commit must be an ancestor of origin/main) and `adr-record` (strategy room, now with a
+  lane field, `note.logged`: `hq/adr-record.mjs` numbers inside the lane's century, skipping every branch and sibling
+  worktree claim). Both new writers approved by the owner; hq.policy.yaml rows appended by the owner. Shared
+  `withGitReader` now in core/proposal-branch.mjs.
+- **Session verbs:** 7 of 15 built (council convene, log lesson, promote rule, develop proof, record ADR; review,
+  adopt plan, lane birth already had process files); dispatch is the door itself.
+- **Next (owner decision first):** the residue -- ship (arc-run must enforce the stop before deploy;
+  CONFIRM_STEP_UNENFORCED today), qa (browser + running app headless), close phase (CI evidence, main clone, owner
+  stamp), hire (no procedure), absorb adopt (an A/B decision the row cannot supply), growth draft (the row takes one
+  topic, the tool needs cluster/plan/keyword). My recommendation: write all six to `evidence/phase-06/residue.md` for
+  the owner to approve as a whole. Then slice 06: attackers, CI, `/arc-phase-done 06` from the main clone.
+- **Owner's optional one-liner:** the hq.policy.yaml comment on `process:adr-record` still says `plan/adr-record.mjs`
+  (the script moved to hq during the attack fixes): `! sed -i 's|plan/adr-record.mjs|hq/adr-record.mjs|' hq.policy.yaml`.
 - **How the owner wants it worked (2026-09-25):** LEAN. Report every step; no live demo (paid opus runs) without
   asking; one attack round per PR; one push per PR; no new mechanism without asking. Every new process needs its
-  `hq.policy.yaml` row, which only the owner can append (`.claude/settings.json` denies it to agents): prepare the
-  rows as one file and hand over a single `! cat <file> >> hq.policy.yaml` line.
-- **Known:** the boundary attacker's answer is refused whole when it quotes a password-bearing URL (ledgered); the
-  logic attacker never runs (free trial model answers 429 -- the owner can set a paid `ARC_ATTACK_TRIAL_MODEL`);
-  Windows shards flake on bench.run-model's CDP timeout and the proposal-branch three-writer race (#267 open) --
-  re-run only the failed jobs.
+  `hq.policy.yaml` row, which only the owner can append: prepare the rows as one file and hand over a single
+  `! cat <file> >> hq.policy.yaml` line.
+- **Known:** the logic attacker never runs (free trial model answers 429 -- the owner can set a paid
+  `ARC_ATTACK_TRIAL_MODEL`); Windows shards flake on bench.run-model's CDP timeout, the proposal-branch three-writer race
+  (#267 open) and face-browser's ERR_NO_BUFFER_SPACE -- re-run only the failed jobs. A shared file (docs/wiki,
+  sync golden) touched by the docs lane conflicts: regenerate the wiki, verify the golden row by row.
 - **On resume, check open PRs and sibling worktrees first:** this `## Now` only sees merged work.
 
 **Earlier (2026-09-23):** **Phase 05 is CLOSED** (done log, 2026-09-23): all 31 work verbs run from the face,
