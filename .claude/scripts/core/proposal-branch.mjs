@@ -46,6 +46,15 @@ const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_FILES = 16;
 const IDENTITY = Object.freeze({ name: "arc face", email: "face@arc.invalid" });
 const GIT_TIMEOUT_MS = 60_000;
+const OBJECT_WRITE_TRIES = 12;
+/** How long a loser waits in all for the winner's write to finish: time, not a try count, bounds it (L2). */
+const OBJECT_WRITE_PATIENCE_MS = 6000;
+/**
+ * The race's own signature: git could not create or write a loose object file because another writer holds it. Only
+ * this is retried -- a full disk, a read-only objects dir, a hook's refusal or a broken pipe exits non-zero too, and
+ * retrying them only delays the same failure (L3, B2).
+ */
+export const OBJECT_WRITE_RACE_RE = /unable to (?:write|create)[^\n]*objects[\\/][^\n]*(?:Permission denied|File exists|Resource busy|Device or resource busy)/i;
 const MAX_GIT_OUT = 16 * 1024 * 1024;
 const NULL_FILE = process.platform === "win32" ? "NUL" : "/dev/null";
 
@@ -129,11 +138,45 @@ async function git(repo, args, o) {
   if (outBytes > MAX_GIT_OUT) throw new ProposalError("GIT_FAILED", `git ${args[0]} printed more than ${MAX_GIT_OUT} bytes`);
   const okCodes = o.ok || [0];
   if (r.exit === null || !okCodes.includes(r.exit)) {
-    const why = r.error || Buffer.concat(err).toString("utf8").trim().split(/\r?\n/).filter(Boolean)[0] || `exit ${r.exit ?? r.signal}`;
-    throw new ProposalError("GIT_FAILED", `git ${args[0]} failed: ${why}`);
+    const stderr = Buffer.concat(err).toString("utf8");
+    const why = r.error || stderr.trim().split(/\r?\n/).filter(Boolean)[0] || `exit ${r.exit ?? r.signal}`;
+    const e = new ProposalError("GIT_FAILED", `git ${args[0]} failed: ${why}`);
+    // WHAT git said, as data: a caller deciding whether to retry reads this, never the message text above -- a timeout
+    // and an overrun throw above with no gitExit, so they can never look like an exit (attack da7d131 L1, B2).
+    /** @type {any} */ (e).gitExit = Object.freeze({ code: r.exit, stderr: stderr.slice(0, 4096) });
+    throw e;
   }
   const buf = Buffer.concat(out);
   return { buf, out: buf.toString("utf8"), status: r.exit };
+}
+
+/**
+ * A git call that writes a content-addressed object (hash-object -w, write-tree), retried when git exits non-zero.
+ * Writers of one plan write the SAME loose object at once, and on Windows the loser's open is refused ("unable to
+ * write file .git/objects/..: Permission denied") -- the three-writers race that PR 3b's lock-wait never reached,
+ * because it failed here, before update-ref (reproduced 2 of 80 rounds, 2026-09-24). A retry is safe: the object's
+ * name is its content, so a second write of it is the same write. Only the race's signature is retried, from git's own
+ * stderr carried as data; a timeout, an overrun or any other exit is thrown at once. `run` is the git call, injectable
+ * so a test can make the race happen on demand (attack da7d131 L4, B1).
+ * @param {string} repo @param {string[]} args @param {Parameters<typeof git>[2]} o @param {typeof git} [run]
+ */
+export async function gitObjectWrite(repo, args, o, run = git) {
+  const started = Date.now();
+  for (let attempt = 1; ; attempt++) {
+    try { return await run(repo, args, o); }
+    catch (e) {
+      const exit = e instanceof ProposalError ? /** @type {any} */ (e).gitExit : undefined;
+      const race = !!exit && OBJECT_WRITE_RACE_RE.test(String(exit.stderr));
+      if (!race) throw e;
+      const spent = Date.now() - started;
+      if (attempt >= OBJECT_WRITE_TRIES || spent >= OBJECT_WRITE_PATIENCE_MS) {
+        throw new ProposalError("GIT_FAILED", `${e.message} -- the object-write race was retried ${attempt} time(s) over ${spent} ms and did not clear`);
+      }
+      // Jittered, so writers that lost the same attempt do not collide again in lockstep (B3).
+      const wait = Math.min(OBJECT_WRITE_PATIENCE_MS - spent, 40 * attempt + Math.floor(Math.random() * 60));
+      await new Promise((r) => setTimeout(r, Math.max(1, wait)));
+    }
+  }
 }
 
 /**
@@ -661,10 +704,10 @@ export async function writeProposal({ repo, branch, files, allow, message, base:
         const row = (await git(repo, ["ls-tree", base, "--", f.path], { hooks })).out.trim();
         const mode = /^100755 /.test(row) ? "100755" : "100644";
         // --no-filters: the blob is the bytes the tool computed, never a line-ending conversion of them.
-        const blob = (await git(repo, ["hash-object", "-w", "--no-filters", "--stdin"], { hooks, input: f.content })).out.trim();
+        const blob = (await gitObjectWrite(repo, ["hash-object", "-w", "--no-filters", "--stdin"], { hooks, input: f.content })).out.trim();
         await git(repo, ["update-index", "--add", "--cacheinfo", `${mode},${blob},${f.path}`], { hooks, env });
       }
-      const tree = (await git(repo, ["write-tree"], { hooks, env })).out.trim();
+      const tree = (await gitObjectWrite(repo, ["write-tree"], { hooks, env })).out.trim();
       // A NONCE per call, as a trailer: two writers of one plan in one second computed ONE commit, and the update-ref
       // catch below told each of them the branch was theirs -- three approvals for one branch (PR 3b round-2 shell
       // attack). With the nonce only the writer whose commit the branch holds can claim it.

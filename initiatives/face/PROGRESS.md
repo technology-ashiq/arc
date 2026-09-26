@@ -424,6 +424,16 @@ stay bespoke folds.
 
 ## Now
 
+**OUT-OF-PHASE BUG (2026-09-24, `/arc-change --lane face`, owner: "neeye pannu"):** the proposal-branch
+"three writers of one plan at once" check is red on Windows, intermittently. It hit three PRs on 2026-09-19 and
+the main dispatch 35959814088 on 2026-09-24, which passed when the shard was re-run. **Root cause, reproduced on
+the owner's Windows box (2 of 80 rounds):** the failure comes from `git hash-object -w`, not from `update-ref`. It
+fails with `unable to write file .git/objects/..: Permission denied`: three writers of identical content write ONE
+loose object at once, and Windows refuses the second open. PR #255's lock-wait fixed the wrong step. **Fix:** retry
+the two content-addressed, idempotent object writes (`hash-object -w`, `write-tree`), bounded, and make the check
+print each writer's message. Assumptions ledger: nothing fired. Estimate 0.25d, charged to this cycle and booked
+at the next burn update so the header and the board row move together (7 to 7.25 of 24d, no tripwire). Branch `feat/face-proposal-race-fix`. Phase 06 is untouched.
+
 **RESUME HERE (2026-09-26, evening):** **Phase 06 is CLOSED** (done log, 2026-09-26) and stamped by the owner.
 **Phase 07 is next: the Reference room** (REQ-12, 3d), then Phase 08, dogfood (REQ-10, 2d). Open: #267 (the Windows
 proposal race: a face PR whose attack round, review and CI read never ran; it needs a rebase onto #282) and this

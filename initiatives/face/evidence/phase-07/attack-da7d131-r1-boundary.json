@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "tests/face/proposal-branch.mjs:303",
+      "breaking_input": "Delete the retry: make gitObjectWrite a single `return await git(repo, args, o)`, or set OBJECT_WRITE_TRIES to 1. Run the suite. The only arm covering this fix is the three-writers Promise.all, which failed 2 of 80 rounds before the fix. About 97% of runs stay green with the fix removed. The only test change is adding `msg: e.message` to the failure detail.",
+      "why": "No arm makes an object write fail on purpose, so nothing asserts that the retry ran, that it stops after 8 tries, or that a timed-out call is not retried. The fix for a flake is proven only by the flake not appearing. The PROGRESS entry also records no post-fix repeat of the 80-round repro.",
+      "fix": "Add a deterministic arm. Put a git shim first on PATH (or inject the spawn) that exits 128 with an 'unable to write file .git/objects/..: Permission denied' line for the first N `hash-object` calls. Assert that writeProposal succeeds and the shim was invoked N+1 times (proving the retry RAN). Assert that N=8 exhausts and throws the exit error. Assert that a shim that hangs past GIT_TIMEOUT_MS is invoked once. Keep the concurrent arm as the integration check.",
+      "twin_of": "Tests that could not fail, or could not pass -> the mutant is the negative control; write the check it fails."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/proposal-branch.mjs:151",
+      "breaking_input": "A `hash-object -w` that hangs until GIT_TIMEOUT_MS (60 s), for example an antivirus scan holding the loose-object file open on Windows. If the timeout error from git() begins with `git hash-object failed: `, the predicate calls it an exit and retries. That is 8 attempts x 60 s plus 1.4 s of sleep, about 8 minutes inside one door-served call. The opposite input is a git() message that words a signal-killed or otherwise non-zero exit differently, for example `git write-tree failed (exit 128)`. The prefix then never matches and the fix silently never fires.",
+      "why": "Whether an error is an exit, a timeout or an overrun is decided by string-matching a message that git() wrote elsewhere. The doc comment says timeouts are not retried, but nothing in the diff or the tests pins that. The predicate also retries every non-zero exit, not just the race signature. A permanent failure (read-only objects dir, full disk) burns 8 spawns and 1.4 s before it surfaces.",
+      "fix": "Decide from structured data. Use a status or a distinct `code`/`timedOut` field that git() already knows, and retry only a non-zero exit whose stderr carries the 'unable to write file ... Permission denied' signature. Better, on failure verify by name (`git cat-file -e <oid>`, or compute the oid with `hash-object` without `-w`) and treat an existing object as success. Test the classifier with one shim per outcome.",
+      "twin_of": "An exit code with three answers read as two -> A failure to look is never an empty result."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/core/proposal-branch.mjs:155",
+      "breaking_input": "Three writers of one plan start together (the test's Promise.all, or three processes launched from one script). They lose the same attempt, all sleep exactly 50*attempt ms and re-issue the identical write within milliseconds of each other. Both losers can hit the same open-file refusal again, and the schedule never decorrelates.",
+      "why": "The delay is deterministic and identical across contenders, so retrying in lockstep repeats the collision instead of resolving it. Eight tries of linear backoff can all be spent while two losers keep colliding with each other.",
+      "fix": "Add jitter to the delay. Preferably make the retry a check rather than a rewrite: after the first failure, test whether the object already exists by name and skip the write, since the winner's write is the same write.",
+      "twin_of": "A check and a write with a spawn between them -> make the write itself the check."
+    }
+  ]
+}
