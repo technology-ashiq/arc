@@ -422,8 +422,9 @@ _render_sandbox() {
   printf '<!doctype html><title>route</title><p>content</p>\n' > "$SANDBOX/docs/route.html"
   git -C "$SANDBOX" add -A >/dev/null 2>&1
   git -C "$SANDBOX" commit -qm route >/dev/null 2>&1
-  R_META="$SANDBOX/.claude/state/design/renders/docs--route-html.json"
-  R_PNG="$SANDBOX/.claude/state/design/renders/docs--route-html.png"
+  # Session-scoped since ADR-1402; the default mode is critique, so the literal is preserved.
+  R_META="$SANDBOX/.claude/state/design/renders/design-critic/docs--route-html.json"
+  R_PNG="$SANDBOX/.claude/state/design/renders/design-critic/docs--route-html.png"
 }
 
 _render() { run bash "$SANDBOX/.claude/scripts/design/design-render.sh" docs/route.html; }

@@ -5,26 +5,49 @@
 
 > **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/lanes/design.md` -- hand-written, never generated (ADR-1505, ADR-1508).
 
-*design (no live cycle)*
+*design v2 "Eyes, Taste, Rivals"*
 
 ## At a glance
 
 | | |
 |---|---|
-| Status | IDLE |
-| Cycle | arc-design (Cycle 3, closed 2026-07-30) |
+| Status | LIVE |
+| Cycle | arc-design v2 (Cycle 16, opened 2026-08-23) |
 | Product | [design](../products/design.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
 
 ## Plan and tracker
 
-- No `PLAN.md`.
+- [`PLAN.md`](../../../initiatives/design/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/design/PROGRESS.md)
 
-## Decisions (0)
+## Decisions (20)
 
-No ADR names this lane first in its `Product:` line.
+ADRs whose `Product:` line names this lane first.
+
+| ADR | Decision | Status | Date |
+|---|---|---|---|
+| [`1400`](../../../docs/adr/1400-dsv-a-the-composer-seat-changes-only-through-exp-a1.md) | DSV-A: the composer seat changes only through EXP-A1, never by fiat | accepted | 2026-08-23 |
+| [`1401`](../../../docs/adr/1401-dsv-b-the-composer-sees-its-own-work.md) | DSV-B: the composer sees its own work — render-in-loop, ≤3 iterations, immutable receipts | accepted | 2026-08-23 |
+| [`1402`](../../../docs/adr/1402-dsv-c-the-renderer-is-session-safe-before-anything-runs-in-parallel.md) | DSV-C: the renderer is session-safe before anything runs in parallel | accepted | 2026-08-23 |
+| [`1403`](../../../docs/adr/1403-dsv-d-the-viewport-set-derives-from-the-briefs-platform-contract.md) | DSV-D: the viewport set derives from the brief's platform contract | accepted | 2026-08-23 |
+| [`1404`](../../../docs/adr/1404-dsv-e-reference-packs-cache-images-commit-provenance.md) | DSV-E: reference packs cache images locally, commit provenance, and teach principles not pixels | accepted | 2026-08-23 |
+| [`1405`](../../../docs/adr/1405-dsv-f-the-jury-ranks-craft-first-n-items-model-mixed.md) | DSV-F: the jury ranks craft first, over N items, on a model-mixed panel | accepted | 2026-08-23 |
+| [`1406`](../../../docs/adr/1406-dsv-g-below-bar-is-anchored-to-the-pack.md) | DSV-G: BELOW-BAR is anchored to the reference pack | accepted | 2026-08-23 |
+| [`1407`](../../../docs/adr/1407-dsv-h-product-canvas-is-decided-by-markers-never-by-text-match.md) | DSV-H: product canvas vs documentation is decided by markers, never by text-match | accepted | 2026-08-23 |
+| [`1408`](../../../docs/adr/1408-dsv-i-one-source-registry-owner-born-lint-guarded.md) | DSV-I: one source registry, owner-born, lint-guarded, future-proof | accepted | 2026-08-23 |
+| [`1409`](../../../docs/adr/1409-dsv-j-rivals-are-evidence-and-arrive-by-spike-then-integrate.md) | DSV-J: rivals are evidence, arrive by spike-then-integrate, and never merge | accepted | 2026-08-23 |
+| [`1410`](../../../docs/adr/1410-dsv-k-outbound-blind-packages-carry-arc-authored-renders-only.md) | DSV-K: outbound blind packages carry arc-authored renders only | accepted | 2026-08-23 |
+| [`1411`](../../../docs/adr/1411-dsv-l-calibration-is-controlled-or-it-is-theatre.md) | DSV-L: calibration is controlled, or it is theatre | accepted | 2026-08-23 |
+| [`1412`](../../../docs/adr/1412-gallery-eligibility-is-decided-by-robots-and-terms-not-by-taste.md) | Gallery eligibility is decided by robots.txt and terms, not by gallery quality | accepted | 2026-08-23 |
+| [`1413`](../../../docs/adr/1413-a-rival-is-not-called-until-its-terms-clear.md) | A rival is not called until its terms clear, and that check gates the spike | accepted | 2026-08-23 |
+| [`1414`](../../../docs/adr/1414-the-curator-sits-at-balanced-workhorse-and-one-juror-at-high-judgment.md) | The curator sits at balanced-workhorse; one juror moves to high-judgment | accepted | 2026-08-23 |
+| [`1415`](../../../docs/adr/1415-the-composer-iron-law-gains-a-read-path-allowlist.md) | The composer's iron law gains an explicit read-path allowlist | accepted | 2026-08-23 |
+| [`1416`](../../../docs/adr/1416-the-exp-a1-prediction-is-session-authored-on-the-owners-delegation.md) | The EXP-A1 prediction is session-authored on the owner's delegation, and says so | accepted | 2026-08-23 |
+| [`1417`](../../../docs/adr/1417-the-stale-duplicate-guard-must-tell-iteration-from-stale-page.md) | The stale-duplicate guard must tell an iteration from a stale page | accepted | 2026-08-23 |
+| [`1418`](../../../docs/adr/1418-an-explore-render-is-confined-to-its-own-variant-directory.md) | An explore render is confined to its own variant directory | accepted | 2026-09-17 |
+| [`1419`](../../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md) | The composer read and write boundaries bind only a ui-composer caller | proposed | 2026-09-26 |
 
 ## Source
 

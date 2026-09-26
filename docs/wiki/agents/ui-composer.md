@@ -13,12 +13,13 @@
 | Model tier | sonnet |
 | Product | [design](../products/design.md) |
 
-## Tools (4)
+## Tools (5)
 
 - `Read`
 - `Glob`
 - `Grep`
 - `Write`
+- `Bash(bash .claude/scripts/design/design-render.sh:*)`
 
 ## Source
 

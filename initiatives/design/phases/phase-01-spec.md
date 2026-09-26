@@ -1,0 +1,212 @@
+# Phase 01 — eyes + viewports + canvas gate
+
+**Goal (one line):** the composer renders its own variant, reads the PNG back with vision and
+revises it up to three times with immutable receipts — and every surface the brief declares is
+rendered and correctly classified as product canvas or documentation.
+**Appetite:** 1.5 days — blown appetite = cut scope or kill, never extend silently
+**Depends on:** phase-00
+**Implements:** ADR-1401 · ADR-1403 · ADR-1407 · ADR-1415
+
+## Exit criteria (Definition of Done)
+
+**REQ-02 — the composer sees its own work**
+
+- [ ] `ui-composer` gains exactly one scoped Bash entry point — `design-render.sh` and nothing
+      else. It has `tools: Read, Glob, Grep, Write` today and no Bash at all.
+      **Found by the live demo (2026-09-17): the frontmatter grant alone scopes nothing.** A
+      subagent's `tools:` field takes tool names, so `Bash(prefix:*)` granted all of Bash, and every
+      composer ran node, sed and PowerShell. The scope is enforced by `composer-bash-check.sh`
+      behind a PreToolUse Bash fragment keyed on the payload's `agent_type`, per the ADR-1415
+      amendment: the renderer only, on the armed variant's own page and session. This bullet
+      closes only when that fragment is installed (the owner's edit, since `.claude/hooks/**` is
+      governance-denied) and the Bash boundary has had its two-surface adversarial pass
+- [ ] Iron law 1 gains the enumerated read allowlist of
+      [ADR-1415](../../../docs/adr/1415-the-composer-iron-law-gains-a-read-path-allowlist.md):
+      its own session's renders and the brief's refpack. Every existing prohibition survives
+      verbatim — another variant's dir, the matrix, the brief file, product files
+- [ ] That allowlist is enforced by a **named technical mechanism** — a PreToolUse Read hook or
+      a permissions path rule — **not by prompt prose alone**. `ui-composer` today declares
+      `tools: Read, Glob, Grep, Write`, which is unscoped Read: iron law 1 is currently obeyed
+      only because the agent chooses to. Without a mechanism the negative control below tests
+      compliance, not refusal, and a stated control is not a control
+- [ ] Loop runs compose → render → read own PNG with vision → revise, capped at **3 iterations**;
+      a 4th refuses. An `unchanged: true` iteration **still consumes a slot** — stated, not left
+      implicit, because a composer that no-ops once has 2 real attempts left and the assumptions
+      ledger's catch-rate trigger must be read against that reduced budget
+- [ ] Iteration outputs are immutable, with a per-variant manifest carrying input sha · output
+      sha · defect claim · revision reason. **Amended 2026-09-17 (owner ruling, `/arc-change`)**
+      to where they are actually built, instead of the `self-review/iter-N/{render.png, meta.json}`
+      this line first named:
+      - the renders and their metas are session-scoped, at
+        `.claude/state/design/renders/<id>--variant-<x>/…--<W>x<H>--iter-N.{png,json}` (ADR-1402's
+        path, with the viewport in the name so two viewports of one iteration cannot overwrite each
+        other);
+      - the hash chain lives in `docs/design/explore/<id>/variant-<x>/self-review/manifest.md`, whose
+        every row names its input and output hash, and which `compose-done` refuses unless the hashes
+        match those metas.
+
+      ADR-1401 carries the same amendment.
+- [ ] ≥1 self-caught defect is visibly fixed across iteration receipts on a real run — provable
+      from the shas, not narrated
+- [ ] A no-op revision records `unchanged: true` (Phase 00's discriminator) rather than refusing
+
+**REQ-03 — declared-surface fidelity**
+
+- [ ] Viewport set derives from the brief's platform contract: desktop 1440×900 always, mobile
+      390×844 when the contract declares mobile `yes`
+- [ ] A **declared-but-unrendered surface blocks PASS**: `design-explore.sh compose-done … --brief`
+      runs the coverage gate, which refuses unless every viewport the brief declares was rendered.
+      **Amended 2026-09-17 (owner ruling, `/arc-change`):** the other half of this line, "the
+      critic judges every rendered viewport", moved to Phase 03, where the critic and the jury are
+      reworked. Nothing in Phase 01 showed the critic judging more than one render meta.
+- [ ] Per-explore surface manifest + `data-arc-doc-surface` markers classify each surface
+- [ ] A planted docs-on-canvas page (state matrix + keyboard tables) returns a deterministic ERR
+- [ ] A legitimate product page containing the word "Reference" **passes** — the ₹-entity
+      over-refusal precedent
+- [ ] An **unmarked** surface fails closed
+
+**Both**
+
+- [ ] Negative control: a composer attempting to read a **sibling** variant's render is refused
+- [ ] **An explore render is confined to its own variant directory**
+      ([ADR-1418](../../../docs/adr/1418-an-explore-render-is-confined-to-its-own-variant-directory.md),
+      `/arc-change` 2026-09-17). Found by the fifth pass, both attackers independently (BL-1 =
+      BS-1): the composer's own page framed `../variant-b/index.html` and `../matrix.md`, the
+      `file://` render delivered those pixels into its own session, and the composer may read that
+      PNG. Contract:
+      - explore mode renders only a file inside `docs/design/explore/<id>/variant-<x>/`, over a
+        loopback server rooted at that directory, and refuses URL routes;
+      - every response carries a same-origin CSP, and the server refuses and records any request
+        that resolves outside the root (encoded, `..`, absolute and symlinked forms included);
+      - the capture is refused, PNG and meta removed, on a recorded out-of-root request or policy
+        violation, a final top-level URL that is not the served page, more than one tab, or no
+        node;
+      - the server has a hard lifetime cap and inherits no descriptors;
+      - the recipe carries `confined-loopback`.
+
+      CI proves the contract with the real server and the fake browser: the request shapes a
+      leaking page makes (relative `..`, percent-encoded, absolute, symlinked) are refused and
+      recorded by the server; a render whose record holds one, or whose final URL moved, is
+      refused; a clean page renders. The fake cannot run a page, so **the real-browser proof is
+      separate and required:** one real re-render of a planted leak page on the live-demo path, refused,
+      and the two-surface attack pass carrying the running defect list.
+      **Fixed in passing:** `design-render.sh:383` has a literal `\n` before `||`, so the
+      fail-closed media check ran `set media light n`. Pinned by a case
+- [ ] **An abandoned boundary is diagnosable and never fails open** (`/arc-change` 2026-09-16).
+      A compose that died without `compose-done` left `lexos-p01/variant-a` armed from 08-25 to
+      09-16 and refused every Read, Grep, Glob and Write in the worktree, operator included — the
+      write boundary reads the same marker, so both refusals carry the note — with a
+      message that did not say when it was armed or how to release it. The marker's `pid=` is
+      NOT a liveness signal: it is the pid of `composer-scope-check.sh --begin` itself, which
+      exits on the next line, so "pid dead -> release" would disarm every boundary the instant
+      it was armed. Contract: `--begin` records `armed_at` (UTC) and stops writing `pid=`; a
+      refusal names the armed explore/variant, its age, and the exact `compose-done` release
+      command; age NEVER relaxes the refusal — an old marker and a legacy `pid=`-only marker
+      still refuse a sibling read (the negative control a "stale -> allow" mutant must fail).
+      The description lives once, in `composer-scope-check.sh --describe`, which the write
+      boundary calls. **Dropped at build, 2026-09-16:** the session-start line in
+      `00-context.sh` — `.claude/hooks/**` is edit-denied by governance, and the first refused
+      read now carries the same description, so the lock surfaces on first contact anyway.
+      **Twin, found at build:** `critic-scope-check.sh` (ADR-0034) writes the same dead
+      `pid=$$` and locks writes the same way, so it gets the same stamp and note. The age logic
+      lives once, as `arc_armed_stamp` / `arc_armed_desc` in `core/common.sh`, which both
+      boundaries already source. **Attacked 2026-09-16** (two fresh agents, 20 findings, one
+      overlap — see `evidence/phase-01/adversarial-open.md` § Third pass): markers are written
+      whole or not at all; ids forbid `--` and edge hyphens; a marker whose filename disagrees
+      with its content is MALFORMED and refused; every refusal class is tested on stderr alone;
+      and every printed release is executed by a test from a subdirectory
+- [ ] **A self-review row names its surface by its hashes** (found by the live demo, 2026-09-17).
+      A row used to be judged at the WIDEST viewport of its iteration. On `lexos-p02`, composer B's
+      iteration 3 fixed a textarea that cut the third line of an outcome at 390px, and desktop did
+      not move because the defect was never there. The row could only name identical desktop
+      hashes and was refused as a no-op claiming a fix, so a defect on one surface was
+      unrecordable. Now the output hash selects the render (and so the viewport). The previous
+      iteration is compared at that viewport, and the rules stay as strict: cross-viewport pairs,
+      no-op claims at the named viewport, and two routes at one viewport are all still refused.
+      `ui-composer.md` says which viewport's hashes to copy
+- [ ] Two-surface adversarial pass by fresh agents on the doc-surface gate and the allowlist,
+      holes fixed and pinned as fixtures
+- [ ] tests added & green **on CI, read per JOB at the branch head SHA**. **Amended 2026-09-17
+      (owner ruling, `/arc-change`):** Phase 01's own suites are green on every leg, and the only
+      red allowed is a LATER phase's named red-first set. Today that set is Phase 02 Slice B's 14
+      cases in `tests/design-refpack.bats` (`refpack:`, `registry:` and `preflight:`), each red for
+      the reason it names, with `declared = executed` on every leg. Any other red, or a red
+      outside that named set, blocks the close.
+- [ ] live demo run + output checked
+- [ ] contract tests green against fakes
+- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+
+## Verification plan
+
+- **Test command:** `bats tests/design-composer-eyes.bats tests/design-surface-gate.bats`
+- **Expected failure first:** in `design-surface-gate.bats`, `doc_surface_on_product_canvas_errs`
+  fails RED with `expected ERR, got PASS` — no marker vocabulary exists yet, so the planted page
+  is indistinguishable from product work; and `page_saying_reference_passes` must be RED-then-green
+  as the paired negative control, since a gate that only proves it refuses has not proved it
+  discriminates. In `design-composer-eyes.bats`, `sibling_render_is_refused` fails RED with
+  `expected refusal, got file contents`, because until the allowlist exists the composer's Read
+  tool has no path restriction at all. Observing all three RED is the phase's entry condition.
+- **Live demo scenario:** run one explore on the `lexos-case-workspace` brief with mobile
+  declared `yes`. Expect per variant: 2 viewports rendered per iteration, up to 3 iteration
+  directories, a manifest whose iteration-2 entry names the defect iteration-1's PNG showed.
+  Open iteration-1 and iteration-2 PNGs **by hand** and confirm the named defect is visibly
+  fixed — the verdict is not taken from the manifest's own prose.
+- **Real-system check:** confirm `.claude/state/design/renders/` holds one session per variant,
+  and that the manifest row for iteration 2 in `self-review/manifest.md` names `iter-1`'s output
+  sha as its input. That row's output sha must equal the `screenshot_sha256` of the iteration-2
+  meta at the same viewport. (Amended 2026-09-17 from a `self-review/iter-2/meta.json` path that
+  was never built; see the iteration-outputs exit criterion.)
+- **Expected evidence:** CI bats output per JOB, the iteration manifests, the two hand-opened
+  PNGs, and the refused sibling-read transcript, to `initiatives/design/evidence/phase-01/`.
+
+## Rabbit holes in this phase
+
+- **Relaxing iron law 1 to "do not read another variant".** That silently re-permits the brief
+  file and product files. Detour: enumerate the two allowed paths, change nothing else.
+- **Perfecting the marker vocabulary.** Detour: two markers, fail closed on unmarked, let the
+  first real explore report what is missing.
+- **Letting the manifest narrate the fix.** A prose claim is not evidence. Detour: input sha,
+  output sha, and a human opening both images.
+- **The confinement server outliving its render.** A background process that inherits bats'
+  fd 3 keeps a CI job open until the leg times out, and killing a node child from Git Bash on
+  Windows is not the same act as on Linux. Detour: close every inherited descriptor at spawn, a
+  hard lifetime cap inside the server itself, and a test that asserts the port is closed after
+  both a clean exit and a refusal.
+- **Trying to enumerate leak shapes in the renderer.** Detour: the browser's origin model does the
+  refusing (ADR-1418); the renderer only reads the server's record and the final URL.
+
+## Out of scope for this phase
+
+Reference packs and the curator (Phase 02) — the composer's pack-read path is built here but has
+nothing to read until Phase 02 · pack-anchored BELOW-BAR (Phase 03) · any live external source.
+
+## Your-setup / pending
+
+None — the renderer and agent-browser are already installed.
+
+## Non-negotiables (verbatim from PLAN)
+
+- **Look at the artifact before carrying its verdict.** No ranking, score, receipt or package
+  is produced from a report about pixels that nobody in the session opened.
+- **Zero new spine event kinds.** This cycle rides `review.completed {lens:design}`,
+  `decision.recorded` and `note.logged` only.
+- **Agents judge, scripts measure — ADR-0048.** A gate never asks an agent for a number it
+  can compute.
+- **Every new gate, lint and parser gets a two-surface adversarial pass by fresh agents that
+  did not write it** — one on decision logic, one on the shell/OS boundary — and that pass runs
+  against the PR THAT SHIPS THE GATE, never batched into the phase-close PR that comes after
+  all of them. The attacker prompt carries this lane's running list of already-fixed defects.
+- **A test that passes proves the assertion held, not that the code ran.** Every gate ships with
+  a negative control that actually fails.
+- **No reference image, rival draft or third-party screenshot is ever committed to git or
+  placed in an outbound package.**
+- **A `model:` frontmatter change is a governed tier change** citing ADR-0069 in a reviewed
+  diff, never a quiet edit.
+- **Shared organs are edited under the shared-file protocol.** Agent contracts under
+  `.claude/agents/`, `.mcp.json`, `hq.policy.yaml` and `tests/**` belong to no lane:
+  `git log origin/main -5` on the file runs BEFORE the edit, the stronger version is taken at
+  merge, and a change to a contract another LIVE lane reads gets a cross-lane note first.
+- **Closing a phase moves the lane's bookkeeping in the same commit as the merge, or the one
+  right after it.** PROGRESS.md's row, its `## Now`, and `docs/HISTORY.md` move together — a
+  lane whose HISTORY says CLOSED while PROGRESS still says LIVE is a failure, not a follow-up.
+- **Tests are green on CI, per JOB, at the branch head SHA** — never on this box.
