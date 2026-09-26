@@ -1,37 +1,40 @@
-# Phase 07 — Dogfood on the final surface + retro
+# Phase 07 — The Reference room: the wiki inside the face, and a Reference link from every room
 
-**Goal (one line):** REQ-10 — two real days where every decision goes through the face and ≥1 op per day is run from it, measured by `face-dogfood`; the retro and HISTORY close the cycle. Claims the surface is operable, never that the habit holds (ADR-1329).
-**Appetite:** 2 days (real calendar days)
-**Depends on:** phase-05, phase-06
-**Serves:** REQ-10
-**Branch:** `feat/face-v2-07` (retro, HISTORY, tracker only)
-**Preconditions (STOP if absent):** Phase 06's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 06` from the main clone.
+**Goal (one line):** REQ-12 — the face serves `docs/wiki`'s own extract on a read route and renders it as a Reference room (index → type → entity pages, with the markdown's cross-links), and every room carries a Reference link to its entity's page (ADR-1346).
+**Appetite:** 3 days (the 3d left unallocated by ADR-1339's re-bank; the phase specs now sum to the full 24d, zero slack)
+**Depends on:** phase-04, phase-06
+**Serves:** REQ-12
+**Branch:** `feat/face-v2-07`
+**Preconditions (STOP if absent):** Phase 06's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 06` from the main clone; the owner's OK on this `/arc-change` (2026-09-26).
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Both days run from the MAIN clone via `node .claude/scripts/hq/arc-face.mjs`.
-- [ ] `face-dogfood` reads MET for 2 days: every `decision.recorded` matched to the face journal, and ≥1 op receipt from the face on each day. If Phase 05's Block C gate fired and zero ops shipped, the op clause is recorded NOT MET and REQ-10 is re-scoped through `/arc-change` before these days start — never silently redefined.
-- [ ] The usage trend recorded since the command ring (Phase 03) is read next to the two days in the retro (retro-log 2026-09-16 lesson).
-- [ ] Assumptions ledger row 7 answered from the numbers: timing or Inbox shape.
-- [ ] ADR-1315's voice question asked at the retro (its trigger's natural place).
-- [ ] `/arc-retro` run; `docs/HISTORY.md` Cycle 16 row; `/arc-phase-done 07` from the main clone.
+- [ ] **One extract (ADR-1346 §1):** `GET /api/reference` returns wiki-build's exported `extract()` over `treeWorld`, `schema: 1` asserted; a fixture proves the route's entity ids equal `wiki-build --json`'s for the same tree, both ways; nothing under `face/` or the door walks the tree (a grep-based check with a mutant control that plants a second walker).
+- [ ] **Build-time facts only (ADR-1509):** a fixture plants a spine event and a `.claude/state/` file with a unique marker, and the marker appears nowhere in the route's response.
+- [ ] **Read-only (ADR-1504):** the route is GET-only (any other method is refused), the room has no verb and no dock, and `docs/wiki/**` is byte-identical before and after a full room walk in the browser harness.
+- [ ] **The room renders the owner's design:** index → type → entity pages, with the cross-links the markdown has (requires / required-by, product ↔ lane, command / agent → owning product, lane → its ADRs); sections Start here · The bigger loop · Reference · Evidence · Meta per `arc-wiki-engine_1.html`; both moods; opens clean in the smoke on every L3 leg.
+- [ ] **Narrative honest (ADR-1508):** Start here / The bigger loop render `docs/wiki/_narrative/<dir>/<id>.md` with the fingerprint line stripped; an entity with no narrative file reads "narrative pending" — a fixture holds both arms.
+- [ ] **Born by the birth rule (ADR-1306):** contract row in `expected-set.json`, `rooms.generated.json` via `face-sections.mjs`, a module under `face/src/modules/`; face-coverage green both directions; wiki-build run in the same PR (the room's product/room rows change what the wiki lists).
+- [ ] **Per-room Reference link (ADR-1346 §6):** every served room whose product or lane has a wiki entity links to that entity's page; the counts of rooms with and without a link are asserted, not assumed.
+- [ ] Two fresh attackers (logic · boundary); CI green per job; `/arc-phase-done 07` from the main clone.
 
 ## Verification plan
 
-Coarse (refined via `/arc-change` when the phase starts): `node .claude/scripts/core/face-dogfood.mjs` output for each day, pasted verbatim into the evidence bundle.
+Coarse, refined when the phase starts (playbook: later phases keep one line): the door's read-route fixtures + the browser smoke over the new room in both moods, read per job on CI; the live demo opens the Reference room from the main clone, walks index → one entity of each type → its cross-links, and shows one room's Reference link landing on its page.
 
 ## Rabbit holes in this phase
 
-- **Counting a half day** — a day is MET or it is not; the harness decides.
-- **Claiming the habit** — two days prove operability only (ADR-1329).
+- **Re-deriving the wiki in the client.** Every page path, type name and cross-link comes from the extract's response; the client computes nothing the extract already decided.
+- **"Helpful" live numbers.** A count of runs next to a process page is exactly what ADR-1509 forbids; it belongs in the live room the link points to.
+- **Generating the missing narrative.** "narrative pending" is the correct output, not a gap to fill with model prose (ADR-1508).
 
 ## Out of scope for this phase
 
-Raising the dogfood bar (a later cycle's question) · fixes beyond one-line — they become the next cycle's input.
+Editing or regenerating `docs/wiki/**` from the face (docs lane, ADR-1504) · search across the wiki (a later change if the owner asks) · any new wiki gate (the docs lane owns them).
 
 ## Your-setup / pending
 
-Two real days of the owner's time deciding and working through the face.
+The owner's OK on this `/arc-change`, and later the owner's accepted narrative files for any section that should not read "narrative pending".
 
 ## Non-negotiables (verbatim from PLAN)
 
