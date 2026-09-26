@@ -199,13 +199,57 @@ _crefuse() {
   echo "A curator runs one command through Bash -- node .claude/scripts/design/design-refpack.mjs --brief <id> --source <registry id> --url \"<https url>\" --principle \"<sentence>\" --avoid \"<sentence>\" -- and fetches only an active registry host whose robots.txt allows it." >&2
   exit 2
 }
+_croot() {
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then printf '%s' "$CLAUDE_PROJECT_DIR"
+  else git rev-parse --show-toplevel 2>/dev/null || pwd; fi
+}
+# One spelling for a path, for COMPARISON only: forward slashes, no trailing slash, an MSYS
+# `/c/` drive as `c:/`, lower case. Never used to open anything.
+_normp() {
+  printf '%s' "$1" | tr '\\' '/' | sed 's#/*$##; s#^/\([A-Za-z]\)/#\1:/#; s#^/\([A-Za-z]\)$#\1:#' \
+    | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz'
+}
+# The curator's reads (attack r2, B1): its Read, Grep and Glob were ungoverned, so a fetched page
+# could tell it to read a secret and carry the text out through a principle. It reads the registry
+# and the design docs (the brief), nothing else: no dot-directory, no env file, no climbing, and
+# no whole-tree search.
+_curator_read() {
+  _tool="$1"
+  _field file_path '["tool_input","file_path"]' '.tool_input.file_path' 1024 || _crefuse "the path of a curator $_tool cannot be read exactly."
+  _p="$FIELD"
+  if [ -z "$_p" ]; then
+    _field path '["tool_input","path"]' '.tool_input.path' 1024 || _crefuse "the path of a curator $_tool cannot be read exactly."
+    _p="$FIELD"
+  fi
+  if [ "$_tool" != "Read" ]; then
+    _field pattern '["tool_input","pattern"]' '.tool_input.pattern' 1024 || _crefuse "the pattern of a curator $_tool cannot be read exactly."
+    case "$(printf '%s' "$FIELD" | tr '\\' '/')" in
+      /*|[A-Za-z]:*|..|../*|*/..|*/../*) _crefuse "a curator's $_tool pattern stays relative and never climbs.";;
+    esac
+  fi
+  [ -n "$_p" ] || _crefuse "a curator's $_tool names a path: design.sources.yaml or something under docs/design/."
+  _np="$(_normp "$_p")"; _nr="$(_normp "$(_croot)")"
+  [ -n "$_np" ] && [ -n "$_nr" ] || _crefuse "the path could not be normalised."
+  case "$_np" in "$_nr"/*) _np="${_np#"$_nr"/}";; esac
+  while :; do case "$_np" in ./*) _np="${_np#./}";; *) break;; esac; done
+  case "$_np" in
+    ..|../*|*/..|*/../*) _crefuse "'${_p:0:120}' climbs out of where a curator reads.";;
+    design.sources.yaml|docs/design|docs/design/*) exit 0;;
+  esac
+  _crefuse "'${_p:0:120}' is outside what a curator reads: design.sources.yaml and docs/design/."
+}
 _curator_bash() {
+  # The command's relative path names the builder only from the project root (attack r2, B10).
+  _field cwd '["cwd"]' '.cwd' 4096 || _crefuse "the call's working directory cannot be read exactly."
+  if [ -n "$FIELD" ] && [ "$(_normp "$FIELD")" != "$(_normp "$(_croot)")" ]; then
+    _crefuse "a curator's Bash runs from the project root; this one would run in '${FIELD:0:120}'."
+  fi
   # The status is captured in a conditional, so no errexit in force can end the script on it and
   # hand the dispatcher a code it reads as allow (attack r1, B7).
   if _field command '["tool_input","command"]' '.tool_input.command' 2000; then _frc=0; else _frc=$?; fi
   case $_frc in
     0) ;;
-    3) _crefuse "the command is longer than 2000 bytes; no refpack call is.";;
+    3) _crefuse "the command is longer than 2000 bytes; a refpack call is at most a 1024-byte URL and two 300-character sentences.";;
     *) _crefuse "the command could not be read from the payload.";;
   esac
   CMD="$FIELD"
@@ -267,7 +311,16 @@ _curator_bash() {
         [ "${#2}" -le 64 ] || _crefuse "$1 is longer than 64 characters."
         case "$2" in con|prn|aux|nul|com[0123456789]|lpt[0123456789]) _crefuse "$1 is a Windows device name.";; esac;;
       --url)
-        case "$2" in https://?*) ;; *) _crefuse "--url is an https URL.";; esac;;
+        case "$2" in https://?*) ;; *) _crefuse "--url is an https URL.";; esac
+        [ "${#2}" -le 1024 ] || _crefuse "--url is longer than 1024 bytes."
+        # The registry binds hosts: no port and no userinfo in the authority (attack r2, B4).
+        _auth="${2#https://}"; _auth="${_auth%%/*}"; _auth="${_auth%%\?*}"; _auth="${_auth%%#*}"
+        case "$_auth" in *:*|*@*) _crefuse "--url carries a port or userinfo; the registry binds hosts.";; esac;;
+      --principle|--avoid)
+        # Free text is capped and must say something: a sentence is not a channel for whatever a
+        # fetched page told the curator to read (attack r2, B1 and B6).
+        [ "${#2}" -le 300 ] || _crefuse "$1 is longer than 300 characters; it is one sentence."
+        case "$2" in *[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789]*) ;; *) _crefuse "$1 says nothing: it needs a letter or a digit.";; esac;;
     esac
     _seen="$_seen$1 "
     shift 2
@@ -278,7 +331,7 @@ _curator_bash() {
   exit 0
 }
 _curator_fetch() {
-  _field url '["tool_input","url"]' '.tool_input.url' 2048 || _crefuse "the URL of a WebFetch cannot be read exactly."
+  _field url '["tool_input","url"]' '.tool_input.url' 1024 || _crefuse "the URL of a WebFetch cannot be read exactly, or is longer than 1024 bytes."
   [ -n "$FIELD" ] || _crefuse "the WebFetch carries no URL."
   _url="$FIELD"
   _root="${CLAUDE_PROJECT_DIR:-}"
@@ -296,8 +349,9 @@ _curator_fetch() {
   fi
   # From the root and by a relative path: a POSIX path handed to a native node is red on the
   # Windows leg only.
-  _out="$(cd "$_root" && node .claude/scripts/design/design-refpack.mjs "$@" 2>&1 >/dev/null)"
-  _rc=$?
+  # In a conditional, the twin of r1 B7: under errexit a bare failing substitution ended the script
+  # with the builder's 3 or 4, which the harness reads as allow (attack r2, B2).
+  if _out="$(cd "$_root" && node .claude/scripts/design/design-refpack.mjs "$@" 2>&1 >/dev/null)"; then _rc=0; else _rc=$?; fi
   [ "$_rc" -eq 0 ] && exit 0
   _crefuse "WebFetch ${_url:0:120} -- ${_out:0:300}"
 }
@@ -314,7 +368,7 @@ case "$AGENT" in
     case "$FIELD" in
       Bash) _curator_bash;;
       WebFetch) _curator_fetch;;
-      Read|Grep|Glob) exit 0;;
+      Read|Grep|Glob) _curator_read "$FIELD";;
       *) _crefuse "the tool '${FIELD:0:40}' is not one the curator holds.";;
     esac;;
   *) _other;;

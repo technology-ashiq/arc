@@ -211,7 +211,9 @@ async function checkBrowse(argv) {
     try { page = await probe.get(url.href, { maxBytes: 64 * 1024, truncate: true }); } catch (e) {
       answer(EXIT.UNREADABLE, "UNREADABLE", `the page could not be reached (${e && e.message ? e.message : "transport error"})`);
     }
-    const s = Number(page.status);
+    // A status that is missing or not an HTTP number is not "no redirect" (attack r2, B3).
+    const s = Number(page && page.status);
+    if (!Number.isInteger(s) || s < 100 || s > 599) answer(EXIT.UNREADABLE, "UNREADABLE", "the page probe returned no HTTP status");
     if (s >= 300 && s < 400) {
       let to = "an unreadable location";
       try { to = field(shown(new URL(page.location, url.href))); } catch { /* named as unreadable */ }
@@ -233,6 +235,9 @@ async function main(argv) {
   if (!validId(id)) fail(1, `--source must match ${ID} and not be a reserved device name, got '${field(id)}'`);
   const url = parseHttpUrl(o["--url"]);
   if (!url) fail(1, `--url must be an http(s) URL with a host, got '${field(o["--url"])}'`);
+  // The registry binds hosts, not whatever listens on another port of one (ADR-1420 r2 B4, the
+  // pack-path twin of --check-browse's rule).
+  if (url.port || url.username || url.password) fail(2, "refused: a pack URL carries no port and no userinfo; the registry binds hosts");
   if (o["--robots-status"] != null && !/^[1-5][0-9][0-9]$/.test(o["--robots-status"])) fail(1, "--robots-status must be an HTTP status");
   const seamsUsed = SEAMS.filter((k) => o[k] != null);
   if (seamsUsed.length && process.env.ARC_DESIGN_OFFLINE !== "1") {

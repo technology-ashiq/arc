@@ -758,3 +758,39 @@ REFPACK_OK='node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --s
   # Paired: the composer boundary is still live.
   _live
 }
+
+@test "ADR-1420 r2 B1: a curator reads the registry and docs/design only, and its sentences are capped" {
+  _curator_sandbox
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Read","tool_input":{"file_path":"docs/design/explore/lexos-v1/brief.md"}}'
+  [ "$status" -eq 0 ] || { echo "a curator Read of a brief was refused: $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Grep","tool_input":{"pattern":"hosts","path":"design.sources.yaml"}}'
+  [ "$status" -eq 0 ] || { echo "a curator Grep of the registry was refused: $stderr"; false; }
+  local p
+  for p in .env ../secrets.txt docs/design/../../.env /etc/passwd .claude/state/design/x; do
+    _hook_raw "{\"agent_type\":\"design-curator\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$p\"}}"
+    [ "$status" -eq 2 ] || { echo "a curator read $p: $status"; false; }
+    printf '%s' "$stderr" | grep -q "BLOCKED by design-curator scope" || { echo "[$p] refused, but not by the curator rule: $stderr"; false; }
+  done
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Grep","tool_input":{"pattern":"KEY"}}'
+  [ "$status" -eq 2 ] || { echo "a whole-tree curator Grep was allowed: $status"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Glob","tool_input":{"pattern":"../**/.env","path":"docs/design"}}'
+  [ "$status" -eq 2 ] || { echo "a climbing curator Glob pattern was allowed: $status"; false; }
+  local long; long="$(head -c 301 /dev/zero | tr '\0' 'a')"
+  _hook design-curator Bash "node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url \"https://lapa.ninja/x.png\" --principle \"$long\" --avoid \"a\""
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "longer than 300" || { echo "a 301-character principle was allowed: $status $stderr"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja/x.png" --principle " " --avoid "."'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "says nothing" || { echo "a blank principle was allowed: $status $stderr"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja:8443/x.png" --principle "p" --avoid "a"'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "port or userinfo" || { echo "a port in a pack URL was allowed: $status $stderr"; false; }
+}
+
+@test "ADR-1420 r2 B10: a curator's Bash runs from the project root only" {
+  _curator_sandbox
+  local root="${CLAUDE_PROJECT_DIR:-$SANDBOX}"
+  local cmd='node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url \"https://lapa.ninja/x.png\" --principle \"p\" --avoid \"a\"'
+  CLAUDE_PROJECT_DIR="$root"; export CLAUDE_PROJECT_DIR
+  _hook_raw "{\"agent_type\":\"design-curator\",\"cwd\":\"$root\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}"
+  [ "$status" -eq 0 ] || { echo "a curator call from the root was refused: $stderr"; false; }
+  _hook_raw "{\"agent_type\":\"design-curator\",\"cwd\":\"$root/docs\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}"
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "runs from the project root" || { echo "a curator call from a subdirectory was allowed: $status $stderr"; false; }
+}
