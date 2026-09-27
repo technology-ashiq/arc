@@ -3,7 +3,381 @@
 
 [arc reference](../index.md) › [Products](../index.md#products) › **Product**
 
-> **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/products/plan.md` -- hand-written, never generated (ADR-1505, ADR-1508).
+## Why it exists
+
+
+# plan
+
+## In plain words
+
+Think of a construction crew that is not allowed to lift a single brick until the site office
+has a signed drawing, a budget with a line marked "stop and rethink if we blow past half of
+this," and a list of the five most likely ways the building falls down along with what will be
+done about each one. Nobody on that crew loses time arguing about whether the drawing is good
+enough — a separate inspector who never met the architect walks the drawing looking for holes
+before the first brick moves. <!-- plain -->
+
+**plan is arc's site office.** It turns a one-line goal into a written build — a plan, an
+ordered list of phases, a one-screen status page — and it will not let product code start until
+a human has explicitly approved it. <!-- src: .claude/commands/arc-kickoff.md -->
+
+Before that approval, the draft plan survives checks that cost no product code: a script that
+checks its own structure, agents that did not write it attacking it from fixed angles, and — for
+anything bigger than a few days — a separate agent simulating the engineer who will build the
+first phase. <!-- src: .claude/commands/arc-kickoff.md; .claude/scripts/plan/kickoff-lint.mjs#deterministic; .claude/agents/plan-attacker.md; .claude/agents/plan-simulator.md -->
+
+It also owns the moment a phase is allowed to be marked done, the moment a mid-build idea gets a
+tracked home instead of being coded on the spot, and the retro that feeds what a build learned
+into the next one's pre-mortem. <!-- src: .claude/commands/arc-phase-done.md; .claude/commands/arc-change.md; .claude/commands/arc-retro.md -->
+
+### Why this needs to be a product at all
+
+If a build only ever had one person doing one thing in one sitting, a plan would just be a
+memory. The moment a build spans many sessions, many months, and possibly many people reading
+the same files without ever having sat in the room where a decision got made, a plan stops being
+optional — it is the only thing standing between "we agreed on this" and "nobody now knows why
+this is built the way it is." <!-- plain -->
+
+| What you lose | What it looks like when it bites | plan's answer |
+|---|---|---|
+| You stop knowing what a phase is for | Lint calls a phase that serves no active or validated `REQ` "a phase without a goal" — a phase with no REQ has nothing to close against | It must point some REQ's phase column at itself, or be marked CUT if it's no longer in scope <!-- src: .claude/scripts/plan/kickoff-lint.mjs#CUT -->|
+| You stop knowing when to stop | Appetite is a constraint, not an estimate: if it's blown, scope is cut or a phase is killed — never silently extended | At 50% of the appetite burnt, if the tripwire phase isn't done, `/arc-phase-done` STOPs and forces the scope-cut conversation <!-- src: docs/templates/PLAN-template.md; docs/build-playbook.md; .claude/commands/arc-phase-done.md -->|
+| You stop knowing why a decision was made | A resolved fork's Decision line states what was chosen and the one reason that carried the most weight | Every fork the build resolves becomes its own ADR file: Decision, Rejected because (one line per losing option), and — for a one-way door — a Revisit trigger <!-- src: docs/templates/adr-template.md -->|
+| You stop knowing whether "done" is real | Exit criteria are written before the phase starts — that's what keeps "done" objective, not felt | The evidence bundle is hashed into a manifest so it's tamper-evident, and a phase cannot close without a verifiable bundle <!-- src: docs/templates/phase-spec-template.md; .claude/scripts/plan/arc-evidence.sh -->|
+
+## arc words → normal words
+
+| arc calls it | It is really | Meaning |
+|---|---|---|
+| `PLAN.md` | the plan itself | Every section the template requires: goal, current state, success requirements, appetite, architecture, key decisions, non-negotiables, no-gos, rabbit holes, assumptions ledger, external dependencies, pre-mortem, and phases <!-- src: docs/templates/PLAN-template.md -->|
+| `REQ` | the promise | One measurable outcome a phase must prove true; a phase with no `REQ` mapped to it has nothing to close against <!-- src: .claude/scripts/plan/kickoff-lint.mjs -->|
+| appetite | the budget, not the guess | A time box chosen up front — Shape Up style — that the build is cut or killed against, never silently extended <!-- src: docs/build-playbook.md; .claude/commands/arc-kickoff.md#Appetite -->|
+| tier | the depth dial | S, M or L, read off the appetite number alone (never judgment) — it decides how many requirements, questions, attackers and gates the build gets <!-- src: .claude/commands/arc-kickoff.md -->|
+| the 50% tripwire | the halfway alarm | At half the appetite burnt, if the tripwire phase isn't done yet, work stops for a scope-cut conversation instead of drifting on <!-- src: .claude/commands/arc-phase-done.md -->|
+| pre-mortem | the funeral held in advance | Five ways this build most likely fails, each with a mitigation or an explicitly accepted risk <!-- src: docs/templates/PLAN-template.md -->|
+| steel thread | the thinnest thing that actually runs | Phase 0: one path from input to output, wired end to end on fakes, before any part is built deep <!-- src: docs/build-playbook.md -->|
+| assumptions ledger | the list of bets | Up to seven things the plan is betting on, each with the exact evidence that would prove the bet wrong <!-- src: .claude/scripts/plan/kickoff-lint.mjs -->|
+| ADR | the receipt for a decision | One file per resolved fork, with a reversibility label and — for a decision that can't be undone — the condition that would reopen it <!-- src: docs/templates/adr-template.md -->|
+| the Golden Loop | the loop every phase repeats | Plan, build the smallest slice, test, demo it live, verify for real, update the tracker, confirm, then the next phase <!-- src: docs/build-playbook.md -->|
+| lane | a separate desk for a separate build | A workstream with its own `PLAN.md`/`PROGRESS.md`/phase files, so two builds running at once in one company don't collide on one tracker <!-- src: .claude/rules/lanes.md -->|
+| machine header | the part a script can read | The `key: value` lines at the very top of `PROGRESS.md`, before the first heading — the one place a lane's status is written in a form software can parse, not just a person <!-- src: .claude/scripts/core/lane-resolve.mjs -->|
+
+## How a job flows
+
+A build only ever gets one plan-writing session, timeboxed to a single sitting — whatever is
+still an open question when time is up becomes a written assumption with a trigger, and the
+build proceeds anyway, because a falsifiable plan beats a perfect one. <!-- src: .claude/commands/arc-kickoff.md -->
+
+Inside that one sitting, up to three separate checks have to pass before the plan is even shown
+to a human for sign-off — how many run depends on the tier — and none of them cost a line of
+product code: <!-- src: .claude/commands/arc-kickoff.md#Appetite -->
+
+1. A script checks the plan's own structure — every section filled, every `REQ` mapped to
+   exactly one phase, every ADR reversibility-labelled, no dependency cycle between phases. <!-- src: .claude/scripts/plan/kickoff-lint.mjs#SECTION_HELP; .claude/scripts/plan/kickoff-lint.mjs#isVague; .claude/scripts/plan/kickoff-lint.mjs#rtVal; .claude/scripts/plan/kickoff-lint.mjs#DFS -->
+2. Agents that did not write the plan attack it from a fixed set of angles and return exact
+   edits, not a report — each one either applied or rejected with a one-line, fixed-vocabulary
+   reason. <!-- src: .claude/agents/plan-attacker.md; .claude/commands/arc-kickoff.md#REJECTED; ADR-0067 -->
+3. For anything bigger than a few days of work, a separate agent tries to actually write the
+   first phase's execution checklist from nothing but the plan and the phase spec — every point
+   where it has to guess is a blocker, and zero blockers is the only way this gate passes. <!-- src: .claude/agents/plan-simulator.md -->
+
+Only once whichever of those checks apply to this build's tier have passed, and only after a
+human explicitly approves, does any other command — `/arc-change`, product code, anything — get
+to run. <!-- src: .claude/commands/arc-kickoff.md#done-log -->
+
+Once a build is under way, the same shape repeats at a smaller scale for every phase: build the
+smallest slice, test it, then `/arc-phase-done` either finds every exit criterion met — bundling
+the evidence from phase 02 onward — or it says plainly what's missing and refuses to move the
+tracker. <!-- src: docs/build-playbook.md; .claude/commands/arc-phase-done.md -->
+
+## The stages, one by one
+
+Steps read from `.claude/commands/arc-kickoff.md`. Several of them are checked afterward by
+`.claude/scripts/plan/kickoff-lint.mjs`, described in its own header as the deterministic gate
+behind `/arc-kickoff`, `/arc-change`, and `/arc-phase-done`. <!-- src: .claude/commands/arc-kickoff.md; .claude/scripts/plan/kickoff-lint.mjs#deterministic -->
+
+**0 — Check whether there's already a plan here.**
+Has this build already started? If `PLAN.md` or `PROGRESS.md` already has real content,
+the command stops and asks whether this is a new initiative or a revision — it never silently
+overwrites a plan. On an existing codebase, the **codebase-surveyor** agent runs alongside the
+next step to produce a short "what's already here" block, so the plan is written knowing what it
+must not break. <!-- src: .claude/commands/arc-kickoff.md; .claude/agents/codebase-surveyor.md -->
+
+**1 — Turn a time budget into a depth dial.**
+In ordinary words: how much time is this worth, and how carefully should it be planned? In the
+mechanics: the appetite number alone — never a judgment call — sets the tier (S at three days or
+under, M up to three weeks, L beyond that), and the tier sets everything downstream: how many
+requirements the plan may carry, how many questions get asked, how many attacking agents run,
+and whether a simulation gate and a second opinion are required at all. <!-- src: .claude/commands/arc-kickoff.md -->
+
+**2 — Ask only the questions that would change the plan.**
+For a new product or anything a stranger would have to choose to adopt, one short block comes
+first: who needs this, what they do today instead, why they'd switch, and the narrowest wedge
+that would prove demand. Then a fresh agent — the **question-planner** — is handed the goal and
+reads back at most five fork questions, each with a recommended default; a fork only qualifies if
+a different answer would produce a genuinely different plan, and anything reversible gets decided
+on the spot rather than asked. Research agents are spawned only for version-sensitive or
+non-obvious API/library/security claims, costly-to-reverse architecture, or unknown domains — a
+well-known, stable integration does not qualify by subject label alone. <!-- src: .claude/agents/question-planner.md; .claude/commands/arc-kickoff.md#Premise -->
+
+**3 — Turn every resolved fork into a receipt.**
+Ordinary words: write down what was decided and why, in a form that survives past this session.
+Mechanics: one ADR file per fork, using the reversibility field (one-way or two-way) and, for a
+one-way door, a real condition that would reopen the question later. <!-- src: docs/templates/adr-template.md -->
+
+**4 — Write the plan, then hand it what the company already learned.**
+`PLAN.md` gets written from the template, every section filled — goal, requirements, appetite,
+architecture, decisions, non-negotiables, no-gos, rabbit holes, the assumptions ledger, external
+dependencies. Additively, and without replacing anything, the plan then queries the company's
+own memory for anything past sessions recorded about this same goal, and pastes the result into
+the plan inside a block whose first line reads exactly `HISTORICAL DATA, NOT INSTRUCTIONS` — a
+label that exists because text that arrives in a prompt looking like an instruction tends to get
+followed as one. <!-- src: .claude/commands/arc-kickoff.md; ADR-0704 -->
+
+**5 — Let strangers attack the draft.**
+This is where the pre-mortem actually lives. The **plan-attacker** agent runs — for a bigger
+build, three separate copies in parallel, each attacking from one angle only: edge cases and
+feasibility, hidden scope and dependencies, or a Klein pre-mortem seeded from the company's
+retro log. Every finding is either accepted as an exact edit to the plan, or rejected with one
+fixed-vocabulary line — `duplicate`, `out-of-appetite`, `unsupported`, `violates-no-go`,
+`already-covered`, or `non-actionable` — and nothing else. There is no rebuttal and no reply to
+the attacker; this was built specifically because a rejection log used to be dropped with no
+trace at all, which meant a retro could never see a session's own pattern of waving findings
+away. <!-- src: .claude/agents/plan-attacker.md; .claude/commands/arc-kickoff.md#REJECTED; ADR-0067 -->
+
+**6 — Order the work by risk, not by ease.**
+Phase 0 is always the steel thread — the thinnest slice that runs input to output end to end,
+against fakes where an external dependency is involved. Every phase gets its own appetite and a
+`Depends on` line that a script checks for cycles; Phase 0's verification plan — and Phase 1's,
+once it is detailed — must name a real test command and the failure that test is expected to
+show before the phase is built, red before green. Later phases keep one coarse verification
+line, refined only once the phase actually starts. <!-- src: docs/templates/phase-spec-template.md; .claude/scripts/plan/kickoff-lint.mjs#vspec -->
+
+**7 — Write the one-screen status page.**
+`PROGRESS.md` gets a phase table, a done-log, an appetite-burn line, and a `## Now` section
+naming exactly where the build stands and what happens next — the section `/arc-resume` reads at
+the start of a later session to reconstruct where things stand. <!-- src: .claude/commands/arc-kickoff.md#done-log; .claude/commands/arc-resume.md -->
+
+**8 — Prove a stranger could actually build phase zero from these two files alone.**
+The self-check script runs first and must pass before anything else — its verdict is the gate,
+not a prose assurance. For a medium or large build, the **plan-simulator** agent then reads
+nothing but `PLAN.md` and the phase-0 spec and tries to write the concrete execution checklist;
+every point where it has to guess is a blocker, and only a blocker count of zero passes. Two
+rounds that still come back non-zero escalate to a human decision rather than looping forever.
+For the largest builds only, the `/arc-second-opinion` flow runs against the same two files, and
+a researcher re-verifies the top three most load-bearing ADR evidence claims. <!-- src: .claude/commands/arc-kickoff.md#done-log; .claude/agents/plan-simulator.md; .claude/scripts/plan/kickoff-lint.mjs#deterministic -->
+
+**9 — Leave a receipt, then stop.**
+The build's kickoff is recorded as a permanent event, and a separate request for the human's
+approval to actually start building is recorded alongside it. Until that approval is given —
+recorded back onto the same record by name — no product code, no `/arc-change`, no other command
+runs. STOP means stop. <!-- src: .claude/commands/arc-kickoff.md -->
+
+## Every part, explained
+
+### Commands
+
+- `/arc-kickoff` — starts a brand-new build: the whole nine-stage sequence above, ending in a
+  written plan and a human approval gate. The only command allowed to create a new lane. Reach
+  for it once, at the very start of a build or a major new milestone. <!-- src: .claude/commands/arc-kickoff.md -->
+- `/arc-change` — the mid-build front door for any new idea, ask, or suggestion, whether it came
+  from the human or from the AI itself. It classifies the change (trivial, new scope, a
+  decision, or a bug), checks it against the appetite burnt so far, updates the tracker, and only
+  then lets the Golden Loop build it. Reach for it every time something new comes up mid-build —
+  never edit product code straight from a suggestion. <!-- src: .claude/commands/arc-change.md -->
+- `/arc-phase-done <n>` — closes a phase, or refuses to. Runs the full test suite, the phase's
+  own live-demo verification plan, a real-system check where one applies, and the plan's
+  structural lint; only if every one of those is green does it bundle the evidence and flip the
+  phase to done. If anything fails, it says exactly what's missing and does not update the
+  tracker. <!-- src: .claude/commands/arc-phase-done.md -->
+- `/arc-retro [n]` — the end-of-phase retro: turns repeated friction (instructions repeated,
+  mistakes made twice, permission prompts that kept firing) into a permanent home — a rule, a
+  new command, a settings allow-rule, or a hook — and feeds recurring patterns into the
+  company's retro log for the next kickoff to read. Reach for it after a phase closes, and once
+  more as the project's final retro when a whole build cycle ends. <!-- src: .claude/commands/arc-retro.md -->
+- `/arc-diagram` `<what>` — turns a plain-English description into a committed Mermaid diagram,
+  saved inside `PLAN.md`, an ADR, or a docs file rather than a throwaway preview, so it renders
+  in a pull request and stays diffable. <!-- src: .claude/commands/arc-diagram.md -->
+
+### Agents
+
+- **`question-planner`** — reads the goal, any premise answers, and the current-state survey, and
+  returns at most five fork questions ranked by how much they'd actually change the plan, each
+  with a recommended default. It exists because the session writing the plan tends to ask
+  questions that confirm what it already assumed; a fresh context asks about its own blind spots
+  instead. <!-- src: .claude/agents/question-planner.md -->
+- **`plan-attacker`** — attacks a drafted plan from exactly one assigned focus (edge cases and
+  feasibility, hidden scope, or a pre-mortem seeded from history) and returns at most seven
+  findings, each an exact, ready-to-paste edit to an existing section — never a report. It
+  exists because the plan's own author cannot see its own failure modes. <!-- src: .claude/agents/plan-attacker.md -->
+- **`plan-simulator`** — reads only `PLAN.md` and the phase-0 spec — exactly the information set
+  a real executor would have — and tries to write the concrete build checklist. Every place it
+  has to guess is a blocker. It exists to test whether the plan is actually buildable by someone
+  who was never in the room where it was written. <!-- src: .claude/agents/plan-simulator.md -->
+- **`codebase-surveyor`** — on a brownfield build, maps the existing codebase (entry points, real
+  conventions, hot modules, do-not-touch zones) into a capped, thirty-line block that becomes
+  the plan's current-state section. It is read-only and never proposes a plan itself; it exists
+  so the noise of surveying a large codebase never reaches the planning session at all. <!-- src: .claude/agents/codebase-surveyor.md -->
+- **`product-challenger`** — for a fuzzy idea, runs before kickoff and pressure-tests the framing
+  with forcing questions (the real pain, the narrowest wedge, the ten-times-better version, the
+  load-bearing assumptions), then writes its conclusions straight into `PLAN.md`'s own sections
+  rather than a separate memo. Reach for it when the idea itself, not just the plan, is still
+  unclear. <!-- src: .claude/agents/product-challenger.md -->
+
+### Processes
+
+plan's manifest lists no `processes/*.process.yaml` job description of its own.
+`/arc-kickoff`'s own wording is the one exception worth knowing about:
+its command file carries a "generated, do not hand-edit" banner because its text is compiled
+from a process file that belongs to the engine product, so changing what `/arc-kickoff` says
+means editing that process file and recompiling, never hand-editing the command. <!-- src: products/plan/manifest.json; .claude/commands/arc-kickoff.md -->
+
+### Scripts
+
+- `kickoff-lint.mjs` — the deterministic gate behind `/arc-kickoff`, `/arc-change`, and
+  `/arc-phase-done`. It checks a plan's structure across the groups detailed in the gates table
+  below. Exit zero means the plan is structurally complete; `/arc-kickoff` says plainly that
+  prose assurances don't count, only the script's verdict. <!-- src: .claude/scripts/plan/kickoff-lint.mjs#deterministic; .claude/commands/arc-kickoff.md -->
+- `arc-evidence.sh` — assembles and verifies the committed evidence bundle a phase closes with:
+  scan verdicts, review stamps, coverage output, and a test log, all hashed into a manifest so
+  tampering is detectable. It refuses to overwrite a bundle that belongs to a different commit,
+  and its `verify` subcommand fails on anything missing, tampered, or present but unlisted. <!-- src: .claude/scripts/plan/arc-evidence.sh#_grab; ADR-0060 -->
+- `arc-bytediff.sh` — proves that moving a file (a `git mv`, not a copy) relocated its content
+  and its git file mode without altering either one. It checks the old path is actually gone,
+  the new path's content hash matches, and — given a whole batch of moves — that no staged move
+  in the commit was left out of the batch it was handed. <!-- src: .claude/scripts/plan/arc-bytediff.sh; ADR-0018 -->
+
+### Gates and rules
+
+The table below groups the checks `kickoff-lint.mjs` runs, by category: <!-- src: .claude/scripts/plan/kickoff-lint.mjs#deterministic -->
+
+| Group | What it holds the plan to |
+|---|---|
+| Structural completeness | `PLAN.md` and `PROGRESS.md` exist, every required section is filled, not a placeholder <!-- src: .claude/scripts/plan/kickoff-lint.mjs -->|
+| Requirement hygiene | every `REQ` id must match `REQ-NN`, its acceptance criterion must be measurable (not vague), and active REQs stay under the tier's hard cap <!-- src: .claude/scripts/plan/kickoff-lint.mjs -->|
+| The phase graph | every phase has a spec file, a `Depends on` line, and no dependency cycle; phase 0 depends on nothing <!-- src: .claude/scripts/plan/kickoff-lint.mjs#specPath; .claude/scripts/plan/kickoff-lint.mjs#DFS -->|
+| Appetite arithmetic | the phases' individual appetites don't sum past the plan's total — crossing 80% already warns of zero slack — and the Appetite section names a kill-criteria / `50%` / scope-cut line at all <!-- src: .claude/scripts/plan/kickoff-lint.mjs#parseApp; .claude/scripts/plan/kickoff-lint.mjs#kill-criteria -->|
+| Assumptions and pre-mortem | at most seven assumptions, each with a real trigger; at least five pre-mortem rows, each mitigated, and mostly citing something real in this plan <!-- src: .claude/scripts/plan/kickoff-lint.mjs#asmRows; .claude/scripts/plan/kickoff-lint.mjs#nonCiting -->|
+| ADR wiring | every ADR in the index has a matching file, a reversibility label, a revisit trigger for one-way doors, is actually cited somewhere, and no two files claim the same ADR number <!-- src: .claude/scripts/plan/kickoff-lint.mjs#byNum; .claude/scripts/plan/kickoff-lint.mjs#adrNums; .claude/scripts/plan/kickoff-lint.mjs#rtVal -->|
+| Drift-proofing | the mermaid architecture diagram is a real flowchart, and every phase spec's copied non-negotiables block still matches `PLAN.md` word for word <!-- src: .claude/scripts/plan/kickoff-lint.mjs -->|
+| Red before green | phase 0 (and any detailed phase 1) names a real test command and the failure it's expected to show before the phase is built <!-- src: .claude/scripts/plan/kickoff-lint.mjs -->|
+| The birth rule | every process file in the repository has a matching row in the company's policy file, and the two never disagree about which subject they're naming <!-- src: .claude/scripts/plan/kickoff-lint.mjs -->|
+
+Most of these groups still only warn, never fail, until `/arc-retro` promotes them against
+recorded evidence in `docs/trial-ledger.md` — a gate is promotable only once its own bats
+fixture proves it fails on a real mutation and it has been exercised on at least three real
+kickoffs with zero false-positives, though the ledger itself calls that threshold "a threshold,
+not a proof of correctness." One group, `appetite-sum`, has already left `TRIAL` this way. The
+lint prints a `[trial-status]` line naming how many groups are live versus still in trial. <!-- src: .claude/scripts/plan/kickoff-lint.mjs; docs/trial-ledger.md#forever -->
+
+`.claude/rules/lanes.md` governs which workspace every plan command reads and writes: a lane
+named with `--lane <name>`, an auto-resolved single eligible lane, or root-mode when no
+`initiatives/` directory exists, or one exists but holds no valid lane. `/arc-kickoff` is the only command allowed to create a
+lane; every other plan command that's handed an unknown lane name stops rather than inventing
+one. <!-- src: .claude/rules/lanes.md -->
+
+Three bats suites hold this product's gates honest: `tests/kickoff-lint.bats`,
+`tests/evidence.bats`, and `tests/bytediff.bats`. <!-- src: tests/kickoff-lint.bats; tests/evidence.bats; tests/bytediff.bats -->
+
+## The bigger loop
+
+### The life of one build
+
+A goal sentence arrives, and inside one sitting it becomes a written plan, survived by checks it
+never wrote itself — how many run depends on the tier — and stopped at a human's explicit yes. From there the plan stops
+being the main character — the Golden Loop takes over, phase by phase: build the smallest slice,
+test it, demo it live, verify it against the real system, update the tracker, confirm, move on.
+Anything new that comes up along the way — an idea, a bug, a fork — goes through `/arc-change`
+first, never straight into code, so the tracker never quietly stops matching what was actually
+built. <!-- src: .claude/commands/arc-change.md; docs/build-playbook.md; .claude/commands/arc-kickoff.md#Timebox; .claude/commands/arc-kickoff.md#done-log -->
+
+Each phase ends the same way: `/arc-phase-done` either finds every exit criterion met, bundles
+the proof, and flips the row to done — or it says exactly what's missing and refuses to move the
+tracker at all. Reaching the fiftieth percent of the whole build's appetite with the risky phase
+still open is not a quiet slippage; it is a forced stop for a scope-cut conversation. <!-- src: .claude/commands/arc-phase-done.md -->
+
+When the build (or a phase, or a whole cycle) closes, `/arc-retro` looks back over the session
+for what had to be repeated, and gives each real pattern a permanent home — most often one new
+line in the company's retro log, tagged so a future kickoff's pre-mortem can find it by subject
+overlap rather than by anyone remembering it happened. This is the whole reason a plan gets
+better across builds instead of every build starting from nothing: the company's own history
+of failures becomes an input the next plan-attacker is handed by name. One honest note from the
+company's own logbook: its own step asking for the `docs/HISTORY.md` entry at the close of a
+cycle sat as an unactioned line at the top of that very file, hand-appended around three
+separate times, before the step that required it finally got wired in — a reminder that a
+written rule and a mechanism that enforces it are not the same thing. <!-- src: .claude/commands/arc-retro.md; docs/retro-log.md; docs/HISTORY.md#hand-appended -->
+
+### How it connects to the rest of arc
+
+- **core** owns the lane resolver and the machine header parser that `/arc-kickoff`,
+  `/arc-change`, `/arc-phase-done`, and `/arc-retro` each call in their own lane-first step, and
+  `/arc-resume` reads the very same `PROGRESS.md` this product writes to reconstruct where a
+  session left off. <!-- src: .claude/scripts/core/lane-resolve.mjs; .claude/commands/arc-kickoff.md#births; .claude/commands/arc-change.md; .claude/commands/arc-phase-done.md; .claude/commands/arc-retro.md; .claude/commands/arc-resume.md -->
+- **engine** compiles `/arc-kickoff`'s own wording from a process file it owns — the command is
+  generated, not hand-written, so a change to what kickoff says routes through engine's
+  recompiler rather than a direct edit. <!-- src: .claude/commands/arc-kickoff.md -->
+- **memory** feeds the plan draft what the company already learned — the recall step that runs
+  right after `PLAN.md` is written — and separately guards every `/arc-retro` append with a
+  near-duplicate check before a new retro-log line is written. <!-- src: .claude/commands/arc-kickoff.md; ADR-0705 -->
+- **hq** is where the permanent receipts land: `/arc-kickoff` and `/arc-phase-done` both write
+  an event plus a human-approval request onto the company's append-only spine, and the birth
+  rule inside `kickoff-lint.mjs` checks every process file against hq's own policy file. <!-- src: .claude/commands/arc-kickoff.md; .claude/commands/arc-phase-done.md; .claude/scripts/plan/kickoff-lint.mjs#policyPath; ADR-0029 -->
+- **develop** turns an approved phase into small, spec-anchored increments — `phases/phase-NN-spec.md`,
+  the document plan writes, is the contract `/arc-develop` and its **spec-fidelity** check both
+  work against, so plan writes the promise and develop is checked against having kept it. <!-- src: .claude/commands/arc-kickoff.md; .claude/commands/arc-develop.md; .claude/agents/spec-fidelity.md -->
+- **git** and **review** close the loop the Golden Loop describes: plan's own `/arc-change`
+  flow ends by routing a built slice through `/arc-review` then `/arc-commit`. <!-- src: .claude/commands/arc-change.md -->
+- In the face app, plan shares its room — called `lane` — with the docs product, inside the
+  `factory` ring that also holds core's toolbelt, the council chamber, the design studio, and
+  develop; the room shows the `PLAN.md` requirements table, the kickoff trail, phase zero, and
+  every phase-done event this product's commands emit. <!-- src: products/plan/manifest.json; products/docs/manifest.json -->
+
+## Glossary
+
+- **`PLAN.md`** — the single committed vision file for a build: goal, architecture, ADR index,
+  requirements, non-negotiables, no-gos, rabbit holes, assumptions, external dependencies,
+  pre-mortem, and the phase list. <!-- src: docs/templates/PLAN-template.md -->
+- **`REQ`** — one row in `PLAN.md`'s requirements table: a measurable outcome mapped to exactly
+  one phase, with a status of active, validated, or dropped (never deleted). Not the same thing
+  as a numbered requirement inside a different product's own ADR, such as one memory or hq cite
+  about themselves — those are that product's internal numbering, not a row in this build's
+  table. <!-- src: .claude/scripts/plan/kickoff-lint.mjs -->
+- **appetite** — the time box a build (or a phase) is allowed, stated as a constraint up front,
+  never as an estimate produced afterward. <!-- src: docs/build-playbook.md -->
+- **tier (S / M / L)** — the depth dial derived purely from the appetite number, setting the
+  requirement cap, the question cap, the attacker panel size, and whether the simulation gate
+  and second opinion run at all. <!-- src: .claude/commands/arc-kickoff.md -->
+- **kill criteria / the 50% tripwire** — the rule that at half the appetite burnt, an unfinished
+  tripwire phase forces a scope-cut conversation rather than a silent overrun. <!-- src: .claude/commands/arc-phase-done.md -->
+- **ADR (Architecture Decision Record)** — one file per resolved fork, carrying a reversibility
+  label and, for a one-way door, a revisit trigger. <!-- src: docs/templates/adr-template.md -->
+- **one-way / two-way door** — whether a decision can be undone later without real cost; only
+  one-way doors are worth spending a human's time asking about at kickoff. <!-- src: .claude/agents/question-planner.md -->
+- **pre-mortem** — five imagined ways the build has already failed, written before any code
+  exists, seeded from the company's own retro log wherever a past pattern matches. <!-- src: docs/templates/PLAN-template.md -->
+- **steel thread** — phase zero: the thinnest possible end-to-end slice, run against fakes,
+  proving the architecture before anything is built deep. <!-- src: docs/build-playbook.md -->
+- **assumptions ledger** — up to seven bets the plan is making, each with the exact evidence that
+  would prove the bet wrong. <!-- src: .claude/scripts/plan/kickoff-lint.mjs -->
+- **the Golden Loop** — plan, build the smallest slice, test, demo it live, verify for real,
+  update the tracker, confirm, next phase — repeated for every phase of every build. <!-- src: docs/build-playbook.md -->
+- **Definition of Done** — the exit criteria a phase spec states before the phase starts, so
+  "done" is checked, not felt. <!-- src: docs/templates/phase-spec-template.md -->
+- **evidence bundle** — the hashed, committed collection of proof (scan verdict, review stamps,
+  coverage, test output) a phase closes with; a phase cannot close if the bundle fails to verify. <!-- src: .claude/scripts/plan/arc-evidence.sh -->
+- **lane** — a workstream with its own `PLAN.md`, `PROGRESS.md`, and phase files under
+  `initiatives/<lane>/`, letting more than one build run in the same company at once. <!-- src: .claude/rules/lanes.md -->
+- **machine header** — the `key: value` lines above the first heading in `PROGRESS.md`, the one
+  place a lane's status is written so a script (not just a person) can read it. <!-- src: .claude/scripts/core/lane-resolve.mjs -->
+- **spike** — for a decision that stays high-impact and low-confidence even after research, a
+  small, timeboxed investigation (timebox of half a day or less); its ADR status is set to
+  `DEFERRED — spike scheduled`, its spike task is queued at the top of the phase-0 spec, its code
+  is quarantined and never merged, and while DEFERRED it blocks Phase 0 from closing (not
+  kickoff's own stop). <!-- src: .claude/commands/arc-kickoff.md -->
+- **retro log / trial ledger / `HISTORY.md`** — the company's shared memory across builds: a
+  one-line-per-pattern log the next pre-mortem is seeded from, a ledger deciding when a
+  warn-only gate is promoted to a real failure, and an append-only logbook of every closed
+  initiative. <!-- src: docs/retro-log.md#compounds; docs/trial-ledger.md#self-assessment; docs/HISTORY.md#hand-appended -->
 
 ## At a glance
 

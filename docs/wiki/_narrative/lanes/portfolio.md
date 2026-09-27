@@ -1,4 +1,148 @@
 <!-- facts: appetite=39b40118 blocked-on=a68c9074 burn=ea4d8a49 cycle=65040f77 depends-on=a68c9074 hasPlan=b5bea41b phase=3bd5956c status=4c1abf59 title=b146a689 -->
-The portfolio lane built the structure every other lane now lives in: a workspace per lane under `initiatives/` with exactly one live plan each (ADR-0050, ADR-0051), the `--lane` flag as the only way to name one (ADR-0054), and `PORTFOLIO.md` as a board that is a view derived from each lane's `PROGRESS.md`, never the truth (ADR-0051).
 
-Its cycle, "The Conductor", closed on 2026-08-02. The lane is idle because what it built is finished and in daily use by every lane on the board — this one included.
+## In plain words
+
+Think of a company that runs every project out of one shared office: when one project gets stuck waiting on the boss, every other project waits behind it too, even the ones that never needed the boss for anything. <!-- plain -->
+
+The lane's own goal, verbatim: arc gains **The Conductor** — multi-lane workspaces (`initiatives/{lane}/` per product) plus a root `PORTFOLIO.md` board and a uniform `--lane` resolver on the seven tracker surfaces, so multiple arc products plan and build in parallel while arc stays one company (one machine, one main, one CI, one spine, one owner) and consumer repos keep today's root layout byte-identical, forever. <!-- src: initiatives/portfolio/PLAN.md#Goal -->
+
+Why it mattered: before this lane, arc's law was one live plan at the root — a single parking slot, so one blocked project stopped the whole company. That was measured, not assumed, at kickoff: the design lane's Phase 03 sat parked on owner items while the develop lane sat kickoff-ready with nowhere to go. <!-- src: docs/adr/0050-port-a-lanes-live-at-initiatives.md -->
+
+### What it is building
+
+Alongside the folders it built the `--lane` resolver every tracker-facing surface reads (`lane-resolve.sh` and its node twin `lane-resolve.mjs`), the `PORTFOLIO.md` company board that derives its values from each lane rather than storing its own, and two WARN-first lints — a board lint checking the board still agrees with the lanes, and an ownership lint checking a lane's diff stays inside its own files. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md; docs/adr/0051-port-b-one-plan-per-lane-board-is-a-view.md; docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md; .claude/scripts/core/lane-resolve.sh; .claude/scripts/core/lane-resolve.mjs -->
+
+## arc words → normal words
+
+| arc calls it | It is really | Meaning |
+|---|---|---|
+| lane | one project's own workspace | A folder at `initiatives/<lane>/` holding that project's `PLAN.md`, `PROGRESS.md`, `phases/` and `evidence/`. <!-- src: docs/adr/0050-port-a-lanes-live-at-initiatives.md -->|
+| `--lane` | the only way to name a project | Every tracker-facing surface accepts it explicitly; a bare word after the command keeps its own meaning (a phase number, a goal, a route) and is never read as a lane name. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md -->|
+| root-mode | today's single-project layout, untouched | With no `initiatives/` directory on disk, every surface behaves byte-identically to before this lane existed — a permanent contract for consumer repos. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md -->|
+| machine header | the lane's own computed status block | The fixed `status` / `cycle` / `phase` / `appetite` / `burn` / `blocked-on` / `depends-on` fields at the top of a lane's `PROGRESS.md` — the one place those values are computed, never hand-copied from prose. <!-- src: docs/adr/0051-port-b-one-plan-per-lane-board-is-a-view.md -->|
+| `PORTFOLIO.md` | the company noticeboard, not a filing cabinet | A view derived from every lane's machine header; on any mismatch the lane files win and the board lint says so. <!-- src: docs/adr/0051-port-b-one-plan-per-lane-board-is-a-view.md -->|
+| eligible | counted toward the WIP number | A lane whose header reads `LIVE` or `BLOCKED`; `QUEUED` and `IDLE` are never counted. <!-- src: docs/adr/0052-port-c-wip-visible-never-gated.md -->|
+| Mode A / Mode B | one room at a time vs. two people writing at once | Mode A is one working tree, one session at a time, and is the default; Mode B is a real `git worktree` per lane, certified only once REQ-04's fixtures are green. <!-- src: docs/adr/0056-port-g-two-execution-modes-mode-b-certification.md -->|
+| ownership lint | a fence-line check | Warns when a lane's diff touches another lane's files, with ownership derived from the existing `products/*/manifest.json` rather than a second registry. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md -->|
+| hard STOP | the wrong-lane refusal | Every surface other than `/arc-kickoff` hitting an unknown lane hard-STOPs, lists the known lanes, and never auto-creates one; `/arc-kickoff` alone is where naming a new lane creates it. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md -->|
+
+## How the work was planned
+
+Its appetite was **3 days**, tier **S**. The kill criterion: 1.5 days burnt with Phase 0 not closed would STOP the cycle — banking the pinned goldens and adversarial fixtures (since those harden today's single-lane arc regardless), reverting the layout work on the branch, and retrying the decision at retro, with no half-migrated state allowed to survive a kill. <!-- src: initiatives/portfolio/PLAN.md#outweighs -->
+
+Two scope cuts were pre-decided rather than improvised mid-cycle. If generalizing the resolver burned more than half a day, the cycle would ship root-mode goldens plus minimal explicit `--lane` routing only — no auto-resolution — and postpone the migration. If Phase 2's burn reached 1.0 day, the cycle would ship the Mode-A core value and defer REQ-04 and Mode-B certification to a follow-up slice. <!-- src: initiatives/portfolio/PLAN.md#outweighs -->
+
+A standing tie rule governed the whole cycle: "venture outweighs OS. If LexOS or design needs the owner mid-cycle, this cycle parks — parking cleanly is literally the feature." <!-- src: initiatives/portfolio/PLAN.md#outweighs -->
+
+Five success requirements, each tied to one phase: <!-- src: initiatives/portfolio/PLAN.md#tripwire -->
+
+| REQ | What it promised | Phase | Status |
+|---|---|---|---|
+| REQ-01 | Dual-mode machinery — the seven surfaces resolve lane-mode per ADR-0054 while root-mode stays byte-identical. | 0 | validated <!-- src: initiatives/portfolio/PLAN.md#REQ-01 -->|
+| REQ-02 | Self-hosted migration with rehearsed rollback — this cycle's own tracker moves into `initiatives/portfolio/`. | 1 | validated <!-- src: initiatives/portfolio/PLAN.md#REQ-02 -->|
+| REQ-03 | Board + WIP visibility — a strict-grammar board lint over both tables plus a kickoff preflight WIP line that never stops the owner. | 2 | validated <!-- src: initiatives/portfolio/PLAN.md#REQ-03 -->|
+| REQ-04 | Parallel-safety floor — ownership lint plus the spine concurrency contract; partially reverted after an adversarial pass found three data-loss defects in the spool half. | 2 | active <!-- src: initiatives/portfolio/PLAN.md#tripwire -->|
+| REQ-05 | Docs truth — the One Rule rewritten to per-lane law, a truth hierarchy and vocabulary. | 3 | validated <!-- src: initiatives/portfolio/PLAN.md#tripwire -->|
+
+The build was ordered into four phases, each with its own spec file stating what it set out to do, its appetite in days, and what it depended on: <!-- src: initiatives/portfolio/phases/phase-00-spec.md; initiatives/portfolio/phases/phase-01-spec.md; initiatives/portfolio/phases/phase-02-spec.md#Appetite; initiatives/portfolio/phases/phase-03-spec.md#Appetite -->
+
+| Phase | Capability | Appetite | Depends on |
+|---|---|---|---|
+| 00 | Dual-mode machinery (steel thread): root goldens pinned, resolver on 7 surfaces, creation/STOP/echo/adversarial fixtures | 1.25 days | none <!-- src: initiatives/portfolio/phases/phase-00-spec.md -->|
+| 01 | Self-host + link history + board v1: tracker moves to `initiatives/portfolio/`, rehearsed rollback, design HISTORY-INDEX, SessionStart degraded rule | 0.75 days | depends on phase-00 <!-- src: initiatives/portfolio/phases/phase-01-spec.md -->|
+| 02 | Parallel-safety floor: WIP info line, two-table board lint, ownership lint, spine spool contract | 0.75 days | depends on phase-01 <!-- src: initiatives/portfolio/phases/phase-02-spec.md#Appetite -->|
+| 03 | Docs truth + retro: One-Rule rewrite, vocabulary, truth hierarchy, HISTORY entry | 0.25 days | depends on phase-02 <!-- src: initiatives/portfolio/phases/phase-03-spec.md#Appetite -->|
+
+Phase 0 was the walking skeleton: routing had to be proven against fixtures and goldens before any real state moved, migration only after routing was proven. <!-- src: initiatives/portfolio/PLAN.md -->
+
+## The phases, one by one
+
+| Phase | Set out to do | What shipped | Cost |
+|---|---|---|---|
+| 00 | Prove PORT-E routing end-to-end: root-mode goldens pinned first, then all seven surfaces resolve `--lane` / auto / ask, kickoff-only creation, unknown-lane hard STOP, canonical output order, and an adversarial lane-name pass. | The `lane-resolve.sh` and `lane-resolve.mjs` twins held byte-identical by an equivalence gate, all seven surfaces routed; three adversarial rounds found 18 findings on the resolver (4 HIGH, all one root — an unquoted `$lane_args` letting a crafted `--lane` smuggle `--for kickoff` or redirect a bundle into the frozen path), 2 cross-OS defects CI found itself, and 1 hole in the ADR-0060 refusal written during this same close; 569 tests green on 3 OS. | ~1.4d of 1.25d (+0.15d) <!-- src: initiatives/portfolio/PROGRESS.md#lane-resolve.sh; docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md; initiatives/portfolio/PLAN.md#REQ-01 -->|
+| 01 | Move this cycle's own tracker into `initiatives/portfolio/` (dry-run → rehearsed rollback in a disposable scratch worktree → single-commit real move), give design its `HISTORY-INDEX.md` lane, birth `PORTFOLIO.md` v1, wire the SessionStart degraded rule — closing this phase itself in lane-mode. | arc self-hosted: the tracker moved as one commit (`dcc7f7d`), pointer stubs left at the old root paths, the ADR-0051 machine header written at birth by the same flow that moved the file; `PORTFOLIO.md` v1 born with both tables; `initiatives/design/` given its lane by a folder, `HISTORY-INDEX.md` links, and a machine-header-only `PROGRESS.md` — still zero copied history (ADR-0058 as amended by ADR-0062); the rollback was rehearsed, from the exact parent of the move commit, before the real move; 621 tests green on 3 OS. | ~0.5d of 0.75d (−0.25d) <!-- src: initiatives/portfolio/PROGRESS.md#self-hosts; initiatives/portfolio/PLAN.md#REQ-02; ADR-0062 -->|
+
+The cycle finished over its own appetite: about 3.35 of 3 days used, about 112%. Phase 02 is where it went over its own tripwire; Phase 03 only failed to claw the overrun back. <!-- src: initiatives/portfolio/PROGRESS.md -->
+
+## What it decided
+
+| # | Decision |
+|---|---|
+| 0050 | Lanes live at `initiatives/<product>/`, kebab-case, each holding that project's own `PLAN.md`, `PROGRESS.md`, `phases/` and `evidence/`. <!-- src: docs/adr/0050-port-a-lanes-live-at-initiatives.md -->|
+| 0051 | Exactly one live plan per lane; `PORTFOLIO.md` is the index and priority view, and on any mismatch the lane files win. <!-- src: docs/adr/0051-port-b-one-plan-per-lane-board-is-a-view.md -->|
+| 0052 | Lane statuses are `LIVE` / `BLOCKED` / `QUEUED` / `IDLE`; the counted WIP number is LIVE plus BLOCKED, shown but never gating kickoff. <!-- src: docs/adr/0052-port-c-wip-visible-never-gated.md -->|
+| 0053 | The spine, approval inbox, ADR ledger, council, retro-log, `HISTORY.md`, trial-ledger, templates and the central test suite stay single, company-level. <!-- src: docs/adr/0053-port-d-shared-company-organs-stay-single.md -->|
+| 0054 | Every surface accepts explicit `--lane <name>`; omitted, it auto-resolves when exactly one lane is eligible, else lists lanes and asks; lane creation belongs to `/arc-kickoff` alone. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md -->|
+| 0055 | New evidence lands at `initiatives/<lane>/evidence/phase-NN/`; existing `docs/evidence/**` stays frozen as the sole canonical copy. <!-- src: docs/adr/0055-port-f-evidence-lane-scoped-forward-frozen-past.md -->|
+| 0056 | Mode A (one working tree, one session at a time) is the default; Mode B (`git worktree` per lane) is certified only when REQ-04's fixtures are green. <!-- src: docs/adr/0056-port-g-two-execution-modes-mode-b-certification.md -->|
+| 0057 | The ownership lint derives boundaries from the existing `products/*/manifest.json`, WARN-first, with `Expected:` / `Found:` / `Example:` on every WARN. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md -->|
+| 0058 | A lane with prior history gets a `HISTORY-INDEX.md` linking to the frozen `docs/archive/` and `docs/evidence/` locations, never a copy. <!-- src: docs/adr/0058-port-i-history-link-never-copy.md -->|
+| 0059 | A venture appears on `PORTFOLIO.md` only as a passport row — venture, repository, current status, next — never as a lane. <!-- src: docs/adr/0059-port-j-ventures-passport-rows-only.md -->|
+| 0060 | Root-mode evidence bundling refuses to overwrite a directory whose manifest names a different commit, and the manifest hashes every file the bundle directory holds, not only the artifacts the run collected. <!-- src: docs/adr/0060-root-mode-evidence-refuses-to-overwrite.md -->|
+| 0061 | The Active initiatives table holds a row for a lane if and only if `initiatives/<lane>/` exists and carries a readable machine header; no row is ever written ahead of a lane's birth. <!-- src: docs/adr/0061-board-indexes-born-lanes-only.md -->|
+| 0062 | Amends ADR-0058: the permitted pre-scaffold for a history-only lane is a folder plus `HISTORY-INDEX.md` plus a machine-header-only `PROGRESS.md`, so the board never derives a value from nothing. <!-- src: docs/adr/0062-port-i-amendment-a-board-row-needs-a-machine-header.md -->|
+
+## Where it stands now
+
+`initiatives/portfolio/PROGRESS.md`'s machine header reads: status `IDLE`, cycle "arc-portfolio (Cycle 4, closed 2026-08-02)", phase "— (no live cycle)", appetite `3d`, burn `3.35d`, blocked-on `—`, depends-on `—`. <!-- src: fact:lanes/portfolio.status; fact:lanes/portfolio.cycle; fact:lanes/portfolio.phase; fact:lanes/portfolio.appetite; fact:lanes/portfolio.burn; fact:lanes/portfolio.blocked-on; fact:lanes/portfolio.depends-on -->
+
+The lane is idle because the cycle that built it is closed: all four phases done, and there is no live plan in this repo. <!-- src: initiatives/portfolio/PROGRESS.md#Position -->
+
+With `portfolio` and `design` both IDLE, the repo has zero eligible lanes: every no-arg lane-aware surface exits 3 and asks, printing that no lane is eligible (LIVE or BLOCKED); ordinary work has to pass `--lane portfolio` explicitly until a new cycle starts. <!-- src: initiatives/portfolio/PROGRESS.md#Position -->
+
+What Cycle 5 inherits, in the order the retro put it: <!-- src: initiatives/portfolio/PROGRESS.md#Position -->
+
+- The five findings still live in shipped `ownership-lint.sh` — first fix, ahead of everything else, because a gate that gives confidently wrong answers is worse than no gate. <!-- src: initiatives/portfolio/PROGRESS.md#Position -->
+- RI-1's tenth board-lint class, accepted but not yet built — it needs the WARN registry, the class-obligation guard, and its own fixtures. <!-- src: initiatives/portfolio/PROGRESS.md#Position -->
+- The spool gap, open again — a hook-mode lock timeout still lands in `_quarantine/` beside malformed payloads. <!-- src: initiatives/portfolio/PROGRESS.md#Position -->
+- Two questions for the next kickoff rather than bug rows: is a hand-written strict-grammar markdown parser the wrong shape for `board-lint.sh`, and which other ADR-mandated artifacts have no gate asserting they exist. <!-- src: initiatives/portfolio/PROGRESS.md#Position -->
+- 52 adversarial findings that still carry only an agent's verdict, not a confirmed one — re-verifying them is its own sized piece of work, not a tail on a fix. <!-- src: initiatives/portfolio/PROGRESS.md#Position -->
+
+Mode B stays **not certified**. It was certified for three hours on 2026-08-01, then withdrawn when section F was reverted, because ADR-0056 makes certification a fixture result and the fixtures it was certified on no longer exist; concurrent emitters stay forbidden and the board carries the reason next to the note. <!-- src: initiatives/portfolio/PROGRESS.md#queue; PORTFOLIO.md; docs/adr/0056-port-g-two-execution-modes-mode-b-certification.md -->
+
+Next, per the tracker: `/arc-kickoff --lane <name>` when the owner starts Cycle 5. `develop` is recorded as the standing candidate for the first native lane, deliberately left off the board, because ADR-0061 holds a row only for a lane that already exists. <!-- src: initiatives/portfolio/PROGRESS.md#queue; docs/adr/0061-board-indexes-born-lanes-only.md -->
+
+## The bigger loop
+
+### What went wrong and what was learned
+
+`docs/retro-log.md` carries four rows tagged `arc-portfolio`. <!-- src: docs/retro-log.md#a-tier-S -->
+
+- Twice in one cycle, a control the process had already decided on turned out not to exist or not to work, and both were found by running the artifact rather than reading it: ADR-0056's mandated "Mode B: not certified" board note was never written and stayed absent through two phases, found only by a section whose job was to delete it; and section E's negative control passed six CI legs by luck before a fresh run caught it reporting clean. <!-- src: docs/retro-log.md#a-tier-S -->
+- The mandated adversarial breaking-input pass was skipped on three gates in one phase, by a process that had required it since 2026-07-16 — nothing noticed until the phase close refused, and the pass then found 61 issues, five of them live in shipped code, in gates whose own comments argued they were correct. <!-- src: docs/retro-log.md#a-tier-S -->
+- Two tests asserted a snapshot of the repo's live cycle state rather than the rule itself — "this tree auto-resolves to portfolio, counted == 1" and "the machine header says status: LIVE" — so simply closing the cycle turned 5 of 19 CI legs red with nothing actually broken. <!-- src: docs/retro-log.md#a-tier-S -->
+- Rewriting three sections of a doc left the same file contradicting itself: untouched sections that cited the old law still taught it, and none of the agents that wrote the new sections could see it — all three contradictions were caught by independent read-back agents and confirmed by hand. <!-- src: docs/retro-log.md#a-tier-S -->
+
+The cycle's own scoreboard row: tier S, rework 1/4, amendments 8, FIRED 1/5, burn ~112%, sim-blockers-r1 n/a-tier-S, t-to-phase0 1d. <!-- src: docs/retro-log.md#arc-engine -->
+
+Phase 03 recorded three verdicts under an explicit owner delegation to complete the phase without waiting: <!-- src: initiatives/portfolio/PROGRESS.md#delegation -->
+
+- RI-1 — accepted, deferred to Cycle 5's first build item: a tenth board-lint class asserting the execution-mode section exists and its Mode B line matches one of two known grammars. <!-- src: initiatives/portfolio/PROGRESS.md#delegation -->
+- RI-2 — split: the five findings live in `ownership-lint.sh` are Cycle 5's first fix, ahead of RI-1; the `board-lint.sh` shape question is a design question for Cycle 5's kickoff, not a bug list to grind through; and the 52 unconfirmed findings are not accepted as work until each is reproduced. <!-- src: initiatives/portfolio/PROGRESS.md#delegation -->
+- A4 — not fired, and still cannot fire: its trigger needs counted lanes above two, or two consecutive weeks with both counted lanes owner-blocked, and this repo counted one lane for the whole cycle. <!-- src: initiatives/portfolio/PROGRESS.md#delegation -->
+- A3 — not fired, and materially weaker than when written: its trigger was widened to cover refused receipts, its lock half was found broken at production defaults and fixed, and its spool half no longer exists to cover anything. <!-- src: initiatives/portfolio/PROGRESS.md#delegation -->
+
+The one finding that outlived the rest, and it is a repeat: every real defect this cycle surfaced came from running an artifact, never from reading one. <!-- src: initiatives/portfolio/PROGRESS.md#outlives -->
+
+### How it connects to the rest of arc
+
+Every lane resolves itself through the same `lane-resolve.sh` and `lane-resolve.mjs` twins this cycle built, rather than a reimplementation — the develop lane, for one, imports lane resolution from `core/lane-resolve.mjs` and rides the generic `--for develop` path with no resolver edit. <!-- src: .claude/scripts/core/lane-resolve.sh; docs/adr/0105-develop-is-its-own-product-riding-the-existing-resolver.md -->
+
+`lane-status.mjs` changes a lane's PROGRESS header and its `PORTFOLIO.md` row together in one commit, for face v2 Phase 05 PR 5b (ADR-1343) — the same one-commit rule ADR-0051 states. <!-- src: .claude/scripts/core/lane-status.mjs; ADR-1343 -->
+
+The company organs this lane declared single — the spine, approval inbox, ADR ledger, council, retro-log, `HISTORY.md`, trial-ledger, templates, and the central test suite — stay at the repo root for every lane born since. <!-- src: docs/adr/0053-port-d-shared-company-organs-stay-single.md; .claude/rules/lanes.md -->
+
+`ownership-lint.sh` reads the same `products/*/manifest.json` registry every lane's code ownership already lived in, rather than a second registry. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md; .claude/scripts/core/ownership-lint.sh -->
+
+`.claude/rules/lanes.md` is the standing rulebook restating this cycle's resolution order, its never-guess rule, and its shared-file merge discipline for every session that touches a lane afterward. <!-- src: .claude/rules/lanes.md -->
+
+## Glossary
+
+- **lane** — a workspace at `initiatives/<lane>/` for one project's own plan, progress, phases and evidence. <!-- src: docs/adr/0050-port-a-lanes-live-at-initiatives.md -->
+- **root-mode** — the byte-identical behavior every surface keeps when no `initiatives/` directory exists. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md -->
+- **machine header** — the fixed `status` / `cycle` / `phase` / `appetite` / `burn` / `blocked-on` / `depends-on` block atop a lane's `PROGRESS.md`. <!-- src: docs/adr/0051-port-b-one-plan-per-lane-board-is-a-view.md -->
+- **eligible lane** — one whose header reads `LIVE` or `BLOCKED`; counted toward the WIP number. <!-- src: docs/adr/0052-port-c-wip-visible-never-gated.md -->
+- **Mode A** — one working tree, one session at a time; the default. <!-- src: docs/adr/0056-port-g-two-execution-modes-mode-b-certification.md -->
+- **Mode B** — a real `git worktree` per lane, certified only when REQ-04's fixtures are green. <!-- src: docs/adr/0056-port-g-two-execution-modes-mode-b-certification.md -->
+- **ownership lint** — the WARN-first check that a lane's diff stays inside its own files, derived from `products/*/manifest.json`. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md -->
+- **hard STOP** — the refusal every surface other than `/arc-kickoff` gives an unknown lane, listing the known lanes and never auto-creating one; `/arc-kickoff` alone creates a new lane. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md -->

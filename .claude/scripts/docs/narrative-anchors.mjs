@@ -31,10 +31,8 @@ export const PAGE_TYPES = ["products", "lanes"];
  * replaced by a verified page.
  * @type {Record<string, string>}
  */
+// Empty since 2026-09-27: all three were replaced by verified pages (products/engine, products/git, lanes/portfolio).
 export const LEGACY = Object.freeze({
-  "products/engine": "6de5e5d730954293fe13ede3f120cc3d124954cccc5d21ba2bc92b877d527d76",
-  "products/git": "8b811cfa1981b4616c2f1a80e00a28f5de41360234e603584947a1cc0c256a48",
-  "lanes/portfolio": "edac90500abe0bcdafefcc9281254eee835c82f7ead44104b82db239ad9a8acd",
 });
 
 const MARK_SRC = /<!--\s*src:\s*([\s\S]*?)\s*-->/g;

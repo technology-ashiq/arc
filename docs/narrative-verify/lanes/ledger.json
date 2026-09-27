@@ -1,0 +1,430 @@
+{
+  "schema": 1,
+  "page": "lanes/ledger",
+  "sha256": "523f1e336f48801e7a9805017562369bae22e6b7a11c5d003c279bd487329bab",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "model_source": "trial",
+  "blocks": 69,
+  "chunks": 29,
+  "verdicts": [
+    {
+      "block": 1,
+      "verdict": "SUPPORTED",
+      "why": "The block is an analogy with no factual claim about arc's files, commands, numbers, steps, or behaviour."
+    },
+    {
+      "block": 2,
+      "verdict": "SUPPORTED",
+      "why": "Every claim—real revenue split gross/fees/tax/net, MRR with full churn transitions, source-labelled AI and fixed costs, kill-distance meters, rendering as arc pnl and in the brief, byte-reproducibility from replay, the month-close reconciliation gate, and the no-customer-PII rule—is stated in initiatives/ledger/PLAN.md's Goal."
+    },
+    {
+      "block": 3,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1009 confirms arc pnl as one CLI under hq with no slash command; ADR-1000 confirms the reader-only derivation layer emitting exactly one event kind month.closed; PLAN.md REQ-05 confirms the green reconciliation gate before emitting month.closed."
+    },
+    {
+      "block": 4,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md states the live spine held 0 revenue.received, 0 revenue.simulated, 0 cost.incurred and 0 run.completed events, and that no ventures.yaml or pnl code existed anywhere."
+    },
+    {
+      "block": 5,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md says per-venture P&L truth is rendered as `arc pnl` and ADR-1009 decides `arc pnl` lives under `.claude/scripts/hq/` with no new slash command in v1."
+    },
+    {
+      "block": 6,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md REQ-03 and ADR-1008 both state kill criteria per venture live in root ventures.yaml and edits require an accompanying decision.recorded receipt; PLAN.md/ADR-1001 identify it as the lane's only config file."
+    },
+    {
+      "block": 7,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md states amount is the ex-tax recurring figure and the MRR base, and pinned fixtures cover all five transitions: new, expansion, contraction, churn, reactivation."
+    },
+    {
+      "block": 8,
+      "verdict": "SUPPORTED",
+      "why": "REQ-03 states kill criteria per venture live in ventures.yaml, `arc pnl` prints distance-to-line per criterion, and a criterion at 80% or closer renders a warning line, matching the row's claims."
+    },
+    {
+      "block": 9,
+      "verdict": "SUPPORTED",
+      "why": "REQ-05 states a month closes only behind a green reconciliation requiring per-rail input, spine and provider disagreement in either direction blocks the close, and a rail with no input blocks exactly as a mismatched one does."
+    },
+    {
+      "block": 10,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md states Ledger writes exactly one kind, `month.closed`, and only behind the reconciliation gate, and ADR-1004 confirms the single new `month.closed` kind after a green close gate."
+    },
+    {
+      "block": 11,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1006's decision labels measured, declared (including subscription/fixed), and allocated costs separately and never sums them into one number, matching the block's claim."
+    },
+    {
+      "block": 12,
+      "verdict": "SUPPORTED",
+      "why": "The twin-determinism claim (deleting derived state and replaying reproduces an identical P&L, in CI from Phase 0) is stated verbatim in PLAN.md's Non-negotiables and concretely in ADR-1014's rebuild-determinism assertion."
+    },
+    {
+      "block": 13,
+      "verdict": "SUPPORTED",
+      "why": "The closed-schema claim — a revenue.* payload's keys are the whole vocabulary and non-listed keys are strict-mode rejections without PII recognition — is stated directly in PLAN.md#CLOSED."
+    },
+    {
+      "block": 14,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md's Appetite states the 8-day hard cap equals the owner's 1.5 weeks and that the four phases sum to exactly the cap with slack as pre-authorized scope cuts, matching the block."
+    },
+    {
+      "block": 15,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md's Kill criteria states the 50%-burn/4-day tripwire cuts to pnl-math only, banks kill-distance and month-close, orders cuts REQ-07 then REQ-08 then REQ-03's 80%-warning line with crossing detection staying, and stops/banks/arc-retros any phase at 2x estimate."
+    },
+    {
+      "block": 16,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md's requirements table lists REQ-01 as 'P&L is true and reproducible' with Phase 0 and status validated, exactly as the row shows."
+    },
+    {
+      "block": 17,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md's requirements table lists REQ-02 as 'MRR math survives its edge cases' with Phase 0 and status validated, exactly as the row shows."
+    },
+    {
+      "block": 18,
+      "verdict": "SUPPORTED",
+      "why": "REQ-03's row matches the PLAN.md table row exactly: kill-distance visible and tamper-evident, phase 1, validated."
+    },
+    {
+      "block": 19,
+      "verdict": "SUPPORTED",
+      "why": "REQ-04's row matches the PLAN.md table row exactly: currency honesty, phase 0, validated."
+    },
+    {
+      "block": 20,
+      "verdict": "SUPPORTED",
+      "why": "REQ-05's row matches the PLAN.md table row exactly: a month closes only behind a green reconciliation, phase 2, validated."
+    },
+    {
+      "block": 21,
+      "verdict": "SUPPORTED",
+      "why": "REQ-06's row matches the PLAN.md table row exactly: costs are honest three ways, phase 2, validated."
+    },
+    {
+      "block": 22,
+      "verdict": "SUPPORTED",
+      "why": "The REQ-07 row's phase 2 and dropped status match the PLAN.md success-requirements table, which states 'Every number explains itself' at phase 2, dropped."
+    },
+    {
+      "block": 23,
+      "verdict": "SUPPORTED",
+      "why": "The REQ-08 row's phase 3 and validated status match the PLAN.md success-requirements table, which states 'Demo without lies' at phase 3, validated."
+    },
+    {
+      "block": 24,
+      "verdict": "SUPPORTED",
+      "why": "The four-phase list matches the risk-ordered phases table in PLAN.md#risk_ordered, including each phase's named capabilities and dependencies."
+    },
+    {
+      "block": 25,
+      "verdict": "SUPPORTED",
+      "why": "Every Phase 0 claim — 3-day appetite, close date, REQ-01/02/04 green, shipped files, 16 fixtures, 70 tests, 30 non-overlapping findings, and the PII control failure — is stated in the #INSIDE source."
+    },
+    {
+      "block": 26,
+      "verdict": "SUPPORTED",
+      "why": "The 2-day appetite, Phase 1 scope, REQ-03 green, dependency-free YAML-subset parser, approval.requested-shaped receipt, 51 tests, and three exit-0 disarm paths including ARC_SPINE_ROOT are all stated in the cited PROGRESS.md text."
+    },
+    {
+      "block": 27,
+      "verdict": "SUPPORTED",
+      "why": "The 2-day appetite, Phase 2 scope, green run 31685435167, the four ways a month closed green with no business closing, all being fixed, and CI re-verification pending are all directly stated in the cited source."
+    },
+    {
+      "block": 28,
+      "verdict": "SUPPORTED",
+      "why": "The 1-day appetite, Phase 3 scope, close date, honest-empty rendering with the four zero money kinds, raw-file corroboration, and liveness control asserted first are all in the #corroborated source."
+    },
+    {
+      "block": 29,
+      "verdict": "SUPPORTED",
+      "why": "The ADR century 1000–1099, ADR-1000..1015 at kickoff, and ADR-1016..1018 written during the build because implementations contradicted earlier decisions are all stated in the #board-lint source."
+    },
+    {
+      "block": 30,
+      "verdict": "SUPPORTED",
+      "why": "The claim that LED-A is a reader-only derivation layer emitting exactly one kind matches ADR-1000's title and decision, and PLAN.md's ADR index lists the same decision."
+    },
+    {
+      "block": 31,
+      "verdict": "SUPPORTED",
+      "why": "The claim that LED-B puts money data only on the spine with ventures.yaml as the only config file matches ADR-1001's decision and PLAN.md's ADR index entry."
+    },
+    {
+      "block": 32,
+      "verdict": "SUPPORTED",
+      "why": "The cited ADR titled LED-C states exactly that revenue payloads are PII-free by construction and that the validator ships before any ingest path exists."
+    },
+    {
+      "block": 33,
+      "verdict": "SUPPORTED",
+      "why": "The cited ADR titled LED-D records the decision that foreign-currency FX facts are captured at ingest and that render and replay perform no lookups."
+    },
+    {
+      "block": 34,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1004 states the vocabulary grows from 44 to 45 with the addition of month.closed, on IST boundaries, never restated; PLAN.md's ADR index repeats the same decision."
+    },
+    {
+      "block": 35,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1005 and PLAN.md both state reconciliation is a blocking close gate in both directions and per rail, with PLAN.md's REQ-05 and failure-cause table confirming the same."
+    },
+    {
+      "block": 36,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1006 and PLAN.md REQ-06 both state that cost lines carry a source label and that measured, declared, and allocated figures are rendered as separate labelled lines, never summed into one total."
+    },
+    {
+      "block": 37,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1007 pins MRR definitions as executable fixtures and states annual/quarterly plans are normalized and rendered beside a labelled cash-in line, with PLAN.md REQ-02 matching this."
+    },
+    {
+      "block": 38,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md's decision table lists '1008 | LED-I — `ventures.yaml` is a root company organ whose edits need a receipt | accepted', and ADR-1008 states `ventures.yaml` lives at the repo root and an edit is honored only with an accompanying `decision.recorded` receipt naming the change."
+    },
+    {
+      "block": 39,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md's decision table lists '1009 | LED-J — ledger ships as `arc pnl` under hq, with no slash command in v1 | accepted', and ADR-1009 decides Option 1: `arc pnl` under `.claude/scripts/hq/` with no new slash command in v1."
+    },
+    {
+      "block": 40,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1010's decision explicitly places natural-key duplicate detection on provider_payment_id in the derived layer, raising a needs-you flag and excluding duplicates from totals, which matches the block's claim."
+    },
+    {
+      "block": 41,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1011 decides ledger adds no hq.policy.yaml row and no processes/ledger.process.yaml, staying read-only by deny-by-default and never moving money, which matches the block's claim and is also echoed in PLAN.md's no-policy-subject note."
+    },
+    {
+      "block": 42,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1012's Decision states every monetary field is an integer count of minor units and FX rates are stored as decimal strings, matching the block's claim for LED-M."
+    },
+    {
+      "block": 43,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1013's Decision selects Option 1: USD, stating the one foreign currency in v1 is USD, matching the block's claim for LED-N."
+    },
+    {
+      "block": 44,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1014's decision states `arc pnl` writes no state of its own and that the engine-equivalence test must assert which engine each leg actually used; PLAN.md's ADR row and title mirror the same claim."
+    },
+    {
+      "block": 45,
+      "verdict": "SUPPORTED",
+      "why": "Block's claim that ADR-1015 (LED-P) reconciles both input paths over one summable parser result is directly stated by ADR-1015's Decision and by the corresponding accepted row in initiatives/ledger/PLAN.md."
+    },
+    {
+      "block": 46,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1016 and PLAN.md both state that a refund is a linked positive event carrying `refund_of`, with `assertMoney` requiring a positive amount, so no superseding negative is possible."
+    },
+    {
+      "block": 47,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1017 and PROGRESS.md both state that ADR-1008's literal wording asked for a digest the closed `decision.recorded` schema could not carry, so the criteria receipt rides an `approval.requested` profile and gains zero new event kinds."
+    },
+    {
+      "block": 48,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1018 states option 3 is chosen: ABSENT is a first-class status with a mandatory reason, rendered rather than dropped, and rejects rendering absent as safe or as crossed."
+    },
+    {
+      "block": 49,
+      "verdict": "SUPPORTED",
+      "why": "PROGRESS.md says status IDLE, cycle arc-ledger opened 2026-08-12 and closed 2026-08-13, appetite 8d, burn 7d, and 7 of 8 is 88%."
+    },
+    {
+      "block": 50,
+      "verdict": "SUPPORTED",
+      "why": "PROGRESS.md says all four phases closed, 7 of 8 REQs validated, and REQ-07 (`--explain`) was taken as the declared first pre-authorized cut against the cap rather than after an overrun."
+    },
+    {
+      "block": 51,
+      "verdict": "SUPPORTED",
+      "why": "PROGRESS.md has the verbatim closure language: mechanism proven, live value pending, every gate exercised against fixtures and the real spine, no rupee moved because none exists, live-value milestone expected Sept/Oct 2026 and explicitly not a gate on this closure."
+    },
+    {
+      "block": 52,
+      "verdict": "SUPPORTED",
+      "why": "PROGRESS.md says real redacted provider exports are owed before the first live ingest, no real export was obtainable offline, and both parsers are pinned against a documented synthetic corpus."
+    },
+    {
+      "block": 53,
+      "verdict": "SUPPORTED",
+      "why": "The source's arc-ledger entry states exactly that the --criteria-digest EISDIR guard was not applied to --reconcile-file 75 lines away in the same file, the two Phase 00 suites were not updated when the resolution changed (24 red tests), and arc-brief did not get the absent-rows rule arc-pnl states one file over."
+    },
+    {
+      "block": 54,
+      "verdict": "SUPPORTED",
+      "why": "The source's arc-ledger entry states that CI stopped creating runs for five consecutive pushes, the draft-PR cause was written into a permanent rules file without checking it, the real cause was mergeable: CONFLICTING, the pull_request trigger runs against refs/pull/N/merge, git cannot build that ref while the branch conflicts, and GitHub creates no run and reports nothing."
+    },
+    {
+      "block": 55,
+      "verdict": "SUPPORTED",
+      "why": "The needs-you source entry states the assertion that `needs-you` did not appear at all held only while this lane was sole writer of the group, then scheduler's cycle and an overdue job opened the same group and the assertion failed for a fact about another lane while the guarded thing stayed intact, matching the block."
+    },
+    {
+      "block": 56,
+      "verdict": "SUPPORTED",
+      "why": "The vanished source entry states file content built inside a shell string ran every backticked span as a command substitution silently replaced with nothing, the file was written, the script reported success, and four phrases vanished, matching the block."
+    },
+    {
+      "block": 57,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md states ledger reads the spine through one reader and writes exactly one event kind, month.closed, only behind the reconciliation gate; ADR-1000 confirms reader-only consumption and the single emission."
+    },
+    {
+      "block": 58,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md's shared-organ check names the same three files (root ventures.yaml, KINDS in validate.mjs, GROUPS in arc-brief.mjs) and prescribes checking prior edits and taking the stronger version at any merge collision."
+    },
+    {
+      "block": 59,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md states the ventures.yaml venture set stays identical to PORTFOLIO.md's Venture passports table and lists a mismatch as an assumption-ledger trigger."
+    },
+    {
+      "block": 60,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md's pre-mortem row 2 explicitly records the arc-policy retro lesson that a mechanism can ship fixture-proven and never be exercised, and states Phase 3's acceptance IS the honest-empty render of the real spine."
+    },
+    {
+      "block": 61,
+      "verdict": "SUPPORTED",
+      "why": "PORTFOLIO.md's Venture passports section states ventures are revenue apps in their own repos, each running its own root-mode arc install, with a passport row as the whole of their presence."
+    },
+    {
+      "block": 62,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md REQ-03 and the accepted ADR-1008 state kill criteria per venture live in root ventures.yaml, and PLAN.md's decision 1001 describes ventures.yaml as the only config file."
+    },
+    {
+      "block": 63,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md's goal and REQ-02 identify MRR as the ex-tax recurring base and enumerate the five transitions exactly as the block does, and Appendix A confirms 'amount' is the ex-tax recurring figure and therefore the MRR base."
+    },
+    {
+      "block": 64,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md REQ-03 states kill criteria live in root ventures.yaml and that `arc pnl` prints distance-to-line per criterion, matching the block's claim that kill-distance is rendered by `arc pnl`."
+    },
+    {
+      "block": 65,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1005 and PLAN.md both state the close is blocked while spine and provider disagree in either direction on a per-rail basis, and ADR-1005 defines a rail as one provider account settling into one currency."
+    },
+    {
+      "block": 66,
+      "verdict": "SUPPORTED",
+      "why": "PLAN.md states ledger writes exactly one kind, month.closed, and ADR-1004/ADR-1005 say the gate emits exactly one such event and only a green reconciliation emits it."
+    },
+    {
+      "block": 67,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1006 and PLAN.md REQ-06 both state measured, declared and apportioned costs stay on separate labelled lines and are never summed into one figure, matching the block's claim."
+    },
+    {
+      "block": 68,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1014's rebuild-determinism assertion (`rm -rf derived/ && arc-replay && arc pnl` byte-identical) and PLAN.md's twin-determinism non-negotiable both support deleting the derived state and replaying to produce a byte-identical P&L."
+    },
+    {
+      "block": 69,
+      "verdict": "SUPPORTED",
+      "why": "ADR-1010 states the derived layer detects a repeated provider_payment_id and flags it rather than trusting the ingest call, and PLAN.md lists LED-K as accepted."
+    }
+  ],
+  "carried": [],
+  "supportedKeys": {
+    "9a727c329f15e691ea7fc328b110f99715fbdf7ee4a3f321b723cd8975fbafa8": "2026-09-27",
+    "5e0c93bd05af2b06fec58eb0e35e49e58663ef3ef0a2c3fce742d3e0ff857cb7": "2026-09-27",
+    "de76b609e5770d8e7e1739cded705a75a38a63367887627d6546288f5be9e996": "2026-09-27",
+    "78ccf5e8929d3edbd01d7a33218484ec97b87ed03d3de5972fe017c121ba6844": "2026-09-27",
+    "fb7bf4cb90c92bd1c108db37cbdf7651b037f4c257c48316847d699f303d0ff6": "2026-09-27",
+    "c44a66485b9f772b81205e948cf52e5d19b0dfd5f2b44685a84c2c257dfe32ce": "2026-09-27",
+    "5d655130742f1a516af91dd8b19a8343519bbedc79ab688d9d96417ebb83f288": "2026-09-27",
+    "f74c574a5adb8d53371c2f5d6fe07e985cba9448cd37a26630bdbe65fa6176c4": "2026-09-27",
+    "5591c60086b2f3401b9b237c1f1d2c35d90f4339305b37fe677e3f618525ba9f": "2026-09-27",
+    "6a480f04faec3e17285bb1b619d7bec7aab5878b1f16fb869010bcb461028e4d": "2026-09-27",
+    "71001f546977d6bf8601751f0388d162452ce87b6f715683a666bdbcd54e745f": "2026-09-27",
+    "048e16a091b87ad548d574347886483f658606bc8ed1e783440200b2a79dff85": "2026-09-27",
+    "e3586fd0028a3c1df513f090d93d4b5c133e7b53178b86d4c19c9681c5973349": "2026-09-27",
+    "07564f92e8f8c052f169c38aa0bb7e8e25848cd3de21e75d4c9f487073884a6d": "2026-09-27",
+    "211ba91cab6c3ea804feec2bae9b3d5e7f20df51a6a8374de2166004c5804b27": "2026-09-27",
+    "3b8e7d15f1cbbbee0d7fd52194d485a5e303208293747d85d7ecad9ef0cab5ee": "2026-09-27",
+    "ce579a870bdcfdcc0130b3fd59350d22ea1a3f2b1c6189fd9212953515a32ca4": "2026-09-27",
+    "ac52e237dff3745236a67a2bd3fd2722f11e4fa25848a7a61ade656c0c827bed": "2026-09-27",
+    "05c49727d68cfee2422b30dff5b19e9359800684c01f713278aef450a19010d6": "2026-09-27",
+    "3bad37bce4a1f8316c491f993b4054afe9ce61a2b0f0c8079b074e3a7b15371d": "2026-09-27",
+    "adc1200de349fcced9d7fa3b0d74fdaa582b73bd4d68027d725e593c58851f42": "2026-09-27",
+    "3e38c74836a8cc64233a5da9468579f5aba0401a5baaba5fe38b6bd48df2c87c": "2026-09-27",
+    "3521a3ffddf08904b5b01c9321cd8d566c49e24a4897ee1721e0937094229120": "2026-09-27",
+    "993e00f47a66ff2cf9535c227b430d67ebec882af7eb8c815dabd8f0eda6a220": "2026-09-27",
+    "b80216e69fb8fcca44b74a21c78fc419a92dfa3e84a817312bf591fa742ca3e2": "2026-09-27",
+    "d671f211354a23d2c84377fbb04c9cdca6543729e365cccf1545155f99d6cb62": "2026-09-27",
+    "a90e238ae410ba451eee0d24e2b1a63e3757998f1700548d4fa4b5ba3c79f476": "2026-09-27",
+    "047cec8857ef181646b947394c6b78a31a5b5a85542085dbdec5f4e383b555f9": "2026-09-27",
+    "81372aed8dfab2e03928882677268de9e8abd627956aec9ce8c2d56e98a8a7f7": "2026-09-27",
+    "4978345d1e58ad1eb6a9e1e940590bbdd8de02b7ea45baeb23cdf560b04151e9": "2026-09-27",
+    "27dafa7017de1160140af77fb46767e02874cc6c27a308f97e5a6b0592cf379d": "2026-09-27",
+    "6483d740c9b489d4a3c192039d2901509232d65bda3b82d9040ba4e53d004863": "2026-09-27",
+    "d32082488c4fc79435574e3f1bca31447ca4db038b5ce2892ab07a588ea52cc7": "2026-09-27",
+    "2f91b8f6f319d9738f6fef6d85f21a50c5669105c8126fe8ed6828ad4c3bba9b": "2026-09-27",
+    "666424aa602a9e9b20d069ddada608d68b95cea74a6db8ca9a203b98e23762f5": "2026-09-27",
+    "0d70d4402ba15f04fce2338a487cfdbdd11bc078164871dd7897a571796bfc40": "2026-09-27",
+    "27a88b0028c2c6f47868890f3fe4fd4828a89c54c47823cbe6c3aa3ba3a8577a": "2026-09-27",
+    "b9d78ea9b2b80fc61d20d519dda691d58fe6eea19937e9330c31f6f0cc5849ef": "2026-09-27",
+    "a864b02db8a0eb22e1ebbec963200c13c25c42d96924fb17a809313126f74bb0": "2026-09-27",
+    "e2069837d9343de602660a99ee9b324c5abe94f2e798d577d84cba20701568a8": "2026-09-27",
+    "cee2c529d54c7268bd8d1c1471e796314d6fd928cd4ade30959d3069c91a6b4a": "2026-09-27",
+    "e327e650e0a35b4bfbdcaaf0a724dee48cc287452baed276f906e7371279831c": "2026-09-27",
+    "35bbe268b60917dd2d4e8504bc67d5f76b365d4537819a0204e88701c33552be": "2026-09-27",
+    "d3133ba6a9b4b64a2e4ba9c3d268ff42bcace0a11ec1de04e193eab4e25c1ef0": "2026-09-27",
+    "92d138df3b8c0d006c31ba0fc7b545e51f0225a6805f2e8dc328a1482555f3a5": "2026-09-27",
+    "adcf135713a4eb92bf79c767869d10f555ae7811b21a1d16844d6f8fdc8e4799": "2026-09-27",
+    "e6cf150dc58c0cd7a8043b6d23d2bd04814fc61ab057e56c0ed5e7278a6d7d92": "2026-09-27",
+    "9549cb179bf0fd1d38b9e3a93ccd3535c0127d8a67e9d224f17c7d31c8716e52": "2026-09-27",
+    "ef1189072a33a307c4bd7e87c8a46d770e900a9c5b74dfa20de1828c67fa4b03": "2026-09-27",
+    "67788f45f0fbc4a6fd9d92abe581d7b53400de087270721339174a2624864807": "2026-09-27",
+    "571912ab5bafb51aff8910bc2c9cc3b7ced1dcb18280f635effb9d09b827dcf0": "2026-09-27",
+    "948438aacb3eb158ad13728c0272bd0df6f4b0896565660536d4d1e35125e7f4": "2026-09-27",
+    "3bd64f684cfd8031f9729020b2cf6525cf61d2d56bab9839933980a35b1f6fdf": "2026-09-27",
+    "985b928dde5b4159eaef92a61cac1737071e815b31897a20439358ac1379f2ec": "2026-09-27",
+    "1572624b90116cd44e9fc6253a4d5256a4fb9fb20a587a473471a6deb19e2115": "2026-09-27",
+    "083307b1b570df85e6379ec3a83637a1513539fed0e7d5c0c1f4f3f76b58d31e": "2026-09-27",
+    "1f3d5f9102bf104125c1b8bdb0e84e515f96a5b94c23d6af48e4813ed402fccd": "2026-09-27",
+    "4d9d9512848985a65a85a3caf12bdb85dd14f6c17196a16b1b8c6536774583f7": "2026-09-27",
+    "94e051843b4b337179b9e00a047817dabeeea493951e23352c8ed9569898c031": "2026-09-27",
+    "87b1d683b093c43eef823338811ebac17a1b6ae0211c55fa18562f38b4b49e17": "2026-09-27",
+    "f7cd0e2f3f75cc758cea38664e85ce7f62d3c5cade431ab8b2e297b2e020d5ce": "2026-09-27",
+    "700ed9bedc1ffe29aa7d8ac2daa062ae8cd29f6240a2f014a68604c67678be32": "2026-09-27",
+    "10ca476e7a51d26afec458773fdaefe415b62386afc33f6c4b51432189cab789": "2026-09-27",
+    "7a5c3dcb4617cbe824ec965dad40a488dc0f8b2569e69f07d5d3325a91ed2cd3": "2026-09-27",
+    "682c6805eda6671fb8dc4ef5e233d24ab3aef8991b15ac6f86ef2c471f5071a3": "2026-09-27",
+    "14370acb8eb8f6785cfb23be2a5207a3e38f43b07deb39fa5ac236ecdf57a902": "2026-09-27",
+    "6f3e9c2f48f7d5fb265ee32426146e5de0e7444afd2564777818db85f0fa184e": "2026-09-27",
+    "9266c2f23483f46a9ea03498dabc04e50181ccceb64ae4d8efd66f0f0d1017cb": "2026-09-27",
+    "94482ff4792de204f2a99c75b049f21d96ac229dbec152a39a777298e8661902": "2026-09-27"
+  },
+  "verified": "2026-09-27T14:45:38.195Z",
+  "accepted": null
+}

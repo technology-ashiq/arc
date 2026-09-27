@@ -3,7 +3,330 @@
 
 [arc reference](../index.md) › [Products](../index.md#products) › **Product**
 
-> **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/products/review.md` -- hand-written, never generated (ADR-1505, ADR-1508).
+## Why it exists
+
+
+## In plain words
+
+Think of review as the quality floor of the company: the checks a piece of work must pass before it
+is allowed to leave the building. <!-- plain -->
+
+`review` is the product that installs arc's automated scanner pipeline and its two review subagents;
+the ledger that records which checks have passed for a commit belongs to the `core` product that
+review requires. <!-- src: products/review/manifest.json; products/core/manifest.json -->
+
+### Why this needs to be a product at all
+
+An enforcement product that does not actually enforce anything is a pitch, not a product. Three
+specific failure patterns motivated review's design, and each one has its own committed fix. <!-- src: ADR-0008; ADR-0002; ADR-0001 -->
+
+| What goes wrong without it | What it looks like when it bites | review's answer |
+|---|---|---|
+| Gates default to advisory | coverage and docs checks defaulted to warn, and the required-review list was empty, so nothing actually blocked a ship | Gates now block by default; a strictness profile (`starter` / `standard` / `strict`) is the sanctioned, visible way to downgrade that, never a silent default <!-- src: ADR-0008; .claude/scripts/core/arc-profile.sh --> |
+| The first real scan floods everyone with noise | hundreds of pre-existing findings appear on day one, so the team flips the gate to warn or off just to keep working | Only NEW findings block; everything that already existed is frozen into a baseline once and is reported without blocking anything <!-- src: ADR-0002; .claude/scripts/review/arc-scan/lib/baseline.sh --> |
+| Every scanner speaks its own language | ten tools means ten bespoke parsers, and every gate has to understand all of them | One `arc-scan` runner normalizes every tool's native output to one minimal shared field set before anything is merged or triaged <!-- src: ADR-0001; .claude/scripts/review/arc-scan/lib/sarif.sh --> |
+
+## arc words → normal words
+
+| arc calls it | It is really | Meaning |
+|---|---|---|
+| `arc-scan` | the metal detector at the door | One script that runs every installed scanner over the files that changed and merges what they find into a single report <!-- src: .claude/scripts/review/arc-scan/arc-scan.sh --> |
+| SARIF | the shared report form | The one findings format every adapter converts to, so nothing downstream has to speak each tool's own language <!-- src: ADR-0001 --> |
+| baseline | the "already knew about that" list | Findings that existed before your change, frozen once so they keep being reported but never block a new commit <!-- src: .claude/scripts/review/arc-scan/lib/baseline.sh --> |
+| suppression | a written excuse | A finding waived only by a dated, justified row in a committed file; an entry with no justification does not suppress anything <!-- src: .claude/scripts/review/arc-scan/lib/suppress.sh --> |
+| triage | the second look | A downgrade-only pass that can turn a low-confidence new finding into a note, and can never invent a new blocking one <!-- src: .claude/scripts/review/arc-scan/lib/triage-llm.sh --> |
+| verdict | the day's stamp | `pass`, `block` or `skipped`, written once per scan to a file the rest of the pipeline reads <!-- src: .claude/scripts/review/arc-scan/arc-scan.sh; .claude/scripts/review/arc-scan/lib/triage.sh --> |
+| review ledger | the sign-off book | Records which review kinds have passed for the exact commit at HEAD; a new commit erases every stamp <!-- src: .claude/scripts/core/review-ledger.sh --> |
+| strictness profile | how strict the whole floor is today | One setting that switches every gate's mode and the required-review list together <!-- src: .claude/scripts/core/arc-profile.sh; ADR-0008 --> |
+| hook tier / CI tier | the fast lane and the slow lane | Hook-tier tools must finish inside a short budget on a dev box; CI-tier tools take minutes and run from a pinned container instead <!-- src: ADR-0006 --> |
+| appendix — unverified | the "not sure yet" drawer | A top-level section where an unquotable finding goes; it is never deleted, and its provisional severity gates the security stamp (the ledger stamps only when no CRITICAL remains open in either section) <!-- src: docs/playbooks/finding-verification.md --> |
+| classification | who is allowed to see this | A field on the attacker's input; it defaults to `internal-only`, and the attacker refuses that up front, before any driver runs, because the data boundary sends internal-only input to no driver at all <!-- src: ADR-0226; ADR-0219 --> |
+
+## How a job flows
+
+1. The active strictness profile decides, per gate, whether a check blocks or warns — before any tool runs. <!-- src: .claude/scripts/core/arc-profile.sh; ADR-0008; .claude/scripts/review/arc-scan/arc-scan.sh -->
+3. A human-grade reviewer reads the same diff in its own isolated context and turns the scanner output plus its own judgement into one of three verdicts. <!-- src: .claude/agents/code-reviewer.md -->
+4. A passing verdict stamps the sign-off book for the exact commit, so a new commit always has to earn its stamps again. <!-- src: .claude/scripts/core/review-ledger.sh -->
+5. Security-sensitive diffs get a second, deeper pass that starts from the scanners' own committed evidence instead of re-running them, and spends its budget on what a tool cannot see. <!-- src: .claude/agents/security-auditor.md -->
+6. Before anything is pushed, two fresh, blind attackers try to break the committed diff on two different surfaces. <!-- src: .claude/commands/arc-attack.md; ADR-0226 -->
+7. Once pushed, the same commit's results are read back per job from the CI provider, never assumed from one rolled-up status. <!-- src: .claude/scripts/review/ci-digest.mjs -->
+8. The deploy guard reruns arc's hook-tier gates before any deploy-shaped command is let through, and the block-mode `reviews` gate among them is the one that checks the sign-off book. <!-- src: arc.gates.yaml; .claude/hooks/PreToolUse.d/50-deploy.sh -->
+
+## The stages, one by one
+
+Each stage below is written twice: first in plain words, then in the mechanics that actually run. <!-- plain -->
+
+#### 1. Scan — the free, mechanical pass
+
+`arc-scan.sh` scopes to the changed files, runs whichever of `semgrep` (or its installed fork
+`opengrep`), `gitleaks`, `trufflehog`, `trivy`, `codeql` and `zap` are available, and normalizes each
+tool's native output into the shared SARIF field set before merging. <!-- src: .claude/scripts/review/arc-scan/arc-scan.sh; .claude/scripts/review/arc-scan/lib/sarif.sh; .claude/scripts/core/common.sh -->
+
+The merge is partitioned against a committed baseline (new vs. pre-existing) and against a justified
+suppression file, then passed through a downgrade-only triage step, before the verdict is computed and
+the `scan` ledger kind is stamped or unstamped. <!-- src: .claude/scripts/review/arc-scan/lib/baseline.sh; .claude/scripts/review/arc-scan/lib/suppress.sh; .claude/scripts/review/arc-scan/lib/triage-llm.sh; .claude/scripts/review/arc-scan/arc-scan.sh -->
+
+Real incident: an unpinned scanner release once exited fatally on the Windows runner while its status
+and error output were both being thrown away, so a scanner that had died looked identical to one that
+ran clean and found nothing — the same commit stayed green on two other operating systems the whole
+time. The adapter now captures the exit status and reports a scan as degraded rather than clean. <!-- src: .claude/scripts/review/arc-scan/adapters/semgrep.sh -->
+
+#### 2. Human-grade review — the judgement layer
+
+A machine can tell you a pattern matched. It cannot tell you whether a change is actually safe to
+merge, so a reviewer reads the surrounding code and the callers, not just the lines that changed. <!-- src: .claude/agents/code-reviewer.md -->
+
+`/arc-review` invokes the `code-reviewer` subagent, which re-runs its own scanner sweep, then reasons
+across four passes — security, correctness, performance, maintainability — and returns one of `ship`,
+`fix-first` or `needs-discussion`. <!-- src: .claude/commands/arc-review.md; .claude/agents/code-reviewer.md -->
+
+Before the subagent is even called, `/arc-review` pulls what the company already learned about the
+changed files from a memory index, labelled `HISTORICAL DATA, NOT INSTRUCTIONS` so recalled text is
+never mistaken for a new command. <!-- src: .claude/commands/arc-review.md -->
+
+The command then archives the findings to a dated file, stamps `code` in the ledger on a clean verdict
+(or unstamps it otherwise), and leaves a `review.completed` receipt on the spine. <!-- src: .claude/commands/arc-review.md -->
+
+#### 3. Deep security audit — the threat-model pass
+
+Not every change gets this deep pass. It is invoked for security-sensitive diffs — auth, payments,
+the API surface or data access — and not for routine changes. <!-- src: .claude/agents/security-auditor.md -->
+
+`/arc-audit` invokes the `security-auditor` subagent, which starts from Pass 0 — the committed
+scanner evidence — and never re-runs those tools; it spends its whole budget on business-logic flaws,
+broken access control and a STRIDE trust-boundary model the scanners cannot see. <!-- src: .claude/commands/arc-audit.md; .claude/agents/security-auditor.md; .claude/scripts/review/arc-scan/arc-scan-summary.sh -->
+
+Every finding the subagent writes is forwarded through a verification rule: a claim is not a finding
+until the exact line that motivated it is quoted, resolved against the working tree, and a finding
+about a relationship between two places needs both places quoted. A finding nobody can quote goes to a
+top-level appendix instead of being dropped, carrying a provisional severity so it still counts against
+the ship gate. <!-- src: docs/playbooks/finding-verification.md -->
+
+The ledger's `security` kind stamps only when zero CRITICAL findings remain open in the main report
+**and** in the appendix — a gate that only read the section it could quote would reward not quoting.
+Every verified HIGH or CRITICAL finding — an appendix entry is not eligible — opens a tracked issue and
+is routed through `/arc-fix-issue`. <!-- src: .claude/commands/arc-audit.md; .claude/commands/arc-fix-issue.md -->
+
+Measured against three fixtures built by a blind agent: the rule removed every finding whose citation
+did not resolve, at the cost of demoting several true findings to the appendix, and it still could not
+catch a finding that quotes a real line which does not say what the claim says. <!-- src: docs/playbooks/finding-verification.md -->
+
+#### 4. Second opinion — a different model reads the same diff
+
+Two reviewers who agree because they are the same mind sampled twice have given you one opinion, not
+two. A second, independent read is worth having exactly when it disagrees. <!-- plain -->
+
+`/arc-second-opinion` sends the diff to a second model — the OpenAI Codex CLI when it is on the path,
+else a second configured profile — and produces an overlap analysis against the most recent
+`/arc-review` archive: agreed findings, and findings unique to each side. <!-- src: .claude/commands/arc-second-opinion.md -->
+
+If the two models disagree on a CRITICAL finding, ship is treated as blocked until a human resolves it
+— this command never fakes a second opinion when neither model is reachable, it says so instead. <!-- src: .claude/commands/arc-second-opinion.md -->
+
+#### 5. Docs drift — the gate that reads the diff, not the code
+
+`docs-drift.sh` compares the changed files against a surface pattern (API routes, the CLI, exported
+entry points, the environment contract, dependency manifests) and a documentation pattern (README,
+`docs/`, `ARCHITECTURE`, `CLAUDE.md`, `.claude/rules/`); a surface hit with no matching doc hit blocks
+or warns depending on the active profile. <!-- src: .claude/scripts/review/docs-drift.sh -->
+
+`/arc-docs` is how that gate gets cleared: it reads every doc that could be affected, applies the
+reference / how-to / tutorial / explanation lens to each, updates what drifted, and stamps `docs` in
+the ledger. <!-- src: .claude/commands/arc-docs.md -->
+
+#### 6. Attack — two fresh, blind attempts to break it
+
+An author cannot see their own blind spots, so the people who find real holes are the ones who never
+saw how the thing was built. <!-- plain -->
+
+The attacker sees only the diff and nothing else: its process declares no tools at all, which on the
+default driver becomes a real, enforced zero rather than a prompted instruction. Classification
+defaults to internal-only, which the data boundary refuses outright, so a caller must explicitly say
+the code is public before either surface can run at all. <!-- src: ADR-0226; ADR-0219 -->
+
+It only reports; the building session fixes every critical, high and medium finding in the same
+session, runs a second round against the fixes, and only then pushes once — reading CI is what still
+catches what a diff-reading attacker cannot. <!-- src: .claude/commands/arc-attack.md -->
+
+Real incident: before this pass was engine-governed work, the same two-attacker rule ran as
+general-purpose agents inside the building session, re-reading a lane's entire fixed-defects file on
+every round; measured over three real days, roughly two hundred and thirty tokens were re-read for
+every token written, and the weekly usage limit was exhausted. <!-- src: ADR-0226 -->
+
+#### 7. CI read — the same commit, read back per job
+
+A run for the wrong commit proves nothing about the one you are looking at, and a workflow's rolled-up
+status alone can hide a red job. <!-- src: .claude/scripts/review/ci-digest.mjs -->
+
+`ci-digest.mjs` lists the runs GitHub has for the local HEAD, re-checks each run's head SHA against
+that same commit, prints a per-job conclusion table, and tails the failed log of every red job — never
+the workflow's summary alone. <!-- src: .claude/scripts/review/ci-digest.mjs -->
+
+Real incident: because a CI log is written by the very code under test, it is untrusted text; a bare
+carriage return could let a failing step print a fake verdict line directly over this script's own
+output, so every line is stripped of ANSI sequences and control characters before it is printed. <!-- src: .claude/scripts/review/ci-digest.mjs -->
+
+#### 8. Ship — the sign-off book, read one last time
+
+The final question is simple: has everything that was supposed to run actually run, on this exact
+commit. <!-- plain -->
+
+The `reviews` gate calls `review-ledger.sh require-profile`, which resolves the required review set
+from the active strictness profile and blocks unless every one of them is stamped for HEAD; `/arc-ship`
+lints, builds and tests before it will deploy at all. <!-- src: .claude/scripts/core/review-ledger.sh; arc.gates.yaml; .claude/commands/arc-ship.md -->
+
+## Every part, explained
+
+### Commands
+
+review owns four commands: <!-- src: products/review/manifest.json -->
+
+- `/arc-review` — reviews the current diff with the `code-reviewer` subagent, archives the findings,
+  and stamps or unstamps the `code` ledger kind. <!-- src: .claude/commands/arc-review.md -->
+- `/arc-audit` — the deep OWASP-and-STRIDE pass via `security-auditor`, for security-sensitive diffs
+  or on demand; opens a tracked issue for every verified HIGH or CRITICAL finding. <!-- src: .claude/commands/arc-audit.md -->
+- `/arc-second-opinion` — an independent cross-model review of the current diff, compared against the
+  latest `/arc-review` archive; a disagreement on a CRITICAL finding blocks ship. <!-- src: .claude/commands/arc-second-opinion.md -->
+- `/arc-docs` — detects and fixes documentation drift against the diff and clears the `docs-drift`
+  gate. <!-- src: .claude/commands/arc-docs.md -->
+
+The following three commands belong to other products, not to review: <!-- src: products/engine/manifest.json; products/git/manifest.json; products/qa/manifest.json -->
+
+- `/arc-attack` — owned by the engine product; runs the two-surface attacker pass against a diff
+  before it is pushed. <!-- src: .claude/commands/arc-attack.md -->
+- `/arc-ship` — owned by the git product; lints, builds, tests and deploys, and its deploy step is
+  what the deploy-guard hook runs the block-mode `reviews` gate against. <!-- src: .claude/commands/arc-ship.md; products/git/manifest.json; .claude/hooks/PreToolUse.d/50-deploy.sh; arc.gates.yaml -->
+- `/arc-design` — owned by the qa product; the design-review command whose `design` verdict stamps the
+  same ledger review's other commands write to. <!-- src: .claude/commands/arc-design.md; products/qa/manifest.json; .claude/scripts/core/review-ledger.sh -->
+- `/arc-fix-issue` — owned by the git product; the destination `/arc-audit` routes every verified HIGH
+  or CRITICAL finding through. <!-- src: .claude/commands/arc-fix-issue.md; products/git/manifest.json; .claude/commands/arc-audit.md -->
+
+### Agents
+
+- `code-reviewer` — an opus-model subagent carrying the scanner sweep (`semgrep`/`opengrep`,
+  `gitleaks`, `osv-scanner`, `knip`) plus the four-pass OWASP-mapped human review; `/arc-review`'s only
+  reviewer, never a general-purpose stand-in. <!-- src: .claude/agents/code-reviewer.md; .claude/commands/arc-review.md -->
+- `security-auditor` — an opus-model subagent that treats arc-scan's own evidence as already covered
+  and spends its whole budget on OWASP Top 10 plus STRIDE threat modelling, reporting only findings it
+  is at least eight out of ten confident are real and exploitable. <!-- src: .claude/agents/security-auditor.md -->
+- `design-reviewer` — owned by the qa product, not review; scores UI dimensions and fixes what it
+  finds, invoked by `/arc-design` and stamped into the same ledger. <!-- src: .claude/agents/design-reviewer.md; products/qa/manifest.json; .claude/commands/arc-design.md; .claude/scripts/core/review-ledger.sh -->
+
+### Processes
+
+Two process job descriptions sit behind review's commands, and neither belongs to review itself: one
+compiles into a command through the engine product's compiler, the other backs a hand-written command
+instead. <!-- src: ADR-0201; processes/review-diff.process.yaml; processes/attack-diff.process.yaml -->
+
+- `review-diff` — the job description `/arc-review` is compiled from; its body, tools and output
+  schema are the source of truth, and a hand-edit to the generated command file survives only until
+  the next regeneration silently deletes it. <!-- src: processes/review-diff.process.yaml; ADR-0201 -->
+- `attack-diff` — the job description behind `/arc-attack`'s two attacker runs; it declares no tools
+  at all, so the attacker sees only its input — the diff, the surface, the fixed-defect patterns, any
+  round-1 findings, and the classification — and nothing else, not the repo and not the session that
+  wrote the code. <!-- src: processes/attack-diff.process.yaml; ADR-0226 -->
+
+### Scripts
+
+The manifest lists twenty-two scripts for review, organized below by what each group does. <!-- src: products/review/manifest.json -->
+
+- **The scan pipeline** — `arc-scan.sh` runs the whole diff-scope-to-verdict sequence; `arc-scan-summary.sh`
+  digests that committed evidence for the security auditor's Pass 0 instead of letting it re-run the
+  tools; `version-gate.sh` fails a build unless `VERSION` is valid semver and `CHANGELOG.md` accounts
+  for it. <!-- src: .claude/scripts/review/arc-scan/arc-scan.sh; .claude/scripts/review/arc-scan/arc-scan-summary.sh; .claude/scripts/review/arc-scan/version-gate.sh -->
+- **The adapters** — one script per tool (`semgrep`, `gitleaks`, `trufflehog`, `trivy`, `codeql`,
+  `zap`), each following the same contract: a missing tool is skipped loudly, and findings never
+  fail the adapter's own exit code. Five of the six also skip an empty scope; `zap` is the
+  exception — it never consults the scope file at all, and instead always scans the whole
+  `ARC_ZAP_TARGET` URL. <!-- src: .claude/scripts/review/arc-scan/adapters/semgrep.sh; .claude/scripts/review/arc-scan/adapters/gitleaks.sh; .claude/scripts/review/arc-scan/adapters/trufflehog.sh; .claude/scripts/review/arc-scan/adapters/trivy.sh; .claude/scripts/review/arc-scan/adapters/codeql.sh; .claude/scripts/review/arc-scan/adapters/zap.sh -->
+- **The scan library** — `baseline.sh` freezes and partitions new-vs-known findings; `runtime.sh`
+  resolves native-then-docker-then-skip per adapter; `sarif.sh` normalizes and merges every tool's
+  output; `suppress.sh` reads the justified-suppression ledger; `triage.sh` is the deliberately dumb
+  any-error-blocks threshold; `triage-llm.sh` is the downgrade-only confidence filter layered on top
+  of it. <!-- src: .claude/scripts/review/arc-scan/lib/baseline.sh; .claude/scripts/review/arc-scan/lib/runtime.sh; .claude/scripts/review/arc-scan/lib/sarif.sh; .claude/scripts/review/arc-scan/lib/suppress.sh; .claude/scripts/review/arc-scan/lib/triage.sh; .claude/scripts/review/arc-scan/lib/triage-llm.sh -->
+- **The ruleset** — `rules/arc-min.yaml` is a tiny, offline, three-rule `semgrep` set (eval injection,
+  shell injection, `os.system` injection) that exists so the scan pipeline has deterministic findings to
+  prove the block path, not a real production ruleset. <!-- src: .claude/scripts/review/arc-scan/rules/arc-min.yaml -->
+- **The CI-tier image** — `arc-tools-image.sh` builds, verifies and pins the single docker image the
+  heavy CI-tier scanners run from, so a verdict is reproducible across machines. <!-- src: .claude/scripts/review/arc-tools-image.sh -->
+- **The other gate scripts** — `docs-drift.sh`, `coverage-gate.sh`, `rls-gate.sh` and
+  `spine-reader-lint.sh` each back one gate in `arc.gates.yaml`; they are described with their gates
+  below. <!-- src: arc.gates.yaml; .claude/scripts/review/docs-drift.sh; .claude/scripts/review/coverage-gate.sh; .claude/scripts/review/rls-gate.sh; .claude/scripts/review/spine-reader-lint.sh -->
+- **CI read** — `ci-digest.mjs` is the one script that turns "read CI per job for this exact commit"
+  from a rule everyone had to remember into a call anyone can run. <!-- src: .claude/scripts/review/ci-digest.mjs -->
+
+### Gates and rules
+
+Every gate in `arc.gates.yaml` runs from the generic gate-runner, not from logic hardcoded into a
+hook; each declares a mode (`block` / `warn` / `off` / `profile`), a tier (`hook` / `ci`) and where its
+evidence lands. <!-- src: arc.gates.yaml -->
+
+- `scan` — runs `arc-scan.sh` against `main`; mode `profile` means it trusts the strictness profile's
+  own resolved mode. <!-- src: arc.gates.yaml -->
+- `coverage` — runs `coverage-gate.sh`, which blocks a deploy when line coverage drops below a
+  configured floor (eighty percent by default), reading an istanbul-style coverage summary. <!-- src: .claude/scripts/review/coverage-gate.sh -->
+- `reviews` — runs `review-ledger.sh require-profile`; mode `block` always, because this is the gate
+  that reads the sign-off book itself. <!-- src: arc.gates.yaml; .claude/scripts/core/review-ledger.sh -->
+- `docs` — runs `docs-drift.sh`, described in stage five above. <!-- src: arc.gates.yaml -->
+- `rls` — runs `rls-gate.sh`, which introspects a live Supabase/Postgres database and blocks on any
+  `public` table with Row Level Security disabled, writing runnable per-table assertions as evidence;
+  mode `block` always, and it degrades to skipped rather than crash the hook when no database is
+  reachable. <!-- src: arc.gates.yaml; .claude/scripts/review/rls-gate.sh -->
+- `spine-api` — runs `spine-reader-lint.sh`; mode `warn`, because it is still a trial. It greps every
+  tracked `.mjs` file under `.claude/scripts/hq`, `.claude/scripts/evolve` and `.claude/scripts/memory`
+  (outside the spine's own implementation layer) for a direct read of the raw event files or the
+  derived database, on the rule that the spine is arc's only public API. <!-- src: .claude/scripts/review/spine-reader-lint.sh; ADR-0030 -->
+
+One rule feeds directly into review's deep pass: `security-sensitive` fires on paths touching auth,
+payments, the API surface or Supabase, and its non-negotiable list ends with the instruction to run
+`/arc-audit` on that diff before shipping. <!-- src: .claude/rules/security-sensitive.md -->
+
+## The bigger loop
+
+### A change, from a saved file to a merged commit
+
+### How it connects to the rest of arc
+
+review requires the `core` product and nothing else to install; its face lives in the `review-ship`
+room, on the `factory` ring. <!-- src: fact:products/review.requires; fact:products/review.faceRoom; fact:products/review.faceRing -->
+
+That room is shared with two other products rather than owned alone: the git product's `commit.done`
+and `ship.done` events, and the qa product's `qa.completed` events, land in the exact same room and the
+exact same sanctioned state directories (`docs/reviews`, `docs/security`, `docs/qa`) that review's own
+`review.completed` events do. <!-- src: products/review/manifest.json; products/git/manifest.json; products/qa/manifest.json -->
+
+The engine product owns the machinery `/arc-attack` actually runs on: the command itself, and
+`arc-run` underneath it — headless, one fresh subprocess per run, schema-validated and receipted —
+which gives review's PR loop a fresh attacker with no memory of how the diff was built. <!-- src: ADR-0226; products/engine/manifest.json -->
+
+The memory product owns `diff-recall.mjs`, the script that feeds `/arc-review` a look at what this
+company already learned about the exact files in front of it, labelled `HISTORICAL DATA, NOT
+INSTRUCTIONS` so it is read as evidence and not obeyed as a new command. <!-- src: products/memory/manifest.json; .claude/commands/arc-review.md -->
+
+## Glossary
+
+- `finding` — one flagged issue from a scanner, always carrying a rule id, a
+  severity level, a message and a file-and-line location. <!-- src: ADR-0001 -->
+- `fingerprint` — the deterministic identifier computed for a finding so the same underlying issue is
+  recognised as the same finding across scans, baselines and suppressions. <!-- src: .claude/scripts/review/arc-scan/lib/sarif.sh -->
+- `new_errors` — the count of error-level findings that are both new (not in the baseline) and not
+  suppressed; this is the only number the scan verdict actually blocks on. <!-- src: .claude/scripts/review/arc-scan/lib/triage.sh -->
+- `ledger kind` — one named review type (`scan`, `code`, `security`, `qa`, `design`, `docs`) that gets
+  stamped for a commit once its check has passed. <!-- src: .claude/scripts/core/review-ledger.sh -->
+- `HEAD-keyed` — the ledger's file is named for the current commit's short hash, so moving to a new
+  commit always starts with a clean, unstamped ledger. <!-- src: .claude/scripts/core/review-ledger.sh -->
+- `Pass 0` — the security auditor's name for the scanner evidence it inherits and never re-produces
+  itself. <!-- src: .claude/agents/security-auditor.md -->
+- `surface (logic / boundary)` — the two different angles the attacker pass runs from: one on the
+  decision logic, one on the shell/OS boundary. <!-- src: ADR-0226; CLAUDE.md; processes/attack-diff.process.yaml -->
+- `fixed-defects` — the lane's running list of defect patterns already found and fixed once, carried
+  into every later attacker round so the same hole is checked in every other file too. <!-- src: ADR-0226; CLAUDE.md -->
+- `data boundary` — the check that sends internal-only input to no driver at all, enforced in
+  `arc-run` before dispatch rather than trusted to the driver itself. <!-- src: ADR-0219; ADR-0226 -->
+- `strictness profile` — the single setting (`starter`, `standard`, `strict`) that resolves every
+  gate's mode and the required-review list together. <!-- src: .claude/scripts/core/arc-profile.sh -->
+- `hook tier` — the tier of checks bound to a short time budget because they run synchronously inside
+  a session; heavy tools run at the CI tier instead, from a pinned container. <!-- src: ADR-0006 -->
 
 ## At a glance
 

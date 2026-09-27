@@ -1,0 +1,138 @@
+<!-- facts: appetite=c68c3357 blocked-on=a68c9074 burn=14bbbb4c cycle=bcf540fd depends-on=a68c9074 hasPlan=b5bea41b phase=42312ac2 status=4c1abf59 title=047eac3a -->
+
+## In plain words
+
+Think of arc as a small company whose staff are AI models, and think of every other lane as a department that gets better at doing arc's own work. <!-- plain -->
+
+Its own stated goal is to turn an external agent or tool's superior technique into native, receipted arc capability: a read-only study first, then a deterministic extraction report, then a classification, then an arc-native rebuild confined to an allowlist, then A/B evidence, then a proposed adoption through the inbox — so the market's best ideas compound into arc without runtime dependencies, supply-chain risk, or license contamination. <!-- src: initiatives/absorb/PLAN.md -->
+
+### What it is building
+
+absorb built its own small product: a read-only study harness, a fixed report template with its own lint, a registry file that tracks every technique it has ever looked at, and a rebuild allowlist that says exactly where a studied idea is permitted to land. <!-- src: initiatives/absorb/PLAN.md -->
+
+Its docs and its registry live at `products/absorb/`, and its scripts live at `.claude/scripts/absorb/` — a split chosen so the registry, which changes on every technique transition, stays outside the part of the repository that a byte-identity check pins into every consumer install. <!-- src: ADR-0606 -->
+
+That mattered because the plan names the alternative directly: absorb becoming tool-hoarding, which it calls every organisation's default failure here without a cap, a retire-review, or an A/B gate in front of every adoption. <!-- src: initiatives/absorb/PLAN.md -->
+
+## arc words → normal words
+
+A handful of absorb's own words, each an ordinary idea wearing a technical name. <!-- plain -->
+
+| arc calls it | It is really | Meaning |
+|---|---|---|
+| technique | one trick, not a whole tool | A single reusable practice worth studying — "rebuild their whole pipeline" is treated as several candidates or a SKIP, never one technique. <!-- src: initiatives/absorb/PLAN.md --> |
+| extraction report | the study writeup | A fixed-heading document a study produces instead of the owner reading the source directly, with a citation and a license note on every row. <!-- src: ADR-0601 --> |
+| verdict | the sorting bucket | One of four words a studied technique is classified as: ABSORB, INTEGRATE, ROUTE or SKIP. <!-- src: initiatives/absorb/PLAN.md --> |
+| registry | the one ledger | The single file listing every technique absorb has ever looked at and its current status. <!-- src: ADR-0600 --> |
+| allowlist | the only places a rebuild may land | A fixed list of paths; landing a rebuild anywhere else is refused, and widening the list is its own reviewed decision. <!-- src: ADR-0602 --> |
+| PLANOFF layout | the evidence paperwork shape | The protocol / scoring / results layout absorb's A/B evidence is written in. <!-- src: ADR-0605 --> |
+| sealed blind judgement | a judgement call that can't cheat itself | The owner picks between two unlabeled options, and which option was which is revealed only after the pick is recorded. <!-- src: ADR-0603 --> |
+
+## How the work was planned
+
+The plan set eight numbered success requirements, running from a study report the owner can trust without reading the source himself through to one real absorb carried all the way to a recorded decision. <!-- src: initiatives/absorb/PLAN.md -->
+
+A few of them carried the most weight. One requirement asked that a named source become a study pack trustworthy without the owner reading the source himself, with studied code never once executing during study. Another — titled "an ABSORB verdict becomes a reviewed diff, never a dependency" — asked for zero new runtime dependencies, proven by a fixture that parses the diff rather than grepping it. A third asked that adoption claims be evidence rather than vibes, backed by an A/B on at least three representative fixtures. A fourth asked for one honest ledger of every technique arc has looked at, capped at 12 adopted per lane. A fifth asked that nothing ever adopt or retire itself in either direction. The last asked for one real absorb, done end to end, on a real weakness — the cycle's own proof-of-life requirement. <!-- src: initiatives/absorb/PLAN.md; initiatives/absorb/PLAN.md#REQ-02 -->
+
+The appetite was an 8-day hard cap, with a planned allocation of 6.5 days and 1.5 days of slack. The kill criteria said that at 50% burn (4 days), if Phase 2 was not done there was a mandatory scope-cut conversation, and at 100% the rule was cut or kill, never a silent extension. One more kill line belonged only to the real absorb: if REQ-08's own A/B failed to show a gain, the loop was judged not to be paying for itself, and the lane would park rather than force an adoption. <!-- src: initiatives/absorb/PLAN.md#slack -->
+
+The riskiest question came early, in Phase 1: whether a study could prove, with a fixture rather than a promise, that it never once executed what it read. The plan's own assumptions ledger names this the STOP kill criterion, and the kill criteria call an unprovable boundary a no — a failure to answer it is a full stop on the whole cycle, not a risk to accept and carry forward. <!-- src: initiatives/absorb/PLAN.md -->
+
+The cycle's own birth was unusual, and the plan says so rather than hiding it: none of the ordinary kickoff gates had passed when it started — the live slot was already held by two other lanes, and no trigger arm had fired. <!-- src: initiatives/absorb/PLAN.md -->
+
+The owner was shown that gap and ruled arc-first anyway, which is why the plan can proceed at all: the venture clock is deferred by that ruling — dated, attributed and revisitable, not cancelled — while the four-arm trigger gate itself is waived only for this one cycle, and one tension the ruling did not resolve was left flagged for the owner rather than answered on the lane's own authority. <!-- src: ADR-0074 -->
+
+## The phases, one by one
+
+**Phase 00 — the matrix and its paperwork.** Set out to audit what develop's own capability system actually guarantees, finalise the registry's shape against that audit, and commit a lint-checked report template — one day's appetite. It shipped an empty, schema-carrying registry, the report template, a warn-first lint, and a steel-thread demo of one filled-in report, in about half a day. <!-- src: initiatives/absorb/phases/phase-00-spec.md; initiatives/absorb/PROGRESS.md -->
+
+**Phase 01 — study harness, hostile-input-first.** Set out to make a read-only study pipeline whose no-execution boundary was proven by a fixture, not asserted in prose — an unprovable boundary was written in as a stop, not a risk. It shipped the study harness, the `arc-absorb` command, and a pinned hostile-input corpus, in about a day and a half against a two-day appetite. The boundary held: three separate mutants, each built to defeat one banned verb, were all caught, and the kill criterion never fired. <!-- src: initiatives/absorb/phases/phase-01-spec.md; initiatives/absorb/PROGRESS.md -->
+
+**Phase 02 — registry and guards.** Set out to make the registry enforceable: a cap and displacement lint, a machine-readable allowlist check, and a license and attribution gate. It shipped in about a day against a one-day appetite, and also had to move its own evidence bundle out of a directory that turned out to be frozen for older history, rather than the lane's own forward-looking path. <!-- src: initiatives/absorb/phases/phase-02-spec.md; ADR-0605; initiatives/absorb/PROGRESS.md -->
+
+**Phase 03 — governance drop.** Set out to make an owner's judgement a sealed, blind, mandatory-reason receipt on arc's existing events, and to hand develop's own plan the addendum it needed to use the new toolbox. It shipped in about a day and a half against a one-day appetite, and closed with one requirement left open by the owner's own decision: the judgement mechanism was proven, but its live demonstration still needed a real pick on the real event log. <!-- src: initiatives/absorb/phases/phase-03-spec.md; initiatives/absorb/PROGRESS.md -->
+
+**Phase 04 — the real absorb.** Set out to run the named target all the way through the loop: study, report, classification, rebuild, A/B, sealed judgement, adoption decision. It shipped in about a day against a one-and-a-half-day appetite, but only after being reopened once: the first rebuild attempt landed on a file that turned out to be another lane's frozen evidence, and had to be reverted and redirected to a different, already-allowed location before the phase could close. <!-- src: initiatives/absorb/phases/phase-04-spec.md; initiatives/absorb/PROGRESS.md; ADR-0602 -->
+
+Its own adversarial pass was the largest of the cycle: two fresh agents on two different surfaces returned 32 findings between them, and every one of the cycle's fifteen recurring defect classes showed up again in this last phase. <!-- src: initiatives/absorb/PROGRESS.md -->
+
+## What it decided
+
+What follows is the decision record behind the mechanics described above. <!-- plain -->
+
+The first is the birth ruling that let the cycle start even though none of the ordinary kickoff gates had passed. <!-- src: ADR-0074 -->
+
+| # | Decision |
+|---|---|
+| 0074 | The owner ruled arc-first at this lane's birth: the venture clock is deferred and the usual four-arm trigger gate is waived, for this one cycle only. <!-- src: ADR-0074 --> |
+| 0600 | The technique registry is one file, and a row references a `capability-lock.json` entry rather than copying its data. <!-- src: ADR-0600 --> |
+| 0601 | The extraction report is a fixed, lint-checked template, and the rule for attributing a permissive-license copy lives inside it. <!-- src: ADR-0601 --> |
+| 0602 | A rebuild lands only on a named allowlist, and widening that allowlist is an amendment to this decision, never a convenience edit made mid-rebuild. <!-- src: ADR-0602 --> |
+| 0603 | An owner's judgement is a sealed, blind pick carried on arc's existing approval and decision events, adding zero new event kinds. <!-- src: ADR-0603 --> |
+| 0604 | absorb's boundaries against develop, bench, discover and evolve are recorded once, so the same question is not re-argued every cycle. <!-- src: ADR-0604 --> |
+| 0605 | absorb's A/B evidence runs bench-style in this version, and switching it to evolve's own experiment machinery needs an evolve-side ruling. <!-- src: ADR-0605 --> |
+| 0606 | absorb claims the 0600s, keeps its docs and registry under `products/absorb/`, seeds its registry empty, and takes the unspecified-input defect class as its first study target. <!-- src: ADR-0606 --> |
+
+## Where it stands now
+
+absorb is currently idle — its build cycle, arc-absorb (Cycle 10), closed on 2026-08-10. <!-- src: fact:lanes/absorb.status; fact:lanes/absorb.cycle -->
+
+By the time it closed, all five of its phases were done and all eight of its success requirements had been met. <!-- src: initiatives/absorb/PROGRESS.md -->
+
+It used 6.5 of its 8 allotted days, leaving 1.5 days unspent, and its tracker currently records nothing blocking it and nothing it depends on. <!-- src: fact:lanes/absorb.appetite; fact:lanes/absorb.burn; fact:lanes/absorb.blocked-on; fact:lanes/absorb.depends-on -->
+
+Its one real study classified four candidate techniques: one to absorb, one to route elsewhere, and two to skip. <!-- src: initiatives/absorb/evidence/phase-04/extraction-report.md -->
+
+The technique it absorbed — a rule that an unquotable finding is forced to low confidence and suppressed from the main report unless the reviewer can quote the source line that motivated it — was studied from gstack's `/review` skill, whose file carried no license at all, so the rebuild is a re-expression rather than a copy. <!-- src: initiatives/absorb/evidence/phase-04/extraction-report.md#T-01 -->
+
+It landed as a playbook, called from a hand-written review command rather than a generated one, without widening the rebuild allowlist. <!-- src: ADR-0602; initiatives/absorb/PROGRESS.md#hand-written -->
+
+The measurement, the blind pick and the adoption decision on this one technique did not agree, and the record kept all three rather than only the one that read best: the A/B measurement cleared its own pass condition, the owner's sealed blind pick chose the old way over the new one, and the owner's adoption decision then overruled a recommendation to retire the technique. <!-- src: initiatives/absorb/PROGRESS.md -->
+
+Its registry today holds that one adopted row, so the 12-per-lane cap and its displacement rule are fixture-tested rather than tested against real data — a bet the lane recorded rather than hid. <!-- src: initiatives/absorb/PLAN.md -->
+
+## The bigger loop
+
+The mechanics above are what absorb built. What follows is what happened when they were put into practice. <!-- plain -->
+
+### What went wrong and what was learned
+
+- CI was green 19 of 19 jobs before three of the four adversarial passes on this lane found their serious holes — 18, 21 and 22 findings apiece, several falsifying claimed properties outright — because a green matrix is evidence the assertions held, never evidence a guard guards. <!-- src: docs/retro-log.md -->
+- A control byte written literally into a source file made grep read the whole file as binary, so two later patches silently matched nothing. <!-- src: docs/retro-log.md#LITERALLY -->
+- An owner command handed over without its working directory landed nowhere, and had to be handed over twice. <!-- src: docs/retro-log.md#gitignored -->
+
+### How it connects to the rest of arc
+
+absorb sits beside four other lanes that each own a neighbouring verb, and one decision draws the line between them so the same question is not re-argued every cycle: an installable artifact is develop's, a technique expressed as an edit to arc's own files is absorb's, bench scores while absorb only produces, discover mines ventures while absorb mines techniques, and evolve keeps its own promotion machinery and experiment kinds untouched by absorb's work. <!-- src: ADR-0604 -->
+
+Its A/B evidence deliberately runs in the paperwork shape already used elsewhere in the repo rather than through evolve's own experiment machinery, so that machine's first real client stays the growth lane. <!-- src: ADR-0605 -->
+
+Its owner-judgement mechanics ride on the same two events every other lane already shares, adding zero new event kinds to a vocabulary this repo keeps closed. <!-- src: ADR-0603 -->
+
+absorb's registry depends on develop's lock file only by reference: a row points at a lock entry rather than copying that entry's own pin, hash or provenance data. <!-- src: ADR-0600 -->
+
+Its rebuild also had to respect a boundary it does not own: three process files are engine's own proof that its compiler reproduces them exactly, so absorb's allowlist treats them as off-limits even though they would otherwise sit inside it. <!-- src: ADR-0602 -->
+
+The one technique it adopted ships out to every consumer repository through the review product's own file list — its caller could not be a file compiled from `processes/`, since a rebuild there vanishes at the next compile with the registry still claiming it shipped. <!-- src: initiatives/absorb/phases/phase-04-spec.md; initiatives/absorb/PROGRESS.md -->
+
+## Glossary
+
+| Term | Meaning |
+|---|---|
+| technique | One reusable trick — the unit is one registry row, one rebuild diff; a whole pipeline is several candidates or a SKIP. <!-- src: initiatives/absorb/PLAN.md --> |
+| extraction report | The fixed-heading document a study produces instead of the owner reading the source, with its headings and required fields checked by `report-lint`. <!-- src: ADR-0601 --> |
+| verdict | One of four classification words a technique inventory row is given: ABSORB, INTEGRATE, ROUTE or SKIP. <!-- src: initiatives/absorb/PLAN.md --> |
+| registry | The one file listing the status of every technique absorb has ever looked at. <!-- src: ADR-0600 --> |
+| allowlist | The fixed list of paths a rebuild is permitted to land on. <!-- src: ADR-0602 --> |
+| PLANOFF layout | The protocol / scoring / results shape absorb's A/B evidence is written in. <!-- src: ADR-0605 --> |
+| sealed blind judgement | An owner's pick between two unlabeled options, with the labels revealed only after the pick is recorded. <!-- src: ADR-0603 --> |
+| cap and displacement | The rule that at most 12 techniques may sit adopted at once per lane, so a new adoption at the limit must name what it replaces. <!-- src: initiatives/absorb/PLAN.md; initiatives/absorb/phases/phase-02-spec.md --> |
+| review_by | A date recorded on each registry row alongside its status and evidence. <!-- src: products/absorb/registry.json --> |
+| lock_ref | A registry row's pointer at a `capability-lock.json` entry, never a copy of that entry's own pin, hash or provenance data. <!-- src: ADR-0600 --> |
+| hostile corpus | A pinned set of adversarial test fixtures — hostile READMEs, symlinks, oversized files — used to prove a boundary holds under attack, not only under ordinary input. <!-- src: initiatives/absorb/phases/phase-01-spec.md --> |
+| license refusal | The recorded outcome when a studied source's license is incompatible: logged in the registry with its reason, never omitted. When no license is found at all, that too is recorded, and the honest consequence is the same: zero copying, re-expression only. <!-- src: ADR-0601; initiatives/absorb/evidence/phase-04/extraction-report.md --> |
+| steel thread | The thinnest end-to-end slice of a system's own paperwork, built first so every later phase has something real to extend. <!-- src: initiatives/absorb/phases/phase-00-spec.md --> |
+| adversarial pass | A fresh, unanchored reviewer sent to attack a finished piece of work with hostile inputs before it counts as done. <!-- src: CLAUDE.md --> |
+| spine | The append-only record of events this repo keeps, with a closed vocabulary of kinds; this cycle adds zero new event kinds to it. <!-- src: ADR-0024; ADR-0026; ADR-0603 --> |
+| lane | One workstream with exactly one live plan, `initiatives/<lane>/PLAN.md`. <!-- src: CLAUDE.md --> |
+| phase | A slice of a lane's plan that closes only on evidence: tests green, a live demonstration, and the tracker updated. <!-- src: CLAUDE.md --> |

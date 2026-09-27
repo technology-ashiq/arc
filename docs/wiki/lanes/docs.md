@@ -3,7 +3,127 @@
 
 [arc reference](../index.md) › [Lanes](../index.md#lanes) › **Lane**
 
-> **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/lanes/docs.md` -- hand-written, never generated (ADR-1505, ADR-1508).
+## Why it exists
+
+
+## In plain words
+
+Think of a large company where every department writes its own paperwork, but nobody keeps one shared, always-current staff directory. New teams appear, old ones close, and the printed directory in the lobby drifts a little further out of date every month, until someone asks a question it cannot answer. <!-- plain -->
+
+The `docs` lane's goal is a wiki that writes itself: `node .claude/scripts/docs/wiki-build.mjs` turns the live arc repository into one `wiki.json` file and then into a page for every product, lane, process, ADR band, command, agent, rule and gate under `docs/wiki/`. <!-- src: initiatives/docs/PLAN.md -->
+
+A second script, `wiki-coverage.mjs`, fails the build and names names whenever a part of arc has no page, or a page has no part of arc behind it — so something born on Monday is documented on Monday, before anyone has written a word about it. <!-- src: initiatives/docs/PLAN.md -->
+
+### What it is building
+
+This lane's one product is also called `docs`: five scripts under `.claude/scripts/docs/` — `wiki-build.mjs` (extracts facts and renders pages), `wiki-coverage.mjs` (the coverage gate), `wiki-drift.mjs` (the drift check), `wiki-stale.mjs` (the staleness check), and `narrative-anchors.mjs` (checks that every factual block carries a resolving anchor and that an independent verifier has passed it) — plus the pages they produce under `docs/wiki/`. <!-- src: products/docs/manifest.json; initiatives/docs/PLAN.md; .claude/scripts/docs/narrative-anchors.mjs -->
+
+Its manifest lists `core`, `engine` and `hq` as the products it requires, and it reaches the tree by importing `core`'s `face-coverage.mjs` across that boundary, in the one direction the design allows. <!-- src: products/docs/manifest.json; ADR-1512 -->
+
+A narrative like this one may ship only under a rule this lane's own ADR band holds: ADR-1513, decided through the face lane's own change process on 2026-09-27 — the day after this lane's own cycle had already closed on 2026-09-26. <!-- src: ADR-1513; initiatives/docs/PROGRESS.md -->
+
+The gate itself, `narrative-anchors.mjs`, checks that every factual block carries an anchor that resolves and that an independent verifier has passed every block of the text; it counts, rather than checks, whether the owner has read the page. <!-- src: ADR-1513; .claude/scripts/docs/narrative-anchors.mjs -->
+
+The tracker's own header, written before this ADR existed, still reads only up through ADR-1512 — a small trace of the order things actually happened in. <!-- src: initiatives/docs/PROGRESS.md; ADR-1513 -->
+
+## arc words → normal words
+
+| arc calls it | It is really | Meaning |
+|---|---|---|
+| `wiki.json` | the one shared ledger | Every fact the extractor found about arc, in one file, derived and never hand-edited. <!-- src: initiatives/docs/PLAN.md --> |
+| `treeWorld` | the single reader | The one function that reads the repository tree; both the wiki and the face app call it, so the two can never disagree about what exists. <!-- src: ADR-1501 --> |
+| `wiki-coverage` | the two-way completeness check | Fails, naming it, on a thing with no page and on a page with nothing behind it — checked in both directions from birth. <!-- src: ADR-1503 --> |
+| `wiki-drift` | the "this no longer exists" check | Fails when a hand-written page names a file, command or decision that has since gone. <!-- src: ADR-1507 --> |
+| `wiki-stale` | the "this has moved on" check | Only warns, never fails, when a page's underlying facts have changed since someone wrote about them. <!-- src: ADR-1507 --> |
+| narrative | the hand-written part | The explanation under a page's generated facts; a page with none says so plainly. <!-- src: ADR-1505 --> |
+| anchor | the receipt on a fact | A hidden comment naming exactly which file or ADR proves the paragraph, list item or table row it sits on; one with neither this nor a plain marker is refused. <!-- src: ADR-1513 --> |
+| explanation debt | the "still not explained" count | How many products, lanes, commands, agents, processes, gates and rules have no narrative yet — reported on stdout, on the wiki index and in the Reference room; a count, never a target. <!-- src: ADR-1513; .claude/scripts/docs/narrative-anchors.mjs --> |
+| ADR band | the numbered shelf | A numbered range of decision records one lane claims; `docs` claims 1500 to 1599. <!-- src: ADR-1500 --> |
+
+## How the work was planned
+
+The lane's own goal statement names ending "second answers" as part of its payoff: the four hand-kept overview documents stop giving them once the wiki exists. <!-- src: initiatives/docs/PLAN.md -->
+
+The plan gave itself nine numbered requirements, each with its own pass/fail test — among them, that the wiki and the face read the tree through one function so they cannot disagree about what exists, that a part of arc with no page fails CI naming it, that a page with no part of arc behind it fails CI naming it, and that no count on any page is copied rather than derived. <!-- src: initiatives/docs/PLAN.md -->
+
+**Appetite:** 6.5 days, capped — 5.5 days planned in phases plus 1 day of slack, a constraint rather than an estimate: going over meant cutting scope or stopping, never quietly running long. <!-- src: initiatives/docs/PLAN.md -->
+
+**Kill criterion:** at the end of Phase 01, on day 3, one question decided whether the cycle continued at all — does the coverage gate's own mutant self-test fail closed on every planted defect? If not, the cycle would STOP there and no renderer would be built at all. <!-- src: initiatives/docs/PLAN.md -->
+
+The four phases were ordered by risk, not by convenience, and the order was fixed in the plan itself: the extractor first, then the coverage gate, then the renderer, and only then drift, staleness and narrative — the coverage gate proven against fixture trees before any renderer existed. <!-- src: initiatives/docs/PLAN.md; ADR-1503 -->
+
+## The phases, one by one
+
+**Phase 00 — the extractor.** Set out to prove that `wiki-build.mjs --json` could turn the live tree into one deterministic `wiki.json`, reading it only through `face-coverage.mjs`'s new `treeWorld` export. It closed the same day it opened, with the owner's 2026-09-18 ruling recorded on arc's own event log and nineteen of nineteen tests green; attacked in two rounds it returned twenty-seven findings, and the logic surface never ran because its free trial model failed on transport twice — an HTTP 503 on round one, then an HTTP 429 on a direct retry. <!-- src: initiatives/docs/phases/phase-00-spec.md; initiatives/docs/PROGRESS.md -->
+
+**Phase 01 — the coverage gate.** Built and proven against hand-made fixture pages, before any renderer existed, so the completeness check could not have been shaped around real pages it had already seen. Its mutant self-test answered the day-3 kill question "yes" — every planted defect still made it fail, naming what was planted — so the cycle was allowed to continue; a second attack round found a real crash that the first round's own fix had introduced. <!-- src: initiatives/docs/phases/phase-01-spec.md; initiatives/docs/PROGRESS.md -->
+
+**Phase 02 — the renderer.** Turned `wiki.json` into an index and 131 entity pages, all 1891 relative links resolving, and closed only once the four old hand-kept documents — `how-it-works.md`, `how-arc-works-simple.md`, `usermanual.md` and `blueprint.md` — were each archived whole and reduced to a short stub at their original path. Its one attack round could only see a code-only view of the diff, because a generated ADR file name read like a secret key and the safety guard refused the rest. <!-- src: initiatives/docs/phases/phase-02-spec.md; initiatives/docs/PROGRESS.md -->
+
+**Phase 03 — drift, staleness and the first narratives.** Added the check that fails on a narrative naming something gone, the check that only warns when facts have moved, and the count that re-derives every number on every page; three narratives — for `engine`, for `git`, and for the `portfolio` lane — were written by hand and accepted by the owner, and the drift check itself caught the first draft citing a command that does not exist. <!-- src: initiatives/docs/phases/phase-03-spec.md; initiatives/docs/PROGRESS.md -->
+
+The cycle closed on 2026-09-26, four of four phases done, all nine requirements validated, at roughly 3.5 of its 6.5-day cap. <!-- src: initiatives/docs/PROGRESS.md -->
+
+## What it decided
+
+| # | Decision |
+|---|---|
+| 1500 | The lane is born on the owner's 2026-09-18 ruling, claiming ADR century 1500–1599 after checking every worktree and branch for a free one <!-- src: ADR-1500 --> |
+| 1501 | Discovery is imported from `face-coverage.mjs`'s new `treeWorld` export, never re-scanned by the wiki itself <!-- src: ADR-1501 --> |
+| 1502 | No hand-maintained inventory of what exists is kept anywhere; every list is derived at build time <!-- src: ADR-1502 --> |
+| 1503 | The coverage gate checks both directions and is fail-from-birth, proven by a mutant self-test <!-- src: ADR-1503 --> |
+| 1504 | Generated output is never hand-edited; CI regenerates the wiki and fails on any difference <!-- src: ADR-1504 --> |
+| 1505 | Narrative lives only in separate hand-written files, and having none is a legal state <!-- src: ADR-1505 --> |
+| 1506 | A newly born entity is documented immediately, with a banner saying its narrative is pending <!-- src: ADR-1506 --> |
+| 1507 | A narrative naming something gone blocks the build; a narrative merely out of date only warns <!-- src: ADR-1507 --> |
+| 1508 | No model-authored prose ships unattended; a human writes it, or accepts it line by line, or the page stays without one <!-- src: ADR-1508 --> |
+| 1509 | Pages show only build-time facts from committed files, never live state, which stays the face app's job <!-- src: ADR-1509 --> |
+| 1510 | The four old overlapping documents are archived whole and reduced to short stubs, inside this same cycle <!-- src: ADR-1510 --> |
+| 1511 | Every gate gets two fresh attackers on different surfaces before it ships, carrying the lane's fixed-defect list <!-- src: ADR-1511 --> |
+| 1512 | The generator is its own `docs` product requiring `core`, not folded into `core` itself <!-- src: ADR-1512 --> |
+| 1513 | A model-drafted narrative may ship after all, but only anchored to real sources, checked by an independent verifier, and read by the owner — the rule this very page is drafted under <!-- src: ADR-1513 --> |
+
+## Where it stands now
+
+The tracker's own header reads status IDLE, cycle `arc-docs` (Cycle 17), phase 03, with the cycle closed. <!-- src: fact:lanes/docs.status; fact:lanes/docs.cycle; fact:lanes/docs.phase -->
+
+Its appetite was 6.5 days and it burned about 3.5 of them, with nothing it is blocked on and nothing it depends on. <!-- src: fact:lanes/docs.appetite; fact:lanes/docs.burn; fact:lanes/docs.blocked-on; fact:lanes/docs.depends-on -->
+
+`docs/wiki/` is live on `main` and held by CI in both directions, and the tracker names no next step inside this lane — any other lane that adds a product, lane, process, ADR, command, agent, rule or gate is now the one that runs the regeneration, in the same pull request that added the thing. <!-- src: initiatives/docs/PROGRESS.md -->
+
+This lane's own tracker names the logic half of its adversarial pass as a standing gap, separate from the ledger's per-phase LOW findings: it never ran at all, across every phase, because the free trial model it was pointed at failed on transport every time. <!-- src: initiatives/docs/PROGRESS.md; initiatives/docs/debt-ledger.md -->
+
+## The bigger loop
+
+### What went wrong and what was learned
+
+The DOC-A scanner had lost sync on a regex literal and never scanned the renderer while printing clean. <!-- src: initiatives/docs/PROGRESS.md -->
+
+An early design call kept lane pages to status and cycle only, not phase or burn, because those fields would have made every lane's tracker edit force a wiki regeneration. <!-- src: initiatives/docs/PROGRESS.md -->
+
+Counted at cycle close: six boundary attack rounds returned seventy-nine findings, while the logic surface never ran; CI caught three real defects no attacker did. <!-- src: initiatives/docs/PROGRESS.md -->
+
+### How it connects to the rest of arc
+
+`docs` reads the tree only through `core`'s `face-coverage.mjs`, the same function the face app's own room list reads, so the wiki and the face can never show a different set of what exists. <!-- src: ADR-1501 -->
+
+The lane also has its own small room in the face app: a `lane`-type room in the `factory` ring, with stations for its plan table, header, kickoff trail, first phase and phase closes. <!-- src: products/docs/manifest.json -->
+
+Because the coverage and dirty-diff checks now run in CI, any other lane's pull request that adds a product, lane, process, ADR, command, agent, rule or gate turns red until someone runs the wiki's own build command — a rule written into arc's own project instructions. <!-- src: initiatives/docs/PLAN.md; CLAUDE.md -->
+
+And the rule this page ships under, ADR-1513, was itself decided through the face lane's own change process — its own status line says so — rather than through a new cycle of `docs`'s own. <!-- src: ADR-1513 -->
+
+## Glossary
+
+- **lane** — a workstream kept to exactly one live plan at `initiatives/<lane>/PLAN.md`; `docs` is one such lane, with its own PLAN, PROGRESS and phases. <!-- src: CLAUDE.md; initiatives/docs/PLAN.md -->
+- **cycle** — `docs` has run one cycle so far: Cycle 17, opened 2026-09-25 and closed 2026-09-26. <!-- src: fact:lanes/docs.cycle -->
+- **phase** — a slice of a cycle that closes only through `/arc-phase-done`, once tests are green on CI, a live demo runs, and the tracker is updated. <!-- src: initiatives/docs/PROGRESS.md -->
+- **appetite** — the time budget a cycle sets itself, capped rather than estimated — going past it means cut or kill, never a silent extension; `docs` set 6.5 days. <!-- src: initiatives/docs/PLAN.md -->
+- **REQ** — one of the plan's numbered requirements, each with its own pass/fail test; `docs`'s plan lists REQ-01 through REQ-09. <!-- src: initiatives/docs/PLAN.md#REQ-01; initiatives/docs/PLAN.md#REQ-05; initiatives/docs/PLAN.md#REQ-07; initiatives/docs/PLAN.md#REQ-09 -->
+- **ADR** — a written decision record, numbered inside the lane's own claimed band; `docs` claims 1500 to 1599. <!-- src: ADR-1500 -->
+- **fixture** — a small, hand-made stand-in tree used to prove a gate before the real renderer exists; the coverage gate was proven this way in Phase 01. <!-- src: initiatives/docs/phases/phase-01-spec.md -->
+- **attack round** — one pass by a fresh agent trying to break a gate before it ships, carrying the lane's list of already-fixed defects with instructions to check each one in every other file; ADR-1511 requires two such passes per gate, on different surfaces. <!-- src: ADR-1511 -->
+- **verifier receipt** — the independent model's block-by-block verdict on a drafted narrative, saved outside `docs/wiki/` so the coverage gate does not have to own it. <!-- src: ADR-1513 -->
 
 *docs v1 "arc's own reference, generated"*
 
