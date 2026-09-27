@@ -71,3 +71,10 @@ parser as the composer's):
   transport's 15 s per request can chain across redirects past the 60 s hook budget, and a hook
   that times out is read as allow, so the hook caps the whole preflight at 40 s and a cap that
   fires refuses.
+
+## Note 2026-09-27 — the revisit trigger fired, and the answer was no
+
+saasui's screens are served from `cdn.sanity.io`, not its registry host, and its own `/_next/image` proxy needs a
+query past the 64-byte cap. That is this ADR's trigger. The owner declined widening the allowlist for one
+gallery; the row went `off` (ADR-1412, second amendment). The boundary is unchanged.
+

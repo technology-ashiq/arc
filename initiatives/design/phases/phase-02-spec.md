@@ -9,19 +9,19 @@ of git and whose provenance goes in.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] `design.sources.yaml` exists with the grammar of
+- [x] `design.sources.yaml` exists with the grammar of
       [ADR-1408](../../../docs/adr/1408-dsv-i-one-source-registry-owner-born-lint-guarded.md):
       `id` · `kind[]` · `access` · `allowed_use[]` · `auth` · optional `credential_ref` · `cost`
       · `status` · `availability` · `approved_by` · `added`. Arrays are arrays
-- [ ] Initial rows match [ADR-1412](../../../docs/adr/1412-gallery-eligibility-is-decided-by-robots-and-terms-not-by-taste.md)
+- [x] Initial rows match [ADR-1412](../../../docs/adr/1412-gallery-eligibility-is-decided-by-robots-and-terms-not-by-taste.md)
       exactly, as amended twice on 2026-09-27 (Lapa Ninja and SaaSFrame `off` after the first real build; nicelydone and collectui `active`; then saasui born `active` and turned `off` for its shared CDN, and screensdesign born `off` for its terms, owner): Awwwards `link-only`; Godly, Dribbble, Behance,
       Land-book, Page Collective `off`
-- [ ] Registry lint exits 0 on the real file, and **fails** on: a singular `kind`, an unknown
+- [x] Registry lint exits 0 on the real file, and **fails** on: a singular `kind`, an unknown
       `access`, a hand-set `availability`, and an entry added by anyone but the owner
-- [ ] `design-curator` agent exists at **balanced-workhorse** per
+- [x] `design-curator` agent exists at **balanced-workhorse** per
       [ADR-1414](../../../docs/adr/1414-the-curator-sits-at-balanced-workhorse-and-one-juror-at-high-judgment.md),
       shipped as a reviewed diff citing ADR-0069
-- [ ] Per [ADR-1420](../../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md),
+- [x] Per [ADR-1420](../../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md),
       the curator holds `Read, Grep, Glob, WebFetch, Bash`, bounded in `composer-bash-check.sh`:
       its Bash runs only `design-refpack.mjs` with its own flags, and its WebFetch runs only on
       an `active` registry row's host with `design-robots.mjs` answering ALLOW inside a 40 s cap.
@@ -29,16 +29,16 @@ of git and whose provenance goes in.
       rm` refused, a well-formed refpack call allowed, a WebFetch to an off-registry host and to
       a DISALLOW path refused, one to an allowed gallery path allowed, and the main session and
       `ui-composer` unchanged. *(`/arc-change` 2026-09-26, owner "Hook-la scope")*
-- [ ] Curator performs a **robots.txt preflight per fetch** and refuses on `Disallow` — the
+- [x] Curator performs a **robots.txt preflight per fetch** and refuses on `Disallow` — the
       refusal is recorded, never a silent skip
-- [ ] A real pack of 5–8 screens exists for one brief at
+- [x] A real pack of 5–8 screens exists for one brief at
       `.claude/state/design/refpacks/<brief>/`, from ≥1 `active` source (REQ-04 amended
       2026-09-27 from ≥2, ADR-1412)
-- [ ] `sources.md` committed with URL · timestamp · content sha · **adaptable principle** ·
+- [x] `sources.md` committed with URL · timestamp · content sha · **adaptable principle** ·
       avoid-this — one row per screen
-- [ ] A PNG planted in the refpack dir is proven ignored by `git check-ignore` — asserted, not
+- [x] A PNG planted in the refpack dir is proven ignored by `git check-ignore` — asserted, not
       assumed from the gitignore's text
-- [ ] An explore output under `docs/design/explore/lexos-*/` (HTML and PNG) is proven ignored
+- [x] An explore output under `docs/design/explore/lexos-*/` (HTML and PNG) is proven ignored
       by `git check-ignore -v`, naming the `.gitignore` rule that did it. This enforces the
       owner's 2026-09-16 ruling that LexOS evidence is committed as text only, instead of
       relying on nobody running `git add -A`. The same case runs two negative controls, and
@@ -46,18 +46,18 @@ of git and whose provenance goes in.
       The second pins the #228 regression, a UTF-16 line that made every trailing-slash path
       read as ignored. The rule does not untrack the four `lexos-case-workspace-*` dirs
       committed before the ruling. *(`/arc-change` 2026-09-18)*
-- [ ] Carried from Phase 01, per [ADR-1419](../../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md):
+- [x] Carried from Phase 01, per [ADR-1419](../../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md):
       the composer read and write checks enforce only for `agent_type` `ui-composer`, using the
       Bash check's identity parser. Red-first on CI, four cases: the main session reads and writes
       a sibling while a marker is armed (allowed), a composer reads and writes a sibling (refused),
       a payload naming `ui-composer` with an unreadable identity (refused), and two armed markers
       refuse a composer only. Composition stays serial. *(`/arc-change` 2026-09-26)*
-- [ ] A source with `status: off` produces **zero** fetch attempts
-- [ ] Two-surface adversarial pass by fresh agents on the registry lint and the preflight
-- [ ] tests added & green **on CI, read per JOB at the branch head SHA**
-- [ ] live demo run + output checked
-- [ ] contract tests green against the gallery fakes
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] A source with `status: off` produces **zero** fetch attempts
+- [x] Two-surface adversarial pass by fresh agents on the registry lint and the preflight
+- [x] tests added & green **on CI, read per JOB at the branch head SHA**
+- [x] live demo run + output checked
+- [x] contract tests green against the gallery fakes
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan
 

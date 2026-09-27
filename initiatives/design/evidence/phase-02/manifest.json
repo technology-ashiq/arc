@@ -1,0 +1,76 @@
+{
+  "phase": "02",
+  "commit": "4a7f26b19d40a0fc7f6fd8ed59c03e70f23e0365",
+  "short": "4a7f26b1",
+  "generated": "2026-09-27T14:22:31Z",
+  "files": [
+    {
+      "name": "attack-0729076-r1-boundary.json",
+      "sha256": "95840bfd0b32944075ec06ef86df4f013ad78a30448d616689b853f7c2344847"
+    },
+    {
+      "name": "attack-0729076-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-1942225-r2-boundary.json",
+      "sha256": "c00ebbbdaa7b13247bc3b5e9b7f735ff4de40cf5d9023233c1c1881a6724fa9c"
+    },
+    {
+      "name": "attack-511cde0-r1-boundary.json",
+      "sha256": "50270db117759e0ca7c62793bc38b4ba9781175aa6e3d85206bc901281492bb2"
+    },
+    {
+      "name": "attack-5f89ed9-r2-boundary.json",
+      "sha256": "80d079d0ce852d7c8fac3343e35daafa1a7b6e145a92da57e4758f08526cf10f"
+    },
+    {
+      "name": "attack-657febe-r1-boundary.json",
+      "sha256": "12da762ed739831284584f7986b5e1170bede6b69c96e9890e6828c12247d1c1"
+    },
+    {
+      "name": "attack-77dc42b-r2-boundary.json",
+      "sha256": "34a4e79d58b0394a0c936841edfdb3f52dc12796a7634694a18d6321b37633b8"
+    },
+    {
+      "name": "attack-a0c0cfe-r1-boundary.json",
+      "sha256": "f8bbb6b27826cb9fc679b7849d1408dfd2e5a7fb4d290d2d2264364017bdee45"
+    },
+    {
+      "name": "attack-a83379e-r1-boundary.json",
+      "sha256": "5f8943415e26dec67b7efe772ecd8360f1c6a0f520429519dc689b10690a7389"
+    },
+    {
+      "name": "attack-b577b80-r1-boundary.json",
+      "sha256": "3e9551fbb6f84e72726e0c20eb3b6b2c8e995b91d8e8abc82f260a0427d3187c"
+    },
+    {
+      "name": "attack-c21928f-r1-boundary.json",
+      "sha256": "da2568502c59fbe771ef850ac64a17ec61c7fedf00fb4881b4ddaa66d78d35e5"
+    },
+    {
+      "name": "attack-d6ed7aa-r1-boundary.json",
+      "sha256": "32acbcb86fecdf127084cacab1abecc6aa4785b74e1eb8e55b1a12175626471e"
+    },
+    {
+      "name": "attack-d6ed7aa-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-f6c7bf0-r1-boundary.json",
+      "sha256": "b2f6fb98429ac8ffe605e0806d4362c51aa3df67931afdfba3da7ec0fef9400d"
+    },
+    {
+      "name": "attack-f6c7bf0-r1-logic.json",
+      "sha256": "28ad5abc7baccd7f421a929cb34ac0c24a670d5f2f5fcb64399768caaa619b91"
+    },
+    {
+      "name": "live-demo-real-pack.md",
+      "sha256": "d740d282ad9eb354acd41e40eef68ccdc98bce328d96bb0638eee0f03eb9cd6c"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "a045b874e1dae621ab4cbc0ca1f03eae94172d06489e56bc1d630188dd2153b0"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
-phase: 02
+phase: 03
 appetite: 12.5d
 burn: 9d
 blocked-on: —
@@ -22,7 +22,7 @@ depends-on: —
 |---|---|---|---|
 | 00 | Renderer proof + isolation — `--session` mandatory in explore mode, `(route, session)` duplicate discriminator, session-less meta refuses, stable-shutter re-proved, callers swept mechanically, and the route-keyed output path re-scoped so two renders of one route can coexist | 1.5d | ✅ 2026-08-23 |
 | 01 | Eyes + viewports + canvas gate — composer scoped-Bash render grant, iron-law read allowlist, ≤3 immutable iterations, platform-contract viewports, marker-based doc-surface gate, sibling-render negative control | 1.5d | ✅ 2026-09-17 |
-| 02 | Registry + curator — `design.sources.yaml` + lint, `design-curator` at balanced-workhorse, robots.txt preflight, real pack from the two permitted galleries, planted-PNG ignore assertion | 1.5d | pending |
+| 02 | Registry + curator — `design.sources.yaml` + lint, `design-curator` at balanced-workhorse, robots.txt preflight, real pack from the two permitted galleries, planted-PNG ignore assertion | 1.5d | ✅ 2026-09-27 |
 | 03 | Taste loop — jury amended FOUR→N, one juror at high-judgment, pack-anchored BELOW-BAR, controlled owner blind score. **Carries the taste tripwire that gates phases 05–07** | 2d | pending |
 | 04 | EXP-A1 — ADR-0070's paired harness in the new regime, prediction pre-registered, reference item present, zero writes into model-policy's sealed bundle | 0.5d | pending |
 | 05 | Live sources — shadcn + 21st.dev search wiring, `.mcp.json` under the shared-file protocol, per-run availability lines, COULD-NOT-SCAN as its own outcome | 1.5d | pending |
@@ -31,6 +31,34 @@ depends-on: —
 | 08 | Governance + retro — packager refuses non-arc renders and absent provenance, spend caps, manual-drop door, all three sealed predictions settled | 1d | pending |
 
 ## Done-log
+
+**Phase 02 — CLOSED 2026-09-27.** REQ-04 validated, as amended to ≥1 active source.
+
+- **CI.** `arc-ci` run **36324180495**, head SHA `4a7f26b1`, confirmed equal to the tip, read per
+  JOB: **19/19 green**. The ubuntu-20 leg reconciles `declared 3847, executed 3847`, 0 failures.
+  Phase 02's own suites: `design-sources.bats` 17, `design-refpack.bats` 28, and the ADR-1420
+  curator cases in `design-composer-bash.bats` (48 in the file).
+- **Live demo.** Three curator runs built the `lexos-case-workspace` pack: 6 nicelydone screens
+  in `.claude/state/`, one `sources.md` row each, refusals exercised on an off source (lapa.ninja)
+  and an off-registry host (Dribbble) before any request. The session opened every image. Two
+  principles overstated a single frame: one row was removed, one was rewritten to what is visible.
+  `evidence/phase-02/live-demo-real-pack.md`.
+- **Adversarial passes.** Boundary: seven rounds across slices B and ADR-1420 before today, then a
+  whole-diff round and three split rounds on the fixed code. **Logic ran for the first time on
+  2026-09-27**, after ADR-0226 Amendment 3 (`ARC_LLM_REASONING=off`): 15 findings on the lint;
+  zero on robots and refpack, which the debt ledger records as weak evidence. Fixed today: DNS
+  rebinding in the real transport, unguarded verdict lookups, unscrubbed separators in two files,
+  a same-host redirect to another port, a 3.5-billion-step robots matcher, the id grammar gap
+  between lint and builder. Rejected with reasons or carried to `debt-ledger.md`.
+- **Gallery reality.** Six of eight candidate galleries failed on permission (robots 403, shared
+  CDNs, terms). REQ-04 was amended to one source by the owner, with a Phase 03 trigger for
+  single-gallery bias in PLAN's ledger.
+- **Evidence:** `initiatives/design/evidence/phase-02/` (manifest verified by `arc-evidence.sh`).
+- **Metrics.** Actual ~4 build days (09-18, 09-20, 09-26, 09-27) against a 1.5d appetite.
+  `amendments: 4` (`/arc-change` 2026-09-18, 2026-09-26 ×2, 2026-09-27) · ADR-1412 amended twice,
+  ADR-1419 and ADR-1420 new, ADR-0226 Amendment 3 · `reopened: n`.
+- **Carried forward.** `phase.closed` and its approval request go out from the main clone. The
+  single-gallery trigger is tested in Phase 03.
 
 **Phase 01 — CLOSED 2026-09-17.** REQ-02 and REQ-03 validated.
 
@@ -117,7 +145,7 @@ count and panel before comparing.
 
 ## Now
 
-**Position:** **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
+**Position (2026-09-27):** **Phases 00, 01 and 02 are CLOSED; Phase 03 (taste loop) is next**, on the same branch and PR #292. Earlier position: **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
 (01 on 2026-09-17); **Phase 02 is open**, with Slice A in and Slice B's 14 red-first tests on the
 branch. Working mode
 set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-c16`, pushed
@@ -562,9 +590,8 @@ consumer projects — it carries the owner's approvals.
      single-gallery-bias trigger tested in Phase 03). The pack is 6 nicelydone screens.
      Debt: `design-robots.mjs` prints its answer then exits 127 on Windows (libuv
      `UV_HANDLE_CLOSING` assertion) — fail-closed, not a blocker.
-   - **Resume here:** read CI per job at the branch head; confirm the pack holds 5-8 screens
-     from ≥1 active source; then `/arc-phase-done 02 --lane design`; then
-     Phase 03, starting with `/arc-change` to refine its coarse spec into slices (there is no
+   - **Phase 02 CLOSED 2026-09-27** (done-log above), CI 19/19 at `4a7f26b1`.
+   - **Resume here:** Phase 03, starting with `/arc-change` to refine its coarse spec into slices (there is no
      jury runner today: N-item pack assembly, ranking collection and deviation logging all have
      to be built). Phase 03's gate is the owner's blind 0-100 score, in person.
 2. ~~**Phase 02 Slice B.**~~ Done: the robots.txt preflight and the pack builder landed at
