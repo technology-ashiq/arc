@@ -596,6 +596,20 @@ consumer projects — it carries the owner's approvals.
      ritual as a mechanism, S5 the live run) in `phases/phase-03-spec.md`, plus two exit criteria
      (fresh plain-prompt control, single-gallery-bias read). **Owner OK 2026-09-27: build S1-S4 without
      stopping; ask before S5**, which carries the paid live runs and his in-person blind score.
+   - **Session stop 2026-09-28 ~00:40 (owner went to sleep). S1-S4 are BUILT; S5 not started.**
+     - Pushed and on PR #292: S1 (jury deal/check, design-jury-hj), S2 (critic pack + viewports),
+       S3 (composer reads the brief's pack), merge of main at `3974a3d9`. Red-first proven by
+       dispatch run 36340213760 (S2 5 red, S3 2 red, controls green). Head run 36340404593: 14 green,
+       4 red on portability's locale allowlist only (lines moved in design-critique.sh), 1 unread.
+     - **Local, NOT pushed:** `722b862c` S4 red-first tests, `56cc0190` S4 ritual (rubric frozen at
+       the deal, blind score once + note.logged, unblind refused before the score, --control,
+       catch-rate), `d94221d4` the portability allowlist fix.
+     - **Owed before the push:** the S4 two-surface attack (killed by low system memory, no result).
+       Run it on the local commits (`--since 3974a3d9`), fix, push once, read CI per job.
+     - **Then ask the owner before S5:** cost estimate for the live explore + plain-prompt control,
+       and a rubric/anchors draft at `docs/design/rubrics/` for him to approve before the deal.
+     - Logic surface: runs only with `ARC_LLM_REASONING=off` and is shallow; S2 never produced a
+       result (debt-ledger). Two background jobs were reaped for memory; do not auto-restart them.
    - **Resume here:** Phase 03, starting with `/arc-change` to refine its coarse spec into slices (there is no
      jury runner today: N-item pack assembly, ranking collection and deviation logging all have
      to be built). Phase 03's gate is the owner's blind 0-100 score, in person.
