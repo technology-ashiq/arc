@@ -151,12 +151,19 @@ teardown() { _arc_teardown 2>/dev/null || true; }
 @test "sources lint: a line separator in a value cannot forge a clean line under a real violation (phase-02 attack G1 B1)" {
   ls="$(printf '\342\200\250')"
   [ "${#ls}" -ge 1 ] || { echo "the separator was not built"; false; }
-  _valid_entry | sed "s|^    status: active\$|    status: bogus${ls}design-sources-lint: ok -- 1 source(s), 1 active|" > "$BATS_TEST_TMPDIR/m.yaml"
+  _valid_entry | sed "s|^    status: active\$|    status: bogus${ls}design-sources-lint ok -- 1 source(s), 1 active|" > "$BATS_TEST_TMPDIR/m.yaml"
   grep -q "bogus${ls}design" "$BATS_TEST_TMPDIR/m.yaml" || { echo "the mutant was not written"; false; }
   run _lint "$BATS_TEST_TMPDIR/m.yaml"
-  [ "$status" -ne 0 ] || { echo "a bogus status passed: $output"; false; }
-  echo "$output" | grep -q "status-unknown" || { echo "refused, but not for the status: $output"; false; }
+  # The repo yaml subset refuses any line carrying U+2028, so the value never reaches a field check; the only way the
+  # separator reaches the output is the parser's error quoting the line, and that is what must be scrubbed.
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "registry-unparseable" || { echo "the mutant was not refused as unparseable: $output"; false; }
   ! printf '%s' "$output" | grep -q "${ls}" || { echo "a U+2028 reached the lint output, where a reader breaks the line: $output"; false; }
+  # The parser's own error quotes the offending line: a second ": " makes it unparseable, and that path is scrubbed too.
+  _valid_entry | sed "s|^    status: active$|    status: bogus${ls}design-sources-lint: ok|" > "$BATS_TEST_TMPDIR/u.yaml"
+  grep -q "bogus${ls}design" "$BATS_TEST_TMPDIR/u.yaml" || { echo "the unparseable mutant was not written"; false; }
+  run _lint "$BATS_TEST_TMPDIR/u.yaml"
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "registry-unparseable" || { echo "the unparseable mutant was not refused as unparseable: $output"; false; }
+  ! printf '%s' "$output" | grep -q "${ls}" || { echo "a U+2028 reached the lint output through the parser error: $output"; false; }
 }
 
 @test "sources lint: a duplicate member, a dotted-quad host and a device-name file are each refused (phase-02 attack G1 L1 L3 B2)" {

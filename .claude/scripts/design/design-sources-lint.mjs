@@ -50,11 +50,14 @@ const findings = [];
 // `ok` line under a real violation (phase-02 attack G1 B1, the twin of refpack's field()).
 const clean = (v) => String(v).replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g, " ");
 const fail = (id, code, msg) => findings.push(clean(`ERR  [${code}] ${id}: ${msg}`));
+// Every line this tool prints goes through clean(): a path, a parser error and an OS message carry remote or registry
+// text too, and the parser's error quoted the forged line whole (phase-02 CI, the twin of G1 B1).
+const out = (line) => console.log(clean(line));
 
 const target = process.argv[2] ? resolve(process.argv[2]) : join(ROOT, "design.sources.yaml");
 // A Windows device name as the file blocks a read on the console instead of failing (phase-02 attack G1 B2).
 if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i.test(basename(target))) {
-  console.log(`ERR  [registry-device-name] ${clean(target)} names a device, not a file`);
+  out(`ERR  [registry-device-name] ${clean(target)} names a device, not a file`);
   process.exit(1);
 }
 
@@ -62,13 +65,13 @@ if (!existsSync(target)) {
   // A missing registry is a NAMED refusal. Returning 0 here would make "no registry" and "a
   // clean registry" the same observable, which is the exact shape that lets a gate certify its
   // own absence.
-  console.log(`ERR  [registry-missing] no registry at ${target} -- a permission surface that is absent is not a permission surface that is empty`);
+  out(`ERR  [registry-missing] no registry at ${target} -- a permission surface that is absent is not a permission surface that is empty`);
   process.exit(1);
 }
 
 let text;
 try { text = readFileSync(target, "utf8"); }
-catch (e) { console.log(`ERR  [registry-unreadable] ${target}: ${e.code || e.message}`); process.exit(1); }
+catch (e) { out(`ERR  [registry-unreadable] ${target}: ${e.code || e.message}`); process.exit(1); }
 
 // Parse through the repo's OWN frozen subset, never a general YAML library. Two readers of one
 // file drift the first time either is touched, and this file is consumed by the curator through
@@ -77,7 +80,7 @@ let parseYamlSubset;
 try {
   ({ parseYamlSubset } = await import(pathToFileURL(join(ROOT, ".claude", "scripts", "engine", "yaml-subset.mjs")).href));
 } catch (e) {
-  console.log(`ERR  [parser-missing] cannot load the repo yaml subset: ${e.message}`);
+  out(`ERR  [parser-missing] cannot load the repo yaml subset: ${e.message}`);
   process.exit(1);
 }
 
@@ -85,17 +88,17 @@ try {
 // attack G1 B3).
 let parsed;
 try { parsed = parseYamlSubset(text); }
-catch (e) { console.log(`ERR  [registry-unparseable] ${target}: ${e && e.message ? e.message : "parser threw"}`); process.exit(1); }
+catch (e) { out(`ERR  [registry-unparseable] ${target}: ${e && e.message ? e.message : "parser threw"}`); process.exit(1); }
 if (!parsed || parsed.ok === false) {
   const err = parsed && parsed.error ? JSON.stringify(parsed.error) : "unparseable";
-  console.log(`ERR  [registry-unparseable] ${target}: ${err}`);
+  out(`ERR  [registry-unparseable] ${target}: ${err}`);
   process.exit(1);
 }
 const doc = parsed.doc ?? parsed.value ?? parsed;
 
 const sources = doc && doc.sources;
 if (!Array.isArray(sources) || sources.length === 0) {
-  console.log("ERR  [registry-empty] the registry declares no sources -- an empty result set is the one thing a broken reader and a clean file agree on");
+  out("ERR  [registry-empty] the registry declares no sources -- an empty result set is the one thing a broken reader and a clean file agree on");
   process.exit(1);
 }
 
@@ -185,9 +188,9 @@ for (const s of sources) {
 }
 
 if (findings.length) {
-  for (const f of findings) console.log(f);
-  console.log(`design-sources-lint: ${findings.length} finding(s) in ${sources.length} source(s)`);
+  for (const f of findings) out(f);
+  out(`design-sources-lint: ${findings.length} finding(s) in ${sources.length} source(s)`);
   process.exit(1);
 }
-console.log(`design-sources-lint: ok -- ${sources.length} source(s), ${sources.filter((s) => s.status === "active").length} active`);
+out(`design-sources-lint: ok -- ${sources.length} source(s), ${sources.filter((s) => s.status === "active").length} active`);
 process.exit(0);
