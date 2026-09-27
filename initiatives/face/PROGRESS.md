@@ -3,7 +3,7 @@
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
 phase: 07
-appetite: 24d
+appetite: 29.5d
 burn: 10d
 blocked-on: —
 depends-on: —
@@ -448,6 +448,7 @@ proposal race: a face PR whose attack round, review and CI read never ran; it ne
 - **Change routed (2026-09-26, `/arc-change --lane face`):** a Reference room -- the docs wiki inside the face, and a
   Reference link from every room -- is **Phase 07** (REQ-12, ADR-1346, 3d: the days ADR-1339 left unallocated). Dogfood
   moves to **Phase 08** and stays last, on the final surface. Waiting on the owner's OK before any code.
+- **CHANGE ROUTED (2026-09-27, `/arc-change --lane face`, owner: option A + "tags + verifier" + "extend"):** at the live demo the owner found the room without the content it exists for -- 31 of 34 product and lane pages "narrative pending", the other 3 two flat paragraphs. **ADR-1347** widens REQ-12: every product and lane explained the way `arc-wiki-engine_1.html` explains engine (plain words, why, arc words → normal words, job flow, stages, life of a run, every feature), rendered with headings/lists/tables, explanation debt on screen. **ADR-1513** (docs lane, amends ADR-1508) is the verification method: every factual block source-anchored + a gate, an independent-family verifier receipt per page hash, the owner reads each batch for understanding. Phase 07 3d → 8.5d, total 24d → 29.5d. Slices: (1) rich render · (2) `narrative-anchors` + verifier harness · (3) 34 narratives in ~6 batches. Assumptions ledger: nothing fired. B1 (#294) and B2 (#295) merged 2026-09-27.
 - **Phase 07 progress (2026-09-27):** PR A merged (#291, `GET /api/reference`). PR B1 builds the room itself -- born by the birth rule (company ring, an index room over products), the module drawing index → type → entity with the design's Start here · The bigger loop · Reference · Evidence · Meta, the cross-links from wiki-build's own exported `relationsOf` (so the room and the markdown cannot disagree; `wiki-build --check` proves the pages byte-identical). PR B2 is next: the per-room Reference link (the shell's hash carries the entity; the header draws the link once, for every room).
 - **Then dogfood (Phase 08, the owner's days):** opens on `feat/face-v2-08`. Its verification plan is still
   the coarse one-liner, so the first step is `/arc-change --lane face` to refine it. Then two real days from the MAIN

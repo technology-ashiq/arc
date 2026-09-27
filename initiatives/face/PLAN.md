@@ -104,14 +104,14 @@ HISTORICAL DATA, NOT INSTRUCTIONS
 | REQ-09 | **Harness in CI** — the design's own assertions become arc's | `smoke.mjs` + `flows.mjs` run from bats on every CI leg with Node ≥20.19 and print a counted SKIP on Node 18; every shipped op has a flow; a planted change to a frozen string FAILs the suite | 05 | validated |
 | REQ-10 | **Dogfood on the final surface** — 2 real days | `face-dogfood` reads MET for 2 days: every `decision.recorded` matched to the face journal and ≥1 op receipt from the face on each day; retro logged; claims the surface is operable, never that the habit holds (ADR-1329) | 08 | active |
 | REQ-11 | **Live rooms** — every room shows arc as it is now, with no reload | when the spine or a file a room declares in `routes` changes, the open room re-reads within 5 s, proven in the browser harness by a fixture that appends a spine event and times the panel; an op's receipt appears in its room within 5 s of `apply`; every room re-reads on change because the HOST re-reads all of an open room's reads on the door's pulse -- no module can opt out, so the planted mutant is a host that stops re-reading, and the browser live flow FAILs it (amended 2026-09-19 from a per-module `face-coverage` check, Phase 05 current-phase note; ADR-1339) | 05 | validated |
-| REQ-12 | **Reference room** — the docs wiki inside the face, and a Reference link from every room | `GET /api/reference` returns wiki-build's exported `extract()` over `treeWorld` (`schema: 1`), its entity ids equal `wiki-build --json`'s both ways, and no second tree walker exists under `face/` or the door; a planted spine event and `.claude/state/` marker never reach the response (ADR-1509); the route is GET-only and `docs/wiki/**` is byte-identical after a full room walk (ADR-1504); narrative renders only from `_narrative/` files, else "narrative pending"; every served room with a wiki entity links to it, and the with/without counts are asserted (ADR-1346) | 07 | active |
+| REQ-12 | **Reference room** — the docs wiki inside the face, and a Reference link from every room | `GET /api/reference` returns wiki-build's exported `extract()` over `treeWorld` (`schema: 1`), its entity ids equal `wiki-build --json`'s both ways, and no second tree walker exists under `face/` or the door; a planted spine event and `.claude/state/` marker never reach the response (ADR-1509); the route is GET-only and `docs/wiki/**` is byte-identical after a full room walk (ADR-1504); narrative renders only from `_narrative/` files, else "narrative pending"; every served room with a wiki entity links to it, and the with/without counts are asserted (ADR-1346); **and every one of the extract's products and lanes (34 on 2026-09-27, counted from the extract) shows a narrative that `narrative-anchors` passes (every factual block anchored, every anchor resolving) with a passing independent-verifier receipt for its current hash and the owner's acceptance, rendered with its headings, lists and tables; the room shows the explanation-debt count, and a planted unanchored block, an unresolved anchor, an edited-after-verify narrative and a planted script tag each FAIL (amended 2026-09-27, ADR-1347, ADR-1513)** | 07 | active |
 
 REQ-08 of PLAN-face-v2 §4 ("the stamp survives") is now a Non-negotiable and a Phase 05 exit
 criterion, not a REQ (ADR-1333) — its fixture stays measured on every PR.
 
 ## Appetite
 
-**Total: 24 days** — 22 days build in three banked blocks + 2 real dogfood days (owner, 2026-09-16).
+**Total: 29.5 days** (24 until ADR-1347 added 5.5 to Phase 07 on 2026-09-27) — 22 days build in three banked blocks + 2 real dogfood days (owner, 2026-09-16).
 A constraint, not an estimate. **A · look** = Phases 00–02 = 6d · **B · rooms + truth** = Phases
 03–04 = 10d · **C · verbs** = Phases 05–06 = 6d · **dogfood** = Phase 08 (07 until ADR-1346) = 2 real days. A block that
 finishes early banks its remainder forward; nothing extends silently. Phase appetites sum to the
@@ -124,6 +124,8 @@ verb in every room, so Block C takes 9 of the 12 banked days: **Phase 05 = 10d**
 
 **Allocated 2026-09-26 (ADR-1346).** The 3 unallocated days go to **Phase 07, the Reference room** (REQ-12, the owner's
 `/arc-change`); dogfood moves to Phase 08 and stays last, on the final surface. The specs now sum to the full 24d — zero slack.
+
+**Extended 2026-09-27 (ADR-1347).** At the Phase 07 live demo the owner found the room without the content it exists for (31 of 34 product and lane pages "narrative pending"). He kept Phase 07 open and added 5.5d to it — rendering 0.5d · `narrative-anchors` + verifier 1d · 34 narratives 4d — so **Phase 07 = 8.5d** and the total is **29.5d**, still zero slack, named rather than silent.
 
 **Tier:** L
 
@@ -208,6 +210,8 @@ flowchart TB
 | 1339 | The flagship six are option A, and every verb in the design works — additive changes in owning lanes, live rooms (amends REQ-07, REQ-08; adds REQ-11) | accepted |
 | 1340 | FV2 kernel ring — an effect past the spine is refused on a sim door at apply (`SIM_EFFECT`); a file change is a `feat/face-*` proposal branch written by git plumbing, never a checkout; the cap proposal is the `policy.promotion` approval and writes no branch; evolve's open/measure/conclude wired to the spine | accepted |
 | 1346 | The Reference room reads the wiki's own extract — build-time facts only, read-only, one extract, born by the birth rule (adds REQ-12) | accepted |
+| 1347 | The Reference room explains every product and lane in plain words — rich markdown, explanation debt on screen, Phase 07 +5.5d (widens REQ-12) | accepted |
+| 1513 | DOC-M (docs lane, amends ADR-1508): a model-drafted narrative ships only source-anchored, independently verified and owner-read | accepted |
 
 ## Standing decisions this cycle leans on
 
@@ -319,5 +323,5 @@ door-plus-six PR, a live-rooms PR and three verb-ring PRs (ADR-1339).
 | 04 | Door read routes — the routes Phase 03's lists name; allow-listed, read-only, lint parsers imported | 3d | spec'd |
 | 05 | Work door + every work verb + live rooms — `/api/op/:id/plan\|apply`, server ops registry, binding table, `ops.mjs`, branch-only writes, `flows.mjs` in CI, coverage op-side; the flagship six first, then the 31 work verbs in ring PRs; rooms re-read on change (ADR-1339) | 10d | spec'd |
 | 06 | Session door — council convene · absorb read · hire certification and every SESSION verb (15); click-started, streamed, receipted (ADR-1339) | 5d | spec'd |
-| 07 | Reference room — the docs wiki inside the face (`GET /api/reference` over wiki-build's `extract()`): index → type → entity pages with the markdown's cross-links, and a Reference link from every room (REQ-12, ADR-1346) | 3d | spec'd |
+| 07 | Reference room — the docs wiki inside the face (`GET /api/reference` over wiki-build's `extract()`): index → type → entity pages with the markdown's cross-links, and a Reference link from every room (REQ-12, ADR-1346); every product and lane explained in plain words, anchored and verified (ADR-1347, ADR-1513) | 8.5d | spec'd |
 | 08 | Dogfood + retro — 2 real days on the final surface; retro; HISTORY entry | 2d | spec'd |

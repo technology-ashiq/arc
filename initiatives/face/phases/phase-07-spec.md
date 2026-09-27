@@ -1,7 +1,7 @@
 # Phase 07 — The Reference room: the wiki inside the face, and a Reference link from every room
 
 **Goal (one line):** REQ-12 — the face serves `docs/wiki`'s own extract on a read route and renders it as a Reference room (index → type → entity pages, with the markdown's cross-links), and every room carries a Reference link to its entity's page (ADR-1346).
-**Appetite:** 3 days (the 3d left unallocated by ADR-1339's re-bank; the phase specs now sum to the full 24d, zero slack)
+**Appetite:** 8.5 days (3 from ADR-1339's re-bank + 5.5 added by ADR-1347 on 2026-09-27: rendering 0.5 · narrative-anchors + verifier 1 · 34 narratives 4; the specs sum to the full 29.5d, zero slack)
 **Depends on:** phase-04, phase-06
 **Serves:** REQ-12
 **Branch:** `feat/face-v2-07`
@@ -16,6 +16,11 @@
 - [ ] **Narrative honest (ADR-1508):** Start here / The bigger loop render `docs/wiki/_narrative/<dir>/<id>.md` with the fingerprint line stripped; an entity with no narrative file reads "narrative pending" — a fixture holds both arms.
 - [ ] **Born by the birth rule (ADR-1306):** contract row in `expected-set.json`, `rooms.generated.json` via `face-sections.mjs`, a module under `face/src/modules/`; face-coverage green both directions; wiki-build run in the same PR (the room's product/room rows change what the wiki lists).
 - [ ] **Per-room Reference link (ADR-1346 §6):** every served room whose product or lane has a wiki entity links to that entity's page; the counts of rooms with and without a link are asserted, not assumed.
+- [ ] **Rich narrative (ADR-1347 §2):** the fold parses narrative markdown into blocks (heading, paragraph, list, table, code) and the View draws them -- no HTML injection; a fixture holds every block kind, and a planted `<script>` and an `onerror=` render as text.
+- [ ] **Anchored (ADR-1513 §1):** `narrative-anchors` FAILs a factual block with no `src`/`plain` marker, an anchor that does not resolve (path, ADR, extract fact), and a `plain` block naming a file, command, ADR or number; each arm FAILs from birth with its mutant; the markers never reach a rendered page (wiki or room).
+- [ ] **Verified (ADR-1513 §2):** every shipped narrative has `_verify/<dir>/<id>.json` with all blocks SUPPORTED, the verifier on the independent-family tier, and a sha256 equal to the file's; an edit after verification FAILs the gate.
+- [ ] **Owner-read (ADR-1513 §3):** every receipt carries `accepted: { by: "owner" }`; the owner read each batch in the room.
+- [ ] **All of it (ADR-1347 §1):** all 34 product and lane pages (counted from the extract) show a shipped narrative; the explanation-debt count is on the index and each page names what its narrative does not yet explain.
 - [ ] Two fresh attackers (logic · boundary); CI green per job; `/arc-phase-done 07` from the main clone.
 
 ## Verification plan
