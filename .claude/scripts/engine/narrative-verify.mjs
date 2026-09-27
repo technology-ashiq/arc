@@ -74,6 +74,8 @@ export const CHUNK_BYTES = 25000;
 export const CHUNK_TRIES = 2;
 /** Chunks of one page run at once. */
 export const CHUNK_PARALLEL = 4;
+/** One child's stdout + stderr, at most. */
+const CHILD_OUTPUT_CAP = 16 * 1024 * 1024;
 
 /** A node child, awaited: its exit status and its whole stdout/stderr. */
 function runNode(/** @type {string[]} */ args) {
@@ -81,10 +83,20 @@ function runNode(/** @type {string[]} */ args) {
     const child = spawn(process.execPath, args, { cwd: ROOT, env: childEnv(process.env), stdio: ["ignore", "pipe", "pipe"] });
     /** @type {Buffer[]} */ const out = [];
     /** @type {Buffer[]} */ const err = [];
-    child.stdout.on("data", (b) => out.push(b));
-    child.stderr.on("data", (b) => err.push(b));
+    // Capped like the spawnSync maxBuffer it replaced: four runaway children at once could exhaust memory (attack
+    // 2436d05 B3). Past the cap the child is killed and the run reports it by name.
+    let bytes = 0, over = false;
+    const take = (/** @type {Buffer[]} */ into) => (/** @type {Buffer} */ b) => {
+      bytes += b.length;
+      if (bytes > CHILD_OUTPUT_CAP) { if (!over) { over = true; try { child.kill(); } catch { /* gone */ } } return; }
+      into.push(b);
+    };
+    child.stdout.on("data", take(out));
+    child.stderr.on("data", take(err));
     child.on("error", (e) => done({ status: null, stdout: "", stderr: `arc-run: could not start: ${e.message}` }));
-    child.on("close", (code) => done({ status: code, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8") }));
+    child.on("close", (code) => done(over
+      ? { status: null, stdout: "", stderr: `arc-run: its output passed ${CHILD_OUTPUT_CAP} bytes and it was stopped` }
+      : { status: code, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8") }));
   });
 }
 
@@ -177,8 +189,10 @@ export function inputFor(page, text, t, skip = new Set()) {
   };
   for (const b of blocks) {
     if (skip.has(b.n)) continue;
-    const line = `[${b.n}] ${b.kind}: ${withheld(b.text)}\n    ${b.plain ? "plain (cites nothing)" : `anchors: ${b.anchors.map(label).join("; ")}`}`;
-    const added = line.length + b.anchors.reduce((n, a) => n + excerptFor(a, [b.text], t).length, 0);
+    // The block text gets the same joined-view scan as a source (attack 2436d05 B2), and the budget below counts what
+    // is actually sent, after withholding (B4).
+    const line = `[${b.n}] ${b.kind}: ${scanned(withheld(b.text))}\n    ${b.plain ? "plain (cites nothing)" : `anchors: ${b.anchors.map(label).join("; ")}`}`;
+    const added = line.length + b.anchors.reduce((n, a) => n + scanned(withheld(excerptFor(a, [b.text], t))).length, 0);
     if (cur.numbers.length && cur.bytes + added > CHUNK_BYTES) flush();
     cur.lines.push(line);
     for (const a of b.anchors) cur.cites.set(a, [...(cur.cites.get(a) || []), b.text]);
@@ -216,15 +230,19 @@ async function prune(page) {
   const text = t.narratives[page];
   const file = join(ROOT, VERIFY_DIR, `${page}.json`);
   if (text === undefined || !existsSync(file)) return usage(`no narrative or no receipt for ${page}`);
-  const r = JSON.parse(readFileSync(file, "utf8"));
-  if (r.sha256 !== sha256(text)) return usage(`the receipt for ${page} judged other text -- verify it first`);
+  let r;
+  try { r = JSON.parse(readFileSync(file, "utf8")); } catch { return usage(`the receipt for ${page} is not JSON -- verify the page again`); }
+  if (!r || typeof r !== "object" || r.sha256 !== sha256(text)) return usage(`the receipt for ${page} judged other text -- verify it first`);
   const bad = new Set((Array.isArray(r.verdicts) ? r.verdicts : []).filter((v) => v && v.verdict !== "SUPPORTED").map((v) => v.block));
   const blocks = blocksOf(text);
   const drop = new Set();
   for (const b of blocks) if (bad.has(b.n)) for (let l = b.line; l <= b.end; l++) drop.add(l);
   const lines = text.split(/\r?\n/);
   const kept = lines.filter((_, i) => !drop.has(i + 1)).join("\n").replace(/\n{3,}/g, "\n\n");
-  writeFileSync(join(ROOT, "docs", "wiki", "_narrative", `${page}.md`), kept);
+  const target = join(ROOT, "docs", "wiki", "_narrative", `${page}.md`);
+  // A fixer may have saved the page since it was read: re-read and compare, and never overwrite newer text (B5).
+  if (sha256(readFileSync(target, "utf8")) !== sha256(text)) return usage(`${page} changed while it was being pruned -- nothing written; verify it again`);
+  writeFileSync(target, kept);
   console.log(`pruned ${page}: ${bad.size} block(s) removed, ${blocks.length - bad.size} kept -- verify it again`);
   return 0;
 }

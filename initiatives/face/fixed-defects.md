@@ -901,3 +901,8 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **One budget shared by every citing block** -- one block's windows crowded out another's in the same long file. *Windows per block, and a long line clipped around the block's words.*
 - **A re-rolled verdict** -- the verifier is not deterministic; re-judging unchanged text flipped settled blocks both ways (bench 57 -> 53). *Carry a SUPPORTED verdict by the exact block key; judge only changed blocks.*
 - **A key-shaped file name** -- `...-risk-checkpoints-...` matched the openai-key rule and withheld a whole line, and fixture keys in sources stopped chunks at the data boundary. *Rewrite only an all-lowercase hyphenated `sk-` run; withhold every other secret-shaped span by rule name; withhold a whole excerpt the run's own scanner would still refuse.*
+- **One reader guarded, its twin not** -- verify() caught a corrupt receipt, prune() a few lines away crashed on it (attack 2436d05 B1). *Every reader of the same file gets the same guard.*
+- **Sources scanned, blocks not** -- the joined-view secret scan ran over source excerpts but never over the block text in the same payload (B2). *Everything assembled into one input passes the same scans.*
+- **A cap dropped in a refactor** -- spawnSync's 16 MB maxBuffer vanished when the call became an async spawn run four at a time (B3). *A rewrite of a bounded call keeps its bound.*
+- **Budgeted on raw text, sent transformed** -- chunk sizes counted excerpts before withholding grew them (B4). *Count what is sent.*
+- **Read, check, write stale** -- prune checked the hash once and wrote a text derived from that read after a fixer might have saved (B5). *Re-read and compare right before a write.*
