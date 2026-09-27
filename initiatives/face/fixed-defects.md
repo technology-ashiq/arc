@@ -893,3 +893,11 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A second walker, in the lane that forbids it** -- narrative-anchors listed directories and spawned `git ls-files`; DOC-A (ADR-1501) allows neither under `.claude/scripts/docs/` (CI red on every leg). *Narratives come from wiki-coverage's pageTree, receipts by named path, ADR numbers from the extract; the tool that spawns arc-run lives in engine, beside arc-attack.*
 - **A count printed before the checks it counted** -- reference-fold's RAN line sat above the checks appended after it, so it said 17 while 20 ran. *The RAN line is the last statement before the exit code, always.*
 - **A fixture key in a cited source stopped a verifier chunk** at the data boundary. *Source lines that match a secret rule are withheld by name (liveLine) before anything is sent.*
+
+## Phase 07 slice 3 -- the verifier run across 34 pages (harness defects found by running it)
+
+- **A whole page inlined** -- 160-835 KB inputs timed out on every model. *Chunk (<=25 KB, four at a time) and send excerpts, never whole long files.*
+- **A source's first page** -- a 5 KB cap judged claims further down a long PLAN or retro log unsupported while the file said them word for word. *Send each block its own windows: the lines that share the most words with that block.*
+- **One budget shared by every citing block** -- one block's windows crowded out another's in the same long file. *Windows per block, and a long line clipped around the block's words.*
+- **A re-rolled verdict** -- the verifier is not deterministic; re-judging unchanged text flipped settled blocks both ways (bench 57 -> 53). *Carry a SUPPORTED verdict by the exact block key; judge only changed blocks.*
+- **A key-shaped file name** -- `...-risk-checkpoints-...` matched the openai-key rule and withheld a whole line, and fixture keys in sources stopped chunks at the data boundary. *Rewrite only an all-lowercase hyphenated `sk-` run; withhold every other secret-shaped span by rule name; withhold a whole excerpt the run's own scanner would still refuse.*

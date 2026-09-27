@@ -86,8 +86,27 @@ VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
   [[ "$output" == *"env ARC_VERIFY_MODEL,PATH"* ]] || { echo "$output"; false; }
 }
 
-@test "docs-narrative: this suite registers all 7 of its tests" {
+@test "narrative-verify: a carried block is never re-sent, and a long source goes as each block's own windows, not its first page" {
+  run node --input-type=module -e "
+    import { pathToFileURL } from 'node:url';
+    const v = await import(pathToFileURL(process.argv[1]).href);
+    const filler = Array.from({ length: 400 }, (_, i) => 'filler line ' + i + ' about nothing in particular at all').join('\n');
+    const src = filler + '\nThe gate refuses a symlinked narrative by name.\n' + filler;
+    const t = { wiki: { entities: {} }, tree: { read: () => src } };
+    const text = 'First claim. <!-- src: a/long.md -->\n\nThe gate refuses a symlinked narrative. <!-- src: a/long.md -->\n';
+    const all = v.inputFor('products/demo', text, t);
+    const skip = v.inputFor('products/demo', text, t, new Set([1]));
+    const sent = skip.chunks.flatMap((c) => c.numbers);
+    const ex = v.excerptFor('a/long.md', ['The gate refuses a symlinked narrative.'], t);
+    console.log('carry ' + (JSON.stringify(sent) === '[2]' && all.chunks.flatMap((c) => c.numbers).length === 2 ? 'skips' : 'RESENDS')
+      + ' window ' + (ex.includes('refuses a symlinked narrative by name') && ex.length < src.length ? 'found' : 'MISSED'));
+  " "$VERIFY"
+  [[ "$output" == *"carry "* ]] || { echo "the probe never ran (exit $status): $output"; false; }
+  [[ "$output" == *"carry skips window found"* ]] || { echo "$output"; false; }
+}
+
+@test "docs-narrative: this suite registers all 8 of its tests" {
   local n
   n="$(grep -c '^@test ' "$ARC_ROOT/tests/docs-narrative.bats")"
-  [ "$n" -eq 7 ] || { echo "registered $n tests, expected 7"; false; }
+  [ "$n" -eq 8 ] || { echo "registered $n tests, expected 8"; false; }
 }

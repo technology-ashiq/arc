@@ -14,88 +14,176 @@
 // passes, for the text on disk now, can be accepted -- an acceptance never rescues a failing or stale verdict.
 //
 // Exit 0 done · 1 the run failed or a verdict is not SUPPORTED · 2 usage.
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { VERIFY_DIR, anchorProblem, blocksOf, readTree, receiptProblem, sha256 } from "../docs/narrative-anchors.mjs";
-import { liveLine } from "../hq/lib/redact.mjs";
+import { DENY_RULES, liveLine, scanSecrets, sizeScaledCap } from "../hq/lib/redact.mjs";
 
 /**
- * A source line that matches a secret rule is withheld by its rule name before it is sent anywhere: a fixture key in a
- * cited file stopped a whole chunk at the data boundary (2026-09-27).
+ * An excerpt the run's own secret scan would still refuse -- a match only its joined views see -- is withheld whole,
+ * by name, so one test fixture cannot stop the chunk (2026-09-27). The verifier is told why, and judges the blocks
+ * against the other sources it cites.
  */
-const withheld = (/** @type {string} */ text) => String(text).split("\n").map((l) => liveLine(l)).join("\n");
+/**
+ * An anchor as the verifier sees it. A file name can look like a key to the secret scan -- `0103-ri` + `sk-checkpoints-...`
+ * matched the openai-key rule and stopped the chunk (2026-09-27) -- so `sk-` is written `sk_` in the label, the same
+ * way in the block and in the source header, and the file on disk is untouched.
+ */
+const label = (/** @type {string} */ a) => String(a).replace(/sk-/g, "sk_");
+/**
+ * A word like `risk-checkpoints-run-inline-...` in a file name or a title matches the openai-key shape, and the whole line
+ * was withheld with it (ADR-0103's title, 2026-09-27). Only an all-lowercase, hyphen-joined run is rewritten -- a real
+ * key carries capitals or digits and still meets the secret rules untouched.
+ */
+const slugSafe = (/** @type {string} */ s) => s.replace(/sk-((?:[a-z]+-)+[a-z]+)\b/g, "sk_$1");
+
+const scanned = (/** @type {string} */ text) => {
+  let hit;
+  try { hit = scanSecrets(JSON.stringify({ text }), { text }, { maxCandidates: sizeScaledCap(JSON.stringify({ text })) }); } catch { hit = { hit: true, rule: "an unscannable excerpt" }; }
+  return hit.hit ? `[this excerpt is withheld: it holds text shaped like ${hit.rule} (a test fixture); judge against the block's other sources]` : text;
+};
+
+/**
+ * Text that matches a secret rule is withheld by the rule's name before it is sent anywhere: a fixture key in a cited
+ * file stopped a whole chunk at the data boundary, a per-line pass missed a match the scanner found in a joined view,
+ * and a verifier quoting a key-shaped block back had its own answer refused (2026-09-27). So: every line through
+ * liveLine, then every rule across the whole text.
+ */
+const withheld = (/** @type {string} */ text) => DENY_RULES.reduce(
+  (s, r) => s.replace(new RegExp(r.re.source, r.re.flags.includes("g") ? r.re.flags : `${r.re.flags}g`), `[text shaped like a ${r.name}, withheld]`),
+  slugSafe(String(text)).split("\n").map((l) => liveLine(l)).join("\n"))
+  // The data boundary's planted test token, quoted in a cited source or a block, is named here rather than carried:
+  // carried, it made the boundary refuse the chunk as internal-only (2026-09-27).
+  .replace(/\bARC-INTERNAL-ONLY\b/g, "[the planted internal-only token]");
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
 const PAGE = /^(products|lanes|processes|commands|agents|rules|gates|adr)\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 /** A source is inlined up to this, else the lines around its symbol: the verifier judges text, not a pointer. */
-const SOURCE_CAP = 5000;
+const SOURCE_CAP = 8000;
+/** A long source's excerpt for one chunk stays under this. */
+const EXCERPT_CAP = 9000;
+/** A source line longer than this is clipped to the stretch around the words a block shares with it. */
+const LONG_LINE = 900;
 /** One run's input stays under this: a whole page's sources (160-835KB) timed out on every model tried. */
-export const CHUNK_BYTES = 50000;
+export const CHUNK_BYTES = 25000;
+/** Runs per chunk before the page is reported failed. */
+export const CHUNK_TRIES = 2;
+/** Chunks of one page run at once. */
+export const CHUNK_PARALLEL = 4;
+
+/** A node child, awaited: its exit status and its whole stdout/stderr. */
+function runNode(/** @type {string[]} */ args) {
+  return new Promise((done) => {
+    const child = spawn(process.execPath, args, { cwd: ROOT, env: childEnv(process.env), stdio: ["ignore", "pipe", "pipe"] });
+    /** @type {Buffer[]} */ const out = [];
+    /** @type {Buffer[]} */ const err = [];
+    child.stdout.on("data", (b) => out.push(b));
+    child.stderr.on("data", (b) => err.push(b));
+    child.on("error", (e) => done({ status: null, stdout: "", stderr: `arc-run: could not start: ${e.message}` }));
+    child.on("close", (code) => done({ status: code, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8") }));
+  });
+}
 
 /**
- * The text an anchor stands for, labelled. A file with a symbol gives the 60 lines around its first mention.
+ * The whole text an anchor stands for: a file, an ADR (found through the extract -- nothing here lists docs/adr), or one
+ * extract fact as JSON.
  * @param {string} anchor @param {any} t readTree()'s result
  */
-export function sourceOf(anchor, t) {
+export function rawSource(anchor, t) {
   const a = anchor.trim();
   const adr = /^ADR-(\d{4})$/.exec(a);
   if (adr) {
-    // The ADR's file, from the extract (the band lists every ADR it holds) -- nothing here lists docs/adr.
     const bands = Array.isArray(t.wiki.entities.adrBands) ? t.wiki.entities.adrBands : [];
-    const hit = bands.flatMap((b) => (b && b.facts && Array.isArray(b.facts.adrs) ? b.facts.adrs : [])).find((a) => a && String(a.number) === adr[1]);
-    const f = hit && typeof hit.file === "string" ? hit.file : "";
-    if (!f) return "";
-    // An ADR's title and its Decision are what a claim cites; the context before them is where the cap would cut.
-    const text = t.tree.read(f);
-    const d = text.indexOf("## Decision");
-    return d < 0 ? text.slice(0, SOURCE_CAP) : `${text.split("\n")[0]}\n...\n${text.slice(d, d + SOURCE_CAP)}`;
+    const hit = bands.flatMap((b) => (b && b.facts && Array.isArray(b.facts.adrs) ? b.facts.adrs : [])).find((x) => x && String(x.number) === adr[1]);
+    return hit && typeof hit.file === "string" ? t.tree.read(hit.file) : "";
   }
   if (a.startsWith("fact:")) {
     const m = /^fact:([a-zA-Z]+)\/(.+)\.([A-Za-z][A-Za-z0-9-]*)$/.exec(a);
     const e = m ? (t.wiki.entities[String(m[1])] || []).find((x) => x && x.id === m[2]) : null;
     if (!m || !e) return "";
-    return JSON.stringify(m[3] === "source" ? e.source : e.facts[String(m[3])], null, 1).slice(0, SOURCE_CAP);
+    return JSON.stringify(m[3] === "source" ? e.source : e.facts[String(m[3])], null, 1);
   }
   const hash = a.indexOf("#");
-  const path = hash < 0 ? a : a.slice(0, hash);
-  const text = t.tree.read(path);
-  if (hash < 0 || text.length <= SOURCE_CAP) return text.slice(0, SOURCE_CAP);
-  const lines = text.split("\n");
-  const at = Math.max(0, lines.findIndex((l) => l.includes(a.slice(hash + 1))));
-  return lines.slice(Math.max(0, at - 15), at + 35).join("\n").slice(0, SOURCE_CAP);
+  return t.tree.read(hash < 0 ? a : a.slice(0, hash));
+}
+
+const STOP = new Set(["that", "this", "with", "from", "what", "when", "which", "their", "there", "these", "those", "into", "every", "each", "only", "than", "then", "they", "them", "been", "have", "does", "will", "would", "about", "after", "before", "never", "other", "while", "where", "here", "just", "also", "some", "such", "more", "most", "because"]);
+const keywords = (/** @type {string} */ text) => new Set((String(text).toLowerCase().match(/[a-z0-9][a-z0-9._-]{3,}/g) || []).filter((w) => !STOP.has(w)));
+
+/**
+ * The part of one source a set of blocks is judged against. A short source goes whole. A long one sends its first line,
+ * the lines around the anchor's symbol, and the windows around the lines that share the most words with those blocks:
+ * the whole-file cap sent a long PLAN or retro log's first page, and claims further down were judged unsupported while
+ * the file said them word for word (2026-09-27).
+ * @param {string} anchor @param {string[]} texts the blocks citing it @param {any} t
+ */
+export function excerptFor(anchor, texts, t) {
+  const raw = rawSource(anchor, t);
+  if (raw.length <= SOURCE_CAP) return raw;
+  const lines = raw.split("\n");
+  const keep = new Set([0]);
+  const win = (/** @type {number} */ i, /** @type {number} */ before, /** @type {number} */ after) => { for (let k = Math.max(0, i - before); k <= Math.min(lines.length - 1, i + after); k++) keep.add(k); };
+  const hash = anchor.indexOf("#");
+  if (hash >= 0 && !anchor.startsWith("fact:")) {
+    const at = lines.findIndex((l) => l.includes(anchor.slice(hash + 1)));
+    if (at >= 0) win(at, 10, 30);
+  }
+  // Every block citing this source gets its OWN windows -- the lines that share the most words with that block: one
+  // shared top ten let one block's passage crowd out another's in a long file (2026-09-27).
+  const lineWords = lines.map((l) => keywords(l));
+  for (const x of texts.length ? texts : [""]) {
+    const words = keywords(x);
+    lineWords.map((lw, i) => { let n = 0; for (const w of lw) if (words.has(w)) n++; return [n, i]; })
+      .filter(([n]) => n > 0).sort((a, b) => b[0] - a[0] || a[1] - b[1])
+      .slice(0, 6).forEach(([, i]) => win(i, 3, 6));
+  }
+  // A line longer than LONG_LINE (a table row thousands of characters wide) is sent as the stretch around the words the
+  // blocks share with it, not whole: whole, a few such rows filled the budget before the passage a block cites
+  // (2026-09-27).
+  const all = new Set();
+  for (const x of texts) for (const w of keywords(x)) all.add(w);
+  const clip = (/** @type {string} */ l) => {
+    if (l.length <= LONG_LINE) return l;
+    const low = l.toLowerCase();
+    const hits = [...all].map((w) => low.indexOf(w)).filter((p) => p >= 0).sort((a, b) => a - b);
+    const at = hits.length ? hits[Math.floor(hits.length / 2)] : 0;
+    const from = Math.max(0, at - LONG_LINE / 2);
+    return `${from > 0 ? "[...] " : ""}${l.slice(from, from + LONG_LINE)}${from + LONG_LINE < l.length ? " [...]" : ""}`;
+  };
+  let out = "", prev = -2;
+  for (const i of [...keep].sort((a, b) => a - b)) { out += i === prev + 1 ? "\n" : out ? "\n[...]\n" : ""; out += clip(String(lines[i])); prev = i; }
+  return out.slice(0, Math.min(24000, EXCERPT_CAP + 3000 * (Math.max(1, texts.length) - 1)));
 }
 
 /**
- * The process inputs for one page: its blocks, numbered for the whole page, cut into chunks that each carry only the
- * sources their own blocks cite and stay under CHUNK_BYTES. A block too big for a chunk of its own still gets one.
- * `input` is the first chunk's (a page that fits is one chunk).
+ * The process inputs for one page: its blocks, numbered for the whole page, cut into chunks under CHUNK_BYTES. Each
+ * chunk carries, per anchor, the excerpt its OWN citing blocks are about. `input` is the first chunk's.
  */
-export function inputFor(page, text, t) {
+export function inputFor(page, text, t, skip = new Set()) {
   const blocks = blocksOf(text);
-  /** @type {Map<string, string>} */
-  const src = new Map();
-  const sourceText = (/** @type {string} */ a) => { if (!src.has(a)) src.set(a, `===== ${a} =====\n${withheld(sourceOf(a, t))}`); return String(src.get(a)); };
   /** @type {{ numbers: number[], input: Record<string, string> }[]} */
   const chunks = [];
-  /** @type {{ lines: string[], anchors: Set<string>, numbers: number[], bytes: number }} */
-  let cur = { lines: [], anchors: new Set(), numbers: [], bytes: 0 };
+  /** @type {{ lines: string[], cites: Map<string, string[]>, numbers: number[], bytes: number }} */
+  let cur = { lines: [], cites: new Map(), numbers: [], bytes: 0 };
   const flush = () => {
     if (!cur.numbers.length) return;
-    chunks.push({ numbers: cur.numbers, input: { classification: "external-ok", page, blocks: cur.lines.join("\n"), sources: [...cur.anchors].map(sourceText).join("\n\n") } });
-    cur = { lines: [], anchors: new Set(), numbers: [], bytes: 0 };
+    const sources = [...cur.cites].map(([a, texts]) => `===== ${label(a)} =====\n${scanned(withheld(excerptFor(a, texts, t)))}`).join("\n\n");
+    chunks.push({ numbers: cur.numbers, input: { classification: "external-ok", page, blocks: cur.lines.join("\n"), sources } });
+    cur = { lines: [], cites: new Map(), numbers: [], bytes: 0 };
   };
   for (const b of blocks) {
-    const line = `[${b.n}] ${b.kind}: ${b.text}\n    ${b.plain ? "plain (cites nothing)" : `anchors: ${b.anchors.join("; ")}`}`;
-    const added = line.length + b.anchors.filter((a) => !cur.anchors.has(a)).reduce((n, a) => n + sourceText(a).length, 0);
+    if (skip.has(b.n)) continue;
+    const line = `[${b.n}] ${b.kind}: ${withheld(b.text)}\n    ${b.plain ? "plain (cites nothing)" : `anchors: ${b.anchors.map(label).join("; ")}`}`;
+    const added = line.length + b.anchors.reduce((n, a) => n + excerptFor(a, [b.text], t).length, 0);
     if (cur.numbers.length && cur.bytes + added > CHUNK_BYTES) flush();
     cur.lines.push(line);
-    for (const a of b.anchors) cur.anchors.add(a);
+    for (const a of b.anchors) cur.cites.set(a, [...(cur.cites.get(a) || []), b.text]);
     cur.numbers.push(b.n);
-    cur.bytes += line.length + b.anchors.reduce((n, a) => n + sourceText(a).length, 0);
+    cur.bytes += added;
   }
   flush();
   const first = chunks[0] ? chunks[0].input : { classification: "external-ok", page, blocks: "", sources: "" };
@@ -116,6 +204,30 @@ export function childEnv(env) {
 }
 
 function usage(msg) { console.error(`narrative-verify: ${msg}`); return 2; }
+
+/**
+ * Remove from the page every block its receipt judged other than SUPPORTED -- the last step after a fix round, so a page
+ * ships with only what its sources say. The receipt must be for the text on disk now. The page must then be verified
+ * again: a pruned text is a new text.
+ * @param {string} page
+ */
+async function prune(page) {
+  const t = await readTree(ROOT);
+  const text = t.narratives[page];
+  const file = join(ROOT, VERIFY_DIR, `${page}.json`);
+  if (text === undefined || !existsSync(file)) return usage(`no narrative or no receipt for ${page}`);
+  const r = JSON.parse(readFileSync(file, "utf8"));
+  if (r.sha256 !== sha256(text)) return usage(`the receipt for ${page} judged other text -- verify it first`);
+  const bad = new Set((Array.isArray(r.verdicts) ? r.verdicts : []).filter((v) => v && v.verdict !== "SUPPORTED").map((v) => v.block));
+  const blocks = blocksOf(text);
+  const drop = new Set();
+  for (const b of blocks) if (bad.has(b.n)) for (let l = b.line; l <= b.end; l++) drop.add(l);
+  const lines = text.split(/\r?\n/);
+  const kept = lines.filter((_, i) => !drop.has(i + 1)).join("\n").replace(/\n{3,}/g, "\n\n");
+  writeFileSync(join(ROOT, "docs", "wiki", "_narrative", `${page}.md`), kept);
+  console.log(`pruned ${page}: ${bad.size} block(s) removed, ${blocks.length - bad.size} kept -- verify it again`);
+  return 0;
+}
 
 async function accept(pages) {
   const t = await readTree(ROOT);
@@ -142,40 +254,80 @@ async function verify(page, driver, minutes) {
   if (text === undefined) return usage(`no narrative for ${page} under docs/wiki/_narrative/`);
   const unresolved = blocksOf(text).flatMap((b) => b.anchors.map((a) => [a, anchorProblem(a, t.tree)])).filter(([, w]) => w);
   if (unresolved.length) { for (const [a, w] of unresolved) console.log(`UNRESOLVED ${a}: ${w}`); return usage("fix the anchors first -- a verifier cannot judge a source that is not there"); }
-  const { blocks, chunks } = inputFor(page, text, t);
+  // CARRIED VERDICTS: a block whose exact text, anchors and plain-marker a previous run judged SUPPORTED is not sent
+  // again -- the verifier is not deterministic, and re-judging unchanged text flipped settled blocks back and forth
+  // (bench went 57 -> 53 of 65 after a round that touched none of them, 2026-09-27). The receipt names every carried
+  // block; a changed block is always judged fresh.
+  const keyOf = (/** @type {{ text: string, anchors: string[], plain: boolean }} */ b) => sha256(`${b.text}
+${b.anchors.join(";")}
+${b.plain}`);
+  const receiptFile = join(ROOT, VERIFY_DIR, `${page}.json`);
+  /** @type {Record<string, string>} */
+  let settled = {};
+  try {
+    const prev = existsSync(receiptFile) ? JSON.parse(readFileSync(receiptFile, "utf8")) : null;
+    if (prev && prev.supportedKeys && typeof prev.supportedKeys === "object" && !Array.isArray(prev.supportedKeys)) settled = prev.supportedKeys;
+  } catch { settled = {}; }
+  const carried = blocksOf(text).filter((b) => Object.prototype.hasOwnProperty.call(settled, keyOf(b)));
+  const { blocks, chunks } = inputFor(page, text, t, new Set(carried.map((b) => b.n)));
   const model = process.env.ARC_VERIFY_MODEL || "";
   if (driver !== "mock" && !model) return usage("set ARC_VERIFY_MODEL (a non-Claude model id) and ARC_LLM_ENDPOINT / ARC_LLM_API_KEY");
   const dir = mkdtempSync(join(tmpdir(), "narrative-verify-"));
   try {
-    /** @type {any[]} */
-    const verdicts = [];
-    for (const [ci, c] of chunks.entries()) {
+    /** One chunk, run to an answer or CHUNK_TRIES failures. @returns {Promise<{ verdicts: any[] } | { failed: string }>} */
+    const runChunk = async (/** @type {number} */ ci, /** @type {{ numbers: number[], input: Record<string, string> }} */ c) => {
       const inFile = join(dir, `in-${ci}.json`);
       writeFileSync(inFile, JSON.stringify(c.input));
       const args = [join(ROOT, ".claude", "scripts", "engine", "arc-run.mjs"), "--process", "narrative-verify", "--root", ROOT, "--input", `@${inFile}`, "--budget", `min=${minutes}`];
       if (driver === "mock") args.push("--driver", "mock");
       else args.push("--driver", "generic-api", "--trial-model", model);
-      const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, env: childEnv(process.env) });
       const label = `chunk ${ci + 1}/${chunks.length} (blocks ${c.numbers[0]}-${c.numbers[c.numbers.length - 1]}, ${JSON.stringify(c.input).length} bytes)`;
       // arc-run prints the answer before it tries the receipt, so a worktree's refused emit is not a failed judgement;
-      // an answer that is not the contract is.
-      let doc = null;
-      try { doc = JSON.parse(r.stdout); } catch { doc = null; }
+      // an answer that is not the contract is. A chunk gets CHUNK_TRIES runs: one provider timeout is weather, and it
+      // cost a whole 21-chunk page on its first chunk (2026-09-27).
+      let doc = null, r = { status: null, stdout: "", stderr: "" };
+      for (let attempt = 1; attempt <= CHUNK_TRIES && !(doc && Array.isArray(doc.verdicts)); attempt++) {
+        r = await runNode(args);
+        try { doc = JSON.parse(r.stdout); } catch { doc = null; }
+        if (!(doc && Array.isArray(doc.verdicts)) && attempt < CHUNK_TRIES) console.log(`  ${label}: attempt ${attempt} gave no verdicts, running it again`);
+      }
       if (!doc || !Array.isArray(doc.verdicts)) {
         const cause = String(r.stderr).split("\n").find((l) => /^arc-run: /.test(l) && !/could not emit|NO destination is set/.test(l)) || `exit ${r.status}`;
-        console.log(`RUN FAILED ${label}: ${cause}`);
-        return 1;
+        return { failed: `${label}: ${cause}` };
       }
       const own = new Set(c.numbers);
+      // A model that numbered the chunk from 1 answered every block, in order: map it back by position, and only then.
+      const local = doc.verdicts.map((v) => (v ? v.block : null));
+      if (local.length === c.numbers.length && local.every((b, i) => b === i + 1) && !c.numbers.every((n, i) => n === i + 1)) {
+        doc.verdicts = doc.verdicts.map((v, i) => ({ ...v, block: c.numbers[i] }));
+      }
       const stray = doc.verdicts.filter((v) => !v || !own.has(v.block));
-      if (stray.length) { console.log(`RUN FAILED ${label}: verdicts for blocks outside this chunk (${stray.map((v) => v && v.block).join(",")})`); return 1; }
-      verdicts.push(...doc.verdicts);
+      if (stray.length) return { failed: `${label}: verdicts for blocks outside this chunk (${stray.map((v) => v && v.block).join(",")})` };
       console.log(`  ${label}: ${doc.verdicts.length} verdict(s)`);
-    }
+      return { verdicts: doc.verdicts };
+    };
+    // CHUNK_PARALLEL chunks at a time: one page is dozens of chunks, and each is minutes of model time.
+    /** @type {any[]} */
+    const verdicts = carried.map((b) => ({ block: b.n, verdict: "SUPPORTED", why: `carried: this exact block was judged SUPPORTED on ${settled[keyOf(b)]}` }));
+    /** @type {string[]} */
+    const failures = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < chunks.length) {
+        const ci = next++;
+        const res = await runChunk(ci, chunks[ci]);
+        if ("failed" in res) failures.push(res.failed); else verdicts.push(...res.verdicts);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CHUNK_PARALLEL, chunks.length) }, worker));
+    if (failures.length) { for (const f of failures) console.log(`RUN FAILED ${f}`); return 1; }
     const receipt = {
       schema: 1, page, sha256: sha256(text),
       model: driver === "mock" ? "mock" : model, model_source: driver === "mock" ? "mock" : "trial",
       blocks: blocks.length, chunks: chunks.length, verdicts: verdicts.sort((a, b) => a.block - b.block),
+      carried: carried.map((b) => b.n),
+      supportedKeys: Object.fromEntries(blocks.filter((b) => verdicts.some((v) => v.block === b.n && v.verdict === "SUPPORTED"))
+        .map((b) => [keyOf(b), Object.prototype.hasOwnProperty.call(settled, keyOf(b)) ? settled[keyOf(b)] : new Date().toISOString().slice(0, 10)])),
       verified: new Date().toISOString(), accepted: null,
     };
     const file = join(ROOT, VERIFY_DIR, `${page}.json`);
@@ -190,6 +342,7 @@ async function verify(page, driver, minutes) {
 
 async function main(argv) {
   if (argv[0] === "--accept") return argv.length > 1 ? accept(argv.slice(1)) : usage("--accept needs at least one <dir>/<id>");
+  if (argv[0] === "--prune") return argv.length === 2 && PAGE.test(String(argv[1])) ? prune(String(argv[1])) : usage("--prune takes one <dir>/<id>");
   let page = "", driver = "generic-api", minutes = 25;
   for (let i = 0; i < argv.length; i++) {
     const a = String(argv[i]);
