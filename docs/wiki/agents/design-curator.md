@@ -9,7 +9,7 @@
 
 | | |
 |---|---|
-| Does | Builds a per-brief reference pack of real screens from the registry's active galleries via design-refpack.mjs: robots.txt preflight per fetch, 5-8 screens from 2+ active sources, an adaptable principle and avoid-this per screen. |
+| Does | Builds a per-brief reference pack of real screens from the registry's active galleries via design-refpack.mjs: robots.txt preflight per fetch, 5-8 screens from every active source that answers, an adaptable principle and avoid-this per screen. |
 | Model tier | sonnet |
 | Product | [design](../products/design.md) |
 

@@ -32,7 +32,8 @@ of git and whose provenance goes in.
 - [ ] Curator performs a **robots.txt preflight per fetch** and refuses on `Disallow` — the
       refusal is recorded, never a silent skip
 - [ ] A real pack of 5–8 screens exists for one brief at
-      `.claude/state/design/refpacks/<brief>/`, from ≥2 `active` sources
+      `.claude/state/design/refpacks/<brief>/`, from ≥1 `active` source (REQ-04 amended
+      2026-09-27 from ≥2, ADR-1412)
 - [ ] `sources.md` committed with URL · timestamp · content sha · **adaptable principle** ·
       avoid-this — one row per screen
 - [ ] A PNG planted in the refpack dir is proven ignored by `git check-ignore` — asserted, not

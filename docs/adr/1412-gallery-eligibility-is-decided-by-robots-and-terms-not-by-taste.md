@@ -95,4 +95,7 @@ spider, scraper, or other automated means" without prior written consent. It is 
 so it is not scouted again. The lesson is about order: a homepage count is not the screen pages,
 and the terms page is read before any probe, not after.
 
-That leaves one working source (nicelydone), and REQ-04's "≥2 active sources" is unmet again.
+That leaves one working source (nicelydone). The owner amended REQ-04 from "≥2 active sources"
+to "≥1" through `/arc-change` rather than widen a boundary or keep scouting (0 of 5 clean). The
+price is a new PLAN ledger row: if Phase 03's jury shows single-gallery bias, a second source is
+mandatory again before Phase 05.

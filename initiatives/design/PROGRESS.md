@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
 phase: 02
 appetite: 12.5d
-burn: 5d
+burn: 9d
 blocked-on: —
 depends-on: —
 
@@ -95,6 +95,10 @@ but are **NOT re-verified** -- the process permits one respawn and it is spent, 
 the engine lane recorded at 18 -> 6. A third round would be patching against the gate.
 
 ## Appetite burn
+
+**Re-count 2026-09-27: 9 of 12.5 days (72%)**, by the same rule (calendar days carrying lane
+commits): the five below plus 09-18, 09-20, 09-26 and 09-27. The owner's 09-16 no-cut ruling
+stands; the next gate is still the taste tripwire after Phase 03.
 
 **5 of 12.5 days used (40%)** — re-counted 2026-09-17 by the same rule as the 09-16 correction,
 calendar days carrying lane commits: 08-23, 08-24, 08-25, 09-16, 09-17. What is left is 7.5d
@@ -551,8 +555,15 @@ consumer projects — it carries the owner's approvals.
      screens and re-adding the Dock row with a corrected principle was in flight at the close;
      check `docs/design/refpacks/lexos-case-workspace/sources.md` (5 rows committed) for rows it
      added, look at each new image, and commit them.
+   - **2026-09-27 (later): REQ-04 amended to ≥1 source.** saasui went off (screens on the
+     shared cdn.sanity.io; the owner declined widening ADR-1420's 64-byte query cap for its
+     proxy), screensdesign was born off (terms forbid scrapers), and no clean second source
+     was found. Owner chose the amendment via `/arc-change` (ADR-1412, PLAN ledger row + a new
+     single-gallery-bias trigger tested in Phase 03). The pack is 6 nicelydone screens.
+     Debt: `design-robots.mjs` prints its answer then exits 127 on Windows (libuv
+     `UV_HANDLE_CLOSING` assertion) — fail-closed, not a blocker.
    - **Resume here:** read CI per job at the branch head; confirm the pack holds 5-8 screens
-     from ≥2 sources (nicelydone + saasui); then `/arc-phase-done 02 --lane design`; then
+     from ≥1 active source; then `/arc-phase-done 02 --lane design`; then
      Phase 03, starting with `/arc-change` to refine its coarse spec into slices (there is no
      jury runner today: N-item pack assembly, ranking collection and deviation logging all have
      to be built). Phase 03's gate is the owner's blind 0-100 score, in person.
