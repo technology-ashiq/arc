@@ -219,7 +219,9 @@ _ranking() {
   _fixture 3 1
   bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}" > "$BATS_TEST_TMPDIR/one.txt" 2>&1 & p1=$!
   bash "$(_explore)" jury jx --n 4 --seed 42 "${REFS[@]}" > "$BATS_TEST_TMPDIR/two.txt" 2>&1 & p2=$!
-  wait "$p1"; r1=$?; wait "$p2"; r2=$?
+  # bats runs under set -e, and the losing deal exits 1 by design: its wait must not end the test.
+  r1=0; wait "$p1" || r1=$?
+  r2=0; wait "$p2" || r2=$?
   [ $((r1 + r2)) -eq 1 ] || { echo "not exactly one winner: $r1 $r2 $(cat "$BATS_TEST_TMPDIR/one.txt" "$BATS_TEST_TMPDIR/two.txt")"; false; }
   node -e 'const c=require("crypto"),f=require("fs"),p=require("path");const d=process.argv[1];const k=require(p.join(d,"key.json"));if(f.readdirSync(p.join(d,"items")).length!==k.n)process.exit(2);for(const i of k.items){if(c.createHash("sha256").update(f.readFileSync(p.join(d,"items",i.file))).digest("hex")!==i.sha256)process.exit(1)}' "$(_jury_dir)" \
     || { echo "the winner's items do not match its key"; false; }
