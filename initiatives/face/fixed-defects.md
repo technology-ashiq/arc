@@ -863,3 +863,33 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **Every non-zero exit retried as if it were the race** -- disk full, a read-only objects dir, a hook's refusal (L3). *Retry only the race's own signature (`OBJECT_WRITE_RACE_RE`); anything else throws at once.*
 - **Patience counted in tries, in lockstep** -- 8 linear waits capped the wait at ~1.4 s against a 60 s window, and losers of one attempt collided again on the same schedule (L2, B3). *Bound a retry by time, and jitter it.*
 - **A flake fix proven only by the flake's absence** -- no arm made the write fail, so deleting the retry left every test green (L4, B1). *An injected runner makes the failure happen on demand: retried-then-won, not-the-race, no-gitExit, never-clears.*
+
+## Phase 07 PR B1 -- the Reference room (attack 53ee223, round 1: logic L1-L15, boundary B1-B7)
+
+- **A navigation pick split, not parsed** -- `products//../gates`, a trailing slash and a nested path each named some page (L1, L6). *A pick read from anywhere is held to ONE grammar, the fragment's; anything else is LOST, never a second spelling.*
+- **An id read through the prototype** -- `constructor` or `__proto__` as a product id made wiki-build spread a function and throw, and the fold read an inherited function as a relation (L5, L13, B1, B4). *Accumulate into null-prototype objects; read keyed maps by OWN property only.*
+- **A list iterated whatever it was** -- a `requires` of "core" was iterated letter by letter, a number threw (B2). *Iterate only what IS an array; a relations body of the wrong shape is a named refusal.*
+- **A room openable by presence** -- the live-room button opened the lane TEMPLATE because the id was in the registry (L7, L12, B3). *Ask the rail's own rule (`roomLink`), never re-derive "openable".*
+- **A heading quoted in a code fence taken as the break** -- the owner's narrative was split inside a fenced block (L3). *A parser of the owner's prose tracks fences before reading structure.*
+- **Rows without a key drawn under a shared one** -- an ADR row with no number (L14). *Rows the fold cannot tell apart are counted, not drawn; the fold supplies each key.*
+
+## Phase 07 PR B2 -- the per-room Reference link (attack 5308c9c, round 1: boundary B1-B10; logic did not run)
+
+- **A destination openable by presence, again** -- the header drew the link whenever a room with the id existed, planned or not (B1). *The twin of B1's L7: the link's destination is FOUND by the rail's rule (`referenceRoom`, lane-room.mjs), never by `some(id ===)`.*
+- **A room id named in the shell** -- App.tsx spelled the Reference room's id twice, which the module-frame shell scan forbids (B2). *Find a room by what its module reads (`/api/reference`), never by name.*
+- **A floor where a set belongs** -- "at least 15 rooms link" let a broken `referenceAt` pass (B3). *Derive the expected set from the contract's own maps and compare both ways.*
+- **A chain tested in halves** -- the hash round-trip and the fold were each green while the seed between them was never exercised (B4). *Carry one value end to end through every hop, for every row, not the first.*
+- **A second writer of the address that forgot a field** -- the as-of control rewrote the hash without `at` (B5). *Every `buildHash(` call site passes the whole address state; grep the call sites, not the function.*
+- **State seeded into rooms it does not belong to** -- `at` was handed to every room's picks (B6). *Seed only the room the value names.*
+- **Unguarded lookups in a test** -- `find(...).at` and `linked[0]` threw instead of failing a named check (B10). *A test resolves and asserts before it dereferences.*
+
+## Phase 07 slice 1+2 -- rich narrative, narrative-anchors, narrative-verify (attack 845e0a5, round 1: boundary B1-B4)
+
+- **A flag with no value fell back to the cwd** -- `--root` as the last argument evaluated whatever directory the shell was in (B1). *A value-taking flag refuses a missing, empty, dash-led or repeated value by name.*
+- **A child handed the whole environment** -- the verifier spawned arc-run with every credential the caller held (B2). *A spawn that reaches the network gets an allow-listed env (ARC_* and the OS keys), never process.env whole.*
+- **A listing that followed symlinks** -- a narrative or receipt symlinked out of the tree was read as the tree's own (B3). *Each listed file is lstat'ed regular and realpath'ed inside the root, or rejected by name.*
+- **A path check that knew one colon** -- only a leading drive letter was refused, so `a/b.mjs:stream` reached the filesystem (B4). *Refuse a colon anywhere in a repo-relative path.*
+- **A closed value spelled from memory** -- the receipt check accepted `model_source: routed`, a value arc-run never writes (it writes `router`), found by the engine narrative's drafter. *Take an enum from the file that writes it, not from recall.*
+- **A second walker, in the lane that forbids it** -- narrative-anchors listed directories and spawned `git ls-files`; DOC-A (ADR-1501) allows neither under `.claude/scripts/docs/` (CI red on every leg). *Narratives come from wiki-coverage's pageTree, receipts by named path, ADR numbers from the extract; the tool that spawns arc-run lives in engine, beside arc-attack.*
+- **A count printed before the checks it counted** -- reference-fold's RAN line sat above the checks appended after it, so it said 17 while 20 ran. *The RAN line is the last statement before the exit code, always.*
+- **A fixture key in a cited source stopped a verifier chunk** at the data boundary. *Source lines that match a secret rule are withheld by name (liveLine) before anything is sent.*

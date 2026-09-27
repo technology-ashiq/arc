@@ -28,14 +28,15 @@ export const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
  * Shape: `#/<room>` with the token, when present, riding alongside as `token=...`.
  *
  * @param {string} hash
- * @returns {{ room: string | null, token: string | null, asOf: string | null }}
+ * @returns {{ room: string | null, token: string | null, asOf: string | null, at: string | null }}
  */
 export function parseHash(hash) {
-  if (typeof hash !== "string" || !hash) return { room: null, token: null, asOf: null };
+  if (typeof hash !== "string" || !hash) return { room: null, token: null, asOf: null, at: null };
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   let room = null;
   let token = null;
   let asOf = null;
+  let at = null;
   for (const part of raw.split("&")) {
     if (!part) continue;
     if (part.startsWith("/")) {
@@ -51,10 +52,13 @@ export function parseHash(hash) {
     // The scrub travels in the ADDRESS, so a scrubbed view is a link someone can send or
     // reload into. A time machine you cannot bookmark is a toy.
     if (k === "asof" && ISO_DAY.test(v)) asOf = v;
+    // Where the Reference room opens: a type, or a type and an entity (Phase 07, REQ-12). Only the grammar a wiki page
+    // path uses -- anything else is dropped, never carried into a pick.
+    if (k === "at" && REFERENCE_AT.test(v)) at = v;
     // A bare `#token=...` with no room is what arc-dash prints. That is not an error and
     // must not be treated as "no route" -- it is the home route with a token attached.
   }
-  return { room, token, asOf };
+  return { room, token, asOf, at };
 }
 
 /**
@@ -64,13 +68,34 @@ export function parseHash(hash) {
  * @param {string} room
  * @param {string | null} [token]
  * @param {string | null} [asOf]
+ * @param {string | null} [at]  where the Reference room opens (REFERENCE_AT), dropped if it is not one
  * @returns {string}
  */
-export function buildHash(room, token = null, asOf = null) {
+export function buildHash(room, token = null, asOf = null, at = null) {
   const parts = [`/${encodeURIComponent(room)}`];
   if (token) parts.push(`token=${encodeURIComponent(token)}`);
   if (typeof asOf === "string" && ISO_DAY.test(asOf)) parts.push(`asof=${asOf}`);
+  if (typeof at === "string" && REFERENCE_AT.test(at)) parts.push(`at=${encodeURIComponent(at)}`);
   return `#${parts.join("&")}`;
+}
+
+/** A Reference pick: a type key, or `<type>/<id>` with a wiki-safe id (wiki-build's SAFE_ID). */
+export const REFERENCE_AT = /^[a-z][A-Za-z]{0,31}(?:\/[A-Za-z0-9][A-Za-z0-9._-]{0,99})?$/;
+
+/**
+ * The Reference page a room links to (Phase 07, REQ-12, ADR-1346 §6): the first product the room holds, else the first
+ * lane, from the served registry's `holds` -- the product->room and lane maps of expected-set.json, never a second
+ * table. A room that holds neither links to nothing, and the caller says so by drawing no link.
+ * @param {{ holds?: Record<string, unknown> } | null | undefined} room
+ * @returns {string | null}
+ */
+export function referenceAt(room) {
+  const holds = room && typeof room === "object" && room.holds && typeof room.holds === "object" ? room.holds : {};
+  const first = (/** @type {unknown} */ list) => (Array.isArray(list) ? list.find((x) => typeof x === "string" && REFERENCE_AT.test(`t/${x}`)) : undefined);
+  const product = first(/** @type {Record<string, unknown>} */ (holds).products);
+  if (typeof product === "string") return `products/${product}`;
+  const lane = first(/** @type {Record<string, unknown>} */ (holds).lanes);
+  return typeof lane === "string" ? `lanes/${lane}` : null;
 }
 
 /**

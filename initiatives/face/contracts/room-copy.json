@@ -200,6 +200,12 @@
       "lede": "planned, drawn dotted -- the door already speaks HTTP, so this is a surface question and not an engine one",
       "render": "generic",
       "planned": true
+    },
+    "reference": {
+      "sentence": "What arc is, from the tree itself.",
+      "lede": "every product, lane, process, command, agent, rule and gate, read from the same extract docs/wiki is built from -- the why only where the owner wrote it",
+      "render": "index",
+      "indexes": "products"
     }
   }
 }

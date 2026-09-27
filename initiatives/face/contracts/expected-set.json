@@ -392,6 +392,16 @@
         "sources": [
           "docs/HISTORY.md"
         ]
+      },
+      {
+        "id": "reference",
+        "name": "Reference",
+        "ring": "company",
+        "status": "built",
+        "sources": [
+          "docs/wiki/**",
+          "GET /api/reference"
+        ]
       }
     ]
   },
@@ -811,6 +821,7 @@
       "brief-materialize": "engine-room",
       "day-close-roll": "engine-room",
       "attack-diff": "engine-room",
+      "narrative-verify": "engine-room",
       "council-convene": "council-chamber",
       "lesson-log": "memory",
       "rule-promote": "memory",

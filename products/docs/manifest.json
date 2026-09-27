@@ -9,6 +9,7 @@
   "commands": [],
   "agents": [],
   "scripts": [
+    ".claude/scripts/docs/narrative-anchors.mjs",
     ".claude/scripts/docs/wiki-build.mjs",
     ".claude/scripts/docs/wiki-coverage.mjs",
     ".claude/scripts/docs/wiki-drift.mjs",

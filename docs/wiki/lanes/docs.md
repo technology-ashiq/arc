@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/docs/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/docs/PROGRESS.md)
 
-## Decisions (13)
+## Decisions (14)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -41,6 +41,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1510`](../../../docs/adr/1510-doc-j-four-overlapping-docs-resolved-in-phase-02.md) | DOC-J: the four overlapping documents are resolved inside the cycle, in Phase 02 | accepted | 2026-09-25 |
 | [`1511`](../../../docs/adr/1511-doc-k-two-surface-adversarial-pass-on-the-extractor-and-each-gate.md) | DOC-K: a two-surface adversarial pass on the extractor and on each gate | accepted | 2026-09-25 |
 | [`1512`](../../../docs/adr/1512-doc-l-the-generator-is-its-own-docs-product-not-core.md) | DOC-L: the generator is its own `docs` product, not part of `core` | accepted | 2026-09-25 |
+| [`1513`](../../../docs/adr/1513-doc-m-a-drafted-narrative-ships-only-source-anchored-and-verified.md) | DOC-M: a model-drafted narrative ships only source-anchored, independently verified and owner-read | accepted (the owner's ruling on the `/arc-change --lane face` of 2026-09-27) | 2026-09-27 |
 
 ## Source
 
