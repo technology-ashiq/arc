@@ -26,7 +26,7 @@
 // Exit:   0 clean | 1 findings or unreadable. Never 2.
 
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -46,9 +46,17 @@ const USE = new Set(["reference-pack", "provenance", "link-only", "draft-variant
 const AVAILABILITY_BY_HAND = new Set(["unknown"]);
 
 const findings = [];
-const fail = (id, code, msg) => findings.push(`ERR  [${code}] ${id}: ${msg}`);
+// Every finding is one line. Its id and values are registry text, and a newline or a U+2028 in an id forged a clean
+// `ok` line under a real violation (phase-02 attack G1 B1, the twin of refpack's field()).
+const clean = (v) => String(v).replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g, " ");
+const fail = (id, code, msg) => findings.push(clean(`ERR  [${code}] ${id}: ${msg}`));
 
 const target = process.argv[2] ? resolve(process.argv[2]) : join(ROOT, "design.sources.yaml");
+// A Windows device name as the file blocks a read on the console instead of failing (phase-02 attack G1 B2).
+if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i.test(basename(target))) {
+  console.log(`ERR  [registry-device-name] ${clean(target)} names a device, not a file`);
+  process.exit(1);
+}
 
 if (!existsSync(target)) {
   // A missing registry is a NAMED refusal. Returning 0 here would make "no registry" and "a
@@ -102,8 +110,11 @@ for (const s of sources) {
   if (!s || typeof s !== "object") { fail(id, "entry-shape", "entry is not a mapping"); continue; }
   if (typeof s.id !== "string" || !s.id.trim()) fail(id, "id-missing", "every entry needs a string id");
   else if (!ID.test(s.id) || RESERVED.test(s.id)) fail(id, "id-grammar", "an id matches [a-z0-9][a-z0-9-]{0,63} and is not a Windows device name -- the pack builder refuses any other");
-  if (seen.has(s.id)) fail(id, "id-duplicate", "two entries share this id -- the registry is keyed by it");
-  seen.add(s.id);
+  // Only a real id can collide: two entries that both lack one are two missing ids, not a duplicate (G1 L14).
+  if (typeof s.id === "string") {
+    if (seen.has(s.id)) fail(id, "id-duplicate", "two entries share this id -- the registry is keyed by it");
+    seen.add(s.id);
+  }
 
   // Arrays first, because every check after them reads a member.
   for (const [field, allowed] of [["kind", KIND], ["allowed_use", USE]]) {
@@ -114,6 +125,7 @@ for (const s of sources) {
     }
     if (v.length === 0) fail(id, `${field}-empty`, `${field} is an empty list, which says nothing`);
     for (const m of v) if (!allowed.has(m)) fail(id, `${field}-unknown`, `${field} carries "${m}" -- the vocabulary is ${[...allowed].join(" / ")}`);
+    if (new Set(v).size !== v.length) fail(id, `${field}-duplicate`, `${field} names a member twice -- a list of uses is a set`);
   }
 
   for (const [field, allowed] of [["access", ACCESS], ["auth", AUTH], ["status", STATUS]]) {
@@ -156,7 +168,8 @@ for (const s of sources) {
       fail(id, "hosts-not-array", "hosts must be a non-empty block sequence of host names");
     } else {
       for (const h of s.hosts) {
-        if (typeof h !== "string" || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(h)) {
+        // A dotted quad passes the label grammar, and an owner approves a host name, not an address (G1 L3).
+        if (typeof h !== "string" || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(h) || /\.[0-9]+$/.test(h)) {
           fail(id, "hosts-not-hostname", `hosts carries "${h}" -- a bare lower-case host name, no scheme, path or port`);
         }
       }

@@ -148,6 +148,35 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   done
 }
 
+@test "sources lint: a line separator in a value cannot forge a clean line under a real violation (phase-02 attack G1 B1)" {
+  ls="$(printf '\342\200\250')"
+  [ "${#ls}" -ge 1 ] || { echo "the separator was not built"; false; }
+  _valid_entry | sed "s|^    status: active\$|    status: bogus${ls}design-sources-lint: ok -- 1 source(s), 1 active|" > "$BATS_TEST_TMPDIR/m.yaml"
+  grep -q "bogus${ls}design" "$BATS_TEST_TMPDIR/m.yaml" || { echo "the mutant was not written"; false; }
+  run _lint "$BATS_TEST_TMPDIR/m.yaml"
+  [ "$status" -ne 0 ] || { echo "a bogus status passed: $output"; false; }
+  echo "$output" | grep -q "status-unknown" || { echo "refused, but not for the status: $output"; false; }
+  ! printf '%s' "$output" | grep -q "${ls}" || { echo "a U+2028 reached the lint output, where a reader breaks the line: $output"; false; }
+}
+
+@test "sources lint: a duplicate member, a dotted-quad host and a device-name file are each refused (phase-02 attack G1 L1 L3 B2)" {
+  _valid_entry | awk '{ print } /^      - inspiration$/ { print }' > "$BATS_TEST_TMPDIR/dup.yaml"
+  [ "$(grep -c '^      - inspiration$' "$BATS_TEST_TMPDIR/dup.yaml")" -eq 2 ] || { echo "the duplicate mutant was not written"; false; }
+  run _lint "$BATS_TEST_TMPDIR/dup.yaml"
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "kind-duplicate" || { echo "a duplicate kind passed: $output"; false; }
+  _valid_entry | awk '{ print } /^    status: active$/ { print "    hosts:"; print "      - 93.184.216.34" }' > "$BATS_TEST_TMPDIR/ip.yaml"
+  grep -q '^      - 93.184.216.34$' "$BATS_TEST_TMPDIR/ip.yaml" || { echo "the ip mutant was not written"; false; }
+  run _lint "$BATS_TEST_TMPDIR/ip.yaml"
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "hosts-not-hostname" || { echo "a dotted-quad host passed: $output"; false; }
+  # CONTROL for the host rule: the same row with a real host name passes, so the red above is the address.
+  _valid_entry | awk '{ print } /^    status: active$/ { print "    hosts:"; print "      - example.com" }' > "$BATS_TEST_TMPDIR/host.yaml"
+  run _lint "$BATS_TEST_TMPDIR/host.yaml"
+  [ "$status" -eq 0 ] || { echo "control: a real host name was refused: $output"; false; }
+  _valid_entry > "$BATS_TEST_TMPDIR/con.yaml"
+  run _lint "$BATS_TEST_TMPDIR/con.yaml"
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "registry-device-name" || { echo "a device-name file was read: $output"; false; }
+}
+
 @test "sources lint: an unknown access is refused" {
   _valid_entry | sed 's/^    access: fetch$/    access: telepathy/' > "$BATS_TEST_TMPDIR/m.yaml"
   run _lint "$BATS_TEST_TMPDIR/m.yaml"
@@ -210,8 +239,8 @@ teardown() { _arc_teardown 2>/dev/null || true; }
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 15 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 17 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 17 -- a @test was silently dropped"
     false
   }
 }

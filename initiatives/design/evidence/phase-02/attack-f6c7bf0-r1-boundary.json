@@ -1,0 +1,23 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "design-sources-lint.mjs:49 (fail helper) and its call sites ~95-165 (id-grammar, kind/allowed_use-unknown, access/auth/status-unknown, hosts-not-hostname, approved-not-owner, availability-hand-set messages)",
+      "breaking_input": "a design.sources.yaml entry with `id: \"x\\ndesign-sources-lint: ok -- 1 source(s), 1 active\"` (embedded newline, or a raw Unicode line-separator U+2028) alongside any real violation such as `status: bogus` in the same entry",
+      "why": "fail(id, code, msg) builds `ERR  [${code}] ${id}: ${msg}` and every field check (kind/allowed_use member, access/auth/status/availability/approved_by value, each hosts entry) interpolates the raw YAML string straight into a console.log line with zero control-character or line-separator stripping. This is the exact class this lane already scrubbed once (\"unicode line separators scrubbed\", e7444b40) but it was never applied to this new file's own logged fields. An id carrying an embedded newline splits one finding into two printed lines and can forge a line that reads exactly like the tool's own success banner ('design-sources-lint: ok -- N source(s), M active') even though the process still exits 1 with real findings -- any caller that greps/searches stdout text for that banner instead of checking the exit code is fooled into treating a rejected, permission-surface registry as clean.",
+      "fix": "strip every C0/C1 control character and Unicode line-breaking code point (U+2028, U+2029, U+0085, plus CR/LF) from id, kind/allowed_use members, access/auth/status/availability/approved_by values and hosts entries before they are interpolated into any fail()/console.log call.",
+      "twin_of": "Remote text reached a tab-separated log verbatim -> strip control characters from every logged field."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "design-sources-lint.mjs:51-63 (target resolution and readFileSync)",
+      "breaking_input": "invoke `node design-sources-lint.mjs CON` (or any path whose final segment is `con`/`prn`/`aux`/`nul`/`com1-9`/`lpt1-9`, case-insensitive, with or without an extension) on Windows",
+      "why": "the RESERVED device-name set is enforced on registry `id` values but the CLI's own `target` path argument is never checked against it before existsSync/readFileSync run on it. On Windows, opening the CON device for a read blocks waiting on the console rather than returning ENOENT, so any wrapper (a bats test, an /arc-* command, a CI step) that passes a bad or attacker-influenced path argument can hang the lint indefinitely instead of getting the intended 'unreadable' refusal -- the same reserved-name defence this file already writes for ids is missing at its own entry point.",
+      "fix": "before existsSync/readFileSync, refuse target when its basename (stripped of extension, case-folded) matches the same RESERVED regex already defined for ids.",
+      "twin_of": "A Windows reserved device name passed the id grammar -> the lane-name reserved list applies to every id that becomes a directory."
+    }
+  ]
+}

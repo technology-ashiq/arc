@@ -62,7 +62,7 @@ const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/
 // bytes below still decide whether the body IS a jpeg.
 const IMAGE_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/avif": "avif", "image/gif": "gif" };
 const MAX_HOPS = 3;
-const SEAMS = ["--registry", "--robots-file", "--robots-status", "--fixture"];
+const SEAMS = ["--registry", "--robots-file", "--robots-status", "--fixture", "--redirect"];
 
 function fail(code, msg) {
   console.error(`design-refpack: ${msg}`);
@@ -107,6 +107,12 @@ const MAGIC = {
   webp: (b) => b.length > 12 && b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP",
   avif: (b) => b.length > 12 && b.toString("latin1", 4, 8) === "ftyp" && /^avi[fs]$/.test(b.toString("latin1", 8, 12)),
 };
+
+// A port or userinfo on ANY hop, not only the first: hostAllowed reads the hostname alone, so a redirect to the same
+// host on another port passed every hop's check (phase-02 attack G3 B1).
+function portOrUser(u) {
+  return u.port || u.username || u.password ? "carries a port or userinfo; the registry binds hosts" : null;
+}
 
 function validId(v) {
   return ID.test(v) && !RESERVED.test(v);
@@ -199,7 +205,7 @@ async function checkBrowse(argv) {
     const match = eligible.filter((s) => hostsOf(s).length > 0 && hostAllowed(url.hostname, hostsOf(s)));
     if (match.length === 0) answer(2, "REFUSED", `${url.hostname} is not a host of an active registry row whose allowed_use carries reference-pack`);
     const allHosts = match.flatMap(hostsOf);
-    const guard = (u) => (hostAllowed(u.hostname, allHosts) ? null : "is not a registry host");
+    const guard = (u) => portOrUser(u) ?? (hostAllowed(u.hostname, allHosts) ? null : "is not a registry host");
     for (const ua of BROWSE_UAS) {
       const transport = fake
         ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null })
@@ -273,13 +279,13 @@ async function main(argv) {
   if (String(src.access) !== "fetch") fail(2, `refused: source '${id}' has access: ${field(src.access)}; this builder only fetches`);
 
   // 2. host binding. A scratch registry may omit hosts; the real one may not.
-  const fake = ["--robots-file", "--robots-status", "--fixture"].some((k) => o[k] != null);
+  const fake = ["--robots-file", "--robots-status", "--fixture", "--redirect"].some((k) => o[k] != null);
   const hosts = src.hosts === undefined ? null : asList(src.hosts).map((h) => h.toLowerCase());
   if (hosts !== null && (hosts.length === 0 || !hosts.every((h) => HOST.test(h)))) {
     fail(2, `refused: source '${id}' has a hosts list that is empty or not bare host names`);
   }
   if (hosts === null && !fake) fail(2, `refused: source '${id}' names no hosts, so a URL cannot be bound to it; the owner adds hosts to its registry row`);
-  const outsideHosts = (u) => (hosts !== null && !hostAllowed(u.hostname, hosts) ? `is not one of source '${id}' hosts [${hosts.join(", ")}]` : null);
+  const outsideHosts = (u) => portOrUser(u) ?? (hosts !== null && !hostAllowed(u.hostname, hosts) ? `is not one of source '${id}' hosts [${hosts.join(", ")}]` : null);
   const bind = (u) => {
     const why = outsideHosts(u);
     if (why) fail(2, `refused: ${u.hostname} ${why}`);
@@ -288,7 +294,7 @@ async function main(argv) {
 
   // Every attempt is written BEFORE it is made, so a crash mid-request still counts.
   const inner = fake
-    ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null, fixture: o["--fixture"] ?? null })
+    ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null, fixture: o["--fixture"] ?? null, redirect: o["--redirect"] ?? null })
     : realTransport({ ua: DEFAULT_UA });
   const via = fake ? "fixture" : "network";
   mkdirSync(stateDir, { recursive: true });
@@ -405,11 +411,14 @@ async function main(argv) {
   }
   if (isTree) {
     let marked = false;
-    for (let attempt = 0; attempt < 2 && !marked; attempt++) {
+    // Three attempts with a pause: another git holding .git/index.lock fails an add at once, and two adds
+    // back to back both lost to it (phase-02 attack G3 B3).
+    for (let attempt = 0; attempt < 3 && !marked; attempt++) {
+      if (attempt) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250 * attempt);
       const r = spawnSync("git", ["-C", ROOT, "add", "-N", "--", rel], { encoding: "utf8" });
       marked = !r.error && r.status === 0;
     }
-    if (!marked) fail(6, `${rel} was written but could not be marked for commit (git add -N failed twice); add it by hand before the pack is used`);
+    if (!marked) fail(6, `${rel} was written but could not be marked for commit (git add -N failed three times); add it by hand before the pack is used`);
   }
 
   console.log(`added ${field(shown(current))} from ${id} -> ${relative(ROOT, image).split("\\").join("/")} (sha256 ${sha})`);

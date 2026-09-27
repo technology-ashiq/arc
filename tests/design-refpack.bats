@@ -458,3 +458,35 @@ Allow: /')"
   run grep -cF 'replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g' .claude/scripts/design/design-refpack.mjs
   [ "$output" = "1" ] || { echo "field() does not strip U+0085/U+2028/U+2029: count=$output"; false; }
 }
+
+@test "refpack: a redirect to the same host on another port is refused on the hop, and a plain same-host redirect is the control (phase-02 attack G3 B1)" {
+  _pack_sandbox
+  rf="$(_robots_file 'User-agent: *
+Allow: /')"
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/x --principle p --avoid a \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)" --redirect "https://example.test:8443/y"
+  [ "$status" -eq 2 ] || { echo "a redirect to another port was not refused: $status $output"; false; }
+  [[ "$output" == *"carries a port or userinfo"* ]] || { echo "refused, but not for the port: $output"; false; }
+  ! ls "$SANDBOX/.claude/state/design/refpacks/lexos/"*.png >/dev/null 2>&1 || { echo "an image was cached from a refused hop"; false; }
+  # CONTROL: the same redirect without the port is followed and the screen is added.
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/x --principle p --avoid a \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)" --redirect "https://example.test/y"
+  [ "$status" -eq 0 ] || { echo "control: a same-host redirect was refused: $status $output"; false; }
+  ls "$SANDBOX/.claude/state/design/refpacks/lexos/"*.png >/dev/null 2>&1 || { echo "control: no image was cached"; false; }
+}
+
+@test "preflight: rules that cost billions of matcher steps end UNREADABLE, fast (phase-02 attack G2 B2)" {
+  _pack_sandbox
+  rf="$BATS_TEST_TMPDIR/heavy.txt"
+  # A star then a long literal the path never completes: ~7M matcher steps per rule, ~3.5 billion for 500 (measured).
+  rule="/*$(printf 'a%.0s' $(seq 1 1000))Z"
+  { printf 'User-agent: *\n'; for _ in $(seq 1 500); do printf 'Disallow: %s\n' "$rule"; done; } > "$rf"
+  [ "$(grep -c '^Disallow: ' "$rf")" -eq 500 ] || { echo "the heavy fixture was not built"; false; }
+  path="$(printf 'a%.0s' $(seq 1 8000))"
+  t0="$(date +%s)"
+  run node "$(_robots)" --url "https://example.test/$path" --ua ClaudeBot --robots-file "$rf"
+  t1="$(date +%s)"
+  [ "$status" -eq 4 ] || { echo "a pathological rule set was not UNREADABLE: $status ${output:0:300}"; false; }
+  [[ "$output" == *"steps; the file was not read through"* ]] || { echo "UNREADABLE, but not for the step budget: ${output:0:300}"; false; }
+  [ $((t1 - t0)) -lt 20 ] || { echo "the budget did not bound the time: $((t1 - t0)) s"; false; }
+}

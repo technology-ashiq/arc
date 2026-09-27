@@ -41,6 +41,8 @@ export const EXIT = { ALLOW: 0, DISALLOW: 3, UNREADABLE: 4 };
 // RFC 9309 asks a parser to read at least 500 KiB; the rest is not read, and not waited for.
 export const ROBOTS_MAX_BYTES = 512 * 1024;
 const FETCH_TIMEOUT_MS = 15000;
+// Total matcher steps for one decision. Real files use a few thousand.
+const MATCH_STEPS = 20_000_000;
 const ROBOTS_MAX_HOPS = 5;
 // Past these the matcher's cost is the remote's choice. A rule or a path over the limit makes
 // the answer UNREADABLE -- never a skipped rule, because skipping a Disallow is an ALLOW.
@@ -117,13 +119,16 @@ export function parseRobots(text) {
 
 // `*` matches any run, a trailing `$` anchors the end, and otherwise the rule is a prefix.
 // Two pointers with one saved star: O(pattern x path) at worst, never exponential.
-export function globMatch(rulePath, path) {
+// `budget` is shared by every rule one decision tries: a 512 KiB file packs ~500 near-max rules, each a million-step
+// worst case, so one per-call bound still let one URL check cost billions (phase-02 attack G2 B2). Out of steps is null.
+export function globMatch(rulePath, path, budget = null) {
   let pat = rulePath;
   let anchored = false;
   if (pat.endsWith("$")) { anchored = true; pat = pat.slice(0, -1); }
   if (!anchored) pat += "*";
   let p = 0, i = 0, starP = -1, starI = 0;
   while (i < path.length) {
+    if (budget && --budget.left < 0) return null;
     if (p < pat.length && pat[p] !== "*" && pat[p] === path[i]) { p++; i++; }
     else if (p < pat.length && pat[p] === "*") { starP = p++; starI = i; }
     else if (starP !== -1) { p = starP + 1; i = ++starI; }
@@ -144,10 +149,13 @@ export function decide(robotsText, url, ua = DEFAULT_UA) {
   let groupName = token;
   if (chosen.length === 0) { chosen = groups.filter((g) => g.agents.includes("*")); groupName = "*"; }
   let best = null;
+  const budget = { left: MATCH_STEPS };
   for (const r of chosen.flatMap((g) => g.rules)) {
     const rp = normPath(r.path);
     if (rp.length > RULE_MAX_LEN) return { verdict: "UNREADABLE", reason: `a rule in group "${groupName}" is longer than ${RULE_MAX_LEN} bytes; the file was not read through` };
-    if (!globMatch(rp, path)) continue;
+    const m = globMatch(rp, path, budget);
+    if (m === null) return { verdict: "UNREADABLE", reason: `matching group "${groupName}" took more than ${MATCH_STEPS} steps; the file was not read through` };
+    if (!m) continue;
     if (!best || rp.length > best.len || (rp.length === best.len && r.allow && !best.allow)) best = { ...r, len: rp.length };
   }
   if (!best) {
@@ -165,7 +173,8 @@ export function decide(robotsText, url, ua = DEFAULT_UA) {
 
 // Serves robots.txt and one screen from disk. `robotsFile` alone is a 200; `robotsStatus` alone
 // is a bodiless status; with neither, robots.txt is a 404.
-export function fakeTransport({ robotsFile = null, robotsStatus = null, fixture = null } = {}) {
+// `redirect`: every screen request that is not already for that URL answers 302 to it, so a test can drive a hop.
+export function fakeTransport({ robotsFile = null, robotsStatus = null, fixture = null, redirect = null } = {}) {
   return {
     fake: true,
     async get(target) {
@@ -175,6 +184,7 @@ export function fakeTransport({ robotsFile = null, robotsStatus = null, fixture 
         const body = robotsFile && status >= 200 && status < 300 ? readFileSync(robotsFile) : Buffer.alloc(0);
         return { status, body, contentType: "text/plain" };
       }
+      if (redirect && u.href !== new URL(redirect).href) return { status: 302, body: Buffer.alloc(0), contentType: "", location: redirect };
       if (!fixture) return { status: 404, body: Buffer.alloc(0), contentType: "" };
       return { status: 200, body: readFileSync(fixture), contentType: "image/png" };
     },
