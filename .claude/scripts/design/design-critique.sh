@@ -72,10 +72,16 @@ case "$CMD" in
       esac
       case "$BRIEF_ID" in
         ''|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|-*) echo "design-critique: the brief id '$BRIEF_ID' is not lowercase kebab" >&2; exit 1;;
+        # A Windows device name passes the charset and breaks the pack path on one CI leg (S2 attack B1).
+        con|prn|aux|nul|com[0-9]|lpt[0-9]) echo "design-critique: the brief id '$BRIEF_ID' is a Windows device name" >&2; exit 1;;
       esac
+      # A run record from an earlier begin must never survive a begin that fails: finish would hold the new
+      # critique to the old brief (S2 attack B2).
+      rm -f "$RUN_FILE" 2>/dev/null
       [ -f "$ROOT/$BRIEF" ] || { echo "design-critique: no brief at $BRIEF" >&2; exit 1; }
       WANT="$(node "$DESIGN_DIR/design-lint.mjs" --viewports "$ROOT/$BRIEF")" || { echo "design-critique: could not derive the viewport set from $BRIEF" >&2; exit 1; }
-      WANT="$(printf '%s\n' $WANT | grep -E '^[0-9]{2,5}x[0-9]{2,5}$' | tr '\n' ' ' | sed 's/ $//')"
+      # Quoted, then split by tr: an unquoted $WANT is word-split AND globbed against the cwd (S2 attack B3).
+      WANT="$(printf '%s\n' "$WANT" | tr ' ' '\n' | grep -E '^[0-9]{2,5}x[0-9]{2,5}$' | tr '\n' ' ' | sed 's/ $//')"
       [ -n "$WANT" ] || { echo "design-critique: $BRIEF declares no viewport -- that is a broken contract, not a pass" >&2; exit 1; }
       bash "$DESIGN_DIR/critic-scope-check.sh" --begin "$ROUTE" || exit 1
       RD="$ROOT/.claude/state/design/renders/design-critic"
