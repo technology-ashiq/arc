@@ -542,8 +542,14 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
   const allVerbRows = [];
   /** @type {string[]} */
   const ringsWithPlanned = [];
+  // A room born after v0.7 has no v0.7 row, so the contract carries it as a served room without a module;
+  // a BUILT one of those is a module folder too. Pinned by id, so a new one is a reviewed edit (ADR-1346).
+  const bornAfter = (contract.servedWithoutModule || []).filter((r) => r && r.status === "built");
+  check("the rooms born after v0.7 with a module folder are exactly reference (ADR-1346)",
+    JSON.stringify(bornAfter.map((r) => r.id).sort()) === JSON.stringify(["reference"]), JSON.stringify(bornAfter));
   for (const ring of SHIPPED_RINGS) {
-    const want = contract.modules.filter((m) => m.ring === ring && (m.class !== "extra" || exemptions.includes(m.id))).map((m) => m.id).sort();
+    const want = contract.modules.filter((m) => m.ring === ring && (m.class !== "extra" || exemptions.includes(m.id))).map((m) => m.id)
+      .concat(bornAfter.filter((r) => r.ring === ring).map((r) => r.id)).sort();
     const ringDir = join(MODULES, ring);
     const have = existsSync(ringDir) ? readdirSync(ringDir).filter((id) => statSync(join(ringDir, id)).isDirectory()).sort() : [];
     check(`SHIPPED RING ${ring}: its module folders are modules-v2.json's ids for the ring`, want.length > 0 && JSON.stringify(have) === JSON.stringify(want), `have=${have.join(",")} want=${want.join(",")}`);
