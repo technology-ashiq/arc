@@ -13,10 +13,20 @@
 //         Each miss is a deviation, logged and counted; any deviation exits 1. No rankings is a
 //         refusal, never a clean zero.
 //
+//   score   --root R --id ID --scores item-a=N,item-b=N,...   (S4, ADR-1411)
+//         The owner's blind 0-100 score for EVERY item, once. Refused after unblinding, if the rubric
+//         changed since the deal, or if ADR-1411's sealed predictions are not on the record.
+//   unblind --root R --id ID
+//         Refused until the score exists -- a score recorded after unblinding is not blind, so the
+//         ordering IS the assertion. Prints which item was which, and the arc-vs-control bar.
+//   catch-rate --root R --id ID
+//         Self-review iterations that caught a defect, over all iterations (assumption row 6).
+//
 // Known limit: a pack screen keeps its own format and size, so an item can differ from the
 // renders in ways a juror can see. Phase 07 renders every item through arc's renderer.
 //
 // Exit: 0 ok | 1 refused, or deviations found.
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative, sep } from "node:path";
@@ -83,7 +93,7 @@ function exploreOf(root, id) {
 }
 
 function deal(argv) {
-  const o = parse(argv, new Set(["--root", "--id", "--n", "--seed", "--viewport", "--ref"]), new Set(["--ref"]));
+  const o = parse(argv, new Set(["--root", "--id", "--n", "--seed", "--viewport", "--ref", "--rubric", "--control"]), new Set(["--ref"]));
   const root = o["--root"];
   if (!root) fail("--root is required");
   const ex = exploreOf(root, o["--id"]);
@@ -94,6 +104,15 @@ function deal(argv) {
   const viewport = o["--viewport"] ?? "1440x900";
   if (!/^[0-9]{2,5}x[0-9]{2,5}$/.test(viewport)) fail("--viewport takes WxH");
   const refs = o["--ref"] ?? [];
+  // The rubric and its anchors are fixed BEFORE the run: its sha goes into the key, and a score over a rubric
+  // edited after the deal is refused (ADR-1411; the rabbit hole of tuning the rubric until the score rises).
+  const rubricRel = o["--rubric"];
+  if (!rubricRel || !/^docs\/design\/rubrics\/[a-z0-9][a-z0-9-]*\.md$/.test(rubricRel)) fail("--rubric docs/design/rubrics/<name>.md is required: the owner scores against a rubric fixed before the deal");
+  const rubricFile = join(root, rubricRel);
+  if (!existsSync(rubricFile) || lstatSync(rubricFile).isSymbolicLink()) fail(`no rubric at ${rubricRel}`);
+  const rubricSha = sha256(readFileSync(rubricFile));
+  const control = o["--control"] ?? null;
+  if (control !== null && !/^[a-z]$/.test(control)) fail("--control names one variant letter");
   if (refs.length === 0) fail("a jury needs at least one reference item from the brief's pack (--ref <sha16>) -- best-of-the-variants is not a bar");
   if (existsSync(ex.jury)) fail(`this explore was already dealt (${ex.jury}); a re-deal after rankings is a re-roll, so it is refused`);
 
@@ -118,7 +137,7 @@ function deal(argv) {
     inside(file, sess, `${v}'s render ${best.m.png}`);
     const bytes = readFileSync(file);
     if (sha256(bytes) !== best.m.screenshot_sha256) fail(`${v}'s render bytes no longer match its meta; render again`);
-    items.push({ kind: "variant", source: v, path: file, sha256: best.m.screenshot_sha256, ext: extname(file).toLowerCase() });
+    items.push({ kind: control === v.slice(-1) ? "control" : "variant", source: v, path: file, sha256: best.m.screenshot_sha256, ext: extname(file).toLowerCase() });
   }
   // References: each --ref is one pack image, bound to a provenance row in the brief's sources.md.
   const packDir = join(root, ".claude", "state", "design", "refpacks", ex.brief);
@@ -141,6 +160,8 @@ function deal(argv) {
     }
     items.push({ kind: "reference", source: basename(file, ext), path: file, sha256: full, ext });
   }
+  if (control !== null && !items.some((i) => i.kind === "control")) fail(`--control ${control}: there is no variant-${control} to mark`);
+  if (!items.some((i) => i.kind === "variant")) fail("every variant is the control; a jury needs at least one arc variant");
   if (items.length !== n) fail(`--n ${n} was declared, and ${items.length} items are dealt (${variants.length} variants and ${refs.length} reference(s)); the count is a contract, so name it right`);
   if (n > LABELS.length) fail(`at most ${LABELS.length} items`);
 
@@ -158,7 +179,7 @@ function deal(argv) {
   }
   const itemsDir = join(ex.jury, "items");
   mkdirSync(itemsDir);
-  const key = { id: basename(ex.dir), brief: ex.brief, n, seed, viewport, dealt: new Date().toISOString(), items: [] };
+  const key = { id: basename(ex.dir), brief: ex.brief, n, seed, viewport, rubric: { path: rubricRel, sha256: rubricSha }, dealt: new Date().toISOString(), items: [] };
   items.forEach((it, i) => {
     const label = `item-${LABELS[i]}`;
     const file = `${label}${it.ext}`;
@@ -234,7 +255,107 @@ function check(argv) {
   process.exit(devs.length ? 1 : 0);
 }
 
+function loadKey(root, id) {
+  const ex = exploreOf(root, id);
+  const keyPath = join(ex.jury, "key.json");
+  if (!existsSync(keyPath)) fail(`no deal for this explore (${keyPath}); run jury first`);
+  let key;
+  try { key = JSON.parse(readFileSync(keyPath, "utf8")); } catch { fail("the sealed key does not parse"); }
+  return { ex, key };
+}
+
+// Write-once: `wx` fails if the file exists, so a second score or a second unblind is refused, not layered.
+function writeOnce(file, obj, what) {
+  try { writeFileSync(file, `${JSON.stringify(obj, null, 2)}\n`, { flag: "wx" }); } catch (e) {
+    fail(e.code === "EEXIST" ? `${what} was already recorded (${file}); a ritual step happens once` : `${what} could not be written (${e.code || e.message})`);
+  }
+}
+
+function sealedPredictions(root) {
+  const dir = join(root, "docs", "adr");
+  const adr = existsSync(dir) ? readdirSync(dir).find((n) => n.startsWith("1411-")) : null;
+  const text = adr ? readFileSync(join(dir, adr), "utf8") : "";
+  return /Sealed at kickoff/.test(text) && /1\. post-Phase-03 controlled blind score/.test(text) && /2\. rival-beats-all-arc rate/.test(text) && /3\. the EXP-A1 prediction/.test(text);
+}
+
+function score(argv) {
+  const o = parse(argv, new Set(["--root", "--id", "--scores"]));
+  const root = o["--root"];
+  if (!root) fail("--root is required");
+  const { ex, key } = loadKey(root, o["--id"]);
+  if (existsSync(join(ex.jury, "unblind.json"))) fail("this explore was already unblinded; a score recorded now is not a blind score");
+  if (!sealedPredictions(root)) fail("ADR-1411's three sealed predictions are not on the record; they are sealed BEFORE the owner scores");
+  if (!key.rubric || !existsSync(join(root, key.rubric.path)) || sha256(readFileSync(join(root, key.rubric.path))) !== key.rubric.sha256) {
+    fail("the rubric changed after the deal (or is gone); anchors are fixed before the run, and a changed one is a recorded decision, not an edit");
+  }
+  const labels = key.items.map((i) => i.label);
+  const scores = {};
+  for (const part of String(o["--scores"] ?? "").split(",")) {
+    const m = part.trim().match(/^(item-[a-z])=(0|[1-9][0-9]?|100)$/);
+    if (!m) fail(`--scores takes item-x=0..100 pairs, got '${part.trim()}'`);
+    if (!labels.includes(m[1])) fail(`${m[1]} is not an item of this deal`);
+    if (m[1] in scores) fail(`${m[1]} scored twice`);
+    scores[m[1]] = Number(m[2]);
+  }
+  const missing = labels.filter((l) => !(l in scores));
+  if (missing.length) fail(`every item is scored, blind: missing ${missing.join(" ")}`);
+  const rec = { id: key.id, scored: new Date().toISOString(), by: "owner", rubric: key.rubric, scores };
+  writeOnce(join(ex.jury, "score.json"), rec, "the owner's score");
+  // The receipt ADR-1411 asks for. The file above is the ordering proof; the spine refuses from a linked worktree
+  // by design, so its answer is reported, never assumed.
+  const payload = JSON.stringify({ lens: "design", what: "owner blind score", explore: key.id, scored: rec.scored, scores });
+  const em = spawnSync("bash", [join(root, ".claude", "scripts", "hq", "arc-event.sh"), "emit", "note.logged", "--payload", payload], { encoding: "utf8" });
+  console.log(`design-explore score: note.logged receipt ${em.status === 0 ? "emitted" : `NOT emitted (${clean(String(em.stderr || em.error || "").split("\n").find(Boolean) || `exit ${em.status}`).slice(0, 160)})`}`);
+  console.log(`design-explore score: ${labels.length} item(s) scored blind at ${rec.scored}; unblind next`);
+}
+
+function unblind(argv) {
+  const o = parse(argv, new Set(["--root", "--id"]));
+  const root = o["--root"];
+  if (!root) fail("--root is required");
+  const { ex, key } = loadKey(root, o["--id"]);
+  const scorePath = join(ex.jury, "score.json");
+  if (!existsSync(scorePath)) fail("no blind score yet; the owner scores BEFORE unblinding, or the score is not blind");
+  let sc;
+  try { sc = JSON.parse(readFileSync(scorePath, "utf8")); } catch { fail("the score record does not parse"); }
+  const at = new Date().toISOString();
+  if (!(Date.parse(sc.scored) <= Date.parse(at))) fail("the score's timestamp is not before this unblinding");
+  const rows = key.items.map((i) => ({ label: i.label, kind: i.kind, source: i.source, score: sc.scores[i.label] }));
+  const best = (kind) => rows.filter((r) => r.kind === kind).reduce((m, r) => (m === null || r.score > m.score ? r : m), null);
+  const arc = best("variant"), ctl = best("control"), ref = best("reference");
+  const bar = ctl ? { arc: arc.score, control: ctl.score, beats: arc.score > ctl.score } : null;
+  writeOnce(join(ex.jury, "unblind.json"), { id: key.id, unblinded: at, scored: sc.scored, rows, bestArc: arc, bestControl: ctl, bestReference: ref, bar }, "the unblinding");
+  for (const r of rows) console.log(`design-explore unblind: ${r.label} = ${r.kind} ${r.source} -- ${r.score}/100`);
+  console.log(`design-explore unblind: best arc ${arc.score}${ctl ? `, plain-prompt control ${ctl.score} (${bar.beats ? "arc beats it" : "arc does NOT beat it"})` : ", no control in this deal"}${ref ? `, reference ${ref.score}` : ""}`);
+}
+
+function catchRate(argv) {
+  const o = parse(argv, new Set(["--root", "--id"]));
+  const root = o["--root"];
+  if (!root) fail("--root is required");
+  const ex = exploreOf(root, o["--id"]);
+  let iters = 0, caught = 0;
+  const per = [];
+  for (const v of readdirSync(ex.dir).filter((d) => /^variant-[a-z]$/.test(d)).sort()) {
+    const man = join(ex.dir, v, "self-review", "manifest.md");
+    if (!existsSync(man)) continue;
+    const rows = readFileSync(man, "utf8").split(/\r?\n/).filter((l) => /^\|\s*[0-9]+\s*\|/.test(l));
+    let c = 0;
+    for (const r of rows) {
+      const cells = r.split("|").map((x) => x.trim());
+      if (cells[4] && !/^unchanged/i.test(cells[4])) c++;
+    }
+    iters += rows.length; caught += c;
+    per.push(`${v} ${c}/${rows.length}`);
+  }
+  if (iters === 0) fail("no self-review iterations recorded in this explore; a rate over nothing is not a rate");
+  console.log(`design-explore catch-rate: ${caught}/${iters} iteration(s) caught a defect (${per.join(", ")})`);
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === "deal") deal(rest);
 else if (cmd === "check") check(rest);
-else fail("usage: design-jury.mjs deal|check --root R --id ID ...");
+else if (cmd === "score") score(rest);
+else if (cmd === "unblind") unblind(rest);
+else if (cmd === "catch-rate") catchRate(rest);
+else fail("usage: design-jury.mjs deal|check|score|unblind|catch-rate --root R --id ID ...");
