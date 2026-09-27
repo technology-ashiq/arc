@@ -816,7 +816,7 @@ REFPACK_OK='node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --s
 
 @test "staging attack B2/B3/B5/B6/B8: query cap, no fragment, cwd pinned for reads, one path key, plain Glob, --staged on adds" {
   _curator_sandbox
-  local q; q="$(head -c 65 /dev/zero | tr ' ' 'a')"
+  local q; q="$(head -c 65 /dev/zero | tr '\0' 'a')"
   _fetch design-curator "https://nicelydone.club/apps?d=$q"
   [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "query is at most 64" || { echo "a 65-byte query was fetched: $status $stderr"; false; }
   _fetch design-curator "https://nicelydone.club/apps#frag"
