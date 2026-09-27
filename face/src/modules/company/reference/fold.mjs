@@ -13,6 +13,8 @@
 // file and the decisions it owns) · Meta (where the page lives, and anything the door withheld).
 import { asArray, asObject, servedRead } from "../../../lib/served.mjs";
 import { roomLink } from "../../../lib/lane-room.mjs";
+import { unescapeDoorText } from "../../../lib/door.mjs";
+import { check as checkDiagram, flow as flowDiagram, loop as loopDiagram } from "../../../lib/diagram.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 /** @typedef {{ text: string, at: string, isLink: boolean }} Ref */
@@ -40,6 +42,11 @@ import { roomLink } from "../../../lib/lane-room.mjs";
  * @property {{ heading: string, kind: string, startHere: string[], hasStartHere: boolean, loop: string[], hasLoop: boolean, startBlocks: Block[], loopBlocks: Block[], missing: string, hasMissing: boolean, isUnexplained: boolean,
  *   pending: string, facts: FactRow[], source: string, adrs: AdrRow[], hasAdrs: boolean, page: string,
  *   faceRoom: { canOpen: boolean, room: string, label: string }, withheld: string, showWithheld: boolean }} entity
+ * @property {boolean} isShaped
+ * @property {boolean} isPlainEntity
+ * @property {{ crumb: string, name: string, version: string, hasVersion: boolean, tagline: Span[], hasTagline: boolean,
+ *   chips: { k: string, v: string }[], nav: { title: string, items: { id: string, label: string }[] }[], groups: Group[],
+ *   hasNarrative: boolean, pending: string, showPending: boolean }} shape
  * @property {string} notes
  * @property {boolean} showNotes
  */
@@ -71,16 +78,26 @@ export function splitNarrative(text) {
 }
 
 /**
- * @typedef {{ text: string, isText: boolean, isStrong: boolean, isEm: boolean, isCode: boolean, isLink: boolean }} Span
+ * @typedef {{ text: string, isText: boolean, isStrong: boolean, isEm: boolean, isCode: boolean, isLink: boolean, isPick: boolean, at: string }} Span
  * @typedef {{ spans: Span[] }} Cell
  * @typedef {{ cells: Cell[] }} Row
+ * @typedef {{ n: string, t: Span[], plain: Span[], d: Span[], f: Span[], hasPlain: boolean, hasD: boolean, hasF: boolean }} Step
+ * @typedef {{ term: string, def: Span[] }} Gloss
+ * @typedef {{ value: string, label: string }} Stat
  * @typedef {{ isHeading: boolean, isH2: boolean, isH3: boolean, isH4: boolean, isPara: boolean, isList: boolean,
  *   isOrdered: boolean, isTable: boolean, isCode: boolean, isQuote: boolean, spans: Span[], items: Cell[], head: Cell[],
- *   rows: Row[], text: string }} Block
+ *   rows: Row[], text: string,
+ *   isLede: boolean, isTagline: boolean, isSteps: boolean, steps: Step[], isFigure: boolean,
+ *   figure: import("../../../lib/diagram.mjs").Geometry, isPanel: boolean, isWarn: boolean, isBig: boolean,
+ *   panelTitle: string, hasPanelTitle: boolean, inner: Block[], isStats: boolean, stats: Stat[], isRosetta: boolean,
+ *   isGloss: boolean, gloss: Gloss[], isBad: boolean, bad: string }} Block
  */
 
 const span = /** @param {string} text @param {"text"|"strong"|"em"|"code"|"link"} k @returns {Span} */ (text, k) =>
-  ({ text, isText: k === "text", isStrong: k === "strong", isEm: k === "em", isCode: k === "code", isLink: k === "link" });
+  ({ text, isText: k === "text", isStrong: k === "strong", isEm: k === "em", isCode: k === "code", isLink: k === "link", isPick: false, at: "" });
+/** A generated cross-link: a page the extract holds (a pick), or plain mono text when it holds none. */
+const pickSpan = /** @param {string} text @param {string} at @param {boolean} isLink @returns {Span} */ (text, at, isLink) =>
+  ({ ...span(text, "code"), isCode: !isLink, isPick: isLink, at: isLink ? at : "" });
 
 /**
  * Inline markdown as spans: code, strong, emphasis and a link's TEXT (its target is dropped -- a page link is a pick the
@@ -106,10 +123,94 @@ export function inlineSpans(text) {
   return out;
 }
 
+/** @type {import("../../../lib/diagram.mjs").Geometry} */
+const NO_FIGURE = { kind: "flow", w: 0, h: 0, boxes: [], arrows: [], labels: [], divider: null, caption: { title: "", rest: "" }, ends: [], problems: [] };
 const block = /** @param {Partial<Block>} b @returns {Block} */ (b) => ({
   isHeading: false, isH2: false, isH3: false, isH4: false, isPara: false, isList: false, isOrdered: false, isTable: false,
-  isCode: false, isQuote: false, spans: [], items: [], head: [], rows: [], text: "", ...b,
+  isCode: false, isQuote: false, spans: [], items: [], head: [], rows: [], text: "",
+  isLede: false, isTagline: false, isSteps: false, steps: [], isFigure: false, figure: NO_FIGURE, isPanel: false, isWarn: false,
+  isBig: false, panelTitle: "", hasPanelTitle: false, inner: [], isStats: false, stats: [], isRosetta: false, isGloss: false,
+  gloss: [], isBad: false, bad: "", ...b,
 });
+
+/** The fenced kinds page shape v1 draws (ADR-1348 section 5); any other info string is a plain code block. */
+export const FENCED = Object.freeze(["tagline", "lede", "steps", "flow", "loop", "panel", "stats", "rosetta", "gloss"]);
+
+/**
+ * One fenced block of page shape v1. A block this cannot read is drawn as its own source with the reason -- never
+ * dropped, never guessed at -- so a typo shows on the page instead of a section silently vanishing.
+ * @param {string} info the fence's info string, e.g. "flow" or "panel warn"
+ * @param {string} body @returns {Block}
+ */
+export function fencedBlock(info, body) {
+  const [kind = "", ...mods] = info.trim().toLowerCase().split(/\s+/);
+  const bad = /** @param {string} why */ (why) => block({ isBad: true, bad: `A \`${kind}\` block could not be read: ${why}`, text: body });
+  const lines = body.split(/\r?\n/);
+  const text = lines.map((l) => l.trim()).filter(Boolean).join(" ");
+  if (kind === "tagline" || kind === "lede") {
+    if (text === "") return bad("it is empty");
+    return block({ isTagline: kind === "tagline", isLede: kind === "lede", spans: inlineSpans(text) });
+  }
+  if (kind === "flow" || kind === "loop") {
+    const g = kind === "flow" ? flowDiagram(body) : loopDiagram(body);
+    const problems = [...g.problems, ...checkDiagram(g)];
+    return problems.length ? bad(problems.join("; ")) : block({ isFigure: true, figure: g });
+  }
+  if (kind === "panel") {
+    const first = /^\s*title\s*:\s*(.*)$/.exec(str(lines.find((l) => l.trim() !== "")));
+    const rest = first ? lines.slice(lines.findIndex((l) => l.trim() !== "") + 1) : lines;
+    const inner = narrativeBlocks(rest.join("\n"));
+    if (inner.length === 0) return bad("it is empty");
+    const title = first ? str(first[1]).trim() : "";
+    return block({ isPanel: true, isWarn: mods.includes("warn"), isBig: mods.includes("big"), panelTitle: title, hasPanelTitle: title !== "", inner });
+  }
+  if (kind === "stats") {
+    const stats = [];
+    for (const l of lines.filter((x) => x.trim() !== "")) {
+      const i = l.indexOf("|");
+      if (i < 0) return bad(`"${l.trim()}" has no "value | label" bar`);
+      stats.push({ value: l.slice(0, i).trim(), label: l.slice(i + 1).trim() });
+    }
+    return stats.length ? block({ isStats: true, stats }) : bad("it is empty");
+  }
+  if (kind === "rosetta") {
+    const rows = [];
+    for (const l of lines.filter((x) => x.trim() !== "")) {
+      const cells = cellsOf(l);
+      if (cells.length !== 3) return bad(`"${l.trim()}" needs three cells: arc word | it is really | meaning`);
+      rows.push({ cells });
+    }
+    const head = ["arc calls it", "It is really", "Meaning"].map((t) => ({ spans: inlineSpans(t) }));
+    return rows.length ? block({ isRosetta: true, head, rows }) : bad("it is empty");
+  }
+  if (kind === "gloss") {
+    const gloss = [];
+    for (const l of lines.filter((x) => x.trim() !== "")) {
+      const m = /^\s*([^:]+?)\s*:\s+(.+)$/.exec(l);
+      if (!m) return bad(`"${l.trim()}" is not "term: definition"`);
+      gloss.push({ term: str(m[1]), def: inlineSpans(str(m[2])) });
+    }
+    return gloss.length ? block({ isGloss: true, gloss }) : bad("it is empty");
+  }
+  // steps: each step opens with `t:`; `plain:`, `d:` and `f:` fill it; an unkeyed line continues the field above.
+  const steps = [];
+  /** @type {Record<string, string> | null} */
+  let cur = null;
+  let field = "";
+  for (const l of lines) {
+    if (l.trim() === "") continue;
+    const m = /^\s*(t|plain|d|f)\s*:\s*(.*)$/.exec(l);
+    if (m) {
+      field = str(m[1]);
+      if (field === "t") { cur = { t: "", plain: "", d: "", f: "" }; steps.push(cur); }
+      if (!cur) return bad(`"${l.trim()}" comes before any step's \`t:\` line`);
+      cur[field] = str(m[2]).trim();
+    } else if (cur && field) cur[field] = `${str(cur[field])} ${l.trim()}`;
+    else return bad(`"${l.trim()}" belongs to no step`);
+  }
+  if (steps.length === 0) return bad("it has no step");
+  return block({ isSteps: true, steps: steps.map((s, i) => ({ n: String(i + 1), t: inlineSpans(str(s.t)), plain: inlineSpans(str(s.plain)), d: inlineSpans(str(s.d)), f: inlineSpans(str(s.f)), hasPlain: str(s.plain) !== "", hasD: str(s.d) !== "", hasF: str(s.f) !== "" })) });
+}
 const cellsOf = /** @param {string} line @returns {Cell[]} */ (line) => {
   const t = line.trim().replace(/^\|/, "").replace(/\|$/, "");
   return t.split(/(?<!\\)\|/).map((c) => ({ spans: inlineSpans(c.trim().replace(/\\\|/g, "|")) }));
@@ -155,7 +256,9 @@ export function narrativeBlocks(text) {
       const body = [];
       let j = i + 1;
       while (j < clean.length && !FENCE.test(str(clean[j]))) body.push(str(clean[j++]));
-      out.push(block({ isCode: true, text: body.join("\n") }));
+      const info = l.trim().replace(/^(```|~~~)/, "").trim();
+      const kind = str(info.toLowerCase().split(/\s+/)[0]);
+      out.push(FENCED.includes(kind) ? fencedBlock(info, body.join("\n")) : block({ isCode: true, text: body.join("\n") }));
       i = j;
       continue;
     }
@@ -226,6 +329,43 @@ export function splitBlocks(text) {
   });
   return at < 0 ? { start: narrativeBlocks(lines.join("\n")), loop: [] }
     : { start: narrativeBlocks(lines.slice(0, at).join("\n")), loop: narrativeBlocks(lines.slice(at + 1).join("\n")) };
+}
+
+/**
+ * @typedef {{ id: string, title: Span[], hasTitle: boolean, isNarrative: boolean, isGenerated: boolean, blocks: Block[] }} Section
+ * @typedef {{ key: string, title: string, sections: Section[], hasSections: boolean }} Group
+ */
+
+const GROUPS = Object.freeze({ "start here": "start", "the bigger loop": "loop", "reference": "reference", "evidence": "evidence", "meta": "meta" });
+const plainText = /** @param {Span[]} ss */ (ss) => ss.map((s) => s.text).join("");
+
+/**
+ * A narrative as page shape v1 (ADR-1348 section 1): a heading named after a group (Start here, The bigger loop, Meta
+ * ...) switches group; every other level-1/2 heading opens a section, and a level-3 one does too when no section is
+ * open yet (the older narratives' shape); deeper headings stay inside their section as sub-heads. A `tagline` block
+ * goes to the masthead. What comes before any heading belongs to Start here.
+ * @param {string} text
+ * @returns {{ tagline: Span[], groups: Record<string, { title: Span[], blocks: Block[] }[]> }}
+ */
+export function pageOf(text) {
+  /** @type {Record<string, { title: Span[], blocks: Block[] }[]>} */
+  const groups = { start: [], loop: [], reference: [], evidence: [], meta: [] };
+  /** @type {Span[]} */
+  let tagline = [];
+  let g = "start";
+  /** @type {{ title: Span[], blocks: Block[] } | null} */
+  let cur = null;
+  for (const b of narrativeBlocks(text)) {
+    if (b.isTagline) { tagline = b.spans; continue; }
+    if (b.isHeading) {
+      const name = str(own(GROUPS, plainText(b.spans).trim().toLowerCase()));
+      if (name !== "") { g = name; cur = null; continue; }
+      if (b.isH2 || (b.isH3 && !cur)) { cur = { title: b.spans, blocks: [] }; groups[g]?.push(cur); continue; }
+    }
+    if (!cur) { cur = { title: [], blocks: [] }; groups[g]?.push(cur); }
+    cur.blocks.push(b);
+  }
+  return { tagline, groups };
 }
 
 /**
@@ -369,6 +509,102 @@ export function fold(payloads, ctx) {
   const dir = isEntity ? str(own(pageDirs, key)) : "";
   const pending = isEntity ? `Narrative pending. Nobody has written why this exists yet; it belongs in docs/wiki/_narrative/${dir}/${id}.md, hand-written or owner-accepted (ADR-1508). The room never writes it.` : "";
 
+  // ---- page shape v1, for products and lanes (ADR-1348) ----
+  const isShaped = isEntity && (key === "products" || key === "lanes");
+  /** @type {Group[]} */
+  let groups = [];
+  /** @type {{ k: string, v: string }[]} */
+  const chips = [];
+  /** @type {Span[]} */
+  let tagline = [];
+  let version = "";
+  if (isShaped && entity) {
+    const f = asObject(entity.facts);
+    const eid = str(entity.id);
+    const productLane = asObject(rel.productLane);
+    // The door serves every string HTML-escaped (ADR-1312); the page parses the owner's words, so it reads them back
+    // first -- React escapes what it draws, so a tag in the prose still shows and never runs.
+    const narr = pageOf(unescapeDoorText(str(own(narrative, at))));
+    tagline = narr.tagline;
+    const cell = /** @param {string} t @returns {Cell} */ (t) => ({ spans: inlineSpans(unescapeDoorText(t)) });
+    const table = /** @param {string[]} head @param {Cell[][]} body @returns {Block} */ (head, body) => block({ isTable: true, head: head.map(cell), rows: body.map((cells) => ({ cells })) });
+    const para = /** @param {string} t @returns {Block} */ (t) => block({ isPara: true, spans: inlineSpans(unescapeDoorText(t)) });
+    const pickCell = /** @param {string} k @param {string[]} ids @param {(i: string) => string} label @returns {Cell} */ (k, ids, label) =>
+      ({ spans: ids.length ? ids.flatMap((i, n) => [...(n ? [span(", ", "text")] : []), pickSpan(label(i), `${k}/${i}`, has(k, i))]) : [span("—", "text")] });
+    /** @type {Record<string, { title: Span[], blocks: Block[], generated: boolean }[]>} */
+    const gen = { start: [], loop: [], reference: [], evidence: [], meta: [] };
+    const add = /** @param {string} g @param {string} title @param {Block[]} blocks */ (g, title, blocks) => { if (blocks.length) gen[g]?.push({ title: inlineSpans(title), blocks, generated: true }); };
+    const laneId = key === "lanes" ? eid : str(own(productLane, eid));
+    const lane = laneId ? list("lanes").find((l) => l.id === laneId) : undefined;
+    const lf = asObject(lane?.facts);
+    const laneStats = lane ? [block({ isStats: true, stats: [
+      { value: str(lf.status) || "—", label: "status" },
+      { value: str(lf.phase).split(/\s[—(]/)[0] || "—", label: "phase now" },
+      { value: `${str(lf.burn) || "?"} / ${str(lf.appetite) || "?"}`, label: "time used / appetite" },
+      { value: str(lf["blocked-on"]) || "—", label: "blocked on" },
+    ] }), para(`Cycle: ${str(lf.cycle)}. Read from \`${str(lane.source)}\` -- the lane's own tracker is the truth (ADR-0051).`)] : [];
+    const cmds = asArray(f.commands).map(stem), agents = asArray(f.agents).map(stem);
+    if (key === "products") {
+      version = str(f.version);
+      if (f.faceRing) chips.push({ k: "ring", v: str(f.faceRing) });
+      if (f.faceRoom) chips.push({ k: "face room", v: str(f.faceRoom) });
+      chips.push({ k: "requires", v: asArray(f.requires).map(str).join(", ") || "nothing" });
+      if (lane) chips.push({ k: "lane", v: `${laneId} · ${str(lf.status)}` });
+      const describe = /** @param {string} k @param {string} i @returns {Record<string, unknown>} */ (k, i) => asObject(list(k).find((e) => e.id === i)?.facts);
+      add("reference", "What it installs", [table(["Kind", "Name", "What it is"], [
+        ...cmds.map((c) => [cell("command"), pickCell("commands", [c], (i) => `/${i}`), cell(str(describe("commands", c).description))]),
+        ...agents.map((a) => { const d = describe("agents", a); return [cell("agent"), pickCell("agents", [a], (i) => i), cell(`${str(d.description)}${d.model ? ` (runs on ${str(d.model)})` : ""}`)]; }),
+      ])]);
+      const owned = [...asArray(f.scripts).map(str), ...asArray(f.files).map(str)];
+      add("reference", "Scripts and files it owns", owned.length ? [block({ isList: true, items: owned.map((p) => ({ spans: [span(p, "code")] })) })] : []);
+      add("reference", "How it connects", [table(["Relation", "With"], [
+        [cell("Needs"), pickCell("products", asArray(f.requires).map(str), (i) => i)],
+        [cell("Needed by"), pickCell("products", asArray(own(asObject(rel.requiredBy), eid)).map(str).sort(), (i) => i)],
+        [cell("Its lane"), pickCell("lanes", laneId ? [laneId] : [], (i) => i)],
+      ])]);
+    } else {
+      if (lf.status) chips.push({ k: "status", v: str(lf.status) });
+      if (lf.cycle) chips.push({ k: "cycle", v: str(lf.cycle) });
+      const prod = Object.keys(productLane).find((p) => own(productLane, p) === eid);
+      add("reference", "How it connects", [table(["Relation", "With"], [
+        [cell("Its product"), pickCell("products", prod ? [prod] : [], (i) => i)],
+        [cell("Plan and tracker"), cell(f.hasPlan ? `\`initiatives/${eid}/PLAN.md\` · \`initiatives/${eid}/PROGRESS.md\`` : `\`initiatives/${eid}/PROGRESS.md\``)],
+      ])]);
+    }
+    add("evidence", "Lane status", laneStats);
+    add("evidence", adrs.length ? `Decisions -- ${adrs.length} ADR${adrs.length === 1 ? "" : "s"}` : "Decisions",
+      adrs.length ? [table(["#", "Decision", "Status"], adrs.map((a) => [cell(`\`${a.number}\``), cell(a.title), cell(`${a.status} · ${a.date}`)]))] : [para("No decision names this as its product yet.")]);
+    const parts = key === "products" ? cmds.length + agents.length : 0;
+    add("meta", "Drift check", [table(["Check", "Result"], [
+      ...(key === "products" ? [[cell("Every command and agent it installs is explained on this page"), cell(missing.length ? `${parts - missing.length} of ${parts} -- not yet: ${missing.map((x) => `\`${x}\``).join(", ")}` : `${parts} of ${parts}`)]] : []),
+      [cell("A narrative exists for this page"), cell(asArray(narr.groups.start).length || asArray(narr.groups.loop).length ? "yes" : "no -- narrative pending")],
+    ])]);
+    add("meta", "Sources", [table(["Source file", "Feeds"], [
+      [cell(`\`${source}\``), cell(key === "products" ? "the header chips, what it installs, how it connects" : "the header chips and lane status")],
+      [cell(`\`docs/wiki/_narrative/${dir}/${id}.md\``), cell("every section marked narrative")],
+      ...(lane && key === "products" ? [[cell(`\`${str(lane.source)}\``), cell("lane status")]] : []),
+      [cell("`docs/adr/`"), cell("decisions")],
+    ])]);
+    const used = new Set();
+    const slug = /** @param {string} t @returns {string} */ (t) => {
+      const base = `ref-${t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section"}`;
+      let s = base, n = 2;
+      while (used.has(s)) s = `${base}-${n++}`;
+      used.add(s);
+      return s;
+    };
+    const TITLES = { start: "Start here", loop: "The bigger loop", reference: "Reference", evidence: "Evidence", meta: "Meta" };
+    groups = Object.entries(TITLES).map(([g, title]) => {
+      const sections = [
+        ...asArray(narr.groups[g]).map((s) => ({ title: /** @type {{ title: Span[] }} */ (s).title, blocks: /** @type {{ blocks: Block[] }} */ (s).blocks, generated: false })),
+        ...asArray(gen[g]).map((s) => /** @type {{ title: Span[], blocks: Block[], generated: boolean }} */ (s)),
+      ].map((s) => ({ id: slug(plainText(s.title) || title), title: s.title, hasTitle: s.title.length > 0, isNarrative: !s.generated, isGenerated: s.generated, blocks: s.blocks }));
+      return { key: g, title, sections, hasSections: sections.length > 0 };
+    });
+  }
+  const nav = groups.filter((g) => g.hasSections).map((g) => ({ title: g.title, items: g.sections.filter((s) => s.hasTitle).map((s) => ({ id: s.id, label: plainText(s.title) })) }));
+  const hasNarrative = groups.some((g) => g.sections.some((s) => s.isNarrative));
+
   const unpaged = asArray(body.unpaged).length;
   const factsAltered = asObject(body.scrubbed).factsAltered === true;
   const notes = [
@@ -407,6 +643,20 @@ export function fold(payloads, ctx) {
       page,
       faceRoom,
       withheld, showWithheld: withheld !== "",
+    },
+    isShaped: st.isRead && isShaped,
+    isPlainEntity: st.isRead && isEntity && !isShaped,
+    shape: {
+      crumb: isShaped ? `arc wiki · ${str(own(titles, key)) || key} · ` : "",
+      name: isShaped && entity ? str(entity.id) : "",
+      version, hasVersion: version !== "",
+      tagline, hasTagline: tagline.length > 0,
+      chips,
+      nav,
+      groups: groups.filter((g) => g.hasSections),
+      hasNarrative,
+      pending: isShaped && !hasNarrative ? pending : "",
+      showPending: isShaped && !hasNarrative,
     },
     notes,
     showNotes: notes !== "",

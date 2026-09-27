@@ -5,6 +5,7 @@ import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Block, Folded, Span } from './fold.mjs'
 import { DoorRefusal, Empty, HPanel, Reading, RoomHead, SectionLabel } from '../../../ui/bits'
 import { Btn, MONO, UI } from '../../../ui/kit'
+import { BadBlock, Figure, Gloss, GroupLabel, Lede, PageMast, PageNav, PagePanel, PageSection, PageTable, StatGrid, StepPipe } from '../../../ui/page'
 export { BookOpenText as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -60,11 +61,36 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
         </HPanel>
       )}
 
-      {f.isEntity && (
+      {f.isShaped && (
+        <article>
+          <PageMast crumb={f.shape.crumb} name={f.shape.name} version={f.shape.version}
+            tagline={f.shape.hasTagline && <Spans spans={f.shape.tagline} onPick={(at) => ctx.onPick('at', at)} />}
+            chips={f.shape.chips}
+            action={f.entity.faceRoom.canOpen && <Btn small onClick={() => ctx.onOpen(f.entity.faceRoom.room)}>{f.entity.faceRoom.label}</Btn>} />
+          {f.shape.showPending && <p className="text-[13px] italic mb-6" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.shape.pending}</p>}
+          <div className="grid gap-x-11 xl:grid-cols-[225px_minmax(0,1fr)]">
+            <PageNav groups={f.shape.nav} />
+            <main className="min-w-0">
+              {f.shape.groups.map((g) => (
+                <div key={g.key}>
+                  <GroupLabel>{g.title}</GroupLabel>
+                  {g.sections.map((s) => (
+                    <PageSection key={s.id} id={s.id} generated={s.isGenerated} title={s.hasTitle && <Spans spans={s.title} onPick={(at) => ctx.onPick('at', at)} />}>
+                      <Blocks blocks={s.blocks} onPick={(at) => ctx.onPick('at', at)} />
+                    </PageSection>
+                  ))}
+                </div>
+              ))}
+            </main>
+          </div>
+        </article>
+      )}
+
+      {f.isPlainEntity && (
         <div className="grid gap-4">
           <HPanel title={f.entity.heading} hint={f.entity.kind}>
             <SectionLabel>Start here</SectionLabel>
-            {f.entity.hasStartHere && <Blocks blocks={f.entity.startBlocks} />}
+            {f.entity.hasStartHere && <Blocks blocks={f.entity.startBlocks} onPick={(at) => ctx.onPick('at', at)} />}
             {f.entity.hasMissing && (
               <p className="text-[12px] mt-1 mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>Not explained on this page yet: <span style={{ fontFamily: MONO }}>{f.entity.missing}</span></p>
             )}
@@ -75,7 +101,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
               <p className="text-[12.5px] italic" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.entity.pending}</p>
             )}
             <SectionLabel className="mt-4">The bigger loop</SectionLabel>
-            {f.entity.hasLoop && <Blocks blocks={f.entity.loopBlocks} />}
+            {f.entity.hasLoop && <Blocks blocks={f.entity.loopBlocks} onPick={(at) => ctx.onPick('at', at)} />}
             {!f.entity.hasLoop && (
               <p className="text-[12.5px] italic" style={{ fontFamily: UI, color: 'var(--text-3)' }}>Narrative pending.</p>
             )}
@@ -138,11 +164,12 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 
 // The narrative as the fold parsed it (ADR-1347 section 2): every choice -- which kind of block, which kind of span -- is a
 // boolean the fold set; this only draws it. Text is React-escaped, so a tag in the prose shows and never runs.
-function Spans({ spans }: { spans: Span[] }) {
+function Spans({ spans, onPick }: { spans: Span[]; onPick: (at: string) => void }) {
   return (
     <>
       {spans.map((s, i) => (
         <span key={i}>
+          {s.isPick && <button type="button" onClick={() => onPick(s.at)} className="cursor-pointer underline decoration-dotted hover:text-(--accent) whitespace-nowrap" style={{ fontFamily: MONO, fontSize: '0.92em' }}>{s.text}</button>}
           {s.isText && s.text}
           {s.isStrong && <strong style={{ fontWeight: 600, color: 'var(--text-1)' }}>{s.text}</strong>}
           {s.isEm && <em>{s.text}</em>}
@@ -154,36 +181,31 @@ function Spans({ spans }: { spans: Span[] }) {
   )
 }
 
-function Blocks({ blocks }: { blocks: Block[] }) {
+function Blocks({ blocks, onPick }: { blocks: Block[]; onPick: (at: string) => void }) {
   return (
-    <div className="text-[13.5px] leading-relaxed" style={{ fontFamily: UI, color: 'var(--text-1)' }}>
+    <div className="text-[15px] leading-[1.65]" style={{ fontFamily: UI, color: 'var(--text-1)' }}>
       {blocks.map((b, i) => (
-        <div key={i} className="mb-2.5">
-          {b.isH2 && <h3 className="text-[15px] font-semibold mt-4 mb-1" style={{ fontFamily: 'var(--font-display)' }}><Spans spans={b.spans} /></h3>}
-          {b.isH3 && <h4 className="text-[13.5px] font-semibold mt-3 mb-1"><Spans spans={b.spans} /></h4>}
-          {b.isH4 && <h5 className="text-[12.5px] font-semibold mt-2 mb-0.5" style={{ color: 'var(--text-2)' }}><Spans spans={b.spans} /></h5>}
-          {b.isPara && <p><Spans spans={b.spans} /></p>}
-          {b.isQuote && <blockquote className="pl-3 italic" style={{ borderLeft: '2px solid var(--line-2)', color: 'var(--text-2)' }}><Spans spans={b.spans} /></blockquote>}
+        <div key={i} className="mb-3 max-w-[76ch] [&:has(figure,table,.grid)]:max-w-none">
+          {b.isLede && <Lede>{<Spans spans={b.spans} onPick={onPick} />}</Lede>}
+          {b.isSteps && <StepPipe steps={b.steps.map((s) => ({ n: s.n, t: <Spans spans={s.t} onPick={onPick} />, plain: s.hasPlain && <Spans spans={s.plain} onPick={onPick} />, d: s.hasD && <Spans spans={s.d} onPick={onPick} />, f: s.hasF && <Spans spans={s.f} onPick={onPick} /> }))} />}
+          {b.isFigure && <Figure g={b.figure} />}
+          {b.isPanel && <PagePanel title={b.panelTitle} warn={b.isWarn} big={b.isBig}><Blocks blocks={b.inner} onPick={onPick} /></PagePanel>}
+          {b.isStats && <StatGrid stats={b.stats} />}
+          {b.isRosetta && <PageTable rosetta head={b.head.map((c) => <Spans spans={c.spans} onPick={onPick} />)} rows={b.rows.map((r) => r.cells.map((c) => <Spans spans={c.spans} onPick={onPick} />))} />}
+          {b.isGloss && <Gloss items={b.gloss.map((g) => ({ term: g.term, def: <Spans spans={g.def} onPick={onPick} /> }))} />}
+          {b.isBad && <BadBlock why={b.bad} source={b.text} />}
+          {b.isH2 && <h3 className="text-[15px] font-semibold mt-4 mb-1" style={{ fontFamily: 'var(--font-display)' }}><Spans spans={b.spans} onPick={onPick} /></h3>}
+          {b.isH3 && <h4 className="text-[13.5px] font-semibold mt-3 mb-1"><Spans spans={b.spans} onPick={onPick} /></h4>}
+          {b.isH4 && <h5 className="text-[12.5px] font-semibold mt-2 mb-0.5" style={{ color: 'var(--text-2)' }}><Spans spans={b.spans} onPick={onPick} /></h5>}
+          {b.isPara && <p><Spans spans={b.spans} onPick={onPick} /></p>}
+          {b.isQuote && <blockquote className="pl-3 italic" style={{ borderLeft: '2px solid var(--line-2)', color: 'var(--text-2)' }}><Spans spans={b.spans} onPick={onPick} /></blockquote>}
           {b.isList && !b.isOrdered && (
-            <ul className="list-disc pl-5 grid gap-1">{b.items.map((it, j) => <li key={j}><Spans spans={it.spans} /></li>)}</ul>
+            <ul className="list-disc pl-5 grid gap-1">{b.items.map((it, j) => <li key={j}><Spans spans={it.spans} onPick={onPick} /></li>)}</ul>
           )}
           {b.isOrdered && (
-            <ol className="list-decimal pl-5 grid gap-1">{b.items.map((it, j) => <li key={j}><Spans spans={it.spans} /></li>)}</ol>
+            <ol className="list-decimal pl-5 grid gap-1">{b.items.map((it, j) => <li key={j}><Spans spans={it.spans} onPick={onPick} /></li>)}</ol>
           )}
-          {b.isTable && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px] border-collapse">
-                <thead>
-                  <tr>{b.head.map((c, j) => <th key={j} className="text-left font-semibold px-2 py-1.5" style={{ borderBottom: '1px solid var(--line-2)', color: 'var(--text-2)' }}><Spans spans={c.spans} /></th>)}</tr>
-                </thead>
-                <tbody>
-                  {b.rows.map((r, j) => (
-                    <tr key={j}>{r.cells.map((c, k) => <td key={k} className="align-top px-2 py-1.5" style={{ borderBottom: '1px solid var(--line-1)' }}><Spans spans={c.spans} /></td>)}</tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {b.isTable && <PageTable head={b.head.map((c) => <Spans spans={c.spans} onPick={onPick} />)} rows={b.rows.map((r) => r.cells.map((c) => <Spans spans={c.spans} onPick={onPick} />))} />}
           {b.isCode && <pre className="text-[12px] p-2.5 rounded overflow-x-auto" style={{ fontFamily: MONO, background: 'var(--bg-2)' }}>{b.text}</pre>}
         </div>
       ))}

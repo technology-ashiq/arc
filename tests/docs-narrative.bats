@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
-# face Phase 07 (ADR-1347) / docs (ADR-1513, DOC-M) -- a drafted narrative ships only source-anchored, verified by an
-# independent family, and read by the owner.
+# face Phase 07 (ADR-1347, ADR-1348) / docs (ADR-1514, DOC-N, amending ADR-1513) -- a narrative ships drift-checked
+# (every ADR, command and path it names exists) and accepted by the owner against its hash; the verifier is advisory.
 #
 # narrative-anchors is a gate, so every arm FAILs from birth with its mutant (its --selftest), the gate runs clean on
 # the real tree, and the TEST is attacked too: a copy of the gate with one rule cut must fail its own self-test.
@@ -17,8 +17,8 @@ VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
   [[ "$output" == *"RAN: 17 checks, 0 failed"* ]] || { echo "$output"; false; }
   [ "$status" -eq 0 ]
   local arm
-  for arm in "MUTANT unanchored" "MUTANT anchor: a path that is not tracked" "MUTANT plain-fact" "MUTANT unverified" \
-             "MUTANT edited-after-verify" "MUTANT verdict" "MUTANT coverage" "MUTANT family" "MUTANT orphan"; do
+  for arm in "MUTANT drift: an ADR" "MUTANT drift: a command" "MUTANT drift: a path" "MUTANT drift: a name inside a page-shape block" \
+             "MUTANT anchor: a src marker" "MUTANT empty" "MUTANT edited-after-accept" "MUTANT orphan" "accept: records the owner"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
   done
 }
@@ -36,13 +36,13 @@ VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
   [ -n "$total" ] && [ "$total" -ge 100 ] || { echo "the debt was counted over too little: $line"; false; }
 }
 
-@test "narrative-anchors: the TEST is attacked -- a gate with the unanchored rule cut fails its own self-test" {
+@test "narrative-anchors: the TEST is attacked -- a gate with the ADR drift rule cut fails its own self-test" {
   local copy="$BATS_TEST_TMPDIR/gate-cut.mjs"
-  sed 's/else if (!b.anchors.length) fails.push/else if (false) fails.push/' "$GATE" > "$copy"
+  sed 's/for (const n of names.adrs) if (!tree.adrs.has(n)) fails.push/for (const n of names.adrs) if (false) fails.push/' "$GATE" > "$copy"
   ! cmp -s "$GATE" "$copy" || { echo "the mutation did not apply -- the anchor text moved"; false; }
   run node "$copy" --selftest
   [[ "$output" == *"RAN: 17 checks"* ]] || { echo "the mutant self-test never ran: $output"; false; }
-  [[ "$output" == *"FAIL MUTANT unanchored"* ]] || { echo "the cut rule was not noticed: $output"; false; }
+  [[ "$output" == *"FAIL MUTANT drift: an ADR"* ]] || { echo "the cut rule was not noticed: $output"; false; }
   [ "$status" -ne 0 ]
 }
 
@@ -105,8 +105,21 @@ VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
   [[ "$output" == *"carry skips window found"* ]] || { echo "$output"; false; }
 }
 
-@test "docs-narrative: this suite registers all 8 of its tests" {
+@test "narrative-anchors: --accept refuses a page that does not exist and leaves the acceptance file as it was" {
+  local f="$ARC_ROOT/docs/narrative-verify/accepted.json" before="none" after="none"
+  if [ -e "$f" ]; then before="$(cksum < "$f")"; fi
+  run node "$GATE" --root "$ARC_ROOT" --accept products/zz-no-such-page
+  [[ "$output" == *"REFUSED products/zz-no-such-page"* ]] || { echo "the refusal never printed (exit $status): $output"; false; }
+  [ "$status" -eq 1 ]
+  if [ -e "$f" ]; then after="$(cksum < "$f")"; fi
+  [ "$before" = "$after" ] || { echo "the acceptance file changed on a refusal"; false; }
+  run node "$GATE" --accept
+  [[ "$output" == *"--accept needs"* ]] || { echo "no refusal for a bare --accept (exit $status): $output"; false; }
+  [ "$status" -eq 2 ]
+}
+
+@test "docs-narrative: this suite registers all 9 of its tests" {
   local n
   n="$(grep -c '^@test ' "$ARC_ROOT/tests/docs-narrative.bats")"
-  [ "$n" -eq 8 ] || { echo "registered $n tests, expected 8"; false; }
+  [ "$n" -eq 9 ] || { echo "registered $n tests, expected 9"; false; }
 }

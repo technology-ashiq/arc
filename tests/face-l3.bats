@@ -595,13 +595,28 @@ load 'test_helper'
 @test "reference room: index, type and entity pages from the real extract; links resolve; cross-links equal the markdown" {
   run node "$ARC_ROOT/tests/face/reference-fold.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"RAN: 20 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  [[ "$output" == *"RAN: 25 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  [[ "$output" == *"ok page shape: a product page draws its groups and nav"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok fenced: every page-shape block parses to its kind"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok figure: a flow and a loop become geometry"* ]] || { echo "$output"; false; }
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
   [[ "$output" == *"ok links: every room's link, written to the address and read back, opens the Reference room ON its page"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok lost: every pick outside the grammar is LOST -- never a type list, never someone else's page"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok entity: every paged entity opens as a page with a path back, and every link it draws resolves to an entity"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok cross-links: each product's 'Required by' in the room equals its docs/wiki page's, for every product"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok lost: a pick naming nothing is LOST with its name, never an empty page that looks real"* ]] || { echo "$output"; false; }
+}
+
+@test "reference room: the flow and loop diagrams lay out clean, and every geometry mutant is caught (ADR-1348)" {
+  run node "$ARC_ROOT/tests/face/diagram.mjs"
+  [[ "$output" == *"RAN: "*" checks"* ]] || { echo "the probe never reached its end (exit $status): $output"; false; }
+  [[ "$output" == *"RAN: 11 checks"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  local arm
+  for arm in "MUTANT overlap" "MUTANT dangling" "MUTANT divider" "MUTANT outside" "spec: a flow or loop that cannot be drawn" "tokens:"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
 }
 
 @test "face v2: the company ring reads its files -- F1 names lanes, the constitution and logbook are read, the extras drawn" {

@@ -5,257 +5,244 @@
 
 ## Why it exists
 
+```tagline
+The people who use the thing before a customer does. They open the real app, press the real buttons,
+fix what breaks with a test that keeps it fixed, and watch production after every deploy.
+```
+
+# Start here
 
 ## In plain words
 
-qa is the part of arc that does not stop at reading the paperwork on a finished piece of work:
-`qa-tester` drives the running app in a real browser the way a real user would and returns pass/fail
-evidence per flow, and `/arc-canary` watches a production URL for a window after a deploy. <!-- src: .claude/agents/qa-tester.md; .claude/commands/arc-canary.md -->
+Think of arc as a small company whose staff are AI models. Some of them write code, some review it,
+some plan the next piece of work.
 
-qa is the product that installs three commands and two agents: `/arc-qa` runs `qa-tester`, which
-drives the running app in a real browser and returns pass/fail evidence per flow; `/arc-design` runs
-`design-reviewer`, which scores each design dimension 0-10 and fixes what it finds; and `/arc-canary`
-watches a production URL for a window after a deploy, monitoring console errors, 5xx responses, Core
-Web Vitals and visual drift. <!-- src: products/qa/manifest.json; .claude/commands/arc-qa.md; .claude/agents/qa-tester.md; .claude/commands/arc-design.md; .claude/agents/design-reviewer.md; .claude/commands/arc-canary.md -->
+Most of that staff works on **paper**. A reviewer reads the diff. A planner reads the plan. Nobody in
+those rooms ever opens the app and presses a button.
+
+```panel big
+**qa is the department that does press the buttons.** It has three people:
+
+- **A mystery shopper** (`qa-tester`). They open the running app in a real browser and use it like a customer would: sign up, fill the form, press back halfway through, type an emoji into the name field. Then they write down exactly what happened. Not what *should* have happened. What happened.
+- **A shop-window designer** (`design-reviewer`). They look at a screen, give it marks out of ten on things like spacing, colour and readability, and then, unlike a critic, pick up the tools and fix it themselves.
+- **A night watchman** (`/arc-canary`). After you open the doors, which means deploying to production, they walk the shop floor every couple of minutes for a while. If something breaks, they don't just ring a bell. They take the new version back down.
+
+That is the whole product. Everything below is how those three do their jobs without lying about what they saw.
+```
 
 ### Why this needs to be a product at all
 
-`code-reviewer` reviews a diff or PR. qa is different: `qa-tester` opens the running app itself and
-drives it like a real user, under an iron law never to mark a flow done that it did not actually
-complete, and `design-reviewer` looks at the rendered screen, scoring it and then fixing what it finds
-itself, in the same pass. <!-- src: .claude/agents/code-reviewer.md; .claude/agents/qa-tester.md; .claude/agents/design-reviewer.md -->
+If the only checks were people reading the code, three things would quietly go wrong, and each one is
+expensive:
 
-| What goes wrong without it | What it looks like when it bites | qa's answer |
+| What you lose | What it looks like when it bites | qa's answer |
 |---|---|---|
-| A QA pass that only reports bugs | the same bug can come back next release, because nothing proves it was ever actually fixed | `/arc-qa` will not count a bug as fixed unless the commit also ships a regression test that fails before the change and passes after <!-- src: .claude/commands/arc-qa.md --> |
-| A design review that only scores | a screen gets a number and nobody makes it better | `design-reviewer` scores each dimension and then makes the fix itself, in the same pass, as one atomic commit <!-- src: .claude/agents/design-reviewer.md --> |
-| A deploy watched only by alerting | a regression ships to every next visitor until a human happens to notice the alert | `/arc-canary` rolls back or blocks promotion itself on a regression, and writes what regressed and what it did <!-- src: .claude/commands/arc-canary.md --> |
+| **Knowing the app actually works** | Every test passes, the review is clean, and the sign-up button does nothing on a real phone. | The mystery shopper uses the real app in a real browser, and may report only what they saw. |
+| **Knowing a bug stays fixed** | A bug gets fixed, and three weeks later the same bug is back, because nothing was watching that spot. | A bug does not count as fixed unless the fix comes with a test that fails before it and passes after. |
+| **Knowing the release is healthy** | A bad deploy keeps serving every visitor until someone happens to notice. | The night watchman compares production with the last good version, and rolls back or blocks the release. |
 
-ADR-0034 calls that pattern — the same agent scoring its own work and then fixing it — self-approval,
-something arc doctrine forbids, and its own context notes this is exactly what the current
-`design-reviewer` does. <!-- src: ADR-0034 -->
-
-ADR-0034's answer is a new, read-only `design-critic` agent with no `Edit` in its tool list, enforced
-mechanically rather than by instruction; the old, self-fixing `design-reviewer` keeps running behind
-`/arc-design` in parallel, because a mid-cycle cutover would break a working surface while the
-replacement was unproven. <!-- src: ADR-0034; ADR-0042 -->
-
-A later note added to that same ADR-0042 records the trigger firing: a Phase 02 explore run produced
-two clean explore-critique runs, so retirement is now a scope decision routed to issue #59 and waiting
-on the owner's call, since the old reviewer fixes and commits where the new critic is read-only by
-construction. <!-- src: ADR-0042 -->
+> The second row is the one most tools skip. A bug list tells you what was wrong today. A tripwire test
+> left at the exact spot is what stops the same bug coming back next month.
 
 ## arc words → normal words
 
-| arc calls it | It is really | Meaning |
-|---|---|---|
-| `qa-tester` | the mystery shopper | An agent that drives the running app in a real browser and reports pass/fail evidence per flow, under an iron law never to fabricate or mark a flow done it did not actually complete <!-- src: .claude/agents/qa-tester.md --> |
-| `design-reviewer` | the in-house designer | An agent that scores a UI, flags AI-slop patterns by name, and then fixes what it finds itself with atomic commits and before/after screenshots <!-- src: .claude/agents/design-reviewer.md --> |
-| `agent-browser` | the fast pair of hands | The CLI `qa-tester` prefers to drive the browser with, called inside an isolated session on every command, with the Playwright MCP kept as the documented fallback if it is missing <!-- src: .claude/agents/qa-tester.md --> |
-| BUG vs BLOCKED | whose fault it is | `qa-tester` never conflates the two: a BUG means the app is wrong, a BLOCKED means the environment or the test itself is the problem <!-- src: .claude/agents/qa-tester.md --> |
-| regression test | proof it stays fixed | A test that fails before a fix and passes after it; `/arc-qa` treats a bug as unfixed without one <!-- src: .claude/commands/arc-qa.md --> |
-| tour | a themed sweep | A quick exploratory pass over the whole app for one concern at a time: a money tour on anything touching payment or entitlements, a landmark tour checking every nav link leads somewhere sane, a garbage tour throwing hostile input at every visible field <!-- src: .claude/agents/qa-tester.md --> |
-| vitals | the four house numbers | LCP, CLS, INP and TTFB, captured on every QA pass and watched again on every canary window <!-- src: .claude/agents/qa-tester.md; .claude/commands/arc-canary.md --> |
-| review ledger kind | a stamp in the sign-off book | `qa` and `design` are two of the named review kinds a commit's ledger can carry, stamped by `/arc-qa` and `/arc-design` respectively <!-- src: .claude/commands/arc-qa.md; .claude/commands/arc-design.md --> |
-| strictness profile | how strict the floor is today | `qa` and `design` are only in the required-review set under the strict profile; the standard profile requires just code and security <!-- src: .claude/scripts/core/arc-profile.sh --> |
-| canary window | the minutes after the truck leaves | The watch period after a deploy, ten minutes by default, polled roughly every two <!-- src: .claude/commands/arc-canary.md --> |
-| money flow | what actually costs money if it breaks | The 1-2 flows (login, checkout) `/arc-canary` hands to `qa-tester` for flow-level verification during the watch window <!-- src: .claude/commands/arc-canary.md --> |
+```lede
+Thirteen pieces of arc jargon. Each is an ordinary shop-floor thing wearing a technical name.
+```
+
+```rosetta
+`qa-tester` | the mystery shopper | the only one who opens the real app
+`design-reviewer` | the shop-window designer | scores the screen, then fixes it
+`/arc-canary` | the night watchman | watches production right after a deploy
+`/arc-qa` | "send in the shopper, then fix what they found" | the main loop of this product
+`/arc-design` | "send in the designer" | the design loop
+flow | one thing a user does, start to finish | e.g. "sign up"; the unit the shopper tests
+BUG vs BLOCKED | "the app is wrong" vs "I couldn't even test it" | the shopper must never mix these up
+regression test | a tripwire at the exact spot a bug was | proves the bug can't quietly come back
+atomic commit | one fix = one saved change | so any single fix can be undone on its own
+baseline | a photo and measurements of the last good version | what the watchman compares against
+ledger stamp | a tick in the register: "qa was done on this code" | `/arc-ship` checks the register
+receipt | one line in arc's logbook, `qa.completed` | so later you can prove it happened
+`--report-only` | "just look, don't touch" | the shopper reports; nobody fixes anything
+```
 
 ## How a job flows
 
-| Command | Starts from | Ends with |
-|---|---|---|
-| `/arc-qa` | a URL or a flow, or the current phase's own exit-criteria flows | every reported bug fixed as one atomic commit with a regression test, re-verified green, archived and ledger-stamped — skipped in `--report-only` <!-- src: .claude/commands/arc-qa.md --> |
-| `/arc-design` | a route or component, or the UI changed in the current diff | a verdict of `design: PASS` or `design: NEEDS-WORK`, with the fixes already committed, and the design ledger kind stamped only on PASS <!-- src: .claude/commands/arc-design.md; .claude/agents/design-reviewer.md --> |
-| `/arc-canary` | a production URL, right after a deploy | either a refreshed known-good baseline on a green window, or a rollback/block plus a written incident on a regression <!-- src: .claude/commands/arc-canary.md --> |
+```lede
+The shopper looks first, and looking is free. Only after the report does anyone touch code, and every
+fix has to bring its own tripwire test.
+```
+
+```flow
+source: /arc-qa [page or flow]
+box: ① Shopper goes in | real browser, real app
+box: ② Fix each bug | one commit + one test
+box: ③ Check again | only the fixed flows
+box*: ④ Paperwork | report · stamp · logbook
+labels: bugs, fixed, green
+out: --report-only | stops here, nothing fixed
+out: no test | not counted as fixed
+out: still red | back to step ②
+out+: qa.completed | one line in the logbook
+divider: 1 | only looks | changes code
+note: Nothing is ever pushed. The report, the fixes and the stamp wait for you.
+caption: Figure 1 — one /arc-qa run. | The dashed red line is where looking stops and code starts changing.
+```
 
 ## The stages, one by one
 
-### The browser QA loop — `/arc-qa`
+```lede
+Each stage is written twice: first what it does in ordinary words, then what actually happens.
+```
 
-1. The command invokes `qa-tester` explicitly through the Task tool and refuses to fall back to a
-   general-purpose agent; if `qa-tester` itself is missing, it stops and asks for the project template
-   to be synced rather than improvise a substitute. <!-- src: .claude/commands/arc-qa.md -->
-2. `qa-tester` confirms the app is actually running, then works each flow happy-path first, verifying
-   the real outcome — not just that no error appeared. <!-- src: .claude/agents/qa-tester.md -->
-3. It then works the sad paths on every flow — invalid input, an empty submit, a double submit, the
-   back button mid-flow, a page refresh mid-flow, a direct URL hit while logged out — and the
-   boundaries: zero, one, many, max, long strings, unicode and emoji, whitespace-only input. <!-- src: .claude/agents/qa-tester.md -->
-4. Themed tours follow — money, landmark, garbage — an accessibility pass with axe-core when that
-   dependency is present (a manual pass, marked SKIPPED, otherwise), and a Web Vitals snapshot on every
-   pass, with a slower Lighthouse run reserved for a launch check. <!-- src: .claude/agents/qa-tester.md -->
-5. Every finding names the exact step, expected versus actual, and a screenshot, and is filed as BUG or
-   BLOCKED, never both, before `qa-tester` reports back at all. <!-- src: .claude/agents/qa-tester.md -->
-6. Back on the main thread, every reported BUG (never a BLOCKED) is fixed as one atomic commit, and the
-   commit does not count as a fix unless it also ships a regression test that fails before the change
-   and passes after. <!-- src: .claude/commands/arc-qa.md -->
-7. `qa-tester` is invoked a second time, on the fixed flows only, to confirm green. <!-- src: .claude/commands/arc-qa.md -->
-8. Unless the run was `--report-only`, the pass is archived to a dated file under `docs/qa`,
-   `PROGRESS.md`'s Now section is updated, the `qa` ledger kind is stamped, and a `qa.completed`
-   receipt is left on the spine. <!-- src: .claude/commands/arc-qa.md -->
+```steps
+t: The mystery shopper goes in
+plain: They start the app if it isn't running and take the list of flows, from you or from the current phase's exit criteria. One iron law: never mark a flow done that they didn't actually complete.
+d: In order: the happy path (and check the result where it matters, e.g. the saved thing is really there afterwards); the sad paths (wrong input, empty submit, double-click, back or refresh mid-flow, a logged-in page while logged out); the edges (zero, one, many, the maximum, very long text, emoji); quick tours (money, landmarks, garbage input); accessibility; loading speed.
+f: `.claude/agents/qa-tester.md` · drives `agent-browser`, falls back to Playwright and says so
 
-### The design review-and-fix loop — `/arc-design`
+t: Every BUG becomes one commit with its own tripwire
+plain: A BLOCKED flow is a problem with the test setup, so there is nothing in the app to fix. A BUG is fixed on its own, and the fix must bring a test that fails before it and passes after. No test, not fixed.
+d: One bug, one atomic commit named `fix(qa): …`. This is the rule that makes arc's QA more than a bug list.
+f: `.claude/commands/arc-qa.md` step 2
 
-1. The command invokes `design-reviewer` explicitly through the Task tool, on a named route or
-   component or on the UI touched by the current diff, and stops rather than substitute a
-   general-purpose agent if it is missing. <!-- src: .claude/commands/arc-design.md -->
-2. `design-reviewer` scores the screen from 0 to 10 across named dimensions — visual hierarchy,
-   typography, spacing and alignment, colour and contrast, consistency with the design system, states
-   (hover, focus, active, disabled, loading, empty, error), responsiveness, and motion — saying what a
-   10 looks like for each. <!-- src: .claude/agents/design-reviewer.md -->
-3. It flags AI-slop patterns by name: a generic gradient hero, three equal cards, an emoji standing in
-   for an icon, everything centred, purple on white, meaningless placeholder copy, inconsistent radius
-   or shadow, drop shadows everywhere, unreadable low-contrast grey text. <!-- src: .claude/agents/design-reviewer.md -->
-4. It then makes the fix itself, in code, reusing the design system's own tokens, as one coherent
-   atomic commit; before and after screenshots are captured with the `agent-browser` CLI, or — if that
-   is not installed — the `qa-tester` agent or the project's Playwright setup, with the fallback stated
-   in the report. <!-- src: .claude/agents/design-reviewer.md -->
-5. The output is the per-dimension scores, the single highest-leverage improvement, the diffs made, the
-   before/after image paths, and a verdict line: `design: PASS` only if nothing critical remains, else
-   `design: NEEDS-WORK` naming the blocking items. <!-- src: .claude/agents/design-reviewer.md -->
-6. The command archives that to a dated file under `docs/design`, commits the fixes as `style(ui)` or
-   `fix(ui)`, and stamps the design ledger kind only when the verdict is PASS. <!-- src: .claude/commands/arc-design.md -->
-7. Its own text carries a standing note: for UI-bearing phases, add `design` to
-   `ARC_REQUIRED_REVIEWS` so `/arc-ship` is actually gated on it. <!-- src: .claude/commands/arc-design.md -->
+t: The shopper checks the fixed flows again
+plain: Only the flows that were fixed, to confirm they are green now.
+d: The same agent, sent back in on those flows.
+f: `.claude/commands/arc-qa.md` step 3
 
-### The post-deploy canary watch — `/arc-canary`
+t: The paperwork
+plain: A report goes on file, the phase tracker is told the outcome, the register gets its tick, and the logbook gets one line saying how many bugs were found and fixed.
+d: The report lands in docs/qa with flows, bugs, fixes and their commits, tests added and screenshots. The ledger is stamped `qa` (not with `--report-only`), and a `qa.completed` receipt is written. Nothing is pushed.
+f: `.claude/commands/arc-qa.md` · "Always finish by"
+```
 
-1. A watch loop opens against the given production URL in an isolated `agent-browser` session, locked
-   to the prod domain and its subdomains so the canary can never wander off it; the default window is
-   ten minutes, polled roughly every two. <!-- src: .claude/commands/arc-canary.md -->
-2. For each key route it captures uncaught JS exceptions, console errors and warnings, any 4xx or 5xx
-   network responses, and Core Web Vitals; if `agent-browser` is not installed, the command falls back
-   to the `qa-tester` subagent for the same checks and says so in the report. <!-- src: .claude/commands/arc-canary.md -->
-3. `docs/canary` holds the last known-good baseline screenshot and vitals file, created on the first
-   run, and the current screenshot is diffed against that baseline with `agent-browser diff
-   screenshot --baseline docs/canary/baseline.png`. <!-- src: .claude/commands/arc-canary.md -->
-4. A regression is defined precisely: new uncaught exceptions or console errors, any 5xx on a key
-   route, a Core Web Vitals cliff against baseline (LCP or INP worse than 1.5x, or CLS worse by more
-   than 0.1), or a large visual diff on a key route. <!-- src: .claude/commands/arc-canary.md -->
-5. Separately, `qa-tester` is spawned on the 1-2 money flows — login, checkout — because this command
-   owns the error/vitals/diff watch and `qa-tester` owns the flows; the session is closed when the
-   window ends. <!-- src: .claude/commands/arc-canary.md -->
-6. On a regression, the command rolls back or blocks promotion and writes the incident to a dated file
-   under `docs/canary` — what regressed, the evidence, and the action taken; on a green window it
-   refreshes the baseline instead and updates `PROGRESS.md`'s Now section, and a green canary is
-   required before a phase that deploys can be marked done. <!-- src: .claude/commands/arc-canary.md -->
+The shopper's report always has the same shape: which browser tool was used, a table with every flow
+marked ✅ worked, ❌ the app is wrong, or ⛔ couldn't test, exact repro steps with a screenshot for every
+failure, and one verdict line: **demo-ready** or **not ready**, with one reason.
 
-## Every part, explained
+# The bigger loop
 
-### Commands
+## The design loop
 
-qa owns three commands: <!-- src: products/qa/manifest.json -->
+```lede
+Same idea, a different expert: score the screen, name the one change that matters most, then make it.
+```
 
-- `/arc-qa` — runs `qa-tester` against a URL or flow, fixes every reported bug with an atomic commit
-  and a required regression test, re-verifies, and stamps the `qa` ledger kind. <!-- src: .claude/commands/arc-qa.md -->
-- `/arc-design` — runs `design-reviewer` against a route or component, fixes what it finds with atomic
-  commits and before/after screenshots, and stamps the `design` ledger kind on a PASS verdict. <!-- src: .claude/commands/arc-design.md -->
-- `/arc-canary` — watches a production URL for a window after a deploy and acts on a regression
-  instead of only reporting one. <!-- src: .claude/commands/arc-canary.md -->
+`/arc-design` sends in the designer. They mark the screen on eight things, each out of ten, and say what
+a ten would look like:
 
-None of the three commands carries a script of its own in qa's manifest. <!-- src: products/qa/manifest.json -->
+| Dimension | The question it asks |
+|---|---|
+| Visual hierarchy | Does your eye land on the right thing first? |
+| Typography | Sizes, line length, weight: does the text read comfortably? |
+| Spacing and alignment | Consistent gaps, nothing cramped or floating? |
+| Colour and contrast | Colour used on purpose, and readable (WCAG AA)? |
+| Consistency | Reuses the design system, no one-off pieces? |
+| States | Hover, focus, disabled, loading, empty, error: all designed? |
+| Responsiveness | Really reflows on a phone, touch targets at least 44px? |
+| Motion | Fast, purposeful, respects "reduce motion"? |
 
-`/arc-qa` stamps the review ledger by calling `review-ledger.sh stamp qa`, and `/arc-design` does the
-same by calling `review-ledger.sh stamp design` — a script the core product's manifest lists, not
-qa's. <!-- src: .claude/commands/arc-qa.md; .claude/commands/arc-design.md; products/core/manifest.json -->
+They also hunt **AI slop**, the look of a screen nobody designed: a generic gradient hero, three
+identical cards in a row, emoji used as icons, everything centred, the default purple-on-white,
+placeholder text, shadows on everything, pale grey text you can't read.
 
-`/arc-qa` also leaves a `qa.completed` receipt by calling `arc-event.sh emit qa.completed`, a script
-the hq product's manifest lists. <!-- src: .claude/commands/arc-qa.md; products/hq/manifest.json -->
+Then they fix it in code, with the project's own design tokens. Each coherent fix is one commit, and a
+before and after screenshot is saved. The verdict is `design: PASS` only if nothing critical is left;
+otherwise `design: NEEDS-WORK` with the list of what blocks it. The register gets its `design` tick
+**only** on a PASS.
 
-### Agents
+```panel warn
+title: one honest caveat
+A reviewer who scores their own fixes is marking their own homework. arc's rules call that self-approval (ADR-0034), so the design lane built a separate critic that can read but cannot edit anything. The old designer still runs behind `/arc-design` while the replacement proves itself; retiring it waits on the owner's decision (ADR-0042).
+```
 
-- `qa-tester` — a senior-QA-engineer persona in an isolated context, driving the app in a real browser
-  through happy paths, sad paths, boundaries and tours, under an iron law to report only what it
-  observed. <!-- src: .claude/agents/qa-tester.md -->
-- `design-reviewer` — scores a UI and then fixes what it finds itself in the same pass, with atomic
-  commits and before/after screenshots. <!-- src: .claude/agents/design-reviewer.md -->
+## The night watch
 
-Both agents sit at the balanced-workhorse pay grade — structured production against an explicit
-contract, consumed by a gate or a human rather than treated as final on its own — and both declare the
-sonnet model in their own frontmatter today. <!-- src: ADR-0069; .claude/agents/qa-tester.md; .claude/agents/design-reviewer.md -->
+```lede
+After a deploy, someone keeps walking the floor. If the new version is worse than the last good one,
+it is taken down; nobody has to notice first.
+```
 
-### Gates and rules
+```flow
+source: /arc-canary <production address>
+box: Deploy lands | a new version is live
+box: Walk the floor | every ~2 minutes, ~10 min
+box: Compare | with the last good version
+box*: Money flows | login, checkout
+labels: watch, measure, then
+out: -
+out: -
+out: regression | roll back or block
+out+: green window | baseline refreshed
+caption: Figure 2 — the night watch. | One owner per job: the shopper owns the money flows; the watchman owns errors, speed and pictures.
+```
 
-- The `reviews` gate blocks on `review-ledger.sh require-profile`, which resolves the required review
-  set from the active strictness profile; `qa` and `design` only enter that required set under the
-  strict profile, while the standard profile requires just code and security. <!-- src: arc.gates.yaml; .claude/scripts/core/review-ledger.sh; .claude/scripts/core/arc-profile.sh -->
-- A separate gate named `design` — not `/arc-design` — in the same declarative file runs
-  `design-gate.sh` in warn mode; that script and its face room belong to the design product, not to
-  this one. <!-- src: arc.gates.yaml; products/design/manifest.json -->
-- qa's own manifest declares no scripts and no process job descriptions of its own — the ledger script
-  its commands call belongs to the core product's manifest, and the spine script belongs to the hq
-  product's manifest. <!-- src: products/qa/manifest.json; .claude/commands/arc-qa.md; .claude/commands/arc-design.md; products/core/manifest.json; products/hq/manifest.json -->
+On every walk the watchman checks each key page, locked to your own domain so it can't wander off:
+crashes in the page's code, errors in the browser console, failed requests (any 5xx on a key page
+counts), loading speed, and a screenshot compared with the last good one.
 
-## The bigger loop
+**What counts as a regression:** a new crash or console error · any 5xx on a key page · speed falling
+off a cliff (LCP or INP more than 1.5 times the baseline, or layout shift worse by more than 0.1) · a
+large visual difference.
 
-### A bug found in the browser, fixed, and proven shut
+**The arc twist:** a failed canary *acts*. It rolls the deploy back, or blocks the release, and writes an
+incident note saying what broke, the evidence, and what it did. A green window refreshes the baseline,
+so the next deploy is compared with today. A phase that deploys can't be marked done without a green
+canary.
 
-A QA pass takes its flows from the request, or from the phase spec's exit criteria. <!-- src: .claude/agents/qa-tester.md -->
-`qa-tester` opens the app in a real browser, session isolated, and works every flow as a real user
-would — first the happy path, verifying the actual outcome, then a run of deliberately awkward paths:
-bad input, an empty submit, a double submit, the back button mid-flow, a refresh mid-flow, a direct
-URL hit while logged out. <!-- src: .claude/agents/qa-tester.md --> Themed sweeps follow: a money
-tour over anything touching payment or entitlements, a landmark tour checking every nav link leads
-somewhere sane, a garbage tour throwing hostile input at every visible field. <!-- src: .claude/agents/qa-tester.md -->
+## Life of a bug
 
-Every finding is filed as a BUG (the app is wrong) or BLOCKED (the environment or the test is wrong) —
-never both, and never a flow marked passing that was not actually completed. <!-- src: .claude/agents/qa-tester.md -->
-Back on the main thread, every BUG becomes one atomic commit, and the commit does not count as a fix
-unless it also ships a regression test that fails before the change and passes after — this is what
-the command itself says makes its QA beat a report-only pass. <!-- src: .claude/commands/arc-qa.md -->
-`qa-tester` is called a second time, on the fixed flows only, before the pass is archived, the phase
-tracker updated, the `qa` ledger kind stamped, and a `qa.completed` receipt left on the spine. <!-- src: .claude/commands/arc-qa.md -->
+```lede
+One bug, from being found to being shut for good, and the day months later when it tries to come back.
+```
 
-The same discipline continues after the code ships: a canary window holds a session open against the
-live URL, watching for the console errors, failed requests, and Core Web Vitals cliffs a browser-only
-QA pass cannot see because the code was not deployed yet — and unlike a QA report, a failed canary
-acts on its own, rolling back or blocking promotion rather than only writing an alert. <!-- src: .claude/commands/arc-canary.md -->
+```loop
+top: 1 | the shopper
+top: 5 | the tripwire
+stage: 1 · Found | Save pressed twice, two records
+stage: 2 · Reported | steps + screenshot
+stage*: 3 · Fixed | code + a tripwire test
+stage: 4 · Checked | the flow is green
+stage!: 5 · Months later | a refactor brings it back
+labels: report, fix, re-check, time
+back: last -> 3 | the test goes red before it ships
+caption: Figure 3 — the life of a bug. | The loop back is the whole reason the test is not optional.
+```
 
-### How it connects to the rest of arc
+1. The mystery shopper presses **Save** twice on the settings page. Two copies of the record appear.
+2. The report says: *settings, double-submit, ❌, two records created*, with the steps and a screenshot.
+3. The fix disables the button while saving. In the same commit goes a test that clicks twice and expects
+   one record. It fails on the old code and passes on the new.
+4. The shopper goes back in, only on that flow: ✅.
+5. The report names the commit and the test. The register gets its `qa` tick, and the logbook gets
+   *qa.completed, 1 bug, 1 fixed*.
+6. Months later someone reworks the settings page and the double-save comes back. The tripwire test goes
+   red before it ever ships. **That** is why the test is not optional.
 
-qa requires only the core product to install; its face lives in the `review-ship` room, on the
-factory ring. <!-- src: fact:products/qa.requires; fact:products/qa.faceRoom; fact:products/qa.faceRing -->
+*The settings-page bug is an illustration of how the loop runs, not a real incident.*
 
-That room is not qa's alone: the git product's `commit.done` and `ship.done` events and the review
-product's `review.completed` events land in the exact same room and the exact same sanctioned state
-directories that qa's own `qa.completed` events do. <!-- src: products/qa/manifest.json; products/git/manifest.json; products/review/manifest.json -->
+## Where qa sits in arc
 
-The manifest's sanctioned list for that shared room names `.claude/state/{reviews,scan,rls}`,
-`docs/reviews`, `docs/security` and `docs/qa` — it does not name `docs/design` or `docs/canary`, the
-two directories `/arc-design` and `/arc-canary` actually archive their own reports to. <!-- src: products/qa/manifest.json; .claude/commands/arc-design.md; .claude/commands/arc-canary.md -->
+- **Closing a phase.** `/arc-phase-done` needs a live demo, proof that the thing works when someone uses
+  it and not only when it is tested. The mystery shopper is who provides that proof.
+- **Shipping.** `/arc-ship` checks the register. For a phase with a screen, add `design` to
+  `ARC_REQUIRED_REVIEWS` and shipping waits until the designer has stamped a PASS.
+- **In the face.** qa lives in the review-and-ship room, where finished work gets checked and sent out.
+  The chips at the top of this page name the room and the ring.
 
-Inside that room, a `qa.completed` receipt is counted onto a "QA runs" tile alongside Reviews, Commits
-and Ships, and a work-door card labelled "Review a commit, or run qa" arrives from the same door a
-code review does. <!-- src: face/src/modules/factory/review-ship/fold.mjs -->
-
-All four of the room's receipt kinds — `commit.done`, `review.completed`, `qa.completed`, `ship.done`
-— belong to the same closed, eighteen-entry event vocabulary the rest of arc's spine draws from. <!-- src: ADR-0026 -->
+# Meta
 
 ## Glossary
 
-- `qa-tester` — the agent that drives the running app in a real browser and reports pass/fail evidence
-  per flow, never fabricating a result. <!-- src: .claude/agents/qa-tester.md -->
-- `design-reviewer` — the agent that scores a UI and fixes what it finds itself, in the same pass. <!-- src: .claude/agents/design-reviewer.md -->
-- BUG / BLOCKED — the two finding classes `qa-tester` never conflates: the app is wrong, or the
-  environment or test is wrong. <!-- src: .claude/agents/qa-tester.md -->
-- regression test — a test that fails before a fix and passes after it; the condition `/arc-qa`
-  requires before it will call a bug fixed. <!-- src: .claude/commands/arc-qa.md -->
-- tour — a themed exploratory sweep across the whole app: money, landmark, or garbage. <!-- src: .claude/agents/qa-tester.md -->
-- vitals — LCP, CLS, INP and TTFB, captured by both `qa-tester` and `/arc-canary`. <!-- src: .claude/agents/qa-tester.md; .claude/commands/arc-canary.md -->
-- AI slop — the named visual patterns `design-reviewer` is told to flag and kill: a generic gradient
-  hero, three equal cards, emoji-as-icon, and more. <!-- src: .claude/agents/design-reviewer.md -->
-- canary window — the timed watch period `/arc-canary` holds open against a production URL after a
-  deploy. <!-- src: .claude/commands/arc-canary.md -->
-- regression (canary sense) — new console errors, a 5xx on a key route, a Core Web Vitals cliff, or a
-  large visual diff against the known-good baseline. <!-- src: .claude/commands/arc-canary.md -->
-- money flow — the login/checkout flows `/arc-canary` hands to `qa-tester` for flow-level verification
-  during the watch window. <!-- src: .claude/commands/arc-canary.md -->
-- review ledger kind — one of the named kinds `review-ledger.sh stamp` records; `/arc-qa` stamps `qa`
-  when its pass finishes (skipped only in `--report-only`), and `/arc-design` stamps `design` only
-  when the verdict is `design: PASS`. <!-- src: .claude/commands/arc-qa.md; .claude/commands/arc-design.md -->
-- strictness profile — the profile table that decides by default whether `qa` and `design` are
-  required reviews (yes under strict, no under standard), unless `$ARC_REQUIRED_REVIEWS` or the
-  `.arc.requiredReviews` setting overrides it. <!-- src: .claude/scripts/core/arc-profile.sh -->
+```gloss
+Core Web Vitals: Google's loading-speed numbers. LCP is how fast the main thing appears, CLS is how much the page jumps around, INP is how fast it reacts to a tap, and TTFB is how fast the server answers.
+WCAG 2.1 AA: the accessibility bar most sites are held to.
+axe-core: a free tool that scans a page for accessibility problems automatically. When a project doesn't have it, the scan is marked SKIPPED, never faked.
+agent-browser: the command-line browser the agents drive. Playwright is the backup, and the report says when it was used.
+5xx: the server's own error codes, meaning "something broke on our side".
+regression: something that used to work and now doesn't.
+```
 
 ## At a glance
 

@@ -1,39 +1,40 @@
 #!/usr/bin/env node
-// narrative-anchors.mjs -- ADR-1513's gate (DOC-M, amends ADR-1508; face Phase 07, ADR-1347).
+// narrative-anchors.mjs -- the narrative gate: ADR-1514 (DOC-N), which amends ADR-1513 (DOC-M) and ADR-1508.
 //
-// A narrative drafted by a model ships only when (1) every factual block carries an anchor that resolves, (2) an
-// independent verifier passed every block of THIS text (its receipt holds the file's sha256), and (3) the owner read
-// it. This file checks (1) and (2), and counts (3). It also reports the EXPLANATION DEBT: every command, agent,
-// process, gate and rule no narrative names, and every product and lane with no narrative -- a count, never a target
-// (ADR-1506's posture), so a part born tomorrow shows up here the day it lands.
+// Hard facts live in the Reference room's generated sections, rebuilt from source (ADR-1348). A narrative explains;
+// this gate keeps it honest in two ways, and counts a third:
+//   (1) the drift check -- every ADR, `/arc-*` command and repo path the narrative names must exist, and any
+//       `<!-- src: ... -->` anchor it still carries must resolve;
+//   (2) the owner's acceptance -- `--accept <dir>/<id>` records it against the narrative's sha256, so an edit after he
+//       read it shows the page as awaiting-owner again. Awaiting is counted, never failed; Phase 07 closes at 0.
+//   (3) the EXPLANATION DEBT: every command, agent, process, gate and rule no narrative names, and every product and
+//       lane with no narrative -- a count, never a target (ADR-1506's posture).
+// The per-block verifier (narrative-verify.mjs) is advisory since ADR-1514; its receipts no longer ship a page.
 //
 //   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] [--json]
+//   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] --accept <dir>/<id>
 //   node .claude/scripts/docs/narrative-anchors.mjs --selftest
 //
-// Exit 0 clean (warnings allowed) · 1 a FAIL finding · 2 usage or an unreadable tree.
+// Exit 0 clean (warnings allowed) · 1 a FAIL finding, or --accept refused · 2 usage or an unreadable tree.
 //
 // The rules live in `evaluate()`, which is pure: the CLI hands it the tree, the self-test hands it planted trees, so
 // every arm FAILs from birth with its mutant (ADR-1503's rule for a gate).
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-/** Where each narrative's verifier receipt lives: outside docs/wiki, which wiki-coverage owns (ADR-1503). */
+/** Where the advisory verifier receipts live, and the owner's acceptances beside them (outside docs/wiki, ADR-1503). */
 export const VERIFY_DIR = "docs/narrative-verify";
+export const ACCEPT_FILE = `${VERIFY_DIR}/accepted.json`;
 /** The types a narrative must NAME to explain (ADR-1513): the features. Products and lanes are explained by a file. */
 export const FEATURE_TYPES = ["commands", "agents", "processes", "gates", "rules"];
 export const PAGE_TYPES = ["products", "lanes"];
+/** The page-shape fenced blocks (ADR-1348 section 5): prose the reader sees, so what they name is checked. */
+export const SHAPE_KINDS = ["tagline", "lede", "steps", "flow", "loop", "panel", "stats", "rosetta", "gloss"];
 
-/**
- * The narratives written by hand before ADR-1513 (ADR-1508's Phase 03 set), exempt from the receipt rule while their
- * text is exactly this. Any edit changes the hash and the exemption is gone; the list only ever shrinks, as each is
- * replaced by a verified page.
- * @type {Record<string, string>}
- */
-// Empty since 2026-09-27: all three were replaced by verified pages (products/engine, products/git, lanes/portfolio).
-export const LEGACY = Object.freeze({
-});
+/** Kept for narrative-verify's callers; ADR-1514 retired the exemption it served. */
+export const LEGACY = Object.freeze({});
 
 const MARK_SRC = /<!--\s*src:\s*([\s\S]*?)\s*-->/g;
 const MARK_PLAIN = /<!--\s*plain\s*-->/;
@@ -41,16 +42,16 @@ const COMMENT = /<!--[\s\S]*?-->/g;
 const FENCE = /^\s*(```|~~~)/;
 const BULLET = /^\s*(?:[-*+]|\d{1,3}[.)])\s+/;
 const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
-/** A plain block states no fact about arc: no code span, no digit, no path or command slash, no ADR, no file name. */
-const PLAIN_FACT = /`|\d|\/|\bADR\b|\.(?:mjs|js|ts|tsx|md|json|ya?ml|sh)\b/;
+/** A repo path as a narrative names one: segments, a slash, a file extension -- and no placeholder or glob. */
+const PATH_NAME = /^(?:\.?[A-Za-z0-9_-][\w.-]*\/)+[\w.-]+\.(?:mjs|cjs|js|ts|tsx|md|json|ya?ml|sh|bats|css|html)$/;
 
 /** Line endings normalised: a Windows checkout (CRLF) and a CI runner (LF) must hash one text the same. */
 export const sha256 = (/** @type {string} */ text) => createHash("sha256").update(String(text).replace(/\r\n/g, "\n"), "utf8").digest("hex");
 
 /**
- * The page's blocks, numbered from 1 in reading order. Headings and fenced code are not blocks: a heading names a
- * section and the fence's text is quoted. A paragraph, a list item (with its indented continuation), a quote and a
- * table ROW are each one block; a table's header and rule are not. A block's text is its prose with every comment gone.
+ * The page's blocks, numbered from 1 in reading order -- the numbering narrative-verify sends its verifier. Headings and
+ * fenced blocks are not blocks. A paragraph, a list item (with its indented continuation), a quote and a table ROW are
+ * each one block; a table's header and rule are not. A block's text is its prose with every comment gone.
  * @param {string} text
  * @returns {{ n: number, kind: string, text: string, anchors: string[], plain: boolean, line: number, end: number }[]}
  */
@@ -101,11 +102,43 @@ export function blocksOf(text) {
 }
 
 /**
+ * What a narrative NAMES that must exist (ADR-1514 section 2): every `ADR-NNNN` in its prose, and every `/arc-*`
+ * command and repo path in a code span. Prose, tables and the page-shape blocks (steps, panels, figures ...) are read;
+ * a plain code fence (```bash ...) is a quote and is not, and neither is a comment.
+ * @param {string} text @returns {{ adrs: string[], commands: string[], paths: string[] }}
+ */
+export function namesOf(text) {
+  const adrs = new Set(), commands = new Set(), paths = new Set();
+  let inFence = false, quoted = false, inComment = false;
+  for (const raw of String(text ?? "").split(/\r?\n/)) {
+    const fence = /^\s*(?:```|~~~)\s*([A-Za-z]*)/.exec(raw);
+    if (fence) {
+      if (inFence) { inFence = false; quoted = false; } else { inFence = true; quoted = !SHAPE_KINDS.includes(String(fence[1]).toLowerCase()); }
+      continue;
+    }
+    if (quoted) continue;
+    let l = raw;
+    if (inComment) { const e = l.indexOf("-->"); if (e < 0) continue; l = l.slice(e + 3); inComment = false; }
+    l = l.replace(COMMENT, "");
+    const open = l.indexOf("<!--");
+    if (open >= 0) { l = l.slice(0, open); inComment = true; }
+    for (const m of l.matchAll(/\bADR-(\d{4})\b/g)) adrs.add(String(m[1]));
+    for (const m of l.matchAll(/`([^`\n]+)`/g)) {
+      const s = String(m[1]).trim();
+      const cmd = /^\/(arc-[a-z0-9-]+)$/.exec(s);
+      if (cmd) commands.add(String(cmd[1]));
+      else if (PATH_NAME.test(s)) paths.add(s);
+    }
+  }
+  return { adrs: [...adrs].sort(), commands: [...commands].sort(), paths: [...paths].sort() };
+}
+
+/**
  * Whether one anchor resolves. `ADR-NNNN` needs its file; `fact:<type>/<id>.<key>` needs that entity and an OWN fact
  * key (or `source`); anything else is a repo path -- relative, a regular file inside the tree -- with an optional `#symbol`
  * that must appear in the file as a word.
  * @param {string} anchor
- * @param {{ adrs: Set<string>, wiki: any, tracked: (p: string) => boolean, read: (p: string) => string }} tree
+ * @param {{ adrs: Set<string>, wiki: any, tracked: (p: string) => boolean, read: (p: string) => string, isDir: (seg: string) => boolean }} tree
  * @returns {string} "" when it resolves, else why not
  */
 export function anchorProblem(anchor, tree) {
@@ -165,43 +198,67 @@ export function explanationDebt(wiki, narratives, pageDirs) {
 }
 
 /**
- * The gate. Pure: every input is handed in.
- * @param {{ narratives: Record<string, string>, receipts: Record<string, unknown>, tree: Parameters<typeof anchorProblem>[1], legacy?: Record<string, string> }} io
+ * The owner's acceptances, as read from ACCEPT_FILE: page -> the sha256 he read. Anything malformed is "" (unread).
+ * @param {unknown} doc @returns {Record<string, string>}
  */
-export function evaluate({ narratives, receipts, tree, legacy = LEGACY }) {
-  /** @type {string[]} */ const fails = [];
-  /** @type {string[]} */ const warns = [];
-  let verified = 0, legacyCount = 0, awaiting = 0;
-  for (const [page, text] of Object.entries(narratives).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    const hash = sha256(text);
-    if (Object.prototype.hasOwnProperty.call(legacy, page) && legacy[page] === hash && !Object.prototype.hasOwnProperty.call(receipts, page)) {
-      legacyCount++;
-      warns.push(`[legacy] ${page} -- hand-written before ADR-1513 (ADR-1508); replace it with a verified page`);
-      continue;
-    }
-    const blocks = blocksOf(text);
-    if (blocks.length === 0) { fails.push(`[empty] ${page} -- a narrative with no block explains nothing`); continue; }
-    for (const b of blocks) {
-      const where = `${page}:${b.line} [${b.n}]`;
-      if (b.plain && b.anchors.length) fails.push(`[marker] ${where} -- a block is plain OR anchored, never both`);
-      else if (b.plain) { if (PLAIN_FACT.test(b.text)) fails.push(`[plain-fact] ${where} -- a plain block names a file, a command, an ADR or a number: anchor it`); }
-      else if (!b.anchors.length) fails.push(`[unanchored] ${where} -- a factual block with no <!-- src: ... --> (or <!-- plain --> if it states no fact)`);
-      for (const a of b.anchors) { const why = anchorProblem(a, tree); if (why) fails.push(`[anchor] ${where} -- ${a}: ${why}`); }
-    }
-    if (!Object.prototype.hasOwnProperty.call(receipts, page)) { fails.push(`[unverified] ${page} -- no receipt at ${VERIFY_DIR}/${page}.json; run narrative-verify.mjs ${page}`); continue; }
-    const r = /** @type {any} */ (receipts[page]);
-    const bad = receiptProblem(r, page, hash, blocks.length);
-    if (bad) { fails.push(`[receipt] ${page} -- ${bad}`); continue; }
-    verified++;
-    if (!r.accepted || r.accepted.by !== "owner") { awaiting++; warns.push(`[awaiting-owner] ${page} -- verified; the owner has not read it yet (ADR-1513 section 3)`); }
+export function acceptedOf(doc) {
+  /** @type {Record<string, string>} */
+  const out = Object.create(null);
+  const pages = doc && typeof doc === "object" && !Array.isArray(doc) && /** @type {any} */ (doc).schema === 1 ? /** @type {any} */ (doc).pages : null;
+  if (!pages || typeof pages !== "object" || Array.isArray(pages)) return out;
+  for (const [page, v] of Object.entries(pages)) {
+    const ok = v && typeof v === "object" && /** @type {any} */ (v).by === "owner" && /^[0-9a-f]{64}$/.test(String(/** @type {any} */ (v).sha256));
+    out[page] = ok ? String(/** @type {any} */ (v).sha256) : "";
   }
-  for (const page of Object.keys(receipts).sort()) if (!Object.prototype.hasOwnProperty.call(narratives, page)) fails.push(`[orphan-receipt] ${VERIFY_DIR}/${page}.json -- no narrative it judged`);
-  return { fails, warns, verified, legacy: legacyCount, awaiting, narratives: Object.keys(narratives).length };
+  return out;
 }
 
 /**
- * Why a receipt does not ship its page, or "" when it does: this page, this text's hash, a trial on a family other than
- * the drafter's (never Claude), one SUPPORTED verdict for every block and nothing else.
+ * The gate. Pure: every input is handed in.
+ * @param {{ narratives: Record<string, string>, accepted: Record<string, string>, tree: Parameters<typeof anchorProblem>[1] }} io
+ */
+export function evaluate({ narratives, accepted, tree }) {
+  /** @type {string[]} */ const fails = [];
+  /** @type {string[]} */ const warns = [];
+  const commands = new Set((Array.isArray(tree.wiki?.entities?.commands) ? tree.wiki.entities.commands : []).map((/** @type {any} */ c) => String(c && c.id)));
+  let ok = 0, awaiting = 0;
+  for (const [page, text] of Object.entries(narratives).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const blocks = blocksOf(text);
+    if (blocks.length === 0 && String(text).replace(COMMENT, "").trim() === "") { fails.push(`[empty] ${page} -- a narrative with nothing in it explains nothing`); continue; }
+    for (const b of blocks) for (const a of b.anchors) { const why = anchorProblem(a, tree); if (why) fails.push(`[anchor] ${page}:${b.line} -- ${a}: ${why}`); }
+    const names = namesOf(text);
+    for (const n of names.adrs) if (!tree.adrs.has(n)) fails.push(`[drift] ${page} -- names ADR-${n}, which has no docs/adr/${n}-*.md`);
+    for (const c of names.commands) if (!commands.has(c)) fails.push(`[drift] ${page} -- names /${c}, which is no command in .claude/commands/`);
+    // A path is a claim about the tree only when it starts at a real top-level directory; `lib/x.mjs` is relative to
+    // something the prose names, so it is not checked (the reader, not the gate, judges it).
+    for (const p of names.paths) if (tree.isDir(String(p.split("/")[0])) && !tree.tracked(p)) fails.push(`[drift] ${page} -- names ${p}, which is not a file in the tree`);
+    const read = Object.prototype.hasOwnProperty.call(accepted, page) ? accepted[page] : "";
+    if (read !== "" && read === sha256(text)) ok++;
+    else { awaiting++; warns.push(`[awaiting-owner] ${page} -- ${read === "" ? "the owner has not read it yet" : "edited since the owner read it"} (ADR-1514 section 4)`); }
+  }
+  for (const page of Object.keys(accepted).sort()) if (!Object.prototype.hasOwnProperty.call(narratives, page)) fails.push(`[orphan-accept] ${ACCEPT_FILE} names ${page}, which has no narrative`);
+  return { fails, warns, accepted: ok, awaiting, narratives: Object.keys(narratives).length };
+}
+
+/**
+ * The acceptance file with one page added (or re-read), or why it is refused: the page must exist and pass the gate.
+ * @param {unknown} doc the current ACCEPT_FILE (or null) @param {string} page @param {Record<string, string>} narratives
+ * @param {string[]} fails evaluate()'s fails @param {string} on YYYY-MM-DD
+ * @returns {{ doc: any, refused: string }}
+ */
+export function acceptEntry(doc, page, narratives, fails, on) {
+  if (!Object.prototype.hasOwnProperty.call(narratives, page)) return { doc: null, refused: `no narrative ${page}` };
+  const own = fails.filter((f) => f.split(" ").some((w) => w === page || w.startsWith(`${page}:`)));
+  if (own.length) return { doc: null, refused: `${page} fails the gate: ${own[0]}` };
+  const prev = doc && typeof doc === "object" && !Array.isArray(doc) && /** @type {any} */ (doc).schema === 1 && /** @type {any} */ (doc).pages && typeof /** @type {any} */ (doc).pages === "object" ? /** @type {any} */ (doc).pages : {};
+  /** @type {Record<string, unknown>} */
+  const pages = {};
+  for (const k of [...Object.keys(prev), page].filter((k, i, a) => a.indexOf(k) === i).sort()) pages[k] = k === page ? { by: "owner", on, sha256: sha256(String(narratives[page])) } : prev[k];
+  return { doc: { schema: 1, pages }, refused: "" };
+}
+
+/**
+ * Why a verifier receipt does not pass its page, or "" when it does -- narrative-verify's advisory check since ADR-1514.
  * @param {any} r @param {string} page @param {string} hash @param {number} count
  */
 export function receiptProblem(r, page, hash, count) {
@@ -227,10 +284,8 @@ export function receiptProblem(r, page, hash, count) {
 // ---------------------------------------------------------------- the tree ----------------------------------------------------------------
 
 /**
- * Every narrative, listed through wiki-coverage's pageTree -- the one sanctioned listing (DOC-A, ADR-1501) -- and each
- * one's receipt, read by its NAMED path. Nothing here lists a directory or spawns a process: an anchor's file is checked
- * by name, and the ADR numbers come from the extract. (An orphan receipt, one with no narrative, is therefore never
- * read: it judges nothing, and evaluate() still refuses one when handed it.)
+ * Every narrative, listed through wiki-coverage's pageTree -- the one sanctioned listing (DOC-A, ADR-1501) -- each one's
+ * advisory receipt, and the acceptance file, all read by NAMED path. Nothing here lists a directory or spawns a process.
  * @param {string} root
  */
 export async function readTree(root) {
@@ -260,13 +315,21 @@ export async function readTree(root) {
       catch { receipts[`${dir}/${stem}`] = "unparseable"; }
     }
   }
+  /** @type {unknown} */
+  let acceptDoc = null;
+  if (existsSync(join(root, ACCEPT_FILE))) {
+    if (!regularInside(join(root, ACCEPT_FILE), rootReal)) rejected.push(ACCEPT_FILE);
+    else { try { acceptDoc = JSON.parse(readFileSync(join(root, ACCEPT_FILE), "utf8")); } catch { rejected.push(`${ACCEPT_FILE} (unparseable)`); } }
+  }
   const adrs = new Set();
   for (const band of Array.isArray(wiki.entities.adrBands) ? wiki.entities.adrBands : []) {
     for (const a of Array.isArray(band && band.facts && band.facts.adrs) ? band.facts.adrs : []) if (a && /^\d{4}$/.test(String(a.number))) adrs.add(String(a.number));
   }
   const tracked = (/** @type {string} */ p) => regularInside(resolve(root, p), rootReal);
   const read = (/** @type {string} */ p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return ""; } };
-  return { wb, wiki, narratives, receipts, rejected, tree: { adrs, wiki, tracked, read } };
+  // A top-level directory, by name (never a listing): lstat, a real directory, not a symlink.
+  const isDir = (/** @type {string} */ seg) => { if (!/^.?[A-Za-z0-9_-][w.-]*$/.test(seg)) return false; try { const st = lstatSync(join(root, seg)); return st.isDirectory() && !st.isSymbolicLink(); } catch { return false; } };
+  return { wb, wiki, narratives, receipts, acceptDoc, accepted: acceptedOf(acceptDoc), rejected, tree: { adrs, wiki, tracked, read, isDir } };
 }
 
 /** A regular file (not a symlink, not a directory) whose real path is inside the tree (attack 845e0a5 B3). */
@@ -281,33 +344,37 @@ function regularInside(/** @type {string} */ abs, /** @type {string} */ rootReal
 
 function selftest() {
   const wiki = { entities: { products: [{ id: "hq", facts: { version: "1.0.0" } }], lanes: [], commands: [{ id: "arc-x", facts: {} }], agents: [], processes: [], gates: [], rules: [] } };
-  const tree = { adrs: new Set(["1513"]), wiki, tracked: (p) => p === "a/b.mjs", read: () => "export function foo() {}" };
-  const good = "<!-- facts: x=1 -->\nThink of it as a front desk. <!-- plain -->\n\nIt reads `a/b.mjs`. <!-- src: a/b.mjs#foo; ADR-1513 -->\n\n| Term | Means |\n|---|---|\n| hq | the spine <!-- src: fact:products/hq.version --> |\n\n- runs `/arc-x` <!-- src: ADR-1513 -->\n";
-  const n = blocksOf(good).length;
-  const receipt = (text, over = {}) => ({ schema: 1, page: "products/hq", sha256: sha256(text), model: "deepseek/deepseek-v4-flash-0731", model_source: "trial", verdicts: Array.from({ length: blocksOf(text).length }, (_, i) => ({ block: i + 1, verdict: "SUPPORTED", why: "x" })), accepted: { by: "owner", on: "2026-09-27" }, ...over });
-  const run = (text, rec = receipt(text), extra = {}) => evaluate({ narratives: { "products/hq": text }, receipts: rec === null ? {} : { "products/hq": rec }, tree, legacy: {}, ...extra });
+  const tree = { adrs: new Set(["1513"]), wiki, tracked: (/** @type {string} */ p) => p === "a/b.mjs", read: () => "export function foo() {}", isDir: (/** @type {string} */ d) => d === "a" };
+  const good = "<!-- facts: x=1 -->\n# Start here\n## In plain words\nThink of hq as the front desk. It keeps `a/b.mjs` and answers to ADR-1513.\n\n```steps\nt: Ask\nplain: you type `/arc-x`\n```\n\n```bash\n# a quote, not a claim\nnode `c/zz.mjs` /arc-zz ADR-0001\n```\n\n| Term | Means |\n|---|---|\n| hq | the spine <!-- src: fact:products/hq.version --> |\n";
+  const run = (/** @type {string} */ text, /** @type {Record<string, string>} */ accepted = {}) => evaluate({ narratives: { "products/hq": text }, accepted, tree });
   let ran = 0, failed = 0;
-  const arm = (name, ok) => { ran++; if (!ok) failed++; console.log(`${ok ? "ok" : "FAIL"} ${name}`); };
-  const has = (r, tag) => r.fails.some((f) => f.startsWith(tag));
-  arm("clean: a plain block, an anchored paragraph, a table row and a list item pass, all four counted as blocks", n === 4 && run(good).fails.length === 0 && run(good).verified === 1);
-  arm("MUTANT unanchored: a factual paragraph with no marker FAILs", has(run(good + "\nIt also writes the ledger.\n"), "[unanchored]"));
-  arm("MUTANT anchor: a path that is not tracked FAILs", has(run(good.replace("a/b.mjs#foo", "a/nope.mjs")), "[anchor]"));
-  arm("MUTANT anchor: a symbol the file never names FAILs", has(run(good.replace("#foo", "#bar")), "[anchor]"));
-  arm("MUTANT anchor: an ADR with no file, and a fact key the entity lacks, each FAIL",
-    has(run(good.replace("ADR-1513 -->\n\n|", "ADR-9999 -->\n\n|")), "[anchor]") && has(run(good.replace("hq.version", "hq.nope")), "[anchor]"));
-  arm("MUTANT anchor: a path climbing out of the tree, or carrying a colon anywhere, FAILs", has(run(good.replace("a/b.mjs#foo", "../x.mjs")), "[anchor]") && has(run(good.replace("a/b.mjs#foo", "a/b.mjs:hidden")), "[anchor]"));
-  arm("MUTANT plain-fact: a plain block with a number or a code span FAILs", has(run(good.replace("a front desk.", "a front desk with 3 doors.")), "[plain-fact]") && has(run(good.replace("a front desk.", "`hq`.")), "[plain-fact]"));
-  arm("MUTANT unverified: a narrative with no receipt FAILs", has(run(good, null), "[unverified]"));
-  arm("MUTANT edited-after-verify: a receipt for other text FAILs", has(run(good + "\nMore. <!-- src: ADR-1513 -->\n", receipt(good)), "[receipt]"));
-  arm("MUTANT verdict: one UNSUPPORTED block FAILs", has(run(good, receipt(good, { verdicts: receipt(good).verdicts.map((v, i) => (i === 1 ? { ...v, verdict: "UNSUPPORTED" } : v)) })), "[receipt]"));
-  arm("MUTANT coverage: a receipt that skipped a block FAILs", has(run(good, receipt(good, { verdicts: receipt(good).verdicts.slice(1) })), "[receipt]"));
-  arm("MUTANT family: a Claude-family verifier FAILs", has(run(good, receipt(good, { model: "anthropic/claude-sonnet-5" })), "[receipt]"));
-  arm("MUTANT orphan: a receipt with no narrative FAILs", has(evaluate({ narratives: {}, receipts: { "products/hq": receipt(good) }, tree, legacy: {} }), "[orphan-receipt]"));
-  arm("legacy: an exempt hand-written text passes as a WARN, and any edit to it FAILs",
-    evaluate({ narratives: { "products/hq": "Old words." }, receipts: {}, tree, legacy: { "products/hq": sha256("Old words.") } }).fails.length === 0
-    && has(evaluate({ narratives: { "products/hq": "Old words!" }, receipts: {}, tree, legacy: { "products/hq": sha256("Old words.") } }), "[unanchored]"));
-  arm("awaiting: a verified page the owner has not read is counted, not failed",
-    run(good, receipt(good, { accepted: null })).fails.length === 0 && run(good, receipt(good, { accepted: null })).awaiting === 1);
+  const arm = (/** @type {string} */ name, /** @type {boolean} */ ok) => { ran++; if (!ok) failed++; console.log(`${ok ? "ok" : "FAIL"} ${name}`); };
+  const has = (/** @type {{ fails: string[] }} */ r, /** @type {string} */ tag) => r.fails.some((f) => f.startsWith(tag));
+  const names = namesOf(good);
+  arm("clean: plain prose with no markers passes; every name it uses resolves", run(good).fails.length === 0);
+  arm("names: prose, a steps block and a table are read; a plain code fence and a comment are not",
+    names.adrs.join() === "1513" && names.commands.join() === "arc-x" && names.paths.join() === "a/b.mjs");
+  arm("MUTANT drift: an ADR with no file FAILs", has(run(good.replace("ADR-1513", "ADR-9999")), "[drift]"));
+  arm("MUTANT drift: a command that does not exist FAILs", has(run(good.replace("`/arc-x`", "`/arc-nope`")), "[drift]"));
+  arm("MUTANT drift: a path that is not in the tree FAILs", has(run(good.replace("`a/b.mjs`", "`a/nope.mjs`")), "[drift]"));
+  arm("MUTANT drift: a name inside a page-shape block is checked too", has(run(good.replace("you type `/arc-x`", "you type `/arc-gone`")), "[drift]"));
+  arm("relative: a path that does not start at a top-level directory is not a claim about the tree", run(good.replace("`a/b.mjs`", "`lib/zz.mjs`")).fails.length === 0);
+  arm("MUTANT anchor: a src marker that does not resolve FAILs", has(run(good.replace("hq.version", "hq.nope")), "[anchor]"));
+  arm("MUTANT anchor: a path climbing out of the tree, or carrying a colon, FAILs",
+    has(run(`${good}\nx <!-- src: ../x.mjs -->\n`), "[anchor]") && has(run(`${good}\nx <!-- src: a/b.mjs:hidden -->\n`), "[anchor]"));
+  arm("MUTANT empty: a narrative with nothing in it FAILs", has(run("<!-- facts: x=1 -->\n\n"), "[empty]"));
+  arm("awaiting: a page the owner has not read is counted, not failed",
+    run(good).fails.length === 0 && run(good).awaiting === 1 && run(good).accepted === 0);
+  arm("accepted: the owner's read against this text's hash counts as accepted",
+    run(good, { "products/hq": sha256(good) }).accepted === 1 && run(good, { "products/hq": sha256(good) }).awaiting === 0);
+  arm("MUTANT edited-after-accept: an acceptance for other text reads awaiting, not accepted",
+    run(`${good}\nMore words.\n`, { "products/hq": sha256(good) }).accepted === 0 && run(`${good}\nMore words.\n`, { "products/hq": sha256(good) }).awaiting === 1);
+  arm("MUTANT orphan: an acceptance for a page with no narrative FAILs",
+    has(evaluate({ narratives: {}, accepted: { "products/gone": sha256(good) }, tree }), "[orphan-accept]"));
+  const accept = acceptEntry(null, "products/hq", { "products/hq": good }, [], "2026-09-28");
+  const refuse = acceptEntry(null, "products/hq", { "products/hq": good }, ["[drift] products/hq -- names x"], "2026-09-28");
+  arm("accept: records the owner and the hash; refuses a page that fails the gate or does not exist",
+    acceptedOf(accept.doc)["products/hq"] === sha256(good) && refuse.refused !== "" && acceptEntry(null, "products/zz", {}, [], "d").refused !== "");
   const debt = explanationDebt(wiki, { "products/hq": good }, { products: "products", lanes: "lanes", commands: "commands" });
   const none = explanationDebt(wiki, {}, { products: "products" });
   arm("debt: a product with a narrative and a command named in a code span are explained; with none, both are debt",
@@ -320,17 +387,19 @@ function selftest() {
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
 
+/** @param {string[]} argv */
 async function main(argv) {
   if (argv.includes("--selftest")) return selftest();
-  let root = process.cwd(), rootSet = false;
+  let root = process.cwd(), rootSet = false, accept = "";
   const json = argv.includes("--json");
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--root") {
+    if (a === "--root" || a === "--accept") {
       const v = argv[i + 1];
-      if (rootSet) { console.error("narrative-anchors: --root given twice"); return 2; }
-      if (typeof v !== "string" || v === "" || v.startsWith("-")) { console.error("narrative-anchors: --root needs a directory"); return 2; }
-      root = resolve(v); rootSet = true; i++;
+      if (typeof v !== "string" || v === "" || v.startsWith("-")) { console.error(`narrative-anchors: ${a} needs ${a === "--root" ? "a directory" : "a page, <dir>/<id>"}`); return 2; }
+      if (a === "--root") { if (rootSet) { console.error("narrative-anchors: --root given twice"); return 2; } root = resolve(v); rootSet = true; }
+      else { if (accept) { console.error("narrative-anchors: --accept given twice"); return 2; } if (!/^[a-z]+\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v)) { console.error("narrative-anchors: --accept needs <dir>/<id>"); return 2; } accept = v; }
+      i++;
       continue;
     }
     if (a === "--json") continue;
@@ -339,13 +408,21 @@ async function main(argv) {
   }
   let t;
   try { t = await readTree(root); } catch (e) { console.error(`narrative-anchors: cannot read the tree: ${/** @type {Error} */ (e).message}`); return 2; }
-  const r = evaluate({ narratives: t.narratives, receipts: t.receipts, tree: t.tree });
-  for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory or a path out of the tree; narratives and receipts are regular files inside it`);
+  const r = evaluate({ narratives: t.narratives, accepted: t.accepted, tree: t.tree });
+  for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory, unparseable or out of the tree; narratives and their records are regular files inside it`);
+  if (accept) {
+    const on = new Date().toISOString().slice(0, 10);
+    const { doc, refused } = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on);
+    if (refused) { console.log(`REFUSED ${accept} -- ${refused}`); return 1; }
+    writeFileSync(join(root, ACCEPT_FILE), `${JSON.stringify(doc, null, 2)}\n`);
+    console.log(`accepted ${accept} for the owner on ${on} (sha256 ${sha256(String(t.narratives[accept])).slice(0, 12)}) -> ${ACCEPT_FILE}`);
+    return 0;
+  }
   const d = explanationDebt(t.wiki, t.narratives, t.wb.PAGE_DIRS);
   if (json) { process.stdout.write(`${JSON.stringify({ ...r, explanation: d }, null, 2)}\n`); return r.fails.length ? 1 : 0; }
   for (const f of r.fails) console.log(`FAIL ${f}`);
   for (const w of r.warns) console.log(`WARN ${w}`);
-  console.log(`narrative-anchors: narratives=${r.narratives} verified=${r.verified} legacy=${r.legacy} awaiting-owner=${r.awaiting} fail=${r.fails.length} · explanation debt: ${d.debt} of ${d.total} (${d.explained} explained)`);
+  console.log(`narrative-anchors: narratives=${r.narratives} accepted=${r.accepted} awaiting-owner=${r.awaiting} fail=${r.fails.length} · explanation debt: ${d.debt} of ${d.total} (${d.explained} explained)`);
   return r.fails.length ? 1 : 0;
 }
 
