@@ -591,6 +591,11 @@ consumer projects — it carries the owner's approvals.
      Debt: `design-robots.mjs` prints its answer then exits 127 on Windows (libuv
      `UV_HANDLE_CLOSING` assertion) — fail-closed, not a blocker.
    - **Phase 02 CLOSED 2026-09-27** (done-log above), CI 19/19 at `4a7f26b1`.
+   - **Phase 03 opened 2026-09-27** via `/arc-change`: the coarse verification plan is now five slices
+     (S1 jury + deviation logger, S2 critic gets the pack, S3 composer reads the real pack, S4 owner
+     ritual as a mechanism, S5 the live run) in `phases/phase-03-spec.md`, plus two exit criteria
+     (fresh plain-prompt control, single-gallery-bias read). **Owner OK 2026-09-27: build S1-S4 without
+     stopping; ask before S5**, which carries the paid live runs and his in-person blind score.
    - **Resume here:** Phase 03, starting with `/arc-change` to refine its coarse spec into slices (there is no
      jury runner today: N-item pack assembly, ranking collection and deviation logging all have
      to be built). Phase 03's gate is the owner's blind 0-100 score, in person.
