@@ -215,7 +215,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/face/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/face/PROGRESS.md)
 
-## Decisions (47)
+## Decisions (48)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -268,6 +268,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1345`](../../../docs/adr/1345-fv2-session-door-driver-only-click-started-no-state-and-the-council-call.md) | The session door: driver-only, click-started, no state of its own; and the council's call on the spine | accepted | 2026-09-25 |
 | [`1346`](../../../docs/adr/1346-fv2-reference-room-reads-the-wiki-extract-build-time-facts-only.md) | The Reference room: the face reads the wiki's own extract, build-time facts only | accepted (pending the owner's OK on the `/arc-change` of 2026-09-26) | 2026-09-26 |
 | [`1347`](../../../docs/adr/1347-fv2-the-reference-room-explains-every-product-and-lane-in-plain-words.md) | The Reference room explains every product and lane in plain words (widens REQ-12; Phase 07 +5.5d) | accepted (the owner's ruling on the `/arc-change --lane face` of 2026-09-27) | 2026-09-27 |
+| [`1348`](../../../docs/adr/1348-fv2-the-reference-room-draws-the-owners-page-shape-with-its-own-diagrams.md) | FV2: the Reference room draws the owner's page shape, with its own flow and loop diagrams | proposed (the owner's `/arc-change --lane face` of 2026-09-27, second pass) | 2026-09-27 |
 
 ## Source
 

@@ -1,7 +1,7 @@
 # Phase 07 — The Reference room: the wiki inside the face, and a Reference link from every room
 
 **Goal (one line):** REQ-12 — the face serves `docs/wiki`'s own extract on a read route and renders it as a Reference room (index → type → entity pages, with the markdown's cross-links), and every room carries a Reference link to its entity's page (ADR-1346).
-**Appetite:** 8.5 days (3 from ADR-1339's re-bank + 5.5 added by ADR-1347 on 2026-09-27: rendering 0.5 · narrative-anchors + verifier 1 · 34 narratives 4; the specs sum to the full 29.5d, zero slack)
+**Appetite:** 10.5 days (3 from ADR-1339's re-bank + 5.5 added by ADR-1347 on 2026-09-27: rendering 0.5 · narrative-anchors + verifier 1 · 34 narratives 4; + 2 added by ADR-1348 the same day: page-shape parts + Diagram + fold 1.5 · ADR-1514 gate change 0.5; the specs sum to the full 31.5d, zero slack)
 **Depends on:** phase-04, phase-06
 **Serves:** REQ-12
 **Branch:** `feat/face-v2-07`
@@ -17,10 +17,13 @@
 - [ ] **Born by the birth rule (ADR-1306):** contract row in `expected-set.json`, `rooms.generated.json` via `face-sections.mjs`, a module under `face/src/modules/`; face-coverage green both directions; wiki-build run in the same PR (the room's product/room rows change what the wiki lists).
 - [ ] **Per-room Reference link (ADR-1346 §6):** every served room whose product or lane has a wiki entity links to that entity's page; the counts of rooms with and without a link are asserted, not assumed.
 - [ ] **Rich narrative (ADR-1347 §2):** the fold parses narrative markdown into blocks (heading, paragraph, list, table, code) and the View draws them -- no HTML injection; a fixture holds every block kind, and a planted `<script>` and an `onerror=` render as text.
-- [ ] **Anchored (ADR-1513 §1):** `narrative-anchors` FAILs a factual block with no `src`/`plain` marker, an anchor that does not resolve (path, ADR, extract fact), and a `plain` block naming a file, command, ADR or number; each arm FAILs from birth with its mutant; the markers never reach a rendered page (wiki or room).
-- [ ] **Verified (ADR-1513 §2):** every shipped narrative has `docs/narrative-verify/<dir>/<id>.json` with all blocks SUPPORTED, the verifier on the independent-family tier, and a sha256 equal to the file's; an edit after verification FAILs the gate.
-- [ ] **Owner-read (ADR-1513 §3):** every receipt carries `accepted: { by: "owner" }`; the owner read each batch in the room.
-- [ ] **All of it (ADR-1347 §1):** all 34 product and lane pages (counted from the extract) show a shipped narrative; the explanation-debt count is on the index and each page names what its narrative does not yet explain.
+- [ ] **Page shape v1 (ADR-1348 §1-3):** an entity page draws Start here · The bigger loop · Reference · Evidence · Meta with a left nav, a masthead (name, version, tagline, chips) and a `narrative`/`generated` pill per section, from kit parts (Lede, Panel, StepPipe, Figure, Rosetta, StatGrid, Pill, Gloss) on face tokens only; generated sections come from the extract and a section whose fact the extract lacks is omitted; a fold fixture over a canned extract holds every part, both moods open clean in the smoke.
+- [ ] **Diagram (ADR-1348 §4):** `diagram.mjs` (pure, node-importable) computes `flow` and `loop` geometry from a spec; a fixture FAILs overlapping boxes, an arrow that ends on no box, and a divider outside the boxes it names — each arm FAILs from birth with its mutant; `View.tsx` only maps geometry to `<svg>`.
+- [ ] **Fenced blocks (ADR-1348 §5):** `lede`, `steps`, `flow`, `loop`, `panel`, `stats`, `rosetta` parse to typed blocks; a malformed block renders as visible source with an error, never dropped; a planted `<script>` and `onerror=` still render as text.
+- [ ] **Drift-checked (ADR-1514 §2, amending ADR-1513 §1-2):** `narrative-anchors` FAILs a narrative naming a path, command, agent, process, script, gate or ADR that does not resolve; the every-block marker rule and the verify-receipt requirement are retired; each new arm FAILs from birth with its mutant.
+- [ ] **Owner-accepted (ADR-1514 §4):** `narrative-anchors --accept <dir>/<id>` records the owner's acceptance against the narrative's sha256; an edit after acceptance reads awaiting-owner; awaiting-owner = 0 at close.
+- [ ] **Sample first (ADR-1348):** the qa page ships through the whole pipeline and the owner accepts it in the room before any of the other 33 is rewritten.
+- [ ] **All of it (ADR-1347 §1):** all 34 product and lane pages (counted from the extract) render page shape v1 with an accepted narrative and at least one diagram; the explanation-debt count is on the index.
 - [ ] Two fresh attackers (logic · boundary); CI green per job; `/arc-phase-done 07` from the main clone.
 
 ## Verification plan
@@ -38,6 +41,14 @@ Refined 2026-09-26 at phase open. Two PRs, each with one attack round and one pu
 - The room: the five sections of `arc-wiki-engine_1.html`, in both moods, in the smoke on every L3 leg, with a fold fixture over a canned extract (index → type → entity; each cross-link resolves to a page the extract holds).
 - The links: one Reference link per served room, from `holds.products` / `holds.lanes`, with the with/without counts asserted.
 - **Live demo:** from the main clone, open the Reference room, walk index → one entity of each type → a cross-link, and follow one room's Reference link to its page; the transcript goes into `evidence/phase-07/`.
+
+**PR C — page shape v1 + Diagram + the qa sample (ADR-1348, ADR-1514, 2026-09-27).**
+- **Test command:** `tests/face-dash.bats` → `tests/face/reference-fold.mjs` (parts + fenced blocks) and a new `tests/face/diagram.mjs` (geometry); `tests/docs-narrative.bats` (drift + accept arms).
+- **Expected failure first:** `diagram.mjs` absent → import fails; a fenced `flow` block renders as a plain code block; `--accept` is an unknown flag (exit 2).
+- **Checks:** every kit part in a canned-extract fold; flow + loop geometry mutants (overlap, dangling arrow, misplaced divider) each FAIL; malformed fenced block visible; drift arm FAILs an unknown ADR and an unknown command; an edit after accept flips the page to awaiting-owner.
+- **Live demo:** from the main clone, open Reference → products → qa in both moods; the owner reads it beside `arc-wiki-engine_1.html` and accepts or sends it back.
+
+**PR D… — the other 33 pages in batches**, each batch read and accepted by the owner in the room before the next.
 
 ## Rabbit holes in this phase
 

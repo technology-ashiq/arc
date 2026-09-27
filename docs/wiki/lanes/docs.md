@@ -142,7 +142,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/docs/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/docs/PROGRESS.md)
 
-## Decisions (14)
+## Decisions (15)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -162,6 +162,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1511`](../../../docs/adr/1511-doc-k-two-surface-adversarial-pass-on-the-extractor-and-each-gate.md) | DOC-K: a two-surface adversarial pass on the extractor and on each gate | accepted | 2026-09-25 |
 | [`1512`](../../../docs/adr/1512-doc-l-the-generator-is-its-own-docs-product-not-core.md) | DOC-L: the generator is its own `docs` product, not part of `core` | accepted | 2026-09-25 |
 | [`1513`](../../../docs/adr/1513-doc-m-a-drafted-narrative-ships-only-source-anchored-and-verified.md) | DOC-M: a model-drafted narrative ships only source-anchored, independently verified and owner-read | accepted (the owner's ruling on the `/arc-change --lane face` of 2026-09-27) | 2026-09-27 |
+| [`1514`](../../../docs/adr/1514-doc-n-truth-lives-in-generated-blocks-narrative-is-drift-checked-and-owner-read.md) | DOC-N: truth lives in generated blocks; a narrative is drift-checked and owner-read, not verified block by block | proposed (the owner's `/arc-change --lane face` of 2026-09-27, second pass) | 2026-09-27 |
 
 ## Source
 
