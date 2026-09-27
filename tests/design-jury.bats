@@ -31,7 +31,12 @@ _fixture() {
     png="$sess/r-1440x900.png"; _png "$png" "variant-$v"; sha="$(_sha "$png")"
     printf '{\n  "route": "/",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "1440x900@1",\n  "session": "jx--variant-%s",\n  "iter": 1,\n  "unchanged": false\n}\n' "$png" "$sha" "$v" > "$sess/r-1440x900.json"
   done
-  REFS=()
+  mkdir -p docs/design/rubrics; printf '# rubric rx
+
+- anchor: pack screen 1 is an 80
+' > docs/design/rubrics/rx.md
+  # The rubric rides first in REFS so every deal carries it; "${REFS[@]:2}" is the refs alone.
+  REFS=(--rubric docs/design/rubrics/rx.md)
   for i in $(seq 1 "$nr"); do
     png=".claude/state/design/refpacks/bx/probe.png"; _png "$png" "reference-$i"; sha="$(_sha "$png")"
     mv "$png" ".claude/state/design/refpacks/bx/nicelydone-${sha:0:16}.png"
@@ -111,11 +116,11 @@ _ranking() {
   _fixture 3 1
   run bash "$(_explore)" jury jx --n 5 --seed 7 "${REFS[@]}"
   [ "$status" -eq 1 ] && [[ "$output" == *"--n 5"* ]] || { echo "a wrong N was dealt: $status $output"; false; }
-  run bash "$(_explore)" jury jx --n 3 --seed 7
+  run bash "$(_explore)" jury jx --n 3 --seed 7 --rubric docs/design/rubrics/rx.md
   [ "$status" -eq 1 ] && [[ "$output" == *"at least one reference"* ]] || { echo "a jury with no reference was dealt: $status $output"; false; }
   _png ".claude/state/design/refpacks/bx/probe.png" "no-row"; nr="$(_sha .claude/state/design/refpacks/bx/probe.png)"
   mv .claude/state/design/refpacks/bx/probe.png ".claude/state/design/refpacks/bx/nicelydone-${nr:0:16}.png"
-  run bash "$(_explore)" jury jx --n 4 --seed 7 --ref "${nr:0:16}"
+  run bash "$(_explore)" jury jx --n 4 --seed 7 --rubric docs/design/rubrics/rx.md --ref "${nr:0:16}"
   [ "$status" -eq 1 ] && [[ "$output" == *"sources.md"* ]] || { echo "a reference with no provenance row was dealt: $status $output"; false; }
   [ ! -e "$(_jury_dir)/key.json" ] || { echo "a refused deal left a key"; false; }
   run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
@@ -237,9 +242,79 @@ _ranking() {
   [ "$status" -eq 0 ] && [[ "$output" == *"1 ranking(s), 0 deviation(s)"* ]] || { echo "a zero-padded copy counted as a juror: $status $output"; false; }
 }
 
+
+# ---------- S4: the owner ritual ----------
+
+# ADR-1411's sealed predictions, as the repo carries them, so the score gate has its record.
+_adr1411() { mkdir -p docs/adr && cp "$ARC_ROOT"/docs/adr/1411-*.md docs/adr/; }
+
+@test "ritual: a deal with no rubric is refused -- the owner scores against anchors fixed before the run" {
+  _fixture 3 1
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]:2}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"--rubric"* ]] || { echo "a deal with no rubric went through: $status $output"; false; }
+}
+
+@test "ritual: the score is refused before the predictions are sealed, for a missing or out-of-range item, and twice" {
+  _fixture 3 1
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55,item-d=80
+  [ "$status" -eq 1 ] && [[ "$output" == *"sealed predictions"* ]] || { echo "a score with no sealed predictions went through: $status $output"; false; }
+  _adr1411
+  run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55
+  [ "$status" -eq 1 ] && [[ "$output" == *"missing item-d"* ]] || { echo "a partial score went through: $status $output"; false; }
+  run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55,item-d=101
+  [ "$status" -eq 1 ] || { echo "a score of 101 went through: $output"; false; }
+  run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55,item-d=80
+  [ "$status" -eq 0 ] || { echo "control: a full score was refused: $output"; false; }
+  run bash "$(_explore)" score jx --scores item-a=71,item-b=40,item-c=55,item-d=80
+  [ "$status" -eq 1 ] && [[ "$output" == *"already recorded"* ]] || { echo "a second score overwrote the first: $status $output"; false; }
+}
+
+@test "ritual: a rubric edited after the deal refuses the score" {
+  _fixture 3 1; _adr1411
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  printf 'anchor moved\n' >> docs/design/rubrics/rx.md
+  run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55,item-d=80
+  [ "$status" -eq 1 ] && [[ "$output" == *"rubric changed"* ]] || { echo "a moved anchor was scored against: $status $output"; false; }
+}
+
+@test "ritual: THE ORDERING -- unblind refuses before the score, and no score is taken after unblinding" {
+  _fixture 3 1; _adr1411
+  run bash "$(_explore)" jury jx --n 4 --seed 7 --control c "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run bash "$(_explore)" unblind jx
+  [ "$status" -eq 1 ] && [[ "$output" == *"no blind score yet"* ]] || { echo "unblinding ran before the score: $status $output"; false; }
+  [ ! -e "$(_jury_dir)/unblind.json" ] || { echo "a refused unblind left a record"; false; }
+  run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55,item-d=80
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"note.logged receipt emitted"* ]] || { echo "the score's receipt was not emitted: $output"; false; }
+  run node "$SANDBOX/.claude/scripts/hq/spine.mjs" read --kind note.logged
+  [[ "$output" == *'"lens":"design"'* ]] && [[ "$output" == *"owner blind score"* ]] || { echo "no design note.logged on the spine: $output"; false; }
+  run bash "$(_explore)" unblind jx
+  [ "$status" -eq 0 ] || { echo "unblind after the score failed: $output"; false; }
+  [[ "$output" == *"= control variant-c"* ]] && [[ "$output" == *"plain-prompt control"* ]] || { echo "the control was not named: $output"; false; }
+  node -e 'const u=require(process.argv[1]);if(!(Date.parse(u.scored)<=Date.parse(u.unblinded)))process.exit(1)' "$(_jury_dir)/unblind.json" || { echo "the score is not timestamped before the unblinding"; false; }
+  rm "$(_jury_dir)/score.json"
+  run bash "$(_explore)" score jx --scores item-a=90,item-b=40,item-c=55,item-d=80
+  [ "$status" -eq 1 ] && [[ "$output" == *"already unblinded"* ]] || { echo "a score was taken after unblinding: $status $output"; false; }
+}
+
+@test "ritual: the self-review catch rate counts iterations that caught a defect, and refuses an empty record" {
+  _fixture 3 1
+  run bash "$(_explore)" catch-rate jx
+  [ "$status" -eq 1 ] && [[ "$output" == *"no self-review iterations"* ]] || { echo "a rate over nothing was reported: $status $output"; false; }
+  mkdir -p docs/design/explore/jx/variant-a/self-review docs/design/explore/jx/variant-b/self-review
+  printf '| iter | input | output | defect | revision |\n|---|---|---|---|---|\n| 1 | a | b | the rail clipped at 390 | widened |\n| 2 | b | b | unchanged: iteration 1 cleared it | none |\n' > docs/design/explore/jx/variant-a/self-review/manifest.md
+  printf '| iter | input | output | defect | revision |\n|---|---|---|---|---|\n| 1 | a | c | the primary action was grey | darkened |\n' > docs/design/explore/jx/variant-b/self-review/manifest.md
+  run bash "$(_explore)" catch-rate jx
+  [ "$status" -eq 0 ] && [[ "$output" == *"2/3 iteration(s) caught a defect"* ]] || { echo "wrong catch rate: $status $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 13 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 18 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 18 -- a @test was silently dropped"
     false
   }
 }
