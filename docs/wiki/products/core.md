@@ -3,7 +3,145 @@
 
 [arc reference](../index.md) › [Products](../index.md#products) › **Product**
 
-> **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/products/core.md` -- hand-written, never generated (ADR-1505, ADR-1508).
+## Why it exists
+
+
+## In plain words
+
+Picture a small company renting out serviced offices. Every new tenant gets the same starter kit on day one: the front-door lock, the fire-alarm wiring, the shared reception desk, the house rules pinned on the wall. A tenant never builds their own front door — they just move in, and the building already works. <!-- plain -->
+
+core is that starter kit for arc. It is one product among many, each described by its own packing list — and of these, hq's, engine's, docs's, council's and git's each name core in their own requires list, while core's names none. <!-- src: products/core/manifest.json; products/hq/manifest.json; products/engine/manifest.json; products/docs/manifest.json; products/council/manifest.json; products/git/manifest.json -->
+
+Nothing else in arc runs without it: the one shared runner every gate's check command runs through, since all gate logic lives in that runner plus the gates file and hooks just call it; the resolver that decides which tracker workspace a command operates on; the registry a sync writes, naming which products are installed and the commit they came from; and the constitution that outranks every roadmap, architecture doc, ADR, PLAN, prompt and line of code — all ship as part of core. <!-- src: .claude/scripts/core/arc-gates.sh; .claude/scripts/core/lane-resolve.sh#workspace; .claude/scripts/core/arc-products.mjs#registrySourceCommit; CONSTITUTION.md; products/core/manifest.json -->
+
+### Why this needs to be a product at all
+
+If every tenant in that building bolted on their own separate front door, their own separate alarm system and their own separate reception desk, the building would stop being one place and become a pile of unrelated rooms wearing one street address. Pulling the shared wiring out into its own unit is what lets every other tenant stay thin — carrying only what makes them different — while still living inside one building that actually holds together. <!-- plain -->
+
+arc itself was split from one monolithic build system into many separately-installable products, each described by its own manifest, so a project could take one slice of arc's habits without dragging in the rest. <!-- src: ADR-0014 -->
+
+Concretely, core carries: the manifest schema and the coverage check every product's file list is validated against, the resolver that decides which lane a command runs in, and the hook dispatcher every Bash, Edit and Read call passes through on its way to running. <!-- src: .claude/scripts/core/product-lint.mjs; .claude/scripts/core/lane-resolve.sh#workspace; .claude/hooks/PreToolUse.sh; .claude/hooks/PreToolUse-edit.sh; .claude/hooks/PreToolUse-read.sh -->
+
+Beyond its commands, its agents and its scripts, core's own packing list also carries plain files: the hook scripts (including the shared dispatcher), the rule files described below, the constitution, the settings file, an output style, a skill, a money-denylist file, and the toolcheck report's HTML template. <!-- src: products/core/manifest.json; .claude/scripts/core/money-surfaces.json; .claude/commands/arc-toolcheck.md -->
+
+## arc words → normal words
+
+| arc word | It is really | Meaning |
+|---|---|---|
+| product | one part of arc | A self-contained bundle of commands, agents, scripts and files, named in its own manifest file. <!-- src: products/core/manifest.json; .claude/scripts/core/product-lint.mjs#KNOWN_FIELDS; ADR-0014 --> |
+| manifest | the packing list | The JSON file naming every command, agent, script and file that belongs to one product; core's is the only one of these with nothing in its own requires list. <!-- src: products/core/manifest.json; products/hq/manifest.json; products/engine/manifest.json; products/docs/manifest.json; products/council/manifest.json; products/git/manifest.json --> |
+| sync | move-in day | Running `sync-to-project.sh`, or its PowerShell twin, to copy arc's machinery into another project's repository. <!-- src: sync-to-project.sh --> |
+| registry | the tenancy log | the registry file `arc-registry.json`, written by a sync, naming which products are installed and the commit they came from. <!-- src: .claude/scripts/core/arc-products.mjs#registrySourceCommit --> |
+| lane | one workstream | A directory holding one workstream's own single live plan; a repo with none of these runs in root-mode instead. <!-- src: .claude/rules/lanes.md --> |
+| profile | the house-rule strictness dial | One settings key — `starter`, `standard` or `strict` — that switches every gate's mode as a set; a per-gate override in settings always wins over it. <!-- src: .claude/scripts/core/arc-profile.sh; ADR-0008 --> |
+| gate | a named house rule | One check listed in the gates file, run by the shared gate runner, that can block, warn, sit off, or defer entirely to the profile. <!-- src: arc.gates.yaml; .claude/scripts/core/arc-gates.sh --> |
+| hook | a tripwire | A small script that runs automatically around a tool call or a session event, without the session asking for it. <!-- src: .claude/hooks/_dispatch.sh --> |
+| freeze | do-not-disturb tape | A directory allowlist that `/arc-freeze` writes; an edit anywhere outside it is refused until `/arc-unfreeze` removes it. <!-- src: .claude/commands/arc-freeze.md; .claude/scripts/core/freeze-check.sh --> |
+| proposal branch | a change nobody has merged yet | A brand-new branch carrying one or more proposed file edits, built from git plumbing alone; it never touches the working tree, the real index, or the main branch. <!-- src: .claude/scripts/core/proposal-branch.mjs --> |
+
+## How a job flows
+
+Setting aside the guard rails that run every session, core's own most concrete job is the one every other product rides on: putting arc's machinery into a project in the first place. Running the sync script against a target directory — either the full suite, or a selective `--products` list that always carries core along for free — copies commands, agents, hooks, rules and a skill into the target, and copies the constitution too since it sits at the repo root outside the main copy loop and both sync paths copy it explicitly, while a fixed set of files is never touched at all: the target's own brain file, its local settings, its plan and progress trackers, its phase files, its decision records, its own reviews, its session log, and its application code. <!-- src: sync-to-project.sh -->
+
+## The stages, one by one
+
+1. Decide the shape of the sync — the full suite, or a selective list of product names that the resolver always extends with core. <!-- src: sync-to-project.sh -->
+2. The resolver turns names into a plan — it reads each named product's manifest and prints a line-protocol plan of directories to make and files to copy, so neither sync twin ever has to parse JSON itself. <!-- src: .claude/scripts/core/arc-products.mjs -->
+3. A consumer's own settings survive the copy — before a full-suite sync overwrites the settings file outright, its current bytes are captured to a backup, and after the copy a merge step folds arc's machinery back in while keeping the consumer's own gate overrides and permission entries. <!-- src: .claude/scripts/core/arc-settings-merge.mjs; sync-to-project.sh -->
+4. An optional environment block is appended once, guarded by a sentinel line so a second sync never appends it twice. <!-- src: sync-to-project.sh -->
+5. The registry is written — a JSON file naming which products are installed and the exact commit they came from, read as ground truth rather than guessed from disk. <!-- src: .claude/scripts/core/arc-products.mjs#registrySourceCommit -->
+6. Nothing here happens silently — a target with no version control gets a note rather than a silent skip, and a report-only run beforehand names every synced file that has gone stale without changing a single byte. <!-- src: sync-to-project.sh -->
+
+## Every part, explained
+
+### Commands
+
+- `/arc` — the read-only install/health dashboard: shows the table for `core · plan · review · qa · council · git` and whether this repository has each one installed, and prints the exact sync command for anything missing, without ever writing anything or running a gate itself. <!-- src: .claude/commands/arc.md -->
+- `/arc-toolcheck` — runs the toolchain health check, fills in the project's fixed HTML report template with the fresh results, and publishes it, then offers to run the fix commands one at a time on approval. <!-- src: .claude/commands/arc-toolcheck.md; .claude/templates/toolchain-health-artifact.html -->
+- `/arc-resume` — reconstructs where a session left off (position, health, scoreboard, risks, next action) purely from the committed tracker files and the last saved snapshot; it only reads state, never writes it. <!-- src: .claude/commands/arc-resume.md -->
+- `/arc-freeze <dir> [more-dirs...]` — locks all edits to the named directories until told otherwise. <!-- src: .claude/commands/arc-freeze.md -->
+- `/arc-unfreeze` — removes that edit boundary. <!-- src: .claude/commands/arc-unfreeze.md -->
+
+### Agents
+
+- `log-analyzer` — an isolated-context incident diagnostician: reconstructs the timeline, finds the earliest failure rather than the loudest one, and hands back a root cause, a trigger, a minimal fix and a regression guard, instead of a patch aimed at the symptom. <!-- src: .claude/agents/log-analyzer.md -->
+- `researcher` — an isolated-context research analyst: breaks a question into sub-questions, checks arc's own past decisions before searching the web, triangulates every load-bearing claim across at least two sources, and hands back one synthesized answer with confidence labels rather than a pile of links. <!-- src: .claude/agents/researcher.md -->
+
+### Scripts
+
+**Lane resolution.** `lane-resolve.sh` and its Node twin `lane-resolve.mjs` answer, for any command, which workstream it operates on — an explicit name, the one auto-resolved eligible lane, or asking rather than guessing when more than one is eligible — and never create, move or write anything themselves. <!-- src: .claude/scripts/core/lane-resolve.sh --> `lane-status.mjs` changes a workstream's own status as a reviewed proposal branch rather than a direct edit. <!-- src: .claude/scripts/core/lane-status.mjs --> `wip-line.sh` counts how many workstreams are currently live or blocked and prints it as one informational line that never blocks anything. <!-- src: .claude/scripts/core/wip-line.sh -->
+
+**The face app's contract lints.** `face-coverage.mjs` fails, by name, if any born lane, spine kind, command or agent has no home in the face contract. <!-- src: .claude/scripts/core/face-coverage.mjs --> `face-sections.mjs` writes each product's own face section of its manifest FROM that same frozen contract, so the two can never be hand-copied out of sync, and its check-only mode turns any drift into a named failure. <!-- src: .claude/scripts/core/face-sections.mjs --> `face-tokens.mjs` keeps the app's copy of the shared design tokens honest against the one source file they are copied from. <!-- src: .claude/scripts/core/face-tokens.mjs --> `face-colour-literal.mjs` fails any spelled-out colour value under the app's UI, modules, shell code or App.tsx — every colour there must be a named token. <!-- src: .claude/scripts/core/face-colour-literal.mjs --> `face-pure.mjs` enforces the fixed four-file shape and the closed import list every interface module must follow. <!-- src: .claude/scripts/core/face-pure.mjs --> `face-facts.mjs` refuses any bundled data file inside the app's source — a fact must be read live through a door route, never shipped as a frozen snapshot. <!-- src: .claude/scripts/core/face-facts.mjs --> `face-dogfood.mjs` matches the app's own request journal against the event log to prove every real decision actually passed through the product rather than around it. <!-- src: .claude/scripts/core/face-dogfood.mjs -->
+
+**The product registry and the sync.** `arc-products.mjs` reads one product's manifest and prints an install plan that both sync twins execute as a dumb copy loop, and doubles as the list, status and registry-writing tool. <!-- src: .claude/scripts/core/arc-products.mjs --> `arc-settings-merge.mjs` preserves a consumer's own settings keys across a sync that would otherwise overwrite the whole file. <!-- src: .claude/scripts/core/arc-settings-merge.mjs --> `arc-status.sh` is the thin wrapper the `/arc` command runs. <!-- src: .claude/scripts/core/arc-status.sh --> `product-lint.mjs` validates every product's manifest against its schema and the rule that every synced file maps to exactly one product, against a hostile-fixture corpus built to catch a parser that only looks correct. <!-- src: .claude/scripts/core/product-lint.mjs --> `evolve-manifest.mjs` validates a manifest's optional experiment section, and permanently refuses one naming a path on the money denylist. <!-- src: .claude/scripts/core/evolve-manifest.mjs; .claude/scripts/core/money-surfaces.json; ADR-0301 --> `variant-grammar.mjs` is the one definition of a process-variant identifier's shape, shared by three products so it cannot drift into three slightly different versions of the same rule. <!-- src: .claude/scripts/core/variant-grammar.mjs --> `json-strict.mjs` rejects a manifest whose raw bytes hide a duplicate key that ordinary JSON parsing would silently resolve last-wins. <!-- src: .claude/scripts/core/json-strict.mjs -->
+
+**Gates, profile and reviews.** `arc-gates.sh` parses the gates file with a hand-written parser and runs whichever gates match a tier. <!-- src: .claude/scripts/core/arc-gates.sh --> `arc-profile.sh` resolves the active strictness profile into a concrete mode per gate. <!-- src: .claude/scripts/core/arc-profile.sh --> `review-ledger.sh` stamps and checks which review kinds have passed for the current commit. <!-- src: .claude/scripts/core/review-ledger.sh --> `board-lint.sh` warns, and only ever warns, when the company board disagrees with what a workstream's own progress file says. <!-- src: .claude/scripts/core/board-lint.sh --> `ownership-lint.sh` warns when one workstream's diff edits files that belong to another. <!-- src: .claude/scripts/core/ownership-lint.sh --> `common.sh` supplies the shared logging and tool-detection helpers the security-scan pipeline runs on. <!-- src: .claude/scripts/core/common.sh -->
+
+**The face app's write door.** `proposal-branch.mjs` is the one writer of a proposal branch anywhere in the repo — built entirely from git plumbing, so it never checks anything out and never moves the working tree, the real index, or main. <!-- src: .claude/scripts/core/proposal-branch.mjs --> `plan-expect.mjs` binds a later write to the exact digest its plan printed, so the write refuses rather than silently re-deriving its result against a world that has since moved. <!-- src: .claude/scripts/core/plan-expect.mjs --> `spawn-bounded.mjs` runs one child process that is guaranteed to end, whole process tree included, once its timeout fires, on Windows and elsewhere alike. <!-- src: .claude/scripts/core/spawn-bounded.mjs --> `one-line.mjs` is the one definition of "a single line of text" — refusing control characters and invisible formatting characters — used by every text field the write door exposes. <!-- src: .claude/scripts/core/one-line.mjs --> `concept-define.mjs` defines a new glossary term as a reviewed proposal branch, and refuses a term homed in a room that has not actually been built yet. <!-- src: .claude/scripts/core/concept-define.mjs --> `profile-request.mjs` asks, as a raised approval rather than a direct edit, to switch the strictness profile. <!-- src: .claude/scripts/core/profile-request.mjs -->
+
+**Session experience.** `freeze-check.sh` is the enforcer behind the freeze commands above. <!-- src: .claude/scripts/core/freeze-check.sh --> `toolchain-health.sh` is the single source of truth for whether every required tool is installed, in both a one-line brief and a full report. <!-- src: .claude/scripts/core/toolchain-health.sh --> `statusline.sh` renders the two-line status bar showing the model, branch state, context usage and session cost. <!-- src: .claude/scripts/core/statusline.sh -->
+
+### Gates and rules
+
+Every one of the seven rule files below ships as a core file, so a project that installs only one extra product still gets the whole guardrail set rather than a partial one. <!-- src: products/core/manifest.json; sync-to-project.sh -->
+
+- `api` — every public route is rate-limited, authorizes every mutating call server-side, validates input at the edge, verifies webhook signatures before acting, and never logs request bodies, tokens or personal data. <!-- src: .claude/rules/api.md -->
+- `lanes` — the one rule for which workstream a command operates on: `--lane <name>` is the only way to name one, omitting it auto-resolves to the sole eligible lane or asks when more than one qualifies, and `/arc-kickoff` is the only command that may create a new one. <!-- src: .claude/rules/lanes.md -->
+- `security-sensitive` — extra rigor over authentication, payments, API surface and data access: never trust client input for authorization or money amounts, Row Level Security stays on, and a deep audit runs on the diff before it ships. <!-- src: .claude/rules/security-sensitive.md -->
+- `stripe` — use the hosted checkout and billing portal rather than hand-rolled card collection, keep one single mapping from a price to an entitlement, and make every webhook handler idempotent. <!-- src: .claude/rules/stripe.md -->
+- `supabase` — Row Level Security on for every table by default, all access through one set of shared clients, schema changes through migrations only, and the service-role key never reaches the client bundle. <!-- src: .claude/rules/supabase.md -->
+- `testing` — unit tests touch no network or real database, every bugfix starts with a failing test, and the automated pipeline is the only gate: never run the full suite locally, and its per-job conclusions are read directly rather than trusted through a watcher's exit code. <!-- src: .claude/rules/testing.md -->
+- `ui` — reuse the existing design-system tokens, design every interactive state, and run the design review before closing any UI-bearing phase. <!-- src: .claude/rules/ui.md -->
+
+core also owns the mechanism every gate runs through, even when it does not own a given gate's own check: the gates file is a flat list read by a hand-written parser with no external YAML dependency, each gate's mode set directly in that file as block, warn, off or profile, and for the three core gates — coverage, docs and scan — the active strictness profile decides warn vs block, with an explicit per-gate setting in the project's own settings file always overruling the profile for that gate. <!-- src: .claude/scripts/core/arc-gates.sh; .claude/scripts/core/arc-profile.sh; ADR-0008 -->
+
+- `reviews` — the one gate core owns outright: it blocks until every review kind the active profile requires is stamped as passed for the exact current commit, and a brand-new commit resets every stamp. <!-- src: .claude/scripts/core/review-ledger.sh; arc.gates.yaml -->
+- `scan`, `coverage` and `docs` run in profile mode, trusting the check's own exit code because that check has already resolved the strictness profile itself; their own checks live outside core. <!-- src: arc.gates.yaml -->
+- `rls` blocks on a Row Level Security gate for Supabase/Postgres tables, and `design` warns when a critiqued route has no design receipt on the spine; neither check's logic belongs to core, but both run through core's one shared runner. <!-- src: arc.gates.yaml; .claude/scripts/review/rls-gate.sh; .claude/scripts/design/design-gate.sh -->
+- `spine-api` warns on a check of which hq module reaches events by opening the raw log directly instead of through the spine reader. <!-- src: arc.gates.yaml; .claude/scripts/review/spine-reader-lint.sh -->
+
+## The bigger loop
+
+### A session, guarded start to finish
+
+A session opens. Before a word is typed, one hook prints the current branch and the last commit, naming the selected lane when exactly one resolves and saying plainly that none was selected when more than one is eligible; a second hook runs the toolchain health check and prints one summary line naming how many tools are ready, need action, or are optional. <!-- src: .claude/hooks/SessionStart.d/00-context.sh; .claude/hooks/SessionStart.d/50-toolchain.sh; .claude/scripts/core/toolchain-health.sh#brief -->
+
+Work begins. Every shell command first passes a guard that scans the whole command line, not merely its first word, for a forced push, a wide `rm -rf`, or a database reset, and blocks it outright if it matches. <!-- src: .claude/hooks/PreToolUse.d/00-destructive.sh -->
+
+If a freeze is active, an edit outside the named directories is blocked the same way, by a boundary file that the `/arc-unfreeze` command removes. <!-- src: .claude/scripts/core/freeze-check.sh; .claude/commands/arc-unfreeze.md -->
+
+A deploy command trips a guard of its own: it runs the test suite first, and only then — if the gate engine is present — every hook-tier gate at once, letting the deploy through only if none of them block. <!-- src: .claude/hooks/PreToolUse.d/50-deploy.sh -->
+
+A file edit landing in one of a fixed set of extensions is auto-formatted on the way out by another hook, which runs prettier and eslint against that one file when `npx` is available. <!-- src: .claude/hooks/PostToolUse.d/00-format.sh -->
+
+The session ends. One hook appends a dated entry to the session log — branch, last commit, how many files sit uncommitted, and the tracker's current position; on a compaction, another hook saves branch, last commit and the uncommitted files to a snapshot file, which `/arc-resume` later reads alongside the committed tracker. <!-- src: .claude/hooks/SessionEnd.d/00-session-log.sh; .claude/hooks/PreCompact.d/00-snapshot.sh; .claude/commands/arc-resume.md -->
+
+None of this is one script. Eight separate hook fragments run in a fixed order by one shared dispatcher — so a product can drop in a new fragment without anyone editing the fragments already there. <!-- src: .claude/hooks/_dispatch.sh; products/core/manifest.json -->
+
+### How it connects to the rest of arc
+
+- Every other product's manifest names core in its own requires list; core's names none — the one product every other one is built on top of, never the other way round. <!-- src: products/hq/manifest.json; products/engine/manifest.json; products/docs/manifest.json; products/git/manifest.json; products/core/manifest.json -->
+- The variant-identifier grammar the `evolve` manifest section is checked against is defined once in core, since the same grammar is needed by the spine validator and process-lint too — rather than copied into each as a regular expression that would slowly drift apart. <!-- src: .claude/scripts/core/variant-grammar.mjs#PROCESS_BASE_RE; .claude/scripts/core/evolve-manifest.mjs#variant_grammar -->
+- core has its own room in the face app too — named `toolbelt`, in the `factory` ring — with its commands, its face-coverage check and its product-lint check as stations. <!-- src: products/core/manifest.json -->
+- The skill `seo-article-writer` still ships as a core file, alongside one output style — and because a selective sync always carries core along for free, every consumer gets them regardless of which other products they choose to install. <!-- src: products/core/manifest.json; sync-to-project.sh -->
+- The company's constitution, the seven rule files, the settings file and its hook wiring travel together as core files — and because a selective sync always carries core along for free, a project that installs only one extra product beside core still gets the whole guardrail set, not a partial one. <!-- src: products/core/manifest.json; sync-to-project.sh -->
+
+## Glossary
+
+- **product** — a self-contained bundle of commands, agents, scripts and files described by its own manifest file. <!-- src: products/core/manifest.json; .claude/scripts/core/product-lint.mjs#KNOWN_FIELDS; ADR-0014 -->
+- **manifest** — the JSON file listing everything one product owns; core's is the only one of these with nothing in its own requires list. <!-- src: products/core/manifest.json; products/hq/manifest.json; products/engine/manifest.json; products/docs/manifest.json; products/council/manifest.json; products/git/manifest.json -->
+- **sync** — copying arc's machinery into another project by running the sync script, full or selective. <!-- src: sync-to-project.sh -->
+- **registry** — the file a sync writes naming which products are installed and from which commit, read as ground truth rather than guessed from disk. <!-- src: .claude/scripts/core/arc-products.mjs#registrySourceCommit -->
+- **lane** — a workstream with exactly one live plan of its own; a repository with none of these is in root-mode instead. <!-- src: .claude/rules/lanes.md -->
+- **root-mode** — the original, single-plan behaviour a repository runs in when it has no workstream directories at all. <!-- src: .claude/rules/lanes.md -->
+- **profile** — the one settings key that switches every gate's mode as a set; an explicit per-gate override always wins over it. <!-- src: .claude/scripts/core/arc-profile.sh; ADR-0008 -->
+- **gate** — one named check, listed in the gates file, with a mode the shared runner reads as `block`, `warn`, `off`, or `profile`. <!-- src: arc.gates.yaml; .claude/scripts/core/arc-gates.sh -->
+- **hook** — a small script that runs automatically around a tool call or a session event, without being asked. <!-- src: .claude/hooks/_dispatch.sh -->
+- **freeze boundary** — the directory allowlist a freeze command writes; an edit anywhere outside it is refused until it is removed. <!-- src: .claude/commands/arc-freeze.md; .claude/scripts/core/freeze-check.sh -->
+- **review ledger** — the record, keyed to one commit, of which review kinds have already passed. <!-- src: .claude/scripts/core/review-ledger.sh -->
+- **proposal branch** — a brand-new branch holding one or more proposed file edits, written by git plumbing alone, never touching the working tree, the real index, or main. <!-- src: .claude/scripts/core/proposal-branch.mjs -->
+- **digest binding** — a plan printing the exact hash of what it would write, so a later apply refuses rather than re-deriving its result against a world that moved in between. <!-- src: .claude/scripts/core/plan-expect.mjs -->
+- **one line (of text)** — the single definition, shared by every write-door field, of a line with no control characters and no invisible formatting character except the zero-width joiners that stay to join emoji and script letters. <!-- src: .claude/scripts/core/one-line.mjs -->
 
 ## At a glance
 

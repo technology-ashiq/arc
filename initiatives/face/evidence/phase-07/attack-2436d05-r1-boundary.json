@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "narrative-verify.mjs: prune() (~line 210-217)",
+      "breaking_input": "Run `node narrative-verify.mjs --prune products/demo` while `.claude/state/.../narrative-verify/products/demo.json` is truncated or corrupted (e.g. 0 bytes, from an interrupted `verify()` write) but still exists on disk.",
+      "why": "`prune()` does `const r = JSON.parse(readFileSync(file, \"utf8\"));` with no try/catch. `verify()`, a few lines away in the SAME file, reads the identical receipt-file shape and wraps it: `try { ... JSON.parse(readFileSync(receiptFile, \"utf8\")) ... } catch { settled = {}; }`. The fix (graceful handling of a malformed receipt) was applied to one reader of this file and not its twin a few lines down -- prune() throws an uncaught SyntaxError with a raw Node stack trace (including local filesystem paths) instead of the intended `usage(...)` exit-2 message.",
+      "fix": "Wrap the `JSON.parse(readFileSync(file, ...))` in prune() the same way verify() does, and return `usage(...)` naming the file on parse failure.",
+      "twin_of": "An unreadable exemption or extras list became \"not exempt\" -> unreadable is exit 2 naming the file, never a default. / The CLI let the library's throw out as a stack with machine paths -> A library throw is translated at the CLI edge."
+    },
+    {
+      "id": "B2",
+      "severity": "critical",
+      "where": "narrative-verify.mjs: inputFor()/flush() (~line 175-185)",
+      "breaking_input": "A narrative block's prose quotes a key-shaped fixture string that only scanSecrets' joined-candidate view catches (the exact scenario the diff's own comment describes: \"a verifier quoting a key-shaped block back had its own answer refused\"), e.g. a claim reading '...the fixture credential looks like an aws-secret-key-shaped 40-character string...' embedded directly in the narrative markdown rather than in a cited source file.",
+      "why": "`flush()` builds `sources` as `scanned(withheld(excerptFor(...)))` -- passing every source excerpt through both the per-line/per-rule `withheld()` AND the scanSecrets-based `scanned()` catch-all added specifically to catch matches `withheld()`'s per-rule regex pass misses. But `cur.lines` (the `blocks` field of the same payload, i.e. the narrative's own prose) is built with `withheld(b.text)` only -- `scanned()` is never applied to it. Any secret-shaped text living in the block prose itself (rather than in a cited file) bypasses the exact protection this diff introduces and is sent verbatim in the `blocks` field to the external model via arc-run's generic-api driver.",
+      "fix": "Run block text through the same `scanned()` catch-all as source excerpts before joining into `cur.lines`, or apply `scanned()` once over the whole assembled chunk input.",
+      "twin_of": "A fixture key in a cited source stopped a verifier chunk -> Source lines that match a secret rule are withheld by name before anything is sent. (Scanned payloads, unscanned context: a value reaches a room by every input the fold takes, not only its payloads.)"
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": "narrative-verify.mjs: runNode() (~line 55-65)",
+      "breaking_input": "arc-run.mjs (or the underlying generic-api model driver it spawns) writes well over 16 MB combined to stdout/stderr on one chunk -- e.g. a runaway verbose-mode transcript or a model looping on repeated tokens -- while 4 chunks run in parallel (CHUNK_PARALLEL).",
+      "why": "The code being replaced used `spawnSync(process.execPath, args, { ..., maxBuffer: 16 * 1024 * 1024, ... })`. The new `runNode()` collects `child.stdout`/`stderr` data events into plain arrays (`out.push(b)`, `err.push(b)`) with no size ceiling at all, and is now invoked up to `CHUNK_PARALLEL` (4) times concurrently. A single misbehaving child that previously would have been killed by Node's maxBuffer guard now accumulates unbounded memory, and the parallel worker pool multiplies the exposure fourfold versus the old sequential loop.",
+      "fix": "Track accumulated byte length in the `data` handlers and kill the child (or stop buffering and report a named overflow) once a fixed cap (e.g. 16 MB) is exceeded, mirroring the removed maxBuffer behavior.",
+      "twin_of": "An unbounded fragment beside a capped buffer -> cap the line as well as the buffer. / Uncapped receipts and a full spine scan on every poll -> a per-poll path gets the same cap as the lines."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "narrative-verify.mjs: inputFor() chunk-size accounting (~line 168-192)",
+      "breaking_input": "A page's narrative or a cited source contains many occurrences of the literal marker text `ARC-INTERNAL-ONLY`, or many spans matching a DENY_RULES pattern, packed near the CHUNK_BYTES boundary.",
+      "why": "The chunk-splitting decision (`if (cur.numbers.length && cur.bytes + added > CHUNK_BYTES) flush();`) sizes `added` from the RAW, pre-transform `excerptFor(...).length`. The actual bytes shipped come from `scanned(withheld(excerptFor(...)))` computed later at flush time, after `withheld()` has replaced each matched span with its own placeholder text (e.g. `ARC-INTERNAL-ONLY` (17 chars) becomes `[the planted internal-only token]` (34 chars) -- roughly double). Because the size check runs before this expansion, a chunk that measured just under CHUNK_BYTES pre-transform can ship meaningfully larger than CHUNK_BYTES once secrets are withheld, silently reintroducing the timeout risk CHUNK_BYTES exists to prevent (per the file's own comment: whole pages \"timed out on every model tried\").",
+      "fix": "Compute the byte budget from the already-withheld/scanned text, or re-check the assembled chunk's actual size after transforms and split further if it exceeds CHUNK_BYTES.",
+      "twin_of": "A cap applied after an unbounded read -> Cap before reading, and take the size from the same read."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "narrative-verify.mjs: prune() (~line 210-220)",
+      "breaking_input": "Run `--prune products/demo` in one terminal while another editor or process (e.g. a concurrent fixer round) saves a new version of `docs/wiki/_narrative/products/demo.md` between prune()'s initial `readTree(ROOT)` read and its final `writeFileSync`.",
+      "why": "prune() reads the narrative text and receipt once, verifies `r.sha256 === sha256(text)` against that single in-memory read, then unconditionally writes a pruned version derived from that same stale in-memory text back to the file -- with no lock and no re-check that the on-disk file is still what was read. A concurrent legitimate edit landing in that window is silently overwritten by prune()'s stale-based rewrite.",
+      "fix": "Re-read and re-hash the file immediately before writeFileSync (or take a lock across the read-verify-write sequence) and refuse to write if the on-disk content has moved since the initial read.",
+      "twin_of": "A re-check with no lock -> a re-check is only a check if nothing can land between it and the write."
+    }
+  ]
+}

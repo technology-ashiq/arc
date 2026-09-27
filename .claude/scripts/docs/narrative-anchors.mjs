@@ -31,10 +31,8 @@ export const PAGE_TYPES = ["products", "lanes"];
  * replaced by a verified page.
  * @type {Record<string, string>}
  */
+// Empty since 2026-09-27: all three were replaced by verified pages (products/engine, products/git, lanes/portfolio).
 export const LEGACY = Object.freeze({
-  "products/engine": "6de5e5d730954293fe13ede3f120cc3d124954cccc5d21ba2bc92b877d527d76",
-  "products/git": "8b811cfa1981b4616c2f1a80e00a28f5de41360234e603584947a1cc0c256a48",
-  "lanes/portfolio": "edac90500abe0bcdafefcc9281254eee835c82f7ead44104b82db239ad9a8acd",
 });
 
 const MARK_SRC = /<!--\s*src:\s*([\s\S]*?)\s*-->/g;
@@ -54,11 +52,11 @@ export const sha256 = (/** @type {string} */ text) => createHash("sha256").updat
  * section and the fence's text is quoted. A paragraph, a list item (with its indented continuation), a quote and a
  * table ROW are each one block; a table's header and rule are not. A block's text is its prose with every comment gone.
  * @param {string} text
- * @returns {{ n: number, kind: string, text: string, anchors: string[], plain: boolean, line: number }[]}
+ * @returns {{ n: number, kind: string, text: string, anchors: string[], plain: boolean, line: number, end: number }[]}
  */
 export function blocksOf(text) {
   const lines = String(text ?? "").split(/\r?\n/);
-  /** @type {{ n: number, kind: string, text: string, anchors: string[], plain: boolean, line: number }[]} */
+  /** @type {{ n: number, kind: string, text: string, anchors: string[], plain: boolean, line: number, end: number }[]} */
   const out = [];
   /** @type {{ kind: string, raw: string[], line: number } | null} */
   let cur = null;
@@ -68,7 +66,7 @@ export function blocksOf(text) {
     const prose = raw.replace(COMMENT, "").replace(/\s+/g, " ").trim();
     if (prose !== "") {
       const anchors = [...raw.matchAll(MARK_SRC)].flatMap((m) => String(m[1]).split(";").map((a) => a.trim()).filter(Boolean));
-      out.push({ n: out.length + 1, kind: cur.kind, text: prose, anchors, plain: MARK_PLAIN.test(raw), line: cur.line });
+      out.push({ n: out.length + 1, kind: cur.kind, text: prose, anchors, plain: MARK_PLAIN.test(raw), line: cur.line, end: cur.line + cur.raw.length - 1 });
     }
     cur = null;
   };

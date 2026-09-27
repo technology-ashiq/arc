@@ -1,0 +1,273 @@
+<!-- facts: appetite=e02f5370 blocked-on=a68c9074 burn=7d7c121a cycle=7a015a98 depends-on=a68c9074 hasPlan=b5bea41b phase=3a417c07 status=4c1abf59 title=373b4406 -->
+
+## In plain words
+
+Think of arc as a small company that keeps hiring itself to build its own tools. Someone still has
+to sit with the builder while it works: hand it the right approved slice of work, make it prove each
+step before moving on, stop it if it starts grinding in circles, and write down what was learned so
+the next build doesn't repeat the mistake. **`develop` is that someone.** It is the lane that built
+`/arc-develop` — the harness a session runs to turn one approved phase into small, checked
+increments instead of one long unsupervised sprint. <!-- src: initiatives/develop/PLAN.md#Goal; docs/adr/0105-develop-is-its-own-product-riding-the-existing-resolver.md -->
+
+The real goal, in the design's own words, is an execution harness that "retrieves the right context
+before each slice, acquires capabilities it lacks, mines decisions for prior art, and learns from its
+own escaped defects — so the next phase is measurably better run than the last, from a record rather
+than from memory." <!-- src: initiatives/develop/PLAN.md#Goal -->
+
+### What it is building
+
+It built one product: **`develop`**, riding the command `/arc-develop`. The product is a script
+(`develop.mjs`) with five lifecycle modes — `start`, `next`, `status`, `checkpoint`, `handoff` — plus
+a lint (`develop-lint.mjs`), a stuck-detector (`stuck.mjs`), a ledger writer/parser (`ledger.mjs`),
+and one agent (`spec-fidelity`). <!-- src: initiatives/develop/PLAN.md; initiatives/develop/archive/PLAN-cycle5-2026-08-02.md#cmd -->
+
+That mattered because before this lane existed, "the longest stretch of the build" — actually
+writing an approved phase's code — was "owned by nobody" and relied on the model remembering to be
+careful. <!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md#Goal -->
+
+## arc words → normal words
+
+| arc calls it | It is really | Meaning |
+|---|---|---|
+| slice | one small, independently proven unit of work inside a phase | A ticked slice missing `proof:`, `tier:` or `commit:` is `slice-unproven`; the ledger holds one block per slice. <!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md#remembering; initiatives/develop/phases/phase-01-spec.md; docs/adr/0100-develop-slice-ledger-grammar.md -->|
+| Build Brief | the briefing sheet handed out at `start` | REQs, non-negotiables, no-gos, the ADR list, a computed blast radius and a 5-field prediction block, written into `phase-NN-tasks.md`. <!-- src: initiatives/develop/phases/phase-00-spec.md -->|
+| tier | how strong a slice's proof is | One of `static` / `unit` / `contract` / `integration` / `e2e-visual` / `verified-real` — "tested" stops meaning six different things. <!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md#REQ-07 -->|
+| Context Pack | what past work already knows about this slice | Five retrieval sources — code neighbourhood, governing ADRs, learning rows, retro patterns, churn — printed before a slice is built. <!-- src: initiatives/develop/phases/phase-05-spec.md -->|
+| learning row | one written-down escaped failure | `what-failed / why-missed / prevention / type / area / cost / verdict` plus typed links `adr:` `rule:` `fixture:` `phase:`, in `docs/develop/learning-ledger.md`. <!-- src: initiatives/develop/phases/phase-04-spec.md#what-failed; docs/develop/learning-ledger.md; initiatives/develop/PLAN.md#REQ-01 -->|
+| promotion | turning a proposed safeguard into an enforced check | Needs three recorded inputs at once: computed replay counts, a fresh agent's verdict, and Ashiq's approval — never a count or a streak alone. <!-- src: initiatives/develop/PLAN.md#REQ-03 -->|
+| holdout | fixtures a candidate is never authored against | Chosen and committed before any candidate was authored, so it can't be picked to fit afterward. <!-- src: initiatives/develop/PROGRESS.md#authored -->|
+| capability vetting | checking a tool before it's allowed in | Fetch it, hash it, read where it came from, scan its source for write-capable code — refuse by default. <!-- src: initiatives/develop/phases/phase-06-spec.md -->|
+| checkpoint | a forced pause when a diff touches risky ground | Triggered by path-matched globs (security-sensitive paths, migrations, auth, public-API surface), never by the model's own say-so. <!-- src: initiatives/develop/phases/phase-03-spec.md -->|
+| stuck | a deterministic "this build is going wrong" signal | Same error fingerprint three times forces root-cause mode; five attempts on one slice escalates to Ashiq with a one-screen diagnosis. <!-- src: initiatives/develop/phases/phase-03-spec.md -->|
+
+## How the work was planned
+
+`develop` was built in two cycles against the same frozen design source,
+`docs/strategy/plans/PLAN-develop.md` — "kickoff-grade, FROZEN," consolidated over four external
+review rounds. <!-- src: docs/strategy/plans/PLAN-develop.md#FROZEN; initiatives/develop/PLAN.md#archived -->
+
+**Cycle 5 ("The Developer")** had a 5-day appetite, set 2026-08-02, with a kill criterion at 3.0
+days burned asking whether Phase 01 was done, and the pre-decided cut was Phase 03 in full.
+<!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md#Appetite -->
+It carried ten REQs (REQ-01 through REQ-10) covering the Build Brief, the lane contract and
+root-mode, cold `status`, receipts, the proof floor, the breaking-input parser, evidence tiers,
+prediction scoring, the fidelity pass, and the escalation backstops.
+<!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md -->
+
+**Cycle 6 ("the intelligence layers")** finished the design source's remaining layers, with one
+carve-out. Its appetite started at 5 days and was **raised to 7** after an attack pass on the first
+draft showed 5 days could not actually finish the design source. <!-- src: initiatives/develop/PLAN.md#owner-set -->
+
+The story behind that raise: the first draft claimed completion while five things had no REQ and no
+phase — Phase 04 deferred them to Phase 07 and Phase 07 deferred them back, so nobody owned them. An
+attack pass caught the claim, and the owner funded the remainder rather than accept the gap: appetite
+raised 5 → 7 days, and Phase 08 was added. <!-- src: initiatives/develop/PLAN.md#archived -->
+
+PLAN.md's kill criteria trigger at 4.0 days burned: if Phase 06 is not done, it forces a mandatory
+scope-cut conversation, with Phase 07 in full as the pre-decided cut. <!-- src: initiatives/develop/PLAN.md#owner-set -->
+
+The one deliberate carve-out was layer 4's **design-critic checkpoints**. Not deferred for time —
+they gate new routes, component families and changed interaction models, and the cycle had no UI REQ
+to exercise them against. Building a gate with nothing to gate would produce a control nobody has
+ever seen fire, which the plan states this product refuses to ship. It carries a debt-ledger row with
+a real trigger: the first phase whose target has a UI surface. <!-- src: initiatives/develop/PLAN.md -->
+
+Cycle 6 also carried an explicit owner decision to build the plan out rather than wait for dogfood
+evidence to pick the next layer — setting aside the design source's own Feature Admission Rule for
+this one cycle, "over four review rounds," with the rule resuming once the layers were in.
+<!-- src: initiatives/develop/PLAN.md -->
+
+## The phases, one by one
+
+**Cycle 5 — "The Developer" (appetite 5 days, closed 2026-08-02 at ~1.9 of 5 days):** <!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md; initiatives/develop/PROGRESS.md --> <!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md; initiatives/develop/PROGRESS.md -->
+
+| Phase | Set out to do | What shipped | Cost |
+|---|---|---|---|
+| 01 — The proof floor | `develop-lint` with structural BLOCKs and a parser tested against adversarial breaking inputs | Nine slices proven through the harness itself; author wrote 26 breaking inputs and caught 0 real holes, then an unanchored agent found 9, including a 4-slice ledger claiming `proof: it works` that parsed to zero slices and "all checks passed"; 45 fixtures pinned now, all caught | ~0.6d of 1.25d <!-- src: initiatives/develop/PROGRESS.md#flagship -->|
+| 02 — Earned judgment | Predictions scored at handoff, a fresh `spec-fidelity` pass over spec + diff | Ran on its own real diff and found real drift: a bare `hit` with no settling reference had passed, and one exit criterion ("recorded in the ledger") was unverifiable by an agent forbidden to read ledgers | ~0.4d of 0.75d <!-- src: initiatives/develop/PROGRESS.md -->|
+| 03 — Controlled escalation | Stuck backstops, inline risk-triggered checkpoints, a debt-marker WARN | Same fingerprint 3× forces root-cause mode; 5 attempts escalates; `checkpoint` became real at the slice boundary; `slice.stuck` needed a new spine kind (ADR-0107) | ~0.4d of 0.5d <!-- src: initiatives/develop/PROGRESS.md; initiatives/develop/archive/PLAN-cycle5-2026-08-02.md#REQ-10 -->|
+
+**Cycle 6 — "the intelligence layers" (appetite raised 5d → 7d, closed 2026-08-03 at 2.1 of 7
+days):** <!-- src: initiatives/develop/PLAN.md; initiatives/develop/PROGRESS.md --> <!-- src: initiatives/develop/PLAN.md; initiatives/develop/PROGRESS.md -->
+
+| Phase | Set out to do | What shipped | Cost |
+|---|---|---|---|
+| 04 — The Learning System | A learning ledger with typed links, ≥12 eval fixtures across six categories, a withheld holdout, and a promotion loop no machine can complete | 12 of 13 slices proven, slice 08 carried forward deliberately; 18 fixtures shipped across six categories including 6 clean controls; the holdout was chosen and committed before any candidate was authored; the loop ran end to end twice and returned "no" twice — L-002 rejected by a fresh agent on the code, L-004's rewrite stopped false-blocking and stopped firing at all; the one-REAL-promotion criterion is **UNPROVEN, deliberately not reworded** | ~0.8d of 1.5d <!-- src: initiatives/develop/PLAN.md#REQ-02; initiatives/develop/PROGRESS.md#authored; initiatives/develop/phases/phase-04-spec.md -->|
+| 05 — Context Pack | Code-graph neighbourhood (with a stated grep fallback), churn, tagged hits, one-hop links, before every slice | Nine slices proven; two fresh agents found 23 holes (8 of them confident wrong answers) in code whose own 14-test suite passed; the pinning commit itself shipped three vacuous passes that "passed" on a stack trace | ~0.2d of 1.0d <!-- src: initiatives/develop/PROGRESS.md#one-hop -->|
+| 06 — Capability acquisition | A scout that proposes, a vet gate that BLOCKs on provenance, a pinned lockfile | Fifteen slices proven; the real candidate, `madge@8.0.0`, was fetched, hashed and **refused** for being write-capable with no recorded human OK; two fresh agents then defeated all seven of the gate's checks, including one newline in a package name walking past the allowlist | ~0.3d of 0.75d <!-- src: initiatives/develop/PROGRESS.md#allowlist; initiatives/develop/evidence/phase-06/handoff.md -->|
+| 07 — Quality intelligence | Decision-triggered pattern mining, risk-triggered approach sketches with economics | Nine slices proven; a fresh agent found 21 holes, all in `quality.mjs`, including a design error that made the feature unusable — approach fields collided with the brief's own namespace | ~0.3d of 0.75d, **not cut** — burn never reached the checkpoint <!-- src: initiatives/develop/evidence/phase-07/handoff.md; initiatives/develop/PROGRESS.md#Burn -->|
+| 08 — The feedback half | Six computed outcome metrics, a calibration record, a closed tag vocabulary, a suggestion engine | Nine slices proven; a fresh agent found 20 holes, 13 of them wrong numbers reported as real, and one live on this repo (`false-block-rate` printing 0 while the trial ledger held five rows reading `unadjudicated`, `unadjudicated, leaning false` and `n/a — not counted as a clean run`) | ~0.5d of 1.5d <!-- src: initiatives/develop/PLAN.md#REQ-10; initiatives/develop/PROGRESS.md; initiatives/develop/evidence/phase-08/handoff.md -->|
+
+Phase 04 was scheduled first in Cycle 6 because everything downstream reads what it defines: the
+Context Pack retrieves learning rows (05), and the promotion loop is what any later safeguard must
+pass through. <!-- src: initiatives/develop/PLAN.md -->
+
+## What it decided
+
+Cycle 5's ADRs: <!-- src: docs/adr/0100-develop-slice-ledger-grammar.md; docs/adr/0107-spine-vocabulary-22-slice-stuck.md -->
+
+| # | Decision |
+|---|---|
+| 0100 | The slice ledger is a `key: value` block per slice, not a table. <!-- src: docs/adr/0100-develop-slice-ledger-grammar.md -->|
+| 0101 | develop-lint's floor: structural checks BLOCK, heuristic checks WARN-first. <!-- src: docs/adr/0101-develop-lint-floor-structural-block-heuristic-warn.md -->|
+| 0102 | One local commit per proven slice; the session commits, never the harness. <!-- src: docs/adr/0102-one-local-commit-per-proven-slice.md -->|
+| 0103 | Risk-triggered checkpoints run inline at the slice boundary. <!-- src: docs/adr/0103-risk-checkpoints-run-inline-at-the-slice-boundary.md -->|
+| 0104 | The Phase-0 fake phase is a committed fixture, not a throwaway demo. <!-- src: docs/adr/0104-fake-phase-is-a-committed-fixture.md -->|
+| 0105 | `develop` ships as its own product and rides `--for develop` with no resolver edit. <!-- src: docs/adr/0105-develop-is-its-own-product-riding-the-existing-resolver.md -->|
+| 0106 | Spine vocabulary extended 18 → 21 for the develop lifecycle. <!-- src: docs/adr/0106-spine-vocabulary-extended-to-21-for-develop.md -->|
+| 0107 | Spine vocabulary 21 → 22, for `slice.stuck`. <!-- src: docs/adr/0107-spine-vocabulary-22-slice-stuck.md -->|
+
+Cycle 6's ADR band: <!-- src: initiatives/develop/PLAN.md --> <!-- src: docs/adr/0108-learning-candidates-graded-by-a-fresh-agent.md; docs/adr/0111-context-pack-follows-links-one-hop-and-records-its-sources.md -->
+
+| # | Decision |
+|---|---|
+| 0108 | A learning candidate is graded by an agent that never saw its author's reasoning. <!-- src: docs/adr/0108-learning-candidates-graded-by-a-fresh-agent.md -->|
+| 0109 | The holdout is process-enforced, and says so. <!-- src: docs/adr/0109-holdout-is-process-enforced-not-cryptographic.md -->|
+| 0110 | Capability vetting BLOCKs on provenance, never on popularity. <!-- src: docs/adr/0110-capability-vetting-blocks-on-provenance-not-popularity.md -->|
+| 0111 | The Context Pack follows typed links exactly one hop, and records every source it used. <!-- src: docs/adr/0111-context-pack-follows-links-one-hop-and-records-its-sources.md -->|
+
+ADR-0100's header carries a `Reversibility` and a `Revisit trigger`: one-way, reopening only if a
+consumer outside arc needs the ledger as structured data, or a slice needs a field that can't be
+expressed as one `key: value` line. <!-- src: docs/adr/0100-develop-slice-ledger-grammar.md -->
+
+## Where it stands now
+
+`initiatives/develop/PROGRESS.md`'s machine header reads: status `IDLE`, cycle "arc-develop (Cycle
+6, closed 2026-08-03)", phase "— (cycle closed, merged as 17473e7 / PR #100)", appetite `7d`, burn
+`2.1d`, blocked-on `—`, depends-on `—`. <!-- src: fact:lanes/develop.status; fact:lanes/develop.cycle; fact:lanes/develop.phase; fact:lanes/develop.appetite; fact:lanes/develop.burn; fact:lanes/develop.blocked-on; fact:lanes/develop.depends-on -->
+
+All of Cycle 6's phases closed on green CI, run `30782174344`, 19 of 19 jobs at head `27cb7ce`,
+recorded in `## Now` as "the cycle is ready to merge — PR #100, still open by instruction."
+<!-- src: initiatives/develop/PROGRESS.md#instruction -->
+
+Three things were explicitly carried forward rather than closed quietly: <!-- src: initiatives/develop/PROGRESS.md --> <!-- src: initiatives/develop/PROGRESS.md -->
+
+- **Phase 04's slice 08** — "one REAL promotion ships an enforced check" — is still unproven. Both
+  authored candidates were rejected (one by a fresh agent reading the code, one by its own computed
+  counts), and the row for the second one records what a third attempt must do differently: reconcile
+  a claimed count against a persisted count, rather than start from a regex over prose.
+  <!-- src: initiatives/develop/PROGRESS.md -->
+- Churn ranking does not follow renames — `--follow` takes a single path and the blast radius is a
+  set, so a renamed file's history splits: dead paths are dropped and the count is stated, which is
+  honest but not the same as knowing the file's real history. <!-- src: initiatives/develop/PROGRESS.md#follow -->
+- PR #100 stayed open by instruction: nothing merges until every Cycle-6 phase is complete.
+  <!-- src: initiatives/develop/PROGRESS.md -->
+
+An open inbox item from the `policy` lane (2026-08-07) also touches this lane: `arc-brief.mjs`'s
+grouping table is behind the closed spine vocabulary by four `develop`/`slice` kinds
+(`develop.started`, `slice.done`, `handoff.ready`, `slice.stuck`) — they now render in a catch-all
+rather than a ranked section, and deciding whether `slice.stuck` belongs in `needs-you` or
+`background` is left for `develop` to decide, not guessed. <!-- src: initiatives/develop/PROGRESS.md -->
+
+## The bigger loop
+
+### What went wrong and what was learned
+
+The debt ledger (`initiatives/develop/debt-ledger.md`) carries eight rows: five still open and
+three struck through as closed, listed below. <!-- src: initiatives/develop/debt-ledger.md --> <!-- src: initiatives/develop/debt-ledger.md -->
+
+- Risk globs are declared inline in `develop.mjs` rather than read from a shared rules file, because
+  Phase 03's 0.5 days did not fit refactoring a file other surfaces also consume; the pay-down
+  trigger is the first time a glob is added to one and not the other, or the next phase that touches
+  `security-sensitive.md` for any reason. <!-- src: initiatives/develop/debt-ledger.md -->
+- Checkpoint health checks ship with no public-API surface diff, complexity delta or
+  circular-dependency check, because all three need something that can read code and arc core is
+  zero-dependency. <!-- src: initiatives/develop/debt-ledger.md -->
+- The Context Pack retrieves slightly wider than its own spec's source table describes — learning
+  rows also match on words in the slice title, and the retro corpus is widened by every matched row's
+  own `area:` and `tag:` — both deliberate, neither named in the written contract.
+  <!-- src: initiatives/develop/debt-ledger.md -->
+- `capability-scout` was exercised through a general-purpose agent carrying its definition inline,
+  not through its own registered agent type, because agent types register at session start and the
+  file was created in the session that needed it — the identical shape recorded and paid down for
+  `spec-fidelity` in Phase 05. <!-- src: initiatives/develop/debt-ledger.md -->
+- Design-critic checkpoints are not built at all, carried with the trigger described above.
+  <!-- src: initiatives/develop/debt-ledger.md -->
+
+Closed: `spec-fidelity` being exercised only through an inline general-purpose agent was paid down
+2026-08-03 in Phase 05, when the real registered agent type loaded, held its isolation, and returned
+a genuine `FIDELITY: drift found` verdict. <!-- src: initiatives/develop/debt-ledger.md -->
+A CI shard-balance row was settled by a merge rather than by this lane's own fix: the `engine` lane
+found and fixed the same stale constant independently, and the merge took their stronger version.
+<!-- src: initiatives/develop/debt-ledger.md -->
+And the duplicate-ADR-number check being only a convention, not an enforced check, was paid down
+2026-08-02 in PR #97, where `kickoff-lint.mjs`'s `[adr-dup]` plus a bats test over the real
+`docs/adr/` started FAILing when two files share a four-digit prefix. <!-- src: initiatives/develop/debt-ledger.md -->
+
+- Line 36 (2026-08-02): a receipt emitter reported success (exit 0) while every receipt was silently
+  quarantined by the spine's closed kind vocabulary. <!-- src: docs/retro-log.md -->
+- Line 37 (2026-08-02): two sessions numbering ADRs in parallel both read the highest number the same
+  way and collided, undetected until a human mentioned the other session. <!-- src: docs/retro-log.md -->
+- Line 38 (2026-08-02): a phase shipped a verifier agent structurally unable to check its own phase's
+  first exit criterion, because the criterion said "recorded in the ledger" and the agent's isolation
+  rule forbids reading ledgers. <!-- src: docs/retro-log.md -->
+- Line 40 (2026-08-02): Cycle 5's scoreboard row — tier M, rework 2/4, amendments 14, FIRED 0/4, burn
+  ~38%, sim-blockers-r1 9, t-to-phase0 ~0.2d. <!-- src: docs/retro-log.md -->
+- Line 47 (2026-08-03): a test passed while executing nothing, three separate times in one cycle —
+  including nine bats probes importing a path node cannot resolve, three of which passed on the stack
+  trace alone. <!-- src: docs/retro-log.md -->
+- Line 48 (2026-08-03): two live lanes independently found and fixed the same stale CI constant four
+  hours apart, and the merge had to choose between them. <!-- src: docs/retro-log.md -->
+- (2026-08-03): Cycle 6's scoreboard row, tagged `arc-develop-cycle6` — tier M, rework 0/5,
+  amendments 11, FIRED 0/5, burn ~30%, t-to-phase0 ~0.8d. <!-- src: docs/retro-log.md -->
+
+Two named lessons stand out from the Done log itself. Phase 01's record: a `#` line
+inside a fenced proof block closed the slice — meaning the sanctioned way to record evidence was also
+the way to stop being checked — and `isFilled` denylisted the em dash but not the en dash while the
+writer itself emits an em dash, so `proof: –` read as a real value. <!-- src: initiatives/develop/PROGRESS.md#floor -->
+Phase 06's record: a newline inside a candidate's `name` field walked past `grep -qxF`'s
+allowlist check, because that flag treats each line of its pattern as a separate fixed string —
+defeating the one control ADR-0110 names as the anti-slopsquatting defence. <!-- src: initiatives/develop/PROGRESS.md#acquisition -->
+
+### How it connects to the rest of arc
+
+`develop` imports lane resolution from `core/lane-resolve.mjs` rather than reimplementing it, and
+rides the generic `--for develop` path with no resolver edit (ADR-0105). <!-- src: initiatives/develop/PLAN.md; docs/adr/0105-develop-is-its-own-product-riding-the-existing-resolver.md -->
+
+It writes receipts onto the shared spine at `.claude/state/hq/events/`, and needed two extensions to
+that spine's closed kind vocabulary to do it (ADR-0106, ADR-0107). <!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md#REQ-04; docs/adr/0106-spine-vocabulary-extended-to-21-for-develop.md; docs/adr/0107-spine-vocabulary-22-slice-stuck.md -->
+
+Company organs it never copies into itself — `docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`,
+`tests/` — stay at the repo root, per ADR-0053; its own evidence stays lane-scoped at
+`initiatives/develop/evidence/phase-NN/`. <!-- src: initiatives/develop/PROGRESS.md -->
+
+Its Context Pack calls out to `codegraph explore` when a `.codegraph/` index exists, with grep and
+glob as the always-available fallback path, and states in `sources:` which one actually ran.
+<!-- src: initiatives/develop/phases/phase-05-spec.md -->
+
+Cycle 6's capability gate reads real registry data — npm `dist.integrity`, PyPI `digests.sha256`, an
+OCI digest — and refuses to trust the same facts if read instead from the MCP registry's `server.json`,
+which only carries a hash for MCPB packages. <!-- src: initiatives/develop/phases/phase-06-spec.md#MCPB -->
+
+The `spec-fidelity` agent, `capability-scout` and `pattern-miner` are declared under
+`.claude/agents/`, registered agent types rather than inline prompts, which is what let Phase 05 pay
+down the debt row recording that `spec-fidelity` had never actually been loaded by the runtime that
+runs it. <!-- src: initiatives/develop/phases/phase-06-spec.md; initiatives/develop/phases/phase-07-spec.md; initiatives/develop/debt-ledger.md; initiatives/develop/evidence/phase-05/spec-fidelity.md -->
+
+## Glossary
+
+- **slice** — one small, independently proven unit of work inside a phase; a ticked slice missing
+  `proof:`, `tier:` or `commit:` is `slice-unproven`. <!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md#remembering; initiatives/develop/phases/phase-01-spec.md -->
+- **Build Brief** — the header `/arc-develop start` writes: REQs, non-negotiables, no-gos, ADR list,
+  blast radius, and a 5-field prediction block. <!-- src: initiatives/develop/phases/phase-00-spec.md -->
+- **tier** — how strong a slice's proof is, one of `static` / `unit` / `contract` / `integration` /
+  `e2e-visual` / `verified-real`. <!-- src: initiatives/develop/archive/PLAN-cycle5-2026-08-02.md#REQ-07 -->
+- **spec-fidelity** — the agent whose whole information set is one phase's spec plus its diff; it
+  never sees the ledger, the brief, or an ADR body. <!-- src: initiatives/develop/phases/phase-02-spec.md -->
+- **learning ledger** — `docs/develop/learning-ledger.md`, one company-wide file recording escaped
+  failures as typed rows. <!-- src: initiatives/develop/phases/phase-04-spec.md -->
+- **holdout** — fixtures set aside, before any candidate is written, that a candidate is never graded
+  against by its own author. <!-- src: docs/adr/0109-holdout-is-process-enforced-not-cryptographic.md -->
+- **capability-scout** — a triggered, no-write agent that proposes external tools and never installs
+  anything. <!-- src: initiatives/develop/phases/phase-06-spec.md -->
+- **capability-vet.sh** — the BLOCK gate: refuses a candidate unless it is allowlisted, version-pinned
+  with a hash and provenance, and passes a content scan — and needs a recorded human OK if it is
+  write-capable. <!-- src: initiatives/develop/phases/phase-06-spec.md -->
+- **Context Pack** — the five-source retrieval `next` prints before a slice: code neighbourhood,
+  governing ADRs, learning rows, retro patterns, churn. <!-- src: initiatives/develop/phases/phase-05-spec.md -->
+- **pattern-miner** — a decision-triggered agent that returns a Pattern Annex of prior art, capped at
+  20 lines, every row carrying a source and a verdict. <!-- src: initiatives/develop/phases/phase-07-spec.md -->
+- **checkpoint** — a forced pause at the slice boundary, triggered by path-matched risk globs, never
+  by the model's own judgement. <!-- src: initiatives/develop/phases/phase-03-spec.md; docs/adr/0103-risk-checkpoints-run-inline-at-the-slice-boundary.md -->
+- **stuck** — the deterministic escalation state: same error fingerprint three times, or five attempts
+  on one slice. <!-- src: initiatives/develop/phases/phase-03-spec.md -->

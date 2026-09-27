@@ -224,12 +224,17 @@ check("loading: before the door answers, the room says it is reading, and draws 
 {
   const ex = body.explanation || {};
   const idx = foldAt("");
-  const unex = new Set((ex.unexplained && ex.unexplained.commands) || []);
-  const prod = body.entities.products.find((e) => (e.facts.commands || []).some((c) => unex.has(String(c).replace(/^.*\//, "").replace(/\.md$/, ""))));
+  // The real tree's debt can be zero, so the "names what is missing" half plants its own case: one product's first
+  // command marked unexplained in a copy of the served explanation, folded, then the real one put back.
+  const prod = body.entities.products.find((e) => (e.facts.commands || []).length > 0);
+  const cmd = prod ? String(prod.facts.commands[0]).replace(/^.*\//, "").replace(/\.md$/, "") : "";
+  const saved = body.explanation;
+  body.explanation = { ...(saved || {}), unexplained: { ...((saved && saved.unexplained) || {}), commands: [cmd] } };
   const pf = prod ? foldAt(`products/${prod.id}`) : null;
+  body.explanation = saved;
   check("debt: the index states the gate's explanation debt, and a product page names its commands no narrative explains",
     Number.isInteger(ex.total) && ex.total >= 100 && idx.debt.startsWith(`Explanation debt: ${ex.debt} of ${ex.total} `)
-    && pf !== null && pf.entity.hasMissing === true && pf.entity.missing.includes("/"),
+    && pf !== null && pf.entity.hasMissing === true && pf.entity.missing.includes(`/${cmd}`),
     JSON.stringify({ debt: idx.debt, prod: prod && prod.id, missing: pf && pf.entity.missing }));
 }
 

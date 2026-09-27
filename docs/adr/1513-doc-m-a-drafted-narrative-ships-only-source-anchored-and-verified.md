@@ -59,3 +59,27 @@ as explanation debt until a narrative covers it.
   "narrative pending", exactly as before.
 - Staleness is unchanged (ADR-1507). When a fact under a narrative moves, its fingerprint warns. The anchors
   point at what to re-verify.
+
+## Amendment 1 (2026-09-27) -- how the verifier actually runs, learned on the first 34 pages
+
+Running the method on every product and lane taught five things the first text did not say:
+
+1. **Chunks, excerpts, not whole pages.** A page with its whole sources inlined was 160-835 KB and timed out on every
+   model. `narrative-verify.mjs` now sends chunks of at most 25 KB, four at a time. Each chunk carries, for every
+   source its blocks cite, the windows around the lines that share the most words with EACH block (a long line is
+   clipped around those words). The first version sent a source's first 5 KB, and claims further down were judged
+   unsupported while the file said them word for word.
+2. **Secret-shaped text is withheld by name before anything is sent.** A fixture key in a cited file, or a file name
+   like `...-risk-checkpoints-...` that looks like a key, stopped chunks at the data boundary.
+3. **A verdict is carried, never re-rolled.** The verifier is not deterministic: re-judging unchanged text flipped
+   settled blocks both ways. A block whose exact text, anchors and plain-marker a previous run judged SUPPORTED keeps
+   that verdict; the receipt lists every carried block (`carried`) and the key it was carried by (`supportedKeys`).
+   A changed block is always judged fresh. Re-running a rejected block until it passes is not the method.
+4. **Fix, then prune.** A rejected block goes to a fixer (a fresh Claude agent) that re-anchors it to the file that
+   states it, narrows it to the source's words, splits it, or corrects it when the page was wrong. Across the 34
+   pages the fixers found well over a hundred CONTRADICTED claims -- real errors reading would not have caught. After
+   three fix rounds, whatever a verifier still rejects is removed (`narrative-verify.mjs --prune`) and the page is
+   verified again. A pruned block is lost information; the cap exists because rounds past three stopped converging.
+5. **The owner's read is recorded after merge.** The room shows only what main holds, so verified pages merge first
+   and `narrative-anchors` counts them `awaiting-owner` until `--accept` records the read. Phase 07 closes only at
+   zero.
