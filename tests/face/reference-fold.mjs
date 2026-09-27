@@ -124,17 +124,48 @@ check("loading: before the door answers, the room says it is reading, and draws 
 // ---- the per-room Reference link (ADR-1346 §6): counted, and every one lands on a page ----
 {
   const shell = await import(u(join(REPO, "face", "src", "lib", "shell.mjs")));
+  const laneRoom = await import(u(join(REPO, "face", "src", "lib", "lane-room.mjs")));
+  // The link's destination is FOUND by its route, and follows the rail's rule: a planned Reference room gets no link (B1).
+  const attached = { [manifest.id]: { manifest }, decoy: { manifest: { routes: ["/api/spine"] } } };
+  const plannedRooms = registry.rooms.map((r) => (r.id === manifest.id ? { ...r, status: "planned" } : r));
+  const twice = [...registry.rooms, { ...room, id: "decoy" }];
+  check("links: the destination is the one openable room whose module reads the extract -- none when planned, none when two",
+    laneRoom.referenceRoom(registry.rooms, attached) === manifest.id && laneRoom.referenceRoom(plannedRooms, attached) === null
+    && laneRoom.referenceRoom(twice, { ...attached, decoy: { manifest } }) === null && laneRoom.referenceRoom(null, null) === null);
   const targets = registry.rooms.map((r) => ({ id: r.id, at: shell.referenceAt(r) }));
   const linked = targets.filter((x) => x.at !== null);
   const unlinked = targets.filter((x) => x.at === null);
   const broken = linked.filter((x) => { const [k, ...rest] = x.at.split("/"); return !ids(k).includes(rest.join("/")) || !body.pages[x.at]; });
   console.log(`reference links: ${linked.length} rooms link to a page, ${unlinked.length} do not (${unlinked.map((x) => x.id).join(",")})`);
-  check("links: every room that links lands on a page the extract holds; with + without = every served room",
-    linked.length >= 15 && broken.length === 0 && linked.length + unlinked.length === registry.rooms.length
-    && targets.find((x) => x.id === "reference").at === null, `linked=${linked.length} broken=${broken.map((x) => `${x.id}->${x.at}`).join(",")}`);
-  const opened = foldAt(linked[0].at);
-  check("links: a room's link opens the Reference room ON that page (the pick the hash seeds)", opened.isEntity === true && opened.crumbs[2].at === linked[0].at, linked[0].at);
+  // The rooms that SHOULD link, derived independently of referenceAt: every served room a product or a lane maps to in
+  // expected-set.json (ADR-1306's maps), compared both ways -- a hand-kept floor let a broken referenceAt pass (B3).
+  const expected = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "expected-set.json"), "utf8"));
+  const mapped = new Set();
+  for (const key of ["products", "lanes"]) {
+    const map = (expected[key] && expected[key].map) || {};
+    for (const [k, v] of Object.entries(map)) if (!k.startsWith("$")) for (const id of [v].flat()) if (typeof id === "string") mapped.add(id);
+  }
+  const want = registry.rooms.map((r) => r.id).filter((id) => mapped.has(id)).sort();
+  const have = linked.map((x) => x.id).sort();
+  const self = targets.find((x) => x.id === manifest.id);
+  check("links: the rooms that link are exactly the rooms a product or a lane maps to, both ways, and every one lands on a page",
+    want.length > 0 && JSON.stringify(have) === JSON.stringify(want) && broken.length === 0
+    && linked.length + unlinked.length === registry.rooms.length && self !== undefined && self.at === null,
+    `missing=${want.filter((i) => !have.includes(i))} extra=${have.filter((i) => !want.includes(i))} broken=${broken.map((x) => `${x.id}->${x.at}`)}`);
+  // End to end, for EVERY linked room: the address the link writes, parsed back, seeds the pick the fold reads (B4).
+  const pickName = "at";
+  const carried = linked.map((x) => {
+    const h = shell.parseHash(shell.buildHash(manifest.id, "tok", "2026-09-01", x.at));
+    const f = foldAt(h.at ?? "");
+    return { id: x.id, at: x.at, ok: h.room === manifest.id && h.asOf === "2026-09-01" && h[pickName] === x.at && f.isEntity === true && f.crumbs[2].at === x.at };
+  });
+  check("links: every room's link, written to the address and read back, opens the Reference room ON its page",
+    carried.length > 0 && carried.every((c) => c.ok), carried.filter((c) => !c.ok).map((c) => `${c.id}->${c.at}`).join(","));
+  // Prototype names pass the fragment grammar; the fold must still find no page there (B9).
+  const proto = ["constructor", "toString", "valueOf", "hasOwnProperty", "products/constructor", "products/__proto__", "constructor/x"].map((a) => [a, foldAt(a)]);
+  check("lost: a prototype name is LOST, never a type list or a page",
+    proto.every(([, f]) => f.isLost === true && f.isEntity === false && f.isType === false), proto.filter(([, f]) => !f.isLost).map(([a]) => a).join(","));
 }
 
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 15 ? 0 : 1;
+process.exitCode = failed === 0 && ran === 17 ? 0 : 1;

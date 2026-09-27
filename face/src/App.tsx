@@ -22,6 +22,7 @@ import { buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navO
 import { asOfReaches, attachModules, collectModules, EXEMPTION_FILE, extraRooms, homeRoom, modeChip, PULSE_MS, railGroups, refusedPayload, roomHoldingKind, withExtras } from './lib/registry.mjs'
 import type { ExtraRooms, ModuleContext } from './lib/registry.mjs'
 import { needsYouByRoom } from './lib/map.mjs'
+import { referenceRoom } from './lib/lane-room.mjs'
 import { applyMood, nextMood, readMood, storeMood } from './lib/mood.mjs'
 import type { Mood } from './lib/mood.mjs'
 
@@ -198,6 +199,7 @@ export default function App() {
   // Modules attach to the SERVED rooms, both ways (ADR-1321), and to an exempted extra through its row. What the
   // glob found is fixed at build time; what it attaches to is whatever the door serves today.
   const attachment = useMemo(() => attachModules(shell ?? { rooms: [] }, collected), [shell, collected])
+  const referenceId = useMemo(() => referenceRoom(shell?.rooms ?? [], attachment.attached), [shell, attachment])
 
   const open = useCallback(
     (id: string, nextAt: string | null = null) => {
@@ -330,12 +332,13 @@ export default function App() {
         asOfSupported={openable !== null && ASOF_ROUTES.length > 0 && asOfReaches(openable, attached ? attached.manifest : null)}
         onAsOf={(day) => {
           setAsOf(day)
-          window.history.replaceState(null, '', buildHash(openable ? openable.id : shownId ?? '', token, day))
+          // The page rides along: an as-of write that dropped it would reload into a different page (attack 5308c9c B5).
+          window.history.replaceState(null, '', buildHash(openable ? openable.id : shownId ?? '', token, day, at))
         }}
         groups={groups}
         current={openable ? openable.id : null}
-        reference={{ at: openable ? referenceAt(openable) : null, served: (shell?.rooms ?? []).some((r) => r.id === 'reference') }}
-        onReference={(a) => open('reference', a)}
+        reference={{ at: openable ? referenceAt(openable) : null, served: referenceId !== null }}
+        onReference={(a) => { if (referenceId !== null) open(referenceId, a) }}
       />
 
       {/* No z-index here on purpose: a room's drawers (z-50, fixed) must stack above the rail and
@@ -353,7 +356,7 @@ export default function App() {
           >
             {openable && ctx ? (
               <div key={openable.id} className="room-enter">
-                <RoomFrame key={`${openable.id}|${at ?? ''}`} room={openable} attachment={attachment} ctx={ctx} seed={at ? { at } : undefined} />
+                <RoomFrame key={`${openable.id}|${at ?? ''}`} room={openable} attachment={attachment} ctx={ctx} seed={at && openable.id === referenceId ? { at } : undefined} />
               </div>
             ) : (
               <NoSuchRoom id={shownId ?? ''} extrasNote={extras.isLoading ? 'the exemption rows are still being read' : extrasNote} />

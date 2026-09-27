@@ -703,6 +703,32 @@ export function holdsCount(base, key) {
   return fmtInt(listOf(base.held, key).length);
 }
 
+/** The route only the Reference room's module reads (Phase 07, REQ-12). */
+export const REFERENCE_ROUTE = "/api/reference";
+
+/**
+ * The room a per-room Reference link opens (ADR-1346 section 6): the ONE openable room -- the rail's rule -- whose attached
+ * module declares the wiki extract's route. Found from the registry, so no shell file names it; none, or two, is null
+ * and the header draws no link (attack 5308c9c B1, B2).
+ * @param {unknown} rooms
+ * @param {unknown} attached  attachModules(...).attached
+ * @returns {string | null}
+ */
+export function referenceRoom(rooms, attached) {
+  const list = Array.isArray(rooms) ? rooms : [];
+  const mods = attached && typeof attached === "object" ? /** @type {Record<string, unknown>} */ (attached) : {};
+  const hits = list.filter((r) => {
+    if (!isOpenable(r)) return false;
+    const id = /** @type {Record<string, unknown>} */ (r)["id"];
+    if (typeof id !== "string" || !Object.hasOwn(mods, id)) return false;
+    const m = /** @type {Record<string, unknown>} */ (mods[id] ?? {});
+    const man = m && typeof m === "object" ? /** @type {Record<string, unknown>} */ (m["manifest"] ?? {}) : {};
+    const routes = man && typeof man === "object" ? man["routes"] : null;
+    return Array.isArray(routes) && routes.includes(REFERENCE_ROUTE);
+  });
+  return hits.length === 1 ? String(/** @type {Record<string, unknown>} */ (hits[0])["id"]) : null;
+}
+
 /**
  * Whether a link to another room can be followed: only to a room the door serves, that is built and is
  * not the lane-room template -- the same answer the rail gives, rather than a fourth one.

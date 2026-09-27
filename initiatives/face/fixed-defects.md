@@ -872,3 +872,13 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A room openable by presence** -- the live-room button opened the lane TEMPLATE because the id was in the registry (L7, L12, B3). *Ask the rail's own rule (`roomLink`), never re-derive "openable".*
 - **A heading quoted in a code fence taken as the break** -- the owner's narrative was split inside a fenced block (L3). *A parser of the owner's prose tracks fences before reading structure.*
 - **Rows without a key drawn under a shared one** -- an ADR row with no number (L14). *Rows the fold cannot tell apart are counted, not drawn; the fold supplies each key.*
+
+## Phase 07 PR B2 -- the per-room Reference link (attack 5308c9c, round 1: boundary B1-B10; logic did not run)
+
+- **A destination openable by presence, again** -- the header drew the link whenever a room with the id existed, planned or not (B1). *The twin of B1's L7: the link's destination is FOUND by the rail's rule (`referenceRoom`, lane-room.mjs), never by `some(id ===)`.*
+- **A room id named in the shell** -- App.tsx spelled the Reference room's id twice, which the module-frame shell scan forbids (B2). *Find a room by what its module reads (`/api/reference`), never by name.*
+- **A floor where a set belongs** -- "at least 15 rooms link" let a broken `referenceAt` pass (B3). *Derive the expected set from the contract's own maps and compare both ways.*
+- **A chain tested in halves** -- the hash round-trip and the fold were each green while the seed between them was never exercised (B4). *Carry one value end to end through every hop, for every row, not the first.*
+- **A second writer of the address that forgot a field** -- the as-of control rewrote the hash without `at` (B5). *Every `buildHash(` call site passes the whole address state; grep the call sites, not the function.*
+- **State seeded into rooms it does not belong to** -- `at` was handed to every room's picks (B6). *Seed only the room the value names.*
+- **Unguarded lookups in a test** -- `find(...).at` and `linked[0]` threw instead of failing a named check (B10). *A test resolves and asserts before it dereferences.*
