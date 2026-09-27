@@ -73,7 +73,11 @@ try {
   process.exit(1);
 }
 
-const parsed = parseYamlSubset(text);
+// A throw is an unparseable registry too, reported by name, not left to a stack trace (phase-02
+// attack G1 B3).
+let parsed;
+try { parsed = parseYamlSubset(text); }
+catch (e) { console.log(`ERR  [registry-unparseable] ${target}: ${e && e.message ? e.message : "parser threw"}`); process.exit(1); }
 if (!parsed || parsed.ok === false) {
   const err = parsed && parsed.error ? JSON.stringify(parsed.error) : "unparseable";
   console.log(`ERR  [registry-unparseable] ${target}: ${err}`);
@@ -87,12 +91,17 @@ if (!Array.isArray(sources) || sources.length === 0) {
   process.exit(1);
 }
 
+// The id grammar the consumer enforces (design-refpack.mjs ID and RESERVED): an id the lint
+// accepts and the builder refuses is a registry row that can never be used (phase-02 attack G1 B1).
+const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 const seen = new Set();
 for (const s of sources) {
   const id = (s && s.id) || "<no id>";
 
   if (!s || typeof s !== "object") { fail(id, "entry-shape", "entry is not a mapping"); continue; }
   if (typeof s.id !== "string" || !s.id.trim()) fail(id, "id-missing", "every entry needs a string id");
+  else if (!ID.test(s.id) || RESERVED.test(s.id)) fail(id, "id-grammar", "an id matches [a-z0-9][a-z0-9-]{0,63} and is not a Windows device name -- the pack builder refuses any other");
   if (seen.has(s.id)) fail(id, "id-duplicate", "two entries share this id -- the registry is keyed by it");
   seen.add(s.id);
 

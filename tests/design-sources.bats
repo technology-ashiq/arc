@@ -138,6 +138,16 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   echo "$output" | grep -qi "kind" || { echo "refused, but not for kind: $output"; false; }
 }
 
+@test "sources lint: an id outside the builder's grammar is refused -- a device name, a path, an upper case (phase-02 attack G1 B1)" {
+  for bad in con lpt1 ../x Lapa a/b; do
+    _valid_entry | sed "s|^  - id: lapa-ninja$|  - id: ${bad}|" > "$BATS_TEST_TMPDIR/m.yaml"
+    grep -q "^  - id: ${bad}$" "$BATS_TEST_TMPDIR/m.yaml" || { echo "the mutant for '${bad}' was not written"; false; }
+    run _lint "$BATS_TEST_TMPDIR/m.yaml"
+    [ "$status" -ne 0 ] || { echo "id '${bad}' passed: $output"; false; }
+    echo "$output" | grep -q "id-grammar" || { echo "id '${bad}' refused, but not for its grammar: $output"; false; }
+  done
+}
+
 @test "sources lint: an unknown access is refused" {
   _valid_entry | sed 's/^    access: fetch$/    access: telepathy/' > "$BATS_TEST_TMPDIR/m.yaml"
   run _lint "$BATS_TEST_TMPDIR/m.yaml"
@@ -191,17 +201,17 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   # saying the right words and git actually resolving the ignore are two different facts, and
   # only one of them is the one that keeps someone else's artwork out of this repo.
   cd "$ARC_ROOT"
-  mkdir -p ".claude/state/design/refpacks/ignore-probe"
-  printf 'not-a-real-png' > ".claude/state/design/refpacks/ignore-probe/probe.png"
-  run git check-ignore -q ".claude/state/design/refpacks/ignore-probe/probe.png"
+  mkdir -p ".claude/state/design/refpacks/ignore-probe-$$"
+  printf 'not-a-real-png' > ".claude/state/design/refpacks/ignore-probe-$$/probe.png"
+  run git check-ignore -q ".claude/state/design/refpacks/ignore-probe-$$/probe.png"
   rc="$status"
-  rm -rf ".claude/state/design/refpacks/ignore-probe"
+  rm -rf ".claude/state/design/refpacks/ignore-probe-$$"
   [ "$rc" -eq 0 ] || { echo "a PNG under refpacks/ is NOT ignored by git"; false; }
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 15 -- a @test was silently dropped"
     false
   }
 }
