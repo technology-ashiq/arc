@@ -9,6 +9,8 @@
 // narrative -- nothing from the spine, nothing under .claude/state/, no live count. Live numbers stay in the live
 // rooms. READ-ONLY (DOC-D, ADR-1504): nothing here writes, and docs/wiki/** is never touched by the door.
 import { ReadError, answer, scrub, scrubDeep } from "../reads.mjs";
+// The explanation debt comes from the gate's own function, so the room and CI cannot count it two ways (ADR-1513).
+import { explanationDebt } from "../../../../docs/narrative-anchors.mjs";
 
 /** The extract schema this room renders. A new schema refuses the route whole rather than rendering half of it. */
 export const REFERENCE_SCHEMA = 1;
@@ -53,6 +55,7 @@ export async function referenceBody(repo, inject = {}) {
   const narrativeOf = w.narrativeReader(repo);
   /** @type {Record<string, string>} */ const pages = {};
   /** @type {Record<string, string>} */ const narrative = {};
+  /** @type {Record<string, string>} */ const byDir = {};
   /** @type {string[]} */ const unpaged = [];
   for (const key of w.RENDERED) {
     for (const e of wk.entities[key] || []) {
@@ -68,7 +71,7 @@ export async function referenceBody(repo, inject = {}) {
       let text;
       try { text = narrativeOf(key, e.id); }
       catch (err) { throw new ReadError("SOURCE_INVALID", `the narrative for ${at} could not be read as a regular file inside the tree: ${scrub(String(err && err.message || err), repo)}`); }
-      if (typeof text === "string") narrative[at] = text;
+      if (typeof text === "string") { narrative[at] = text; byDir[`${w.PAGE_DIRS[key]}/${e.id}`] = text; }
     }
   }
   // The cross-links the markdown draws, from the SAME function renderWiki draws them with (ADR-1346 §1).
@@ -79,7 +82,8 @@ export async function referenceBody(repo, inject = {}) {
   const relOk = relations !== null && typeof relations === "object"
     && RELATION_KEYS.every((k) => relations[k] !== null && typeof relations[k] === "object" && !Array.isArray(relations[k]));
   if (!relOk) throw new ReadError("SOURCE_INVALID", `the wiki's cross-links are not the five maps the room reads (${RELATION_KEYS.join(", ")}) -- refused whole, never drawn as "none"`);
-  return { schema: wk.schema, stats: wk.stats, entities: wk.entities, pages, narrative, unpaged, relations, pageDirs: w.PAGE_DIRS, typeKey: w.TYPE_KEY, rendered: w.RENDERED, titles: w.TITLES, singular: w.SINGULAR };
+  const explanation = explanationDebt(wk, byDir, w.PAGE_DIRS);
+  return { schema: wk.schema, stats: wk.stats, entities: wk.entities, pages, narrative, unpaged, relations, pageDirs: w.PAGE_DIRS, typeKey: w.TYPE_KEY, rendered: w.RENDERED, titles: w.TITLES, singular: w.SINGULAR, explanation };
 }
 
 /** A page path the room may link: one directory, one safe id, `.md` -- relative to docs/wiki, never out of it. */

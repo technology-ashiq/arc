@@ -18,7 +18,7 @@
 - [ ] **Per-room Reference link (ADR-1346 §6):** every served room whose product or lane has a wiki entity links to that entity's page; the counts of rooms with and without a link are asserted, not assumed.
 - [ ] **Rich narrative (ADR-1347 §2):** the fold parses narrative markdown into blocks (heading, paragraph, list, table, code) and the View draws them -- no HTML injection; a fixture holds every block kind, and a planted `<script>` and an `onerror=` render as text.
 - [ ] **Anchored (ADR-1513 §1):** `narrative-anchors` FAILs a factual block with no `src`/`plain` marker, an anchor that does not resolve (path, ADR, extract fact), and a `plain` block naming a file, command, ADR or number; each arm FAILs from birth with its mutant; the markers never reach a rendered page (wiki or room).
-- [ ] **Verified (ADR-1513 §2):** every shipped narrative has `_verify/<dir>/<id>.json` with all blocks SUPPORTED, the verifier on the independent-family tier, and a sha256 equal to the file's; an edit after verification FAILs the gate.
+- [ ] **Verified (ADR-1513 §2):** every shipped narrative has `docs/narrative-verify/<dir>/<id>.json` with all blocks SUPPORTED, the verifier on the independent-family tier, and a sha256 equal to the file's; an edit after verification FAILs the gate.
 - [ ] **Owner-read (ADR-1513 §3):** every receipt carries `accepted: { by: "owner" }`; the owner read each batch in the room.
 - [ ] **All of it (ADR-1347 §1):** all 34 product and lane pages (counted from the extract) show a shipped narrative; the explanation-debt count is on the index and each page names what its narrative does not yet explain.
 - [ ] Two fresh attackers (logic · boundary); CI green per job; `/arc-phase-done 07` from the main clone.

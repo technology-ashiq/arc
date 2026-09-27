@@ -65,6 +65,12 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
           <HPanel title={f.entity.heading} hint={f.entity.kind}>
             <SectionLabel>Start here</SectionLabel>
             {f.entity.hasStartHere && <Blocks blocks={f.entity.startBlocks} />}
+            {f.entity.hasMissing && (
+              <p className="text-[12px] mt-1 mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>Not explained on this page yet: <span style={{ fontFamily: MONO }}>{f.entity.missing}</span></p>
+            )}
+            {f.entity.isUnexplained && (
+              <p className="text-[12px] mt-1 mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>No narrative explains this yet -- it counts in the explanation debt (ADR-1513).</p>
+            )}
             {!f.entity.hasStartHere && (
               <p className="text-[12.5px] italic" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.entity.pending}</p>
             )}

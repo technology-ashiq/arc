@@ -23,8 +23,10 @@ None declared.
 
 None declared.
 
-## Scripts (4)
+## Scripts (6)
 
+- [`.claude/scripts/docs/narrative-anchors.mjs`](../../../.claude/scripts/docs/narrative-anchors.mjs)
+- [`.claude/scripts/docs/narrative-verify.mjs`](../../../.claude/scripts/docs/narrative-verify.mjs)
 - [`.claude/scripts/docs/wiki-build.mjs`](../../../.claude/scripts/docs/wiki-build.mjs)
 - [`.claude/scripts/docs/wiki-coverage.mjs`](../../../.claude/scripts/docs/wiki-coverage.mjs)
 - [`.claude/scripts/docs/wiki-drift.mjs`](../../../.claude/scripts/docs/wiki-drift.mjs)

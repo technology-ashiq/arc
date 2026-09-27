@@ -221,4 +221,17 @@ console.log(`RAN: ${ran} checks`);
     all.slice(0, 300));
 }
 
-process.exitCode = failed === 0 && ran === 19 ? 0 : 1;
+// ---- the explanation debt (ADR-1513): the gate's count, on the index and on each product's page ----
+{
+  const ex = body.explanation || {};
+  const idx = foldAt("");
+  const unex = new Set((ex.unexplained && ex.unexplained.commands) || []);
+  const prod = body.entities.products.find((e) => (e.facts.commands || []).some((c) => unex.has(String(c).replace(/^.*\//, "").replace(/\.md$/, ""))));
+  const pf = prod ? foldAt(`products/${prod.id}`) : null;
+  check("debt: the index states the gate's explanation debt, and a product page names its commands no narrative explains",
+    Number.isInteger(ex.total) && ex.total >= 100 && idx.debt.startsWith(`Explanation debt: ${ex.debt} of ${ex.total} `)
+    && pf !== null && pf.entity.hasMissing === true && pf.entity.missing.includes("/"),
+    JSON.stringify({ debt: idx.debt, prod: prod && prod.id, missing: pf && pf.entity.missing }));
+}
+
+process.exitCode = failed === 0 && ran === 20 ? 0 : 1;

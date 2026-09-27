@@ -37,10 +37,10 @@ A narrative drafted by a model ships only when all three hold. The reading tests
 2. **An independent verifier passes every block.** A fresh agent on the independent-family-verifier tier (ADR-0069)
    gets the page and its anchored sources, and nothing of the session that drafted it. It marks every block
    SUPPORTED, UNSUPPORTED or CONTRADICTED. One non-SUPPORTED block keeps the page out. The verdict is written to
-   `docs/wiki/_narrative/_verify/<dir>/<id>.json` together with the sha256 of the narrative it judged. The gate
+   `docs/narrative-verify/<dir>/<id>.json` (outside `docs/wiki/`, which wiki-coverage owns) together with the sha256 of the narrative it judged. The gate
    FAILs a narrative whose current hash has no passing receipt, so an edit after verification unships it until it
    is verified again.
-3. **The owner reads it for understanding.** Pages ship in batches. The owner reads each batch in the Reference
+3. **The owner reads it for understanding.** Pages merge in batches once anchored and verified -- the room can only show what main holds -- and `narrative-anchors` counts every verified page he has not read yet (`awaiting-owner`); Phase 07 closes only when that count is 0. The owner reads each batch in the Reference
    room and accepts it: does a layman understand this product from this page? The acceptance is recorded in each
    receipt (`accepted: { by: "owner", on: <date> }`). A page he does not accept is rewritten, then verified again.
 

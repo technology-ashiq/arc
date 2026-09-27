@@ -37,7 +37,7 @@ import { roomLink } from "../../../lib/lane-room.mjs";
  * @property {{ key: string, title: string, count: string, at: string, note: string }[]} types
  * @property {string} debt
  * @property {{ title: string, rows: { name: string, at: string, summary: string }[], isEmpty: boolean }} typeList
- * @property {{ heading: string, kind: string, startHere: string[], hasStartHere: boolean, loop: string[], hasLoop: boolean, startBlocks: Block[], loopBlocks: Block[],
+ * @property {{ heading: string, kind: string, startHere: string[], hasStartHere: boolean, loop: string[], hasLoop: boolean, startBlocks: Block[], loopBlocks: Block[], missing: string, hasMissing: boolean, isUnexplained: boolean,
  *   pending: string, facts: FactRow[], source: string, adrs: AdrRow[], hasAdrs: boolean, page: string,
  *   faceRoom: { canOpen: boolean, room: string, label: string }, withheld: string, showWithheld: boolean }} entity
  * @property {string} notes
@@ -276,7 +276,14 @@ export function fold(payloads, ctx) {
   });
   const total = rendered.reduce((n, k) => n + list(k).length, 0);
   const narrated = Object.keys(narrative).length;
-  const debt = total ? `Narrative debt: ${total - narrated} of ${total} pages have no owner-written narrative yet (ADR-1508).` : "";
+  // The explanation debt (ADR-1513): what the gate counts, served with the extract. It names the parts, not the pages.
+  const expl = asObject(body.explanation);
+  const unexplained = asObject(expl.unexplained);
+  const explTotal = Number(expl.total), explDebt = Number(expl.debt);
+  const debt = Number.isInteger(explTotal) && explTotal > 0 && Number.isInteger(explDebt)
+    ? `Explanation debt: ${explDebt} of ${explTotal} parts of arc are not explained in plain words yet -- every product and lane needs its page, every command, agent, process, gate and rule a mention (ADR-1513).`
+    : total ? `Narrative debt: ${total - narrated} of ${total} pages have no owner-written narrative yet (ADR-1508).` : "";
+  const isUnexplained = /** @param {string} type @param {string} id */ (type, id) => asArray(own(unexplained, type)).map(str).includes(id);
 
   // ---- a type's list ----
   const summaryOf = /** @param {Record<string, unknown>} e @returns {string} */ (e) => {
@@ -296,6 +303,7 @@ export function fold(payloads, ctx) {
   /** @type {Block[]} */ let startBlocks = [];
   /** @type {Block[]} */ let loopBlocks = [];
   let source = "", page = "", withheld = "", kind = "", unnumbered = 0;
+  /** @type {string[]} */ let missing = [];
   if (isEntity && entity) {
     const f = asObject(entity.facts);
     const eid = str(entity.id);
@@ -317,6 +325,9 @@ export function fold(payloads, ctx) {
       links("Required by", reqBy.map((r) => ref("products", r)));
       links("Lane", own(productLane, eid) ? [ref("lanes", str(own(productLane, eid)))] : []);
       links("Commands", asArray(f.commands).map((c) => ref("commands", stem(c), `/${stem(c)}`)));
+      // What this product owns that no narrative explains yet: its commands and agents, by the gate's count.
+      missing = [...asArray(f.commands).map(stem).filter((c) => isUnexplained("commands", c)).map((c) => `/${c}`),
+        ...asArray(f.agents).map(stem).filter((a) => isUnexplained("agents", a))];
       links("Agents", asArray(f.agents).map((a) => ref("agents", stem(a))));
       items("Scripts", asArray(f.scripts));
       items("Files", asArray(f.files));
@@ -389,6 +400,8 @@ export function fold(payloads, ctx) {
       startHere, hasStartHere: startHere.length > 0,
       loop, hasLoop: loop.length > 0,
       startBlocks, loopBlocks,
+      missing: missing.join(", "), hasMissing: missing.length > 0,
+      isUnexplained: isEntity && entity !== null && ["commands", "agents", "processes", "gates", "rules"].includes(key) && isUnexplained(key, str(entity.id)),
       pending,
       facts, source, adrs, hasAdrs: adrs.length > 0,
       page,
