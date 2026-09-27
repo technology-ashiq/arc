@@ -54,11 +54,11 @@ export const sha256 = (/** @type {string} */ text) => createHash("sha256").updat
  * section and the fence's text is quoted. A paragraph, a list item (with its indented continuation), a quote and a
  * table ROW are each one block; a table's header and rule are not. A block's text is its prose with every comment gone.
  * @param {string} text
- * @returns {{ n: number, kind: string, text: string, anchors: string[], plain: boolean, line: number }[]}
+ * @returns {{ n: number, kind: string, text: string, anchors: string[], plain: boolean, line: number, end: number }[]}
  */
 export function blocksOf(text) {
   const lines = String(text ?? "").split(/\r?\n/);
-  /** @type {{ n: number, kind: string, text: string, anchors: string[], plain: boolean, line: number }[]} */
+  /** @type {{ n: number, kind: string, text: string, anchors: string[], plain: boolean, line: number, end: number }[]} */
   const out = [];
   /** @type {{ kind: string, raw: string[], line: number } | null} */
   let cur = null;
@@ -68,7 +68,7 @@ export function blocksOf(text) {
     const prose = raw.replace(COMMENT, "").replace(/\s+/g, " ").trim();
     if (prose !== "") {
       const anchors = [...raw.matchAll(MARK_SRC)].flatMap((m) => String(m[1]).split(";").map((a) => a.trim()).filter(Boolean));
-      out.push({ n: out.length + 1, kind: cur.kind, text: prose, anchors, plain: MARK_PLAIN.test(raw), line: cur.line });
+      out.push({ n: out.length + 1, kind: cur.kind, text: prose, anchors, plain: MARK_PLAIN.test(raw), line: cur.line, end: cur.line + cur.raw.length - 1 });
     }
     cur = null;
   };
