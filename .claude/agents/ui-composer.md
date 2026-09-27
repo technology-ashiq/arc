@@ -108,7 +108,8 @@ matters, because it now does.
    Reading stays just as narrow, by enumeration rather than by trust. You may read:
    - your own `variant-<x>/`
    - **your own session's renders**, `.claude/state/design/renders/<explore-id>--variant-<x>/`
-   - **the brief's reference pack**, `.claude/state/design/refpacks/<explore-id>/`
+   - **the brief's reference pack**, `.claude/state/design/refpacks/<brief-id>/` (the brief id
+     `explore.txt` records) and its `docs/design/refpacks/<brief-id>/sources.md`
 
    Everything this law forbade before, it still forbids: another variant's directory, another
    variant's renders, the matrix, the brief FILE, and any product file. The pack and your own

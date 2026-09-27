@@ -717,7 +717,7 @@ EOF
       echo "design-explore: read boundary ARMED for $ID variant-$V."
       echo "  writes:  docs/design/explore/$ID/variant-$V/"
       echo "  reads:   that dir, .claude/state/design/renders/$ID--variant-$V/,"
-      echo "           .claude/state/design/refpacks/$ID/   -- and nothing else"
+      echo "           the brief's pack: .claude/state/design/refpacks/<brief-id>/ and its sources.md -- and nothing else"
       echo "  renders: bash .claude/scripts/design/design-render.sh <page> --mode explore --session $ID--variant-$V --iter N"
       echo ""
       echo "Next: spawn the ui-composer agent for variant-$V, then run:"
