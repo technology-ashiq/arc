@@ -1,0 +1,374 @@
+{
+  "schema": 1,
+  "page": "lanes/bench",
+  "sha256": "26ba0deb8c87d867786d0ffac32ded96e41b567701e80baf5e969f4f497f56c4",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "model_source": "trial",
+  "blocks": 51,
+  "chunks": 0,
+  "verdicts": [
+    {
+      "block": 1,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 2,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 3,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 4,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 5,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 6,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 7,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 8,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 9,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 10,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 11,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 12,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 13,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 14,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 15,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 16,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 17,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 18,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 19,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 20,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 21,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 22,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 23,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 24,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 25,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 26,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 27,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 28,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 29,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 30,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 31,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 32,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 33,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 34,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 35,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 36,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 37,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 38,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 39,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 40,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 41,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 42,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 43,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 44,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 45,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 46,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 47,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 48,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 49,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 50,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    },
+    {
+      "block": 51,
+      "verdict": "SUPPORTED",
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+    }
+  ],
+  "carried": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51
+  ],
+  "supportedKeys": {
+    "bd41488dff4af956ee26bd57328489e33c72e83022b73e0bab89d1c67d22ff0a": "2026-09-27",
+    "8c03469a0edbe71aa4265be3d53757df7d60d345f7144a5cbe4a3ee0b3dcf8f6": "2026-09-27",
+    "ccf8045095536369968963b2bc720eec7af11245a010de65eaa2953f0a86712e": "2026-09-27",
+    "9eea4580faa350b4eb2ce5b3fa8e49e8add44a440e36fc42dba13a1a4610c4a6": "2026-09-27",
+    "605ca10808cacd0d82d7e1a073a98bd535b86c942189fc28d647ed4b045c3cb2": "2026-09-27",
+    "1dc145276bb71cc243577fa457f0afd7a7bfe66168ff761a840bec8fec0fde0d": "2026-09-27",
+    "9d454def4b99b330c491013d205be96781b27a4e426d8c341ddda2fb82c929ec": "2026-09-27",
+    "5c5a3d37fa6e91462c815da057c6d3bd604e411703ad434cfe057c38e549c093": "2026-09-27",
+    "0e3b459653a69766aff15e966064b2918dbc8fe908857b56826bd1ed33f4e38a": "2026-09-27",
+    "19bb5019eec804bdf6257a37b7d3d2fd586c7181c8d7859b70d3f697c2d47a27": "2026-09-27",
+    "c5b4f1ad143fe51efcd78a97a0ae0648b79734be36195504d6117eeaf9e7144f": "2026-09-27",
+    "13b8de2ceeae8c6d1a4cde639c513d11eb1769d729670a919747ed2af108f44f": "2026-09-27",
+    "ffcbbabd0e2f6e0e6bc79e8fc12e5dbe2c98be82bf74c2da4cb2afcb82995a5e": "2026-09-27",
+    "a2bdc4be9b177748194f94f3524512e37cb2d4f6deb0de5dae8207de31f45143": "2026-09-27",
+    "3cbcff98f4436790286984a6c24a8aab680c5d43fbe782aa57861863ac97cb0d": "2026-09-27",
+    "5083a1ed172187209c0de5510560a286eb4d86fae903b0c44a449e5eda1ed04b": "2026-09-27",
+    "c805f3926a096d0a8161aaade29b9270c25ff75d38d204d7eb4db40b233bb414": "2026-09-27",
+    "6d0ad99de938d70c6da767db46ba5ffbe624dc393790e8934cc4418347f57166": "2026-09-27",
+    "a442fcc1c9855a3109d09b67b0a7476ecbc6c99fc5c3c46a3eb6f801eb0b5633": "2026-09-27",
+    "ffffe1fdc56753c1222a50ef3742362fea369c15c671c3dff7c9a2754e11cf11": "2026-09-27",
+    "bae42ad05f82a947c5240bbab8859172830cb3b6af2cabfb7a38726ec9118e9c": "2026-09-27",
+    "cabe7298dacb9c517122cb4e632234b5a488ddc26ddbd076a23a64a4fde052ec": "2026-09-27",
+    "c6eca40d5e6a6dd6038af255f84a311684a24f0dc22dd4445ef627fd983c72c0": "2026-09-27",
+    "d48882a985dc238fceb078900babe730464139b9ed8129b27281e1cc8886809d": "2026-09-27",
+    "ae18dd26850ae13785e2691ef8ab78275d8412d5c530515089988b91a68f5c28": "2026-09-27",
+    "8abef7c20333b4c46d3f743f3786637e0cc9195d4a943b9a7ae6b365d9c13cb0": "2026-09-27",
+    "04f8b61e923fdd5db43eff401dd44ffc73eae138f6fc31a83286c470c685d683": "2026-09-27",
+    "8ff6ef56a575d27e39850a239cefa274c49b96ea9732bc61c520453a1ab03a70": "2026-09-27",
+    "ad6d5612bd8d12ceba9c0c09977101f69fef94f47034b410024eb3d87c51f27d": "2026-09-27",
+    "3043599c10edee3c873128eb4096cab55e74fd78d082a3b54a48edfab6061e1b": "2026-09-27",
+    "918eba82b4c960f9a21ad205e2a6af430a5ad09b06313f0d55cfe17d581eabef": "2026-09-27",
+    "3677cf3b39842b38e3edd6ce26160fec15202e4012e261feed548c7f31c5476e": "2026-09-27",
+    "759a0e1be99f131f02752dbfd894db118a7f89d52b884ad6d66d419ce57fc606": "2026-09-27",
+    "d6642ee2549f266b68ec7808a4f182e4465515c3524e7b25d090e6a33770b2dc": "2026-09-27",
+    "9e470bde3d7e8e048a78a23acdd09e6105f4492886c806627d96902de404bb7b": "2026-09-27",
+    "ef79d0222db3b763c7ab3270be1cf9db08b0d8c88b8c95ec997f09c2043c1750": "2026-09-27",
+    "9085a9800872e9fe28b75d16d4d9b185acd053493767ff52f5512efed776c971": "2026-09-27",
+    "0ce9afcf5a2a972c4fc33ab7b4ae47ffbb4be5a3fe87048a40cbbb6a50dd06b6": "2026-09-27",
+    "844b852a3740d9f7fa7422cabf87263d76037dad9352f9a8c59e0a600e806968": "2026-09-27",
+    "ff82243eab3320eceadcf8b36990ac75b70867e803c7f48bfd89939a82ae5e5e": "2026-09-27",
+    "55a5521ba339553a341108c27cb9edb95432e96d02a50024775e6ca7ea3c0aae": "2026-09-27",
+    "ad4d5a681bc33f34460b95aed99fce57b88bc4dd60996c6a99c431bd6c29209c": "2026-09-27",
+    "77450558fcae039ab460539e1674114b7ed7f233bffc65e479a7c3b6840fd862": "2026-09-27",
+    "e39b70f7910741b995bdee9d47ad9a6f5c01faab21b67bec446fc40de528151c": "2026-09-27",
+    "374b4b2b150049aca8147acbc1b218cbc3eda37471ce10cf7b52a410f5e53eb1": "2026-09-27",
+    "f0aa8e9d0154d4c718d9a421d734f63d869e681c66b1a9927dd6ba860b9145f2": "2026-09-27",
+    "75f7dee03eebae9033e0b1af5e29828878d7e2b3349b6247d0c98bf2ab02eefa": "2026-09-27",
+    "c6a22a35685d61aeec2ff696d45c84823e71bdecc3b013ab7fa55dd8b2abea0b": "2026-09-27",
+    "fc1c4218a125227beaf7d95aa287acee59b9b03d660b08ee5e1cc630b9616e5b": "2026-09-27",
+    "d486026da18c46cce6a5748b46b328b5c66a56b9aabe6133c3efa264cb72e29d": "2026-09-27",
+    "efca6211ac8520db693870b9879c7cd72da68679d009d41bb402104bffb081c2": "2026-09-27"
+  },
+  "verified": "2026-09-27T15:31:58.372Z",
+  "accepted": null
+}

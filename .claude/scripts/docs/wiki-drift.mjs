@@ -30,7 +30,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_DEFAULT = join(HERE, "..", "..", "..");
 const WIKI = "docs/wiki";
-const ROOTS = [".claude/", "products/", "initiatives/", "processes/", "docs/", "tests/"];
+// engine/ holds tracked files narratives cite (engine/router.yaml); it was missing, so a real file read as dangling.
+const ROOTS = [".claude/", "products/", "initiatives/", "processes/", "docs/", "tests/", "engine/"];
 const EXT = /\.(mjs|cjs|js|sh|bash|md|json|ya?ml|bats|ts|tsx)$/;
 
 async function load(repo) {

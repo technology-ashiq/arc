@@ -1,0 +1,192 @@
+<!-- facts: appetite=e02f5370 blocked-on=a68c9074 burn=ddae603d cycle=58ec8790 depends-on=a68c9074 hasPlan=b5bea41b phase=2c24f3cd status=4c1abf59 title=70e647bb -->
+
+# policy — enforced capability vectors
+
+## In plain words
+
+Every company has rules about what a new employee may do without asking a manager first — sign a
+cheque, delete a file, send a message to a customer on the company's behalf. A trusted employee
+earns wider rules over time, through evidence, and any of those rules can be taken back the moment
+trust is broken. <!-- plain -->
+
+Before this lane, arc's headless runner invoked a driver with no policy check of any kind — that
+call site was the single insertion point. <!-- src: initiatives/policy/PLAN.md#insertion -->
+
+The lane's goal: `hq.policy.yaml` becomes machine-enforced law. Every action a run might take is
+described as one of eight capabilities — read, write, shell, network, message, publish, deploy,
+spend — each held at a level from L0 to L3, under a two-key authority model where a human declares
+the ceiling and events earn the cap, denying by default and enforced fail-closed at the only two
+places code can act: the `arc-run` wrapper for a headless run, and PreToolUse hooks plus a static
+deny floor for an interactive one. <!-- src: initiatives/policy/PLAN.md -->
+
+### What it is building
+
+Policy builds a policy engine that lives inside `hq` — not as a new, separate product — reached at
+exactly two enforcement points: the `arc-run` wrapper for headless runs, and PreToolUse hooks with a
+static `permissions.deny` floor for interactive ones. <!-- src: initiatives/policy/PLAN.md; ADR-0500 -->
+
+The plan's own north-star: the first unattended run in arc's history is block-capable on its first
+day, and every authority change before and after it is a receipt on the spine. <!-- src: initiatives/policy/PLAN.md#North-star -->
+
+## arc words → normal words
+
+| arc calls it | It is really | Meaning |
+|---|---|---|
+| `hq.policy.yaml` | the written rulebook | The file that becomes machine-enforced law: the human-declared ceiling on what an action may do. <!-- src: initiatives/policy/PLAN.md --> |
+| capability | the kind of act | One of eight things an action might do: read, write, shell, network, message, publish, deploy, spend. <!-- src: initiatives/policy/PLAN.md --> |
+| level (L0–L3) | how far it may go | Levels L0 through L3 for one capability; L4 is a parse error. <!-- src: initiatives/policy/PLAN.md#REQ-01 --> |
+| ceiling | the rule as written | The human-declared half of the two-key model; arming or raising it means a reviewed diff, which POL-A ties to a change no agent makes on its own. <!-- src: initiatives/policy/PLAN.md; initiatives/policy/PROGRESS.md#reviewed --> |
+| cap | the rule as earned | The event-earned half: `resolveEffectivePolicy` folds spine events to a cap. <!-- src: initiatives/policy/PLAN.md#raiseIncidentAndDemote; ADR-0505 --> |
+| deny-by-default | silence means no | A kind absent from the policy file can read and do nothing else — read-only at L1, nothing beyond that granted by omission. <!-- src: initiatives/policy/PLAN.md#REQ-01 --> |
+| fail-closed | a jam stops the machine | A policy check that throws blocks the run rather than letting it through, and a hook fragment that hits its own internal error exits refusing the tool rather than passing it. <!-- src: initiatives/policy/PLAN.md#ADR-0028 --> |
+| promotion | a raise, on the record | A human decision, citing trial-ledger evidence, that raises a cap — never automatic, never on a timer. <!-- src: initiatives/policy/PLAN.md --> |
+| demotion | an automatic pay cut | The cap for the capability actually involved in a denied action is demoted automatically on incident — never a human step. <!-- src: initiatives/policy/PLAN.md; ADR-0505 --> |
+| E2 | the five things nobody may automate | Five items quoted verbatim from the adopted Constitution that may never sit above L1, checked against the policy file by hashing the Constitution first and only then comparing. <!-- src: initiatives/policy/PLAN.md; ADR-0506 --> |
+| hook feasibility matrix | the "can we even catch this" table | A table generated from `.mcp.json`, one row per tool class, each with a fixture proving intercept-and-block or an assigned static-deny fallback. <!-- src: initiatives/policy/PLAN.md#REQ-01 --> |
+
+## How the work was planned
+
+Appetite: 7 days, Tier M. Phases allocate 6.75 of 7 days, 0.25 days of slack, never taken from
+Phase 4. <!-- src: initiatives/policy/PROGRESS.md; initiatives/policy/PLAN.md#Tier -->
+
+Kill criteria: REQ-01's exit not reached by end of day 2 stops the cycle and retros the schema
+scope; at 50% burn (day 3.5) Phase 1 must be done or the scope-cut conversation is mandatory; and
+Phase 4 finding an unclosable bypass class stops the cycle too. <!-- src: initiatives/policy/PROGRESS.md#Tripwires -->
+
+| REQ | User outcome | Phase | Status |
+|---|---|---|---|
+| REQ-02 | A headless run cannot act outside its vector | 1 | validated <!-- src: initiatives/policy/PLAN.md#REQ-02 --> |
+| REQ-03 | Deny-by-default is proven, not promised | 1 | validated <!-- src: initiatives/policy/PLAN.md#REQ-03 --> |
+| REQ-04 | Authority changes are receipts with a deterministic state machine | 2 | validated <!-- src: initiatives/policy/PLAN.md#REQ-04; initiatives/policy/PLAN.md#North-star --> |
+| REQ-05 | An interactive session obeys the same law | 2 | validated <!-- src: initiatives/policy/PLAN.md#REQ-05; initiatives/policy/PLAN.md#North-star --> |
+| REQ-06 | A second run cannot double-spend the day's cap; a crash after the provider call leaves the reservation stuck open for a human decision — the no-auto-recovery rule applies to money too — and v1 autonomous spend is valid only in Mode A | 1 | validated <!-- src: initiatives/policy/PLAN.md#REQ-06 --> |
+| REQ-07 | Birth-rule wiring and cap inventory; migration deferred by evidence, not hunted for | 3 | active <!-- src: initiatives/policy/PLAN.md#North-star --> |
+| REQ-08 | The engine survives a real attack, with receipts | 4 | done <!-- src: initiatives/policy/PLAN.md#North-star; initiatives/policy/PROGRESS.md#hook-matrix.json --> |
+
+The five phases, in order: Phase 0 is the steel thread carrying the law, its parser and the
+decision; Phase 1 is headless enforcement; Phase 2 is receipts and interactive; Phase 3 is
+birth-rule and cap inventory; Phase 4 is the adversarial security pass, two full days, untouchable. <!-- src: initiatives/policy/PROGRESS.md#hook-matrix.json -->
+
+## The phases, one by one
+
+Phase 00 — the steel thread. It set out to build the schema, the canonical L0–L3 table,
+`policy-lint`, `resolveEffectivePolicy` and `authorizeAction` against fakes, a green hostile corpus
+and a hook feasibility matrix generated from `.mcp.json`, on a 2-day appetite. It closed
+2026-08-06: `policy-lint` FAILing from birth, 54 hostile fixtures (30 static + 24 runtime), a
+63-row feasibility matrix, and 88 new tests across 6 bats suites. Two fresh agents found ~24
+capability escalations in code that was already green on its own tests, and every one was closed
+and pinned. <!-- src: initiatives/policy/PROGRESS.md#hook-matrix.json -->
+
+Phase 01 — headless enforcement. It set out to wire the Phase-0 decision into `arc-run` before any
+driver call, a capability fixture matrix, a deny-by-default proof at runtime, and a money guard with
+reservation flow and double-spend fixtures, on a 1.25-day appetite. It closed 2026-08-07: the gate
+sits both at `invoke()` in `arc-run` and at `runDriver` in `drivers/common.mjs`, because `arc-run`
+was never the only door. Two fresh adversarial agents found about 30 escalations, the worst being
+`ARC_ROOT=/tmp/x` disarming the whole gate in one variable, a forged JSONL line raising a cap, and
+three concurrent reservations charging 240 against a cap of 100. <!-- src: initiatives/policy/PROGRESS.md#hook-matrix.json; initiatives/policy/PROGRESS.md#ARC_ROOT -->
+
+Phase 02 — receipts and interactive. It set out to add a vocabulary ADR for 4 new kinds, the
+promotion chain end to end through the inbox, automatic demotion, hook fragments, the static deny
+floor and its cross-check, and `arc brief` plus inbox rendering, on a 1.25-day appetite. It closed
+2026-08-07. Writing that renderer found the phase's worst defect: none of the four new kinds could
+actually be emitted, because `arc-event` had no idem branch for them, so every policy receipt was
+rejected and quarantined while the emitter still exited 0. Once fixed, 5 bats suites and 67 tests
+shipped. <!-- src: initiatives/policy/PROGRESS.md#contentPre -->
+
+Phase 03 — birth rule and cap inventory. It set out to wire a birth-rule check into `kickoff-lint`
+and take a cap inventory, with migration deferred by evidence rather than hunted for, on a 0.25-day
+appetite. It closed 2026-08-08 with a 53-row cap inventory and its own adversarial pass: two agents,
+20 findings, including the gate comparing the wrong string, with a test pinning that blindness as
+correct. The inventory's own finding contradicted the plan's deferral premise: `leads` turned out to
+be a live cap-bearing module already. <!-- src: initiatives/policy/PROGRESS.md#evil.process.yaml -->
+
+Phase 04 — the adversarial security pass, 2 untouchable days. Two days, four fresh agents on two
+surfaces, found 26 holes: 23 closed in code, 2 rejected after measurement, and 1 left as an action
+only the owner could take, because it needed 3 edits to `.claude/settings.json` — a file an agent
+is refused by design. The build was merged 2026-08-08 (PR #130) before it could close, and closed
+2026-08-10 once the owner applied those 3 edits: `permissions.deny` grew from 24 to 37 entries, the
+write matcher gained `MultiEdit` and `NotebookEdit`, and a third `PreToolUse` matcher finally routed
+the per-server capability table that had sat unreachable since Phase 02. <!-- src: initiatives/policy/PROGRESS.md#hook-matrix.json; initiatives/policy/PROGRESS.md#STEP1 -->
+
+## What it decided
+
+| # | Decision |
+|---|---|
+| 0500 | The lane is named `policy`, claims ADR century 0500, and its library lives inside `hq` rather than a new install-time-optional product. <!-- src: initiatives/policy/PLAN.md; ADR-0500 --> |
+| 0501 | Fail-closed at the interactive surface is two layers: hooks decide first, and `permissions.deny` is the static floor that holds when a hook never runs at all. <!-- src: initiatives/policy/PLAN.md; ADR-0501 --> |
+| 0502 | Certain resources — settings, the policy file, the hook directory — are excluded from every write grant, whatever the ceiling or cap says. <!-- src: initiatives/policy/PLAN.md; ADR-0502 --> |
+| 0503 | MCP tools count as in-scope capability surfaces, but only the four servers declared in this repo's `.mcp.json`. <!-- src: initiatives/policy/PLAN.md; ADR-0503 --> |
+| 0504 | The thing being authorized is an action kind — a `process:NAME` from `processes/`, plus one reserved `session:interactive` — with capabilities as the verbs and tools as the instruments. <!-- src: initiatives/policy/PLAN.md; ADR-0504 --> |
+| 0505 | Authority is tracked per pairing of action kind and capability, everywhere, so a demotion only bites the one capability actually involved in the denied action. <!-- src: initiatives/policy/PLAN.md; ADR-0505 --> |
+| 0506 | E2 binds to grants through a mandatory `e2:` declaration on every kind, and drift between the policy file and the Constitution is caught by hashing the Constitution first and only then parsing it. <!-- src: initiatives/policy/PLAN.md; ADR-0506 --> |
+| 0507 | No capability may be used to reach further than another capability's own grant — `shell` is capped at the least of whatever its allowlisted programs could themselves do, and an unclassified program is a hard error. <!-- src: initiatives/policy/PLAN.md; ADR-0507 --> |
+| 0508 | The four new authority receipts extend the closed spine vocabulary from 40 to 44 kinds, two kinds per direction, because a human decision and a machine demotion are different truths. <!-- src: initiatives/policy/PLAN.md; ADR-0508 --> |
+
+## Where it stands now
+
+Status: IDLE. The cycle (arc-policy, Cycle 9) closed 2026-08-10, merged as `677b67e` (PR #130) and
+closed by `e594d6e` (PR #147). Burn: 7.0 of 7 days (100%), every phase closed with no overrun. <!-- src: initiatives/policy/PROGRESS.md -->
+
+All five phases are closed, and the retro on the same day found the honest gap underneath that:
+none of the cycle's four new spine kinds — `policy.level.changed`, `policy.demoted`,
+`spend.reserved`, `spend.released` — had been emitted in production, not once; the pre-existing
+`promotion.requested` and `incident.raised` kinds each counted zero too, across 975 events on the
+canonical spine. <!-- src: initiatives/policy/PROGRESS.md#STEP1; ADR-0508 -->
+
+While `ARC_POLICY_HOOK` is off — the shipped default — the engine is safe because it is disarmed,
+not because it enforces: `session:interactive` holds shell and write at L1, so arming it means
+raising that ceiling, and POL-A ties any such change to a reviewed diff rather than something an
+agent does. <!-- src: initiatives/policy/PROGRESS.md#reviewed -->
+
+Assumption row 1 — whether starting before the pull-trigger fired was right — is TRIGGER ARMED, not
+fired: 0 promotion requests and 0 incidents asserted from the spine, with a re-check due 2026-08-17. <!-- src: initiatives/policy/PROGRESS.md#STEP1 -->
+
+What is still open, and is not a phase: REQ-07's migration of the 53-row cap inventory. The
+inventory falsified REQ-07's own deferral premise — `leads` is a live cap-bearing module — so the
+deferral now rests on "out of budget" rather than "nothing to migrate", with a named reopening
+owner. <!-- src: initiatives/policy/PROGRESS.md#subjects.mjs -->
+
+## The bigger loop
+
+### What went wrong and what was learned
+
+- Entire enforcement — fixture-proven, unexercised: 4 new kinds, 0 emissions. <!-- src: docs/retro-log.md#unexercised -->
+- Going forward: production `promotion.requested` and `incident.raised` decide if it was pulled or
+  pushed, not a fixture. <!-- src: docs/retro-log.md#promotion.requested -->
+- A dogfood-gated assumption stays NOT EVALUABLE, never VALIDATED outright. <!-- src: docs/retro-log.md#EVALUABLE -->
+- This is unverified, not validated, because it is testable only now: the MCP route began after
+  2026-08-09, and no proof exists that one was intercepted. <!-- src: initiatives/policy/PROGRESS.md#intercepted -->
+- Closing the cycle also surfaced that past receipts, including one of this lane's own phase closes,
+  had been emitted into a worktree's spine rather than the canonical one in the main clone, and were
+  unreachable from there until re-emitted. <!-- src: initiatives/policy/PROGRESS.md -->
+
+### How it connects to the rest of arc
+
+- The policy library lives inside `hq` rather than a separate product, because `engine` already
+  requires `hq` — an optional policy product would have been an install-time fail-open. <!-- src: initiatives/policy/PLAN.md; ADR-0500 -->
+- `leads` is the one other LIVE lane sharing the same `permissions.deny` block; a collision there is
+  resolved by taking the stronger version at merge. <!-- src: initiatives/policy/PLAN.md#stronger -->
+- `leads` is a live cap-bearing module, which is why REQ-07's deferred migration carries a named
+  reopening owner rather than closing the question. <!-- src: initiatives/policy/PROGRESS.md#subjects.mjs -->
+- This stray worktree-spine problem is filed as an `hq` organ's job to fix — because the appetite
+  here was spent. <!-- src: initiatives/policy/PROGRESS.md#ARC_SPINE_ROOT -->
+
+## Glossary
+
+- **capability vector** — the per-action-kind set of levels across the eight capability
+  dimensions — read, write, shell, network, message, publish, deploy, spend — each at L0–L3. <!-- src: initiatives/policy/PLAN.md -->
+- **L0–L3** — Levels L0 through L3 for one capability; L4 is a parse error. <!-- src: initiatives/policy/PLAN.md#REQ-01 -->
+- **ceiling** — The human-declared half of authority; raising it means a reviewed diff, which POL-A
+  ties to a change no agent makes on its own. <!-- src: initiatives/policy/PLAN.md; initiatives/policy/PROGRESS.md#reviewed -->
+- **cap** — The event-earned half of authority, folded from the spine's own recorded history. <!-- src: initiatives/policy/PLAN.md#raiseIncidentAndDemote; ADR-0505 -->
+- **deny-by-default** — A kind absent from the policy file can read and do nothing else —
+  read-only at L1. <!-- src: initiatives/policy/PLAN.md#REQ-01 -->
+- **fail-closed** — A policy check that throws blocks the run, and a hook fragment exits 2 on its
+  own internal error. <!-- src: initiatives/policy/PLAN.md#ADR-0028 -->
+- **E2** — Five items, quoted verbatim from the adopted Constitution, that may never sit above L1. <!-- src: initiatives/policy/PLAN.md; ADR-0506 -->
+- **hook feasibility matrix** — A table, generated from `.mcp.json`, of which tools a PreToolUse
+  hook can actually intercept and which need a static deny fallback. <!-- src: initiatives/policy/PLAN.md#REQ-01 -->
+- **promotion** — A human decision, citing trial-ledger evidence, that raises a capability's cap. <!-- src: initiatives/policy/PLAN.md -->
+- **demotion** — The cap for the capability involved in a denied action is demoted automatically
+  on incident. <!-- src: initiatives/policy/PLAN.md; ADR-0505 -->
+- **lane** — Exactly one plan is ever live per lane; `policy` claims ADR band 0500–0599. <!-- src: CLAUDE.md; initiatives/policy/PROGRESS.md -->

@@ -906,3 +906,6 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A cap dropped in a refactor** -- spawnSync's 16 MB maxBuffer vanished when the call became an async spawn run four at a time (B3). *A rewrite of a bounded call keeps its bound.*
 - **Budgeted on raw text, sent transformed** -- chunk sizes counted excerpts before withholding grew them (B4). *Count what is sent.*
 - **Read, check, write stale** -- prune checked the hash once and wrote a text derived from that read after a fixer might have saved (B5). *Re-read and compare right before a write.*
+- **A real root missing from the drift gate** -- wiki-drift's ROOTS lacked `engine/`, so the tracked `engine/router.yaml` read as dangling in five narratives (#299 CI). *A gate's allow-list of roots is derived from what is tracked, or it is re-checked whenever a narrative cites a new top-level dir.*
+- **Placeholders written as paths** -- backticked `initiatives/<lane>/PLAN.md`, `products/*/manifest.json`, `/arc-x` read as references to files and commands that do not exist (#299 CI). *In prose a pattern is described in words; only a real path or command goes in backticks.*
+- **A test that needed debt to exist** -- reference-fold's debt check looked for a product with an unexplained command, and failed the day debt reached zero. *A check that needs a case plants its own.*
