@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "products/council",
-  "sha256": "fcb7acfdac78b9b9e5a2c7523469377b9e0b2d2d871a9b3908fc60fb12510bbc",
+  "sha256": "5ee79d5731dd051838a8986a8a49027aa7d5cda894dde56f6a2d62a11b7f378a",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 76,
-  "chunks": 0,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -175,7 +175,7 @@
     {
       "block": 34,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "Every factual claim matches the cited source: step 8 writes the verdict to docs/council/sessions and requires council-lint.mjs --verdict, step 9 derives a payload with --payload and emits council.verdict via arc-event.sh, only stopping on a real receipt id, and a refused derivation emits nothing; the table confirms a quick run does neither and a standard run is saved and receipted like a deep run."
     },
     {
       "block": 35,
@@ -422,7 +422,6 @@
     31,
     32,
     33,
-    34,
     35,
     36,
     37,
@@ -500,7 +499,7 @@
     "676d79e97a076c26a2a45c1bd58a2896162fcf4a8bba0d6d78d74d5f4fe2eb02": "2026-09-27",
     "3b3efa2d292109d041a37d894114d96848061dcd992f5a9ec1bee3a0f09df6cf": "2026-09-27",
     "58ac2a8d6c5e2cbb94d1e733fd5a87deda0f15a6901e6375fbbb3e3bb9ae00bc": "2026-09-27",
-    "00d5b1a537a1d3b5b3c96f73af1f3d152720d844a5a119926df3af9187bbec5d": "2026-09-27",
+    "c71c2ab9b212c82c55814cd8f42fb821246c599e5128b2dbb94e601f47349a83": "2026-09-27",
     "7c4af368400cce84c5937457f6e5d163bb81e1262411dcfea867236da106da37": "2026-09-27",
     "e1345def63c0e9914ca6e5673328f205146316c29fd2ba3bb715ce9f18d41c0c": "2026-09-27",
     "34451a2a30e57ec6e9d77874be2d742eba2d2504e85d7ba9e2c3eff22b798146": "2026-09-27",
@@ -544,6 +543,6 @@
     "04b4320e99a4566eb88b90320e5801f18d7353a8b598455483ad512b7f534528": "2026-09-27",
     "7e4cdbcd4e237c312259d675e53ed8abe4ffe01c1fe42777dde61a48c443843b": "2026-09-27"
   },
-  "verified": "2026-09-27T15:36:00.704Z",
+  "verified": "2026-09-27T17:08:44.630Z",
   "accepted": null
 }

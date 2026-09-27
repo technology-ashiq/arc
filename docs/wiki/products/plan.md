@@ -226,7 +226,7 @@ runs. STOP means stop. <!-- src: .claude/commands/arc-kickoff.md -->
 
 ### Processes
 
-plan's manifest lists no `processes/*.process.yaml` job description of its own.
+plan's manifest lists no the process files under processes job description of its own.
 `/arc-kickoff`'s own wording is the one exception worth knowing about:
 its command file carries a "generated, do not hand-edit" banner because its text is compiled
 from a process file that belongs to the engine product, so changing what `/arc-kickoff` says
@@ -322,7 +322,7 @@ written rule and a mechanism that enforces it are not the same thing. <!-- src: 
 - **hq** is where the permanent receipts land: `/arc-kickoff` and `/arc-phase-done` both write
   an event plus a human-approval request onto the company's append-only spine, and the birth
   rule inside `kickoff-lint.mjs` checks every process file against hq's own policy file. <!-- src: .claude/commands/arc-kickoff.md; .claude/commands/arc-phase-done.md; .claude/scripts/plan/kickoff-lint.mjs#policyPath; ADR-0029 -->
-- **develop** turns an approved phase into small, spec-anchored increments — `phases/phase-NN-spec.md`,
+- **develop** turns an approved phase into small, spec-anchored increments — each phase's `phase-NN-spec.md`,
   the document plan writes, is the contract `/arc-develop` and its **spec-fidelity** check both
   work against, so plan writes the promise and develop is checked against having kept it. <!-- src: .claude/commands/arc-kickoff.md; .claude/commands/arc-develop.md; .claude/agents/spec-fidelity.md -->
 - **git** and **review** close the loop the Golden Loop describes: plan's own `/arc-change`

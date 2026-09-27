@@ -83,7 +83,7 @@ absorb defines no agent of its own -- its manifest's agent list is empty. The on
 
 ### Processes
 
-`/arc-absorb` is a hand-written command body: it carries none of the "GENERATED FILE -- DO NOT EDIT" markers that mark a command compiled from a `processes/*.process.yaml` file, the way `/arc-commit` does. <!-- src: .claude/commands/arc-absorb.md; .claude/commands/arc-commit.md -->
+`/arc-absorb` is a hand-written command body: it carries none of the "GENERATED FILE -- DO NOT EDIT" markers that mark a command compiled from a the process files under processes file, the way `/arc-commit` does. <!-- src: .claude/commands/arc-absorb.md; .claude/commands/arc-commit.md -->
 
 ### Scripts
 

@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "lanes/portfolio",
-  "sha256": "af3d911e1d1d834810ef56124928da06db3c1d87951be70305e45872989b0bec",
+  "sha256": "e9154df4642035c76ec9f8d545f860106a7ab4b205da4b49da21fb7a4749787c",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 80,
-  "chunks": 0,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -65,7 +65,7 @@
     {
       "block": 12,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "ADR-0057 states the lint warns when a lane's diff touches another lane's files and derives ownership from existing products/*/manifest.json rather than a second registry."
     },
     {
       "block": 13,
@@ -200,7 +200,7 @@
     {
       "block": 39,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "ADR-0057 says the lint is WARN-first, derives ownership from products/*/manifest.json, and prints Expected/Found/Example on every WARN."
     },
     {
       "block": 40,
@@ -360,7 +360,7 @@
     {
       "block": 71,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "ownership-lint.sh's header and ADR-0057 both say ownership is derived from the existing products/*/manifest.json and never a second registry, matching the claim that the script reads that existing manifest."
     },
     {
       "block": 72,
@@ -400,7 +400,7 @@
     {
       "block": 79,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "ADR-0057 describes the WARN-first ownership boundary lint derived from products/*/manifest.json that catches cross-lane file edits, supporting the item's description."
     },
     {
       "block": 80,
@@ -420,7 +420,6 @@
     9,
     10,
     11,
-    12,
     13,
     14,
     15,
@@ -447,7 +446,6 @@
     36,
     37,
     38,
-    39,
     40,
     41,
     42,
@@ -479,7 +477,6 @@
     68,
     69,
     70,
-    71,
     72,
     73,
     74,
@@ -487,7 +484,6 @@
     76,
     77,
     78,
-    79,
     80
   ],
   "supportedKeys": {
@@ -502,7 +498,7 @@
     "8346132a3b2fc9b3fd7c06cf79603102b5d88169c4716be596fec48e97230eb2": "2026-09-27",
     "6b7bdf02bd509e270d3a4c357c1b80c55fb87464ba769cd9c4c8d767795bda4f": "2026-09-27",
     "8c99685e02cd792700212a345103265ba7f3f3fac6b2a3ae335533435e864101": "2026-09-27",
-    "dd48f470be90d5a4ebacd3fb6aa8068b25018b03cddea0ea0aa6a834a74e72a3": "2026-09-27",
+    "209989864de4874d6d7e530c613e884fd3497402ef095f3e5848d4479950f113": "2026-09-27",
     "ee119d09b83ae99f537a340fd881ad416906fbf422e726d3449dd7cb503dfc3d": "2026-09-27",
     "a5933b7a4a005fa537dfcc2c46094d390d8e04714edceb3fc35c4793ab8bef78": "2026-09-27",
     "2e086475631799cf1518435fa8968c710bfa94f9eff67ea1e5ceaedbf2c8bd14": "2026-09-27",
@@ -529,7 +525,7 @@
     "d2d07ed9d7ee15aae29313b32af99b0e6fdddbe8b1d25c92ce2d43ae4034d753": "2026-09-27",
     "3a5f71ba3dd8bd7acda0f375546d47a38c042429fddd4e1b485e5143a41549e0": "2026-09-27",
     "9e8537f81f15632f5443019117d26ce6cb701160a124760ded4c04b45b8e2464": "2026-09-27",
-    "fa6d1f9244ab1857997f94794cbfd40b5bfd0265bfdc6c1997938a8162244572": "2026-09-27",
+    "a9d2bea5fd1c8f904e62cc7d0b5509bb23c17c079bbf04e186eb23abd3f5f325": "2026-09-27",
     "129bd9e729d628b425a4ab8471b2d9470b5a244a7e2f3d5a2ffaeb7411d0e1eb": "2026-09-27",
     "00cd85f044617d8b36abc9e5ba94ae1d9f095feb4ff45cbd3ec92485e8a8c573": "2026-09-27",
     "fc182e04b4a1a15950a0aff5c11246525da0043735e2b997f9d2d8700f7dcb2a": "2026-09-27",
@@ -561,7 +557,7 @@
     "b1e65e257f1f1e6b21b3934825550c19652a94e6b223a8f3908a23325bb09fac": "2026-09-27",
     "bfcf1ab2b7f45ce0cce4a32e90c9cf5790519ef7f159f26bdd787b9b63e53a59": "2026-09-27",
     "2ed21dd8e123a91f82c79ff4f934bb61b3db9b11257da24fadd6424ea7f5221d": "2026-09-27",
-    "50f9cc74a96bebfbf98a6f7df7d2f6e625d8fe06869de8d341c9c5bac58cf48c": "2026-09-27",
+    "cd48f21332763dc8fb9ab087324506869e62e4f8bd15596df9ffe1710b299cde": "2026-09-27",
     "a08df1b9517723eb9a7d9f968a96c8d57f438d1da07f4cccc31c8a4f82ac6de0": "2026-09-27",
     "23815e6a95ecf0c5caa4b5d6dddbf7960ce01e51a7c1aea534a624aae7b7184d": "2026-09-27",
     "cee38f590c09cc6295cc3d29e96fe63342b46a3fb389c561e7168d922a502881": "2026-09-27",
@@ -569,9 +565,9 @@
     "5446084c6b32617a3a585d338f1ebf1b022dc798516475d423cfd4b8b500d041": "2026-09-27",
     "501db926a08e639ed75708792c2c8f793b626c02e0729eaae8ea05575b0324d4": "2026-09-27",
     "544cdae672930ea5734c528b2267645bceceb96bfda26eb90fe9bc1c6e3538e7": "2026-09-27",
-    "bc7f8c58a11c77af3ca3d5710ae578651e394be7b5afb8ecf4a00e296dcaaf29": "2026-09-27",
+    "48a9703f07a830eb29a548eedaea3954392d13f75ee373afccfb8fd19fb9c48f": "2026-09-27",
     "7e109cc45fb53770c10a2a1770d5db4a84b191049e9cfb1c0ac23e22253c6839": "2026-09-27"
   },
-  "verified": "2026-09-27T15:32:59.165Z",
+  "verified": "2026-09-27T17:09:12.404Z",
   "accepted": null
 }

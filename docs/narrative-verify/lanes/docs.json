@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "lanes/docs",
-  "sha256": "f69d940d036c100e2856b6410fb23fd4bebcc0671647f372c0bc7b0cb0669ffd",
+  "sha256": "6575f76afbf1500174ffdd5f1561017696d6f45f8f900d7503636428aa455790",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 61,
-  "chunks": 0,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -270,7 +270,7 @@
     {
       "block": 53,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "CLAUDE.md states exactly one PLAN is live per lane at that lane's PLAN.md, and initiatives/docs/PLAN.md confirms docs is a lane with its own plan referencing phases and PROGRESS."
     },
     {
       "block": 54,
@@ -366,7 +366,6 @@
     50,
     51,
     52,
-    53,
     54,
     55,
     56,
@@ -429,7 +428,7 @@
     "2f9b48682d20e11400ed0a7e3e12ab186cda33398a41313fc5654ba492015bcf": "2026-09-27",
     "87f2ccae0c26efc62b39143b61b71b45a0757a8f50fa22bbea2b72bc8f6f9aa0": "2026-09-27",
     "8bd732746ac6f3ef40aeb59d18a7f84023c403424fdda42292403b092145b96d": "2026-09-27",
-    "ac9e3e94ff267fd87ec47236e092272d5e5122843c5c0075ffa09558ab2c8b87": "2026-09-27",
+    "0f725233c3ac9a7cdddee380388874f42dcfd1ea7fcfab7fc036314a2e5dd8f5": "2026-09-27",
     "ade3d1634ab3b0b526f58fb9c276bd3a8b55286b278da772a7dc0d37182318b7": "2026-09-27",
     "5be405179b103d330251030372c2328fc6ec345439f3632548815260fcd586c6": "2026-09-27",
     "3500e1568e034ae6d9757e0b90469e0bea5d7aeb0e2ef52ca12035db98134e6e": "2026-09-27",
@@ -439,6 +438,6 @@
     "e149002bf6d64d02bf987a195fa87607b1f4f14ba81acc4b872558e4921b2c54": "2026-09-27",
     "6782a92db46d06b5a91330a353f3e5627494d2c4b97cdb87cd37e68e6144d076": "2026-09-27"
   },
-  "verified": "2026-09-27T16:40:20.975Z",
+  "verified": "2026-09-27T17:08:23.220Z",
   "accepted": null
 }

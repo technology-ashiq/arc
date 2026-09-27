@@ -23,7 +23,7 @@ Alongside the folders it built the `--lane` resolver every tracker-facing surfac
 | `PORTFOLIO.md` | the company noticeboard, not a filing cabinet | A view derived from every lane's machine header; on any mismatch the lane files win and the board lint says so. <!-- src: docs/adr/0051-port-b-one-plan-per-lane-board-is-a-view.md -->|
 | eligible | counted toward the WIP number | A lane whose header reads `LIVE` or `BLOCKED`; `QUEUED` and `IDLE` are never counted. <!-- src: docs/adr/0052-port-c-wip-visible-never-gated.md -->|
 | Mode A / Mode B | one room at a time vs. two people writing at once | Mode A is one working tree, one session at a time, and is the default; Mode B is a real `git worktree` per lane, certified only once REQ-04's fixtures are green. <!-- src: docs/adr/0056-port-g-two-execution-modes-mode-b-certification.md -->|
-| ownership lint | a fence-line check | Warns when a lane's diff touches another lane's files, with ownership derived from the existing `products/*/manifest.json` rather than a second registry. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md -->|
+| ownership lint | a fence-line check | Warns when a lane's diff touches another lane's files, with ownership derived from the existing each product's `manifest.json` rather than a second registry. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md -->|
 | hard STOP | the wrong-lane refusal | Every surface other than `/arc-kickoff` hitting an unknown lane hard-STOPs, lists the known lanes, and never auto-creates one; `/arc-kickoff` alone is where naming a new lane creates it. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md -->|
 
 ## How the work was planned
@@ -75,7 +75,7 @@ The cycle finished over its own appetite: about 3.35 of 3 days used, about 112%.
 | 0054 | Every surface accepts explicit `--lane <name>`; omitted, it auto-resolves when exactly one lane is eligible, else lists lanes and asks; lane creation belongs to `/arc-kickoff` alone. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md -->|
 | 0055 | New evidence lands at `initiatives/<lane>/evidence/phase-NN/`; existing `docs/evidence/**` stays frozen as the sole canonical copy. <!-- src: docs/adr/0055-port-f-evidence-lane-scoped-forward-frozen-past.md -->|
 | 0056 | Mode A (one working tree, one session at a time) is the default; Mode B (`git worktree` per lane) is certified only when REQ-04's fixtures are green. <!-- src: docs/adr/0056-port-g-two-execution-modes-mode-b-certification.md -->|
-| 0057 | The ownership lint derives boundaries from the existing `products/*/manifest.json`, WARN-first, with `Expected:` / `Found:` / `Example:` on every WARN. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md -->|
+| 0057 | The ownership lint derives boundaries from the existing each product's `manifest.json`, WARN-first, with `Expected:` / `Found:` / `Example:` on every WARN. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md -->|
 | 0058 | A lane with prior history gets a `HISTORY-INDEX.md` linking to the frozen `docs/archive/` and `docs/evidence/` locations, never a copy. <!-- src: docs/adr/0058-port-i-history-link-never-copy.md -->|
 | 0059 | A venture appears on `PORTFOLIO.md` only as a passport row — venture, repository, current status, next — never as a lane. <!-- src: docs/adr/0059-port-j-ventures-passport-rows-only.md -->|
 | 0060 | Root-mode evidence bundling refuses to overwrite a directory whose manifest names a different commit, and the manifest hashes every file the bundle directory holds, not only the artifacts the run collected. <!-- src: docs/adr/0060-root-mode-evidence-refuses-to-overwrite.md -->|
@@ -132,7 +132,7 @@ Every lane resolves itself through the same `lane-resolve.sh` and `lane-resolve.
 
 The company organs this lane declared single — the spine, approval inbox, ADR ledger, council, retro-log, `HISTORY.md`, trial-ledger, templates, and the central test suite — stay at the repo root for every lane born since. <!-- src: docs/adr/0053-port-d-shared-company-organs-stay-single.md; .claude/rules/lanes.md -->
 
-`ownership-lint.sh` reads the same `products/*/manifest.json` registry every lane's code ownership already lived in, rather than a second registry. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md; .claude/scripts/core/ownership-lint.sh -->
+`ownership-lint.sh` reads the same each product's `manifest.json` registry every lane's code ownership already lived in, rather than a second registry. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md; .claude/scripts/core/ownership-lint.sh -->
 
 `.claude/rules/lanes.md` is the standing rulebook restating this cycle's resolution order, its never-guess rule, and its shared-file merge discipline for every session that touches a lane afterward. <!-- src: .claude/rules/lanes.md -->
 
@@ -144,5 +144,5 @@ The company organs this lane declared single — the spine, approval inbox, ADR 
 - **eligible lane** — one whose header reads `LIVE` or `BLOCKED`; counted toward the WIP number. <!-- src: docs/adr/0052-port-c-wip-visible-never-gated.md -->
 - **Mode A** — one working tree, one session at a time; the default. <!-- src: docs/adr/0056-port-g-two-execution-modes-mode-b-certification.md -->
 - **Mode B** — a real `git worktree` per lane, certified only when REQ-04's fixtures are green. <!-- src: docs/adr/0056-port-g-two-execution-modes-mode-b-certification.md -->
-- **ownership lint** — the WARN-first check that a lane's diff stays inside its own files, derived from `products/*/manifest.json`. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md -->
+- **ownership lint** — the WARN-first check that a lane's diff stays inside its own files, derived from each product's `manifest.json`. <!-- src: docs/adr/0057-port-h-ownership-boundary-warn-first-manifest-derived.md -->
 - **hard STOP** — the refusal every surface other than `/arc-kickoff` gives an unknown lane, listing the known lanes and never auto-creating one; `/arc-kickoff` alone creates a new lane. <!-- src: docs/adr/0054-port-e-uniform-explicit-lane-flag-dual-mode-resolution.md -->

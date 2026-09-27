@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "page": "lanes/absorb",
-  "sha256": "e6ec981e165c241ce3a415ccc0c10dca6f06923c33d4f4b887506d88bdf8cd0d",
+  "sha256": "cc90ac342025bf8b99073cef6b7e7dc0d3c41eb03650ade09e97c8391a09795c",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
-  "blocks": 70,
+  "blocks": 69,
   "chunks": 0,
   "verdicts": [
     {
@@ -351,11 +351,6 @@
       "block": 69,
       "verdict": "SUPPORTED",
       "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
-    },
-    {
-      "block": 70,
-      "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     }
   ],
   "carried": [
@@ -427,8 +422,7 @@
     66,
     67,
     68,
-    69,
-    70
+    69
   ],
   "supportedKeys": {
     "a8b24a2fe5235fd956595fb9ebe22b6eb67b3ca5272e24ff55307958191f6101": "2026-09-27",
@@ -470,7 +464,7 @@
     "112d205622cdd5e75d2f15c643d758373238f501d2ea839710c4f0b844b7cab9": "2026-09-27",
     "f4a35eb1e212bf970600a6e98ec8f704d37288a99ca8da9a7e0f280fe3453431": "2026-09-27",
     "e7ab5ad693278376b601e8db3de4b1afcec17abed1719e46686b97a8b903ce60": "2026-09-27",
-    "396b8c8d694de4ad2d4a8f8664aac339595c96c7bb417a2e248639235b05cd27": "2026-09-27",
+    "b066cdf3459b171cf0753c3b16133f6812367434464b09d4197566949bfaaf3c": "2026-09-27",
     "d7cb744ac0bab45a89eb4ccb6be7bb011cc7396f4a9fc453693e70889984db81": "2026-09-27",
     "d3fca8cb9e8b86ac3a56a885d5451bc7c4bb726b2d4db2e28718b2cbb6b1a2a3": "2026-09-27",
     "fd9130ae0a98262672bbcf860cbe29cddb3f8891cefbecd23b172033ccb94163": "2026-09-27",
@@ -499,9 +493,8 @@
     "17f34c55b4f6b1c35d3f098f4b2902fe1ecd0f04a7696324ca1cd35023fdc37f": "2026-09-27",
     "da0a2403c72c5efe174023dd630b32ddc72e30d8bcb6b82d00a947fcc62c544f": "2026-09-27",
     "9cc83810a75675de606cfb4fe9265bc49f1f85b49740b6d353c9013de50813c9": "2026-09-27",
-    "9d33094575178d70ddbd3e11426a16141ff7ea90e0600329e91d6e6312d9e974": "2026-09-27",
     "ce8340596957cc19919f9430ef0f61df9fe7c2e57ad4161864079446b9d4367f": "2026-09-27"
   },
-  "verified": "2026-09-27T15:31:58.376Z",
+  "verified": "2026-09-27T17:11:24.059Z",
   "accepted": null
 }

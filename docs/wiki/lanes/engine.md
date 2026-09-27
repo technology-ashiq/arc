@@ -173,7 +173,7 @@ This lane's own scrubbed transcript per dispatch is stored at `initiatives/engin
 - **burn** — how much of the appetite has been used, measured in active days rather than a stopwatch. <!-- src: initiatives/engine/PROGRESS.md -->
 - **STOP** — a named condition whose evaluation is itself recorded: the phase that carries one writes `STOP evaluated: fired` or `did not fire, because X` at its close, even when it does not fire. <!-- src: initiatives/engine/PLAN.md#evaluated -->
 - **OUT-OF-CYCLE** — work routed through `/arc-change`, charged to no cycle's appetite once the cycle it touches has closed; a separate time estimate may still be reported at close for tracking, but that estimate is not a charge against any cycle's budget. <!-- src: initiatives/engine/PROGRESS.md#post-close; initiatives/engine/PLAN.md -->
-- **lane** — a workstream with exactly one live plan, tracked in `initiatives/<lane>/PLAN.md`. <!-- src: CLAUDE.md -->
+- **lane** — a workstream with exactly one live plan, tracked in each lane's `PLAN.md`. <!-- src: CLAUDE.md -->
 
 *Cycle 7 · arc-engine "The Hired Hands"*
 

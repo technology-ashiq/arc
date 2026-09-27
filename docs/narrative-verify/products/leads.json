@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "products/leads",
-  "sha256": "e25589131a29d92257cf7043f2d0bed474100c19547d3bafb2820c61b7057239",
+  "sha256": "afe9b3020b3e334cd0ec0df5425cc58aace27fcd1086d86578d2354fe65f538d",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 76,
-  "chunks": 0,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -145,7 +145,7 @@
     {
       "block": 28,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "The cited source is an empty list, which directly states that the manifest's command list is empty."
     },
     {
       "block": 29,
@@ -416,7 +416,6 @@
     25,
     26,
     27,
-    28,
     29,
     30,
     31,
@@ -494,7 +493,7 @@
     "45b9298f74620c0ca626820a02e5da969bd70d24f56ac134abc8b6a13513bb2d": "2026-09-27",
     "422dba2e167ef713e8a201891b856617a58368b921fe3c95a3ba997a43e18cac": "2026-09-27",
     "11109da696ed0dbcf8412ba7d22b5023d1946ee0bbbf37283b995561070f96da": "2026-09-27",
-    "7930bdef2f79ced58da60b63904399295259f9015b0905815496d84beb5c2d39": "2026-09-27",
+    "a37a6004ff7a751a773f9cba8a74591317a4f1e1bab98e7fef52d515ec754a05": "2026-09-27",
     "930dd4a6d331e7d8ccbf2479e26c1089ff6a21134e729b45bf0c245e562adb2f": "2026-09-27",
     "22f3cf0c390502bd529dfa08d3d25ba56d8aab2226fa74d8cd435eac46d06826": "2026-09-27",
     "ec810417fa998ac597fff851189244953e70f08db8cf809ea3f58e6777a3a61d": "2026-09-27",
@@ -544,6 +543,6 @@
     "665ef968c2dabc58e4e2b191447aea0de3a71ee4c635b59f2ca94393c7ce577d": "2026-09-27",
     "fe77f02565697051b09ced6359a42ec80f976209e62923bc02f345cf9d7210d1": "2026-09-27"
   },
-  "verified": "2026-09-27T16:14:20.117Z",
+  "verified": "2026-09-27T17:08:53.893Z",
   "accepted": null
 }

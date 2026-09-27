@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "products/growth",
-  "sha256": "23c0a1516b506a2a54c49df0379faafb1ca1957ed5bc32ed3f85deb7c61dacd5",
+  "sha256": "05022b7fcceaca64882d879efbfa5557a82d300911c8359eb309d96a939cbfab",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 72,
-  "chunks": 0,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -220,7 +220,7 @@
     {
       "block": 43,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "The cited ADR states that growth adds no hq.policy.yaml row, its commands are scripts invoked inside session:interactive, and they are not processes/*.process.yaml, so they inherit that subject's ceiling and introduce no subject, matching every claim in the block."
     },
     {
       "block": 44,
@@ -411,7 +411,6 @@
     40,
     41,
     42,
-    43,
     44,
     45,
     46,
@@ -485,7 +484,7 @@
     "53beefc735fa07998854208d43d754d58ee845f2b6eecba78c3d7709e2699c88": "2026-09-27",
     "b97bd3f91ee824a2463f02e32ce9dc4efff91a22b99cd7a1faa83dae6f000757": "2026-09-27",
     "faf7f12042ce62794497c259c405ba84865a58b5710b6d3a9810a5a975e60a3f": "2026-09-27",
-    "a25bec133e6787aa144f182bf48da0aecabac1add7035a0f666e8ccefccdf8c9": "2026-09-27",
+    "823e42357b73fd15149e62b8398f042d74bf0b2fdb822cd309b946c1d7467b01": "2026-09-27",
     "2bd009cc98fdf5c71e2a30e3689c12ba9d724d59bf59af47732c21931f95daac": "2026-09-27",
     "e22d7883f997bfa7db66c4c0aba572220a611d953a78742e301c6416c89211d1": "2026-09-27",
     "af78b166fbcb53ec8fb539617a640b69cd6fbe9912b422f9bc21da1e78e1fbba": "2026-09-27",
@@ -516,6 +515,6 @@
     "b3cb3fcb622c1a9c04bce862787c58a9b821c4b46362fbd5bd830b89c5a6d0d8": "2026-09-27",
     "f73bef161b2cdf14bbc30d46ccd6fede20594c6e237f40361ceefc9d31165240": "2026-09-27"
   },
-  "verified": "2026-09-27T15:31:58.449Z",
+  "verified": "2026-09-27T17:08:46.275Z",
   "accepted": null
 }

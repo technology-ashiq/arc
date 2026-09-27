@@ -30,7 +30,6 @@ about what it is not: not legal advice, a template engine with receipts, not a l
 
 | arc calls it | It is really |
 |---|---|
-| facts file | The per-venture YAML file, `legal/facts.yaml`, whose mandatory fields include `payment_model`, `gst_registered` and `stores_third_party_client_data`, and from which every clause and interpolated value is rendered. <!-- src: initiatives/legal/PLAN.md; ADR-1202 --> |
 | clause | A pre-approved template block that an enum value maps to 1:1, selected as a whole branch by fields such as `payment_model`. <!-- src: ADR-1202; initiatives/legal/PLAN.md --> |
 | value lint | The check aimed at a compliance badge or a markup fragment riding a free-text value into a clause, which FAILs by naming an empty required field rather than rendering a dangling enumeration. <!-- src: ADR-1202; initiatives/legal/PLAN.md --> |
 | trace lint | The check that every clause on a rendered page traces back to a real entry in the enum-to-clause map, and that a clause belonging to a branch that was not selected never survives into the render. <!-- src: initiatives/legal/PLAN.md --> |

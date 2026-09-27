@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "products/docs",
-  "sha256": "89340b02ba24e5298e254b1940d1695ec4fefe4a009d4c28ff2afa184e1f9b67",
+  "sha256": "bd1b52d363d1aec38a52ac65608f130eb7e401c7c4ed6be108634d31e252de18",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 75,
-  "chunks": 0,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -140,7 +140,7 @@
     {
       "block": 27,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "ADR-1505 states narrative files live under docs/wiki/_narrative, are included verbatim below generated facts, and absence renders the narrative-pending banner per ADR-1506."
     },
     {
       "block": 28,
@@ -195,7 +195,7 @@
     {
       "block": 38,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "ADR-1507 and the wiki-drift source state that wiki-drift fails on unresolved references with file and line details, and wiki-stale warns at exit 0 naming moved fact keys."
     },
     {
       "block": 39,
@@ -410,7 +410,6 @@
     24,
     25,
     26,
-    27,
     28,
     29,
     30,
@@ -421,7 +420,6 @@
     35,
     36,
     37,
-    38,
     39,
     40,
     41,
@@ -487,7 +485,7 @@
     "16b69a0eb14ee4384d81020852740d844c1c043e40f26a7e9977748e035fe781": "2026-09-27",
     "0550fb937ea4bc903a059322df0b75f468123afbc89cb90496cb81b684c800af": "2026-09-27",
     "e1eb4b99cc2a601a652db0789cc04978b1c3c5ee5d00f1ace9683f07823e69a0": "2026-09-27",
-    "55a914c11ae904f9850b95a27519c99164a8d6c8b7e8ce660de2ed231cf77e54": "2026-09-27",
+    "76700969c81851b77540d2ed3053a0503dc43dd9640a732e0121dd816db3514b": "2026-09-27",
     "d142c771ef8421fcefb189e1d33f2922bb14d2963b8ee706c967e767334ade0f": "2026-09-27",
     "63071f7069a72b66fb14c3a8d056a06ab2b6f95e748b8f4c3bf595c96245626e": "2026-09-27",
     "6650065d6c9dc521423e4dcb5138fdf8b1673f4ea05515aaff6ba4b211c37703": "2026-09-27",
@@ -498,7 +496,7 @@
     "7e622f3852afb9eef996e8abcf8dafdd6c98ac1abdf2acd8339be50fbd571ae6": "2026-09-27",
     "926ca169a07322977c7af70521afa6f298f059c4962b6289a206e93fd95e01e2": "2026-09-27",
     "8047ed43eceb349b0a6fce0e397bc1e1fc82697aede6a4dc070b03452c70a32f": "2026-09-27",
-    "81333807b58e9980a0a32cc4899cae1b7b48d3e69a59ad0bec5d0d9df7236d2e": "2026-09-27",
+    "6f1d29fbefb2bdd12745446ee262c4fb06dbd2f54cf3e06eafed9aae990d6543": "2026-09-27",
     "379bc86af0f880bf718721d1afd188e7744e47be027cf06a0fada80e5fd793b2": "2026-09-27",
     "d1609d1e080ea47d689919cb1fcda30396d56d116a3d60f1937493824cd8122c": "2026-09-27",
     "99b0f8ea82c0083a4ddb58306f280b5a2c43ee99ea5ed53b01b7efed760cf6fb": "2026-09-27",
@@ -537,6 +535,6 @@
     "49454e8e67d5fce90c7bbff5501d2c2e657e2134f6193fbe7f6ff0c4ba1319d7": "2026-09-27",
     "cc425e8ac0726ffcf7e9f2e8483255f02f0894efd92dd4efd40e49387ef2734a": "2026-09-27"
   },
-  "verified": "2026-09-27T16:14:20.084Z",
+  "verified": "2026-09-27T17:08:52.379Z",
   "accepted": null
 }

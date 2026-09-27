@@ -72,7 +72,7 @@ anything back from `docs`. <!-- src: ADR-1512 -->
    entity and turns the result into one deterministic `wiki.json`. <!-- src: .claude/scripts/docs/wiki-build.mjs#extractOrThrow -->
 4. The same script renders `wiki.json` into plain markdown: one page per entity plus an index, each
    starting with a do-not-edit banner. <!-- src: .claude/scripts/docs/wiki-build.mjs#renderWiki -->
-5. Wherever a hand-written file exists at `docs/wiki/_narrative/<type>/<id>.md`, its text is
+5. Wherever a hand-written file exists at one narrative file per page under docs/wiki/_narrative, its text is
    included verbatim below the generated facts; wherever it does not, the page carries the visible
    "Narrative pending" banner instead. <!-- src: ADR-1505; ADR-1506 -->
 6. `wiki-coverage` checks both directions at once: every entity in `wiki.json` must have a page, and
@@ -125,7 +125,7 @@ before the gate is trusted against the real tree. <!-- src: ADR-1503; .claude/sc
 Prose can go wrong in two different ways: it can name something that is now gone, or it can keep
 describing a fact that has quietly changed underneath it. Drift blocks; staleness only warns. <!-- src: ADR-1507 -->
 
-`wiki-drift.mjs` scans every narrative for a reference -- an `ADR-NNNN`, a backticked `/command`, a
+`wiki-drift.mjs` scans every narrative for a reference -- an `ADR-NNNN`, a backticked slash-command name, a
 repo path -- and blocks, naming the file and line, on anything that does not resolve on the current
 tree; `wiki-stale.mjs` instead warns, at exit 0, when the fingerprinted facts behind a narrative
 have moved, naming which fact key changed. <!-- src: ADR-1507; .claude/scripts/docs/wiki-drift.mjs#backticks -->

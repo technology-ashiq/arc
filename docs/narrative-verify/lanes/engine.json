@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "lanes/engine",
-  "sha256": "1102addaed19638f1151e4a226a3fb4dab909237fa97014ee5ea11659a2c183b",
+  "sha256": "10d60bf71f5cdae3123f8a74e6c9622a020fe66a7af026f60c0841f4da57d8e8",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 96,
-  "chunks": 0,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -485,7 +485,7 @@
     {
       "block": 96,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "CLAUDE.md states 'Exactly ONE plan is ever live per lane: that lane's initiatives/<lane>/PLAN.md', supporting exactly one live plan per lane tracked in the lane's PLAN.md; 'workstream' is a plain-words gloss for lane and adds no new fact."
     }
   ],
   "carried": [
@@ -583,8 +583,7 @@
     92,
     93,
     94,
-    95,
-    96
+    95
   ],
   "supportedKeys": {
     "28b9e344faf7f63aa4b9194ed6e1d69be8cfd0902857dc1525216db5abdb2b20": "2026-09-27",
@@ -682,8 +681,8 @@
     "09ddb9087a1c92204e55e32227fb518c536e87cab61465ab1d787cf20dfd4178": "2026-09-27",
     "bc768dd5dfc243659613535f84675c53f828eae8f6cecb969ca054e583927d3e": "2026-09-27",
     "d5282723ff31c5573a8a8b83bd87b95e01265bc206647958317419a16a71283e": "2026-09-27",
-    "8bf12c3a2ccdeb4700d2f7381aac2e5fc437de6afafaac5108485bd857f99e50": "2026-09-27"
+    "789f2e5794b731f8aaf5be5f2799b91d6515fc538b96a6b17d903701428b55bc": "2026-09-27"
   },
-  "verified": "2026-09-27T15:32:58.980Z",
+  "verified": "2026-09-27T17:09:15.544Z",
   "accepted": null
 }

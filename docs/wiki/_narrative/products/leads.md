@@ -53,7 +53,7 @@ There is no background scheduler, daemon or cron: sequence advancement is a huma
 
 ### Commands
 
-leads owns no `/arc-x` command of its own -- its manifest's command list is empty. <!-- src: fact:products/leads.commands -->
+leads owns no slash command of its own -- its manifest's command list is empty. <!-- src: fact:products/leads.commands -->
 
 Instead, the whole product is driven by one script with many subcommands, each an operator-typed verb: <!-- src: .claude/scripts/leads/arc-leads.mjs -->
 

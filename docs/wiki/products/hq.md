@@ -154,7 +154,7 @@ hq's manifest lists more than seventy of them. <!-- src: products/hq/manifest.js
   but the log), and the shared library underneath them -- `lib/canonical.mjs` (canonical
   serialization, hashing, ULIDs, the strict JSON reader), `lib/spine-io.mjs` (the lock, the
   append, the quarantine, the day-close markers), `lib/validate.mjs` plus the six
-  `lib/validate-*.mjs` kind-specific modules it imports (experiment, leads, content, policy,
+  the `validate-*` modules in hq's lib kind-specific modules it imports (experiment, leads, content, policy,
   absorb, ledger), and `lib/redact.mjs` (secret scanning at emit, fail-safe). <!-- src: .claude/scripts/hq/spine.mjs; .claude/scripts/hq/arc-event.mjs; .claude/scripts/hq/arc-event.sh; .claude/scripts/hq/arc-replay.mjs; .claude/scripts/hq/lib/canonical.mjs; .claude/scripts/hq/lib/spine-io.mjs; .claude/scripts/hq/lib/validate.mjs; .claude/scripts/hq/lib/redact.mjs -->
 - **Reading the spine like a person would.** `arc-brief.mjs` is the day rendered in one screen --
   today's minimal renderer; the noise-budget grouping is Phase 2's work, not shipped yet.

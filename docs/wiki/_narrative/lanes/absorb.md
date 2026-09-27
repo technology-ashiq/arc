@@ -83,7 +83,7 @@ It used 6.5 of its 8 allotted days, leaving 1.5 days unspent, and its tracker cu
 
 Its one real study classified four candidate techniques: one to absorb, one to route elsewhere, and two to skip. <!-- src: initiatives/absorb/evidence/phase-04/extraction-report.md -->
 
-The technique it absorbed — a rule that an unquotable finding is forced to low confidence and suppressed from the main report unless the reviewer can quote the source line that motivated it — was studied from gstack's `/review` skill, whose file carried no license at all, so the rebuild is a re-expression rather than a copy. <!-- src: initiatives/absorb/evidence/phase-04/extraction-report.md#T-01 -->
+The technique it absorbed — a rule that an unquotable finding is forced to low confidence and suppressed from the main report unless the reviewer can quote the source line that motivated it — was studied from gstack's review skill, whose file carried no license at all, so the rebuild is a re-expression rather than a copy. <!-- src: initiatives/absorb/evidence/phase-04/extraction-report.md#T-01 -->
 
 It landed as a playbook, called from a hand-written review command rather than a generated one, without widening the rebuild allowlist. <!-- src: ADR-0602; initiatives/absorb/PROGRESS.md#hand-written -->
 
@@ -134,5 +134,4 @@ The one technique it adopted ships out to every consumer repository through the 
 | steel thread | The thinnest end-to-end slice of a system's own paperwork, built first so every later phase has something real to extend. <!-- src: initiatives/absorb/phases/phase-00-spec.md --> |
 | adversarial pass | A fresh, unanchored reviewer sent to attack a finished piece of work with hostile inputs before it counts as done. <!-- src: CLAUDE.md --> |
 | spine | The append-only record of events this repo keeps, with a closed vocabulary of kinds; this cycle adds zero new event kinds to it. <!-- src: ADR-0024; ADR-0026; ADR-0603 --> |
-| lane | One workstream with exactly one live plan, `initiatives/<lane>/PLAN.md`. <!-- src: CLAUDE.md --> |
 | phase | A slice of a lane's plan that closes only on evidence: tests green, a live demonstration, and the tracker updated. <!-- src: CLAUDE.md --> |

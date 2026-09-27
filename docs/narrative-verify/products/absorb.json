@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "products/absorb",
-  "sha256": "b54d71ec83690960fcc6d148b686029403f7f795794d4db499884a2ad4aca027",
+  "sha256": "421a44c42f4842c1314a120aa32fa8e2d1f73273d9eec1233218b12ba0bae05b",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 73,
-  "chunks": 0,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -205,7 +205,7 @@
     {
       "block": 40,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "The block's claim is confirmed by the cited sources: .claude/commands/arc-absorb.md contains no generated-file marker, while .claude/commands/arc-commit.md carries the \"GENERATED FILE — DO NOT EDIT\" comment pointing to a process file."
     },
     {
       "block": 41,
@@ -413,7 +413,6 @@
     37,
     38,
     39,
-    40,
     41,
     42,
     43,
@@ -488,7 +487,7 @@
     "2b32a07371c118b2ff406703d1dca5601eecc21760784b2869826917fccc9c3c": "2026-09-27",
     "bba094c9a3961f1cfaa9c21d815a1560ae179cc7a38bea63464ae9ee5a3a3cb7": "2026-09-27",
     "ba49274ca89e6451535f714463d832a4032ea994247950f66e15635489f93cbd": "2026-09-27",
-    "136742d7899b1016c6a6bb55d75bd16b53885026d4958131508033299b994167": "2026-09-27",
+    "98f9fbfadd261175b6b9672415dbefd0cafd3002eb82c19aa630940cc5d60f0b": "2026-09-27",
     "fb144e2980996d0c260aa0827b34b5747e0e01b32859edcd0dd94854a259f57d": "2026-09-27",
     "29decc4ac96f97237e83f00e0d817d847c50b73179b8d6ab61b832c1e75e7deb": "2026-09-27",
     "ee7e0dbe91b464d9c940e03205c8a83704448398234c7c6c7af66e7354ee169b": "2026-09-27",
@@ -523,6 +522,6 @@
     "cf93c1e64cbaad14ec649203a493703b39739ae0a72e42ce02a8f3086788be7d": "2026-09-27",
     "521efbb77b56ea93ab96aea3b9c1e60db5d83fb18b223f3d799521cf17efdb3a": "2026-09-27"
   },
-  "verified": "2026-09-27T16:40:21.211Z",
+  "verified": "2026-09-27T17:08:24.223Z",
   "accepted": null
 }

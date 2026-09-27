@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "products/core",
-  "sha256": "d3fbdcdb0a2e87e0f11215e368f138ec310c79d34ad64aacd169e7b36be5b986",
+  "sha256": "5462f7f77d335f0a38883a50293c31ec436638793a3567cb4c541b8f944fe959",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 76,
-  "chunks": 3,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -35,17 +35,17 @@
     {
       "block": 6,
       "verdict": "SUPPORTED",
-      "why": "product-lint.mjs states the schema/coverage validation, lane-resolve.sh states lane resolution, and the three PreToolUse hook scripts state Bash/Edit/Read dispatch, matching every claim."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 7,
       "verdict": "SUPPORTED",
-      "why": "products/core/manifest.json lists the hook scripts, _dispatch.sh, rule files, CONSTITUTION.md, settings.json, output-styles/terse.md, the SKILL.md, money-surfaces.json, and toolchain-health-artifact.html, while money-surfaces.json and arc-toolcheck.md confirm the denylist and HTML template roles."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 8,
       "verdict": "SUPPORTED",
-      "why": "ADR-0014 and the core manifest describe a product as a per-product bundle of commands, agents, scripts and files identified by its own manifest.json, which directly backs the row definition."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 9,
@@ -60,7 +60,7 @@
     {
       "block": 11,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "The source shows the registry at .claude/arc-registry.json, says a (re-)sync writes it, and constructs it with `products` plus a source `commit`, matching the block's claim that it names installed products and the commit they came from."
     },
     {
       "block": 12,
@@ -225,7 +225,7 @@
     {
       "block": 44,
       "verdict": "SUPPORTED",
-      "why": "testing.md states unit tests avoid network and real databases, every bugfix starts with a failing test, CI is the only gate with local test runs not permitted, and per-job conclusions are read instead of the watcher's exit code."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 45,
@@ -300,7 +300,7 @@
     {
       "block": 59,
       "verdict": "SUPPORTED",
-      "why": "variant-grammar.mjs's header says the variant identifier grammar is defined once in core, is needed by the spine validator, process-lint and the evolve manifest validator, and lives there to prevent copied regexes from drifting."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 60,
@@ -320,7 +320,7 @@
     {
       "block": 63,
       "verdict": "SUPPORTED",
-      "why": "The cited manifest lists commands, agents, scripts and files under a name/version, product-lint.mjs validates that per-product structure, and ADR-0014 defines products as manifest-described bundles; 'self-contained bundle' adds no new fact."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 64,
@@ -365,7 +365,7 @@
     {
       "block": 72,
       "verdict": "SUPPORTED",
-      "why": "arc-freeze.md writes the directory allowlist to .claude/state/freeze and says edits are blocked outside it until /arc-unfreeze, and freeze-check.sh exits 2 for any target outside the listed directories, matching the boundary claim."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 73,
@@ -394,9 +394,11 @@
     3,
     4,
     5,
+    6,
+    7,
+    8,
     9,
     10,
-    11,
     12,
     13,
     14,
@@ -429,6 +431,7 @@
     41,
     42,
     43,
+    44,
     45,
     46,
     47,
@@ -443,9 +446,11 @@
     56,
     57,
     58,
+    59,
     60,
     61,
     62,
+    63,
     64,
     65,
     66,
@@ -454,6 +459,7 @@
     69,
     70,
     71,
+    72,
     73,
     74,
     75,
@@ -470,7 +476,7 @@
     "e67233520cd25a65ab864dbc3902937531f2d09eddc1a265dcd12a734ff99e2f": "2026-09-27",
     "b3be4c8346235ee061f2ad7e8bb78fe8d5aa91ce5b245862e47fabbb8eb4150f": "2026-09-27",
     "77a90b67eef17914cad2ab9e19a4ff3cb1fb947603c5edcb8f1d9460fec6a1f2": "2026-09-27",
-    "9e1c69d64e2c60e7aef90224bb813f2627bf66a2d8fb404c612480a9c75761a1": "2026-09-27",
+    "0589557daf20dbeb90ea054cd5586446ba8bbce14a4bd4e8805b75052df13124": "2026-09-27",
     "7cbddf4b764ebccd4275c012c50b10e42054da6d079ded5d66e3b649d2353741": "2026-09-27",
     "b941bd80410e6721afc0861816a0094e99fdf6d1f97078fe5898520df0895847": "2026-09-27",
     "3c385924bff0caafd39dd5dc479073d66c6fc4dbcea2c3c43ff72a2d9074ec6d": "2026-09-27",
@@ -537,6 +543,6 @@
     "3837daed9b01d1477ba2f40b2bc51d1ede902ca3d0cd27153d2f7e5426c1a8c8": "2026-09-27",
     "cb7e5b53481923c199cbdbd7cc3cea5a0e71d8bf4a4a3d49f825c50063229d08": "2026-09-27"
   },
-  "verified": "2026-09-27T15:05:05.419Z",
+  "verified": "2026-09-27T17:08:26.610Z",
   "accepted": null
 }

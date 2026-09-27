@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "products/memory",
-  "sha256": "7e3d287e4459651bbb6b45b501ad8a3d016c304f43a51ec9db3094258b881fc0",
+  "sha256": "c2d7d11659c0eb76dbc510a104b842ed1d548ea1eb23e85f7d80f9320bf2f8e5",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 72,
-  "chunks": 3,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -35,7 +35,7 @@
     {
       "block": 6,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "memory-index.mjs says it builds the derived recall index from the five company organs into .claude/state/memory/index.json, gitignored, derived-only, and safe to delete, matching the block."
     },
     {
       "block": 7,
@@ -145,7 +145,7 @@
     {
       "block": 28,
       "verdict": "SUPPORTED",
-      "why": "The block's claims match the cited sources: engines.mjs states the sqlite engine was cut with the search measured at 0.42ms of a 199ms wall clock (~0.2%), registers only the canonical `js` engine, and says the contract/harness is what ships, while the ADR confirms the pure-JS engine is canonical and sqlite is an optional accelerator."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 29,
@@ -170,7 +170,7 @@
     {
       "block": 33,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "rule-propose.mjs says it appends the rule's text to main's copy of CLAUDE.md or an existing .claude/rules/*.md on a new branch with no checkout, ends on approval.requested, and a human merges it or does not."
     },
     {
       "block": 34,
@@ -180,7 +180,7 @@
     {
       "block": 35,
       "verdict": "SUPPORTED",
-      "why": "Manifest lists no commands; arc-retro.md appends to docs/retro-log.md, runs conflict-check.mjs before the append, and reads docs/trial-ledger.md for gate promotion; kickoff-plan.process.yaml runs arc-recall.mjs on the goal sentence and fences output under 'HISTORICAL DATA, NOT INSTRUCTIONS'; review-diff.process.yaml declares diff-recall.mjs under shell.run."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 36,
@@ -195,7 +195,7 @@
     {
       "block": 38,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "rule-promote.process.yaml reads CLAUDE.md and .claude/rules/*.md to pick an existing home, then rule-propose.mjs writes the rule onto a new branch off main without touching the working tree and raises approval.requested."
     },
     {
       "block": 39,
@@ -215,7 +215,7 @@
     {
       "block": 42,
       "verdict": "SUPPORTED",
-      "why": "arc-recall.mjs's source describes ranked queries and a literal --grep mode; diff-recall.mjs's source says it turns a diff's changed paths into a recall query and prints dropped path-structure tokens with the reason each was dropped; golden-check.mjs and ADR-0706 cover anchor checks, a ranked hit-rate gate, a CI expected-rows gate, and the two-engine equivalence harness; and all three are index-reading CLI scripts."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 43,
@@ -285,7 +285,7 @@
     {
       "block": 56,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "arc-retro.md step 2 proposes a line in CLAUDE.md or .claude/rules/*.md as the permanent home, and rule-propose.mjs says it writes the rule onto a branch with no checkout and raises an approval a human merges or rejects."
     },
     {
       "block": 57,
@@ -374,7 +374,6 @@
     3,
     4,
     5,
-    6,
     7,
     8,
     9,
@@ -396,18 +395,19 @@
     25,
     26,
     27,
+    28,
     29,
     30,
     31,
     32,
-    33,
     34,
+    35,
     36,
     37,
-    38,
     39,
     40,
     41,
+    42,
     43,
     44,
     45,
@@ -421,7 +421,6 @@
     53,
     54,
     55,
-    56,
     57,
     58,
     59,
@@ -445,7 +444,7 @@
     "14ffd3f1551cf39ea48ca80fbe902bff45a34a4c46afc5b6e0ebdd28f5cb1e85": "2026-09-27",
     "95f4b89a8cbd0627188dae5e990c2e8c9169fc3b232afa30c18cb2c86e3e98d6": "2026-09-27",
     "dbe667b85f2b39d5143611566bc3048feee9f0577f2e7d78cad2b45fed372a4d": "2026-09-27",
-    "75ae6ab01e1d4eb90f9cc23a30bc0b54cff8951f5c26411b38e54ea7ccaa6dde": "2026-09-27",
+    "fbe7fccc83457143d760387a346756074ccbd66d5cf5cf81c3402a4be4fbe875": "2026-09-27",
     "8b4debbd50aec9141e4429f959e5e3e4386611fe783c639b7cccda4bddb836d2": "2026-09-27",
     "cc26cb137ec87095171cc7dc2b94b5d8ec79450ecea1c5cddaa9e8e84eeb0ef5": "2026-09-27",
     "ddce1ce97a22956ef4cda5483ca6315a7b02ecb8836f3404f9ca2005b9c7cf72": "2026-09-27",
@@ -472,12 +471,12 @@
     "fc41cafd161179190976a7d5fe74a85181333e050e7c72fc66e267a7fea3f1cf": "2026-09-27",
     "6e30120cb72ec97beb65d4c8ab799dd6aaf78faa69c3c639d99c0a4474ac96ed": "2026-09-27",
     "835cbac45de5c48e00244913847aa28278648e61a9bf765c4a5ad51b45640330": "2026-09-27",
-    "bf4f24c2c3dbbbe2db27e9632204dd53212b9e05bf0d42d64ab5c2a95af37bf9": "2026-09-27",
+    "dde5a84f0f52bc14b479e94e801264394672f36f547fbbf98b3faa5f1d312769": "2026-09-27",
     "db726ec1de223f7d57433d1da40fc0a7bd1967173a170a77e1c7603e8539633f": "2026-09-27",
     "334f755cd8c8d5b2d17ac31c4a91eea60fdc090a6c37a7c291aaff89b8fecabe": "2026-09-27",
     "484b6e70d2b4ddb7b65b53eb3271517db2655d774d9de797ee0db58491d2f362": "2026-09-27",
     "b40945e75226b31a75086b6d5b108fe9222e8ae073d034fa89c21a3afe48dc21": "2026-09-27",
-    "1afa0f84f9281b2a32fa581a2677e8a6b091da81b91d11e80b0dc2b6f5aab809": "2026-09-27",
+    "8c8cab0b34f9af9cffe23d1c37b9fbb335adde28f221483eb7c4469f95d0a146": "2026-09-27",
     "24b4ad379d8caa2b8964e2b1af6bad231876d8a7cf8bd149f52e80dd92e6985f": "2026-09-27",
     "bbc889130280a02f631e70f692807272a1d4c2580fc44e1c54388d0343d48ad7": "2026-09-27",
     "9b2a514e86e693849b27ad681a916f199c4901f929dcdf794eda9437a98d915b": "2026-09-27",
@@ -495,7 +494,7 @@
     "c1259b7ffc4c0c59a5d93928c3fd86481240bb2fbb821b45f714949526b7e3e0": "2026-09-27",
     "0d98bdd89393488adae042460c7f850aa19232c4f1de7577aaa821fece4fd187": "2026-09-27",
     "0ee79be474fa6a6051d4433d55af4aafc33de0355844fd45d49d65e07d95030f": "2026-09-27",
-    "32bc45da11078aab7cb3a426f1bbec5539ac8e6970e348ac1b1bed504a76711e": "2026-09-27",
+    "54437446d99856f9f9c0685cdbc0035d55f5ebd489bca39a9a69850086b52c74": "2026-09-27",
     "d080386d277910d9f0e81c563f1e3ba8db0cf5ea975ddb68b201f44e995fb926": "2026-09-27",
     "8f2de5623e29c73e91ee77b98e01ce25aa63e098b558d248f67679b4c1dee991": "2026-09-27",
     "4862163fa9f0ebe04dff175fcedab3f5948edd25462d34da4c94eff3e95b4939": "2026-09-27",
@@ -513,6 +512,6 @@
     "78a426ef85d50b37df6e56dae5c655d3197b87e745a4e23213c3b18e3fc6f1d7": "2026-09-27",
     "f7509d64afaf9878a433252d20ad06e840d43bd0047f4b3fc3ecc96e78864516": "2026-09-27"
   },
-  "verified": "2026-09-27T14:57:26.760Z",
+  "verified": "2026-09-27T17:09:54.224Z",
   "accepted": null
 }

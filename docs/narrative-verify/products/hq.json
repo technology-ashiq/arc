@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "page": "products/hq",
-  "sha256": "dc61056d9dce41ec17f677d7d6c5dcd247d0b2cfb0b01ee1118a1de244dae01c",
+  "sha256": "1ca8f46d883d331f50778bce3994cc2cd30e8b42cdee516d66d3612b01e9352f",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 95,
-  "chunks": 0,
+  "chunks": 1,
   "verdicts": [
     {
       "block": 1,
@@ -265,7 +265,7 @@
     {
       "block": 52,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "Every claim — spine.mjs as the sole public reader with arc-replay the only other raw-log opener, arc-event as the spine's only dual-mode writer (with arc-event.sh its thin wrapper), arc-replay rebuilding derived state only from the log, and the listed lib modules' roles — is stated in the cited sources, including the six kind-specific validate-* imports in lib/validate.mjs."
     },
     {
       "block": 53,
@@ -535,7 +535,6 @@
     49,
     50,
     51,
-    52,
     53,
     54,
     55,
@@ -632,7 +631,7 @@
     "b53380a033ccd4790e0c574ac2da0dcfcf1aca4e1ce55969adf2d7e79af6c925": "2026-09-27",
     "41f448e56da719a6b5b37b918939be1d43ceb773acb70e36b5ed96dec310ee4b": "2026-09-27",
     "4ed0c51ccd2f29a9f042d48efb5794eec47588b04a8beb3514ff4a099fdc6c69": "2026-09-27",
-    "2a73b9dde299436f2935706328774ebbaefc4fcf7f2152e629c99761dbc0c082": "2026-09-27",
+    "12834c23a9fe7493e4ec4005fd54043896b2e78794896299781df70f140eb2f7": "2026-09-27",
     "492e53591e712045f0e929d0bfd4ebc1acb57ec0318d029d3a31b56fe39e7e6f": "2026-09-27",
     "63bf735a3f39a08d6246d11884bff02a8f2c0f89ec2aca16c6a8769588e0710b": "2026-09-27",
     "ed8840c8365e4305f203a224b335d0763d24028351c88b09fe6a154bd4e8d77b": "2026-09-27",
@@ -677,6 +676,6 @@
     "feb9883760a61f6c0f656ae149a5d7b66c2aa1ebdfa44025a03956b1d79f969a": "2026-09-27",
     "1869499282e7109b2182ae552c3b9ec9b694ae13d8301cc2d4024495793cd87c": "2026-09-27"
   },
-  "verified": "2026-09-27T16:40:21.358Z",
+  "verified": "2026-09-27T17:09:18.485Z",
   "accepted": null
 }

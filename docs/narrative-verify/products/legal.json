@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "page": "products/legal",
-  "sha256": "22c65664be527baf486deb3e0e0b431758dcce2e648e6d45493a88a7dab29041",
+  "sha256": "c6576ead955ee8074cb01bf3a3157a71d7c3793735ae36fee884c449664af1f1",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
-  "blocks": 70,
+  "blocks": 69,
   "chunks": 0,
   "verdicts": [
     {
@@ -351,11 +351,6 @@
       "block": 69,
       "verdict": "SUPPORTED",
       "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
-    },
-    {
-      "block": 70,
-      "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     }
   ],
   "carried": [
@@ -427,8 +422,7 @@
     66,
     67,
     68,
-    69,
-    70
+    69
   ],
   "supportedKeys": {
     "1751412606092c28619f0f25d12af7804bb65afed9fabe697d7d7980ee3f29ee": "2026-09-27",
@@ -460,7 +454,6 @@
     "afa7c7e5e59ea8b5abb7520519bc4f37604a7a1642e4980b5f28eb092fc4dfb7": "2026-09-27",
     "21599529f09dd75076e13069192bd24cfbc7c7b115dcc2c4c7ef7baadf21269a": "2026-09-27",
     "b45eabe1c47f78f4934cab0c0fc82a9ed65a2e255e7ab2fa0d2307ca8915eee6": "2026-09-27",
-    "25c237a0e96a1343d02fdc0eeb223b055dbc1f31541dd7c85c785a88227c73bf": "2026-09-27",
     "849004885fe8ecb4c00eeec5e8d0c186aed2371188e26189394c0ee1b19033a5": "2026-09-27",
     "9fb5272b6873785f2279d24c39fedffe763a33507d362371fbed6540e27dbd5f": "2026-09-27",
     "6d8fbb91751698804dde42fdd76116afcff46f210c0e9e6f0bac8532e4c5284e": "2026-09-27",
@@ -502,6 +495,6 @@
     "ccb056251bb570a75592cb20c557e5e515d368288655a27d13478f0414adc8fc": "2026-09-27",
     "102c8ed0d50a3184fc7e3bf5b63de9cfd9d7ddf8c98313440ad14b7af84c8f12": "2026-09-27"
   },
-  "verified": "2026-09-27T16:40:21.290Z",
+  "verified": "2026-09-27T17:11:24.273Z",
   "accepted": null
 }

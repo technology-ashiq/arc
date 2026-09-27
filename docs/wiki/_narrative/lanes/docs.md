@@ -109,7 +109,7 @@ And the rule this page ships under, ADR-1513, was itself decided through the fac
 
 ## Glossary
 
-- **lane** — a workstream kept to exactly one live plan at `initiatives/<lane>/PLAN.md`; `docs` is one such lane, with its own PLAN, PROGRESS and phases. <!-- src: CLAUDE.md; initiatives/docs/PLAN.md -->
+- **lane** — a workstream kept to exactly one live plan at each lane's `PLAN.md`; `docs` is one such lane, with its own PLAN, PROGRESS and phases. <!-- src: CLAUDE.md; initiatives/docs/PLAN.md -->
 - **cycle** — `docs` has run one cycle so far: Cycle 17, opened 2026-09-25 and closed 2026-09-26. <!-- src: fact:lanes/docs.cycle -->
 - **phase** — a slice of a cycle that closes only through `/arc-phase-done`, once tests are green on CI, a live demo runs, and the tracker is updated. <!-- src: initiatives/docs/PROGRESS.md -->
 - **appetite** — the time budget a cycle sets itself, capped rather than estimated — going past it means cut or kill, never a silent extension; `docs` set 6.5 days. <!-- src: initiatives/docs/PLAN.md -->

@@ -82,7 +82,7 @@ growth's manifest lists no agent. <!-- src: products/growth/manifest.json --> Dr
 
 ### Processes
 
-growth defines no `processes/*.process.yaml` file and adds no `hq.policy.yaml` row. Its verbs are scripts invoked inside `session:interactive`, so they inherit that subject's existing ceiling rather than introducing a subject of their own. <!-- src: docs/adr/1101-content-published-vocabulary-and-its-policy-rows.md -->
+growth defines no the process files under processes file and adds no `hq.policy.yaml` row. Its verbs are scripts invoked inside `session:interactive`, so they inherit that subject's existing ceiling rather than introducing a subject of their own. <!-- src: docs/adr/1101-content-published-vocabulary-and-its-policy-rows.md -->
 
 ### Scripts
 

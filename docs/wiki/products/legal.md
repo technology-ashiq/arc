@@ -58,8 +58,6 @@ Writing each venture's six pages by hand instead was considered and rejected: th
 
 ## Every part, explained
 
-`legal` ships no slash command and no `processes/*.process.yaml` file of its own — every verb below is reached through its own CLI directly. <!-- src: products/legal/manifest.json; ADR-1210 -->
-
 ### Scripts
 
 - `.claude/scripts/legal/arc-legal.mjs` — the CLI itself, carrying eight verbs: `render` (produce and lint pages, publish nothing), `propose` (raise the human approval question), `publish` (refuse unless the recorded decision matches these exact bytes), `verify` (diff a published directory against a fresh re-render), `checklist` (render the launch checklist), `bump-templates` (move one venture to a newer pinned set, voiding its approval), `ci-guard` (emit the venture-side CI check), and `propose-templates` (print one template set's own approval payload, for a human to decide and record separately from any venture). <!-- src: .claude/scripts/legal/arc-legal.mjs#proposeMain; .claude/scripts/legal/arc-legal.mjs#publishMain; .claude/scripts/legal/arc-legal.mjs#verifyMain; .claude/scripts/legal/arc-legal.mjs#checklistMain; .claude/scripts/legal/arc-legal.mjs#bumpTemplatesMain; .claude/scripts/legal/arc-legal.mjs#ciGuardMain; .claude/scripts/legal/arc-legal.mjs#proposeTemplatesMain -->

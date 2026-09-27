@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "page": "products/plan",
-  "sha256": "c76b35ae6e85eb68851c3f9295855a27da27d99297703af13a644ff7f18d0737",
+  "sha256": "5fd8edb5a81e328ca03c726e9459a12be552aff7565f3b0da25748b967358417",
   "model": "deepseek/deepseek-v4-flash-0731",
   "model_source": "trial",
   "blocks": 93,
@@ -45,7 +45,7 @@
     {
       "block": 8,
       "verdict": "SUPPORTED",
-      "why": "adr-template.md states the Decision line records what was chosen and the one reason carrying the most weight, `Rejected because` gives one line per losing option, and Revisit trigger is required for one-way doors, matching all claims in the block."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 9,
@@ -55,7 +55,7 @@
     {
       "block": 10,
       "verdict": "SUPPORTED",
-      "why": "PLAN-template.md lists exactly Goal, Current state, Success requirements, Appetite, Architecture, Key decisions, Non-negotiables, No-gos, Rabbit holes, Assumptions ledger, External dependencies, Pre-mortem, and Phases as the required sections."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 11,
@@ -255,7 +255,7 @@
     {
       "block": 50,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "The manifest JSON has no processes field or process-file entries, and arc-kickoff.md's own banner says it is a GENERATED FILE — DO NOT EDIT whose source of truth is a process file in the arc-engine repo that must be changed and recompiled, matching the block's claims."
     },
     {
       "block": 51,
@@ -325,7 +325,7 @@
     {
       "block": 64,
       "verdict": "SUPPORTED",
-      "why": "kickoff-lint.mjs and trial-ledger.md confirm that trial groups WARN until /arc-retro promotes them, promotion requires fixture-proven bats failure plus at least three clean dogfood runs with zero false-positives, `appetite-sum` left TRIAL, the ledger calls the threshold not a proof of correctness, and the lint prints a [trial-status] line with live-versus-trial counts."
+      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
     },
     {
       "block": 65,
@@ -375,7 +375,7 @@
     {
       "block": 74,
       "verdict": "SUPPORTED",
-      "why": "carried: this exact block was judged SUPPORTED on 2026-09-27"
+      "why": "arc-develop.md says it turns an approved phase into small, spec-anchored increments, arc-kickoff.md has plan write phases/phase-NN-spec.md from the template, and spec-fidelity.md calls that file the contract both it and develop work against."
     },
     {
       "block": 75,
@@ -481,7 +481,9 @@
     5,
     6,
     7,
+    8,
     9,
+    10,
     11,
     12,
     13,
@@ -521,7 +523,6 @@
     47,
     48,
     49,
-    50,
     51,
     52,
     53,
@@ -535,6 +536,7 @@
     61,
     62,
     63,
+    64,
     65,
     66,
     67,
@@ -544,7 +546,6 @@
     71,
     72,
     73,
-    74,
     75,
     76,
     77,
@@ -615,7 +616,7 @@
     "8a25a612455afd0d58cd3a1fa45ee23898df1cd0f928a99239699131eb2a6cf3": "2026-09-27",
     "fb597326907ba4ccd944ade0f154f3115fb760f860259b1283dca09f58fecc9a": "2026-09-27",
     "5e0fc92fe6eb5bc9185dd51a9a2d5e20e9ccd887a54e8f7a7efa4b7a1f62ffc2": "2026-09-27",
-    "6405da53ad52689d4258d979b3f0046b993db9f310bab7a7090cb582cfa100e8": "2026-09-27",
+    "8d7dd5787d762813a9f7ffdc7f023b09df50363ed63dbef2acdf2a05623cfc19": "2026-09-27",
     "2937f9551a994c73241ab914432dd77513d28f8e41995e6f99e3975f86a1e9e4": "2026-09-27",
     "1ff362344f3bd53ff4e6d057b48902f74015a8871c3c3c5c88c8b99daea44873": "2026-09-27",
     "8b0f73978a620b0627ceda9f3584f6d2afaccc6e94e5ef78d5e4d60d57995996": "2026-09-27",
@@ -639,7 +640,7 @@
     "6844b82b751a1fedc32eaf1e9eb542dd009d57c91053a1ad26ba0921b9e26292": "2026-09-27",
     "c87d79ae0f0827821075b7d293c2c3d63a7d280fecdc57fc8fd96b934627a40e": "2026-09-27",
     "5af9e227fc07281e647a74e8121ab241041b0998640236eeeb64c99e9c7c96ee": "2026-09-27",
-    "6394734982d8298310f7ff3c92e703f94f732ae43b63121c769b7b885f2ca64d": "2026-09-27",
+    "747053bbc4b49301ab6ea29286999b0c24af2106e7ce6da9088430d350cf0c6b": "2026-09-27",
     "7126fa332895a700d05b927f333e3f7599f050fe7904530c830545a09f1c3fe8": "2026-09-27",
     "bd966035b15b42319e601d590c908740a6d59d4dcdf8b7e84b5ca5bd1df43f19": "2026-09-27",
     "0ceeeb7a5f418c05171a73adabefe888987d90be1a0d9ea69e6266de44f92de7": "2026-09-27",
@@ -660,6 +661,6 @@
     "77d3d45030f57b6ed8c188ac8ce143ffa811eb98947a12f9e0c84aa9142e6aac": "2026-09-27",
     "8762c84f9351dcd7b44ba29eefbdefae917877ac649cd59faf8a978844fb01b4": "2026-09-27"
   },
-  "verified": "2026-09-27T15:42:01.896Z",
+  "verified": "2026-09-27T17:09:37.233Z",
   "accepted": null
 }
