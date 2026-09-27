@@ -94,8 +94,10 @@ teardown() { _arc_teardown 2>/dev/null || true; }
     // status enum and says a new access pattern is a schema bump, not a free-text column.
     const want = {
       // ADR-1412 amendment 2026-09-27: lapa-ninja and saasframe went off on the first real
-      // build (a Claude block, a shared CDN); nicelydone and collectui replaced them.
-      "lapa-ninja": "off", "saasframe": "off", "nicelydone": "active", "collectui": "active", "saasui": "active",
+      // build (a Claude block, a shared CDN); nicelydone and collectui replaced them. saasui went
+      // off the same day (screens on a shared CDN), and screensdesign was born off (its terms).
+      "lapa-ninja": "off", "saasframe": "off", "nicelydone": "active", "collectui": "active", "saasui": "off",
+      "screensdesign": "off",
       "awwwards": "active",
       "godly": "off", "dribbble": "off", "behance": "off",
       "land-book": "off", "page-collective": "off",

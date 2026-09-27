@@ -79,3 +79,20 @@ the same day: **nicelydone.club** and **collectui.com** go **active**. Each serv
 as plain text allowing `ClaudeBot` and `Claude-User` on both the page host and the image host, and
 neither publishes terms at the usual paths. The rule did not change; the table did, which is the
 mechanism working. The preflight per fetch still decides every request.
+
+### Second change, same day: saasui off, screensdesign born off
+
+collectui is a client-rendered app, so a plain fetch reaches no screen URL. The owner then made
+**saasui.design** active. Its homepage images were on its own host, but every screen on an
+application page is on **cdn.sanity.io**, a CDN shared by every Sanity project: the SaaSFrame
+case again. The site's `/_next/image` proxy is on saasui.design, but its query (~120 bytes) is
+past the curator's 64-byte cap (ADR-1420). The owner declined widening that boundary for one
+gallery, so the row goes **off**.
+
+**screensdesign.com** was scouted as the replacement. robots allows both agents, and every screen
+image is on its own `media.screensdesign.com`. But its Terms of Service §(e) forbid "any robot,
+spider, scraper, or other automated means" without prior written consent. It is recorded **off**
+so it is not scouted again. The lesson is about order: a homepage count is not the screen pages,
+and the terms page is read before any probe, not after.
+
+That leaves one working source (nicelydone), and REQ-04's "≥2 active sources" is unmet again.

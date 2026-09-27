@@ -118,13 +118,36 @@ sources:
       - provenance
     auth: none
     cost: free
-    status: active
+    status: off
     availability: unknown
     approved_by: ashiq
     added: 2026-09-27
     # SaaS product screens. Added by the owner on 2026-09-27 when collectui proved unreachable by
-    # a plain fetch: robots.txt is plain text allowing ClaudeBot and Claude-User, and every image
-    # on its homepage (51 of 51) is served from its own host.
+    # a plain fetch: robots.txt is plain text allowing ClaudeBot and Claude-User. OFF the same
+    # day: the 51-of-51 own-host count was the homepage only; every screen on an application
+    # page is on cdn.sanity.io, a shared CDN that is not this row's host (the saasframe rule).
+    # Its /_next/image proxy sits on saasui.design but needs a ~120-byte query past the
+    # curator's 64-byte cap (ADR-1420); the owner declined that boundary change 2026-09-27.
+
+  - id: screensdesign
+    kind:
+      - inspiration
+    access: fetch
+    hosts:
+      - screensdesign.com
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: none
+    cost: free
+    status: off
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-09-27
+    # Scouted 2026-09-27 as saasui's replacement: robots.txt allows ClaudeBot and Claude-User and
+    # every screen image is on its own media.screensdesign.com. OFF on terms, not robots: its
+    # Terms of Service section (e) forbid any robot, spider or scraper without prior written
+    # consent (the dribbble rule). Mostly iOS screens as well, a weak fit for a desktop brief.
 
   # ---- active, but citation only: permitted to link, never to cache ----
   - id: awwwards
