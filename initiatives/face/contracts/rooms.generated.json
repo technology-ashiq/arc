@@ -714,6 +714,7 @@
           "design-curator",
           "design-director",
           "design-jury",
+          "design-jury-hj",
           "design-reviewer (legacy)",
           "ui-composer"
         ],
@@ -737,7 +738,7 @@
           "1400"
         ]
       },
-      "itemCount": 24
+      "itemCount": 25
     },
     {
       "id": "toolbelt",

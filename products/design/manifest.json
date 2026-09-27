@@ -13,7 +13,8 @@
     ".claude/agents/design-director.md",
     ".claude/agents/design-jury.md",
     ".claude/agents/ui-composer.md",
-    ".claude/agents/design-curator.md"
+    ".claude/agents/design-curator.md",
+    ".claude/agents/design-jury-hj.md"
   ],
   "scripts": [
     ".claude/scripts/design/composer-bash-check.sh",
@@ -25,6 +26,7 @@
     ".claude/scripts/design/design-gate.sh",
     ".claude/scripts/design/design-lint.mjs",
     ".claude/scripts/design/design-refpack.mjs",
+    ".claude/scripts/design/design-jury.mjs",
     ".claude/scripts/design/design-render-serve.mjs",
     ".claude/scripts/design/design-render.sh",
     ".claude/scripts/design/design-robots.mjs",

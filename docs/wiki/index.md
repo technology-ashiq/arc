@@ -10,12 +10,12 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Processes](#processes) | 13 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 16 | 0 |
 | [Commands](#commands) | 28 | 0 |
-| [Agents](#agents) | 31 | 0 |
+| [Agents](#agents) | 32 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **136** | **3** |
+| **Total** | **137** | **3** |
 
-Narrative debt: **133 of 136** pages have no narrative yet. ADR headers: 268 of 333 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **134 of 137** pages have no narrative yet. ADR headers: 268 of 333 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -24,7 +24,7 @@ Narrative debt: **133 of 136** pages have no narrative yet. ADR headers: 268 of 
 | [absorb](products/absorb.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 8 |
 | [core](products/core.md) | 1.0.0 | — | 5 | 2 | 33 |
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
-| [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 5 | 15 |
+| [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 6 | 16 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
 | [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 5 |
 | [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 32 |
@@ -155,7 +155,8 @@ Narrative debt: **133 of 136** pages have no narrative yet. ADR headers: 268 of 
 | [design-critic](agents/design-critic.md) | sonnet | Read-only design critic. Reads the rendered screenshot back with vision, judges the surface against the brief's four contracts, and writes ONE critique artifact classing every finding VIOLATION / WEAKNESS / POLISH. Never edits product code and never scores. Invoked between design-critique.sh begin and finish. |
 | [design-curator](agents/design-curator.md) | sonnet | Builds a per-brief reference pack of real screens from the registry's active galleries via design-refpack.mjs: robots.txt preflight per fetch, 5-8 screens from every active source that answers, an adaptable principle and avoid-this per screen. |
 | [design-director](agents/design-director.md) | opus | Explore-mode director. Assigns three DIFFERENT product-structure theses from the brief, fills the IA-difference matrix at assignment time, and after the variants exist writes the explicit ≥3/7 divergence call — rejecting same-app-different-styling with at most one reassignment round. Never touches variant code. |
-| [design-jury](agents/design-jury.md) | sonnet | Explore-mode blind juror. Ranks FOUR unlabelled items — the three variants plus a world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact. |
+| [design-jury](agents/design-jury.md) | sonnet | Explore-mode blind juror. Ranks N unlabelled items — the explore's variants plus at least one world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact. |
+| [design-jury-hj](agents/design-jury-hj.md) | opus | Explore-mode blind juror at the high-judgment seat (ADR-1414): the same contract as design-jury, read from .claude/agents/design-jury.md, ranking N unlabelled items. One seat per panel, so the panel is model-mixed by construction (ADR-1405). |
 | [design-reviewer](agents/design-reviewer.md) | sonnet | UI/UX design reviewer that scores each design dimension 0-10, detects AI slop, then FIXES what it finds with atomic commits and before/after screenshots. Invoked by /arc-design for UI work. |
 | [log-analyzer](agents/log-analyzer.md) | sonnet | Diagnoses errors, stack traces and incident logs via differential diagnosis and first-error analysis, returning root cause + minimal fix + prevention. Use when debugging errors, crashes, or incidents. |
 | [pattern-miner](agents/pattern-miner.md) | sonnet | Finds prior art for ONE declared product, UX, architecture or external-API decision and returns a Pattern Annex of at most 20 lines, every row carrying a source and an adopted-or-rejected verdict. Decision-triggered, never ambient, never a background crawl. At most 3 run in parallel. |

@@ -22,6 +22,9 @@
 #   design-explore.sh render <id>                 # one shared render command, all variants
 #   design-explore.sh status <id>                 # where this explore stands
 #   design-explore.sh surfaces|coverage|selfreview <id>   # the REQ-03 / REQ-02b gates
+#   design-explore.sh jury <id> --n N --seed S --ref <sha16> [--ref ...] [--viewport WxH]
+#                                                 # deal N blinded items, seal the key (Phase 03 S1)
+#   design-explore.sh jury-check <id>             # every ranking against the key; deviations logged
 #
 # compose/compose-done are the bookends, and they are the reason the gates are reachable at
 # all: the three of them shipped with zero production callers, so nothing armed the marker
@@ -767,6 +770,14 @@ EOF
     exit 0
     ;;
 
+  jury|jury-check)
+    # The jury step (Phase 03 S1, ADR-1405). Its logic is a node module, not a program in this
+    # shell string: it parses rankings and hashes images, and belongs in its own file.
+    command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- the jury needs it" >&2; exit 1; }
+    if [ "$CMD" = "jury" ]; then sub=deal; else sub=check; fi
+    node "$DESIGN_DIR/design-jury.mjs" "$sub" --root "$ROOT" --id "$ID" "$@"
+    exit $?
+    ;;
   render)
     [ -d "$EX" ] || { echo "design-explore: no explore '$ID'" >&2; exit 1; }
     # AN ARGUMENT LOOP, because this branch had none and silently swallowed everything after

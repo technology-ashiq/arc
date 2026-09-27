@@ -776,7 +776,7 @@
     }
   },
   "agents": {
-    "$comment": "31; every card shows its ADR-0069 tier; census in model-policy",
+    "$comment": "32; every card shows its ADR-0069 tier; census in model-policy",
     "map": {
       "council-advocate": "council-chamber",
       "council-skeptic": "council-chamber",
@@ -808,7 +808,8 @@
       "design-critic": "design-studio",
       "design-jury": "design-studio",
       "design-reviewer (legacy)": "design-studio",
-      "design-curator": "design-studio"
+      "design-curator": "design-studio",
+      "design-jury-hj": "design-studio"
     }
   },
   "processes": {
