@@ -235,6 +235,7 @@
           "commit-msg-draft",
           "day-close-roll",
           "kickoff-plan",
+          "narrative-verify",
           "review-diff"
         ],
         "lints": [
@@ -255,7 +256,7 @@
           "0200"
         ]
       },
-      "itemCount": 18
+      "itemCount": 19
     },
     {
       "id": "model-policy",

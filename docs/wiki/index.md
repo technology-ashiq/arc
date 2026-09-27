@@ -7,15 +7,15 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 |---|---|---|
 | [Products](#products) | 17 | 2 |
 | [Lanes](#lanes) | 17 | 1 |
-| [Processes](#processes) | 12 | 0 |
+| [Processes](#processes) | 13 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 16 | 0 |
 | [Commands](#commands) | 28 | 0 |
 | [Agents](#agents) | 30 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **134** | **3** |
+| **Total** | **135** | **3** |
 
-Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 267 of 332 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **132 of 135** pages have no narrative yet. ADR headers: 267 of 332 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -26,8 +26,8 @@ Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 267 of 
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
 | [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 4 | 15 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
-| [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 4 |
-| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 31 |
+| [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 5 |
+| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 32 |
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
@@ -75,6 +75,7 @@ Narrative debt: **131 of 134** pages have no narrative yet. ADR headers: 267 of 
 | [develop-proof](processes/develop-proof.md) | 1.0.0 | Prove the next unproven slice of a LIVE lane from evidence already recorded, and end on its slice.done receipt. |
 | [kickoff-plan](processes/kickoff-plan.md) | 1.0.0 | Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated. |
 | [lesson-log](processes/lesson-log.md) | 1.0.0 | Log one lesson as a docs/retro-log.md row, after the near-duplicate check, and end on its note.logged receipt. |
+| [narrative-verify](processes/narrative-verify.md) | 1.0.0 | Judge every block of one drafted wiki narrative against the sources its anchors name, and return one verdict per block. |
 | [review-diff](processes/review-diff.md) | 1.0.0 | Review the current branch's diff with the code-reviewer subagent; findings archived to docs/reviews/. |
 | [rule-promote](processes/rule-promote.md) | 1.0.0 | Propose one rule for its permanent home as a proposal branch, and end on the approval.requested it raises. |
 

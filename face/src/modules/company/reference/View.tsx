@@ -2,7 +2,7 @@
 // -- which page, which facts, which link resolves, whether the narrative exists -- is fold's; a click only sets the
 // one pick (`at`) or opens a live room.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
-import type { Folded } from './fold.mjs'
+import type { Block, Folded, Span } from './fold.mjs'
 import { DoorRefusal, Empty, HPanel, Reading, RoomHead, SectionLabel } from '../../../ui/bits'
 import { Btn, MONO, UI } from '../../../ui/kit'
 export { BookOpenText as Icon } from '@phosphor-icons/react'
@@ -64,16 +64,18 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
         <div className="grid gap-4">
           <HPanel title={f.entity.heading} hint={f.entity.kind}>
             <SectionLabel>Start here</SectionLabel>
-            {f.entity.hasStartHere && f.entity.startHere.map((p, i) => (
-              <p key={i} className="text-[13.5px] leading-relaxed mb-2" style={{ fontFamily: UI, color: 'var(--text-1)' }}>{p}</p>
-            ))}
+            {f.entity.hasStartHere && <Blocks blocks={f.entity.startBlocks} />}
+            {f.entity.hasMissing && (
+              <p className="text-[12px] mt-1 mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>Not explained on this page yet: <span style={{ fontFamily: MONO }}>{f.entity.missing}</span></p>
+            )}
+            {f.entity.isUnexplained && (
+              <p className="text-[12px] mt-1 mb-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>No narrative explains this yet -- it counts in the explanation debt (ADR-1513).</p>
+            )}
             {!f.entity.hasStartHere && (
               <p className="text-[12.5px] italic" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.entity.pending}</p>
             )}
             <SectionLabel className="mt-4">The bigger loop</SectionLabel>
-            {f.entity.hasLoop && f.entity.loop.map((p, i) => (
-              <p key={i} className="text-[13.5px] leading-relaxed mb-2" style={{ fontFamily: UI, color: 'var(--text-1)' }}>{p}</p>
-            ))}
+            {f.entity.hasLoop && <Blocks blocks={f.entity.loopBlocks} />}
             {!f.entity.hasLoop && (
               <p className="text-[12.5px] italic" style={{ fontFamily: UI, color: 'var(--text-3)' }}>Narrative pending.</p>
             )}
@@ -130,6 +132,61 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
       )}
 
       {f.showNotes && <p className="text-[11.5px] mt-3" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.notes}</p>}
+    </div>
+  )
+}
+
+// The narrative as the fold parsed it (ADR-1347 section 2): every choice -- which kind of block, which kind of span -- is a
+// boolean the fold set; this only draws it. Text is React-escaped, so a tag in the prose shows and never runs.
+function Spans({ spans }: { spans: Span[] }) {
+  return (
+    <>
+      {spans.map((s, i) => (
+        <span key={i}>
+          {s.isText && s.text}
+          {s.isStrong && <strong style={{ fontWeight: 600, color: 'var(--text-1)' }}>{s.text}</strong>}
+          {s.isEm && <em>{s.text}</em>}
+          {s.isLink && <span style={{ color: 'var(--text-1)', textDecoration: 'underline dotted' }}>{s.text}</span>}
+          {s.isCode && <code className="text-[12px] px-1 rounded" style={{ fontFamily: MONO, background: 'var(--bg-2)' }}>{s.text}</code>}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function Blocks({ blocks }: { blocks: Block[] }) {
+  return (
+    <div className="text-[13.5px] leading-relaxed" style={{ fontFamily: UI, color: 'var(--text-1)' }}>
+      {blocks.map((b, i) => (
+        <div key={i} className="mb-2.5">
+          {b.isH2 && <h3 className="text-[15px] font-semibold mt-4 mb-1" style={{ fontFamily: 'var(--font-display)' }}><Spans spans={b.spans} /></h3>}
+          {b.isH3 && <h4 className="text-[13.5px] font-semibold mt-3 mb-1"><Spans spans={b.spans} /></h4>}
+          {b.isH4 && <h5 className="text-[12.5px] font-semibold mt-2 mb-0.5" style={{ color: 'var(--text-2)' }}><Spans spans={b.spans} /></h5>}
+          {b.isPara && <p><Spans spans={b.spans} /></p>}
+          {b.isQuote && <blockquote className="pl-3 italic" style={{ borderLeft: '2px solid var(--line-2)', color: 'var(--text-2)' }}><Spans spans={b.spans} /></blockquote>}
+          {b.isList && !b.isOrdered && (
+            <ul className="list-disc pl-5 grid gap-1">{b.items.map((it, j) => <li key={j}><Spans spans={it.spans} /></li>)}</ul>
+          )}
+          {b.isOrdered && (
+            <ol className="list-decimal pl-5 grid gap-1">{b.items.map((it, j) => <li key={j}><Spans spans={it.spans} /></li>)}</ol>
+          )}
+          {b.isTable && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12.5px] border-collapse">
+                <thead>
+                  <tr>{b.head.map((c, j) => <th key={j} className="text-left font-semibold px-2 py-1.5" style={{ borderBottom: '1px solid var(--line-2)', color: 'var(--text-2)' }}><Spans spans={c.spans} /></th>)}</tr>
+                </thead>
+                <tbody>
+                  {b.rows.map((r, j) => (
+                    <tr key={j}>{r.cells.map((c, k) => <td key={k} className="align-top px-2 py-1.5" style={{ borderBottom: '1px solid var(--line-1)' }}><Spans spans={c.spans} /></td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {b.isCode && <pre className="text-[12px] p-2.5 rounded overflow-x-auto" style={{ fontFamily: MONO, background: 'var(--bg-2)' }}>{b.text}</pre>}
+        </div>
+      ))}
     </div>
   )
 }

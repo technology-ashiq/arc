@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs (main(), CLI flag loop)",
+      "breaking_input": "node .claude/scripts/docs/narrative-anchors.mjs --root (no value following, end of argv) — or `--root A --root B` given twice",
+      "why": "`if (a === \"--root\") { root = resolve(String(argv[++i] ?? \"\")); continue; }` never checks that the next token exists or is non-empty. When `--root` is the last argv token, `argv[++i]` is `undefined`, `?? \"\"` makes it `\"\"`, and `resolve(\"\")` returns `process.cwd()` — the gate silently evaluates whatever directory it happened to be invoked from instead of refusing. A repeated `--root` is also silent last-wins with no diagnostic. A CI script or wrapper that drops the value (a common shell-quoting slip) makes narrative-anchors quietly PASS on an unrelated tree instead of failing loud.",
+      "fix": "Refuse when the next token is missing, starts with `-`, or is empty, and refuse a repeated `--root` by name, the same way `--driver`/`--minutes` are already refused in narrative-verify.mjs.",
+      "twin_of": "Repeated flags were last-wins and an empty value resolved to the cwd -> a repeated or empty flag is refused by name."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-verify.mjs:~104 (verify(), the spawnSync call)",
+      "breaking_input": "Run narrative-verify.mjs against any page with `--driver generic-api` in an environment where secrets (e.g. an API key, a git token) sit in process.env alongside ARC_VERIFY_MODEL/ARC_LLM_API_KEY",
+      "why": "`spawnSync(process.execPath, args, { cwd: ROOT, encoding: \"utf8\", maxBuffer: ..., env: process.env })` hands the child arc-run process the FULL parent environment, unfiltered. arc-run then talks to an external model over the network (`--driver generic-api`) on the caller's behalf. The process's own YAML declares `tools: []` specifically so it sees nothing beyond the blocks/sources it's handed, but the OS-level child still inherits every env var the harness has, including any credential not scoped to this task.",
+      "fix": "Build an explicit allow-listed env for this spawn (ARC_VERIFY_MODEL, ARC_LLM_ENDPOINT/API_KEY, PATH, and whatever arc-run structurally needs) instead of forwarding process.env whole.",
+      "twin_of": "A session child held the door's token -> A child that runs a model gets less env than a deterministic CLI."
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs readTree() (the narrative/receipt readdirSync loops)",
+      "breaking_input": "Place a symlink at docs/wiki/_narrative/products/evil.md pointing to a file outside the repo tree (or to another checkout entirely), then run narrative-anchors --root <repo> or narrative-verify",
+      "why": "`for (const f of readdirSync(nd)) if (f.endsWith(\".md\") && statSync(join(nd, f)).isFile()) narratives[...] = readFileSync(join(nd, f), \"utf8\")` uses `statSync`, which follows symlinks, and never realpath-checks the target against `root`. The same gap applies to the receipts loop (`rd`), which has no `.isFile()` guard at all before `readFileSync`. Every other containment-sensitive read this codebase does resolves and checks a realpath before trusting content; here the text that becomes 'the narrative' (hashed, anchor-checked, and eventually shipped once verified+accepted) can be swapped for arbitrary off-tree bytes via a symlink that is trivial to miss in a diff review.",
+      "fix": "Use `lstatSync`/reject symlinks, or realpath each candidate file and require it to start with `realpathSync(root) + sep` before reading it into `narratives`/`receipts` — the same fence `tracked()` already applies to anchor targets.",
+      "twin_of": "Directory walks with no containment and no type check -> every file AND directory a route reads is realpath-contained and type-checked, exactly as `lanePhases` is."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs anchorProblem() path-shape check",
+      "breaking_input": "An anchor value of `a/b.mjs:hidden` (a colon embedded mid-path, not at index 1) in an environment where `git ls-files` fails (no git binary on PATH, or --root points outside a git repo), so readTree()'s `files` set is null and the fallback tracked() runs",
+      "why": "The rejection regex `/^[A-Za-z]:/` only refuses a drive-letter prefix; a colon appearing later in the path (`a/b.mjs:hidden`) passes every check (`startsWith(\"/\")`, drive-letter, `..`, backslash) and reaches the fallback `tracked()`, which does `existsSync(abs) && statSync(abs).isFile() && realpathSync(abs).startsWith(rootReal + sep)`. On Windows/NTFS a colon mid-path addresses an alternate data stream of the base file (`a/b.mjs`); if that stream exists, stat/realpath can resolve it as a regular file inside the tree, and `tree.read(path)` (a plain `readFileSync`) would then return the ADS content as the anchor's 'source', letting stream-planted bytes stand in for the real, git-tracked file's content.",
+      "fix": "Reject any embedded `:` in the path (not only a leading drive letter) before it reaches tracked()/read(), matching the fix already applied elsewhere in this codebase for NTFS-stream specifiers.",
+      "twin_of": "A specifier holding a colon (an NTFS stream) and one matching a folder only case-insensitively passed, and `..` resolved from the link path, not the real one -> the twin of face-pure's Phase 02 spelling fix, which had not been made here: a fix is applied in every file that resolves paths."
+    }
+  ]
+}

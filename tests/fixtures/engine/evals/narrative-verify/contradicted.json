@@ -1,0 +1,24 @@
+{
+  "note": "Eval fixture (ADR-1513). Block 2 states a number its source contradicts; block 1 is a plain analogy with no fact. `expected` asserts the SHAPE of a verdict list and the one planted CONTRADICTED; wording is free. An all-SUPPORTED answer would be schema-valid and is the negative the harness must be able to tell apart.",
+  "input": {
+    "classification": "external-ok",
+    "page": "products/demo",
+    "blocks": "[1] para: Think of it as a front desk.\n    plain (cites nothing)\n[2] para: The desk retries a failed call five times before it gives up.\n    anchors: demo/retry.mjs",
+    "sources": "===== demo/retry.mjs =====\n// A failed call is retried up to twice with backoff, then reported.\nexport const RETRIES = 2;\n"
+  },
+  "expected": {
+    "page": "products/demo",
+    "verdicts": [
+      {
+        "block": 1,
+        "verdict": "SUPPORTED",
+        "why": "an analogy that states no fact about arc"
+      },
+      {
+        "block": 2,
+        "verdict": "CONTRADICTED",
+        "why": "the source retries up to twice, not five times"
+      }
+    ]
+  }
+}
