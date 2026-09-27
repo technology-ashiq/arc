@@ -22,7 +22,7 @@ _composer_sandbox() {
   mkdir -p "$SANDBOX/$EX/variant-a" "$SANDBOX/$EX/variant-b" \
            "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a" \
            "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-b" \
-           "$SANDBOX/.claude/state/design/refpacks/lexos-v1"
+           "$SANDBOX/.claude/state/design/refpacks/lexos-v1" \n           "$SANDBOX/.claude/state/design/refpacks/lexos-p" \n           "$SANDBOX/.claude/state/design/refpacks/other-brief" \n           "$SANDBOX/docs/design/refpacks/lexos-p"
   printf 'thesis a\n'  > "$SANDBOX/$EX/variant-a/thesis.txt"
   printf 'page a\n'    > "$SANDBOX/$EX/variant-a/index.html"
   printf 'page b\n'    > "$SANDBOX/$EX/variant-b/index.html"
@@ -31,6 +31,12 @@ _composer_sandbox() {
   : > "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a/x.png"
   : > "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-b/x.png"
   : > "$SANDBOX/.claude/state/design/refpacks/lexos-v1/ref-1.png"
+  # The explore records its brief; the pack is keyed by THAT id (Phase 03 S3). lexos-v1/ above is the
+  # explore-id directory the grant used to name, kept as a decoy that must now be refused.
+  printf 'id=lexos-v1\nbrief=docs/design/briefs/lexos-p/brief.md\n' > "$SANDBOX/$EX/explore.txt"
+  : > "$SANDBOX/.claude/state/design/refpacks/lexos-p/ref-1.png"
+  : > "$SANDBOX/.claude/state/design/refpacks/other-brief/ref-9.png"
+  printf '| url | fetched | sha256 |\n' > "$SANDBOX/docs/design/refpacks/lexos-p/sources.md"
 }
 
 _csc() { echo "$SANDBOX/.claude/scripts/design/composer-scope-check.sh"; }
@@ -83,8 +89,26 @@ teardown() { _arc_teardown; }
 
 @test "composer scope: the brief's reference pack is readable" {
   _composer_sandbox; _arm
+  run bash "$(_csc)" ".claude/state/design/refpacks/lexos-p/ref-1.png"
+  [ "$status" -eq 0 ] || { echo "the brief's pack screen was refused: $output"; false; }
+  run bash "$(_csc)" "docs/design/refpacks/lexos-p/sources.md"
+  [ "$status" -eq 0 ] || { echo "the pack's provenance and principles were refused: $output"; false; }
+}
+
+@test "composer scope: the pack is the BRIEF's -- the explore-id dir, another brief's pack and a missing record are refused (Phase 03 S3)" {
+  _composer_sandbox; _arm
   run bash "$(_csc)" ".claude/state/design/refpacks/lexos-v1/ref-1.png"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 2 ] || { echo "the explore-id directory is still granted: $status"; false; }
+  run bash "$(_csc)" ".claude/state/design/refpacks/other-brief/ref-9.png"
+  [ "$status" -eq 2 ] || { echo "another brief's pack was readable: $status"; false; }
+  run bash "$(_csc)" "docs/design/refpacks/lexos-p/other.md"
+  [ "$status" -eq 2 ] || { echo "more than sources.md was granted in the pack's docs dir: $status"; false; }
+  rm "$SANDBOX/docs/design/explore/lexos-v1/explore.txt"
+  run bash "$(_csc)" ".claude/state/design/refpacks/lexos-p/ref-1.png"
+  [ "$status" -eq 2 ] || { echo "with no explore record the pack was still granted -- it must fail closed: $status"; false; }
+  # CONTROL: the composer's own variant is still readable, so each refusal above is the pack rule.
+  run bash "$(_csc)" "docs/design/explore/lexos-v1/variant-a/index.html"
+  [ "$status" -eq 0 ] || { echo "control: own variant refused: $output"; false; }
 }
 
 # ---------- 3. what it REFUSES -- the negative controls ----------
