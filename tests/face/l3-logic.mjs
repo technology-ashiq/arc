@@ -302,6 +302,17 @@ check("the bare token URL arc-dash prints is the HOME route, not 'no route'",
   shell.parseHash("#token=abc").room === null && shell.parseHash("#token=abc").token === "abc");
 check("an empty fragment is not a route", shell.parseHash("").room === null);
 check("a room id is decoded", shell.parseHash("#/council-chamber").room === "council-chamber");
+// Phase 07 (REQ-12): the Reference room opens AT a page, carried in the fragment so the link can be sent and reloaded.
+check("REFERENCE: a page rides the fragment and round-trips through buildHash",
+  shell.parseHash(shell.buildHash("reference", "tok", null, "products/hq")).at === "products/hq" && shell.parseHash("#/reference&at=lanes").at === "lanes");
+check("REFERENCE: a value outside the page grammar is DROPPED, never carried into a pick",
+  ["..%2Fetc", "products%2F..%2Fx", "products/", "Products/x", "a%20b", "products/x%0Ay"].every((v) => shell.parseHash(`#/reference&at=${v}`).at === null)
+  && !shell.buildHash("reference", null, null, "../etc").includes("at="));
+check("REFERENCE: a room links to its first product's page, else its first lane's, else to nothing",
+  shell.referenceAt({ holds: { products: ["memory"], lanes: ["memory"] } }) === "products/memory"
+  && shell.referenceAt({ holds: { lanes: ["face"] } }) === "lanes/face"
+  && shell.referenceAt({ holds: {} }) === null && shell.referenceAt(null) === null
+  && shell.referenceAt({ holds: { products: ["../x"] } }) === null);
 check("building a hash round-trips the room and the token", (() => {
   const h = shell.buildHash("money", "tok");
   const p = shell.parseHash(h);

@@ -27,17 +27,18 @@ import { MONO, UI } from '../ui/kit'
 type ViewProps = { f: Record<string, unknown>; ctx: ModuleViewContext }
 type Folded = { ok: true; f: Record<string, unknown> } | { ok: false; error: unknown }
 
-export default function RoomFrame({ room, attachment, ctx }: { room: Room; attachment: Attachment; ctx: ModuleContext }) {
+export default function RoomFrame({ room, attachment, ctx, seed }: { room: Room; attachment: Attachment; ctx: ModuleContext; seed?: Record<string, string> }) {
   const render = renderFor(room.id, attachment)
   const attached = attachment.attached[room.id]
-  if (render.kind === 'module' && attached) return <ModuleView module={attached} ctx={ctx} />
+  if (render.kind === 'module' && attached) return <ModuleView module={attached} ctx={ctx} seed={seed} />
   return <GenericModule room={room} ctx={ctx} problems={problemsFor(room.id, attachment)} />
 }
 
-function ModuleView({ module: m, ctx }: { module: AttachedModule; ctx: ModuleContext }) {
+function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: ModuleContext; seed?: Record<string, string> }) {
   const { door } = ctx
   const [loaded, setLoaded] = useState<Record<string, Payload>>({})
-  const [picks, setPicks] = useState<Record<string, string>>({})
+  // A room opened AT something (the Reference room's page, from another room's link) starts with that pick.
+  const [picks, setPicks] = useState<Record<string, string>>(() => ({ ...(seed ?? {}) }))
   const [pollTick, setPollTick] = useState(0)
   // Bumped whenever the reads are dropped (a new door, a stamp, a re-read), so the load effect runs again
   // over the EMPTIED payloads even when the fold asks for exactly the same reads as before.

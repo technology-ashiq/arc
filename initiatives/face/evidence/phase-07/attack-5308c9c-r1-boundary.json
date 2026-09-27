@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/src/App.tsx:337",
+      "breaking_input": "A registry where the `reference` room is present but planned or a template, so the rail's openable rule (the `roomLink` / `openableRooms` predicate behind `current` and `groups`) will not open it. `served` is `(shell?.rooms ?? []).some((r) => r.id === 'reference')`, which is true on presence alone.",
+      "why": "The header draws a Reference link on every room that holds a product or lane. Each click calls `open('reference', at)`, which sets `roomId` to a room the shell then refuses, so the user lands on NoSuchRoom or a stub. This is a fifth reader of 'is this room openable', and it is the one reader that skips the filter the rail applies.",
+      "fix": "Derive `served` from the same list the rail uses, for example `groups.some((g) => g.rooms.some(...))` or the `roomLink` predicate. Add a fixture arm with the reference room planned and assert that no Reference link is drawn.",
+      "twin_of": "A room openable by presence -> Ask the rail's own rule (`roomLink`), never re-derive \"openable\"."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/src/App.tsx:337",
+      "breaking_input": "Run the module-frame shell scan over `face/src/App.tsx`. The diff adds the quoted room id `'reference'` twice: in `r.id === 'reference'` and in `open('reference', a)`.",
+      "why": "This is the ledgered defect of a shell or lib file naming a served room as a data key, which the frame scan reads as a room named from shell code. It was already caught once in `money-room.mjs` with the string \"spine\". If the scan covers App.tsx, or reads the file list from `face/src`, this diff turns the frame check red. If the scan does not read App.tsx, the shell now hard-codes a room identity that the registry should supply.",
+      "fix": "Have the registry mark the Reference destination (a manifest or contract field, or the room that homes the wiki extract) and read it from `shell.rooms`. Alternatively, cite the ADR-1346 §6 exemption inside the scan itself, by full path and with the reason.",
+      "twin_of": "A shell file named a served room as a data key, twice -> the module-frame scan reads keys too; name the field for what it holds (`unreadLines`)."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/face/reference-fold.mjs:132",
+      "breaking_input": "Mutate `referenceAt` so that any room holding two or more products returns null, or drop the lane fallback for the rooms that hold only lanes. While at least 15 rooms still link, `linked.length >= 15` holds, `broken` is empty, and `linked.length + unlinked.length === registry.rooms.length` holds.",
+      "why": "`linked` and `unlinked` are the two halves of one filter over `targets`, so their sum equals the total by construction. That clause of the check called 'with + without = every served room' cannot fail. The claim it makes, that every room that CAN link does link, has no independent anchor. The only real bound is a hand-kept floor of 15, and the unlinked room ids are printed but never compared with the rooms whose `holds` carry a valid product or lane.",
+      "fix": "Derive the expected linked set independently from the contract (rooms whose `holds` carry at least one grammar-valid product or lane id, from expected-set.json). Compare that set with the linked ids in both directions. Drop the hand-kept 15 and delete the tautological sum.",
+      "twin_of": "A count derived from the list it counts -> A derived count needs an independent anchor."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/face/reference-fold.mjs:135",
+      "breaking_input": "Change the seed key in App.tsx (`seed={at ? { at } : undefined}`) or the Reference module's declared pick name so they disagree, for example `{ page: at }` against a pick named `at`. Every test in the diff still passes and every header link opens the Reference index.",
+      "why": "The check titled 'a room's link opens the Reference room ON that page (the pick the hash seeds)' calls `foldAt(linked[0].at)` directly. It never goes through `buildHash`, `parseHash`, the `open` handler, `RoomFrame`'s `seed` or `ModuleView`'s `picks` initialiser, so the seam that carries the pick is never crossed. The seed key `at` is a literal in App.tsx that nothing ties to the module's manifest. Only `linked[0]` is folded, so the other linked rooms are unchecked.",
+      "fix": "Add one arm that carries a link end to end: `buildHash('reference', tok, null, at)`, then `parseHash`, then the seed, then the module's initial picks, and folds every linked room's target (not just the first). Read the pick name from the module manifest instead of hard-coding `at`.",
+      "twin_of": "`gather()` was an untested seam -> one test arm crosses every wiring layer end to end."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "face/src/lib/shell.mjs:73",
+      "breaking_input": "Open the Reference room via a room's link, so the address carries `&at=products%2Fhq`. Then set a day in the as-of control. Whatever writes `asof=` into the address calls `buildHash(room, token, day)` without the new fourth argument, so `at` is dropped from the address while the `at` state stays. Reload the page and it opens the Reference index, not the page.",
+      "why": "`buildHash(..., at = null)` defaults silently. The diff updates only `open`, and every other caller keeps compiling and quietly rewrites the address without `at`. A hashchange that then fires (parse, then `setAt(null)`) remounts the room through the new `key` and discards the page the user is on. This is the same defect repeated one route over.",
+      "fix": "Grep every `buildHash(` call site in face/src, and route the address writes through one helper that takes the `{ room, token, asOf, at }` state. Pin the case with a test: set as-of while at is set, and assert the address still carries `at`.",
+      "twin_of": "The twin of a fixed hole, left open one route over -> a fix to a shared deriver's output is applied at EVERY route that serves it; grep the deriver's name, not the route."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/src/App.tsx:356",
+      "breaking_input": "`#/money&at=lanes/face`, or a bare `#at=lanes/face` (which parses to room null with `at` set). `at` is App-level state independent of `roomId`, initialised from the hash for whichever room is open, and it is passed as `seed={{ at }}` to every ModuleView.",
+      "why": "Nothing scopes the seed to the room it was written for. The room `money` (or the home room) mounts with a foreign `picks.at`. Any path that sets `roomId` without going through `open` leaves a stale `at` seeding the next room. The `at` pick is then read by whatever fold happens to declare a pick named `at`.",
+      "fix": "Keep only the seed keys the module's manifest declares as picks, inside ModuleView, and clear `at` wherever `roomId` is set (one setter).",
+      "twin_of": "A stale answer landing on a newer card -> every async answer is keyed to the attempt or plan it was for."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "face/src/lib/shell.mjs:55",
+      "breaking_input": "`#/reference&at=Products/hq` (a case slip) or `#/reference&at=lanes&at=products/hq` (a repeated key).",
+      "why": "An out-of-grammar `at` is dropped to null, so the room opens on the index, which is a type list. The reference fold's own rule is that every pick outside the grammar is LOST, never a type list, but the value never reaches the fold to be named LOST. A repeated `at` resolves silently to the last one, so two contradictory links are indistinguishable from one.",
+      "fix": "Have `parseHash` report a rejected or duplicated `at`, and draw a named 'this page is not in the reference' state in the room. Do not fall back to the index silently.",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "face/src/lib/shell.mjs:94",
+      "breaking_input": "`referenceAt({ holds: { products: [\"../x\", \"memory\"] } })` returns `products/memory` without a word about the skipped id. `referenceAt({ holds: { products: \"memory\" } })` returns null, which looks the same as `{ holds: {} }`.",
+      "why": "`find` silently skips damaged entries and links a later product. A wrong-shaped list reads as 'holds nothing'. The grammar check is run on the stand-in string `t/${x}`, while the returned string is `products/${x}`, and that returned string is never validated itself.",
+      "fix": "Validate the exact string returned (`REFERENCE_AT.test(result)`). Report a damaged holds list as unreadable instead of null, and make the links check count rooms whose holds are damaged.",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "face/src/lib/shell.mjs:80",
+      "breaking_input": "`#/reference&at=constructor`, `at=toString`, or `at=hasOwnProperty/x`. All of these match `[a-z][A-Za-z]{0,31}` and pass the fragment grammar.",
+      "why": "The address bar is now the first path that feeds arbitrary in-grammar strings into the fold as a type key, where before only listed types could be clicked. The drop-list test added in l3-logic contains none of the in-grammar Object.prototype names, and nothing in this diff pins that the fold reads own keys for them.",
+      "fix": "Add `constructor`, `toString`, `valueOf` and `hasOwnProperty` (bare and with `/x`) to the reference-fold 'lost' arm, and assert LOST rather than a type list or another page.",
+      "twin_of": "An id read through the prototype -> Accumulate into null-prototype objects; read keyed maps by OWN property only."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/face/reference-fold.mjs:134",
+      "breaking_input": "A registry with no `reference` room, so `targets.find((x) => x.id === \"reference\")` is undefined and `.at` throws. Also an empty `linked`, where `linked[0].at` throws.",
+      "why": "The throw happens while `check()`'s arguments are being built, at the top level. No FAIL line and no `RAN:` line are printed, only a TypeError stack. That is a crash, not a named failure of the property.",
+      "fix": "Resolve `find` and `linked[0]` into locals first and assert their existence with a named check before dereferencing.",
+      "twin_of": "A suite whose output stops before its `RAN:` line is a crash, never read as the FAIL above it."
+    }
+  ]
+}

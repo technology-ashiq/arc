@@ -23,12 +23,14 @@ import { HEAD_H } from './Rail'
 type Group = { ring: string; rooms: Room[] }
 
 export default function Header({
-  room, mode, inbox, onOpen, mood, onToggleMood, asOf, today, asOfSupported, onAsOf, groups, current,
+  room, mode, inbox, onOpen, mood, onToggleMood, asOf, today, asOfSupported, onAsOf, groups, current, reference, onReference,
 }: {
   room: Room | null
   mode: { label: string; tone: 'live' | 'sim' | 'unknown'; dot: string; title: string }
   inbox: { open: number | null; room: string | null }
   onOpen: (id: string) => void
+  reference: { at: string | null; served: boolean }
+  onReference: (at: string) => void
   mood: Mood
   onToggleMood: () => void
   asOf: string | null
@@ -56,6 +58,9 @@ export default function Header({
               <span className="hidden lg:flex items-baseline gap-2 min-w-0">
                 <span className="text-[13.5px] truncate" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{room.name}</span>
                 <span className="text-[12px] truncate" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{room.ring}</span>
+                {reference.at && reference.served ? (
+                  <button type="button" onClick={() => onReference(reference.at as string)} title={`Its page in the reference: ${reference.at}`} className="text-[12px] cursor-pointer underline decoration-dotted hover:text-(--accent)" style={{ fontFamily: UI, color: 'var(--text-2)' }}>Reference</button>
+                ) : null}
               </span>
             ) : null}
             <span className="hidden md:block w-px h-4" style={{ background: 'var(--line-2)' }} />
