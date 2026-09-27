@@ -188,9 +188,56 @@ _ranking() {
   [ "$status" -eq 1 ] || { echo "an explore with no deal passed: $status $output"; false; }
 }
 
+@test "jury: a meta naming a file outside its render session, a non-image, or a symlinked pack screen is refused (S1 attack B1 B3 L4)" {
+  _fixture 3 1
+  printf 'SECRET=1\n' > .env
+  sha="$(_sha .env)"
+  printf '{"route":"/","png":".env","screenshot_sha256":"%s","viewport":"1440x900@1","iter":99}\n' "$sha" > ".claude/state/design/renders/jx--variant-a/x.json"
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"outside"* ]] || { echo "a meta pointing at .env was dealt: $status $output"; false; }
+  [ ! -e "$(_jury_dir)" ] || { echo "a refused deal claimed the jury dir"; false; }
+  rm ".claude/state/design/renders/jx--variant-a/x.json"
+  printf '<svg/>' > ".claude/state/design/renders/jx--variant-a/r.svg"; sha="$(_sha .claude/state/design/renders/jx--variant-a/r.svg)"
+  printf '{"route":"/","png":".claude/state/design/renders/jx--variant-a/r.svg","screenshot_sha256":"%s","viewport":"1440x900@1","iter":99}\n' "$sha" > ".claude/state/design/renders/jx--variant-a/x.json"
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"not an image file"* ]] || { echo "a non-image render was dealt: $status $output"; false; }
+  rm ".claude/state/design/renders/jx--variant-a/x.json"
+  # CONTROL: with the planted metas gone the same deal goes through, so each red above was its plant.
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "control: $output"; false; }
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) return 0;; esac   # git-bash ln -s copies; the symlink half needs a real one
+  rm -rf "$(_jury_dir)"
+  ref="$(ls .claude/state/design/refpacks/bx/ | head -1)"
+  mv ".claude/state/design/refpacks/bx/$ref" "$BATS_TEST_TMPDIR/$ref"
+  ln -s "$BATS_TEST_TMPDIR/$ref" ".claude/state/design/refpacks/bx/$ref"
+  [ -L ".claude/state/design/refpacks/bx/$ref" ] || { echo "fixture: no symlink"; false; }
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"not a regular file"* ]] || { echo "a symlinked pack screen was dealt: $status $output"; false; }
+}
+
+@test "jury: two deals at once -- exactly one wins, and the winner's items all match its key (S1 attack B2)" {
+  _fixture 3 1
+  bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}" > "$BATS_TEST_TMPDIR/one.txt" 2>&1 & p1=$!
+  bash "$(_explore)" jury jx --n 4 --seed 42 "${REFS[@]}" > "$BATS_TEST_TMPDIR/two.txt" 2>&1 & p2=$!
+  wait "$p1"; r1=$?; wait "$p2"; r2=$?
+  [ $((r1 + r2)) -eq 1 ] || { echo "not exactly one winner: $r1 $r2 $(cat "$BATS_TEST_TMPDIR/one.txt" "$BATS_TEST_TMPDIR/two.txt")"; false; }
+  node -e 'const c=require("crypto"),f=require("fs"),p=require("path");const d=process.argv[1];const k=require(p.join(d,"key.json"));if(f.readdirSync(p.join(d,"items")).length!==k.n)process.exit(2);for(const i of k.items){if(c.createHash("sha256").update(f.readFileSync(p.join(d,"items",i.file))).digest("hex")!==i.sha256)process.exit(1)}' "$(_jury_dir)" \
+    || { echo "the winner's items do not match its key"; false; }
+}
+
+@test "jury-check: a zero-padded ranking file is not a second juror (S1 attack L8)" {
+  _fixture 3 1
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _ranking 1 "item-a item-b item-c item-d"
+  cp "$SANDBOX/docs/design/explore/jx/ranking-1.md" "$SANDBOX/docs/design/explore/jx/ranking-01.md"
+  run bash "$(_explore)" jury-check jx
+  [ "$status" -eq 0 ] && [[ "$output" == *"1 ranking(s), 0 deviation(s)"* ]] || { echo "a zero-padded copy counted as a juror: $status $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 10 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 10 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 13 -- a @test was silently dropped"
     false
   }
 }

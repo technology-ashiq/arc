@@ -18,8 +18,8 @@
 //
 // Exit: 0 ok | 1 refused, or deviations found.
 import { createHash } from "node:crypto";
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, join } from "node:path";
+import { appendFileSync, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, join, relative, sep } from "node:path";
 
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
@@ -30,6 +30,20 @@ const clean = (v) => String(v).replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+
 function fail(msg) { console.log(`design-explore jury: ${clean(msg)}`); process.exit(1); }
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 const validId = (v) => typeof v === "string" && ID.test(v) && !RESERVED.test(v);
+
+// A file the jury copies must be a real image file INSIDE the directory it was found through: not a
+// symlink, not a path a meta names anywhere else under the root. A meta that said `png: ".env"` had
+// the repo's secrets dealt to a model as an item (S1 attack B1); a symlink in the pack did the same
+// through the reference branch (S1 attack L4).
+function inside(file, dir, what) {
+  let st;
+  try { st = lstatSync(file); } catch { fail(`${what} is missing`); }
+  if (st.isSymbolicLink() || !st.isFile()) fail(`${what} is not a regular file`);
+  let rel;
+  try { rel = relative(realpathSync(dir), realpathSync(file)); } catch { fail(`${what} could not be resolved`); }
+  if (!rel || rel.split(sep).includes("..") || /^[A-Za-z]:/.test(rel) || rel.startsWith(sep)) fail(`${what} is outside ${dir}`);
+  if (!IMAGE_EXT.has(extname(file).toLowerCase())) fail(`${what} is not an image file`);
+}
 
 function parse(argv, known, repeat = new Set()) {
   const o = {};
@@ -73,7 +87,7 @@ function deal(argv) {
   const root = o["--root"];
   if (!root) fail("--root is required");
   const ex = exploreOf(root, o["--id"]);
-  if (!/^[0-9]{1,2}$/.test(o["--n"] ?? "")) fail("--n takes the item count, a whole number");
+  if (!/^[1-9][0-9]?$/.test(o["--n"] ?? "")) fail("--n takes the item count, a whole number with no leading zero");
   const n = Number(o["--n"]);
   if (!/^[0-9]{1,10}$/.test(o["--seed"] ?? "") || Number(o["--seed"]) > 4294967295) fail("--seed takes a whole number below 2^32");
   const seed = Number(o["--seed"]);
@@ -81,7 +95,7 @@ function deal(argv) {
   if (!/^[0-9]{2,5}x[0-9]{2,5}$/.test(viewport)) fail("--viewport takes WxH");
   const refs = o["--ref"] ?? [];
   if (refs.length === 0) fail("a jury needs at least one reference item from the brief's pack (--ref <sha16>) -- best-of-the-variants is not a bar");
-  if (existsSync(join(ex.jury, "key.json"))) fail(`this explore was already dealt (${join(ex.jury, "key.json")}); a re-deal after rankings is a re-roll, so it is refused`);
+  if (existsSync(ex.jury)) fail(`this explore was already dealt (${ex.jury}); a re-deal after rankings is a re-roll, so it is refused`);
 
   const items = [];
   // Variants: every variant-<x>/ with an index.html, its highest-iter render at this viewport.
@@ -100,12 +114,11 @@ function deal(argv) {
       if (!best || iter > best.iter) best = { m, iter };
     }
     if (!best) fail(`${v} has no render at ${viewport} (render it first)`);
-    if (best.m.png.includes("..") || best.m.png.startsWith("/") || /^[A-Za-z]:/.test(best.m.png)) fail(`${v}'s meta names a png outside the tree`);
     const file = join(root, best.m.png);
-    if (!existsSync(file)) fail(`${v}'s render ${best.m.png} is missing`);
+    inside(file, sess, `${v}'s render ${best.m.png}`);
     const bytes = readFileSync(file);
     if (sha256(bytes) !== best.m.screenshot_sha256) fail(`${v}'s render bytes no longer match its meta; render again`);
-    items.push({ kind: "variant", source: v, path: file, sha256: best.m.screenshot_sha256, ext: extname(file).toLowerCase() || ".png" });
+    items.push({ kind: "variant", source: v, path: file, sha256: best.m.screenshot_sha256, ext: extname(file).toLowerCase() });
   }
   // References: each --ref is one pack image, bound to a provenance row in the brief's sources.md.
   const packDir = join(root, ".claude", "state", "design", "refpacks", ex.brief);
@@ -120,7 +133,7 @@ function deal(argv) {
     if (hits.length !== 1) fail(`--ref ${r}: ${hits.length} pack image(s) match in ${packDir}; exactly one is needed`);
     const file = join(packDir, hits[0]);
     const ext = extname(file).toLowerCase();
-    if (!IMAGE_EXT.has(ext)) fail(`--ref ${r} is not an image file`);
+    inside(file, packDir, `--ref ${r}`);
     const full = sha256(readFileSync(file));
     if (!full.startsWith(r)) fail(`--ref ${r}: the file's bytes hash to ${full.slice(0, 16)}; the pack was changed`);
     if (!rows.split(/\r?\n/).some((l) => l.startsWith("|") && l.split("|").map((c) => c.trim()).includes(full))) {
@@ -137,8 +150,14 @@ function deal(argv) {
     const j = Math.floor(next() * (i + 1));
     [items[i], items[j]] = [items[j], items[i]];
   }
+  // The claim: a non-recursive mkdir is atomic, so of two concurrent deals exactly one owns the jury dir, and it
+  // is taken only after every check passed. The loser never touches the winner's items (S1 attack B2).
+  mkdirSync(dirname(ex.jury), { recursive: true });
+  try { mkdirSync(ex.jury); } catch (e) {
+    fail(e.code === "EEXIST" ? "this explore was already dealt by another run" : `the jury dir could not be claimed (${e.code || e.message})`);
+  }
   const itemsDir = join(ex.jury, "items");
-  mkdirSync(itemsDir, { recursive: true });
+  mkdirSync(itemsDir);
   const key = { id: basename(ex.dir), brief: ex.brief, n, seed, viewport, dealt: new Date().toISOString(), items: [] };
   items.forEach((it, i) => {
     const label = `item-${LABELS[i]}`;
@@ -167,7 +186,7 @@ function check(argv) {
   try { key = JSON.parse(readFileSync(keyPath, "utf8")); } catch { fail("the sealed key does not parse"); }
   const labels = key.items.map((i) => i.label);
   const kindOf = Object.fromEntries(key.items.map((i) => [i.label, i]));
-  const files = readdirSync(ex.dir).filter((f) => /^ranking-[0-9]+\.md$/.test(f)).sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
+  const files = readdirSync(ex.dir).filter((f) => /^ranking-[1-9][0-9]*\.md$/.test(f)).sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
   if (files.length === 0) fail("no rankings to check -- an empty panel is not a clean one");
 
   const devs = [];
