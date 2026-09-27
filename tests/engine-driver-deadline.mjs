@@ -6,6 +6,8 @@
 //   A. an endpoint that accepts and NEVER answers, a 60 s per-attempt cap and a ~6 s run budget: the run ends on the
 //      deadline (well under one cap), and says so attempt by attempt.
 //   B. an endpoint that answers 503 at once: three attempts, three lines, each naming its status, the last not retrying.
+//   D. ARC_LLM_REASONING=off puts reasoning {enabled: false} on the request, unset leaves no reasoning key at all, and
+//      any other value is refused before the endpoint is reached (ADR-0226 Amendment 3).
 // Asserts each run RAN (a spawned child, a started server) before asserting what it printed.
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -27,14 +29,14 @@ const check = (name, cond, detail = "") => {
 const serve = (handler) => new Promise((ok) => { const s = createServer(handler); s.listen(0, "127.0.0.1", () => ok(s)); });
 
 /** arc-run through generic-api at `port`, with a run budget in minutes. */
-const run = (port, budgetMin, spine) => new Promise((ok) => {
+const run = (port, budgetMin, spine, extraEnv = {}) => new Promise((ok) => {
   const t0 = Date.now();
   const child = spawn(process.execPath, [join(REPO, ".claude/scripts/engine/arc-run.mjs"), "--process", "commit-msg-draft", "--driver", "generic-api",
     "--trial-model", "deepseek/deepseek-v4-flash-0731", "--budget", `min=${budgetMin}`, "--root", REPO], {
     env: { ...process.env, ARC_LLM_ENDPOINT: `http://127.0.0.1:${port}/v1/chat/completions`, ARC_LLM_API_KEY: "test-key-not-a-secret",
       ARC_LLM_TIMEOUT_MS: "60000", ARC_SPINE_ROOT: spine, ARC_DRIVER_FAKE: "",
       // Stream mode, as arc-attack runs it: the driver's lines reach this stderr as they happen, whatever the verdict.
-      ARC_RUN_STREAM: "1" },
+      ARC_RUN_STREAM: "1", ...extraEnv },
     windowsHide: true,
   });
   let err = "";
@@ -85,8 +87,33 @@ try {
     check("C: forty digits are refused as malformed, never read as Infinity (no deadline); a real epoch is read",
       huge.malformed === true && typeof ok.ms === "number" && ok.ms > 50_000 && ok.ms <= 60_000, JSON.stringify({ ok, huge }));
   }
+  // ---- D. the reasoning knob: off is sent, unset is absent, anything else never reaches the endpoint ----
+  {
+    const bodies = [];
+    const s = await serve((req, res) => {
+      let b = ""; req.on("data", (c) => { b += c; });
+      req.on("end", () => { bodies.push(b); res.writeHead(400, { "content-type": "application/json" }); res.end("{}"); });
+    });
+    const port = s.address().port;
+    await run(port, 2, join(tmp, "spine-d1"), { ARC_LLM_REASONING: "off" });
+    const off = bodies.length;
+    await run(port, 2, join(tmp, "spine-d2"), { ARC_LLM_REASONING: undefined });
+    const unset = bodies.length;
+    const bad = await run(port, 2, join(tmp, "spine-d3"), { ARC_LLM_REASONING: "on" });
+    s.close();
+    const parse = (i) => { try { return JSON.parse(bodies[i]); } catch { return null; } };
+    check("fixture: the off run and the unset run each reached the endpoint (vacuous-pass guard)", off >= 1 && unset > off, `off=${off} unset=${unset}`);
+    const o = parse(0);
+    check("D: ARC_LLM_REASONING=off sends reasoning {enabled: false}",
+      !!o && JSON.stringify(o.reasoning) === JSON.stringify({ enabled: false }), String(bodies[0]).slice(0, 200));
+    const u = parse(off);
+    check("D: unset sends no reasoning key at all, so the request keeps its old shape",
+      !!u && !Object.hasOwn(u, "reasoning") && Array.isArray(u.messages), String(bodies[off]).slice(0, 200));
+    check("D: any other value is refused before the endpoint is reached",
+      bad.code !== 0 && bodies.length === unset && /ARC_LLM_REASONING="on" is not "off" or unset/.test(bad.err), `code=${bad.code} bodies=${bodies.length} err=${bad.err.slice(-300)}`);
+  }
 } finally {
   try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { console.log(`WARN the scratch dir was not removed: ${tmp} (${e.code || "error"})`); }
 }
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 6 ? 0 : 1;
+process.exitCode = failed === 0 && ran === 10 ? 0 : 1;
