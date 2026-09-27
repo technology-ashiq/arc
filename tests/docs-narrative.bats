@@ -72,8 +72,22 @@ VERIFY="$ARC_ROOT/.claude/scripts/docs/narrative-verify.mjs"
   [ ! -e "$ARC_ROOT/docs/narrative-verify/products/zz-no-such-page.json" ] || { echo "a receipt appeared"; false; }
 }
 
-@test "docs-narrative: this suite registers all 6 of its tests" {
+@test "narrative-anchors and narrative-verify: a flag with no value is refused, and arc-run gets only ARC_ and OS variables" {
+  run node "$GATE" --root
+  [[ "$output" == *"--root needs a directory"* ]] || { echo "no refusal (exit $status): $output"; false; }
+  [ "$status" -eq 2 ]
+  run node --input-type=module -e "
+    import { pathToFileURL } from 'node:url';
+    const v = await import(pathToFileURL(process.argv[1]).href);
+    const e = v.childEnv({ PATH: 'p', ARC_VERIFY_MODEL: 'm', GITHUB_TOKEN: 'secret', AWS_SECRET_ACCESS_KEY: 'k' });
+    console.log('env ' + Object.keys(e).sort().join(','));
+  " "$VERIFY"
+  [[ "$output" == *"env "* ]] || { echo "the probe never ran (exit $status): $output"; false; }
+  [[ "$output" == *"env ARC_VERIFY_MODEL,PATH"* ]] || { echo "$output"; false; }
+}
+
+@test "docs-narrative: this suite registers all 7 of its tests" {
   local n
   n="$(grep -c '^@test ' "$ARC_ROOT/tests/docs-narrative.bats")"
-  [ "$n" -eq 6 ] || { echo "registered $n tests, expected 6"; false; }
+  [ "$n" -eq 7 ] || { echo "registered $n tests, expected 7"; false; }
 }

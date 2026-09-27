@@ -24,8 +24,10 @@ import { VERIFY_DIR, anchorProblem, blocksOf, readTree, receiptProblem, sha256 }
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
 const PAGE = /^(products|lanes|processes|commands|agents|rules|gates|adr)\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
-/** A source is inlined whole up to this, else the lines around its symbol: the verifier judges text, not a pointer. */
-const SOURCE_CAP = 12000;
+/** A source is inlined up to this, else the lines around its symbol: the verifier judges text, not a pointer. */
+const SOURCE_CAP = 5000;
+/** One run's input stays under this: a whole page's sources (160-835KB) timed out on every model tried. */
+export const CHUNK_BYTES = 50000;
 
 /**
  * The text an anchor stands for, labelled. A file with a symbol gives the 60 lines around its first mention.
@@ -36,7 +38,11 @@ export function sourceOf(anchor, t) {
   const adr = /^ADR-(\d{4})$/.exec(a);
   if (adr) {
     const f = execFileSync("git", ["ls-files", `docs/adr/${adr[1]}-*.md`], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean)[0] || "";
-    return f ? t.tree.read(f).slice(0, SOURCE_CAP) : "";
+    if (!f) return "";
+    // An ADR's title and its Decision are what a claim cites; the context before them is where the cap would cut.
+    const text = t.tree.read(f);
+    const d = text.indexOf("## Decision");
+    return d < 0 ? text.slice(0, SOURCE_CAP) : `${text.split("\n")[0]}\n...\n${text.slice(d, d + SOURCE_CAP)}`;
   }
   if (a.startsWith("fact:")) {
     const m = /^fact:([a-zA-Z]+)\/(.+)\.([A-Za-z][A-Za-z0-9-]*)$/.exec(a);
@@ -50,16 +56,53 @@ export function sourceOf(anchor, t) {
   if (hash < 0 || text.length <= SOURCE_CAP) return text.slice(0, SOURCE_CAP);
   const lines = text.split("\n");
   const at = Math.max(0, lines.findIndex((l) => l.includes(a.slice(hash + 1))));
-  return lines.slice(Math.max(0, at - 20), at + 40).join("\n");
+  return lines.slice(Math.max(0, at - 15), at + 35).join("\n").slice(0, SOURCE_CAP);
 }
 
-/** The process input for one page: the numbered blocks and every distinct source, both inlined. */
+/**
+ * The process inputs for one page: its blocks, numbered for the whole page, cut into chunks that each carry only the
+ * sources their own blocks cite and stay under CHUNK_BYTES. A block too big for a chunk of its own still gets one.
+ * `input` is the first chunk's (a page that fits is one chunk).
+ */
 export function inputFor(page, text, t) {
   const blocks = blocksOf(text);
-  const lines = blocks.map((b) => `[${b.n}] ${b.kind}: ${b.text}\n    ${b.plain ? "plain (cites nothing)" : `anchors: ${b.anchors.join("; ")}`}`);
-  const anchors = [...new Set(blocks.flatMap((b) => b.anchors))];
-  const sources = anchors.map((a) => `===== ${a} =====\n${sourceOf(a, t)}`);
-  return { blocks, input: { classification: "external-ok", page, blocks: lines.join("\n"), sources: sources.join("\n\n") } };
+  /** @type {Map<string, string>} */
+  const src = new Map();
+  const sourceText = (/** @type {string} */ a) => { if (!src.has(a)) src.set(a, `===== ${a} =====\n${sourceOf(a, t)}`); return String(src.get(a)); };
+  /** @type {{ numbers: number[], input: Record<string, string> }[]} */
+  const chunks = [];
+  /** @type {{ lines: string[], anchors: Set<string>, numbers: number[], bytes: number }} */
+  let cur = { lines: [], anchors: new Set(), numbers: [], bytes: 0 };
+  const flush = () => {
+    if (!cur.numbers.length) return;
+    chunks.push({ numbers: cur.numbers, input: { classification: "external-ok", page, blocks: cur.lines.join("\n"), sources: [...cur.anchors].map(sourceText).join("\n\n") } });
+    cur = { lines: [], anchors: new Set(), numbers: [], bytes: 0 };
+  };
+  for (const b of blocks) {
+    const line = `[${b.n}] ${b.kind}: ${b.text}\n    ${b.plain ? "plain (cites nothing)" : `anchors: ${b.anchors.join("; ")}`}`;
+    const added = line.length + b.anchors.filter((a) => !cur.anchors.has(a)).reduce((n, a) => n + sourceText(a).length, 0);
+    if (cur.numbers.length && cur.bytes + added > CHUNK_BYTES) flush();
+    cur.lines.push(line);
+    for (const a of b.anchors) cur.anchors.add(a);
+    cur.numbers.push(b.n);
+    cur.bytes += line.length + b.anchors.reduce((n, a) => n + sourceText(a).length, 0);
+  }
+  flush();
+  const first = chunks[0] ? chunks[0].input : { classification: "external-ok", page, blocks: "", sources: "" };
+  return { blocks, input: first, chunks };
+}
+
+/**
+ * The environment arc-run is handed: arc's own ARC_* settings and what a process needs to start on each OS, nothing
+ * else -- a credential the caller happens to hold is not the verifier's to carry (attack 845e0a5 B2).
+ * @param {NodeJS.ProcessEnv} env
+ */
+export function childEnv(env) {
+  const OS = new Set(["PATH", "Path", "PATHEXT", "SYSTEMROOT", "SystemRoot", "WINDIR", "COMSPEC", "ComSpec", "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "LANG", "LC_ALL", "SHELL", "USER", "USERNAME", "HOMEDRIVE", "HOMEPATH", "MSYSTEM"]);
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const [k, v] of Object.entries(env)) if (typeof v === "string" && (OS.has(k) || k.startsWith("ARC_"))) out[k] = v;
+  return out;
 }
 
 function usage(msg) { console.error(`narrative-verify: ${msg}`); return 2; }
@@ -89,24 +132,40 @@ async function verify(page, driver, minutes) {
   if (text === undefined) return usage(`no narrative for ${page} under docs/wiki/_narrative/`);
   const unresolved = blocksOf(text).flatMap((b) => b.anchors.map((a) => [a, anchorProblem(a, t.tree)])).filter(([, w]) => w);
   if (unresolved.length) { for (const [a, w] of unresolved) console.log(`UNRESOLVED ${a}: ${w}`); return usage("fix the anchors first -- a verifier cannot judge a source that is not there"); }
-  const { blocks, input } = inputFor(page, text, t);
+  const { blocks, chunks } = inputFor(page, text, t);
   const model = process.env.ARC_VERIFY_MODEL || "";
   if (driver !== "mock" && !model) return usage("set ARC_VERIFY_MODEL (a non-Claude model id) and ARC_LLM_ENDPOINT / ARC_LLM_API_KEY");
   const dir = mkdtempSync(join(tmpdir(), "narrative-verify-"));
   try {
-    const inFile = join(dir, "in.json");
-    writeFileSync(inFile, JSON.stringify(input));
-    const args = [join(ROOT, ".claude", "scripts", "engine", "arc-run.mjs"), "--process", "narrative-verify", "--root", ROOT, "--input", `@${inFile}`, "--budget", `min=${minutes}`];
-    if (driver === "mock") args.push("--driver", "mock");
-    else args.push("--driver", "generic-api", "--trial-model", model);
-    const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, env: process.env });
-    if (r.status !== 0) { console.log(`RUN FAILED (arc-run exit ${r.status}): ${String(r.stderr).trim().split("\n").slice(-4).join(" | ")}`); return 1; }
-    let doc;
-    try { doc = JSON.parse(r.stdout); } catch { console.log("RUN FAILED: arc-run printed no JSON"); return 1; }
+    /** @type {any[]} */
+    const verdicts = [];
+    for (const [ci, c] of chunks.entries()) {
+      const inFile = join(dir, `in-${ci}.json`);
+      writeFileSync(inFile, JSON.stringify(c.input));
+      const args = [join(ROOT, ".claude", "scripts", "engine", "arc-run.mjs"), "--process", "narrative-verify", "--root", ROOT, "--input", `@${inFile}`, "--budget", `min=${minutes}`];
+      if (driver === "mock") args.push("--driver", "mock");
+      else args.push("--driver", "generic-api", "--trial-model", model);
+      const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, env: childEnv(process.env) });
+      const label = `chunk ${ci + 1}/${chunks.length} (blocks ${c.numbers[0]}-${c.numbers[c.numbers.length - 1]}, ${JSON.stringify(c.input).length} bytes)`;
+      // arc-run prints the answer before it tries the receipt, so a worktree's refused emit is not a failed judgement;
+      // an answer that is not the contract is.
+      let doc = null;
+      try { doc = JSON.parse(r.stdout); } catch { doc = null; }
+      if (!doc || !Array.isArray(doc.verdicts)) {
+        const cause = String(r.stderr).split("\n").find((l) => /^arc-run: /.test(l) && !/could not emit|NO destination is set/.test(l)) || `exit ${r.status}`;
+        console.log(`RUN FAILED ${label}: ${cause}`);
+        return 1;
+      }
+      const own = new Set(c.numbers);
+      const stray = doc.verdicts.filter((v) => !v || !own.has(v.block));
+      if (stray.length) { console.log(`RUN FAILED ${label}: verdicts for blocks outside this chunk (${stray.map((v) => v && v.block).join(",")})`); return 1; }
+      verdicts.push(...doc.verdicts);
+      console.log(`  ${label}: ${doc.verdicts.length} verdict(s)`);
+    }
     const receipt = {
       schema: 1, page, sha256: sha256(text),
       model: driver === "mock" ? "mock" : model, model_source: driver === "mock" ? "mock" : "trial",
-      blocks: blocks.length, verdicts: Array.isArray(doc.verdicts) ? doc.verdicts : [],
+      blocks: blocks.length, chunks: chunks.length, verdicts: verdicts.sort((a, b) => a.block - b.block),
       verified: new Date().toISOString(), accepted: null,
     };
     const file = join(ROOT, VERIFY_DIR, `${page}.json`);

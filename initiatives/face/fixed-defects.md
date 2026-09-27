@@ -882,3 +882,11 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A second writer of the address that forgot a field** -- the as-of control rewrote the hash without `at` (B5). *Every `buildHash(` call site passes the whole address state; grep the call sites, not the function.*
 - **State seeded into rooms it does not belong to** -- `at` was handed to every room's picks (B6). *Seed only the room the value names.*
 - **Unguarded lookups in a test** -- `find(...).at` and `linked[0]` threw instead of failing a named check (B10). *A test resolves and asserts before it dereferences.*
+
+## Phase 07 slice 1+2 -- rich narrative, narrative-anchors, narrative-verify (attack 845e0a5, round 1: boundary B1-B4)
+
+- **A flag with no value fell back to the cwd** -- `--root` as the last argument evaluated whatever directory the shell was in (B1). *A value-taking flag refuses a missing, empty, dash-led or repeated value by name.*
+- **A child handed the whole environment** -- the verifier spawned arc-run with every credential the caller held (B2). *A spawn that reaches the network gets an allow-listed env (ARC_* and the OS keys), never process.env whole.*
+- **A listing that followed symlinks** -- a narrative or receipt symlinked out of the tree was read as the tree's own (B3). *Each listed file is lstat'ed regular and realpath'ed inside the root, or rejected by name.*
+- **A path check that knew one colon** -- only a leading drive letter was refused, so `a/b.mjs:stream` reached the filesystem (B4). *Refuse a colon anywhere in a repo-relative path.*
+- **A closed value spelled from memory** -- the receipt check accepted `model_source: routed`, a value arc-run never writes (it writes `router`), found by the engine narrative's drafter. *Take an enum from the file that writes it, not from recall.*

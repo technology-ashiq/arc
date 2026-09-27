@@ -16,7 +16,7 @@
 // every arm FAILs from birth with its mutant (ADR-1503's rule for a gate).
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -129,7 +129,7 @@ export function anchorProblem(anchor, tree) {
   const hash = a.indexOf("#");
   const path = hash < 0 ? a : a.slice(0, hash);
   const symbol = hash < 0 ? "" : a.slice(hash + 1);
-  if (path === "" || path.startsWith("/") || /^[A-Za-z]:/.test(path) || path.split(/[\\/]/).includes("..") || path.includes("\\")) return "not a repo-relative path";
+  if (path === "" || path.startsWith("/") || path.includes(":") || path.split(/[\\/]/).includes("..") || path.includes("\\")) return "not a repo-relative path";
   if (!tree.tracked(path)) return `${path} is not a tracked file`;
   if (symbol) {
     if (!/^[A-Za-z_$][\w$.-]*$/.test(symbol)) return `#${symbol} is not a symbol name`;
@@ -214,7 +214,7 @@ export function receiptProblem(r, page, hash, count) {
   if (r.sha256 !== hash) return "judged other text -- the narrative changed after it was verified; verify it again";
   if (typeof r.model !== "string" || r.model.trim() === "") return "names no model";
   if (/claude|anthropic|opus|sonnet|haiku|fable/i.test(r.model)) return `the verifier ${r.model} is the drafter's family (ADR-0069: agreement within one family is not evidence)`;
-  if (r.model_source !== "trial" && r.model_source !== "routed") return `model_source ${JSON.stringify(r.model_source)}`;
+  if (r.model_source !== "trial" && r.model_source !== "router") return `model_source ${JSON.stringify(r.model_source)}`;
   if (!Array.isArray(r.verdicts)) return "no verdict list";
   const seen = new Set();
   for (const v of r.verdicts) {
@@ -238,13 +238,20 @@ export function readTree(root) {
     if (!wiki || !wiki.entities) throw new Error("wiki-build's extract returned no entities");
     /** @type {Record<string, string>} */ const narratives = Object.create(null);
     /** @type {Record<string, unknown>} */ const receipts = Object.create(null);
+    /** @type {string[]} */ const rejected = [];
+    const rootReal = realpathSync(root);
     for (const type of wb.RENDERED) {
       const dir = String(wb.PAGE_DIRS[type]);
       const nd = join(root, wb.WIKI_DIR, wb.NARRATIVE_DIR, dir);
-      if (existsSync(nd)) for (const f of readdirSync(nd)) if (f.endsWith(".md") && statSync(join(nd, f)).isFile()) narratives[`${dir}/${f.slice(0, -3)}`] = readFileSync(join(nd, f), "utf8");
+      if (existsSync(nd)) for (const f of readdirSync(nd)) {
+        if (!f.endsWith(".md")) continue;
+        if (!regularInside(join(nd, f), rootReal)) { rejected.push(`${wb.WIKI_DIR}/${wb.NARRATIVE_DIR}/${dir}/${f}`); continue; }
+        narratives[`${dir}/${f.slice(0, -3)}`] = readFileSync(join(nd, f), "utf8");
+      }
       const rd = join(root, VERIFY_DIR, dir);
       if (existsSync(rd)) for (const f of readdirSync(rd)) {
         if (!f.endsWith(".json")) continue;
+        if (!regularInside(join(rd, f), rootReal)) { rejected.push(`${VERIFY_DIR}/${dir}/${f}`); continue; }
         try { receipts[`${dir}/${f.slice(0, -5)}`] = JSON.parse(readFileSync(join(rd, f), "utf8")); }
         catch { receipts[`${dir}/${f.slice(0, -5)}`] = "unparseable"; }
       }
@@ -252,7 +259,6 @@ export function readTree(root) {
     let files = null;
     try { files = new Set(execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean)); }
     catch { files = null; }
-    const rootReal = realpathSync(root);
     const tracked = (/** @type {string} */ p) => {
       if (files) return files.has(p);
       const abs = resolve(root, p);
@@ -260,8 +266,16 @@ export function readTree(root) {
     };
     const read = (/** @type {string} */ p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return ""; } };
     const adrs = new Set(readdirSync(join(root, "docs", "adr")).map((f) => /^(\d{4})-.*\.md$/.exec(f)).filter(Boolean).map((m) => String(/** @type {RegExpExecArray} */ (m)[1])));
-    return { wb, wiki, narratives, receipts, tree: { adrs, wiki, tracked, read } };
+    return { wb, wiki, narratives, receipts, rejected, tree: { adrs, wiki, tracked, read } };
   });
+}
+
+/** A regular file (not a symlink, not a directory) whose real path is inside the tree (attack 845e0a5 B3). */
+function regularInside(/** @type {string} */ abs, /** @type {string} */ rootReal) {
+  try {
+    const st = lstatSync(abs);
+    return st.isFile() && !st.isSymbolicLink() && realpathSync(abs).startsWith(rootReal + sep);
+  } catch { return false; }
 }
 
 // ---------------------------------------------------------------- self-test ----------------------------------------------------------------
@@ -282,7 +296,7 @@ function selftest() {
   arm("MUTANT anchor: a symbol the file never names FAILs", has(run(good.replace("#foo", "#bar")), "[anchor]"));
   arm("MUTANT anchor: an ADR with no file, and a fact key the entity lacks, each FAIL",
     has(run(good.replace("ADR-1513 -->\n\n|", "ADR-9999 -->\n\n|")), "[anchor]") && has(run(good.replace("hq.version", "hq.nope")), "[anchor]"));
-  arm("MUTANT anchor: a path climbing out of the tree FAILs", has(run(good.replace("a/b.mjs#foo", "../x.mjs")), "[anchor]"));
+  arm("MUTANT anchor: a path climbing out of the tree, or carrying a colon anywhere, FAILs", has(run(good.replace("a/b.mjs#foo", "../x.mjs")), "[anchor]") && has(run(good.replace("a/b.mjs#foo", "a/b.mjs:hidden")), "[anchor]"));
   arm("MUTANT plain-fact: a plain block with a number or a code span FAILs", has(run(good.replace("a front desk.", "a front desk with 3 doors.")), "[plain-fact]") && has(run(good.replace("a front desk.", "`hq`.")), "[plain-fact]"));
   arm("MUTANT unverified: a narrative with no receipt FAILs", has(run(good, null), "[unverified]"));
   arm("MUTANT edited-after-verify: a receipt for other text FAILs", has(run(good + "\nMore. <!-- src: ADR-1513 -->\n", receipt(good)), "[receipt]"));
@@ -309,11 +323,17 @@ function selftest() {
 
 async function main(argv) {
   if (argv.includes("--selftest")) return selftest();
-  let root = process.cwd();
+  let root = process.cwd(), rootSet = false;
   const json = argv.includes("--json");
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--root") { root = resolve(String(argv[++i] ?? "")); continue; }
+    if (a === "--root") {
+      const v = argv[i + 1];
+      if (rootSet) { console.error("narrative-anchors: --root given twice"); return 2; }
+      if (typeof v !== "string" || v === "" || v.startsWith("-")) { console.error("narrative-anchors: --root needs a directory"); return 2; }
+      root = resolve(v); rootSet = true; i++;
+      continue;
+    }
     if (a === "--json") continue;
     console.error(`narrative-anchors: unknown argument ${JSON.stringify(a)}`);
     return 2;
@@ -321,6 +341,7 @@ async function main(argv) {
   let t;
   try { t = await readTree(root); } catch (e) { console.error(`narrative-anchors: cannot read the tree: ${/** @type {Error} */ (e).message}`); return 2; }
   const r = evaluate({ narratives: t.narratives, receipts: t.receipts, tree: t.tree });
+  for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory or a path out of the tree; narratives and receipts are regular files inside it`);
   const d = explanationDebt(t.wiki, t.narratives, t.wb.PAGE_DIRS);
   if (json) { process.stdout.write(`${JSON.stringify({ ...r, explanation: d }, null, 2)}\n`); return r.fails.length ? 1 : 0; }
   for (const f of r.fails) console.log(`FAIL ${f}`);
