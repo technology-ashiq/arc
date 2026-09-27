@@ -198,7 +198,9 @@ setup() {
 @test "arc-attack: a newline inside a model finding cannot forge a line of output" {
   # Boundary attack B3: a `why` carrying "\n" printed a forged summary header and a forged finding.
   cd "$REPO"
-  run env ARC_MOCK_DIR="$ARC_ROOT/tests/fixtures/engine/attack-diff-mock-newline" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 7 --driver mock
+  # --separate-stderr: the summary is STDOUT; the started/heartbeat lines each surface prints go to stderr, and
+  # counting them as headers would read a status line as a forged one.
+  run --separate-stderr env ARC_MOCK_DIR="$ARC_ROOT/tests/fixtures/engine/attack-diff-mock-newline" node .claude/scripts/engine/arc-attack.mjs --base HEAD~1 --classification external-ok --phase 7 --driver mock
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"real reason"* ]] || { echo "the finding was not printed at all: $output"; false; }
   local headers; headers=$(printf '%s\n' "$output" | grep -c '^BOUNDARY:')
@@ -469,6 +471,27 @@ EOF
   # NEGATIVE CONTROL: the upstream elsewhere is still the mismatch it always was.
   run node "$(PROBE)" digest "$DIGEST/mismatch"
   [[ "$output" == *"CODE=4"* ]] && [[ "$output" == *"the branch upstream is at 222222222222"* ]] || { echo "mismatch: $output"; false; }
+}
+
+
+@test "arc-attack watches each surface: started line, heartbeat, one-line status file, watchdog past the deadline" {
+  run node "$ARC_ROOT/tests/engine-attack-watch.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: 14 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok A: heartbeats while it ran, each quoting the child's latest line"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok A: the watchdog ended the child just past its deadline -- not before, not minutes after"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok A: the status file was ONE line at every sample, and its last word names the watchdog"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok C: the CLI refuses a malformed ARC_ATTACK_MINUTES before anything runs (exit 2, named)"* ]] || { echo "$output"; false; }
+}
+
+@test "data boundary: an exact process.env read is not a credential; a literal, or one glued to a read, still is" {
+  run node "$ARC_ROOT/tests/redact-env-read.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: 5 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok CONTROL: the rule as it stood flagged every one of those lines -- the exemption is what changed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok a literal credential, or one glued to an env read, is still caught"* ]] || { echo "$output"; false; }
 }
 
 # LAST, and it must stay last. bats silently drops a @test it cannot register (a non-ASCII name was

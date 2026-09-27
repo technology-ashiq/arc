@@ -84,7 +84,15 @@ export const DENY_RULES = Object.freeze([
   { name: "private-key-block", re: /-----BEGIN [A-Z ]{0,32}PRIVATE KEY-----/ },
   { name: "connection-string-password", re: /[a-z][a-z0-9+.-]{1,32}:\/\/[^\s:/@]{1,64}:[^\s:/@]{6,64}@/i },
   { name: "bearer-token", re: /\bbearer\s{1,8}[A-Za-z0-9._-]{16,512}/i },
-  { name: "generic-credential-assignment", re: /\b(?:api[_-]?key|secret|password|passwd|passphrase|access[_-]?token|auth[_-]?token)\b['"]?\s{0,8}[:=]\s{0,8}['"]?[^\s'"]{8,512}/i },
+  // An ENVIRONMENT READ is not a credential: `API_KEY = process.env.ARC_LLM_API_KEY` names where a key comes from and
+  // holds none, and it refused every attack diff whose context reached that line of drivers/generic-api.mjs (engine
+  // bug, 2026-09-26). The exception is an ALLOW-list of what may follow the name, never a deny-list: an optional EMPTY
+  // fallback (`|| ""`, `?? null`, `|| undefined`), then spaces or tabs, then a closer (`;` `,` `)` `}` `]`), a quote,
+  // a backtick (the end of a code span in prose), a line end or the end. Anything else after the name -- a glued
+  // literal (`process.env.X+sk-...`), a literal fallback (`process.env.X || "sk-..."`, attack 415d3a3 L1), a word --
+  // leaves the whole assignment to the rule. It holds in every view the scanner builds, whitespace-stripped included,
+  // and in JSON text, where the quotes are `\"` and a line end is the two characters `\n` (an attack input IS JSON).
+  { name: "generic-credential-assignment", re: /\b(?:api[_-]?key|secret|password|passwd|passphrase|access[_-]?token|auth[_-]?token)\b['"]?\s{0,8}[:=]\s{0,8}['"]?(?!process\.env\.[A-Za-z_][A-Za-z0-9_]{0,127}(?:[ \t]{0,8}(?:\|\||\?\?)[ \t]{0,8}(?:\\?"\\?"|\\?'\\?'|``|null|undefined)(?![A-Za-z0-9_]))?[ \t]{0,8}(?:[;,)}\]`\r\n]|\\?["']|\\[nrt]|$))[^\s'"]{8,512}/i },
 ]);
 
 // Linear, backtracking-free JWT detection. A regex for this shape is a ReDoS waiting to

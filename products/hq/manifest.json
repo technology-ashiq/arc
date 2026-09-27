@@ -34,6 +34,7 @@
     ".claude/scripts/hq/lib/face/ask-offline.mjs",
     ".claude/scripts/hq/lib/face/reads.mjs",
     ".claude/scripts/hq/lib/face/session-door.mjs",
+    ".claude/scripts/hq/lib/face/reference/route.mjs",
     ".claude/scripts/hq/lib/face/work-door.mjs",
     ".claude/scripts/hq/lib/jobs/audit.mjs",
     ".claude/scripts/hq/lib/jobs/cadence.mjs",

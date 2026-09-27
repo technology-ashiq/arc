@@ -20,7 +20,19 @@
 
 ## Verification plan
 
-Coarse, refined when the phase starts (playbook: later phases keep one line): the door's read-route fixtures + the browser smoke over the new room in both moods, read per job on CI; the live demo opens the Reference room from the main clone, walks index → one entity of each type → its cross-links, and shows one room's Reference link landing on its page.
+Refined 2026-09-26 at phase open. Two PRs, each with one attack round and one push; tests run on CI only, read per job, and each fixture asserts it RAN before asserting what it printed.
+
+**PR A — the door (`/api/reference`).**
+- **Test command:** `tests/face-dash.bats` → `tests/face/reference-door.mjs` (no door) and the P07 arm of `tests/face/dash-doors.mjs` (live door).
+- **Expected failure first:** before the route exists, `reference-door.mjs` fails to import `lib/face/reference/route.mjs`, and the live arm's `route("/api/reference")` is 404, so `named` is false.
+- **Checks:** A — entity ids equal `wiki-build --json`'s both ways, and byte for byte. B — a marker planted in a fixture tree's spine and `.claude/state/` never reaches the body; the narrative is served with its fingerprint stripped, and every other entity has none. C — schema 2 and an incomplete extract are `SOURCE_INVALID`, and a missing `narrativeReader` export is `PARSER_UNAVAILABLE`. D — the docs lane's own `tests/docs/no-walker.mjs` passes over the route's directory and catches a mutant copy that lists a directory. E — every tracked `docs/wiki` file is byte-identical after two runs. Live — named, schema 1, ≥100 entities, no fixture-spine id in the body, POST refused, query `BAD_ARGS`, 401 / 403 posture.
+- **Additive in the docs lane (ADR-1339 pattern):** `narrativeReader` is exported from `wiki-build.mjs` so the door imports it rather than spelling it a second time.
+
+**PR B — the room and the links.**
+- Birth: an `expected-set.json` row, the `room-copy.json` entry, `rooms.generated.json` via `face-sections.mjs`, `modules-v2.json` via `face-modules-contract.mjs`, and the module under `face/src/modules/<ring>/reference/`. face-coverage stays green both directions.
+- The room: the five sections of `arc-wiki-engine_1.html`, in both moods, in the smoke on every L3 leg, with a fold fixture over a canned extract (index → type → entity; each cross-link resolves to a page the extract holds).
+- The links: one Reference link per served room, from `holds.products` / `holds.lanes`, with the with/without counts asserted.
+- **Live demo:** from the main clone, open the Reference room, walk index → one entity of each type → a cross-link, and follow one room's Reference link to its page; the transcript goes into `evidence/phase-07/`.
 
 ## Rabbit holes in this phase
 

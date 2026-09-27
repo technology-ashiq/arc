@@ -10,7 +10,7 @@
 | | |
 |---|---|
 | Intent | Adversarially attack one surface of a diff with concrete breaking inputs, carrying the lane's fixed-defect patterns. |
-| Version | 1.0.0 |
+| Version | 1.1.0 |
 | Permissions | declared |
 
 ## Tools

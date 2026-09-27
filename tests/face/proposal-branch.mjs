@@ -300,10 +300,46 @@ await refuse("a path that needs main's file to be a directory", { branch: "feat/
 // the same second gave one commit, and the update-ref catch told all three writers the branch was theirs) ----
 {
   const c = scratch("concurrent");
-  const results = await Promise.all([0, 1, 2].map(() => PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-concurrent", files: [{ path: "engine/router.yaml", content: PROPOSED }] }).then((w) => ({ ok: w.commit }), (e) => ({ code: e.code }))));
+  const results = await Promise.all([0, 1, 2].map(() => PB.writeProposal({ repo: c, message: "m", allow: ALLOW, branch: "feat/face-concurrent", files: [{ path: "engine/router.yaml", content: PROPOSED }] }).then((w) => ({ ok: w.commit }), (e) => ({ code: e.code, msg: e.message }))));
   const tip = git(c, "rev-parse", "refs/heads/feat/face-concurrent");
   check("three writers of one plan at once: one writes and claims the branch, the others refuse (BRANCH_EXISTS)",
     results.filter((r) => r.ok).length === 1 && results.find((r) => r.ok).ok === tip && results.filter((r) => r.code === "BRANCH_EXISTS").length === 2, JSON.stringify(results));
+}
+
+// ---- the object-write retry, driven on demand (attack da7d131 L4, B1): the three-writers arm above fails 2 of 80
+// rounds without the fix, so it cannot prove the retry ran. An injected git makes the race happen every time. ----
+{
+  const race = () => Object.assign(new PB.ProposalError("GIT_FAILED", "git hash-object failed: error: unable to write file .git/objects/98/ab: Permission denied"),
+    { gitExit: { code: 128, stderr: "error: unable to write file .git/objects/98/abcdef: Permission denied\n" } });
+  const full = () => Object.assign(new PB.ProposalError("GIT_FAILED", "git hash-object failed: error: unable to write file .git/objects/98/ab: No space left on device"),
+    { gitExit: { code: 128, stderr: "error: unable to write file .git/objects/98/abcdef: No space left on device\n" } });
+  const timedOut = () => new PB.ProposalError("GIT_FAILED", "git hash-object failed: did not finish in 60 s");
+  const scripted = (plan) => { let calls = 0; const run = async () => { const step = plan[Math.min(calls, plan.length - 1)]; calls++; if (step === "ok") return { buf: Buffer.from("abc\n"), out: "abc\n", status: 0 }; throw step(); }; return { run, count: () => calls }; };
+  const outcome = async (fn) => { try { return { value: await fn() }; } catch (e) { return { error: e }; } };
+
+  const twice = scripted([race, race, "ok"]);
+  const a = await outcome(() => PB.gitObjectWrite("repo", ["hash-object", "-w"], {}, twice.run));
+  check("object-write retry: two lost races then a win -- the write succeeds on the third call (a no-retry mutant stops at one)",
+    a.value && a.value.out === "abc\n" && twice.count() === 3, `calls=${twice.count()} ${a.error && a.error.message}`);
+  const disk = scripted([full, "ok"]);
+  const b = await outcome(() => PB.gitObjectWrite("repo", ["hash-object", "-w"], {}, disk.run));
+  check("object-write retry: a full disk is NOT the race -- thrown on the first call, never retried",
+    b.error && disk.count() === 1 && /No space left/.test(b.error.message), `calls=${disk.count()}`);
+  // A timeout message that even STARTS like an exit is not retried: the decision reads gitExit, not the text (L1, B2).
+  const slow = scripted([timedOut, "ok"]);
+  const c = await outcome(() => PB.gitObjectWrite("repo", ["hash-object", "-w"], {}, slow.run));
+  check("object-write retry: an error with no gitExit (a timeout, an overrun) is thrown at once, whatever its text says",
+    c.error && slow.count() === 1, `calls=${slow.count()}`);
+  const forever = scripted([race]);
+  const t0 = Date.now();
+  const d = await outcome(() => PB.gitObjectWrite("repo", ["hash-object", "-w"], {}, forever.run));
+  const took = Date.now() - t0;
+  check("object-write retry: a race that never clears stops -- bounded in tries and time, and the error says how long it tried",
+    d.error && forever.count() >= 2 && forever.count() <= 12 && took < 9000 && /retried \d+ time\(s\) over \d+ ms/.test(d.error.message), `calls=${forever.count()} ms=${took} ${d.error && d.error.message}`);
+  check("object-write retry: the race signature matches the Windows loss and nothing else",
+    PB.OBJECT_WRITE_RACE_RE.test("error: unable to write file .git\\objects\\98\\ab: Permission denied")
+    && !PB.OBJECT_WRITE_RACE_RE.test("error: unable to write file .git/objects/98/ab: No space left on device")
+    && !PB.OBJECT_WRITE_RACE_RE.test("fatal: the pre-commit hook declined"));
 }
 
 // ---- a symbolic link on main is not a file a proposal edits (PR 3b round-2 shell attack: the plan showed a text edit

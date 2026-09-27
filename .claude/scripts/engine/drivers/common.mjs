@@ -121,6 +121,31 @@ export function parseModelJson(text, what = "model output") {
  * the model is precisely the un-reviewed tier change ADR-0069 block (b)(1) forbids, and a
  * receipt claiming a tier that nothing applied is a false claim in an append-only ledger.
  */
+/**
+ * The remaining run time, as an absolute deadline arc-run set. Never derived from the budget. ONE reader for every
+ * driver (moved from hermes): generic-api ignored this deadline and let each transport attempt start a fresh clock
+ * -- A-03's class at a new enforcement point (engine out-of-cycle bug, 2026-09-26).
+ * @returns {number | undefined} ms left, or undefined when the run has no deadline
+ */
+export function msUntilDeadline() {
+  const raw = process.env.ARC_DRIVER_DEADLINE_EPOCH_MS;
+  if (raw === undefined || raw === "") return undefined;   // absent means no deadline
+  // PRESENT-BUT-UNPARSEABLE IS AN ERROR, NOT SILENCE. This returned undefined for any non-finite
+  // value, so `1e400` and `Infinity` meant NO CLOCK AT ALL and the shim ran unbounded under a
+  // caller that believed it had set a deadline -- and `"   "` became Number 0, declining every
+  // run with "0ms left". MAX_BUFFER above validates and falls back to a SAFE value; this one
+  // validated and fell back to NO GUARD. Twin readers of the same rule, one failing closed and
+  // one failing open, which is the defect this cycle has now hit four times.
+  // A digit string is not yet an epoch millisecond: forty digits pass /^\d+$/ and become Infinity, which every
+  // caller reads as "no deadline" -- failing OPEN again (attack 415d3a3 L2). A safe integer or it is refused.
+  if (!/^\d+$/.test(String(raw).trim()) || !Number.isSafeInteger(Number(String(raw).trim()))) {
+    const e = new Error(`ARC_DRIVER_DEADLINE_EPOCH_MS is ${JSON.stringify(raw)}, which is not an epoch millisecond — refusing to run without the clock the caller believes it set`);
+    e.arcDeadlineMalformed = true;
+    throw e;
+  }
+  return Number(String(raw).trim()) - Date.now();
+}
+
 export function pinnedModel() {
   return process.env.ARC_DRIVER_MODEL || null;
 }

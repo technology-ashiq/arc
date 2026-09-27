@@ -1,0 +1,85 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-attack.mjs:277-285",
+      "breaking_input": "A surface whose arc-run has spawned a driver that outlives arc-run (claude-code.sh -> bash -> the CLI, or a hermes runtime) and is still running at minutes*60000+graceMs. The watchdog calls child.kill(\"SIGKILL\") on arc-run's own pid only. Inverse case: arc-run exits 0 at minute 5 with a valid result, but a descendant that inherited a pipe handle keeps it open until the watchdog fires.",
+      "why": "On Windows, kill is TerminateProcess on one process. On POSIX it signals one pid, not the group. The driver survives, holds any inherited pipe, and 'close' (which waits for the stdio streams, not just exit) never fires. The promise never resolves, the heartbeat interval is never cleared, and it prints 'running' forever, which is the silent hang this PR set out to remove. The orphaned driver keeps making paid model calls, and main's finally (rmSync of tmp) never runs. In the inverse case, killed is set by the late watchdog and `status: killed ? null : code` discards a genuinely successful stdout as 'RUN FAILED ... ended by the watchdog'.",
+      "fix": "Kill the tree: on POSIX spawn with detached:true and process.kill(-pid,'SIGKILL'); on win32 run taskkill /pid <pid> /T /F. After the kill, destroy child.stdout and child.stderr and resolve from a second short timer if 'close' still has not fired. Take status from 'exit' (code, signal), and set killed only if the child had not yet exited when the watchdog fired."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-attack.mjs:262",
+      "breaking_input": "Any descendant of arc-run that reads stdin to EOF when stdin is a pipe (a driver CLI given a prompt argument but a piped stdin, or arc-run passing its own stdin through to a driver, e.g. `--driver auto` routing to a CLI that appends stdin to its prompt).",
+      "why": "spawnSync with no `input` gave the child an immediately-closed stdin, so readers saw EOF. The new async spawn uses the default stdio, and its stdin pipe is never ended (there is no child.stdin.end()). A reader now blocks until the watchdog fires 31 minutes later, so a run that used to finish in minutes now hangs to the deadline.",
+      "fix": "Pass stdio: ['ignore','pipe','pipe'] to spawn (or call child.stdin.end() straight after spawn)."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-attack.mjs:266-276",
+      "breaking_input": "The child writes to stderr one line that echoes a gateway error body, or arc-run's own diagnostic, containing the credential the request carried, in a path that does not go through arc-run's liveLine cleaning (a non-stream code path, arc-run's own message, or a driver crash line). The next heartbeat quotes it.",
+      "why": "The existing failure path was hardened after round-2 attack 4010c52 B7 so that every child stderr line is redacted before it reaches the summary. The new heartbeat quotes `lastLine` on the parent's stderr and writes it into the --status-file, where it persists on disk. The only protection is oneLine() plus a comment claiming arc-run has already cleaned the line, and that claim covers only the driver lines in stream mode.",
+      "fix": "Run lastLine through the same redaction (redactText or scanSecrets) as the failure path before printing or writing it, and replace the line with a placeholder if a rule hits."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-attack.mjs:256,274",
+      "breaking_input": "`node arc-attack.mjs ... 2>&1 | head -3`, or a harness that stops reading arc-attack's stderr, or the parent being terminated while a surface runs.",
+      "why": "The parent used to write stderr only at the end. It now writes on every heartbeat. A closed stderr pipe raises EPIPE as an 'error' event on process.stderr, which is unhandled, so arc-attack crashes mid-run with no result and no cleanup. The arc-run child is not killed by any parent-exit hook, so it keeps running (and billing) up to its own 30-minute budget with nobody to read its result.",
+      "fix": "Add process.stderr.on('error', () => {}) and guard the writes. Register process.on('exit', ...) and SIGINT/SIGTERM handlers that kill the child tree."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-attack.mjs:222-228,283",
+      "breaking_input": "--status-file pointing at a file a Windows watcher has open without delete-sharing (PowerShell Get-Content), or into a directory that does not exist, at the moment the terminal 'ended after ...' line is written.",
+      "why": "renameSync over an open file fails with EPERM. writeStatus only warns, retries nothing, and leaves `<file>.<pid>.tmp` behind. The 'ended' line is written exactly once, so the watcher's last word stays the previous heartbeat, 'running 12m01s', for a run that is already dead. A missing directory also emits a WARN every 60 s.",
+      "fix": "Retry the rename a few times, fall back to a direct writeFileSync of the final line, unlink the tmp on failure, and warn only once per run."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:414",
+      "breaking_input": "Run 1 completes and leaves 'BOUNDARY: ended after 12m03s (exit 0)' in the status file. Run 2 with the same --status-file is refused before any surface starts (the data boundary, an empty diff, an unknown lane).",
+      "why": "The status file is written only from runWatched. A run that never reaches a surface never touches it, so a watcher of run 2 reads run 1's terminal line as its own. Nothing marks the end of the whole pass either, so between surfaces or after the last one the file is indistinguishable from a live run.",
+      "fix": "Truncate or overwrite the status file with a 'starting' line at the top of main, and write a final 'pass finished, exit N' line in main's finally."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:23,95",
+      "breaking_input": "ARC_LLM_TIMEOUT_MS=abc, =0, =-5, or a value above 2147483647 with no run deadline set.",
+      "why": "TIMEOUT_MS is `Number(env || 60000)` with no validation. For NaN, 0 or negative, cap becomes NaN or 1, and setTimeout(NaN) or setTimeout(1) aborts every attempt at once. A value over 2^31-1 gets a TimeoutOverflowWarning and also fires at 1 ms. Each attempt is then reported as 'timeout after 0s'. This is the fail-open twin of the strict deadline reader added in the same diff, which the comment in common.mjs calls a defect this cycle has hit four times.",
+      "fix": "Validate ARC_LLM_TIMEOUT_MS as an integer from 1000 to 2147483647 and refuse anything else, as msUntilDeadline does, or fall back to 60000."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:217",
+      "breaking_input": "ARC_ATTACK_GRACE_MS=\"   \" (whitespace) or =0.",
+      "why": "Number(\"   \") is 0 and the graceMs lower bound is 0, so it is accepted. The watchdog then fires at the same instant as arc-run's own --budget deadline and SIGKILLs it during its teardown. arc-run is killed while writing its result or receipt, and the surface is reported as a watchdog kill instead of a clean deadline end. The other two knobs refuse whitespace-only values only because their lower bounds are above 0.",
+      "fix": "Refuse a whitespace-only raw value and set graceMs's lower bound to a few seconds (for example 5000)."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/common.mjs:139",
+      "breaking_input": "ARC_DRIVER_DEADLINE_EPOCH_MS set to '1' followed by 400 zeros.",
+      "why": "It matches /^\\d+$/, but Number() of it is Infinity, so msUntilDeadline returns Infinity. That means no deadline at all, and mmss(Infinity) prints 'NaNmNaNs' in the attempt line. This is the fail-open-on-unparseable defect the comment above it says was closed, now in the single shared reader.",
+      "fix": "After Number(), reject values where !Number.isSafeInteger(n) with the same arcDeadlineMalformed error."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-attack.mjs:264-271",
+      "breaking_input": "(a) A child that writes more than 64 MiB to stdout. (b) A stderr line delivered in two chunks, such as 'generic-api: attempt 2/3: tim' followed by 'eout after 420s ...'.",
+      "why": "(a) spawnSync's maxBuffer killed the child and reported ENOBUFS. Now chunks past CHILD_CAP are silently dropped and the child keeps running, so the truncated JSON fails to parse with a misleading message. (b) lastLine is computed per chunk from String(c), so it can quote a tail fragment, or a UTF-8 sequence cut in half, instead of the latest line.",
+      "fix": "On overflow, kill the child and set an explicit 'output exceeded the cap' error. Buffer the trailing partial line between chunks and use a StringDecoder."
+    }
+  ]
+}

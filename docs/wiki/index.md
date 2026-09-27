@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **135** | **3** |
 
-Narrative debt: **132 of 135** pages have no narrative yet. ADR headers: 265 of 330 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **132 of 135** pages have no narrative yet. ADR headers: 266 of 331 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -31,7 +31,7 @@ Narrative debt: **132 of 135** pages have no narrative yet. ADR headers: 265 of 
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
-| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 73 |
+| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 74 |
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
 | [memory](products/memory.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
@@ -66,7 +66,7 @@ Narrative debt: **132 of 135** pages have no narrative yet. ADR headers: 265 of 
 | Process | Version | Intent |
 |---|---|---|
 | [adr-record](processes/adr-record.md) | 1.0.0 | Record one owner decision as an ADR at the next free number of the lane's century, and end on its note.logged receipt. |
-| [attack-diff](processes/attack-diff.md) | 1.0.0 | Adversarially attack one surface of a diff with concrete breaking inputs, carrying the lane's fixed-defect patterns. |
+| [attack-diff](processes/attack-diff.md) | 1.1.0 | Adversarially attack one surface of a diff with concrete breaking inputs, carrying the lane's fixed-defect patterns. |
 | [brief-materialize](processes/brief-materialize.md) | 1.0.0 | Render the day's brief into instance state so the morning read is zero-effort. |
 | [build-in-public-draft](processes/build-in-public-draft.md) | 1.0.0 | Draft one build-in-public post from an approved context pack. L1 only -- a draft, never a publication. |
 | [commit-msg-draft](processes/commit-msg-draft.md) | 1.0.0 | Stage related changes and write a conventional commit. |
@@ -84,7 +84,7 @@ Narrative debt: **132 of 135** pages have no narrative yet. ADR headers: 265 of 
 |---|---|---|
 | [0000–0099](adr/0000.md) | 75 | 62 |
 | [0100–0199](adr/0100.md) | 12 | 0 |
-| [0200–0299](adr/0200.md) | 27 | 2 |
+| [0200–0299](adr/0200.md) | 28 | 2 |
 | [0300–0399](adr/0300.md) | 12 | 0 |
 | [0400–0499](adr/0400.md) | 19 | 0 |
 | [0500–0599](adr/0500.md) | 9 | 0 |

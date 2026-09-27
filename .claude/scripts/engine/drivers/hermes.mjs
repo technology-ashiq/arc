@@ -62,7 +62,7 @@ import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { EXIT, canonicalDoc, pinnedModel, runDriver, settle, writeCost } from "./common.mjs";
+import { EXIT, canonicalDoc, msUntilDeadline, pinnedModel, runDriver, settle, writeCost } from "./common.mjs";
 import { taggedSha256 } from "../type-tagged-hash.mjs";
 // The seat grammar is imported from the spine's OWN validator rather than re-spelled here.
 // A second copy of a regex is a second thing to keep in sync, and the failure this guards
@@ -526,23 +526,6 @@ export function versionString() {
   return `hermes@${runtime}+cfg.${taggedSha256(pre).slice(0, 12)}`;
 }
 
-/** The remaining run time, as an absolute deadline arc-run set. Never derived from the budget. */
-function msUntilDeadline() {
-  const raw = process.env.ARC_DRIVER_DEADLINE_EPOCH_MS;
-  if (raw === undefined || raw === "") return undefined;   // absent means no deadline
-  // PRESENT-BUT-UNPARSEABLE IS AN ERROR, NOT SILENCE. This returned undefined for any non-finite
-  // value, so `1e400` and `Infinity` meant NO CLOCK AT ALL and the shim ran unbounded under a
-  // caller that believed it had set a deadline -- and `"   "` became Number 0, declining every
-  // run with "0ms left". MAX_BUFFER above validates and falls back to a SAFE value; this one
-  // validated and fell back to NO GUARD. Twin readers of the same rule, one failing closed and
-  // one failing open, which is the defect this cycle has now hit four times.
-  if (!/^\d+$/.test(String(raw).trim())) {
-    const e = new Error(`ARC_DRIVER_DEADLINE_EPOCH_MS is ${JSON.stringify(raw)}, which is not an epoch millisecond — refusing to run without the clock the caller believes it set`);
-    e.arcDeadlineMalformed = true;
-    throw e;
-  }
-  return Number(String(raw).trim()) - Date.now();
-}
 
 /**
  * The first symlink anywhere under `root`, or null. Depth-first, and it walks with `lstat` so it
