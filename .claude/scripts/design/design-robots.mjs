@@ -30,6 +30,8 @@
 
 import { readFileSync, realpathSync } from "node:fs";
 import { lookup } from "node:dns/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { isIP, isIPv4 } from "node:net";
 import { fileURLToPath } from "node:url";
 
@@ -227,40 +229,63 @@ export function isPrivateAddress(ip) {
   return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00;
 }
 
-async function refusePrivate(hostname) {
-  const host = hostname.replace(/^\[|\]$/g, "");
-  if (host === "localhost" || host.endsWith(".localhost")) throw new Error(`refused: ${host} is a local name`);
-  const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
-  for (const { address } of addrs) if (isPrivateAddress(address)) throw new Error(`refused: ${host} resolves to a private address`);
+// The check runs INSIDE the socket's own lookup, so the address that was checked is the address
+// that is connected to. A separate check-then-fetch resolved twice, and a host that rebinds its
+// DNS between the two passed the check and connected to 127.0.0.1 (attack r1 B1, phase-02 logic
+// pass). \`resolve\` is dns.lookup unless a test injects one.
+export function checkedLookup(resolve = lookup) {
+  return (hostname, options, cb) => {
+    if (typeof options === "function") { cb = options; options = {}; }
+    const host = String(hostname).replace(/^\[|\]$/g, "");
+    if (host === "localhost" || host.endsWith(".localhost")) { cb(new Error(`refused: ${host} is a local name`)); return; }
+    Promise.resolve(resolve(host, { all: true })).then((addrs) => {
+      if (!Array.isArray(addrs) || addrs.length === 0) { cb(new Error(`refused: ${host} did not resolve`)); return; }
+      for (const { address } of addrs) if (isPrivateAddress(address)) { cb(new Error(`refused: ${host} resolves to a private address`)); return; }
+      const all = addrs.map(({ address, family }) => ({ address, family: family || (isIPv4(address) ? 4 : 6) }));
+      if (options && options.all) cb(null, all); else cb(null, all[0].address, all[0].family);
+    }, (e) => cb(e));
+  };
 }
 
-export function realTransport({ ua = DEFAULT_UA } = {}) {
+export function realTransport({ ua = DEFAULT_UA, resolve = lookup } = {}) {
+  const pinned = checkedLookup(resolve);
   return {
     fake: false,
-    async get(target, { maxBytes = 15 * 1024 * 1024, truncate = false } = {}) {
-      await refusePrivate(new URL(target).hostname);
-      const res = await fetch(target, { headers: { "user-agent": ua }, redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-      const contentType = res.headers.get("content-type") || "";
-      const location = res.headers.get("location");
-      // Stream, and stop at the cap: a body with no content-length must not be buffered whole.
-      const chunks = [];
-      let total = 0, tooLarge = false, truncated = false;
-      if (res.body) {
-        const reader = res.body.getReader();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (total + value.length > maxBytes) {
-            if (truncate) { chunks.push(Buffer.from(value.subarray(0, maxBytes - total))); total = maxBytes; truncated = true; }
-            else tooLarge = true;
-            await reader.cancel().catch(() => {});
-            break;
-          }
-          chunks.push(Buffer.from(value));
-          total += value.length;
-        }
-      }
-      return { status: res.status, body: tooLarge ? Buffer.alloc(0) : Buffer.concat(chunks), contentType, location, tooLarge, truncated };
+    get(target, { maxBytes = 15 * 1024 * 1024, truncate = false } = {}) {
+      const u = new URL(target);
+      const host = u.hostname.replace(/^\[|\]$/g, "");
+      // node skips the lookup for an IP literal, so a literal is checked here, on the value used.
+      if (isIP(host) && isPrivateAddress(host)) return Promise.reject(new Error(`refused: ${host} is a private address`));
+      return new Promise((resolveGet, reject) => {
+        let settled = false;
+        const settle = (fn, v) => { if (!settled) { settled = true; clearTimeout(timer); fn(v); } };
+        const send = u.protocol === "https:" ? httpsRequest : httpRequest;
+        // Redirects are never followed here: the caller walks each hop through its own gates.
+        const req = send(u, { method: "GET", headers: { "user-agent": ua, "accept-encoding": "identity" }, lookup: pinned }, (res) => {
+          // Stream, and stop at the cap: a body with no content-length must not be buffered whole.
+          const chunks = [];
+          let total = 0, tooLarge = false, truncated = false;
+          const done = () => settle(resolveGet, { status: res.statusCode, body: tooLarge ? Buffer.alloc(0) : Buffer.concat(chunks), contentType: String(res.headers["content-type"] || ""), location: res.headers.location ?? null, tooLarge, truncated });
+          res.on("data", (value) => {
+            if (settled) return;
+            if (total + value.length > maxBytes) {
+              if (truncate) { chunks.push(value.subarray(0, maxBytes - total)); total = maxBytes; truncated = true; }
+              else tooLarge = true;
+              done();
+              req.destroy();
+              return;
+            }
+            chunks.push(value);
+            total += value.length;
+          });
+          res.on("end", done);
+          res.on("error", (e) => settle(reject, e));
+        });
+        // One deadline for the whole request, not a socket idle timer.
+        const timer = setTimeout(() => req.destroy(new Error(`timed out after ${FETCH_TIMEOUT_MS} ms`)), FETCH_TIMEOUT_MS);
+        req.on("error", (e) => settle(reject, e));
+        req.end();
+      });
     },
   };
 }
@@ -363,7 +388,7 @@ async function main(argv) {
   const transport = fake ? fakeTransport({ robotsFile: opts["--robots-file"] ?? null, robotsStatus: opts["--robots-status"] ?? null }) : realTransport({ ua });
   const d = await preflight({ url: u, ua, transport });
   console.log(`${d.verdict} ${u.origin}${u.pathname} -- ${d.reason}${fake ? " (fixture)" : ""}`);
-  process.exit(EXIT[d.verdict]);
+  process.exitCode = Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE;
 }
 
 const isMain = (() => {

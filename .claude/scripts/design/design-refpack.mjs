@@ -85,7 +85,7 @@ function parseArgs(argv) {
 // Remote text reaches the logs (a rule line, a content-type, an error message). One line, one
 // field: no tab, no line break, no control character can forge a row.
 function field(v) {
-  return String(v).replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+  return String(v).replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g, " ").trim();
 }
 
 // One markdown table cell: a pipe or a line break inside a principle must not become a column.
@@ -307,7 +307,7 @@ async function main(argv) {
   const check = async (u) => {
     const d = await preflight({ url: u, ua: DEFAULT_UA, transport, guard: outsideHosts });
     record(u, d.verdict, d.reason);
-    if (d.verdict !== "ALLOW") fail(EXIT[d.verdict], `${d.verdict} ${field(shown(u))} -- ${field(d.reason)}`);
+    if (d.verdict !== "ALLOW") fail(Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE, `${d.verdict} ${field(shown(u))} -- ${field(d.reason)}`);
   };
   await check(url);
 

@@ -430,3 +430,31 @@ Allow: /')"
   [ "$status" -eq 0 ] || { echo "a padded allow-all file was not ALLOW: $status $output"; false; }
   [ $((t1 - t0)) -lt 10 ] || { echo "the padded file took $((t1 - t0)) s"; false; }
 }
+
+@test "transport: the address that is checked is the address connected to -- one resolution, loopback refused, zero hits (logic pass r1 B1)" {
+  cd "$ARC_ROOT"
+  run node tests/fixtures/design/pinned-transport-probe.mjs .claude/scripts/design/design-robots.mjs
+  [ "$status" -eq 0 ] || { echo "the probe did not run: $status $output"; false; }
+  # Assert it RAN before asserting what it printed: all three cases reported.
+  printf '%s' "$output" | grep -q '"ran":\["a","b","c"\]' || { echo "not every case ran: $output"; false; }
+  printf '%s' "$output" | grep -q '"a":{"ok":false,"error":"refused: rebind.test resolves to a private address","calls":1}' || { echo "A: loopback was not refused on ONE resolution: $output"; false; }
+  printf '%s' "$output" | grep -q '"b":{"ok":false,"error":"refused: rebind.test resolves to a private address"' || { echo "B: a private address beside a public one passed: $output"; false; }
+  printf '%s' "$output" | grep -q '"c":{"ok":false,"error":"refused: 127.0.0.1 is a private address"}' || { echo "C: an IP literal was not refused: $output"; false; }
+  printf '%s' "$output" | grep -q '"hits":0}' || { echo "a refused request still reached the server: $output"; false; }
+}
+
+@test "exit codes: every verdict-to-code lookup is guarded, so an unknown verdict can never exit 0 (logic pass r1 B2)" {
+  cd "$ARC_ROOT"
+  # The CLI of each file maps a verdict through EXIT; a raw lookup of an unknown key is undefined,
+  # and process.exit(undefined) is 0. Every lookup must carry the hasOwn guard.
+  run grep -nE 'EXIT\[d\.verdict\]' .claude/scripts/design/design-robots.mjs .claude/scripts/design/design-refpack.mjs
+  [ "$status" -eq 0 ] || { echo "no verdict lookup found at all -- the scan read nothing"; false; }
+  bad="$(printf '%s\n' "$output" | grep -v 'Object.hasOwn(EXIT, d.verdict)' || true)"
+  [ -z "$bad" ] || { echo "an unguarded verdict lookup: $bad"; false; }
+}
+
+@test "logs: unicode line separators are stripped from every logged field, like C0 controls (logic pass r1 B4)" {
+  cd "$ARC_ROOT"
+  run grep -cF 'replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g' .claude/scripts/design/design-refpack.mjs
+  [ "$output" = "1" ] || { echo "field() does not strip U+0085/U+2028/U+2029: count=$output"; false; }
+}

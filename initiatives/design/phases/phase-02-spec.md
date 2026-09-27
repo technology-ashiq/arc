@@ -14,7 +14,7 @@ of git and whose provenance goes in.
       `id` · `kind[]` · `access` · `allowed_use[]` · `auth` · optional `credential_ref` · `cost`
       · `status` · `availability` · `approved_by` · `added`. Arrays are arrays
 - [ ] Initial rows match [ADR-1412](../../../docs/adr/1412-gallery-eligibility-is-decided-by-robots-and-terms-not-by-taste.md)
-      exactly, as amended 2026-09-27 (Lapa Ninja and SaaSFrame `off` after the first real build; nicelydone and collectui `active`, owner): Awwwards `link-only`; Godly, Dribbble, Behance,
+      exactly, as amended twice on 2026-09-27 (Lapa Ninja and SaaSFrame `off` after the first real build; nicelydone and collectui `active`; then saasui born `active` and turned `off` for its shared CDN, and screensdesign born `off` for its terms, owner): Awwwards `link-only`; Godly, Dribbble, Behance,
       Land-book, Page Collective `off`
 - [ ] Registry lint exits 0 on the real file, and **fails** on: a singular `kind`, an unknown
       `access`, a hand-set `availability`, and an entry added by anyone but the owner
@@ -61,12 +61,23 @@ of git and whose provenance goes in.
 
 ## Verification plan
 
-Coarse — refined via `/arc-change` when the phase starts. Registry lint proved by a mutant
-registry per invalid-field class; curator proved by one real pack built against the two `active`
-galleries with a robots.txt refusal exercised on a third; "no images in git" proved by planting
-a PNG and asserting `git check-ignore` resolves it, and by `git status --porcelain` staying
-empty. The adaptable-principle column is read by a human on at least two rows — a principle that
-describes appearance rather than a transferable idea fails the phase.
+Refined 2026-09-27 at close, to match REQ-04 as amended (≥1 source):
+
+1. **Tests:** CI green on every job at the branch head, read per job with `ci-digest`. That covers
+   `design-sources.bats` (the registry rows, and one mutant per invalid-field class the lint must
+   refuse), `design-refpack.bats` (ALLOW / DISALLOW / UNREADABLE, `status: off` → zero fetch
+   attempts, the planted PNG under `git check-ignore`, all against the fake transport) and
+   `design-composer-bash.bats` (the ADR-1420 curator boundary through the real dispatcher).
+2. **Live demo:** `design-curator` builds a real pack for `lexos-case-workspace`. Expected: 5–8
+   screens in `.claude/state/design/refpacks/lexos-case-workspace/` from ≥1 `active` source, one
+   `sources.md` row per screen, and a refusal exercised before any request on an `off` source
+   and on an off-registry host. Recorded in `evidence/phase-02/live-demo-real-pack.md`.
+3. **No images in git:** `git status --porcelain` stays empty after the build, and the image
+   files sit only under `.claude/state/`.
+4. **Human read:** the session opens every image and checks each principle against the pixels.
+   The owner delegated his two-row reading to that check on 2026-09-27. A principle that
+   describes appearance, not a transferable idea, fails the phase.
+5. **Two-surface attack:** logic and boundary, fresh agents, via `/arc-attack`.
 
 ## Rabbit holes in this phase
 
