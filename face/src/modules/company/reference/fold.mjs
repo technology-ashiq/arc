@@ -37,7 +37,7 @@ import { roomLink } from "../../../lib/lane-room.mjs";
  * @property {{ key: string, title: string, count: string, at: string, note: string }[]} types
  * @property {string} debt
  * @property {{ title: string, rows: { name: string, at: string, summary: string }[], isEmpty: boolean }} typeList
- * @property {{ heading: string, kind: string, startHere: string[], hasStartHere: boolean, loop: string[], hasLoop: boolean,
+ * @property {{ heading: string, kind: string, startHere: string[], hasStartHere: boolean, loop: string[], hasLoop: boolean, startBlocks: Block[], loopBlocks: Block[],
  *   pending: string, facts: FactRow[], source: string, adrs: AdrRow[], hasAdrs: boolean, page: string,
  *   faceRoom: { canOpen: boolean, room: string, label: string }, withheld: string, showWithheld: boolean }} entity
  * @property {string} notes
@@ -68,6 +68,164 @@ export function splitNarrative(text) {
   });
   const paras = /** @param {string[]} ls @returns {string[]} */ (ls) => ls.join("\n").split(/\n\s*\n/).map((p) => p.replace(/^#{1,6}\s+/gm, "").trim()).filter(Boolean);
   return at < 0 ? { start: paras(lines), loop: [] } : { start: paras(lines.slice(0, at)), loop: paras(lines.slice(at + 1)) };
+}
+
+/**
+ * @typedef {{ text: string, isText: boolean, isStrong: boolean, isEm: boolean, isCode: boolean, isLink: boolean }} Span
+ * @typedef {{ spans: Span[] }} Cell
+ * @typedef {{ cells: Cell[] }} Row
+ * @typedef {{ isHeading: boolean, isH2: boolean, isH3: boolean, isH4: boolean, isPara: boolean, isList: boolean,
+ *   isOrdered: boolean, isTable: boolean, isCode: boolean, isQuote: boolean, spans: Span[], items: Cell[], head: Cell[],
+ *   rows: Row[], text: string }} Block
+ */
+
+const span = /** @param {string} text @param {"text"|"strong"|"em"|"code"|"link"} k @returns {Span} */ (text, k) =>
+  ({ text, isText: k === "text", isStrong: k === "strong", isEm: k === "em", isCode: k === "code", isLink: k === "link" });
+
+/**
+ * Inline markdown as spans: code, strong, emphasis and a link's TEXT (its target is dropped -- a page link is a pick the
+ * facts panel already draws, and a raw URL is never an anchor here). Everything else is text; React escapes it, so a
+ * tag in the owner's prose is shown, never run (ADR-1347 section 2).
+ * @param {string} text @returns {Span[]}
+ */
+export function inlineSpans(text) {
+  /** @type {Span[]} */
+  const out = [];
+  const re = /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([^*]+?)\*\*|__([^_]+?)__|\*([^*\s][^*]*?)\*|(?<![A-Za-z0-9])_([^_\s][^_]*?)_(?![A-Za-z0-9])|\[([^\]]+)\]\([^)\s]*\)/g;
+  let last = 0;
+  for (const m of str(text).matchAll(re)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push(span(text.slice(last, i), "text"));
+    if (m[2] !== undefined) out.push(span(m[2].trim(), "code"));
+    else if (m[3] !== undefined || m[4] !== undefined) out.push(span(str(m[3] ?? m[4]), "strong"));
+    else if (m[5] !== undefined || m[6] !== undefined) out.push(span(str(m[5] ?? m[6]), "em"));
+    else out.push(span(str(m[7]), "link"));
+    last = i + m[0].length;
+  }
+  if (last < str(text).length) out.push(span(str(text).slice(last), "text"));
+  return out;
+}
+
+const block = /** @param {Partial<Block>} b @returns {Block} */ (b) => ({
+  isHeading: false, isH2: false, isH3: false, isH4: false, isPara: false, isList: false, isOrdered: false, isTable: false,
+  isCode: false, isQuote: false, spans: [], items: [], head: [], rows: [], text: "", ...b,
+});
+const cellsOf = /** @param {string} line @returns {Cell[]} */ (line) => {
+  const t = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return t.split(/(?<!\\)\|/).map((c) => ({ spans: inlineSpans(c.trim().replace(/\\\|/g, "|")) }));
+};
+const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+const BULLET = /^\s*[-*+]\s+(.*)$/;
+const NUMBERED = /^\s*\d{1,3}[.)]\s+(.*)$/;
+const FENCE = /^\s*(```|~~~)/;
+
+/**
+ * The owner's markdown as blocks (ADR-1347 section 2): headings, paragraphs, lists, tables, code and quotes. HTML
+ * comments -- the fingerprint line and ADR-1513's src/plain markers -- are metadata for the author and the gates, never
+ * prose for the reader, so they are dropped outside a code fence; inside one the text is the owner's quote, verbatim.
+ * @param {string} text @returns {Block[]}
+ */
+export function narrativeBlocks(text) {
+  const lines = str(text).split(/\r?\n/);
+  /** @type {Block[]} */
+  const out = [];
+  /** @type {string[]} */
+  let para = [];
+  const flush = () => { if (para.length) out.push(block({ isPara: true, spans: inlineSpans(para.join(" ")) })); para = []; };
+  let inComment = false;
+  /** @type {string[]} */
+  const clean = [];
+  let fencedHere = false;
+  for (const raw of lines) {
+    if (FENCE.test(raw) && !inComment) { fencedHere = !fencedHere; clean.push(raw); continue; }
+    if (fencedHere) { clean.push(raw); continue; }
+    let l = raw;
+    if (inComment) { const e = l.indexOf("-->"); if (e < 0) continue; l = l.slice(e + 3); inComment = false; }
+    l = l.replace(/<!--[\s\S]*?-->/g, "");
+    const open = l.indexOf("<!--");
+    if (open >= 0) { l = l.slice(0, open); inComment = true; }
+    // A line that held only a marker is gone, not a blank that splits a paragraph.
+    if (l.trim() === "" && raw.trim() !== "") continue;
+    clean.push(l);
+  }
+  for (let i = 0; i < clean.length; i++) {
+    const l = str(clean[i]);
+    if (FENCE.test(l)) {
+      flush();
+      const body = [];
+      let j = i + 1;
+      while (j < clean.length && !FENCE.test(str(clean[j]))) body.push(str(clean[j++]));
+      out.push(block({ isCode: true, text: body.join("\n") }));
+      i = j;
+      continue;
+    }
+    if (l.trim() === "") { flush(); continue; }
+    const h = /^\s*(#{1,6})\s+(.*?)\s*#*\s*$/.exec(l);
+    if (h) {
+      flush();
+      const level = Math.max(2, Math.min(4, str(h[1]).length));
+      out.push(block({ isHeading: true, isH2: level === 2, isH3: level === 3, isH4: level === 4, spans: inlineSpans(str(h[2])) }));
+      continue;
+    }
+    if (l.trim().startsWith("|") && i + 1 < clean.length && TABLE_RULE.test(str(clean[i + 1]))) {
+      flush();
+      const head = cellsOf(l);
+      /** @type {Row[]} */
+      const rows = [];
+      let j = i + 2;
+      while (j < clean.length && str(clean[j]).trim().startsWith("|")) rows.push({ cells: cellsOf(str(clean[j++])) });
+      out.push(block({ isTable: true, head, rows }));
+      i = j - 1;
+      continue;
+    }
+    const bullet = BULLET.exec(l), numbered = bullet ? null : NUMBERED.exec(l);
+    if (bullet || numbered) {
+      flush();
+      const ordered = numbered !== null;
+      /** @type {string[]} */
+      const items = [];
+      let j = i;
+      while (j < clean.length) {
+        const b = (ordered ? NUMBERED : BULLET).exec(str(clean[j]));
+        if (b) { items.push(str(b[1])); j++; continue; }
+        // An indented line continues the item above it; a blank line or anything else ends the list.
+        const c = str(clean[j]);
+        if (c.trim() !== "" && /^\s{2,}/.test(c) && items.length) { items[items.length - 1] = str(items[items.length - 1]) + " " + c.trim(); j++; continue; }
+        break;
+      }
+      out.push(block({ isList: true, isOrdered: ordered, items: items.map((s) => ({ spans: inlineSpans(s) })) }));
+      i = j - 1;
+      continue;
+    }
+    if (/^\s*>\s?/.test(l)) {
+      flush();
+      const q = [];
+      let j = i;
+      while (j < clean.length && /^\s*>\s?/.test(str(clean[j]))) q.push(str(clean[j++]).replace(/^\s*>\s?/, ""));
+      out.push(block({ isQuote: true, spans: inlineSpans(q.join(" ")) }));
+      i = j - 1;
+      continue;
+    }
+    para.push(l.trim());
+  }
+  flush();
+  return out;
+}
+
+/**
+ * splitNarrative's two sections as blocks: the same break, found the same way, so the paragraphs and the blocks can
+ * never disagree about where "The bigger loop" starts.
+ * @param {string} text @returns {{ start: Block[], loop: Block[] }}
+ */
+export function splitBlocks(text) {
+  const lines = str(text).split(/\r?\n/);
+  let fenced = false;
+  const at = lines.findIndex((l) => {
+    if (FENCE.test(l)) { fenced = !fenced; return false; }
+    return !fenced && /^#{1,6}\s*the bigger loop\s*$/i.test(l.trim());
+  });
+  return at < 0 ? { start: narrativeBlocks(lines.join("\n")), loop: [] }
+    : { start: narrativeBlocks(lines.slice(0, at).join("\n")), loop: narrativeBlocks(lines.slice(at + 1).join("\n")) };
 }
 
 /**
@@ -135,6 +293,8 @@ export function fold(payloads, ctx) {
   let faceRoom = { canOpen: false, room: "", label: "" };
   /** @type {string[]} */ let startHere = [];
   /** @type {string[]} */ let loop = [];
+  /** @type {Block[]} */ let startBlocks = [];
+  /** @type {Block[]} */ let loopBlocks = [];
   let source = "", page = "", withheld = "", kind = "", unnumbered = 0;
   if (isEntity && entity) {
     const f = asObject(entity.facts);
@@ -144,6 +304,7 @@ export function fold(payloads, ctx) {
     page = own(pages, at) ? `docs/wiki/${str(own(pages, at))}` : "";
     const text = str(own(narrative, at));
     ({ start: startHere, loop } = splitNarrative(text));
+    ({ start: startBlocks, loop: loopBlocks } = splitBlocks(text));
     const scalar = /** @param {string} label @param {unknown} v */ (label, v) => facts.push({ label, value: str(v), refs: [], hasRefs: false, isList: false, items: [] });
     const links = /** @param {string} label @param {Ref[]} refs */ (label, refs) => facts.push({ label, value: refs.length ? "" : "—", refs, hasRefs: refs.length > 0, isList: false, items: [] });
     const items = /** @param {string} label @param {unknown[]} xs */ (label, xs) => facts.push({ label, value: xs.length ? "" : "—", refs: [], hasRefs: false, isList: xs.length > 0, items: xs.map(str) });
@@ -227,6 +388,7 @@ export function fold(payloads, ctx) {
       kind,
       startHere, hasStartHere: startHere.length > 0,
       loop, hasLoop: loop.length > 0,
+      startBlocks, loopBlocks,
       pending,
       facts, source, adrs, hasAdrs: adrs.length > 0,
       page,

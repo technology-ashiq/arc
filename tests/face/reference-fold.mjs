@@ -16,7 +16,7 @@ const reg = await import(u(join(REPO, "face", "src", "lib", "registry.mjs")));
 const route = await import(u(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reference", "route.mjs")));
 const dir = join(REPO, "face", "src", "modules", "company", "reference");
 const manifest = (await import(u(join(dir, "module.mjs")))).default;
-const { fold, splitNarrative } = await import(u(join(dir, "fold.mjs")));
+const { fold, splitNarrative, splitBlocks } = await import(u(join(dir, "fold.mjs")));
 const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
 let ran = 0, failed = 0;
 const check = (name, cond, detail = "") => {
@@ -168,4 +168,57 @@ check("loading: before the door answers, the room says it is reading, and draws 
 }
 
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 17 ? 0 : 1;
+// ---- the narrative as markdown (ADR-1347 section 2): every block kind, and nothing of the author's metadata ----
+{
+  const md = [
+    "<!-- facts: agents=0000 -->",
+    "Intro with **strong**, *em*, `code` and [a link](../lanes/face.md). <!-- src: ADR-1347 -->",
+    "",
+    "## Why it exists",
+    "",
+    "- first <!-- plain -->",
+    "- second",
+    "  continued",
+    "",
+    "1. one",
+    "2. two",
+    "",
+    "| Term | Means |",
+    "|---|---|",
+    "| lane | <script>alert(1)</script> |",
+    "",
+    "```md",
+    "<!-- quoted -->",
+    "## not a heading",
+    "```",
+    "",
+    "> a quote",
+    "",
+    "<!-- a comment",
+    "over two lines -->",
+    "## The bigger loop",
+    "",
+    "The loop.",
+  ].join("\n");
+  const s = splitBlocks(md);
+  const kinds = s.start.map((b) => Object.keys(b).filter((k) => k.startsWith("is") && b[k] === true).sort().join("+"));
+  const want = ["isPara", "isH2+isHeading", "isList", "isList+isOrdered", "isTable", "isCode", "isQuote"];
+  const intro = s.start[0] ? s.start[0].spans : [];
+  const flags = (sp) => Object.keys(sp).filter((k) => k.startsWith("is") && sp[k] === true).join("");
+  check("narrative blocks: a heading, a paragraph with every span kind, both lists, a table, code and a quote each parse; the loop break is splitNarrative's",
+    JSON.stringify(kinds) === JSON.stringify(want)
+    && ["isStrong", "isEm", "isCode", "isLink"].every((k) => intro.some((sp) => flags(sp) === k))
+    && s.start[2].items.length === 2 && s.start[2].items[1].spans.map((x) => x.text).join("") === "second continued"
+    && s.start[4].head.length === 2 && s.start[4].rows.length === 1
+    && s.loop.length === 1 && s.loop[0].isPara === true && splitNarrative(md).loop.length === 1,
+    JSON.stringify(kinds));
+  const all = JSON.stringify(s);
+  const cell = s.start[4].rows[0].cells[1].spans;
+  check("narrative blocks: the fingerprint and every src/plain marker are dropped, a fenced comment is kept verbatim, and a script tag is one TEXT span",
+    !all.includes("facts:") && !all.includes("src:") && !all.includes("plain -->") && !all.includes("over two lines")
+    && s.start[5].text === "<!-- quoted -->\n## not a heading"
+    && cell.length === 1 && cell[0].isText === true && cell[0].text === "<script>alert(1)</script>",
+    all.slice(0, 300));
+}
+
+process.exitCode = failed === 0 && ran === 19 ? 0 : 1;
