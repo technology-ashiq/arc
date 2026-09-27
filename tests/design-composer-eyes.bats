@@ -22,7 +22,10 @@ _composer_sandbox() {
   mkdir -p "$SANDBOX/$EX/variant-a" "$SANDBOX/$EX/variant-b" \
            "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-a" \
            "$SANDBOX/.claude/state/design/renders/lexos-v1--variant-b" \
-           "$SANDBOX/.claude/state/design/refpacks/lexos-v1" \n           "$SANDBOX/.claude/state/design/refpacks/lexos-p" \n           "$SANDBOX/.claude/state/design/refpacks/other-brief" \n           "$SANDBOX/docs/design/refpacks/lexos-p"
+           "$SANDBOX/.claude/state/design/refpacks/lexos-v1" \
+           "$SANDBOX/.claude/state/design/refpacks/lexos-p" \
+           "$SANDBOX/.claude/state/design/refpacks/other-brief" \
+           "$SANDBOX/docs/design/refpacks/lexos-p"
   printf 'thesis a\n'  > "$SANDBOX/$EX/variant-a/thesis.txt"
   printf 'page a\n'    > "$SANDBOX/$EX/variant-a/index.html"
   printf 'page b\n'    > "$SANDBOX/$EX/variant-b/index.html"
@@ -109,6 +112,20 @@ teardown() { _arc_teardown; }
   # CONTROL: the composer's own variant is still readable, so each refusal above is the pack rule.
   run bash "$(_csc)" "docs/design/explore/lexos-v1/variant-a/index.html"
   [ "$status" -eq 0 ] || { echo "control: own variant refused: $output"; false; }
+}
+
+@test "composer scope: a CRLF explore record still grants its pack, and a symlinked record grants none (S3 attack B2 B3)" {
+  _composer_sandbox; _arm
+  printf 'id=lexos-v1\r\nbrief=docs/design/briefs/lexos-p/brief.md\r\n' > "$SANDBOX/docs/design/explore/lexos-v1/explore.txt"
+  grep -q $'\r' "$SANDBOX/docs/design/explore/lexos-v1/explore.txt" || { echo "fixture: no CR"; false; }
+  run bash "$(_csc)" ".claude/state/design/refpacks/lexos-p/ref-1.png"
+  [ "$status" -eq 0 ] || { echo "a CRLF record withheld the pack: $status $output"; false; }
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) return 0;; esac   # git-bash ln -s copies; the symlink half needs a real one
+  mv "$SANDBOX/docs/design/explore/lexos-v1/explore.txt" "$BATS_TEST_TMPDIR/explore.txt"
+  ln -s "$BATS_TEST_TMPDIR/explore.txt" "$SANDBOX/docs/design/explore/lexos-v1/explore.txt"
+  [ -L "$SANDBOX/docs/design/explore/lexos-v1/explore.txt" ] || { echo "fixture: no symlink"; false; }
+  run bash "$(_csc)" ".claude/state/design/refpacks/lexos-p/ref-1.png"
+  [ "$status" -eq 2 ] || { echo "a symlinked record granted the pack: $status"; false; }
 }
 
 # ---------- 3. what it REFUSES -- the negative controls ----------

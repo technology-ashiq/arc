@@ -350,7 +350,12 @@ OWN_RENDERS=".claude/state/design/renders/$EX--$VARIANT"
 # absent explore.txt grants NO pack: fail closed, never back to the explore id.
 PACK=""
 PACK_SOURCES=""
-_brief_line="$(sed -n 's#^brief=docs/design/briefs/\([a-z0-9][a-z0-9-]*\)/brief\.md$#\1#p' "$ROOT/docs/design/explore/$EX/explore.txt" 2>/dev/null | head -1)"
+# A CRLF checkout (core.autocrlf on Windows) left a CR before the anchor, so the record never matched and the
+# pack was silently withheld (S3 attack B2). A symlinked record is not the explore's own (S3 attack B3).
+_brief_line=""
+if [ -f "$ROOT/docs/design/explore/$EX/explore.txt" ] && [ ! -L "$ROOT/docs/design/explore/$EX/explore.txt" ]; then
+  _brief_line="$(tr -d '\r' < "$ROOT/docs/design/explore/$EX/explore.txt" 2>/dev/null | sed -n 's#^brief=docs/design/briefs/\([a-z0-9][a-z0-9-]*\)/brief\.md$#\1#p' | head -1)"
+fi
 case "$_brief_line" in
   ''|con|prn|aux|nul|com[0-9]|lpt[0-9]) ;;
   *) PACK=".claude/state/design/refpacks/$_brief_line"
