@@ -15,8 +15,7 @@
 // The rules live in `evaluate()`, which is pure: the CLI hands it the tree, the self-test hands it planted trees, so
 // every arm FAILs from birth with its mutant (ADR-1503's rule for a gate).
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -105,7 +104,7 @@ export function blocksOf(text) {
 
 /**
  * Whether one anchor resolves. `ADR-NNNN` needs its file; `fact:<type>/<id>.<key>` needs that entity and an OWN fact
- * key (or `source`); anything else is a repo path -- relative, inside the tree, tracked -- with an optional `#symbol`
+ * key (or `source`); anything else is a repo path -- relative, a regular file inside the tree -- with an optional `#symbol`
  * that must appear in the file as a word.
  * @param {string} anchor
  * @param {{ adrs: Set<string>, wiki: any, tracked: (p: string) => boolean, read: (p: string) => string }} tree
@@ -130,7 +129,7 @@ export function anchorProblem(anchor, tree) {
   const path = hash < 0 ? a : a.slice(0, hash);
   const symbol = hash < 0 ? "" : a.slice(hash + 1);
   if (path === "" || path.startsWith("/") || path.includes(":") || path.split(/[\\/]/).includes("..") || path.includes("\\")) return "not a repo-relative path";
-  if (!tree.tracked(path)) return `${path} is not a tracked file`;
+  if (!tree.tracked(path)) return `${path} is not a regular file in the tree`;
   if (symbol) {
     if (!/^[A-Za-z_$][\w$.-]*$/.test(symbol)) return `#${symbol} is not a symbol name`;
     const esc = symbol.replace(/[.$]/g, (c) => `\\${c}`);
@@ -229,45 +228,47 @@ export function receiptProblem(r, page, hash, count) {
 
 // ---------------------------------------------------------------- the tree ----------------------------------------------------------------
 
-/** Every narrative, by NAMED directory (wiki-build's PAGE_DIRS), and every receipt. */
-export function readTree(root) {
-  const wbUrl = pathToFileURL(join(root, ".claude", "scripts", "docs", "wiki-build.mjs")).href;
-  return import(wbUrl).then(async (wb) => {
-    const res = wb.extract ? await wb.extract(root) : null;
-    const wiki = res && res.wiki ? res.wiki : res;
-    if (!wiki || !wiki.entities) throw new Error("wiki-build's extract returned no entities");
-    /** @type {Record<string, string>} */ const narratives = Object.create(null);
-    /** @type {Record<string, unknown>} */ const receipts = Object.create(null);
-    /** @type {string[]} */ const rejected = [];
-    const rootReal = realpathSync(root);
-    for (const type of wb.RENDERED) {
-      const dir = String(wb.PAGE_DIRS[type]);
-      const nd = join(root, wb.WIKI_DIR, wb.NARRATIVE_DIR, dir);
-      if (existsSync(nd)) for (const f of readdirSync(nd)) {
-        if (!f.endsWith(".md")) continue;
-        if (!regularInside(join(nd, f), rootReal)) { rejected.push(`${wb.WIKI_DIR}/${wb.NARRATIVE_DIR}/${dir}/${f}`); continue; }
-        narratives[`${dir}/${f.slice(0, -3)}`] = readFileSync(join(nd, f), "utf8");
-      }
-      const rd = join(root, VERIFY_DIR, dir);
-      if (existsSync(rd)) for (const f of readdirSync(rd)) {
-        if (!f.endsWith(".json")) continue;
-        if (!regularInside(join(rd, f), rootReal)) { rejected.push(`${VERIFY_DIR}/${dir}/${f}`); continue; }
-        try { receipts[`${dir}/${f.slice(0, -5)}`] = JSON.parse(readFileSync(join(rd, f), "utf8")); }
-        catch { receipts[`${dir}/${f.slice(0, -5)}`] = "unparseable"; }
-      }
+/**
+ * Every narrative, listed through wiki-coverage's pageTree -- the one sanctioned listing (DOC-A, ADR-1501) -- and each
+ * one's receipt, read by its NAMED path. Nothing here lists a directory or spawns a process: an anchor's file is checked
+ * by name, and the ADR numbers come from the extract. (An orphan receipt, one with no narrative, is therefore never
+ * read: it judges nothing, and evaluate() still refuses one when handed it.)
+ * @param {string} root
+ */
+export async function readTree(root) {
+  const href = (/** @type {string} */ p) => pathToFileURL(join(root, p)).href;
+  const wb = await import(href(".claude/scripts/docs/wiki-build.mjs"));
+  const fc = await import(href(".claude/scripts/core/face-coverage.mjs"));
+  const cov = await import(href(".claude/scripts/docs/wiki-coverage.mjs"));
+  const res = await wb.extract(root);
+  if (!res || res.code !== 0 || !res.wiki || !res.wiki.entities) throw new Error(`wiki-build's extract did not complete: ${String(res && res.message || "no result")}`);
+  const wiki = res.wiki;
+  const rootReal = realpathSync(root);
+  const pages = cov.pageTree(fc, wb, join(root, wb.WIKI_DIR));
+  /** @type {Record<string, string>} */ const narratives = Object.create(null);
+  /** @type {Record<string, unknown>} */ const receipts = Object.create(null);
+  /** @type {string[]} */ const rejected = [];
+  for (const l of pages.links || []) if (String(l).startsWith(`${wb.NARRATIVE_DIR}/`)) rejected.push(`${wb.WIKI_DIR}/${l}`);
+  for (const type of wb.RENDERED) {
+    const dir = String(wb.PAGE_DIRS[type]);
+    for (const stem of pages.narratives[dir] || []) {
+      const rel = `${wb.WIKI_DIR}/${wb.NARRATIVE_DIR}/${dir}/${stem}.md`;
+      if (!regularInside(join(root, rel), rootReal)) { rejected.push(rel); continue; }
+      narratives[`${dir}/${stem}`] = readFileSync(join(root, rel), "utf8");
+      const rrel = `${VERIFY_DIR}/${dir}/${stem}.json`;
+      if (!existsSync(join(root, rrel))) continue;
+      if (!regularInside(join(root, rrel), rootReal)) { rejected.push(rrel); continue; }
+      try { receipts[`${dir}/${stem}`] = JSON.parse(readFileSync(join(root, rrel), "utf8")); }
+      catch { receipts[`${dir}/${stem}`] = "unparseable"; }
     }
-    let files = null;
-    try { files = new Set(execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean)); }
-    catch { files = null; }
-    const tracked = (/** @type {string} */ p) => {
-      if (files) return files.has(p);
-      const abs = resolve(root, p);
-      return existsSync(abs) && statSync(abs).isFile() && realpathSync(abs).startsWith(rootReal + sep);
-    };
-    const read = (/** @type {string} */ p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return ""; } };
-    const adrs = new Set(readdirSync(join(root, "docs", "adr")).map((f) => /^(\d{4})-.*\.md$/.exec(f)).filter(Boolean).map((m) => String(/** @type {RegExpExecArray} */ (m)[1])));
-    return { wb, wiki, narratives, receipts, rejected, tree: { adrs, wiki, tracked, read } };
-  });
+  }
+  const adrs = new Set();
+  for (const band of Array.isArray(wiki.entities.adrBands) ? wiki.entities.adrBands : []) {
+    for (const a of Array.isArray(band && band.facts && band.facts.adrs) ? band.facts.adrs : []) if (a && /^\d{4}$/.test(String(a.number))) adrs.add(String(a.number));
+  }
+  const tracked = (/** @type {string} */ p) => regularInside(resolve(root, p), rootReal);
+  const read = (/** @type {string} */ p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return ""; } };
+  return { wb, wiki, narratives, receipts, rejected, tree: { adrs, wiki, tracked, read } };
 }
 
 /** A regular file (not a symlink, not a directory) whose real path is inside the tree (attack 845e0a5 B3). */

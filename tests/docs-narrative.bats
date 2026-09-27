@@ -9,7 +9,7 @@ bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 GATE="$ARC_ROOT/.claude/scripts/docs/narrative-anchors.mjs"
-VERIFY="$ARC_ROOT/.claude/scripts/docs/narrative-verify.mjs"
+VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
 
 @test "narrative-anchors: the self-test runs all 17 arms and every mutant FAILs" {
   run node "$GATE" --selftest

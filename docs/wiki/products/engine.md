@@ -27,7 +27,7 @@ Three of arc's commands are compiled from process files rather than written by h
 
 None declared.
 
-## Scripts (31)
+## Scripts (32)
 
 - [`.claude/scripts/engine/adapters/claude-code.mjs`](../../../.claude/scripts/engine/adapters/claude-code.mjs)
 - [`.claude/scripts/engine/adapters/codex.mjs`](../../../.claude/scripts/engine/adapters/codex.mjs)
@@ -54,6 +54,7 @@ None declared.
 - [`.claude/scripts/engine/drivers/mock.sh`](../../../.claude/scripts/engine/drivers/mock.sh)
 - [`.claude/scripts/engine/egress-proxy.py`](../../../.claude/scripts/engine/egress-proxy.py)
 - [`.claude/scripts/engine/egress-session.sh`](../../../.claude/scripts/engine/egress-session.sh)
+- [`.claude/scripts/engine/narrative-verify.mjs`](../../../.claude/scripts/engine/narrative-verify.mjs)
 - [`.claude/scripts/engine/process-lint.mjs`](../../../.claude/scripts/engine/process-lint.mjs)
 - [`.claude/scripts/engine/propose.mjs`](../../../.claude/scripts/engine/propose.mjs)
 - [`.claude/scripts/engine/router-row.mjs`](../../../.claude/scripts/engine/router-row.mjs)

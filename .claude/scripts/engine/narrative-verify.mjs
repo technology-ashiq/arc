@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // narrative-verify.mjs -- ADR-1513 section 2 and 3: verify one drafted narrative, or record the owner's read.
 //
-//   node .claude/scripts/docs/narrative-verify.mjs <dir>/<id> [--driver mock] [--minutes N]
-//   node .claude/scripts/docs/narrative-verify.mjs --accept <dir>/<id> [<dir>/<id> ...]
+//   node .claude/scripts/engine/narrative-verify.mjs <dir>/<id> [--driver mock] [--minutes N]
+//   node .claude/scripts/engine/narrative-verify.mjs --accept <dir>/<id> [<dir>/<id> ...]
 //
 // Verify: numbers the page's blocks exactly as narrative-anchors does, inlines every anchored source, and runs the
 // `narrative-verify` process through arc-run -- `--driver generic-api --trial-model $ARC_VERIFY_MODEL` (ADR-0069(g),
@@ -14,12 +14,19 @@
 // passes, for the text on disk now, can be accepted -- an acceptance never rescues a failing or stale verdict.
 //
 // Exit 0 done · 1 the run failed or a verdict is not SUPPORTED · 2 usage.
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { VERIFY_DIR, anchorProblem, blocksOf, readTree, receiptProblem, sha256 } from "./narrative-anchors.mjs";
+import { VERIFY_DIR, anchorProblem, blocksOf, readTree, receiptProblem, sha256 } from "../docs/narrative-anchors.mjs";
+import { liveLine } from "../hq/lib/redact.mjs";
+
+/**
+ * A source line that matches a secret rule is withheld by its rule name before it is sent anywhere: a fixture key in a
+ * cited file stopped a whole chunk at the data boundary (2026-09-27).
+ */
+const withheld = (/** @type {string} */ text) => String(text).split("\n").map((l) => liveLine(l)).join("\n");
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
@@ -37,7 +44,10 @@ export function sourceOf(anchor, t) {
   const a = anchor.trim();
   const adr = /^ADR-(\d{4})$/.exec(a);
   if (adr) {
-    const f = execFileSync("git", ["ls-files", `docs/adr/${adr[1]}-*.md`], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean)[0] || "";
+    // The ADR's file, from the extract (the band lists every ADR it holds) -- nothing here lists docs/adr.
+    const bands = Array.isArray(t.wiki.entities.adrBands) ? t.wiki.entities.adrBands : [];
+    const hit = bands.flatMap((b) => (b && b.facts && Array.isArray(b.facts.adrs) ? b.facts.adrs : [])).find((a) => a && String(a.number) === adr[1]);
+    const f = hit && typeof hit.file === "string" ? hit.file : "";
     if (!f) return "";
     // An ADR's title and its Decision are what a claim cites; the context before them is where the cap would cut.
     const text = t.tree.read(f);
@@ -68,7 +78,7 @@ export function inputFor(page, text, t) {
   const blocks = blocksOf(text);
   /** @type {Map<string, string>} */
   const src = new Map();
-  const sourceText = (/** @type {string} */ a) => { if (!src.has(a)) src.set(a, `===== ${a} =====\n${sourceOf(a, t)}`); return String(src.get(a)); };
+  const sourceText = (/** @type {string} */ a) => { if (!src.has(a)) src.set(a, `===== ${a} =====\n${withheld(sourceOf(a, t))}`); return String(src.get(a)); };
   /** @type {{ numbers: number[], input: Record<string, string> }[]} */
   const chunks = [];
   /** @type {{ lines: string[], anchors: Set<string>, numbers: number[], bytes: number }} */

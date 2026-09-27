@@ -26,8 +26,8 @@ Narrative debt: **132 of 135** pages have no narrative yet. ADR headers: 267 of 
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
 | [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 4 | 15 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
-| [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 6 |
-| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 31 |
+| [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 5 |
+| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 32 |
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |

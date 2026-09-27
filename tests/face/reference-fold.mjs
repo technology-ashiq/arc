@@ -167,7 +167,6 @@ check("loading: before the door answers, the room says it is reading, and draws 
     proto.every(([, f]) => f.isLost === true && f.isEntity === false && f.isType === false), proto.filter(([, f]) => !f.isLost).map(([a]) => a).join(","));
 }
 
-console.log(`RAN: ${ran} checks`);
 // ---- the narrative as markdown (ADR-1347 section 2): every block kind, and nothing of the author's metadata ----
 {
   const md = [
@@ -234,4 +233,5 @@ console.log(`RAN: ${ran} checks`);
     JSON.stringify({ debt: idx.debt, prod: prod && prod.id, missing: pf && pf.entity.missing }));
 }
 
+console.log(`RAN: ${ran} checks`);
 process.exitCode = failed === 0 && ran === 20 ? 0 : 1;
