@@ -1249,6 +1249,19 @@
       "itemCount": 2
     },
     {
+      "id": "reference",
+      "name": "Reference",
+      "ring": "company",
+      "status": "built",
+      "sentence": "What arc is, from the tree itself.",
+      "lede": "every product, lane, process, command, agent, rule and gate, read from the same extract docs/wiki is built from -- the why only where the owner wrote it",
+      "render": "index",
+      "indexes": "products",
+      "stations": [],
+      "holds": {},
+      "itemCount": 17
+    },
+    {
       "id": "lane",
       "name": "Lane room",
       "ring": "factory",

@@ -863,3 +863,12 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **Every non-zero exit retried as if it were the race** -- disk full, a read-only objects dir, a hook's refusal (L3). *Retry only the race's own signature (`OBJECT_WRITE_RACE_RE`); anything else throws at once.*
 - **Patience counted in tries, in lockstep** -- 8 linear waits capped the wait at ~1.4 s against a 60 s window, and losers of one attempt collided again on the same schedule (L2, B3). *Bound a retry by time, and jitter it.*
 - **A flake fix proven only by the flake's absence** -- no arm made the write fail, so deleting the retry left every test green (L4, B1). *An injected runner makes the failure happen on demand: retried-then-won, not-the-race, no-gitExit, never-clears.*
+
+## Phase 07 PR B1 -- the Reference room (attack 53ee223, round 1: logic L1-L15, boundary B1-B7)
+
+- **A navigation pick split, not parsed** -- `products//../gates`, a trailing slash and a nested path each named some page (L1, L6). *A pick read from anywhere is held to ONE grammar, the fragment's; anything else is LOST, never a second spelling.*
+- **An id read through the prototype** -- `constructor` or `__proto__` as a product id made wiki-build spread a function and throw, and the fold read an inherited function as a relation (L5, L13, B1, B4). *Accumulate into null-prototype objects; read keyed maps by OWN property only.*
+- **A list iterated whatever it was** -- a `requires` of "core" was iterated letter by letter, a number threw (B2). *Iterate only what IS an array; a relations body of the wrong shape is a named refusal.*
+- **A room openable by presence** -- the live-room button opened the lane TEMPLATE because the id was in the registry (L7, L12, B3). *Ask the rail's own rule (`roomLink`), never re-derive "openable".*
+- **A heading quoted in a code fence taken as the break** -- the owner's narrative was split inside a fenced block (L3). *A parser of the owner's prose tracks fences before reading structure.*
+- **Rows without a key drawn under a shared one** -- an ADR row with no number (L14). *Rows the fold cannot tell apart are counted, not drawn; the fold supplies each key.*

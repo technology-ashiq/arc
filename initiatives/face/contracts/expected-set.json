@@ -392,6 +392,16 @@
         "sources": [
           "docs/HISTORY.md"
         ]
+      },
+      {
+        "id": "reference",
+        "name": "Reference",
+        "ring": "company",
+        "status": "built",
+        "sources": [
+          "docs/wiki/**",
+          "GET /api/reference"
+        ]
       }
     ]
   },

@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "face/src/modules/company/reference/fold.mjs:66-72",
+      "breaking_input": "at = `products//../gates` (an id whose decoded rest contains a slash after the first segment), served with any entity id containing a slash",
+      "why": "at is split on '/' and the id is reassembled with `rest.join('/')` with no validation. `pages[at]`, `narrative[at]`, and the entity lookup `list(key).find(e => e.id === id)` are keyed by the same raw at, so an id containing a slash or a dot segment makes the room draw one entity's facts while reading another entity's narrative/page (or none). The test only checks `products/no-such-product-anywhere`, which cannot reach this path because the slash is in the id part after the first split.",
+      "fix": "Validate `at` against the page grammar before any lookup: key must be a rendered type, id must contain no '/' and must not start with '.', else LOST.",
+      "twin_of": "Malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "face/src/modules/company/reference/fold.mjs:75-86",
+      "breaking_input": "at = `products` when a product entity id is also `products` (a type-key/entity-id collision)",
+      "why": "The navigation grammar is ambiguous when an entity id equals a rendered type key. `fold` decides isIndex/isType/isEntity purely by string shape, so one at can name both a type list and an entity page; the room then silently draws whichever the current extract chooses.",
+      "fix": "Make the grammar unambiguous: reserve one-segment ats for type lists and refuse an entity whose id collides with a rendered type key (count it as unpaged or rename it).",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "face/src/modules/company/reference/fold.mjs:96-99",
+      "breaking_input": "A narrative text containing a fenced code block with a line `## The bigger loop` inside it",
+      "why": "splitNarrative scans raw lines with a regex and does not track fenced code blocks or indented code. An owner-written narrative that documents the heading, or quotes code containing it, is split at the wrong place: part of the owner's text is dropped from 'Start here' and the rest is mislabeled as 'The bigger loop'. The test narrative uses only a plain heading and never presents a fenced block.",
+      "fix": "Parse the narrative with a block parser that ignores headings inside fenced/indented code, or refuse a narrative whose heading appears inside a fence.",
+      "twin_of": "A text scanner's comment stripper read `/*` inside a path... a parser reports when it stops scanning; it never goes quiet."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "face/src/modules/company/reference/fold.mjs:108-114",
+      "breaking_input": "A served body whose `relations` object lacks `requiredBy` (e.g. a door built from an older wiki-build, or a stub overriding only part of relationsOf)",
+      "why": "The fold dereferences `asObject(rel.requiredBy)[eid]` without checking that the sub-key exists; `asObject(undefined)` turns it into `{}`, so every product's 'Required by' silently draws as empty instead of a named refusal. The fixed-defects pattern 'wrong-shaped source read as empty' applies: an absent required mapping is SOURCE_INVALID, never `[]`.",
+      "fix": "Check each relations sub-key's shape once at fold entry and draw a refusal when any of requiredBy/commandOwner/agentOwner/adrsFor/productLane is absent.",
+      "twin_of": "A wrong-shaped source returned an empty inventory -> empty because absent and empty because unreadable are different results."
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/docs/wiki-build.mjs:477-499",
+      "breaking_input": "A product whose id is `__proto__` or `constructor`, with facts.requires listing another product",
+      "why": "relationsOf builds `requiredBy`, `commandOwner`, `agentOwner`, `adrsFor`, and `productLane` as plain `{}` objects and assigns keys derived from entity ids. An id of `__proto__` or `constructor` makes `requiredBy[r] = [...]` set or skip through the prototype, so the room's `asObject(rel.requiredBy)[eid]` reads an inherited value instead of (or in addition to) the product's real list. The test compares the room against the markdown built by the same buggy map, so both agree and both are wrong for prototype-keyed ids.",
+      "fix": "Build all relation maps with Object.create(null) (or Maps converted to JSON), and refuse an id equal to a prototype property name.",
+      "twin_of": "`out[key] =` on a plain object -> Build maps from untrusted keys without a prototype."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "face/src/modules/company/reference/fold.mjs:75-86",
+      "breaking_input": "at = `products/` (trailing slash) or at = `products` with a trailing space",
+      "why": "`at.split('/')` on `products/` yields `['products','']`, so id is `''` and isType is true: the trailing-slash spelling is silently accepted as a second spelling of the type list. The room itself never emits this at (tiles emit `at: k`), but a browser URL or crafted pick can. Two spellings of one state mean the same navigation key has two identities, and a trailing space is trimmed at line 80 while an embedded trailing slash is not, so the normalization is inconsistent.",
+      "fix": "Normalize at once at the fold boundary: trim, refuse a trailing slash, and refuse an empty id for a type pick.",
+      "twin_of": "Empty and relative values past driverOnly -> A free-text slot is exempt from the whitespace rule, never from emptiness or containment."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "face/src/modules/company/reference/fold.mjs:146-149",
+      "breaking_input": "A product fact `faceRoom` = 'reference' while ctx.rooms lists a room with id `reference` but a different ring",
+      "why": "The fold decides `served = asArray(ctx.rooms).some(r => asObject(r).id === room)` without checking the room's ring or that the room is openable in this context. The fixed-defects patterns 'a permission granted by name is scoped to the receiver it was meant for' and 'roomLink counted planned and template rooms as openable' apply: a planned or template room, or a room homed in another ring, lights an 'Open the live room' button when only the id matches. The suite only runs over today's registry where the reference room is built, so a planned/template room with a colliding id is never exercised.",
+      "fix": "Require the matched room to have status 'built' (or the same openable predicate the rail uses) and a ring compatible with the company ring.",
+      "twin_of": "A permission granted by name is scoped to the receiver it was meant for."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "face/src/modules/company/reference/fold.mjs:135-143",
+      "breaking_input": "A lane id containing a slash or a leading dot, e.g. a lane named `../x`",
+      "why": "The fold emits `at: `${key}/${e.id}`` for every entity id without validating the id's shape. An id containing a slash or dot segment makes the generated at unparseable by the fold's own split: a later click on the link cannot navigate back to the same entity, and the test's dangling check would catch it only if such an id existed in today's extract. The fold's promise is 'what it draws can be picked again', and no check enforces it for all ids.",
+      "fix": "Validate every entity id at the fold boundary (no '/', no leading '.', no control characters) and count/refuse ids that cannot be picked, rather than emitting links that cannot round-trip.",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "face/src/modules/company/reference/fold.mjs:75-86",
+      "breaking_input": "at = `products/a%2Fb` (a percent-encoded slash in an id)",
+      "why": "The fold splits on the literal '/' before decoding, so a percent-encoded slash stays inside the id and is compared against literal entity ids. When the door's pages map is keyed by the decoded page path (or by a different normalization), `pages[at]` misses and the entity page renders with an empty Meta/source while its facts come from a matched id. The test only picks ids from body.entities, never a browser-style encoded pick, so this normalization mismatch is uncovered.",
+      "fix": "Decode percent-encoding once at the fold boundary, validate the decoded at against the page grammar, and use the same decoded value for entity matching and for pages/narrative lookups.",
+      "twin_of": "A path checked by one resolver and loaded by another is refused when the two can disagree."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "face/src/modules/company/reference/fold.mjs:108-123",
+      "breaking_input": "A served body whose `entities` is an object with a `products` key holding non-object entries (e.g. `products: ['x']`)",
+      "why": "`list(key)` maps with `asObject` and filters on `typeof e.id === 'string'`, silently dropping entries that are not objects. The dropped entities are then invisible from the index count? Actually `list(key).length` counts only the filtered survivors, so the tile's count and the entity page set disagree with the body's own raw array; a body that should be SOURCE_INVALID instead draws a smaller list and a lower count with no named refusal. The test asserts `index.types.every(t => t.count === String(body.entities[t.key].length))`, which catches this for today's tree but only because the fixture is well-formed; the fold itself has no shape refusal.",
+      "fix": "Require every entry of each entities array to be an object with a string id at fold entry; otherwise refuse the body by name rather than filtering silently.",
+      "twin_of": "A wrong-shaped source read as empty -> empty because absent and empty because unreadable are different results."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "face/src/modules/company/reference/fold.mjs:75-86",
+      "breaking_input": "at = `products` with st.isRead false (loading) while `body` is an empty object",
+      "why": "In the loading state the fold computes `isLost = st.isRead && !isIndex && !isType && !isEntity`, and `isIndex/isType/isEntity` in the returned object are gated on st.isRead. But `lost` and the type/rows/facts fields are computed from the empty body regardless and are returned alongside `isReading`. View checks isReading first in this component, but a consumer that checks isLost before isReading (or a future twin) would draw 'Nothing in the reference is called ...' during the loading state. The test only asserts isReading and isRead, never that loading.lost is empty.",
+      "fix": "Make isLost require st.isRead, and clear lost/notes/debt while isReading, or have View check isReading before isLost and pin it with a test.",
+      "twin_of": "A 200 that is not a lane, or is a body about ANOTHER lane, drew \"reading the lane…\" for ever → BAD_BODY / WRONG_LANE refusals."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "face/src/modules/company/reference/fold.mjs:146-149",
+      "breaking_input": "A product fact `faceRoom` = 'reference' while ctx.rooms contains a room with id `reference` that is planned (status 'planned')",
+      "why": "The fold's `served` check only compares room ids; it does not require the room to be built or openable. A planned room with a colliding id turns the button into 'Open the live room: reference' even though no live room exists, exactly the class of 'planned and template rooms counted as openable' fixed elsewhere in the codebase. The suite runs against the real registry where reference is built, so the planned/template collision is not exercised.",
+      "fix": "Use the same openable-room predicate as the rail (status built and ring compatible), not an id-only match.",
+      "twin_of": "The lane meter drew 0% for a lane with no measured burn ... → hasMeter, and no bar without a measurement."
+    },
+    {
+      "id": "L13",
+      "severity": "high",
+      "where": "face/src/modules/company/reference/fold.mjs:108-123",
+      "breaking_input": "a product id `constructor` with `facts.requires` containing `constructor`",
+      "why": "Even with Object.create(null) in relationsOf, the fold's `asObject` is fed by JSON.parse which creates objects with Object.prototype. `asObject(rel.requiredBy)[eid]` with eid = `constructor` reads the inherited constructor function, `[...].map(str)` converts it to source text, and the room draws a 'Required by' row of function source instead of a refusal. The suite never tests an id that is a prototype property name, so the fixed-defects 'key-shaped text outside the branch name' and 'an id trusted as a key' rows apply.",
+      "fix": "Use Object.hasOwn for every relation lookup, and refuse an id that is a prototype property name before using it as a key.",
+      "twin_of": "An id trusted as a key -> A key the client links by exists only for an id with a contained `<dir>/<id>.md` page; the rest are counted (`unpaged`)."
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": "face/src/modules/company/reference/fold.mjs:155-158",
+      "breaking_input": "an ADR band whose `facts.adrs` contains an entry without a `number` field, or a non-object entry",
+      "why": "`asArray(f.adrs).map(asObject)` maps and then pulls `str(a.number)`, `str(a.title)` etc.; a missing number becomes the empty string and two such ADRs sort as equal and draw under a duplicate React key (`key={a.number}` in View.tsx). The fixed-defects 'an unparseable row became null... every table row parses or is a named error' applies: malformed ADR entries should be a named unreadable count, never two identical empty-number rows.",
+      "fix": "Validate each ADR entry (number/title/status/date as strings) during the map; entries that fail are counted and named, not rendered with empty keys.",
+      "twin_of": "An unparseable plan row became `null` and an unknown mark became \"served\" -> every table row parses or is a named error; unknown is never a default."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "face/src/modules/company/reference/fold.mjs:96-99",
+      "breaking_input": "narrative text containing a line `# The bigger loop` with leading whitespace (e.g. one space before the #)",
+      "why": "The regex requires `^#{1,6}\\s*the bigger loop\\s*$` after `l.trim()`, so leading whitespace is handled. But a heading `### The bigger loop` inside a blockquote line `> ## The bigger loop` is not matched (blockquote marker not stripped), so a narrative that uses a blockquote to quote the heading is not split and all text lands in Start here. The split then silently omits the loop section instead of reporting that the expected heading was quoted. The test only uses the plain form.",
+      "fix": "Use the same heading recognition as the wiki's markdown parser (strip blockquote markers and track fences), or report when a narrative contains a quoted/ambiguous bigger-loop heading.",
+      "twin_of": "A text scanner's comment stripper read `/*` inside a path, a `//` comment and a string -> a parser reports when it stops scanning; it never goes quiet."
+    }
+  ]
+}
