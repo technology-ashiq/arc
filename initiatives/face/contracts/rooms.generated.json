@@ -1214,7 +1214,7 @@
       "indexes": "lanes",
       "stations": [],
       "holds": {},
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "concepts",
@@ -1285,7 +1285,8 @@
           "phase.closed"
         ],
         "lanes": [
-          "docs"
+          "docs",
+          "org"
         ],
         "commands": [
           "arc-change",
@@ -1319,10 +1320,11 @@
           "plan"
         ],
         "adrs": [
-          "1500"
+          "1500",
+          "1600"
         ]
       },
-      "itemCount": 25
+      "itemCount": 27
     }
   ],
   "inventories": {
@@ -1333,6 +1335,7 @@
       "1300": "toolbelt",
       "1400": "design-studio",
       "1500": "lane",
+      "1600": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
