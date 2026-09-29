@@ -177,7 +177,7 @@ diff: the list of exactly what changed between two versions of the files.
 |---|---|
 | Version | 0.1.0 |
 | Requires | [core](core.md), [hq](hq.md) |
-| Required by | [docs](docs.md) |
+| Required by | [docs](docs.md), [org](org.md) |
 | Lane | [engine](../lanes/engine.md) |
 | Face room | engine-room (ring kernel) |
 

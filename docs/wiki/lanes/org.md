@@ -13,7 +13,7 @@
 |---|---|
 | Status | LIVE |
 | Cycle | arc-org (Cycle 18, opened 2026-09-29) |
-| Product | — |
+| Product | [org](../products/org.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
 
