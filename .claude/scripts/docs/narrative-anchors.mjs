@@ -8,7 +8,9 @@
 //   (2) the owner's acceptance -- `--accept <dir>/<id> --approval <ULID>` records it against the narrative's sha256, so an
 //       edit after he read it shows the page as awaiting-owner again. Awaiting is counted, never failed; Phase 07 closes
 //       at 0. The ULID is the owner's proof (ADR-1514 amendment 1): an approval.requested for that page and hash, decided
-//       approve through arc-inbox. `--request-accept <dir>/<id>...` raises it.
+//       approve through arc-inbox. `--request-accept <dir>/<id>...` raises it. Amendment 2 makes it authentication: the
+//       approval carries one Ed25519 signature per page, made with a key only the owner's passphrase unseals, and every
+//       accepted entry carries its own `sig`, verified here against the committed public key (.claude/owner-key.pub).
 //   (3) the EXPLANATION DEBT: every command, agent, process, gate and rule no narrative names, and every product and
 //       lane with no narrative -- a count, never a target (ADR-1506's posture).
 // The per-block verifier (narrative-verify.mjs) is advisory since ADR-1514; its receipts no longer ship a page.
@@ -22,7 +24,7 @@
 //
 // The rules live in `evaluate()`, which is pure: the CLI hands it the tree, the self-test hands it planted trees, so
 // every arm FAILs from birth with its mutant (ADR-1503's rule for a gate).
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
@@ -31,6 +33,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The one hq file the gate needs (products/docs requires hq): every spawn, spine read and git call lives there (DOC-A). */
 const PROOF_HREF = pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href;
+/** The pure half of the owner key (message, shapes, verify): node:crypto only, so the gate may import it (DOC-A). Loaded dynamically, so a consumer without hq still refuses by name. */
+const OWNER_SIG_HREF = pathToFileURL(join(HERE, "..", "hq", "lib", "owner-sig.mjs")).href;
+/** Where the owner's public key is committed, relative to the tree (ADR-1514 amendment 2). */
+export const OWNER_PUB = ".claude/owner-key.pub";
 /** The gate string an owner-proof request carries, and the id grammar of the approval that answers it (arc-event's ULID). */
 export const ACCEPT_GATE = "narrative-accept";
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -320,12 +326,32 @@ export function proofsOf(doc) {
 }
 
 /**
+ * The owner signature each acceptance carries, as read from ACCEPT_FILE: page -> its base64 `sig`, or "" when the entry has none
+ * (ADR-1514 amendment 2). Whether it is well formed and verifies is the gate's job, with the owner library.
+ * @param {unknown} doc @returns {Record<string, string>}
+ */
+export function sigsOf(doc) {
+  /** @type {Record<string, string>} */
+  const out = Object.create(null);
+  const pages = doc && typeof doc === "object" && !Array.isArray(doc) && /** @type {any} */ (doc).schema === 1 ? /** @type {any} */ (doc).pages : null;
+  if (!pages || typeof pages !== "object" || Array.isArray(pages)) return out;
+  for (const [page, v] of Object.entries(pages)) {
+    const a = v && typeof v === "object" ? /** @type {any} */ (v).sig : undefined;
+    out[page] = typeof a === "string" ? a : "";
+  }
+  return out;
+}
+
+/**
  * The gate. Pure: every input is handed in. `proofs` is proofsOf(): an owner entry with no well-formed approval FAILs.
  * CI can only see that an approval is NAMED, never that it is real: the spine is gitignored and lives in the main clone, so
  * the check that the ULID is a decided approve for this page and hash runs at --accept time and nowhere else.
- * @param {{ narratives: Record<string, string>, accepted: Record<string, string>, proofs: Record<string, string>, tree: Parameters<typeof anchorProblem>[1] }} io
+ * `sigs` is sigsOf() and `owner` is { pub, lib } -- the committed public key PEM ("" when the file is missing) and the pure
+ * owner library. An owner entry needs a sig that VERIFIES over its own approval, page and hash (ADR-1514 amendment 2), so
+ * an invented ULID, a hand-edited entry and a sig copied from other text FAIL here, on CI, with no spine.
+ * @param {{ narratives: Record<string, string>, accepted: Record<string, string>, proofs: Record<string, string>, sigs?: Record<string, string>, owner?: { pub: string, lib: any } | null, tree: Parameters<typeof anchorProblem>[1] }} io
  */
-export function evaluate({ narratives, accepted, proofs, tree }) {
+export function evaluate({ narratives, accepted, proofs, sigs = {}, owner = null, tree }) {
   /** @type {string[]} */ const fails = [];
   /** @type {string[]} */ const warns = [];
   const rows = Array.isArray(tree.wiki?.entities?.commands) ? tree.wiki.entities.commands : [];
@@ -358,6 +384,21 @@ export function evaluate({ narratives, accepted, proofs, tree }) {
   for (const page of Object.keys(accepted).sort()) {
     if (accepted[page] !== "" && !(Object.prototype.hasOwnProperty.call(proofs, page) && ULID.test(String(proofs[page])))) fails.push(`[no-owner-proof] ${page} -- accepted without an owner proof: ${ACCEPT_FILE} names no approval for it (--request-accept, then --accept --approval)`);
   }
+  let keyReported = false;
+  for (const page of Object.keys(accepted).sort()) {
+    const approval = Object.prototype.hasOwnProperty.call(proofs, page) ? String(proofs[page]) : "";
+    // No hash or no approval is already reported above ([awaiting-owner], [no-owner-proof]); a signature needs both to be judged.
+    if (accepted[page] === "" || !ULID.test(approval)) continue;
+    const sig = Object.prototype.hasOwnProperty.call(sigs, page) ? sigs[page] : "";
+    if (typeof sig !== "string" || sig === "") { fails.push(`[no-owner-signature] ${page} -- the accepted entry carries no owner signature (sig): only --accept, from an approval the owner signed at a terminal with arc-inbox, writes one`); continue; }
+    if (!owner || !owner.lib || !owner.pub) {
+      if (!keyReported) { keyReported = true; fails.push(`[no-owner-key] ${OWNER_PUB} is missing or unreadable (or the owner library is not installed), but ${ACCEPT_FILE} holds owner entries, so none can be verified; the owner runs "arc-inbox owner-key init" and commits it`); }
+      continue;
+    }
+    if (!owner.lib.sigWellFormed(sig)) { fails.push(`[no-owner-signature] ${page} -- the entry's sig is not a base64 Ed25519 signature of the exact length`); continue; }
+    const hash = accepted[page];
+    if (!owner.lib.verifyOwnerSig(owner.pub, owner.lib.ownerMessage(approval, page, hash), sig)) fails.push(`[bad-owner-signature] ${page} -- the entry's sig does not verify against ${OWNER_PUB} over this page, its hash and its approval (another key, another text, or a sig copied from elsewhere)`);
+  }
   for (const page of Object.keys(accepted).sort()) if (!Object.prototype.hasOwnProperty.call(narratives, page)) fails.push(`[orphan-accept] ${ACCEPT_FILE} names ${page}, which has no narrative`);
   return { fails, warns, accepted: ok, awaiting, narratives: Object.keys(narratives).length };
 }
@@ -366,20 +407,22 @@ export function evaluate({ narratives, accepted, proofs, tree }) {
  * The acceptance file with one page added (or re-read), or why it is refused: the page must exist and pass the gate.
  * @param {unknown} doc the current ACCEPT_FILE (or null) @param {string} page @param {Record<string, string>} narratives
  * @param {string[]} fails evaluate()'s fails @param {string} on YYYY-MM-DD @param {string} approval the owner's proof, a ULID
+ * @param {string} sig the owner's signature for this page, copied from the approval's decision (the caller has verified it)
  * @returns {{ doc: any, refused: string }}
  */
-export function acceptEntry(doc, page, narratives, fails, on, approval) {
+export function acceptEntry(doc, page, narratives, fails, on, approval, sig) {
   if (!ULID.test(String(approval))) return { doc: null, refused: "an acceptance needs the ULID of the owner's approval (--approval)" };
+  if (typeof sig !== "string" || sig === "") return { doc: null, refused: "an acceptance needs the owner's signature for this page, taken from the approval's decision" };
   if (!Object.prototype.hasOwnProperty.call(narratives, page)) return { doc: null, refused: `no narrative ${page}` };
   // A missing proof is what re-stamping CURES, so it must not block the very entry that fixes it.
-  const own = fails.filter((f) => !f.startsWith("[no-owner-proof]") && f.split(" ").some((w) => w === page || w.startsWith(`${page}:`)));
+  const own = fails.filter((f) => !/^\[(no-owner-proof|no-owner-signature|bad-owner-signature)\]/.test(f) && f.split(" ").some((w) => w === page || w.startsWith(`${page}:`)));
   if (own.length) return { doc: null, refused: `${page} fails the gate: ${own[0]}` };
   // A page id of __proto__ is a legal own key from JSON.parse and would vanish into the prototype (attack b5f5e03 B4).
   if (doc && typeof doc === "object" && Object.prototype.hasOwnProperty.call(/** @type {any} */ (doc).pages ?? {}, "__proto__")) return { doc: null, refused: `${ACCEPT_FILE} holds a __proto__ page key; fix the file by hand` };
   const prev = doc && typeof doc === "object" && !Array.isArray(doc) && /** @type {any} */ (doc).schema === 1 && /** @type {any} */ (doc).pages && typeof /** @type {any} */ (doc).pages === "object" ? /** @type {any} */ (doc).pages : {};
   /** @type {Record<string, unknown>} */
   const pages = Object.create(null);
-  for (const k of [...Object.keys(prev), page].filter((k, i, a) => a.indexOf(k) === i).sort()) pages[k] = k === page ? { by: "owner", on, sha256: sha256(String(narratives[page])), approval } : prev[k];
+  for (const k of [...Object.keys(prev), page].filter((k, i, a) => a.indexOf(k) === i).sort()) pages[k] = k === page ? { by: "owner", on, sha256: sha256(String(narratives[page])), approval, sig } : prev[k];
   return { doc: { schema: 1, pages }, refused: "" };
 }
 
@@ -452,10 +495,14 @@ export async function readTree(root) {
   for (const band of Array.isArray(wiki.entities.adrBands) ? wiki.entities.adrBands : []) {
     for (const a of Array.isArray(band && band.facts && band.facts.adrs) ? band.facts.adrs : []) if (a && /^\d{4}$/.test(String(a.number))) adrs.add(String(a.number));
   }
+  /** @type {any} */ let lib = null;
+  try { lib = await import(OWNER_SIG_HREF); } catch { lib = null; }
+  const pubFile = join(root, OWNER_PUB);
+  const owner = { pub: regularInside(pubFile, rootReal) ? readFileSync(pubFile, "utf8") : "", lib };
   const tracked = got.list ? trackedIn(got.list, root, rootReal) : (/** @type {string} */ p) => presentExact(root, rootReal, p);
   const read = (/** @type {string} */ p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return ""; } };
   const isDir = (/** @type {string} */ seg) => isTopDir(root, seg);
-  return { wb, wiki, narratives, receipts, acceptDoc, acceptText: acc.text, accepted: acceptedOf(acceptDoc), rejected, degraded: got.why, tree: { adrs, wiki, tracked, read, isDir } };
+  return { wb, wiki, narratives, receipts, acceptDoc, acceptText: acc.text, accepted: acceptedOf(acceptDoc), owner, rejected, degraded: got.why, tree: { adrs, wiki, tracked, read, isDir } };
 }
 
 /**
@@ -634,6 +681,20 @@ export function acceptArgProblem(accept, approval, requestPages) {
   return { code: 0, why: "" };
 }
 
+/**
+ * What the plain gate says about the owner key against the base ref (ADR-1514 amendment 2, "Correction"): one WARN when the
+ * key was swapped, one WARN when it could not be compared (never a silent pass), nothing otherwise. `changed` is the count the
+ * summary line carries. Pure: narrative-proof's ownerKeyBaseState does the git read.
+ * @param {{ state: string, why?: string, base?: string, was?: string, now?: string } | null} st
+ * @returns {{ warn: string, changed: number }}
+ */
+export function ownerKeyFinding(st) {
+  if (!st) return { warn: `[owner-key-unchecked] hq/lib/narrative-proof.mjs is not installed, so ${OWNER_PUB} was not compared with the base ref`, changed: 0 };
+  if (st.state === "changed") return { warn: `[owner-key-changed] ${OWNER_PUB} differs from ${st.base} (fingerprint ${st.was} -> ${st.now}): a key swap is the one thing a signature cannot stop, so it is loud; do not merge without telling the owner (ADR-1514 amendment 2)`, changed: 1 };
+  if (st.state === "unavailable") return { warn: `[owner-key-unchecked] ${String(st.why || "the base ref could not be read").replace(/\s+/g, " ").trim()}`, changed: 0 };
+  return { warn: "", changed: 0 };
+}
+
 /** Why --selftest cannot combine with other arguments, or "" (attack b5f5e03 B6): a mode must not ignore what it was given. */
 export function selftestArgProblem(/** @type {string[]} */ argv) {
   const extra = argv.filter((a) => a !== "--selftest");
@@ -682,10 +743,10 @@ async function selftest() {
     run(`${good}\nMore words.\n`, { "products/hq": sha256(good) }).accepted === 0 && run(`${good}\nMore words.\n`, { "products/hq": sha256(good) }).awaiting === 1);
   arm("MUTANT orphan: an acceptance for a page with no narrative FAILs",
     has(evaluate({ narratives: {}, accepted: { "products/gone": sha256(good) }, proofs: { "products/gone": "01ARZ3NDEKTSV4RRFFQ69G5FAV" }, tree }), "[orphan-accept]"));
-  const accept = acceptEntry(null, "products/hq", { "products/hq": good }, [], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV");
-  const refuse = acceptEntry(null, "products/hq", { "products/hq": good }, ["[drift] products/hq -- names x"], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+  const accept = acceptEntry(null, "products/hq", { "products/hq": good }, [], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "sig");
+  const refuse = acceptEntry(null, "products/hq", { "products/hq": good }, ["[drift] products/hq -- names x"], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "sig");
   arm("accept: records the owner and the hash; refuses a page that fails the gate or does not exist",
-    acceptedOf(accept.doc)["products/hq"] === sha256(good) && refuse.refused !== "" && acceptEntry(null, "products/zz", {}, [], "d", "01ARZ3NDEKTSV4RRFFQ69G5FAV").refused !== "");
+    acceptedOf(accept.doc)["products/hq"] === sha256(good) && refuse.refused !== "" && acceptEntry(null, "products/zz", {}, [], "d", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "sig").refused !== "");
   const debt = explanationDebt(wiki, { "products/hq": good }, { products: "products", lanes: "lanes", commands: "commands" });
   const none = explanationDebt(wiki, {}, { products: "products" });
   arm("debt: a product with a narrative and a command named in a code span are explained; with none, both are debt",
@@ -731,8 +792,8 @@ async function selftest() {
     rmSync(outside, { recursive: true, force: true });
   }
   const protoDoc = JSON.parse('{"schema":1,"pages":{"__proto__":{"by":"owner"},"products/a":{"by":"owner"}}}');
-  const protoAccept = acceptEntry(protoDoc, "products/hq", { "products/hq": good }, [], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV");
-  const cleanAccept = acceptEntry({ schema: 1, pages: { "products/a": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, "products/hq", { "products/hq": good }, [], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+  const protoAccept = acceptEntry(protoDoc, "products/hq", { "products/hq": good }, [], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "sig");
+  const cleanAccept = acceptEntry({ schema: 1, pages: { "products/a": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, "products/hq", { "products/hq": good }, [], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "sig");
   arm("MUTANT B4 proto: a __proto__ page key in the file is refused by name, and a normal merge keeps the earlier page",
     protoAccept.refused.includes("__proto__") && cleanAccept.refused === "" && Object.keys(cleanAccept.doc.pages).join() === "products/a,products/hq");
   arm("MUTANT B6 selftest args: --selftest beside any other argument is refused by name, alone it is fine",
@@ -781,7 +842,7 @@ async function selftest() {
       return has(bare, "[no-owner-proof] products/hq") && bare.fails.some((f) => f.includes("without an owner proof")) && has(bad, "[no-owner-proof]") && !has(fine, "[no-owner-proof]")
         && pf["products/hq"] === "" && pf["products/a"] === "" && pf["products/b"] === U2;
     })());
-  const stamped = acceptEntry({ schema: 1, pages: { "products/old": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, "products/hq", { "products/hq": good }, ["[no-owner-proof] products/hq -- accepted without an owner proof: x"], "2026-09-29", U1);
+  const stamped = acceptEntry({ schema: 1, pages: { "products/old": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, "products/hq", { "products/hq": good }, ["[no-owner-proof] products/hq -- accepted without an owner proof: x"], "2026-09-29", U1, "sig");
   arm("MUTANT B6 record: the entry carries the approval; none or a malformed one is refused; a page failing only for a missing proof can still be re-stamped, and other entries are kept",
     stamped.refused === "" && stamped.doc.pages["products/hq"].approval === U1 && stamped.doc.pages["products/old"].sha256 === "0".repeat(64)
     && acceptEntry(null, "products/hq", { "products/hq": good }, [], "d", "").refused !== "" && acceptEntry(null, "products/hq", { "products/hq": good }, [], "d", "nope").refused !== "");
@@ -805,6 +866,37 @@ async function selftest() {
   const many = [{ id: U1, kind: "approval.requested", payload: { what: "w", gate: ACCEPT_GATE, pages: [{ page: "products/hq", sha256: HG }, { page: "lanes/x", sha256: "a".repeat(64) }] } }, dc(U1, "approve")];
   arm("proof: one approved request covers every page it lists at its hash, and only those",
     approvalProblem(many, U1, "products/hq", HG) === "" && approvalProblem(many, U1, "lanes/x", "a".repeat(64)) === "" && approvalProblem(many, U1, "lanes/x", "b".repeat(64)) !== "" && approvalProblem(many, U1, "lanes/y", HG) !== "");
+  // ---- ADR-1514 amendment 2: the owner's signature. Each arm FAILs against the code before it, which asked for none.
+  const OS = await import(OWNER_SIG_HREF);
+  const K1 = generateKeyPairSync("ed25519"), K2 = generateKeyPairSync("ed25519");
+  const pemOf = (/** @type {any} */ k) => String(k.publicKey.export({ type: "spki", format: "pem" }));
+  const P1 = pemOf(K1), P2 = pemOf(K2);
+  const sgn = (/** @type {any} */ k, /** @type {string} */ approval, /** @type {string} */ page, /** @type {string} */ text) => cryptoSign(null, Buffer.from(OS.ownerMessage(approval, page, sha256(text)), "utf8"), k.privateKey).toString("base64");
+  const gateWith = (/** @type {string} */ text, /** @type {any} */ entrySig, pub = P1, approval = U1) => evaluate({ narratives: { "products/hq": text }, accepted: { "products/hq": sha256(text) }, proofs: { "products/hq": approval }, sigs: entrySig === undefined ? {} : { "products/hq": entrySig }, owner: { pub, lib: OS }, tree });
+  const goodSig = sgn(K1, U1, "products/hq", good);
+  arm("MUTANT A2 format: the signed message is exactly prefix|approval|page|hash; a signature must be 86 base64 characters and ==; sigs is a closed page -> signature object; the gate string is the gate's own",
+    OS.ownerMessage("A", "p/x", "h") === "arc-narrative-accept-v1\nA\np/x\nh" && OS.sigWellFormed(goodSig) && !OS.sigWellFormed(goodSig.slice(1)) && !OS.sigWellFormed(`${goodSig}A`) && !OS.sigWellFormed(7) && !OS.sigWellFormed("")
+    && OS.sigsShapeProblem({ "products/hq": goodSig }) === "" && ["x", [], {}, { "no page": goodSig }, { "products/hq": "abc" }, { "products/hq": goodSig.slice(2) }].every((v) => OS.sigsShapeProblem(v) !== "")
+    && OS.ACCEPT_GATE === ACCEPT_GATE && /^[0-9a-f]{16}$/.test(OS.fingerprint(P1)) && OS.fingerprint(P1) !== OS.fingerprint(P2));
+  arm("MUTANT A4 no signature: an invented ULID with no sig, an empty sig and a malformed sig each FAIL [no-owner-signature] by page; the owner's real signature passes clean",
+    has(gateWith(good, undefined), "[no-owner-signature] products/hq") && has(gateWith(good, ""), "[no-owner-signature]") && has(gateWith(good, "not-base64"), "[no-owner-signature]") && gateWith(good, goodSig).fails.length === 0 && gateWith(good, goodSig).accepted === 1);
+  arm("MUTANT A4 wrong key: a signature by another key FAILs [bad-owner-signature] against the committed key, though it is well formed",
+    has(gateWith(good, sgn(K2, U1, "products/hq", good)), "[bad-owner-signature] products/hq") && !has(gateWith(good, sgn(K2, U1, "products/hq", good)), "[no-owner-signature]") && gateWith(good, sgn(K2, U1, "products/hq", good), P2).fails.length === 0);
+  arm("MUTANT A4 copied sig: a valid signature copied for other text, for another page, or for another approval FAILs [bad-owner-signature]; each is valid where it was made",
+    has(gateWith(good, sgn(K1, U1, "products/hq", `${good}\nother words\n`)), "[bad-owner-signature]") && has(gateWith(good, sgn(K1, U1, "lanes/other", good)), "[bad-owner-signature]") && has(gateWith(good, sgn(K1, U2, "products/hq", good)), "[bad-owner-signature]")
+    && has(gateWith(good, goodSig, P1, U2), "[bad-owner-signature]"));
+  const twoPages = evaluate({ narratives: { "products/hq": good, "lanes/x": `${good}\nlane\n` }, accepted: { "products/hq": sha256(good), "lanes/x": sha256(`${good}\nlane\n`) }, proofs: { "products/hq": U1, "lanes/x": U1 }, sigs: { "products/hq": goodSig, "lanes/x": goodSig }, owner: { pub: "", lib: OS }, tree });
+  const noEntries = evaluate({ narratives: { "products/hq": good }, accepted: {}, proofs: {}, sigs: {}, owner: { pub: "", lib: OS }, tree });
+  arm("MUTANT A4 no key: with owner entries and no public key file one [no-owner-key] FAILs (once, however many pages); with no entries a missing key says nothing",
+    twoPages.fails.filter((f) => f.startsWith("[no-owner-key]")).length === 1 && !has(twoPages, "[bad-owner-signature]") && !has(noEntries, "[no-owner-key]") && noEntries.fails.length === 0
+    && has(evaluate({ narratives: { "products/hq": good }, accepted: { "products/hq": sha256(good) }, proofs: { "products/hq": U1 }, sigs: { "products/hq": goodSig }, owner: null, tree }), "[no-owner-key]"));
+  const stampedSig = acceptEntry({ schema: 1, pages: { "products/old": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, "products/hq", { "products/hq": good }, ["[no-owner-signature] products/hq -- x", "[bad-owner-signature] products/hq -- x"], "2026-09-30", U1, goodSig);
+  const drifted = acceptEntry(null, "products/hq", { "products/hq": good }, ["[drift] products/hq -- names x"], "2026-09-30", U1, goodSig);
+  const docSigs = sigsOf({ schema: 1, pages: { "products/hq": { by: "owner", sha256: sha256(good), approval: U1, sig: goodSig }, "products/a": { by: "owner", sig: 7 }, "products/b": { by: "owner" } } });
+  arm("MUTANT A5 entry: --accept writes {approval, sig} into the entry and keeps the others; no sig is refused; a page failing only for a missing or bad signature can be re-stamped, a drifting one cannot; sigsOf reads a non-string as none",
+    stampedSig.refused === "" && stampedSig.doc.pages["products/hq"].sig === goodSig && stampedSig.doc.pages["products/hq"].approval === U1 && stampedSig.doc.pages["products/old"].sha256 === "0".repeat(64)
+    && acceptEntry(null, "products/hq", { "products/hq": good }, [], "d", U1, "").refused !== "" && acceptEntry(null, "products/hq", { "products/hq": good }, [], "d", U1, undefined).refused !== "" && drifted.refused !== ""
+    && docSigs["products/hq"] === goodSig && docSigs["products/a"] === "" && docSigs["products/b"] === "");
   // ---- attack r1 (logic surface): L2 shape markers, L3 command word, L4 command rows, L7 local day.
   const withStep = (/** @type {string} */ line) => good.replace("plain: you type `/arc-x`", `plain: you type \`/arc-x\` ${line}`);
   const badMark = run(withStep("<!-- src: a/nope.mjs -->")), goodMark = run(withStep("<!-- src: a/b.mjs -->")), plainMark = run(withStep("<!-- plain -->"));
@@ -837,14 +929,14 @@ async function selftest() {
   const warnLine = reducedWarn(gone.why);
   arm("MUTANT B3 degrade: the plain gate names ONE [drift-reduced] WARN saying gitignored files are not caught, and --accept / --request-accept refuse on it (nothing written); with a git list neither fires",
     warnLine.startsWith("[drift-reduced]") && !warnLine.includes("\n") && warnLine.includes("gitignored") && acceptDegradeProblem(gone.why).includes("nothing was written") && acceptDegradeProblem("") === "");
-  const missing = acceptEntry(null, "products/zz-no-such-page", {}, [], "2026-09-30", U1_DUMMY);
+  const missing = acceptEntry(null, "products/zz-no-such-page", {}, [], "2026-09-30", U1_DUMMY, "sig");
   arm("MUTANT B4 missing page: with a well-formed approval the refusal is the missing page, by name, decided before any spine read",
     missing.doc === null && missing.refused === "no narrative products/zz-no-such-page" && acceptArgProblem("products/zz-no-such-page", U1_DUMMY, []).code === 0);
   // The arms that need a process, the spine or a git repo live with the code that does (DOC-A: nothing here spawns); each still runs the REAL functions.
   const proof = await import(PROOF_HREF);
-  for (const [name, ok] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok);
+  for (const [name, ok] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, acceptEntry, sigsOf, ownerKeyFinding, OWNER_PUB, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok);
   console.log(`RAN: ${ran} checks, ${failed} failed`);
-  return failed === 0 && ran === 59 ? 0 : 1;
+  return failed === 0 && ran === 75 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
@@ -904,8 +996,17 @@ async function main(argv) {
     const noGit = acceptDegradeProblem(t.degraded);
     if (noGit) { console.log(`REFUSED ${accept || "request-accept"} -- ${noGit}`); return 1; }
   }
-  const r = evaluate({ narratives: t.narratives, accepted: t.accepted, proofs: proofsOf(t.acceptDoc), tree: t.tree });
+  const r = evaluate({ narratives: t.narratives, accepted: t.accepted, proofs: proofsOf(t.acceptDoc), sigs: sigsOf(t.acceptDoc), owner: t.owner, tree: t.tree });
   if (t.degraded) r.warns.push(reducedWarn(t.degraded));
+  // The base read spawns git, so it lives in hq (DOC-A); only the plain gate runs it, never --accept or --request-accept.
+  let keyChanged = 0;
+  if (!accept && !requestPages.length) {
+    /** @type {any} */ let mod = pm;
+    if (!mod) { try { mod = await import(PROOF_HREF); } catch { mod = null; } }
+    const kf = ownerKeyFinding(mod ? mod.ownerKeyBaseState(root) : t.owner.pub === "" ? { state: "no-key" } : null);
+    if (kf.warn) r.warns.push(kf.warn);
+    keyChanged = kf.changed;
+  }
   for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory, unparseable, wrong-shaped or out of the tree; narratives and their records are regular files inside it`);
   if (requestPages.length) {
     const req = requestPayload(requestPages, t.narratives);
@@ -924,11 +1025,15 @@ async function main(argv) {
     // The baseline is the text readTree PARSED, never a second read (attack b8707be B2): the guard must judge the read the doc came from.
     const before = t.acceptText;
     const on = localDay();
-    const { doc, refused } = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on, approval);
+    // The owner's proof, read from HIS spine (the main clone's, read-only): the one place the ULID is checked against anything,
+    // and where the page's signature is taken from the decision after it verifies against the committed public key.
+    // The page's own refusals (no such narrative, a failing page) come first and cost no spine read; the sig is not known yet.
+    const pre = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on, approval, "pending");
+    if (pre.refused) { console.log(`REFUSED ${accept} -- ${pre.refused}`); return 1; }
+    const proof = await pm.verifyAcceptApproval({ ulid: approval, page: accept, sha256: sha256(String(t.narratives[accept] ?? "")), opts: { root, pubPath: join(root, OWNER_PUB), judge: approvalProblem } });
+    const { doc, refused } = proof.why ? { doc: null, refused: "" } : acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on, approval, proof.sig);
     if (refused) { console.log(`REFUSED ${accept} -- ${refused}`); return 1; }
-    // The owner's proof, read from HIS spine (the main clone's, read-only): the one place the ULID is checked against anything.
-    const noProof = await pm.verifyAcceptApproval({ ulid: approval, page: accept, sha256: sha256(String(t.narratives[accept])), opts: { root, judge: approvalProblem } });
-    if (noProof) { console.log(`REFUSED ${accept} -- ${noProof}; nothing was written`); return 1; }
+    if (proof.why) { console.log(`REFUSED ${accept} -- ${proof.why}; nothing was written`); return 1; }
     const failed = writeAccept(root, doc, before);
     if (failed) { console.log(`REFUSED ${accept} -- ${failed}`); return 1; }
     console.log(`accepted ${accept} for the owner on ${on} under approval ${approval} (sha256 ${sha256(String(t.narratives[accept])).slice(0, 12)}) -> ${ACCEPT_FILE}`);
@@ -938,7 +1043,7 @@ async function main(argv) {
   if (json) { process.stdout.write(`${JSON.stringify({ ...r, explanation: d }, null, 2)}\n`); return r.fails.length ? 1 : 0; }
   for (const f of r.fails) console.log(`FAIL ${f}`);
   for (const w of r.warns) console.log(`WARN ${w}`);
-  console.log(`narrative-anchors: narratives=${r.narratives} accepted=${r.accepted} awaiting-owner=${r.awaiting} fail=${r.fails.length} · explanation debt: ${d.debt} of ${d.total} (${d.explained} explained)`);
+  console.log(`narrative-anchors: narratives=${r.narratives} accepted=${r.accepted} awaiting-owner=${r.awaiting} fail=${r.fails.length} owner-key-changed=${keyChanged} · explanation debt: ${d.debt} of ${d.total} (${d.explained} explained)`);
   return r.fails.length ? 1 : 0;
 }
 

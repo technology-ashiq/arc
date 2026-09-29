@@ -5,6 +5,7 @@
 // suggestion (council v2's case-insensitive-then-exact-compare class).
 
 import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex, IST_TS_RE } from "./canonical.mjs";
+import { sigsShapeProblem } from "./owner-sig.mjs";
 import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate-experiment.mjs";
 import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
 import { CONTENT_KINDS, assertContent, isContentKind } from "./validate-content.mjs";
@@ -229,11 +230,17 @@ function assertMoney(payload) {
 // human reason. Unlike a provider money payload it carries no free metadata, so the shape is
 // CLOSED: a malformed decision must never be sealed onto an append-only spine (REQ-02), and an
 // un-normalized verdict keeps "Approve" or "reject " from ever counting as a real decision.
-function assertDecision(event) {
+export function assertDecision(event) {
   const payload = event.payload;
   for (const k of Object.keys(payload))
-    if (k !== "decides" && k !== "verdict" && k !== "reason")
-      throw new SpineError("BAD_DECISION", `decision.recorded payload has unknown key "${k}" (shape is closed to decides|verdict|reason)`);
+    if (k !== "decides" && k !== "verdict" && k !== "reason" && k !== "sigs")
+      throw new SpineError("BAD_DECISION", `decision.recorded payload has unknown key "${k}" (shape is closed to decides|verdict|reason, and the optional sigs)`);
+  // ADR-1514 amendment 2: the ONE optional key. A narrative-accept approve carries one Ed25519 signature per page. The
+  // validator cannot see the request's gate, so it does not require it (the reader and the CI gate do); it only keeps the shape closed.
+  if ("sigs" in payload) {
+    const bad = sigsShapeProblem(payload.sigs);
+    if (bad) throw new SpineError("BAD_DECISION", `decision.${bad}`);
+  }
   if (typeof payload.decides !== "string" || !ULID_RE.test(payload.decides))
     throw new SpineError("BAD_DECISION", "decision.decides must be the ULID of the approval.requested it decides");
   // A decision that decides its own id is a cycle no fold can resolve (mirrors supersedes-self).
