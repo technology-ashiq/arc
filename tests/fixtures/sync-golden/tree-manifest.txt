@@ -276,8 +276,8 @@
 .claude/scripts/hq/lib/ledger/pnl.mjs	238dc9d9fe07cdacc6ac8d9bb48b0e9211c3c714651f612a48ced9e0279c3699
 .claude/scripts/hq/lib/ledger/reconcile.mjs	ba148b3bddf9516b026dcae34992de5707bb8b24034791b5c9c6b23f8456260b
 .claude/scripts/hq/lib/ledger/ventures.mjs	a61b52d3c2cf7efa9133749993bb175aba67924cbd63973be1a5d7b249b400db
-.claude/scripts/hq/lib/narrative-proof.mjs	d918f9428560c3a9ded79c69a5201c83bc38719c20466329a6d1acafbe155486
-.claude/scripts/hq/lib/owner-key.mjs	86161c6fde8eeab799d37c4dec0d51cf6b5722fbf2660b620c3eb29c02134263
+.claude/scripts/hq/lib/narrative-proof.mjs	0d2b0ef01eb176b128b99516b1941267f33a62ae3b09f89940b7d15c77ebea97
+.claude/scripts/hq/lib/owner-key.mjs	f7da53e05663d7fb0fd31ee32590523b1b7b3668525f26b49cbf0e998ec6c009
 .claude/scripts/hq/lib/owner-sig.mjs	8a20a20be2ed353c692c85cf58610d6def19ac7f31c9d126fa80cdc3c36c6634
 .claude/scripts/hq/lib/policy/authorize.mjs	993b72bcde4c99721535b15ca5ec2ee155610308ceadd517716ab8cb67d66b78
 .claude/scripts/hq/lib/policy/constitution.mjs	c2dd14eb505cce4a9dd131b33ad29cc1388ba37a7428be39e599d7474c642f3f
