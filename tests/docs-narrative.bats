@@ -11,10 +11,10 @@ load 'test_helper'
 GATE="$ARC_ROOT/.claude/scripts/docs/narrative-anchors.mjs"
 VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
 
-@test "narrative-anchors: the self-test runs all 33 arms and every mutant FAILs" {
+@test "narrative-anchors: the self-test runs all 41 arms and every mutant FAILs" {
   run node "$GATE" --selftest
   [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the self-test never reached its end (exit $status): $output"; false; }
-  [[ "$output" == *"RAN: 33 checks, 0 failed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: 41 checks, 0 failed"* ]] || { echo "$output"; false; }
   [ "$status" -eq 0 ]
   local arm
   for arm in "MUTANT drift: an ADR" "MUTANT drift: a command" "MUTANT drift: a path" "MUTANT drift: a name inside a page-shape block" \
@@ -41,7 +41,7 @@ VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
   sed 's/for (const n of names.adrs) if (!tree.adrs.has(n)) fails.push/for (const n of names.adrs) if (false) fails.push/' "$GATE" > "$copy"
   ! cmp -s "$GATE" "$copy" || { echo "the mutation did not apply -- the anchor text moved"; false; }
   run node "$copy" --selftest
-  [[ "$output" == *"RAN: 33 checks"* ]] || { echo "the mutant self-test never ran: $output"; false; }
+  [[ "$output" == *"RAN: 41 checks"* ]] || { echo "the mutant self-test never ran: $output"; false; }
   [[ "$output" == *"FAIL MUTANT drift: an ADR"* ]] || { echo "the cut rule was not noticed: $output"; false; }
   [ "$status" -ne 0 ]
 }

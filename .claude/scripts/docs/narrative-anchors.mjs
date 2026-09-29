@@ -5,26 +5,34 @@
 // this gate keeps it honest in two ways, and counts a third:
 //   (1) the drift check -- every ADR, `/arc-*` command and repo path the narrative names must exist, and any
 //       `<!-- src: ... -->` anchor it still carries must resolve;
-//   (2) the owner's acceptance -- `--accept <dir>/<id>` records it against the narrative's sha256, so an edit after he
-//       read it shows the page as awaiting-owner again. Awaiting is counted, never failed; Phase 07 closes at 0.
+//   (2) the owner's acceptance -- `--accept <dir>/<id> --approval <ULID>` records it against the narrative's sha256, so an
+//       edit after he read it shows the page as awaiting-owner again. Awaiting is counted, never failed; Phase 07 closes
+//       at 0. The ULID is the owner's proof (ADR-1514 amendment 1): an approval.requested for that page and hash, decided
+//       approve through arc-inbox. `--request-accept <dir>/<id>...` raises it.
 //   (3) the EXPLANATION DEBT: every command, agent, process, gate and rule no narrative names, and every product and
 //       lane with no narrative -- a count, never a target (ADR-1506's posture).
 // The per-block verifier (narrative-verify.mjs) is advisory since ADR-1514; its receipts no longer ship a page.
 //
 //   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] [--json]
-//   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] --accept <dir>/<id>
+//   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] --request-accept <dir>/<id> [<dir>/<id> ...]
+//   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] --accept <dir>/<id> --approval <ULID>
 //   node .claude/scripts/docs/narrative-anchors.mjs --selftest
 //
-// Exit 0 clean (warnings allowed) · 1 a FAIL finding, or --accept refused · 2 usage or an unreadable tree.
+// Exit 0 clean (warnings allowed) · 1 a FAIL finding, or --accept / --request-accept refused · 2 usage or an unreadable tree.
 //
 // The rules live in `evaluate()`, which is pure: the CLI hands it the tree, the self-test hands it planted trees, so
 // every arm FAILs from birth with its mutant (ADR-1503's rule for a gate).
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+/** The gate string an owner-proof request carries, and the id grammar of the approval that answers it (arc-event's ULID). */
+export const ACCEPT_GATE = "narrative-accept";
+const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 /** Where the advisory verifier receipts live, and the owner's acceptances beside them (outside docs/wiki, ADR-1503). */
 export const VERIFY_DIR = "docs/narrative-verify";
@@ -253,10 +261,29 @@ export function acceptedOf(doc) {
 }
 
 /**
- * The gate. Pure: every input is handed in.
- * @param {{ narratives: Record<string, string>, accepted: Record<string, string>, tree: Parameters<typeof anchorProblem>[1] }} io
+ * The approval each acceptance names, as read from ACCEPT_FILE: page -> its ULID, or "" when the entry names none or a
+ * malformed one (ADR-1514 amendment 1). Read beside acceptedOf, never inside it, so the hash check stays as it was.
+ * @param {unknown} doc @returns {Record<string, string>}
  */
-export function evaluate({ narratives, accepted, tree }) {
+export function proofsOf(doc) {
+  /** @type {Record<string, string>} */
+  const out = Object.create(null);
+  const pages = doc && typeof doc === "object" && !Array.isArray(doc) && /** @type {any} */ (doc).schema === 1 ? /** @type {any} */ (doc).pages : null;
+  if (!pages || typeof pages !== "object" || Array.isArray(pages)) return out;
+  for (const [page, v] of Object.entries(pages)) {
+    const a = v && typeof v === "object" ? /** @type {any} */ (v).approval : undefined;
+    out[page] = typeof a === "string" && ULID.test(a) ? a : "";
+  }
+  return out;
+}
+
+/**
+ * The gate. Pure: every input is handed in. `proofs` is proofsOf(): an owner entry with no well-formed approval FAILs.
+ * CI can only see that an approval is NAMED, never that it is real: the spine is gitignored and lives in the main clone, so
+ * the check that the ULID is a decided approve for this page and hash runs at --accept time and nowhere else.
+ * @param {{ narratives: Record<string, string>, accepted: Record<string, string>, proofs: Record<string, string>, tree: Parameters<typeof anchorProblem>[1] }} io
+ */
+export function evaluate({ narratives, accepted, proofs, tree }) {
   /** @type {string[]} */ const fails = [];
   /** @type {string[]} */ const warns = [];
   const commands = new Set((Array.isArray(tree.wiki?.entities?.commands) ? tree.wiki.entities.commands : []).map((/** @type {any} */ c) => String(c && c.id)));
@@ -275,6 +302,9 @@ export function evaluate({ narratives, accepted, tree }) {
     if (read !== "" && read === sha256(text)) ok++;
     else { awaiting++; warns.push(`[awaiting-owner] ${page} -- ${read === "" ? "the owner has not read it yet" : "edited since the owner read it"} (ADR-1514 section 4)`); }
   }
+  for (const page of Object.keys(accepted).sort()) {
+    if (accepted[page] !== "" && !(Object.prototype.hasOwnProperty.call(proofs, page) && ULID.test(String(proofs[page])))) fails.push(`[no-owner-proof] ${page} -- accepted without an owner proof: ${ACCEPT_FILE} names no approval for it (--request-accept, then --accept --approval)`);
+  }
   for (const page of Object.keys(accepted).sort()) if (!Object.prototype.hasOwnProperty.call(narratives, page)) fails.push(`[orphan-accept] ${ACCEPT_FILE} names ${page}, which has no narrative`);
   return { fails, warns, accepted: ok, awaiting, narratives: Object.keys(narratives).length };
 }
@@ -282,19 +312,21 @@ export function evaluate({ narratives, accepted, tree }) {
 /**
  * The acceptance file with one page added (or re-read), or why it is refused: the page must exist and pass the gate.
  * @param {unknown} doc the current ACCEPT_FILE (or null) @param {string} page @param {Record<string, string>} narratives
- * @param {string[]} fails evaluate()'s fails @param {string} on YYYY-MM-DD
+ * @param {string[]} fails evaluate()'s fails @param {string} on YYYY-MM-DD @param {string} approval the owner's proof, a ULID
  * @returns {{ doc: any, refused: string }}
  */
-export function acceptEntry(doc, page, narratives, fails, on) {
+export function acceptEntry(doc, page, narratives, fails, on, approval) {
+  if (!ULID.test(String(approval))) return { doc: null, refused: "an acceptance needs the ULID of the owner's approval (--approval)" };
   if (!Object.prototype.hasOwnProperty.call(narratives, page)) return { doc: null, refused: `no narrative ${page}` };
-  const own = fails.filter((f) => f.split(" ").some((w) => w === page || w.startsWith(`${page}:`)));
+  // A missing proof is what re-stamping CURES, so it must not block the very entry that fixes it.
+  const own = fails.filter((f) => !f.startsWith("[no-owner-proof]") && f.split(" ").some((w) => w === page || w.startsWith(`${page}:`)));
   if (own.length) return { doc: null, refused: `${page} fails the gate: ${own[0]}` };
   // A page id of __proto__ is a legal own key from JSON.parse and would vanish into the prototype (attack b5f5e03 B4).
   if (doc && typeof doc === "object" && Object.prototype.hasOwnProperty.call(/** @type {any} */ (doc).pages ?? {}, "__proto__")) return { doc: null, refused: `${ACCEPT_FILE} holds a __proto__ page key; fix the file by hand` };
   const prev = doc && typeof doc === "object" && !Array.isArray(doc) && /** @type {any} */ (doc).schema === 1 && /** @type {any} */ (doc).pages && typeof /** @type {any} */ (doc).pages === "object" ? /** @type {any} */ (doc).pages : {};
   /** @type {Record<string, unknown>} */
   const pages = Object.create(null);
-  for (const k of [...Object.keys(prev), page].filter((k, i, a) => a.indexOf(k) === i).sort()) pages[k] = k === page ? { by: "owner", on, sha256: sha256(String(narratives[page])) } : prev[k];
+  for (const k of [...Object.keys(prev), page].filter((k, i, a) => a.indexOf(k) === i).sort()) pages[k] = k === page ? { by: "owner", on, sha256: sha256(String(narratives[page])), approval } : prev[k];
   return { doc: { schema: 1, pages }, refused: "" };
 }
 
@@ -482,6 +514,128 @@ export function writeAccept(root, doc, before) {
   }
 }
 
+// ---------------------------------------------------------------- the owner's proof (ADR-1514 amendment 1) ----------------------------------------------------------------
+
+/**
+ * The main clone, from git's common dir the way spine-io's assertNotLinkedWorktree finds it: in a linked worktree the
+ * common dir's parent IS the main clone, and in the main clone itself it is the clone. "" when git cannot say.
+ * @param {string} cwd
+ */
+export function mainCloneOf(cwd) {
+  try {
+    const common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return common ? dirname(common) : "";
+  } catch { return ""; }
+}
+
+/**
+ * Where the owner's spine is, and which arc-event writes to it. A linked worktree refuses the spine (WORKTREE_SPINE) and the
+ * canonical spine is in the main clone, so both the read and the request go there. ARC_SPINE_ROOT, the existing TEST door,
+ * names the spine instead and skips the lookup; set but empty is refused, never read as "no spine named".
+ * @param {string} root the tree this ran against
+ * @returns {{ spine: string, arcEvent: string, cwd: string, main: string, why: string }}
+ */
+export function ownerSpine(root) {
+  const none = { spine: "", arcEvent: "", cwd: "", main: "", why: "" };
+  if ("ARC_SPINE_ROOT" in process.env) {
+    const named = String(process.env.ARC_SPINE_ROOT ?? "");
+    if (named.trim() === "") return { ...none, why: "ARC_SPINE_ROOT is set but empty; unset it or name a spine" };
+    return { spine: resolve(named), arcEvent: join(HERE, "..", "hq", "arc-event.mjs"), cwd: root, main: "", why: "" };
+  }
+  const main = mainCloneOf(root);
+  if (!main) return { ...none, why: "git cannot say where the main clone is, so the owner's spine cannot be found" };
+  const arcEvent = join(main, ".claude", "scripts", "hq", "arc-event.mjs");
+  if (!existsSync(arcEvent)) return { ...none, why: `the main clone ${main} has no arc-event; pull it first` };
+  return { spine: join(main, ".claude", "state", "hq"), arcEvent, cwd: main, main, why: "" };
+}
+
+/**
+ * Every event on the spine, read-only, through the door (spine.mjs `query`). Never throws: a spine that cannot be read is a
+ * reason to refuse, and the events it could not show cannot have forged an approval.
+ * @param {string} spine @returns {Promise<{ events: any[], why: string }>}
+ */
+export async function readSpineEvents(spine) {
+  if (!spine || !existsSync(join(spine, "events"))) return { events: [], why: "the owner's spine has no events folder, so no approval can be found" };
+  try {
+    const { query } = await import(pathToFileURL(join(HERE, "..", "hq", "spine.mjs")).href);
+    const r = await query(spine, { engine: "scan" });
+    return { events: r.events.map((/** @type {any} */ x) => x.event), why: "" };
+  } catch (e) { return { events: [], why: `the spine could not be read (${e && /** @type {any} */ (e).code ? /** @type {any} */ (e).code : "error"})` }; }
+}
+
+/**
+ * Why `approval` is not the owner's proof for this page at this text, or "" when it is: the spine must hold an
+ * approval.requested for gate narrative-accept that lists the page with its CURRENT sha256, and a decision.recorded for it
+ * that approves. Pure; the caller hands in the spine's events.
+ * @param {any[]} events @param {unknown} approval @param {string} page @param {string} hash
+ */
+export function approvalProblem(events, approval, page, hash) {
+  if (typeof approval !== "string" || approval === "") return "--approval <ULID> is required: the owner's approval for this page (--request-accept raises it, arc-inbox approve decides it)";
+  if (!ULID.test(approval)) return `${JSON.stringify(approval.slice(0, 40))} is not an approval id (the 26-character ULID --request-accept printed)`;
+  const evs = (Array.isArray(events) ? events : []).filter((e) => e && typeof e === "object");
+  const req = evs.find((e) => e.id === approval && e.kind === "approval.requested");
+  if (!req) {
+    const other = evs.find((e) => e.id === approval);
+    return other ? `${approval} is a ${String(other.kind)}, not an approval request` : `${approval} is not an approval on the owner's spine`;
+  }
+  const p = req.payload && typeof req.payload === "object" ? req.payload : {};
+  if (p.gate !== ACCEPT_GATE) return `${approval} is an approval for ${JSON.stringify(p.gate ?? null)}, not ${ACCEPT_GATE}`;
+  const named = (Array.isArray(p.pages) ? p.pages : []).filter((/** @type {any} */ x) => x && typeof x === "object" && x.page === page);
+  if (!named.length) return `${approval} does not name ${page}`;
+  if (!named.every((/** @type {any} */ x) => x.sha256 === hash)) return `${page} was edited after ${approval} was requested (its text no longer matches what the owner was asked to read); request a new approval`;
+  const decisions = evs.filter((e) => e.kind === "decision.recorded" && e.payload && typeof e.payload === "object" && e.payload.decides === approval);
+  if (!decisions.length) return `${approval} is not decided yet: the owner runs arc-inbox approve ${approval} from the main clone`;
+  if (decisions.some((d) => d.payload.verdict !== "approve")) return `${approval} was rejected by the owner, not approved`;
+  return "";
+}
+
+/**
+ * The approval.requested a page list becomes, or why it cannot: every page must have a narrative, none twice.
+ * @param {string[]} pages @param {Record<string, string>} narratives
+ * @returns {{ payload: any, problem: string }}
+ */
+export function requestPayload(pages, narratives) {
+  if (!Array.isArray(pages) || pages.length === 0) return { payload: null, problem: "--request-accept needs at least one <dir>/<id>" };
+  const seen = new Set();
+  for (const pg of pages) {
+    if (seen.has(pg)) return { payload: null, problem: `${pg} is named twice` };
+    seen.add(pg);
+    if (!Object.prototype.hasOwnProperty.call(narratives, pg)) return { payload: null, problem: `no narrative ${pg}` };
+  }
+  const list = pages.map((page) => ({ page, sha256: sha256(String(narratives[page])) }));
+  const what = `accept ${pages.length} narrative page${pages.length === 1 ? "" : "s"} as read by the owner (${pages.slice(0, 3).join(", ")}${pages.length > 3 ? ", ..." : ""})`;
+  return { payload: { what, gate: ACCEPT_GATE, pages: list }, problem: "" };
+}
+
+/**
+ * Raise the request through the owner's arc-event (the main clone's, run from the main clone).
+ * @param {string} root @param {any} payload
+ * @returns {Promise<{ id: string, main: string, why: string }>}
+ */
+export async function raiseRequest(root, payload) {
+  const os = ownerSpine(root);
+  if (os.why) return { id: "", main: "", why: os.why };
+  const { emitReceipt } = await import(pathToFileURL(join(HERE, "..", "core", "plan-expect.mjs")).href);
+  const r = emitReceipt(os.arcEvent, "approval.requested", payload, { cwd: os.cwd, env: { ...process.env }, timeoutMs: 60_000 });
+  if (r.state !== "landed") return { id: "", main: os.main, why: `the spine ${r.state === "refused" ? "refused" : "may or may not have taken"} the request: ${r.why}` };
+  if (!r.id) return { id: "", main: os.main, why: String(r.why) };
+  return { id: r.id, main: os.main, why: "" };
+}
+
+/**
+ * What --accept / --approval / --request-accept may not be combined with, judged BEFORE the tree is read so a refusal costs
+ * nothing: a bare --accept (the agent-style call) is refused, and so is an approval that is not a ULID.
+ * @param {string} accept @param {string} approval @param {string[]} requestPages
+ * @returns {{ code: number, why: string }}
+ */
+export function acceptArgProblem(accept, approval, requestPages) {
+  if (requestPages.length && (accept || approval)) return { code: 2, why: "--request-accept cannot be combined with --accept or --approval" };
+  if (approval && !accept) return { code: 2, why: "--approval only goes with --accept" };
+  if (accept && !approval) return { code: 1, why: "--accept needs --approval <ULID>: the owner's approval (--request-accept raises it, arc-inbox approve decides it); nothing was written" };
+  if (accept && !ULID.test(approval)) return { code: 1, why: `${JSON.stringify(approval.slice(0, 40))} is not an approval id (the 26-character ULID --request-accept printed); nothing was written` };
+  return { code: 0, why: "" };
+}
+
 /** Why --selftest cannot combine with other arguments, or "" (attack b5f5e03 B6): a mode must not ignore what it was given. */
 export function selftestArgProblem(/** @type {string[]} */ argv) {
   const extra = argv.filter((a) => a !== "--selftest");
@@ -498,11 +652,12 @@ function regularInside(/** @type {string} */ abs, /** @type {string} */ rootReal
 
 // ---------------------------------------------------------------- self-test ----------------------------------------------------------------
 
-function selftest() {
+async function selftest() {
   const wiki = { entities: { products: [{ id: "hq", facts: { version: "1.0.0" } }], lanes: [], commands: [{ id: "arc-x", facts: {} }], agents: [], processes: [], gates: [], rules: [] } };
   const tree = { adrs: new Set(["1513"]), wiki, tracked: (/** @type {string} */ p) => p === "a/b.mjs", read: () => "export function foo() {}", isDir: (/** @type {string} */ d) => d === "a" };
   const good = "<!-- facts: x=1 -->\n# Start here\n## In plain words\nThink of hq as the front desk. It keeps `a/b.mjs` and answers to ADR-1513.\n\n```steps\nt: Ask\nplain: you type `/arc-x`\n```\n\n```bash\n# a quote, not a claim\nnode `c/zz.mjs` /arc-zz ADR-0001\n```\n\n| Term | Means |\n|---|---|\n| hq | the spine <!-- src: fact:products/hq.version --> |\n";
-  const run = (/** @type {string} */ text, /** @type {Record<string, string>} */ accepted = {}) => evaluate({ narratives: { "products/hq": text }, accepted, tree });
+  // The older arms judge the hash and the drift rules, so every acceptance they plant carries a well-formed proof.
+  const run = (/** @type {string} */ text, /** @type {Record<string, string>} */ accepted = {}) => evaluate({ narratives: { "products/hq": text }, accepted, proofs: Object.fromEntries(Object.keys(accepted).map((k) => [k, "01ARZ3NDEKTSV4RRFFQ69G5FAV"])), tree });
   let ran = 0, failed = 0;
   const arm = (/** @type {string} */ name, /** @type {boolean} */ ok) => { ran++; if (!ok) failed++; console.log(`${ok ? "ok" : "FAIL"} ${name}`); };
   const has = (/** @type {{ fails: string[] }} */ r, /** @type {string} */ tag) => r.fails.some((f) => f.startsWith(tag));
@@ -526,11 +681,11 @@ function selftest() {
   arm("MUTANT edited-after-accept: an acceptance for other text reads awaiting, not accepted",
     run(`${good}\nMore words.\n`, { "products/hq": sha256(good) }).accepted === 0 && run(`${good}\nMore words.\n`, { "products/hq": sha256(good) }).awaiting === 1);
   arm("MUTANT orphan: an acceptance for a page with no narrative FAILs",
-    has(evaluate({ narratives: {}, accepted: { "products/gone": sha256(good) }, tree }), "[orphan-accept]"));
-  const accept = acceptEntry(null, "products/hq", { "products/hq": good }, [], "2026-09-28");
-  const refuse = acceptEntry(null, "products/hq", { "products/hq": good }, ["[drift] products/hq -- names x"], "2026-09-28");
+    has(evaluate({ narratives: {}, accepted: { "products/gone": sha256(good) }, proofs: { "products/gone": "01ARZ3NDEKTSV4RRFFQ69G5FAV" }, tree }), "[orphan-accept]"));
+  const accept = acceptEntry(null, "products/hq", { "products/hq": good }, [], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+  const refuse = acceptEntry(null, "products/hq", { "products/hq": good }, ["[drift] products/hq -- names x"], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV");
   arm("accept: records the owner and the hash; refuses a page that fails the gate or does not exist",
-    acceptedOf(accept.doc)["products/hq"] === sha256(good) && refuse.refused !== "" && acceptEntry(null, "products/zz", {}, [], "d").refused !== "");
+    acceptedOf(accept.doc)["products/hq"] === sha256(good) && refuse.refused !== "" && acceptEntry(null, "products/zz", {}, [], "d", "01ARZ3NDEKTSV4RRFFQ69G5FAV").refused !== "");
   const debt = explanationDebt(wiki, { "products/hq": good }, { products: "products", lanes: "lanes", commands: "commands" });
   const none = explanationDebt(wiki, {}, { products: "products" });
   arm("debt: a product with a narrative and a command named in a code span are explained; with none, both are debt",
@@ -545,7 +700,7 @@ function selftest() {
     writeFileSync(join(sandbox, "docs", "Real.md"), "x");
     const sbReal = realpathSync(sandbox);
     const realTree = { adrs: new Set(), wiki, tracked: (/** @type {string} */ p) => presentExact(sandbox, sbReal, p), read: () => "", isDir: (/** @type {string} */ d) => isTopDir(sandbox, d) };
-    const realRun = (/** @type {string} */ text) => evaluate({ narratives: { "products/hq": text }, accepted: {}, tree: realTree });
+    const realRun = (/** @type {string} */ text) => evaluate({ narratives: { "products/hq": text }, accepted: {}, proofs: {}, tree: realTree });
     arm("MUTANT B1 real isDir: docs is a directory on the real check, and a planted missing docs/ path FAILs",
       isTopDir(sandbox, "docs") && !isTopDir(sandbox, "nope") && !isTopDir(sandbox, "docs/x") && has(realRun("It keeps `docs/nope-gone.md` here.\n"), "[drift]") && !has(realRun("It keeps `docs/Real.md` here.\n"), "[drift]"));
     arm("MUTANT B5 case: docs/real.md is not the on-disk docs/Real.md, so a wrong-case name FAILs even on a case-insensitive disk",
@@ -576,8 +731,8 @@ function selftest() {
     rmSync(outside, { recursive: true, force: true });
   }
   const protoDoc = JSON.parse('{"schema":1,"pages":{"__proto__":{"by":"owner"},"products/a":{"by":"owner"}}}');
-  const protoAccept = acceptEntry(protoDoc, "products/hq", { "products/hq": good }, [], "2026-09-28");
-  const cleanAccept = acceptEntry({ schema: 1, pages: { "products/a": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, "products/hq", { "products/hq": good }, [], "2026-09-28");
+  const protoAccept = acceptEntry(protoDoc, "products/hq", { "products/hq": good }, [], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+  const cleanAccept = acceptEntry({ schema: 1, pages: { "products/a": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, "products/hq", { "products/hq": good }, [], "2026-09-28", "01ARZ3NDEKTSV4RRFFQ69G5FAV");
   arm("MUTANT B4 proto: a __proto__ page key in the file is refused by name, and a normal merge keeps the earlier page",
     protoAccept.refused.includes("__proto__") && cleanAccept.refused === "" && Object.keys(cleanAccept.doc.pages).join() === "products/a,products/hq");
   arm("MUTANT B6 selftest args: --selftest beside any other argument is refused by name, alone it is fine",
@@ -620,7 +775,7 @@ function selftest() {
     execFileSync("git", ["add", ".gitignore", "docs/kept.md"], { cwd: box });
     const list = gitTrackedList(box);
     const gtree = { adrs: new Set(), wiki, tracked: trackedIn(list, box, boxReal), read: () => "", isDir: (/** @type {string} */ d) => isTopDir(box, d) };
-    const grun = (/** @type {string} */ text) => evaluate({ narratives: { "products/hq": text }, accepted: {}, tree: gtree });
+    const grun = (/** @type {string} */ text) => evaluate({ narratives: { "products/hq": text }, accepted: {}, proofs: {}, tree: gtree });
     arm("MUTANT B5 tracked: a gitignored file present on disk FAILs the drift check; a git-tracked one passes",
       existsSync(join(box, "docs", "ignored.md")) && list.has("docs/kept.md") && !list.has("docs/ignored.md")
       && has(grun("It keeps `docs/ignored.md` here.\n"), "[drift]") && !has(grun("It keeps `docs/kept.md` here.\n"), "[drift]"));
@@ -634,8 +789,99 @@ function selftest() {
     rmSync(box, { recursive: true, force: true });
     rmSync(bare, { recursive: true, force: true });
   }
+  // ---- ADR-1514 amendment 1: the owner's proof. Each arm FAILs against the code before it (no proof was asked, so nothing refused).
+  const U1 = "01ARZ3NDEKTSV4RRFFQ69G5FAV", U2 = "01ARZ3NDEKTSV4RRFFQ69G5FAW";
+  arm("MUTANT B6 gate: an owner acceptance that names no approval, or a malformed one, FAILs by page; a well-formed ULID does not; a hand-edited file reads the same",
+    (() => {
+      const acc = { "products/hq": sha256(good) };
+      const bare = evaluate({ narratives: { "products/hq": good }, accepted: acc, proofs: {}, tree });
+      const bad = evaluate({ narratives: { "products/hq": good }, accepted: acc, proofs: { "products/hq": "not-a-ulid" }, tree });
+      const fine = evaluate({ narratives: { "products/hq": good }, accepted: acc, proofs: { "products/hq": U1 }, tree });
+      const edited = JSON.parse(JSON.stringify({ schema: 1, pages: { "products/hq": { by: "owner", on: "d", sha256: sha256(good) }, "products/a": { by: "owner", on: "d", sha256: "0".repeat(64), approval: "x" }, "products/b": { by: "owner", on: "d", sha256: "1".repeat(64), approval: U2 } } }));
+      const pf = proofsOf(edited);
+      return has(bare, "[no-owner-proof] products/hq") && bare.fails.some((f) => f.includes("without an owner proof")) && has(bad, "[no-owner-proof]") && !has(fine, "[no-owner-proof]")
+        && pf["products/hq"] === "" && pf["products/a"] === "" && pf["products/b"] === U2;
+    })());
+  const stamped = acceptEntry({ schema: 1, pages: { "products/old": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, "products/hq", { "products/hq": good }, ["[no-owner-proof] products/hq -- accepted without an owner proof: x"], "2026-09-29", U1);
+  arm("MUTANT B6 record: the entry carries the approval; none or a malformed one is refused; a page failing only for a missing proof can still be re-stamped, and other entries are kept",
+    stamped.refused === "" && stamped.doc.pages["products/hq"].approval === U1 && stamped.doc.pages["products/old"].sha256 === "0".repeat(64)
+    && acceptEntry(null, "products/hq", { "products/hq": good }, [], "d", "").refused !== "" && acceptEntry(null, "products/hq", { "products/hq": good }, [], "d", "nope").refused !== "");
+  const HG = sha256(good);
+  const rq = (/** @type {string} */ id, /** @type {any} */ over = {}) => ({ id, kind: "approval.requested", payload: { what: "w", gate: ACCEPT_GATE, pages: [{ page: "products/hq", sha256: HG }], ...over } });
+  const dc = (/** @type {string} */ of, /** @type {string} */ verdict) => ({ id: "01ARZ3NDEKTSV4RRFFQ69G5FB1", kind: "decision.recorded", payload: { decides: of, verdict, reason: "r" } });
+  const yes = [rq(U1), dc(U1, "approve")];
+  const cases = /** @type {[string, string][]} */ ([
+    [approvalProblem(yes, undefined, "products/hq", HG), "required"],
+    [approvalProblem(yes, "not-a-ulid", "products/hq", HG), "not an approval id"],
+    [approvalProblem(yes, U2, "products/hq", HG), "not an approval on"],
+    [approvalProblem([rq(U1, { gate: "concept-define" }), dc(U1, "approve")], U1, "products/hq", HG), "not narrative-accept"],
+    [approvalProblem(yes, U1, "products/other", HG), "does not name"],
+    [approvalProblem(yes, U1, "products/hq", sha256(`${good}\nedited\n`)), "edited after"],
+    [approvalProblem([rq(U1)], U1, "products/hq", HG), "not decided yet"],
+    [approvalProblem([rq(U1), dc(U1, "reject")], U1, "products/hq", HG), "rejected"],
+    [approvalProblem([dc(U1, "approve")], U1, "products/hq", HG), "not an approval on"],
+  ]);
+  arm("MUTANT B6 refusals: no --approval, a malformed id, an unknown id, another gate, a page not in the request, an edited page, an undecided and a rejected request are each refused in their own words",
+    cases.every(([why, want]) => why.includes(want)));
+  const many = [{ id: U1, kind: "approval.requested", payload: { what: "w", gate: ACCEPT_GATE, pages: [{ page: "products/hq", sha256: HG }, { page: "lanes/x", sha256: "a".repeat(64) }] } }, dc(U1, "approve")];
+  arm("proof: one approved request covers every page it lists at its hash, and only those",
+    approvalProblem(many, U1, "products/hq", HG) === "" && approvalProblem(many, U1, "lanes/x", "a".repeat(64)) === "" && approvalProblem(many, U1, "lanes/x", "b".repeat(64)) !== "" && approvalProblem(many, U1, "lanes/y", HG) !== "");
+  const spine = mkdtempSync(join(tmpdir(), "narr-spine-"));
+  const priorSpine = process.env.ARC_SPINE_ROOT;
+  try {
+    mkdirSync(join(spine, "events"));
+    process.env.ARC_SPINE_ROOT = spine;
+    const inbox = (/** @type {string} */ verb, /** @type {string} */ id) => spawnSync(process.execPath, [join(HERE, "..", "hq", "arc-inbox.mjs"), verb, id, "--reason", "read it"], { encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: spine } });
+    const asked = requestPayload(["products/hq", "lanes/x"], { "products/hq": good, "lanes/x": `${good}\nlane\n` });
+    const got = await raiseRequest(spine, asked.payload);
+    const read0 = await readSpineEvents(spine);
+    const undecided = approvalProblem(read0.events, got.id, "products/hq", HG);
+    const ap = inbox("approve", got.id);
+    const read1 = await readSpineEvents(spine);
+    const approved = approvalProblem(read1.events, got.id, "products/hq", HG);
+    const second = approvalProblem(read1.events, got.id, "lanes/x", sha256(`${good}\nlane\n`));
+    const afterEdit = approvalProblem(read1.events, got.id, "products/hq", sha256(`${good}\nedited after approval\n`));
+    const got2 = await raiseRequest(spine, requestPayload(["products/hq"], { "products/hq": good }).payload);
+    const rj = inbox("reject", got2.id);
+    const rejected = approvalProblem((await readSpineEvents(spine)).events, got2.id, "products/hq", HG);
+    arm("MUTANT B6 real spine: request -> undecided refused -> arc-inbox approve -> accepted for every listed page -> edit the page -> hash mismatch refused; a rejected request stays refused",
+      got.why === "" && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(got.id) && undecided.includes("not decided yet") && ap.status === 0 && approved === "" && second === ""
+      && afterEdit.includes("edited after") && got2.why === "" && rj.status === 0 && rejected.includes("rejected"));
+    const named = ownerSpine("x").spine === resolve(spine);
+    process.env.ARC_SPINE_ROOT = "";
+    const emptyDoor = ownerSpine(spine).why !== "" && (await raiseRequest(spine, asked.payload)).why !== "";
+    process.env.ARC_SPINE_ROOT = spine;
+    arm("MUTANT B6 request: an unknown page, a repeat and an empty list are refused before anything is emitted; the test door names the spine, and an empty one is refused",
+      requestPayload(["products/nope"], {}).problem !== "" && requestPayload(["products/hq", "products/hq"], { "products/hq": good }).problem !== "" && requestPayload([], {}).problem !== ""
+      && asked.payload.gate === ACCEPT_GATE && asked.payload.pages.length === 2 && asked.payload.pages[0].sha256 === HG && named && emptyDoor);
+  } finally {
+    if (priorSpine === undefined) delete process.env.ARC_SPINE_ROOT; else process.env.ARC_SPINE_ROOT = priorSpine;
+    rmSync(spine, { recursive: true, force: true });
+  }
+  const cli = mkdtempSync(join(tmpdir(), "narr-cli-"));
+  try {
+    const me = join(HERE, "narrative-anchors.mjs");
+    const call = (/** @type {string[]} */ ...a) => spawnSync(process.execPath, [me, "--root", cli, ...a], { encoding: "utf8" });
+    const bareAccept = call("--accept", "products/hq");
+    const junk = call("--accept", "products/hq", "--approval", "12345");
+    const orphanApproval = call("--approval", U1);
+    const both = call("--request-accept", "products/hq", "--accept", "products/hq");
+    arm("MUTANT B6 bare accept: an agent-style --accept with no --approval, or a malformed one, is refused (exit 1, one sentence, nothing written); --approval alone and --request-accept beside --accept are usage errors",
+      bareAccept.status === 1 && /^REFUSED products\/hq -- --accept needs --approval/.test(bareAccept.stdout) && junk.status === 1 && junk.stdout.includes("not an approval id")
+      && orphanApproval.status === 2 && both.status === 2 && !existsSync(join(cli, "docs")));
+  } finally { rmSync(cli, { recursive: true, force: true }); }
+  const repo = mkdtempSync(join(tmpdir(), "narr-main-"));
+  const wt = `${repo}-wt`;
+  try {
+    const g = (/** @type {string[]} */ a, /** @type {string} */ cwd) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...a], { cwd, stdio: "ignore" });
+    g(["init", "-q"], repo);
+    g(["commit", "-q", "--allow-empty", "-m", "x"], repo);
+    g(["worktree", "add", "-q", "--detach", wt], repo);
+    arm("main clone: from a linked worktree git's common dir names the main clone, and from the clone itself the same one",
+      realpathSync(mainCloneOf(wt)) === realpathSync(repo) && realpathSync(mainCloneOf(repo)) === realpathSync(repo));
+  } finally { rmSync(wt, { recursive: true, force: true }); rmSync(repo, { recursive: true, force: true }); }
   console.log(`RAN: ${ran} checks, ${failed} failed`);
-  return failed === 0 && ran === 33 ? 0 : 1;
+  return failed === 0 && ran === 41 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
@@ -644,16 +890,30 @@ function selftest() {
 async function main(argv) {
   const stProblem = selftestArgProblem(argv);
   if (stProblem) { console.error(`narrative-anchors: ${stProblem}`); return 2; }
-  if (argv.includes("--selftest")) return selftest();
-  let root = process.cwd(), rootSet = false, accept = "";
+  if (argv.includes("--selftest")) return await selftest();
+  let root = process.cwd(), rootSet = false, accept = "", approval = "";
+  /** @type {string[]} */ const requestPages = [];
   const json = argv.includes("--json");
+  const PAGE_ARG = /^[a-z]+\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--root" || a === "--accept") {
+    if (a === "--request-accept") {
+      // Takes every page up to the next flag: one request may name the whole batch.
+      if (requestPages.length) { console.error("narrative-anchors: --request-accept given twice"); return 2; }
+      while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
+        const v = String(argv[++i]);
+        if (!PAGE_ARG.test(v)) { console.error(`narrative-anchors: --request-accept needs <dir>/<id>, got ${JSON.stringify(v)}`); return 2; }
+        requestPages.push(v);
+      }
+      if (!requestPages.length) { console.error("narrative-anchors: --request-accept needs at least one page, <dir>/<id>"); return 2; }
+      continue;
+    }
+    if (a === "--root" || a === "--accept" || a === "--approval") {
       const v = argv[i + 1];
-      if (typeof v !== "string" || v === "" || v.startsWith("-")) { console.error(`narrative-anchors: ${a} needs ${a === "--root" ? "a directory" : "a page, <dir>/<id>"}`); return 2; }
+      if (typeof v !== "string" || v === "" || v.startsWith("-")) { console.error(`narrative-anchors: ${a} needs ${a === "--root" ? "a directory" : a === "--approval" ? "the approval ULID" : "a page, <dir>/<id>"}`); return 2; }
       if (a === "--root") { if (rootSet) { console.error("narrative-anchors: --root given twice"); return 2; } root = resolve(v); rootSet = true; }
-      else { if (accept) { console.error("narrative-anchors: --accept given twice"); return 2; } if (!/^[a-z]+\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v)) { console.error("narrative-anchors: --accept needs <dir>/<id>"); return 2; } accept = v; }
+      else if (a === "--approval") { if (approval) { console.error("narrative-anchors: --approval given twice"); return 2; } approval = v; }
+      else { if (accept) { console.error("narrative-anchors: --accept given twice"); return 2; } if (!PAGE_ARG.test(v)) { console.error("narrative-anchors: --accept needs <dir>/<id>"); return 2; } accept = v; }
       i++;
       continue;
     }
@@ -661,21 +921,43 @@ async function main(argv) {
     console.error(`narrative-anchors: unknown argument ${JSON.stringify(a)}`);
     return 2;
   }
+  // Judged before the tree is read: a bare --accept (no owner proof) costs nothing to refuse and can write nothing.
+  const argBad = acceptArgProblem(accept, approval, requestPages);
+  if (argBad.code === 2) { console.error(`narrative-anchors: ${argBad.why}`); return 2; }
+  if (argBad.code === 1) { console.log(`REFUSED ${accept} -- ${argBad.why}`); return 1; }
   let t;
   try { t = await readTree(root); } catch (e) { console.error(`narrative-anchors: cannot read the tree: ${/** @type {Error} */ (e).message}`); return 2; }
-  const r = evaluate({ narratives: t.narratives, accepted: t.accepted, tree: t.tree });
+  const r = evaluate({ narratives: t.narratives, accepted: t.accepted, proofs: proofsOf(t.acceptDoc), tree: t.tree });
   for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory, unparseable, wrong-shaped or out of the tree; narratives and their records are regular files inside it`);
+  if (requestPages.length) {
+    const req = requestPayload(requestPages, t.narratives);
+    if (req.problem) { console.log(`REFUSED request-accept -- ${req.problem}`); return 1; }
+    const got = await raiseRequest(root, req.payload);
+    if (got.why) { console.log(`REFUSED request-accept -- ${got.why}`); return 1; }
+    console.log(`requested ${got.id}: the owner is asked to accept ${requestPages.length} page${requestPages.length === 1 ? "" : "s"}, each at the text hash it has now`);
+    console.log(`the owner runs${got.main ? ` from the main clone (${got.main})` : ""}:`);
+    console.log(`  node .claude/scripts/hq/arc-inbox.mjs approve ${got.id} --reason "read the ${requestPages.length} narrative page${requestPages.length === 1 ? "" : "s"} and accept ${requestPages.length === 1 ? "it" : "them"}"`);
+    console.log(`then, per page: node .claude/scripts/docs/narrative-anchors.mjs --accept <dir>/<id> --approval ${got.id}`);
+    return 0;
+  }
   if (accept) {
     const blocked = acceptBlocker(t.rejected);
     if (blocked) { console.log(`REFUSED ${accept} -- ${blocked}`); return 1; }
     // The baseline is the text readTree PARSED, never a second read (attack b8707be B2): the guard must judge the read the doc came from.
     const before = t.acceptText;
     const on = new Date().toISOString().slice(0, 10);
-    const { doc, refused } = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on);
+    const { doc, refused } = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on, approval);
     if (refused) { console.log(`REFUSED ${accept} -- ${refused}`); return 1; }
+    // The owner's proof, read from HIS spine (the main clone's, read-only): the one place the ULID is checked against anything.
+    const os = ownerSpine(root);
+    if (os.why) { console.log(`REFUSED ${accept} -- ${os.why}; nothing was written`); return 1; }
+    const sp = await readSpineEvents(os.spine);
+    if (sp.why) { console.log(`REFUSED ${accept} -- ${sp.why}; nothing was written`); return 1; }
+    const noProof = approvalProblem(sp.events, approval, accept, sha256(String(t.narratives[accept])));
+    if (noProof) { console.log(`REFUSED ${accept} -- ${noProof}; nothing was written`); return 1; }
     const failed = writeAccept(root, doc, before);
     if (failed) { console.log(`REFUSED ${accept} -- ${failed}`); return 1; }
-    console.log(`accepted ${accept} for the owner on ${on} (sha256 ${sha256(String(t.narratives[accept])).slice(0, 12)}) -> ${ACCEPT_FILE}`);
+    console.log(`accepted ${accept} for the owner on ${on} under approval ${approval} (sha256 ${sha256(String(t.narratives[accept])).slice(0, 12)}) -> ${ACCEPT_FILE}`);
     return 0;
   }
   const d = explanationDebt(t.wiki, t.narratives, t.wb.PAGE_DIRS);

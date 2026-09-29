@@ -430,9 +430,12 @@ drive awaiting-owner to 0. The owner chose option A: **`--accept` needs an `arc-
 **ADR-1514 Amendment 1** carries the decision; a new exit criterion ("Owner-proved") sits under Phase 07. Classified as a
 decision plus in-scope build (no new REQ: it is how REQ-12's owner-read gate becomes true). Assumptions ledger: nothing fired,
 but ADR-1514 section 4 assumed that only the owner runs `--accept`, and that premise was false. Estimate 0.75d, charged to Phase 07
-and booked at the next burn update (10d of 31.5d today, no tripwire near). **Waiting on the owner's OK before any code**
-(approval, hq lane files, cross-lane): the plan is in the Amendment. The 34 acceptances already recorded were given in chat
-and stay valid until the batch approval re-stamps them.
+and booked at the next burn update (10d of 31.5d today, no tripwire near). **BUILT the same day (owner: "OK, A build pannu"):**
+`--request-accept` and `--accept --approval <ULID>` in `narrative-anchors` (self-test 17 to 41 arms, no hq file touched: the
+gate string needed no validator row). The owner approved ONE batch request for all 34 pages himself through `arc-inbox`
+(`approval.requested` `01M3PX6YZJVB1D7M0CYGRPGMTV`, decided from the main clone) and the 34 entries were re-stamped under it.
+Known limit, stated in the Amendment: CI cannot re-check the ULID (the spine is gitignored), and anything that can run
+`arc-event` from the main clone could still forge a request; this closes the casual `--accept`, not that.
 
 **OUT-OF-PHASE BUG (2026-09-24, `/arc-change --lane face`, owner: "neeye pannu"):** the proposal-branch
 "three writers of one plan at once" check is red on Windows, intermittently. It hit three PRs on 2026-09-19 and
