@@ -1,0 +1,39 @@
+# Capability scout -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'capability-scout'
+title: 'Capability scout'
+dept: 'e-engineering'
+mission: 'Find and vet a tool for a stated need, and install nothing.'
+stages:
+  - 'build'
+  - 'launch'
+  - 'support'
+  - 'operate'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'capability-scout'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'solution-architect'
+escalate_to: 'solution-architect'
+e2: []
+produces:
+  kind: 'capability-scout-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

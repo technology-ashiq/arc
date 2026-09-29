@@ -1,0 +1,29 @@
+{
+  "name": "org",
+  "version": "0.1.0",
+  "requires": [
+    "core",
+    "engine",
+    "hq"
+  ],
+  "commands": [],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/org/lib/card.mjs",
+    ".claude/scripts/org/lib/emit.mjs",
+    ".claude/scripts/org/org-catalog.mjs",
+    ".claude/scripts/org/org-coverage.mjs"
+  ],
+  "files": [],
+  "docs": [],
+  "face": {
+    "room": "org",
+    "ring": "company",
+    "kinds": [],
+    "sanctioned": [
+      "arc-company-org-blueprint.md"
+    ],
+    "stations": [],
+    "concepts": []
+  }
+}

@@ -1,0 +1,33 @@
+# Product manager -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'product-manager'
+title: 'Product manager'
+dept: 'd-product'
+mission: 'Turn a goal into a falsifiable plan with risk-ordered phases before any code is written.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+seat: 'partial'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'question-planner'
+  skills: []
+  scripts: []
+  process: 'kickoff-plan'
+  tier: 'balanced-workhorse'
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'product-manager-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []

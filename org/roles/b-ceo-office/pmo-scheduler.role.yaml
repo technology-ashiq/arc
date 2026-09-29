@@ -1,0 +1,43 @@
+# PMO / scheduler -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'pmo-scheduler'
+title: 'PMO / scheduler'
+dept: 'b-ceo-office'
+mission: 'Run the company''s recurring jobs on time and report every missed slot.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+  - 'launch'
+  - 'grow'
+  - 'sell'
+  - 'support'
+  - 'operate'
+seat: 'script'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts:
+    - '.claude/scripts/hq/arc-jobs.mjs'
+  process: 'day-close-roll'
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'pmo-scheduler-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

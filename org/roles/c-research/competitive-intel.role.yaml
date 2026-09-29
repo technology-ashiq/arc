@@ -1,0 +1,38 @@
+# Competitive intel -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'competitive-intel'
+title: 'Competitive intel'
+dept: 'c-research'
+mission: 'Find and triangulate what competitors, libraries and APIs actually do, with sources.'
+stages:
+  - 'discover'
+  - 'validate'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'researcher'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'competitive-intel-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history:
+  - 'A-02 at kickoff -- the researcher agent had no chart row; placed here, so this role is not vacant.'

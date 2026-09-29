@@ -1,0 +1,34 @@
+# Build-in-public / social -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'build-in-public-social'
+title: 'Build-in-public / social'
+dept: 'g-growth'
+mission: 'Owns the Build-in-public / social job in Growth & Marketing.'
+stages:
+  - 'launch'
+  - 'grow'
+seat: 'human'
+byline: 'ashiq'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts: []
+  process: 'build-in-public-draft'
+  tier: null
+reports_to: 'human:ashiq'
+escalate_to: 'human:ashiq'
+e2:
+  - 'publishing under Ashiq''s name'
+produces:
+  kind: 'build-in-public-social-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history:
+  - 'router hire build-in-public-draft (hermes) expired 2026-08-31; retire-or-rejustify is the engine lane''s call (ADR-1622)'

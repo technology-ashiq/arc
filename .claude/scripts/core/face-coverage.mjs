@@ -66,6 +66,31 @@ export function yamlStems(p) {
   const suffix = ".process.yaml";
   return readdirSync(p).filter((n) => n.endsWith(suffix)).map((n) => n.slice(0, -suffix.length));
 }
+/**
+ * Every script under .claude/scripts/ as a sorted repo-relative POSIX path (*.mjs, *.js, *.sh).
+ * Added for org-coverage (ADR-1620), which must resolve a role card's `binds.scripts` through
+ * this module rather than a second walker of its own. Symlinks are listed as found and never
+ * followed, so a link cannot pull a tree from outside the repo into the inventory.
+ */
+export function treeScripts(repo) {
+  const base = join(repo, ".claude", "scripts");
+  const out = [];
+  const walk = (dir, rel) => {
+    let names;
+    try { names = readdirSync(dir); } catch { return; }
+    for (const n of names) {
+      if (n === "node_modules") continue;
+      const abs = join(dir, n);
+      const r = rel ? `${rel}/${n}` : n;
+      let st;
+      try { st = lstatSync(abs); } catch { continue; }
+      if (st.isDirectory()) walk(abs, r);
+      else if (/\.(mjs|js|sh)$/.test(n)) out.push(`.claude/scripts/${r}`);
+    }
+  };
+  walk(base, "");
+  return out.sort();
+}
 
 // ---------- the seven inventories added by ADR-1317 ----------
 //

@@ -1,0 +1,44 @@
+# Chief of staff -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'chief-of-staff'
+title: 'Chief of staff'
+dept: 'b-ceo-office'
+mission: 'Put the day''s decisions in front of the owner in one brief and keep the inbox honest.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+  - 'launch'
+  - 'grow'
+  - 'sell'
+  - 'support'
+  - 'operate'
+seat: 'script'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts:
+    - '.claude/scripts/hq/arc-brief.mjs'
+    - '.claude/scripts/hq/arc-inbox.mjs'
+  process: 'brief-materialize'
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'chief-of-staff-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

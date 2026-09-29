@@ -1,0 +1,1379 @@
+{
+  "counts": {
+    "roles": 71,
+    "staffed": 37,
+    "partial": 3,
+    "vacant": 24,
+    "human": 7,
+    "seated-unlegitimised": 0,
+    "own": 71,
+    "hired": 0
+  },
+  "departments": [
+    {
+      "dept": "a-board",
+      "name": "Board & Governance",
+      "roles": [
+        {
+          "id": "board-advisors",
+          "title": "Board advisors",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "council-advocate",
+              "council-designer",
+              "council-engineer",
+              "council-life-counselor",
+              "council-marketer",
+              "council-neutral",
+              "council-policy-analyst",
+              "council-researcher",
+              "council-risk-analyst",
+              "council-skeptic",
+              "council-strategist",
+              "council-verifier"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": "council-convene",
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "calibration-keeper",
+          "title": "Calibration keeper",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/council/council-calibrate.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "constitution-keeper",
+          "title": "Constitution keeper",
+          "state": "human",
+          "seat": "human",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": true,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "human:ashiq"
+        },
+        {
+          "id": "internal-auditor",
+          "title": "Internal auditor",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "council-verifier"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "high-judgment"
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "policy-officer",
+          "title": "Policy officer",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/hq/policy-lint.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        }
+      ]
+    },
+    {
+      "dept": "b-ceo-office",
+      "name": "CEO Office",
+      "roles": [
+        {
+          "id": "ceo",
+          "title": "CEO",
+          "state": "human",
+          "seat": "human",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "human:ashiq"
+        },
+        {
+          "id": "chief-of-staff",
+          "title": "Chief of staff",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/hq/arc-brief.mjs",
+              ".claude/scripts/hq/arc-inbox.mjs"
+            ],
+            "process": "brief-materialize",
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "coo-dispatcher",
+          "title": "COO / dispatcher",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "knowledge-manager",
+          "title": "Knowledge manager",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/memory/arc-recall.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "pmo-scheduler",
+          "title": "PMO / scheduler",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/hq/arc-jobs.mjs"
+            ],
+            "process": "day-close-roll",
+            "tier": null
+          },
+          "reports_to": "ceo"
+        }
+      ]
+    },
+    {
+      "dept": "c-research",
+      "name": "Research & Strategy",
+      "roles": [
+        {
+          "id": "competitive-intel",
+          "title": "Competitive intel",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "researcher"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "market-researcher",
+          "title": "Market researcher",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "pain-point-miner",
+          "title": "Pain-point miner",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "pricing-strategist",
+          "title": "Pricing strategist",
+          "state": "human",
+          "seat": "human",
+          "origin": "own",
+          "e2": [
+            "changing prices"
+          ],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "human:ashiq"
+        },
+        {
+          "id": "risk-analyst",
+          "title": "Risk analyst",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "council-risk-analyst"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "strategy-analyst",
+          "title": "Strategy analyst",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "council-strategist"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "ceo"
+        }
+      ]
+    },
+    {
+      "dept": "d-product",
+      "name": "Product",
+      "roles": [
+        {
+          "id": "business-analyst",
+          "title": "Business analyst",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "product-challenger"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "plan-attacker",
+          "title": "Plan attacker",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "plan-attacker",
+              "plan-simulator"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "product-manager",
+          "title": "Product manager",
+          "state": "partial",
+          "seat": "partial",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "question-planner"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": "kickoff-plan",
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "technical-writer",
+          "title": "Technical writer",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/docs/wiki-build.mjs"
+            ],
+            "process": "narrative-verify",
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "ux-researcher",
+          "title": "UX researcher",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "ux-writer",
+          "title": "UX writer",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        }
+      ]
+    },
+    {
+      "dept": "e-engineering",
+      "name": "Engineering",
+      "roles": [
+        {
+          "id": "ai-ml-engineer",
+          "title": "AI/ML engineer",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "capability-scout",
+          "title": "Capability scout",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "capability-scout"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "code-reviewer",
+          "title": "Code reviewer",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "code-reviewer"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": "review-diff",
+            "tier": "high-judgment"
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "data-engineer",
+          "title": "Data engineer",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "developer",
+          "title": "Developer",
+          "state": "partial",
+          "seat": "partial",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "pattern-miner"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": "develop-proof",
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "devops-release",
+          "title": "DevOps / release",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/review/ci-digest.mjs"
+            ],
+            "process": "commit-msg-draft",
+            "tier": null
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "log-analyst",
+          "title": "Log analyst",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "log-analyzer"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "qa-tester",
+          "title": "QA tester",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "qa-tester"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "security-engineer",
+          "title": "Security engineer",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "security-auditor"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": "attack-diff",
+            "tier": "high-judgment"
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "solution-architect",
+          "title": "Solution architect",
+          "state": "partial",
+          "seat": "partial",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "codebase-surveyor"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": "adr-record",
+            "tier": "high-judgment"
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "spec-fidelity-checker",
+          "title": "Spec-fidelity checker",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "spec-fidelity"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "solution-architect"
+        },
+        {
+          "id": "sre-oncall",
+          "title": "SRE / on-call",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "solution-architect"
+        }
+      ]
+    },
+    {
+      "dept": "f-design",
+      "name": "Design",
+      "roles": [
+        {
+          "id": "brand-designer",
+          "title": "Brand designer",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "design-director"
+        },
+        {
+          "id": "design-critic",
+          "title": "Design critic",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "design-critic"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "design-director"
+        },
+        {
+          "id": "design-director",
+          "title": "Design director",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "design-director"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "high-judgment"
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "design-jury",
+          "title": "Design jury",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "design-jury"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "design-director"
+        },
+        {
+          "id": "design-reviewer",
+          "title": "Design reviewer",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "design-reviewer"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "design-director"
+        },
+        {
+          "id": "graphics-video",
+          "title": "Graphics / video",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "design-director"
+        },
+        {
+          "id": "ui-designer",
+          "title": "UI designer",
+          "state": "staffed",
+          "seat": "agent",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [
+              "ui-composer"
+            ],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "design-director"
+        }
+      ]
+    },
+    {
+      "dept": "g-growth",
+      "name": "Growth & Marketing",
+      "roles": [
+        {
+          "id": "build-in-public-social",
+          "title": "Build-in-public / social",
+          "state": "human",
+          "seat": "human",
+          "origin": "own",
+          "e2": [
+            "publishing under Ashiq's name"
+          ],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": "build-in-public-draft",
+            "tier": null
+          },
+          "reports_to": "human:ashiq"
+        },
+        {
+          "id": "community-manager",
+          "title": "Community manager",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "head-of-growth"
+        },
+        {
+          "id": "content-editor",
+          "title": "Content editor",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/growth/arc-growth.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "head-of-growth"
+        },
+        {
+          "id": "content-writer",
+          "title": "Content writer",
+          "state": "staffed",
+          "seat": "skill",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [
+              "seo-article-writer"
+            ],
+            "scripts": [],
+            "process": null,
+            "tier": "balanced-workhorse"
+          },
+          "reports_to": "head-of-growth"
+        },
+        {
+          "id": "email-lifecycle",
+          "title": "Email / lifecycle",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "head-of-growth"
+        },
+        {
+          "id": "head-of-growth",
+          "title": "Head of growth",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "launch-pr",
+          "title": "Launch / PR",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "head-of-growth"
+        },
+        {
+          "id": "marketing-analyst",
+          "title": "Marketing analyst",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/growth/arc-growth.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "head-of-growth"
+        },
+        {
+          "id": "performance-ads",
+          "title": "Performance ads",
+          "state": "human",
+          "seat": "human",
+          "origin": "own",
+          "e2": [
+            "moving money"
+          ],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "human:ashiq"
+        },
+        {
+          "id": "seo-strategist",
+          "title": "SEO strategist",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/growth/arc-growth.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "head-of-growth"
+        }
+      ]
+    },
+    {
+      "dept": "h-sales",
+      "name": "Sales",
+      "roles": [
+        {
+          "id": "account-executive",
+          "title": "Account executive / closer",
+          "state": "human",
+          "seat": "human",
+          "origin": "own",
+          "e2": [
+            "changing prices",
+            "moving money"
+          ],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "human:ashiq"
+        },
+        {
+          "id": "lead-researcher",
+          "title": "Lead researcher",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/leads/arc-leads.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "proposal-writer",
+          "title": "Proposal writer",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "revops-crm",
+          "title": "RevOps / CRM",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "sales-engineer",
+          "title": "Sales engineer / demo",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "sdr-outbound",
+          "title": "SDR / outbound",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/leads/arc-leads.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        }
+      ]
+    },
+    {
+      "dept": "i-support",
+      "name": "Customer Success & Support",
+      "roles": [
+        {
+          "id": "customer-success",
+          "title": "Customer success / retention",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "kb-writer",
+          "title": "KB writer",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "onboarding-specialist",
+          "title": "Onboarding specialist",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "support-l1",
+          "title": "Support L1",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "support-l2",
+          "title": "Support L2 (bug to fix)",
+          "state": "staffed",
+          "seat": "process",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": "develop-proof",
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "voc-analyst",
+          "title": "Voice-of-customer analyst",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        }
+      ]
+    },
+    {
+      "dept": "j-finance-legal-people",
+      "name": "Finance, Legal & People-Ops",
+      "roles": [
+        {
+          "id": "billing-payments-ops",
+          "title": "Billing / payments ops",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "bookkeeper",
+          "title": "Bookkeeper",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/hq/arc-pnl.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "compliance-dpdp",
+          "title": "Compliance / DPDP",
+          "state": "vacant",
+          "seat": "vacant",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "finops",
+          "title": "FinOps / token cost",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/engine/router-row.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "hr-performance",
+          "title": "HR / performance",
+          "state": "staffed",
+          "seat": "process",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": "lesson-log",
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "legal-counsel",
+          "title": "Legal counsel",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/legal/arc-legal.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "recruiter",
+          "title": "Recruiter",
+          "state": "staffed",
+          "seat": "script",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": false,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [
+              ".claude/scripts/engine/agent-scaffold.mjs"
+            ],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "ceo"
+        },
+        {
+          "id": "tax-gst",
+          "title": "Tax / GST",
+          "state": "human",
+          "seat": "human",
+          "origin": "own",
+          "e2": [],
+          "owner_choice": true,
+          "binds": {
+            "agents": [],
+            "skills": [],
+            "scripts": [],
+            "process": null,
+            "tier": null
+          },
+          "reports_to": "human:ashiq"
+        }
+      ]
+    }
+  ]
+}

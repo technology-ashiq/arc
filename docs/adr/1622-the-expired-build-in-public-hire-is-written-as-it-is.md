@@ -14,7 +14,7 @@ The design source's kickoff gate asks for a rejustify-or-retire decision before 
 2. **Retire the row from this lane** — cross-lane shared-organ edit.
 
 ## Decision
-Write the truth. The build-in-public / social card is `seat: vacant`, `origin: own`, with a `history:` line naming the hire and its 2026-08-31 expiry, and `e2: ["publishing under Ashiq's name"]` if the byline is his (ADR-1609). The retire-or-rejustify question goes to the engine lane / owner; org does not touch `router.yaml`.
+Write the truth. The build-in-public / social card has `byline: ashiq` and `e2: ["publishing under Ashiq's name"]`, so ADR-1609 seats it `human` (`human:ashiq`). The agent may prepare, but the owner publishes. It is `origin: own`, binds the `build-in-public-draft` process as its preparation tool, and has a `history:` line naming the hire and its 2026-08-31 expiry. *(Kickoff erratum, 2026-09-30, before first push: the first draft said `seat: vacant`, which ADR-1609 forbids for a role with a non-empty `e2`. The gate caught it when the card was written.)* The retire-or-rejustify question goes to the engine lane / owner; org does not touch `router.yaml`.
 
 ## Consequences
 Easier: no shared-organ edit. Harder: the router keeps an expired row until its owner acts.

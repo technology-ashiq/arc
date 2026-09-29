@@ -1,0 +1,38 @@
+# Business analyst -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'business-analyst'
+title: 'Business analyst'
+dept: 'd-product'
+mission: 'Challenge a fuzzy idea until the sharper product and its narrowest wedge are clear.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'product-challenger'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'business-analyst-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

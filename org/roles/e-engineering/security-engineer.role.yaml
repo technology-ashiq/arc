@@ -1,0 +1,39 @@
+# Security engineer -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'security-engineer'
+title: 'Security engineer'
+dept: 'e-engineering'
+mission: 'Attack security-sensitive changes and give every finding a concrete exploit scenario.'
+stages:
+  - 'build'
+  - 'launch'
+  - 'support'
+  - 'operate'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'security-auditor'
+  skills: []
+  scripts: []
+  process: 'attack-diff'
+  tier: 'high-judgment'
+reports_to: 'solution-architect'
+escalate_to: 'solution-architect'
+e2: []
+produces:
+  kind: 'security-engineer-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

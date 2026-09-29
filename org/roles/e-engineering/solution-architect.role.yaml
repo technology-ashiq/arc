@@ -1,0 +1,34 @@
+# Solution architect -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'solution-architect'
+title: 'Solution architect'
+dept: 'e-engineering'
+mission: 'Judge engineering hand-offs and record every costly-to-reverse decision as an ADR.'
+stages:
+  - 'build'
+  - 'launch'
+  - 'support'
+  - 'operate'
+seat: 'partial'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'codebase-surveyor'
+  skills: []
+  scripts: []
+  process: 'adr-record'
+  tier: 'high-judgment'
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'solution-architect-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []

@@ -64,103 +64,15 @@ imbalance visible.
   council verdicts and promoted gates are what turn both into claimable products. Moat =
   accumulated calibration data, not the scripts.
 
-## 4. The full org chart — ~50 roles, 9 departments
+## 4. The full org chart — moved to the generated chart
 
-Legend: **EXISTS** (live in repo) · **PLANNED** (a brief/plan owns it) · **MISSING** (no
-owner yet) · **HUMAN** (deliberately never automated).
-
-### A. Board & governance
-| # | Role | arc seat | State |
-|---|---|---|---|
-| 1 | Board of directors | `/arc-council` (stances + experts + verifier + juror) | EXISTS |
-| 2 | Constitution / charter | `CONSTITUTION.md` at repo root, adopted v1.0 2026-08-06 | LIVE (receipt `01KZ9V0QXNNMB3ZH18MSH8DKH3`) |
-| 3 | Internal auditor | spine gap-audit + evidence bundles | EXISTS |
-| 4 | Calibration keeper | council-calibrate + Brier scoreboard | EXISTS — data 0 |
-
-### B. CEO office
-| # | Role | arc seat | State |
-|---|---|---|---|
-| 5 | CEO — vision, kill calls, taste, accounts, money | Ashiq | HUMAN (permanent) |
-| 6 | Chief of staff — the day in one screen | `arc brief` + inbox | EXISTS |
-| 7 | EA / scheduler | BRIEF-scheduler (policy engine is prereq) | PLANNED |
-| 8 | Strategy analyst | council + this strategy pack | EXISTS |
-
-### C. Product
-| # | Role | arc seat | State |
-|---|---|---|---|
-| 9 | Product manager | `/arc-kickoff` + question-planner | EXISTS |
-| 10 | Business analyst (premise check) | product-challenger | EXISTS |
-| 11 | Market researcher (pain mining) | PLAN-discover | PLANNED |
-| 12 | Competitive intel | discover competitor-mode (complaint mining) | PLANNED |
-| 13 | UX researcher (stranger tests) | manual 3-stranger check | HUMAN (right call at this scale) |
-| 14 | Pricing analyst | V-B ADR, human until customer #10 | HUMAN (for now) |
-| 15 | Technical writer (user docs/FAQ) | dev docs exist; user-facing manual in Cycle-3 | PLANNED (partial) |
-
-### D. Engineering
-| # | Role | arc seat | State |
-|---|---|---|---|
-| 16 | Architect | kickoff ADR flow + council-engineer | EXISTS |
-| 17 | Developers | Claude Code main loop + factory | EXISTS |
-| 18 | Code reviewer | code-reviewer + review ledger | EXISTS |
-| 19 | QA engineer | qa-tester (real browser + axe + vitals) | EXISTS |
-| 20 | Security engineer | security-auditor + arc-scan | EXISTS |
-| 21 | DevOps / release | ship + deploy-guard + canary | EXISTS |
-| 22 | SRE / monitoring | BRIEF-ops (scheduled sweep + health report) | PLANNED |
-| 23 | Data engineer (analytics wiring) | per-venture manual (Cycle-3 REQ-05) | MISSING (acceptably) |
-| 24 | Performance engineer | vitals/lighthouse inside qa-tester | EXISTS (partial) |
-
-### E. Design
-| # | Role | arc seat | State |
-|---|---|---|---|
-| 25 | Design reviewer | design-reviewer (score ≥8 gate) | EXISTS |
-| 26 | UI designer (generation) | ad-hoc via tools; review is gated, generation isn't | PLANNED (loose) |
-| 27 | Brand designer (logo/OG/palette) | brand-kit one-shot → BRIEF-growth v1.1 | PLANNED (new) |
-| 28 | Video / creative producer | BRIEF-growth video pipeline | PLANNED |
-
-### F. Marketing / growth
-| # | Role | arc seat | State |
-|---|---|---|---|
-| 29 | Head of growth | BRIEF-growth | PLANNED |
-| 30 | SEO specialist | seo-article-writer (basic; programmatic upgrade at growth v1) | EXISTS (v0) |
-| 31 | Content editor / quality gate | growth slop-lint (WARN-first) | PLANNED |
-| 32 | Build-in-public / social | master plan §12.4 — **unstarted, free, compounds** | MISSING |
-| 33 | Email / lifecycle marketing | lifecycle scope → BRIEF-growth v1.1 | PLANNED (new) |
-| 34 | Performance ads | deferred; ad spend is forever-human | HUMAN (deliberate) |
-| 35 | PR / launch manager | Cycle-3 launch-week playbook (5 channels) | EXISTS (manual playbook) |
-| 36 | Community manager | — | MISSING (post-customers) |
-| 37 | Marketing analyst (funnel) | REQ-05 counts now; ledger later | PLANNED |
-
-### G. Sales
-| # | Role | arc seat | State |
-|---|---|---|---|
-| 38 | SDR (outbound, capped, personalized) | BRIEF-leads — L1 draft-approve | PLANNED |
-| 39 | Account executive (closing) | Ashiq — trust lands on humans | HUMAN |
-| 40 | Sales engineer (demos/technical) | product + docs + FAQ | PLANNED (indirect) |
-| 41 | RevOps / CRM (pipeline truth) | pipeline receipt kinds → ADR at leads kickoff | MISSING (ADR queued) |
-| 42 | Partnerships / BD | — | MISSING (post-₹25k MRR) |
-
-### H. Support / success
-| # | Role | arc seat | State |
-|---|---|---|---|
-| 43 | Support L1 (triage + drafts) | BRIEF-ops; expect 45–55% honest auto-resolution | PLANNED |
-| 44 | Support L2 (bug → fix → ship) | the factory itself (fix-issue → review → ship) | EXISTS (a real strength) |
-| 45 | KB / FAQ writer | Cycle-3 REQ + generator later | PLANNED (partial) |
-| 46 | Onboarding / activation | lifecycle scope → BRIEF-growth v1.1 | PLANNED (new) |
-| 47 | Retention / churn analyst | BRIEF-ledger (churn views) | PLANNED |
-
-### I. Finance / legal / HR
-| # | Role | arc seat | State |
-|---|---|---|---|
-| 48 | Bookkeeper / P&L | BRIEF-ledger; `revenue.received` ingest already live | PLANNED (mechanism EXISTS) |
-| 49 | Cost accountant ("agent payroll") | REQ-08 (cut in Cycle 2) revives in BRIEF-ledger v1.1 | PLANNED (deferred) |
-| 50 | Tax / compliance | MoR route (Paddle/Dodo/Creem) + Razorpay domestic | EXISTS (decision) |
-| 51 | Legal (ToS / privacy / refunds) | **BRIEF-legal-pack (new)** | PLANNED (new) |
-| 52 | Policy / risk officer | BRIEF-policy (capability vectors) + Constitution | PLANNED + EXISTS |
-| 53 | HR — performance, promotion, firing | trial-ledger + retro + autonomy ladder + attic | EXISTS — **arc's unique organ** |
-| 54 | Recruiter (onboarding new roles) | sync-to-project + skill authoring | EXISTS (partial) |
-
-**Snapshot:** ~20 EXISTS · ~19 PLANNED · ~10 MISSING (6 of them now have owners via this
-drop) · 5 HUMAN by design.
+**This section is now generated.** The hand-kept chart that stood here (about 50 roles in 9 departments, a
+snapshot dated 2026-07-25) went stale within a week. The 2026-08-03 audit found four departments marked
+EXISTS with no row behind them. It is replaced by **`org/CHART.md`**, which
+`.claude/scripts/org/org-catalog.mjs --chart` renders from one role card per job under `org/roles/`.
+That chart has 71 roles in 10 departments, and every count is derived from the cards. `org-coverage` fails CI
+when a card and the tree disagree (org lane, ADR-1602 / ADR-1610). The old table is in git history at
+this file's revisions before 2026-09-30. The rest of this blueprint (§1–3 and §5–7) stays as the reasoning record.
 
 ## 5. The shape rule — roles are a catalog, not headcount
 

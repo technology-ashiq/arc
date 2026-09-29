@@ -1,0 +1,32 @@
+# Tax / GST -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'tax-gst'
+title: 'Tax / GST'
+dept: 'j-finance-legal-people'
+mission: 'Owns the Tax / GST job in Finance, Legal & People-Ops.'
+stages:
+  - 'launch'
+  - 'operate'
+seat: 'human'
+owner_choice: true
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts: []
+  process: null
+  tier: null
+reports_to: 'human:ashiq'
+escalate_to: 'human:ashiq'
+e2: []
+produces:
+  kind: 'tax-gst-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []

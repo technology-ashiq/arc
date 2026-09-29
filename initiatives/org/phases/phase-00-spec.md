@@ -113,8 +113,10 @@ with these field names; the validator's own test loads it.
 **I-3 · Producer scope.** Phase 00: a consumed kind needs ≥ 1 producer anywhere in the catalog. From
 Phase 02: on the same team.
 
-**I-4 · Walkers (ADR-1610, ADR-1620).** `agents`, `products`, `processes` come from
-`treeWorld(repo, kinds)` (its `.agents`, `.products`, `.processes`); skills from `treeCapabilities(repo)`;
+**I-4 · Walkers (ADR-1610, ADR-1620).** `agents` and `processes` come from the same primitives
+`treeWorld` itself uses, `mdStems(.claude/agents)` and `yamlStems(processes)`, imported from
+`face-coverage.mjs` (build note: `treeWorld` also reads the face contract, which a scratch self-test
+tree does not carry, and the primitives are the same code); skills from `treeCapabilities(repo)`;
 `KINDS` from `treeKinds(repo)`; ventures from `treeVentures(repo)`. The one new export is
 `treeScripts(repo)` → a sorted array of repo-relative POSIX paths of `*.mjs|*.js|*.sh` under
 `.claude/scripts/**`, symlinks not followed. M10 stubs `.agents` and `treeScripts` in the collector.
@@ -146,8 +148,9 @@ for owner review); product `manifest.json` `scripts` of the product owning the a
 one line per seated card, owner accepts line by line (no-go: no unreviewed model-authored card).
 
 **I-8b · Defaults for every card (simulation round 2 — deterministic, no model):**
-`autonomy_ceiling: L1` · `escalate_to` = `reports_to` · `ventures: []` · `kpi: pending` (the owner
-accepts KPI lines for seated cards at review) · `consumes: []` and `produces: {kind: ID-output,
+`autonomy_ceiling: L1` · `escalate_to` = `reports_to` · `ventures: []` · `kpi: pending` on unstaffed
+cards; a genesis-staffed card gets `kpi: [{name: runs, over: run.completed, via: attribution-map}]`
+because the gate FAILs a staffed seat with no KPI (ORG-J), and the owner refines KPI lines at review · `consumes: []` and `produces: {kind: ID-output,
 schema: pending, receipt: handoff.ready}` until the pilot chain is written in Phase 02 (REQ-13 is
 proven in Phase 00 by its mutant arm M7) · `binds.tier` required iff `seat` ∈ {agent, skill, partial},
 otherwise `null` · `review_by` for genesis cards = **2026-10-29** (ruling date + 30, fixed at draft time

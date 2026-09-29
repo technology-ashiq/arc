@@ -1,0 +1,37 @@
+# Content writer -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'content-writer'
+title: 'Content writer'
+dept: 'g-growth'
+mission: 'Write the articles the content plan ranks, grounded in cited sources.'
+stages:
+  - 'launch'
+  - 'grow'
+seat: 'skill'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills:
+    - 'seo-article-writer'
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'head-of-growth'
+escalate_to: 'head-of-growth'
+e2: []
+produces:
+  kind: 'content-writer-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

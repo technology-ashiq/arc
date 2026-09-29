@@ -1,0 +1,30 @@
+# RevOps / CRM -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'revops-crm'
+title: 'RevOps / CRM'
+dept: 'h-sales'
+mission: 'Owns the RevOps / CRM job in Sales.'
+stages:
+  - 'sell'
+seat: 'vacant'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts: []
+  process: null
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'revops-crm-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []
