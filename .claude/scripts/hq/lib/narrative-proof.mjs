@@ -5,9 +5,9 @@
 // and the gate imports this file with a dynamic import() only on the paths that need it (the tracked list, --request-accept,
 // --accept). Nothing here lists a directory.
 //
-// Exports: gitEnv, gitTrackedList, mainCloneOf, spineEnvProblem, ownerSpine, readSpineEvents, requestAcceptApproval, verifyAcceptApproval, proofArms.
+// Exports: gitEnv, gitTrackedList, explainGitFailure, mainCloneInfo, mainCloneOf, spineEnvProblem, ownerSpine, readSpineEvents, requestAcceptApproval, verifyAcceptApproval, proofArms.
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -50,11 +50,34 @@ export function gitTrackedList(root, extraEnv = {}) {
  * layout is refused by name rather than guessed at. "" when git cannot say or the layout is not the default.
  * @param {string} cwd
  */
-export function mainCloneOf(cwd) {
+export function mainCloneOf(cwd) { return mainCloneInfo(cwd).main; }
+
+/**
+ * Why a git child failed, in the name of the real cause (attack r2 B6): git itself could not run (missing, or an option this
+ * git does not know, such as --path-format before 2.31), or the directory is not a git checkout. One line.
+ * @param {any} e the error execFileSync threw
+ * @returns {{ kind: "no-git" | "not-a-checkout" | "git-failed", why: string }}
+ */
+export function explainGitFailure(e) {
+  const err = String(e && e.stderr ? e.stderr : "").split("\n").map((l) => l.trim()).find(Boolean) || "";
+  if (e && (e.code === "ENOENT" || e.code === "EACCES")) return { kind: "no-git", why: `git could not run (${String(e.code)}: is git installed and on PATH?)` };
+  if (/not a git repository/i.test(err)) return { kind: "not-a-checkout", why: "this directory is not a git checkout" };
+  if (e && e.killed) return { kind: "git-failed", why: "git timed out" };
+  return { kind: "git-failed", why: `git could not answer (${err || String(e && e.message || e).split("\n")[0]}); an old git that does not know --path-format shows up here` };
+}
+
+/**
+ * mainCloneOf with the reason: { main, why }, exactly one of them non-empty. `extraEnv` lets a test name its own git ceiling or PATH.
+ * @param {string} cwd @param {Record<string, string>} [extraEnv] @returns {{ main: string, why: string }}
+ */
+export function mainCloneInfo(cwd, extraEnv = {}) {
+  let common = "";
   try {
-    const common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], env: gitEnv() }).trim();
-    return common && basename(common) === ".git" ? dirname(common) : "";
-  } catch { return ""; }
+    common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: gitEnv(extraEnv), timeout: 30000 }).trim();
+  } catch (e) { return { main: "", why: explainGitFailure(e).why }; }
+  if (!common) return { main: "", why: "git named no common dir" };
+  if (basename(common) !== ".git") return { main: "", why: `the git dir is ${JSON.stringify(basename(common))}, not named .git (a --separate-git-dir clone or a bare repo is refused, not guessed at)` };
+  return { main: dirname(common), why: "" };
 }
 
 /**
@@ -80,7 +103,7 @@ export function spineEnvProblem() {
  * Where the owner's spine is, and which arc-event writes to it. A linked worktree refuses the spine (WORKTREE_SPINE) and the
  * canonical spine is in the main clone, so both the read and the request go there, always. The environment never names it
  * (spineEnvProblem); only the self-test's injected opts.spineRoot does, and no command line can reach that.
- * @param {string} root the tree this ran against @param {{ spineRoot?: string }} [opts]
+ * @param {string} root the tree this ran against @param {{ spineRoot?: string, gitEnv?: Record<string, string> }} [opts] gitEnv is a test's own ceiling or PATH
  * @returns {{ spine: string, arcEvent: string, cwd: string, main: string, why: string }}
  */
 export function ownerSpine(root, opts = {}) {
@@ -88,8 +111,9 @@ export function ownerSpine(root, opts = {}) {
   if (typeof opts.spineRoot === "string" && opts.spineRoot !== "") return { spine: resolve(opts.spineRoot), arcEvent: join(HQ, "arc-event.mjs"), cwd: root, main: "", why: "" };
   const env = spineEnvProblem();
   if (env) return { ...none, why: env };
-  const main = mainCloneOf(root);
-  if (!main) return { ...none, why: "git cannot say where the main clone is (a bare repo, or a git dir not named .git, is refused), so the owner's spine cannot be found" };
+  const info = mainCloneInfo(root, opts.gitEnv);
+  const main = info.main;
+  if (!main) return { ...none, why: `the owner's spine cannot be found: ${info.why}` };
   const arcEvent = join(main, ".claude", "scripts", "hq", "arc-event.mjs");
   if (!existsSync(arcEvent)) return { ...none, why: `the main clone ${main} has no arc-event; pull it first` };
   return { spine: join(main, ".claude", "state", "hq"), arcEvent, cwd: main, main, why: "" };
@@ -259,7 +283,7 @@ export async function proofArms(d) {
     g(["init", "-q", `--separate-git-dir=${join(sep, "store.git")}`, work], sep);
     g(["commit", "-q", "--allow-empty", "-m", "x"], work);
     out.push(["MUTANT B3 layout: a clone whose git dir is not named .git (--separate-git-dir) is refused by name, never resolved to the parent of its git dir; ownerSpine says why",
-      mainCloneOf(work) === "" && ownerSpine(work).why.includes("not named .git")]);
+      mainCloneOf(work) === "" && ownerSpine(work).why.includes("not named .git") && !ownerSpine(work).why.includes("not a git checkout")]);
     // B2: the caller's GIT_DIR must not steer either git child.
     g(["init", "-q"], decoy);
     writeFileSync(join(decoy, "decoy-only.txt"), "x");
@@ -276,5 +300,31 @@ export async function proofArms(d) {
     if (priorGitDir === undefined) delete process.env.GIT_DIR; else process.env.GIT_DIR = priorGitDir;
     for (const dir of [wt, repo, sep, decoy]) rmSync(dir, { recursive: true, force: true });
   }
+  // B6: three causes, three sentences. A git that cannot run, a directory that is no checkout and a git dir not named .git are told apart.
+  const nogit = mkdtempSync(join(tmpdir(), "narr-nogit-"));
+  try {
+    const ceil = { GIT_CEILING_DIRECTORIES: dirname(nogit) };
+    const notCheckout = ownerSpine(nogit, { gitEnv: ceil }).why;
+    const noRun = ownerSpine(nogit, { gitEnv: { ...ceil, PATH: join(nogit, "nowhere") } }).why;
+    const old = explainGitFailure({ status: 129, stderr: "error: unknown option path-format\nusage: git rev-parse" });
+    out.push(["MUTANT B6 reasons: a fake unknown-option failure, a missing git and a non-checkout are each named for what they are, and none is blamed on the .git layout",
+      explainGitFailure({ code: "ENOENT" }).kind === "no-git" && explainGitFailure({ status: 128, stderr: "fatal: not a git repository (or any parent)" }).kind === "not-a-checkout"
+      && old.kind === "git-failed" && old.why.includes("unknown option") && !old.why.includes("not named .git")]);
+    out.push(["MUTANT B6 ownerSpine: a directory that is no git checkout says so, git missing from PATH says it could not run, and neither says a git dir not named .git",
+      notCheckout.includes("not a git checkout") && !notCheckout.includes("not named .git") && noRun.includes("git could not run") && !noRun.includes("not named .git") && !noRun.includes("not a git checkout")]);
+  } finally { rmSync(nogit, { recursive: true, force: true }); }
+  // B3: a consumer that synced only docs has no hq helper; --accept and --request-accept then refuse by name and write nothing.
+  const lone = mkdtempSync(join(tmpdir(), "narr-lone-"));
+  try {
+    mkdirSync(join(lone, ".claude", "scripts", "docs"), { recursive: true });
+    copyFileSync(d.script, join(lone, ".claude", "scripts", "docs", "narrative-anchors.mjs"));
+    const U = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+    const run = (/** @type {string[]} */ ...a) => spawnSync(process.execPath, [join(lone, ".claude", "scripts", "docs", "narrative-anchors.mjs"), "--root", lone, ...a], { encoding: "utf8" });
+    const acc = run("--accept", "products/hq", "--approval", U);
+    const req = run("--request-accept", "products/hq");
+    out.push(["MUTANT B3 accept without hq: with the hq helper absent, --accept and --request-accept each REFUSE (exit 1, one sentence naming the helper, nothing written) instead of throwing",
+      acc.status === 1 && /^REFUSED products\/hq -- hq\/lib\/narrative-proof\.mjs is not installed/.test(acc.stdout) && req.status === 1 && /^REFUSED request-accept -- hq\/lib\/narrative-proof\.mjs is not installed/.test(req.stdout)
+      && !existsSync(join(lone, "docs"))]);
+  } finally { rmSync(lone, { recursive: true, force: true }); }
   return out;
 }

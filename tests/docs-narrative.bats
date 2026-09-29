@@ -11,10 +11,10 @@ load 'test_helper'
 GATE="$ARC_ROOT/.claude/scripts/docs/narrative-anchors.mjs"
 VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
 
-@test "narrative-anchors: the self-test runs all 52 arms and every mutant FAILs" {
+@test "narrative-anchors: the self-test runs all 59 arms and every mutant FAILs" {
   run node "$GATE" --selftest
   [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the self-test never reached its end (exit $status): $output"; false; }
-  [[ "$output" == *"RAN: 52 checks, 0 failed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: 59 checks, 0 failed"* ]] || { echo "$output"; false; }
   [ "$status" -eq 0 ]
   local arm
   for arm in "MUTANT drift: an ADR" "MUTANT drift: a command" "MUTANT drift: a path" "MUTANT drift: a name inside a page-shape block" \
@@ -46,7 +46,7 @@ VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
   sed 's/for (const n of names.adrs) if (!tree.adrs.has(n)) fails.push/for (const n of names.adrs) if (false) fails.push/' "$GATE" > "$copy"
   ! cmp -s "$GATE" "$copy" || { echo "the mutation did not apply -- the anchor text moved"; false; }
   run node "$copy" --selftest
-  [[ "$output" == *"RAN: 52 checks"* ]] || { echo "the mutant self-test never ran: $output"; false; }
+  [[ "$output" == *"RAN: 59 checks"* ]] || { echo "the mutant self-test never ran: $output"; false; }
   [[ "$output" == *"FAIL MUTANT drift: an ADR"* ]] || { echo "the cut rule was not noticed: $output"; false; }
   [ "$status" -ne 0 ]
 }
@@ -113,8 +113,9 @@ VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
 @test "narrative-anchors: --accept refuses a page that does not exist and leaves the acceptance file as it was" {
   local f="$ARC_ROOT/docs/narrative-verify/accepted.json" before="none" after="none"
   if [ -e "$f" ]; then before="$(cksum < "$f")"; fi
-  run node "$GATE" --root "$ARC_ROOT" --accept products/zz-no-such-page
-  [[ "$output" == *"REFUSED products/zz-no-such-page"* ]] || { echo "the refusal never printed (exit $status): $output"; false; }
+  # A well-formed approval id, so the run reaches the page check: without one it is refused for the missing approval (attack r2 B4).
+  run node "$GATE" --root "$ARC_ROOT" --accept products/zz-no-such-page --approval 01ARZ3NDEKTSV4RRFFQ69G5FAV
+  [[ "$output" == *"REFUSED products/zz-no-such-page -- no narrative products/zz-no-such-page"* ]] || { echo "the refusal is not the missing page (exit $status): $output"; false; }
   [ "$status" -eq 1 ]
   if [ -e "$f" ]; then after="$(cksum < "$f")"; fi
   [ "$before" = "$after" ] || { echo "the acceptance file changed on a refusal"; false; }

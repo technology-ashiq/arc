@@ -75,3 +75,21 @@ than a row, the build stops and this amendment returns to the owner.
 **Cost.** About 0.75 day: the two commands, the spine read, a fixture per refusal (each FAILs against the old code), one
 attack round. Charged to Phase 07. **Revisit trigger:** the owner reads a page in the room and cannot accept it without a
 terminal, which would make the proof a chore and the room the place to record it.
+
+### What Amendment 1 proves, and what it does not (added after the round-3 attack)
+
+The owner proof is a **deliberate-step proof, not authentication.** It makes an accepted page cost one thing an agent cannot
+do by accident: a request the owner decided through `arc-inbox`, naming the page's exact hash. It does **not** prove that a
+human wrote that decision, for two reasons the attack found and this ADR states instead of hiding:
+
+1. **CI cannot re-verify it.** The gate checks that an entry carries a well-formed ULID and no more, because the spine is
+   gitignored and absent on a CI runner. A hand-edited `accepted.json` with an invented ULID therefore reads as accepted on
+   CI. On CI the awaiting-owner count is **advisory**; the real check runs only inside `--accept`, on the owner's own clone.
+2. **Anything that can run `arc-event` from the main clone can write both events.** `arc-inbox approve` and a direct
+   `decision.recorded{decides, verdict: approve}` are indistinguishable to the reader. Closing that needs an owner-only token
+   that only `arc-inbox` can stamp and the validator can require, which is a new authentication design in the hq lane. It is
+   **not built here** and is the owner's call.
+
+So the guarantee is: an agent cannot accept a page by running `--accept` alone, or by pointing `ARC_SPINE_ROOT` at a spine of
+its own (refused by name), and any forgery leaves two receipts on the real spine that a reader can see. It is not: an agent
+with a shell in the main clone cannot forge them. **Revisit trigger, added:** the owner asks for the owner-only token.

@@ -29,6 +29,8 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+/** The one hq file the gate needs (products/docs requires hq): every spawn, spine read and git call lives there (DOC-A). */
+const PROOF_HREF = pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href;
 /** The gate string an owner-proof request carries, and the id grammar of the approval that answers it (arc-event's ULID). */
 export const ACCEPT_GATE = "narrative-accept";
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -443,17 +445,37 @@ export async function readTree(root) {
   const acc = readAccept(root, rootReal);
   if (acc.problem) rejected.push(acc.problem);
   const acceptDoc = acc.doc;
-  // The one process the gate needs, the tracked list, is in the hq lane (DOC-A: docs/ spawns nothing).
-  const gitList = (await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href)).gitTrackedList(root);
+  // The one process the gate needs, the tracked list, is in the hq lane (DOC-A: docs/ spawns nothing). When it cannot be had
+  // the plain gate degrades to on-disk presence and says so (attack r2 B3); --accept and --request-accept refuse on `degraded`.
+  const got = await loadTracked(root, PROOF_HREF);
   const adrs = new Set();
   for (const band of Array.isArray(wiki.entities.adrBands) ? wiki.entities.adrBands : []) {
     for (const a of Array.isArray(band && band.facts && band.facts.adrs) ? band.facts.adrs : []) if (a && /^\d{4}$/.test(String(a.number))) adrs.add(String(a.number));
   }
-  const tracked = trackedIn(gitList, root, rootReal);
+  const tracked = got.list ? trackedIn(got.list, root, rootReal) : (/** @type {string} */ p) => presentExact(root, rootReal, p);
   const read = (/** @type {string} */ p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return ""; } };
   const isDir = (/** @type {string} */ seg) => isTopDir(root, seg);
-  return { wb, wiki, narratives, receipts, acceptDoc, acceptText: acc.text, accepted: acceptedOf(acceptDoc), rejected, tree: { adrs, wiki, tracked, read, isDir } };
+  return { wb, wiki, narratives, receipts, acceptDoc, acceptText: acc.text, accepted: acceptedOf(acceptDoc), rejected, degraded: got.why, tree: { adrs, wiki, tracked, read, isDir } };
 }
+
+/**
+ * The git-tracked list, or why there is none (attack r2 B3): the hq helper may be absent (a consumer synced only docs) or the
+ * root may not be a git checkout. Never throws; `why` is one line. `extraEnv` lets a test name its own git ceiling.
+ * @param {string} root @param {string} proofHref @param {Record<string, string>} [extraEnv]
+ * @returns {Promise<{ list: Set<string> | null, why: string }>}
+ */
+export async function loadTracked(root, proofHref, extraEnv = {}) {
+  const one = (/** @type {unknown} */ e) => String(e && /** @type {Error} */ (e).message || e).split("\n")[0];
+  let mod;
+  try { mod = await import(proofHref); } catch (e) { return { list: null, why: `hq/lib/narrative-proof.mjs cannot be loaded (${one(e)})` }; }
+  try { return { list: mod.gitTrackedList(root, extraEnv), why: "" }; } catch (e) { return { list: null, why: one(e) }; }
+}
+
+/** The one WARN line the plain gate prints when it has no git list. @param {string} why */
+export const reducedWarn = (why) => `[drift-reduced] no git-tracked list (${String(why).replace(/\s+/g, " ").trim()}); a path is judged by exact-case presence on disk only, so a gitignored file is not caught here`;
+
+/** --accept and --request-accept never run on a reduced drift check. @param {string} why @returns {string} */
+export const acceptDegradeProblem = (why) => (why ? `the drift check has no git-tracked list (${String(why).replace(/\s+/g, " ").trim()}), and an acceptance never runs on a reduced check; nothing was written` : "");
 
 /**
  * Why an acceptance document is not `{schema:1, pages:<plain object>}`, or "" when it is (attack b8707be B1): a document that
@@ -630,6 +652,7 @@ function regularInside(/** @type {string} */ abs, /** @type {string} */ rootReal
 // ---------------------------------------------------------------- self-test ----------------------------------------------------------------
 
 async function selftest() {
+  const U1_DUMMY = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
   const wiki = { entities: { products: [{ id: "hq", facts: { version: "1.0.0" } }], lanes: [], commands: [{ id: "arc-x", facts: {} }], agents: [], processes: [], gates: [], rules: [] } };
   const tree = { adrs: new Set(["1513"]), wiki, tracked: (/** @type {string} */ p) => p === "a/b.mjs", read: () => "export function foo() {}", isDir: (/** @type {string} */ d) => d === "a" };
   const good = "<!-- facts: x=1 -->\n# Start here\n## In plain words\nThink of hq as the front desk. It keeps `a/b.mjs` and answers to ADR-1513.\n\n```steps\nt: Ask\nplain: you type `/arc-x`\n```\n\n```bash\n# a quote, not a claim\nnode `c/zz.mjs` /arc-zz ADR-0001\n```\n\n| Term | Means |\n|---|---|\n| hq | the spine <!-- src: fact:products/hq.version --> |\n";
@@ -802,11 +825,26 @@ async function selftest() {
   const fakeClock = { getFullYear: () => 2026, getMonth: () => 8, getDate: () => 29, toISOString: () => "2026-09-28T19:00:00.000Z" };
   arm("MUTANT L7 local day: the acceptance date is the owner's local calendar day (a clock whose UTC day differs reads its local one), zero-padded",
     localDay(fakeClock) === "2026-09-29" && localDay({ getFullYear: () => 2027, getMonth: () => 0, getDate: () => 5 }) === "2027-01-05" && /^\d{4}-\d{2}-\d{2}$/.test(localDay()));
+  // ---- attack r2 B3 (the gate degrades, --accept never does) and B4 (the missing-page refusal, reached with a real approval id).
+  const gone = await loadTracked(HERE, pathToFileURL(join(HERE, "no-such-hq-helper.mjs")).href);
+  const bareGit = mkdtempSync(join(tmpdir(), "narr-nogit-"));
+  let noGit;
+  try { noGit = await loadTracked(bareGit, PROOF_HREF, { GIT_CEILING_DIRECTORIES: dirname(bareGit) }); } finally { rmSync(bareGit, { recursive: true, force: true }); }
+  arm("MUTANT B3 module absent: with the hq helper missing the tracked list is null with a one-line reason, never a throw",
+    gone.list === null && gone.why.includes("narrative-proof.mjs") && !gone.why.includes("\n"));
+  arm("MUTANT B3 no git: a root git cannot list gives a null list and a one-line reason naming git, never a throw",
+    noGit.list === null && noGit.why.includes("git ls-files") && !noGit.why.includes("\n"));
+  const warnLine = reducedWarn(gone.why);
+  arm("MUTANT B3 degrade: the plain gate names ONE [drift-reduced] WARN saying gitignored files are not caught, and --accept / --request-accept refuse on it (nothing written); with a git list neither fires",
+    warnLine.startsWith("[drift-reduced]") && !warnLine.includes("\n") && warnLine.includes("gitignored") && acceptDegradeProblem(gone.why).includes("nothing was written") && acceptDegradeProblem("") === "");
+  const missing = acceptEntry(null, "products/zz-no-such-page", {}, [], "2026-09-30", U1_DUMMY);
+  arm("MUTANT B4 missing page: with a well-formed approval the refusal is the missing page, by name, decided before any spine read",
+    missing.doc === null && missing.refused === "no narrative products/zz-no-such-page" && acceptArgProblem("products/zz-no-such-page", U1_DUMMY, []).code === 0);
   // The arms that need a process, the spine or a git repo live with the code that does (DOC-A: nothing here spawns); each still runs the REAL functions.
-  const proof = await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href);
+  const proof = await import(PROOF_HREF);
   for (const [name, ok] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok);
   console.log(`RAN: ${ran} checks, ${failed} failed`);
-  return failed === 0 && ran === 52 ? 0 : 1;
+  return failed === 0 && ran === 59 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
@@ -853,19 +891,26 @@ async function main(argv) {
   if (argBad.code === 2) { console.error(`narrative-anchors: ${argBad.why}`); return 2; }
   if (argBad.code === 1) { console.log(`REFUSED ${accept} -- ${argBad.why}`); return 1; }
   // The owner's spine is never named by the environment (attack B1): refused by name before the tree is read, nothing written.
+  /** @type {any} */ let pm = null;
   if (accept || requestPages.length) {
-    const envBad = (await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href)).spineEnvProblem();
+    try { pm = await import(PROOF_HREF); } catch { pm = null; }
+    if (!pm) { console.log(`REFUSED ${accept || "request-accept"} -- hq/lib/narrative-proof.mjs is not installed beside this gate, so the owner's proof cannot be checked; nothing was written`); return 1; }
+    const envBad = pm.spineEnvProblem();
     if (envBad) { console.log(`REFUSED ${accept || "request-accept"} -- ${envBad}; nothing was written`); return 1; }
   }
   let t;
   try { t = await readTree(root); } catch (e) { console.error(`narrative-anchors: cannot read the tree: ${/** @type {Error} */ (e).message}`); return 2; }
+  if (accept || requestPages.length) {
+    const noGit = acceptDegradeProblem(t.degraded);
+    if (noGit) { console.log(`REFUSED ${accept || "request-accept"} -- ${noGit}`); return 1; }
+  }
   const r = evaluate({ narratives: t.narratives, accepted: t.accepted, proofs: proofsOf(t.acceptDoc), tree: t.tree });
+  if (t.degraded) r.warns.push(reducedWarn(t.degraded));
   for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory, unparseable, wrong-shaped or out of the tree; narratives and their records are regular files inside it`);
   if (requestPages.length) {
     const req = requestPayload(requestPages, t.narratives);
     if (req.problem) { console.log(`REFUSED request-accept -- ${req.problem}`); return 1; }
-    const proof = await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href);
-    const got = await proof.requestAcceptApproval(req.payload, { root });
+    const got = await pm.requestAcceptApproval(req.payload, { root });
     if (got.why) { console.log(`REFUSED request-accept -- ${got.why}`); return 1; }
     console.log(`requested ${got.id}: the owner is asked to accept ${requestPages.length} page${requestPages.length === 1 ? "" : "s"}, each at the text hash it has now`);
     console.log(`the owner runs${got.main ? ` from the main clone (${got.main})` : ""}:`);
@@ -882,8 +927,7 @@ async function main(argv) {
     const { doc, refused } = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on, approval);
     if (refused) { console.log(`REFUSED ${accept} -- ${refused}`); return 1; }
     // The owner's proof, read from HIS spine (the main clone's, read-only): the one place the ULID is checked against anything.
-    const proof = await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href);
-    const noProof = await proof.verifyAcceptApproval({ ulid: approval, page: accept, sha256: sha256(String(t.narratives[accept])), opts: { root, judge: approvalProblem } });
+    const noProof = await pm.verifyAcceptApproval({ ulid: approval, page: accept, sha256: sha256(String(t.narratives[accept])), opts: { root, judge: approvalProblem } });
     if (noProof) { console.log(`REFUSED ${accept} -- ${noProof}; nothing was written`); return 1; }
     const failed = writeAccept(root, doc, before);
     if (failed) { console.log(`REFUSED ${accept} -- ${failed}`); return 1; }
