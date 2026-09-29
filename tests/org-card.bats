@@ -76,5 +76,5 @@ mutant() {
 @test "org-card: the emitter refuses a list item the subset would misread as a mapping" {
   run node "$(PROBE)" emit-colon
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == "REFUSED "*'contains ": "'* ]] || { echo "$output"; false; }
+  [[ "$output" == "REFUSED "*'contains a key separator'* ]] || { echo "$output"; false; }
 }

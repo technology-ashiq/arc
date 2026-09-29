@@ -205,8 +205,7 @@ function arms(firstAgent) {
 
 /** A scratch tree holding exactly what collect() reads. Scripts become empty placeholders:
  *  the gate reads their NAMES, and copying their bytes would only slow every arm. */
-function buildScratch(repo, w) {
-  const s = mkdtempSync(join(tmpdir(), `org-selftest-${process.pid}-`));
+function buildScratch(repo, w, s) {
   for (const d of [".claude/agents", ".claude/skills", "processes", "org"]) {
     const src = join(repo, d);
     if (existsSync(src)) cpSync(src, join(s, d), { recursive: true });
@@ -224,11 +223,17 @@ function buildScratch(repo, w) {
 async function mutantSelftest(repo) {
   const real = await collect(repo);
   const kinds = [...real.kinds];
-  const scratch = buildScratch(repo, real);
+  // The dir exists before anything can throw, and every exit path -- a throw inside the build, a
+  // failed arm, Ctrl+C -- removes it (attack d62ae10 B8).
+  const scratch = mkdtempSync(join(tmpdir(), `org-selftest-${process.pid}-`));
+  const cleanup = () => rmSync(scratch, { recursive: true, force: true });
+  const onSig = () => { cleanup(); process.exit(130); };
+  process.once("SIGINT", onSig);
   const table = arms(real.agents[0]);
   let ran = 0, failed = 0;
   const lines = [];
   try {
+    buildScratch(repo, real, scratch);
     for (const a of table) {
       const written = [];
       const put = (rel, text) => { const p = join(scratch, rel); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, text); written.push(p); };
@@ -264,7 +269,8 @@ async function mutantSelftest(repo) {
       }
     }
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    process.removeListener("SIGINT", onSig);
+    cleanup();
   }
   for (const l of lines) console.log(l);
   console.log(`mutant-selftest: ran ${ran} of ${table.length}`);
@@ -314,4 +320,5 @@ function isMainModule() {
     return !!invoked && realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
   } catch { return false; }
 }
-if (isMainModule()) main().then((c) => process.exit(c), (e) => { console.error(`org-coverage: ${e.stack || e}`); process.exit(2); });
+// exitCode, not exit(): a hard exit right after a burst of console.log can cut a piped stdout short.
+if (isMainModule()) main().then((c) => { process.exitCode = c; }, (e) => { console.error(`org-coverage: ${e.stack || e}`); process.exitCode = 2; });

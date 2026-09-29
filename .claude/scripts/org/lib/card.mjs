@@ -37,8 +37,14 @@ const HIRE_KEYS = new Set(["runtime", "source", "vetted_by"]);
 const PRODUCES_KEYS = new Set(["kind", "schema", "receipt"]);
 const KPI_KEYS = new Set(["name", "over", "via", "where"]);
 
-const ID_RE = /^[a-z][a-z0-9-]{1,63}$/;
-const KIND_ID_RE = /^[a-z][a-z0-9-]{1,63}$/;
+// A role id and a venture slug each become a FILE NAME. Windows opens `con.role.yaml` as the
+// console device whatever the extension, so the reserved device names are refused outright
+// (the same rule lanes.md applies to lane names).
+const WIN_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+const ID_GRAMMAR = /^[a-z][a-z0-9-]{1,63}$/;
+export const isId = (s) => typeof s === "string" && ID_GRAMMAR.test(s) && !WIN_RESERVED.test(s);
+const ID_RE = { test: isId, toString: () => `${ID_GRAMMAR} (not a Windows device name)` };
+const KIND_ID_RE = ID_RE; // a produced kind names docs/schemas/KIND.md, so it is a file name too
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SOURCE_RE = /^(openrouter|omniroute|mcp|skill|codex):[a-z0-9._/-]+$/;

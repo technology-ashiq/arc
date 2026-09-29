@@ -8,6 +8,8 @@
  * org-catalog's own test asserts, so a card written here is a card the gate reads unchanged.
  */
 
+import { parseYamlSubset } from "../../engine/yaml-subset.mjs";
+
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
 function scalar(v) {
@@ -49,8 +51,8 @@ function emitItem(item, indent, out) {
     // The subset parser reads a sequence item holding ": " as a one-key MAPPING even when the
     // item is quoted (`- 'a: b'` -> {"'a": "b'"}) -- found writing the first org cards. Refuse
     // loudly here rather than write a file the gate would read back as something else.
-    if (typeof item === "string" && /: /.test(item))
-      throw new Error(`emit: list item ${JSON.stringify(item)} contains ": ", which the yaml subset misreads as a mapping`);
+    if (typeof item === "string" && /:(\s|$)/.test(item))
+      throw new Error(`emit: list item ${JSON.stringify(item)} contains a key separator (":" then a space or line end), which the yaml subset misreads as a mapping`);
     out.push(`${pad}- ${scalar(item)}`);
   }
 }
@@ -59,5 +61,11 @@ function emitItem(item, indent, out) {
 export function emitYaml(doc, header = []) {
   const out = header.map((l) => (l ? `# ${l}` : "#"));
   for (const k of Object.keys(doc)) emitValue(k, doc[k], 0, out);
-  return out.join("\n") + "\n";
+  const text = out.join("\n") + "\n";
+  // The guard above names ONE misread the parser is known for; this proves there is no other.
+  // Whatever this module writes must read back as exactly what it was given, or nothing is written.
+  const back = parseYamlSubset(text);
+  if (!back.ok || JSON.stringify(back.value) !== JSON.stringify(doc))
+    throw new Error(`emit: the yaml subset does not read this document back unchanged (${back.ok ? "values differ" : back.error.message})`);
+  return text;
 }

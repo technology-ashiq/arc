@@ -14,13 +14,13 @@
  *
  * Every count printed is derived from the cards on disk; nothing here carries a number forward.
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
-import { collect } from "./org-coverage.mjs";
-import { isStaffed, DEPTS, OWNER } from "./lib/card.mjs";
+import { collect, check } from "./org-coverage.mjs";
+import { isStaffed, isId, DEPTS, OWNER } from "./lib/card.mjs";
 import { emitYaml } from "./lib/emit.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -98,17 +98,41 @@ function draft(repo, seedPath) {
   const rows = r.value?.roles;
   if (!Array.isArray(rows)) throw new Error("seed: expected a top-level roles: list");
   const unpinned = [];
+  // Validate EVERY row and build every card in memory before one byte is written: a bad row 40
+  // must not leave rows 1-39 on disk as a half-drafted catalog (attack d62ae10 B6). Ids and agent
+  // stems become path segments, so both are held to the id grammar -- `join` would otherwise
+  // normalise a `../` id straight out of org/roles/ (B3).
+  const seen = new Set();
+  const bad = [];
+  const built = [];
+  for (const [i, row] of rows.entries()) {
+    const at = `seed row ${i + 1} (${JSON.stringify(row?.id)})`;
+    if (!row || typeof row !== "object") { bad.push(`${at}: not a mapping`); continue; }
+    if (!isId(row.id)) { bad.push(`${at}: id is not a valid role id`); continue; }
+    if (seen.has(row.id)) { bad.push(`${at}: duplicate id`); continue; }
+    seen.add(row.id);
+    if (!DEPTS.includes(row.dept)) { bad.push(`${at}: unknown dept ${JSON.stringify(row.dept)}`); continue; }
+    const stems = row.agents ?? [];
+    if (!Array.isArray(stems) || !stems.every(isId)) { bad.push(`${at}: agents must be a list of agent stems`); continue; }
+    try {
+      const text = emitYaml(cardFromSeed(repo, row, unpinned), [
+        `${row.title} -- role card (org, ADR-1601). Binds; never rewrites an agent file.`,
+        "Edit by hand; org-catalog --draft never overwrites an existing card.",
+      ]);
+      built.push({ path: join(repo, "org", "roles", row.dept, `${row.id}.role.yaml`), text });
+    } catch (e) { bad.push(`${at}: ${e.message}`); }
+  }
+  if (bad.length) {
+    for (const b of bad) console.log(`FAIL ${b}`);
+    console.log(`org-catalog: ${bad.length} bad seed row(s) -- nothing written`);
+    return 1;
+  }
   let wrote = 0, kept = 0;
-  for (const row of rows) {
-    if (!DEPTS.includes(row.dept)) throw new Error(`seed row ${row.id}: unknown dept ${row.dept}`);
-    const p = join(repo, "org", "roles", row.dept, `${row.id}.role.yaml`);
-    if (existsSync(p)) { kept++; continue; }
-    mkdirSync(dirname(p), { recursive: true });
-    writeFileSync(p, emitYaml(cardFromSeed(repo, row, unpinned), [
-      `${row.title} -- role card (org, ADR-1601). Binds; never rewrites an agent file.`,
-      "Edit by hand; org-catalog --draft never overwrites an existing card.",
-    ]));
-    wrote++;
+  for (const { path, text } of built) {
+    mkdirSync(dirname(path), { recursive: true });
+    // `wx` makes "never overwrite" atomic: no gap between a check and the write.
+    try { writeFileSync(path, text, { flag: "wx" }); wrote++; }
+    catch (e) { if (e.code === "EEXIST") kept++; else throw e; }
   }
   console.log(`org-catalog: drafted ${wrote} card(s), kept ${kept} existing, from ${rows.length} seed row(s)`);
   if (unpinned.length) console.log(`org-catalog: agents with no model line (tier defaulted to balanced-workhorse, owner to review): ${[...new Set(unpinned)].join(", ")}`);
@@ -170,8 +194,23 @@ export function renderChart(m) {
   return out.join("\n");
 }
 
-async function chart(repo, checkOnly) {
+/** A catalog the gate would refuse is never rendered or digested: collect() drops a card it
+ *  cannot parse, so a chart or digest over the rest would silently describe a different
+ *  catalog -- and a genesis approval would bless it (attack d62ae10 B2). */
+async function soundWorld(repo) {
   const w = await collect(repo);
+  const f = check(w);
+  if (f.length) {
+    for (const x of f) console.log(`FAIL ${x}`);
+    console.log(`org-catalog: the catalog has ${f.length} finding(s) -- run org-coverage and fix them first; nothing rendered`);
+    return null;
+  }
+  return w;
+}
+
+async function chart(repo, checkOnly) {
+  const w = await soundWorld(repo);
+  if (!w) return 1;
   const m = chartModel(w);
   const md = renderChart(m);
   const json = JSON.stringify(m, null, 2) + "\n";
@@ -204,7 +243,8 @@ export function catalogDigest(w) {
 }
 
 async function digest(repo) {
-  const w = await collect(repo);
+  const w = await soundWorld(repo);
+  if (!w) return 1;
   const genesis = w.cards.filter((x) => x.card?.legitimacy === "genesis").length;
   console.log(`digest: ${catalogDigest(w)}`);
   console.log(`cards: ${w.cards.length} · genesis-legitimised: ${genesis}`);
@@ -213,7 +253,8 @@ async function digest(repo) {
 
 // ---------- CLI ----------
 
-function readOr(p) { try { return readFileSync(p, "utf8"); } catch { return null; } }
+// CRLF is folded to LF before comparing: a checkout with autocrlf turned on is not a hand edit (B4).
+function readOr(p) { try { return readFileSync(p, "utf8").replace(/\r\n/g, "\n"); } catch { return null; } }
 
 function parseArgs(argv) {
   const o = { root: REPO, mode: null, check: false, seed: null };
@@ -248,4 +289,5 @@ function isMainModule() {
     return !!invoked && realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
   } catch { return false; }
 }
-if (isMainModule()) main().then((c) => process.exit(c), (e) => { console.error(`org-catalog: ${e.stack || e}`); process.exit(2); });
+// exitCode, not exit(): a hard exit right after a burst of console.log can cut a piped stdout short.
+if (isMainModule()) main().then((c) => { process.exitCode = c; }, (e) => { console.error(`org-catalog: ${e.stack || e}`); process.exitCode = 2; });
