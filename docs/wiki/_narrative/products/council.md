@@ -1,149 +1,163 @@
 <!-- facts: agents=fbd87ae3 commands=c03f3ed4 docs=4f53cda1 faceRing=785b1405 faceRoom=2259e097 files=4f53cda1 requires=d7a6ddaf scripts=4a4215bf version=39fe4a40 -->
+```tagline
+A small courtroom for one hard decision. One side argues yes, one argues no, one sits on the fence, a
+fact-checker grades every claim, and you get a single answer you can check against reality later.
+```
+
+# Start here
 
 ## In plain words
 
-Picture a hard decision put in front of a small courtroom instead of one advisor. One arguer is assigned to make the strongest case for doing it, a second is assigned to make the strongest case against it, a third weighs in siding with neither, and a fact-checker grades every claim before anyone is allowed to decide anything. Nobody in that room is also the judge of their own argument. <!-- plain -->
+Think of arc as a small company whose staff are AI models. Asking one model a big question is like asking
+one advisor. Advisors like to agree with you, and nobody checks their homework.
 
-council is that courtroom, built out of AI models instead of people. One command, `/arc-council`, takes any question — a startup call, a purchase, a technical choice, a personal decision — researches it, has assigned agents argue it from fixed and expert stances, has a separate agent grade the evidence behind every point, and returns exactly one decision with its confidence, its strongest opposing point, and the cheapest test that would most move the decision. <!-- src: .claude/commands/arc-council.md#CONDITIONAL; products/council/manifest.json -->
+**council is the courtroom you use instead.** You type one question. It does not answer straight away. It
+gathers the facts, lets people argue, checks what they said, and only then rules.
+
+```panel big
+- **The moderator** (the Chair, which is the session running `/arc-council`). Runs the whole trial. It never argues a side itself.
+- **The three lawyers** (`council-advocate`, `council-skeptic`, `council-neutral`). One makes the best case for, one the best case against, one takes no side.
+- **The specialist witnesses** (the domain experts, `council-strategist` for business, `council-risk-analyst` for money, `council-marketer` for growth, `council-designer` for design, `council-engineer` for technical choices, `council-policy-analyst` for policy, `council-life-counselor` for personal calls). Called only when the question touches their field.
+- **The fact-finders** (`council-researcher`). Each takes one small question and brings back sourced facts, never an opinion.
+- **The examiner** (`council-verifier`). Does not judge who is right. It grades the evidence behind each point.
+
+The rule they all share: nobody sees anybody else's answer until the examiner has read them all.
+```
 
 ### Why this needs to be a product at all
 
-If a hard call only ever needed one opinion, you would just ask one model and act on the answer. council is a whole product because a single voice cannot be trusted to mark its own homework: its manifest names twelve agents, and the three stance members plus every matched domain expert are spawned together in a single parallel batch and never see each other's answers, so no member's case is shaped by another's before a separate agent, `council-verifier`, grades what was actually said. <!-- src: products/council/manifest.json; .claude/commands/arc-council.md#VERBATIM -->
-
-| What is lost | What it looks like | council's answer |
+| What you lose | What it looks like when it bites | council's answer |
 |---|---|---|
-| A debate that only ever agrees with the asker | One voice makes the case for proceeding and the same voice, in effect, judges it | A separate `council-advocate` argues only FOR, a separate `council-skeptic` argues only AGAINST, and the Chair that runs the whole session never argues a side itself <!-- src: .claude/agents/council-advocate.md; .claude/agents/council-skeptic.md; .claude/commands/arc-council.md#orchestrate --> |
-| A confident-sounding claim that was never actually checked | A model states a fact or a risk, and there is no way to tell whether it was invented | `council-verifier` rates every argued point Supported, Plausible, Weak or Contested, and a run where it rates nothing Weak or Contested is refused as invalid <!-- src: .claude/agents/council-verifier.md; docs/council/references/fairness.md --> |
-| A decision nobody ever checks against reality | The verdict is filed away and forgotten, right or wrong | A saved verdict carries a `Review-by` date and a falsifiable `Resolution` line, and `/arc-council review` later appends an `## OUTCOME` section whose `RESULT:` is `HIT`, `MISS`, or `UNRESOLVED` <!-- src: .claude/commands/arc-council.md; docs/council/kickoff-v2/docs/adr/0012-outcome-lives-in-session-files.md --> |
+| **An honest argument** | One voice makes the case for doing it, then quietly judges its own case. | Separate lawyers for each side, all started at the same moment, none allowed to read the others. |
+| **Checked claims** | A confident sentence that was never true sounds exactly like one that was. | The examiner grades every point. A run where it found nothing weak to challenge is refused, not passed. |
+| **A way to learn if it was right** | The verdict is filed away and nobody ever asks how it turned out. | Each saved verdict names a date and a test. Later you record whether it was a hit or a miss. |
+
+> The middle row is the one that matters most. An examiner that agrees with everything is a rubber stamp,
+> so arc treats "nothing contested" as a broken run.
 
 ## arc words → normal words
 
-| arc calls it | It is really | Meaning |
-|---|---|---|
-| Chair | the moderator | The running agent that orchestrates the run and, by rule, never argues a side itself. <!-- src: .claude/commands/arc-council.md --> |
-| stance member | a lawyer with a fixed side | One of three agents always convened: the Advocate (for), the Skeptic (against), the Neutral (neither). <!-- src: .claude/agents/council-advocate.md; .claude/agents/council-skeptic.md; .claude/agents/council-neutral.md --> |
-| domain expert | a specialist witness | One of seven agents that weigh the question through one professional lens — business, finance, marketing, design, engineering, policy or personal life — convened only when that lens applies, at most four at once. <!-- src: .claude/commands/arc-council.md; docs/council/kickoff/docs/adr/0004-roster-auto-select-ceiling.md --> |
-| Evidence Brief | the shared case file | One neutral, sourced set of facts, built before any member takes a side, that the whole council argues from. <!-- src: docs/council/kickoff/docs/adr/0003-shared-evidence-brief.md --> |
-| POINT-ID | an exhibit number | A short tag such as `A1` or `ST2` stamped on one argued point, so a later step can grade or cite that exact point and no other. <!-- src: .claude/commands/arc-council.md; docs/council/kickoff/docs/adr/0007-mechanical-verification-contract.md --> |
-| rebuttal set | the contested exhibits | Every POINT-ID the Verifier rated Contested, plus everything it listed as DISPUTED — the only points that get one more round. <!-- src: .claude/commands/arc-council.md --> |
-| anchor set | what the second judge reviews | Every point rated Weak or Contested in the verifier's `FIRST-PASS RATINGS`, plus every `REBUTTAL LOG` id — exactly what the cross-model juror re-grades. <!-- src: docs/council/kickoff-v3/docs/adr/0017-juror-scope-adr0014-charter.md --> |
-| juror | a second, different judge | An independent grader from a different model family, called only on deep runs, whose ratings are written by a script rather than typed by the Chair. <!-- src: .claude/commands/arc-council.md; .claude/scripts/council/council-juror.mjs; docs/council/kickoff-v3/docs/adr/0018-script-written-artifact-disagreement-is-signal.md --> |
-| session | the case file | One saved Markdown file holding the rendered verdict and, later, what actually happened. <!-- src: .claude/commands/arc-council.md --> |
-| receipt / `council.verdict` | the courthouse's own record | One permanent spine line naming the session, the hashed question, and whether the call was to proceed or to hold. <!-- src: docs/adr/1345-fv2-session-door-driver-only-click-started-no-state-and-the-council-call.md --> |
-| Brier score | the judge's own report card | One number scoring how well stated confidence matched what really happened; lower is better. <!-- src: .claude/scripts/council/council-calibrate.mjs --> |
-| rubber-stamp | a judge who agrees with everything | A run whose verifier contested nothing — treated as invalid, never as a clean pass. <!-- src: docs/council/references/fairness.md --> |
+```lede
+Some jargon from the command file, each one an ordinary courtroom thing.
+```
 
-## How a job flows
+```rosetta
+Chair | the moderator | runs the trial, never takes a side
+POINT-ID | an exhibit number such as `A1` or `ST2` | lets the examiner grade one exact point
+Evidence Brief | the shared case file | facts only, built before anyone argues
+verdict | the ruling | one of YES, NO, CONDITIONAL or WAIT, plus how sure it is
+dissent | the best point against the ruling | always printed, never hidden
+Review-by / Resolution | a date, and the test that will say if it was right | what makes a verdict checkable later
+HIT / MISS | the ruling turned out right / wrong | written into the saved file afterwards
+juror | a second examiner from a different AI company | re-checks only the shaky points
+receipt (the spine) | one line in arc's logbook saying "this verdict happened" | left after a saved run
+```
 
-The human picks which of three fixed price points to run — there is no automatic classifier, because a model choosing its own budget is exactly the auto-switching arc forbids everywhere else. The one exception: a one-way-door decision always runs `deep`, mandatorily, whatever word was typed. <!-- src: .claude/commands/arc-council.md; docs/adr/0065-mp-c-council-mode-ladder-fixed-at-three.md -->
+## How a question flows
 
-| Mode | What actually runs | Price | Saved? |
-|---|---|---|---|
-| `quick` | 3 stance members only — no research, no domain experts, no verifier | 3 calls <!-- src: .claude/commands/arc-council.md --> | Writes nothing <!-- src: .claude/commands/arc-council.md --> |
-| `standard` | at most 2 researchers + 3 stance members + 1 verifier — no domain experts, no rebuttal, no juror | at most 7 calls, at most 6 seats <!-- src: .claude/commands/arc-council.md --> | Saved and receipted <!-- src: .claude/commands/arc-council.md --> |
-| `deep` (default) | the full panel: research, 3 stances plus the matched domain experts, the verifier, a rebuttal, a cross-model juror | about twelve or more calls <!-- src: .claude/commands/arc-council.md --> | Saved and receipted <!-- src: .claude/commands/arc-council.md#predictable --> |
+```lede
+The trial has a fixed order. The order is the point: facts first, arguing second, grading third.
+```
 
-One-way-door decisions always run `deep`, mandatorily, whatever word was typed on the command line. <!-- src: .claude/commands/arc-council.md#One-way-door -->
-
-A `standard` run whose 2 researchers genuinely cannot cover the question does not quietly become `deep` — it stops and says so, and the human then chooses whether to re-run as `deep`. <!-- src: .claude/commands/arc-council.md -->
+```flow
+source: your question
+box: ① Gather facts | researchers
+box: ② Argue | lawyers and witnesses
+box*: ③ Grade | the examiner
+box: ④ Rule | the Chair
+labels: case file, numbered points, ratings
+out: web unavailable | facts marked low-confidence
+out: one side reads another | not allowed
+out: nothing contested | sent back once
+out: no clear answer | WAIT, with a test to run
+note: Before step 1 the Chair writes down its own guess, so it can later show whether the evidence changed its mind.
+caption: Figure 1 — from a question to a ruling. | Each box only receives what the box before it produced.
+```
 
 ## The stages, one by one
 
-1. **Intake.** The Chair restates the question as one decision statement, resolves any ambiguous term that would make members analyze different things, picks a research mode (`live` by default, `model-knowledge` if the web is unavailable), classifies which domain experts apply, and announces the roster. Before any research or any member runs, it records one `PREDICTION` line — its own best guess — so the final verdict can be compared against it later. <!-- src: .claude/commands/arc-council.md -->
-2. **Research fan-out.** The question is broken into three to five sub-questions (`standard` mode: at most two), and one `council-researcher` is spawned per sub-question, capped at about five. Together they build one neutral Evidence Brief, facts renumbered `F1…`, which is checked with `node .claude/scripts/council/council-lint.mjs --brief`. <!-- src: .claude/commands/arc-council.md; .claude/commands/arc-council.md#predictable -->
-3. **Convene.** In a single message, the Chair spawns the three stance members and every selected domain expert together — never one after another, and never showing one member another's answer. Each returns its argument, and the Chair persists every member's output verbatim to a file, so nothing it grades later has passed through a summary the Chair wrote. <!-- src: .claude/commands/arc-council.md -->
-4. **Assign POINT-IDs.** Every key point is labelled by who made it: the Advocate's points become `A1…`, the Skeptic's `S1…`, the Neutral's `N1…`, and each domain expert by its own prefix — `ST` strategist, `RK` risk analyst, `MK` marketer, `DS` designer, `EN` engineer, `PO` policy analyst, `LC` life counselor. <!-- src: .claude/commands/arc-council.md -->
-5. **Cross-examine.** `council-verifier` is spawned once with every point and its ID, the member files, the researchers' fact packs, and the Evidence Brief, so it can also flag brief-framing bias. It returns one rating per ID — Supported, Plausible, Weak or Contested — plus CONTRADICTIONS, CONSENSUS, DISPUTED and DROP THESE sections. If it contested nothing, it is sent back exactly once. <!-- src: .claude/agents/council-verifier.md; .claude/commands/arc-council.md -->
-6. **Bounded rebuttal — one round** (SKIPPED, never runs, in `standard` mode). The rebuttal set is every ID rated Contested plus every ID under DISPUTED. For each one, the Chair spawns one targeted rebuttal task whose author sees only the single opposing point, never any sibling argument, then re-spawns the verifier once more with only that set. The verifier's original ratings are kept verbatim as `FIRST-PASS RATINGS`, and each ID's change is recorded as `pre → post` in a `REBUTTAL LOG` — exactly one round, never repeated. <!-- src: .claude/commands/arc-council.md; .claude/commands/arc-council.md#predictable -->
-7. **Cross-model juror (`deep` only).** From the anchor set — every point rated Weak or Contested on the first pass, plus every rebuttal-set point — the Chair builds a points file and runs `node .claude/scripts/council/council-juror.mjs --points <file> --out docs/council/sessions/.juror/<slug>-<run-id>.md`, using the human's own `JUROR_BASE_URL`, `JUROR_MODEL` and `JUROR_API_KEY`. The script itself, not the Chair, writes the artifact and prints a `Juror:` line and a `Juror-Artifact-SHA256:` line, copied into the verdict exactly as printed. If the juror disagrees with the verifier, that disagreement is shown under `UNRESOLVED` rather than hidden. <!-- src: .claude/commands/arc-council.md; .claude/scripts/council/council-juror.mjs --> If no juror is configured, the verdict says so in one visible line instead of silently skipping the step. <!-- src: docs/council/kickoff-v3/docs/adr/0016-juror-required-when-configured.md -->
-8. **Deliberate.** Every point rated Weak, or listed under DROP THESE, is dropped. The Chair weighs what survives — CONSENSUS points count heavier, DISPUTED ones mark genuine uncertainty — and commits to one of YES, NO, CONDITIONAL or WAIT. <!-- src: .claude/commands/arc-council.md; .claude/commands/arc-council.md#CONDITIONAL -->
+```lede
+Each stage is written twice: first what it does in ordinary words, then what actually happens.
+```
 
-9. **Render the verdict.** The Chair writes it in one fixed shape: the ratings sections, an optional `UNRESOLVED`, then a `VERDICT` block with `PREDICTION` → `RESULT`, `DECISION`, `CONFIDENCE`, the `Roster`, `KEY REASONS`, a `DISSENT` naming the strongest surviving opposing point, a `CHEAPEST TEST TO DE-RISK`, and a `Review-by` date with a `Resolution` criterion. Every `KEY REASON` and the `DISSENT` must cite a POINT-ID the verifier rated Supported or Plausible. <!-- src: .claude/commands/arc-council.md#CONDITIONAL -->
+```steps
+t: The Chair restates the question
+plain: It turns your question into one plain sentence, picks a reading if a word could mean two things, and writes down its own guess before any research.
+d: Intake names the decision, settles any ambiguous term, picks live or model-knowledge research, announces which experts join (four at most), and records a one-line prediction.
+f: `.claude/commands/arc-council.md`
 
-10. **Save, then leave the receipt.** The verdict is written to a numbered session file under docs/council/sessions and must pass `node .claude/scripts/council/council-lint.mjs --verdict`. Only then does the Chair derive a payload with `--payload` and emit a `council.verdict` event with `bash .claude/scripts/hq/arc-event.sh`; the step ends only once a real receipt id comes back, and a refused derivation stops the whole step rather than emitting anything. A `quick` run does neither step; a `standard` run is saved and receipted exactly like a `deep` run. <!-- src: .claude/commands/arc-council.md -->
+t: The fact-finders build the case file
+plain: The question is cut into a few small ones. Each fact-finder takes one and returns facts with sources. The Chair merges them into one neutral file.
+d: One `council-researcher` per sub-question, in a single batch. The merged Evidence Brief is checked by `--brief` in the lint script.
+f: `.claude/scripts/council/council-lint.mjs`
 
-## Every part, explained
+t: The lawyers and witnesses argue
+plain: All of them get the same question and the same case file at the same moment. Their answers are saved word for word so no summary can bend them.
+d: The three stance agents plus every matched expert are spawned in one parallel message. Each key point gets an exhibit number.
+f: `.claude/agents/council-advocate.md`
 
-### Commands
+t: The examiner grades, and contested points get one reply
+plain: Each point is graded from solid to weak. Anything contested goes back to its author once, to defend or give in. Then the examiner regrades only those.
+d: The verifier reads the saved files, not a summary. One rebuttal round, never more. First-pass grades are kept so the rebuttal can be checked against them.
+f: `.claude/agents/council-verifier.md`
 
-- `/arc-council` — the one command council owns. It runs every mode (`quick`, `standard`, `deep`, and `review`), and it is written to be self-contained, so it runs even in a project that installed nothing else from `docs/council/`. <!-- src: .claude/commands/arc-council.md; docs/council/README.md -->
+t: A second examiner checks the shaky points
+plain: A different AI company re-grades the weak and contested points, because a second family of model can catch what the first misses.
+d: A script calls any OpenAI-compatible provider and writes the result itself, with a fingerprint the Chair must copy in unchanged. If no key is set, the verdict says so in plain words.
+f: `.claude/scripts/council/council-juror.mjs`
 
-### Agents
+t: The ruling is saved and receipted
+plain: The Chair drops the weak points, commits to one answer, prints the best opposing point, names the cheapest test, and sets a date to check back.
+d: The verdict is written under `docs/council/sessions/`, must pass the lint, and its receipt is derived from the saved file by script, never typed. YES and CONDITIONAL count as proceed, NO and WAIT as hold (ADR-1345).
+f: `.claude/scripts/council/council-lint.mjs`
+```
 
-**The three stance members**, convened on every run: `council-advocate` builds the strongest case FOR, deliberately biased toward yes; `council-skeptic` builds the strongest case AGAINST, deliberately biased toward caution; `council-neutral` takes no side and weighs base rates and tradeoffs instead. <!-- src: .claude/agents/council-advocate.md; .claude/agents/council-skeptic.md; .claude/agents/council-neutral.md -->
+### A short story
 
-**The fact-finder and the judge.** `council-researcher` takes one sub-question and returns a triangulated FACT PACK — facts, confidence, sources — and never a recommendation. `council-verifier` grades the evidence behind every point, never the conclusions, and runs on the `opus` model tier while every stance, researcher and domain-expert member runs on `sonnet` — the strongest reasoning is spent on the cross-examination seat that keeps the whole council honest. <!-- src: .claude/agents/council-researcher.md; .claude/agents/council-verifier.md; docs/council/kickoff/docs/adr/0006-per-agent-model-tiers.md -->
+Say you ask, "Should I hire a first employee this quarter?" The Chair calls it a money question and a
+business question, so it invites the money witness and the business witness. The researchers bring back
+facts about cost and hiring. The advocate says hire, the skeptic says wait, the neutral lists what nobody
+knows. The examiner marks the skeptic's claim about salaries as contested, the skeptic defends it with a
+source, and it holds. The ruling comes out CONDITIONAL, shows the skeptic's best point as the dissent, and
+suggests a one-month contractor trial as the cheapest test. Three months on, you tell the council what
+happened, and it writes HIT or MISS at the bottom of the file.
 
-**The seven domain experts**, convened by the Chair only when their lens applies: <!-- src: .claude/commands/arc-council.md#GTM -->
+# The bigger loop
 
-| Agent | Lens | Prefix |
-|---|---|---|
-| `council-strategist` | business & startup — market, moat, GTM, unit economics, founder-fit <!-- src: .claude/agents/council-strategist.md --> | `ST` <!-- src: .claude/commands/arc-council.md --> |
-| `council-risk-analyst` | finance & investment — expected value, downside and ruin risk, liquidity <!-- src: .claude/agents/council-risk-analyst.md --> | `RK` <!-- src: .claude/commands/arc-council.md --> |
-| `council-marketer` | marketing & growth — positioning, audience, channels and CAC <!-- src: .claude/agents/council-marketer.md --> | `MK` <!-- src: .claude/commands/arc-council.md --> |
-| `council-designer` | design & UX — jobs-to-be-done, friction, accessibility, product feel <!-- src: .claude/agents/council-designer.md --> | `DS` <!-- src: .claude/commands/arc-council.md --> |
-| `council-engineer` | technical & product-build — feasibility, maintainability, build-vs-buy <!-- src: .claude/agents/council-engineer.md --> | `EN` <!-- src: .claude/commands/arc-council.md --> |
-| `council-policy-analyst` | politics & policy — stakeholders, incentives, unintended consequences, non-partisan by rule <!-- src: .claude/agents/council-policy-analyst.md --> | `PO` <!-- src: .claude/commands/arc-council.md --> |
-| `council-life-counselor` | personal & life choices — values, reversibility, regret minimization <!-- src: .claude/agents/council-life-counselor.md --> | `LC` <!-- src: .claude/commands/arc-council.md --> |
+## Three sizes of trial
 
-### Processes
+`/arc-council` has three sizes, and you pick the size by typing a word first. arc never picks it for you,
+because a model choosing its own budget is the auto-switching arc forbids everywhere (ADR-0065).
 
-- `council-convene` — convenes the full council on one question with nobody at the keyboard, ending on a `council.verdict` receipt. It does not copy `/arc-council`'s own file; it reads and runs that command file at run time, because copying it would give the council two sources that quietly drift apart, and a hash comment pins the command's current contents so an edit to it is caught rather than silently ignored. <!-- src: processes/council-convene.process.yaml -->
+- **`quick`.** Just the three lawyers. No research, no examiner, nothing saved. An unverified quick take.
+- **`standard`.** A few fact-finders, the three lawyers and one examiner, at a fixed price. Contested points
+  are reported, not debated. It never quietly grows into the full trial.
+- **Deep, the default.** Everything above: experts, rebuttal, second examiner. One-way-door decisions are
+  always run deep, whatever word you typed.
 
-Its headless run differs from a human-run `/arc-council` in one important way: it never asks — where the human protocol says "ask once," the headless Chair picks the most reasonable reading and says so, and if the question is truly unanswerable the verdict is `WAIT` naming the missing fact. It always runs in `deep` mode, whatever word the question happens to start with, because the question text is taken verbatim and is never read as a mode word. <!-- src: processes/council-convene.process.yaml -->
+## Closing the loop
 
-It also claims its own session number itself, once, with `council-lint.mjs --claim`, rather than guessing the next free number the way a human typing by hand would — two runs racing for the same number is exactly the failure this exists to prevent. <!-- src: processes/council-convene.process.yaml; .claude/scripts/council/council-lint.mjs -->
+Typing `/arc-council review` finds saved verdicts whose check-back date has passed and asks you what really
+happened. It only adds a short outcome section to the end of the file. It never re-decides and never edits
+what was written above. A calibration script then shows how often each confidence level was right, so the
+council keeps score on itself (`.claude/scripts/council/council-calibrate.mjs`).
 
-### Scripts
+## Where council sits in arc
 
-- **`council-juror.mjs`** is the independent second grader from a different model family. This script — not the Chair — writes the juror artifact (`JUROR RATINGS` + `JUROR RUN-RECORD`) and prints its SHA-256; the run-record and the artifact never contain the API key. On an HTTP 429 or 5xx response it retries before failing, and the run-record it writes carries the Time, Provider, Model, Latency, and the request- and response-size in characters. <!-- src: .claude/scripts/council/council-juror.mjs#AbortController; .claude/scripts/council/council-juror.mjs#Latency -->
-- **`council-calibrate.mjs`** scores saved verdicts against their recorded outcomes: a per-confidence-bucket hit-rate table and one overall Brier score, where High/Medium/Low map to fixed probabilities of 0.85/0.65/0.5. Its `--overdue` mode lists every session whose latest `Review-by` date has passed with no HIT or MISS recorded yet, which is what `/arc-council review` reads to know what to ask about. <!-- src: .claude/scripts/council/council-calibrate.mjs -->
+- **On top of core.** It needs only `core`, so it can be installed alone.
+- **A tool you call, not a stage.** Nothing else in arc requires it. You reach for it when a call is hard
+  and costly to undo.
+- **In the face.** council lives in its own chamber room, in the factory ring. The chips at the top of this
+  page name them.
 
-### Gates and rules
-
-- `tests/council-lint-outcome-anchor.bats` checks that `council-lint` and `council-calibrate` only recognise a real `## OUTCOME` heading, not the words appearing inside a sentence — a real session once failed this gate for describing its own append-only rule in prose, because the section-matching pattern was not anchored to the start of a line. <!-- src: tests/council-lint-outcome-anchor.bats -->
-- `tests/council-convene-probe.mjs` checks the `council-convene` process against the same two readers that meet it for real: the command-line adapter, and the policy gate a live click on the face's Convene card has to cross. <!-- src: tests/council-convene-probe.mjs -->
-- The fairness invariants in `docs/council/references/fairness.md` name eleven rules the council must hold to, and state plainly that where a rule can be checked by a script, `council-lint` checks it, and the rest are enforced by the Chair protocol plus the verifier — never by the Chair grading itself. <!-- src: docs/council/references/fairness.md -->
-- The command's own **Non-negotiables**: members are spawned in one parallel batch and never see each other's answers; no invented sources or numbers, ever; the council always commits to a real decision rather than "it depends"; the strongest opposing point is never hidden; and the command only ever adds a new file or a new receipt, never rewrites an existing one. One further rule — every KEY REASON and the DISSENT must cite a POINT-ID the verifier rated Supported or Plausible — is marked "(Full mode only.)" <!-- src: .claude/commands/arc-council.md -->
-
-## The bigger loop
-
-### One real question, start to finish
-
-In one real cycle, the Chair was asked, in effect, whether arc itself should reach a self-standing good shape before any revenue venture starts. The run stayed inside the `standard` envelope: 6 seats and 6 model calls — exactly at its 6-seat ceiling and one below its 7-call ceiling — and the verifier itself contested six of the fifteen argued points on its own, without needing the one free send-back. <!-- src: initiatives/model-policy/PROGRESS.md -->
-
-The Chair's own pre-registered prediction had been CONDITIONAL. The verdict that came out the other end was NO, at Medium confidence — the prediction did not hold, and the session records that mismatch rather than quietly dropping it. <!-- src: initiatives/model-policy/PROGRESS.md -->
-
-Two honesty details were recorded inside that same session file rather than smoothed over: the Evidence Brief itself had anchored a key date wrongly at High confidence, which every member inherited before the verifier caught it; and the brief's own framing leaned against the proposition it was supposed to be neutral about, which is exactly why the final confidence was held at Medium rather than High. <!-- src: initiatives/model-policy/PROGRESS.md -->
-
-Separately, the one older session that predated all of this — session 001 — was corrected in place rather than left broken: its confidence was capped down because an offline run cannot honestly claim High, and a dated correction note was appended naming the decision that allowed it, the one sanctioned exception to the rule that a saved verdict is never rewritten. Session 001 graded `UNRESOLVED`, with the scoreboard still at 0 scored — and that is the pass condition, not a shortfall, because the verdict's CONDITIONAL was never exercised. <!-- src: docs/council/kickoff-v2/docs/adr/0010-fix-session-001-in-place.md; initiatives/model-policy/PROGRESS.md#scoreboard -->
-
-### How it connects to the rest of arc
-
-council requires exactly one other product, `core`, and nothing else. <!-- src: products/council/manifest.json -->
-
-`arc-run --process council-convene` is how the rest of arc convenes a council without a person present — the face's own Convene card starts that path after an owner's click, rather than running `/arc-council` itself. <!-- src: processes/council-convene.process.yaml -->
-
-A saved verdict's `council.verdict` receipt is read by the spine in a fixed shape: a session id, the question's hash, a confidence bucket, and one word, `proceed` or `hold`, mapped from the decision itself. That is the same reading arc's evolve lane uses to score whether a council's calls turned out right. <!-- src: docs/adr/1345-fv2-session-door-driver-only-click-started-no-state-and-the-council-call.md -->
-
-council's own face room, `council-chamber`, sits in the factory ring and is described, in the file that defines it, as a company organ rather than any one lane's work — it has no lane of its own. <!-- src: face/src/modules/factory/council-chamber/module.mjs --> Its stations are calibration, convene, intake, outcome and an overdue queue, and the concepts on its wall are the Brier score, HIT/MISS/UNRESOLVED, the POINT-ID, the PREDICTION, and Review-by. <!-- src: products/council/manifest.json -->
-
-Because sync-to-project carries council's command, its twelve agents and its scripts into any project that installs arc's toolkit, a consumer project only has to add its own juror key to gain the same independent second grader — nothing about the council itself needs to change. <!-- src: docs/council/README.md -->
+# Meta
 
 ## Glossary
 
-| Term | Meaning |
-|---|---|
-| Chair | The running agent that orchestrates one council run and never argues a side itself. <!-- src: .claude/commands/arc-council.md --> |
-| stance member | One of the three core agents — Advocate, Skeptic, Neutral — convened on every run. <!-- src: .claude/agents/council-advocate.md; .claude/agents/council-skeptic.md; .claude/agents/council-neutral.md --> |
-| domain expert | One of seven agents convened only when its professional lens applies to the question, at most four per run. <!-- src: docs/council/kickoff/docs/adr/0004-roster-auto-select-ceiling.md; .claude/commands/arc-council.md#GTM --> |
-| Evidence Brief | The one neutral, sourced set of facts the whole council argues from. <!-- src: docs/council/kickoff/docs/adr/0003-shared-evidence-brief.md --> |
-| POINT-ID | The short tag, such as `A1` or `ST2`, stamped on one argued point so it can be graded and cited precisely. <!-- src: .claude/commands/arc-council.md#MK1; docs/council/kickoff/docs/adr/0007-mechanical-verification-contract.md --> |
-| rebuttal set | Every POINT-ID rated Contested, plus everything listed under DISPUTED. <!-- src: .claude/commands/arc-council.md --> |
-| anchor set | Every point Weak or Contested on the verifier's first pass, plus every rebuttal-set point — what the juror re-grades. <!-- src: docs/council/kickoff-v3/docs/adr/0017-juror-scope-adr0014-charter.md --> |
-| juror | An independent grader from a different model family, its artifact written by a script rather than the Chair. <!-- src: docs/council/kickoff-v3/docs/adr/0018-script-written-artifact-disagreement-is-signal.md --> |
-| session | One saved file under `docs/council/sessions/` holding the rendered verdict and, later, what actually happened. <!-- src: .claude/commands/arc-council.md --> |
-| `Review-by` / `Resolution` | The date and the falsifiable test that later decide whether a verdict counted as a HIT or a MISS. <!-- src: docs/council/kickoff-v2/docs/adr/0012-outcome-lives-in-session-files.md --> |
-| Brier score | One number scoring how well stated confidence matched real outcomes; lower is better. <!-- src: .claude/scripts/council/council-calibrate.mjs --> |
-| rubber-stamp | A run whose verifier contested nothing — treated as invalid, never as a clean pass. <!-- src: docs/council/references/fairness.md --> |
-| additive-only | The rule that a saved verdict is only ever added to, never rewritten, except the one dated, named exception. <!-- src: .claude/commands/arc-council.md; docs/council/kickoff-v2/docs/adr/0010-fix-session-001-in-place.md --> |
+```gloss
+Evidence Brief: the neutral, sourced file of facts everyone argues from.
+rubber stamp: an examiner that challenged nothing, which arc treats as an invalid run rather than a clean one.
+rebuttal: the one reply a contested point's author gets, to defend or give in.
+falsifiable: written so that reality can later prove it wrong.
+append-only: a record you can add to but never rewrite.
+```
