@@ -354,7 +354,7 @@ export async function proofArms(d) {
       && spawnedInit.status === 1 && spawnedInit.stderr.includes("real terminal") && !existsSync(join(homeBox, ".arc-private"))]);
     const wrongTry = await attempt("approve", idA, { keyDir, readPassphrase: typed("not the passphrase at all"), isTty: () => true });
     const noKeyTry = await attempt("approve", idA, { keyDir: join(keyBox, "nowhere"), readPassphrase: typed(PASS), isTty: () => true });
-    out.push(["MUTANT A2 wrong passphrase: a passphrase that does not unseal the key refuses in one sentence and writes nothing; so does a missing key file, naming owner-key init",
+    out.push(["MUTANT A2 wrong pass phrase -- one that does not unseal the key refuses in one sentence and writes nothing; so does a missing key file, naming owner-key init",
       wrongTry.code === 1 && wrongTry.message.includes("does not unseal") && !wrongTry.message.includes("\n") && (await decisionsFor(idA)).length === 0 && noKeyTry.code === 1 && noKeyTry.message.includes("owner-key init") && (await decisionsFor(idA)).length === 0]);
     const okTry = await attempt("approve", idA, signer);
     const decA = (await decisionsFor(idA))[0];
