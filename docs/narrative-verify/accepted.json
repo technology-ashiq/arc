@@ -1,10 +1,30 @@
 {
   "schema": 1,
   "pages": {
+    "products/core": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "44e5492ad2d4e645292fd7143ace52872de5f345b51ba310f30037cf31042fb3"
+    },
+    "products/git": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "5294190dbda4f73455213ed5790bf72257c6ac224c724e928b2120194b61e03b"
+    },
+    "products/plan": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "f25400c04e2f367473e7c36fe437b7ed2add17c96c6bd6747ed6aa6fee3ec329"
+    },
     "products/qa": {
       "by": "owner",
       "on": "2026-09-29",
       "sha256": "e2a175b19d8b5a19d98df01f071155723fc2b48f41114430a59db28b06accd84"
+    },
+    "products/review": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "7f1adb06776f0f82ffe44fcb42add3fc9b9f97189f7a087f3639b2ed31ce6fc8"
     }
   }
 }
