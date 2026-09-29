@@ -563,6 +563,7 @@ export function acceptArgProblem(accept, approval, requestPages) {
 /** Why --selftest cannot combine with other arguments, or "" (attack b5f5e03 B6): a mode must not ignore what it was given. */
 export function selftestArgProblem(/** @type {string[]} */ argv) {
   const extra = argv.filter((a) => a !== "--selftest");
+  if (argv.length - extra.length > 1) return "--selftest given twice";
   return argv.includes("--selftest") && extra.length ? `--selftest takes no other argument (got ${JSON.stringify(extra[0])})` : "";
 }
 
@@ -660,7 +661,7 @@ async function selftest() {
   arm("MUTANT B4 proto: a __proto__ page key in the file is refused by name, and a normal merge keeps the earlier page",
     protoAccept.refused.includes("__proto__") && cleanAccept.refused === "" && Object.keys(cleanAccept.doc.pages).join() === "products/a,products/hq");
   arm("MUTANT B6 selftest args: --selftest beside any other argument is refused by name, alone it is fine",
-    selftestArgProblem(["--selftest", "--accept", "products/qa"]).includes("--accept") && selftestArgProblem(["--selftest"]) === "");
+    selftestArgProblem(["--selftest", "--accept", "products/qa"]).includes("--accept") && selftestArgProblem(["--selftest"]) === "" && selftestArgProblem(["--selftest", "--selftest"]).includes("twice"));
   const nested = "````bash\n```steps\n`/arc-gone`\n```\n````\n\nAfter `/arc-x`.\n";
   arm("MUTANT B7 names: a longer fence is closed only by a bare fence of its own length, so a quoted inner steps fence stays quoted",
     namesOf(nested).commands.join() === "arc-x" && namesOf("```bash\n~~~\n`/arc-gone`\n```\n").commands.length === 0);
@@ -733,7 +734,7 @@ async function selftest() {
   const proof = await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href);
   for (const [name, ok] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok);
   console.log(`RAN: ${ran} checks, ${failed} failed`);
-  return failed === 0 && ran === 41 ? 0 : 1;
+  return failed === 0 && ran === 46 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
@@ -745,7 +746,7 @@ async function main(argv) {
   if (argv.includes("--selftest")) return await selftest();
   let root = process.cwd(), rootSet = false, accept = "", approval = "";
   /** @type {string[]} */ const requestPages = [];
-  const json = argv.includes("--json");
+  let json = false;
   const PAGE_ARG = /^[a-z]+\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -769,14 +770,21 @@ async function main(argv) {
       i++;
       continue;
     }
-    if (a === "--json") continue;
+    if (a === "--json") { if (json) { console.error("narrative-anchors: --json given twice"); return 2; } json = true; continue; }
     console.error(`narrative-anchors: unknown argument ${JSON.stringify(a)}`);
     return 2;
   }
+  // --json shapes the gate's report; --accept and --request-accept print prose, so the pair would be a flag silently ignored (attack B4).
+  if (json && (accept || requestPages.length)) { console.error(`narrative-anchors: --json cannot be combined with ${accept ? "--accept" : "--request-accept"}`); return 2; }
   // Judged before the tree is read: a bare --accept (no owner proof) costs nothing to refuse and can write nothing.
   const argBad = acceptArgProblem(accept, approval, requestPages);
   if (argBad.code === 2) { console.error(`narrative-anchors: ${argBad.why}`); return 2; }
   if (argBad.code === 1) { console.log(`REFUSED ${accept} -- ${argBad.why}`); return 1; }
+  // The owner's spine is never named by the environment (attack B1): refused by name before the tree is read, nothing written.
+  if (accept || requestPages.length) {
+    const envBad = (await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href)).spineEnvProblem();
+    if (envBad) { console.log(`REFUSED ${accept || "request-accept"} -- ${envBad}; nothing was written`); return 1; }
+  }
   let t;
   try { t = await readTree(root); } catch (e) { console.error(`narrative-anchors: cannot read the tree: ${/** @type {Error} */ (e).message}`); return 2; }
   const r = evaluate({ narratives: t.narratives, accepted: t.accepted, proofs: proofsOf(t.acceptDoc), tree: t.tree });
