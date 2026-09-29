@@ -20,7 +20,8 @@
 // The rules live in `evaluate()`, which is pure: the CLI hands it the tree, the self-test hands it planted trees, so
 // every arm FAILs from birth with its mutant (ADR-1503's rule for a gate).
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -39,7 +40,12 @@ export const LEGACY = Object.freeze({});
 const MARK_SRC = /<!--\s*src:\s*([\s\S]*?)\s*-->/g;
 const MARK_PLAIN = /<!--\s*plain\s*-->/;
 const COMMENT = /<!--[\s\S]*?-->/g;
-const FENCE = /^\s*(```|~~~)/;
+/** One fence tokenizer for the fold and the gate (attack b5f5e03 B7): CommonMark closes only on a bare fence of the opener's character and at least its length. */
+const FENCE = /^\s*(`{3,}|~~~+)(.*)$/;
+/** @param {string} line @returns {{ ch: string, len: number, info: string } | null} */
+const fenceOf = (line) => { const m = FENCE.exec(line); return m ? { ch: String(m[1])[0], len: String(m[1]).length, info: String(m[2]).trim() } : null; };
+/** @param {{ ch: string, len: number, info: string }} f @param {{ ch: string, len: number }} open */
+const closesFence = (f, open) => f.ch === open.ch && f.len >= open.len && f.info === "";
 const BULLET = /^\s*(?:[-*+]|\d{1,3}[.)])\s+/;
 const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
 /** A repo path as a narrative names one: segments, a slash, a file extension -- and no placeholder or glob. */
@@ -71,12 +77,15 @@ export function blocksOf(text) {
     }
     cur = null;
   };
-  let fenced = false, inComment = false;
+  /** @type {{ ch: string, len: number } | null} */ let fenced = null;
+  let inComment = false;
   for (let i = 0; i < lines.length; i++) {
     const l = String(lines[i]);
     // A comment that spans lines is one marker, never prose (the fingerprint, or a src list broken over lines).
     if (inComment) { if (cur) cur.raw.push(l); if (l.includes("-->")) inComment = false; continue; }
-    if (FENCE.test(l)) { close(); fenced = !fenced; continue; }
+    const fl = fenceOf(l);
+    if (fl && !fenced) { close(); fenced = fl; continue; }
+    if (fl && fenced && closesFence(fl, fenced)) { close(); fenced = null; continue; }
     if (fenced) continue;
     const opens = (l.match(/<!--/g) || []).length, shuts = (l.match(/-->/g) || []).length;
     if (opens > shuts) inComment = true;
@@ -109,13 +118,12 @@ export function blocksOf(text) {
  */
 export function namesOf(text) {
   const adrs = new Set(), commands = new Set(), paths = new Set();
-  let inFence = false, quoted = false, inComment = false;
+  /** @type {{ ch: string, len: number } | null} */ let inFence = null;
+  let quoted = false, inComment = false;
   for (const raw of String(text ?? "").split(/\r?\n/)) {
-    const fence = /^\s*(?:```|~~~)\s*([A-Za-z]*)/.exec(raw);
-    if (fence) {
-      if (inFence) { inFence = false; quoted = false; } else { inFence = true; quoted = !SHAPE_KINDS.includes(String(fence[1]).toLowerCase()); }
-      continue;
-    }
+    const fence = fenceOf(raw);
+    if (fence && !inFence) { inFence = fence; quoted = !SHAPE_KINDS.includes(String(/^[A-Za-z]*/.exec(fence.info)?.[0]).toLowerCase()); continue; }
+    if (fence && inFence && closesFence(fence, inFence)) { inFence = null; quoted = false; continue; }
     if (quoted) continue;
     let l = raw;
     if (inComment) { const e = l.indexOf("-->"); if (e < 0) continue; l = l.slice(e + 3); inComment = false; }
@@ -250,9 +258,11 @@ export function acceptEntry(doc, page, narratives, fails, on) {
   if (!Object.prototype.hasOwnProperty.call(narratives, page)) return { doc: null, refused: `no narrative ${page}` };
   const own = fails.filter((f) => f.split(" ").some((w) => w === page || w.startsWith(`${page}:`)));
   if (own.length) return { doc: null, refused: `${page} fails the gate: ${own[0]}` };
+  // A page id of __proto__ is a legal own key from JSON.parse and would vanish into the prototype (attack b5f5e03 B4).
+  if (doc && typeof doc === "object" && Object.prototype.hasOwnProperty.call(/** @type {any} */ (doc).pages ?? {}, "__proto__")) return { doc: null, refused: `${ACCEPT_FILE} holds a __proto__ page key; fix the file by hand` };
   const prev = doc && typeof doc === "object" && !Array.isArray(doc) && /** @type {any} */ (doc).schema === 1 && /** @type {any} */ (doc).pages && typeof /** @type {any} */ (doc).pages === "object" ? /** @type {any} */ (doc).pages : {};
   /** @type {Record<string, unknown>} */
-  const pages = {};
+  const pages = Object.create(null);
   for (const k of [...Object.keys(prev), page].filter((k, i, a) => a.indexOf(k) === i).sort()) pages[k] = k === page ? { by: "owner", on, sha256: sha256(String(narratives[page])) } : prev[k];
   return { doc: { schema: 1, pages }, refused: "" };
 }
@@ -325,11 +335,77 @@ export async function readTree(root) {
   for (const band of Array.isArray(wiki.entities.adrBands) ? wiki.entities.adrBands : []) {
     for (const a of Array.isArray(band && band.facts && band.facts.adrs) ? band.facts.adrs : []) if (a && /^\d{4}$/.test(String(a.number))) adrs.add(String(a.number));
   }
-  const tracked = (/** @type {string} */ p) => regularInside(resolve(root, p), rootReal);
+  const tracked = (/** @type {string} */ p) => presentExact(root, rootReal, p);
   const read = (/** @type {string} */ p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return ""; } };
-  // A top-level directory, by name (never a listing): lstat, a real directory, not a symlink.
-  const isDir = (/** @type {string} */ seg) => { if (!/^.?[A-Za-z0-9_-][w.-]*$/.test(seg)) return false; try { const st = lstatSync(join(root, seg)); return st.isDirectory() && !st.isSymbolicLink(); } catch { return false; } };
+  const isDir = (/** @type {string} */ seg) => isTopDir(root, seg);
   return { wb, wiki, narratives, receipts, acceptDoc, accepted: acceptedOf(acceptDoc), rejected, tree: { adrs, wiki, tracked, read, isDir } };
+}
+
+/** A top-level directory, by name (never a listing): lstat, a real directory, not a symlink. The name grammar is run on the REAL tree by the self-test (attack b5f5e03 B1). */
+export function isTopDir(/** @type {string} */ root, /** @type {string} */ seg) {
+  if (!/^\.?[A-Za-z0-9_-][\w.-]*$/.test(seg)) return false;
+  try { const st = lstatSync(join(root, seg)); return st.isDirectory() && !st.isSymbolicLink(); } catch { return false; }
+}
+
+/**
+ * A regular file inside the tree whose on-disk spelling is EXACTLY `p`. It is not a git-tracked check (the extract lists
+ * no files), so the name says what it does. A case-insensitive checkout (Windows, macOS) resolves `Docs/x.md` to
+ * `docs/x.md` and would pass locally what the Linux leg fails (attack b5f5e03 B5); the native real path carries the true case.
+ */
+export function presentExact(/** @type {string} */ root, /** @type {string} */ rootReal, /** @type {string} */ p) {
+  const abs = resolve(root, p);
+  if (!regularInside(abs, rootReal)) return false;
+  try {
+    const base = realpathSync.native(root);
+    const real = realpathSync.native(abs);
+    return real.startsWith(base + sep) && real.slice(base.length + 1).split(sep).join("/") === p;
+  } catch { return false; }
+}
+
+/** The acceptance file as text, or null when absent or not a regular file; read again right before a write (attack b5f5e03 B4). */
+function acceptRaw(/** @type {string} */ root) {
+  try { const f = join(root, ACCEPT_FILE); return lstatSync(f).isFile() ? readFileSync(f, "utf8") : null; } catch { return null; }
+}
+
+/** Why --accept must not touch ACCEPT_FILE, from readTree's `rejected`: a link, a directory or bad JSON is never read as empty (attack b5f5e03 B2, B3). */
+export function acceptBlocker(/** @type {string[]} */ rejected) {
+  const bad = rejected.find((r) => r === ACCEPT_FILE || r.startsWith(`${ACCEPT_FILE} `));
+  return bad ? `${bad} is not a readable regular file inside the tree; fix or remove it by hand -- nothing was written` : "";
+}
+
+/**
+ * Write the acceptance file, or return why not (never throws): every folder on the way must be a real directory (not a
+ * link that leads outside the tree), the file must not have changed since it was read, and the write is a temp file plus
+ * rename so a torn write never leaves half a file (attack b5f5e03 B2, B4).
+ * @param {string} root @param {unknown} doc @param {string | null} before the text read when the run began
+ */
+export function writeAccept(root, doc, before) {
+  const tmp = join(root, `${ACCEPT_FILE}.${process.pid}.tmp`);
+  try {
+    let dir = root;
+    for (const seg of VERIFY_DIR.split("/")) {
+      dir = join(dir, seg);
+      let st = null;
+      try { st = lstatSync(dir); } catch { /* not there yet */ }
+      if (!st) mkdirSync(dir);
+      else if (!st.isDirectory() || st.isSymbolicLink()) return `${dir} is not a plain directory inside the tree; nothing was written`;
+    }
+    const file = join(root, ACCEPT_FILE);
+    try { const st = lstatSync(file); if (!st.isFile() || st.isSymbolicLink()) return `${ACCEPT_FILE} is not a regular file; nothing was written`; } catch { /* first acceptance */ }
+    if (acceptRaw(root) !== before) return `${ACCEPT_FILE} changed while this ran (another session accepted a page?); run --accept again`;
+    writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`, { flag: "wx" });
+    renameSync(tmp, file);
+    return "";
+  } catch (e) {
+    try { unlinkSync(tmp); } catch { /* none written */ }
+    return `could not write ${ACCEPT_FILE}: ${/** @type {Error} */ (e).message}`;
+  }
+}
+
+/** Why --selftest cannot combine with other arguments, or "" (attack b5f5e03 B6): a mode must not ignore what it was given. */
+export function selftestArgProblem(/** @type {string[]} */ argv) {
+  const extra = argv.filter((a) => a !== "--selftest");
+  return argv.includes("--selftest") && extra.length ? `--selftest takes no other argument (got ${JSON.stringify(extra[0])})` : "";
 }
 
 /** A regular file (not a symlink, not a directory) whose real path is inside the tree (attack 845e0a5 B3). */
@@ -381,14 +457,66 @@ function selftest() {
     debt.debt === 0 && debt.total === 2 && none.debt === 2 && none.unexplained.commands.includes("arc-x"));
   arm("blocks: a fenced heading, a multi-line comment and a table rule are not blocks",
     blocksOf("A. <!-- src: x -->\n\n```\n## no\nB\n```\n\n<!-- a\nb -->\n\n| h |\n|---|\n| r <!-- src: y --> |\n").length === 2);
+  // ---- attack b5f5e03 round 1: the arms below run the REAL functions against a real temp tree, never a stub.
+  const sandbox = mkdtempSync(join(tmpdir(), "narr-anchors-"));
+  const outside = mkdtempSync(join(tmpdir(), "narr-outside-"));
+  try {
+    mkdirSync(join(sandbox, "docs"));
+    writeFileSync(join(sandbox, "docs", "Real.md"), "x");
+    const sbReal = realpathSync(sandbox);
+    const realTree = { adrs: new Set(), wiki, tracked: (/** @type {string} */ p) => presentExact(sandbox, sbReal, p), read: () => "", isDir: (/** @type {string} */ d) => isTopDir(sandbox, d) };
+    const realRun = (/** @type {string} */ text) => evaluate({ narratives: { "products/hq": text }, accepted: {}, tree: realTree });
+    arm("MUTANT B1 real isDir: docs is a directory on the real check, and a planted missing docs/ path FAILs",
+      isTopDir(sandbox, "docs") && !isTopDir(sandbox, "nope") && !isTopDir(sandbox, "docs/x") && has(realRun("It keeps `docs/nope-gone.md` here.\n"), "[drift]") && !has(realRun("It keeps `docs/Real.md` here.\n"), "[drift]"));
+    arm("MUTANT B5 case: docs/real.md is not the on-disk docs/Real.md, so a wrong-case name FAILs even on a case-insensitive disk",
+      presentExact(sandbox, sbReal, "docs/Real.md") && !presentExact(sandbox, sbReal, "docs/real.md") && has(realRun("It keeps `docs/real.md` here.\n"), "[drift]"));
+    arm("MUTANT B3 unparseable: a rejected or unparseable acceptance file blocks --accept, never read as empty",
+      acceptBlocker([`${ACCEPT_FILE} (unparseable)`]) !== "" && acceptBlocker([ACCEPT_FILE]) !== "" && acceptBlocker(["docs/wiki/x.md"]) === "");
+    // B2: a directory where the file belongs, and a link where its folder belongs, are refused, never followed.
+    mkdirSync(join(sandbox, "docs", "narrative-verify"));
+    mkdirSync(join(sandbox, "docs", "narrative-verify", "accepted.json"));
+    const dirRefusal = writeAccept(sandbox, { schema: 1, pages: {} }, null);
+    arm("MUTANT B2 directory: accepted.json is a directory -> a plain refusal, no throw, still a directory",
+      dirRefusal !== "" && lstatSync(join(sandbox, ACCEPT_FILE)).isDirectory());
+    rmSync(join(sandbox, "docs", "narrative-verify"), { recursive: true });
+    let linked = false;
+    try { symlinkSync(outside, join(sandbox, "docs", "narrative-verify"), "junction"); linked = true; } catch { /* the arm below then FAILs, honestly */ }
+    const linkRefusal = linked ? writeAccept(sandbox, { schema: 1, pages: {} }, null) : "";
+    arm("MUTANT B2 link: the verify folder is a link out of the tree -> refused, and the outside folder stays empty",
+      linked && linkRefusal !== "" && !existsSync(join(outside, "accepted.json")));
+    if (linked) rmSync(join(sandbox, "docs", "narrative-verify"), { recursive: true, force: true });
+    // B4: a clean write lands whole; a write over a file changed since it was read is refused.
+    const okWrite = writeAccept(sandbox, { schema: 1, pages: { "products/a": { by: "owner" } } }, null);
+    const stale = writeAccept(sandbox, { schema: 1, pages: {} }, null);
+    const landed = existsSync(join(sandbox, ACCEPT_FILE)) && JSON.parse(readFileSync(join(sandbox, ACCEPT_FILE), "utf8")).pages["products/a"].by === "owner";
+    arm("MUTANT B4 stale write: a clean write lands whole with no temp file; a write over a file changed since it was read is refused",
+      okWrite === "" && landed && stale !== "" && !existsSync(join(sandbox, `${ACCEPT_FILE}.${process.pid}.tmp`)));
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+  const protoDoc = JSON.parse('{"schema":1,"pages":{"__proto__":{"by":"owner"},"products/a":{"by":"owner"}}}');
+  const protoAccept = acceptEntry(protoDoc, "products/hq", { "products/hq": good }, [], "2026-09-28");
+  const cleanAccept = acceptEntry({ schema: 1, pages: { "products/a": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, "products/hq", { "products/hq": good }, [], "2026-09-28");
+  arm("MUTANT B4 proto: a __proto__ page key in the file is refused by name, and a normal merge keeps the earlier page",
+    protoAccept.refused.includes("__proto__") && cleanAccept.refused === "" && Object.keys(cleanAccept.doc.pages).join() === "products/a,products/hq");
+  arm("MUTANT B6 selftest args: --selftest beside any other argument is refused by name, alone it is fine",
+    selftestArgProblem(["--selftest", "--accept", "products/qa"]).includes("--accept") && selftestArgProblem(["--selftest"]) === "");
+  const nested = "````bash\n```steps\n`/arc-gone`\n```\n````\n\nAfter `/arc-x`.\n";
+  arm("MUTANT B7 names: a longer fence is closed only by a bare fence of its own length, so a quoted inner steps fence stays quoted",
+    namesOf(nested).commands.join() === "arc-x" && namesOf("```bash\n~~~\n`/arc-gone`\n```\n").commands.length === 0);
+  arm("MUTANT B7 blocks: the fold agrees -- the nested fence hides its inner line, so only the closing paragraph is a block",
+    blocksOf("````\n```x\nA\n```\n````\n\nB\n").length === 1);
   console.log(`RAN: ${ran} checks, ${failed} failed`);
-  return failed === 0 && ran === 17 ? 0 : 1;
+  return failed === 0 && ran === 27 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
 
 /** @param {string[]} argv */
 async function main(argv) {
+  const stProblem = selftestArgProblem(argv);
+  if (stProblem) { console.error(`narrative-anchors: ${stProblem}`); return 2; }
   if (argv.includes("--selftest")) return selftest();
   let root = process.cwd(), rootSet = false, accept = "";
   const json = argv.includes("--json");
@@ -411,10 +539,14 @@ async function main(argv) {
   const r = evaluate({ narratives: t.narratives, accepted: t.accepted, tree: t.tree });
   for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory, unparseable or out of the tree; narratives and their records are regular files inside it`);
   if (accept) {
+    const blocked = acceptBlocker(t.rejected);
+    if (blocked) { console.log(`REFUSED ${accept} -- ${blocked}`); return 1; }
+    const before = acceptRaw(root);
     const on = new Date().toISOString().slice(0, 10);
     const { doc, refused } = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on);
     if (refused) { console.log(`REFUSED ${accept} -- ${refused}`); return 1; }
-    writeFileSync(join(root, ACCEPT_FILE), `${JSON.stringify(doc, null, 2)}\n`);
+    const failed = writeAccept(root, doc, before);
+    if (failed) { console.log(`REFUSED ${accept} -- ${failed}`); return 1; }
     console.log(`accepted ${accept} for the owner on ${on} (sha256 ${sha256(String(t.narratives[accept])).slice(0, 12)}) -> ${ACCEPT_FILE}`);
     return 0;
   }

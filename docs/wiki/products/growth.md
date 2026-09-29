@@ -5,136 +5,152 @@
 
 ## Why it exists
 
+```tagline
+arc's small press desk. It finds what people really search for, drafts true articles, and hands every
+one to a human to publish. Then it reads back who actually came.
+```
+
+# Start here
 
 ## In plain words
 
-Picture a company opening its first press desk. Someone has to find out what people are actually asking about, write something true about it, get a person to sign off before anything goes out the door, and then find out afterward whether anyone actually read it. <!-- plain -->
+Think of a company opening its first press desk. Someone has to find out what people are asking. Someone
+has to write something true about it. A person must sign off before anything goes out the door. And
+weeks later someone has to check whether anybody read it.
 
-growth is that desk. It finds real keyword evidence, drafts exemplar-anchored articles with an original point-of-view floor, publishes only through a pull request a human merges, and every week reads back click data and turns it into a receipt — so growth is at once arc's traffic engine and, in the plan's own words, "the hand that winds the alarm clock" of an evolve module that is already built and waiting. <!-- src: initiatives/growth/PLAN.md -->
+```panel big
+**growth is that press desk.** It has one rule above all the others: **the machine never presses
+"publish". A human does.**
+
+- **The researcher** (`mine`) reads a named list of real places and writes down topics people ask about, each with a link to where it was seen.
+- **The editor** (`cluster`) groups the topics into one plan: a main article, several side articles, and a few "ready to buy" ones. A human approves that plan first.
+- **The writer** (`generate`, `render`) is a separate drafting skill. This product only prepares its brief and packs the draft into the site's file format.
+- **The proofreaders** (`lint`) catch known bad habits and articles that state facts with no source.
+- **The courier** (`publish`) prepares a review pack and the pull request. It does not merge it.
+- **The clipping service** (`ingest`, `seal`) records what was published and, once a week, what search traffic it earned.
+```
 
 ### Why this needs to be a product at all
 
-Before growth existed, arc's spine had `KINDS.length` = 44 and no `content.*` kind at all — and of those 44 declared kinds, only 11 had ever actually been emitted, across 1,024 events. <!-- src: docs/adr/1101-content-published-vocabulary-and-its-policy-rows.md; initiatives/growth/PLAN.md#REQ-00 -->
+| What you lose | What it looks like when it bites | growth's answer |
+|---|---|---|
+| **Your name on the site** | A machine publishes something under the owner's name without anyone looking. | The command can only open a pull request. A person merges it by hand. |
+| **A real cluster** | Four "different" articles that are really the same idea in four spellings. | A side article must add something new that the main one and the other sides lack. |
+| **Knowing if it worked** | A week with no data is read as a week with zero readers. | A week nobody has recorded is shown as MISSING, never as zero. |
 
-A second module, evolve, had already been built ahead of any real user of it, on an explicit owner override — fixture-proven, never exercised against a real feed. <!-- src: docs/adr/0300-evolve-is-built-ahead-of-its-trigger.md --> Its companion decision made leads evolve's first client, shipping the metrics vocabulary — but leads' own campaign stayed parked, and its own revisit trigger already named growth as the one that would run a real campaign first and become the first client whose receipts start the four-week window. <!-- src: docs/adr/0408-leads-is-evolves-first-client-and-ships-evo-h0-vocabulary-not-its-clock.md --> So growth exists to close two gaps at once: it gives arc a publishing vocabulary it never had, and it is the first product to actually feed evolve's waiting clock rather than leave it fixture-proven and idle. <!-- src: initiatives/growth/PLAN.md -->
-
-growth is also arc's first product with a real public surface — a static site in its own repository, kept separate from arc's private tooling by that repository boundary itself rather than by a build-config field someone has to keep correct. <!-- src: initiatives/growth/PLAN.md; docs/adr/1104-the-site-is-astro-mdx-in-its-own-repo-behind-a-deploy-interface.md -->
+> growth is arc's first product with a public face: a real website, kept in its own repository so that
+> arc's private tooling is separated from it by the repository boundary itself.
 
 ## arc words → normal words
 
-| arc calls it | It is really | Meaning |
-|---|---|---|
-| cluster | the topic map for one batch of articles | One pillar article, 5-8 spoke articles each on a distinct topic, and 2-3 BOFU articles — composed as ONE inbox item a human approves or rejects, before any generation runs. <!-- src: .claude/scripts/growth/lib/cluster.mjs; docs/adr/1112-exactly-two-recurring-human-gates.md --> |
-| the residue rule | "does this spoke actually say something new" | A candidate may become a spoke only if its topic words add something the pillar and every already-chosen spoke lack; a candidate that only restates the pillar is refused rather than counted. <!-- src: docs/adr/1116-a-spoke-must-be-a-distinct-topic-not-a-re-cut-of-the-pillar.md --> |
-| gate 1 | the cluster approval | The one point before any drafting happens where a human approves the exact keyword plan, bound to it by its own hash (`plan_sha`) rather than just its name — the plan changing after approval refuses generation. <!-- src: docs/adr/1112-exactly-two-recurring-human-gates.md; .claude/scripts/growth/lib/cluster.mjs --> |
-| gate 2 | the review-pack approval | The one point before any merge where a human reads a preview link, a lint report, a citation report and a diff, and approves or rejects. <!-- src: docs/adr/1112-exactly-two-recurring-human-gates.md --> |
-| content_sha | the article's fingerprint | A sha256 of the exact bytes of the published file, never of rendered HTML and never normalized — the value the idem is built on. <!-- src: .claude/scripts/growth/lib/content-sha.mjs --> |
-| the arm / template_id | which headline style an article got | One of two enumerated title templates, chosen by hashing the article's own slug, so the same article always lands on the same arm and nobody can move it by hand. <!-- src: .claude/scripts/growth/lib/templates.mjs --> |
-| E2 | the rule that a human, not a machine, publishes | Constitution article Human Sovereignty, naming publishing under Ashiq's name as an act reserved to a person, and marked unamendable. <!-- src: docs/adr/1102-publish-is-a-pull-request-and-the-machine-never-merges.md --> |
-| the module-graph guard | proof by reading the code's shape, not by searching its text | A parse that follows every local import a publish command makes, proving that only the one declared choke point can spawn a subprocess, that its verb tables carry no merge or protected-branch push, and that no module in the graph imports a deploy surface. <!-- src: .claude/scripts/growth/lib/guard.mjs; .claude/scripts/growth/lib/exec-allowlist.mjs --> |
-| the feed | the only visible readout of the clock | ADR-1108's weekly ingest reads Search Console click data, matched by URL to the `content.published` receipt that describes it, and prints the emit command for one metric line per matched article — the only visible readout of a clock that runs whether or not anyone is watching. <!-- src: initiatives/growth/PLAN.md; docs/adr/1108-the-weekly-ingest-is-a-pacific-time-iso-week-read-from-a-range-matched-csv.md; .claude/scripts/growth/lib/ingest.mjs; .claude/scripts/growth/arc-growth.mjs#cmdIngest --> |
-| MISSING | "we don't know yet," never "zero" | The state of a week nobody has successfully read and recorded — reported as missing rather than as a week with no clicks, because the two are different facts. <!-- src: .claude/scripts/growth/lib/feed.mjs --> |
-| standing capability | a department the company keeps, not a one-time campaign | The framing under which the two phases that need a live domain were parked rather than faked, while everything that does not need one was still finished. <!-- src: docs/adr/1115-growth-ships-as-a-standing-capability-and-the-domain-phases-are-parked.md --> |
+```lede
+Ordinary press-desk things wearing technical names.
+```
+
+```rosetta
+cluster | the story plan for one batch | one main article, side articles, ready-to-buy articles
+gate 1 | the editor's sign-off on the plan | a human approves the exact plan before any drafting
+gate 2 | the sign-off before printing | a human reads the review pack before any merge
+E2 | "only a person publishes" | the constitution article that reserves publishing to a human; it cannot be amended
+review pack | the proof sheet | preview link, both proofreading reports, the diff
+residue rule | "does this side article say anything new" | a side article must add words the main one lacks
+content_sha | the article's fingerprint | computed from the exact file bytes as published
+arm | which headline style it got | picked from the article's own slug, so nobody can steer it
+seal | filing the clipping | record the publish only after a human merged it
+MISSING | "we don't know yet" | never confused with zero
+standing capability | a desk the company keeps | finish what needs no live domain, park what does, never fake it
+```
 
 ## How a job flows
 
-1. `mine` reads a named list of real sources and writes out keyword candidates, each carrying an evidence URL back to where it was found. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdMine; .claude/scripts/growth/lib/mine.mjs -->
-2. `cluster` turns candidates that already passed structural validation into one pillar-plus-spokes-plus-BOFU plan and prints the exact command to raise it for gate 1. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdCluster; .claude/scripts/growth/lib/cluster.mjs -->
-3. Once a human approves that exact plan, `generate` checks the approval and assembles a drafting prompt bound to one approved row; the drafting itself is a separate skill's job, not this command's. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdGenerate -->
-4. `render` turns the draft into the site's MDX file and assigns its title-template arm from the slug, independent of anything the draft itself claims. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdRender; .claude/scripts/growth/lib/templates.mjs -->
-5. `lint` runs both checks over a file and prints their reports plus the POV-floor line. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdLint -->
-6. `publish` assembles the review pack, hashes the article, and prints the exact `git checkout -b`, `git commit`, `git push` and `gh pr create` commands that open the pull request — it never runs them itself; a human then merges it by hand (E2). <!-- src: .claude/scripts/growth/arc-growth.mjs#checkout; docs/adr/1102-publish-is-a-pull-request-and-the-machine-never-merges.md -->
-7. A human merges the pull request by hand; `seal` then reads the merged file's bytes and prints the exact command that records the publish receipt. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdSeal -->
-8. Once a week — ADR-1108's weekly ingest — `ingest` reads a Search Console export and prints the commands that record each matched article's clicks; `spec-verify` re-runs the ADR-0408 probes against the live metrics validator and blocks if a deviation appeared or vanished. <!-- src: docs/adr/1108-the-weekly-ingest-is-a-pacific-time-iso-week-read-from-a-range-matched-csv.md; .claude/scripts/growth/arc-growth.mjs#cmdIngest; .claude/scripts/growth/arc-growth.mjs#cmdSpecVerify; .claude/scripts/growth/lib/spec-verify.mjs -->
+```lede
+Two human stops, and the machine only ever prepares. A person acts at each stop and at the merge.
+```
+
+```flow
+source: mine → cluster
+box: ① Find topics | real sources, with proof
+box: ② Plan the batch | one cluster, hashed
+box*: ③ Draft and check | writer skill, then lint
+box: ④ Review pack | preview, reports, diff
+labels: approve, draft, submit
+out: plan changed | generation refuses
+out: no source link | flagged by the citation check
+out+: human merges | then seal, then the weekly read
+divider: 1 | machine prepares | human decides
+note: The tool prints the git and pull-request commands. It never runs the merge itself.
+caption: Figure 1 — one batch of articles. | Gate 1 sits before drafting, gate 2 before the merge.
+```
 
 ## The stages, one by one
 
-2. **Cluster, then gate 1.** `cluster` builds one plan and hashes it; `generate` will later refuse to run against that cluster id unless the exact same hash was the one a human approved, so approving a plan by name alone is not enough. The approval itself rides the same request-and-decide mechanism every other approval in arc uses — growth writes no approval receipt of its own. <!-- src: .claude/scripts/growth/lib/cluster.mjs -->
-3. **Generate, then render.** The prompt handed to the drafting skill carries the cluster row, the exemplar bytes, and the E3 laws — and nothing else, because the exemplars are declared the only style input, permanently. Two separate checks guard this: one scans the authored prompt template for structure creeping back in, the other checks that the cluster's own data cannot inject new instructions or invent a link target. `render` then assigns the arm independently of whatever the draft file claims, because on the very first real article the draft's own frontmatter and the hash-based assignment disagreed (`title-a` vs `title-b`). <!-- src: docs/adr/1110-lints-are-negative-only-forever-and-exemplars-are-the-only-style-input.md; .claude/scripts/growth/lib/generate.mjs; .claude/scripts/growth/lib/templates.mjs; .claude/scripts/growth/arc-growth.mjs#cmdRender -->
-4. **Lint.** One check only ever reports bad patterns it found and never what is absent or how good the writing is; a companion check requires that any checkable claim carry a source link, and treats a merely dead link as a warning rather than a failure, because the live web rots and a check that fails on ordinary link rot is a check people learn to route around. A human line asking the reviewer to name the article's one original insight travels alongside both reports, because no marker list can detect that a draft has nothing to say. <!-- src: .claude/scripts/growth/lib/slop-lint.mjs; .claude/scripts/growth/lib/citation-lint.mjs; .claude/scripts/growth/arc-growth.mjs; docs/adr/1110-lints-are-negative-only-forever-and-exemplars-are-the-only-style-input.md -->
-5. **Publish.** The review pack is invalid without a working preview link, because a reviewer who can only see a diff cannot tell whether the rendered page is actually broken. The bytes that get hashed and the text that gets linted are decoded once, not two reads seconds apart with a network call between them, so an edit landing in that window cannot leave the lint reports describing different bytes than the `content_sha` the approval binds to. Underneath, one file alone is allowed to run git or a pull-request command at all, and even that file cannot merge, push to a protected branch, or write to a deploy hook — checked by parsing the whole chain of files the publish command imports rather than by searching its text, because a text search once missed several ways of reaching a forbidden capability. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdPublish; .claude/scripts/growth/lib/publish.mjs; .claude/scripts/growth/lib/guard.mjs; .claude/scripts/growth/lib/exec-allowlist.mjs -->
-6. **Seal.** Only after a human has merged the pull request by hand does `seal` exist to do anything: it reads the permanent site host from one pinned configuration file, re-derives the article's arm the same way publishing did, hashes the merged file's raw bytes, and prints the one command that records the fact. It spawns nothing and merges nothing, because recording a merge that already happened is not the same act as making one. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdSeal; .claude/scripts/growth/lib/cutover.mjs; .claude/scripts/growth/lib/templates.mjs; .claude/scripts/growth/lib/content-sha.mjs -->
-7. **Ingest, then the feed.** Each week's export is checked against the seven days it claims to cover before anything is trusted from it; the lag guard refuses a week whose last day is under 3 days old, because an early read is a wrong read; and every article's clicks are matched to the publish receipt that currently heads that article's history rather than to any receipt that has since been superseded. The feed line that reports all this back is recomputed from the event log on every single read rather than cached, because a stale reading once cost the company five silent days without anyone noticing the readout itself was wrong. <!-- src: initiatives/growth/PLAN.md; .claude/scripts/growth/lib/ingest.mjs; .claude/scripts/growth/lib/cutover.mjs; .claude/scripts/growth/lib/feed.mjs -->
+```lede
+Each stage is written twice: first what it does in ordinary words, then what actually happens.
+```
 
-## Every part, explained
+```steps
+t: Find topics, with receipts
+plain: The researcher reads a named list of sources and writes down candidate topics. Every topic carries a link to where it was found. It does not invent keywords.
+d: `mine` takes a source list and a sitemap so it can skip topics the site already covers. Its I/O adapters are one per source, and the evidence checker reports each link as live, dead or unknown.
+f: `.claude/scripts/growth/arc-growth.mjs` · `initiatives/growth/sources.json`
 
-### Commands
+t: Plan the batch, then get gate 1
+plain: The editor groups topics into one plan and asks a human to approve it. Approval is tied to the plan's own fingerprint, so changing the plan afterward cancels it.
+d: `cluster` builds the plan and prints the command that raises it as one inbox item. `generate` refuses to run unless that exact plan hash was approved. The residue rule keeps side articles distinct (ADR-1116).
+f: `.claude/scripts/growth/lib/cluster.mjs` · ADR-1112
 
-growth's manifest declares no commands at all. <!-- src: products/growth/manifest.json --> Instead of a slash-command surface, the whole product is reached through the verbs of one script (below), run directly rather than dispatched through arc's process-and-router office. <!-- src: .claude/scripts/growth/arc-growth.mjs; docs/adr/1101-content-published-vocabulary-and-its-policy-rows.md -->
+t: Draft, render, proofread
+plain: `generate` writes the brief for the drafting skill, using approved example articles as the only style guide. `render` puts the draft into the site's file shape. `lint` then scans for known bad patterns and for claims with no source.
+d: The drafting is done by the `seo-article-writer` skill, not by this command. Both lints only report what they find. They never demand a length, a structure or a "good" style (ADR-1110).
+f: `.claude/skills/seo-article-writer` · `.claude/scripts/growth/lib/slop-lint.mjs` · `.claude/scripts/growth/lib/citation-lint.mjs`
 
-| Verb | What it does |
-|---|---|
-| `mine` | Reads a named source list and a sitemap-derived exclusion list, and writes evidence-linked keyword candidates. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdMine --> |
-| `cluster` | Builds one pillar-plus-spokes-plus-BOFU plan from validated candidates and prints its hash and the command to raise it for approval. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdCluster --> |
-| `generate` | Checks the cluster's approval against its exact hash, then writes the drafting prompt for one approved keyword row. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdGenerate --> |
-| `render` | Turns a drafted body into the site's file shape and assigns the title-template arm from the slug. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdRender --> |
-| `lint` | Runs both checks over one file and prints their reports plus the point-of-view line. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdLint --> |
-| `publish` | Assembles the review pack, hashes the article once, and prints the branch and pull-request commands; it has no merge path. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdPublish --> |
-| `ingest` | Reads one weekly Search Console export and prints the commands that record each matched article's clicks. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdIngest --> |
-| `spec-verify` | Re-runs the ADR-0408 probes against the live leads validator and blocks if a known deviation vanished or a new one appeared. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdSpecVerify; .claude/scripts/growth/lib/spec-verify.mjs#BAD_VALIDATOR --> |
-| `seal` | Prints the command recording the publish receipt for an article a human has already merged; site, url, template_id and content_sha are derived, and the operator supplies the slug, the merged article, the cluster id, the title and merged PR number. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdSeal --> |
+t: The review pack, then gate 2
+plain: `publish` bundles a preview link, the two reports and the diff, then prints the exact commands that open a pull request. A person reads it and merges by hand, or does not.
+d: A guard reads the code itself to prove that only one file may start git or pull-request commands, and that none of its allowed commands can merge (ADR-1102).
+f: `.claude/scripts/growth/lib/guard.mjs` · `.claude/scripts/growth/lib/exec-allowlist.mjs`
 
-Every verb here is a reader, never a second writer: the one place any of them may write to the shared event log is by printing the exact command for a person or another tool to run, and the one place any of them may run git or a pull-request command is the single file the module-graph guard watches. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdIngest; .claude/scripts/growth/lib/exec-allowlist.mjs; .claude/scripts/growth/lib/guard.mjs -->
+t: Seal, then read the results weekly
+plain: After the human merge, `seal` records that the article went out. Each week `ingest` reads a Search Console export and prints the commands that record each article's clicks.
+d: A week whose last day is under 3 days old is refused, and a week nobody has recorded reads as MISSING. Search Console counts days in Pacific Time (ADR-1108).
+f: `.claude/scripts/growth/lib/ingest.mjs` · `.claude/scripts/growth/lib/feed.mjs`
+```
 
-### Agents
+# The bigger loop
 
-growth's manifest lists no agent. <!-- src: products/growth/manifest.json --> Drafting itself is deliberately not done by any script here: it is handed to a skill, invoked separately with the approved cluster row and the exemplar files, because a deterministic command line that shells out to a model would be untestable and would put an unreviewable creative step inside the same file that also holds a security gate. <!-- src: .claude/scripts/growth/arc-growth.mjs#cmdGenerate -->
+## A story the desk lived: the cluster that was one idea four times
 
-### Processes
+```lede
+This is a real event from the growth lane, told in short.
+```
 
-growth defines no the process files under processes file and adds no `hq.policy.yaml` row. Its verbs are scripts invoked inside `session:interactive`, so they inherit that subject's existing ceiling rather than introducing a subject of their own. <!-- src: docs/adr/1101-content-published-vocabulary-and-its-policy-rows.md -->
+The first real cluster, `c-001`, had the main topic `ai agents`. Two of its side articles were the main
+topic plus one word, and a third was the same words reordered. The plan showed one idea to the human four
+times and called it a cluster.
 
-### Scripts
+The cause was the ranking: it favoured topics that overlapped the main one most, so the most repetitive
+topics won. A quiet second bug hid the word `ai`, because very short words were dropped from the
+comparison. The fix was the residue rule, which requires every side article to add something new
+(ADR-1116).
 
-- **The command surface and the one-shot hasher.** `arc-growth.mjs` is the CLI described above; `content-sha-of.mjs` prints one file's fingerprint through `contentShaOfFile`, which itself calls `contentShaOfBytes` — the single content_sha definition the publish path also calls directly — so a runbook step never re-implements the hash by hand. <!-- src: .claude/scripts/growth/arc-growth.mjs; .claude/scripts/growth/content-sha-of.mjs; .claude/scripts/growth/lib/content-sha.mjs -->
-- **Mining and evidence.** `mine.mjs` holds the pure candidate logic and the rule against inventing keywords; `adapters.mjs` is the one-adapter-per-source I/O layer, including the public Hacker News search adapter; `evidence.mjs` is the three-state live/dead/unknown link checker. <!-- src: .claude/scripts/growth/lib/mine.mjs; .claude/scripts/growth/lib/adapters.mjs; .claude/scripts/growth/lib/evidence.mjs -->
-- **Cluster and templates.** `cluster.mjs` builds the plan and is the only door that can refuse `generate` on an unapproved cluster; `templates.mjs` loads the two versioned title-template files and assigns an article's arm by hashing its slug. <!-- src: .claude/scripts/growth/lib/cluster.mjs; .claude/scripts/growth/lib/templates.mjs -->
-- **Generation and the shared text layer.** `generate.mjs` assembles the exemplar-anchored prompt and renders the MDX; `text.mjs` is the one folding-and-block-splitting layer both lints and the anti-prescription check now share, written after an adversarial pass found `citation-lint` did no Unicode folding at all and missed five fabricated figures hidden behind zero-width spaces and fullwidth digits, while `slop-lint`'s separate defect only ever matched a single physical line. <!-- src: .claude/scripts/growth/lib/generate.mjs; .claude/scripts/growth/lib/text.mjs; .claude/scripts/growth/lib/citation-lint.mjs -->
-- **The two lints.** `slop-lint.mjs` scans for known bad patterns and nothing else; `citation-lint.mjs` checks that a checkable claim carries a source link and, separately, whether that link still resolves. <!-- src: .claude/scripts/growth/lib/slop-lint.mjs; .claude/scripts/growth/lib/citation-lint.mjs -->
-- **The publish path and its guard.** `publish.mjs` assembles the review pack and has no ability to run anything itself; `guard.mjs` parses the whole module graph rather than searching it; `exec-allowlist.mjs` is the single file allowed to run git or a pull-request command, and its own tables are checked for a banned merge, push-to-protected-branch, or deploy verb. <!-- src: .claude/scripts/growth/lib/publish.mjs; .claude/scripts/growth/lib/guard.mjs; .claude/scripts/growth/lib/exec-allowlist.mjs -->
-- **The feed.** `ingest.mjs` holds every ingest-time refusal; `spec-verify.mjs` re-runs the conformance check against the shared metrics validator as an executable gate rather than a one-time claim; `feed.mjs` derives the reportable feed lines fresh from the event log on every call. <!-- src: .claude/scripts/growth/lib/ingest.mjs; .claude/scripts/growth/lib/spec-verify.mjs; .claude/scripts/growth/lib/feed.mjs -->
+## Where growth sits in arc
 
-### Gates and rules
+- **Needs core and hq.** The publish receipt `content.published` joins arc's logbook without adding a new rule to the company policy file (ADR-1101).
+- **Parked, not faked.** The weekly read needs a live, crawled site. Where that clock had not started, growth parked those phases instead of inventing data (ADR-1115).
+- **Indexable is not crawled.** The site being open to search engines did not start the clock. Google had to find it first, and that only happened after a sitemap was submitted. The tracker records the date it was first discovered (`initiatives/growth/PROGRESS.md`).
+- **In the face.** growth lives in the money room. The chips at the top of this page name the room and the ring.
 
-- Nine test suites guard this product by name: a vocabulary suite, a publish-thread suite, a deploy suite, a cluster-gate suite, a lints suite, a mining suite, a feed suite, a site-cutover suite, and a publish suite. <!-- src: tests/growth-vocabulary.bats; tests/growth-publish-thread.bats; tests/growth-deploy.bats; tests/growth-cluster-gate.bats; tests/growth-lints.bats; tests/growth-mine.bats; tests/growth-feed.bats; tests/growth-site-cutover.bats; tests/growth-publish.bats -->
-- Neither lint may ever fail on an absent structure or a prescribed length; a rule of that shape can only be added by its own decision, arguing the creativity cost by name. <!-- src: docs/adr/1110-lints-are-negative-only-forever-and-exemplars-are-the-only-style-input.md -->
-- A sample that carries none of the listed bad patterns and is still poor writing must pass the lint and be caught only at the human review gate — kept as a fixture on disk so the lint's own limits stay documented rather than assumed away. <!-- src: docs/adr/1110-lints-are-negative-only-forever-and-exemplars-are-the-only-style-input.md -->
-- Exactly two approvals repeat for any unit of ongoing work — the cluster approval and the review-pack approval — and any future approval that would recur per article or per cluster needs its own decision before it may exist. <!-- src: docs/adr/1112-exactly-two-recurring-human-gates.md -->
-- The publish receipt's idem is the total set of identity-bearing fields, deliberately excluding the pull-request reference, so a metadata-only correction produces a new receipt instead of silently colliding with the original. <!-- src: docs/adr/1101-content-published-vocabulary-and-its-policy-rows.md -->
-- Growth's two lints went through an adversarial pass by two fresh surfaces — one on the marker logic, one on the file/encoding boundary — before either was trusted to fail anything, and the attacker's prompt carried the lane's own running list of already-fixed defects so each was checked in the other lint too. <!-- src: docs/adr/1110-lints-are-negative-only-forever-and-exemplars-are-the-only-style-input.md -->
-
-## The bigger loop
-
-### The first real article, start to finish
-
-The steel thread ran for real rather than only in a fixture: a branch, a pull request, a preview build, then the owner's own merge, and only then a publish receipt — verified sitting in the event log and absent from its quarantine folder. <!-- src: initiatives/growth/PROGRESS.md -->
-
-The very next check this product ran against itself found a real gap on its first live use: `checkSitemapCoverage` found one article in the sitemap with no `content.published` receipt behind it, because that file had been pushed directly in the initial setup commit with no pull request at all — so no receipt was fabricated for it, and its clicks would report UNJOINED until this is settled. <!-- src: initiatives/growth/PROGRESS.md -->
-
-Turning the site indexable was not the same moment as Google actually finding it. Search Console showed the property faithfully verified, yet also showed zero pages ever crawled, because nobody had ever submitted a sitemap while the site still told search engines to stay out — so the readable week had never actually started, even though every one of the site's own settings had already flipped to public. Submitting the sitemap and requesting indexing moved the site from unknown to Google to merely discovered, and only from that day could a full week of real crawling begin. <!-- src: initiatives/growth/PROGRESS.md -->
-
-### How it connects to the rest of arc
-
-growth requires exactly two other products, core and hq. <!-- src: products/growth/manifest.json --> The receipt it adds, content.published, joins arc's closed vocabulary of event kinds without adding any row to the company's policy file, because a spine event kind and an authorization subject are different things that happen to share a word. <!-- src: docs/adr/1101-content-published-vocabulary-and-its-policy-rows.md --> The metric it later writes, metric.observed, was already law from another lane's cycle before growth existed; growth is simply the first product to actually run the weekly feed that fills it. <!-- src: docs/adr/0408-leads-is-evolves-first-client-and-ships-evo-h0-vocabulary-not-its-clock.md; initiatives/growth/PLAN.md -->
-
-growth's claimed decision band runs from eleven hundred through eleven ninety-nine, established only after every workspace on the machine was scanned — and it still collided: `ledger` and `legal` had also claimed the same century, `1000–1099`, the same week, and growth renumbered to `1100–1199` after the fact. <!-- src: initiatives/growth/PLAN.md; initiatives/growth/PROGRESS.md -->
-
-Its face room, named growth, sits in the money ring, with two stations named the feed clock and the publish board, and two named concepts on its wall: the INDEXABLE clock, and gate 1 / gate 2 — the cluster approval and the review-pack approval. <!-- src: products/growth/manifest.json; docs/adr/1112-exactly-two-recurring-human-gates.md -->
+# Meta
 
 ## Glossary
 
-| Term | Meaning |
-|---|---|
-| gate 1 / gate 2 | The cluster approval before any drafting, and the review-pack approval before any merge — the only two approvals allowed to recur. <!-- src: docs/adr/1112-exactly-two-recurring-human-gates.md --> |
-| residue rule | The check that a candidate spoke's residue — its topic tokens minus the pillar's — is non-empty, and not equal to or a subset of an already-chosen spoke's residue, so a cluster cannot be four spellings of one idea. <!-- src: docs/adr/1116-a-spoke-must-be-a-distinct-topic-not-a-re-cut-of-the-pillar.md --> |
-| content_sha | A sha256 fingerprint of an article's exact published bytes, never of rendered output and never normalized. <!-- src: .claude/scripts/growth/lib/content-sha.mjs --> |
-| arm / template_id | Which of two enumerated title templates an article was assigned, decided by hashing its own slug. <!-- src: .claude/scripts/growth/lib/templates.mjs --> |
-| E2 | Human Sovereignty, the unamendable article naming publishing as an act only a person may complete. <!-- src: docs/adr/1102-publish-is-a-pull-request-and-the-machine-never-merges.md --> |
-| module-graph guard | A parse of every file a publish command imports, proving that at most one chokepoint module can run a subprocess at all, that its allowlists contain no merge, push-to-protected-branch or deploy verb, and that no module in the graph imports a deploy surface — it cannot see what a spawned subprocess does once started. <!-- src: .claude/scripts/growth/lib/guard.mjs; .claude/scripts/growth/lib/exec-allowlist.mjs --> |
-| MISSING | A week nobody has successfully read and recorded yet — reported as unknown, never as zero clicks. <!-- src: .claude/scripts/growth/lib/feed.mjs --> |
-| standing capability | The framing that let growth finish every phase that does not need a live domain while parking, rather than faking, the two that do. <!-- src: docs/adr/1115-growth-ships-as-a-standing-capability-and-the-domain-phases-are-parked.md --> |
-| seal | Recording the publish receipt for an article a human has already merged, rather than performing any merge itself. <!-- src: .claude/scripts/growth/arc-growth.mjs --> |
-| POV floor | The human line in the review pack asking the reviewer to name the one original practitioner insight a draft contributes — something arc learned by doing, not restated from the sources — because an original practitioner stance is not detectable by a marker list. <!-- src: docs/adr/1110-lints-are-negative-only-forever-and-exemplars-are-the-only-style-input.md; .claude/scripts/growth/arc-growth.mjs#POV_FLOOR_LINE --> |
+```gloss
+Search Console: Google's free report of which searches led people to your pages, and how many clicked.
+sitemap: a list of a site's pages that you hand to search engines so they can find them.
+noindex: a note on a page telling search engines to stay away from it.
+pull request: a proposed change, held open so a person can read it and choose to merge it.
+BOFU: "bottom of funnel", an article aimed at someone close to deciding.
+ISO week: a week counted Monday to Sunday with a fixed number, such as 2026-W36.
+```
 
 ## At a glance
 

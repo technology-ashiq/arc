@@ -5,211 +5,184 @@
 
 ## Why it exists
 
+```tagline
+The lane that teaches arc to look at its own drawings. Before anyone judges a screen, the person who
+made it opens the picture, compares it with real screens worth learning from, and revises.
+```
+
+# Start here
 
 ## In plain words
 
-Think of this lane as an in-house design studio that used to send its sketches out the door after only reading a report about them, and never once looking at the actual picture itself — Cycle 3 ran a full pipeline of critique rounds and blind rankings built on pixels nobody in the room had opened, and the owner scored the result 23 out of 100 the one time he looked. <!-- src: docs/retro-log.md -->
+Think of arc's design work as a small design studio.
 
-This cycle sets out to give that studio three things it never had. Eyes, so the person who draws a screen also opens and studies the picture of it before anyone else judges the work. Taste, so every brief carries a curated folder of real screens worth learning from, and the judge measures new work against those real screens rather than an adjective. And rivals, so outside AI design tools compete blindly in the very same judging round — so that "is this actually good" stops being one person's impression and starts being something written down. <!-- src: initiatives/design/PLAN.md -->
+The studio has a studio head, a drafter who draws a screen, a critic and a jury. On paper that sounds
+fine. The trouble, found in the first design cycle, was that the judging happened on **reports about
+the pictures**. Nobody in the room had opened the picture itself. The owner looked once, at the real
+output, and scored it 23 out of 100 (`docs/retro-log.md`).
 
-Its cycle is `arc-design v2 (Cycle 16, opened 2026-08-23)`, and it implements a design source whose own decisions are marked LOCKED, so those decisions are treated as settled rather than re-argued here. <!-- src: fact:lanes/design.cycle; initiatives/design/PLAN.md -->
+```panel big
+**This lane fixes the studio in three ways.**
 
-That locked source is `docs/strategy/plans/PLAN-design-v2.md`; its §3 (DSV-A through DSV-L) and its §10 rejected registry are marked LOCKED, and this lane's plan implements them rather than reopening them. <!-- src: initiatives/design/PLAN.md -->
+- **Eyes.** The drafter (`ui-composer`) renders its own page, looks at the screenshot, and revises, up to three times, before anyone else sees it.
+- **Taste.** Every brief gets a folder of real screens to learn from. The critic and the jury measure new work against those screens, not against an adjective like "clean".
+- **Rivals.** Outside AI design tools get to submit a draft into the same blind judging round, so that "is our work actually good" becomes something written down.
 
-### What it is building
+Nothing is ranked, scored or packaged from a report about a picture that nobody opened. That sentence is the lane's rule number one.
+```
 
-The product this lane builds is called `design`. Its manifest today lists four agents: `design-critic`, `design-director`, `design-jury` and `ui-composer` — a critic that reads the rendered screenshot and judges the surface against the brief's four contracts, a director that assigns each variant its own thesis, a jury that ranks unlabelled items against each other, and a composer that builds one variant, renders it, and revises it after reading its own screenshot. <!-- src: products/design/manifest.json; .claude/agents/design-critic.md; .claude/agents/design-director.md; .claude/agents/design-jury.md; .claude/agents/ui-composer.md; ADR-1401 -->
+### Why it needs its own lane
 
-Phase 02's own exit criteria call for a fifth agent, a curator that builds each brief's reference pack, seated at the balanced-workhorse tier — but as of this page, no `design-curator` file exists yet, and the manifest's agent list is still the four above. <!-- src: initiatives/design/phases/phase-02-spec.md; products/design/manifest.json -->
+A lane is one workstream of arc's build. It has its own plan, its own progress file and its own status.
+This one is big enough to need all three, because it changes agents that other work depends on.
 
-Cycle 3's own retro record shows an evidence pipeline running end to end — critique rounds, blind rankings, receipts and a sealed prediction — built from reports about pixels nobody in the session had opened, with the owner scoring the output 23 out of 100 the one time he looked. <!-- src: docs/retro-log.md -->
-
-In arc's face app, this product renders as the `design-studio` room, in the `factory` ring. <!-- src: products/design/manifest.json -->
+| What went wrong before | What it looked like | This lane's answer |
+|---|---|---|
+| **Judging pictures nobody opened** | Five critique rounds and three blind rankings ran, and the owner scored the result 23/100. | The drafter looks at its own screenshot first (ADR-1401). |
+| **A pass that only meant "no rule broken"** | Plain, characterless work passed five runs in a row. | A finding class for work that is below the bar, tied to a real reference screen (ADR-1406). |
+| **A rule the agent could not obey** | The drafter was told never to read certain files, yet needed exactly those files. | A short, written list of what it may read (ADR-1415). |
 
 ## arc words → normal words
 
-| arc calls it | It is really |
-|---|---|
-| `ui-composer` | The agent that writes a variant's page, renders it, and revises it after reading its own screenshot — up to three times. <!-- src: ADR-1401 --> |
-| `design-critic` | The agent that reads back the deterministic render of one route and judges it against the brief's four contracts; it never fixes anything itself. <!-- src: .claude/commands/arc-design-critique.md --> |
-| `design-jury` | The panel that ranks several unlabelled candidates against each other on craft alone. <!-- src: .claude/agents/design-jury.md; ADR-1405 --> |
-| `design-director` | The agent that assigns each variant its own thesis, so variants diverge on purpose rather than by accident. <!-- src: .claude/agents/design-director.md --> |
-| brief | A container carrying four contracts: interaction, art direction, platform, and content. <!-- src: initiatives/design/PLAN.md --> |
-| refpack | A per-brief folder of real reference screens, cached on disk and never committed to git as images. <!-- src: ADR-1404 --> |
-| iron law | The composer's standing "your directory only" rule, now carrying an explicit list of the few things it may also read. <!-- src: ADR-1415 --> |
-| DSV | One of the design source's own locked decisions, DSV-A through DSV-L, each paired with one ADR number from 1400 through 1411 in the plan's own decision table. <!-- src: initiatives/design/PLAN.md --> |
+```lede
+A few pieces of jargon, each one an ordinary studio thing wearing a technical name.
+```
 
-## How the work was planned
+```rosetta
+lane | one workstream of the build | it has its own plan and progress file
+brief | the job sheet for one screen | it carries four promises: how it behaves, how it looks, what device, what content
+`ui-composer` | the drafter | draws a page, renders it, looks, revises
+`design-critic` | the critic | reads the rendered page and judges it, never fixes it
+`design-jury` | the jury | ranks unlabelled candidates against each other on craft
+`design-director` | the studio head | gives each variant its own idea so they differ on purpose
+reference pack | a folder of real screens to learn from | only the facts about them are saved in git, never the images
+BELOW-BAR | "nothing broken, but not good enough" | fails work that a rule-checker would let through
+blind jury | judges who do not know whose work is whose | arc drafts, a reference screen and a rival draft, all unlabelled
+spike | a small test run of a rival tool | done before any real code depends on it
+tripwire | a pre-agreed stop sign | if the numbers say stop, the next phases do not start
+DSV | one of the design plan's own locked decisions | DSV-A to DSV-L, each written up as an ADR from 1400 to 1411
+```
 
-The plan's own success table carries ten active rows, which the plan's own text calls the M-tier cap. <!-- src: initiatives/design/PLAN.md#M-tier -->
+## How one design run is meant to flow
 
-| REQ | User outcome | Phase |
-|---|---|---|
-| REQ-01 | Two renders never collide, and iteration history survives. <!-- src: initiatives/design/PLAN.md --> | 00 |
-| REQ-02 | The composer sees its own work before anyone else judges it. <!-- src: initiatives/design/PLAN.md --> | 01 |
-| REQ-03 | Every surface the brief declares is rendered and correctly classified. <!-- src: initiatives/design/PLAN.md --> | 01 |
-| REQ-04 | Briefs carry real reference screens, and the repo carries only facts about them. <!-- src: initiatives/design/PLAN.md --> | 02 |
-| REQ-05 | The jury judges craft against a real bar, and the owner's score is comparable across runs. <!-- src: initiatives/design/PLAN.md --> | 03 |
-| REQ-06 | The composer-tier question is settled by evidence, not argument. <!-- src: initiatives/design/PLAN.md --> | 04 |
-| REQ-07 | Reference packs come from live sources, and the run says which ones answered. <!-- src: initiatives/design/PLAN.md --> | 05 |
-| REQ-08 | A rival's contract is known before any code depends on it. <!-- src: initiatives/design/PLAN.md --> | 06 |
-| REQ-09 | Rival drafts compete on equal terms in one blind jury. <!-- src: initiatives/design/PLAN.md --> | 07 |
-| REQ-10 | Nothing leaves the repo carrying someone else's authorship. <!-- src: initiatives/design/PLAN.md --> | 08 |
+```lede
+When every phase has landed, one run goes through the whole studio in order. Some steps already work.
+The rest are still on the plan.
+```
 
-The plan's stated appetite is 12.5 days at tier M — the honest sum of nine separate phase appetites, moved up twice from an original 10-day figure once arithmetic and an attack pass both found it too small. <!-- src: initiatives/design/PLAN.md#Tier -->
+```flow
+source: a brief for one screen
+box: ① Studio head | each variant gets its own idea
+box: ② Curator | gathers real reference screens
+box: ③ Drafter | draws, looks, revises up to 3 times
+box*: ④ Judges | critic and blind jury
+labels: idea, pack, drafts
+out: no pack | critic has no bar
+out: rule broken | back to the drafter
+out: below the bar | back to the drafter
+out+: a ranked result | with the owner's blind score
+caption: Figure 1 — one design run, once the lane is finished. | The curator is planned in Phase 02 and is not built yet; the drafter's look-and-revise step is already in.
+```
 
-This plan sets out two kill criteria. A 50% tripwire: if Phase 00 and Phase 01 are not both green by the end of day three, stop and reassess the renderer approach before any taste work begins. And a taste tripwire: Phase 03 must freshly re-measure a plain-prompt baseline score, and if the owner's controlled score does not beat that freshly measured bar, Phases 05 through 07 do not start. <!-- src: initiatives/design/PLAN.md -->
+## Where the work stands, phase by phase
 
-The plan also carries a standing non-negotiable that reads as this lane's own motto: no ranking, score, receipt or package is ever produced from a report about pixels that nobody in the session opened. <!-- src: initiatives/design/PLAN.md -->
+```lede
+Nine phases, built one after another, from the safest piece to the riskiest. Each is closed only with proof.
+```
 
-Every new gate, lint or parser this cycle ships is required to survive a two-surface adversarial pass — one agent attacking the decision logic, a separate fresh agent attacking the shell or OS boundary — run against the very pull request that ships that gate, never batched into the phase-close pull request that comes after all of them; the attacker prompt carries the lane's running list of already-fixed defects. <!-- src: initiatives/design/PLAN.md -->
+```steps
+t: Phases 00 and 01, closed
+plain: First the renderer was made safe, so two pictures of one screen never overwrite each other. Then the drafter got its eyes: it renders its own work, looks, and revises, and a gate refuses a pass if a screen the brief promised was never rendered.
+d: Phase 01 took far longer than planned. Two independent attack rounds found real holes, for example that the drafter's allowed command list actually opened up everything, and that one draft could pull in a sibling draft's pictures. Both were closed (ADR-1415, ADR-1418).
+f: `initiatives/design/PROGRESS.md` · Done-log
 
-## The phases, one by one
+t: Phase 02, open now
+plain: A short list of galleries the owner approved, a check of each gallery's own rules before anything is fetched, and a builder that assembles the reference pack. The list and the builder are in. The real pack from two permitted galleries is not built yet.
+d: The gallery rules check and pack builder went through two attack rounds and were merged. The plan also calls for a curator agent, but no curator agent file exists in the repo yet.
+f: `initiatives/design/phases/phase-02-spec.md`
 
-| Phase | What it set out to prove | What shipped / status |
-|---|---|---|
-| 00 — renderer proof + isolation | Make the renderer session- and iteration-safe, so two renders of one route can coexist and a real self-review iteration is never deleted as a stale duplicate. <!-- src: initiatives/design/phases/phase-00-spec.md --> | Closed 2026-08-23 against a 1.5-day appetite. Two fresh attackers on different surfaces returned 26 findings with one overlap in Phase 00's own attack round, 22 fixed and 4 accepted in writing; CI then found three things neither attacker had caught, among them a locale-collation trap on the session id and a stale invariant — pinned as "the design lane is IDLE" — that Cycle 16 itself had already falsified. <!-- src: initiatives/design/PROGRESS.md --> |
-| 01 — eyes + viewports + canvas gate | Give the composer a scoped render-and-look loop, capped at three iterations, and a gate that blocks PASS when a brief-declared surface is never rendered. <!-- src: initiatives/design/phases/phase-01-spec.md --> | Closed 2026-09-17, at roughly four build days against a 1.5-day appetite, carrying three amendments and four ADR amendments plus one new ADR. Nine adversarial passes found the composer's Bash grant was unscoped and that a composer's own page could pull a sibling's pixels into its render. <!-- src: initiatives/design/PROGRESS.md --> |
-| 02 — registry + curator | Stand up one owner-approved source registry and a curator that builds a real reference pack while every fetched image stays out of git. <!-- src: initiatives/design/phases/phase-02-spec.md --> | Open, and this page's current phase. Slice A — the registry and its lint — is in; the robots.txt preflight and the pack builder landed, with two attack rounds closed; still open: the real pack from the two permitted galleries. <!-- src: initiatives/design/PROGRESS.md --> |
-| 03 — taste loop | Rework the jury from a fixed four items to N, seat one juror at a stronger tier, anchor BELOW-BAR to the pack, and collect the owner's first controlled blind score. <!-- src: initiatives/design/phases/phase-03-spec.md --> | Pending; it carries the taste tripwire that can stop Phases 05 through 07 on evidence. <!-- src: initiatives/design/PROGRESS.md --> |
-| 04 — EXP-A1 | Re-run the paired composer-tier experiment inside the new regime, with a sealed prediction and a reference item present, to settle the composer's tier question with evidence rather than argument. <!-- src: initiatives/design/phases/phase-04-spec.md --> | Pending. <!-- src: initiatives/design/PROGRESS.md --> |
-| 05 — live sources | Wire the reference pack to live component-search sources instead of fixtures, and report per run which sources actually answered. <!-- src: initiatives/design/phases/phase-05-spec.md --> | Pending. <!-- src: initiatives/design/PROGRESS.md --> |
-| 06 — rival spike | Prove one rival AI design tool's real contract — auth, request shape, output retrieval, failure behaviour — on one fixture, before any adapter code exists. <!-- src: initiatives/design/phases/phase-06-spec.md --> | Pending; it may not make its first live call until that provider's terms position is recorded. <!-- src: initiatives/design/phases/phase-06-spec.md; initiatives/design/PROGRESS.md --> |
-| 07 — rival integration | Put a rival's draft into the same blind jury as arc's own variants, unlabelled, and record the rival-beats-all-arc rate whichever way it lands. <!-- src: initiatives/design/phases/phase-07-spec.md --> | Pending. <!-- src: initiatives/design/PROGRESS.md --> |
-| 08 — governance + retro | Make the outbound packager refuse any render that is not arc-authored, and settle all three sealed predictions on the record. <!-- src: initiatives/design/phases/phase-08-spec.md --> | Pending. <!-- src: initiatives/design/PROGRESS.md --> |
+t: Phases 03 and 04, next
+plain: The jury is reworked to rank any number of drafts, and the owner gives his first controlled blind score. Then a paired experiment settles, with evidence, whether the drafter needs a stronger model.
+d: Phase 03 carries the taste tripwire. If the owner's score does not beat a freshly measured plain-prompt score, Phases 05 to 07 do not start.
+f: `initiatives/design/phases/phase-03-spec.md`
 
-## What it decided
+t: Phases 05 to 08, later
+plain: Live sources for the reference pack, a small proof of one rival tool, putting a rival draft into the blind jury, and finally a packager that refuses to send out anything not made by arc.
+d: A rival tool is not called at all until its terms of use have been recorded (ADR-1413).
+f: `initiatives/design/phases/phase-08-spec.md`
+```
 
-This cycle's ADR century is 1400 through 1499, and twenty of those numbers are taken so far, 1400 through 1419. <!-- src: initiatives/design/PLAN.md#decisions -->
+The lane's own numbers, the ten requirements, the day budget and the twenty decisions are kept in the
+generated sections of this page, so they are not repeated here.
 
-The first twelve of those, 1400 through 1411, are the design source's own locked decisions, DSV-A through DSV-L. <!-- src: initiatives/design/PLAN.md#decisions -->
+# The bigger loop
 
-Two of the rest came from collisions the kickoff's own tree verification found that the design source did not know about: ADR-1417, because the stale-duplicate guard deletes the self-review loop's key signal, and ADR-1415, because the composer's iron law 1 forbids reading the pack and its own render. <!-- src: initiatives/design/PLAN.md -->
+## A story of one draft
 
-ADR-1418 came during Phase 01, once a real attack pass found the composer's own render could pull in a sibling variant's pixels; ADR-1419 later ended the operator lock the composer's read and write boundaries had been carrying, though composition itself stays serial. <!-- src: ADR-1418; ADR-1419; initiatives/design/PROGRESS.md -->
+```lede
+One made-up draft, to show what "the drafter looks at its own work" changes. This is an illustration, not a real run.
+```
 
-| ADR | What it decided |
-|---|---|
-| 1400 | DSV-A: the composer's model tier changes only through the EXP-A1 experiment, never by fiat. <!-- src: ADR-1400 --> |
-| 1401 | DSV-B: the composer renders its own work and revises it, up to three iterations, with immutable receipts. <!-- src: ADR-1401 --> |
-| 1402 | DSV-C: the renderer must be safe for concurrent, session-scoped renders before anything composes in parallel. <!-- src: ADR-1402 --> |
-| 1403 | DSV-D: which screen sizes get rendered derives from the brief's own platform contract, not a fixed list. <!-- src: ADR-1403 --> |
-| 1404 | DSV-E: reference packs cache real images locally and commit only their provenance, never the images. <!-- src: ADR-1404 --> |
-| 1405 | DSV-F: the jury ranks craft over N items, not a fixed four, on a panel mixing model tiers. <!-- src: ADR-1405 --> |
-| 1406 | DSV-G: a BELOW-BAR finding must cite an actual reference-pack screen it is measured against. <!-- src: ADR-1406 --> |
-| 1407 | DSV-H: whether a rendered surface is product or documentation is decided by an explicit marker, never by matching its text. <!-- src: ADR-1407 --> |
-| 1408 | DSV-I: one owner-born, lint-guarded registry lists every external source the lane may use, and how. <!-- src: ADR-1408 --> |
-| 1409 | DSV-J: rival design tools are proven by a compatibility spike before any adapter code is written, and never merged into arc. <!-- src: ADR-1409 --> |
-| 1410 | DSV-K: any package leaving the repo carries only arc-authored renders, never a rival draft or gallery image. <!-- src: ADR-1410 --> |
-| 1411 | DSV-L: the owner's quality score is collected as a controlled ritual — seeded, rubric-anchored, blind before unblinding — with predictions sealed before the run. <!-- src: ADR-1411 --> |
-| 1412 | Which reference galleries the curator may fetch from is decided by their robots.txt and terms, not by how good they look. <!-- src: ADR-1412 --> |
-| 1413 | A rival provider is never called until its terms position is recorded, and that check gates the whole spike. <!-- src: ADR-1413 --> |
-| 1414 | The curator sits at the balanced-workhorse tier; one juror moves to the high-judgment tier. <!-- src: ADR-1414 --> |
-| 1415 | The composer's iron law gains an explicit read allowlist for its own render and the reference pack. <!-- src: ADR-1415 --> |
-| 1416 | The EXP-A1 prediction is written by the session itself, on the owner's own delegated mandate, and says so on its face. <!-- src: ADR-1416 --> |
-| 1417 | The guard that deletes stale duplicate renders must tell a genuine self-review iteration apart from a stale browser page. <!-- src: ADR-1417 --> |
-| 1418 | An explore render is confined to its own variant directory, served over loopback with a same-origin policy, so a page cannot pull in a sibling's pixels. <!-- src: ADR-1418 --> |
-| 1419 | The composer's read and write boundaries refuse only a `ui-composer` caller, ending an operator-wide lockout. <!-- src: ADR-1419 --> |
+```loop
+top: 1 | the drafter
+top: 4 | the critic
+stage: 1 · Draw | a pricing page
+stage: 2 · Look | opens its own screenshot
+stage*: 3 · Revise | the cards are cramped, fix
+stage: 4 · Judge | measured against real screens
+labels: render, notice, submit
+back: last -> 2 | below the bar, look again
+caption: Figure 2 — the look-and-revise loop. | The loop is capped at three turns, and every turn leaves a saved record.
+```
 
-This lane also ran a much earlier Cycle 3, closed 2026-07-30, whose decisions are ADR-0034 through ADR-0049. <!-- src: initiatives/design/HISTORY-INDEX.md -->
+1. The drafter builds a pricing page for a brief.
+2. It renders the page and opens the screenshot. Before this lane, this step did not exist.
+3. It notices the price cards are cramped on a phone, and fixes them. Each turn leaves a record of what it
+   started from and what it produced.
+4. The critic then judges the finished page. If it is plain but nothing is broken, the critic can now say
+   it is below the bar, and cite the reference screen it compared against.
 
-## Where it stands now
+*The pricing page is an illustration of how the loop runs, not a real incident.*
 
-Status is LIVE, on cycle `arc-design v2 (Cycle 16, opened 2026-08-23)`, currently at phase 02, against an appetite of 12.5 days with 5 days burned. <!-- src: fact:lanes/design.status; fact:lanes/design.cycle; fact:lanes/design.phase; fact:lanes/design.appetite; fact:lanes/design.burn -->
+## The two stop signs
 
-Nothing currently blocks this lane, and it depends on no other lane. <!-- src: fact:lanes/design.blocked-on; fact:lanes/design.depends-on -->
+```lede
+The plan does not just hope. It writes down, in advance, when to stop.
+```
 
-The cycle was approved by the owner on 2026-08-23. Phases 00 and 01 are closed; Phase 02 is open, its robots.txt preflight and pack builder landed at commit `a0c0cfee` with two attack rounds closed, and pull request #222 was merged by the owner on 2026-09-26 at 19 of 19 CI jobs green — the same merge that ended this cycle's original working mode of one branch merged only once at the very end, so the lane now ships in ordinary pull requests off `main`. <!-- src: initiatives/design/PROGRESS.md#APPROVED -->
+```panel warn
+title: stop sign 1, already reached
+If Phases 00 and 01 were not both done by the end of day three, the plan said to stop and rethink the renderer. That day passed with Phase 01 still open. The owner ruled on 2026-09-16 to continue all nine phases, because the overrun came from the two attack rounds, not from the renderer the sign exists to protect.
+```
 
-The plan's 50% tripwire already crossed, at day three, with Phase 01 still open — but the owner ruled to continue all nine phases rather than cut scope, because the overrun sat inside Phase 01's two adversarial passes rather than in the renderer phase the tripwire exists to catch. <!-- src: initiatives/design/PROGRESS.md -->
+```panel warn
+title: stop sign 2, still ahead
+After Phase 03, the owner's controlled blind score has to beat a plain-prompt score that is measured fresh. If it does not, the rival phases do not start and no money is spent on rivals.
+```
 
-ADR-1419, accepted by the owner 2026-09-26, ends the operator-wide lockout by scoping the read and write boundaries to a `ui-composer` caller alone. <!-- src: initiatives/design/PROGRESS.md; ADR-1419 -->
+## Where design sits in arc
 
-## The bigger loop
+- **Other lanes.** Three of the agent files, `ui-composer`, `design-jury` and `design-critic`, are shared
+  with the `face` lane. Any edit to them sends that lane a note first.
+- **The product.** The lane builds the `design` product, and its checking command is
+  `/arc-design-critique`, which only looks and never edits.
+- **Course changes.** New ideas arrive through `/arc-change`, and each phase closes only through
+  `/arc-phase-done`.
+- **Rule of thumb.** Agents judge, scripts measure (ADR-0048). A gate never asks an agent for a number a
+  script can count.
 
-Once every phase lands, one explore run is meant to move through the whole studio in order: the director assigns each variant its own thesis; the curator builds the brief's reference pack from permitted galleries; the composer writes a variant, renders it, reads its own screenshot and revises up to three times; the critic judges the rendered page against the pack; unlabelled arc variants, a reference item, and — once Phase 07 lands — a rival's draft all enter one blind jury together; and the owner scores the result blind before anything is unblinded. <!-- src: initiatives/design/PLAN.md; .claude/agents/design-director.md; ADR-1401 -->
-
-### What went wrong and what was learned
-
-The lane's closed Cycle 3 ran an entire evidence pipeline — five critique rounds, three blind rankings, receipts, hashes, a sealed prediction and a ready-to-send external package — on pixels nobody in the session had actually opened; the one time the owner looked at the real output, he scored it 23 out of 100. <!-- src: docs/retro-log.md -->
-
-That same cycle found that a fix added purely to make renders comparable had destroyed the very thing being compared: the renderer pinned the font family Arial for hash stability, so every variant was judged with its own typography deleted, invisible for a whole cycle to every brief, agent prompt and decision record. <!-- src: docs/retro-log.md -->
-
-It also found that its own pass condition was only an absence — zero VIOLATION meaning "broke no rule" — so compliant, characterless work passed five consecutive runs with no way for the loop to say the work was simply not good enough. <!-- src: docs/retro-log.md -->
-
-And it found a required input with no legitimate path to the agent that needed it: the director wrote the canonical case data into the matrix file, while the composer's own iron law forbade reading that file, so three composers each invented a different case and only the one that broke the rule matched. <!-- src: docs/retro-log.md -->
-
-Design v2 is this lane's direct answer to those findings: REQ-02 makes the composer render and read its own screenshot before anyone else judges it, closing the report-about-pixels gap outright. <!-- src: initiatives/design/PLAN.md -->
-
-ADR-1406 anchors a BELOW-BAR finding to an actual reference-pack screen instead of an absence-only pass condition, and ADR-1415 gives the composer an enumerated read allowlist in place of a blanket prohibition it could not actually honor. <!-- src: ADR-1406; ADR-1415 -->
-
-This live cycle has produced its own defects too. Phase 00's two independent attackers each separately found that a value-taking command-line flag given last spins the argument-parsing loop forever, hanging a CI job. <!-- src: initiatives/design/PROGRESS.md -->
-
-Phase 01 found that `ui-composer`'s Bash grant, meant to allow only the renderer script, actually opened all of Bash, because a subagent's tool grant takes tool names only and a command-prefix specifier narrows nothing — every composer in a live demo used it to run node, a stream editor and PowerShell before this was caught. <!-- src: ADR-1415 -->
-
-A separate defect in the same phase let a composer's own page pull a sibling variant's pixels into its own render, by framing the sibling and letting the render's local-file load reach outside the variant directory — closed only by serving each render over loopback from its own directory under a same-origin policy. <!-- src: ADR-1418 -->
-
-The lane keeps a running debt ledger rather than treating an accepted shortcut as forgotten: open rows include a timing window in the curator's privacy check where the address checked is resolved separately from the address `fetch` actually connects to, and a boundary check that depends on the harness writing an identity field — a composer ever dispatched without it, by an older harness or a general-purpose agent given the composer prompt, would be judged as the main session. <!-- src: initiatives/design/debt-ledger.md -->
-
-Two attack rounds on Phase 02's registry and pack builder found and fixed a run of named holes, among them a robots.txt read that silently became an allow when its body was truncated, and a redirect-following client that skipped the registry, the robots check and the attempt log on every hop. <!-- src: initiatives/design/fixed-defects.md -->
-
-### How it connects to the rest of arc
-
-Three of the product's agent files — `ui-composer`, `design-jury` and `design-critic` — are not scoped to this lane alone; the `face` lane is live and reads the same contracts while this cycle rewrites all three, so every edit to them runs the shared-file protocol and sends a cross-lane note before it lands. <!-- src: initiatives/design/PLAN.md -->
-
-This cycle adds zero new spine event kinds; it rides the existing `review.completed`, `decision.recorded` and `note.logged` kinds the product's own manifest already declares. <!-- src: initiatives/design/PLAN.md; products/design/manifest.json -->
-
-Like every lane in this repo, this one follows agents judge, scripts measure: a gate never asks an agent for a number a script can compute instead. <!-- src: ADR-0048 -->
-
-Every seat's model tier is a governed production change under the company-wide Balanced Model Policy, so this cycle's curator and juror tier moves ship as reviewed diffs citing that policy rather than quiet frontmatter edits. <!-- src: ADR-0069; ADR-1414 -->
-
-The lane's own read-only command, `/arc-design-critique`, renders one route deterministically and has `design-critic` judge it against the brief's four contracts; it never fixes, since fixing is the creation side's job and the critic re-verifies afterward. <!-- src: .claude/commands/arc-design-critique.md -->
-
-Phase 07's rival adapters are required to follow the `engine` lane's own driver-and-adapter contract rather than inventing a new pattern class. <!-- src: initiatives/design/phases/phase-07-spec.md -->
+# Meta
 
 ## Glossary
 
-composer
-The `ui-composer` agent: writes a page, renders it, and reads its own screenshot before revising, up to three times. <!-- src: ADR-1401 -->
-
-iron law
-`ui-composer`'s standing prohibition — "your directory only" — against reading or writing another variant's files, the brief file, or product files. <!-- src: ADR-1415 -->
-
-reference pack
-A per-brief set of five to eight real screens the curator gathers from registry sources marked `reference-only`, cached locally and never committed as images. <!-- src: ADR-1404 -->
-
-adaptable principle
-The transferable idea a pack's provenance file records for each screen, as opposed to a description of its exact appearance. <!-- src: initiatives/design/phases/phase-02-spec.md -->
-
-BELOW-BAR
-A finding class for work that breaks no rule but still falls short of the reference pack's bar. <!-- src: ADR-1406 -->
-
-self-review iteration
-One pass of the composer's render-then-revise loop, capped at three, with a manifest row naming its input and output hash. <!-- src: ADR-1401 -->
-
-blind jury
-A panel that ranks unlabelled candidates — arc's own variants, a reference item, and eventually a rival's draft — without knowing which is which. <!-- src: initiatives/design/PLAN.md; .claude/agents/design-jury.md; ADR-1409 -->
-
-DSV
-One of the design source's own locked decisions, DSV-A through DSV-L, that ADRs 1400 through 1411 each implement. <!-- src: initiatives/design/PLAN.md -->
-
-EXP-A1
-The paired same-commit experiment, re-run in Phase 04, that settles whether the composer needs a stronger model tier. <!-- src: ADR-1400 -->
-
-taste tripwire
-The rule that stops Phases 05 through 07 if the owner's controlled score does not beat a freshly measured plain-prompt baseline. <!-- src: initiatives/design/PLAN.md -->
-
-confined-loopback
-The render mode that serves an explore page over a local loopback server rooted at its own variant directory, so the page cannot reach a sibling's files. <!-- src: ADR-1418 -->
-
-tier
-A description of the work a seat does, never of a vendor's product, defined company-wide and applied here to the curator's and jury's seats. <!-- src: ADR-0069; ADR-1414 -->
-
-spike
-A one-provider, one-fixture proof of a rival tool's real contract, run and quarantined before any adapter code is written. <!-- src: initiatives/design/phases/phase-06-spec.md -->
-
-agent_type
-The field the harness itself writes on every subagent call, which the composer's Bash, read and write boundaries use to tell a `ui-composer` call from anyone else's. <!-- src: ADR-1419 -->
+```gloss
+Iteration: one turn of the drafter's render, look and revise loop. At most three per draft.
+Iron law: the drafter's standing rule that it works only in its own folder, now with a short list of things it may also read (ADR-1415).
+Loopback: a private address that only your own computer can reach. A draft is shown there so it cannot see a sibling draft's files (ADR-1418).
+EXP-A1: the planned paired experiment that decides whether the drafter needs a stronger model (ADR-1400).
+Sealed prediction: a guess written down and locked before a run, so it cannot be adjusted after the result is known.
+Debt ledger: the lane's running list of shortcuts it accepted on purpose, kept in writing so none is forgotten (`initiatives/design/debt-ledger.md`).
+```
 
 *design v2 "Eyes, Taste, Rivals"*
 
