@@ -149,6 +149,8 @@ caption: Figure 2 — the build after the plan. | The alarm is why the budget is
 - **A new idea mid-build** goes through `/arc-change`. It sorts the idea (tiny, new scope, a decision, or a bug), checks it against the budget already burnt, and updates the tracker. Only then does it get built. Nobody edits product code straight from a suggestion.
 - **Closing a phase** goes through `/arc-phase-done <n>`. It runs the tests, runs the live demo written into the phase's own spec, and re-runs the plan-structure script. Only if all of that is green does it bundle the evidence and flip the phase to done. Otherwise it says exactly what is missing and leaves the tracker alone.
 - **Learning from the phase** goes through `/arc-retro`. Repeated friction (an instruction you gave twice, a mistake made twice) becomes a permanent rule, command or setting. Recurring patterns are fed to the retro log, which the next kickoff reads for its pre-mortem.
+- **Drawing a picture** goes through `/arc-diagram`. You say in plain English what to draw, and it saves a diagram as text inside the plan, an ADR or a doc, so the picture is kept and compared like any other change.
+- **The kickoff as a recipe.** `/arc-kickoff` is written down once as the `kickoff-plan` process, and the command file is generated from it. That is why the steps in Figure 1 cannot drift from what actually runs.
 
 ## A small story
 

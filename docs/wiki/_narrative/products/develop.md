@@ -136,6 +136,10 @@ and writes nothing. A gate (`.claude/scripts/develop/capability-vet.sh`) refuses
 sits you, because letting something into the building is a decision, not a step. The gate judges on
 where a tool came from, not on how popular it is (ADR-0110).
 
+## Proving a room from the face
+
+The one step `/arc-develop` leaves to the session is filling a room's result and commit. The face can start that for you, after a click of yours, through the `develop-proof` process. It proves the next unproven room from evidence already recorded, and ends on a `slice.done` receipt.
+
 ## Where develop sits in arc
 
 - **Between plan and audit.** `/arc-kickoff` makes the plan. `/arc-develop` builds against it.
