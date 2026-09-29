@@ -209,7 +209,7 @@ ledger: the list of money in and money out.
 
 None declared.
 
-## Scripts (74)
+## Scripts (75)
 
 - [`.claude/scripts/hq/adr-record.mjs`](../../../.claude/scripts/hq/adr-record.mjs)
 - [`.claude/scripts/hq/arc-brief.mjs`](../../../.claude/scripts/hq/arc-brief.mjs)
@@ -255,6 +255,7 @@ None declared.
 - [`.claude/scripts/hq/lib/ledger/pnl.mjs`](../../../.claude/scripts/hq/lib/ledger/pnl.mjs)
 - [`.claude/scripts/hq/lib/ledger/reconcile.mjs`](../../../.claude/scripts/hq/lib/ledger/reconcile.mjs)
 - [`.claude/scripts/hq/lib/ledger/ventures.mjs`](../../../.claude/scripts/hq/lib/ledger/ventures.mjs)
+- [`.claude/scripts/hq/lib/narrative-proof.mjs`](../../../.claude/scripts/hq/lib/narrative-proof.mjs)
 - [`.claude/scripts/hq/lib/policy/authorize.mjs`](../../../.claude/scripts/hq/lib/policy/authorize.mjs)
 - [`.claude/scripts/hq/lib/policy/constitution.mjs`](../../../.claude/scripts/hq/lib/policy/constitution.mjs)
 - [`.claude/scripts/hq/lib/policy/encode.mjs`](../../../.claude/scripts/hq/lib/policy/encode.mjs)

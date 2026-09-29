@@ -166,7 +166,7 @@
 .claude/scripts/develop/quality.mjs	c656a0ae844b50f3e0435d11f916aead7161a107a714cabca63521e3a62f319f
 .claude/scripts/develop/replay-child.mjs	1d641ffb0ad349084a14be12df3b3c8863e370e2f191b9e78d6214097be5749c
 .claude/scripts/develop/stuck.mjs	7f3d64a9341e180186df5e892cfa6bfcffc676836739a3ac7c810cb19eb9531e
-.claude/scripts/docs/narrative-anchors.mjs	a997d63d5bc88d9c889b98d7acea86cd54013122bcaf6e1ebd449b7c22356ca6
+.claude/scripts/docs/narrative-anchors.mjs	8f3dd52a6f144e3494e2be4df2d682f3225037c78b5d60cfe522a19d53b36dc0
 .claude/scripts/docs/wiki-build.mjs	e387b53c28bfa9ef91ffa7f33b85f89b77c02554939ba0d378f577095987f79f
 .claude/scripts/docs/wiki-coverage.mjs	08626d1c44e0eef10779d9234e96b24683ec23750def596c354dce637f799774
 .claude/scripts/docs/wiki-drift.mjs	520d4116f93e5b2dd3dc61695101dde0f6f491f3f642af9551017f7e03d004e7
@@ -276,6 +276,7 @@
 .claude/scripts/hq/lib/ledger/pnl.mjs	238dc9d9fe07cdacc6ac8d9bb48b0e9211c3c714651f612a48ced9e0279c3699
 .claude/scripts/hq/lib/ledger/reconcile.mjs	ba148b3bddf9516b026dcae34992de5707bb8b24034791b5c9c6b23f8456260b
 .claude/scripts/hq/lib/ledger/ventures.mjs	a61b52d3c2cf7efa9133749993bb175aba67924cbd63973be1a5d7b249b400db
+.claude/scripts/hq/lib/narrative-proof.mjs	215c99d19620a5c27c4cb31ab34562b68efcd4b646e2606c7859a3f6190ac9a2
 .claude/scripts/hq/lib/policy/authorize.mjs	993b72bcde4c99721535b15ca5ec2ee155610308ceadd517716ab8cb67d66b78
 .claude/scripts/hq/lib/policy/constitution.mjs	c2dd14eb505cce4a9dd131b33ad29cc1388ba37a7428be39e599d7474c642f3f
 .claude/scripts/hq/lib/policy/encode.mjs	436c17ed6bd3269e8ce39383803706da27064531b112f2f43feb10bf5487bcb1

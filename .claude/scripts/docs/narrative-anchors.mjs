@@ -22,7 +22,6 @@
 //
 // The rules live in `evaluate()`, which is pure: the CLI hands it the tree, the self-test hands it planted trees, so
 // every arm FAILs from birth with its mutant (ADR-1503's rule for a gate).
-import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -358,8 +357,8 @@ export function receiptProblem(r, page, hash, count) {
 
 /**
  * Every narrative, listed through wiki-coverage's pageTree -- the one sanctioned listing (DOC-A, ADR-1501) -- each one's
- * advisory receipt, and the acceptance file, all read by NAMED path. Nothing here lists a directory; the one process is a
- * single `git ls-files -z` (the tracked list the drift check is judged against, attack b8707be B5).
+ * advisory receipt, and the acceptance file, all read by NAMED path. Nothing here lists a directory or spawns a process; the tracked list the
+ * drift check is judged against (attack b8707be B5) comes from hq/lib/narrative-proof.mjs.
  * @param {string} root
  */
 export async function readTree(root) {
@@ -392,7 +391,8 @@ export async function readTree(root) {
   const acc = readAccept(root, rootReal);
   if (acc.problem) rejected.push(acc.problem);
   const acceptDoc = acc.doc;
-  const gitList = gitTrackedList(root);
+  // The one process the gate needs, the tracked list, is in the hq lane (DOC-A: docs/ spawns nothing).
+  const gitList = (await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href)).gitTrackedList(root);
   const adrs = new Set();
   for (const band of Array.isArray(wiki.entities.adrBands) ? wiki.entities.adrBands : []) {
     for (const a of Array.isArray(band && band.facts && band.facts.adrs) ? band.facts.adrs : []) if (a && /^\d{4}$/.test(String(a.number))) adrs.add(String(a.number));
@@ -432,20 +432,6 @@ export function readAccept(root, rootReal) {
   try { doc = JSON.parse(text); } catch { return { text, doc: null, problem: `${ACCEPT_FILE} (unparseable)` }; }
   const why = acceptShapeProblem(doc);
   return { text, doc: why ? null : doc, problem: why ? `${ACCEPT_FILE} (wrong shape: ${why})` : "" };
-}
-
-/**
- * Every git-tracked path, from ONE bounded `git ls-files -z` (attack b8707be B5): a gitignored file that exists on this
- * box is absent from a clean checkout, so disk presence is not the CI verdict. Refuses, loudly, when git cannot answer.
- * @param {string} root @returns {Set<string>}
- */
-export function gitTrackedList(root) {
-  try {
-    const out = execFileSync("git", ["-C", root, "ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 30000, stdio: ["ignore", "pipe", "pipe"] });
-    return new Set(out.split("\0").filter(Boolean));
-  } catch (e) {
-    throw new Error(`git ls-files failed in ${root} (${String(/** @type {Error} */ (e).message).split("\n")[0]}); the drift check judges paths against the git-tracked list and will not guess`);
-  }
 }
 
 /** A path counts only when git tracks it AND it is a regular file on disk spelt exactly so; the list is handed in, so evaluate() stays pure. */
@@ -517,53 +503,6 @@ export function writeAccept(root, doc, before) {
 // ---------------------------------------------------------------- the owner's proof (ADR-1514 amendment 1) ----------------------------------------------------------------
 
 /**
- * The main clone, from git's common dir the way spine-io's assertNotLinkedWorktree finds it: in a linked worktree the
- * common dir's parent IS the main clone, and in the main clone itself it is the clone. "" when git cannot say.
- * @param {string} cwd
- */
-export function mainCloneOf(cwd) {
-  try {
-    const common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-    return common ? dirname(common) : "";
-  } catch { return ""; }
-}
-
-/**
- * Where the owner's spine is, and which arc-event writes to it. A linked worktree refuses the spine (WORKTREE_SPINE) and the
- * canonical spine is in the main clone, so both the read and the request go there. ARC_SPINE_ROOT, the existing TEST door,
- * names the spine instead and skips the lookup; set but empty is refused, never read as "no spine named".
- * @param {string} root the tree this ran against
- * @returns {{ spine: string, arcEvent: string, cwd: string, main: string, why: string }}
- */
-export function ownerSpine(root) {
-  const none = { spine: "", arcEvent: "", cwd: "", main: "", why: "" };
-  if ("ARC_SPINE_ROOT" in process.env) {
-    const named = String(process.env.ARC_SPINE_ROOT ?? "");
-    if (named.trim() === "") return { ...none, why: "ARC_SPINE_ROOT is set but empty; unset it or name a spine" };
-    return { spine: resolve(named), arcEvent: join(HERE, "..", "hq", "arc-event.mjs"), cwd: root, main: "", why: "" };
-  }
-  const main = mainCloneOf(root);
-  if (!main) return { ...none, why: "git cannot say where the main clone is, so the owner's spine cannot be found" };
-  const arcEvent = join(main, ".claude", "scripts", "hq", "arc-event.mjs");
-  if (!existsSync(arcEvent)) return { ...none, why: `the main clone ${main} has no arc-event; pull it first` };
-  return { spine: join(main, ".claude", "state", "hq"), arcEvent, cwd: main, main, why: "" };
-}
-
-/**
- * Every event on the spine, read-only, through the door (spine.mjs `query`). Never throws: a spine that cannot be read is a
- * reason to refuse, and the events it could not show cannot have forged an approval.
- * @param {string} spine @returns {Promise<{ events: any[], why: string }>}
- */
-export async function readSpineEvents(spine) {
-  if (!spine || !existsSync(join(spine, "events"))) return { events: [], why: "the owner's spine has no events folder, so no approval can be found" };
-  try {
-    const { query } = await import(pathToFileURL(join(HERE, "..", "hq", "spine.mjs")).href);
-    const r = await query(spine, { engine: "scan" });
-    return { events: r.events.map((/** @type {any} */ x) => x.event), why: "" };
-  } catch (e) { return { events: [], why: `the spine could not be read (${e && /** @type {any} */ (e).code ? /** @type {any} */ (e).code : "error"})` }; }
-}
-
-/**
  * Why `approval` is not the owner's proof for this page at this text, or "" when it is: the spine must hold an
  * approval.requested for gate narrative-accept that lists the page with its CURRENT sha256, and a decision.recorded for it
  * that approves. Pure; the caller hands in the spine's events.
@@ -605,21 +544,6 @@ export function requestPayload(pages, narratives) {
   const list = pages.map((page) => ({ page, sha256: sha256(String(narratives[page])) }));
   const what = `accept ${pages.length} narrative page${pages.length === 1 ? "" : "s"} as read by the owner (${pages.slice(0, 3).join(", ")}${pages.length > 3 ? ", ..." : ""})`;
   return { payload: { what, gate: ACCEPT_GATE, pages: list }, problem: "" };
-}
-
-/**
- * Raise the request through the owner's arc-event (the main clone's, run from the main clone).
- * @param {string} root @param {any} payload
- * @returns {Promise<{ id: string, main: string, why: string }>}
- */
-export async function raiseRequest(root, payload) {
-  const os = ownerSpine(root);
-  if (os.why) return { id: "", main: "", why: os.why };
-  const { emitReceipt } = await import(pathToFileURL(join(HERE, "..", "core", "plan-expect.mjs")).href);
-  const r = emitReceipt(os.arcEvent, "approval.requested", payload, { cwd: os.cwd, env: { ...process.env }, timeoutMs: 60_000 });
-  if (r.state !== "landed") return { id: "", main: os.main, why: `the spine ${r.state === "refused" ? "refused" : "may or may not have taken"} the request: ${r.why}` };
-  if (!r.id) return { id: "", main: os.main, why: String(r.why) };
-  return { id: r.id, main: os.main, why: "" };
 }
 
 /**
@@ -748,8 +672,6 @@ async function selftest() {
   arm("MUTANT B3 comment first: a fence line inside an open comment opens nothing, so the prose after `-->` is still checked, by names and by blocks",
     (() => { const t = "<!-- todo\n```bash\n-->\nSee `/arc-gone` and ADR-9999.\n"; const n = namesOf(t); return n.commands.join() === "arc-gone" && n.adrs.join() === "9999" && blocksOf(t).length === 1; })());
   const box = mkdtempSync(join(tmpdir(), "narr-r2-"));
-  const bare = mkdtempSync(join(tmpdir(), "narr-nogit-"));
-  const ceiling = process.env.GIT_CEILING_DIRECTORIES;
   try {
     mkdirSync(join(box, "docs", "narrative-verify"), { recursive: true });
     const boxReal = realpathSync(box);
@@ -767,27 +689,8 @@ async function selftest() {
     const raced = writeAccept(box, { schema: 1, pages: {} }, seen.text);
     arm("MUTANT B2 baseline: readAccept hands back the exact text it parsed, and a write against it after another session landed is refused",
       seen.text === mine && raced !== "" && readFileSync(accFile, "utf8") === theirs);
-    // B5: a gitignored file that exists on this box is not in the tracked list, so it FAILs; a tracked one passes.
-    execFileSync("git", ["init", "-q"], { cwd: box });
-    writeFileSync(join(box, ".gitignore"), "docs/ignored.md\n");
-    writeFileSync(join(box, "docs", "kept.md"), "x");
-    writeFileSync(join(box, "docs", "ignored.md"), "x");
-    execFileSync("git", ["add", ".gitignore", "docs/kept.md"], { cwd: box });
-    const list = gitTrackedList(box);
-    const gtree = { adrs: new Set(), wiki, tracked: trackedIn(list, box, boxReal), read: () => "", isDir: (/** @type {string} */ d) => isTopDir(box, d) };
-    const grun = (/** @type {string} */ text) => evaluate({ narratives: { "products/hq": text }, accepted: {}, proofs: {}, tree: gtree });
-    arm("MUTANT B5 tracked: a gitignored file present on disk FAILs the drift check; a git-tracked one passes",
-      existsSync(join(box, "docs", "ignored.md")) && list.has("docs/kept.md") && !list.has("docs/ignored.md")
-      && has(grun("It keeps `docs/ignored.md` here.\n"), "[drift]") && !has(grun("It keeps `docs/kept.md` here.\n"), "[drift]"));
-    process.env.GIT_CEILING_DIRECTORIES = dirname(bare);
-    let refusal = "";
-    try { gitTrackedList(bare); } catch (e) { refusal = /** @type {Error} */ (e).message; }
-    arm("MUTANT B5 no git: a directory git cannot list is refused with a message naming git ls-files, never a silent pass",
-      refusal.includes("git ls-files") && refusal.includes("will not guess"));
   } finally {
-    if (ceiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES; else process.env.GIT_CEILING_DIRECTORIES = ceiling;
     rmSync(box, { recursive: true, force: true });
-    rmSync(bare, { recursive: true, force: true });
   }
   // ---- ADR-1514 amendment 1: the owner's proof. Each arm FAILs against the code before it (no proof was asked, so nothing refused).
   const U1 = "01ARZ3NDEKTSV4RRFFQ69G5FAV", U2 = "01ARZ3NDEKTSV4RRFFQ69G5FAW";
@@ -826,60 +729,9 @@ async function selftest() {
   const many = [{ id: U1, kind: "approval.requested", payload: { what: "w", gate: ACCEPT_GATE, pages: [{ page: "products/hq", sha256: HG }, { page: "lanes/x", sha256: "a".repeat(64) }] } }, dc(U1, "approve")];
   arm("proof: one approved request covers every page it lists at its hash, and only those",
     approvalProblem(many, U1, "products/hq", HG) === "" && approvalProblem(many, U1, "lanes/x", "a".repeat(64)) === "" && approvalProblem(many, U1, "lanes/x", "b".repeat(64)) !== "" && approvalProblem(many, U1, "lanes/y", HG) !== "");
-  const spine = mkdtempSync(join(tmpdir(), "narr-spine-"));
-  const priorSpine = process.env.ARC_SPINE_ROOT;
-  try {
-    mkdirSync(join(spine, "events"));
-    process.env.ARC_SPINE_ROOT = spine;
-    const inbox = (/** @type {string} */ verb, /** @type {string} */ id) => spawnSync(process.execPath, [join(HERE, "..", "hq", "arc-inbox.mjs"), verb, id, "--reason", "read it"], { encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: spine } });
-    const asked = requestPayload(["products/hq", "lanes/x"], { "products/hq": good, "lanes/x": `${good}\nlane\n` });
-    const got = await raiseRequest(spine, asked.payload);
-    const read0 = await readSpineEvents(spine);
-    const undecided = approvalProblem(read0.events, got.id, "products/hq", HG);
-    const ap = inbox("approve", got.id);
-    const read1 = await readSpineEvents(spine);
-    const approved = approvalProblem(read1.events, got.id, "products/hq", HG);
-    const second = approvalProblem(read1.events, got.id, "lanes/x", sha256(`${good}\nlane\n`));
-    const afterEdit = approvalProblem(read1.events, got.id, "products/hq", sha256(`${good}\nedited after approval\n`));
-    const got2 = await raiseRequest(spine, requestPayload(["products/hq"], { "products/hq": good }).payload);
-    const rj = inbox("reject", got2.id);
-    const rejected = approvalProblem((await readSpineEvents(spine)).events, got2.id, "products/hq", HG);
-    arm("MUTANT B6 real spine: request -> undecided refused -> arc-inbox approve -> accepted for every listed page -> edit the page -> hash mismatch refused; a rejected request stays refused",
-      got.why === "" && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(got.id) && undecided.includes("not decided yet") && ap.status === 0 && approved === "" && second === ""
-      && afterEdit.includes("edited after") && got2.why === "" && rj.status === 0 && rejected.includes("rejected"));
-    const named = ownerSpine("x").spine === resolve(spine);
-    process.env.ARC_SPINE_ROOT = "";
-    const emptyDoor = ownerSpine(spine).why !== "" && (await raiseRequest(spine, asked.payload)).why !== "";
-    process.env.ARC_SPINE_ROOT = spine;
-    arm("MUTANT B6 request: an unknown page, a repeat and an empty list are refused before anything is emitted; the test door names the spine, and an empty one is refused",
-      requestPayload(["products/nope"], {}).problem !== "" && requestPayload(["products/hq", "products/hq"], { "products/hq": good }).problem !== "" && requestPayload([], {}).problem !== ""
-      && asked.payload.gate === ACCEPT_GATE && asked.payload.pages.length === 2 && asked.payload.pages[0].sha256 === HG && named && emptyDoor);
-  } finally {
-    if (priorSpine === undefined) delete process.env.ARC_SPINE_ROOT; else process.env.ARC_SPINE_ROOT = priorSpine;
-    rmSync(spine, { recursive: true, force: true });
-  }
-  const cli = mkdtempSync(join(tmpdir(), "narr-cli-"));
-  try {
-    const me = join(HERE, "narrative-anchors.mjs");
-    const call = (/** @type {string[]} */ ...a) => spawnSync(process.execPath, [me, "--root", cli, ...a], { encoding: "utf8" });
-    const bareAccept = call("--accept", "products/hq");
-    const junk = call("--accept", "products/hq", "--approval", "12345");
-    const orphanApproval = call("--approval", U1);
-    const both = call("--request-accept", "products/hq", "--accept", "products/hq");
-    arm("MUTANT B6 bare accept: an agent-style --accept with no --approval, or a malformed one, is refused (exit 1, one sentence, nothing written); --approval alone and --request-accept beside --accept are usage errors",
-      bareAccept.status === 1 && /^REFUSED products\/hq -- --accept needs --approval/.test(bareAccept.stdout) && junk.status === 1 && junk.stdout.includes("not an approval id")
-      && orphanApproval.status === 2 && both.status === 2 && !existsSync(join(cli, "docs")));
-  } finally { rmSync(cli, { recursive: true, force: true }); }
-  const repo = mkdtempSync(join(tmpdir(), "narr-main-"));
-  const wt = `${repo}-wt`;
-  try {
-    const g = (/** @type {string[]} */ a, /** @type {string} */ cwd) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...a], { cwd, stdio: "ignore" });
-    g(["init", "-q"], repo);
-    g(["commit", "-q", "--allow-empty", "-m", "x"], repo);
-    g(["worktree", "add", "-q", "--detach", wt], repo);
-    arm("main clone: from a linked worktree git's common dir names the main clone, and from the clone itself the same one",
-      realpathSync(mainCloneOf(wt)) === realpathSync(repo) && realpathSync(mainCloneOf(repo)) === realpathSync(repo));
-  } finally { rmSync(wt, { recursive: true, force: true }); rmSync(repo, { recursive: true, force: true }); }
+  // The arms that need a process, the spine or a git repo live with the code that does (DOC-A: nothing here spawns); each still runs the REAL functions.
+  const proof = await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href);
+  for (const [name, ok] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok);
   console.log(`RAN: ${ran} checks, ${failed} failed`);
   return failed === 0 && ran === 41 ? 0 : 1;
 }
@@ -932,7 +784,8 @@ async function main(argv) {
   if (requestPages.length) {
     const req = requestPayload(requestPages, t.narratives);
     if (req.problem) { console.log(`REFUSED request-accept -- ${req.problem}`); return 1; }
-    const got = await raiseRequest(root, req.payload);
+    const proof = await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href);
+    const got = await proof.requestAcceptApproval(req.payload, { root });
     if (got.why) { console.log(`REFUSED request-accept -- ${got.why}`); return 1; }
     console.log(`requested ${got.id}: the owner is asked to accept ${requestPages.length} page${requestPages.length === 1 ? "" : "s"}, each at the text hash it has now`);
     console.log(`the owner runs${got.main ? ` from the main clone (${got.main})` : ""}:`);
@@ -949,11 +802,8 @@ async function main(argv) {
     const { doc, refused } = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on, approval);
     if (refused) { console.log(`REFUSED ${accept} -- ${refused}`); return 1; }
     // The owner's proof, read from HIS spine (the main clone's, read-only): the one place the ULID is checked against anything.
-    const os = ownerSpine(root);
-    if (os.why) { console.log(`REFUSED ${accept} -- ${os.why}; nothing was written`); return 1; }
-    const sp = await readSpineEvents(os.spine);
-    if (sp.why) { console.log(`REFUSED ${accept} -- ${sp.why}; nothing was written`); return 1; }
-    const noProof = approvalProblem(sp.events, approval, accept, sha256(String(t.narratives[accept])));
+    const proof = await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href);
+    const noProof = await proof.verifyAcceptApproval({ ulid: approval, page: accept, sha256: sha256(String(t.narratives[accept])), opts: { root, judge: approvalProblem } });
     if (noProof) { console.log(`REFUSED ${accept} -- ${noProof}; nothing was written`); return 1; }
     const failed = writeAccept(root, doc, before);
     if (failed) { console.log(`REFUSED ${accept} -- ${failed}`); return 1; }

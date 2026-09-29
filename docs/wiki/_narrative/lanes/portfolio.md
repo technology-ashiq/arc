@@ -88,7 +88,7 @@ f: `PORTFOLIO.md`
 
 t: Two watchers
 plain: One watcher checks that the noticeboard still matches the doors. The other warns when work in one room touches files that belong to another. Both warn first and do not block.
-d: The ownership check reads the existing `products/*/manifest.json` files instead of a second list (ADR-0057).
+d: The ownership check reads each product's own manifest instead of a second list (ADR-0057).
 f: `.claude/scripts/core/board-lint.sh` and `.claude/scripts/core/ownership-lint.sh`
 
 t: One tool for status changes

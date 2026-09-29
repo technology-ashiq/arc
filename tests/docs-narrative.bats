@@ -37,7 +37,12 @@ VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
 }
 
 @test "narrative-anchors: the TEST is attacked -- a gate with the ADR drift rule cut fails its own self-test" {
-  local copy="$BATS_TEST_TMPDIR/gate-cut.mjs"
+  # The gate reaches hq/lib/narrative-proof.mjs (and its core/ import) by a path relative to itself, so the cut copy
+  # lives in a mirror of .claude/scripts/ under the same file name -- a copy dropped loose in a temp dir cannot import.
+  local mirror="$BATS_TEST_TMPDIR/.claude/scripts" copy
+  mkdir -p "$mirror/docs"
+  cp -R "$(dirname "$GATE")/../hq" "$(dirname "$GATE")/../core" "$mirror/"
+  copy="$mirror/docs/narrative-anchors.mjs"
   sed 's/for (const n of names.adrs) if (!tree.adrs.has(n)) fails.push/for (const n of names.adrs) if (false) fails.push/' "$GATE" > "$copy"
   ! cmp -s "$GATE" "$copy" || { echo "the mutation did not apply -- the anchor text moved"; false; }
   run node "$copy" --selftest
