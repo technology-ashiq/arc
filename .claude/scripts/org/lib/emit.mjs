@@ -59,6 +59,9 @@ function emitItem(item, indent, out) {
 
 /** @param doc a plain object; @param header optional leading comment lines */
 export function emitYaml(doc, header = []) {
+  // A newline in a header line would turn the rest of it into LIVE YAML above the real keys, and
+  // the value round trip below cannot see a key the parser then overwrote (attack 4a4a17b B8).
+  for (const l of header) if (/[\r\n]/.test(String(l))) throw new Error("emit: a header line holds a line break");
   const out = header.map((l) => (l ? `# ${l}` : "#"));
   for (const k of Object.keys(doc)) emitValue(k, doc[k], 0, out);
   const text = out.join("\n") + "\n";

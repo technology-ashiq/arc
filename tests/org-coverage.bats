@@ -54,11 +54,13 @@ org_scratch() {
   if [[ "$output" == *"FAILED-ARM"* ]]; then echo "an arm failed: $output"; false; fi
   local i
   for ((i = 0; i < total; i++)); do
-    printf '%s\n' "$output" | grep -Eq "^M$i .*: PASS \(exit [01]\)$" || { echo "arm M$i is not PASS: $output"; false; }
+    printf '%s\n' "$output" | grep -Eq "^M$i .*: PASS \(exit [01], (cli|in-process)\)$" || { echo "arm M$i is not PASS: $output"; false; }
   done
   # Every planted arm names what it caught; only M0, the clean control, exits 0.
   [ "$(printf '%s\n' "$output" | grep -c 'EXPECTED-FAIL')" -eq "$((total - 1))" ] || { echo "$output"; false; }
-  printf '%s\n' "$output" | grep -Eq '^M0 .*: PASS \(exit 0\)$'
+  printf '%s\n' "$output" | grep -Eq '^M0 .*: PASS \(exit 0, cli\)$'
+  # Only a walker-stub arm may run in-process; every other arm must have gone through the real CLI.
+  [ "$(printf '%s\n' "$output" | grep -c ', in-process)$')" -le 1 ] || { echo "more than one in-process arm: $output"; false; }
 }
 
 @test "org-coverage: an orphan agent fails end to end, named" {

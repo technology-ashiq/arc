@@ -1,0 +1,81 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-catalog.mjs:catalogDigest and chartModel (localeCompare sorts)",
+      "breaking_input": "Run `org-catalog --digest` and `--chart --check` on the Linux, macOS and Windows CI legs, or on one machine under different LANG/LC_ALL values (for example en_US vs sv_SE vs C). Ids like `ux-writer`, `ux-researcher` and `uxwriter` are enough to separate the orders, as is any id where a hyphen sits next to a letter.",
+      "why": "`String.prototype.localeCompare` uses the process default locale, so the ordering of cards depends on the host. The genesis digest hashes the cards in that order, and CHART.md/chart.json are rendered in that order. Two hosts can print different digests for the same catalog. Approving a digest on one machine can then fail to match a re-run elsewhere, and `--chart --check` can report STALE on one CI leg only. This is the same 'green locally, red on one leg' class as the CRLF finding.",
+      "fix": "Sort with a locale-free codepoint comparison such as `a.id < b.id ? -1 : a.id > b.id ? 1 : 0`. Apply it to the dept sort in chartModel as well as the id sort in both functions."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/org/lib/card.mjs:produces.schema check (`/^docs\\/schemas\\/[a-z0-9-]+\\.md$/`)",
+      "breaking_input": "A card with `produces: {kind: 'seo-brief', schema: 'docs/schemas/nul.md', receipt: 'handoff.ready'}`, or `schema: 'docs/schemas/aux.md'`. Also `kind: 'a-brief'` with `schema: 'docs/schemas/other-thing.md'`.",
+      "why": "The Windows-device-name fix was applied to `produces.kind` through isId but not to the schema path segment. That segment becomes a real file name (docs/schemas/KIND.md), and the fixed-defects list names this exact case as a place to re-check. The schema regex accepts `nul`, `con` and `com1`. The check also never ties the schema stem to `kind`, so the card validates one name and a later Phase 02 writer would use the other.",
+      "fix": "Extract the stem and require `isId(stem)`. Require the stem to equal `produces.kind`, or `pending`.",
+      "twin_of": "Role ids and produced kinds become file names, and Windows opens `con.role.yaml` as a device whatever the extension"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-catalog.mjs:draft() and main() (no --root existence check)",
+      "breaking_input": "`node org-catalog.mjs --draft --seed seed.yaml --root E:/typo/arc`. Also a `--root` pointing at a directory that has no .claude/agents.",
+      "why": "org-coverage refuses a missing --root with exit 2, but org-catalog does not. `mkdirSync(..., {recursive:true})` then creates `org/roles/<dept>/` under whatever path was typed. agentTier returns null for every agent because the agents dir is absent. Every seated card is silently written at balanced-workhorse, and the 'no model line' notice never prints. The result is a full catalog at the wrong location with the wrong tiers, and it exits 0.",
+      "fix": "In main() for all modes, require `isDir(o.root)` and `existsSync(join(o.root,'.claude','agents'))` before draft. Exit 2 otherwise."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-catalog.mjs:agentTier",
+      "breaking_input": "An agent file whose frontmatter has `model: inherit` or `model: haiku-4`, or an agent listed in a seed row whose file does not exist.",
+      "why": "The `unpinned` list is only filled when the `model:` line does not match the regex. When the line matches but the value is not in MODEL_TIER, the function returns null, and the caller filters null out and defaults the tier to balanced-workhorse without printing anything. A missing file returns null the same way. An opus-class agent can be silently drafted at the wrong tier, and a head loses `high-judgment` because `tiers.includes('high-judgment')` is false.",
+      "fix": "Push the stem to `unpinned` (or fail the row) whenever the value is unmapped or the file is unreadable. Do not return null silently."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-coverage.mjs and org-catalog.mjs: main tails and console.log bursts",
+      "breaking_input": "`node org-coverage.mjs | head -1` with more than one FAIL line, on POSIX legs.",
+      "why": "The B7 fix set `process.exitCode` but did not handle the second half of the finding. When the reader closes early, the next console.log raises EPIPE as an unhandled 'error' event on stdout. The process crashes with a stack trace and a non-zero code that does not match the gate's result. The fix was only half applied.",
+      "fix": "Add `process.stdout.on('error', (e) => { if (e.code !== 'EPIPE') throw e; })` at startup, or write the report in a single call.",
+      "twin_of": "`process.exit(c)` right after a burst of console.log can truncate piped stdout"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-catalog.mjs:draft() write loop",
+      "breaking_input": "A seed of 71 valid rows where writing card 40 throws EACCES, ENOSPC or EBUSY (a locked file on Windows). Also a seed row whose id already exists as a card in a different dept directory.",
+      "why": "Only validation was moved ahead of the writes. The write loop still throws on any non-EEXIST error, and cards 1-39 stay on disk, so the 'nothing written' guarantee from the fix does not hold for I/O failures. A row whose id already lives under another dept directory is not caught, because `wx` only sees the same path. It writes a second card with the same id, and the gate then reports a duplicate role id.",
+      "fix": "Collect the paths written and remove them on a mid-loop throw, or write to a temp dir and rename. Pre-scan `org/roles/*/<id>.role.yaml` for existing ids across all departments.",
+      "twin_of": "`--draft` validated rows while writing, so a bad row 40 left rows 1-39 on disk"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-coverage.mjs:mutantSelftest (`const exit = findings.length ? 1 : 0`)",
+      "breaking_input": "Break the CLI exit mapping in main(), for example `return 0` after printing FAILs, or make the summary path throw for cards with `unstaffed` ventures. Run `--mutant-selftest` and the org-coverage.bats suite.",
+      "why": "The arms call collect() and check() in-process. The `exit N` printed in each PASS line is computed from the findings list and was never observed from a spawned process. The bats test asserts `PASS (exit [01])`, so it checks the synthetic label. Only three end-to-end bats tests exercise the real CLI path (orphan, E2, ghost script). Arms M6 to M12 never pass through parseArgs, main, or the process exit code. This is the 'assertion held, code never ran' pattern.",
+      "fix": "Have each arm spawn `process.execPath [this file] --root scratch` and record the real exit status and stdout. Assert the finding text on that output."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-catalog.mjs:draft() header lines passed to emitYaml (`${row.title} -- role card`)",
+      "breaking_input": "Seed row with `title: \"x\\nautonomy_ceiling: 'L3'\\n#\"`. The title is not validated at draft time.",
+      "why": "emitYaml writes each header as `# ${l}`. An embedded newline turns the following text into a live YAML line before the real keys. The round-trip check only compares values. A duplicate of an existing key can survive it if the parser takes the last value. That leaves a card with a smuggled first line that no test flags.",
+      "fix": "Reject any seed title or mission containing \\r or \\n (`oneLine`). In emitYaml, throw when a header line contains a newline."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/org/lib/card.mjs:MODEL_RE and its comment",
+      "breaking_input": "A role card with `title: 'Claude Code operator'`, or a role id `opus-editor` or `grok-analyst`.",
+      "why": "The comment says a name like `opus-editor` is judged on a whole token. But `\\b` treats `-` as a boundary, so `opus-editor` matches `opus` and the card is refused as naming a model. The same regex runs over every free-text field (title, history, mission), so ordinary prose with `Claude`, `Gemini` or `Grok` fails. The scan is a word-bounded regex over free text, the same shape as the earlier `.claude/` false positive.",
+      "fix": "Restrict the model scan to the fields that can carry a model, meaning tier, hire.runtime and binds names. Alternatively use `(?<![\\w-])...(?![\\w-])` so hyphenated ids are compared as whole tokens, and update the comment to match.",
+      "twin_of": "The model-string scan read `.claude/` inside script paths as the model \"claude\", which would fail every card that binds a script"
+    }
+  ]
+}

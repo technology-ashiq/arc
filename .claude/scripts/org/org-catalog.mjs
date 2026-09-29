@@ -14,7 +14,7 @@
  *
  * Every count printed is derived from the cards on disk; nothing here carries a number forward.
  */
-import { readFileSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, realpathSync, readdirSync, rmSync, lstatSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,9 @@ import { emitYaml } from "./lib/emit.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..", "..");
+// Codepoint order, never localeCompare: the host locale would give two CI legs two digests and
+// two chart orders for one catalog (attack 4a4a17b B1).
+export const byCode = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const MODEL_TIER = { haiku: "cheap-scan", sonnet: "balanced-workhorse", opus: "high-judgment" };
 const TIERED = new Set(["agent", "skill", "partial"]);
 const WORKING = new Set(["agent", "skill", "script", "process"]);
@@ -50,11 +53,13 @@ const DEPT_NAME = {
 
 function agentTier(repo, stem, unpinned) {
   let text = "";
-  try { text = readFileSync(join(repo, ".claude", "agents", `${stem}.md`), "utf8"); } catch { return null; }
+  try { text = readFileSync(join(repo, ".claude", "agents", `${stem}.md`), "utf8"); } catch { throw new Error(`agent "${stem}" has no file in .claude/agents/`); }
   const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   const m = fm && fm[1].match(/^model:\s*([A-Za-z0-9._-]+)\s*$/m);
   if (!m) { unpinned.push(stem); return "balanced-workhorse"; }
-  return MODEL_TIER[m[1].toLowerCase()] ?? null;
+  const tier = MODEL_TIER[m[1].toLowerCase()];
+  if (!tier) { unpinned.push(`${stem} (model: ${m[1]})`); return "balanced-workhorse"; }
+  return tier;
 }
 
 /** One seed row -> one card, with every default from the Phase 00 spec (I-8b). */
@@ -104,6 +109,13 @@ function draft(repo, seedPath) {
   // normalise a `../` id straight out of org/roles/ (B3).
   const seen = new Set();
   const bad = [];
+  const existingIds = new Map();
+  const rolesDir = join(repo, "org", "roles");
+  for (const d of DEPTS) {
+    let names = [];
+    try { names = readdirSync(join(rolesDir, d)); } catch { continue; }
+    for (const n of names) if (n.endsWith(".role.yaml")) existingIds.set(n.slice(0, -10), d);
+  }
   const built = [];
   for (const [i, row] of rows.entries()) {
     const at = `seed row ${i + 1} (${JSON.stringify(row?.id)})`;
@@ -112,6 +124,9 @@ function draft(repo, seedPath) {
     if (seen.has(row.id)) { bad.push(`${at}: duplicate id`); continue; }
     seen.add(row.id);
     if (!DEPTS.includes(row.dept)) { bad.push(`${at}: unknown dept ${JSON.stringify(row.dept)}`); continue; }
+    for (const k of ["title", "mission"]) if (row[k] !== undefined && !(typeof row[k] === "string" && row[k].trim() && !/[\r\n]/.test(row[k]))) bad.push(`${at}: ${k} must be one line`);
+    const elsewhere = existingIds.get(row.id);
+    if (elsewhere && elsewhere !== row.dept) { bad.push(`${at}: id already has a card in org/roles/${elsewhere}/`); continue; }
     const stems = row.agents ?? [];
     if (!Array.isArray(stems) || !stems.every(isId)) { bad.push(`${at}: agents must be a list of agent stems`); continue; }
     try {
@@ -128,11 +143,18 @@ function draft(repo, seedPath) {
     return 1;
   }
   let wrote = 0, kept = 0;
-  for (const { path, text } of built) {
-    mkdirSync(dirname(path), { recursive: true });
-    // `wx` makes "never overwrite" atomic: no gap between a check and the write.
-    try { writeFileSync(path, text, { flag: "wx" }); wrote++; }
-    catch (e) { if (e.code === "EEXIST") kept++; else throw e; }
+  const written = [];
+  try {
+    for (const { path, text } of built) {
+      mkdirSync(dirname(path), { recursive: true });
+      // `wx` makes "never overwrite" atomic: no gap between a check and the write.
+      try { writeFileSync(path, text, { flag: "wx" }); written.push(path); wrote++; }
+      catch (e) { if (e.code === "EEXIST") kept++; else throw e; }
+    }
+  } catch (e) {
+    // All or nothing, for I/O failures too (B6): remove what this run wrote, then report.
+    for (const w of written) rmSync(w, { force: true });
+    throw new Error(`draft stopped (${e.code || e.message}); removed the ${written.length} card(s) it had written`);
   }
   console.log(`org-catalog: drafted ${wrote} card(s), kept ${kept} existing, from ${rows.length} seed row(s)`);
   if (unpinned.length) console.log(`org-catalog: agents with no model line (tier defaulted to balanced-workhorse, owner to review): ${[...new Set(unpinned)].join(", ")}`);
@@ -149,7 +171,7 @@ function classify(c) {
 }
 
 export function chartModel(w) {
-  const cards = w.cards.map((x) => x.card).sort((a, b) => a.dept.localeCompare(b.dept) || a.id.localeCompare(b.id));
+  const cards = w.cards.map((x) => x.card).sort((a, b) => byCode(a.dept, b.dept) || byCode(a.id, b.id));
   const counts = { roles: cards.length, staffed: 0, partial: 0, vacant: 0, human: 0, "seated-unlegitimised": 0, own: 0, hired: 0 };
   for (const c of cards) { counts[classify(c)]++; counts[c.origin]++; }
   return {
@@ -238,7 +260,7 @@ function canonical(v) {
 }
 
 export function catalogDigest(w) {
-  const cards = w.cards.map((x) => x.card).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  const cards = w.cards.map((x) => x.card).sort((a, b) => byCode(String(a.id), String(b.id)));
   return createHash("sha256").update(canonical(cards)).digest("hex");
 }
 
@@ -275,9 +297,14 @@ function parseArgs(argv) {
   return o;
 }
 
+function isDir(p) { try { return lstatSync(p).isDirectory(); } catch { return false; } }
+
 async function main() {
   let o;
   try { o = parseArgs(process.argv.slice(2)); } catch (e) { console.error(`org-catalog: ${e.message}`); return 2; }
+  if (!isDir(o.root)) { console.error(`org-catalog: no such directory: ${o.root}`); return 2; }
+  // Draft writes under --root, so a typo must not grow a catalog in the wrong place (B3).
+  if (!isDir(join(o.root, ".claude", "agents"))) { console.error(`org-catalog: ${o.root} is not an arc tree (no .claude/agents/)`); return 2; }
   if (o.mode === "draft") return draft(o.root, o.seed);
   if (o.mode === "chart") return chart(o.root, o.check);
   return digest(o.root);
@@ -290,4 +317,7 @@ function isMainModule() {
   } catch { return false; }
 }
 // exitCode, not exit(): a hard exit right after a burst of console.log can cut a piped stdout short.
+// And a reader that closes early (`| head -1`) is not an error of THIS program: EPIPE is ignored
+// rather than crashing with a code that no longer says what the gate found (attack 4a4a17b B5).
+if (isMainModule()) process.stdout.on("error", (e) => { if (e.code !== "EPIPE") throw e; });
 if (isMainModule()) main().then((c) => { process.exitCode = c; }, (e) => { console.error(`org-catalog: ${e.stack || e}`); process.exitCode = 2; });

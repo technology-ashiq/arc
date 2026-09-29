@@ -16,6 +16,7 @@ import { readFileSync, readdirSync, existsSync, lstatSync, realpathSync, mkdtemp
   mkdirSync, writeFileSync, rmSync, cpSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { mdStems, yamlStems, treeScripts, treeCapabilities, treeKinds, treeVentures } from "../core/face-coverage.mjs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
@@ -213,11 +214,21 @@ function buildScratch(repo, w, s) {
   for (const p of ["engine/router.yaml", "hq.policy.yaml", "ventures.yaml", ".mcp.json"]) {
     if (existsSync(join(repo, p))) { mkdirSync(dirname(join(s, p)), { recursive: true }); cpSync(join(repo, p), join(s, p)); }
   }
-  for (const rel of w.scripts) { mkdirSync(dirname(join(s, rel)), { recursive: true }); writeFileSync(join(s, rel), ""); }
-  // face-coverage's walkers load the YAML parser FROM the tree they read, so the scratch tree
-  // needs its real bytes; an empty placeholder made every ventures.yaml read "unreadable".
-  for (const rel of [".claude/scripts/engine/yaml-subset.mjs"]) cpSync(join(repo, rel), join(s, rel));
+  // Real bytes, not placeholders: each arm runs the CLI against this tree, and the walkers IMPORT
+  // code from the tree they read (the YAML parser, the spine vocabulary in validate.mjs).
+  cpSync(join(repo, ".claude", "scripts"), join(s, ".claude", "scripts"), {
+    recursive: true, filter: (src) => !/[\\/]node_modules([\\/]|$)/.test(src),
+  });
   return s;
+}
+
+const byCode = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Run THIS gate as a child process on a tree, and return what a caller of the CLI would see. */
+function runCli(root) {
+  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--root", root], { encoding: "utf8" });
+  const findings = (r.stdout || "").split(/\r?\n/).filter((l) => l.startsWith("FAIL ")).map((l) => l.slice(5));
+  return { exit: r.status, findings, ran: /^org-coverage: /m.test(r.stdout || ""), stderr: r.stderr || "" };
 }
 
 async function mutantSelftest(repo) {
@@ -245,7 +256,7 @@ async function mutantSelftest(repo) {
           put(`org/roles/${card.dept}/${card.id}${ROLE_SUFFIX}`, emitYaml(card));
         }
         if (a.last) {
-          const last = [...real.cards].sort((x, y) => String(x.card?.id).localeCompare(String(y.card?.id))).at(-1);
+          const last = [...real.cards].sort((x, y) => byCode(String(x.card?.id), String(y.card?.id))).at(-1);
           const p = join(scratch, last.rel);
           const before = readFileSync(p, "utf8");
           const card = JSON.parse(JSON.stringify(last.card));
@@ -253,14 +264,26 @@ async function mutantSelftest(repo) {
           writeFileSync(p, emitYaml(card));
           restore = () => writeFileSync(p, before);
         }
-        const w = await collect(scratch, { kinds, ...(a.inject || {}) });
-        const findings = check(w);
+        // Every arm runs the real CLI in a child process and reads its real exit status (attack
+        // 4a4a17b B7): an in-process check() never passes through parseArgs, main or the exit code.
+        // The one exception is an arm that stubs a WALKER, which only the in-process seam can do;
+        // its line says so rather than printing a synthetic exit as if the CLI had produced it.
+        let exit, findings, how;
+        if (a.inject) {
+          findings = check(await collect(scratch, { kinds, ...a.inject }));
+          exit = findings.length ? 1 : 0;
+          how = "in-process";
+        } else {
+          const r = runCli(scratch);
+          if (!r.ran) { failed++; ran++; lines.push(`${a.id} ${a.what}: FAILED-ARM (the CLI did not run: exit ${r.status ?? r.exit}; ${r.stderr.trim().split("\n").pop() || "no stderr"})`); continue; }
+          ({ exit, findings } = r);
+          how = "cli";
+        }
         ran++;
         const hit = a.expect ? findings.find((x) => x.includes(a.expect)) : null;
-        const ok = a.expect === null ? findings.length === 0 : !!hit;
+        const ok = a.expect === null ? findings.length === 0 && exit === 0 : !!hit && exit === 1;
         if (!ok) failed++;
-        const exit = findings.length ? 1 : 0;
-        lines.push(`${a.id} ${a.what}: ${ok ? "PASS" : "FAILED-ARM"} (exit ${exit})`);
+        lines.push(`${a.id} ${a.what}: ${ok ? "PASS" : "FAILED-ARM"} (exit ${exit}, ${how})`);
         if (a.expect && hit) lines.push(`   EXPECTED-FAIL ${hit}`);
         if (!ok) lines.push(`   wanted ${a.expect === null ? "no findings" : `a finding containing "${a.expect}"`}; got ${findings.length ? findings.slice(0, 3).join(" | ") : "none"}`);
       } finally {
@@ -321,4 +344,7 @@ function isMainModule() {
   } catch { return false; }
 }
 // exitCode, not exit(): a hard exit right after a burst of console.log can cut a piped stdout short.
+// And a reader that closes early (`| head -1`) is not an error of THIS program: EPIPE is ignored
+// rather than crashing with a code that no longer says what the gate found (attack 4a4a17b B5).
+if (isMainModule()) process.stdout.on("error", (e) => { if (e.code !== "EPIPE") throw e; });
 if (isMainModule()) main().then((c) => { process.exitCode = c; }, (e) => { console.error(`org-coverage: ${e.stack || e}`); process.exitCode = 2; });

@@ -48,8 +48,9 @@ const KIND_ID_RE = ID_RE; // a produced kind names docs/schemas/KIND.md, so it i
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SOURCE_RE = /^(openrouter|omniroute|mcp|skill|codex):[a-z0-9._/-]+$/;
-// ADR-1614: no seat names a model. Word-bounded so `balanced-workhorse` or a role called
-// `opus-editor` is judged on a whole token, and case-folded so `Claude-3` cannot slip by.
+// ADR-1614: no seat names a model. Case-folded so `Claude-3` cannot slip by. `\b` treats a hyphen
+// as a boundary, so this matches `claude-opus` AND a role id like `opus-editor` -- which is why it
+// runs only over the SELECTOR fields below, never over prose (attack 4a4a17b B9).
 export const MODEL_RE = /\b(claude|gpt|o[1-9]|gemini|llama|mistral|deepseek|qwen|glm|grok|haiku|sonnet|opus)\b/i;
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -61,16 +62,21 @@ export function isStaffed(card) {
   return !!card && WORKING_SEATS.has(card.seat) && typeof card.legitimacy === "string" && card.legitimacy.length > 0;
 }
 
-// hire.source is provenance by design (ADR-1614); the rest are repo PATHS, where `.claude/` is a
-// directory name and not a model -- scanning them would fail every card that binds a script.
-const NOT_SCANNED = new Set(["hire.source", "binds.scripts", "fixtures", "produces.schema"]);
+// The fields that SELECT who or what runs a seat: where a model name could be smuggled in place
+// of a tier. Prose (title, mission, history) is the owner's to review and may say "Claude";
+// paths hold `.claude/`; hire.source is provenance by design. An allowlist, not a denylist: the
+// denylist version was wrong twice (`.claude/` paths, then prose), each time by an omission.
+const SELECTORS = [["id"], ["binds", "tier"], ["binds", "agents"], ["binds", "skills"], ["binds", "process"],
+  ["hire", "runtime"], ["produces", "kind"], ["reports_to"], ["escalate_to"]];
 
-/** Every string value in the card except the NOT_SCANNED fields. */
-function* stringsOf(v, path) {
-  if (NOT_SCANNED.has(path)) return;
-  if (typeof v === "string") yield [path, v];
-  else if (Array.isArray(v)) for (let i = 0; i < v.length; i++) yield* stringsOf(v[i], `${path}[${i}]`);
-  else if (isObj(v)) for (const [k, x] of Object.entries(v)) yield* stringsOf(x, path ? `${path}.${k}` : k);
+function* selectorStrings(card) {
+  for (const path of SELECTORS) {
+    let v = card;
+    for (const k of path) v = isObj(v) ? v[k] : undefined;
+    const name = path.join(".");
+    if (typeof v === "string") yield [name, v];
+    else if (Array.isArray(v)) for (const [i, x] of v.entries()) if (typeof x === "string") yield [`${name}[${i}]`, x];
+  }
 }
 
 /**
@@ -146,8 +152,12 @@ export function validateCard(card, ctx) {
     else {
       for (const k of Object.keys(card.produces)) if (!PRODUCES_KEYS.has(k)) bad(`unknown produces key "${k}"`);
       if (!KIND_ID_RE.test(card.produces.kind || "")) bad("produces.kind must be a kebab id");
+      // The schema stem is a file name AND must be the kind it describes: validating one name and
+      // letting a later writer use another is how the two drift (attack 4a4a17b B2).
       const sc = card.produces.schema;
-      if (sc !== "pending" && !(typeof sc === "string" && /^docs\/schemas\/[a-z0-9-]+\.md$/.test(sc))) bad("produces.schema must be docs/schemas/KIND.md or pending");
+      const stem = typeof sc === "string" ? (sc.match(/^docs\/schemas\/([^/]+)\.md$/) || [])[1] : undefined;
+      if (sc !== "pending" && !(isId(stem) && stem === card.produces.kind))
+        bad("produces.schema must be pending or docs/schemas/KIND.md with KIND equal to produces.kind");
       if (card.produces.receipt !== "handoff.ready") bad("produces.receipt must be handoff.ready");
     }
   }
@@ -189,7 +199,7 @@ export function validateCard(card, ctx) {
   } else if (card.review_by !== undefined && card.review_by !== null) bad("review_by is only set on a legitimised seat");
   if (!Array.isArray(card.history) || !card.history.every((x) => typeof x === "string")) bad("history must be a list of strings");
 
-  for (const [path, s] of stringsOf(card, "")) {
+  for (const [path, s] of selectorStrings(card)) {
     const m = s.match(MODEL_RE);
     if (m) bad(`${path} names a model ("${m[0]}") -- a seat binds a tier, never a model (ADR-1614)`);
   }
