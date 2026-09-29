@@ -1,0 +1,209 @@
+{
+  "schema": 1,
+  "pages": {
+    "lanes/absorb": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "31a7cfcf70c2b484ee69684c48e2e3d996bebd8a15b75bd7ea40c63ee61ab525",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/bench": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "3b4f6cd5b9aaf07cba873825d011af1a9377d68643a5f648141627fbffa17f92",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/design": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "67ab38aef1ca34ac6bdf8ea9be34ee61f2ba07110e5b3d7bd37b993786eab25f",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/develop": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "1390f1469033ad08b65adbdc71035f31499ad647611d00eaeb1bc92fe7a23555",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/docs": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "fcf5bc0a91c02aa450f2b389b6a7cc131c232dd36ddfb06b47bea0d2f1a14e15",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/engine": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "9ed7b8be62c4a9cae80d799133a8f79dc86c4f2bf314e7d85a6c429a0002a0d1",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/evolve": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "fa1c7cea5ce3ec95913173023ae38d38bb5e71ea9fba15fa93b06095f1c9a1a4",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/face": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "4baad46350be15157090c59d2bb068f7ee1c222f8770ff10bbfb807f02c2cd13",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/growth": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "e549f89c822204409eb1d116b0343a41581bbdd2f8461c5b47d6253d3ae789fc",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/leads": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "0cdca025deb303b45a7ae9fd1b8e4cd87860c2ad35ac9eedcab1fa26ceb14d10",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/ledger": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "d9ad44b354f4c2b827ed401f38da2eef9e6840f0c4a16c5c6905036b7d40e87d",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/legal": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "a4a41515ebe25aaa4b9877c990c65d419a3d7ecbda2a67af9f58cd594636f67c",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/memory": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "0ce9ed4fe88f9d6aadbe32181ccb3f0f323630453809e131f7d02cbf79ae4902",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/model-policy": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "3892836358cd62d77a0397e671fa2406c9f7494d7ddcf0264a9e740d58a6a4b6",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/policy": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "f1bc4e853df59c669907df5000dbe3faaa08c2c98a3a47f4d5587f8ecad82635",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "lanes/portfolio": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "9b429d72d2577fd3b30fb0c5879690d14107b27944eee66734f6228e00d440a6",
+      "approval": "01M3PYME20K4DBAN6AN6N1BZNA"
+    },
+    "lanes/scheduler": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "9f9902337b00adbe2894c23945254e2631d8650ffdc59f41877f02d57cdda5c5",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/absorb": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "c20ace29d09ac822b07253021c059b1a83703337fda6292783cea909a594ab3d",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/core": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "44e5492ad2d4e645292fd7143ace52872de5f345b51ba310f30037cf31042fb3",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/council": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "491e861a719dbabbedb2dfafcac13f71755f554da39eaa77d20607538662c87a",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/design": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "ddb5d962aaba4511d2dd85139207eba4d5b265b0df7857689328d919c6328d04",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/develop": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "71a0ccce1bd98d22959aeab1a3612e5c6114a778e8da9c0f118db74a94e2c1ed",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/docs": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "2613d7eed1f6ad2abb63dd9155e3856bf3543138c1119425a225c79933ecd369",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/engine": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "1779001f4b9c2c0bae104584388f708f725e69421ab0bef52d8dea33db82064e",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/evolve": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "8b69c741e51a7a95d6d13c0e320a8ad1a44c69f33d372520e935d7d952353fbc",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/git": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "5294190dbda4f73455213ed5790bf72257c6ac224c724e928b2120194b61e03b",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/growth": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "fb6bf47dee91d8199adff747fa5f5ba1180bceab39d04057c1e0269ba04136b1",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/hq": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "3f2aaa5d933144c2e57736ba9b2a5419b8650df6a5b8f0ade85c601dbced8604",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/leads": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "cd48245c06ea2b7fc08efa2738be6c2ffabac82c9e4da70407b60d2be2ef5f31",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/legal": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "050488fead8c31df97591a75cc2a391c47c84c215e597259af48546a73a008a8",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/memory": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "8c849426ebb04cf8cf2966aa46b338e032f65bc468b8ca91bc35bc8547ed6d61",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/plan": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "822de8f808b02779649b587786cb477d30b7236b527e8232cd8a96b69cc02ae2",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/qa": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "e2a175b19d8b5a19d98df01f071155723fc2b48f41114430a59db28b06accd84",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    },
+    "products/review": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "7f1adb06776f0f82ffe44fcb42add3fc9b9f97189f7a087f3639b2ed31ce6fc8",
+      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+    }
+  }
+}

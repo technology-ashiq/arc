@@ -1,137 +1,173 @@
 <!-- facts: agents=4f53cda1 commands=4f53cda1 docs=4f53cda1 faceRing=7028414a faceRoom=bc0e0622 files=81efe5e4 requires=8ba3b34a scripts=a50baccf version=c1f37a27 -->
+```tagline
+A careful one-person sales desk. It picks a few people worth writing to, learns something real about each,
+and sends nothing until you say yes. If someone says stop, it stops for good.
+```
+
+# Start here
 
 ## In plain words
 
-Picture a one-person sales desk: someone who picks a short, carefully checked list of companies worth talking to, learns enough about each one to write a real note instead of a form letter, waits for a yes from the person in charge before anything leaves the building, and stops the moment somebody asks to be left alone. <!-- plain -->
+Think of arc as a small company whose staff are AI models. Most of them build things. **leads** is the
+part that tries to sell them, by writing first emails to strangers.
 
-**leads is arc's outbound engine**, and its own plan states the whole job in one sentence: an ICP definition goes in, and out comes a small, deeply-researched, evidence-backed lead list of twenty-five people, never twenty-five hundred; first-touch drafts come out that are structurally incapable of being a template blast; and a capped, human-approved sequence runs from a warmed, dedicated domain, with every send, reply, meeting and suppression written as a typed receipt on the spine, every cap enforced in code and proven unbypassable by a fixture, one human approval per send until the trial ledger earns anything more. <!-- src: initiatives/leads/PLAN.md -->
+Cold email is risky in a way most work is not. One bad habit does not cost you one lead. It can cost the
+whole company its name with the mail providers. So leads is built like a desk with a doorman.
+
+```panel big
+- **The researcher** (`research`). Reads a description of who counts as a good customer, then builds a case file on each person who fits. A person from the wrong country, or from a bought list, is turned away and the reason is kept.
+- **The writer** (`draft`). Writes a first note that must point at something true about that one person. A note that could go to anyone is stopped before you ever see it.
+- **You, the boss** (`review`). You read the real words, beside the evidence, and say yes or no. Nothing leaves without your yes.
+- **The doorman** (`daily`). At the moment of sending, he checks everything again, because the world may have changed since you said yes.
+- **The mail slot** (`ingest-reply`). A reply comes in. If it says stop, that person is never written to again.
+
+The one rule under all five: **the desk works in a locked cabinet outside the repository.** Real names, emails and drafts never go into arc's shared files.
+```
 
 ### Why this needs to be a product at all
 
-Cold email is one of the few things a company does where a single mistake does not cost one lead, it costs the company's whole ability to be believed by a mail server ever again -- so the ordinary shortcuts (a purchased list, a generic template, a shared inbox nobody watches) are exactly the moves that look cheap and are not. <!-- plain -->
+Without the desk, the usual shortcuts feel cheap and are not:
 
 | What you lose | What it looks like when it bites | leads's answer |
 |---|---|---|
-| You burn the one sending reputation the company has | One spam-complaint run can destroy the same domain that carries the product's own password resets and receipts | Cold outbound only ever leaves from a dedicated domain bought for the purpose, warmed and checked, never the product or root domain or any subdomain of it <!-- src: docs/adr/0402-cold-outbound-sends-from-a-dedicated-domain-behind-a-provider-interface.md --> |
-| You send the same message to everyone and it reads like junk mail | A message that cites nothing about the person it names is exactly what a template blast looks like | A draft that cites no lead-specific fact, or a fact the lead's own dossier does not contain, is refused before a human ever sees it -- fake personalization becomes mechanically impossible <!-- src: docs/adr/0404-personalization-gate-splits-deterministic-fail-from-heuristic-below-bar.md --> |
-| You mail someone again after they said stop | Re-contacting an unsubscribed person is, in the send-guard code's own words, the single worst thing this system can do | Suppression is an event-backed, permanent record checked before every send, matched under every historical key the store has ever used, and it survives across campaigns and key rotations <!-- src: .claude/scripts/leads/lib/guard.mjs; docs/adr/0403-caps-and-suppression-derive-from-receipts-and-re-check-at-send-moment.md --> |
-| A system could promote itself to send without a human ever deciding | Auto-promoting send autonomy from metrics alone means the system grades its own homework, and auto-switching is forbidden house-wide | Every send needs one human's yes, one at a time, until a proposal built from ledger evidence -- never a self-graded metric -- earns anything more <!-- src: docs/adr/0407-send-autonomy-is-earned-by-ledger-evidence-and-granted-by-a-human.md --> |
-| Real contact data could sit forever in a public git history | The repo is headed public by owner strategy, and git history is forever -- any lead PII committed today would be permanently published the day the repo opens | Lead PII never enters the repository directory at all -- it lives in a private store outside it, watched by a tripwire lint that treats every tracked leads path as a violation on sight <!-- src: docs/adr/0410-lead-pii-lives-outside-the-repository-directory-entirely.md --> |
+| **The company's sending name** | Spam complaints land on the same domain that sends your product's password resets. | Cold mail leaves only from a separate domain bought for it (ADR-0402). |
+| **Anything that reads as personal** | The same letter, with a name swapped in, sent to everyone. | A draft that cites nothing true about the person is refused (ADR-0404). |
+| **The right to be left alone** | Someone says stop, and gets another email next week. | Stop is a permanent record, checked before every send (ADR-0403). |
+| **Your privacy rules** | Real contact details sit in a public history forever. | The cabinet lives outside the repository entirely (ADR-0410). |
+
+> The third row is the one that matters most. Writing to someone who asked not to be written to cannot be
+> taken back, so the doorman checks it last, at the door.
 
 ## arc words → normal words
 
-| arc calls it | It is really | Meaning |
-|---|---|---|
-| ICP | the target list's own description | A file naming who counts as a good lead at all -- the input to `research`. <!-- src: initiatives/leads/PLAN.md -->|
-| dossier | the case file on one person | Everything known about one lead, held in the private store: name, email and firm, plus its why-they-fit narrative, source links, provenance class, geography, verified email, and lead-specific facts with their evidence. <!-- src: docs/adr/0409-research-provenance-is-a-closed-allowlist-and-unverified-emails-are-held.md; docs/adr/0410-lead-pii-lives-outside-the-repository-directory-entirely.md; .claude/scripts/leads/arc-leads.mjs --> |
-| lead_id | the lead's disguise everywhere outside the store | A one-way scramble of the lead's email using a secret only the private store holds, so nobody reading the spine can reverse it back to an address. <!-- src: docs/adr/0400-pipeline-receipt-kinds-are-a-first-class-vocabulary-extension.md --> |
-| draft_ref / draft_sha | the sealed envelope and its wax seal | `draft_ref` points at one draft in the store without revealing its words; `draft_sha` is a fingerprint of its exact wording, and an approval is bound to that fingerprint, not merely to the lead. <!-- src: docs/adr/0412-the-approver-sees-the-draft-the-spine-never-does.md --> |
-| BELOW-BAR | a warning, not a wall | A draft that broke no hard rule but still reads as generic, under-cited, or too close to another draft in the same batch -- flagged on the inbox item for a human to weigh; only the trial-ledger ritual can later promote that class to an outright block. <!-- src: docs/adr/0404-personalization-gate-splits-deterministic-fail-from-heuristic-below-bar.md --> |
-| HELD | a lead nobody may write to yet | A lead whose email address could not be confirmed to exist -- it gets a dossier, and it can never be sent to until that changes. <!-- src: docs/adr/0418-the-email-verifier-is-mx-plus-syntax-not-a-vendor.md --> |
-| rehearsal | a dress rehearsal on real people who already said yes | A separate, tightly locked mode that runs the whole sending pipeline against a real mail server using only a short, named list of people who already agreed to it -- never a stranger, and never counted as a real campaign. <!-- src: docs/adr/0416-the-outreach-path-may-bind-the-product-domain-only-in-rehearsal-mode.md --> |
-| L1 | the lowest rung of trust | Every single send needs one human's yes before it goes; nothing in this product sends itself. <!-- src: docs/adr/0407-send-autonomy-is-earned-by-ledger-evidence-and-granted-by-a-human.md --> |
-| the guard chain | the last checkpoint before the door | The ordered list of checks the send code re-runs at the moment of sending, from whether this lead is even reachable today down to whether the wording still matches what was approved. <!-- src: .claude/scripts/leads/lib/guard.mjs --> |
+```lede
+Eight pieces of arc jargon. Each is an ordinary desk-and-cabinet thing wearing a technical name.
+```
+
+```rosetta
+ICP | the description of a good customer | the file `research` starts from
+dossier | the case file on one person | held in the locked cabinet, never in the repo
+the private store | the locked cabinet | lives outside the repository on purpose
+lead_id | a code name for one person | so the logbook never shows a real email
+draft_sha | a wax seal on the exact wording | your yes is tied to that wording, not to the person
+BELOW-BAR | a yellow warning on a draft | it broke no rule, but it reads generic; you decide
+HELD | a person nobody may write to yet | their email could not be confirmed to exist
+the guard chain | the doorman's checklist | re-run at the moment of sending
+```
 
 ## How a job flows
 
-One campaign moves through a sequence of steps, each its own operator-typed command -- the stages below. <!-- src: .claude/scripts/leads/arc-leads.mjs -->
+```lede
+A campaign moves one command at a time, and you start every command. Nothing runs in the background.
+```
 
-There is no background scheduler, daemon or cron: sequence advancement is a human-started command, and nothing else ever moves it forward. <!-- src: initiatives/leads/PLAN.md; docs/adr/0403-caps-and-suppression-derive-from-receipts-and-re-check-at-send-moment.md -->
+```flow
+source: who counts as a good lead
+box: ① Research | research
+box: ② Draft | draft
+box*: ③ You decide | review
+box: ④ Send | daily
+labels: dossiers, drafts, approved
+out: wrong country or bought list | turned away
+out: cites nothing true | blocked
+out: you say no | stays in the drawer
+out: the doorman says no | nothing sent
+divider: 3 | prepares | goes out
+note: Sending cannot be undone, so the line after your yes is where the doorman stands.
+caption: Figure 1 — from a list of criteria to a sent note. | Each stop on the right is a place where the desk refuses to go on.
+```
 
 ## The stages, one by one
 
-1. **Find and vet the people.** `research` reads an ICP file and, because no automated search source exists yet, a curated corpus file the operator supplies by its own path -- read through the exact same lint every candidate goes through, with no relaxation for a hand-written input. A candidate outside the allowed geography, or sourced from a purchased list or a login-walled site, is rejected outright and keeps its exclusion reason; a lead whose address cannot be confirmed is HELD rather than guessed at. Every candidate that survives becomes a dossier in the private store and a `lead.researched` receipt on the spine. <!-- src: initiatives/leads/PLAN.md; docs/adr/0417-manual-research-reaches-the-store-through-a-curated-corpus-file.md; docs/adr/0409-research-provenance-is-a-closed-allowlist-and-unverified-emails-are-held.md; docs/adr/0406-jurisdiction-is-an-allowlist-enforced-at-research-time.md; docs/adr/0400-pipeline-receipt-kinds-are-a-first-class-vocabulary-extension.md -->
-2. **Turn a lead into a first message.** `draft` lints a batch of prepared messages against each lead's own dossier before anything is written to disk. A message that cites nothing specific, cites a fact the dossier does not contain, or never says why the fact matters to the offer, is a deterministic FAIL and is blocked before it reaches a human. A message that clears that bar but cites too few facts, uses a stock phrase, or reads too close to another draft in the same campaign is BELOW-BAR: it still queues, with the warning riding along on the inbox item. <!-- src: docs/adr/0404-personalization-gate-splits-deterministic-fail-from-heuristic-below-bar.md; .claude/scripts/leads/arc-leads.mjs -->
-3. **A human reads and decides.** The spine only ever carries an opaque reference to a draft, never its wording, because a draft is personal data and the spine is public-bound; `review` renders the real words locally, straight from the private store, beside the dossier evidence that backs each cited fact. Approving or rejecting binds that exact wording; if the text changes afterward, the send is refused rather than going out under a stale decision. <!-- src: docs/adr/0412-the-approver-sees-the-draft-the-spine-never-does.md -->
-4. **Plan the send, then send it.** `daily <campaign>` takes `--dry-run` or `--expect DIGEST`: a dry run lists every approved draft with the sha the owner approved and the IST day the cap buckets by, then prints a digest, and nothing is sent; running it again with `--expect` and that same digest is what actually sends. It refuses unless the digest still holds -- an edited draft, a rolled-over day, or a send already recorded against that campaign each make the plan stale. Approval authorises an attempt, never a guaranteed delivery. <!-- src: .claude/scripts/leads/arc-leads.mjs; docs/adr/1344-fv2-live-lanes-a-send-is-bound-to-its-plan-a-gate-reaches-the-inbox.md -->
-5. **The guard chain re-checks everything at the last possible moment.** In order: `rehearsal-allowlist` (is this send inside a locked rehearsal list, when rehearsal mode is declared); `campaign-state` (is the campaign on HOLD or FROZEN); `unresolved-intent` (is there an unresolved crash-recovery intent still open); `already-sent` (has this exact touch already been sent); `suppression` (is this lead suppressed); `reply-stop` (did this lead reply since being approved); `clock-skew` (are any of this lead's touches stamped after the current send time); `touch-cap` (has this lead already used up its touches in the rolling window); `daily-cap` (has today's campaign already used its daily quota); `send-window` (is this inside the allowed sending hours); and `draft-sha` (does the draft's current wording still match what was approved). Any one of those refusing stops the send before the provider is ever called. <!-- src: .claude/scripts/leads/lib/guard.mjs#guardSend -->
-6. **The numbers behind that chain are hard-ceilinged, not merely configured.** The values an operator may set live in one config file: it may lower the daily-send and per-lead touch limits but never raise either past the ceiling fixed in code -- at most twenty sends in one IST calendar day, at most two touches to one lead. The rolling touch window runs the other way: it defaults to seven days, config may raise it as high as thirty-one, but it may never be set below seven, because a shorter window would weaken the touch cap rather than tighten it. A first bounce pauses the campaign for a human to check; a second bounce, a rolling bounce rate of at least three percent once at least fifty lifetime sends exist, or any spam complaint freezes it outright and raises an incident, cleared only by a named approval. <!-- src: .claude/scripts/leads/lib/caps.mjs#FLOORS; .claude/scripts/leads/lib/caps.mjs#CEILINGS; docs/adr/0403-caps-and-suppression-derive-from-receipts-and-re-check-at-send-moment.md -->
-7. **A reply can stop every later touch in the same run that reads it.** `ingest-reply` takes one reply as bytes -- from a file outside the repository or from standard input, never as a typed command-line argument, because a reply is somebody else's words and a command line is a place they would otherwise end up logged. It is parsed, classified, and written as an `outreach.replied` receipt identified by a hash of its own raw bytes rather than by when it happened to be read, so importing the same reply twice writes exactly one receipt. An unsubscribe-shaped reply also writes a `lead.suppressed` receipt in that same run, and the guard chain honours it from the very next send it is asked to check; an interested reply gets a calendar-link draft created in that same run. <!-- src: docs/adr/0405-reply-ingestion-is-interface-plus-fake-with-a-manual-file-fallback.md; docs/adr/0414-a-replys-identity-is-its-content-not-its-arrival-time.md; docs/adr/0400-pipeline-receipt-kinds-are-a-first-class-vocabulary-extension.md; .claude/scripts/leads/lib/ingest.mjs#ingestReply -->
-8. **Count what actually happened, from the spine alone.** `state --json` is a pure fold over the spine: it rebuilds the dossier index and every lead's touch and suppression counts, so wiping all derived state and replaying it comes back byte-identical. <!-- src: initiatives/leads/PLAN.md; .claude/scripts/leads/arc-leads.mjs#cmdState -->
+```lede
+Each stage is written twice: first what it does in ordinary words, then what actually happens.
+```
 
-## Every part, explained
+```steps
+t: The researcher builds case files
+plain: It reads the description of a good customer and a list you hand it. It checks every person against the rules before making a file.
+d: `research` reads the ICP file and a curated corpus file you supply, and runs each candidate through one lint. Provenance, jurisdiction and email verification decide the outcome. A person whose email cannot be confirmed becomes HELD. Survivors become dossiers in the store, each with a `lead.researched` receipt.
+f: `.claude/scripts/leads/lib/research-lint.mjs`
 
-### Commands
+t: The writer must cite something true
+plain: A first note has to mention a fact about that person, and the fact must be in their case file. Otherwise it is stopped.
+d: `draft` lints a batch against each dossier. A deterministic fail is blocked. A softer miss, such as too few facts or a stock phrase, is BELOW-BAR: it still queues, with the warning shown on the inbox item.
+f: `.claude/scripts/leads/lib/personalization.mjs`
 
-leads owns no slash command of its own -- its manifest's command list is empty. <!-- src: fact:products/leads.commands -->
+t: You read the real words
+plain: The logbook never holds the wording of a draft, because it is personal. You see the words on your own machine, beside the evidence.
+d: `review` renders the draft from the store. Your yes or no is bound to its `draft_sha`; if the text changes afterwards, the send is refused (ADR-0412).
+f: `.claude/scripts/leads/arc-leads.mjs`
 
-Instead, the whole product is driven by one script with many subcommands, each an operator-typed verb: <!-- src: .claude/scripts/leads/arc-leads.mjs -->
+t: The doorman plans, then sends
+plain: First you see a plan: what would go out today. Sending needs the plan's fingerprint, so a plan that went stale cannot be sent.
+d: `daily <campaign> --dry-run` lists the approved drafts and prints a digest. Then `daily <campaign> --expect DIGEST` sends. A wrong digest stops it. Before each send the guard chain re-checks, in order, names such as `campaign-state`, `already-sent`, `suppression`, `reply-stop`, `touch-cap`, `daily-cap`, `send-window` and `draft-sha`.
+f: `.claude/scripts/leads/lib/guard.mjs`
 
-- `store init` -- mints the private store and its keyed secret, printed once with a warning to back it up, because losing it breaks suppression matching permanently. <!-- src: .claude/scripts/leads/arc-leads.mjs -->
-- `campaign init <name>` -- binds a new campaign name to that store. <!-- src: .claude/scripts/leads/arc-leads.mjs; .claude/scripts/leads/lib/drafts.mjs#initCampaign -->
-- `research <icp-file>` -- an ICP in, dossiers and receipts out, described above as the first stage. <!-- src: .claude/scripts/leads/arc-leads.mjs -->
-- `draft <campaign> <drafts.json>` -- lints a batch of drafts, then queues everything that is not a deterministic FAIL for approval. <!-- src: .claude/scripts/leads/arc-leads.mjs -->
-- `review <draft_ref>` -- renders one queued draft locally, beside its dossier evidence. <!-- src: .claude/scripts/leads/arc-leads.mjs -->
-- `daily <campaign>` -- the human-started send run; nothing runs in the background. <!-- src: .claude/scripts/leads/arc-leads.mjs -->
-- `ingest-reply` -- a reply in: triage, receipt, suppression or a calendar draft, all in the same run. <!-- src: .claude/scripts/leads/arc-leads.mjs -->
-- `reconcile` -- spine-first recovery of unresolved intents, the gap left when a process dies after the provider accepts a send but before its receipt lands. <!-- src: .claude/scripts/leads/arc-leads.mjs; .claude/scripts/leads/lib/journal.mjs -->
-- `unlock` -- clears the single-writer send lock, and only if the process holding it is confirmed dead (refuses if alive). <!-- src: .claude/scripts/leads/arc-leads.mjs; .claude/scripts/leads/lib/guard.mjs -->
-- `mail` -- arc mailing its own owner, never a lead, allowlist-locked before any network call. <!-- src: .claude/scripts/leads/arc-leads.mjs; .claude/scripts/leads/lib/mail.mjs -->
-- `notify canary | approvals | brief` -- the three triggers that mail the owner off-terminal; the approvals trigger sends nothing when nothing is waiting. <!-- src: .claude/scripts/leads/arc-leads.mjs#deliverNotification; docs/adr/0415-arc-notification-mail-is-owner-directed-and-rides-a-transactional-api.md -->
-- `report` -- the mixing count over a window: rehearsal sends against real ones, printed as separate numbers on their own lines -- rehearsal, real, unmarked and unplaceable -- never collapsed into one figure. <!-- src: .claude/scripts/leads/arc-leads.mjs#cmdReport -->
-- `preflight` -- the deliverability gate, checked as code rather than a checklist; `state --json` -- the reader-derived state dump, whose replay after wiping all derived state comes back byte-identical. <!-- src: .claude/scripts/leads/lib/preflight.mjs; initiatives/leads/PLAN.md -->
+t: Replies close the loop
+plain: A reply is read as data, never trusted as an instruction. A stop request is remembered from that moment.
+d: `ingest-reply` takes the reply as bytes, from a file or standard input, and writes an `outreach.replied` receipt. The same reply imported twice writes one receipt (ADR-0414). An unsubscribe also writes `lead.suppressed`.
+f: `.claude/scripts/leads/lib/ingest.mjs`
+```
 
-One further verb is reachable from the face app rather than the command line directly: "Send today's outreach" plans and then sends a campaign's approved drafts through the same `daily` command, bound to the plan the owner read on screen and confirmed by a keystroke. <!-- src: .claude/scripts/hq/face-ops.mjs -->
+# The bigger loop
 
-### Agents
+## A story, as an illustration
 
-leads declares no dedicated subagent of its own. <!-- src: fact:products/leads.agents -->
+```lede
+This one is invented to show the shape. It is not a record of a real campaign.
+```
 
-### Scripts
+Imagine you approve a note to a founder at 09:00. At 09:30 she replies, "please stop". At 10:00 you run
+the send. Without a doorman the note goes, because you said yes at 09:00. With one, `reply-stop` sees the
+reply and the send is refused. Approval lets an attempt happen. It never promises a delivery.
 
-- **The command line and the emitter.** `arc-leads.mjs` calls itself "the ONE leads emitter": every leads receipt is constructed there from a literal shape, so "no PII in a payload" is a property of one function rather than a habit spread over the codebase. <!-- src: .claude/scripts/leads/arc-leads.mjs -->
-- **The private store.** `lib/store.mjs` holds the private store itself, which lives outside the repository directory on purpose. <!-- src: .claude/scripts/leads/lib/store.mjs -->
-- **Finding and checking people.** `lib/research-lint.mjs` decides provenance, jurisdiction, verification and the ICP-generic rule in one place, with four outcomes rather than a simple accept-or-reject. <!-- src: .claude/scripts/leads/lib/research-lint.mjs -->
-- **Writing to people.** `lib/drafts.mjs` is the two-plane review boundary and the campaign record; `lib/personalization.mjs` is the draft gate that splits FAIL from BELOW-BAR from PASS by determinism, not by severity. <!-- src: .claude/scripts/leads/lib/drafts.mjs; .claude/scripts/leads/lib/personalization.mjs -->
-- **Sending safely.** `lib/sequencer.mjs` is the send path, human-started and never a daemon; `lib/guard.mjs` is the send-moment guard chain and the single-writer lock; `lib/caps.mjs` holds the config, its hard ceilings, and the rolling-window arithmetic; `lib/journal.mjs` is the two-phase send journal and the spine-first reconciler for a crash between the provider's acknowledgement and the receipt landing. <!-- src: .claude/scripts/leads/lib/sequencer.mjs; .claude/scripts/leads/lib/guard.mjs; .claude/scripts/leads/lib/caps.mjs; .claude/scripts/leads/lib/journal.mjs -->
-- **Replies.** `lib/ingest.mjs` carries one reply end to end; `lib/replies.mjs` is the reply parser and triage classifier, written as parser-class code because it consumes bytes an outsider chose. <!-- src: .claude/scripts/leads/lib/ingest.mjs; .claude/scripts/leads/lib/replies.mjs -->
-- **The deliverability gate.** `lib/preflight.mjs` checks every deliverability clause as code rather than trusting an evidence file that could be stale or copied from another project. <!-- src: .claude/scripts/leads/lib/preflight.mjs -->
-- **arc's own mail, to its owner.** `lib/mail.mjs` is the policy layer for arc's own notification mail -- a different code path from cold outreach, deliberately, so the product domain can never acquire a cold-outbound path by accident. <!-- src: .claude/scripts/leads/lib/mail.mjs; docs/adr/0415-arc-notification-mail-is-owner-directed-and-rides-a-transactional-api.md -->
-- **External edges and credentials.** `lib/deps.mjs` is the one interface-and-fake switch for every outside dependency this product has -- the sending provider, the email verifier, the lead source, the reply inbox; `lib/env.mjs` reads arc's one credential home from inside Node. <!-- src: .claude/scripts/leads/lib/deps.mjs; .claude/scripts/leads/lib/env.mjs -->
-- **Reading the spine.** `lib/spine-read.mjs` is reader-only access to the spine for every one of leads' own derivations. <!-- src: .claude/scripts/leads/lib/spine-read.mjs -->
-- **Two standalone checks.** `pii-tripwire.sh` is the alarm, not the wall, against lead PII landing in a tracked file; `rehearsal-check.mjs` answers one narrow question -- whether the rehearsal will actually reach the people named in the operator's own credential file. <!-- src: .claude/scripts/leads/pii-tripwire.sh; .claude/scripts/leads/rehearsal-check.mjs -->
+```loop
+top: 1 | the reply
+top: 4 | the next send
+stage: 1 · You approve | a note is ready
+stage: 2 · She says stop | a reply arrives
+stage*: 3 · It is remembered | a permanent record
+stage: 4 · Next send | the doorman checks
+stage!: 5 · Refused | nothing goes out
+labels: reply, record, check, stop
+back: last -> 4 | the same check runs before every later send
+caption: Figure 2 — a stop request outlives the yes. | The record is checked again at every send, not once.
+```
 
-### Gates and rules
+## Limits are set in code, not in taste
 
-No gate in `arc.gates.yaml` -- the repository's own flat list of gates -- is specific to leads. Instead, sixteen dedicated test files cover it, each named for its surface: adversarial fixtures, the send journey, the mail guard, the mixing report, send ordering, the PII tripwire, the deliverability preflight, the provider contract, receipts, the rehearsal allowlist guard, the rehearsal send guard, the reply contract, the reply parser, reply triage, research and provenance lint, and the sequencer's caps and suppression. <!-- src: arc.gates.yaml; tests/leads-adversarial.bats; tests/leads-journey.bats; tests/leads-mail-guard.bats; tests/leads-mixing-report.bats; tests/leads-ordering.bats; tests/leads-pii-tripwire.bats; tests/leads-preflight.bats; tests/leads-provider-contract.bats; tests/leads-receipts.bats; tests/leads-rehearsal-guard.bats; tests/leads-rehearsal-send.bats; tests/leads-reply-contract.bats; tests/leads-reply-parser.bats; tests/leads-reply-triage.bats; tests/leads-research-lint.bats; tests/leads-sequencer.bats -->
+Config may lower the daily and per-person limits, and it may not raise them past a ceiling written in
+code. Raising one takes an ADR, not an edit (ADR-0403, `.claude/scripts/leads/lib/caps.mjs`). The touch
+window works the other way: shortening it would weaken the limit, so it has a floor. A first bounce pauses
+a campaign and a spam complaint freezes it.
 
-As a lane, leads also lives under the company's shared lane rules: a lane is named only by an explicit flag, never a bare word, and the shared company organs -- the ADRs, the retro log, and the tests directory among them -- belong to no lane and are edited by whichever lane touches them. <!-- src: .claude/rules/lanes.md -->
+## If the machine dies mid-send
 
-## The bigger loop
+A crash between "the provider accepted it" and "we wrote it down" would risk a duplicate email to a real
+person. So each send is journalled first, and `reconcile` repairs the gap by trusting the logbook first
+(ADR-0411).
 
-### The rehearsal that stopped at the clock
+## Who sees what
 
-The most valuable result of that day was not a send -- it was that the anti-template-blast lint stopped its own author. An earlier rehearsal attempt used a hand-written list of candidates whose facts were one template with a number changed, and the lint correctly refused every one of them as generic; the list that finally passed was the owner's own real descriptions, not a relaxed version of the gate. <!-- src: initiatives/leads/PROGRESS.md -->
+The logbook holds only code names and fingerprints. You see real words in `review`. `pii-tripwire.sh`
+is an alarm if lead details land in a tracked file, and `rehearsal-check.mjs` checks that a dress
+rehearsal will reach only the people you named.
 
-Each phase this product has closed has been checked by two mandatory adversarial surfaces, run by two agents who consistently shared almost nothing between them. The running total for the cycle reached ninety-six holes in code the automated checks had already called green. <!-- src: initiatives/leads/PROGRESS.md -->
+## Where leads sits in arc
 
-One single build slice inside the rehearsal phase was attacked eleven separate times before it was allowed to merge: eleven adversarial rounds returned 3, 9, 10, 8, 2, 3, 2, 1, 1, 4 and 0 CRITICALs, the last of them the first round to end with no CRITICAL. <!-- src: initiatives/leads/PROGRESS.md -->
+- **On top of core and hq.** The generated facts above list what it requires.
+- **Feeds evolve.** Its receipts are the vocabulary that evolve needs to measure anything (ADR-0408).
+- **In the face.** leads has a room that shows the funnel by stage and never names a lead.
 
-Several findings in those rounds were defects introduced by the fix for a previous round -- twice inside the comment explaining that fix. <!-- src: initiatives/leads/PROGRESS.md -->
-
-### How it connects to the rest of arc
-
-leads requires exactly two other products, `core` and `hq`. <!-- src: fact:products/leads.requires -->
-
-The pipeline's own receipts do not stay leads' alone: leads is the first product to ship the closed-payload vocabulary another product, evolve, needs to measure anything at all, though only the vocabulary ships in this cycle -- the measurement clock itself starts at the first real send, not at this work landing. <!-- src: docs/adr/0408-leads-is-evolves-first-client-and-ships-evo-h0-vocabulary-not-its-clock.md -->
-
-And the receipts do not stay inside this repository's own spine either: because a venture is sold to, not built by, this repository, every pipeline receipt is written to the company spine rather than to any one venture's own. <!-- src: docs/adr/0401-pipeline-truth-lives-on-the-company-spine.md -->
-
-In the face app, leads has its own room in the money ring: a funnel of receipts by stage -- researched, sent, replied, booked, won, lost, suppressed -- a table of the caps against today's sends, and a suppression ledger; no lead is ever named on that screen, only its opaque id. <!-- src: face/src/modules/money/leads/fold.mjs; products/leads/manifest.json -->
-
-The room also writes out the guard chain's own rules in plain words: caps, suppression and jurisdiction are checked at the moment of use rather than at approval; a reply stops every later touch automatically; sends stay inside the send window; and a first bounce holds a lead while a spam complaint freezes sending and raises an incident. <!-- src: face/src/modules/money/leads/fold.mjs#guard -->
+# Meta
 
 ## Glossary
 
-| Term | Meaning |
-|---|---|
-| dossier | One lead's case file in the private store: name, email and firm, plus its facts, each with where it came from. <!-- src: docs/adr/0409-research-provenance-is-a-closed-allowlist-and-unverified-emails-are-held.md; docs/adr/0410-lead-pii-lives-outside-the-repository-directory-entirely.md; .claude/scripts/leads/arc-leads.mjs --> |
-| lead_id | A one-way scramble of a lead's email under a secret only the private store holds. <!-- src: docs/adr/0400-pipeline-receipt-kinds-are-a-first-class-vocabulary-extension.md --> |
-| draft_ref / draft_sha | The opaque pointer to a draft, and the fingerprint of its exact wording that an approval binds to. <!-- src: docs/adr/0412-the-approver-sees-the-draft-the-spine-never-does.md --> |
-| BELOW-BAR | A heuristic warning on a draft, shown to the approver; only the trial-ledger ritual can promote it to a hard block. <!-- src: docs/adr/0404-personalization-gate-splits-deterministic-fail-from-heuristic-below-bar.md --> |
-| HELD | A lead whose email could not be confirmed; it can never be sent to. <!-- src: docs/adr/0418-the-email-verifier-is-mx-plus-syntax-not-a-vendor.md --> |
-| rehearsal | A locked mode that runs the real pipeline against a real mail server on a named, consenting list, never counted as a real campaign. <!-- src: docs/adr/0416-the-outreach-path-may-bind-the-product-domain-only-in-rehearsal-mode.md --> |
-| L1 | The send-autonomy rung at which every send needs one human's yes. <!-- src: docs/adr/0407-send-autonomy-is-earned-by-ledger-evidence-and-granted-by-a-human.md --> |
-| guard chain | The ordered checks re-run at the moment of sending, against state derived fresh from receipts. <!-- src: .claude/scripts/leads/lib/guard.mjs --> |
-| suppression | The permanent, event-backed record that a lead may never be contacted again once they have said so. <!-- src: docs/adr/0403-caps-and-suppression-derive-from-receipts-and-re-check-at-send-moment.md --> |
-| the private store | Where every lead's real name, email, draft text and reply content live -- outside the repository directory entirely. <!-- src: docs/adr/0410-lead-pii-lives-outside-the-repository-directory-entirely.md --> |
+```gloss
+suppression: the permanent record that a person must never be contacted again.
+receipt: one line in arc's logbook saying "this happened".
+provenance: where a fact about a person came from.
+digest: a short fingerprint of a plan, so a stale plan cannot be sent.
+bounce: a message that came back because the address did not work.
+```

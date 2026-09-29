@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:acceptEntry (the `prev` computation)",
+      "breaking_input": "docs/narrative-verify/accepted.json holds valid JSON of the wrong shape: the text `null`, `[]`, an object with schema 2, or `{\"schema\":1,\"pages\":[...]}`. Run `--accept products/qa`.",
+      "why": "The B3 fix only blocks a file that fails to parse or is rejected. A parseable but unrecognised document gives `acceptedOf` an empty map and gives `acceptEntry` `prev = {}`. The file is then rewritten with only the new page, silently dropping every earlier owner acceptance. In the check run, all of those pages read \"the owner has not read it yet\" with no FAIL naming the bad file. This is the same defect as before: unreadable is read as empty.",
+      "fix": "When the file exists and is not exactly `{schema:1, pages:<plain object>}`, put ACCEPT_FILE into `rejected` in readTree. `acceptBlocker` then refuses the write and evaluate() FAILs. Only a missing file counts as empty.",
+      "twin_of": "A wrong-shaped source returned an empty inventory -> empty because absent and empty because unreadable are different results"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:main --accept (`t.acceptDoc` vs `acceptRaw(root)`)",
+      "breaking_input": "Session A runs `--accept products/a`. Between A's readTree and A's `const before = acceptRaw(root)`, session B lands `--accept products/b`.",
+      "why": "`doc` is built from the text readTree parsed, while the stale-write guard's `before` comes from a second, later read. B's write falls in the gap, so `before` already contains B, the comparison passes, and A overwrites the file with a doc built from the older read. B's acceptance is lost, which is the very race B4 was meant to close. The guard compares a different read from the one it validated.",
+      "fix": "Have readTree return the raw text it parsed and pass that string as `before`. Never call acceptRaw again to obtain the baseline.",
+      "twin_of": "Validate one read, compare another; read, check, write stale -> re-read and compare right before a write"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:namesOf (`fenceOf(raw)` runs before the `inComment` handling)",
+      "breaking_input": "A narrative contains the lines `<!-- todo`, then `` ```bash ``, then `-->`, then `See `/arc-gone` and ADR-9999.`",
+      "why": "blocksOf handles an open multi-line comment first, so it ignores the fence line. namesOf tokenises fences before comments, so the fence line inside the comment opens a quoted fence. The `-->` is then skipped as quoted and `inComment` stays true, so every later name is skipped until a bare closing fence. Names in real prose are never drift-checked, while the renderer shows that prose. The gate and the fold disagree on structure, again.",
+      "fix": "In namesOf, handle `inComment` before fence detection, in the same order as blocksOf. Better, share one line-classifier between the two functions.",
+      "twin_of": "A heading quoted in a code fence taken as the break; the gate and the renderer share one fence tokenizer"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "face/src/modules/company/reference/fold.mjs:narrativeBlocks fence loop (`while (j < clean.length && !FENCE.test(...))`, unchanged FENCE)",
+      "breaking_input": "A narrative has a 4-backtick ```` ````md ```` fence wrapping an example with an inner `` ```steps `` block. The inner steps text names `` `/arc-gone` ``.",
+      "why": "The B7 fix claims the gate and the renderer share one tokenizer, but only narrative-anchors changed. fold.mjs still closes a fence on any line matching `(```|~~~)`, and its opener check is separate. The gate therefore treats the inner block as quoted and skips its names. The renderer closes at the inner fence and draws that content as a real steps or panel block, so a false command reaches the reader unchecked. The B7 test only compares blocksOf and namesOf with each other, never the renderer.",
+      "fix": "Export fenceOf/closesFence from one shared module and use them in fold.mjs. Add a fixture that runs the same nested input through the fold and the gate and asserts they agree.",
+      "twin_of": "A parser that skipped its own arguments, and a fence tracker that closed on any fence -> the gate and the renderer share one fence tokenizer"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:presentExact / readTree `tracked`",
+      "breaking_input": "A narrative names `` `.claude/state/hq/some-marker.json` `` or another gitignored regular file that exists on the author's box, under a real top-level directory.",
+      "why": "B5's fix made the check case-exact and renamed the function. It still tests disk presence, not tracked status. The file exists locally, so `[drift]` passes. On a clean CI checkout the file is absent, so the same narrative fails there. Local green and CI red still happens for ignored and untracked files, which was the other half of the finding.",
+      "fix": "Check against the tracked list, for example one bounded `git ls-files -z` read through the shared git reader, or a list carried in the extract. Alternatively, refuse any path under a gitignored root.",
+      "twin_of": "A host path.join used for another platform's lookup; compare names the way the filesystem and the remote will"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:main --accept / acceptEntry (`by: \"owner\"`)",
+      "breaking_input": "An agent session runs `node .claude/scripts/docs/narrative-anchors.mjs --accept products/qa` with no human present.",
+      "why": "The gate that Phase 07 closes on is that the owner has read the page. The CLI stamps `by: \"owner\"` for any caller, with no TTY confirmation, no approval id, and no check that the caller is a human. An agent can self-accept all 34 pages and drive awaiting-owner to 0. That is a permission that exists only in the ADR prose.",
+      "fix": "Require an owner-only proof. Options are an arc-inbox approval ULID passed as `--approval` and verified on the spine, or an interactive TTY prompt that refuses when stdin is not a TTY. Record the proof in the entry.",
+      "twin_of": "A write fenced only by prose -> a permission that exists only in the prompt is not a permission"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:main (`json` is read before the accept branch)",
+      "breaking_input": "`node narrative-anchors.mjs --accept products/qa --json`",
+      "why": "`--json` is accepted, then the accept branch prints plain text and ignores it. A caller parsing stdout as JSON gets an unparseable line. The same class as `--selftest` ignoring `--accept`, which B6 closed only for that one mode.",
+      "fix": "Refuse `--json` together with `--accept` by name, with exit 2. Also refuse a repeated `--json`.",
+      "twin_of": "Extra tokens ignored -> a mode that ignores what it was given answers a question nobody asked"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:FENCE / SHAPE_KINDS vs fold.mjs:FENCED",
+      "breaking_input": "A prose line beginning with inline triple backticks, such as `` ```x``` ``, followed by later text that names `/arc-gone`. Also add a tenth kind to fold.mjs's FENCED without touching SHAPE_KINDS.",
+      "why": "FENCE accepts a backtick opener whose info string contains backticks. CommonMark does not treat that as a fence, so the gate opens a quoted region that swallows later names until a bare fence. SHAPE_KINDS is a second hand-kept copy of fold's FENCED list. A kind added to one and not the other gives a page-shape block the renderer draws but the gate treats as a quote.",
+      "fix": "Reject a backtick opener whose info contains a backtick. Derive SHAPE_KINDS from a single exported list that fold.mjs also imports.",
+      "twin_of": "A hand-kept list beside a glob -> two lists of one thing drift; derive or compare them"
+    }
+  ]
+}

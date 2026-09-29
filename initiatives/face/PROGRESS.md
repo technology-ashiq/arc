@@ -3,7 +3,7 @@
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
 phase: 07
-appetite: 29.5d
+appetite: 31.5d
 burn: 10d
 blocked-on: —
 depends-on: —
@@ -31,7 +31,7 @@ depends-on: —
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | ✅ **CLOSED 2026-09-18** — 0.5d of 3d; 18 routes served, 35 of 50 panels (39 tables), residue 15 panels on 10 routes approved by the owner (ADR-1338); four attacker rounds, `phase04-folds` 141 checks; merged `0a4cb262` (#248), PR head 19/19 (run 35367884908), `main` re-verified 19/19 (run 35369459599), suite 1..3415; live door 19 of 19 routes 200; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` · `01M2TPXZGPTN08BN98G6TCRZ5J` |
 | 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | ✅ **CLOSED 2026-09-23** — 3d of 10d; 31 of 31 work verbs ship as ops, residue none (`residue.md`, held both ways by `tests/face/work-door.mjs`); eight PRs (#252 · #253 · #254 · #255 · #257 · #258 · #259 · #261) + the close's #262/#263, 20 attacker rounds, 175 fixed-defect rows; final tree `2fba48f7` 19/19 (run 35870851639), suite 1..3427; live door from the main clone, one real apply receipted (`01M37CDRK7E03P67E45Y1BDT4E`); spec-fidelity drift dispositioned; receipts `01M37D0KHFPXBDBWQRYPMEXVT8` · `01M37D0M5F55KH2D8A5ZWJG6TA` |
 | 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | ✅ **CLOSED 2026-09-26** — 3d of 5d; of 15 SESSION verbs 5 ship with the receipt read back (the live council convene among them), 4 start with the read-back owed, 6 residue filed to their lanes (`residue.md`, held to the registry by `tests/face/session-door.mjs`); PRs #269 · #270 · #271 · #272 · #273 · #274 · #276 · #278 · #282 + the close #285/#286; 13 boundary rounds, 118 fixed-defect rows, the logic surface never ran (debt row); `main` `465f5b82` 19/19 (run 36225129900), suite 1..3545; spec-fidelity drift dispositioned; receipts `01M3EBD91R95PZD0EPQ1QB4TS2` · `01M3EBDGQ70ETM8PXDHNKHSZXJ` |
-| 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 3d | spec'd — /arc-change 2026-09-26, awaiting the owner's OK |
+| 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 10.5d | spec'd — /arc-change 2026-09-26, awaiting the owner's OK |
 | 08 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
 **Appetite burn: 7d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
@@ -424,6 +424,19 @@ stay bespoke folds.
 
 ## Now
 
+**CHANGE ROUTED (2026-09-29, `/arc-change --lane face`, owner: "a pannu, debt vachu poga thaa"):** the round-2 attack (B6, medium)
+found that `narrative-anchors --accept` stamps `by: "owner"` for whoever runs it, so an agent could self-accept every page and
+drive awaiting-owner to 0. The owner chose option A: **`--accept` needs an `arc-inbox` approval** and it is not parked as debt.
+**ADR-1514 Amendment 1** carries the decision; a new exit criterion ("Owner-proved") sits under Phase 07. Classified as a
+decision plus in-scope build (no new REQ: it is how REQ-12's owner-read gate becomes true). Assumptions ledger: nothing fired,
+but ADR-1514 section 4 assumed that only the owner runs `--accept`, and that premise was false. Estimate 0.75d, charged to Phase 07
+and booked at the next burn update (10d of 31.5d today, no tripwire near). **BUILT the same day (owner: "OK, A build pannu"):**
+`--request-accept` and `--accept --approval <ULID>` in `narrative-anchors` (self-test 17 to 41 arms, no hq file touched: the
+gate string needed no validator row). The owner approved ONE batch request for all 34 pages himself through `arc-inbox`
+(`approval.requested` `01M3PX6YZJVB1D7M0CYGRPGMTV`, decided from the main clone) and the 34 entries were re-stamped under it.
+Known limit, stated in the Amendment: CI cannot re-check the ULID (the spine is gitignored), and anything that can run
+`arc-event` from the main clone could still forge a request; this closes the casual `--accept`, not that.
+
 **OUT-OF-PHASE BUG (2026-09-24, `/arc-change --lane face`, owner: "neeye pannu"):** the proposal-branch
 "three writers of one plan at once" check is red on Windows, intermittently. It hit three PRs on 2026-09-19 and
 the main dispatch 35959814088 on 2026-09-24, which passed when the shard was re-run. **Root cause, reproduced on
@@ -433,6 +446,10 @@ loose object at once, and Windows refuses the second open. PR #255's lock-wait f
 the two content-addressed, idempotent object writes (`hash-object -w`, `write-tree`), bounded, and make the check
 print each writer's message. Assumptions ledger: nothing fired. Estimate 0.25d, charged to this cycle and booked
 at the next burn update so the header and the board row move together (7 to 7.25 of 24d, no tripwire). Branch `feat/face-proposal-race-fix`. Phase 06 is untouched.
+
+**RESUME HERE (2026-09-28, night):** PR C is committed on `feat/face-v2-07-page-shape` (`fce8b311`) and **not pushed**: page shape v1 (kit parts, `diagram.mjs` flow/loop, generated sections, door text unescaped), gate per ADR-1514, and qa rewritten with three figures. The owner saw qa in the room and said it is good (not yet recorded with `--accept`). Open decision: the other 33 pages through **improved plan B**, one Opus subagent per page with a pre-built source bundle and about 6 calls (roughly 200k cached reads per page), first batch 4 pages with real token counts measured, then his OK for the rest. He asked about secondary models (a Sonnet/DeepSeek bake-off was offered, not decided). Before push: one `/arc-attack` round (paid, needs his OK), then a background ci-digest watch.
+
+**CHANGE ROUTED (2026-09-27, second pass, `/arc-change --lane face`, owner: "seri, vazhi 1 pannu"):** the owner read the 34 slice-3 pages (#299) in the room and rejected them -- unreadable, not the page shape of `arc-wiki-engine_1.html`, 40% of a week's tokens spent. **ADR-1348** (face): the room draws page shape v1 -- kit parts on face tokens (React, the owner's pick over embedding), generated sections from the extract, and our own `Diagram` (`flow` + `loop`) from a spec (vazhi 1, no library). **ADR-1514** (docs, amends ADR-1513 §1-2): facts live in generated blocks; a narrative is drift-checked and owner-accepted against its hash; the per-block verifier becomes advisory. Phase 07 8.5d -> 10.5d, total 29.5d -> 31.5d. Next: PR C on `feat/face-v2-07-page-shape` (parts + Diagram + fold + gate change + the qa sample); the other 33 only after the owner accepts qa. Assumptions ledger: nothing fired. Stale slice-3 drafts from arc-face-3 are parked on local branch `backup/face-3-stale-0927` (never pushed).
 
 **RESUME HERE (2026-09-26, evening):** **Phase 06 is CLOSED** (done log, 2026-09-26) and stamped by the owner.
 **Phase 07 is next: the Reference room** (REQ-12, 3d), then Phase 08, dogfood (REQ-10, 2d). Open: #267 (the Windows

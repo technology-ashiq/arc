@@ -5,150 +5,169 @@
 
 ## Why it exists
 
+```tagline
+The studio that judges a screen honestly. One person looks and says what is wrong, a different person
+paints, and nobody ever grades their own painting.
+```
+
+# Start here
 
 ## In plain words
 
-Picture a small studio that ships one design job at a time. Some staff paint the screen. A completely different staff member only ever looks at the finished screen and says what is wrong with it — and that second person is never allowed to pick up a brush, because a painter who also grades their own painting will always tell you the painting is good. <!-- plain -->
+Think of arc as a small company whose staff are AI models. Making a screen is one job. Deciding whether
+that screen is any good is a different job, and it goes wrong when the same person does both.
 
-**design is arc's design studio.** It has two jobs it can be asked to do. The first is to look at ONE screen that already exists and say, honestly, whether it is good enough. The second is to build SEVERAL real, different directions for a screen that does not exist yet, and pick the best one without anyone's thumb on the scale. <!-- src: .claude/commands/arc-design-critique.md; .claude/scripts/design/design-explore.sh -->
+```panel big
+**design is a studio with two rules: the inspector never paints, and the painters never see each other.** It does two jobs:
 
-Looking at an existing screen is called a critique: the page is rendered the same exact way every time, an agent reads the picture with its own eyes, and a separate script — never the agent — decides pass or fail. <!-- src: .claude/commands/arc-design-critique.md; .claude/scripts/design/design-critique.sh -->
+- **Inspect one screen that already exists** (`/arc-design-critique`). A photo of the screen is taken the same way every time. A critic (`design-critic`) looks at the photo with its own eyes and writes down what is wrong. A separate script, not the critic, counts the problems and says pass or fail.
+- **Paint three different ideas for a screen that does not exist yet.** A director (`design-director`) hands out three different bets. Three painters (`ui-composer`), each in a locked room, build one each. Three jurors (`design-jury`) rank them without being told which is which. You pick one.
 
-Building several directions is called an explore: three isolated attempts, each blind to the other two, checked mechanically, ranked by three more agents who are shown the three attempts plus one real shipped screen and never told which is which. <!-- src: .claude/scripts/design/design-explore.sh; .claude/agents/design-jury.md -->
-
-In the critique loop, the agent that judges never fixes what it finds — that is handed back to whoever is building the product, and the critic looks again afterwards. <!-- src: .claude/commands/arc-design-critique.md; ADR-0034 -->
+The inspector cannot edit anything. That is not politeness, it is how the studio is built.
+```
 
 ### Why this needs to be a product at all
 
-There used to be one agent, `design-reviewer`, doing both jobs in the same breath. `/arc-design-critique` refuses to fall back to it for the read-only job, in these words: it "fixes its own findings, which is exactly the self-approval this loop replaced." <!-- src: .claude/commands/arc-design-critique.md -->
+A painter who also grades the painting will nearly always say the painting is fine. Three slips follow
+from that:
 
-For a whole cycle, the only way a critique could fail was to break a written rule — so a page that broke nothing passed, even a page nobody would actually ship, and the owner scored a compliant, characterless result 23 out of 100. <!-- src: .claude/agents/design-critic.md -->
+| What you lose | What it looks like when it bites | design's answer |
+|---|---|---|
+| **An honest verdict** | The same agent that fixes a screen also approves it. | The critic has no editing tool, and a hook blocks it from writing anywhere but its own report folder (ADR-0034). |
+| **A bar higher than "broke no rule"** | A screen breaks nothing and looks like nobody designed it. Once, a result like that passed and was scored 23 out of 100 by the owner. | A second way to fail, `BELOW-BAR`: nothing broken, still not good enough to ship. |
+| **Real choice between ideas** | Three "different" designs are one layout in three skins. | Each painter gets its own structure bet and its own look, and the director must write down whether they truly differ. |
 
-That is why a second failing class exists, BELOW-BAR: compliant and still not good enough, judged against the brief's own reference bar or its three feel words, never against a number. <!-- src: .claude/agents/design-critic.md#anti-words -->
-
-Exploring more than one direction has its own failure shape. A previous cycle assigned three structure theses and held the visual system constant, and a human scored the result 23 out of 100 for looking identical — three layouts in one visual language is the same failure as three skins of one layout. <!-- src: .claude/agents/design-director.md -->
-
-So the director now assigns each variant its own product-structure thesis AND its own art direction, and has to write down, separately, whether the built variants actually diverged on each. <!-- src: .claude/agents/design-director.md -->
+> The second row is the one most tools skip. "No rule broken" only proves nobody was caught, not that
+> anyone did good work.
 
 ## arc words → normal words
 
-| arc word | plain words | meaning |
-|---|---|---|
-| brief | the design contract | four required sections — interaction model, art direction, platform contract, content contract — that must exist before any pixels get made <!-- src: docs/templates/design-brief-template.md -->
-| route | the screen under review | a repo-relative route, or a URL for a running surface, that gets rendered and judged <!-- src: .claude/commands/arc-design-critique.md -->
-| critique | judging one screen that already exists | render it the same way every time, then have a critic read the picture <!-- src: .claude/commands/arc-design-critique.md -->
-| explore | building several new directions at once | three isolated variants from one brief, checked, then ranked blind <!-- src: .claude/scripts/design/design-explore.sh -->
-| variant | one composer's whole attempt | its own folder, its own colours, its own layout, nothing shared <!-- src: .claude/agents/ui-composer.md -->
-| thesis | the one sentence a variant is betting on | written as "This product wins because the user can ___ without ___." <!-- src: .claude/agents/design-director.md -->
-| matrix | the director's written scorecard | a 7-dimension IA-difference table, a 4-axis art-direction table, and — after the variants are built — the director's two divergence calls <!-- src: .claude/agents/design-director.md -->
-| BELOW-BAR | broke no rule, still not good enough | a finding class that fails a critique even with zero rule violations <!-- src: .claude/agents/design-critic.md -->
-| tokens.css | the one file allowed to hold colour | every colour value a variant invents has to live here and nowhere else in the page <!-- src: .claude/agents/ui-composer.md -->
-| reference item | the shipped screen the jury is never told about | a fourth, unlabelled item placed beside the three variants so a jury can rank every variant below it <!-- src: .claude/agents/design-jury.md -->
-| refpack | a brief's saved reference screenshots | added one at a time, only from a source a registry names as permitted <!-- src: .claude/scripts/design/design-refpack.mjs -->
-| ledger | the running record of which reviews passed | the design row is stamped only when a critique's verdict is PASS <!-- src: .claude/scripts/design/design-critique.sh -->
+```lede
+Twelve pieces of arc jargon. Each is an ordinary studio thing wearing a technical name.
+```
+
+```rosetta
+brief | the design contract | four sections written before any painting: how it works, how it looks, where it runs, what it says
+route | the screen being inspected | a page in the repo, or the address of a running one
+critique | inspecting one existing screen | photo it the same way every time, then a critic reads the photo
+explore | painting several new ideas at once | three isolated tries from one brief, ranked blind
+variant | one painter's whole attempt | its own folder, its own colours, its own layout
+thesis | the one bet a variant makes | "This product wins because the user can ___ without ___."
+matrix | the director's written scorecard | how the three bets differ, and whether the finished work really did
+`BELOW-BAR` | broke no rule, still not good enough | fails an inspection even with zero rule breaks
+`tokens.css` | the paint shelf | the only file in a variant allowed to hold colours
+reference item | a real shipped screen slipped in among the three | so a jury can rank every idea below it
+refpack | a brief's saved example screens | added one at a time, only from a source the owner has approved
+ledger stamp | a tick in the register: "design was inspected" | given only on a pass
+```
 
 ## How a job flows
 
-design runs one of two loops. Critique starts from an existing route and ends in one verdict; explore starts from a mandatory brief and ends in the owner's pick. <!-- src: .claude/scripts/design/design-critique.sh; .claude/scripts/design/design-explore.sh -->
+```lede
+Inspecting is quick and read-only. Painting three ideas is a longer chain that ends with you choosing.
+```
 
-| Loop | Starts from | Ends with |
-|---|---|---|
-| critique | one existing route | PASS or FAIL, stamped to the review ledger only on PASS <!-- src: .claude/scripts/design/design-critique.sh -->
+```flow
+source: /arc-design-critique <screen>
+box: ① Photo | same way, every time
+box: ② Critic looks | reads the photo, writes findings
+box: ③ Script decides | counts the problems
+box*: ④ Paperwork | receipt + register tick
+labels: photo, findings, verdict
+out: won't render | stops, no critique
+out: no photo read | no result
+out: any problem | fail, sent back
+out+: review.completed | one line in the logbook
+divider: 2 | agent judges | script decides
+note: The critic never fixes. On a fail the problems go to whoever is building, then the critic looks again.
+caption: Figure 1 — one inspection. | The dashed red line is where judging stops and the count-up starts.
+```
 
 ## The stages, one by one
 
-### The critique loop
+```lede
+Two loops. Each stage is written twice: what it does in ordinary words, then what actually happens.
+```
 
-1. **Arm and render.** `design-critique.sh begin <route>` arms the critic's write boundary and renders the route at a fixed viewport with animations turned off; underneath, `design-render.sh` shoots the page twice and publishes a screenshot hash only once both captures agree, retrying up to three times before it refuses. <!-- src: .claude/scripts/design/design-critique.sh; .claude/scripts/design/design-render.sh -->
-2. **Look with vision.** The `design-critic` agent reads the rendered picture and judges it against the brief's four contracts in order — interaction model, art direction, platform contract, content contract — writing exactly one artifact that classes every finding as VIOLATION, BELOW-BAR, WEAKNESS or POLISH. <!-- src: .claude/agents/design-critic.md -->
-3. **Never a measured number.** The critic may flag a suspected colour or contrast problem but may never state a sampled colour value or a computed contrast ratio itself — only `design-lint.mjs` is allowed to publish a measured number. <!-- src: .claude/agents/design-critic.md; .claude/scripts/design/design-lint.mjs; ADR-0048 -->
-4. **Judge and record.** `design-critique.sh finish <route>` counts the declared VIOLATION and BELOW-BAR lines in that one artifact — PASS means zero of either — emits a `review.completed` receipt naming the route, the result and the screenshot hash, and stamps the review ledger's design row only on PASS. <!-- src: .claude/scripts/design/design-critique.sh -->
-5. **On FAIL, stop.** The command reports the violations and hands them to whoever is building the page; the critic re-verifies afterward, and two rounds is the cap before the disagreement becomes a human call. <!-- src: .claude/commands/arc-design-critique.md -->
-6. **The gate watches, warns, never blocks.** `design-gate.sh` checks that every critiqued route under `docs/design/critique/` carries a matching receipt on the spine; a missing tool, an unreadable spine or an unparseable line all count as a warning, never a silent pass. <!-- src: .claude/scripts/design/design-gate.sh#PATH -->
+```steps
+t: Photograph the screen
+plain: The screen is shot twice in a row. If the two photos do not match, it tries again, and if it still cannot get a steady photo it refuses rather than judge a blur.
+d: `design-critique.sh begin` arms the critic's write boundary, then `design-render.sh` renders at a fixed size with animations off and publishes the picture only when the captures agree. A blank page or a missing browser tool stops the run.
+f: `.claude/scripts/design/design-critique.sh` · `.claude/scripts/design/design-render.sh`
 
-### The explore loop
+t: The critic looks with its eyes
+plain: It must actually look at the picture, not read the code behind it. It judges the screen against the brief and files each problem in a class. It may say a colour looks too pale, but it may never quote a measured number, because it cannot measure.
+d: Findings are classed VIOLATION, BELOW-BAR, WEAKNESS or POLISH, in one report. Only the lint script may state a measured value (ADR-0048).
+f: `.claude/agents/design-critic.md` · `.claude/scripts/design/design-lint.mjs`
 
-1. **Open the brief.** `design-explore.sh init <id> --brief <path>` scaffolds three empty variant folders and records the exact git revision the explore starts from; on the factory ring, `open-brief.mjs` does the same work on a brand-new branch, off main, without touching the owner's own checkout. <!-- src: .claude/scripts/design/design-explore.sh#DEST; .claude/scripts/design/open-brief.mjs -->
-2. **Assign three directions.** The `design-director` agent picks three of six product-structure theses — command center, guided workflow, canvas, narrative, review workspace, ambient assistant — and gives each variant its own art direction across four axes: palette, typography, density & rhythm, surface & ornament; both tables go into `matrix.md` before any composer starts. <!-- src: .claude/agents/design-director.md -->
-3. **Build, blind.** Three `ui-composer` agents each build exactly one variant, never seeing the other two; every colour value it invents has to live in that variant's own tokens.css, and it can render and revise its own work up to three times, each iteration kept as an immutable receipt. <!-- src: .claude/agents/ui-composer.md#immutable -->
-4. **The composer's own boundary.** `composer-scope-check.sh`, `composer-write-check.sh` and `composer-bash-check.sh` hold the composer to its own variant folder for reads and writes, plus its own renders and the brief's reference pack for reading images, and to exactly one Bash command shape — the renderer, on its own variant, into its own session. <!-- src: .claude/scripts/design/composer-scope-check.sh; .claude/scripts/design/composer-write-check.sh; .claude/scripts/design/composer-bash-check.sh#nobody -->
-5. **Check the mechanical half.** `design-explore.sh check` fails the run if the matrix carries no written divergence call, a variant is missing its thesis, page or tokens file, or a colour value has escaped tokens.css into the page itself. <!-- src: .claude/scripts/design/design-explore.sh -->
-6. **The director's two written calls.** After the variants exist, the director judges whether the structures differ on at least three of the seven IA dimensions, and — independently — whether the art direction differs on at least three of the four axes; under either bar, the exploration failed, the weak thesis line(s) get reassigned, and there is at most one reassignment round before it becomes the owner's call. <!-- src: .claude/agents/design-director.md -->
-7. **Render every variant the same way.** `design-explore.sh render` renders all three variants with one identical recipe, and in explore mode each page is served from a private local server rooted at that one variant's own folder; a request for a sibling, the matrix, or another origin is refused, and design-render.sh's own message is plain: "Nothing was published." <!-- src: .claude/scripts/design/design-explore.sh; .claude/scripts/design/design-render.sh#asked -->
-8. **Rank blind.** Three `design-jury` agents each rank four unlabelled items — the three variants plus one real, shipped screen — using only comparisons, never a score, so "every variant lost to the hidden reference" is a checkable result rather than a guess. <!-- src: .claude/agents/design-jury.md -->
-9. **The owner picks, once.** `pick.mjs` records the chosen variant as an approval, refuses if a pick has already been recorded for that explore, and binds the approval to the exact bytes of all three variants so a rebuild between planning and clicking makes the plan stale. <!-- src: .claude/scripts/design/pick.mjs -->
+t: A script gives the verdict
+plain: Pass means zero VIOLATION and zero BELOW-BAR lines in the report. The critic does not get to be lenient with itself.
+d: `design-critique.sh finish` counts them, writes a `review.completed` receipt, and stamps the `design` row of the review ledger on a pass only (ADR-0047).
+f: `.claude/commands/arc-design-critique.md` step 3
 
-## Every part, explained
+t: Three bets, three locked rooms
+plain: For a new screen, the director picks three different bets and gives each its own look. Each painter builds one idea and is not allowed to see the other two.
+d: `design-explore.sh init` scaffolds three variant folders from a brief. Small hooks keep each painter inside its own folder. `design-explore.sh check` refuses a colour that escapes `tokens.css`, or a variant missing its thesis.
+f: `.claude/scripts/design/design-explore.sh` · `.claude/agents/design-director.md` · `.claude/agents/ui-composer.md`
 
-### Commands
+t: The director writes two honest calls
+plain: Once the three exist, the director says in writing whether they really differ in structure and in look. If not, the weak ones are re-assigned, once.
+d: Each call needs at least three of the listed dimensions to differ. The look is judged on the finished screens, not on the paint shelf files.
+f: `.claude/agents/design-director.md`
 
-- `/arc-design-critique` — the read-only half of the loop: renders a route, spawns `design-critic`, derives the verdict from the artifact it wrote, and shows the evidence; it reports, it never fixes. <!-- src: .claude/commands/arc-design-critique.md -->
-- `/arc-design` — reviews a route or component through the `design-reviewer` agent, which scores it and then fixes what it finds itself, with atomic commits and before/after screenshots. <!-- src: .claude/commands/arc-design.md -->
+t: A blind jury, then you pick
+plain: Three jurors each rank four unnamed screens: the three ideas plus one real shipped screen. If every idea loses to the shipped one, that is a fail. You then choose, once.
+d: Rankings are comparisons only, never scores. `pick.mjs` raises your choice as an approval tied to the exact contents of the variants, so nothing can change after you chose (ADR-1418 keeps each render inside its own folder).
+f: `.claude/agents/design-jury.md` · `.claude/scripts/design/pick.mjs`
+```
 
-### Agents
+# The bigger loop
 
-- `design-critic` — read-only; reads a rendered screenshot with vision and judges it against the brief's four contracts; has no Edit tool, and its only Bash entry point is the receipt emitter. <!-- src: .claude/agents/design-critic.md#arc-event -->
-- `design-director` — assigns the three structure theses and the four art-direction axes, then calls whether the built variants actually diverged on each. <!-- src: .claude/agents/design-director.md -->
-- `ui-composer` — builds exactly one variant end to end, blind to the other two composers' work. <!-- src: .claude/agents/ui-composer.md -->
-- `design-jury` — ranks the three variants plus one hidden reference screen, comparatively only, with no absolute score anywhere. <!-- src: .claude/agents/design-jury.md -->
-- `design-reviewer` — scores a UI across eight dimensions — visual hierarchy, typography, spacing + alignment, colour + contrast, consistency, states, responsiveness, motion — flags AI-slop patterns by name, and fixes what it finds itself with atomic commits. <!-- src: .claude/agents/design-reviewer.md -->
+## A screen that broke nothing
 
-### Scripts
+```lede
+One inspection from photo to fail, and the rework that follows.
+```
 
-- **The critique loop:** `design-render.sh` is the one deterministic render command every screenshot in this product comes from — fixed viewport, animations off, and it refuses to publish a hash unless two back-to-back captures agree, retrying up to three times; `design-critique.sh` arms the critic, derives PASS/FAIL from its artifact, and stamps the ledger; `design-gate.sh` is the warn-only check that every critiqued route has a receipt; `critic-scope-check.sh` is the hook that confines the critic's writes to `docs/design/critique/` while a run is armed. <!-- src: .claude/scripts/design/design-render.sh#viewport-fixed; .claude/scripts/design/design-render.sh#back-to-back; .claude/scripts/design/design-critique.sh; .claude/scripts/design/design-gate.sh; .claude/scripts/design/critic-scope-check.sh -->
-- **Briefs and the design library:** `design-lint.mjs` is the deterministic half of the design contract — it lints a brief's sections against the four contracts the brief template requires, computes contrast from colour pairs the brief itself declares (never a hardcoded floor), scans critiqued routes for placeholder lorem-ipsum text, and checks design-library entries for their required tags. <!-- src: docs/templates/design-brief-template.md; .claude/scripts/design/design-lint.mjs -->
-- **External reference sources:** `design-refpack.mjs` adds one screen to a brief's reference pack, but only after `design-robots.mjs` returns an ALLOW for that exact URL and a registry row permits it; `design-sources-lint.mjs` gates that registry, `design.sources.yaml`, and refuses any row not approved by the owner by name. <!-- src: .claude/scripts/design/design-refpack.mjs; .claude/scripts/design/design-robots.mjs; .claude/scripts/design/design-sources-lint.mjs -->
-- **Factory-ring plumbing:** `open-brief.mjs` opens an explore on a fresh branch from a brief; `pick.mjs` records the owner's pick as a spine approval instead of a hand-written file; `design-render-serve.mjs` is the private local server an explore render is confined to, and it records every request the page made that did not resolve inside its own folder. <!-- src: .claude/scripts/design/open-brief.mjs; .claude/scripts/design/pick.mjs; .claude/scripts/design/design-render-serve.mjs -->
+```loop
+top: 1 | the photo
+top: 4 | the rebuild
+stage: 1 · Photographed | sign-up page, steady photo
+stage: 2 · Judged | zero rules broken
+stage*: 3 · Below the bar | generic, characterless
+stage: 4 · Handed back | builders rework it
+stage!: 5 · Inspected again | fresh photo, fresh look
+labels: look, verdict, rework, re-check
+back: last -> 1 | a pass needs zero of both
+caption: Figure 2 — one inspection round. | Two rounds is the cap; a third means a human decides.
+```
 
-### Gates and rules
+1. The sign-up page is photographed. The steady photo is a fair witness.
+2. The critic finds no broken rule.
+3. It still files a `BELOW-BAR` finding: the page could belong to any product and never says what this one is for.
+4. The script counts one, so the verdict is fail. The problem goes to the builders, not to the critic.
+5. After the rework the page is photographed and judged again. Two rounds is the limit; if the disagreement lasts longer, a human decides.
 
-- A critique's PASS is defined once, in the runner, as zero VIOLATION and zero BELOW-BAR findings — never in the critic that could be tempted to grade its own work leniently. <!-- src: .claude/scripts/design/design-critique.sh; ADR-0047 -->
-- The critic is read-only by construction, not by instruction: a hook blocks any write outside `docs/design/critique/` while a critique is armed. <!-- src: .claude/scripts/design/critic-scope-check.sh; ADR-0034 -->
-- An agent may judge a design; only a script may measure one — a critic that states a sampled colour or a contrast ratio is reporting something it cannot actually see. <!-- src: .claude/agents/design-critic.md; ADR-0048 -->
-- `design-explore.sh check` refuses a colour literal — hex, a functional form (`rgb`/`rgba`/`hsl`/`hsla`), or a named colour in a CSS value position — outside a variant's own tokens.css file; an exotic named colour in prose can still slip past it, since the render and the critic still see the pixels. <!-- src: .claude/scripts/design/design-explore.sh -->
-- `design-explore.sh selfreview` refuses a manifest row whose declared input or output hash does not match what the render actually published, and refuses a row that claims a fix while its input and output hashes are identical. <!-- src: .claude/scripts/design/design-explore.sh#real_out -->
-- An explore render is confined to serving only its own variant's own folder over a private local server; a page that reaches for a sibling, the matrix, or the network is refused and nothing is published. <!-- src: .claude/scripts/design/design-render.sh; ADR-1418 -->
-- The director's art-direction call is judged on the rendered pixels, never on the token files: two palettes can differ on paper and still read the same on screen. <!-- src: .claude/agents/design-director.md -->
-- The typeface is not pinned by default any more: pinning it once hid every variant's typography from the critic and the jury alike, and three variants that a human scored 23 out of 100 for looking identical had, in fact, been rendered identical. <!-- src: .claude/scripts/design/design-render.sh; ADR-0049 -->
-- `design-sources-lint.mjs` refuses any registry row whose `approved_by` is not the owner by name, so the registry of permitted external sources can never widen itself. <!-- src: .claude/scripts/design/design-sources-lint.mjs -->
-- A pick is recorded once per explore and is refused a second time; `pick.mjs` also refuses a variant folder that is a symlink rather than the composer's own files. <!-- src: .claude/scripts/design/pick.mjs -->
+*This sign-up page is an illustration of how the loop runs, not a real incident.*
 
-## The bigger loop
+## Where design sits in arc
 
-### One explore, brief to pick
+- **A separate tool for the fixing side.** `/arc-design` is the older combined designer that scores and also fixes. It still runs while the inspector proves itself; retiring it is a later task that waits until the new inspector has proven itself (ADR-0042).
+- **Shipping.** A pass stamps the `design` row of the ledger, and `/arc-ship` reads that register.
+- **In the face.** design lives in the factory ring, in the room called design-studio. The chips at the top of this page name it.
 
-A brief names what the product's job is, what it looks like at its best, and a reference bar of real shipped screens the work has to reach. `design-explore.sh init` scaffolds three empty variant folders and records the base revision the explore starts from. <!-- src: docs/templates/design-brief-template.md; .claude/scripts/design/design-explore.sh#DEST -->
-
-The director reads the brief and assigns three genuinely different product-structure theses and three genuinely different art directions, writing the assignment down before any composer has built anything. <!-- src: .claude/agents/design-director.md -->
-
-The director writes both divergence calls into matrix.md after the variants exist; the mechanical check then verifies that matrix.md carries those two written calls, that every variant has its three files, and that no colour has been smuggled outside tokens.css — it checks that the calls exist and are shaped right, never what they conclude. <!-- src: .claude/scripts/design/design-explore.sh; .claude/agents/design-director.md -->
-
-Three jurors, each alone, are shown the three variants and one real shipped screen they are never told is the reference, and each writes a ranking of all four with reasons, never a score. <!-- src: .claude/agents/design-jury.md -->
-
-The owner reads the three jurors' rankings and reasons, then picks one variant. That pick is not a file anyone edits by hand; it is an approval bound to the exact bytes of what was actually built, so nobody can quietly change a variant after it was chosen. <!-- src: .claude/agents/design-jury.md; .claude/scripts/design/pick.mjs -->
-
-### How it connects to the rest of arc
-
-design requires `core` and `hq`. <!-- src: products/design/manifest.json -->
-
-Its face room is `design-studio`, sitting in the factory ring, with stations named canonical tokens, critique, explore, jury and render, and concepts on the wall named BELOW-BAR, blind jury / reference item, deterministic render, thesis (design) and tokens.css. <!-- src: products/design/manifest.json -->
-
-That room reads events of kind `decision.recorded`, `note.logged` and `review.completed`, and its sanctioned surfaces are `docs/design/**`, `.claude/state/design`, and a `review.completed` receipt carrying the design lens. <!-- src: products/design/manifest.json -->
+# Meta
 
 ## Glossary
 
-- **brief** — the design contract: four required sections declaring the interaction model, the art direction, the platform contract and the content contract, filled in before any pixels exist. <!-- src: docs/templates/design-brief-template.md -->
-- **route** — the repo-relative page, or URL, being rendered and judged in a critique. <!-- src: .claude/commands/arc-design-critique.md -->
-- **variant** — one composer's whole, isolated attempt at the product: its own folder, its own visual system. <!-- src: .claude/agents/ui-composer.md -->
-- **thesis** — the one sentence a variant is built to prove, in the form "This product wins because the user can ___ without ___." <!-- src: .claude/agents/design-director.md -->
-- **matrix** — the director's written scorecard: the structure table, the art-direction table, and both divergence calls. <!-- src: .claude/agents/design-director.md -->
-- **BELOW-BAR** — a finding class for a screen that breaks no written rule and still is not good enough to ship. <!-- src: .claude/agents/design-critic.md -->
-- **VIOLATION** — a finding that breaks a principle, the brief, or one of its contracts outright; any one of them fails the run. <!-- src: .claude/agents/design-critic.md -->
-- **tokens.css** — the one file inside a variant allowed to hold a colour value. <!-- src: .claude/agents/ui-composer.md -->
-- **reference item** — the fourth, unlabelled screen shown to the jury alongside the three variants, so every variant can lose to a real shipped product. <!-- src: .claude/agents/design-jury.md -->
-- **refpack** — a brief's saved set of reference screenshots, each added only from a permitted, robots-checked source. <!-- src: .claude/scripts/design/design-refpack.mjs -->
-- **review ledger** — the standing record of which review lens last passed; its design row is stamped only on a PASS verdict. <!-- src: .claude/scripts/design/design-critique.sh -->
-- **boundary** — a hook that blocks a write (and, for the composer, also a read or a Bash command) outside the one folder or command an agent is meant to touch; once armed it stays armed until it is released by hand, so a run that dies before finishing can leave it blocking everyone for weeks. <!-- src: .claude/scripts/design/critic-scope-check.sh; .claude/scripts/design/composer-scope-check.sh; .claude/scripts/design/composer-write-check.sh; .claude/scripts/design/composer-bash-check.sh#nobody -->
+```gloss
+VIOLATION: a finding that breaks the brief or a principle outright. Any one fails the inspection.
+WEAKNESS: a real problem that does not by itself fail the inspection, for instance a suspected contrast issue the critic cannot measure.
+POLISH: a small refinement, nothing wrong.
+ledger: the standing register of which kinds of review have passed on this code.
+spine: arc's logbook of what happened; receipts like review.completed are written there.
+hook: a small guard that blocks an action, such as a write outside an agent's own folder.
+```
 
 ## At a glance
 

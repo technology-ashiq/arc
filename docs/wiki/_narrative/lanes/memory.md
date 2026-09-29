@@ -1,165 +1,172 @@
 <!-- facts: appetite=cefdf849 blocked-on=a68c9074 burn=f72cb1a4 cycle=a1a957d1 depends-on=a68c9074 hasPlan=b5bea41b phase=43817889 status=4c1abf59 title=08c5f829 -->
+```tagline
+The company librarian. Ask it a question in plain words and it hands back the lessons arc has already
+paid for, word for word, with the file each one came from.
+```
 
-# memory — playbooks + recall
+# Start here
 
 ## In plain words
 
-A company that keeps every hard lesson it ever paid for in a filing cabinet nobody can search still
-pays for each one again, one folder at a time. <!-- plain -->
+Think of arc as a company that has written down every hard lesson it ever learned: a mistake, a ruling,
+a rule. The notes are all there. But they sit in different filing cabinets, and nobody has time to
+open every drawer. So the same mistake gets paid for twice.
 
-`arc-recall` gives any session — human or process, in arc or any root-mode install — the company's
-relevant recorded lessons, decisions and rules in under a second, verbatim and with canonical
-citations, delivered automatically to the kickoff and review processes, so a lesson arc has already
-paid for is never re-learned because nobody could find it. <!-- src: initiatives/memory/PLAN.md -->
+**The memory lane builds the librarian.** You ask it a question, for example "how did we get burned by
+this before". It searches the cabinets and hands back the matching notes, copied exactly as written,
+each with the address of the file it came from.
 
-### What it is building
+```panel big
+**The librarian only reads.** It never edits the cabinets, never files a new note, and never writes to arc's logbook (ADR-0703). It also never rephrases a lesson. What you get is what was written, plus where to find it (ADR-0702).
+```
 
-Memory builds `arc-recall`, a search tool over five existing company organs it never edits —
-`docs/retro-log.md`, `docs/trial-ledger.md`, `docs/develop/learning-ledger.md`, `docs/adr/`, and the
-spine's own `decision.recorded` events — plus the index builder behind it and two additive hooks
-landing as steps in `processes/kickoff-plan.process.yaml` and `processes/review-diff.process.yaml`.
-<!-- src: initiatives/memory/PLAN.md#recompiled -->
+### What this lane is for
 
-It mattered because, measured on 2026-08-11, those organs already held 54 retro-log
-pattern rows, 49 trial-ledger records, 4 learning-ledger blocks and 150 ADR files — real, true, and
-not findable enough — with the only existing recall mechanisms being a manual whole-file read at
-kickoff, one-hop typed links in develop's own Context Pack, and grep. <!-- src: initiatives/memory/PLAN.md -->
+The lane's goal, from its plan (`initiatives/memory/PLAN.md`), is that a lesson arc has already paid for
+is never learned again just because nobody could find it. Two of arc's own routines are handed the
+librarian's answer without anyone asking: the one that plans a build and the one that reviews a change.
+
+### The road it chose first
+
+The first design said the search should sit on a database feature built into newer versions of Node,
+arc's runtime. The kickoff tested that and found most of arc's test machines cannot use it. So the
+owner chose a plain search that works everywhere, with the database as an optional speed-up (ADR-0701).
+Later the lane measured how long the search really takes, found it was already fast enough, and never
+built the speed-up.
 
 ## arc words → normal words
 
-| arc calls it | It is really | Meaning |
-|---|---|---|
-| `arc-recall` | the search command | Takes a query and returns bm25-ranked, verbatim rows with a path-bearing citation on every one, in under a second. <!-- src: initiatives/memory/PLAN.md --> |
-| adapter | one organ's reader | A pure function turning one company organ into indexable records; there are five, one per organ, each count-verified. <!-- src: initiatives/memory/PLAN.md --> |
-| count-verify | nothing silently dropped | Every indexed row is checked (`N_parsed == N_indexed`), and every excluded row is named with its file and line rather than quietly skipped. <!-- src: initiatives/memory/PLAN.md --> |
-| golden query | the twelve questions that must always work | Twelve queries and their expected answers, committed before any tuning begins, so the people grading recall cannot retune the grade. <!-- src: initiatives/memory/PLAN.md; ADR-0706 --> |
-| root-mode | memory works with no lane at all | `lane` is provenance metadata only; the module proves a zero-lane fixture rather than assuming every install has lanes. <!-- src: initiatives/memory/PLAN.md; ADR-0707 --> |
-| equivalence gate | two engines must agree | The canonical JS engine and the optional sqlite accelerator are checked against each other on the twelve golden queries, skipping visibly rather than silently wherever `node:sqlite` is unavailable. <!-- src: initiatives/memory/PLAN.md; ADR-0701 --> |
-| near-duplicate check | a human decides, not a merge | Two or more shared tags plus a word-overlap threshold of 0.5 makes `/arc-retro` surface a possible contradiction before it appends a new rule; nothing auto-resolves. <!-- src: initiatives/memory/PLAN.md; ADR-0705 --> |
-| alias layer | teaching the search different words for the same thing | A small hand-curated table of vocabulary substitutions, with no stemming and no embeddings. <!-- src: initiatives/memory/PLAN.md; ADR-0709 --> |
+```lede
+Eight pieces of arc jargon. Each is an ordinary library thing wearing a technical name.
+```
 
-## How the work was planned
+```rosetta
+arc-recall | the librarian's desk | takes a question, returns ranked notes with a citation on each
+organ | one filing cabinet | retro log, trial ledger, learning ledger, decision records, the logbook
+adapter | the clerk for one cabinet | reads that cabinet and turns each note into a searchable card
+index | the card catalogue | rebuilt from the cabinets; deleting it loses nothing
+count-verify | "every card accounted for" | nothing is skipped without a written reason naming file and line
+golden query | a test question with a known right answer | written down before tuning, so the grader cannot move the goalposts
+root-mode | works with no lane at all | the lane name is only a label on a note, never a requirement
+alias layer | a synonym list for the search | a hand-kept table of words that mean the same thing
+```
 
-Appetite: five days, raised from an original four by the owner on 2026-08-11, once the
-storage decision added a second engine to a cycle that was already fully committed at four days —
-the kickoff's own recommendation was to keep four days and cut that engine first, and the owner chose
-to fund it instead. <!-- src: initiatives/memory/PLAN.md; initiatives/memory/PROGRESS.md -->
+## How one question goes
 
-Kill criteria: at fifty percent burn (2.5 days), if Phase 0 was not yet closed, a scope-cut
-conversation became mandatory; at one hundred percent, cut or kill, never silently extend — and
-because the appetite had already been raised once, a second extension would be a kill conversation
-rather than a third number. <!-- src: initiatives/memory/PLAN.md -->
+```lede
+The librarian searches by words, ranks by match, and always shows its sources. When it cannot find
+anything it says so instead of guessing.
+```
 
-| REQ | User outcome | Phase | Status |
-|---|---|---|---|
-| REQ-01 | Every recorded lesson is in one searchable index | 0 | validated <!-- src: initiatives/memory/PLAN.md --> |
-| REQ-02 | The right lesson in under a second | 1 | validated <!-- src: initiatives/memory/PLAN.md --> |
-| REQ-03 | Kickoff receives recall without being asked | 1 | validated <!-- src: initiatives/memory/PLAN.md --> |
-| REQ-04 | Past decisions are queryable, not archaeological | 2 | validated <!-- src: initiatives/memory/PLAN.md --> |
-| REQ-05 | Contradicting rules meet a human, not a merge bot | 2 | validated <!-- src: initiatives/memory/PLAN.md --> |
-| REQ-06 | Recall quality is a number, not a vibe | 2 | validated <!-- src: initiatives/memory/PLAN.md --> |
-| REQ-07 | The fast engine is proven to agree with the reference | 2 | dropped <!-- src: initiatives/memory/PLAN.md --> |
-| REQ-08 | Review receives recall without being asked | 2 | validated <!-- src: initiatives/memory/PLAN.md --> |
+```flow
+source: arc-recall "<your question>"
+box: ① Card catalogue | built from every cabinet
+box: ② Widen the words | the synonym list
+box: ③ Rank the cards | best word match first
+box*: ④ Hand back the notes | verbatim + address
+labels: cards, terms, matches
+out: -
+out: -
+out: -
+out+: notes | each with a repo path
+note: The librarian reads the cabinets. Nothing is written back to them.
+caption: Figure 1 — one recall. | No step rewrites a lesson, and no step calls an AI model.
+```
 
-Three phases, risk-ordered: Phase 0 is the steel thread — the index exists and is honest; Phase 1 is
-recall people can trust, with the CLI, sanitization, aliases and the kickoff hook; Phase 2 is
-decisions, conflicts and proof, including the equivalence gate. <!-- src: initiatives/memory/PLAN.md -->
+## The stages, one by one
 
-## The phases, one by one
+```lede
+Each stage is written twice: first in ordinary words, then what actually happens.
+```
 
-Phase 0 — the index exists and is honest, 1.5-day appetite. It set out to build five adapters,
-count-verified with named exclusions, an atomic rebuild, the twelve golden queries committed up
-front, and the grep baseline measured before any claim to beat it. It closed 2026-08-11, one day
-against its 1.5-day line: 31 of 31 memory tests green on all five OS-and-node combinations, live
-counts of 54/49/4/150/21 = 278 records across the five organs, and two rebuilds with the index
-deleted between them producing byte-identical record dumps. <!-- src: initiatives/memory/PROGRESS.md#dumps -->
+```steps
+t: Build the card catalogue
+plain: One clerk per cabinet reads every note and makes a card for it. The catalogue is checked so that every note became a card, and any note left out is named with its file and line. It is rebuilt whole each time, never patched.
+d: The cabinets are the retro log, the trial ledger, the learning ledger, the ADR folder and the logbook's decision events. The index is derived from them and can be deleted and rebuilt (ADR-0700).
+f: `.claude/scripts/memory/memory-index.mjs`
 
-Inside that same phase, two fresh-agent adversarial passes found 37 findings with exactly one
-overlap between the two surfaces. <!-- src: initiatives/memory/PROGRESS.md#overlapped -->
+t: Ask the question
+plain: You type a question in ordinary words. The librarian widens it with its synonym list, then ranks the cards by how well they match.
+d: A plain search with no AI model and no embeddings (ADR-0709). The synonym list is small and reviewed by hand.
+f: `.claude/scripts/memory/arc-recall.mjs`
 
-Phase 1 — recall people can trust, 1.75-day appetite. It set out to ship the CLI, sanitization,
-aliases, citations, sub-second answers on three operating systems, a root-mode fixture and the
-kickoff hook. It closed 2026-08-11, 0.75 days against its 1.75-day line: the golden set scored 12 of
-12 in the top three against a recorded bar of 5 of 12, and two fresh-agent adversarial passes found
-27 findings with zero overlap, the worst being that the direct-invocation guard's own exact-URL check
-failed under a symlinked path and let all three CLIs exit 0 doing nothing. <!-- src: initiatives/memory/PROGRESS.md#renegotiated -->
+t: Get the notes back, verbatim
+plain: The answer is the original wording of each matching note, with the file it lives in. Nothing is summarised. Lessons about how to prevent a repeat come first.
+d: Every row carries a citation with a repo path, and a bare number is never printed alone (ADR-0702). A `--decisions` option asks only about past decisions.
+f: `docs/retro-log.md` is one of the cabinets it reads
 
-Phase 2 — decisions, conflicts and proof, 1.25-day appetite. It shipped `--decisions`, the
-write-time conflict check, the golden-set CI gate, the equivalence contract and harness (the
-sqlite engine itself was cut), and the review hook. It closed 2026-08-12, 1.0 day against its
-1.25-day line: two adversarial passes
-returned 30 findings and all 30 were fixed, with nothing accepted on a written reason instead. <!-- src: initiatives/memory/PROGRESS.md#highs -->
+t: Check for a clash before a new rule is filed
+plain: When `/arc-retro` is about to add a rule, it first shows any existing rule that looks nearly the same. A person decides whether they clash. Nothing is merged or blocked automatically.
+d: A wording-overlap check only. It does not understand meaning, and says so (ADR-0705).
+f: `.claude/scripts/memory/conflict-check.mjs`
+```
 
-The sqlite engine itself was cut on its own measurement — the search it would accelerate took 0.42
-milliseconds of a 199-millisecond wall clock — while the equivalence contract and its test harness
-still shipped. <!-- src: initiatives/memory/PROGRESS.md#circular -->
+# The bigger loop
 
-## What it decided
+## Grading the librarian
 
-| # | Decision |
-|---|---|
-| 0700 | MEM-A: index the organs in place; never create a second rule store. <!-- src: initiatives/memory/PLAN.md; ADR-0700 --> |
-| 0701 | MEM-B: the pure-JS index is canonical; `node:sqlite` FTS5 is an optional accelerator behind an equivalence gate — re-decided at kickoff once measurement showed the module exists on only one of five OS-and-node combinations in CI. <!-- src: initiatives/memory/PROGRESS.md; ADR-0701 --> |
-| 0702 | MEM-C: verbatim, prevention-first output; every row carries a path-bearing citation. <!-- src: initiatives/memory/PLAN.md; ADR-0702 --> |
-| 0703 | MEM-D: reader-only; memory emits zero events and needs no policy rows. <!-- src: initiatives/memory/PLAN.md; ADR-0703 --> |
-| 0704 | MEM-E: hooks are additive process-file steps, at eight results and a 1200-token budget. <!-- src: initiatives/memory/PLAN.md; ADR-0704 --> |
-| 0705 | MEM-F: conflicts are surfaced at write time at a 0.5 threshold; semantic detection is out of scope. <!-- src: initiatives/memory/PLAN.md; ADR-0705 --> |
-| 0706 | MEM-G: the golden set gates the build; the surfaced-to-cited rate stays observational forever. <!-- src: initiatives/memory/PLAN.md; ADR-0706 --> |
-| 0707 | MEM-I: root-mode first; `lane` is provenance metadata only. <!-- src: initiatives/memory/PLAN.md; ADR-0707 --> |
-| 0708 | MEM-J: two fresh-agent adversarial passes per parser surface, run inside the phase that ships it. <!-- src: initiatives/memory/PLAN.md; ADR-0708 --> |
-| 0709 | MEM-K: a curated alias layer fixes vocabulary mismatch; no stemming, no embeddings. <!-- src: initiatives/memory/PLAN.md; ADR-0709 --> |
+```lede
+The search is graded on a fixed set of questions, written before anyone tuned anything. The grade
+cannot be moved to make the search look good.
+```
 
-## Where it stands now
+A "golden query" is a question with a known right answer. The set was committed before any clerk was
+built, so nobody could tune the search to the exam. The build only passes if the right note comes back
+near the top for every one of them (ADR-0706). How often people actually use a recalled note is watched,
+but it is never allowed to fail the build.
 
-Status: IDLE. The cycle (arc-memory, Cycle 11) closed 2026-08-12, merged to `main` as `9581011`,
-with 3 of 3 phases closed, 7 of 8 REQs validated and 1 cut, at a burn of 3.75 of 5 days (75%). <!-- src: initiatives/memory/PROGRESS.md -->
+## A recall, as a story
 
-What is still open, in writing: the named per-job CI legibility for REQ-06's gate is deferred by an
-owner ruling, since editing `.github/workflows/**` is denied on purpose; Phase 02 has no
-`develop.started` or `slice.done` receipts and they were deliberately not backfilled; and the alias
-layer ships empty and unearned — ten rows were written, then removed, because nothing measurable
-changed. <!-- src: initiatives/memory/PROGRESS.md -->
+```loop
+top: 1 | a new plan
+top: 5 | the next build
+stage: 1 · Plan drafted | goal: change how routing works
+stage: 2 · Librarian asked | by the planner, unprompted
+stage: 3 · Old notes return | "we tried this, it broke"
+stage*: 4 · The plan changes | it avoids the old trap
+stage!: 5 · Lesson filed | with a clash check first
+labels: question, notes, plan, lesson
+back: last -> 1 | the new note is there for the next plan
+caption: Figure 2 — how a lesson keeps paying off. | The loop closes when a new lesson goes back into a cabinet.
+```
 
-The module has never run in a consumer repo — everything proven so far is proven on arc's own
-corpus, and that limit is stated as the honest edge of this cycle's evidence. <!-- src: initiatives/memory/PROGRESS.md -->
+1. A build is being planned and its goal is typed in.
+2. The plan-drafting routine asks the librarian about that goal, automatically (ADR-0704).
+3. Two old notes come back, word for word, with their files.
+4. The plan takes a different route around the old trap.
+5. Later, `/arc-retro` files a new lesson, after showing any near-duplicate for a person to judge.
 
-## The bigger loop
+*This story is an illustration of how the loop runs. It is not a real recall.*
 
-### What went wrong and what was learned
+## Where it stands
 
-- A gate printed its own contract and compared it against nothing: `TIE_BREAK` was just an exported
-  string, so inverting the ranking comparator to id-descending left both `--equivalence` and `--gate`
-  green at exit 0. <!-- src: docs/retro-log.md#TIE_BREAK -->
-- A scanner could not tell having scanned clean apart from having failed to scan at all: an unquoted
-  loop variable fed `awk` two nonexistent paths, and a planted bypass exited 0. <!-- src: docs/retro-log.md#awk -->
+The tracker (`initiatives/memory/PROGRESS.md`) holds the live status in the generated sections. In words:
+all three phases are closed, the librarian is merged, and the lane is idle. The second speed-up engine
+was cut on its own measurement, while the test that would prove two engines agree still ships.
 
-### How it connects to the rest of arc
+What is still open is written in `initiatives/memory/debt-ledger.md`. The check that grades the
+librarian runs inside the normal test run rather than as its own named CI job, because the workflow
+folder is deliberately locked against edits. The synonym list ships empty, since nothing measurable
+improved when it was filled. And everything was proved on arc's own notes only: the librarian has not yet
+run in another company's repo.
 
-- Memory reads the spine only through the existing reader library, and writes nothing to it —
-  `KINDS.length` stays at 44 throughout the whole build. <!-- src: initiatives/memory/PLAN.md; ADR-0703 -->
-- Two of its hooks land inside `processes/kickoff-plan.process.yaml`
-  and `processes/review-diff.process.yaml`, both changed only through the generated-command
-  discipline, never by hand-editing the compiled command. <!-- src: initiatives/memory/PLAN.md -->
-- Landing the review hook required retiring another lane's migration proof — the engine lane's
-  per-file byte-identity check — which this lane wrote as ADR-0207 in the engine's own ADR band, with
-  the owner's explicit approval, because retiring it was that lane's decision to make, not this one's
-  to assume. <!-- src: initiatives/memory/PROGRESS.md -->
-- The Context-Pack-to-recall integration that `develop` might eventually want is explicitly named as
-  a future `/arc-change` to the `develop` lane, not something this cycle touches. <!-- src: initiatives/memory/PLAN.md -->
+## How memory sits in arc
+
+- **Planning.** The routine behind `/arc-kickoff` asks the librarian about the goal
+  (`processes/kickoff-plan.process.yaml`).
+- **Reviewing.** The routine behind `/arc-review` asks it about the change
+  (`processes/review-diff.process.yaml`). Landing this meant retiring another lane's proof that a
+  generated command never changes, which ADR-0207 records.
+- **Retros.** `/arc-retro` runs the clash check before it adds a rule.
+
+# Meta
 
 ## Glossary
 
-- **adapter** — A pure function turning one company organ into indexable records; there are
-  five adapters, one per organ. <!-- src: initiatives/memory/PLAN.md -->
-- **count-verify** — The check that every parsed row was indexed and every excluded row is named by
-  file and line. <!-- src: initiatives/memory/PLAN.md -->
-- **golden query** — One of twelve committed queries with an expected answer, used to gate ranking
-  quality before any tuning begins. <!-- src: initiatives/memory/PLAN.md; ADR-0706 -->
-- **equivalence gate** — The check that the canonical JS engine and the optional sqlite engine return
-  the same ordered results. <!-- src: initiatives/memory/PLAN.md; ADR-0701 -->
-- **near-duplicate check** — The write-time comparison, on shared tags and word overlap, that
-  surfaces a possible contradiction to a human rather than resolving it automatically. <!-- src: initiatives/memory/PLAN.md; ADR-0705 -->
-- **root-mode** — Working with no lane at all; `lane` is recorded only as provenance, never
-  required. <!-- src: initiatives/memory/PLAN.md; ADR-0707 -->
-- **alias layer** — A hand-curated alias file that drives deterministic query expansion, fixing the
-  vocabulary mismatch between a query's words and the organs' own words. <!-- src: initiatives/memory/PLAN.md; ADR-0709 -->
+```gloss
+bm25: a standard way of ranking search results by how well the words match. It is not an AI model.
+verbatim: copied exactly as written, with no rewording.
+citation: the file path a note came from, so you can go and read the original.
+spine: arc's append-only logbook of what happened. The librarian reads it and never writes to it.
+adversarial pass: a fresh agent, who did not write the code, tries to break it with hostile input.
+```

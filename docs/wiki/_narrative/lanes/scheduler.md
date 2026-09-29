@@ -1,169 +1,171 @@
 <!-- facts: appetite=39b40118 blocked-on=39bf1db6 burn=7bd4fb72 cycle=43b10f08 depends-on=a68c9074 hasPlan=b5bea41b phase=0b3aa5a1 status=8ddd7aee title=ae009067 -->
+```tagline
+The alarm clock for arc's daily chores. A list of jobs sits in git, the computer's own clock rings each
+one, every ring leaves a receipt, and a chore that stops ringing shows up on the morning briefing.
+```
+
+# Start here
 
 ## In plain words
 
-Think of a small company where a few chores have to happen every single day whether or not anyone
-remembers — closing yesterday's books, writing the morning briefing. Putting a chore on a clock
-instead of trusting memory only helps if someone can glance at that clock each morning and see
-whether it actually rang. <!-- plain -->
+Think of arc as a small shop. Some chores have to happen every day whether or not anyone remembers:
+closing yesterday's books, writing the morning briefing. If they depend on a person typing a command,
+sooner or later nobody types it.
 
-The lane's own goal: turn every daily arc chore into a receipted, budgeted, policy-checked
-headless run — a jobs file in git, one wrapper, the operating system's own scheduler — so arc
-stays free of any resident background process, the spine records everything that happens, and
-silence itself becomes something visible rather than something nobody notices. <!-- src: initiatives/scheduler/PLAN.md -->
+```panel big
+**scheduler is the alarm clock, plus the person who checks that it rang.** Three parts:
 
-### What it is building
+- **The chore list** (`hq.jobs.yaml`). One file in git that names every scheduled chore and when it is due. A checker (`jobs-lint`) refuses a bad entry before it can ever run.
+- **The one door** (`arc-jobs`). Every run, whether a person started it or the clock did, walks through the same door: take a lock, check the rules, do the chore, write a receipt.
+- **The computer's own clock.** arc runs no background program of its own. The operating system's scheduler is the only timer.
+```
 
-The product is `hq.jobs.yaml` (a git-tracked, closed-schema list of jobs) plus the `arc-jobs`
-wrapper that runs them, registers them on the real operating-system scheduler, and writes one
-receipt per run — so a chore that used to depend on somebody remembering to run a command now runs
-unattended and reports on itself. <!-- src: initiatives/scheduler/PLAN.md#arc-jobs -->
+### What this lane is for
 
-That mattered because arc deliberately runs no daemon of its own: the operating system's own
-scheduler is arc's only timer, and every execution — attended or scheduled — walks the same one
-path: lock, guards, execute, receipt, the same as a person typing the command by hand would get. <!-- src: initiatives/scheduler/PLAN.md#resident -->
+The goal in `initiatives/scheduler/PLAN.md` is to turn every daily arc chore into a run that leaves a
+receipt, has a budget and is checked against the rules. The hard part is not making chores run. It is
+making **silence visible**: a chore that dies emits nothing, so nobody sees it missing unless something
+is watching for the gap.
+
+### Why the plan is small
+
+The plan gave itself a three-day time budget (its appetite). It named two chores to start with, both
+scripts (`brief-materialize` on weekday mornings, `day-close-roll` daily), because the process files
+that existed were all interactive commands that cannot run alone. Money-spending jobs are refused outright.
 
 ## arc words → normal words
 
-| arc calls it | It is really |
-|---|---|
-| `hq.jobs.yaml` | The one git-tracked file listing every scheduled chore, parsed by the same closed grammar the engine already uses elsewhere. <!-- src: initiatives/scheduler/PLAN.md -->|
-| jobs-lint | The check that refuses a bad job file at commit time — before it can ever run — against a fixed list of hostile shapes. <!-- src: initiatives/scheduler/PLAN.md -->|
-| the wrapper | `arc-jobs`, the one path every run walks: lock, guards, execute, receipt. <!-- src: initiatives/scheduler/PLAN.md#arc-jobs -->|
-| slot | The moment a job is due to fire, floored to the nearest scheduled time; it becomes part of the receipt's idem key `<job>@<scheduled_for>`, which is how a repeat firing for the same moment is recognised as a repeat. <!-- src: initiatives/scheduler/phases/phase-00-spec.md -->|
-| catchup | Running the jobs that were due while the machine was off or asleep, the next time it wakes. <!-- src: ADR-0804 -->|
-| needs-you line | The line the brief prints when a job is overdue more than twice its own cadence, naming the job and how long it has been silent. <!-- src: initiatives/scheduler/phases/phase-01-spec.md -->|
-| register / unregister | `register`/`unregister` drive the PowerShell ScheduledTasks module, with every power and logon setting written explicitly rather than inherited; `unregister` turns the whole heartbeat off with one command. <!-- src: initiatives/scheduler/phases/phase-02-spec.md -->|
-| POL-D | The one shared policy library every run's authorization check goes through; this lane is forbidden from writing a second one. <!-- src: initiatives/scheduler/PLAN.md -->|
+```lede
+Eight pieces of arc jargon. Each is an ordinary alarm-clock thing wearing a technical name.
+```
 
-## How the work was planned
+```rosetta
+`hq.jobs.yaml` | the chore list | one git file naming every scheduled chore
+`jobs-lint` | the list checker | refuses a bad entry at commit time, before it can run
+`arc-jobs` | the one door | lock, rules, do the chore, write the receipt
+slot | the moment a chore is due | a repeat ring for the same moment is recognised as a repeat
+catchup | doing the chores missed while the machine was off | runs when the machine next wakes
+needs-you line | "this chore has gone quiet" | printed in the morning briefing
+`register` / `unregister` | hand the list to the clock / take it back | `unregister` switches the whole thing off
+fire-drill | unplug one alarm on purpose | proves the quiet-chore warning really appears
+```
 
-The lane's five success requirements, from its plan: <!-- src: initiatives/scheduler/PLAN.md#arc-jobs -->
+## How one chore runs
 
-| REQ | What it demands |
-|---|---|
-| REQ-01 | A job that would misbehave is rejected at commit time, before it can ever run, against at least twelve pinned hostile shapes — bad cadence, an entry outside the jobs folder, a missing budget, a money-spending job, and more. <!-- src: initiatives/scheduler/PLAN.md -->|
-| REQ-02 | Every run, whether started by a person or by the scheduler, takes exactly one path and leaves exactly one receipt, with a scheduled run never able to exceed what a manual run of the same kind is allowed. <!-- src: initiatives/scheduler/PLAN.md -->|
-| REQ-03 | One command runs everything currently due, and the brief's jobs panel is a pure function of the date, the jobs file and the spine, so replaying an old date reproduces byte-identical output. <!-- src: initiatives/scheduler/PLAN.md#arc-jobs -->|
-| REQ-04 | The heartbeat runs unattended, and turns itself off rather than run unpoliced: `register` exits 2 when policy enforcement fixtures are red. <!-- src: initiatives/scheduler/PLAN.md#arc-jobs -->|
-| REQ-05 | A week of real unattended running, with zero manual starts proven by an actor query on the spine rather than merely asserted, and the silence detector itself proven by deliberately removing one job's OS task. <!-- src: initiatives/scheduler/PLAN.md#arc-jobs -->|
+```lede
+Every ring takes the same road as a person typing the command, so a scheduled run can never do more
+than a hand-started one. Checking comes before doing.
+```
 
-The appetite was three days of effort, though the elapsed calendar time runs longer since Phase 3
-is a real proving week needing at least seven days wall-clock — a constraint the lane treated as
-fixed: blowing it means cutting a phase or killing the cycle, never a silent extension. <!-- src: initiatives/scheduler/PLAN.md#arc-jobs -->
+```flow
+source: the clock rings | or a person runs arc-jobs
+box: ① Lock | one run of a chore at a time
+box: ② Check the rules | the shared policy check
+box*: ③ Do the chore | a script with a time limit
+box: ④ Write the receipt | one line in the logbook
+labels: allowed, ran, then
+out: already running | refused, with a receipt
+out: rules say no | skipped, and says why
+out: -
+out+: receipt | the chore is on record
+divider: 2 | free to refuse | the chore runs
+note: A chore that never ran leaves no receipt. The briefing notices the gap instead.
+caption: Figure 1 — one chore, one door. | The dashed line is where checking ends and doing begins.
+```
 
-The plan's kill criteria: Phase 0 not green within a day and a half stops the cycle and reassesses,
-with the cycle dying while the analysis survives; at half the appetite burnt with Phase 0 still
-open, a scope-cut conversation becomes mandatory; at full burn, it is cut or killed, never a silent
-extension; and the proving week turning up fewer than two jobs worth scheduling parks the cron
-flip, keeps `register` off, and keeps the attended wrapper plus brief panel, since they are already
-daily value. <!-- src: initiatives/scheduler/PLAN.md#Appetite -->
+## The stages, one by one
 
-The four phases, in the plan's own risk order: a steel thread proving the law and the wrapper core
-(1.0 day), the attended heartbeat a person can run by hand (0.5 day), the flip onto the real
-operating-system scheduler (0.75 day), and a proving week plus retro (0.5 day of effort against the
-proving week's own seven-or-more days of elapsed time). <!-- src: initiatives/scheduler/PLAN.md#Phases; initiatives/scheduler/PLAN.md#Appetite -->
+```lede
+Each stage is written twice: first in ordinary words, then what actually happens.
+```
 
-## The phases, one by one
+```steps
+t: The steel thread (phase 00)
+plain: Build the thinnest complete version first: the list, the checker, the door and both chores, then attack it.
+d: Two fresh reviewers attacked it. They found 24 problems that overlapped on only one, and four would have shipped. The live demo found two more that tests missed.
+f: `.claude/scripts/hq/arc-jobs.mjs` · `.claude/scripts/hq/jobs-lint.mjs`
 
-| Phase | Set out to prove | What shipped, and what it cost |
-|---|---|---|
-| 00 — steel thread | the jobs schema, `jobs-lint` with its hostile corpus, the wrapper's lock→guards→execute→receipt path, both script-jobs, and the `arc-run` job-stub guard | Closed 2026-08-12: the two-surface adversarial pass returned 24 findings overlapping on ONE, and four would have shipped — every close-day failure counted as a sealed day, `roots: ["**"]` passing the self-modification ban, a directory accepted as a script entry, and the branch already CI-red on all three legs; the live demo then found two more: every receipt being rejected as a duplicate while the wrapper still reported success, and a benign double fire being called a lost receipt. Double fires are now prevented, not merely noticed. <!-- src: initiatives/scheduler/PROGRESS.md#BAD_IDEM -->|
-| 01 — the attended heartbeat | `run`, `catchup`, `list --next 7`, a read-only startup nudge, and a briefing panel that never disturbs another lane's pinned output | Closed 2026-08-12: the panel is a derivation, not a query, and the hard case was the job that has never run — an early version anchored its missed-slot count at the last slot forever, so a job that had never fired in a month read identically to one just registered; it now measures over the window the spine can actually witness. <!-- src: initiatives/scheduler/PROGRESS.md#derivePanel -->|
-| 02 — the cron flip | registering and unregistering against the real Windows Task Scheduler with ADR-0803's five explicit settings, a next-minute smoke test, and a policy gate that refuses to register at all when it is not passing | Closed 2026-08-13: the headline finding was that `registrationFor` emitted a weekday trigger string `scheduler-task.ps1` refuses outright, and since `register` walks enabled jobs in file order with `brief-materialize` first, that one bug would have made the entire unattended surface unregisterable; three green checks had looked straight at the registration path beforehand and none of them caught it. <!-- src: initiatives/scheduler/PROGRESS.md#registrationFor -->|
-| 03 — proving week + retro | at least two jobs running unattended for at least seven days, zero manual starts proven by an actor query on the spine, a deliberate fire-drill, a full gap audit, and a retro | Still running as of the tracker's own header: the week had to restart once after a defect made every run past the first a no-op, and the fire-drill needed a third missed slot before the silence detector could fire, pushing the earliest possible close later than first planned. <!-- src: initiatives/scheduler/PROGRESS.md -->|
+t: The attended heartbeat (phase 01)
+plain: Let a person run what is due by hand, and make a chore going quiet show up in the morning briefing.
+d: The briefing panel is worked out from the date, the list and the logbook, never from the current clock, so replaying an old date gives the same answer. The hard case was a chore that had never run at all.
+f: `.claude/hooks/SessionStart.d/60-jobs.sh`
 
-## What it decided
+t: The flip onto the real clock (phase 02)
+plain: Hand the list to the Windows Task Scheduler, with a switch to take it back, and refuse to hand over anything if the rules check is failing.
+d: The attack found that the weekday time string this lane generated was one the scheduler script refuses. That one bug would have kept every job after it from being registered.
+f: `initiatives/scheduler/PROGRESS.md`
 
-The lane holds ADR century 0800–0899, and the proving week widened it to 0800–0808: <!-- src: initiatives/scheduler/PROGRESS.md -->
+t: The proving week (phase 03)
+plain: Leave it alone for seven days and count what happened. Then unplug one alarm on purpose and see if the warning appears.
+d: Zero manual starts, checked from the logbook and not just claimed. The week restarted once, after a fault made every run after the first do nothing.
+f: `initiatives/scheduler/evidence/phase-03/week-log.md`
+```
 
-| # | Decision |
-|---|---|
-| 0800 | The lane claims century 0800–0899 rather than the 0700s the company board had advertised as free. <!-- src: ADR-0800 -->|
-| 0801 | The build-out trigger is an owner instruction, and the ADR says plainly that its own receipt is still owed rather than pretending to cite one. <!-- src: ADR-0801 -->|
-| 0802 | A job authorizes itself as `process:<name>`, reusing the policy library's already-closed subject set rather than adding a new one. <!-- src: ADR-0802 -->|
-| 0803 | Registration goes through the PowerShell ScheduledTasks module, with every power and logon setting written out explicitly rather than left at a default. <!-- src: ADR-0803 -->|
-| 0804 | The machine is never woken up just to run a job; a slot missed while it was asleep is caught the next time it wakes on its own. <!-- src: ADR-0804 -->|
-| 0805 | The logic for rolling forward several missed days at once lives inside the job itself, because the underlying day-closing tool is not the right place for it. <!-- src: ADR-0805 -->|
-| 0806 | Version one ships exactly two script-jobs, and a third job watching an external site is decided against building this cycle. <!-- src: ADR-0806 -->|
-| 0807 | The real operating-system scheduler queues at most one missed run per task, so recovering more than one missed slot needs a separate logon-triggered mechanism, decided but not built this cycle. <!-- src: ADR-0807 -->|
-| 0808 | A gap in the schedule is graded by its cause, not merely by its absence, because the machine simply being off is not this lane's defect to own. <!-- src: ADR-0808 -->|
+# The bigger loop
 
-## Where it stands now
+## What the week found
 
-The tracker reads status live, on phase 03, having burned two and a half of its three-day
-appetite. <!-- src: fact:lanes/scheduler.status; fact:lanes/scheduler.phase; fact:lanes/scheduler.burn; fact:lanes/scheduler.appetite -->
+```lede
+The proving week did its job: it found things nobody had planned for.
+```
 
-The tracker's own header names what it is waiting on: elapsed time — the proving week restarted on
-2026-08-17 after a defect made every run past the first a no-op, and the armed fire-drill needs its
-third missed slot before the silence detector fires, putting the earliest possible close at
-2026-08-26. <!-- src: fact:lanes/scheduler.blocked-on -->
+- **The clock drops missed rings.** Windows keeps only one missed run per chore. On a day the machine was
+  off, two slots were missed and only the newer was made up. That is ADR-0807, with the fix decided and not yet built.
+- **The success test could not be met.** A powered-off machine writes nothing, so no week with an off day
+  could grade clean. The rule stayed strict and the test was reworded to grade each gap by its cause (ADR-0808).
+- **A suspect was cleared.** Antivirus was blamed for missing runs. The real cause was an action that only
+  made its log folder on its first run, so later runs launched nothing.
 
-Measured over the week's six finished days, manual starts were zero and spend was zero rupees, as
-designed, but two slots on one off day were never made up — the operating system's own scheduler
-turned out to queue only the newer of two missed runs and simply drop the older one, which is a
-sharper finding than the assumptions-ledger row that first raised the question. <!-- src: initiatives/scheduler/PROGRESS.md#audit.mjs -->
+## Life of a quiet chore
 
-A leading hypothesis for missing runs earlier in the week — antivirus software blocking the job —
-was investigated and closed as wrong: the real cause was a registered action that only created its
-own log directory on its very first run, so every later run exited cleanly having launched nothing
-at all, and nothing was ever actually blocked. <!-- src: initiatives/scheduler/PROGRESS.md#McAfee -->
+```loop
+top: 1 | the chore list
+top: 5 | the briefing
+stage: 1 · A chore is due | the clock should ring
+stage: 2 · It does not ring | alarm gone, machine off
+stage: 3 · Slots pass | nothing is written
+stage*: 4 · Gap grows | the panel counts it
+stage!: 5 · Needs-you line | the briefing names it
+labels: due, silent, counted, warned
+back: last -> 1 | someone fixes it and the next ring is on record
+caption: Figure 2 — how silence becomes visible. | The warning is worked out from what is missing.
+```
 
-The lane's appetite position, stated plainly: this cycle cannot afford its own remedy — ADR-0807's
-logon trigger and ADR-0808's downtime classification are real build work, and building them inside
-the remaining time would be the silent extension the kill criteria forbid, so both ADRs are
-recorded as decisions with implementation deferred to the next cycle's opening phase. <!-- src: initiatives/scheduler/PROGRESS.md#deferred -->
+1. A chore is meant to ring every weekday morning.
+2. Someone unplugs its alarm. The chore list still says it is on.
+3. Each morning passes with no receipt.
+4. Once more than two slots are missing, the panel counts it as overdue.
+5. The briefing prints a line naming the chore and how long it has been silent.
 
-## The bigger loop
+*The steps above are an illustration of how the loop runs. The fire-drill in phase 03 is the real test of it.*
 
-### What went wrong and what was learned
+## Where it stands
 
-The two-surface adversarial pass on the steel thread found twenty-four holes overlapping on only
-one, and a live demo afterward found two more that the unit tests alone could not have caught: every
-receipt was being silently rejected as a duplicate while the wrapper still reported success, and a
-harmless repeat firing was being called a lost receipt when it was not one. <!-- src: initiatives/scheduler/PROGRESS.md -->
+The live phase, burn and blocker are in the generated sections. In words: phases 00, 01 and 02 are
+closed and both chores are registered on the real clock. Phase 03, the proving week, is still running.
+It is waiting on elapsed time, not on work: the fire-drill needs a third missed slot before the warning
+can fire, and the tracker gives 2026-08-26 as the earliest close.
 
-Building the silence detector taught the lane that the hardest case is not a job that fails loudly
-but a job that has simply never run: an early version measured missed slots from the last slot it
-had ever seen, which reported a job silent for a month as identical to a job that had just started
-— exactly the failure the detector exists to catch, hiding behind its own arithmetic. <!-- src: initiatives/scheduler/PROGRESS.md#derivePanel -->
+Effort is nearly spent (2.5 of 3 days), so the fixes from ADR-0807 and ADR-0808 are decided but left
+for the next cycle's opening phase. Building them now would be the quiet extension the plan forbids.
 
-`scheduler-task.ps1` refused the exact trigger string this lane's own code generated for a weekday
-job, and because registration walks every enabled job in file order with `brief-materialize` first,
-that one bug would have silently blocked every job listed after it from ever being registered at
-all. Three separate green checks looked directly at the registration path beforehand and none of
-them caught it: the real-OS smoke test hand-typed its own trigger and never went through
-`registrationFor`, the contract test pinned the bug by asserting the wrong string back, and every
-other test exercised only the daily job. <!-- src: initiatives/scheduler/PROGRESS.md#registrationFor -->
+What is next: capture the needs-you line, run the gap audit, then close with `/arc-retro`.
 
-The proving week's own exit criterion turned out to be unreachable: `audit.mjs` accepts an
-explanation only from actor `scheduler:<job>`, and a powered-off machine emits nothing, so no
-window containing an off day could ever grade CLEAN. The strict actor rule stayed exactly as
-written — it is what stops a hand-written note from grading a dead scheduler clean — and the
-criterion for a clean week was the part that changed: it now reads every gap classified, zero gaps
-in the class of arc running while the job did not fire, recorded as ADR-0808. <!-- src: initiatives/scheduler/PROGRESS.md#audit.mjs -->
+## How it connects to the rest of arc
 
-### How it connects to the rest of arc
+- **Policy.** Every run is authorised by the shared policy check that other lanes use (ADR-0802). This
+  lane may not write a second reading of it.
+- **The logbook.** Receipts go to the same append-only spine as everything else.
+- **The engine.** Chores that call `arc-run` pass through the engine, which refuses chore stubs on purpose.
 
-Every run this lane makes, attended or scheduled, is authorized through the same shared policy
-library every other lane uses, and this lane is expressly forbidden from writing any second reading
-of that policy for itself. <!-- src: initiatives/scheduler/PLAN.md -->
-
-Money-touching jobs are refused outright by this lane's own commit-time check, on top of whatever
-the shared policy library would already refuse, so scheduling can never become a quiet side door
-around the company's spending rules. <!-- src: initiatives/scheduler/PLAN.md -->
+# Meta
 
 ## Glossary
 
-- **hq.jobs.yaml** — the single git-tracked file naming every scheduled chore. <!-- src: initiatives/scheduler/PLAN.md -->
-- **jobs-lint** — the commit-time check that refuses a hostile or malformed job before it can ever
-  run. <!-- src: initiatives/scheduler/PLAN.md -->
-- **the wrapper** — `arc-jobs`, the single path every run takes: lock, guards, execute,
-  receipt. <!-- src: initiatives/scheduler/PLAN.md#arc-jobs -->
-- **catchup** — running the jobs that were due while the machine was off, the next time it wakes. <!-- src: ADR-0804 -->
-- **needs-you line** — the brief's way of surfacing a job that is overdue more than twice its own
-  cadence, naming it and how long it has been silent. <!-- src: initiatives/scheduler/phases/phase-01-spec.md -->
-- **register / unregister** — driving the PowerShell ScheduledTasks module directly, with every
-  power and logon setting written explicitly rather than inherited. <!-- src: initiatives/scheduler/phases/phase-02-spec.md -->
-- **fire-drill** — removing a job's operating-system task while `hq.jobs.yaml` still reads
-  `enabled: true`, to prove the needs-you line actually appears. <!-- src: initiatives/scheduler/phases/phase-03-spec.md -->
+```gloss
+spine: arc's append-only logbook of what happened.
+receipt: one line on the spine saying a chore ran, and how it ended.
+cadence: how often a chore is due, such as weekdays at 06:00.
+idempotent: safe to run twice. A second run for the same slot changes nothing.
+appetite: the time budget a lane sets itself before it starts.
+```

@@ -1,133 +1,179 @@
 <!-- facts: appetite=c68c3357 blocked-on=a68c9074 burn=96d97217 cycle=ef40fafb depends-on=a68c9074 hasPlan=b5bea41b phase=27491f50 status=8ddd7aee title=b2ca57cd -->
+```tagline
+The trial room for new AI workers. A candidate model sits the same small tests the current best one
+sits, and bench can only recommend. A person decides.
+```
+
+# Start here
 
 ## In plain words
 
-Think of arc as a small company that keeps hiring new AI workers, and think of bench as the room
-where a candidate worker sits a timed test before starting on real work. <!-- plain -->
+Think of arc as a small company whose staff are AI models. Each kind of job (writing a commit message,
+reviewing a diff) is done by whichever model is currently the best fit. Without a proper test, changing
+who does a job is slow and done by hunch.
 
-The lane's own goal, in its own words: one command runs every process that ships a fixture pack
-against one explicitly-named driver-and-model pair, scores schema-compliance, assertion pass-rate,
-cost and latency with deterministic checks, and emits a propose-only router diff whose evidence,
-approval and verdict all live on the spine as ordinary receipts — so a new model becomes a
-same-day, receipted routing decision instead of a migration project, and a silently-drifting
-champion is caught within a month. <!-- src: initiatives/bench/PLAN.md -->
+**bench is the trial room.** A new model is brought in, given the same small tests the current holder
+of the job already sits, and marked on the same sheet. Then bench writes a short note: "this one looks
+as good and costs less" or "no, here is why".
 
-### What it is building
+```panel big
+**bench never hires anyone.** It may only *propose* a change to the staff rota (`engine/router.yaml`). A person reads the proposal and says yes or no. Bench has no way to write to the rota itself, and the run checks afterwards that the rota did not change.
+```
 
-The lane's product is `arc-bench.mjs`, a runner that never joins the company payroll itself: it
-tests one candidate model against the fixtures the real processes already ship, and it can only
-propose a change to the hiring rota (`engine/router.yaml`) — a human merges every routing change,
-and bench has no write path to the router. <!-- src: initiatives/bench/PLAN.md -->
+### What this lane is for
 
-That mattered because, at the moment this lane was born, only one driver had ever produced a real
-receipt, no eval fixture anywhere in the repo carried an assertion, the replay driver and a version
-check did not exist, and no pricing snapshot existed to bound spend — so the "model market" the
-design imagined had no floor under it yet, and kickoff verification falsified five of the design
-source's inherited premises. <!-- src: initiatives/bench/PLAN.md; ADR-0900; ADR-0901; ADR-0902; ADR-0904 -->
+Without bench, a new model arrives and nobody can say whether it is any good at arc's real jobs. And a
+model already on the job can quietly get worse or dearer, and nobody notices.
+
+The lane's goal, from its plan (`initiatives/bench/PLAN.md`), is that a new model becomes a same-day
+decision with a paper trail, and that a champion who is slipping is caught within a month.
+
+### Why it took a road first
+
+When the lane was born, the plan checked its own assumptions against the real repo. Five did not hold
+(ADR-0900 to ADR-0905 record them): only one worker had ever produced a real receipt, the test cases
+carried no marking scheme, the practice driver did not exist, and there was no price list. So the lane
+spent its first phase building the missing road, and its appetite (its time budget) was set at eight days.
 
 ## arc words → normal words
 
-| arc calls it | It is really |
-|---|---|
-| champion | The model a candidate is measured against in the eligibility gates, and the one `--champion` re-runs to check for drift. <!-- src: ADR-0906; ADR-0908 -->|
-| candidate | The model under test, named explicitly on the command line — never picked automatically and never a sweep of several. <!-- src: initiatives/bench/PLAN.md -->|
-| propose-only | Bench never edits `engine/router.yaml` itself; it writes a diff a human reviews and merges, and the router's SHA is checked unchanged after every run, including one that aborts. <!-- src: initiatives/bench/PLAN.md -->|
-| K=3 | Every fixture is run three times per candidate, executed sequentially, and the three outcomes are never averaged or majority-voted into one pass or fail — each one contributes on its own to the assertion count. <!-- src: initiatives/bench/PLAN.md -->|
-| ceiling | An owner-set placeholder cap on what one invocation may cost, hand-authored with no pricing snapshot behind it, used only to bound spend before a call is made — it never appears in an emitted payload. <!-- src: ADR-0904; initiatives/bench/PLAN.md -->|
-| drift guard | The re-run, monthly and started by the owner, that catches a champion quietly getting worse (a new schema failure, or assertions dropping) or more expensive (cost up more than 20%). <!-- src: ADR-0910; ADR-0908 -->|
-| real event | The one time a genuinely new model is run all the way through: benched, proposed, and merged or rejected by a human through `arc-inbox`, with a reason recorded either way — both outcomes count as success. <!-- src: initiatives/bench/PLAN.md -->|
-| mock driver | A driver that replays pre-recorded bytes instead of calling a real model — built by bench itself, so bench's own tests run offline and cost nothing. <!-- src: ADR-0902; initiatives/bench/PROGRESS.md -->|
+```lede
+Eight pieces of arc jargon. Each is an ordinary hiring-trial thing wearing a technical name.
+```
 
-## How the work was planned
+```rosetta
+bench | the trial room | tests one named model and proposes; never decides
+champion | the current best worker for a job | what a candidate is compared against
+candidate | the new worker on trial | always named by hand; never picked or swept automatically
+fixture | one exam question with its answer key | ships with each process that can be benched
+K=3 | sit every exam three times | the three results are never blended into one
+propose-only | "write the recommendation, do not sign it" | a person merges every routing change
+ceiling | a spending cap someone typed in by hand | stops a run before it spends; it is not a real price list
+drift guard | a monthly check on the champion | catches quiet slipping in quality or cost
+```
 
-The lane's success requirements, from its plan: <!-- src: initiatives/bench/PLAN.md -->
+## How one trial goes
 
-| REQ | What it demands |
-|---|---|
-| REQ-01 | One command runs every fixture-shipping process for one named candidate, reporting schema pass-rate and assertion pass-rate separately, over three runs (K=3) per fixture executed sequentially; re-scoring captured outputs must come back byte-identical, fixture-proven on all three CI operating systems. <!-- src: initiatives/bench/PLAN.md -->|
-| REQ-02 | `--propose` emits three artifacts — a human evidence table, a machine-readable manifest, and a stable diff pinned to the exact router SHA the run read — and any failing gate yields `NO PROPOSAL` with its reason instead of a diff; the router's SHA is asserted unchanged after every run, including one that aborts. <!-- src: initiatives/bench/PLAN.md -->|
-| REQ-03 | `--champion` re-runs the champion on two separate axes, quality and cost, with every cost change classified into one of three causes; the baseline is re-pinned only for an enumerated cause, never for a score movement alone. <!-- src: initiatives/bench/PLAN.md; ADR-0908 -->|
-| REQ-04 | Money is reserved before a fixture group starts, against both a whole-run cap and a per-process cap, and a group the remaining budget cannot cover is never started at all. <!-- src: initiatives/bench/PLAN.md; ADR-0909 -->|
-| REQ-05 | The whole loop is proven once on a real model: reached, benched, proposed, and taken to a recorded human accept or reject through `arc-inbox`, with both outcomes counting as success. <!-- src: initiatives/bench/PLAN.md; ADR-0914 -->|
-| REQ-06 | `commit-msg-draft` ships 5 real, assertion-bearing fixtures under a closed set of checks, enough to actually tell a candidate apart from a champion; a fixture with no assertions counts as absent, never as a pass. <!-- src: initiatives/bench/PLAN.md -->|
-| REQ-08 | The runner survives hostile input and two planted mutants — one that tries to write the router directly, one that tries to spawn a driver outside the policy gate — and the suite rejects both, each for a reason traceable to the specific guard that caught it. <!-- src: initiatives/bench/PLAN.md -->|
+```lede
+The exam is marked by fixed checks, not by anyone's opinion. Money is set aside before each exam
+starts, and any failed gate ends in a written reason, not a recommendation.
+```
 
-The appetite was set at eight days, a hard cap raised from the design source's original four
-because kickoff verification found the lane's prerequisites did not exist yet and the missing road
-itself became part of the scope. <!-- src: initiatives/bench/PLAN.md; ADR-0900 -->
+```flow
+source: arc-bench.mjs --driver D --model M
+box: ① Set the cap | money reserved first
+box: ② Sit the exams | each one three times
+box: ③ Mark them | schema, answers, cost
+box*: ④ Gates | all must pass
+labels: reserved, scored, then
+out: no cap | refused, never defaulted
+out: -
+out: gate fails | NO PROPOSAL, with the reason
+out+: proposal | evidence + diff, for a person
+divider: 2 | free to refuse | money is spent
+note: Nothing is merged by bench. A person answers the proposal through arc-inbox.
+caption: Figure 1 — one bench run. | The dashed line is where the trial starts costing real money.
+```
 
-## The phases, one by one
+## The stages, one by one
 
-| Phase | Set out to prove | What shipped, and what it cost |
-|---|---|---|
-| 0 — the road + steel thread | `drivers/mock`, a `version` verb, the assertion schema, a fixture-repo harness, `commit-msg-draft` armed, one fixture end to end | Closed 2026-08-13: `commit-msg-draft` ended up armed with six fixtures rather than the five planned, each carrying real assertions; a fixture with no assertions key scores as absent, never as a pass; and four separate defects were found in the engine's own runner by running it, reported rather than fixed here, since `arc-run.mjs` is a one-line-only path for this lane. <!-- src: initiatives/bench/PROGRESS.md -->|
-| 1 — bench core | a full run across every fixture-shipping process, K=3 kept separate, admission control against both spend caps, a replay-proof scorecard | Closed 2026-08-13: replayed captured outputs came back byte-identical on all three CI operating systems, on top of a canonical encoder that refuses to hash values like `NaN` or `±Infinity` rather than silently coercing them. <!-- src: initiatives/bench/PLAN.md; ADR-0907; initiatives/bench/PROGRESS.md -->|
-| 4 — seal + retro | a mutant that attempts to write the router directly, a mutant that spawns a driver outside the policy gate, a redaction sweep, a runbook | Closed 2026-08-13: the real work of this phase was the adversarial pass itself, which returned twenty-three confirmed holes from two fresh adversarial surfaces with almost no overlap between them — among them a bug that let one run overspend its cap 2.16 times over, and a drift guard that reported no drift on a run where every attempt had failed. <!-- src: initiatives/bench/PLAN.md; initiatives/bench/PROGRESS.md -->|
+```lede
+Each stage is written twice: first in ordinary words, then what actually happens.
+```
 
-## What it decided
+```steps
+t: Reserve the money first
+plain: Before an exam starts, bench sets aside the worst-case cost of all three sittings. If the cap cannot cover it, that exam is never started. A missing cap is a refusal, never a guess.
+d: Admission control by fixture group, against both a whole-run cap and a per-process cap (ADR-0909). The caps are typed in by hand in `initiatives/bench/ceilings.json`.
+f: `.claude/scripts/engine/arc-bench.mjs`
 
-The lane holds ADR century 0900–0999, locked at ADR-0900 through ADR-0914: <!-- src: initiatives/bench/PROGRESS.md -->
+t: Sit and mark the exams
+plain: The candidate does each exam three times. Marking is mechanical: does the answer have the right shape, and does it pass the answer key. Cost and speed are noted too. Nothing is averaged away.
+d: Quality means assertion pass-rate (ADR-0905). An exam with no answer key counts as absent, never as a pass. Re-marking the saved answers gives byte-identical scores (ADR-0913).
+f: `commit-msg-draft` is the one job armed with real exams so far
 
-| # | Decision |
-|---|---|
-| 0900 | The owner's build-out ruling is what fires this lane, superseding the earlier plan to wait for a pull trigger. <!-- src: ADR-0900 -->|
-| 0901 | Bench's command line is a flat script; whether arc ever gets a `noun verb` dispatcher is left as the engine lane's question. <!-- src: ADR-0901 -->|
-| 0902 | Bench builds the replay test driver and its version verb itself, amending an earlier no-go. <!-- src: ADR-0902 -->|
-| 0903 | A run's driver identity is recorded beside the existing fingerprint, never folded inside it. <!-- src: ADR-0903 -->|
-| 0904 | Cost eligibility is decided with no pricing snapshot: a ceiling bounds spend without ever claiming to report a true price. <!-- src: ADR-0904 -->|
-| 0905 | Quality is defined as assertion pass-rate, and this cycle builds the substrate for exactly one task class. <!-- src: ADR-0905 -->|
-| 0906 | Candidate selection is gates-first, with no single composite score standing in for the evidence. <!-- src: ADR-0906 -->|
-| 0907 | A run keeps a per-fixture record, plus up to three proposal artifacts — a class at `NO PROPOSAL` gets only the first two and no diff. <!-- src: ADR-0907 -->|
-| 0908 | Drift is measured on two separate comparability axes, in three alert tiers, with a floor set per task class. <!-- src: ADR-0908 -->|
-| 0909 | Budget is admission control at the fixture-group level, and execution stays sequential in this version. <!-- src: ADR-0909 -->|
-| 0910 | The drift guard runs monthly and only when the owner starts it; a clean run leaves no open approval behind. <!-- src: ADR-0910 -->|
-| 0911 | Bench rides the spine's existing event kinds only, and adds none of its own. <!-- src: ADR-0911 -->|
-| 0912 | Bench adds no new policy subject, and must never become a way around the policy gate. <!-- src: ADR-0912 -->|
-| 0913 | Reproducibility means replay-determinism, with variance reported honestly rather than hidden. <!-- src: ADR-0913 -->|
-| 0914 | The real event's candidate is a second model run under an already-proven driver, not an unproven one. <!-- src: ADR-0914 -->|
+t: Run the gates
+plain: A list of tests the candidate must clear, in a fixed order. There is no single score. All the evidence is shown side by side.
+d: Selection is gates-first with no composite score (ADR-0906).
+f: `initiatives/bench/PLAN.md`
 
-## Where it stands now
+t: Write the proposal, or the reason not to
+plain: If every gate passes, bench writes an evidence table, a machine-readable copy, and a diff of the rota pinned to the exact version it read. If not, only the first two, headed NO PROPOSAL with the reason.
+d: Three artifacts (ADR-0907). It goes onto arc's logbook using the existing event kinds only (ADR-0911), and it travels through the same policy gate as everything else (ADR-0912).
+f: `engine/router.yaml` is read, never written
+```
 
-The tracker reads status live, on phase 04, having burned seven and a quarter of its eight-day
-appetite. <!-- src: fact:lanes/bench.status; fact:lanes/bench.phase; fact:lanes/bench.burn; fact:lanes/bench.appetite -->
+# The bigger loop
 
-Four of the five phases are fully closed; the drift guard is built, and the real event is the one
-piece left. By 2026-08-17 it was buildable and simply not started — waiting only on money and an
-owner keystroke. By 2026-09-15 it was blocked again, from outside the lane: engine's hermes row
-had expired, and since then every run naming a model on a model-capable driver has thrown an error
-before ever reaching a provider, with the owner having deferred the hire decision. <!-- src: initiatives/bench/PROGRESS.md -->
+## The monthly check
 
-Bench's production `run.completed` count, read directly off the canonical spine, was zero at its
-close, across all 17 day files — every run this cycle used a throwaway spine root instead, and
-that absence was written down rather than left to be assumed. <!-- src: initiatives/bench/PROGRESS.md -->
+```lede
+The champion is re-sat once a month. Quality and cost are judged separately, and a fall in score is
+never a reason to move the goalposts.
+```
 
-## The bigger loop
+The drift guard is the same trial run on the current champion. It watches two things on separate
+sheets: is it answering worse, and is it costing more. A clean month leaves nothing waiting for a
+person (ADR-0910). It is started by the owner, not by a timer, and `docs/runbooks/bench.md` says how
+to run it and read the report (ADR-0908 sets the tiers).
 
-### What went wrong and what was learned
+## A trial, as a story
 
-### How it connects to the rest of arc
+```loop
+top: 1 | a new model
+top: 5 | the rota
+stage: 1 · New model appears | cheaper, claims to be as good
+stage: 2 · Both sit the exams | champion and candidate
+stage: 3 · Gates run | quality, cost, cap
+stage*: 4 · Proposal filed | a person is asked
+stage!: 5 · Person answers | yes or no, with a reason
+labels: names, marks, evidence, verdict
+back: last -> 1 | a "no" is recorded too, so nobody re-asks blind
+caption: Figure 2 — one real trial, start to finish. | Both a yes and a no count as the loop working.
+```
 
-Bench reads the engine lane's process files, its fixture packs, and `engine/router.yaml`, but
-never writes to that file itself — every routing change it produces is a diff a human merges by
-hand, and every run it makes still travels through the engine's own policy gate rather than around
-it. <!-- src: initiatives/bench/PLAN.md; ADR-0912 -->
+1. A cheaper model is named on the command line.
+2. It and the current champion sit the same exams, three times each.
+3. The gates compare them. Say it matches on answers and costs less.
+4. Bench files a proposal to change the rota.
+5. A person opens `arc-inbox`, approves or rejects, and writes why.
 
-Its runs and its proposals land on the same append-only spine every other lane writes to, as
-ordinary `run.completed`, `approval.requested` and `decision.recorded` receipts, which is also how
-the owner reviews and answers a proposal through the existing inbox rather than through anything
-bench built for itself. <!-- src: ADR-0911 -->
+*This story is an illustration of how the loop runs. It is not a real result.*
+
+## Where it stands
+
+The tracker (`initiatives/bench/PROGRESS.md`) shows the live phase and burn in the generated sections.
+In words: the road, the marking, the proposals, the drift guard and a hostile-input pass are all built
+and closed. One piece is not done, the **real event**: running a genuine new model through the whole
+loop once, to a recorded human verdict.
+
+That piece needs two things nobody else can supply. It needs the owner's go-ahead to spend real money
+(the tracker names a worst-case cap), and it needs a human to press approve or reject. The tracker also
+says a change outside this lane blocked it again on 2026-09-15: an expired staff-rota row in the engine
+lane makes any run that names a model fail before reaching a provider. The fix is engine's to make,
+tracked in `initiatives/engine/PROGRESS.md`.
+
+What is next: unblock that, then run the real event from the main clone (the spine refuses to record
+from a worktree), then close the phase.
+
+The adversarial pass of the seal phase found many real holes in code the lane had just written, for
+example a run that could overspend its cap more than twice over. The full table is in
+`initiatives/bench/evidence/phase-04/adversarial-pass.md`.
+
+## How it connects to the rest of arc
+
+- **The engine lane.** Bench reads engine's process files and staff rota and uses its runner. Engine
+  owns the runner (`arc-run.mjs`) and the trial-model seam bench relies on (engine ADR-0220).
+- **The logbook and inbox.** Runs and proposals land on the same append-only logbook as every other
+  lane, and are answered through `arc-inbox`.
+
+# Meta
 
 ## Glossary
 
-- **bench** — the runner that tests one named model against a process's fixtures and can only
-  propose a routing change, never make one. <!-- src: initiatives/bench/PLAN.md -->
-- **champion** — the model a candidate is measured against in the eligibility gates, and the one
-  `--champion` re-runs to check for drift. <!-- src: ADR-0906; ADR-0908 -->
-- **candidate** — the model under test, named explicitly, never swept or guessed. <!-- src: initiatives/bench/PLAN.md -->
-- **driver** — a script that takes a process, JSON input and a budget and returns output JSON plus
-  a cost sidecar (`drivers/NAME.sh run PROCESS INPUT-JSON BUDGET`); bench may add only the mock
-  replay driver and a version verb, never a new provider integration.
-  <!-- src: initiatives/bench/PLAN.md; ADR-0902 -->
-- **propose-only** — bench's rule that it may only emit a reviewable diff, never merge one. <!-- src: initiatives/bench/PLAN.md -->
-- **mock driver** — the replay driver, built by bench in phase 0, that bench's own tests run
-  against at zero cost. <!-- src: ADR-0902; initiatives/bench/PROGRESS.md -->
+```gloss
+driver: the adapter that calls a particular AI provider. Bench may add only a practice driver, never a new provider.
+mock driver: the practice driver. It replays saved answers, so bench's own tests cost nothing (`.claude/scripts/engine/drivers/mock.sh`).
+real event: the one time a genuine new model is run through the whole loop, to a person's recorded answer.
+spine: arc's append-only logbook of what happened.
+```

@@ -1,170 +1,154 @@
 <!-- facts: appetite=cefdf849 blocked-on=a68c9074 burn=cffcdb64 cycle=1d67b294 depends-on=a68c9074 hasPlan=b5bea41b phase=8875c0e8 status=8ddd7aee title=d25ea005 -->
+```tagline
+The shop-window paperwork for every venture arc builds: terms, privacy, refunds and the rest. Written
+from real facts, checked by fixed tests, and published only when a person signs.
+```
+
+# Start here
 
 ## In plain words
 
-Imagine a company that wants to open its doors for business but has no terms posted anywhere, no
-privacy notice, and no idea what happens if a customer asks for a refund. <!-- plain -->
+Think of arc as a company that will open shops. Before a payment provider lets a shop take money, it
+asks: where are your terms, your privacy notice, your refund rules? A shop with none of these is
+turned away at the door. A shop with invented ones is worse off, because a wrong legal promise is
+still a promise.
 
-The lane's own goal is a command that turns a per-venture facts file plus one pinned template set
-into seven honest, evidence-linked, human-signed policy pages and a launch checklist that probes
-production — versioned, hash-chained, receipted — so no arc venture ever publishes an invented
-legal claim, and none is ever blocked at a payment provider's policy-pages gate. It is explicit
-about what it is not: not legal advice, a template engine with receipts, not a lawyer. <!-- src: initiatives/legal/PLAN.md -->
+**The legal lane is the sign-writer.** You give it one facts file per shop: the real business
+facts. It writes the policy pages from those facts, and only those.
 
-### What it is building
+```panel big
+**The sign-writer never invents and never hangs a sign alone.** Every line on a page comes from a fact you stated. Every page is checked by tests that read the finished text. And putting the pages live is always a person's decision, made through the approval inbox. The plan says it plainly: not legal advice, a template engine with receipts, not a lawyer.
+```
 
-- **The `legal` product** — the bounded YAML parser, the total type-tagged canonicaliser, the
-  three-tier schema, the clause renderer, a publish gate, a receipts module and a launch-checklist
-  renderer, plus a lints group that grew from three entries to four. <!-- src: initiatives/legal/PROGRESS.md; products/legal/manifest.json; ADR-1213 -->
-- **A versioned, pinned template set** of seven policy pages per venture — terms, privacy, refund
-  and cancellation, shipping and delivery, contact, pricing, and about. <!-- src: products/legal/manifest.json; ADR-1201; initiatives/legal/PLAN.md -->
-- **Data files, such as `clause-map.json`,** that map a branching field's value — like
-  `payment_model` or `gst_registered` — to the clause it turns on. <!-- src: products/legal/manifest.json; initiatives/legal/phases/phase-00-spec.md -->
-- **A verification command that runs inside a venture's own repository**, re-rendering and
-  diffing its committed pages so drift can be caught even when this lane is not present to check
-  it itself. <!-- src: initiatives/legal/PLAN.md -->
-- **One real render for LexOS**, the venture that goes through the whole path from a real facts
-  file to committed, receipted pages in its own working tree. <!-- src: initiatives/legal/PLAN.md -->
+### What this lane is for
+
+Its goal, from its plan (`initiatives/legal/PLAN.md`), is a command that turns a facts file plus one
+pinned set of templates into seven policy pages and a launch checklist. The plan names the command
+`arc-legal`, and the code for it is `.claude/scripts/legal/arc-legal.mjs`. The aim is that no venture
+ever publishes an invented legal claim, and none is stuck at a provider's policy-pages gate.
+
+The seven pages are terms, privacy, refund and cancellation, shipping and delivery, contact, pricing,
+and about. Seven, not six: the plan checked the provider's own documentation and found the real list
+was longer than the design note had assumed (ADR-1201).
+
+### Why the first phase was so careful
+
+The lane was opened with a hard five-day appetite (its time budget), and phase 00 was a thin
+"steel thread": three pages, start to finish, before building the rest. Then fresh reviewers were
+sent at the finished text, not at the code. They found a page that listed other people's records
+and promised nothing about them. That is the reason the checks read what a customer would read.
 
 ## arc words → normal words
 
-| arc calls it | It is really |
-|---|---|
-| clause | A pre-approved template block that an enum value maps to 1:1, selected as a whole branch by fields such as `payment_model`. <!-- src: ADR-1202; initiatives/legal/PLAN.md --> |
-| value lint | The check aimed at a compliance badge or a markup fragment riding a free-text value into a clause, which FAILs by naming an empty required field rather than rendering a dangling enumeration. <!-- src: ADR-1202; initiatives/legal/PLAN.md --> |
-| trace lint | The check that every clause on a rendered page traces back to a real entry in the enum-to-clause map, and that a clause belonging to a branch that was not selected never survives into the render. <!-- src: initiatives/legal/PLAN.md --> |
-| completeness lint | The check that every mandatory clause for a venture's posture is actually present, so an empty or thin page cannot pass on provenance alone. <!-- src: initiatives/legal/PLAN.md --> |
-| consistency lint | A fourth check added after the fact, comparing two different pages of the same venture against each other rather than reading any one page alone. <!-- src: ADR-1213 --> |
-| canonicaliser | The function that turns a facts file into one fixed, hashable form, refusing anything it cannot represent losslessly rather than guessing. <!-- src: ADR-1204 --> |
-| hash chain | The receipted link between a venture's facts, its rendered pages, and its approved template set, refused on any mismatch. <!-- src: ADR-1204 --> |
-| `--verify` | The command that re-renders a venture's committed pages and reports drift, telling apart an out-of-date format from an actually tampered page. <!-- src: initiatives/legal/PLAN.md --> |
-| `pins.yaml` | The per-venture file recording which version of the template set that venture is approved against. <!-- src: initiatives/legal/PLAN.md --> |
-| launch checklist | The list of live-site checks a real deployed venture must pass, each row recording one of four outcomes and never left blank. <!-- src: initiatives/legal/PLAN.md --> |
-| DPDP Rule-3 notice | The itemised data-and-purpose disclosure block a privacy page must carry once a country's forthcoming data-protection duties commence. <!-- src: initiatives/legal/PLAN.md --> |
+```lede
+Eight pieces of arc jargon. Each is an ordinary sign-writing thing wearing a technical name.
+```
 
-## How the work was planned
+```rosetta
+facts file | the shop's fact sheet | one file per venture; every clause is drawn from it
+clause | one pre-approved paragraph | switched on only when the facts call for it
+template set | the sign-writer's kit | versioned; a venture pins the version it is approved against
+lint | a proofreader with one job | reads the finished page, not the code
+receipt | a stamp on the sign | ties the exact wording to the facts and to the person's approval
+hash chain | stamps that must match in order | facts, then pages, then template kit; any mismatch is refused
+launch checklist | the walk round the real shop | checks the live site, and a row may say NOT-CHECKED
+payment_model | who takes the money | a fact that switches whole paragraphs; a third value, none, was added for LexOS (ADR-1211)
+```
 
-The lane was opened with a five-day hard cap, stated as a constraint rather than an estimate:
-going over it means cutting scope or killing a phase, never a silent extension. <!-- src: initiatives/legal/PLAN.md -->
-It was sized as a Tier M piece of work, with phase appetites summing to exactly five days and no
-calendar slack left anywhere in the schedule. <!-- src: initiatives/legal/PLAN.md -->
+## How one set of pages is made
 
-Its pre-decided cut order, never taken from the adversarial passes, was probe automation first,
-then polish on the drift-verification command, then the checklist renderer itself. <!-- src: initiatives/legal/PLAN.md -->
-Its kill line sat at fifty percent burned: if the first phase was not yet closed by then, the
-plan forced a mandatory scope-cut conversation rather than quietly continuing. <!-- src: initiatives/legal/PLAN.md -->
+```lede
+Facts go in, seven pages come out, proofreaders read the result, and a person signs before anything
+goes live.
+```
 
-| REQ | User outcome |
-|---|---|
-| REQ-01 | One facts file renders into all seven correct pages, with a business-posture mismatch caught as a lint failure. <!-- src: initiatives/legal/PLAN.md --> |
-| REQ-02 | Every money and legal line matches reality and carries its own evidence link. <!-- src: initiatives/legal/PLAN.md --> |
-| REQ-03 | Pages provably answer real customer situations, checked against a pinned set of scenarios. <!-- src: initiatives/legal/PLAN.md --> |
-| REQ-04 | The launch checklist checks the live, deployed site rather than trusting a stated intention. <!-- src: initiatives/legal/PLAN.md --> |
-| REQ-05 | No page can change without a cryptographic receipt tying its bytes to an approved decision. <!-- src: initiatives/legal/PLAN.md --> |
-| REQ-06 | Publishing stays human forever, reviewable through the existing approval inbox. <!-- src: initiatives/legal/PLAN.md --> |
-| REQ-07a | The template set itself is versioned and pin-governed, so one venture can sit on an older version than another. <!-- src: initiatives/legal/PLAN.md --> |
-| REQ-07b | Drift from a receipted page is detectable even without this lane present to check it. <!-- src: initiatives/legal/PLAN.md --> |
-| REQ-08 | One real venture goes through the whole path end to end, with its live-deploy checks recorded honestly as not yet checked. <!-- src: initiatives/legal/PLAN.md --> |
+```flow
+source: facts file + pinned template set
+box: ① Render | pages from facts only
+box: ② Proofread | four lints on the text
+box*: ③ Receipt | the wording is stamped
+box: ④ Ask a person | via the approval inbox
+labels: pages, checked, stamped
+out: bad facts | refused with a reason
+out: lint fails | stopped, page not shown
+out: -
+out+: signed | pages go into the venture
+divider: 3 | nothing leaves arc | a person decides
+note: Publishing stays human. The lane adds no new kinds of event to arc's log (ADR-1203).
+caption: Figure 1 — one venture, facts to signed pages. | The dashed line is where a person has to say yes.
+```
 
-## The phases, one by one
+## The stages, one by one
 
-| Phase | What it set out to prove | What shipped |
-|---|---|---|
-| 0 — Steel thread | The three core pages, rendered deterministically, lint-checked, and attacked on the actual rendered text as well as on the code. <!-- src: initiatives/legal/PLAN.md --> | Closed; five fresh attackers returned roughly seventy findings, three of them independently converging on the same worst defect: a page that itemised other people's records while promising nothing about them. <!-- src: initiatives/legal/PROGRESS.md --> |
-| 1 — The full set and its receipts | The remaining four pages, a scenario fixture set, and the hash-chained approval and publish path. <!-- src: initiatives/legal/PLAN.md --> | Found roughly half-built partway through: the pages existed but the entire receipts-and-approval half did not, corrected honestly in the tracker rather than left standing. <!-- src: initiatives/legal/PROGRESS.md --> |
-| 2 — Guards and governance | The drift-verification command, a generated venture-side guard, per-venture template pins, and the checklist renderer. <!-- src: initiatives/legal/PLAN.md --> | Pending at the tracker's own last recorded position; the tracker names per-venture template pinning the biggest remaining item, and bigger than it sounds. <!-- src: initiatives/legal/PROGRESS.md --> |
-| 3 — The real render | LexOS's own real facts, approval and commit into its working tree, plus an integration handoff. <!-- src: initiatives/legal/PROGRESS.md --> | Pending; blocked on one question owed to the owner — is the operator GST-registered — though both branches are already built and fixture-pinned. <!-- src: initiatives/legal/PROGRESS.md --> |
+```lede
+Each stage is written twice: first in ordinary words, then what actually happens.
+```
 
-## What it decided
+```steps
+t: Read the facts safely
+plain: The fact sheet is read by a strict reader that refuses anything odd, and turned into one fixed form so the same facts always give the same result. Anything it cannot represent exactly is refused, never guessed.
+d: A bounded YAML parser and a canonicaliser (ADR-1204). Facts are sorted into three risk tiers, and free text is allowed only where unavoidable (ADR-1202).
+f: `.claude/scripts/legal/arc-legal.mjs`
 
-| ADR | Decision |
-|---|---|
-| 1200 | The owner's build-out mandate fires this lane, superseding an earlier launch-prep trigger. <!-- src: ADR-1200 --> |
-| 1201 | The page set is the verified provider superset of seven pages, not the six a design document had assumed. <!-- src: ADR-1201 --> |
-| 1202 | The facts schema classifies every field into one of three risk tiers, with free text permitted only where unavoidable and bounded. <!-- src: ADR-1202 --> |
-| 1203 | This lane adds zero new spine event kinds and rides the existing strict approval payload profile. <!-- src: ADR-1203 --> |
-| 1204 | The receipt attests to the rendered bytes themselves, and its hash preimage carries its own version number. <!-- src: ADR-1204 --> |
-| 1205 | Templates are authored inside arc but executed venture-side, never propagated automatically across a whole fleet. <!-- src: ADR-1205 --> |
-| 1206 | The data-protection notice depth is light but correct for launch, and the underlying rules are recorded as not yet in force. <!-- src: ADR-1206 --> |
-| 1207 | A real lawyer's review is a triple tripwire, with its advocate role armed early rather than at the end. <!-- src: ADR-1207 --> |
-| 1208 | Operational wording defaults cover the deletion mailbox and a cancellation path free of dark patterns. <!-- src: ADR-1208 --> |
-| 1209 | Text quality is judged by whether a page can answer a pinned scenario, and that scenario set is itself a fixture. <!-- src: ADR-1209 --> |
-| 1210 | A bundle of seven decisions made together on the lane's kickoff day. <!-- src: ADR-1210 --> |
-| 1211 | The payment-model field gains a third value, because the flagship venture is not itself a merchant of record. <!-- src: ADR-1211 --> |
-| 1212 | A pricing page may carry several plans, each with one all-inclusive figure rather than a breakdown. <!-- src: ADR-1212 --> |
-| 1213 | A fourth lint checks consistency between two pages of the same venture, because the worst defects found sat between pages rather than on any single one. <!-- src: ADR-1213 --> |
+t: Write the pages
+plain: The fact sheet switches paragraphs on and off. Whole branches follow from a choice such as who takes the payment. The same facts always produce the same words.
+d: Templates and data files live under the product; a venture pins one set by name.
+f: `products/legal/manifest.json`
 
-## Where it stands now
+t: Proofread the finished text
+plain: Four proofreaders read each page. One checks that no stray badge or markup rode in on a free-text answer. One checks every paragraph traces back to a real fact. One checks nothing required is missing. The fourth compares two pages of the same venture with each other.
+d: Value, trace, completeness and consistency lints. The fourth exists because the worst defects sat between pages, not on them (ADR-1213).
+f: `tests/legal-lints.bats`, `tests/legal-consistency.bats`
 
-Appetite burn, re-derived at this close rather than carried forward, reads about three of the five
-days used — sixty percent. <!-- src: initiatives/legal/PROGRESS.md -->
+t: Stamp and ask
+plain: The exact wording is stamped, and a person is asked to approve exactly those words. If the facts or the pages change after approval, the stamps no longer match and publishing is refused.
+d: Receipts attest to the bytes and the hash preimage carries its own version (ADR-1204). The approval rides the existing strict profile (ADR-1203).
+f: `.claude/scripts/legal/publish-gate.mjs`
+```
 
-Its fifty-percent kill tripwire did not fire, because the first phase had already closed inside
-its own budget by the time that line was reached. <!-- src: initiatives/legal/PROGRESS.md -->
+# The bigger loop
 
-The honest reading is that the schedule's scope grew rather than its estimate slipping: reader
-panels alone returned dozens of findings and one entire extra lint that no phase specification had
-anticipated. <!-- src: initiatives/legal/PROGRESS.md -->
+## A venture, as a story
 
-Two honest gaps are named rather than smoothed over: `publish-gate.mjs` runs inside the bats step
-rather than its own CI step, because `.github/` is write-denied in this workspace, and eight
-text-panel findings remain open in the evidence file, none of them asserting an untruth. <!-- src: initiatives/legal/PROGRESS.md -->
+```loop
+top: 1 | a new venture
+top: 5 | live pages
+stage: 1 · Facts are written | real values only
+stage: 2 · Pages are rendered | seven of them
+stage: 3 · Proofreaders run | four lints
+stage*: 4 · A person is asked | reads the exact words
+stage!: 5 · Signed | drift is caught later
+labels: facts, pages, verdict, signature
+back: last -> 1 | a change to the facts starts the loop again
+caption: Figure 2 — the life of one venture's pages. | A change after signing needs a new signature.
+```
 
-## The bigger loop
+1. A shop owner states the real facts: how they get paid, what the refund window is, where the grievance mailbox is.
+2. The lane renders the seven pages.
+3. The four proofreaders read the text and stop on anything unsound.
+4. A person reads the pages and approves or rejects, and gives a reason.
+5. Later, a check re-renders the committed pages and reports if they drifted.
 
-### What went wrong and what was learned
+*This story is an illustration of how the loop runs. It is not a real venture.*
 
-- **A page can pass every check that reads it alone and still contradict its own neighbour.** One
-  text panel ran three stances over the rendered bytes of two ventures, blind to each other, and
-  three of the four most severe findings were contradictions between two pages, each raised
-  independently by more than one stance — and every page involved had already passed all three
-  single-page lints, which is why a fourth lint was added to compare pages against each other. <!-- src: ADR-1213 -->
-- **A negative control ran inside a shell subshell and silently proved nothing.** The helper meant
-  to simulate a broken page ran under bats' own `run`, a subshell, so every mutation control for
-  all three lints silently passed without actually exercising anything, and that is why three
-  criticals survived to be found by an agent rather than by the test suite meant to catch them. <!-- src: initiatives/legal/PROGRESS.md -->
-- **A present-tense sentence quietly promised a duty that had not yet begun.** `privacy.mdx` said a
-  data-protection right was already given to a customer, eight sections after the very same page
-  had correctly said those provisions had not yet commenced — a contradiction between two clauses
-  on one page that survived four reads because no lint in this lane compares two clauses on one
-  page. <!-- src: initiatives/legal/PROGRESS.md -->
-- **A structurally perfect-looking number was never actually validated.** Every fixture tax
-  identifier had the right shape but the wrong statutory check digit, and it took a reader playing
-  the role of a regulator, not a test, to notice the shape alone was never enough. <!-- src: initiatives/legal/PROGRESS.md -->
-- **A literal control character written into a guard's own source made the guard invisible to
-  later patches.** A byte-level check was authored using the literal character it was meant to
-  guard against, which made a text tool read the whole file as binary — reproducing, in a
-  different file, a defect this repository had already hit once before. <!-- src: initiatives/legal/evidence/fixed-defect-list.md -->
-- **A generated venture-side script must never be hand-copied**, because a future fix to the
-  comparison function it is generated from would otherwise silently diverge from a copy sitting in
-  a different repository that no sweep of this one can reach. <!-- src: initiatives/legal/PROGRESS.md -->
+## Where it stands
 
-### How it connects to the rest of arc
+The live numbers (phase, burn, blockers) are in the generated sections from `initiatives/legal/PROGRESS.md`.
+In words, as that tracker records it: phase 00 is closed. Its evidence bundle is
+`initiatives/legal/evidence/phase-00/bundle.md`. The seven pages, four lints and scenario fixtures
+are built, and a fourth lint was added that no plan had predicted.
 
-Every attacker this lane runs carries forward its own running list of already-fixed defects, with
-the standing instruction to check every entry in every OTHER file, since a fix is not applied until
-it has been attacked somewhere it was never made. <!-- src: initiatives/legal/evidence/fixed-defect-list.md -->
+The tracker also states an honest gap. Its own closing notes list the receipts and approval half,
+the drift check (`--verify`), per-venture template pinning and the real LexOS render as still to do,
+and say the receipts half had not been built at the time it was written. The code has since gained
+propose and publish steps, so the tracker may lag the code. Check the tracker before quoting a phase.
 
-The lane adds zero new kinds to the spine's closed event vocabulary and rides the existing strict
-approval profile instead of adding a new row to `hq.policy.yaml`, keeping `targets.publish` empty. <!-- src: ADR-1203 -->
+What waits on the owner: the real render for LexOS, the first venture to go through the whole
+path, needs one answer. Is the operator registered for GST? Both answers are already built and tested.
 
-For its one real venture, LexOS, the lane itself commits pages, pins and receipts into the
-venture's working tree, then produces a handoff checklist — route wiring, footer creation, signup
-consent capture, cancel-path UI parity, grievance mailbox, provider dashboard fields — for that
-venture's own team to complete. <!-- src: initiatives/legal/PLAN.md -->
+## What next
 
-## Glossary
-
-- **facts file** — the one YAML file per venture stating the real business facts every clause is
-  rendered from. <!-- src: initiatives/legal/PLAN.md -->
-- **clause** — one fact-driven block of a template, present only when a venture's posture calls
-  for it. <!-- src: initiatives/legal/PLAN.md -->
-- **canonicaliser** — the function that turns a facts file into one fixed, hashable form and
-  refuses what it cannot represent exactly. <!-- src: ADR-1204 -->
-- **hash chain** — the receipted link between a venture's facts, its rendered pages and its
-  approved template version. <!-- src: ADR-1204 -->
-- **`--verify`** — the command that re-renders a venture's committed pages and reports drift. <!-- src: initiatives/legal/PLAN.md -->
-- **launch checklist** — the set of live-site checks on a deployed venture, each row recording one
-  of four fixed outcomes and never left blank. <!-- src: initiatives/legal/PLAN.md -->
-- **consistency lint** — the fourth check, comparing two pages of one venture against each other
-  rather than reading either alone. <!-- src: ADR-1213 -->
+1. Check the tracker against the code and bring it up to date.
+2. Per-venture template pinning, so one venture can stay on an older kit while another moves.
+3. A drift check that runs inside the venture's own repository, generated from the same comparison code, never hand-copied.
+4. The real LexOS render, once the GST answer is given.
