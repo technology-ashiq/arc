@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "pages": {
+    "products/qa": {
+      "by": "owner",
+      "on": "2026-09-29",
+      "sha256": "e2a175b19d8b5a19d98df01f071155723fc2b48f41114430a59db28b06accd84"
+    }
+  }
+}
