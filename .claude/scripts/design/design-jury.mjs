@@ -271,10 +271,21 @@ function writeOnce(file, obj, what) {
   }
 }
 
+// Every file the ritual decides on is read as a regular file: a symlink could point anywhere, and a
+// directory where a file belongs crashed the read into a stack trace (S4 attack B2 B4).
+function readRegular(file, what) {
+  let st;
+  try { st = lstatSync(file); } catch { fail(`${what} is missing`); }
+  if (st.isSymbolicLink() || !st.isFile()) fail(`${what} is not a regular file`);
+  try { return readFileSync(file); } catch (e) { fail(`${what} could not be read (${e.code || e.message})`); }
+}
+
 function sealedPredictions(root) {
   const dir = join(root, "docs", "adr");
-  const adr = existsSync(dir) ? readdirSync(dir).find((n) => n.startsWith("1411-")) : null;
-  const text = adr ? readFileSync(join(dir, adr), "utf8") : "";
+  const adrs = existsSync(dir) ? readdirSync(dir).filter((n) => n.startsWith("1411-")) : [];
+  // The first of two is directory order, not the record (S4 attack B1).
+  if (adrs.length > 1) fail(`docs/adr holds ${adrs.length} files numbered 1411; exactly one ADR-1411 is the record`);
+  const text = adrs.length ? readRegular(join(dir, adrs[0]), `docs/adr/${adrs[0]}`).toString("utf8") : "";
   return /Sealed at kickoff/.test(text) && /1\. post-Phase-03 controlled blind score/.test(text) && /2\. rival-beats-all-arc rate/.test(text) && /3\. the EXP-A1 prediction/.test(text);
 }
 
@@ -285,7 +296,7 @@ function score(argv) {
   const { ex, key } = loadKey(root, o["--id"]);
   if (existsSync(join(ex.jury, "unblind.json"))) fail("this explore was already unblinded; a score recorded now is not a blind score");
   if (!sealedPredictions(root)) fail("ADR-1411's three sealed predictions are not on the record; they are sealed BEFORE the owner scores");
-  if (!key.rubric || !existsSync(join(root, key.rubric.path)) || sha256(readFileSync(join(root, key.rubric.path))) !== key.rubric.sha256) {
+  if (!key.rubric || !existsSync(join(root, key.rubric.path)) || sha256(readRegular(join(root, key.rubric.path), key.rubric.path)) !== key.rubric.sha256) {
     fail("the rubric changed after the deal (or is gone); anchors are fixed before the run, and a changed one is a recorded decision, not an edit");
   }
   const labels = key.items.map((i) => i.label);
@@ -325,8 +336,9 @@ function unblind(argv) {
   const arc = best("variant"), ctl = best("control"), ref = best("reference");
   const bar = ctl ? { arc: arc.score, control: ctl.score, beats: arc.score > ctl.score } : null;
   writeOnce(join(ex.jury, "unblind.json"), { id: key.id, unblinded: at, scored: sc.scored, rows, bestArc: arc, bestControl: ctl, bestReference: ref, bar }, "the unblinding");
-  for (const r of rows) console.log(`design-explore unblind: ${r.label} = ${r.kind} ${r.source} -- ${r.score}/100`);
-  console.log(`design-explore unblind: best arc ${arc.score}${ctl ? `, plain-prompt control ${ctl.score} (${bar.beats ? "arc beats it" : "arc does NOT beat it"})` : ", no control in this deal"}${ref ? `, reference ${ref.score}` : ""}`);
+  // The key and the score are files on disk; what they carry is printed as text, never as terminal control (S4 attack B3).
+  for (const r of rows) console.log(clean(`design-explore unblind: ${r.label} = ${r.kind} ${r.source} -- ${r.score}/100`));
+  console.log(clean(`design-explore unblind: best arc ${arc.score}${ctl ? `, plain-prompt control ${ctl.score} (${bar.beats ? "arc beats it" : "arc does NOT beat it"})` : ", no control in this deal"}${ref ? `, reference ${ref.score}` : ""}`));
 }
 
 function catchRate(argv) {
@@ -338,8 +350,9 @@ function catchRate(argv) {
   const per = [];
   for (const v of readdirSync(ex.dir).filter((d) => /^variant-[a-z]$/.test(d)).sort()) {
     const man = join(ex.dir, v, "self-review", "manifest.md");
-    if (!existsSync(man)) continue;
-    const rows = readFileSync(man, "utf8").split(/\r?\n/).filter((l) => /^\|\s*[0-9]+\s*\|/.test(l));
+    // lstat, not existsSync: a dangling symlink is a planted input, not an absent manifest.
+    try { lstatSync(man); } catch { continue; }
+    const rows = readRegular(man, `${v}/self-review/manifest.md`).toString("utf8").split(/\r?\n/).filter((l) => /^\|\s*[0-9]+\s*\|/.test(l));
     let c = 0;
     for (const r of rows) {
       const cells = r.split("|").map((x) => x.trim());
