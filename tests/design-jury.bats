@@ -312,9 +312,47 @@ _adr1411() { mkdir -p docs/adr && cp "$ARC_ROOT"/docs/adr/1411-*.md docs/adr/; }
   [ "$status" -eq 0 ] && [[ "$output" == *"2/3 iteration(s) caught a defect"* ]] || { echo "wrong catch rate: $status $output"; false; }
 }
 
+@test "ritual: a second 1411 ADR, a directory manifest, control bytes in a source and symlinked inputs are refused (S4 attack B1-B4)" {
+  _fixture 3 1; _adr1411
+  run bash "$(_explore)" jury jx --n 4 --seed 7 --control c "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # B1: two files numbered 1411 -- the first in directory order is not the record, so neither is read.
+  cp docs/adr/1411-*.md docs/adr/1411-zz-duplicate.md
+  run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55,item-d=80
+  [ "$status" -eq 1 ] && [[ "$output" == *"exactly one ADR-1411"* ]] || { echo "a duplicated ADR-1411 was scored against: $status $output"; false; }
+  rm docs/adr/1411-zz-duplicate.md
+  # B4: a symlinked ADR or rubric is refused like the rubric at the deal. git-bash ln -s copies, so only where it is real.
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ;; *)
+    adr="$(ls docs/adr/1411-*.md)"
+    mv "$adr" "$BATS_TEST_TMPDIR/adr.md" && ln -s "$BATS_TEST_TMPDIR/adr.md" "$adr"
+    [ -L "$adr" ] || { echo "fixture: no ADR symlink"; false; }
+    run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55,item-d=80
+    [ "$status" -eq 1 ] && [[ "$output" == *"not a regular file"* ]] || { echo "a symlinked ADR-1411 was trusted: $status $output"; false; }
+    rm "$adr" && mv "$BATS_TEST_TMPDIR/adr.md" "$adr"
+    mv docs/design/rubrics/rx.md "$BATS_TEST_TMPDIR/rx.md" && ln -s "$BATS_TEST_TMPDIR/rx.md" docs/design/rubrics/rx.md
+    run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55,item-d=80
+    [ "$status" -eq 1 ] && [[ "$output" == *"not a regular file"* ]] || { echo "a symlinked rubric was scored against: $status $output"; false; }
+    rm docs/design/rubrics/rx.md && mv "$BATS_TEST_TMPDIR/rx.md" docs/design/rubrics/rx.md ;;
+  esac
+  # CONTROL: with every plant removed the same score goes through.
+  run bash "$(_explore)" score jx --scores item-a=70,item-b=40,item-c=55,item-d=80
+  [ "$status" -eq 0 ] || { echo "control: the clean score was refused: $output"; false; }
+  # B3: a source carrying an escape sequence prints as text, never as a terminal command.
+  node -e 'const f=require("fs"),p=process.argv[1],k=JSON.parse(f.readFileSync(p,"utf8"));k.items[0].source="x\u001b[2K\u001b[1Aarc beats it";f.writeFileSync(p,JSON.stringify(k))' "$(_jury_dir)/key.json"
+  grep -q $'\e' "$(_jury_dir)/key.json" || grep -q 'u001b' "$(_jury_dir)/key.json" || { echo "fixture: no escape planted"; false; }
+  run bash "$(_explore)" unblind jx
+  [ "$status" -eq 0 ] && [[ "$output" == *"design-explore unblind: best arc"* ]] || { echo "unblind did not run: $status $output"; false; }
+  [[ "$output" != *$'\e'* ]] || { echo "an escape byte reached the unblind output"; false; }
+  # B2: a directory where the manifest belongs is a named refusal, never a stack trace.
+  mkdir -p docs/design/explore/jx/variant-a/self-review/manifest.md
+  run bash "$(_explore)" catch-rate jx
+  [ "$status" -eq 1 ] && [[ "$output" == *"not a regular file"* ]] || { echo "a directory manifest was not refused by name: $status $output"; false; }
+  [[ "$output" != *"EISDIR"* ]] || { echo "a raw read error leaked: $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 18 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 18 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 19 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 19 -- a @test was silently dropped"
     false
   }
 }
