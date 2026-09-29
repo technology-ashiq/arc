@@ -424,6 +424,11 @@ stay bespoke folds.
 
 ## Now
 
+**PHASE 08 PLAN REFINED (2026-09-30, `/arc-change --lane face`, owner: "complete everything, all phases, don't stop for anything"):**
+its coarse one-line verification plan is now a table with one exact check per exit criterion, an evidence file each, and who does
+it (`phases/phase-08-spec.md`). Tracker only, no code. The two real days are the owner's and no session can run them for him;
+Phase 08 opens only after `/arc-phase-done 07`, which waits on the owner-key PR below. Assumptions ledger: nothing fired.
+
 **CHANGE ROUTED (2026-09-30, `/arc-change --lane face`, owner: "owner-token first"):** PR #300 merged (`9979a266`). Its round-3
 attack (boundary B1, B2) showed the accept proof is a deliberate step, not authentication: CI cannot re-verify the ULID, and a
 shell in the main clone can write both events. **ADR-1514 Amendment 2** (decision, proposed) makes it authentication: an
