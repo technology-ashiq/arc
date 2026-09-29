@@ -3,7 +3,7 @@
 id: 'product-manager'
 title: 'Product manager'
 dept: 'd-product'
-mission: 'Turn a goal into a falsifiable plan with risk-ordered phases before any code is written.'
+mission: 'Turn a goal into a falsifiable plan, phases ordered by risk, before any code is written.'
 stages:
   - 'discover'
   - 'validate'
