@@ -71,7 +71,7 @@ box: ② Curator | gathers real reference screens
 box: ③ Drafter | draws, looks, revises up to 3 times
 box*: ④ Judges | critic and blind jury
 labels: idea, pack, drafts
-out: no pack | the critic has no bar to measure against
+out: no pack | critic has no bar
 out: rule broken | back to the drafter
 out: below the bar | back to the drafter
 out+: a ranked result | with the owner's blind score

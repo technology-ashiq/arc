@@ -61,7 +61,7 @@ box: ① Research | a dossier per lead
 box: ② Draft | one message each
 box: ③ Check | honest and specific?
 box*: ④ Approve | a person says yes
-labels: leads, drafts, passed, approved
+labels: leads, drafts, passed
 out: bad source | lead rejected, with the reason
 out: unverified email | lead held, not guessed
 out: generic draft | refused, or flagged
@@ -106,12 +106,12 @@ f: `initiatives/leads/phases/phase-02-spec.md`
 ```loop
 top: 1 | five known people
 top: 5 | the logbook
-stage: 1 · Owner names five addresses | people he knows
+stage: 1 · Owner names five | people he knows
 stage: 2 · Research and draft | the real pipeline
 stage: 3 · Gates run | facts, lint, allowlist
 stage*: 4 · Owner approves | in the inbox
 stage!: 5 · Send is attempted | the clock decides
-labels: roster, dossiers, verdicts, yes, outcome
+labels: roster, dossiers, verdicts, yes
 back: last -> 1 | a refusal is recorded too, so the next run starts from what really happened
 caption: Figure 2 — the rehearsal, start to finish. | A refusal counts as the guard working.
 ```

@@ -62,7 +62,7 @@ box: ① Study | /arc-absorb
 box: ② Rebuild | allowlist only
 box*: ③ Test both | A/B, blind pick
 box: ④ You decide | adopt or not
-labels: tasting note, arc's own version, evidence
+labels: note, rebuild, evidence
 out: unsafe input | refused, nothing runs
 out: outside the allowlist | refused
 out: no evidence | stays a candidate

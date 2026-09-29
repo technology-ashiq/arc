@@ -72,7 +72,6 @@ labels: pages, checked, stamped
 out: bad facts | refused with a reason
 out: lint fails | stopped, page not shown
 out: -
-out: no signature | nothing is published
 out+: signed | pages go into the venture
 divider: 3 | nothing leaves arc | a person decides
 note: Publishing stays human. The lane adds no new kinds of event to arc's log (ADR-1203).
@@ -118,7 +117,7 @@ stage: 1 · Facts are written | real values only
 stage: 2 · Pages are rendered | seven of them
 stage: 3 · Proofreaders run | four lints
 stage*: 4 · A person is asked | reads the exact words
-stage!: 5 · Signed, then checked | drift is caught later
+stage!: 5 · Signed | drift is caught later
 labels: facts, pages, verdict, signature
 back: last -> 1 | a change to the facts starts the loop again
 caption: Figure 2 — the life of one venture's pages. | A change after signing needs a new signature.

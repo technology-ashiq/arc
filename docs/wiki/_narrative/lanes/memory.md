@@ -120,11 +120,11 @@ but it is never allowed to fail the build.
 ```loop
 top: 1 | a new plan
 top: 5 | the next build
-stage: 1 · A plan is being drafted | goal: change how routing works
-stage: 2 · The librarian is asked | by the planner, unprompted
-stage: 3 · Old notes come back | "we tried this, it broke"
+stage: 1 · Plan drafted | goal: change how routing works
+stage: 2 · Librarian asked | by the planner, unprompted
+stage: 3 · Old notes return | "we tried this, it broke"
 stage*: 4 · The plan changes | it avoids the old trap
-stage!: 5 · A new lesson is filed | with a clash check first
+stage!: 5 · Lesson filed | with a clash check first
 labels: question, notes, plan, lesson
 back: last -> 1 | the new note is there for the next plan
 caption: Figure 2 — how a lesson keeps paying off. | The loop closes when a new lesson goes back into a cabinet.

@@ -123,10 +123,10 @@ room). `/arc-face-module` builds a new module already passing both. A phase clos
 ```loop
 top: 1 | the owner
 top: 5 | the logbook
-stage: 1 · A decision is waiting | shows in the inbox room
+stage: 1 · Decision waits | shows in the inbox room
 stage: 2 · The owner reads it | the room shows facts from the read door
 stage: 3 · The owner answers | approve or reject, with a reason
-stage*: 4 · The work door runs it | the same tool as by hand
+stage*: 4 · Work door runs it | the same tool as by hand
 stage!: 5 · A receipt lands | the room reads it back
 labels: opened, read, pressed, recorded
 back: last -> 1 | the next decision shows up

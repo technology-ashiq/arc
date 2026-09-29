@@ -56,7 +56,7 @@ box: ② Any rooms? | initiatives/ exists
 box: ③ One busy room? | LIVE or BLOCKED
 box*: ④ Go | work in that room
 labels: named, rooms exist, exactly one
-out: unknown name | STOP, list rooms, create nothing
+out: unknown name | STOP, create nothing
 out: no folder | root-mode, as before
 out: none or many | ask, never pick
 out+: room chosen | its own plan and progress
@@ -109,7 +109,7 @@ The point of the lane, told as one small story.
 top: 1 | a project is stuck
 top: 5 | the board
 stage: 1 · Room A waits | needs the owner
-stage: 2 · Board shows BLOCKED | the reason sits beside it
+stage: 2 · Board: BLOCKED | the reason sits beside it
 stage: 3 · Room B carries on | its own plan
 stage*: 4 · Owner answers A | a command names --lane A
 stage!: 5 · Board updated | from A's door sign

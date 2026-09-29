@@ -76,9 +76,8 @@ labels: budget, forks, draft
 out: -
 out: -
 out: -
-out: holes found | fixed, then re-checked
-out+: STOP | wait for your approval
-divider: 4 | still on paper | code allowed
+out+: holes or STOP | fixed, then your approval
+divider: 3 | still on paper | code allowed
 note: Nothing is built until you approve. Not even /arc-change will run first.
 caption: Figure 1 — one /arc-kickoff. | The dashed line is the only door to product code, and it opens from your side.
 ```
@@ -136,7 +135,7 @@ The site office does not go home when the plan is signed. It guards three moment
 
 ```loop
 top: 1 | /arc-change
-top: 6 | /arc-retro
+top: 5 | /arc-retro
 stage: 1 · New idea | someone has a suggestion
 stage: 2 · Get a home | tracker, spec or receipt first
 stage*: 3 · Build a slice | small, then test and demo

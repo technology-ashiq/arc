@@ -124,7 +124,7 @@ top: 5 | the briefing
 stage: 1 · A chore is due | the clock should ring
 stage: 2 · It does not ring | alarm gone, machine off
 stage: 3 · Slots pass | nothing is written
-stage*: 4 · Gap passes twice the cadence | the panel counts it
+stage*: 4 · Gap grows | the panel counts it
 stage!: 5 · Needs-you line | the briefing names it
 labels: due, silent, counted, warned
 back: last -> 1 | someone fixes it and the next ring is on record

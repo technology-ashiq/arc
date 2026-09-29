@@ -65,8 +65,8 @@ box: ① Pin and read | study.mjs
 box: ② Write the note | report-lint.mjs
 box*: ③ Rebuild in arc | rebuild-lint.mjs
 box: ④ Test and judge | ab-run.mjs
-labels: studied, classified, rebuilt, judged
-out: no licence found | rebuild the idea in arc's own words only
+labels: studied, classified, rebuilt
+out: no licence found | rebuild in own words
 out: bad licence | refused, logged with the reason
 out: outside the allowlist | flagged, not proposed
 out: no decision from you | stays a candidate

@@ -70,7 +70,7 @@ box*: ④ Paperwork | receipt + register tick
 labels: photo, findings, verdict
 out: won't render | stops, no critique
 out: no photo read | no result
-out: any problem | fail, handed back to the builders
+out: any problem | fail, sent back
 out+: review.completed | one line in the logbook
 divider: 2 | agent judges | script decides
 note: The critic never fixes. On a fail the problems go to whoever is building, then the critic looks again.

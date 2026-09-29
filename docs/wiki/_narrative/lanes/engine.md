@@ -69,8 +69,7 @@ box*: ④ Check the answer | shape + secrets scan
 labels: found, sent, returned
 out: bad row | refused before any spend
 out: -
-out: -
-out: wrong shape | one retry, then a proposal to a person
+out: wrong shape | one retry, then a person
 out+: receipt | one line in the logbook
 divider: 2 | free to refuse | money is spent
 note: A failed run never quietly changes a worker. It ends in a proposal for a person to read.

@@ -62,10 +62,8 @@ source: someone wants a seat on a different model
 box: ① Free to try | any model, on an isolated branch
 box: ② Fair race | paired A/B, blind ranking
 box*: ③ Reviewed change | cites `ADR-0069`
-labels: try, judged, then
+labels: try, judged
 out: just a trial | nothing in production moves
-out: -
-out: -
 out: no clear gain | seat stays put, and the reason is filed
 out+: clear gain | tier change, as a reviewed diff
 divider: 2 | free to explore | production changes

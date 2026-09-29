@@ -65,7 +65,7 @@ box: ① Gather facts | researchers
 box: ② Argue | lawyers and witnesses
 box*: ③ Grade | the examiner
 box: ④ Rule | the Chair
-labels: case file, numbered points, ratings
+labels: case file, points, ratings
 out: web unavailable | facts marked low-confidence
 out: one side reads another | not allowed
 out: nothing contested | sent back once

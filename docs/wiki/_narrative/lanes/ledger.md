@@ -112,7 +112,7 @@ stage: 2 · Report | arc pnl shows the numbers
 stage: 3 · Meter | distance to the cliff is printed
 stage*: 4 · Match | till against bank, both ways
 stage!: 5 · Sealed | month.closed, never restated
-labels: earn, read, watch, check, seal
+labels: read, watch, check, seal
 back: last -> 4 | a mismatch keeps the page open
 caption: Figure 2 — a month in the notebook. | The loop back is the point: no match, no seal.
 ```

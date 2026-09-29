@@ -68,7 +68,6 @@ box*: ④ Gates | all must pass
 labels: reserved, scored, then
 out: no cap | refused, never defaulted
 out: -
-out: -
 out: gate fails | NO PROPOSAL, with the reason
 out+: proposal | evidence + diff, for a person
 divider: 2 | free to refuse | money is spent
@@ -123,7 +122,7 @@ to run it and read the report (ADR-0908 sets the tiers).
 ```loop
 top: 1 | a new model
 top: 5 | the rota
-stage: 1 · A new model appears | cheaper, claims to be as good
+stage: 1 · New model appears | cheaper, claims to be as good
 stage: 2 · Both sit the exams | champion and candidate
 stage: 3 · Gates run | quality, cost, cap
 stage*: 4 · Proposal filed | a person is asked

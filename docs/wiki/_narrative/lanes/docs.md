@@ -69,7 +69,6 @@ box*: ④ Run the checks | coverage, drift, redraw
 labels: found, drawn, then
 out: reader fails | stops, names the reader
 out: -
-out: -
 out: a check fails | CI red, names the culprit
 out+: the wiki | docs/wiki/, committed
 divider: 2 | nothing written yet | files now change
