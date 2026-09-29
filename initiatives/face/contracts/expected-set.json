@@ -1417,6 +1417,7 @@
       "PLAN-memory": "strategy",
       "PLAN-model-policy": "strategy",
       "PLAN-ops": "strategy",
+      "PLAN-org": "strategy",
       "PLAN-policy": "strategy",
       "PLAN-portfolio": "strategy",
       "PLAN-scheduler": "strategy",
