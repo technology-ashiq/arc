@@ -1,0 +1,90 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:ownerKeyBaseState (the `got.missing` branch), narrative-anchors.mjs:ownerKeyFinding",
+      "breaking_input": "PR 1 deletes .claude/owner-key.pub and removes every accepted.json entry. PR 2 then adds the agent's own key and re-signs the entries with it.",
+      "why": "When the working-tree key is missing, ownerKeyBaseState returns \"no-key\" before it looks at the base. Deleting the trust anchor therefore gives no WARN, and the summary says base=no-key. Once the deletion is merged, the base has no key file, so PR 2 reads as \"bootstrap\" and is also silent. The key swap the design promises to make loud goes through in two quiet steps.",
+      "fix": "Read the base before returning no-key. If the base has the key and the tree does not, report state \"changed\" (deleted) with a WARN. Treat bootstrap as allowed only when accepted.json holds no owner entries."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:ownerKeyBaseState (rev-parse, merge-base, ls-tree, show on a bare `origin/main`)",
+      "breaking_input": "Create a local tag or branch named `origin/main` (refs/tags/origin/main or refs/heads/origin/main) that points at a commit carrying the swapped key. Run the plain gate with the default base.",
+      "why": "git resolves an unqualified name in the order refs/<name>, tags, heads, remotes. A local ref of that name shadows refs/remotes/origin/main, so the base is read from the attacker's commit and the swap reports \"same\". The ref-name regex only blocks options and does not fix the ambiguity.",
+      "fix": "Default to the fully qualified `refs/remotes/origin/main`. Resolve any user-supplied ref with `rev-parse --verify --end-of-options` and refuse an ambiguous name (warning: refname is ambiguous).",
+      "twin_of": "A case-insensitive ref shadow -> compare names the way the filesystem does."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:proofArms MUTANT B3 and B7 symlink cases (rdLink, sigLink, baseLink, b7c)",
+      "breaking_input": "Run the self-test where symlinkSync throws EPERM. This is the Windows case the session hit at 4:03a.",
+      "why": "When the link cannot be made, the arm fabricates the result it then asserts: `rdLink = {pem:\"\", why:\"is a symlink\"}`, `sigLink = {why:\"is a symlink\", sig:\"\"}`, `baseLink = {state:\"unavailable\"}`, and `b7c` is skipped by `!linked ||`. The arm passes without the code under test running. The count still reads 89.",
+      "fix": "When the link cannot be made, exclude the arm from the RAN count or fail it as UNMEASURED. Do not synthesise the expected result. Build the link case with a junction or a mocked lstat.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs main(): the `[not-a-file] ${p}` push",
+      "breaking_input": "Put a symlink or directory under the narrative or verify tree whose file name holds a newline followed by a forged summary line, for example `x\\nnarrative-anchors: narratives=34 accepted=34 awaiting-owner=0 fail=0 owner-key-changed=0 owner-key-base=checked`.",
+      "why": "B13 escaped page names in evaluate(), but t.rejected holds paths read off disk and they are interpolated raw. A single finding can then span two lines and begin as a summary.",
+      "fix": "Print `${shownPage(p)}` here. Apply the same escaping to every remaining finding that embeds a disk-derived name.",
+      "twin_of": "A folder name or finding carrying a newline could print a verdict line of its own -> the one-line rule applies to names read off a disk."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:gitEnv",
+      "breaking_input": "On the owner box, run `git replace <base-commit> <commit carrying the swapped key>`. Alternatively set GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES or GIT_CONFIG_COUNT/KEY/VALUE in the environment. Then run the gate.",
+      "why": "gitEnv strips only five location variables. Replace refs are honoured by ls-tree and show, so the base key can be replaced by attacker content and the swap check reports \"same\". The object-store and config-injection variables pass through. `GIT_OPTIONAL_LOCKS` is appended after the spread, so an inherited lower-case `git_optional_locks` survives as a second variable on Windows, the same case class as the B4 fix.",
+      "fix": "Set GIT_NO_REPLACE_OBJECTS=1. Strip GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES, GIT_CONFIG_* and GIT_NAMESPACE. Case-fold `GIT_OPTIONAL_LOCKS` the same way as the extra names.",
+      "twin_of": "Owner config that runs or hides -> override every config key that can run a program or change what a diff shows."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:signAccept, decisionSizeProblem",
+      "breaking_input": "An approval.requested lists 201 distinct short page ids such as `a/b001`. The payload cost is about 22K, under the 28000 ceiling.",
+      "why": "The size check does not count keys. The owner types the passphrase and the signatures are made. Only then does sigsShapeProblem refuse with \"names 201 pages, ceiling 200\". This is the refusal-after-passphrase that B10 was meant to remove.",
+      "fix": "Refuse pages.length or byPage.size over MAX_SIGNED_PAGES inside signAccept, before unsealOwnerKey. Add the same count check to decisionSizeProblem."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:initOwnerKey (writeNew, madePub, madeTmp)",
+      "breaking_input": "Make writeSync throw after openSync succeeds, for example on a full disk or a quota error, on the public file or on the tmp private file.",
+      "why": "`madePub = true` and `madeTmp = true` are set after writeNew returns. When the write throws, the file was already created. The catch does not remove it, so a zero-byte public key file is left behind. The next init refuses with \"a public key file already exists\", which strands the owner. This is B7's own failure mode.",
+      "fix": "Set the flag before the write, or have writeNew unlink its own path when the write throws."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:proofArms MUTANT B7 (b7b case)",
+      "breaking_input": "Delete the `present(pubPath)` refusal in initOwnerKey.",
+      "why": "The session's own mutation pass found this survivor (4:11a). With a committed public key file, the later wx open fails EEXIST and init still returns !ok with the file unchanged. b7b asserts neither the message nor that no passphrase was prompted, so it cannot tell an early refusal from a late write failure. The early check exists to refuse before the owner types anything.",
+      "fix": "Assert that b7b.why contains \"already exists\" and that a counting readPassphrase was called 0 times."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-sig.mjs:readOwnerPubFile; owner-key.mjs:unsealOwnerKey",
+      "breaking_input": "Between lstat and realpath or readFileSync, swap the checked regular file for a symlink to an outside file, or swap it back after the check. This is a same-user race.",
+      "why": "The file is judged by lstat and realpath and then reopened by path. The read is not made on a descriptor. It is the check-then-open pattern that lists as fixed elsewhere, and B3 unified the checks but not the open.",
+      "fix": "Open with O_NOFOLLOW where available. fstat the descriptor and read from the same fd. Compare fstat ino/dev with the lstat before trusting the bytes.",
+      "twin_of": "Check-then-open on a caller's path -> decide on the descriptor you read from."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:openKey (N_BAND) with SCRYPT_MAXMEM",
+      "breaking_input": "A sealed file whose recorded N is 2^20, or p is 4 with a large N. The band accepts it.",
+      "why": "128*N*r at N=2^20 and r=8 is 2^30, plus overhead, which exceeds maxmem=2^30. scryptSync throws, and the catch reports \"that passphrase does not unseal the owner key\". A cost the band accepts can never open, and the message blames the passphrase. Any in-band N near the top also allocates hundreds of MiB per attempt.",
+      "fix": "Tighten the upper band to N ≤ 2^19 with p=1. Or size maxmem from the recorded parameters, and report a memory-limit throw separately from an authentication failure."
+    }
+  ]
+}
