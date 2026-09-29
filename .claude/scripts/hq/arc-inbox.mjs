@@ -28,7 +28,7 @@ import { venturesPath } from "./lib/ledger/kill-panel.mjs";
 import { parseVentures } from "./lib/ledger/ventures.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { query } from "./spine.mjs";
-import { initOwnerKey, ownerKeyDir, ownerPubPath, readPassphraseTty, signAccept, stdioIsTty } from "./lib/owner-key.mjs";
+import { initOwnerKey, ownerKeyDir, ownerPubPath, pageListing, readPassphraseTty, signAccept, stdioIsTty } from "./lib/owner-key.mjs";
 import { ACCEPT_GATE } from "./lib/owner-sig.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -178,9 +178,9 @@ export async function decide(root, verdict, id, reason, signer = {}) {
   const ap = approval.event.payload || {};
   /** @type {Record<string, string> | null} */ let sigs = null;
   if (verdict === "approve" && ap.gate === ACCEPT_GATE) {
-    const listed = Array.isArray(ap.pages) ? ap.pages : [];
-    process.stderr.write(`inbox: ${id} asks you to accept ${listed.length} narrative page${listed.length === 1 ? "" : "s"}:\n${listed.map((x) => `  ${x && x.page}  ${String(x && x.sha256).slice(0, 12)}`).join("\n")}\n`);
-    const s = await signAccept({ approval: id, pages: ap.pages, keyDir: signer.keyDir ?? ownerKeyDir(), readPassphrase: signer.readPassphrase ?? readPassphraseTty, isTty: signer.isTty ?? stdioIsTty });
+    // Only validated entries are drawn raw; the request is an agent's text and this is the screen the passphrase is typed at.
+    process.stderr.write(pageListing(id, ap.pages));
+    const s = await signAccept({ approval: id, pages: ap.pages, keyDir: signer.keyDir ?? ownerKeyDir(), readPassphrase: signer.readPassphrase ?? readPassphraseTty, isTty: signer.isTty ?? stdioIsTty, reason });
     if (!s.sigs) throw new SpineError("SIGN_REFUSED", s.why);
     sigs = s.sigs;
   }
@@ -203,6 +203,20 @@ export async function decide(root, verdict, id, reason, signer = {}) {
   }
   process.stderr.write(`inbox: ${verdict} recorded for ${id}\n`);
   return 0;
+}
+
+/**
+ * Why the owner's public key must not be written into this checkout, or "": it is a change to a committed trust anchor, so it
+ * belongs on a feature branch, never on main or master (attack r1 B11). One line; a git that cannot answer is no objection.
+ * @param {string} repo the checkout that would hold .claude/owner-key.pub
+ */
+export function ownerKeyRepoProblem(repo) {
+  const DROP = new Set(["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES"]);
+  /** @type {NodeJS.ProcessEnv} */ const env = {};
+  for (const [k, v] of Object.entries(process.env)) if (!DROP.has(k.toUpperCase())) env[k] = v;
+  let branch = "";
+  try { branch = execFileSync("git", ["-C", repo, "branch", "--show-current"], { encoding: "utf8", env, timeout: 30000, stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return ""; }
+  return branch === "main" || branch === "master" ? `this checkout (${repo}) is on ${branch}; the public key is a committed trust anchor, so run owner-key init from a feat/* branch checkout` : "";
 }
 
 function parse(argv) {
@@ -229,7 +243,14 @@ async function main(argv) {
   const command = positional[0] || "inbox";
   if (command === "owner-key") {
     if (positional[1] !== "init" || positional.length !== 2) throw new SpineError("BAD_ARGS", "usage: arc-inbox owner-key init");
+    // A mode that ignores what it was given answers a question nobody asked (attack r1 B11): owner-key init takes no flag at all.
+    const given = Object.keys(flags);
+    if (given.length) throw new SpineError("BAD_ARGS", `owner-key init takes no flag (got --${given[0]}); usage: arc-inbox owner-key init`);
     const repo = join(HERE, "..", "..", "..");
+    process.stdout.write(`owner-key: the public key will be written to ${ownerPubPath(repo)}\n`);
+    // Only where a real terminal exists: without one, init refuses for that reason, first and alone.
+    const wrong = stdioIsTty() ? ownerKeyRepoProblem(repo) : "";
+    if (wrong) { process.stderr.write(`owner-key: refused -- ${wrong}\n`); return 1; }
     const r = await initOwnerKey({ keyDir: ownerKeyDir(), pubPath: ownerPubPath(repo), readPassphrase: readPassphraseTty, isTty: stdioIsTty });
     if (!r.ok) { process.stderr.write(`owner-key: refused -- ${r.why}\n`); return 1; }
     process.stdout.write(`owner key made. fingerprint ${r.fingerprint}\nprivate key (sealed by your passphrase): ${r.keyPath}\npublic key: ${ownerPubPath(repo)} -- commit that file; it is what CI checks every accepted page against\n`);

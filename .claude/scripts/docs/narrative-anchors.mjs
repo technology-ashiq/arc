@@ -15,7 +15,7 @@
 //       lane with no narrative -- a count, never a target (ADR-1506's posture).
 // The per-block verifier (narrative-verify.mjs) is advisory since ADR-1514; its receipts no longer ship a page.
 //
-//   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] [--json]
+//   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] [--json] [--base <ref-or-sha>]
 //   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] --request-accept <dir>/<id> [<dir>/<id> ...]
 //   node .claude/scripts/docs/narrative-anchors.mjs [--root DIR] --accept <dir>/<id> --approval <ULID>
 //   node .claude/scripts/docs/narrative-anchors.mjs --selftest
@@ -40,6 +40,8 @@ export const OWNER_PUB = ".claude/owner-key.pub";
 /** The gate string an owner-proof request carries, and the id grammar of the approval that answers it (arc-event's ULID). */
 export const ACCEPT_GATE = "narrative-accept";
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+/** A page id as the gate prints it: a name off a disk is untrusted, so anything outside the id grammar is shown JSON-escaped with control characters and line breaks stripped (attack r1 B13). */
+export const shownPage = (/** @type {string} */ p) => (/^[a-z]+\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(p) ? p : JSON.stringify(String(p).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, "?").slice(0, 80)));
 
 /** Where the advisory verifier receipts live, and the owner's acceptances beside them (outside docs/wiki, ADR-1503). */
 export const VERIFY_DIR = "docs/narrative-verify";
@@ -349,7 +351,7 @@ export function sigsOf(doc) {
  * `sigs` is sigsOf() and `owner` is { pub, lib } -- the committed public key PEM ("" when the file is missing) and the pure
  * owner library. An owner entry needs a sig that VERIFIES over its own approval, page and hash (ADR-1514 amendment 2), so
  * an invented ULID, a hand-edited entry and a sig copied from other text FAIL here, on CI, with no spine.
- * @param {{ narratives: Record<string, string>, accepted: Record<string, string>, proofs: Record<string, string>, sigs?: Record<string, string>, owner?: { pub: string, lib: any } | null, tree: Parameters<typeof anchorProblem>[1] }} io
+ * @param {{ narratives: Record<string, string>, accepted: Record<string, string>, proofs: Record<string, string>, sigs?: Record<string, string>, owner?: { pub: string, why?: string, lib: any } | null, tree: Parameters<typeof anchorProblem>[1] }} io
  */
 export function evaluate({ narratives, accepted, proofs, sigs = {}, owner = null, tree }) {
   /** @type {string[]} */ const fails = [];
@@ -382,7 +384,7 @@ export function evaluate({ narratives, accepted, proofs, sigs = {}, owner = null
     else { awaiting++; warns.push(`[awaiting-owner] ${page} -- ${read === "" ? "the owner has not read it yet" : "edited since the owner read it"} (ADR-1514 section 4)`); }
   }
   for (const page of Object.keys(accepted).sort()) {
-    if (accepted[page] !== "" && !(Object.prototype.hasOwnProperty.call(proofs, page) && ULID.test(String(proofs[page])))) fails.push(`[no-owner-proof] ${page} -- accepted without an owner proof: ${ACCEPT_FILE} names no approval for it (--request-accept, then --accept --approval)`);
+    if (accepted[page] !== "" && !(Object.prototype.hasOwnProperty.call(proofs, page) && ULID.test(String(proofs[page])))) fails.push(`[no-owner-proof] ${shownPage(page)} -- accepted without an owner proof: ${ACCEPT_FILE} names no approval for it (--request-accept, then --accept --approval)`);
   }
   let keyReported = false;
   for (const page of Object.keys(accepted).sort()) {
@@ -390,16 +392,16 @@ export function evaluate({ narratives, accepted, proofs, sigs = {}, owner = null
     // No hash or no approval is already reported above ([awaiting-owner], [no-owner-proof]); a signature needs both to be judged.
     if (accepted[page] === "" || !ULID.test(approval)) continue;
     const sig = Object.prototype.hasOwnProperty.call(sigs, page) ? sigs[page] : "";
-    if (typeof sig !== "string" || sig === "") { fails.push(`[no-owner-signature] ${page} -- the accepted entry carries no owner signature (sig): only --accept, from an approval the owner signed at a terminal with arc-inbox, writes one`); continue; }
+    if (typeof sig !== "string" || sig === "") { fails.push(`[no-owner-signature] ${shownPage(page)} -- the accepted entry carries no owner signature (sig): only --accept, from an approval the owner signed at a terminal with arc-inbox, writes one`); continue; }
     if (!owner || !owner.lib || !owner.pub) {
-      if (!keyReported) { keyReported = true; fails.push(`[no-owner-key] ${OWNER_PUB} is missing or unreadable (or the owner library is not installed), but ${ACCEPT_FILE} holds owner entries, so none can be verified; the owner runs "arc-inbox owner-key init" and commits it`); }
+      if (!keyReported) { keyReported = true; fails.push(`[no-owner-key] ${OWNER_PUB} ${owner && owner.why ? owner.why : "is missing or unreadable (or the owner library is not installed)"}, but ${ACCEPT_FILE} holds owner entries, so none can be verified; the owner runs "arc-inbox owner-key init" and commits it`); }
       continue;
     }
-    if (!owner.lib.sigWellFormed(sig)) { fails.push(`[no-owner-signature] ${page} -- the entry's sig is not a base64 Ed25519 signature of the exact length`); continue; }
+    if (!owner.lib.sigWellFormed(sig)) { fails.push(`[no-owner-signature] ${shownPage(page)} -- the entry's sig is not a base64 Ed25519 signature of the exact length`); continue; }
     const hash = accepted[page];
-    if (!owner.lib.verifyOwnerSig(owner.pub, owner.lib.ownerMessage(approval, page, hash), sig)) fails.push(`[bad-owner-signature] ${page} -- the entry's sig does not verify against ${OWNER_PUB} over this page, its hash and its approval (another key, another text, or a sig copied from elsewhere)`);
+    if (!owner.lib.verifyOwnerSig(owner.pub, owner.lib.ownerMessage(approval, page, hash), sig)) fails.push(`[bad-owner-signature] ${shownPage(page)} -- the entry's sig does not verify against ${OWNER_PUB} over this page, its hash and its approval (another key, another text, or a sig copied from elsewhere)`);
   }
-  for (const page of Object.keys(accepted).sort()) if (!Object.prototype.hasOwnProperty.call(narratives, page)) fails.push(`[orphan-accept] ${ACCEPT_FILE} names ${page}, which has no narrative`);
+  for (const page of Object.keys(accepted).sort()) if (!Object.prototype.hasOwnProperty.call(narratives, page)) fails.push(`[orphan-accept] ${ACCEPT_FILE} names ${shownPage(page)}, which has no narrative`);
   return { fails, warns, accepted: ok, awaiting, narratives: Object.keys(narratives).length };
 }
 
@@ -497,8 +499,9 @@ export async function readTree(root) {
   }
   /** @type {any} */ let lib = null;
   try { lib = await import(OWNER_SIG_HREF); } catch { lib = null; }
-  const pubFile = join(root, OWNER_PUB);
-  const owner = { pub: regularInside(pubFile, rootReal) ? readFileSync(pubFile, "utf8") : "", lib };
+  // ONE reader of the public key file, shared with --accept and the base-ref comparison (attack r1 B3): the owner library's.
+  const got2 = lib && typeof lib.readOwnerPubFile === "function" ? lib.readOwnerPubFile(join(root, OWNER_PUB)) : { pem: "", why: "" };
+  const owner = { pub: got2.pem, why: got2.why, lib };
   const tracked = got.list ? trackedIn(got.list, root, rootReal) : (/** @type {string} */ p) => presentExact(root, rootReal, p);
   const read = (/** @type {string} */ p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return ""; } };
   const isDir = (/** @type {string} */ seg) => isTopDir(root, seg);
@@ -685,14 +688,26 @@ export function acceptArgProblem(accept, approval, requestPages) {
  * What the plain gate says about the owner key against the base ref (ADR-1514 amendment 2, "Correction"): one WARN when the
  * key was swapped, one WARN when it could not be compared (never a silent pass), nothing otherwise. `changed` is the count the
  * summary line carries. Pure: narrative-proof's ownerKeyBaseState does the git read.
+ * `base` is what the summary line says of the comparison: "checked" (the base was read), "unchecked" (it could not be: a shallow
+ * CI checkout has no base ref, and there the swap check is left to the owner-side CODEOWNERS review) or "no-key" (no file).
  * @param {{ state: string, why?: string, base?: string, was?: string, now?: string } | null} st
- * @returns {{ warn: string, changed: number }}
+ * @returns {{ warn: string, changed: number, base: "checked" | "unchecked" | "no-key" }}
  */
 export function ownerKeyFinding(st) {
-  if (!st) return { warn: `[owner-key-unchecked] hq/lib/narrative-proof.mjs is not installed, so ${OWNER_PUB} was not compared with the base ref`, changed: 0 };
-  if (st.state === "changed") return { warn: `[owner-key-changed] ${OWNER_PUB} differs from ${st.base} (fingerprint ${st.was} -> ${st.now}): a key swap is the one thing a signature cannot stop, so it is loud; do not merge without telling the owner (ADR-1514 amendment 2)`, changed: 1 };
-  if (st.state === "unavailable") return { warn: `[owner-key-unchecked] ${String(st.why || "the base ref could not be read").replace(/\s+/g, " ").trim()}`, changed: 0 };
-  return { warn: "", changed: 0 };
+  if (!st) return { warn: `[owner-key-unchecked] hq/lib/narrative-proof.mjs is not installed, so ${OWNER_PUB} was not compared with the base ref`, changed: 0, base: "unchecked" };
+  if (st.state === "changed") return { warn: `[owner-key-changed] ${OWNER_PUB} differs from ${st.base} (fingerprint ${st.was} -> ${st.now}): a key swap is the one thing a signature cannot stop, so it is loud; do not merge without telling the owner (ADR-1514 amendment 2)`, changed: 1, base: "checked" };
+  if (st.state === "unavailable") return { warn: `[owner-key-unchecked] ${String(st.why || "the base ref could not be read").replace(/\s+/g, " ").trim()}; the swap check is then the owner's CODEOWNERS review of ${OWNER_PUB}`, changed: 0, base: "unchecked" };
+  return { warn: "", changed: 0, base: st.state === "no-key" ? "no-key" : "checked" };
+}
+
+/**
+ * The plain gate's summary line. `owner-key-base=unchecked` is on it whenever the key could not be compared with the base, so a
+ * CI log that only greps the summary still sees that the swap check did not run (attack r1 B2).
+ * @param {{ narratives: number, accepted: number, awaiting: number, fails: string[] }} r
+ * @param {{ changed: number, base: string }} kf @param {{ debt: number, total: number, explained: number }} d
+ */
+export function summaryLine(r, kf, d) {
+  return `narrative-anchors: narratives=${r.narratives} accepted=${r.accepted} awaiting-owner=${r.awaiting} fail=${r.fails.length} owner-key-changed=${kf.changed} owner-key-base=${kf.base} · explanation debt: ${d.debt} of ${d.total} (${d.explained} explained)`;
 }
 
 /** Why --selftest cannot combine with other arguments, or "" (attack b5f5e03 B6): a mode must not ignore what it was given. */
@@ -934,9 +949,9 @@ async function selftest() {
     missing.doc === null && missing.refused === "no narrative products/zz-no-such-page" && acceptArgProblem("products/zz-no-such-page", U1_DUMMY, []).code === 0);
   // The arms that need a process, the spine or a git repo live with the code that does (DOC-A: nothing here spawns); each still runs the REAL functions.
   const proof = await import(PROOF_HREF);
-  for (const [name, ok] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, acceptEntry, sigsOf, ownerKeyFinding, OWNER_PUB, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok);
+  for (const [name, ok] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, acceptEntry, sigsOf, ownerKeyFinding, summaryLine, shownPage, OWNER_PUB, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok);
   console.log(`RAN: ${ran} checks, ${failed} failed`);
-  return failed === 0 && ran === 75 ? 0 : 1;
+  return failed === 0 && ran === 89 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
@@ -946,7 +961,7 @@ async function main(argv) {
   const stProblem = selftestArgProblem(argv);
   if (stProblem) { console.error(`narrative-anchors: ${stProblem}`); return 2; }
   if (argv.includes("--selftest")) return await selftest();
-  let root = process.cwd(), rootSet = false, accept = "", approval = "";
+  let root = process.cwd(), rootSet = false, accept = "", approval = "", base = "";
   /** @type {string[]} */ const requestPages = [];
   let json = false;
   const PAGE_ARG = /^[a-z]+\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -963,10 +978,11 @@ async function main(argv) {
       if (!requestPages.length) { console.error("narrative-anchors: --request-accept needs at least one page, <dir>/<id>"); return 2; }
       continue;
     }
-    if (a === "--root" || a === "--accept" || a === "--approval") {
+    if (a === "--root" || a === "--accept" || a === "--approval" || a === "--base") {
       const v = argv[i + 1];
-      if (typeof v !== "string" || v === "" || v.startsWith("-")) { console.error(`narrative-anchors: ${a} needs ${a === "--root" ? "a directory" : a === "--approval" ? "the approval ULID" : "a page, <dir>/<id>"}`); return 2; }
+      if (typeof v !== "string" || v === "" || v.startsWith("-")) { console.error(`narrative-anchors: ${a} needs ${a === "--root" ? "a directory" : a === "--approval" ? "the approval ULID" : a === "--base" ? "a ref or commit to compare the owner key with" : "a page, <dir>/<id>"}`); return 2; }
       if (a === "--root") { if (rootSet) { console.error("narrative-anchors: --root given twice"); return 2; } root = resolve(v); rootSet = true; }
+      else if (a === "--base") { if (base) { console.error("narrative-anchors: --base given twice"); return 2; } base = v; }
       else if (a === "--approval") { if (approval) { console.error("narrative-anchors: --approval given twice"); return 2; } approval = v; }
       else { if (accept) { console.error("narrative-anchors: --accept given twice"); return 2; } if (!PAGE_ARG.test(v)) { console.error("narrative-anchors: --accept needs <dir>/<id>"); return 2; } accept = v; }
       i++;
@@ -977,6 +993,7 @@ async function main(argv) {
     return 2;
   }
   // --json shapes the gate's report; --accept and --request-accept print prose, so the pair would be a flag silently ignored (attack B4).
+  if (base && (accept || requestPages.length)) { console.error(`narrative-anchors: --base compares the owner key in the plain gate; it cannot be combined with ${accept ? "--accept" : "--request-accept"}`); return 2; }
   if (json && (accept || requestPages.length)) { console.error(`narrative-anchors: --json cannot be combined with ${accept ? "--accept" : "--request-accept"}`); return 2; }
   // Judged before the tree is read: a bare --accept (no owner proof) costs nothing to refuse and can write nothing.
   const argBad = acceptArgProblem(accept, approval, requestPages);
@@ -999,13 +1016,13 @@ async function main(argv) {
   const r = evaluate({ narratives: t.narratives, accepted: t.accepted, proofs: proofsOf(t.acceptDoc), sigs: sigsOf(t.acceptDoc), owner: t.owner, tree: t.tree });
   if (t.degraded) r.warns.push(reducedWarn(t.degraded));
   // The base read spawns git, so it lives in hq (DOC-A); only the plain gate runs it, never --accept or --request-accept.
-  let keyChanged = 0;
+  /** @type {{ changed: number, base: "checked" | "unchecked" | "no-key" }} */ let kf = { changed: 0, base: "no-key" };
   if (!accept && !requestPages.length) {
     /** @type {any} */ let mod = pm;
     if (!mod) { try { mod = await import(PROOF_HREF); } catch { mod = null; } }
-    const kf = ownerKeyFinding(mod ? mod.ownerKeyBaseState(root) : t.owner.pub === "" ? { state: "no-key" } : null);
-    if (kf.warn) r.warns.push(kf.warn);
-    keyChanged = kf.changed;
+    const kfound = ownerKeyFinding(mod ? mod.ownerKeyBaseState(root, base ? { baseRef: base } : {}) : t.owner.pub === "" ? { state: "no-key" } : null);
+    if (kfound.warn) r.warns.push(kfound.warn);
+    kf = kfound;
   }
   for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory, unparseable, wrong-shaped or out of the tree; narratives and their records are regular files inside it`);
   if (requestPages.length) {
@@ -1043,7 +1060,7 @@ async function main(argv) {
   if (json) { process.stdout.write(`${JSON.stringify({ ...r, explanation: d }, null, 2)}\n`); return r.fails.length ? 1 : 0; }
   for (const f of r.fails) console.log(`FAIL ${f}`);
   for (const w of r.warns) console.log(`WARN ${w}`);
-  console.log(`narrative-anchors: narratives=${r.narratives} accepted=${r.accepted} awaiting-owner=${r.awaiting} fail=${r.fails.length} owner-key-changed=${keyChanged} · explanation debt: ${d.debt} of ${d.total} (${d.explained} explained)`);
+  console.log(summaryLine(r, kf, d));
   return r.fails.length ? 1 : 0;
 }
 

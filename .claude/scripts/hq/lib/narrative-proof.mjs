@@ -7,12 +7,12 @@
 //
 // Exports: gitEnv, gitTrackedList, explainGitFailure, mainCloneInfo, mainCloneOf, spineEnvProblem, ownerSpine, readSpineEvents, requestAcceptApproval, ownerSigProblem, verifyAcceptApproval, ownerKeyBaseState, proofArms.
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createHash, createPublicKey, generateKeyPairSync, sign as cryptoSign } from "node:crypto";
-import { fingerprint, ownerMessage, sigsShapeProblem, verifyOwnerSig } from "./owner-sig.mjs";
+import { createDecipheriv, createHash, createPrivateKey, createPublicKey, generateKeyPairSync, scryptSync, sign as cryptoSign } from "node:crypto";
+import { fingerprint, ownerMessage, readOwnerPubFile, sigsShapeProblem, verifyOwnerSig } from "./owner-sig.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HQ = join(HERE, "..");
@@ -21,13 +21,16 @@ const CORE = join(HERE, "..", "..", "core");
 /**
  * The environment every git child here gets: the caller's, minus git's location variables (a pre-push hook exports GIT_DIR and
  * GIT_INDEX_FILE, and `git ls-files` then lists ANOTHER repo's index -- attack B2, the twin of face reads.mjs childEnv), and
- * with optional locks off so a read never takes the index lock. Names compared upper-cased: Windows reads them case-blind.
+ * with optional locks off so a read never takes the index lock. Names compared upper-cased: Windows reads them case-blind, so
+ * an inherited `Path` and an added `PATH` are ONE variable there and two here (attack r1 B4): every inherited name that an
+ * `extra` name shadows, in any case, is dropped before the extra is set, so exactly one survives on every platform.
  * @param {Record<string, string>} [extra] set after the strip (a test names its own ceiling) @returns {NodeJS.ProcessEnv}
  */
 export function gitEnv(extra = {}) {
   const DROP = new Set(["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES"]);
+  const shadowed = new Set(Object.keys(extra).map((k) => k.toUpperCase()));
   /** @type {NodeJS.ProcessEnv} */ const env = {};
-  for (const [k, v] of Object.entries(process.env)) if (!DROP.has(k.toUpperCase())) env[k] = v;
+  for (const [k, v] of Object.entries(process.env)) if (!DROP.has(k.toUpperCase()) && !shadowed.has(k.toUpperCase())) env[k] = v;
   return { ...env, ...extra, GIT_OPTIONAL_LOCKS: "0" };
 }
 
@@ -159,9 +162,8 @@ export async function requestAcceptApproval(payload, opts) {
  */
 export function ownerSigProblem(events, ulid, page, sha256, pubPath) {
   const no = (/** @type {string} */ why) => ({ why, sig: "" });
-  let pub = "";
-  try { if (typeof pubPath === "string" && pubPath !== "" && statSync(pubPath).isFile()) pub = readFileSync(pubPath, "utf8"); } catch { pub = ""; }
-  if (pub === "") return no("the owner's public key file (.claude/owner-key.pub) is missing, so no signature can be checked; the owner runs arc-inbox owner-key init and commits it");
+  const got = readOwnerPubFile(pubPath), pub = got.pem;
+  if (pub === "") return no(`the owner's public key file (.claude/owner-key.pub) ${got.why || "is missing"}, so no signature can be checked; the owner runs arc-inbox owner-key init and commits it (the public key file is a regular file inside the tree, never a link)`);
   const dec = (Array.isArray(events) ? events : []).find((e) => e && e.kind === "decision.recorded" && e.payload && e.payload.decides === ulid && e.payload.verdict === "approve");
   const sigs = dec && dec.payload && typeof dec.payload.sigs === "object" && dec.payload.sigs !== null ? dec.payload.sigs : null;
   if (!sigs) return no(`${ulid} was approved with no signature: an approval the owner did not sign at a terminal with his key is not a proof; he approves it again with arc-inbox approve`);
@@ -197,24 +199,33 @@ export async function verifyAcceptApproval({ ulid, page, sha256, opts }) {
 export function ownerKeyBaseState(root, opts = {}) {
   const base = opts.baseRef || "origin/main", rel = ".claude/owner-key.pub";
   const out = (/** @type {any} */ state, why = "", was = "", now = "") => ({ state, why, base, was, now });
-  let cur = null;
-  try { cur = readFileSync(join(root, rel), "utf8"); } catch { cur = null; }
-  if (cur === null) return out("no-key");
+  // The same reader as --accept and the gate (attack r1 B3): a link, a directory or an oversize file is not "the key".
+  const got = readOwnerPubFile(join(root, rel));
+  if (got.missing) return out("no-key");
+  if (got.pem === "") return out("unavailable", `${rel} ${got.why}, so it could not be compared with ${base}`);
+  const cur = got.pem;
+  // A ref that is not a plain ref name is refused, never handed to git as an option (a leading dash is an option).
+  if (!/^[A-Za-z0-9_][A-Za-z0-9._/@~^-]{0,99}$/.test(base)) return out("unavailable", `the base ref ${JSON.stringify(base.slice(0, 40))} is not a plain ref name, so the owner key could not be compared with it`);
   const git = (/** @type {string[]} */ args) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8", env: gitEnv(opts.extraEnv), timeout: 30000, stdio: ["ignore", "pipe", "pipe"] });
   const norm = (/** @type {string} */ t) => t.replace(/\r\n/g, "\n").trim();
   const fp = (/** @type {string} */ t) => { try { return fingerprint(t); } catch { return "unreadable"; } };
   try { git(["rev-parse", "--verify", "--quiet", `${base}^{commit}`]); }
   catch (e) {
     const err = /** @type {any} */ (e);
-    if (err && err.status === 1 && !err.stderr?.toString().trim()) return out("unavailable", `the base ref ${base} does not exist here (git fetch it), so the owner key could not be compared with it`);
+    if (err && err.status === 1 && !err.stderr?.toString().trim()) return out("unavailable", `the base ref ${base} does not exist here (a shallow CI checkout has none: fetch it, or pass --base <sha>), so the owner key could not be compared with it`);
     return out("unavailable", `${explainGitFailure(e).why}, so the owner key could not be compared with ${base}`);
   }
+  // Compared with where this branch left the base (the merge-base), not the base's tip: a base that moved on and changed the key
+  // is not this branch's swap, and a branch that changed it is one whatever the tip says. A history too shallow to name a
+  // merge-base falls back to the tip, which is the older, coarser comparison.
+  let at = base;
+  try { const mb = git(["merge-base", base, "HEAD"]).trim(); if (/^[0-9a-f]{40,64}$/.test(mb)) at = mb; } catch { at = base; }
   let listed = "";
-  try { listed = git(["ls-tree", "--name-only", base, "--", rel]).trim(); }
+  try { listed = git(["ls-tree", "--name-only", at, "--", rel]).trim(); }
   catch (e) { return out("unavailable", `${explainGitFailure(e).why}, so the owner key could not be compared with ${base}`); }
   if (listed === "") return out("bootstrap", "", "", fp(cur));
   let then = "";
-  try { then = git(["show", `${base}:${rel}`]); }
+  try { then = git(["show", `${at}:${rel}`]); }
   catch (e) { return out("unavailable", `${explainGitFailure(e).why}, so the owner key could not be compared with ${base}`); }
   return norm(then) === norm(cur) ? out("same", "", fp(then), fp(cur)) : out("changed", "", fp(then), fp(cur));
 }
@@ -234,7 +245,8 @@ export async function proofArms(d) {
   // ADR-1514 amendment 2: one real sealed key in a temp dir, made through the real initOwnerKey with the terminal and the prompt injected.
   const OK = await import(pathToFileURL(join(HERE, "owner-key.mjs")).href);
   const OSg = await import(pathToFileURL(join(HERE, "owner-sig.mjs")).href);
-  const { decide } = await import(pathToFileURL(join(HQ, "arc-inbox.mjs")).href);
+  const inboxMod = await import(pathToFileURL(join(HQ, "arc-inbox.mjs")).href);
+  const { decide } = inboxMod;
   const { assertDecision } = await import(pathToFileURL(join(HQ, "lib", "validate.mjs")).href);
   const typed = (/** @type {string[]} */ ...answers) => { const q = [...answers]; return async () => String(q.shift() ?? ""); };
   const PASS = "correct horse battery staple";
@@ -251,8 +263,8 @@ export async function proofArms(d) {
   out.push(["MUTANT A1 init refusals: without a terminal on both ends, with two different passphrases and with a short one, owner-key init refuses in one sentence and writes no key and no public file",
     !refusedNoTty.ok && refusedNoTty.why.includes("real terminal") && !refusedMismatch.ok && refusedMismatch.why.includes("differ") && !refusedShort.ok && refusedShort.why.includes("at least") && nothingYet
     && [refusedNoTty, refusedMismatch, refusedShort].every((r) => !r.why.includes("\n"))]);
-  out.push(["MUTANT A1 init: with a terminal it writes an ENCRYPTED PKCS8 private key outside the repo and the SPKI public key at the repo path, prints a 16-hex fingerprint of the public DER, and refuses to overwrite (naming a deliberate delete) leaving the key as it was",
-    made.ok && made.keyPath === join(keyDir, OK.KEY_FILE) && sealed.includes("BEGIN ENCRYPTED PRIVATE KEY") && pubPem.includes("BEGIN PUBLIC KEY") && /^[0-9a-f]{16}$/.test(made.fingerprint)
+  out.push(["MUTANT A1 init: with a terminal it writes a scrypt-sealed private key file outside the repo and the SPKI public key at the repo path, prints a 16-hex fingerprint of the public DER, and refuses to overwrite (naming a deliberate delete) leaving the key as it was",
+    made.ok && made.keyPath === join(keyDir, OK.KEY_FILE) && JSON.parse(sealed).kdf === "scrypt" && pubPem.includes("BEGIN PUBLIC KEY") && /^[0-9a-f]{16}$/.test(made.fingerprint)
     && made.fingerprint === createHash("sha256").update(createPublicKey(pubPem).export({ type: "spki", format: "der" })).digest("hex").slice(0, 16)
     && !again.ok && again.why.includes("delete it deliberately") && readFileSync(join(keyDir, OK.KEY_FILE), "utf8") === sealed && readFileSync(pubPath, "utf8") === pubPem
     && OK.ownerKeyDir("/h").replace(/\\/g, "/") === "/h/.arc-private/owner" && OK.ownerPubPath("/r").replace(/\\/g, "/") === "/r/.claude/owner-key.pub"]);
@@ -421,6 +433,193 @@ other
     rmSync(spine2, { recursive: true, force: true });
     rmSync(homeBox, { recursive: true, force: true });
   }
+  // ---- attack r1 (boundary surface) on ADR-1514 amendment 2: each arm FAILs against the code before its fix.
+  const r1 = mkdtempSync(join(tmpdir(), "narr-r1-"));
+  try {
+    const W = (/** @type {string} */ n) => join(r1, n);
+    const ESC = String.fromCharCode(27), LS = String.fromCharCode(0x2028);
+    const U0 = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+    const oneLine = (/** @type {string} */ t) => !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(t);
+    const link = (/** @type {string} */ target, /** @type {string} */ at) => { try { symlinkSync(target, at, "file"); return true; } catch { return false; } };
+    const keyAt = (/** @type {string} */ name, /** @type {string} */ content) => { const dir = W(name); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, OK.KEY_FILE), content); return dir; };
+    const unseal = (/** @type {string} */ dir, /** @type {string} */ secret) => OK.unsealOwnerKey({ keyDir: dir, readPassphrase: typed(secret) });
+    // B1: the sealed file is our own scrypt + AES-GCM document with a random salt, and opens with an independent implementation.
+    const sf = JSON.parse(sealed);
+    const dir2 = { keyDir: W("k2/owner"), pubPath: W("k2/repo/.claude/owner-key.pub"), readPassphrase: typed(PASS, PASS), isTty: () => true };
+    const made2 = await OK.initOwnerKey(dir2);
+    const sf2 = made2.ok ? JSON.parse(readFileSync(join(dir2.keyDir, OK.KEY_FILE), "utf8")) : {};
+    const openIndep = (/** @type {any} */ f, /** @type {string} */ secret) => {
+      const dc = createDecipheriv("aes-256-gcm", scryptSync(secret, Buffer.from(f.salt, "base64"), 32, { N: f.N, r: f.r, p: f.p, maxmem: 2 ** 30 }), Buffer.from(f.iv, "base64"));
+      dc.setAAD(Buffer.from(JSON.stringify({ v: f.v, kdf: f.kdf, N: f.N, r: f.r, p: f.p, salt: f.salt }), "utf8"));
+      dc.setAuthTag(Buffer.from(f.tag, "base64"));
+      return Buffer.concat([dc.update(Buffer.from(f.ct, "base64")), dc.final()]);
+    };
+    let indepOk = false, indepWrongThrows = false;
+    try {
+      const k = createPrivateKey({ key: openIndep(sf, PASS), format: "der", type: "pkcs8" });
+      indepOk = OSg.verifyOwnerSig(pubPem, "m", cryptoSign(null, Buffer.from("m"), k).toString("base64"));
+    } catch { indepOk = false; }
+    try { openIndep(sf, `${PASS}x`); } catch { indepWrongThrows = true; }
+    out.push(["MUTANT B1 sealing: the private key is sealed by scrypt (N at least 2^17, recorded) and AES-256-GCM in our own JSON file -- no PEM, a fresh random salt and iv per key, opening with an independent scrypt + GCM implementation gives the real key, a wrong passphrase gives none, and the length floor stays 12",
+      sf.v === 1 && sf.kdf === "scrypt" && sf.cipher === "aes-256-gcm" && sf.N >= 2 ** 17 && sf.r === 8 && sf.p >= 1 && OK.SCRYPT_N >= 2 ** 17 && !sealed.includes("BEGIN") && made2.ok
+      && sf.salt !== sf2.salt && sf.iv !== sf2.iv && sf.ct !== sf2.ct && indepOk && indepWrongThrows && OK.MIN_PASSPHRASE === 12]);
+    // B12: every way the key file can be wrong is one sentence, never a stack; a directory is not a key.
+    const cheap = keyAt("k-cheap", JSON.stringify({ ...sf, N: 1024 }));
+    const bomb = keyAt("k-bomb", JSON.stringify({ ...sf, N: 2 ** 25 }));
+    // The old PEM wrapper is built from parts: the attack-input scan refuses a whole diff that carries the literal header.
+    const pemWord = "ENCRYPTED " + "PRIVATE KEY";
+    const legacy = keyAt("k-legacy", "-----BEGIN " + pemWord + "-----\nMIIBAAAA\n-----END " + pemWord + "-----\n");
+    const flipped = keyAt("k-flip", JSON.stringify({ ...sf, ct: Buffer.from(sf.ct, "base64").map((b, i) => (i === 0 ? b ^ 1 : b)).toString("base64") }));
+    const dirKey = W("k-dir"); mkdirSync(join(dirKey, OK.KEY_FILE), { recursive: true });
+    const uCheap = await unseal(cheap, PASS), uBomb = await unseal(bomb, PASS), uLegacy = await unseal(legacy, PASS), uFlip = await unseal(flipped, PASS), uDir = await unseal(dirKey, PASS);
+    const overDir = await OK.initOwnerKey({ keyDir: dirKey, pubPath: W("k-dir-pub/repo/.claude/owner-key.pub"), readPassphrase: typed(PASS, PASS), isTty: () => true });
+    const uGood = await unseal(keyDir, PASS);
+    out.push(["MUTANT B12 key file: a recorded cost outside the band (too cheap, or a memory bomb), an older PEM file, a flipped byte and a wrong passphrase are each ONE sentence and no key; a directory named owner-key.pem is refused by name (unseal) and as existing (init), never a raw error; the real file still opens",
+      [uCheap, uBomb, uLegacy, uFlip, uDir].every((u) => u.key === null && u.why !== "" && oneLine(u.why)) && uCheap.why.includes("outside the accepted band") && uBomb.why.includes("outside the accepted band") && uLegacy.why.includes("not a sealed key")
+      && uFlip.why.includes("does not unseal") && uDir.why.includes("not a regular file") && !overDir.ok && overDir.why.includes("already exists") && uGood.key !== null]);
+    // B7: nothing is left behind by a refusal or a failed write, and the committed public key is never overwritten.
+    const pubDir = W("b7a/repo/.claude/owner-key.pub"); mkdirSync(pubDir, { recursive: true });
+    const b7a = await OK.initOwnerKey({ keyDir: W("b7a/owner"), pubPath: pubDir, readPassphrase: typed(PASS, PASS), isTty: () => true });
+    const b7aLeft = existsSync(join(W("b7a/owner"), OK.KEY_FILE));
+    rmSync(pubDir, { recursive: true });
+    const b7retry = await OK.initOwnerKey({ keyDir: W("b7a/owner"), pubPath: pubDir, readPassphrase: typed(PASS, PASS), isTty: () => true });
+    const pubFile = W("b7b/repo/.claude/owner-key.pub"); mkdirSync(dirname(pubFile), { recursive: true }); writeFileSync(pubFile, "COMMITTED\n");
+    const b7b = await OK.initOwnerKey({ keyDir: W("b7b/owner"), pubPath: pubFile, readPassphrase: typed(PASS, PASS), isTty: () => true });
+    const linkPub = W("b7c/repo/.claude/owner-key.pub"); mkdirSync(dirname(linkPub), { recursive: true });
+    const linked = link(W("b7c/elsewhere.pub"), linkPub);
+    const b7c = linked ? await OK.initOwnerKey({ keyDir: W("b7c/owner"), pubPath: linkPub, readPassphrase: typed(PASS, PASS), isTty: () => true }) : { ok: false, why: "" };
+    mkdirSync(W("b7d"), { recursive: true }); writeFileSync(W("b7d/owner"), "a file where the key directory should be");
+    const b7d = await OK.initOwnerKey({ keyDir: W("b7d/owner"), pubPath: W("b7d/repo/.claude/owner-key.pub"), readPassphrase: typed(PASS, PASS), isTty: () => true });
+    const b7eKey = W("b7e/owner"); mkdirSync(join(b7eKey, `${OK.KEY_FILE}.tmp-${process.pid}`), { recursive: true });
+    const b7e = await OK.initOwnerKey({ keyDir: b7eKey, pubPath: W("b7e/repo/.claude/owner-key.pub"), readPassphrase: typed(PASS, PASS), isTty: () => true });
+    out.push(["MUTANT B7 atomic init: a public path that is a directory, a committed public key file and a link each REFUSE before any key is made (the committed file untouched, nothing written), a key directory that cannot be made and a private write that fails after the public file is down each leave NOTHING behind, and a fixed path then succeeds -- no half-made key strands the owner",
+      !b7a.ok && b7a.why.includes("already exists") && !b7aLeft && b7retry.ok
+      && !b7b.ok && readFileSync(pubFile, "utf8") === "COMMITTED\n" && !existsSync(join(W("b7b/owner"), OK.KEY_FILE))
+      && (!linked || (!b7c.ok && !existsSync(W("b7c/elsewhere.pub")) && !existsSync(join(W("b7c/owner"), OK.KEY_FILE))))
+      && !b7d.ok && !existsSync(W("b7d/repo/.claude/owner-key.pub")) && b7d.why.includes("nothing was left behind")
+      && !b7e.ok && !existsSync(W("b7e/repo/.claude/owner-key.pub")) && !existsSync(join(b7eKey, OK.KEY_FILE)) && [b7a, b7b, b7d, b7e].every((r) => oneLine(r.why))]);
+    // B6: HOME and USERPROFILE do not move the key directory.
+    const homeReal = OK.ownerKeyDir(), fakeHome = W("fakehome");
+    const prevHome = process.env.HOME, prevProfile = process.env.USERPROFILE;
+    process.env.HOME = fakeHome; process.env.USERPROFILE = fakeHome;
+    let moved = "";
+    try { moved = OK.ownerKeyDir(); } finally {
+      if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
+      if (prevProfile === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = prevProfile;
+    }
+    out.push(["MUTANT B6 home: with HOME and USERPROFILE pointing at another directory the key directory does not move -- it is the operating system's own record of the user's home",
+      moved === homeReal && !moved.startsWith(fakeHome) && homeReal.replace(/\\/g, "/").endsWith("/.arc-private/owner") && OK.ownerKeyDir("/h").replace(/\\/g, "/") === "/h/.arc-private/owner"]);
+    // B8: a real owner terminal that is refused is told where a real console is; the check itself is not weakened.
+    const noTty2 = await OK.initOwnerKey({ ...initArgs, isTty: false });
+    const noTtySign = await OK.signAccept({ approval: U0, pages: [{ page: "products/hq", sha256: HG }], keyDir, readPassphrase: typed(PASS), isTty: false });
+    out.push(["MUTANT B8 terminal hint: a refusal for want of a terminal names PowerShell, cmd and Windows Terminal, and inside Git Bash (MSYSTEM or mintty) also the winpty form; outside it does not; both refusals still say real terminal in one sentence",
+      OK.terminalHint({ MSYSTEM: "MINGW64" }).includes("winpty") && OK.terminalHint({ TERM_PROGRAM: "mintty" }).includes("winpty") && !OK.terminalHint({}).includes("winpty") && OK.terminalHint({}).includes("PowerShell")
+      && !noTty2.ok && noTty2.why.includes("real terminal") && noTty2.why.includes("PowerShell") && noTtySign.sigs === null && noTtySign.why.includes("real terminal") && noTtySign.why.includes("PowerShell") && oneLine(noTty2.why) && oneLine(noTtySign.why)]);
+    // B5: an agent's request text is never drawn raw on the terminal where the passphrase is typed.
+    const evilPage = `${ESC}[2J${ESC}[Hfake prompt`;
+    const shown = typeof OK.pageListing === "function" ? OK.pageListing(U0, [{ page: "products/hq", sha256: HG }, { page: evilPage, sha256: HG }, { page: "lanes/x", sha256: `${ESC}[31m${"a".repeat(30)}` }, { page: "lanes/y", sha256: 7 }, null, "text"]) : "";
+    out.push(["MUTANT B5 listing: a request page with terminal escape sequences, a hash made of control bytes, a non-string hash, null and a bare string are each shown as one JSON-escaped, control-stripped 'will not be signed' line; a valid entry is shown as it is; no control character but the line ends reaches the terminal",
+      shown !== "" && shown.includes(`  products/hq  ${HG.slice(0, 12)}`) && shown.split("\n").every(oneLine) && !shown.includes(ESC) && shown.split("will not be signed").length === 6 && shown.includes("asks you to accept 6 narrative pages")]);
+    // B9: one spelling per signature.
+    const kk = generateKeyPairSync("ed25519"), kkPem = String(kk.publicKey.export({ type: "spki", format: "pem" }));
+    const sg = cryptoSign(null, Buffer.from("m"), kk.privateKey).toString("base64");
+    const AB = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const alias = `${sg.slice(0, 85)}${AB[AB.indexOf(sg[85]) | 1]}${sg.slice(86)}`;
+    out.push(["MUTANT B9 canonical base64: a signature whose unused low bits are changed decodes to the very same 64 bytes yet is refused as a spelling (not well formed, never verifies); the canonical one verifies",
+      alias !== sg && Buffer.from(alias, "base64").equals(Buffer.from(sg, "base64")) && OSg.sigWellFormed(sg) && !OSg.sigWellFormed(alias) && OSg.verifyOwnerSig(kkPem, "m", sg) && !OSg.verifyOwnerSig(kkPem, "m", alias) && OSg.sigsShapeProblem({ "products/hq": alias }) !== ""]);
+    // B10: the decision fits one command line, judged before the passphrase is typed; messages carry no line break.
+    const longId = `products/${"a".repeat(120)}`;
+    const bigPages = Array.from({ length: 200 }, (_, i) => ({ page: `products/${String(i).padStart(3, "0")}${"b".repeat(85)}`, sha256: HG }));
+    let prompted = 0;
+    const bigTry = typeof OSg.decisionSizeProblem === "function" ? await OK.signAccept({ approval: U0, pages: bigPages, keyDir, readPassphrase: async () => { prompted++; return PASS; }, isTty: () => true, reason: "r" }) : { sigs: {}, why: "" };
+    const lsKey = `products/x${LS}y`;
+    const lsProblem = OSg.sigsShapeProblem({ [lsKey]: sg });
+    out.push(["MUTANT B10 size: a page id over 100 characters is not a page id; 200 pages that would outgrow one command line are refused BEFORE any passphrase prompt (prompted 0) with the ceiling named, while one page passes; a sigs key holding U+2028 or a newline is refused in a message with no line break",
+      !OSg.PAGE_ID_RE.test(longId) && OSg.PAGE_ID_RE.test(`products/${"a".repeat(80)}`) && OSg.sigsShapeProblem({ [longId]: sg }) !== "" && typeof OSg.decisionSizeProblem === "function" && OSg.decisionSizeProblem(U0, "r", bigPages).includes("ceiling")
+      && OSg.decisionSizeProblem(U0, "r", [{ page: "products/hq", sha256: HG }]) === "" && bigTry.sigs === null && prompted === 0 && bigTry.why.includes("ceiling") && lsProblem !== "" && oneLine(lsProblem) && oneLine(OSg.sigsShapeProblem({ "products/x\ny": sg }))]);
+    // B11: owner-key init takes no argument it would ignore, and will not put the public key on main.
+    const inboxCli = (/** @type {string[]} */ ...a) => spawnSync(process.execPath, [join(HQ, "arc-inbox.mjs"), "owner-key", "init", ...a], { encoding: "utf8" });
+    const withReason = inboxCli("--reason", "x"), withLane = inboxCli("--lane=y"), withForce = inboxCli("--force");
+    const bRepo = mkdtempSync(join(tmpdir(), "narr-branch-"));
+    let onMain = "", onFeat = "?", noRepo = "?";
+    try {
+      const gb = (/** @type {string[]} */ a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...a], { cwd: bRepo, stdio: "ignore", env: gitEnv() });
+      gb(["init", "-q"]); gb(["symbolic-ref", "HEAD", "refs/heads/main"]); gb(["commit", "-q", "--allow-empty", "-m", "x"]);
+      onMain = typeof inboxMod.ownerKeyRepoProblem === "function" ? inboxMod.ownerKeyRepoProblem(bRepo) : "";
+      gb(["checkout", "-q", "-b", "feat/x"]);
+      onFeat = inboxMod.ownerKeyRepoProblem(bRepo);
+      noRepo = inboxMod.ownerKeyRepoProblem(join(bRepo, "no-such-dir"));
+    } finally { rmSync(bRepo, { recursive: true, force: true }); }
+    out.push(["MUTANT B11 owner-key args: init refuses --reason, --lane=y and --force by name with exit 2 and touches nothing; the branch check refuses main (naming it and a feat/* checkout), passes a feat branch and a directory git cannot answer for",
+      withReason.status === 2 && withReason.stderr.includes("--reason") && withLane.status === 2 && withLane.stderr.includes("--lane") && withForce.status === 2 && withForce.stderr.includes("--force")
+      && onMain.includes("main") && onMain.includes("feat/") && !onMain.includes("\n") && onFeat === "" && noRepo === ""]);
+    // B13: a page name read off a disk cannot forge a line of its own in the gate's output.
+    const forged = "products/x\nnarrative-anchors: narratives=34 accepted=34 awaiting-owner=0 fail=0 owner-key-changed=0";
+    const forgedTree = { adrs: new Set(), wiki, tracked: () => false, read: () => "", isDir: () => false };
+    const forgedRun = (/** @type {any} */ sigs, /** @type {any} */ owner) => evaluate({ narratives: { "products/hq": good }, accepted: { [forged]: "0".repeat(64), [`products/z${LS}q`]: "1".repeat(64) }, proofs: { [forged]: U0, [`products/z${LS}q`]: U0 }, sigs, owner, tree: forgedTree });
+    const fr = [forgedRun({}, null), forgedRun({ [forged]: "not-base64" }, { pub: kkPem, lib: OSg }), forgedRun({ [forged]: `${"A".repeat(86)}==` }, { pub: kkPem, lib: OSg }), evaluate({ narratives: {}, accepted: { [forged]: "0".repeat(64) }, proofs: {}, tree: forgedTree })];
+    const frLines = fr.flatMap((r) => r.fails);
+    out.push(["MUTANT B13 page names: an accepted.json key holding a newline that spells a whole summary line, or U+2028, is shown JSON-escaped in [no-owner-proof], [no-owner-signature], [bad-owner-signature] and [orphan-accept], so no finding spans two lines or begins as a summary; an ordinary page id is shown as it is",
+      frLines.length >= 8 && frLines.every(oneLine) && frLines.every((f) => f.startsWith("[")) && frLines.some((f) => f.startsWith("[bad-owner-signature]")) && frLines.some((f) => f.startsWith("[no-owner-signature]")) && frLines.some((f) => f.startsWith("[orphan-accept]"))
+      && frLines.some((f) => f.startsWith("[no-owner-proof]")) && d.shownPage("products/hq") === "products/hq" && d.shownPage(forged).startsWith("\"") && !d.shownPage(forged).includes("\n")]);
+    // B3: one reader of the public key file, one rule for a file, a link, a directory and a size.
+    const treeRoot = W("b3/repo"); mkdirSync(join(treeRoot, ".claude"), { recursive: true });
+    const pubAt = join(treeRoot, ".claude", "owner-key.pub");
+    const rd = () => OSg.readOwnerPubFile(pubAt);
+    const rdMissing = rd();
+    writeFileSync(pubAt, pubPem); const rdFile = rd();
+    rmSync(pubAt); mkdirSync(pubAt); const rdDir = rd(); const sigDir = ownerSigProblem([], U0, "products/hq", HG, pubAt); const baseDir = ownerKeyBaseState(treeRoot, { baseRef: "HEAD" }); rmSync(pubAt, { recursive: true });
+    writeFileSync(pubAt, "x".repeat(5000)); const rdBig = rd();
+    writeFileSync(pubAt, "not a key at all\n"); const rdJunk = rd();
+    writeFileSync(pubAt, String(generateKeyPairSync("rsa", { modulusLength: 2048 }).publicKey.export({ type: "spki", format: "pem" }))); const rdRsa = rd();
+    rmSync(pubAt);
+    const outside = W("b3/attacker.pub"); writeFileSync(outside, kkPem);
+    const linkedPub = link(outside, pubAt);
+    const rdLink = linkedPub ? rd() : { pem: "", why: "is a symlink", missing: false };
+    const sigLink = linkedPub ? ownerSigProblem([], U0, "products/hq", HG, pubAt) : { why: "is a symlink", sig: "" };
+    const baseLink = linkedPub ? ownerKeyBaseState(treeRoot, { baseRef: "HEAD" }) : { state: "unavailable", why: "is a symlink" };
+    out.push(["MUTANT B3 one reader: the public key file read through ONE function -- a regular Ed25519 key passes; missing is the only bootstrap; a directory, an oversize file, junk, an RSA key and a symlink to an outside file holding another key are each refused by name -- and the signature check and the base-ref comparison refuse the same link and directory instead of reading through them",
+      rdMissing.missing && rdMissing.pem === "" && rdFile.pem === pubPem && !rdFile.missing && rdDir.pem === "" && !rdDir.missing && rdDir.why.includes("regular file") && rdBig.pem === "" && rdBig.why.includes("too large")
+      && rdJunk.pem === "" && rdJunk.why.includes("not a public key") && rdRsa.pem === "" && rdRsa.why.includes("Ed25519") && rdLink.pem === "" && rdLink.why.includes("symlink") && sigLink.sig === "" && sigLink.why.includes("symlink")
+      && sigDir.why.includes("regular file") && baseDir.state === "unavailable" && baseLink.state === "unavailable"]);
+    // B4: the env override is one variable on every platform, so the arm that says "git cannot run" cannot be beaten by case.
+    const injectCase = process.platform !== "win32";
+    if (injectCase) process.env.Path = "decoy-path";
+    let pathKeys = [], pathVal = "";
+    try { const e = gitEnv({ PATH: "the-one" }); pathKeys = Object.keys(e).filter((k) => k.toUpperCase() === "PATH"); pathVal = String(e[pathKeys[0]]); } finally { if (injectCase) delete process.env.Path; }
+    const nogit2 = mainCloneInfo(W("b3"), { PATH: join(W("b3"), "nowhere") });
+    out.push(["MUTANT B4 env case: gitEnv with an added PATH leaves exactly ONE variable named PATH in any case (with an inherited Path present), holding the added value; git with that PATH cannot run and says so",
+      pathKeys.length === 1 && pathVal === "the-one" && gitEnv({ PATH: "x" }).GIT_OPTIONAL_LOCKS === "0" && nogit2.main === "" && nogit2.why.includes("could not run")]);
+    // B2: the base comparison is against the merge-base; a ref is never an option; the summary line says when it did not run.
+    const okm = mkdtempSync(join(tmpdir(), "narr-okey-mb-"));
+    try {
+      const gm = (/** @type {string[]} */ a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...a], { cwd: okm, stdio: "ignore", env: gitEnv() });
+      const pemC = String(generateKeyPairSync("ed25519").publicKey.export({ type: "spki", format: "pem" }));
+      mkdirSync(join(okm, ".claude"), { recursive: true });
+      writeFileSync(join(okm, ".claude", "owner-key.pub"), pubPem);
+      gm(["init", "-q"]); gm(["symbolic-ref", "HEAD", "refs/heads/trunk"]); gm(["add", "."]); gm(["commit", "-q", "-m", "c1"]);
+      const c1 = execFileSync("git", ["rev-parse", "HEAD"], { cwd: okm, encoding: "utf8", env: gitEnv() }).trim();
+      gm(["checkout", "-q", "-b", "feat"]); gm(["checkout", "-q", "trunk"]);
+      writeFileSync(join(okm, ".claude", "owner-key.pub"), pemC); gm(["add", "."]); gm(["commit", "-q", "-m", "c2 trunk moved its key"]);
+      gm(["checkout", "-q", "feat"]);
+      const untouched = ownerKeyBaseState(okm, { baseRef: "trunk" });
+      writeFileSync(join(okm, ".claude", "owner-key.pub"), pemC);
+      const swapped = ownerKeyBaseState(okm, { baseRef: "trunk" });
+      const bySha = ownerKeyBaseState(okm, { baseRef: c1 });
+      const optionRef = ownerKeyBaseState(okm, { baseRef: "--upload-pack=x" }), dashRef = ownerKeyBaseState(okm, { baseRef: "-x" });
+      out.push(["MUTANT B2 merge-base: a branch that did not touch the key is 'same' even when the base moved on to another key, one that swapped it is 'changed' even when the base tip already holds that key, a commit sha given as the base works, and a ref that would be a git option is refused as not a plain ref name",
+        untouched.state === "same" && swapped.state === "changed" && swapped.was === fingerprint(pubPem) && swapped.now === fingerprint(pemC) && bySha.state === "changed" && bySha.was === fingerprint(pubPem)
+        && optionRef.state === "unavailable" && optionRef.why.includes("not a plain ref") && dashRef.state === "unavailable"]);
+    } finally { rmSync(okm, { recursive: true, force: true }); }
+    const fUn = d.ownerKeyFinding({ state: "unavailable", why: "the base ref origin/main does not exist here", base: "origin/main" });
+    const fSame = d.ownerKeyFinding({ state: "same" }), fNone = d.ownerKeyFinding({ state: "no-key" }), fChg = d.ownerKeyFinding({ state: "changed", base: "b", was: "1", now: "2" });
+    const stats = { narratives: 1, accepted: 0, awaiting: 1, fails: [] }, debt = { debt: 1, total: 2, explained: 1 };
+    const usage = spawnSync(process.execPath, [d.script, "--base", "origin/main", "--accept", "products/hq", "--approval", U0], { encoding: "utf8" });
+    out.push(["MUTANT B2 unchecked: an owner key that could not be compared with the base says [owner-key-unchecked] with the CODEOWNERS fallback AND puts owner-key-base=unchecked on the summary line; a compared key says checked, no file says no-key; --base beside --accept is a usage error (exit 2)",
+      fUn.base === "unchecked" && fUn.warn.startsWith("[owner-key-unchecked]") && fUn.warn.includes("CODEOWNERS") && !fUn.warn.includes("\n") && fUn.changed === 0 && d.ownerKeyFinding(null).base === "unchecked"
+      && d.summaryLine(stats, fUn, debt).includes("owner-key-changed=0 owner-key-base=unchecked ") && d.summaryLine(stats, fSame, debt).includes("owner-key-base=checked") && d.summaryLine(stats, fNone, debt).includes("owner-key-base=no-key")
+      && fChg.base === "checked" && fChg.changed === 1 && usage.status === 2 && usage.stderr.includes("--base")]);
+  } finally { rmSync(r1, { recursive: true, force: true }); }
   const cli = mkdtempSync(join(tmpdir(), "narr-cli-"));
   try {
     const U1 = "01ARZ3NDEKTSV4RRFFQ69G5FAV";

@@ -166,7 +166,7 @@
 .claude/scripts/develop/quality.mjs	c656a0ae844b50f3e0435d11f916aead7161a107a714cabca63521e3a62f319f
 .claude/scripts/develop/replay-child.mjs	1d641ffb0ad349084a14be12df3b3c8863e370e2f191b9e78d6214097be5749c
 .claude/scripts/develop/stuck.mjs	7f3d64a9341e180186df5e892cfa6bfcffc676836739a3ac7c810cb19eb9531e
-.claude/scripts/docs/narrative-anchors.mjs	3d91fb44b116664df0c2849f8c1d785f95232aca266994e532d485a8fb6c60bd
+.claude/scripts/docs/narrative-anchors.mjs	8277eaaec08f2816507992aa995f0e6bee7930ab8adc7d2403726a5734b8846b
 .claude/scripts/docs/wiki-build.mjs	e387b53c28bfa9ef91ffa7f33b85f89b77c02554939ba0d378f577095987f79f
 .claude/scripts/docs/wiki-coverage.mjs	08626d1c44e0eef10779d9234e96b24683ec23750def596c354dce637f799774
 .claude/scripts/docs/wiki-drift.mjs	520d4116f93e5b2dd3dc61695101dde0f6f491f3f642af9551017f7e03d004e7
@@ -238,7 +238,7 @@
 .claude/scripts/hq/arc-event.mjs	a1f8353efe971fa13dec4664d998ff33b7fffdce0e4e9850a12d6c26834cea05
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	00b09e6fa03156cdadc04870216c34b037f4ea90e4a938ad7d89de839b9aec19
-.claude/scripts/hq/arc-inbox.mjs	c611d6f3bf393737955bc48b674d08592d6b419cf379a9088283fa8917d5e130
+.claude/scripts/hq/arc-inbox.mjs	01f21635127f522378a2a04ceaf60e7c5c690db9d0e8a4ca4fdb1b411b588aa5
 .claude/scripts/hq/arc-jobs.mjs	d6e9c51919bb603d78a67cb399cfcbcebc5314d1dce080a253973f80ee69ae0a
 .claude/scripts/hq/arc-jobs.sh	ac0dd934e1c6959f512e283d9411382a29bd3671bc4542ba05b74371d204323b
 .claude/scripts/hq/arc-pnl.mjs	1c79af9b70cde51f419f413335765598fb37e393cdef2fedf2cbb1b52495c237
@@ -276,9 +276,9 @@
 .claude/scripts/hq/lib/ledger/pnl.mjs	238dc9d9fe07cdacc6ac8d9bb48b0e9211c3c714651f612a48ced9e0279c3699
 .claude/scripts/hq/lib/ledger/reconcile.mjs	ba148b3bddf9516b026dcae34992de5707bb8b24034791b5c9c6b23f8456260b
 .claude/scripts/hq/lib/ledger/ventures.mjs	a61b52d3c2cf7efa9133749993bb175aba67924cbd63973be1a5d7b249b400db
-.claude/scripts/hq/lib/narrative-proof.mjs	0d2b0ef01eb176b128b99516b1941267f33a62ae3b09f89940b7d15c77ebea97
-.claude/scripts/hq/lib/owner-key.mjs	f7da53e05663d7fb0fd31ee32590523b1b7b3668525f26b49cbf0e998ec6c009
-.claude/scripts/hq/lib/owner-sig.mjs	8a20a20be2ed353c692c85cf58610d6def19ac7f31c9d126fa80cdc3c36c6634
+.claude/scripts/hq/lib/narrative-proof.mjs	b0affb2cae2e174c0611c3954aaad6a592bb7d5cc69063e32c783203a33016ac
+.claude/scripts/hq/lib/owner-key.mjs	14b59a46405d5a4ba80337149e02eebf94490dfe790a071298ebacb8865a4d01
+.claude/scripts/hq/lib/owner-sig.mjs	74fc977cd9b28746ee76d872d6bde0a87af2fe2f591fec49414c92d4074b3278
 .claude/scripts/hq/lib/policy/authorize.mjs	993b72bcde4c99721535b15ca5ec2ee155610308ceadd517716ab8cb67d66b78
 .claude/scripts/hq/lib/policy/constitution.mjs	c2dd14eb505cce4a9dd131b33ad29cc1388ba37a7428be39e599d7474c642f3f
 .claude/scripts/hq/lib/policy/encode.mjs	436c17ed6bd3269e8ce39383803706da27064531b112f2f43feb10bf5487bcb1
