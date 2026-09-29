@@ -606,6 +606,8 @@ consumer projects — it carries the owner's approvals.
        catch-rate), `d94221d4` the portability allowlist fix.
      - **Owed before the push:** the S4 two-surface attack (killed by low system memory, no result).
        Run it on the local commits (`--since 3974a3d9`), fix, push once, read CI per job.
+       **Done 2026-09-29:** the boundary half's four findings (B1-B4) closed red-first at
+       `a3a927c3`/`04b31d3b`; the logic half skipped by the owner (debt-ledger row). Pushed once.
      - **Then ask the owner before S5:** cost estimate for the live explore + plain-prompt control,
        and a rubric/anchors draft at `docs/design/rubrics/` for him to approve before the deal.
      - Logic surface: runs only with `ARC_LLM_REASONING=off` and is shallow; S2 never produced a
