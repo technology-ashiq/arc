@@ -1,11 +1,13 @@
-# org — fixed defects (carried into every attacker prompt)
+# Fixed defects — the org lane's running list
 
-Each row is a hole found and closed. An attacker checks every OTHER file for the same shape:
-a fix is not applied until it has been attacked somewhere it was never made.
+Every attacker prompt carries this file, with one instruction: **check each line in every OTHER
+file you are shown, not only the file it was fixed in.** Every attacker pass adds its fixed holes
+here, one line each.
 
-| # | Found | Shape | Where fixed | Check elsewhere for |
-|---|---|---|---|---|
-| 1 | build, 2026-09-30 | The model-string scan read `.claude/` inside script PATHS as the model "claude". Every card that binds a script would have failed. | `card.mjs` `NOT_SCANNED` (paths + `hire.source`) | any word-bounded regex run over a free-text field that also holds paths |
-| 2 | build, 2026-09-30 | The ADR-0200 yaml subset reads a QUOTED sequence item holding `": "` as a one-key mapping (`- 'a: b'` → `{"'a": "b'"}`). This is a silent misread. The gate caught the one that reached a card. | `emit.mjs` refuses such items; `validateCard` fails a non-string list item | every list-of-strings field read through `parseYamlSubset` (engine lane owns the parser; reported, not fixed here) |
-| 3 | build, 2026-09-30 | The self-test scratch tree held EMPTY placeholder scripts. `face-coverage`'s walkers load the YAML parser from the tree they read, so `ventures.yaml` read as unreadable and two arms failed for the wrong reason. | `org-coverage.mjs` `buildScratch` copies `yaml-subset.mjs` bytes | any scratch/fixture tree that stubs a file a walker IMPORTS rather than lists |
-| 4 | build, 2026-09-30 | ADR-1622's first draft seated the social card `vacant` while giving it an E2 string. ADR-1609 forbids that, and the gate refused the card. | ADR-1622 erratum; the card is `seat: human` | any ADR or spec line that sets `seat` for a role carrying `e2` |
+Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
+
+- **The model-string scan read `.claude/` inside script paths as the model "claude", which would fail every card that binds a script** — `card.mjs` `NOT_SCANNED` (paths + `hire.source`), 07568bd — *any word-bounded regex run over a free-text field that also holds paths*
+- **The ADR-0200 yaml subset reads a quoted sequence item holding ": " as a one-key mapping (`- 'a: b'` becomes `{"'a": "b'"}`), a silent misread** — `emit.mjs` refuses such items and `validateCard` fails a non-string list item, 07568bd (the parser is the engine lane's, reported and not fixed here) — *every list-of-strings field read through `parseYamlSubset`*
+- **The self-test's scratch tree held EMPTY placeholder scripts, but face-coverage's walkers IMPORT the YAML parser from the tree they read, so ventures.yaml read as unreadable** — `org-coverage.mjs` `buildScratch` copies the real `yaml-subset.mjs` bytes, 07568bd — *any scratch or fixture tree that stubs a file a walker imports rather than lists*
+- **ADR-1622's first draft seated the social card `vacant` while giving it an E2 string, which ADR-1609 forbids; the gate refused the card** — ADR-1622 erratum, the card is `seat: human`, 07568bd — *any ADR or spec line that sets `seat` for a role that carries `e2`*
+- **A card mission (the phrase risk_ordered phases before any code is written, hyphen written here as `_` so this line does not trip the same rule) read as an OpenAI key once the secret scanner stripped whitespace, and arc-run refused the whole attack input** — `product-manager` mission reworded — *any prose containing sk plus a hyphen (risk, task, desk + hyphen) followed by 32+ word characters once spaces are removed*
