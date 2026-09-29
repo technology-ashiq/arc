@@ -1194,13 +1194,14 @@
           "PLAN-memory",
           "PLAN-model-policy",
           "PLAN-ops",
+          "PLAN-org",
           "PLAN-policy",
           "PLAN-portfolio",
           "PLAN-scheduler",
           "PLAN-trader"
         ]
       },
-      "itemCount": 29
+      "itemCount": 30
     },
     {
       "id": "org",
