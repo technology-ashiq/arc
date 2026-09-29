@@ -1,0 +1,37 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:ownerSpine",
+      "breaking_input": "An agent session builds a scratch spine directory with an events/ folder, sets ARC_SPINE_ROOT to it, and runs `--request-accept` for a page. It then runs `arc-inbox approve <ULID>` with the same ARC_SPINE_ROOT, and finally `--accept <page> --approval <ULID>` with ARC_SPINE_ROOT still set. ownerSpine returns the scratch spine and readSpineEvents reads events the agent wrote itself. approvalProblem then returns \"\" and `by: owner` is stamped.",
+      "why": "The proof exists to stop an agent from accepting a page as the owner, but the ARC_SPINE_ROOT door is read from the caller's own environment. Setting it swaps the owner's real spine for one the caller controls, which is cheaper than the `arc-event` forgery the amendment admits to. The docs call it 'test-only', but nothing enforces that.",
+      "fix": "Refuse ARC_SPINE_ROOT in `--accept` and `--request-accept` unless the main clone's spine is the resolved one. Give the self-test a separate injected option, such as a function parameter, instead of an env override. Refuse the env override by name, as the bench ceilings do."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:gitTrackedList, mainCloneOf",
+      "breaking_input": "Run the gate from a git hook, or from any shell that exports GIT_DIR, GIT_WORK_TREE or GIT_INDEX_FILE (a pre-push hook does). `git -C root ls-files -z` then lists another repo's or index's files, so the drift check passes or fails against the wrong tracked set. `mainCloneOf` reads the wrong `--git-common-dir` the same way and the owner spine is looked up in the wrong place.",
+      "why": "Both spawns inherit the caller's whole environment, including git's location variables. The lane's fixed-defects list says every child a door runs inherits its env minus git location variables (`childEnv`). This is the same defect one file over.",
+      "fix": "Spawn git with GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_COMMON_DIR and GIT_CEILING_DIRECTORIES stripped from the env (the existing childEnv helper). Set GIT_OPTIONAL_LOCKS=0 as well."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:mainCloneOf",
+      "breaking_input": "A main clone created with `git init --separate-git-dir /elsewhere/x.git`, or a clone whose git dir is not named `.git`. `--git-common-dir` prints `/elsewhere/x.git`, and dirname gives `/elsewhere`, which is not the clone.",
+      "why": "The code assumes the common dir's parent is the work tree. That holds only for the default layout. A wrong main path makes `existsSync(arc-event)` fail with a misleading 'pull it first', or worse, it resolves a different directory that happens to hold an arc-event.",
+      "fix": "Ask git for the main work tree with `git worktree list --porcelain` and take the first entry. Otherwise accept the layout only when basename(common) === \".git\" and refuse anything else by name."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:main (argument loop)",
+      "breaking_input": "`narrative-anchors --json --json`, or `--selftest --selftest`. These are accepted silently. `--json` beside `--accept` or `--request-accept` is also accepted and ignored, so a caller that parses the output gets prose.",
+      "why": "The defect list says a repeated flag is refused by name, and a mode must not ignore an argument it was given. `--json` is checked only with `includes`, so repetition and the mode combination slip through. The second case is a known debt row (B7).",
+      "fix": "Count `--json` and refuse a repeat. Refuse `--json` together with `--accept` or `--request-accept` with exit 2."
+    }
+  ]
+}

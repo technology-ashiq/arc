@@ -59,6 +59,10 @@ const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
 /** A repo path as a narrative names one: segments, a slash, a file extension -- and no placeholder or glob. */
 const PATH_NAME = /^(?:\.?[A-Za-z0-9_-][\w.-]*\/)+[\w.-]+\.(?:mjs|cjs|js|ts|tsx|md|json|ya?ml|sh|bats|css|html)$/;
 
+/** The owner's LOCAL calendar day, YYYY-MM-DD: an evening acceptance east of UTC is that day for him, not the UTC one (attack r1 L7). */
+export const localDay = (/** @type {{ getFullYear(): number, getMonth(): number, getDate(): number }} */ d = new Date()) =>
+  `${String(d.getFullYear()).padStart(4, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 /** Line endings normalised: a Windows checkout (CRLF) and a CI runner (LF) must hash one text the same. */
 export const sha256 = (/** @type {string} */ text) => createHash("sha256").update(String(text).replace(/\r\n/g, "\n"), "utf8").digest("hex");
 
@@ -149,13 +153,46 @@ export function blocksOf(text) {
 }
 
 /**
+ * Every comment a page-shape fenced body carries. The fold draws a shape body verbatim and strips markers only from prose,
+ * so a marker in one is shown to the reader as raw text AND was never resolved (attack r1 L2). Each body is joined first so
+ * a marker broken over lines is one marker.
+ * @param {string} text
+ * @returns {{ line: number, raw: string, anchors: string[] }[]}
+ */
+export function shapeMarkers(text) {
+  const lines = String(text ?? "").split(/\r?\n/);
+  const cls = classify(lines);
+  /** @type {{ line: number, raw: string, anchors: string[] }[]} */
+  const out = [];
+  /** @type {string[]} */ let body = [];
+  let start = 0;
+  const flush = () => {
+    const joined = body.join("\n");
+    for (const m of joined.matchAll(COMMENT)) {
+      const raw = String(m[0]);
+      const anchors = [...raw.matchAll(MARK_SRC)].flatMap((x) => String(x[1]).split(";").map((a) => a.trim()).filter(Boolean));
+      out.push({ line: start + joined.slice(0, m.index).split("\n").length - 1, raw, anchors });
+    }
+    if (/<!--/.test(joined.replace(COMMENT, ""))) out.push({ line: start, raw: "<!--", anchors: [] });
+    body = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const c = /** @type {NonNullable<typeof cls[number]>} */ (cls[i]);
+    if (c.t === "body" && !c.quoted) { if (!body.length) start = i + 1; body.push(String(lines[i])); continue; }
+    flush();
+  }
+  flush();
+  return out;
+}
+
+/**
  * What a narrative NAMES that must exist (ADR-1514 section 2): every `ADR-NNNN` in its prose, and every `/arc-*`
  * command and repo path in a code span. Prose, tables and the page-shape blocks (steps, panels, figures ...) are read;
  * a plain code fence (```bash ...) is a quote and is not, and neither is a comment.
- * @param {string} text @returns {{ adrs: string[], commands: string[], paths: string[] }}
+ * @param {string} text @returns {{ adrs: string[], commands: string[], paths: string[], badCommands: string[] }}
  */
 export function namesOf(text) {
-  const adrs = new Set(), commands = new Set(), paths = new Set();
+  const adrs = new Set(), commands = new Set(), paths = new Set(), badCommands = new Set();
   const lines = String(text ?? "").split(/\r?\n/);
   const cls = classify(lines);
   for (let i = 0; i < lines.length; i++) {
@@ -171,12 +208,16 @@ export function namesOf(text) {
     for (const m of l.matchAll(/\bADR-(\d{4})\b/g)) adrs.add(String(m[1]));
     for (const m of l.matchAll(/`([^`\n]+)`/g)) {
       const s = String(m[1]).trim();
-      const cmd = /^\/(arc-[a-z0-9-]+)$/.exec(s);
-      if (cmd) commands.add(String(cmd[1]));
-      else if (PATH_NAME.test(s)) paths.add(s);
+      // A span that STARTS with the command word names it (`/arc-x --lane y`, `/arc-x.`); detection is case-blind and the
+      // id is then checked exactly, so `/ARC-Gone` is a drift finding and not a span nobody reads (attack r1 L3).
+      if (/^\/arc-/i.test(s)) {
+        const cmd = /^\/(arc-[A-Za-z0-9][A-Za-z0-9-]*)/i.exec(s);
+        // The bare wildcard `/arc-*` names the whole family, no one command (products/evolve says so), like a glob path.
+        if (cmd) commands.add(String(cmd[1])); else if (s !== "/arc-*") badCommands.add(s);
+      } else if (PATH_NAME.test(s)) paths.add(s);
     }
   }
-  return { adrs: [...adrs].sort(), commands: [...commands].sort(), paths: [...paths].sort() };
+  return { adrs: [...adrs].sort(), commands: [...commands].sort(), paths: [...paths].sort(), badCommands: [...badCommands].sort() };
 }
 
 /**
@@ -285,13 +326,24 @@ export function proofsOf(doc) {
 export function evaluate({ narratives, accepted, proofs, tree }) {
   /** @type {string[]} */ const fails = [];
   /** @type {string[]} */ const warns = [];
-  const commands = new Set((Array.isArray(tree.wiki?.entities?.commands) ? tree.wiki.entities.commands : []).map((/** @type {any} */ c) => String(c && c.id)));
+  const rows = Array.isArray(tree.wiki?.entities?.commands) ? tree.wiki.entities.commands : [];
+  const commands = new Set();
+  // A row with no string id must not become the allow-list entry "undefined" (attack r1 L4); it is named instead.
+  rows.forEach((/** @type {any} */ c, /** @type {number} */ i) => {
+    if (c && typeof c === "object" && typeof c.id === "string") commands.add(c.id);
+    else fails.push(`[commands] entities.commands[${i}] has no id -- the command list the drift check trusts is malformed`);
+  });
   let ok = 0, awaiting = 0;
   for (const [page, text] of Object.entries(narratives).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     const blocks = blocksOf(text);
     if (blocks.length === 0 && String(text).replace(COMMENT, "").trim() === "") { fails.push(`[empty] ${page} -- a narrative with nothing in it explains nothing`); continue; }
     for (const b of blocks) for (const a of b.anchors) { const why = anchorProblem(a, tree); if (why) fails.push(`[anchor] ${page}:${b.line} -- ${a}: ${why}`); }
+    for (const m of shapeMarkers(text)) {
+      for (const a of m.anchors) { const why = anchorProblem(a, tree); if (why) fails.push(`[anchor] ${page}:${m.line} -- ${a}: ${why}`); }
+      fails.push(`[marker-in-shape] ${page}:${m.line} -- a comment inside a page-shape block is drawn to the reader as raw text; move it out of the fence`);
+    }
     const names = namesOf(text);
+    for (const b of names.badCommands) fails.push(`[drift] ${page} -- names ${JSON.stringify(b)}, which starts /arc- but carries no command id`);
     for (const n of names.adrs) if (!tree.adrs.has(n)) fails.push(`[drift] ${page} -- names ADR-${n}, which has no docs/adr/${n}-*.md`);
     for (const c of names.commands) if (!commands.has(c)) fails.push(`[drift] ${page} -- names /${c}, which is no command in .claude/commands/`);
     // A path is a claim about the tree only when it starts at a real top-level directory; `lib/x.mjs` is relative to
@@ -730,11 +782,31 @@ async function selftest() {
   const many = [{ id: U1, kind: "approval.requested", payload: { what: "w", gate: ACCEPT_GATE, pages: [{ page: "products/hq", sha256: HG }, { page: "lanes/x", sha256: "a".repeat(64) }] } }, dc(U1, "approve")];
   arm("proof: one approved request covers every page it lists at its hash, and only those",
     approvalProblem(many, U1, "products/hq", HG) === "" && approvalProblem(many, U1, "lanes/x", "a".repeat(64)) === "" && approvalProblem(many, U1, "lanes/x", "b".repeat(64)) !== "" && approvalProblem(many, U1, "lanes/y", HG) !== "");
+  // ---- attack r1 (logic surface): L2 shape markers, L3 command word, L4 command rows, L7 local day.
+  const withStep = (/** @type {string} */ line) => good.replace("plain: you type `/arc-x`", `plain: you type \`/arc-x\` ${line}`);
+  const badMark = run(withStep("<!-- src: a/nope.mjs -->")), goodMark = run(withStep("<!-- src: a/b.mjs -->")), plainMark = run(withStep("<!-- plain -->"));
+  arm("MUTANT L2 shape marker: a src marker inside a steps block is resolved (unresolvable FAILs [anchor]), and any marker there FAILs [marker-in-shape] because the fold draws it raw",
+    has(badMark, "[anchor]") && has(badMark, "[marker-in-shape]") && !has(goodMark, "[anchor]") && has(goodMark, "[marker-in-shape]") && has(plainMark, "[marker-in-shape]") && !has(run(good), "[marker-in-shape]"));
+  arm("MUTANT L2 multi-line: a marker broken over lines in a shape block, and a comment left open there, are still found; a marker in a plain quote fence is not",
+    has(run(good.replace("plain: you type", "<!-- src: a/nope.mjs\n-->\nplain: you type")), "[anchor]") && has(run(good.replace("plain: you type", "<!-- open\nplain: you type")), "[marker-in-shape]")
+    && !has(run(good.replace("# a quote, not a claim", "# a quote <!-- src: a/nope.mjs -->")), "[anchor]"));
+  arm("MUTANT L3 command word: a span that starts with /arc-x is checked -- flags, a trailing dot and upper case included; an existing command with flags passes",
+    ["`/arc-gone --lane docs`", "`/arc-gone.`", "`/ARC-Gone`", "`/ARC-x`"].every((sp) => has(run(good.replace("`/arc-x`", sp)), "[drift]"))
+    && !has(run(good.replace("`/arc-x`", "`/arc-x --lane docs`")), "[drift]") && !has(run(good.replace("`/arc-x`", "`/arc-x.`")), "[drift]"));
+  arm("MUTANT L3 no id: a span that starts /arc- and yields no command id FAILs by name",
+    ["`/arc-`", "`/arc- x`", "`/arc-*x`"].every((sp) => run(good.replace("`/arc-x`", sp)).fails.some((f) => f.startsWith("[drift]") && f.includes("no command id"))) && !has(run(good.replace("`/arc-x`", "`/arc-*`")), "[drift]"));
+  const rowRun = (/** @type {any[]} */ commands, /** @type {string} */ text) => evaluate({ narratives: { "products/hq": text }, accepted: {}, proofs: {}, tree: { ...tree, wiki: { entities: { ...wiki.entities, commands } } } });
+  arm("MUTANT L4 command rows: a row with no string id is named and never becomes the command undefined; well-formed rows raise nothing",
+    rowRun([{ id: "arc-x" }, null, {}, { id: 7 }], good).fails.filter((f) => f.startsWith("[commands]")).length === 3
+    && has(rowRun([{ id: "arc-x" }, {}], good.replace("`/arc-x`", "`/undefined`")), "[commands]") && !has(rowRun([{ id: "arc-x" }], good), "[commands]"));
+  const fakeClock = { getFullYear: () => 2026, getMonth: () => 8, getDate: () => 29, toISOString: () => "2026-09-28T19:00:00.000Z" };
+  arm("MUTANT L7 local day: the acceptance date is the owner's local calendar day (a clock whose UTC day differs reads its local one), zero-padded",
+    localDay(fakeClock) === "2026-09-29" && localDay({ getFullYear: () => 2027, getMonth: () => 0, getDate: () => 5 }) === "2027-01-05" && /^\d{4}-\d{2}-\d{2}$/.test(localDay()));
   // The arms that need a process, the spine or a git repo live with the code that does (DOC-A: nothing here spawns); each still runs the REAL functions.
   const proof = await import(pathToFileURL(join(HERE, "..", "hq", "lib", "narrative-proof.mjs")).href);
   for (const [name, ok] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok);
   console.log(`RAN: ${ran} checks, ${failed} failed`);
-  return failed === 0 && ran === 46 ? 0 : 1;
+  return failed === 0 && ran === 52 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
@@ -806,7 +878,7 @@ async function main(argv) {
     if (blocked) { console.log(`REFUSED ${accept} -- ${blocked}`); return 1; }
     // The baseline is the text readTree PARSED, never a second read (attack b8707be B2): the guard must judge the read the doc came from.
     const before = t.acceptText;
-    const on = new Date().toISOString().slice(0, 10);
+    const on = localDay();
     const { doc, refused } = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on, approval);
     if (refused) { console.log(`REFUSED ${accept} -- ${refused}`); return 1; }
     // The owner's proof, read from HIS spine (the main clone's, read-only): the one place the ULID is checked against anything.

@@ -1,0 +1,66 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "critical",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:66",
+      "breaking_input": "export ARC_SPINE_ROOT=/tmp/agent-spine  (any writable dir); node .claude/scripts/docs/narrative-anchors.mjs --request-accept products/qa  -> the approval.requested is emitted into /tmp/agent-spine via arc-event (ownerSpine honors the env for the writer too); node .claude/scripts/hq/arc-inbox.mjs approve <printed-id> --reason x  -> decision.recorded lands in the same agent-owned dir (proofArms itself runs exactly this flow against a temp spine); node .claude/scripts/docs/narrative-anchors.mjs --accept products/qa --approval <id>  -> verifyAcceptApproval reads /tmp/agent-spine, approvalProblem passes, accepted.json gains by:\"owner\". No main clone touched.",
+      "why": "ADR-1514 amendment 1 exists to stop an agent session self-accepting pages, but the owner-proof it added reads whichever spine ARC_SPINE_ROOT names, checked unconditionally and first in ownerSpine, in production --accept and --request-accept, not only in tests. The same agent that runs --accept can point the env var at a spine it owns and forge both the request and the owner's approve decision, or hand-write the two event lines. The gate's entire new guarantee is defeated by one env var held by the exact threat actor it names.",
+      "fix": "Refuse ARC_SPINE_ROOT by name on the --accept and --request-accept paths (the proof must read the main-clone spine located by git), or honor it only under --selftest; the self-test passes the spine as an argument instead of through the environment.",
+      "twin_of": "An env override silently turned a door \"live\" -> a door over a named spine is sim mode; the override is refused by name in live."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:160",
+      "breaking_input": "A narrative page containing:  ```steps\\nt: Open the ledger <!-- src: a/nope.mjs -->\\n```  -- the gate returns 0 fails: blocksOf classifies the line t:\"body\" and skips it so the marker's anchor never reaches anchorProblem, and namesOf skips comment handling for bodies (\"if (c.t !== \\\"body\\\")\") so `a/nope.mjs` (unbackticked, as src markers spell paths) is never drift-checked either. The room's fencedBlock then draws the step with the literal text \"<!-- src: a/nope.mjs -->\" on the owner's page.",
+      "why": "ADR-1514 section 2 promises \"Markers that are present are still resolved, and still stripped before rendering\", and the gate's own header promises \"any <!-- src: ... --> anchor it still carries must resolve\". Both halves are false for markers inside the new page-shape fences (steps/lede/panel/stats/rosetta/gloss/flow/loop): prose markers are resolved and stripped, shape-body markers are neither -- two readers of one marker kind, one guarded, one not. The migration of the 34 existing pages (which are full of markers) into shape blocks walks every writer straight into this.",
+      "fix": "Run one comment layer over shape-fence bodies: extract every <!-- src: ... --> from bodies in namesOf/blocksOf and resolve it with anchorProblem, and strip the markers in fencedBlock before inlineSpans so the page never shows raw marker text.",
+      "twin_of": "One reader guarded, its twin not -> Every reader of the same file gets the same guard."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:178",
+      "breaking_input": "A narrative line: Run `/arc-gone --lane docs` to file the report.  -- the code span is not exactly \"/arc-gone\", so ^\\/(arc-[a-z0-9-]+)$ does not match, no [drift] fail, the page ships naming a command that does not exist. Same escape for `/arc-gone.` (trailing punctuation) and `/ARC-Gone` (case).",
+      "why": "The drift rule's stated scope is \"every /arc-* command the narrative names must exist\", but the check only fires when the backtick span is byte-exactly the bare command. Any argument, punctuation or casing suffix -- the natural way to write a usage example -- silently removes the command from the drift check, so the one hard rule ADR-1514 kept has a one-character bypass.",
+      "fix": "Match the command word inside the span (e.g. /\\/(arc-[a-z0-9-]+)\\b/ on the trimmed span, anchored left) and drift-check that id; anything beginning /arc- that yields no id is a named fail, not a pass."
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:321",
+      "breaking_input": "wiki entities.commands containing one malformed row (null, or the id spelled as a bare string \"arc-x\"): the set gains String(null&&...)=\\\"null\\\" or \\\"undefined\\\", so a narrative naming `/undefined` passes the drift check; with a string row the real command id is lost and every `/arc-x` a page names false-FAILs [drift].",
+      "why": "The command allow-list is built with String(c && c.id), which turns a malformed entry into the ids \\\"null\\\"/\\\"undefined\\\" instead of naming the malformed row -- unknown silently becomes a default value that real spans can match.",
+      "fix": "Build the set only from entries that are objects with a string id, and push a named fail (\"entities.commands[i] has no id\") for the rest.",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "face/src/ui/page.tsx:204",
+      "breaking_input": "A narrative stats block:  ```stats\\n3 | commands\\n3 | commands\\n```  (or a gloss block with the same term twice) -- StatGrid renders both boxes keyed \"commands\" (Gloss keys by it.term), a duplicate React key; on the room's live re-read one box can fail to update or render stale content.",
+      "why": "The kit parts key list items by narrative-supplied text with no dedupe, so an author's repeated label becomes a duplicate React key -- the same class already fixed once in the catalogue.",
+      "fix": "Key by index (or suffix repeats like label-2), as the fold already does for section slugs.",
+      "twin_of": "A name the registry listed twice was counted twice and drawn under a duplicate React key"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "face/src/modules/company/reference/fold.mjs:383",
+      "breaking_input": "A products/qa narrative containing \"# How it fails\" followed by a paragraph -- pageOf's own docstring says \"every other level-1/2 heading opens a section\", but the code tests only b.isH2 || (b.isH3 && !cur); a level-1 heading that is not a group name falls through into cur.blocks where the View's Blocks has no isHeading/H1 branch, so the heading (and if it opened no section, its lead-in prose under it) is drawn by nothing while the gate reports 0 fails.",
+      "why": "pageOf contradicts its documented contract for level-1 headings, and ADR-1348 section 5 says a block that cannot be placed is rendered with a visible error, never dropped -- an H1 that matches no group name vanishes silently instead.",
+      "fix": "Let a non-group level-1 heading open a section like isH2 (per the docstring), or add an isH1 render branch / a BadBlock for headings pageOf cannot place."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:645",
+      "breaking_input": "The owner accepts a page at 01:00 IST on 2026-09-30 -- new Date().toISOString().slice(0,10) records on:\"2026-09-29\", dating the owner's read to the previous day in accepted.json.",
+      "why": "The acceptance date is a real-day fact recorded from the UTC clock; the repo's real-day rule says every date a tool serves or records uses the real day, not a shape-sliced instant from another timezone.",
+      "fix": "Record the owner's local date (or take --on), as the dogfood real-day fix did for MET.",
+      "twin_of": "A shape check where a real-day check belongs, twice more -> the round-1 real-day rule applied to every date a door serves or buckets"
+    }
+  ]
+}
