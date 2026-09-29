@@ -117,7 +117,8 @@ teardown() { _arc_teardown; }
 @test "composer scope: a CRLF explore record still grants its pack, and a symlinked record grants none (S3 attack B2 B3)" {
   _composer_sandbox; _arm
   printf 'id=lexos-v1\r\nbrief=docs/design/briefs/lexos-p/brief.md\r\n' > "$SANDBOX/docs/design/explore/lexos-v1/explore.txt"
-  grep -q $'\r' "$SANDBOX/docs/design/explore/lexos-v1/explore.txt" || { echo "fixture: no CR"; false; }
+  # The byte is checked by node: git-bash grep strips CR before matching, so grep reports no CR on Windows.
+  node -e 'process.exit(require("fs").readFileSync(process.argv[1]).includes(13) ? 0 : 1)' "$SANDBOX/docs/design/explore/lexos-v1/explore.txt" || { echo "fixture: no CR"; false; }
   run bash "$(_csc)" ".claude/state/design/refpacks/lexos-p/ref-1.png"
   [ "$status" -eq 0 ] || { echo "a CRLF record withheld the pack: $status $output"; false; }
   case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) return 0;; esac   # git-bash ln -s copies; the symlink half needs a real one
