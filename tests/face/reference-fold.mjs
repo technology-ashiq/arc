@@ -16,7 +16,9 @@ const reg = await import(u(join(REPO, "face", "src", "lib", "registry.mjs")));
 const route = await import(u(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reference", "route.mjs")));
 const dir = join(REPO, "face", "src", "modules", "company", "reference");
 const manifest = (await import(u(join(dir, "module.mjs")))).default;
-const { fold, splitNarrative, splitBlocks } = await import(u(join(dir, "fold.mjs")));
+const { fold, splitNarrative, splitBlocks, narrativeBlocks } = await import(u(join(dir, "fold.mjs")));
+// Only a test may import both: the face keeps its own copy of the gate's fence tokenizer (it must not import from .claude/scripts).
+const gate = await import(u(join(REPO, ".claude", "scripts", "docs", "narrative-anchors.mjs")));
 const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
 let ran = 0, failed = 0;
 const check = (name, cond, detail = "") => {
@@ -291,5 +293,19 @@ check("loading: before the door answers, the room says it is reading, and draws 
     JSON.stringify(figs.map((b) => [b.isFigure, b.isBad, b.bad])));
 }
 
+{
+  // attack b8707be B4: the gate and the renderer must read one fence the same way. A longer fence closes only on a bare
+  // fence of its own character and at least its length, so the inner ```steps below is QUOTED text to both.
+  const nested = "## S\n\n````md\n```steps\nt: x\nplain: `/arc-gone`\n```\n````\n\nAfter `/arc-x`.\n";
+  const tilde = "```bash\n~~~\n`/arc-gone`\n```\n\nAfter `/arc-x`.\n";
+  const loopQuoted = "Intro.\n\n````md\n```\n## The bigger loop\n```\n````\n\nMore.\n";
+  const kinds = (t) => narrativeBlocks(t).filter((b) => !b.isHeading).map((b) => (b.isCode ? "code" : b.isSteps ? "steps" : b.isPara ? "para" : "other")).join();
+  const gateKinds = (t) => `${gate.blocksOf(t).length}:${gate.namesOf(t).commands.join()}`;
+  check("fence agreement: the fold and the gate treat a nested inner fence, and a fence of the other character, as quoted text alike",
+    kinds(nested) === "code,para" && gateKinds(nested) === "1:arc-x" && kinds(tilde) === "code,para" && gateKinds(tilde) === "1:arc-x"
+    && splitBlocks(loopQuoted).loop.length === 0 && splitNarrative(loopQuoted).loop.length === 0 && gate.blocksOf(loopQuoted).length === 2,
+    JSON.stringify({ nested: [kinds(nested), gateKinds(nested)], tilde: [kinds(tilde), gateKinds(tilde)], loop: [splitBlocks(loopQuoted).loop.length, splitNarrative(loopQuoted).loop.length] }));
+}
+
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 25 ? 0 : 1;
+process.exitCode = failed === 0 && ran === 26 ? 0 : 1;

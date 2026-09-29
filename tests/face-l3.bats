@@ -595,7 +595,7 @@ load 'test_helper'
 @test "reference room: index, type and entity pages from the real extract; links resolve; cross-links equal the markdown" {
   run node "$ARC_ROOT/tests/face/reference-fold.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"RAN: 25 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  [[ "$output" == *"RAN: 26 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
   [[ "$output" == *"ok page shape: a product page draws its groups and nav"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok fenced: every page-shape block parses to its kind"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok figure: a flow and a loop become geometry"* ]] || { echo "$output"; false; }

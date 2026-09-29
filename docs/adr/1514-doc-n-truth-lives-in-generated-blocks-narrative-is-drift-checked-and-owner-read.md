@@ -45,3 +45,33 @@ and fix rounds.
   trigger.
 - `tests/docs-narrative.bats` loses the arms for the every-block marker and the verify receipt, and gains the arms
   for acceptance-hash and drift. Each new arm FAILs from birth with its mutant.
+
+## Amendment 1 (2026-09-29, `/arc-change --lane face`): `--accept` carries an owner proof
+
+**Why.** The round-2 attack (B6) showed section 4 rests on a premise nothing enforces: `--accept` stamps `by: "owner"`
+for any caller. An agent session could accept all 34 pages and take awaiting-owner to 0, and the gate Phase 07 closes on
+would read as an owner's act when it was not. The owner chose to close this in code, not to park it (2026-09-29).
+
+**Decision.** `narrative-anchors --accept <dir>/<id> --approval <ULID>` writes an entry only when the spine holds:
+1. an `approval.requested` with `gate: narrative-accept` whose payload lists that page and its **current** sha256;
+2. a `decision.recorded` for it with verdict `approve`, written through `arc-inbox approve` (the owner's stamp).
+
+Anything else is refused with a plain sentence, exit 1, nothing written: no `--approval`, an unknown ULID, an undecided or
+rejected request, a request for another page, or a hash that no longer matches (an edit after approval needs a new one).
+The entry records the ULID. The gate FAILs an entry that names none, so a hand-edited `accepted.json` does not pass either.
+
+**How the request is made.** `narrative-anchors --request-accept <dir>/<id>...` computes the pages' hashes and asks the main
+clone's `arc-event` to emit the `approval.requested`; the owner runs `arc-inbox approve` there. One request may name many pages
+(the 34 existing acceptances are re-stamped under one batch request).
+
+**The worktree constraint.** The spine refuses reads and writes inside a linked worktree (`WORKTREE_SPINE`), and the canonical
+spine is in the main clone. So both new steps locate the main clone from git's common dir and use it read-only for `--accept`
+and through its own `arc-event` for the request. Nothing else reaches across, and `ARC_SPINE_ROOT` stays test-only.
+
+**Not decided here, checked in the build.** Whether `arc-event` accepts a new `gate` string on `approval.requested` as it
+stands, or `validate.mjs` needs a row (an hq-lane file, so the change would land as a small additive edit). If it needs more
+than a row, the build stops and this amendment returns to the owner.
+
+**Cost.** About 0.75 day: the two commands, the spine read, a fixture per refusal (each FAILs against the old code), one
+attack round. Charged to Phase 07. **Revisit trigger:** the owner reads a page in the room and cannot accept it without a
+terminal, which would make the proof a chore and the room the place to record it.

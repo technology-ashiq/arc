@@ -19,10 +19,11 @@
 //
 // The rules live in `evaluate()`, which is pure: the CLI hands it the tree, the self-test hands it planted trees, so
 // every arm FAILs from birth with its mutant (ADR-1503's rule for a gate).
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 /** Where the advisory verifier receipts live, and the owner's acceptances beside them (outside docs/wiki, ADR-1503). */
@@ -54,6 +55,40 @@ const PATH_NAME = /^(?:\.?[A-Za-z0-9_-][\w.-]*\/)+[\w.-]+\.(?:mjs|cjs|js|ts|tsx|
 /** Line endings normalised: a Windows checkout (CRLF) and a CI runner (LF) must hash one text the same. */
 export const sha256 = (/** @type {string} */ text) => createHash("sha256").update(String(text).replace(/\r\n/g, "\n"), "utf8").digest("hex");
 
+const opensComment = (/** @type {string} */ s) => (s.match(/<!--/g) || []).length > (s.match(/-->/g) || []).length;
+
+/**
+ * One structural pass over the lines, read by blocksOf AND namesOf so they cannot disagree about which line is a fence, a
+ * comment or prose (attack b8707be B3: namesOf tokenised fences before comments, blocksOf after). A comment that is open
+ * is handled BEFORE any fence test; a fence body never carries comments (the fold draws it verbatim).
+ * `rest` is what follows the `-->` that closes a comment on that line; `opens` says a comment is still open after the line.
+ * @param {string[]} lines
+ * @returns {{ t: "fence" | "body" | "comment" | "prose", quoted: boolean, rest: string, opens: boolean }[]}
+ */
+function classify(lines) {
+  /** @type {{ t: "fence" | "body" | "comment" | "prose", quoted: boolean, rest: string, opens: boolean }[]} */
+  const out = [];
+  /** @type {{ ch: string, len: number, info: string } | null} */ let fenced = null;
+  let quoted = false, inComment = false;
+  for (const raw of lines) {
+    const l = String(raw);
+    if (inComment) {
+      const e = l.indexOf("-->");
+      const rest = e < 0 ? "" : l.slice(e + 3);
+      if (e >= 0) inComment = opensComment(rest);
+      out.push({ t: "comment", quoted: false, rest, opens: e >= 0 && inComment });
+      continue;
+    }
+    const f = fenceOf(l);
+    if (f && !fenced) { fenced = f; quoted = !SHAPE_KINDS.includes(String(/^[A-Za-z]*/.exec(f.info)?.[0]).toLowerCase()); out.push({ t: "fence", quoted, rest: "", opens: false }); continue; }
+    if (f && fenced && closesFence(f, fenced)) { fenced = null; out.push({ t: "fence", quoted, rest: "", opens: false }); quoted = false; continue; }
+    if (fenced) { out.push({ t: "body", quoted, rest: "", opens: false }); continue; }
+    inComment = opensComment(l);
+    out.push({ t: "prose", quoted: false, rest: "", opens: inComment });
+  }
+  return out;
+}
+
 /**
  * The page's blocks, numbered from 1 in reading order -- the numbering narrative-verify sends its verifier. Headings and
  * fenced blocks are not blocks. A paragraph, a list item (with its indented continuation), a quote and a table ROW are
@@ -77,18 +112,14 @@ export function blocksOf(text) {
     }
     cur = null;
   };
-  /** @type {{ ch: string, len: number } | null} */ let fenced = null;
-  let inComment = false;
+  const cls = classify(lines);
   for (let i = 0; i < lines.length; i++) {
     const l = String(lines[i]);
+    const c = /** @type {NonNullable<typeof cls[number]>} */ (cls[i]);
     // A comment that spans lines is one marker, never prose (the fingerprint, or a src list broken over lines).
-    if (inComment) { if (cur) cur.raw.push(l); if (l.includes("-->")) inComment = false; continue; }
-    const fl = fenceOf(l);
-    if (fl && !fenced) { close(); fenced = fl; continue; }
-    if (fl && fenced && closesFence(fl, fenced)) { close(); fenced = null; continue; }
-    if (fenced) continue;
-    const opens = (l.match(/<!--/g) || []).length, shuts = (l.match(/-->/g) || []).length;
-    if (opens > shuts) inComment = true;
+    if (c.t === "comment") { if (cur) cur.raw.push(l); continue; }
+    if (c.t === "fence") { close(); continue; }
+    if (c.t === "body") continue;
     if (l.trim() === "") { close(); continue; }
     if (/^\s*#{1,6}\s/.test(l)) { close(); continue; }
     if (l.trim().startsWith("|")) {
@@ -118,18 +149,18 @@ export function blocksOf(text) {
  */
 export function namesOf(text) {
   const adrs = new Set(), commands = new Set(), paths = new Set();
-  /** @type {{ ch: string, len: number } | null} */ let inFence = null;
-  let quoted = false, inComment = false;
-  for (const raw of String(text ?? "").split(/\r?\n/)) {
-    const fence = fenceOf(raw);
-    if (fence && !inFence) { inFence = fence; quoted = !SHAPE_KINDS.includes(String(/^[A-Za-z]*/.exec(fence.info)?.[0]).toLowerCase()); continue; }
-    if (fence && inFence && closesFence(fence, inFence)) { inFence = null; quoted = false; continue; }
-    if (quoted) continue;
-    let l = raw;
-    if (inComment) { const e = l.indexOf("-->"); if (e < 0) continue; l = l.slice(e + 3); inComment = false; }
-    l = l.replace(COMMENT, "");
-    const open = l.indexOf("<!--");
-    if (open >= 0) { l = l.slice(0, open); inComment = true; }
+  const lines = String(text ?? "").split(/\r?\n/);
+  const cls = classify(lines);
+  for (let i = 0; i < lines.length; i++) {
+    const c = /** @type {NonNullable<typeof cls[number]>} */ (cls[i]);
+    if (c.t === "fence" || (c.t === "body" && c.quoted)) continue;
+    let l = c.t === "comment" ? c.rest : String(lines[i]);
+    // A shape-fence body is drawn verbatim by the fold, so it is read verbatim; only prose carries comments.
+    if (c.t !== "body") {
+      l = l.replace(COMMENT, "");
+      const open = c.opens ? l.indexOf("<!--") : -1;
+      if (open >= 0) l = l.slice(0, open);
+    }
     for (const m of l.matchAll(/\bADR-(\d{4})\b/g)) adrs.add(String(m[1]));
     for (const m of l.matchAll(/`([^`\n]+)`/g)) {
       const s = String(m[1]).trim();
@@ -295,7 +326,8 @@ export function receiptProblem(r, page, hash, count) {
 
 /**
  * Every narrative, listed through wiki-coverage's pageTree -- the one sanctioned listing (DOC-A, ADR-1501) -- each one's
- * advisory receipt, and the acceptance file, all read by NAMED path. Nothing here lists a directory or spawns a process.
+ * advisory receipt, and the acceptance file, all read by NAMED path. Nothing here lists a directory; the one process is a
+ * single `git ls-files -z` (the tracked list the drift check is judged against, attack b8707be B5).
  * @param {string} root
  */
 export async function readTree(root) {
@@ -325,20 +357,68 @@ export async function readTree(root) {
       catch { receipts[`${dir}/${stem}`] = "unparseable"; }
     }
   }
-  /** @type {unknown} */
-  let acceptDoc = null;
-  if (existsSync(join(root, ACCEPT_FILE))) {
-    if (!regularInside(join(root, ACCEPT_FILE), rootReal)) rejected.push(ACCEPT_FILE);
-    else { try { acceptDoc = JSON.parse(readFileSync(join(root, ACCEPT_FILE), "utf8")); } catch { rejected.push(`${ACCEPT_FILE} (unparseable)`); } }
-  }
+  const acc = readAccept(root, rootReal);
+  if (acc.problem) rejected.push(acc.problem);
+  const acceptDoc = acc.doc;
+  const gitList = gitTrackedList(root);
   const adrs = new Set();
   for (const band of Array.isArray(wiki.entities.adrBands) ? wiki.entities.adrBands : []) {
     for (const a of Array.isArray(band && band.facts && band.facts.adrs) ? band.facts.adrs : []) if (a && /^\d{4}$/.test(String(a.number))) adrs.add(String(a.number));
   }
-  const tracked = (/** @type {string} */ p) => presentExact(root, rootReal, p);
+  const tracked = trackedIn(gitList, root, rootReal);
   const read = (/** @type {string} */ p) => { try { return readFileSync(join(root, p), "utf8"); } catch { return ""; } };
   const isDir = (/** @type {string} */ seg) => isTopDir(root, seg);
-  return { wb, wiki, narratives, receipts, acceptDoc, accepted: acceptedOf(acceptDoc), rejected, tree: { adrs, wiki, tracked, read, isDir } };
+  return { wb, wiki, narratives, receipts, acceptDoc, acceptText: acc.text, accepted: acceptedOf(acceptDoc), rejected, tree: { adrs, wiki, tracked, read, isDir } };
+}
+
+/**
+ * Why an acceptance document is not `{schema:1, pages:<plain object>}`, or "" when it is (attack b8707be B1): a document that
+ * parses but is another shape is unreadable, never "empty" -- writing over it would drop every earlier acceptance.
+ * @param {unknown} doc
+ */
+export function acceptShapeProblem(doc) {
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) return "not a JSON object";
+  const d = /** @type {any} */ (doc);
+  if (d.schema !== 1) return `schema ${JSON.stringify(d.schema)}, not 1`;
+  if (!d.pages || typeof d.pages !== "object" || Array.isArray(d.pages)) return "pages is not an object";
+  return "";
+}
+
+/**
+ * The acceptance file, read ONCE: its text (the stale-write baseline, attack b8707be B2 -- never re-read to get one), the
+ * parsed document, and why it is unusable. Only a MISSING file is empty; a link, a directory, bad JSON or the wrong shape is a problem.
+ * @param {string} root @param {string} rootReal
+ * @returns {{ text: string | null, doc: unknown, problem: string }}
+ */
+export function readAccept(root, rootReal) {
+  const file = join(root, ACCEPT_FILE);
+  if (!existsSync(file)) return { text: null, doc: null, problem: "" };
+  if (!regularInside(file, rootReal)) return { text: null, doc: null, problem: ACCEPT_FILE };
+  let text = "";
+  try { text = readFileSync(file, "utf8"); } catch { return { text: null, doc: null, problem: `${ACCEPT_FILE} (unreadable)` }; }
+  let doc;
+  try { doc = JSON.parse(text); } catch { return { text, doc: null, problem: `${ACCEPT_FILE} (unparseable)` }; }
+  const why = acceptShapeProblem(doc);
+  return { text, doc: why ? null : doc, problem: why ? `${ACCEPT_FILE} (wrong shape: ${why})` : "" };
+}
+
+/**
+ * Every git-tracked path, from ONE bounded `git ls-files -z` (attack b8707be B5): a gitignored file that exists on this
+ * box is absent from a clean checkout, so disk presence is not the CI verdict. Refuses, loudly, when git cannot answer.
+ * @param {string} root @returns {Set<string>}
+ */
+export function gitTrackedList(root) {
+  try {
+    const out = execFileSync("git", ["-C", root, "ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 30000, stdio: ["ignore", "pipe", "pipe"] });
+    return new Set(out.split("\0").filter(Boolean));
+  } catch (e) {
+    throw new Error(`git ls-files failed in ${root} (${String(/** @type {Error} */ (e).message).split("\n")[0]}); the drift check judges paths against the git-tracked list and will not guess`);
+  }
+}
+
+/** A path counts only when git tracks it AND it is a regular file on disk spelt exactly so; the list is handed in, so evaluate() stays pure. */
+export function trackedIn(/** @type {Set<string>} */ list, /** @type {string} */ root, /** @type {string} */ rootReal) {
+  return (/** @type {string} */ p) => list.has(p) && presentExact(root, rootReal, p);
 }
 
 /** A top-level directory, by name (never a listing): lstat, a real directory, not a symlink. The name grammar is run on the REAL tree by the self-test (attack b5f5e03 B1). */
@@ -348,8 +428,8 @@ export function isTopDir(/** @type {string} */ root, /** @type {string} */ seg) 
 }
 
 /**
- * A regular file inside the tree whose on-disk spelling is EXACTLY `p`. It is not a git-tracked check (the extract lists
- * no files), so the name says what it does. A case-insensitive checkout (Windows, macOS) resolves `Docs/x.md` to
+ * A regular file inside the tree whose on-disk spelling is EXACTLY `p`. It is not a git-tracked check by itself (trackedIn
+ * adds the git list), so the name says what it does. A case-insensitive checkout (Windows, macOS) resolves `Docs/x.md` to
  * `docs/x.md` and would pass locally what the Linux leg fails (attack b5f5e03 B5); the native real path carries the true case.
  */
 export function presentExact(/** @type {string} */ root, /** @type {string} */ rootReal, /** @type {string} */ p) {
@@ -507,8 +587,55 @@ function selftest() {
     namesOf(nested).commands.join() === "arc-x" && namesOf("```bash\n~~~\n`/arc-gone`\n```\n").commands.length === 0);
   arm("MUTANT B7 blocks: the fold agrees -- the nested fence hides its inner line, so only the closing paragraph is a block",
     blocksOf("````\n```x\nA\n```\n````\n\nB\n").length === 1);
+  // ---- attack b8707be round 2 (B4, the renderer's half, is tests/face/reference-fold.mjs: only a test may import both).
+  arm("MUTANT B1 shape: null, an array, schema 2 and pages-as-array are each a wrong shape; the real shape is not",
+    [null, [], { schema: 2, pages: {} }, { schema: 1, pages: [] }, { schema: 1 }].every((d) => acceptShapeProblem(d) !== "") && acceptShapeProblem({ schema: 1, pages: {} }) === "");
+  arm("MUTANT B3 comment first: a fence line inside an open comment opens nothing, so the prose after `-->` is still checked, by names and by blocks",
+    (() => { const t = "<!-- todo\n```bash\n-->\nSee `/arc-gone` and ADR-9999.\n"; const n = namesOf(t); return n.commands.join() === "arc-gone" && n.adrs.join() === "9999" && blocksOf(t).length === 1; })());
+  const box = mkdtempSync(join(tmpdir(), "narr-r2-"));
+  const bare = mkdtempSync(join(tmpdir(), "narr-nogit-"));
+  const ceiling = process.env.GIT_CEILING_DIRECTORIES;
+  try {
+    mkdirSync(join(box, "docs", "narrative-verify"), { recursive: true });
+    const boxReal = realpathSync(box);
+    const accFile = join(box, ACCEPT_FILE);
+    writeFileSync(accFile, "[]\n");
+    const wrong = readAccept(box, boxReal);
+    arm("MUTANT B1 read: a parseable acceptance file of the wrong shape is a problem that blocks --accept (never empty); a missing file is empty",
+      wrong.problem.includes("wrong shape") && wrong.doc === null && acceptBlocker([wrong.problem]) !== "" && (() => { unlinkSync(accFile); const gone = readAccept(box, boxReal); return gone.problem === "" && gone.text === null; })());
+    const mine = `${JSON.stringify({ schema: 1, pages: { "products/a": { by: "owner", on: "d", sha256: "0".repeat(64) } } }, null, 2)}\n`;
+    writeFileSync(accFile, mine);
+    const seen = readAccept(box, boxReal);
+    // Session B lands between A's read and A's write: A's baseline is the text A parsed, so the write must be refused.
+    const theirs = `${JSON.stringify({ schema: 1, pages: { "products/a": { by: "owner", on: "d", sha256: "0".repeat(64) }, "products/b": { by: "owner", on: "d", sha256: "1".repeat(64) } } }, null, 2)}\n`;
+    writeFileSync(accFile, theirs);
+    const raced = writeAccept(box, { schema: 1, pages: {} }, seen.text);
+    arm("MUTANT B2 baseline: readAccept hands back the exact text it parsed, and a write against it after another session landed is refused",
+      seen.text === mine && raced !== "" && readFileSync(accFile, "utf8") === theirs);
+    // B5: a gitignored file that exists on this box is not in the tracked list, so it FAILs; a tracked one passes.
+    execFileSync("git", ["init", "-q"], { cwd: box });
+    writeFileSync(join(box, ".gitignore"), "docs/ignored.md\n");
+    writeFileSync(join(box, "docs", "kept.md"), "x");
+    writeFileSync(join(box, "docs", "ignored.md"), "x");
+    execFileSync("git", ["add", ".gitignore", "docs/kept.md"], { cwd: box });
+    const list = gitTrackedList(box);
+    const gtree = { adrs: new Set(), wiki, tracked: trackedIn(list, box, boxReal), read: () => "", isDir: (/** @type {string} */ d) => isTopDir(box, d) };
+    const grun = (/** @type {string} */ text) => evaluate({ narratives: { "products/hq": text }, accepted: {}, tree: gtree });
+    arm("MUTANT B5 tracked: a gitignored file present on disk FAILs the drift check; a git-tracked one passes",
+      existsSync(join(box, "docs", "ignored.md")) && list.has("docs/kept.md") && !list.has("docs/ignored.md")
+      && has(grun("It keeps `docs/ignored.md` here.\n"), "[drift]") && !has(grun("It keeps `docs/kept.md` here.\n"), "[drift]"));
+    process.env.GIT_CEILING_DIRECTORIES = dirname(bare);
+    let refusal = "";
+    try { gitTrackedList(bare); } catch (e) { refusal = /** @type {Error} */ (e).message; }
+    arm("MUTANT B5 no git: a directory git cannot list is refused with a message naming git ls-files, never a silent pass",
+      refusal.includes("git ls-files") && refusal.includes("will not guess"));
+  } finally {
+    if (ceiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES; else process.env.GIT_CEILING_DIRECTORIES = ceiling;
+    rmSync(box, { recursive: true, force: true });
+    rmSync(bare, { recursive: true, force: true });
+  }
   console.log(`RAN: ${ran} checks, ${failed} failed`);
-  return failed === 0 && ran === 27 ? 0 : 1;
+  return failed === 0 && ran === 33 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
@@ -537,11 +664,12 @@ async function main(argv) {
   let t;
   try { t = await readTree(root); } catch (e) { console.error(`narrative-anchors: cannot read the tree: ${/** @type {Error} */ (e).message}`); return 2; }
   const r = evaluate({ narratives: t.narratives, accepted: t.accepted, tree: t.tree });
-  for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory, unparseable or out of the tree; narratives and their records are regular files inside it`);
+  for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory, unparseable, wrong-shaped or out of the tree; narratives and their records are regular files inside it`);
   if (accept) {
     const blocked = acceptBlocker(t.rejected);
     if (blocked) { console.log(`REFUSED ${accept} -- ${blocked}`); return 1; }
-    const before = acceptRaw(root);
+    // The baseline is the text readTree PARSED, never a second read (attack b8707be B2): the guard must judge the read the doc came from.
+    const before = t.acceptText;
     const on = new Date().toISOString().slice(0, 10);
     const { doc, refused } = acceptEntry(t.acceptDoc, accept, t.narratives, r.fails, on);
     if (refused) { console.log(`REFUSED ${accept} -- ${refused}`); return 1; }

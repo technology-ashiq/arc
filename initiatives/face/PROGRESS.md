@@ -424,6 +424,16 @@ stay bespoke folds.
 
 ## Now
 
+**CHANGE ROUTED (2026-09-29, `/arc-change --lane face`, owner: "a pannu, debt vachu poga thaa"):** the round-2 attack (B6, medium)
+found that `narrative-anchors --accept` stamps `by: "owner"` for whoever runs it, so an agent could self-accept every page and
+drive awaiting-owner to 0. The owner chose option A: **`--accept` needs an `arc-inbox` approval** and it is not parked as debt.
+**ADR-1514 Amendment 1** carries the decision; a new exit criterion ("Owner-proved") sits under Phase 07. Classified as a
+decision plus in-scope build (no new REQ: it is how REQ-12's owner-read gate becomes true). Assumptions ledger: nothing fired,
+but ADR-1514 section 4 assumed that only the owner runs `--accept`, and that premise was false. Estimate 0.75d, charged to Phase 07
+and booked at the next burn update (10d of 31.5d today, no tripwire near). **Waiting on the owner's OK before any code**
+(approval, hq lane files, cross-lane): the plan is in the Amendment. The 34 acceptances already recorded were given in chat
+and stay valid until the batch approval re-stamps them.
+
 **OUT-OF-PHASE BUG (2026-09-24, `/arc-change --lane face`, owner: "neeye pannu"):** the proposal-branch
 "three writers of one plan at once" check is red on Windows, intermittently. It hit three PRs on 2026-09-19 and
 the main dispatch 35959814088 on 2026-09-24, which passed when the shard was re-run. **Root cause, reproduced on

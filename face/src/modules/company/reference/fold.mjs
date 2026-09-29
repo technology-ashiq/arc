@@ -68,10 +68,12 @@ const stem = /** @param {unknown} p @returns {string} */ (p) => str(p).replace(/
 export function splitNarrative(text) {
   const lines = str(text).split(/\r?\n/);
   // A heading inside a fenced code block is text the owner quoted, not the owner's section break (attack 53ee223 L3).
-  let fenced = false;
+  /** @type {{ ch: string, len: number, info: string } | null} */
+  let open = null;
   const at = lines.findIndex((l) => {
-    if (/^\s*(```|~~~)/.test(l)) { fenced = !fenced; return false; }
-    return !fenced && /^#{1,6}\s*the bigger loop\s*$/i.test(l.trim());
+    const was = open;
+    open = fenceStep(open, l);
+    return !was && !open && /^#{1,6}\s*the bigger loop\s*$/i.test(l.trim());
   });
   const paras = /** @param {string[]} ls @returns {string[]} */ (ls) => ls.join("\n").split(/\n\s*\n/).map((p) => p.replace(/^#{1,6}\s+/gm, "").trim()).filter(Boolean);
   return at < 0 ? { start: paras(lines), loop: [] } : { start: paras(lines.slice(0, at)), loop: paras(lines.slice(at + 1)) };
@@ -218,7 +220,18 @@ const cellsOf = /** @param {string} line @returns {Cell[]} */ (line) => {
 const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
 const BULLET = /^\s*[-*+]\s+(.*)$/;
 const NUMBERED = /^\s*\d{1,3}[.)]\s+(.*)$/;
-const FENCE = /^\s*(```|~~~)/;
+// The fence tokenizer is a COPY of narrative-anchors.mjs's (the face must not import from .claude/scripts): CommonMark closes
+// only on a bare fence of the opener's character and at least its length. tests/face/reference-fold.mjs feeds both one nested input.
+const FENCE = /^\s*(`{3,}|~~~+)(.*)$/;
+/** @param {string} line @returns {{ ch: string, len: number, info: string } | null} */
+const fenceOf = (line) => { const m = FENCE.exec(line); return m ? { ch: str(m[1])[0] ?? "", len: str(m[1]).length, info: str(m[2]).trim() } : null; };
+/** @param {{ ch: string, len: number, info: string }} f @param {{ ch: string, len: number }} open */
+const closesFence = (f, open) => f.ch === open.ch && f.len >= open.len && f.info === "";
+/** The fence state after one line: null outside a fence, the opener inside one. */
+const fenceStep = /** @param {{ ch: string, len: number, info: string } | null} open @param {string} line */ (open, line) => {
+  const f = fenceOf(line);
+  return !f ? open : !open ? f : closesFence(f, open) ? null : open;
+};
 
 /**
  * The owner's markdown as blocks (ADR-1347 section 2): headings, paragraphs, lists, tables, code and quotes. HTML
@@ -236,9 +249,10 @@ export function narrativeBlocks(text) {
   let inComment = false;
   /** @type {string[]} */
   const clean = [];
-  let fencedHere = false;
+  /** @type {{ ch: string, len: number, info: string } | null} */
+  let fencedHere = null;
   for (const raw of lines) {
-    if (FENCE.test(raw) && !inComment) { fencedHere = !fencedHere; clean.push(raw); continue; }
+    if (!inComment && fenceOf(raw)) { fencedHere = fenceStep(fencedHere, raw); clean.push(raw); continue; }
     if (fencedHere) { clean.push(raw); continue; }
     let l = raw;
     if (inComment) { const e = l.indexOf("-->"); if (e < 0) continue; l = l.slice(e + 3); inComment = false; }
@@ -251,12 +265,13 @@ export function narrativeBlocks(text) {
   }
   for (let i = 0; i < clean.length; i++) {
     const l = str(clean[i]);
-    if (FENCE.test(l)) {
+    const opener = fenceOf(l);
+    if (opener) {
       flush();
       const body = [];
       let j = i + 1;
-      while (j < clean.length && !FENCE.test(str(clean[j]))) body.push(str(clean[j++]));
-      const info = l.trim().replace(/^(```|~~~)/, "").trim();
+      while (j < clean.length) { const c = fenceOf(str(clean[j])); if (c && closesFence(c, opener)) break; body.push(str(clean[j++])); }
+      const info = opener.info;
       const kind = str(info.toLowerCase().split(/\s+/)[0]);
       out.push(FENCED.includes(kind) ? fencedBlock(info, body.join("\n")) : block({ isCode: true, text: body.join("\n") }));
       i = j;
@@ -322,10 +337,12 @@ export function narrativeBlocks(text) {
  */
 export function splitBlocks(text) {
   const lines = str(text).split(/\r?\n/);
-  let fenced = false;
+  /** @type {{ ch: string, len: number, info: string } | null} */
+  let open = null;
   const at = lines.findIndex((l) => {
-    if (FENCE.test(l)) { fenced = !fenced; return false; }
-    return !fenced && /^#{1,6}\s*the bigger loop\s*$/i.test(l.trim());
+    const was = open;
+    open = fenceStep(open, l);
+    return !was && !open && /^#{1,6}\s*the bigger loop\s*$/i.test(l.trim());
   });
   return at < 0 ? { start: narrativeBlocks(lines.join("\n")), loop: [] }
     : { start: narrativeBlocks(lines.slice(0, at).join("\n")), loop: narrativeBlocks(lines.slice(at + 1).join("\n")) };
