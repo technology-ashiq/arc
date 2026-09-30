@@ -122,20 +122,20 @@ export const FACE_PALETTE = {
 export const SPRITE = Object.freeze({
   clear: 'rgba(0, 0, 0, 0)',
   /** the cloud's diamond glow */
-  glow: Object.freeze([
+  glow: /** @type {ReadonlyArray<[number, string]>} */ (Object.freeze([
     [0, 'rgba(255, 255, 255, 1.0)'],
     [0.25, 'rgba(255, 255, 255, 0.95)'],
     [0.5, 'rgba(0, 255, 230, 0.6)'],
     [0.8, 'rgba(0, 100, 255, 0.2)'],
     [1.0, 'rgba(0, 0, 0, 0)'],
-  ]),
+  ])),
   /** the mask's ringed point */
-  ring: Object.freeze([
+  ring: /** @type {ReadonlyArray<[number, string]>} */ (Object.freeze([
     [0, 'rgba(255, 255, 255, 1.0)'],
     [0.3, 'rgba(0, 255, 240, 0.8)'],
     [0.7, 'rgba(0, 150, 255, 0.35)'],
     [1.0, 'rgba(0, 0, 0, 0)'],
-  ]),
+  ])),
   ringEdge: 'rgba(255, 255, 255, 0.9)',
 });
 
