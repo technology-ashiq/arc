@@ -6,10 +6,11 @@
 // served room with no module draws through the generic module and says so (ADR-1321). Every
 // decision is in ../lib/*.mjs where node can hold it; what is left here is wiring.
 //
-// The face stage is not in the workroom, in either mood. v0.7's workroom is "a clean room, the face
-// belongs to the front door" (its App.jsx), and the reference is the target (ADR-1318); the owner's
-// Phase 01 ruling left the stage dark-only until this phase placed it. The product has no front door,
-// so the stage is unmounted here and kept, WebGL-guarded, for the room that next draws it.
+// Two surfaces over one address bar (face v2 Phase 09, ADR-1349): the FRONT DOOR at `/`, the face at full
+// presence and one ENTER HQ, and the workroom at `#hq` or `#/<room>`. The workroom is "a clean room, the
+// face belongs to the front door" (v0.7 App.jsx): the stage is mounted on the door, flies past the camera
+// on the way in (the warp) and is unmounted STAGE_UNMOUNT_MS later; a workroom opened from its address
+// never mounts it, in either mood. Which surface, and when the stage is on, are mode.mjs's decisions.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 // Tailwind v4 and the generated token copy both enter through index.css (ADR-1323).
@@ -25,6 +26,7 @@ import { needsYouByRoom } from './lib/map.mjs'
 import { referenceRoom } from './lib/lane-room.mjs'
 import { applyMood, nextMood, readMood, storeMood } from './lib/mood.mjs'
 import type { Mood } from './lib/mood.mjs'
+import { enterHash, exitHash, modeOf, STAGE_UNMOUNT_MS, stageOn, warpDir } from './lib/mode.mjs'
 
 import Rail from './shell/Rail'
 import Header from './shell/Header'
@@ -34,6 +36,9 @@ import RoomFrame from './shell/RoomFrame'
 import type { PaletteItem } from './shell/Palette'
 import { Failure, Loading } from './ui/legacy'
 import { UI } from './ui/kit'
+import FaceStage from './face/FaceStage'
+import FrontDoor from './frontdoor/FrontDoor'
+import StageGuard from './frontdoor/StageGuard'
 
 // `inventories` is nullable, not optional-with-a-default. A door serving a registry generated
 // before ADR-1317 sends null, and a room must be able to say "the registry carried no band map"
@@ -56,6 +61,33 @@ const FOUND_MODULES: Record<string, unknown> = {
 }
 
 export default function App() {
+  // Which surface: the front door or the workroom. The address bar is the truth; this follows it.
+  const [surface, setSurface] = useState<'door' | 'hq'>(() => modeOf(window.location.hash))
+  // The crossing: each one starts a warp pass, and one into the workroom keeps the stage on while it flies.
+  const [warp, setWarp] = useState<{ dir: 1 | -1; id: number } | undefined>(undefined)
+  const [warping, setWarping] = useState(false)
+  // The stage could not draw (no WebGL, or it threw): the door says so and the workroom is untouched.
+  const [stageFailed, setStageFailed] = useState(false)
+  const failStage = useCallback(() => setStageFailed(true), [])
+  const prevSurface = useRef(surface)
+  useEffect(() => {
+    const dir = warpDir(prevSurface.current, surface)
+    prevSurface.current = surface
+    if (dir === 0) return
+    setWarp((w) => ({ dir, id: (w ? w.id : 0) + 1 }))
+    if (dir === -1) { setWarping(false); return }
+    setWarping(true)
+    // How long the stage stayed for the fly-through, on <html> once it leaves: the harness judges the warp from this
+    // record instead of a read that races the hold on a loaded machine. Cleared at the start of each crossing.
+    const root = document.documentElement
+    delete root.dataset.warpHeldMs
+    const t0 = performance.now()
+    const t = window.setTimeout(() => {
+      root.dataset.warpHeldMs = String(Math.round(performance.now() - t0))
+      setWarping(false)
+    }, STAGE_UNMOUNT_MS)
+    return () => window.clearTimeout(t)
+  }, [surface])
   const [registry, setRegistry] = useState<Registry | null>(null)
   // The rooms arc does not serve but the face keeps (ADR-1327): drawn from the exemption rows the door serves as a
   // file, never from a list typed here. Until they are read, or if they cannot be, the served rooms stand alone.
@@ -203,6 +235,8 @@ export default function App() {
 
   const open = useCallback(
     (id: string, nextAt: string | null = null) => {
+      // A room is in the workroom: opening one from the door's palette crosses into it.
+      setSurface('hq')
       setRoomId(id)
       setAt(nextAt)
       // Replace, not push: holding j through the company should not bury the back button under
@@ -216,7 +250,11 @@ export default function App() {
   useEffect(() => {
     const onHash = () => {
       const h = parseHash(window.location.hash)
+      const next = modeOf(window.location.hash)
+      setSurface(next)
+      // ENTER HQ names no room: the workroom opens on the registry's home, not the last room left.
       if (h.room) setRoomId(h.room)
+      else if (next === 'hq') setRoomId(null)
       setAsOf(h.asOf)
       setAt(h.at)
     }
@@ -238,6 +276,8 @@ export default function App() {
   homeRef.current = home
   const paletteOpenRef = useRef(paletteOpen)
   paletteOpenRef.current = paletteOpen
+  const surfaceRef = useRef(surface)
+  surfaceRef.current = surface
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -248,6 +288,9 @@ export default function App() {
       if (!action) return
       if (action.type === 'palette-toggle') { ev.preventDefault(); setPaletteOpen((o) => !o); return }
       if (action.type === 'palette-close') { ev.preventDefault(); setPaletteOpen(false); return }
+      // The door has the palette (v0.7: "⌘K works everywhere, the landing included") and nothing else: a room key
+      // pressed on the door is not a way in.
+      if (surfaceRef.current === 'door') return
       const current = roomRef.current ?? homeRef.current
       if (action.type === 'room-move' && typeof action.delta === 'number' && current) {
         ev.preventDefault()
@@ -260,6 +303,35 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
+
+  const enter = () => { window.location.hash = enterHash(window.location.hash) }
+  const exit = () => { setPaletteOpen(false); window.location.hash = exitHash(window.location.hash) }
+  const stage = stageOn(surface, warping) && !stageFailed ? (
+    <StageGuard onFail={failStage}>
+      <FaceStage presence={surface === 'door' ? 1 : 0.24} warp={warp} neon onUnavailable={failStage} />
+    </StageGuard>
+  ) : null
+
+  // ONE place for the stage in every branch: the first child of the root fragment. Crossing from the door into the
+  // workroom changes the tree around it, and a stage drawn inside each branch's own root was a different element to
+  // React, so ENTER HQ threw the running face away and built a second WebGL context mid-warp (CI 2026-10-01: under
+  // software WebGL that rebuild held the page for seconds and the stage outlived its unmount timer).
+  const body = (() => {
+  // The door draws before the registry is read, and whether or not it could be: the face does not wait on the company.
+  if (surface === 'door') {
+    return (
+      <>
+        {paletteOpen && shell && (
+          <Palette
+            items={paletteItems(shell.rooms, concepts)}
+            onClose={() => setPaletteOpen(false)}
+            onOpen={(item: PaletteItem) => { setPaletteOpen(false); open(item.room) }}
+          />
+        )}
+        <FrontDoor onEnter={enter} stageFailed={stageFailed} />
+      </>
+    )
+  }
 
   if (error) {
     return (
@@ -301,7 +373,7 @@ export default function App() {
     : null
 
   return (
-    <div className="relative min-h-screen" style={{ fontFamily: UI, background: 'var(--bg-0)', color: 'var(--text-1)' }}>
+    <div className="relative min-h-screen" style={{ fontFamily: UI, background: stage ? 'transparent' : 'var(--bg-0)', color: 'var(--text-1)' }}>
       {paletteOpen && (
         <Palette
           items={items}
@@ -315,6 +387,7 @@ export default function App() {
         current={openable ? openable.id : null}
         onOpen={open}
         onPalette={() => setPaletteOpen(true)}
+        onExit={exit}
         attachment={attachment}
         ringCount={registry.rings.length}
         extrasNote={extras.isLoading ? '' : extrasNote}
@@ -325,6 +398,7 @@ export default function App() {
         mode={modeChip(registry.mode)}
         inbox={{ open: openItems === null ? null : openItems.length, room: roomHoldingKind(registry, APPROVAL_KIND) }}
         onOpen={open}
+        onExit={exit}
         mood={mood}
         onToggleMood={toggleMood}
         asOf={asOf}
@@ -367,6 +441,18 @@ export default function App() {
 
       <Dock door={door} />
     </div>
+  )
+  })()
+
+  return (
+    <>
+      {stage}
+      {/* the reading scrim, only while the face is still flying into the workroom (v0.7 App.jsx); once the stage
+          unmounts the workroom's own ground takes over. z 0, after the stage: above the face, and below the room, whose
+          drawers must stack over everything. */}
+      {stage && surface === 'hq' && <div aria-hidden="true" className="fixed inset-0 pointer-events-none" style={{ zIndex: 0, background: 'var(--bg-0)', opacity: 0.6 }} />}
+      {body}
+    </>
   )
 }
 
