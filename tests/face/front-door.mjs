@@ -215,6 +215,12 @@ function warpMisses(warpTargets) {
   const code = (app ?? "").split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
   check("B: App.tsx imports StageGuard from the front door and renders the stage inside it",
     /import\s+StageGuard\s+from\s+['"]\.\/frontdoor\/StageGuard['"]/.test(code) && /<StageGuard[\s>][\s\S]*?<FaceStage[\s\S]*?<\/StageGuard>/.test(code));
+  // CI 2026-10-01: a stage drawn inside each branch's own root is a different element to React on every crossing, so
+  // ENTER HQ rebuilt the WebGL face mid-warp. One `{stage}`, in the root return after the branches, keeps it one element.
+  const stageUses = code.match(/\{stage\}/g) ?? [];
+  const bodyEnd = code.indexOf("})()");
+  check("B: the stage is drawn in exactly ONE place, the root return after every branch, so a crossing never remounts it",
+    stageUses.length === 1 && bodyEnd !== -1 && code.indexOf("{stage}") > bodyEnd, `{stage} uses=${stageUses.length}`);
 }
 
 // ─────────────────────────────── C. named, not a room ───────────────────────────────
@@ -375,4 +381,4 @@ check("D: face/src/lib/stage.mjs is a required default root and a named allowanc
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 52 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 53 ? 0 : 1;

@@ -304,11 +304,15 @@ export default function App() {
     </StageGuard>
   ) : null
 
+  // ONE place for the stage in every branch: the first child of the root fragment. Crossing from the door into the
+  // workroom changes the tree around it, and a stage drawn inside each branch's own root was a different element to
+  // React, so ENTER HQ threw the running face away and built a second WebGL context mid-warp (CI 2026-10-01: under
+  // software WebGL that rebuild held the page for seconds and the stage outlived its unmount timer).
+  const body = (() => {
   // The door draws before the registry is read, and whether or not it could be: the face does not wait on the company.
   if (surface === 'door') {
     return (
       <>
-        {stage}
         {paletteOpen && shell && (
           <Palette
             items={paletteItems(shell.rooms, concepts)}
@@ -362,11 +366,6 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen" style={{ fontFamily: UI, background: stage ? 'transparent' : 'var(--bg-0)', color: 'var(--text-1)' }}>
-      {stage}
-      {/* the reading scrim, only while the face is still flying (v0.7 App.jsx); once the stage unmounts the
-          workroom's own ground takes over. z 0, after the stage: above the face, and below the room, whose drawers
-          must stack over everything (see main below). */}
-      {stage && <div aria-hidden="true" className="fixed inset-0 pointer-events-none" style={{ zIndex: 0, background: 'var(--bg-0)', opacity: 0.6 }} />}
       {paletteOpen && (
         <Palette
           items={items}
@@ -434,6 +433,18 @@ export default function App() {
 
       <Dock door={door} />
     </div>
+  )
+  })()
+
+  return (
+    <>
+      {stage}
+      {/* the reading scrim, only while the face is still flying into the workroom (v0.7 App.jsx); once the stage
+          unmounts the workroom's own ground takes over. z 0, after the stage: above the face, and below the room, whose
+          drawers must stack over everything. */}
+      {stage && surface === 'hq' && <div aria-hidden="true" className="fixed inset-0 pointer-events-none" style={{ zIndex: 0, background: 'var(--bg-0)', opacity: 0.6 }} />}
+      {body}
+    </>
   )
 }
 
