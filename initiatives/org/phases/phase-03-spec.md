@@ -30,6 +30,10 @@ ancestry, within a cap of 7 and every seat's budget, for five live days — and 
 Coarse at kickoff (refined via `/arc-change` when the phase starts): `bats tests/org-dispatch.bats`
 red-first over a fixture spine + team manifest; five-day live log from the main clone.
 
+## Build notes (2026-09-30)
+- Built: `org/stages.yaml`, `lib/dispatch.mjs`, `org-dispatch.mjs` (dry-run default, `--emit`), `jobs/org-dispatch.mjs` (the scheduler entry, since `hq.jobs.yaml` entries carry no args), `org-review --verdicts` (first review: keep 35 / promote 0 / retrain 1 / retire 1; heartbeat evidence never promotes). Tests: `tests/org-dispatch.bats`, verdict arm in `tests/org-review.bats`.
+- Waiting on the owner: the `process:org-dispatch` policy row (`initiatives/org/owner-actions.md`), then the stub + job entry land together; then the five heartbeat-days on the Nilluvai team.
+
 ## Out of scope for this phase
 Model-written proposals · raising the dispatcher above L1 · a face room for the org chart.
 

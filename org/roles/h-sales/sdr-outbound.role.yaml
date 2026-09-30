@@ -11,7 +11,8 @@ origin: 'own'
 hire: null
 binds:
   agents: []
-  skills: []
+  skills:
+    - 'outreach-draft'
   scripts:
     - '.claude/scripts/leads/arc-leads.mjs'
   process: null

@@ -22,7 +22,7 @@ Every count above is derived from the cards on disk. A vacant role is shown, nev
 | Role | State | Seat | Bound to | Reports to |
 |---|---|---|---|---|
 | CEO (`ceo`) | human | human · own | -- | owner |
-| Chief of staff (`chief-of-staff`) | staffed | script · own | arc-brief.mjs, arc-inbox.mjs, process:brief-materialize | `ceo` |
+| Chief of staff (`chief-of-staff`) | staffed | script · own | skill:council-consult, arc-brief.mjs, arc-inbox.mjs, process:brief-materialize | `ceo` |
 | COO / dispatcher (`coo-dispatcher`) | **VACANT** | vacant · own | -- | `ceo` |
 | Knowledge manager (`knowledge-manager`) | staffed | script · own | arc-recall.mjs | `ceo` |
 | PMO / scheduler (`pmo-scheduler`) | staffed | script · own | arc-jobs.mjs, process:day-close-roll | `ceo` |
@@ -102,7 +102,7 @@ Every count above is derived from the cards on disk. A vacant role is shown, nev
 | Proposal writer (`proposal-writer`) | **VACANT** | vacant · own | -- | `ceo` |
 | RevOps / CRM (`revops-crm`) | **VACANT** | vacant · own | -- | `ceo` |
 | Sales engineer / demo (`sales-engineer`) | **VACANT** | vacant · own | -- | `ceo` |
-| SDR / outbound (`sdr-outbound`) | staffed | script · own | arc-leads.mjs | `ceo` |
+| SDR / outbound (`sdr-outbound`) | staffed | script · own | skill:outreach-draft, arc-leads.mjs | `ceo` |
 
 ## Customer Success & Support
 
@@ -111,7 +111,7 @@ Every count above is derived from the cards on disk. A vacant role is shown, nev
 | Customer success / retention (`customer-success`) | **VACANT** | vacant · own | -- | `ceo` |
 | KB writer (`kb-writer`) | **VACANT** | vacant · own | -- | `ceo` |
 | Onboarding specialist (`onboarding-specialist`) | **VACANT** | vacant · own | -- | `ceo` |
-| Support L1 (`support-l1`) | **VACANT** | vacant · own | -- | `ceo` |
+| Support L1 (`support-l1`) | **VACANT** | vacant · own | skill:support-reply | `ceo` |
 | Support L2 (bug to fix) (`support-l2`) | staffed | process · own | process:develop-proof | `ceo` |
 | Voice-of-customer analyst (`voc-analyst`) | **VACANT** | vacant · own | -- | `ceo` |
 

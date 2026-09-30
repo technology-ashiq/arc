@@ -31,6 +31,11 @@ exactly its staffed seats, and no seat reaches `staffed` without a hire branch a
 Coarse at kickoff (refined via `/arc-change` when the phase starts): `bats tests/org-team.bats` +
 `tests/org-sync-team.bats` red-first, golden install diff = 0, one interview receipt read back.
 
+## Build notes (2026-09-30)
+- Built: `lib/team.mjs` + `org-team.mjs` (`--init/--validate/--digest/--check/--products-for`), `sync-to-project --team` in both twins over the one `--products` installer, `org-catalog --hire` verifying the interview on the spine, `org-coverage --spine-dir`, M14, three skills (council-consult, outreach-draft, support-reply) as capabilities. Tests: `tests/org-team.bats` (REQ-06 governance incl. a near-miss subject, REQ-07 `--team` vs `--products` byte-identical install, REQ-11 hire refusals).
+- `--init` puts VACANT roles on shift, so the dispatcher can count demand for them.
+- Waiting on the owner: Nilluvai registration, then the pilot team, its approval, pilot fixtures/KPIs/schemas and one interview (A-07 hand-record if bench cannot express it).
+
 ## Out of scope for this phase
 Dispatcher and review loop (Phase 03) · process `role:` slot, `arc skill import`, head-judge emission, hire-to-own command (ADR-1618).
 

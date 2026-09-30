@@ -100,8 +100,33 @@ async function kindsTable(root, events) {
   return rows;
 }
 
+/**
+ * ORG-G (ADR-1607): one verdict per STAFFED seat, derived from its scorecard -- a proposal, never an
+ * action; nothing auto-renews and nothing auto-fires (A4's incident demotion already exists and is
+ * not re-implemented here). Thresholds are small and stated so the owner can argue with them:
+ *   no evidence                          -> keep   (nothing to judge; say so)
+ *   any incident                         -> retrain
+ *   >= 3 runs and 0 ok                   -> retire (seat back to vacant, agent to attic, A10)
+ *   >= 3 runs and ok rate < 50%, or >= 3 decisions with rejects > accepts -> retrain
+ *   >= 3 runs, ok rate >= 80%, accepts >= rejects, >= 3 SOURCED receipts -> promote (cite trial-ledger)
+ *   otherwise                            -> keep
+ * A seat whose review_by is still ahead is reported "not due" beside its verdict.
+ */
+export function verdictFor(s) {
+  if (!s.evidence) return { verdict: "keep", why: "no evidence yet -- nothing to judge" };
+  if (s.incidents > 0) return { verdict: "retrain", why: `${s.incidents} incident(s)` };
+  const rate = s.runs ? s.runs_ok / s.runs : null;
+  if (s.runs >= 3 && s.runs_ok === 0) return { verdict: "retire", why: `${s.runs} runs, none ok` };
+  if ((s.runs >= 3 && rate < 0.5) || (s.accepts + s.rejects >= 3 && s.rejects > s.accepts))
+    return { verdict: "retrain", why: `ok ${s.runs_ok}/${s.runs}, accepts ${s.accepts} vs rejects ${s.rejects}` };
+  // Promotion needs work a role DID, not a clock that ran: heartbeat and kind-only receipts are unsourced.
+  if (s.runs >= 3 && rate >= 0.8 && s.accepts >= s.rejects && s.sourced >= 3) return { verdict: "promote", why: `ok ${s.runs_ok}/${s.runs}, ${s.sourced} sourced receipt(s)` };
+  if (s.runs >= 3 && rate >= 0.8 && s.sourced < 3) return { verdict: "keep", why: `ok ${s.runs_ok}/${s.runs} but ${s.sourced} sourced -- heartbeat evidence never promotes` };
+  return { verdict: "keep", why: `ok ${s.runs_ok}/${s.runs}, accepts ${s.accepts}, rejects ${s.rejects}` };
+}
+
 function parseArgs(argv) {
-  const o = { root: REPO, spineDir: null, role: null, all: false, audit: false, checkpoint: false, kinds: false, json: false, since: null };
+  const o = { root: REPO, spineDir: null, role: null, all: false, audit: false, checkpoint: false, kinds: false, verdicts: false, json: false, since: null };
   // A flag given twice is an operator error, never last-wins (lanes.md; attack c7eddd6 B4).
   const given = new Set();
   for (let i = 0; i < argv.length; i++) {
@@ -113,14 +138,15 @@ function parseArgs(argv) {
     else if (a === "--audit") o.audit = true;
     else if (a === "--checkpoint") o.checkpoint = true;
     else if (a === "--kinds-table") o.kinds = true;
+    else if (a === "--verdicts") o.verdicts = true;
     else if (a === "--json") o.json = true;
     else if (a === "--since") { o.since = val(); if (!/^\d{4}-\d{2}-\d{2}$/.test(o.since)) throw new Error("--since must be YYYY-MM-DD"); }
     else if (a === "--spine-dir") o.spineDir = val();
     else if (a === "--root") o.root = val();
-    else throw new Error(`unknown flag ${JSON.stringify(a)} -- known flags are --role --all --audit --checkpoint --kinds-table --json --since --spine-dir --root`);
+    else throw new Error(`unknown flag ${JSON.stringify(a)} -- known flags are --role --all --audit --checkpoint --kinds-table --verdicts --json --since --spine-dir --root`);
   }
-  const modes = [!!o.role, o.all, o.audit, o.checkpoint, o.kinds].filter(Boolean).length;
-  if (modes !== 1) throw new Error("exactly one of --role R, --all, --audit, --checkpoint, --kinds-table is required");
+  const modes = [!!o.role, o.all, o.audit, o.checkpoint, o.kinds, o.verdicts].filter(Boolean).length;
+  if (modes !== 1) throw new Error("exactly one of --role R, --all, --audit, --checkpoint, --kinds-table, --verdicts is required");
   return o;
 }
 
@@ -146,6 +172,22 @@ async function main() {
   const { placements, unattributed, conflicts } = placeAll(sp.events, org.rules, org.roleIds);
   for (const c of conflicts) console.log(`CONFLICT ${c}`);
   const byId = new Map(org.cards.map((c) => [c.id, c]));
+
+  if (o.verdicts) {
+    const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+    const staffed = org.cards.filter(isStaffed);
+    const tally = { keep: 0, promote: 0, retrain: 0, retire: 0 };
+    for (const c of staffed) {
+      const v = verdictFor(scorecard(c.id, sp.events, placements));
+      tally[v.verdict]++;
+      const due = typeof c.review_by === "string" && c.review_by <= today ? "due" : `not due (review_by ${c.review_by})`;
+      // `id:` -- the colon ends the word run: arc-run's secret scan strips whitespace, and
+      // "risk-analyst KEEP no evidence..." then reads as an OpenAI key (fixed-defects).
+      console.log(`${`${c.id}:`.padEnd(25)} ${v.verdict.toUpperCase().padEnd(8)} ${v.why} -- ${due}`);
+    }
+    console.log(`org-review: ${staffed.length} staffed seat(s) -- keep ${tally.keep} · promote ${tally.promote} · retrain ${tally.retrain} · retire ${tally.retire}. Proposals only: the owner decides each (ADR-1607).`);
+    return 0;
+  }
 
   if (o.kinds) {
     const rows = await kindsTable(o.root, sp.events);

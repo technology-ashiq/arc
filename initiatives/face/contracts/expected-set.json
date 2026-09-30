@@ -1346,6 +1346,7 @@
     "map": {
       "hq": "spine",
       "core": "toolbelt",
+      "org": "toolbelt",
       "plan": "lane",
       "review": "review-ship",
       "git": "review-ship",
@@ -1429,6 +1430,9 @@
   "capabilities": {
     "map": {
       "skill:seo-article-writer": "toolbelt",
+      "skill:council-consult": "toolbelt",
+      "skill:outreach-draft": "toolbelt",
+      "skill:support-reply": "toolbelt",
       "mcp:supabase": "toolbelt",
       "mcp:playwright": "toolbelt",
       "mcp:context7": "toolbelt",

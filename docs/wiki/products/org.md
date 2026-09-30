@@ -13,7 +13,7 @@
 | Requires | [core](core.md), [engine](engine.md), [hq](hq.md) |
 | Required by | — |
 | Lane | [org](../lanes/org.md) |
-| Face room | — |
+| Face room | toolbelt (ring factory) |
 
 ## Commands
 
@@ -23,12 +23,25 @@ None declared.
 
 None declared.
 
-## Scripts (4)
+## Scripts (11)
 
+- [`.claude/scripts/org/jobs/org-dispatch.mjs`](../../../.claude/scripts/org/jobs/org-dispatch.mjs)
+- [`.claude/scripts/org/lib/attribution.mjs`](../../../.claude/scripts/org/lib/attribution.mjs)
 - [`.claude/scripts/org/lib/card.mjs`](../../../.claude/scripts/org/lib/card.mjs)
+- [`.claude/scripts/org/lib/dispatch.mjs`](../../../.claude/scripts/org/lib/dispatch.mjs)
 - [`.claude/scripts/org/lib/emit.mjs`](../../../.claude/scripts/org/lib/emit.mjs)
+- [`.claude/scripts/org/lib/team.mjs`](../../../.claude/scripts/org/lib/team.mjs)
 - [`.claude/scripts/org/org-catalog.mjs`](../../../.claude/scripts/org/org-catalog.mjs)
 - [`.claude/scripts/org/org-coverage.mjs`](../../../.claude/scripts/org/org-coverage.mjs)
+- [`.claude/scripts/org/org-dispatch.mjs`](../../../.claude/scripts/org/org-dispatch.mjs)
+- [`.claude/scripts/org/org-review.mjs`](../../../.claude/scripts/org/org-review.mjs)
+- [`.claude/scripts/org/org-team.mjs`](../../../.claude/scripts/org/org-team.mjs)
+
+## Files (3)
+
+- [`.claude/skills/council-consult/SKILL.md`](../../../.claude/skills/council-consult/SKILL.md)
+- [`.claude/skills/outreach-draft/SKILL.md`](../../../.claude/skills/outreach-draft/SKILL.md)
+- [`.claude/skills/support-reply/SKILL.md`](../../../.claude/skills/support-reply/SKILL.md)
 
 ## Source
 

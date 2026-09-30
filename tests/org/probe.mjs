@@ -5,12 +5,14 @@
 //   probe.mjs validate ROOT CARD.yaml   -> "VALID staffed=<bool>" or one "FINDING ..." per finding
 //   probe.mjs roundtrip                 -> "ROUNDTRIP OK" when parse(emit(x)) == x for a card-shaped x
 //   probe.mjs emit-colon                -> "REFUSED ..." when the emitter refuses a ": " list item
+//   probe.mjs verdict JSON              -> "VERDICT <word> -- <why>" for a scorecard (ORG-G)
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { collect } from "../../.claude/scripts/org/org-coverage.mjs";
 import { validateCard, isStaffed } from "../../.claude/scripts/org/lib/card.mjs";
 import { emitYaml } from "../../.claude/scripts/org/lib/emit.mjs";
 import { parseYamlSubset } from "../../.claude/scripts/engine/yaml-subset.mjs";
+import { verdictFor } from "../../.claude/scripts/org/org-review.mjs";
 
 const [mode, a, b] = process.argv.slice(2);
 
@@ -27,6 +29,10 @@ if (mode === "validate") {
     binds: { agents: ["a"], tier: "cheap-scan" }, kpi: [{ name: "runs", over: "run.completed" }], e2: ["publishing under Ashiq's name"] };
   const r = parseYamlSubset(emitYaml(x, ["header"]));
   console.log(r.ok && JSON.stringify(r.value) === JSON.stringify(x) ? "ROUNDTRIP OK" : `ROUNDTRIP DIFF ${JSON.stringify(r.value)}`);
+} else if (mode === "verdict") {
+  // a scorecard as JSON on argv -> "VERDICT <word> -- <why>"
+  const v = verdictFor(JSON.parse(a));
+  console.log(`VERDICT ${v.verdict} -- ${v.why}`);
 } else if (mode === "emit-colon") {
   try { emitYaml({ history: ["a: b"] }); console.log("WROTE"); }
   catch (e) { console.log(`REFUSED ${e.message}`); }

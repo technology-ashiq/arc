@@ -18,7 +18,8 @@ origin: 'own'
 hire: null
 binds:
   agents: []
-  skills: []
+  skills:
+    - 'council-consult'
   scripts:
     - '.claude/scripts/hq/arc-brief.mjs'
     - '.claude/scripts/hq/arc-inbox.mjs'

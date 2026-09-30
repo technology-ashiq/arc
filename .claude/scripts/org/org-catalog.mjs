@@ -17,7 +17,7 @@
 import { readFileSync, writeFileSync, mkdirSync, realpathSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { collect, check } from "./org-coverage.mjs";
 import { isStaffed, isId, DEPTS, OWNER } from "./lib/card.mjs";
@@ -161,6 +161,52 @@ function draft(repo, seedPath) {
   return 0;
 }
 
+// ---------- hire (REQ-11) ----------
+
+const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/**
+ * Stamp a seat as staffed ONLY after its interview is on the spine: an owner `approve` deciding an
+ * approval.requested with subject org.role that names this role. The seat and bindings change is
+ * the card edit in the same proposal branch; this stamps legitimacy, tenure and provenance, and it
+ * refuses when the interview had no fixtures to run (fixtures: pending).
+ */
+async function hire(repo, role, interview, spineDir) {
+  if (!ULID.test(interview || "")) { console.error("org-catalog: --interview needs the ULID of the approving decision"); return 2; }
+  const w = await collect(repo);
+  const entry = w.cards.find((c) => c.card?.id === role);
+  if (!entry) { console.error(`org-catalog: no role "${role}"`); return 2; }
+  const card = JSON.parse(JSON.stringify(entry.card));
+  if (card.seat === "vacant" || card.seat === "human" || card.seat === "partial")
+    { console.log(`FAIL ${role}: seat is "${card.seat}" -- set the working seat and its binds in this branch first, then hire`); return 1; }
+  if (card.fixtures === "pending") { console.log(`FAIL ${role}: fixtures: pending -- an interview needs a fixture set (REQ-11)`); return 1; }
+  const { scanAll } = await import(pathToFileURL(join(repo, ".claude", "scripts", "hq", "spine.mjs")).href);
+  const events = scanAll(spineDir).events.map((x) => x.event);
+  const byId = new Map(events.map((e) => [e.id, e]));
+  const d = byId.get(interview);
+  const req = d && d.kind === "decision.recorded" ? byId.get(d.payload?.decides) : null;
+  if (!d || d.kind !== "decision.recorded") { console.log(`FAIL ${role}: ${interview} is not a decision on this spine`); return 1; }
+  if (d.payload?.verdict !== "approve") { console.log(`FAIL ${role}: interview ${interview} was not approved`); return 1; }
+  if (!req || req.kind !== "approval.requested" || req.payload?.subject !== "org.role" || req.payload?.role !== role)
+    { console.log(`FAIL ${role}: ${interview} decides no org.role request naming this role`); return 1; }
+  const day = String(d.ts).slice(0, 10);
+  const until = new Date(`${day}T00:00:00Z`); until.setUTCDate(until.getUTCDate() + 30);
+  card.legitimacy = `interview:${interview}`;
+  card.review_by = until.toISOString().slice(0, 10);
+  card.history = [...(card.history || []), `staffed ${day} by interview ${interview} (origin ${card.origin})`];
+  // Keys in the order a drafted card has them, so a hire is a small diff, not a reshuffle.
+  const order = ["id", "title", "dept", "mission", "stages", "seat", "owner_choice", "byline", "origin", "hire", "binds", "reports_to",
+    "escalate_to", "e2", "produces", "consumes", "fixtures", "legitimacy", "ventures", "kpi", "autonomy_ceiling", "review_by", "history"];
+  const out = {}; for (const k of order) if (card[k] !== undefined) out[k] = card[k];
+  const path = join(repo, entry.rel);
+  const header = readFileSync(path, "utf8").split("\n").filter((l) => l.startsWith("# ")).map((l) => l.slice(2));
+  writeFileSync(path, emitYaml(out, header));
+  const after = check(await collect(repo));
+  if (after.length) { for (const x of after) console.log(`FAIL ${x}`); console.log("org-catalog: the hired card does not pass the gate -- fix it in this branch"); return 1; }
+  console.log(`org-catalog: ${role} staffed by interview ${interview}; review_by ${out.review_by}`);
+  return 0;
+}
+
 // ---------- chart ----------
 
 function classify(c) {
@@ -282,23 +328,29 @@ async function digest(repo) {
 function readOr(p) { try { return readFileSync(p, "utf8").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n"); } catch { return null; } }
 
 function parseArgs(argv) {
-  const o = { root: REPO, mode: null, check: false, seed: null };
+  const o = { root: REPO, mode: null, check: false, seed: null, role: null, interview: null, spineDir: null };
   // A flag given twice is an operator error, never last-wins (lanes.md; attack c7eddd6 B4).
   const given = new Set();
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) { if (given.has(argv[i])) throw new Error(`${argv[i]} given twice`); given.add(argv[i]); }
     const a = argv[i];
     const val = () => { const v = argv[++i]; if (v === undefined || v.startsWith("--")) throw new Error(`${a} needs a value`); return v; };
-    if (a === "--draft" || a === "--chart" || a === "--digest") {
+    if (a === "--hire") {
+      if (o.mode) throw new Error(`${a} and --${o.mode} are separate modes`);
+      o.mode = "hire"; o.role = val();
+    } else if (a === "--interview") o.interview = val();
+    else if (a === "--spine-dir") o.spineDir = val();
+    else if (a === "--draft" || a === "--chart" || a === "--digest") {
       if (o.mode) throw new Error(`${a} and --${o.mode} are separate modes`);
       o.mode = a.slice(2);
     } else if (a === "--check") o.check = true;
     else if (a === "--seed") o.seed = val();
     else if (a === "--root") o.root = val();
-    else throw new Error(`unknown flag ${JSON.stringify(a)} -- known flags are --draft --seed --chart --check --digest --root`);
+    else throw new Error(`unknown flag ${JSON.stringify(a)} -- known flags are --draft --seed --chart --check --digest --hire --interview --spine-dir --root`);
   }
-  if (!o.mode) throw new Error("one of --draft, --chart, --digest is required");
+  if (!o.mode) throw new Error("one of --draft, --chart, --digest, --hire is required");
   if (o.mode === "draft" && !o.seed) throw new Error("--draft needs --seed FILE");
+  if (o.mode === "hire" && (!o.interview || !o.spineDir)) throw new Error("--hire needs --interview ULID and --spine-dir DIR");
   if (o.check && o.mode !== "chart") throw new Error("--check only applies to --chart");
   return o;
 }
@@ -313,6 +365,7 @@ async function main() {
   // Draft writes under --root, so a typo must not grow a catalog in the wrong place (B3).
   if (!isDir(join(o.root, ".claude", "agents"))) { console.error(`org-catalog: ${o.root} is not an arc tree (no .claude/agents/)`); return 2; }
   if (o.mode === "draft") return draft(o.root, o.seed);
+  if (o.mode === "hire") return hire(o.root, o.role, o.interview, o.spineDir);
   if (o.mode === "chart") return chart(o.root, o.check);
   return digest(o.root);
 }

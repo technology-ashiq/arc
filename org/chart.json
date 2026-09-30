@@ -151,7 +151,9 @@
           "owner_choice": false,
           "binds": {
             "agents": [],
-            "skills": [],
+            "skills": [
+              "council-consult"
+            ],
             "scripts": [
               ".claude/scripts/hq/arc-brief.mjs",
               ".claude/scripts/hq/arc-inbox.mjs"
@@ -1106,7 +1108,9 @@
           "owner_choice": false,
           "binds": {
             "agents": [],
-            "skills": [],
+            "skills": [
+              "outreach-draft"
+            ],
             "scripts": [
               ".claude/scripts/leads/arc-leads.mjs"
             ],
@@ -1182,7 +1186,9 @@
           "owner_choice": false,
           "binds": {
             "agents": [],
-            "skills": [],
+            "skills": [
+              "support-reply"
+            ],
             "scripts": [],
             "process": null,
             "tier": null

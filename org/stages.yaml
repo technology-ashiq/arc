@@ -1,0 +1,82 @@
+# org/stages.yaml -- the eight lifecycle stages and what ends each one (org Phase 03, ADR-1606 / ORG-F).
+#
+# Every exit criterion is a count of a spine KIND for the venture (event.venture == the team's
+# venture). The dispatcher reads these, finds which are unmet, and proposes the role that owns each
+# one. When every criterion of the current stage reads true it PROPOSES the stage change; only an
+# owner decision moves the stage in the team manifest. A criterion no kind can express is `manual`,
+# and the dispatcher never proposes past it.
+version: 1
+stages:
+  discover:
+    - id: 'problem-captured'
+      kind: 'idea.captured'
+      count: 1
+      role: 'pain-point-miner'
+      task: 'Capture the problem in the words of the people who have it, with where each was heard.'
+    - id: 'board-verdict'
+      kind: 'council.verdict'
+      count: 1
+      role: 'board-advisors'
+      task: 'Put the idea to the board and record its verdict.'
+  validate:
+    - id: 'experiment-opened'
+      kind: 'experiment.opened'
+      count: 1
+      role: 'product-manager'
+      task: 'Open the narrowest experiment that could prove someone will adopt or pay.'
+    - id: 'experiment-measured'
+      kind: 'experiment.measured'
+      count: 1
+      role: 'product-manager'
+      task: 'Measure the open experiment against its pre-registered bar.'
+  build:
+    - id: 'kickoff'
+      kind: 'kickoff.done'
+      count: 1
+      role: 'product-manager'
+      task: 'Kick off the build: a falsifiable plan with risk-ordered phases.'
+    - id: 'shipped'
+      kind: 'ship.done'
+      count: 1
+      role: 'devops-release'
+      task: 'Ship the first build behind green CI.'
+  launch:
+    - id: 'first-content'
+      kind: 'content.published'
+      count: 1
+      role: 'content-writer'
+      task: 'Publish the first piece the content plan ranks.'
+  grow:
+    - id: 'first-metric'
+      kind: 'metric.observed'
+      count: 1
+      role: 'marketing-analyst'
+      task: 'Read search and traffic metrics and say which content is working.'
+  sell:
+    - id: 'first-outreach'
+      kind: 'outreach.sent'
+      count: 1
+      role: 'sdr-outbound'
+      task: 'Send the first researched, owner-approved message.'
+    - id: 'first-deal'
+      kind: 'deal.won'
+      count: 1
+      role: 'account-executive'
+      task: 'Close the first deal.'
+  support:
+    - id: 'first-handoff'
+      kind: 'handoff.ready'
+      count: 1
+      role: 'support-l2'
+      task: 'Turn the first reproduced customer bug into a proven fix.'
+  operate:
+    - id: 'first-revenue'
+      kind: 'revenue.received'
+      count: 1
+      role: 'bookkeeper'
+      task: 'Record the first real revenue against the venture.'
+    - id: 'first-close'
+      kind: 'month.closed'
+      count: 1
+      role: 'bookkeeper'
+      task: 'Close the first month behind reconciliation.'

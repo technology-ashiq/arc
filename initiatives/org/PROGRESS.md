@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-org (Cycle 18, opened 2026-09-29)
-phase: 01
+phase: 03
 appetite: 10d
-burn: 2.5d
+burn: 6.5d
 blocked-on: —
 depends-on: —
 
@@ -20,10 +20,10 @@ depends-on: —
 |---|---|---|---|
 | 00 | The catalog + its gate — ruling on the spine, `products/org`, 71 cards, `org-coverage` + `--mutant-selftest`, generated chart, genesis digest | 2.5d | 🔨 built, closes on CI green + ruling approval |
 | 01 | Attribution + scorecard — `org/attribution.yaml`, `org review --role` + `--audit`; **day-3 kill checkpoint**; Nilluvai pilot gate | 1.5d | 🔨 built, day-3 checkpoint PROCEED (5 seated roles) |
-| 02 | Staffing — team manifest + `org.team` digest, `sync-to-project --team`, Nilluvai staffed, hire path + bench interview, three skills | 2.5d | ⬜ (needs Nilluvai registered) |
-| 03 | The COO + the review loop — `org-dispatch` script-job, five pilot days, first `org review`, retro + seal | 2d + 5 elapsed | ⬜ |
+| 02 | Staffing — team manifest + `org.team` digest, `sync-to-project --team`, Nilluvai staffed, hire path + bench interview, three skills | 2.5d | 🔨 mechanism built; pilot parts wait on Nilluvai |
+| 03 | The COO + the review loop — `org-dispatch` script-job, five pilot days, first `org review`, retro + seal | 2d + 5 elapsed | 🔨 dispatcher + review built; the live five days wait on Nilluvai + the owner policy row |
 
-**Appetite burn:** 2.5 of 10 days used (8.5 d planned · 1.5 d slack · + 5 elapsed pilot days in Phase 03).
+**Appetite burn:** 6.5 of 10 days used (8.5 d planned · 1.5 d slack · + 5 elapsed pilot days in Phase 03).
 
 ## Done-log
 
@@ -50,6 +50,12 @@ Receipts (main clone): `kickoff.done` `01M3QF38HX8BA33G1B52RRQZ3G` · approval r
 - P01 built: org/attribution.yaml (24 rules, 15 name their source), org-review (--role/--all/--audit/--checkpoint/--kinds-table). Live spine (1457 receipts): 13 of 71 roles have evidence, audit 0 differences, day-3 checkpoint PROCEED with 5 seated roles. Cost: 0 cost.incurred receipts exist, so every cost column reads no evidence (ORG-P enforcement is real only once cost receipts exist). A-01: decision.recorded, content.published and lead.researched are closed (map-only); run.completed, approval.requested, review.completed, slice.done, phase.closed and kickoff.done accept payload.role.
 
 **Receipts (main clone):** ruling request `01M3QG94BA03NM6692VRMXNN51` -> approved `01M3QSAJ8R7P6NQW2JJB776330` (2026-09-30) · genesis request `01M3QSK9P0DZJXKR2XSC4PMKHB` over digest `4b459d8e...` (71 cards, 37 genesis) -- awaiting approval.
+
+- P02 mechanism built: team manifest grammar + org.team digest governance (org-team --init/--validate/--digest/--check/--products-for), sync-to-project --team in BOTH twins over the one --products installer, hire stamp (org-catalog --hire) that verifies the interview on the spine, org-coverage --spine-dir re-verifying every interview ULID, M14 team-E2 arm (15/15), three ORG-H skills (council-consult, outreach-draft, support-reply) registered as capabilities and bound to chief-of-staff, sdr-outbound, support-l1. CI 36649278109 reds (face every-product-mapped, stale wiki counts) fixed: products.org maps to toolbelt.
+- The catalog digest moved when skills were bound, so genesis request 01M3QSK9P0DZJXKR2XSC4PMKHB is over a STALE digest; a fresh genesis is emitted over the final cards at the cycle close.
+- WAITING ON THE OWNER for P02 pilot parts: Nilluvai registration (kill lines are his), then org-team --init nilluvai, its org.team approval, fixtures/KPIs/schemas for the pilot roles, one interview.
+
+- P03 built: org/stages.yaml (8 stages, receipt-measured exit criteria), the deterministic dispatcher (lib/dispatch.mjs + org-dispatch CLI, dry-run by default, --emit as scheduler:org-dispatch, and a jobs/ wrapper as the scheduler entry). It proposes only for governed teams, carries goal ancestry, enforces the queue cap of 7, counts vacancy demands (a hire at 3), sends one budget-cap request per spent seat, proposes a stage change when every criterion is met, and never duplicates an open proposal. The first org review (--verdicts) ran over 37 staffed seats: keep 35, promote 0, retrain 1 (board-advisors, 1/4 ok), retire 1 (devops-release, 8 runs none ok). Heartbeat evidence never promotes. The job registration waits on the owner policy row (owner-actions.md section 2).
 
 **Next step:** P02 needs Nilluvai registered (ADR-1612) -- asked of the owner; P02 non-pilot parts (team schema, digest gate, sync --team, hire path) build meanwhile.
 

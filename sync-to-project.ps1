@@ -2,6 +2,7 @@
 # Usage (PowerShell, from anywhere):
 #   & sync-to-project.ps1 -Target "E:\path\to\your-project"            # full suite
 #   & sync-to-project.ps1 -Target "E:\path\to\your-project" -Products council,plan
+#   & sync-to-project.ps1 -Target "E:path	oenture" -Team nilluvai # a venture's staffed seats (org)
 #   & sync-to-project.ps1 -List                                        # list products
 #
 # Windows-native twin of sync-to-project.sh; keep the two in lockstep. The full
@@ -15,6 +16,7 @@
 param(
   [string]$Target,
   [string]$Products = "",
+  [string]$Team = "",
   [switch]$List,
   [switch]$PruneReport
 )
@@ -56,6 +58,15 @@ if (-not (Test-Path (Join-Path $Target ".git"))) {
 if ($PruneReport) {
   & node $resolver --prune-report --target $Target
   exit $LASTEXITCODE
+}
+
+# ---- -Team: a venture's staffed seats become the -Products list (org, REQ-07) ----
+# No second installer: org-team resolves the products; the -Products path below installs them.
+if ($Team) {
+  if ($Products) { Write-Error "sync: -Team and -Products are exclusive"; exit 2 }
+  $Products = (& node (Join-Path $src ".claudescriptsorgorg-team.mjs") --products-for $Team --root $src | Out-String).Trim()
+  if ($LASTEXITCODE -ne 0 -or -not $Products) { Write-Error "sync: -Team $Team did not resolve"; exit 2 }
+  Write-Host "sync: team $Team -> products $Products"
 }
 
 # ---- -Products: manifest-driven selective install ----

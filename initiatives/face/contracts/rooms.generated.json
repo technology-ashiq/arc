@@ -792,7 +792,8 @@
           "room birth-rule"
         ],
         "products": [
-          "core"
+          "core",
+          "org"
         ],
         "adrs": [
           "1300"
@@ -803,10 +804,13 @@
           "mcp:playwright",
           "mcp:stripe",
           "mcp:supabase",
-          "skill:seo-article-writer"
+          "skill:council-consult",
+          "skill:outreach-draft",
+          "skill:seo-article-writer",
+          "skill:support-reply"
         ]
       },
-      "itemCount": 34
+      "itemCount": 38
     },
     {
       "id": "factory",
@@ -1261,7 +1265,7 @@
       "indexes": "products",
       "stations": [],
       "holds": {},
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "lane",

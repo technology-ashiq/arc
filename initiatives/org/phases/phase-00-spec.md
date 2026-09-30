@@ -176,9 +176,9 @@ on exit.
 `node .claude/scripts/core/face-coverage.mjs`; sync golden: rebuild `tests/fixtures/sync-golden/tree-manifest.txt`
 by the procedure `tests/sync.bats:140-153` uses for `actual.txt`; product manifest: the shape of
 `products/docs/manifest.json` (`name, version, requires, commands, agents, scripts, files, docs, face`);
-`products.org` stays UNMAPPED in `expected-set.json` and the manifest carries no `face:` section
-(build note, CI 36643308697: the `org` room is an INDEX room, and mapping a product to it broke
-face-l3; the no-go "no face ring" holds), and `arc-products.mjs` CATALOG gains `org`; CI read: `node .claude/scripts/review/ci-digest.mjs` in a background loop; close:
+`products.org` maps to the `toolbelt` room (build notes, CI 36643308697 and 36649278109: the `org`
+room is an INDEX room and broke face-l3; leaving the product unmapped broke face-coverage.bats's
+"every product mapped"; toolbelt is generic and lists agents, which cards bind; no new ring), and `arc-products.mjs` CATALOG gains `org`; CI read: `node .claude/scripts/review/ci-digest.mjs` in a background loop; close:
 `/arc-phase-done 0 --lane org`. Tracker files at close: `initiatives/org/PROGRESS.md`,
 `PORTFOLIO.md` (lane row + band row), `docs/HISTORY.md`.
 

@@ -17,13 +17,15 @@ import { readFileSync, readdirSync, existsSync, lstatSync, statSync, realpathSyn
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { mdStems, yamlStems, treeScripts, treeCapabilities, treeKinds, treeVentures } from "../core/face-coverage.mjs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "../hq/lib/policy/yaml.mjs";
 import { validateCard, isStaffed, DEPTS, OWNER } from "./lib/card.mjs";
 import { emitYaml } from "./lib/emit.mjs";
 import { validateMap } from "./lib/attribution.mjs";
+import { validateTeam } from "./lib/team.mjs";
+import { validateStages } from "./lib/dispatch.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..", "..");
@@ -88,6 +90,14 @@ export async function collect(repo, inject = {}) {
   }
   const teams = join(repo, "org", "teams");
   w.teams = existsSync(teams) ? readdirSync(teams).filter((n) => n.endsWith(TEAM_SUFFIX)).map((n) => n.slice(0, -TEAM_SUFFIX.length)) : [];
+  // Phase 02: each team manifest is parsed here and judged in check(), statically. Its GOVERNANCE
+  // (an approved digest) needs the spine and lives in org-team --check.
+  w.teamDocs = w.teams.map((stem) => {
+    const r = parseYamlSubset(readText(join(teams, `${stem}${TEAM_SUFFIX}`)) ?? "");
+    return r.ok ? { stem, doc: r.value } : { stem, error: r.error.message };
+  });
+  const stagesText = readText(join(repo, "org", "stages.yaml"));
+  if (stagesText !== null) { const r = parseYamlSubset(stagesText); w.stages = r.ok ? { ok: true, value: r.value } : { ok: false, error: r.error.message }; }
   const amap = readText(join(repo, "org", "attribution.yaml"));
   if (amap !== null) {
     const r = parseYamlSubset(amap);
@@ -172,6 +182,35 @@ export function check(w) {
 
   // The attribution map (Phase 01, ADR-1604) points at roles too: a rule naming a role that is not
   // a card places receipts on a seat nobody holds, and the scorecard would count them silently.
+  // Team manifests (REQ-06/REQ-13 team scope, ADR-1615 heads, ADR-1616 budgets).
+  const cardMap = new Map(cards.map((c) => [c.id, c]));
+  for (const t of w.teamDocs || []) {
+    if (t.error) { f.push(`org/teams/${t.stem}${TEAM_SUFFIX}: ${t.error}`); continue; }
+    f.push(...validateTeam(t.doc, { stem: t.stem, ventures: ventureSet, cards: cardMap }));
+  }
+
+  // REQ-11 on the spine: an `interview:ULID` must be an owner APPROVE over an org.role request that
+  // names this role. Checked only when a spine is given (--spine-dir); CI has none, and the grammar
+  // check above still runs everywhere.
+  if (w.spineEvents) {
+    const byId = new Map(w.spineEvents.map((e) => [e.id, e]));
+    for (const c of cards) {
+      if (typeof c.legitimacy !== "string" || !c.legitimacy.startsWith("interview:")) continue;
+      const d = byId.get(c.legitimacy.slice(10));
+      const req = d && d.kind === "decision.recorded" ? byId.get(d.payload?.decides) : null;
+      if (!d || d.kind !== "decision.recorded") f.push(`${c.id}: interview ${c.legitimacy.slice(10)} is not a decision on this spine (REQ-11)`);
+      else if (d.payload?.verdict !== "approve") f.push(`${c.id}: interview ${d.id} was not approved (REQ-11)`);
+      else if (!req || req.kind !== "approval.requested" || req.payload?.subject !== "org.role" || req.payload?.role !== c.id)
+        f.push(`${c.id}: interview ${d.id} decides no org.role request naming this role (REQ-11)`);
+    }
+  }
+
+  // The dispatcher's stage criteria point at roles and kinds too (ADR-1606).
+  if (w.stages) {
+    if (!w.stages.ok) f.push(`org/stages.yaml: ${w.stages.error}`);
+    else f.push(...validateStages(w.stages.value, new Set(byId.keys()), w.kinds));
+  }
+
   if (w.attribution) {
     if (!w.attribution.ok) f.push(`org/attribution.yaml: ${w.attribution.error}`);
     else f.push(...validateMap(w.attribution.value, byId, w.kinds));
@@ -215,6 +254,7 @@ function arms(firstAgent) {
     { id: "M11", what: "venture with a seated card and no team manifest", card: plantCard({ ventures: ["__FIRST_VENTURE__"] }), expect: "but no org/teams/" },
     { id: "M12", what: "ghost agent planted in the LAST card in sort order", last: true, expect: 'binds agent "ghost-agent"' },
     { id: "M13", what: "attribution rule placing receipts on a role that is not a card", mapRule: { id: "zz-ghost-rule", match: { process: "zz-nothing" }, role: "ghost-role" }, expect: 'role "ghost-role" is not a card id' },
+    { id: "M14", what: "team manifest seating an E2 role without the owner", team: true, expect: "touches E2" },
   ];
 }
 
@@ -269,6 +309,13 @@ async function mutantSelftest(repo) {
         for (const c of a.cards || (a.card ? [a.card] : [])) {
           const card = JSON.parse(JSON.stringify(c).replace("__FIRST_VENTURE__", real.ventures[0] ?? "no-venture"));
           put(`org/roles/${card.dept}/${card.id}${ROLE_SUFFIX}`, emitYaml(card));
+        }
+        if (a.team) {
+          const v = real.ventures[0];
+          if (!v) throw new Error("self-test: M14 needs one venture in ventures.yaml");
+          put(`org/teams/${v}${TEAM_SUFFIX}`, emitYaml({ venture: v, stage: "validate", mission: "private",
+            on_shift: { validate: ["pricing-strategist"] }, seats: { "pricing-strategist": { holder: "card" } },
+            dispatch: { heartbeat: "daily", queue_cap: 7 } }));
         }
         if (a.mapRule) {
           const p = join(scratch, "org", "attribution.yaml");
@@ -334,18 +381,22 @@ function isFile(p) { try { return lstatSync(p).isFile(); } catch { return false;
 function arr(v) { return Array.isArray(v) ? v : []; }
 
 function parseArgs(argv) {
-  const o = { root: REPO, selftest: false };
+  const o = { root: REPO, selftest: false, spineDir: null };
   // A flag given twice is an operator error, never last-wins (lanes.md; attack c7eddd6 B4).
   const given = new Set();
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) { if (given.has(argv[i])) return { error: `${argv[i]} given twice` }; given.add(argv[i]); }
     const a = argv[i];
     if (a === "--mutant-selftest") o.selftest = true;
-    else if (a === "--root") {
+    else if (a === "--spine-dir") {
+      const v = argv[++i];
+      if (v === undefined || v.startsWith("--")) return { error: "--spine-dir needs a directory" };
+      o.spineDir = v;
+    } else if (a === "--root") {
       const v = argv[++i];
       if (v === undefined || v.startsWith("--")) return { error: "--root needs a directory" };
       o.root = v;
-    } else return { error: `unknown flag ${JSON.stringify(a)} -- known flags are --root, --mutant-selftest` };
+    } else return { error: `unknown flag ${JSON.stringify(a)} -- known flags are --root, --spine-dir, --mutant-selftest` };
   }
   return o;
 }
@@ -356,6 +407,11 @@ async function main() {
   if (!isDir(o.root)) { console.error(`org-coverage: no such directory: ${o.root}`); return 2; }
   if (o.selftest) return mutantSelftest(o.root);
   const w = await collect(o.root);
+  if (o.spineDir) {
+    if (!isDir(o.spineDir)) { console.error(`org-coverage: no spine at ${o.spineDir}`); return 2; }
+    const { scanAll } = await import(pathToFileURL(join(o.root, ".claude", "scripts", "hq", "spine.mjs")).href);
+    w.spineEvents = scanAll(o.spineDir).events.map((x) => x.event);
+  }
   const f = check(w);
   for (const x of f) console.log(`FAIL ${x}`);
   const staffed = w.cards.filter((c) => isStaffed(c.card)).length;

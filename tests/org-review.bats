@@ -113,3 +113,19 @@ spine() {
   run node "$(REVIEW)" --al
   [ "$status" -eq 2 ] && [[ "$output" == *'unknown flag "--al"'* ]] || { echo "$output"; false; }
 }
+
+@test "org-review: verdicts are derived, and heartbeat evidence never promotes (ADR-1607)" {
+  local P="$ARC_ROOT/tests/org/probe.mjs" base='"evidence":true,"incidents":0,"accepts":0,"rejects":0'
+  run node "$P" verdict '{"evidence":false}'
+  [ "$output" = "VERDICT keep -- no evidence yet -- nothing to judge" ] || { echo "$output"; false; }
+  run node "$P" verdict "{$base,\"runs\":8,\"runs_ok\":0,\"sourced\":8}"
+  [[ "$output" == "VERDICT retire -- 8 runs, none ok" ]] || { echo "$output"; false; }
+  run node "$P" verdict "{$base,\"runs\":4,\"runs_ok\":1,\"sourced\":4}"
+  [[ "$output" == "VERDICT retrain -- "* ]] || { echo "$output"; false; }
+  run node "$P" verdict "{$base,\"runs\":35,\"runs_ok\":35,\"sourced\":0}"
+  [[ "$output" == "VERDICT keep -- ok 35/35 but 0 sourced -- heartbeat evidence never promotes" ]] || { echo "$output"; false; }
+  run node "$P" verdict "{$base,\"runs\":5,\"runs_ok\":5,\"sourced\":5}"
+  [[ "$output" == "VERDICT promote -- "* ]] || { echo "$output"; false; }
+  run node "$P" verdict '{"evidence":true,"incidents":1,"accepts":0,"rejects":0,"runs":5,"runs_ok":5,"sourced":5}'
+  [[ "$output" == "VERDICT retrain -- 1 incident(s)" ]] || { echo "$output"; false; }
+}

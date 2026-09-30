@@ -12,7 +12,8 @@ origin: 'own'
 hire: null
 binds:
   agents: []
-  skills: []
+  skills:
+    - 'support-reply'
   scripts: []
   process: null
   tier: null
