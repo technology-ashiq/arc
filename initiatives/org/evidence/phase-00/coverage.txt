@@ -1,0 +1,2 @@
+unstaffed: unstaffed:lexos (1, no card seated for them)
+org-coverage: 71 roles (37 staffed), 30 agents, 286 scripts, 1 venture(s) -- all covered
