@@ -1058,8 +1058,13 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
   "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
   "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
 ]);
-/** How long past STAGE_UNMOUNT_MS the pass waits before asking whether the stage is gone. */
-export const UNMOUNT_MARGIN_MS = 1250;
+/**
+ * How long past STAGE_UNMOUNT_MS the pass keeps asking whether the stage is gone. Polled, not one fixed sleep: under
+ * software WebGL on a CI runner the stage's render loop can hold the main thread, so the unmount timer fires late on
+ * the first crossing (CI 2026-10-01: 3 s and still mounted, on the first crossing only). A stage that never leaves
+ * still FAILs at the cap; the time it took is printed either way.
+ */
+export const UNMOUNT_MARGIN_MS = 8000;
 /** WebGL refused before any page script runs: three's renderer constructor throws, and FaceStage must catch it. */
 export const NO_WEBGL_SCRIPT = `(function () { var get = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (kind) { if (kind === "webgl" || kind === "webgl2" || kind === "experimental-webgl") return null; return get.apply(this, arguments); }; })();`;
 /** A stage that throws after its renderer exists: only FaceStage uses ResizeObserver, so its effect throws. */
@@ -1140,10 +1145,12 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       if (reached) { report.crossings++; if ((await count(page, "[data-stage]")) > 0) report.warpHeld++; }
       record(name, reached, acted ? `the hash stayed ${JSON.stringify(redactSecrets(String(await hash(page)), [token]))}` : "the control was not there to act on");
       if (!reached) { record(unmountName, false, "never crossed"); return; }
-      await sleep(STAGE_UNMOUNT_MS + UNMOUNT_MARGIN_MS);
+      const crossedAt = Date.now();
+      await sleep(STAGE_UNMOUNT_MS);
+      await until(async () => (await count(page, "[data-stage]")) === 0, UNMOUNT_MARGIN_MS, 150);
       const stages = await count(page, "[data-stage]");
       const opened = await inWorkroom(page);
-      record(unmountName, stages === 0 && opened, `stage nodes=${stages} workroom opened=${opened}`);
+      record(unmountName, stages === 0 && opened, `stage nodes=${stages} workroom opened=${opened} after ${Date.now() - crossedAt} ms`);
     };
     const step = async (fn, names) => {
       const before = report.checks.length;
