@@ -2,7 +2,7 @@
 # Usage (PowerShell, from anywhere):
 #   & sync-to-project.ps1 -Target "E:\path\to\your-project"            # full suite
 #   & sync-to-project.ps1 -Target "E:\path\to\your-project" -Products council,plan
-#   & sync-to-project.ps1 -Target "E:path	oenture" -Team nilluvai # a venture's staffed seats (org)
+#   & sync-to-project.ps1 -Target "E:\path\to\venture" -Team nilluvai # a venture's staffed seats (org)
 #   & sync-to-project.ps1 -List                                        # list products
 #
 # Windows-native twin of sync-to-project.sh; keep the two in lockstep. The full
@@ -64,7 +64,7 @@ if ($PruneReport) {
 # No second installer: org-team resolves the products; the -Products path below installs them.
 if ($Team) {
   if ($Products) { Write-Error "sync: -Team and -Products are exclusive"; exit 2 }
-  $Products = (& node (Join-Path $src ".claudescriptsorgorg-team.mjs") --products-for $Team --root $src | Out-String).Trim()
+  $Products = (& node (Join-Path $src ".claude\scripts\org\org-team.mjs") --products-for $Team --root $src | Out-String).Trim()
   if ($LASTEXITCODE -ne 0 -or -not $Products) { Write-Error "sync: -Team $Team did not resolve"; exit 2 }
   Write-Host "sync: team $Team -> products $Products"
 }

@@ -295,6 +295,7 @@ async function mutantSelftest(repo) {
   const cleanup = () => rmSync(scratch, { recursive: true, force: true });
   const onSig = () => { cleanup(); process.exit(130); };
   process.once("SIGINT", onSig);
+  process.once("SIGTERM", onSig);
   const table = arms(real.agents[0]);
   let ran = 0, failed = 0;
   const lines = [];
@@ -364,6 +365,7 @@ async function mutantSelftest(repo) {
     }
   } finally {
     process.removeListener("SIGINT", onSig);
+    process.removeListener("SIGTERM", onSig);
     cleanup();
   }
   for (const l of lines) console.log(l);

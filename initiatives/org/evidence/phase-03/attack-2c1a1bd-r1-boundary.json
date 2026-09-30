@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "sync-to-project.ps1 (the -Team block, Join-Path $src \".claudescriptsorgorg-team.mjs\")",
+      "breaking_input": "`& sync-to-project.ps1 -Target X -Team nilluvai` on Windows PowerShell. The header comment also contains a raw vertical-tab character where `\\venture` should be.",
+      "why": "The backslashes in the script path were lost, so the literal is `.claudescriptsorgorg-team.mjs`. Node gets a nonexistent file, `$Products` is empty and the script exits 2 with 'did not resolve'. The whole -Team feature is dead on the Windows-native twin. The team tests only run sync-to-project.sh, so nothing catches it. The comment and the path both look mangled by a shell-string or escape defect.",
+      "fix": "Write the path as `Join-Path $src '.claude/scripts/org/org-team.mjs'` with forward slashes, and remove the control character from the comment. Add a test that runs the ps1 twin, or at least greps it for the real path.",
+      "twin_of": "A program embedded in a shell string / typed `\\` escapes eaten by the writing mechanism"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-dispatch.mjs:emit() and main()",
+      "breaking_input": "`org-dispatch --venture v --spine-dir /some/other/spine --emit` from the main clone.",
+      "why": "Governance and open-proposal state are read from `o.spineDir`. `emit()` spawns arc-event.mjs with no way to name that spine, so the proposals and notes go to the canonical spine. The dispatch decision is made on one read and the write lands in another store. Dedup against open proposals then never sees what was emitted.",
+      "fix": "Refuse `--emit` together with `--spine-dir`, or pass the spine root to arc-event through its supported env var or flag and assert it matches.",
+      "twin_of": "validate one read, use another"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-catalog.mjs:hire() header extraction",
+      "breaking_input": "`org-catalog --hire R --interview ULID` on a card checked out with CRLF (autocrlf on Windows, no eol=lf pin for org/**).",
+      "why": "`readFileSync(path).split(\"\\n\")` leaves a trailing `\\r` on each header line. `emitYaml` then throws 'a header line holds a line break', so hire crashes with a stack trace (exit 2) on exactly the Windows leg. Nothing has been written at that point, but the hire can never succeed there. This is the CRLF half of the earlier readOr fix, applied in one place and missed here.",
+      "fix": "Split on /\\r?\\n/, strip the BOM, and pin `org/** text eol=lf` in .gitattributes.",
+      "twin_of": "`--chart --check` compared raw bytes, so an autocrlf checkout read as a hand edit"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-catalog.mjs:hire() (writeFileSync then check())",
+      "breaking_input": "A hire whose card fails the gate after stamping, for example a hired card with a bad hire block or one that trips the head rule.",
+      "why": "The card is overwritten in place with `legitimacy: interview:ULID` and `review_by` before the post-write gate runs. On a failing gate the function returns 1 but leaves the stamped card on disk. A caller that ignores the exit code, or a later commit -a, records a legitimised seat that the gate rejects. The write is also not atomic.",
+      "fix": "Validate the stamped object in memory first, using the same validateCard and check logic, and write only on pass. Or write to a temp file and rename it, restoring the original on failure.",
+      "twin_of": "Draft was all-or-nothing for validation but not for I/O"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-coverage.mjs:mutantSelftest (signal handling)",
+      "breaking_input": "CI job cancellation or `kill -TERM` while an arm is running.",
+      "why": "The self-test registers only SIGINT. SIGTERM, which the round-1 finding B3 named explicitly, leaves the scratch tree in tmpdir. That tree holds a full copy of .claude/scripts. While spawnSync blocks, the SIGINT handler also replaces Node's default kill behaviour until the loop resumes.",
+      "fix": "Register the same cleanup for SIGTERM and SIGHUP, and keep a process-exit fallback.",
+      "twin_of": "The self-test built its scratch tree before the try/finally, so a throw during the build leaked a temp tree"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/org/jobs/org-dispatch.mjs (timeout 110_000) versus org-dispatch.mjs:emit() (timeout 60_000 per call)",
+      "breaking_input": "`--all` over several teams with proposals and notes, where each emit spawns a node process and one is slow, for example a locked spine file on Windows.",
+      "why": "The wrapper's total ceiling is only about two inner emits. spawnSync kills only the direct node child, so a running arc-event grandchild survives on Windows and may still append its event. The run reports exit 2 with proposals only partly emitted. Notes are emitted after proposals, so a kill between them loses the demand count for that day. There is no deadline inside the loop.",
+      "fix": "Track a total deadline inside main and stop emitting once it is exceeded. Emit notes and proposals in one deterministic order with idem keys, so a re-run is safe, and raise the wrapper timeout above the worst case.",
+      "twin_of": "every spawnSync/execFileSync in a gate or self-test"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-coverage.mjs:treeScripts",
+      "breaking_input": "A symlink or junction named `x.sh` or `y.mjs` that points at a directory, or a symlinked script file.",
+      "why": "`lstatSync` reports a symlink as neither a directory nor a regular file. The name test then lists it as a script even when it is a directory link or dangling. A card can bind it and org-coverage calls it covered, though it is not a file. The comment 'listed as found' hides this.",
+      "fix": "For symlinks, `statSync` in a try block. List the entry only if it resolves to a regular file, and report dangling links as unreadable.",
+      "twin_of": "every existence check on a caller-given path"
+    }
+  ]
+}

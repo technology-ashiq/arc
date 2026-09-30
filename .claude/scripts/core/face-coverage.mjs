@@ -69,8 +69,8 @@ export function yamlStems(p) {
 /**
  * Every script under .claude/scripts/ as a sorted repo-relative POSIX path (*.mjs, *.js, *.sh).
  * Added for org-coverage (ADR-1620), which must resolve a role card's `binds.scripts` through
- * this module rather than a second walker of its own. Symlinks are listed as found and never
- * followed, so a link cannot pull a tree from outside the repo into the inventory.
+ * this module rather than a second walker of its own. Symlinks are neither followed nor listed:
+ * a link cannot pull a tree from outside the repo in, and a link named x.mjs is not a script.
  */
 export function treeScripts(repo) {
   const base = join(repo, ".claude", "scripts");
@@ -86,7 +86,7 @@ export function treeScripts(repo) {
       let st;
       try { st = lstatSync(abs); } catch (e) { if (e && e.code === "ENOENT") continue; throw e; }
       if (st.isDirectory()) walk(abs, r);
-      else if (/\.(mjs|js|sh)$/.test(n)) out.push(`.claude/scripts/${r}`);
+      else if (st.isFile() && /\.(mjs|js|sh)$/.test(n)) out.push(`.claude/scripts/${r}`);
     }
   };
   walk(base, "");

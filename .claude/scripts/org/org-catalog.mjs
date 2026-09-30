@@ -199,10 +199,16 @@ async function hire(repo, role, interview, spineDir) {
     "escalate_to", "e2", "produces", "consumes", "fixtures", "legitimacy", "ventures", "kpi", "autonomy_ceiling", "review_by", "history"];
   const out = {}; for (const k of order) if (card[k] !== undefined) out[k] = card[k];
   const path = join(repo, entry.rel);
-  const header = readFileSync(path, "utf8").split("\n").filter((l) => l.startsWith("# ")).map((l) => l.slice(2));
+  const before = readFileSync(path, "utf8");
+  const header = before.split(/\r?\n/).filter((l) => l.startsWith("# ")).map((l) => l.slice(2));
   writeFileSync(path, emitYaml(out, header));
   const after = check(await collect(repo));
-  if (after.length) { for (const x of after) console.log(`FAIL ${x}`); console.log("org-catalog: the hired card does not pass the gate -- fix it in this branch"); return 1; }
+  if (after.length) {
+    writeFileSync(path, before); // the stamp is all or nothing
+    for (const x of after) console.log(`FAIL ${x}`);
+    console.log("org-catalog: the hired card does not pass the gate -- restored unchanged; fix it in this branch");
+    return 1;
+  }
   console.log(`org-catalog: ${role} staffed by interview ${interview}; review_by ${out.review_by}`);
   return 0;
 }

@@ -53,6 +53,9 @@ function parseArgs(argv) {
   }
   if (!!o.venture === o.all) throw new Error("exactly one of --venture V or --all is required");
   if (o.venture && !isId(o.venture)) throw new Error(`venture "${o.venture}" is not a valid slug`);
+  // --emit writes to the canonical spine arc-event resolves; reading governance and open proposals
+  // from a DIFFERENT spine would dedupe and cap against state that is not where the writes land.
+  if (o.emit && o.spineDir) throw new Error("--emit writes the canonical spine and cannot be combined with --spine-dir");
   return o;
 }
 
@@ -62,7 +65,7 @@ function emit(root, kind, payload) {
     const f = join(dir, "payload.json");
     writeFileSync(f, JSON.stringify(payload));
     return execFileSync(process.execPath, [join(root, ".claude", "scripts", "hq", "arc-event.mjs"), "emit", kind, "--payload-file", f, "--actor", ACTOR],
-      { cwd: root, encoding: "utf8", timeout: 60_000 }).trim().split("\n").pop();
+      { cwd: root, encoding: "utf8", timeout: 8_000 }).trim().split("\n").pop();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
