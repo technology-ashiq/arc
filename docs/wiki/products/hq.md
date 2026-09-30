@@ -209,7 +209,7 @@ ledger: the list of money in and money out.
 
 None declared.
 
-## Scripts (75)
+## Scripts (77)
 
 - [`.claude/scripts/hq/adr-record.mjs`](../../../.claude/scripts/hq/adr-record.mjs)
 - [`.claude/scripts/hq/arc-brief.mjs`](../../../.claude/scripts/hq/arc-brief.mjs)
@@ -256,6 +256,8 @@ None declared.
 - [`.claude/scripts/hq/lib/ledger/reconcile.mjs`](../../../.claude/scripts/hq/lib/ledger/reconcile.mjs)
 - [`.claude/scripts/hq/lib/ledger/ventures.mjs`](../../../.claude/scripts/hq/lib/ledger/ventures.mjs)
 - [`.claude/scripts/hq/lib/narrative-proof.mjs`](../../../.claude/scripts/hq/lib/narrative-proof.mjs)
+- [`.claude/scripts/hq/lib/owner-key.mjs`](../../../.claude/scripts/hq/lib/owner-key.mjs)
+- [`.claude/scripts/hq/lib/owner-sig.mjs`](../../../.claude/scripts/hq/lib/owner-sig.mjs)
 - [`.claude/scripts/hq/lib/policy/authorize.mjs`](../../../.claude/scripts/hq/lib/policy/authorize.mjs)
 - [`.claude/scripts/hq/lib/policy/constitution.mjs`](../../../.claude/scripts/hq/lib/policy/constitution.mjs)
 - [`.claude/scripts/hq/lib/policy/encode.mjs`](../../../.claude/scripts/hq/lib/policy/encode.mjs)
@@ -287,7 +289,7 @@ None declared.
 - [`.claude/scripts/hq/spine.mjs`](../../../.claude/scripts/hq/spine.mjs)
 - [`.claude/scripts/hq/venture-register.mjs`](../../../.claude/scripts/hq/venture-register.mjs)
 
-## Files (7)
+## Files (8)
 
 - [`.claude/hooks/PostToolUse.d/90-emit.sh`](../../../.claude/hooks/PostToolUse.d/90-emit.sh)
 - [`.claude/hooks/PreToolUse-edit.d/40-policy.sh`](../../../.claude/hooks/PreToolUse-edit.d/40-policy.sh)
@@ -296,6 +298,7 @@ None declared.
 - [`.claude/hooks/SessionStart.d/60-jobs.sh`](../../../.claude/hooks/SessionStart.d/60-jobs.sh)
 - [`.claude/hooks/SessionStart.d/90-emit.sh`](../../../.claude/hooks/SessionStart.d/90-emit.sh)
 - [`.claude/hooks/policy-decide.sh`](../../../.claude/hooks/policy-decide.sh)
+- [`.claude/owner-key.pub`](../../../.claude/owner-key.pub)
 
 ## Source
 

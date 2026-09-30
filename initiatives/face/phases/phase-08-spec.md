@@ -18,7 +18,19 @@
 
 ## Verification plan
 
-Coarse (refined via `/arc-change` when the phase starts): `node .claude/scripts/core/face-dogfood.mjs` output for each day, pasted verbatim into the evidence bundle.
+Refined 2026-09-30 through `/arc-change --lane face` (owner: "complete everything, all phases"). One check per exit criterion, run in this order from the MAIN clone on `main` after `git pull --ff-only`:
+
+| # | Exit criterion | Check (exact command) | Evidence file | Who |
+|---|---|---|---|---|
+| 0 | Precondition | `initiatives/face/PROGRESS.md` shows Phase 07 CLOSED and `/arc-phase-done 07` receipt on the spine | line quoted in `evidence/phase-08/README.md` | session |
+| 1 | Both days run from the MAIN clone | the owner starts `node .claude/scripts/hq/arc-face.mjs` (live spine, not `--spine`); the journal under the face's journal dir gains lines that day | `evidence/phase-08/day-1.txt`, `day-2.txt` (the launcher's printed URL host + the journal line count) | owner |
+| 2 | MET for 2 days | at the end of each day `node .claude/scripts/core/face-dogfood.mjs --days 1 --json` then once `node .claude/scripts/core/face-dogfood.mjs --days 2`; exit 0 both; `spine-only` and `journal-only` both zero; at least one op receipt from the face each day | output pasted verbatim into `day-1.txt`, `day-2.txt`, `summary.txt` | session reads, owner acts |
+| 3 | Usage trend beside the two days | the trend recorded since Phase 03 (retro-log 2026-09-16 lesson) read next to the two days in the retro | `evidence/phase-08/trend.md` (numbers, not adjectives) | session |
+| 4 | Ledger row 7 answered | the Assumptions row 7 (owner decided in the CLI because the surface came late, or the Inbox is the wrong shape) gets `FIRED` or `HELD` with the two-day numbers in the cell | PLAN.md row 7 | session |
+| 5 | ADR-1315 voice question | asked at the retro, answer written into the retro | `retro-log` line | owner answers |
+| 6 | Close | `/arc-retro`, `docs/HISTORY.md` Cycle 16 row, then `/arc-phase-done 08 --lane face` from the main clone | receipts | session, owner stamps |
+
+Failure handling: a day with any `spine-only` id is NOT MET; the ids are listed, the day is repeated, the failing decision is named in the retro. An op receipt missing for a day is recorded as NOT MET unless Phase 05's Block C gate fired (then it is recorded as such). A half day is never counted (rabbit hole 1). The owner is the only one who can make the two days; nothing in this plan lets a session run them for him.
 
 ## Rabbit holes in this phase
 

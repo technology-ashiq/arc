@@ -3,207 +3,241 @@
   "pages": {
     "lanes/absorb": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "31a7cfcf70c2b484ee69684c48e2e3d996bebd8a15b75bd7ea40c63ee61ab525",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "oPJKjogO8UGWmB0wGSU0fOyoHIpxbbmtIF7pkaOwLUMX+j5jjQ4xCDfMOk2kFiP8Nz0FP7eTm8LRNkmHEoNUBw=="
     },
     "lanes/bench": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "3b4f6cd5b9aaf07cba873825d011af1a9377d68643a5f648141627fbffa17f92",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "8dB6EcGW2fC04YXe2ieOjv+Hym+RD78cDT7tK92o7oFQxR+e7H/9AQ9hHE9mj9HpKmoZNJcG3A3V0BJ/vuaNBA=="
     },
     "lanes/design": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "67ab38aef1ca34ac6bdf8ea9be34ee61f2ba07110e5b3d7bd37b993786eab25f",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "hcMWsIIlJmBqK9hWBKk3VdvZlO+YbLoz2maE07aUTdzEdl52BSs8Gley326V7OSkItrUlVcepWPCTm6m1pmeCg=="
     },
     "lanes/develop": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "1390f1469033ad08b65adbdc71035f31499ad647611d00eaeb1bc92fe7a23555",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "bvru40oQLRSKa+LKDusfC1TMFr4fEk3GZonULdHUqbeSnw0fNC+bHrmeOtJfB10/JppfENc3eij27m6MEForDQ=="
     },
     "lanes/docs": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "fcf5bc0a91c02aa450f2b389b6a7cc131c232dd36ddfb06b47bea0d2f1a14e15",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "p2z1YuITd7AHuRaGDmGwAnHBL4xXDhXUrtfAsvygFum1bH8cB5WwVB6T3mV52KefH8nYP27vU9VtNZTEzorJBw=="
     },
     "lanes/engine": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "9ed7b8be62c4a9cae80d799133a8f79dc86c4f2bf314e7d85a6c429a0002a0d1",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "qucaqOAtgK1N/IRYiyZ6L9JZPReA1zGnm3v3Q8EV8jzpAOgc9TbxSd+fxcgxdlGf/QQEGSyF9eFTndEOLJK/Aw=="
     },
     "lanes/evolve": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "fa1c7cea5ce3ec95913173023ae38d38bb5e71ea9fba15fa93b06095f1c9a1a4",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "Fvz4+ZxpFJH9ZOuIcTSC+odC7bqUuCLlEqcHSA3zGPnXp7fm+UiNKLyxXegT7+5sfVD+zg7gcbPvuCGbb3DQBA=="
     },
     "lanes/face": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "4baad46350be15157090c59d2bb068f7ee1c222f8770ff10bbfb807f02c2cd13",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "E4omNkb7fimI0YP8kJ1q4R5cgLgFbg/alU0ha5UnZ6mcJQ+s6lb4IbujJ1a8rsoFYoDfLtK8CQT+ety3IfkyBw=="
     },
     "lanes/growth": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "e549f89c822204409eb1d116b0343a41581bbdd2f8461c5b47d6253d3ae789fc",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "kXcA8K5KUzOYH78n9NErqLoaMmKyLf7j7tteViFZrlPUERJ24Mho3grEseVp+GiQzWV954PkVv14o2IHa3JDDA=="
     },
     "lanes/leads": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "0cdca025deb303b45a7ae9fd1b8e4cd87860c2ad35ac9eedcab1fa26ceb14d10",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "QXR9MtQjfWKVptJHEVnEN01ZTNxtkBC3OyJjNZ0+uUAAJ72ACWvGlitkjPzxujPzxXghJSDNzsaw8KrAasJ2AQ=="
     },
     "lanes/ledger": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "d9ad44b354f4c2b827ed401f38da2eef9e6840f0c4a16c5c6905036b7d40e87d",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "GfvcdoikJ15oG/WXPyYpgVfFj9MKPGzL7PPFrubDSXkVsd/FdiQjHUfgufozGKUydXGc/lFlPB9pwbOoYdcMDA=="
     },
     "lanes/legal": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "a4a41515ebe25aaa4b9877c990c65d419a3d7ecbda2a67af9f58cd594636f67c",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "PoxpxVKrglLYvkgjVxF/hoUlk0VT8FuHUjTPjqCA2W3R2dwFrm13ufztVUeShsTV4V9xSRa84Tfk6lXA/pFTBw=="
     },
     "lanes/memory": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "0ce9ed4fe88f9d6aadbe32181ccb3f0f323630453809e131f7d02cbf79ae4902",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "F97gSOMJCntaVrc7DUNHPfGhYEhJEhjb4J2tE9ulHcgwFcnp4v9obJsNhwXmwcwzZwzedo2PajeJHlR6NObcBQ=="
     },
     "lanes/model-policy": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "3892836358cd62d77a0397e671fa2406c9f7494d7ddcf0264a9e740d58a6a4b6",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "khhzNwV2zjzv4Mcx1vC1T4Pi+RobNbI/rH5ANrPin/V0lhN5jMd3ZuzkLMRmvrk3VdNC3Huc80Wt8sJCbLGbCA=="
     },
     "lanes/policy": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "f1bc4e853df59c669907df5000dbe3faaa08c2c98a3a47f4d5587f8ecad82635",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "XKwyByLchP7VChozB0Ih73yIjMuht5X02ATWu2WG8CPOXK17E/R5aNlifQwgFSEz0g01JsZksUquVxd5KrENAQ=="
     },
     "lanes/portfolio": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "9b429d72d2577fd3b30fb0c5879690d14107b27944eee66734f6228e00d440a6",
-      "approval": "01M3PYME20K4DBAN6AN6N1BZNA"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "ckLLv6d0ZpGWDcsrK0r8aQJbjpDVglIGJ6v+APN9JxsAtMtTKawJb67ttmypOTA44pM1hocyG/hDSnt0IFVyDQ=="
     },
     "lanes/scheduler": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "9f9902337b00adbe2894c23945254e2631d8650ffdc59f41877f02d57cdda5c5",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "xacrnsD66dgi25zAoWY+VAM1o9Wrm1L4xhD6dsdKhPZ0wTigXaWkkeBFZln113VwxTFETJPpLFR6gvmOxddhDg=="
     },
     "products/absorb": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "c20ace29d09ac822b07253021c059b1a83703337fda6292783cea909a594ab3d",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "1IXXnZjzrsAJp4/tCiA5Y0BgvJemha3Uw34CbPVFhpj0gVdX6NmpCk2ocNtGwdp5mvOlKPSfwOWIuJAhE2nCCg=="
     },
     "products/core": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "44e5492ad2d4e645292fd7143ace52872de5f345b51ba310f30037cf31042fb3",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "89AjciBmqR9aAtD+/U2H/u4/NFzUFISZSbCK2cia9oU6e3w0YJlae8UnNvhnwLLdAy23PS0mXCgGsQuHMcjhCA=="
     },
     "products/council": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "491e861a719dbabbedb2dfafcac13f71755f554da39eaa77d20607538662c87a",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "pz4V+ziVPEABMToLiI7sGJM69XUKyoIbKBMM5g5AE9OZwBHd75hBH2mhzAHoFwfCU1aLImOqSisvQEBEvUC5AA=="
     },
     "products/design": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "ddb5d962aaba4511d2dd85139207eba4d5b265b0df7857689328d919c6328d04",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "O79fM6Xg1mfJmfdXKsZqozi/yFtlphplZIP7VxvR0reHE5YYCPQUEFTRMHLCdSdWoaS3tZ3MatwH/avc94L4Bg=="
     },
     "products/develop": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "71a0ccce1bd98d22959aeab1a3612e5c6114a778e8da9c0f118db74a94e2c1ed",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "omeqvDeEJ5y64QJxKLWafQgyrEnlZ2Y2u4DjsglGLV20DZ4Czs84CBPpymZncmntXBFLHgQekLEeYA+vmrLmCg=="
     },
     "products/docs": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "2613d7eed1f6ad2abb63dd9155e3856bf3543138c1119425a225c79933ecd369",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "cGg0Hu0sZmNHA7YOONr6+ebSmbjfJ/nKgGDingDUGGuJt5zIPwrysnaxAnJD3OruSx6HcpVrlIkUbvWNWafzDw=="
     },
     "products/engine": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "1779001f4b9c2c0bae104584388f708f725e69421ab0bef52d8dea33db82064e",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "HyC+yZlVh8Z0Bk8UERwxnk+QRfcr0ePnIwACV7EbYdZXvMReZx0zob5RE6q4ofqTNj0U6/PxR/r81lc9wNVfAg=="
     },
     "products/evolve": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "8b69c741e51a7a95d6d13c0e320a8ad1a44c69f33d372520e935d7d952353fbc",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "zTJtK8IXuijIrg822bndEPsTTzIe7jMn2cqrYJMzNxueT3o1Kb+M4ipH7Cx4mPwXXsERQ/E1zkOVEx+b8WE7BA=="
     },
     "products/git": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "5294190dbda4f73455213ed5790bf72257c6ac224c724e928b2120194b61e03b",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "P3pDoYPkinttNhFza+00t9IyGDAy+i5htEYtpr/4MdApwP4dKllvLm1mX5hG7mAVfj/oEVmqDqX4GWAwrsIvCw=="
     },
     "products/growth": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "fb6bf47dee91d8199adff747fa5f5ba1180bceab39d04057c1e0269ba04136b1",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "knVpWWbZj7B4hTCxptoWXJoamRx4B1Hj2/1ACL84Qd5Cuv5u5QvF9xH0Oy19cL8zuLp2hxc59xSzN4aXgbuWDQ=="
     },
     "products/hq": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "3f2aaa5d933144c2e57736ba9b2a5419b8650df6a5b8f0ade85c601dbced8604",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "7VuvwaRkJ6g1KR3ej8UFFGaiQGAPbSSxu29wFpB5mwbe8QXYmeEDCDgs7s4zma5GP46+UeshN8Ko/vLMQQrJBA=="
     },
     "products/leads": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "cd48245c06ea2b7fc08efa2738be6c2ffabac82c9e4da70407b60d2be2ef5f31",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "vsepNB9jNb96vv8PKJohbnu1HLc2yn/PXCeqnwg0wFe8QbPbZHz3HrcLeEzYk0RkNj3qZC5iZP1+4nhMtyMPBQ=="
     },
     "products/legal": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "050488fead8c31df97591a75cc2a391c47c84c215e597259af48546a73a008a8",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "U17jhuQEQq4cuIh5vVpBH0VO3tpjNOA6c18uipqjxQzI49qnPFMocU/WnpGltYkpL5fXyk7640czK6fOX2RcBw=="
     },
     "products/memory": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "8c849426ebb04cf8cf2966aa46b338e032f65bc468b8ca91bc35bc8547ed6d61",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "OMrnzmCntHTCXjxjk4tzzD1AxcmLP3MdQX9hv53mQzq6BQ6JuEVjzvIQIKT+nxjW1wVsgpgT3PBx34oHJ5DkAg=="
     },
     "products/plan": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "822de8f808b02779649b587786cb477d30b7236b527e8232cd8a96b69cc02ae2",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "XDnBA9XGkEq7XRZ9t4cgypSR+RhjYuy+zjNwyGjIFxPTa13d2gWdoliupwaXB9RJqD9E3QDXRR+elIOuMZMdDg=="
     },
     "products/qa": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "e2a175b19d8b5a19d98df01f071155723fc2b48f41114430a59db28b06accd84",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "pV9ixE5mRWZA+UG+KsfCDBAHxSQbP/EAtHS1UXWo2h0PJrC6/xKPExPwY+JXoH9I98ay8Zfug5SKbYYROXopAA=="
     },
     "products/review": {
       "by": "owner",
-      "on": "2026-09-29",
+      "on": "2026-09-30",
       "sha256": "7f1adb06776f0f82ffe44fcb42add3fc9b9f97189f7a087f3639b2ed31ce6fc8",
-      "approval": "01M3PX6YZJVB1D7M0CYGRPGMTV"
+      "approval": "01M3QPG0RVYD5HXF6XHCJP75ZR",
+      "sig": "Jaiu+vF3zVdqMkAe9jQUdODpr5u/VGHJxMsvQmHDEY3PmNLvGnzw6Sfj6PavmegMS5RHURSD23vXVS51ixCfCg=="
     }
   }
 }

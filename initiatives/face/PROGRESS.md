@@ -424,6 +424,22 @@ stay bespoke folds.
 
 ## Now
 
+**PHASE 08 PLAN REFINED (2026-09-30, `/arc-change --lane face`, owner: "complete everything, all phases, don't stop for anything"):**
+its coarse one-line verification plan is now a table with one exact check per exit criterion, an evidence file each, and who does
+it (`phases/phase-08-spec.md`). Tracker only, no code. The two real days are the owner's and no session can run them for him;
+Phase 08 opens only after `/arc-phase-done 07`, which waits on the owner-key PR below. Assumptions ledger: nothing fired.
+
+**CHANGE ROUTED (2026-09-30, `/arc-change --lane face`, owner: "owner-token first"):** PR #300 merged (`9979a266`). Its round-3
+attack (boundary B1, B2) showed the accept proof is a deliberate step, not authentication: CI cannot re-verify the ULID, and a
+shell in the main clone can write both events. **ADR-1514 Amendment 2** (decision, proposed) makes it authentication: an
+Ed25519 owner key sealed by a passphrase, `arc-inbox approve` on `gate: narrative-accept` needs a terminal and writes a `sig`,
+the validator requires it for that gate only, the public key is committed and the gate verifies every entry against it. New
+exit criterion "Owner-authenticated" under Phase 07. Classified as a decision plus in-scope build (no new REQ). Assumptions
+ledger: nothing fired; Amendment 1 had named the limit. Estimate 1.5d, charged to Phase 07 and booked at the next burn update
+(10d booked, plus 0.75d for Amendment 1 not yet booked, of 31.5d; no tripwire near). **Waiting on the owner's OK before any
+code** (auth, an hq-lane validator key, a committed key, a passphrase step for the owner). Branch `feat/face-owner-token`.
+Phase 07 stays open until this lands.
+
 **CHANGE ROUTED (2026-09-29, `/arc-change --lane face`, owner: "a pannu, debt vachu poga thaa"):** the round-2 attack (B6, medium)
 found that `narrative-anchors --accept` stamps `by: "owner"` for whoever runs it, so an agent could self-accept every page and
 drive awaiting-owner to 0. The owner chose option A: **`--accept` needs an `arc-inbox` approval** and it is not parked as debt.

@@ -1,0 +1,119 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:initOwnerKey (generateKeyPairSync cipher aes-256-cbc) and MIN_PASSPHRASE",
+      "breaking_input": "The agent runs as the same OS user, so it reads ~/.arc-private/owner/owner-key.pem directly and brute-forces it offline. A 12-character passphrase such as twelve repeated letters passes the length check. The comment claims node fixes the derivation cost, and that cost is OpenSSL's low default PBKDF2 iteration count for PKCS8.",
+      "why": "The whole proof rests on the sealed file being unreadable without the passphrase, but the file is readable and the KDF is cheap. Length is the only entropy rule, so a guessable passphrase gives a cheap offline crack.",
+      "fix": "Wrap the raw key with crypto.scrypt (N at least 2^17) or another memory-hard KDF that you control, and require a longer passphrase or an entropy check. Alternatively document the offline-crack bound in the ADR."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs main() plain-gate branch; narrative-proof.mjs:ownerKeyBaseState",
+      "breaking_input": "A PR CI checkout with fetch-depth 1 has no refs/remotes/origin/main. A branch that swaps .claude/owner-key.pub and re-signs every entry with its own key gets state unavailable, which becomes one WARN. The gate then exits 0.",
+      "why": "The key swap is the one attack the design says it makes loud. On the CI leg it degrades to an unread WARN, and even when the base is present a swap only WARNs, never FAILs. The base is also the tip of origin/main rather than the merge-base.",
+      "fix": "Have the CI workflow fetch the base ref, and turn owner-key-unchecked into a FAIL when CI is set. Compare against the merge-base, or require a committed fingerprint pin that a second file must change."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "narrative-anchors.mjs:readTree (regularInside), narrative-proof.mjs:ownerSigProblem (statSync().isFile()), narrative-proof.mjs:ownerKeyBaseState (plain readFileSync)",
+      "breaking_input": "Make .claude/owner-key.pub a symlink to a file outside the tree that holds an attacker key. --accept reads it through statSync, which follows symlinks, and writes an entry signed by the attacker key. The gate treats the symlink as missing and reports [no-owner-key]. ownerKeyBaseState reads through the link and fingerprints the attacker key.",
+      "why": "Three readers of the same file use three different guards. Two of them disagree about what the key is, and one has no containment check. This is the same class as validating one read and using another.",
+      "fix": "Use one helper that lstat-checks, realpaths inside the root, and reads once. Pass the resulting PEM text to evaluate, --accept and ownerKeyBaseState.",
+      "twin_of": "One reader guarded, its twin not -> Every reader of the same file gets the same guard."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs proofArms MUTANT A6 (noGit: extraEnv { PATH: ... })",
+      "breaking_input": "On Windows the inherited environment key is Path. Spreading process.env and adding PATH produces two keys that differ only in case, so which one wins is undefined. git is still found, so noGit.state is same or changed instead of unavailable.",
+      "why": "The arm that proves git cannot run depends on env-name case. It goes red only on the windows CI leg, or passes for the wrong reason.",
+      "fix": "Delete every key whose upper-cased name is PATH before setting it, or point the spawn at a nonexistent executable through an injected runner.",
+      "twin_of": "Name filters compared case-sensitively on an OS whose env is not -> normalise case before every env-name comparison."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-inbox.mjs decide() (the process.stderr.write listing pages)",
+      "breaking_input": "An agent-written approval.requested lists a page whose text carries ANSI escape sequences such as cursor-up, clear-line and fake colour, or a sha256 field made of terminal control bytes. The listing prints them raw to the owner's terminal just before the passphrase prompt.",
+      "why": "Untrusted payload text is drawn on the owner's terminal before signAccept validates it, so the owner sees a spoofed screen at the moment of authentication. The signer later refuses the entry, but the display was already forged. This is display before validate.",
+      "fix": "Validate the entries with the PAGE_ID_RE and 64-hex checks first, and print only validated values. Otherwise print JSON-escaped text with control characters stripped.",
+      "twin_of": "The smoke's oneLine and face-pure left ESC and other controls in a printed line -> one-line means no terminal control either."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:ownerKeyDir (os.homedir())",
+      "breaking_input": "Launch arc-inbox with HOME or USERPROFILE set to another directory. os.homedir() honours those variables, so the key directory moves to one holding a key pair the caller made. The selftest itself relies on this by setting both variables.",
+      "why": "The header comment says no environment variable can move the key in production. That is false, because homedir() reads the environment. This is an env door on the production path for the very actor the proof guards against.",
+      "fix": "Derive the home from os.userInfo().homedir, or refuse when the resolved directory differs from it. Have the tests inject keyDir, which they already do.",
+      "twin_of": "An env door read by the very actor the proof guards against -> A door documented as test-only is refused by name on the production path."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:initOwnerKey (the tail after generateKeyPairSync)",
+      "breaking_input": "Case 1: the private key is written, then mkdirSync(dirname(pubPath)) or the public write throws (read-only checkout, path is a directory). The private key exists with no public file, and a re-run refuses with 'already exists'. Case 2: the private key is absent but a committed .claude/owner-key.pub exists. init overwrites it silently, and a symlinked pub path is followed and written through.",
+      "why": "The private key lands before the last refusal, so a half-made key strands the owner, and the raw error escapes without a translated message. The overwrite replaces the committed trust anchor with no check. The write follows a link.",
+      "fix": "Validate that pubPath is writable and is neither an existing file nor a link before creating the private key. Write the public key first with wx, or roll back the private key on failure. Refuse to overwrite an existing public key.",
+      "twin_of": "A directory created before the last refusals -> Refuse before you create."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:stdioIsTty",
+      "breaking_input": "Run arc-inbox owner-key init or approve from Git Bash in mintty, the default MSYS terminal on Windows. process.stdin.isTTY is false there because stdin is a pipe. Every attempt refuses with 'needs a real terminal'.",
+      "why": "A genuine human terminal on the owner's platform is refused, and the message tells the owner to use a terminal window, which is what they are already using. The owner cannot approve any page from that shell.",
+      "fix": "Name PowerShell or cmd in the refusal, or detect MSYS and print the winpty hint. Do not weaken the check itself."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-sig.mjs:SIG_B64_RE / verifyOwnerSig",
+      "breaking_input": "Take a valid signature and change its 86th character to any other base64 character that keeps the top two bits. Buffer.from(...,'base64') ignores the unused low bits and decodes to the same 64 bytes, so the variant verifies.",
+      "why": "The comment promises exact length and canonical padding, but the regex accepts 16 spellings of each signature. That defeats any exact-string dedup, comparison or pin on a sig.",
+      "fix": "After decoding, re-encode with toString('base64') and require it to equal the input.",
+      "twin_of": "Round-trip tests ran a codec against itself -> every length path crosses the independent implementation."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-sig.mjs:sigsShapeProblem and PAGE_ID_RE; arc-inbox.mjs decide payload",
+      "breaking_input": "A request lists 200 pages, each with a 150-character id, so each id passes PAGE_ID_RE. sigs stays under the 200-key ceiling, but the JSON payload plus Windows quote-escaping passes 32K characters. The spawn of arc-event fails after the owner has typed the passphrase. Separately, a sigs key containing U+2028 produces a multi-line BAD_DECISION message.",
+      "why": "The ceiling counts keys, not bytes, and the id length is unbounded, so the stated command-line limit is not enforced. The error text embeds a key slice in which JSON.stringify leaves U+2028 and U+2029 unescaped.",
+      "fix": "Cap the page id length and the total sigs bytes, and check the size before prompting for the passphrase. Escape U+2028 and U+2029 and other \\p{Cc} in messages.",
+      "twin_of": "\"One line\" that allowed ESC, VT, FF and U+2028 -> one line refuses every \\p{Cc} and the Unicode line breaks, not only CR, LF and NUL."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-inbox.mjs main() owner-key branch",
+      "breaking_input": "Run `arc-inbox owner-key init --force`, or `--reason x`, or `--lane=y`. The extra flag is parsed and then ignored silently. Separately, repo is derived from the script's own location, so a run from the main clone (the only place the spine lives) writes the public key into main's working tree, while the change belongs on a feat branch.",
+      "why": "The command ignores arguments it was given, and the public key file lands in whichever checkout holds the script, which can be main.",
+      "fix": "Refuse any flag on owner-key by name with exit 2. Print the resolved public-key path and require that the branch is not main before writing.",
+      "twin_of": "Extra tokens ignored -> A mode that ignores what it was given answers a question nobody asked."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:unsealOwnerKey and initOwnerKey (existsSync)",
+      "breaking_input": "Create a directory named owner-key.pem inside the key directory. existsSync is true. unsealOwnerKey then calls readFileSync outside its try and throws EISDIR after the prompt has been shown, and init reports that a key exists.",
+      "why": "existsSync accepts a directory, and the read is unguarded, so the CLI shows a raw stack instead of one sentence.",
+      "fix": "Use lstat plus isFile, and wrap the read in the same try that returns a named refusal.",
+      "twin_of": "`existsSync` accepted a directory as an executable, and a spawn error was an unhandled 'error' event -> require isFile()."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs evaluate() new fails ([no-owner-signature], [bad-owner-signature])",
+      "breaking_input": "Put a key such as \"products/x\\nnarrative-anchors: narratives=34 accepted=34 awaiting-owner=0 fail=0 owner-key-changed=0\" in accepted.json, with a ULID approval and a hash. The page name is interpolated raw into a FAIL line, so a forged summary line prints before the real one.",
+      "why": "The page names come from disk and are printed unescaped in the new message paths. That lets a file forge a line that a log parser could read.",
+      "fix": "Grammar-check the page keys in acceptedOf, or JSON-escape the page name in every finding.",
+      "twin_of": "A folder name or finding carrying a newline could print a verdict line of its own -> the one-line rule applies to names read off a disk."
+    }
+  ]
+}
