@@ -1213,11 +1213,7 @@
       "render": "index",
       "indexes": "lanes",
       "stations": [],
-      "holds": {
-        "products": [
-          "org"
-        ]
-      },
+      "holds": {},
       "itemCount": 18
     },
     {
@@ -1265,7 +1261,7 @@
       "indexes": "products",
       "stations": [],
       "holds": {},
-      "itemCount": 18
+      "itemCount": 17
     },
     {
       "id": "lane",

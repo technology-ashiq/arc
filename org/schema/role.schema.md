@@ -7,7 +7,7 @@ consumes, fixtures, KPI, autonomy ceiling and tenure (ADR-1601).
 
 **The grammar lives in code, not here.** `.claude/scripts/org/lib/card.mjs` is the only definition.
 A second copy of the field list in prose would drift the way the blueprint's §4 did. Read that
-file's `KEYS` and `validateCard`. `example.role.yaml` beside this file is a card the validator
+file's `KEYS` and `validateCard`. `example-seo-strategist.role.yaml` beside this file is a card the validator
 accepts, and `tests/org-card.bats` loads it.
 
 ## Why each rule exists

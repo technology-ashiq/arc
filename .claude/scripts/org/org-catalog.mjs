@@ -14,7 +14,7 @@
  *
  * Every count printed is derived from the cards on disk; nothing here carries a number forward.
  */
-import { readFileSync, writeFileSync, mkdirSync, realpathSync, readdirSync, rmSync, lstatSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, realpathSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -98,7 +98,7 @@ export function cardFromSeed(repo, row, unpinned) {
 }
 
 function draft(repo, seedPath) {
-  const r = parseYamlSubset(readFileSync(seedPath, "utf8"));
+  const r = parseYamlSubset(readFileSync(seedPath, "utf8").replace(/^\uFEFF/, ""));
   if (!r.ok) throw new Error(`seed: ${r.error.message}`);
   const rows = r.value?.roles;
   if (!Array.isArray(rows)) throw new Error("seed: expected a top-level roles: list");
@@ -186,6 +186,9 @@ export function chartModel(w) {
   };
 }
 
+// Markdown table cells: a `|` would split the row and shift every column after it (B9).
+const cell = (s) => String(s).replace(/\|/g, "\\|");
+
 function seatLabel(r) {
   const b = r.binds || {};
   const names = [...(b.agents || []), ...(b.skills || []).map((s) => `skill:${s}`), ...(b.scripts || []).map((s) => s.split("/").pop()), ...(b.process ? [`process:${b.process}`] : [])];
@@ -209,7 +212,7 @@ export function renderChart(m) {
     out.push(`## ${d.name}`, "", "| Role | State | Seat | Bound to | Reports to |", "|---|---|---|---|---|");
     for (const r of d.roles) {
       const state = r.state === "vacant" ? "**VACANT**" : r.state === "human" ? (r.e2.length ? `human (E2: ${r.e2.join("; ")})` : r.owner_choice ? "human (owner choice)" : "human") : r.state;
-      out.push(`| ${r.title} (\`${r.id}\`) | ${state} | ${r.seat} · ${r.origin} | ${seatLabel(r)} | ${r.reports_to === OWNER ? "owner" : `\`${r.reports_to}\``} |`);
+      out.push(`| ${cell(r.title)} (\`${r.id}\`) | ${cell(state)} | ${r.seat} · ${r.origin} | ${cell(seatLabel(r))} | ${r.reports_to === OWNER ? "owner" : `\`${r.reports_to}\``} |`);
     }
     out.push("");
   }
@@ -276,11 +279,14 @@ async function digest(repo) {
 // ---------- CLI ----------
 
 // CRLF is folded to LF before comparing: a checkout with autocrlf turned on is not a hand edit (B4).
-function readOr(p) { try { return readFileSync(p, "utf8").replace(/\r\n/g, "\n"); } catch { return null; } }
+function readOr(p) { try { return readFileSync(p, "utf8").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n"); } catch { return null; } }
 
 function parseArgs(argv) {
   const o = { root: REPO, mode: null, check: false, seed: null };
+  // A flag given twice is an operator error, never last-wins (lanes.md; attack c7eddd6 B4).
+  const given = new Set();
   for (let i = 0; i < argv.length; i++) {
+    if (argv[i].startsWith("--")) { if (given.has(argv[i])) throw new Error(`${argv[i]} given twice`); given.add(argv[i]); }
     const a = argv[i];
     const val = () => { const v = argv[++i]; if (v === undefined || v.startsWith("--")) throw new Error(`${a} needs a value`); return v; };
     if (a === "--draft" || a === "--chart" || a === "--digest") {
@@ -297,7 +303,8 @@ function parseArgs(argv) {
   return o;
 }
 
-function isDir(p) { try { return lstatSync(p).isDirectory(); } catch { return false; } }
+// statSync, not lstat: a root reached through a symlink or junction is a directory to every caller (B8).
+function isDir(p) { try { return statSync(p).isDirectory(); } catch { return false; } }
 
 async function main() {
   let o;

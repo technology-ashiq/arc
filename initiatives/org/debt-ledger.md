@@ -6,3 +6,5 @@ would take to close.
 | # | Opened | Item | Why not now | Closes when |
 |---|---|---|---|---|
 | 1 | 2026-09-30 | The yaml-subset parser (engine lane, ADR-0200) misreads a quoted list item holding `": "` as a mapping. | The parser is the engine lane's shared organ. org works around it (the emitter refuses; the gate fails the misread) and does not edit it. | The engine lane fixes `parseYamlSubset` and a paste-ready report is delivered to that lane. |
+| 2 | 2026-09-30 | Two concurrent `org-catalog --draft` runs: A's rollback can delete a file B reported as existing (attack c7eddd6 B7, low). | Draft is a one-time, single-operator bootstrap; a lock costs more than the race. | Draft runs in any automated path, or a second operator drafts. |
+| 3 | 2026-09-30 | The LOGIC attack surface has not produced a result for Phase 00: the free qwen trial and deepseek-v4-flash both hit the driver's 60 s per-attempt default (`ARC_LLM_TIMEOUT_MS`). | Found after three boundary passes; the next logic run sets `ARC_LLM_TIMEOUT_MS=420000` and covers the Phase 00 code in its diff. | A logic result is recorded for a diff that includes Phase 00. |

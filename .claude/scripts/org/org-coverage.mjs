@@ -12,7 +12,7 @@
  * Usage: node .claude/scripts/org/org-coverage.mjs [--root DIR] [--mutant-selftest]
  * Exit:  0 covered · 1 findings (or a failed self-test arm) · 2 usage
  */
-import { readFileSync, readdirSync, existsSync, lstatSync, realpathSync, mkdtempSync,
+import { readFileSync, readdirSync, existsSync, lstatSync, statSync, realpathSync, mkdtempSync,
   mkdirSync, writeFileSync, rmSync, cpSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
@@ -23,6 +23,7 @@ import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "../hq/lib/policy/yaml.mjs";
 import { validateCard, isStaffed, DEPTS, OWNER } from "./lib/card.mjs";
 import { emitYaml } from "./lib/emit.mjs";
+import { validateMap } from "./lib/attribution.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..", "..");
@@ -87,6 +88,11 @@ export async function collect(repo, inject = {}) {
   }
   const teams = join(repo, "org", "teams");
   w.teams = existsSync(teams) ? readdirSync(teams).filter((n) => n.endsWith(TEAM_SUFFIX)).map((n) => n.slice(0, -TEAM_SUFFIX.length)) : [];
+  const amap = readText(join(repo, "org", "attribution.yaml"));
+  if (amap !== null) {
+    const r = parseYamlSubset(amap);
+    w.attribution = r.ok ? { ok: true, value: r.value } : { ok: false, error: r.error.message };
+  }
   return w;
 }
 
@@ -163,6 +169,13 @@ export function check(w) {
   }
   for (const t of w.teams) if (!ventureSet.has(t)) f.push(`org/teams/${t}${TEAM_SUFFIX} names no venture in ventures.yaml`);
   for (const c of cards) for (const v of arr(c.ventures)) if (!ventureSet.has(v)) f.push(`${c.id}: seated for venture "${v}", which is not in ventures.yaml`);
+
+  // The attribution map (Phase 01, ADR-1604) points at roles too: a rule naming a role that is not
+  // a card places receipts on a seat nobody holds, and the scorecard would count them silently.
+  if (w.attribution) {
+    if (!w.attribution.ok) f.push(`org/attribution.yaml: ${w.attribution.error}`);
+    else f.push(...validateMap(w.attribution.value, byId, w.kinds));
+  }
   return f;
 }
 
@@ -201,6 +214,7 @@ function arms(firstAgent) {
     { id: "M10", what: "agent and script walkers return nothing", inject: { agents: [], scripts: [] }, expect: "WALKER EMPTY: agents" },
     { id: "M11", what: "venture with a seated card and no team manifest", card: plantCard({ ventures: ["__FIRST_VENTURE__"] }), expect: "but no org/teams/" },
     { id: "M12", what: "ghost agent planted in the LAST card in sort order", last: true, expect: 'binds agent "ghost-agent"' },
+    { id: "M13", what: "attribution rule placing receipts on a role that is not a card", mapRule: { id: "zz-ghost-rule", match: { process: "zz-nothing" }, role: "ghost-role" }, expect: 'role "ghost-role" is not a card id' },
   ];
 }
 
@@ -226,9 +240,10 @@ const byCode = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Run THIS gate as a child process on a tree, and return what a caller of the CLI would see. */
 function runCli(root) {
-  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--root", root], { encoding: "utf8" });
+  // A hard per-arm ceiling: a hung child must fail its arm, not hold the self-test until the CI job limit.
+  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--root", root], { encoding: "utf8", timeout: 120_000, killSignal: "SIGKILL" });
   const findings = (r.stdout || "").split(/\r?\n/).filter((l) => l.startsWith("FAIL ")).map((l) => l.slice(5));
-  return { exit: r.status, findings, ran: /^org-coverage: /m.test(r.stdout || ""), stderr: r.stderr || "" };
+  return { exit: r.error ? `timeout/${r.error.code}` : r.status, findings, ran: /^org-coverage: /m.test(r.stdout || ""), stderr: r.stderr || "" };
 }
 
 async function mutantSelftest(repo) {
@@ -254,6 +269,15 @@ async function mutantSelftest(repo) {
         for (const c of a.cards || (a.card ? [a.card] : [])) {
           const card = JSON.parse(JSON.stringify(c).replace("__FIRST_VENTURE__", real.ventures[0] ?? "no-venture"));
           put(`org/roles/${card.dept}/${card.id}${ROLE_SUFFIX}`, emitYaml(card));
+        }
+        if (a.mapRule) {
+          const p = join(scratch, "org", "attribution.yaml");
+          const before = readFileSync(p, "utf8");
+          const doc = parseYamlSubset(before);
+          if (!doc.ok) throw new Error(`self-test: the real attribution map does not parse (${doc.error.message})`);
+          doc.value.rules = [...doc.value.rules, a.mapRule];
+          writeFileSync(p, emitYaml(doc.value));
+          restore = () => writeFileSync(p, before);
         }
         if (a.last) {
           const last = [...real.cards].sort((x, y) => byCode(String(x.card?.id), String(y.card?.id))).at(-1);
@@ -302,14 +326,19 @@ async function mutantSelftest(repo) {
 
 // ---------- helpers + CLI ----------
 
-function readText(p) { try { return readFileSync(p, "utf8"); } catch { return null; } }
-function isDir(p) { try { return lstatSync(p).isDirectory(); } catch { return false; } }
+// A UTF-8 BOM (Notepad) would become part of the first key, `\uFEFFid`, and fail a card for a byte nobody sees.
+function readText(p) { try { return readFileSync(p, "utf8").replace(/^\uFEFF/, ""); } catch { return null; } }
+// statSync, not lstat: a root reached through a symlink or junction is a directory to every caller (B8).
+function isDir(p) { try { return statSync(p).isDirectory(); } catch { return false; } }
 function isFile(p) { try { return lstatSync(p).isFile(); } catch { return false; } }
 function arr(v) { return Array.isArray(v) ? v : []; }
 
 function parseArgs(argv) {
   const o = { root: REPO, selftest: false };
+  // A flag given twice is an operator error, never last-wins (lanes.md; attack c7eddd6 B4).
+  const given = new Set();
   for (let i = 0; i < argv.length; i++) {
+    if (argv[i].startsWith("--")) { if (given.has(argv[i])) return { error: `${argv[i]} given twice` }; given.add(argv[i]); }
     const a = argv[i];
     if (a === "--mutant-selftest") o.selftest = true;
     else if (a === "--root") {

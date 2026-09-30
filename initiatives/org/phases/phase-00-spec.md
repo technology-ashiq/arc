@@ -107,7 +107,7 @@ event: add the role, list it in the bundle.
 `legitimacy` is set; **partial** iff `seat: partial`; heads (≥ 2 staffed workers) count staffed
 workers with `reports_to: HEAD`. **Model-string FAIL** (ADR-1614): any value outside `hire.source`
 matching `/\b(claude|gpt|o[1-9]|gemini|llama|mistral|deepseek|qwen|glm|grok|haiku|sonnet|opus)\b/i`.
-**One worked example** is `org/schema/example.role.yaml`, a copy of the design source's §"A role card"
+**One worked example** is `org/schema/example-seo-strategist.role.yaml`, a copy of the design source's §"A role card"
 with these field names; the validator's own test loads it.
 
 **I-3 · Producer scope.** Phase 00: a consumed kind needs ≥ 1 producer anywhere in the catalog. From
@@ -176,8 +176,9 @@ on exit.
 `node .claude/scripts/core/face-coverage.mjs`; sync golden: rebuild `tests/fixtures/sync-golden/tree-manifest.txt`
 by the procedure `tests/sync.bats:140-153` uses for `actual.txt`; product manifest: the shape of
 `products/docs/manifest.json` (`name, version, requires, commands, agents, scripts, files, docs, face`);
-`expected-set.json` `products.map` gains `"org": ROOM` (ROOM = `org` — the existing face room of that
-name); CI read: `node .claude/scripts/review/ci-digest.mjs` in a background loop; close:
+`products.org` stays UNMAPPED in `expected-set.json` and the manifest carries no `face:` section
+(build note, CI 36643308697: the `org` room is an INDEX room, and mapping a product to it broke
+face-l3; the no-go "no face ring" holds), and `arc-products.mjs` CATALOG gains `org`; CI read: `node .claude/scripts/review/ci-digest.mjs` in a background loop; close:
 `/arc-phase-done 0 --lane org`. Tracker files at close: `initiatives/org/PROGRESS.md`,
 `PORTFOLIO.md` (lane row + band row), `docs/HISTORY.md`.
 

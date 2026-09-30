@@ -17,11 +17,11 @@ const [mode, a, b] = process.argv.slice(2);
 if (mode === "validate") {
   const w = await collect(a);
   const r = parseYamlSubset(readFileSync(b, "utf8"));
-  if (!r.ok) { console.log(`PARSE-ERROR ${r.error.message}`); process.exit(1); }
+  if (!r.ok) { console.log(`PARSE-ERROR ${r.error.message}`); process.exitCode = 1; }
   const stem = basename(b).replace(/\.role\.yaml$/, "");
-  const f = validateCard(r.value, { tiers: w.tiers, ungrantable: w.ungrantable, drivers: w.drivers, kinds: w.kinds, stem, dept: r.value.dept });
-  if (f.length) { for (const x of f) console.log(`FINDING ${x}`); process.exit(1); }
-  console.log(`VALID staffed=${isStaffed(r.value)}`);
+  const f = !r.ok ? [] : validateCard(r.value, { tiers: w.tiers, ungrantable: w.ungrantable, drivers: w.drivers, kinds: w.kinds, stem, dept: r.value.dept });
+  if (f.length) { for (const x of f) console.log(`FINDING ${x}`); process.exitCode = 1; }
+  else if (r.ok) console.log(`VALID staffed=${isStaffed(r.value)}`);
 } else if (mode === "roundtrip") {
   const x = { id: "p", mission: "it's 'quoted', and no", flag: true, none: null, empty: {}, list: [],
     binds: { agents: ["a"], tier: "cheap-scan" }, kpi: [{ name: "runs", over: "run.completed" }], e2: ["publishing under Ashiq's name"] };
@@ -30,4 +30,4 @@ if (mode === "validate") {
 } else if (mode === "emit-colon") {
   try { emitYaml({ history: ["a: b"] }); console.log("WROTE"); }
   catch (e) { console.log(`REFUSED ${e.message}`); }
-} else { console.error(`probe: unknown mode ${mode}`); process.exit(2); }
+} else { console.error(`probe: unknown mode ${mode}`); process.exitCode = 2; }

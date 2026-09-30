@@ -8,7 +8,7 @@ bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 PROBE() { printf '%s' "$ARC_ROOT/tests/org/probe.mjs"; }
-EXAMPLE() { printf '%s' "$ARC_ROOT/org/schema/example.role.yaml"; }
+EXAMPLE() { printf '%s' "$ARC_ROOT/org/schema/example-seo-strategist.role.yaml"; }
 
 # copy the example to a scratch card named after it, apply one sed expression, print its path
 mutant() {

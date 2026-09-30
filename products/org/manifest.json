@@ -9,21 +9,13 @@
   "commands": [],
   "agents": [],
   "scripts": [
+    ".claude/scripts/org/lib/attribution.mjs",
     ".claude/scripts/org/lib/card.mjs",
     ".claude/scripts/org/lib/emit.mjs",
     ".claude/scripts/org/org-catalog.mjs",
-    ".claude/scripts/org/org-coverage.mjs"
+    ".claude/scripts/org/org-coverage.mjs",
+    ".claude/scripts/org/org-review.mjs"
   ],
   "files": [],
-  "docs": [],
-  "face": {
-    "room": "org",
-    "ring": "company",
-    "kinds": [],
-    "sanctioned": [
-      "arc-company-org-blueprint.md"
-    ],
-    "stations": [],
-    "concepts": []
-  }
+  "docs": []
 }

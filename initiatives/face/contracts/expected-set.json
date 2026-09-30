@@ -1346,7 +1346,6 @@
     "map": {
       "hq": "spine",
       "core": "toolbelt",
-      "org": "org",
       "plan": "lane",
       "review": "review-ship",
       "git": "review-ship",

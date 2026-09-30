@@ -77,13 +77,14 @@ export function treeScripts(repo) {
   const out = [];
   const walk = (dir, rel) => {
     let names;
-    try { names = readdirSync(dir); } catch { return; }
+    // Only a MISSING directory is an empty answer; EACCES or EIO would silently shrink the inventory.
+    try { names = readdirSync(dir); } catch (e) { if (e && e.code === "ENOENT") return; throw e; }
     for (const n of names) {
       if (n === "node_modules") continue;
       const abs = join(dir, n);
       const r = rel ? `${rel}/${n}` : n;
       let st;
-      try { st = lstatSync(abs); } catch { continue; }
+      try { st = lstatSync(abs); } catch (e) { if (e && e.code === "ENOENT") continue; throw e; }
       if (st.isDirectory()) walk(abs, r);
       else if (/\.(mjs|js|sh)$/.test(n)) out.push(`.claude/scripts/${r}`);
     }

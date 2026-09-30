@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-org (Cycle 18, opened 2026-09-29)
-phase: 00
+phase: 01
 appetite: 10d
-burn: 0d
+burn: 2.5d
 blocked-on: —
 depends-on: —
 
@@ -18,12 +18,12 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | The catalog + its gate — ruling on the spine, `products/org`, 71 cards, `org-coverage` + `--mutant-selftest`, generated chart, genesis digest | 2.5d | 🔨 in progress |
-| 01 | Attribution + scorecard — `org/attribution.yaml`, `org review --role` + `--audit`; **day-3 kill checkpoint**; Nilluvai pilot gate | 1.5d | ⬜ |
+| 00 | The catalog + its gate — ruling on the spine, `products/org`, 71 cards, `org-coverage` + `--mutant-selftest`, generated chart, genesis digest | 2.5d | 🔨 built, closes on CI green + ruling approval |
+| 01 | Attribution + scorecard — `org/attribution.yaml`, `org review --role` + `--audit`; **day-3 kill checkpoint**; Nilluvai pilot gate | 1.5d | 🔨 built, day-3 checkpoint PROCEED (5 seated roles) |
 | 02 | Staffing — team manifest + `org.team` digest, `sync-to-project --team`, Nilluvai staffed, hire path + bench interview, three skills | 2.5d | ⬜ (needs Nilluvai registered) |
 | 03 | The COO + the review loop — `org-dispatch` script-job, five pilot days, first `org review`, retro + seal | 2d + 5 elapsed | ⬜ |
 
-**Appetite burn:** 0 of 10 days used (8.5 d planned · 1.5 d slack · + 5 elapsed pilot days in Phase 03).
+**Appetite burn:** 2.5 of 10 days used (8.5 d planned · 1.5 d slack · + 5 elapsed pilot days in Phase 03).
 
 ## Done-log
 
@@ -43,8 +43,15 @@ Receipts (main clone): `kickoff.done` `01M3QF38HX8BA33G1B52RRQZ3G` · approval r
 - REJECTED: the `org.*` profiles must be registered in `hq.policy.yaml` or be refused at emit — unsupported (`approval.requested` is generic, `validate.mjs:410`)
 - REJECTED: rename the day-3 kill checkpoint to "Phase 01 step-2 checkpoint" — violates-no-go (the owner locked the name and question; its timing was tightened instead)
 
-**Next step:** on approval → Phase 00 step 1: record the 2026-09-29 owner ruling as a
-`decision.recorded` from the MAIN clone, then `products/org` birth + card schema.
+**Build log 2026-09-30 (owner ruling this session: "all phases, one PR, merge once at the end, do not wait"; this overrides the PLAN line that merged P00 and P01 separately):**
+- P00 built: 71 cards, org-coverage + 14-arm self-test (13 arms through the real CLI), chart, digest, products/org. Boundary attack: three passes (d62ae10, 4a4a17b, c7eddd6), 26 findings, 25 fixed, 1 LOW to debt. The third pass exceeded the two-round cap because arc-attack re-ran boundary on a new SHA; recorded, not repeated.
+- LOGIC surface has NOT produced a result yet (qwen free and deepseek-v4-flash both hit the 60 s per-attempt default); the next run sets ARC_LLM_TIMEOUT_MS=420000 (debt row 3).
+- CI run 36643308697 (c7eddd6): 3 distinct reds, all fixed: example card stem, products CATALOG, and a face index room broken by mapping the product to it.
+- P01 built: org/attribution.yaml (24 rules, 15 name their source), org-review (--role/--all/--audit/--checkpoint/--kinds-table). Live spine (1457 receipts): 13 of 71 roles have evidence, audit 0 differences, day-3 checkpoint PROCEED with 5 seated roles. Cost: 0 cost.incurred receipts exist, so every cost column reads no evidence (ORG-P enforcement is real only once cost receipts exist). A-01: decision.recorded, content.published and lead.researched are closed (map-only); run.completed, approval.requested, review.completed, slice.done, phase.closed and kickoff.done accept payload.role.
+
+**Receipts (main clone):** ruling request `01M3QG94BA03NM6692VRMXNN51` -> approved `01M3QSAJ8R7P6NQW2JJB776330` (2026-09-30) · genesis request `01M3QSK9P0DZJXKR2XSC4PMKHB` over digest `4b459d8e...` (71 cards, 37 genesis) -- awaiting approval.
+
+**Next step:** P02 needs Nilluvai registered (ADR-1612) -- asked of the owner; P02 non-pilot parts (team schema, digest gate, sync --team, hire path) build meanwhile.
 
 **Open owner items (not blocking Phase 00):** register Nilluvai via `venture-register` by the end of
 Phase 01 (else the cycle pauses there, ADR-1612) · rejustify-or-retire the expired

@@ -13,7 +13,7 @@
 | Requires | [core](core.md), [engine](engine.md), [hq](hq.md) |
 | Required by | — |
 | Lane | [org](../lanes/org.md) |
-| Face room | org (ring company) |
+| Face room | — |
 
 ## Commands
 
