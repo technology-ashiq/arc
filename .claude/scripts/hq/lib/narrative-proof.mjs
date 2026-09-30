@@ -7,11 +7,11 @@
 //
 // Exports: gitEnv, gitTrackedList, explainGitFailure, mainCloneInfo, mainCloneOf, spineEnvProblem, ownerSpine, readSpineEvents, requestAcceptApproval, ownerSigProblem, verifyAcceptApproval, ownerKeyBaseState, proofArms.
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createDecipheriv, createHash, createPrivateKey, createPublicKey, generateKeyPairSync, scryptSync, sign as cryptoSign } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, scryptSync, sign as cryptoSign } from "node:crypto";
 import { fingerprint, ownerMessage, readOwnerPubFile, sigsShapeProblem, verifyOwnerSig } from "./owner-sig.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -27,11 +27,15 @@ const CORE = join(HERE, "..", "..", "core");
  * @param {Record<string, string>} [extra] set after the strip (a test names its own ceiling) @returns {NodeJS.ProcessEnv}
  */
 export function gitEnv(extra = {}) {
-  const DROP = new Set(["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES"]);
-  const shadowed = new Set(Object.keys(extra).map((k) => k.toUpperCase()));
+  // Location variables, the object store and its alternates, every config-injection variable, the namespace, and replace/graft
+  // variables: each can make a git read answer from somewhere or something other than the tree it was asked about (attack r2 B5).
+  const DROP = new Set(["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE"]);
+  const dropped = (/** @type {string} */ k) => DROP.has(k) || /^GIT_(CONFIG|REPLACE|GRAFT)/.test(k);
+  // The two names this function sets itself are case-folded like an extra, so a lower-case inherited copy cannot survive beside them.
+  const shadowed = new Set([...Object.keys(extra).map((k) => k.toUpperCase()), "GIT_OPTIONAL_LOCKS", "GIT_NO_REPLACE_OBJECTS"]);
   /** @type {NodeJS.ProcessEnv} */ const env = {};
-  for (const [k, v] of Object.entries(process.env)) if (!DROP.has(k.toUpperCase()) && !shadowed.has(k.toUpperCase())) env[k] = v;
-  return { ...env, ...extra, GIT_OPTIONAL_LOCKS: "0" };
+  for (const [k, v] of Object.entries(process.env)) if (!dropped(k.toUpperCase()) && !shadowed.has(k.toUpperCase())) env[k] = v;
+  return { ...env, ...extra, GIT_OPTIONAL_LOCKS: "0", GIT_NO_REPLACE_OBJECTS: "1" };
 }
 
 /**
@@ -191,42 +195,67 @@ export async function verifyAcceptApproval({ ulid, page, sha256, opts }) {
 
 /**
  * Whether the tree's public key is the one the base ref has (ADR-1514 amendment 2, "Correction"). A swapped key is the one
- * thing signatures cannot stop on a same-user box, so the gate makes it loud: state "changed" is a WARN. A base with no such file
- * is the first-time bootstrap and is allowed; a missing base ref or git is "unavailable" with one line, never a throw.
+ * thing signatures cannot stop on a same-user box, so the gate makes it loud: state "changed" is a WARN. That covers a key that
+ * differs, a key that is DELETED from the tree while the base has it, and a key that comes back after the base's history removed
+ * it (attack r2 B1: delete in one change, add the agent's own in the next). A base that never had the file is the first-time
+ * bootstrap and is allowed; a missing base ref or git is "unavailable" with one line, never a throw; a tree with no key file and
+ * no base to compare is "no-key".
+ * The base is read by full ref name (attack r2 B2): an unqualified name is resolved by git through refs/<name>, tags, heads and
+ * remotes, so a local tag or branch named `origin/main` would stand in for the real one. The default is refs/remotes/origin/main,
+ * a short name must name exactly one ref, and one that names two is refused by name. Every read runs with replace refs off
+ * (attack r2 B5) and against the resolved commit sha, never the name again.
  * @param {string} root @param {{ baseRef?: string, extraEnv?: Record<string, string> }} [opts]
  * @returns {{ state: "no-key" | "same" | "changed" | "bootstrap" | "unavailable", why: string, base: string, was: string, now: string }}
  */
 export function ownerKeyBaseState(root, opts = {}) {
-  const base = opts.baseRef || "origin/main", rel = ".claude/owner-key.pub";
+  const base = opts.baseRef || "refs/remotes/origin/main", rel = ".claude/owner-key.pub";
   const out = (/** @type {any} */ state, why = "", was = "", now = "") => ({ state, why, base, was, now });
   // The same reader as --accept and the gate (attack r1 B3): a link, a directory or an oversize file is not "the key".
   const got = readOwnerPubFile(join(root, rel));
-  if (got.missing) return out("no-key");
-  if (got.pem === "") return out("unavailable", `${rel} ${got.why}, so it could not be compared with ${base}`);
-  const cur = got.pem;
+  if (got.pem === "" && !got.missing) return out("unavailable", `${rel} ${got.why}, so it could not be compared with ${base}`);
+  const gone = got.missing, cur = got.pem;
+  // With no key in the tree there is nothing to compare unless the base or its history had one: every failure to find out is "no-key".
+  const cannot = (/** @type {string} */ why) => (gone ? out("no-key") : out("unavailable", why));
   // A ref that is not a plain ref name is refused, never handed to git as an option (a leading dash is an option).
-  if (!/^[A-Za-z0-9_][A-Za-z0-9._/@~^-]{0,99}$/.test(base)) return out("unavailable", `the base ref ${JSON.stringify(base.slice(0, 40))} is not a plain ref name, so the owner key could not be compared with it`);
-  const git = (/** @type {string[]} */ args) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8", env: gitEnv(opts.extraEnv), timeout: 30000, stdio: ["ignore", "pipe", "pipe"] });
+  if (!/^[A-Za-z0-9_][A-Za-z0-9._/@~^-]{0,99}$/.test(base)) return cannot(`the base ref ${JSON.stringify(base.slice(0, 40))} is not a plain ref name, so the owner key could not be compared with it`);
+  const git = (/** @type {string[]} */ args) => execFileSync("git", ["--no-replace-objects", "-C", root, ...args], { encoding: "utf8", env: gitEnv(opts.extraEnv), timeout: 30000, stdio: ["ignore", "pipe", "pipe"] });
   const norm = (/** @type {string} */ t) => t.replace(/\r\n/g, "\n").trim();
   const fp = (/** @type {string} */ t) => { try { return fingerprint(t); } catch { return "unreadable"; } };
-  try { git(["rev-parse", "--verify", "--quiet", `${base}^{commit}`]); }
+  const why = (/** @type {unknown} */ e) => `${explainGitFailure(e).why}, so the owner key could not be compared with ${base}`;
+  /** @param {string} full */
+  const exists = (full) => { try { git(["show-ref", "--verify", "--quiet", full]); return true; } catch (e) { if (e && /** @type {any} */ (e).status === 1) return false; throw e; } };
+  /** @type {string} */ let target = base, sha = "";
+  try {
+    const shadows = [`refs/${base}`, `refs/tags/${base}`, `refs/heads/${base}`, `refs/remotes/${base}`].filter(exists);
+    const literal = base.startsWith("refs/") || base === "HEAD" || /^[0-9a-f]{40,64}$/.test(base);
+    if (literal ? shadows.length > 0 : shadows.length > 1) return cannot(`the base ref name ${base} is ambiguous (it names ${shadows.join(" and ")}); a local branch or tag can stand in for the real base, so pass the full name, for example refs/remotes/origin/main`);
+    if (!literal) { if (shadows.length === 0) return cannot(`the base ref ${base} does not exist here (a shallow CI checkout has none: fetch it, or pass --base <sha>), so the owner key could not be compared with it`); target = shadows[0]; }
+  } catch (e) { return cannot(why(e)); }
+  try { sha = git(["rev-parse", "--verify", "--quiet", "--end-of-options", `${target}^{commit}`]).trim(); }
   catch (e) {
     const err = /** @type {any} */ (e);
-    if (err && err.status === 1 && !err.stderr?.toString().trim()) return out("unavailable", `the base ref ${base} does not exist here (a shallow CI checkout has none: fetch it, or pass --base <sha>), so the owner key could not be compared with it`);
-    return out("unavailable", `${explainGitFailure(e).why}, so the owner key could not be compared with ${base}`);
+    if (err && err.status === 1 && !err.stderr?.toString().trim()) return cannot(`the base ref ${base} does not exist here (a shallow CI checkout has none: fetch it, or pass --base <sha>), or is not a commit, so the owner key could not be compared with it`);
+    return cannot(why(e));
   }
+  if (!/^[0-9a-f]{40,64}$/.test(sha)) return cannot(`git named no commit for the base ref ${base}, so the owner key could not be compared with it`);
   // Compared with where this branch left the base (the merge-base), not the base's tip: a base that moved on and changed the key
   // is not this branch's swap, and a branch that changed it is one whatever the tip says. A history too shallow to name a
   // merge-base falls back to the tip, which is the older, coarser comparison.
-  let at = base;
-  try { const mb = git(["merge-base", base, "HEAD"]).trim(); if (/^[0-9a-f]{40,64}$/.test(mb)) at = mb; } catch { at = base; }
+  let at = sha;
+  try { const mb = git(["merge-base", sha, "HEAD"]).trim(); if (/^[0-9a-f]{40,64}$/.test(mb)) at = mb; } catch { at = sha; }
   let listed = "";
   try { listed = git(["ls-tree", "--name-only", at, "--", rel]).trim(); }
-  catch (e) { return out("unavailable", `${explainGitFailure(e).why}, so the owner key could not be compared with ${base}`); }
-  if (listed === "") return out("bootstrap", "", "", fp(cur));
+  catch (e) { return cannot(why(e)); }
+  /** Whether the base's history ever held the file: a key removed and later re-added is a swap in two quiet steps. */
+  const everHad = () => { try { return git(["log", "-n", "1", "--format=%H", at, "--", rel]).trim() !== ""; } catch { return false; } };
+  if (listed === "") {
+    if (gone) return out("no-key");
+    return everHad() ? out("changed", "", "removed-earlier", fp(cur)) : out("bootstrap", "", "", fp(cur));
+  }
   let then = "";
   try { then = git(["show", `${at}:${rel}`]); }
-  catch (e) { return out("unavailable", `${explainGitFailure(e).why}, so the owner key could not be compared with ${base}`); }
+  catch (e) { return cannot(why(e)); }
+  if (gone) return out("changed", "", fp(then), "deleted");
   return norm(then) === norm(cur) ? out("same", "", fp(then), fp(cur)) : out("changed", "", fp(then), fp(cur));
 }
 
@@ -235,10 +264,10 @@ export function ownerKeyBaseState(root, opts = {}) {
  * own, handed in. Returns [name, ok] pairs; the caller counts and prints them like its own arms.
  * @param {any} d the gate's pure pieces and fixtures: good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate,
  *   trackedIn, isTopDir, acceptEntry, sigsOf, ownerKeyFinding, OWNER_PUB, script (the gate's own path)
- * @returns {Promise<[string, boolean][]>}
+ * @returns {Promise<[string, boolean, boolean?][]>} [name, ok] pairs; a third element true is a NAMED SKIP (an arm the platform cannot run, never a pass)
  */
 export async function proofArms(d) {
-  /** @type {[string, boolean][]} */ const out = [];
+  /** @type {[string, boolean, boolean?][]} */ const out = [];
   const has = (/** @type {{ fails: string[] }} */ r, /** @type {string} */ tag) => r.fails.some((f) => f.startsWith(tag));
   const { good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir } = d;
   const HG = sha256(good);
@@ -440,7 +469,10 @@ other
     const ESC = String.fromCharCode(27), LS = String.fromCharCode(0x2028);
     const U0 = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
     const oneLine = (/** @type {string} */ t) => !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(t);
-    const link = (/** @type {string} */ target, /** @type {string} */ at) => { try { symlinkSync(target, at, "file"); return true; } catch { return false; } };
+    let linkWhy = "";
+    const link = (/** @type {string} */ target, /** @type {string} */ at) => { try { symlinkSync(target, at, "file"); return true; } catch (e) { linkWhy = String(/** @type {any} */ (e) && /** @type {any} */ (e).code || "error"); return false; } };
+    /** An arm that needs a symlink runs for real or is a named skip: it never builds the answer it then asserts (attack r2 B3). */
+    const linkArm = (/** @type {string} */ name, /** @type {boolean} */ made, /** @type {() => boolean} */ ok) => out.push(made ? [name, ok()] : [`${name} [SKIPPED: this platform refused to make a symlink (${linkWhy})]`, true, true]);
     const keyAt = (/** @type {string} */ name, /** @type {string} */ content) => { const dir = W(name); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, OK.KEY_FILE), content); return dir; };
     const unseal = (/** @type {string} */ dir, /** @type {string} */ secret) => OK.unsealOwnerKey({ keyDir: dir, readPassphrase: typed(secret) });
     // B1: the sealed file is our own scrypt + AES-GCM document with a random salt, and opens with an independent implementation.
@@ -484,20 +516,24 @@ other
     rmSync(pubDir, { recursive: true });
     const b7retry = await OK.initOwnerKey({ keyDir: W("b7a/owner"), pubPath: pubDir, readPassphrase: typed(PASS, PASS), isTty: () => true });
     const pubFile = W("b7b/repo/.claude/owner-key.pub"); mkdirSync(dirname(pubFile), { recursive: true }); writeFileSync(pubFile, "COMMITTED\n");
-    const b7b = await OK.initOwnerKey({ keyDir: W("b7b/owner"), pubPath: pubFile, readPassphrase: typed(PASS, PASS), isTty: () => true });
+    let b7bPrompts = 0;
+    const b7b = await OK.initOwnerKey({ keyDir: W("b7b/owner"), pubPath: pubFile, readPassphrase: async () => { b7bPrompts++; return PASS; }, isTty: () => true });
     const linkPub = W("b7c/repo/.claude/owner-key.pub"); mkdirSync(dirname(linkPub), { recursive: true });
     const linked = link(W("b7c/elsewhere.pub"), linkPub);
     const b7c = linked ? await OK.initOwnerKey({ keyDir: W("b7c/owner"), pubPath: linkPub, readPassphrase: typed(PASS, PASS), isTty: () => true }) : { ok: false, why: "" };
+    const b7cLinkWhy = linkWhy;
     mkdirSync(W("b7d"), { recursive: true }); writeFileSync(W("b7d/owner"), "a file where the key directory should be");
     const b7d = await OK.initOwnerKey({ keyDir: W("b7d/owner"), pubPath: W("b7d/repo/.claude/owner-key.pub"), readPassphrase: typed(PASS, PASS), isTty: () => true });
     const b7eKey = W("b7e/owner"); mkdirSync(join(b7eKey, `${OK.KEY_FILE}.tmp-${process.pid}`), { recursive: true });
     const b7e = await OK.initOwnerKey({ keyDir: b7eKey, pubPath: W("b7e/repo/.claude/owner-key.pub"), readPassphrase: typed(PASS, PASS), isTty: () => true });
     out.push(["MUTANT B7 atomic init: a public path that is a directory, a committed public key file and a link each REFUSE before any key is made (the committed file untouched, nothing written), a key directory that cannot be made and a private write that fails after the public file is down each leave NOTHING behind, and a fixed path then succeeds -- no half-made key strands the owner",
       !b7a.ok && b7a.why.includes("already exists") && !b7aLeft && b7retry.ok
-      && !b7b.ok && readFileSync(pubFile, "utf8") === "COMMITTED\n" && !existsSync(join(W("b7b/owner"), OK.KEY_FILE))
-      && (!linked || (!b7c.ok && !existsSync(W("b7c/elsewhere.pub")) && !existsSync(join(W("b7c/owner"), OK.KEY_FILE))))
+      && !b7b.ok && b7b.why.includes("already exists") && b7bPrompts === 0 && readFileSync(pubFile, "utf8") === "COMMITTED\n" && !existsSync(join(W("b7b/owner"), OK.KEY_FILE))
       && !b7d.ok && !existsSync(W("b7d/repo/.claude/owner-key.pub")) && b7d.why.includes("nothing was left behind")
       && !b7e.ok && !existsSync(W("b7e/repo/.claude/owner-key.pub")) && !existsSync(join(b7eKey, OK.KEY_FILE)) && [b7a, b7b, b7d, b7e].every((r) => oneLine(r.why))]);
+    linkWhy = b7cLinkWhy;
+    linkArm("MUTANT B7 link: a public path that is a symlink REFUSES before any key is made -- the link's target is never written and no private key is left",
+      linked, () => !b7c.ok && !existsSync(W("b7c/elsewhere.pub")) && !existsSync(join(W("b7c/owner"), OK.KEY_FILE)));
     // B6: HOME and USERPROFILE do not move the key directory.
     const homeReal = OK.ownerKeyDir(), fakeHome = W("fakehome");
     const prevHome = process.env.HOME, prevProfile = process.env.USERPROFILE;
@@ -575,13 +611,16 @@ other
     rmSync(pubAt);
     const outside = W("b3/attacker.pub"); writeFileSync(outside, kkPem);
     const linkedPub = link(outside, pubAt);
-    const rdLink = linkedPub ? rd() : { pem: "", why: "is a symlink", missing: false };
-    const sigLink = linkedPub ? ownerSigProblem([], U0, "products/hq", HG, pubAt) : { why: "is a symlink", sig: "" };
-    const baseLink = linkedPub ? ownerKeyBaseState(treeRoot, { baseRef: "HEAD" }) : { state: "unavailable", why: "is a symlink" };
+    const linkedWhy = linkWhy;
+    const rdLink = linkedPub ? rd() : { pem: "", why: "", missing: false };
+    const sigLink = linkedPub ? ownerSigProblem([], U0, "products/hq", HG, pubAt) : { why: "", sig: "" };
+    const baseLink = linkedPub ? ownerKeyBaseState(treeRoot, { baseRef: "HEAD" }) : { state: "", why: "" };
     out.push(["MUTANT B3 one reader: the public key file read through ONE function -- a regular Ed25519 key passes; missing is the only bootstrap; a directory, an oversize file, junk, an RSA key and a symlink to an outside file holding another key are each refused by name -- and the signature check and the base-ref comparison refuse the same link and directory instead of reading through them",
       rdMissing.missing && rdMissing.pem === "" && rdFile.pem === pubPem && !rdFile.missing && rdDir.pem === "" && !rdDir.missing && rdDir.why.includes("regular file") && rdBig.pem === "" && rdBig.why.includes("too large")
-      && rdJunk.pem === "" && rdJunk.why.includes("not a public key") && rdRsa.pem === "" && rdRsa.why.includes("Ed25519") && rdLink.pem === "" && rdLink.why.includes("symlink") && sigLink.sig === "" && sigLink.why.includes("symlink")
-      && sigDir.why.includes("regular file") && baseDir.state === "unavailable" && baseLink.state === "unavailable"]);
+      && rdJunk.pem === "" && rdJunk.why.includes("not a public key") && rdRsa.pem === "" && rdRsa.why.includes("Ed25519") && sigDir.why.includes("regular file") && baseDir.state === "unavailable"]);
+    linkWhy = linkedWhy;
+    linkArm("MUTANT B3 links: a symlink at the public key path, to an outside file holding another key, is refused by name by the reader and by the signature check, and the base-ref comparison says unavailable instead of reading through it",
+      linkedPub, () => rdLink.pem === "" && rdLink.why.includes("symlink") && sigLink.sig === "" && sigLink.why.includes("symlink") && baseLink.state === "unavailable");
     // B4: the env override is one variable on every platform, so the arm that says "git cannot run" cannot be beaten by case.
     const injectCase = process.platform !== "win32";
     if (injectCase) process.env.Path = "decoy-path";
@@ -619,6 +658,107 @@ other
       fUn.base === "unchecked" && fUn.warn.startsWith("[owner-key-unchecked]") && fUn.warn.includes("CODEOWNERS") && !fUn.warn.includes("\n") && fUn.changed === 0 && d.ownerKeyFinding(null).base === "unchecked"
       && d.summaryLine(stats, fUn, debt).includes("owner-key-changed=0 owner-key-base=unchecked ") && d.summaryLine(stats, fSame, debt).includes("owner-key-base=checked") && d.summaryLine(stats, fNone, debt).includes("owner-key-base=no-key")
       && fChg.base === "checked" && fChg.changed === 1 && usage.status === 2 && usage.stderr.includes("--base")]);
+    // ---- attack r2 (boundary surface): each arm FAILs against the code before its fix.
+    const gitIn = (/** @type {string} */ cwd) => ({
+      run: (/** @type {string[]} */ a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...a], { cwd, stdio: "ignore", env: gitEnv() }),
+      get: (/** @type {string[]} */ a) => execFileSync("git", a, { cwd, encoding: "utf8", env: gitEnv() }).trim(),
+    });
+    const pemK2 = String(generateKeyPairSync("ed25519").publicKey.export({ type: "spki", format: "pem" }));
+    // B1: a key deleted from the tree, or added back after the base's history removed it, is loud, not silent.
+    const rz = W("r2/deleted"), rh = W("r2/history");
+    mkdirSync(join(rz, ".claude"), { recursive: true }); mkdirSync(join(rh, ".claude"), { recursive: true });
+    const gzr = gitIn(rz), ghr = gitIn(rh);
+    gzr.run(["init", "-q"]); gzr.run(["symbolic-ref", "HEAD", "refs/heads/trunk"]);
+    writeFileSync(join(rz, ".claude", "owner-key.pub"), pubPem); gzr.run(["add", "."]); gzr.run(["commit", "-q", "-m", "k1"]);
+    gzr.run(["update-ref", "refs/remotes/origin/main", gzr.get(["rev-parse", "HEAD"])]); gzr.run(["checkout", "-q", "-b", "feat"]);
+    rmSync(join(rz, ".claude", "owner-key.pub"));
+    const deleted = ownerKeyBaseState(rz), fDel = d.ownerKeyFinding(deleted);
+    ghr.run(["init", "-q"]); ghr.run(["symbolic-ref", "HEAD", "refs/heads/trunk"]);
+    writeFileSync(join(rh, ".claude", "owner-key.pub"), pubPem); ghr.run(["add", "."]); ghr.run(["commit", "-q", "-m", "k1"]);
+    ghr.run(["rm", "-q", ".claude/owner-key.pub"]); ghr.run(["commit", "-q", "-m", "the key is deleted"]);
+    ghr.run(["update-ref", "refs/remotes/origin/main", ghr.get(["rev-parse", "HEAD"])]); ghr.run(["checkout", "-q", "-b", "feat"]);
+    mkdirSync(join(rh, ".claude"), { recursive: true }); writeFileSync(join(rh, ".claude", "owner-key.pub"), pemK2);
+    const readded = ownerKeyBaseState(rh), fRe = d.ownerKeyFinding(readded);
+    out.push(["MUTANT B1 deleted key: with the key deleted from the tree while the base holds it the state is 'changed' (one [owner-key-changed] WARN, count 1, the fingerprint and 'deleted' named); a key added back after the base's history removed it is 'changed' too, not a bootstrap; a tree that never had one is still 'no-key'",
+      deleted.state === "changed" && deleted.now === "deleted" && deleted.was === fingerprint(pubPem) && fDel.changed === 1 && fDel.warn.startsWith("[owner-key-changed]") && !fDel.warn.includes("\n")
+      && readded.state === "changed" && readded.now === fingerprint(pemK2) && fRe.changed === 1 && ownerKeyBaseState(W("r2"), { baseRef: "HEAD" }).state === "no-key"]);
+    // B2: a local tag named origin/main, on a commit that carries the swapped key, must not stand in for the real remote-tracking ref.
+    const gz = gitIn(rz);
+    gz.run(["checkout", "-q", "--orphan", "evil"]); writeFileSync(join(rz, ".claude", "owner-key.pub"), pemK2); gz.run(["add", "-A"]); gz.run(["commit", "-q", "-m", "evil"]);
+    gz.run(["tag", "origin/main"]); gz.run(["checkout", "-q", "-f", "feat"]); writeFileSync(join(rz, ".claude", "owner-key.pub"), pemK2);
+    const shadowDefault = ownerKeyBaseState(rz), shadowShort = ownerKeyBaseState(rz, { baseRef: "origin/main" }), shadowFull = ownerKeyBaseState(rz, { baseRef: "refs/remotes/origin/main" });
+    out.push(["MUTANT B2 shadowed ref: with a local tag named origin/main on a commit holding the swapped key, the default base still reads refs/remotes/origin/main and says 'changed'; the short name origin/main is refused as ambiguous, naming both refs; the full name works",
+      shadowDefault.state === "changed" && shadowDefault.was === fingerprint(pubPem) && shadowShort.state === "unavailable" && shadowShort.why.includes("ambiguous") && shadowShort.why.includes("refs/tags/origin/main") && shadowFull.state === "changed"]);
+    // B5: a replace ref on the base commit must not change what the key is compared with; the environment cannot move the object store or the config.
+    const rp = W("r2/replace"); mkdirSync(join(rp, ".claude"), { recursive: true });
+    const gpr = gitIn(rp);
+    gpr.run(["init", "-q"]); gpr.run(["symbolic-ref", "HEAD", "refs/heads/trunk"]);
+    writeFileSync(join(rp, ".claude", "owner-key.pub"), pubPem); gpr.run(["add", "."]); gpr.run(["commit", "-q", "-m", "real base"]);
+    const realBase = gpr.get(["rev-parse", "HEAD"]);
+    gpr.run(["checkout", "-q", "--orphan", "fake"]); writeFileSync(join(rp, ".claude", "owner-key.pub"), pemK2); gpr.run(["add", "-A"]); gpr.run(["commit", "-q", "-m", "fake base"]);
+    const fakeBase = gpr.get(["rev-parse", "HEAD"]);
+    gpr.run(["checkout", "-q", "-f", "trunk"]); gpr.run(["checkout", "-q", "-b", "feat"]); gpr.run(["replace", realBase, fakeBase]);
+    writeFileSync(join(rp, ".claude", "owner-key.pub"), pemK2);
+    const replaced = ownerKeyBaseState(rp, { baseRef: "refs/heads/trunk" });
+    out.push(["MUTANT B5 replace ref: with git replace making the base commit read as one that holds the swapped key, the comparison still reads the real base and says 'changed'",
+      replaced.state === "changed" && replaced.was === fingerprint(pubPem) && replaced.now === fingerprint(pemK2)]);
+    const envNames = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0", "GIT_CONFIG_PARAMETERS", "GIT_NAMESPACE", "GIT_REPLACE_REF_BASE", "GIT_GRAFT_FILE"];
+    const priorEnv = envNames.map((k) => [k, process.env[k]]);
+    for (const k of envNames) process.env[k] = "x";
+    if (process.platform !== "win32") { process.env.git_optional_locks = "1"; process.env.git_no_replace_objects = "0"; }
+    /** @type {NodeJS.ProcessEnv} */ let ge = {};
+    try { ge = gitEnv(); } finally {
+      for (const [k, v] of priorEnv) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+      if (process.platform !== "win32") { delete process.env.git_optional_locks; delete process.env.git_no_replace_objects; }
+    }
+    const geKeys = Object.keys(ge).map((k) => k.toUpperCase());
+    out.push(["MUTANT B5 git env: gitEnv drops the object-store, alternates, config-injection, namespace, replace and graft variables, sets GIT_NO_REPLACE_OBJECTS to 1, and leaves exactly one GIT_OPTIONAL_LOCKS and one GIT_NO_REPLACE_OBJECTS in any case",
+      envNames.every((k) => !geKeys.includes(k)) && ge.GIT_NO_REPLACE_OBJECTS === "1" && ge.GIT_OPTIONAL_LOCKS === "0" && geKeys.filter((k) => k === "GIT_OPTIONAL_LOCKS").length === 1 && geKeys.filter((k) => k === "GIT_NO_REPLACE_OBJECTS").length === 1]);
+    // B6: the page count is judged before the passphrase is typed (201 short ids fit the byte ceiling).
+    const manyPages = Array.from({ length: 201 }, (_, i) => ({ page: `a/b${String(i).padStart(3, "0")}`, sha256: HG }));
+    let prompted201 = 0;
+    const many = await OK.signAccept({ approval: U0, pages: manyPages, keyDir, readPassphrase: async () => { prompted201++; return PASS; }, isTty: () => true, reason: "r" });
+    out.push(["MUTANT B6 count: 201 short page ids (well under the byte ceiling) are refused BEFORE any passphrase prompt (prompted 0) with the page ceiling named, by signAccept and by decisionSizeProblem",
+      many.sigs === null && prompted201 === 0 && many.why.includes("ceiling") && OSg.decisionSizeProblem(U0, "r", manyPages).includes("ceiling") && OSg.decisionSizeProblem(U0, "r", manyPages.slice(0, 200)) === ""]);
+    // B7: a write that throws after the file was created leaves nothing behind, and a fixed path then succeeds.
+    const throwAt = (/** @type {number} */ n) => { let c = 0; return (/** @type {number} */ fd, /** @type {string} */ data) => { c++; if (c === n) throw new Error("ENOSPC: no space left on device"); writeSync(fd, data); }; };
+    const wf = (/** @type {string} */ name, /** @type {number} */ n) => ({ keyDir: W(`${name}/owner`), pubPath: W(`${name}/repo/.claude/owner-key.pub`), readPassphrase: typed(PASS, PASS), isTty: () => true, writeData: throwAt(n) });
+    const w1 = wf("b7w1", 1), w2 = wf("b7w2", 2);
+    const wr1 = await OK.initOwnerKey(w1), wr2 = await OK.initOwnerKey(w2);
+    const wLeft = (/** @type {any} */ w) => existsSync(w.pubPath) || existsSync(join(w.keyDir, OK.KEY_FILE)) || existsSync(`${join(w.keyDir, OK.KEY_FILE)}.tmp-${process.pid}`);
+    const left1 = wLeft(w1), left2 = wLeft(w2); // judged BEFORE the retry, which makes the files
+    const wRetry = await OK.initOwnerKey({ ...w1, readPassphrase: typed(PASS, PASS), writeData: undefined });
+    out.push(["MUTANT B7 failed write: a public-key write that throws after the file was created and a private write that throws after the public file is down each leave NOTHING behind (no zero-byte key file that would strand the owner), say so in one sentence, and init then succeeds on the same paths",
+      !wr1.ok && !wr2.ok && !left1 && !left2 && wr1.why.includes("nothing was left behind") && oneLine(wr1.why) && oneLine(wr2.why) && wRetry.ok]);
+    // B9: the key file is judged on the descriptor it is read from: a different file than the one judged is refused.
+    const b9 = W("b9"); mkdirSync(b9, { recursive: true });
+    writeFileSync(join(b9, "a"), "AAAA"); writeFileSync(join(b9, "b"), "BBBB");
+    const stA = lstatSync(join(b9, "a"), { bigint: true });
+    const rcOk = typeof OSg.readCheckedFile === "function" ? OSg.readCheckedFile(join(b9, "a"), stA, 100) : { buf: null, why: "" };
+    const rcSwap = typeof OSg.readCheckedFile === "function" ? OSg.readCheckedFile(join(b9, "b"), stA, 100) : { buf: Buffer.from("x"), why: "" };
+    const rcBig = typeof OSg.readCheckedFile === "function" ? OSg.readCheckedFile(join(b9, "a"), stA, 2) : { buf: Buffer.from("x"), why: "" };
+    out.push(["MUTANT B9 descriptor: the bytes are read from the descriptor that was checked -- the judged file reads, a different file (the swap after the check) is refused as changed between the check and the read, and a file over the ceiling is refused on the descriptor's own size",
+      rcOk.buf !== null && rcOk.buf.toString() === "AAAA" && rcSwap.buf === null && rcSwap.why.includes("changed between") && rcBig.buf === null && rcBig.why.includes("too large")]);
+    // B10: the accepted cost band and the memory scrypt is given agree: the band's top opens, and a cost above it is refused by name, not blamed on the passphrase.
+    const sealAt = (/** @type {number} */ N) => {
+      const raw = /** @type {Buffer} */ (generateKeyPairSync("ed25519").privateKey.export({ type: "pkcs8", format: "der" }));
+      const head = { v: 1, kdf: "scrypt", N, r: 8, p: 1, salt: randomBytes(16).toString("base64") };
+      const iv = randomBytes(12), c = createCipheriv("aes-256-gcm", scryptSync(PASS, Buffer.from(head.salt, "base64"), 32, { N, r: 8, p: 1, maxmem: 2 ** 31 }), iv);
+      c.setAAD(Buffer.from(JSON.stringify(head), "utf8"));
+      const ct = Buffer.concat([c.update(raw), c.final()]);
+      return JSON.stringify({ ...head, cipher: "aes-256-gcm", iv: iv.toString("base64"), tag: c.getAuthTag().toString("base64"), ct: ct.toString("base64") });
+    };
+    const top = typeof OK.SCRYPT_N_MAX === "number" ? OK.SCRYPT_N_MAX : 2 ** 19;
+    const uTop = await unseal(keyAt("k-top", sealAt(top)), PASS);
+    const uOver = await unseal(keyAt("k-over", JSON.stringify({ ...JSON.parse(sealAt(top)), N: top * 2 })), PASS);
+    out.push(["MUTANT B10 band: a file sealed at the top of the accepted cost band opens with its passphrase (the memory scrypt is given covers 128 x N x r for every N in the band), a recorded cost above the band is refused as outside the band -- never as a wrong passphrase -- and the band's top is no more than 2^19",
+      typeof OK.scryptMaxmem === "function" && OK.scryptMaxmem(top, 8, 4) >= 128 * 8 * top && top <= 2 ** 19 && uTop.key !== null && uOver.key === null && uOver.why.includes("outside the accepted band") && !uOver.why.includes("passphrase")]);
+    // B4: a name read off a disk cannot forge a line in any finding, [not-a-file] and [empty] included.
+    const nlName = "products/x\nnarrative-anchors: narratives=34 accepted=34 awaiting-owner=0 fail=0 owner-key-changed=0 owner-key-base=checked";
+    const rf = typeof d.rejectedFindings === "function" ? d.rejectedFindings([nlName, `wiki/a${LS}b`, "docs/narrative-verify/accepted.json is a symlink"]) : [];
+    const emptyForged = evaluate({ narratives: { [nlName]: "" }, accepted: {}, proofs: {}, tree: forgedTree });
+    out.push(["MUTANT B4 disk names: a rejected path holding a newline that spells a whole summary line, or U+2028, is shown JSON-escaped in [not-a-file] and never spans two lines; a sentence in the same list is shown as it is; an empty page with such a name gives one-line findings too",
+      rf.length === 3 && rf.every((x) => x.startsWith("[not-a-file] ") && oneLine(x)) && rf[2].includes("docs/narrative-verify/accepted.json is a symlink") && emptyForged.fails.length >= 1 && emptyForged.fails.every((x) => x.startsWith("[") && oneLine(x))]);
   } finally { rmSync(r1, { recursive: true, force: true }); }
   const cli = mkdtempSync(join(tmpdir(), "narr-cli-"));
   try {

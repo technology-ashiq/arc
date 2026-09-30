@@ -289,7 +289,7 @@ None declared.
 - [`.claude/scripts/hq/spine.mjs`](../../../.claude/scripts/hq/spine.mjs)
 - [`.claude/scripts/hq/venture-register.mjs`](../../../.claude/scripts/hq/venture-register.mjs)
 
-## Files (7)
+## Files (8)
 
 - [`.claude/hooks/PostToolUse.d/90-emit.sh`](../../../.claude/hooks/PostToolUse.d/90-emit.sh)
 - [`.claude/hooks/PreToolUse-edit.d/40-policy.sh`](../../../.claude/hooks/PreToolUse-edit.d/40-policy.sh)
@@ -298,6 +298,7 @@ None declared.
 - [`.claude/hooks/SessionStart.d/60-jobs.sh`](../../../.claude/hooks/SessionStart.d/60-jobs.sh)
 - [`.claude/hooks/SessionStart.d/90-emit.sh`](../../../.claude/hooks/SessionStart.d/90-emit.sh)
 - [`.claude/hooks/policy-decide.sh`](../../../.claude/hooks/policy-decide.sh)
+- [`.claude/owner-key.pub`](../../../.claude/owner-key.pub)
 
 ## Source
 

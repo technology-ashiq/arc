@@ -11,10 +11,15 @@ load 'test_helper'
 GATE="$ARC_ROOT/.claude/scripts/docs/narrative-anchors.mjs"
 VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
 
-@test "narrative-anchors: the self-test runs all 89 arms and every mutant FAILs" {
+@test "narrative-anchors: the self-test runs all 100 arms and every mutant FAILs" {
   run node "$GATE" --selftest
   [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the self-test never reached its end (exit $status): $output"; false; }
-  [[ "$output" == *"RAN: 89 checks, 0 failed"* ]] || { echo "$output"; false; }
+  # An arm the platform cannot run (a symlink it refuses to make) is a printed SKIP, counted apart: ran + skipped is always all 100.
+  local ran skipped
+  ran="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed, \([0-9][0-9]*\) skipped$/\1/p')"
+  skipped="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed, \([0-9][0-9]*\) skipped$/\2/p')"
+  [ -n "$ran" ] && [ -n "$skipped" ] && [ $((ran + skipped)) -eq 100 ] || { echo "$output"; false; }
+  [ "$skipped" -le 2 ] || { echo "more arms skipped than the two symlink arms: $output"; false; }
   [ "$status" -eq 0 ]
   local arm
   for arm in "MUTANT drift: an ADR" "MUTANT drift: a command" "MUTANT drift: a path" "MUTANT drift: a name inside a page-shape block" \
@@ -46,7 +51,7 @@ VERIFY="$ARC_ROOT/.claude/scripts/engine/narrative-verify.mjs"
   sed 's/for (const n of names.adrs) if (!tree.adrs.has(n)) fails.push/for (const n of names.adrs) if (false) fails.push/' "$GATE" > "$copy"
   ! cmp -s "$GATE" "$copy" || { echo "the mutation did not apply -- the anchor text moved"; false; }
   run node "$copy" --selftest
-  [[ "$output" == *"RAN: 89 checks"* ]] || { echo "the mutant self-test never ran: $output"; false; }
+  [[ "$output" == *"RAN: "*" checks, "* ]] || { echo "the mutant self-test never ran: $output"; false; }
   [[ "$output" == *"FAIL MUTANT drift: an ADR"* ]] || { echo "the cut rule was not noticed: $output"; false; }
   [ "$status" -ne 0 ]
 }

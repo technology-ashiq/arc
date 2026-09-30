@@ -365,23 +365,24 @@ export function evaluate({ narratives, accepted, proofs, sigs = {}, owner = null
   });
   let ok = 0, awaiting = 0;
   for (const [page, text] of Object.entries(narratives).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const pg = shownPage(page); // a name read off a disk is escaped in every finding, not only some (attack r2 B4)
     const blocks = blocksOf(text);
-    if (blocks.length === 0 && String(text).replace(COMMENT, "").trim() === "") { fails.push(`[empty] ${page} -- a narrative with nothing in it explains nothing`); continue; }
-    for (const b of blocks) for (const a of b.anchors) { const why = anchorProblem(a, tree); if (why) fails.push(`[anchor] ${page}:${b.line} -- ${a}: ${why}`); }
+    if (blocks.length === 0 && String(text).replace(COMMENT, "").trim() === "") { fails.push(`[empty] ${pg} -- a narrative with nothing in it explains nothing`); continue; }
+    for (const b of blocks) for (const a of b.anchors) { const why = anchorProblem(a, tree); if (why) fails.push(`[anchor] ${pg}:${b.line} -- ${a}: ${why}`); }
     for (const m of shapeMarkers(text)) {
-      for (const a of m.anchors) { const why = anchorProblem(a, tree); if (why) fails.push(`[anchor] ${page}:${m.line} -- ${a}: ${why}`); }
-      fails.push(`[marker-in-shape] ${page}:${m.line} -- a comment inside a page-shape block is drawn to the reader as raw text; move it out of the fence`);
+      for (const a of m.anchors) { const why = anchorProblem(a, tree); if (why) fails.push(`[anchor] ${pg}:${m.line} -- ${a}: ${why}`); }
+      fails.push(`[marker-in-shape] ${pg}:${m.line} -- a comment inside a page-shape block is drawn to the reader as raw text; move it out of the fence`);
     }
     const names = namesOf(text);
-    for (const b of names.badCommands) fails.push(`[drift] ${page} -- names ${JSON.stringify(b)}, which starts /arc- but carries no command id`);
-    for (const n of names.adrs) if (!tree.adrs.has(n)) fails.push(`[drift] ${page} -- names ADR-${n}, which has no docs/adr/${n}-*.md`);
-    for (const c of names.commands) if (!commands.has(c)) fails.push(`[drift] ${page} -- names /${c}, which is no command in .claude/commands/`);
+    for (const b of names.badCommands) fails.push(`[drift] ${pg} -- names ${JSON.stringify(b)}, which starts /arc- but carries no command id`);
+    for (const n of names.adrs) if (!tree.adrs.has(n)) fails.push(`[drift] ${pg} -- names ADR-${n}, which has no docs/adr/${n}-*.md`);
+    for (const c of names.commands) if (!commands.has(c)) fails.push(`[drift] ${pg} -- names /${c}, which is no command in .claude/commands/`);
     // A path is a claim about the tree only when it starts at a real top-level directory; `lib/x.mjs` is relative to
     // something the prose names, so it is not checked (the reader, not the gate, judges it).
-    for (const p of names.paths) if (tree.isDir(String(p.split("/")[0])) && !tree.tracked(p)) fails.push(`[drift] ${page} -- names ${p}, which is not a file in the tree`);
+    for (const p of names.paths) if (tree.isDir(String(p.split("/")[0])) && !tree.tracked(p)) fails.push(`[drift] ${pg} -- names ${p}, which is not a file in the tree`);
     const read = Object.prototype.hasOwnProperty.call(accepted, page) ? accepted[page] : "";
     if (read !== "" && read === sha256(text)) ok++;
-    else { awaiting++; warns.push(`[awaiting-owner] ${page} -- ${read === "" ? "the owner has not read it yet" : "edited since the owner read it"} (ADR-1514 section 4)`); }
+    else { awaiting++; warns.push(`[awaiting-owner] ${pg} -- ${read === "" ? "the owner has not read it yet" : "edited since the owner read it"} (ADR-1514 section 4)`); }
   }
   for (const page of Object.keys(accepted).sort()) {
     if (accepted[page] !== "" && !(Object.prototype.hasOwnProperty.call(proofs, page) && ULID.test(String(proofs[page])))) fails.push(`[no-owner-proof] ${shownPage(page)} -- accepted without an owner proof: ${ACCEPT_FILE} names no approval for it (--request-accept, then --accept --approval)`);
@@ -710,6 +711,12 @@ export function summaryLine(r, kf, d) {
   return `narrative-anchors: narratives=${r.narratives} accepted=${r.accepted} awaiting-owner=${r.awaiting} fail=${r.fails.length} owner-key-changed=${kf.changed} owner-key-base=${kf.base} · explanation debt: ${d.debt} of ${d.total} (${d.explained} explained)`;
 }
 
+/** The [not-a-file] findings, one per rejected path; a path read off a disk is shown escaped (attack r2 B4). Pure. */
+export function rejectedFindings(/** @type {string[]} */ rejected) {
+  const show = (/** @type {string} */ p) => (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(p) ? shownPage(p) : p); // rejected also holds a sentence (a parse problem): only a name with a control character is quoted
+  return rejected.map((p) => `[not-a-file] ${show(String(p))} -- a symlink, a directory, unparseable, wrong-shaped or out of the tree; narratives and their records are regular files inside it`);
+}
+
 /** Why --selftest cannot combine with other arguments, or "" (attack b5f5e03 B6): a mode must not ignore what it was given. */
 export function selftestArgProblem(/** @type {string[]} */ argv) {
   const extra = argv.filter((a) => a !== "--selftest");
@@ -734,8 +741,9 @@ async function selftest() {
   const good = "<!-- facts: x=1 -->\n# Start here\n## In plain words\nThink of hq as the front desk. It keeps `a/b.mjs` and answers to ADR-1513.\n\n```steps\nt: Ask\nplain: you type `/arc-x`\n```\n\n```bash\n# a quote, not a claim\nnode `c/zz.mjs` /arc-zz ADR-0001\n```\n\n| Term | Means |\n|---|---|\n| hq | the spine <!-- src: fact:products/hq.version --> |\n";
   // The older arms judge the hash and the drift rules, so every acceptance they plant carries a well-formed proof.
   const run = (/** @type {string} */ text, /** @type {Record<string, string>} */ accepted = {}) => evaluate({ narratives: { "products/hq": text }, accepted, proofs: Object.fromEntries(Object.keys(accepted).map((k) => [k, "01ARZ3NDEKTSV4RRFFQ69G5FAV"])), tree });
-  let ran = 0, failed = 0;
-  const arm = (/** @type {string} */ name, /** @type {boolean} */ ok) => { ran++; if (!ok) failed++; console.log(`${ok ? "ok" : "FAIL"} ${name}`); };
+  let ran = 0, failed = 0, skipped = 0;
+  // A skip is an arm the platform cannot run (a symlink it refuses to make): it is named, counted apart and printed in the summary, and it is never an "ok" (attack r2 B3).
+  const arm = (/** @type {string} */ name, /** @type {boolean} */ ok, /** @type {boolean} */ skip = false) => { if (skip) { skipped++; console.log(`SKIP ${name}`); return; } ran++; if (!ok) failed++; console.log(`${ok ? "ok" : "FAIL"} ${name}`); };
   const has = (/** @type {{ fails: string[] }} */ r, /** @type {string} */ tag) => r.fails.some((f) => f.startsWith(tag));
   const names = namesOf(good);
   arm("clean: plain prose with no markers passes; every name it uses resolves", run(good).fails.length === 0);
@@ -949,9 +957,9 @@ async function selftest() {
     missing.doc === null && missing.refused === "no narrative products/zz-no-such-page" && acceptArgProblem("products/zz-no-such-page", U1_DUMMY, []).code === 0);
   // The arms that need a process, the spine or a git repo live with the code that does (DOC-A: nothing here spawns); each still runs the REAL functions.
   const proof = await import(PROOF_HREF);
-  for (const [name, ok] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, acceptEntry, sigsOf, ownerKeyFinding, summaryLine, shownPage, OWNER_PUB, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok);
-  console.log(`RAN: ${ran} checks, ${failed} failed`);
-  return failed === 0 && ran === 89 ? 0 : 1;
+  for (const [name, ok, skip] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, acceptEntry, sigsOf, ownerKeyFinding, summaryLine, shownPage, rejectedFindings, OWNER_PUB, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok, skip === true);
+  console.log(`RAN: ${ran} checks, ${failed} failed, ${skipped} skipped`);
+  return failed === 0 && ran + skipped === 100 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------
@@ -1024,7 +1032,7 @@ async function main(argv) {
     if (kfound.warn) r.warns.push(kfound.warn);
     kf = kfound;
   }
-  for (const p of t.rejected) r.fails.push(`[not-a-file] ${p} -- a symlink, a directory, unparseable, wrong-shaped or out of the tree; narratives and their records are regular files inside it`);
+  r.fails.push(...rejectedFindings(t.rejected));
   if (requestPages.length) {
     const req = requestPayload(requestPages, t.narratives);
     if (req.problem) { console.log(`REFUSED request-accept -- ${req.problem}`); return 1; }

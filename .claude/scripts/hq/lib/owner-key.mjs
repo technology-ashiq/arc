@@ -12,12 +12,12 @@
 // readable by the agent, so a guessable passphrase would fall to an offline guess): scrypt with a random salt and a large
 // memory cost, then AES-256-GCM over the raw private key, in one small JSON file that records its own parameters.
 import { createCipheriv, createDecipheriv, createPrivateKey, generateKeyPairSync, randomBytes, scryptSync, sign } from "node:crypto";
-import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
+import { closeSync, lstatSync, mkdirSync, openSync, renameSync, rmSync, writeSync } from "node:fs";
 import { userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { Writable } from "node:stream";
 import { createInterface } from "node:readline";
-import { PAGE_ID_RE, decisionSizeProblem, fingerprint, isUlid, ownerMessage, safeText, sigsShapeProblem } from "./owner-sig.mjs";
+import { MAX_SIGNED_PAGES, PAGE_ID_RE, decisionSizeProblem, fingerprint, isUlid, ownerMessage, readCheckedFile, safeText, sigsShapeProblem } from "./owner-sig.mjs";
 
 export const KEY_FILE = "owner-key.pem";
 /** The sealed file's format version and the ONLY key derivation it may name. */
@@ -27,8 +27,15 @@ export const SCRYPT_N = 2 ** 17;
 export const SCRYPT_R = 8;
 export const SCRYPT_P = 1;
 /** An unseal refuses a file whose recorded cost is outside this band: below it the file was made cheap to guess, above it the file is a memory bomb. */
-const N_BAND = [2 ** 17, 2 ** 20];
-const SCRYPT_MAXMEM = 2 ** 30;
+export const SCRYPT_N_MAX = 2 ** 19;
+const N_BAND = [SCRYPT_N, SCRYPT_N_MAX];
+const P_MAX = 4;
+/**
+ * The memory scrypt is allowed for a recorded cost: what it needs (128 x r x (N + p + 2) bytes) and a MiB of slack. Sized from
+ * the parameters, so a cost the band accepts can always run and a memory-limit throw can only mean a bug (attack r2 B10).
+ * @param {number} N @param {number} r @param {number} p
+ */
+export const scryptMaxmem = (N, r, p) => 128 * r * (N + p + 2) + 2 ** 20;
 /** Shorter than this and an offline guess at the sealed file is cheap: the passphrase carries what the derivation cost does not. */
 export const MIN_PASSPHRASE = 12;
 
@@ -82,7 +89,7 @@ const aad = (/** @type {{ v: number, kdf: string, N: number, r: number, p: numbe
 export function sealKey(raw, secret) {
   const salt = randomBytes(16), iv = randomBytes(12);
   const head = { v: SEAL_VERSION, kdf: "scrypt", N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, salt: b64(salt) };
-  const key = scryptSync(secret, salt, 32, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM });
+  const key = scryptSync(secret, salt, 32, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: scryptMaxmem(SCRYPT_N, SCRYPT_R, SCRYPT_P) });
   const c = createCipheriv("aes-256-gcm", key, iv);
   c.setAAD(aad(head));
   const ct = Buffer.concat([c.update(raw), c.final()]);
@@ -101,10 +108,12 @@ export function openKey(text, secret) {
   const str = (/** @type {unknown} */ s, /** @type {number} */ len) => typeof s === "string" && /^[A-Za-z0-9+/]+={0,2}$/.test(s) && Buffer.from(s, "base64").length === len;
   if (!f || typeof f !== "object" || f.v !== SEAL_VERSION || f.kdf !== "scrypt" || f.cipher !== "aes-256-gcm" || !int(f.N) || !int(f.r) || !int(f.p) || !str(f.salt, 16) || !str(f.iv, 12) || !str(f.tag, 16) || typeof f.ct !== "string" || f.ct.length > 4096)
     return no("the owner key file is not a sealed key this tool made (an older or damaged file); delete it deliberately and run \"arc-inbox owner-key init\" again");
-  if (f.N < N_BAND[0] || f.N > N_BAND[1] || (f.N & (f.N - 1)) !== 0 || f.r !== SCRYPT_R || f.p < 1 || f.p > 4)
+  if (f.N < N_BAND[0] || f.N > N_BAND[1] || (f.N & (f.N - 1)) !== 0 || f.r !== SCRYPT_R || f.p < 1 || f.p > P_MAX)
     return no(`the owner key file records a key-derivation cost (N=${safeText(f.N, 12)}) outside the accepted band, so it was made cheap to guess or is not safe to open; nothing was signed`);
+  /** @type {Buffer} */ let key;
+  try { key = scryptSync(String(secret), Buffer.from(f.salt, "base64"), 32, { N: f.N, r: f.r, p: f.p, maxmem: scryptMaxmem(f.N, f.r, f.p) }); }
+  catch { return no("the key derivation could not run for the cost this file records (not a wrong passphrase); nothing was signed"); }
   try {
-    const key = scryptSync(String(secret), Buffer.from(f.salt, "base64"), 32, { N: f.N, r: f.r, p: f.p, maxmem: SCRYPT_MAXMEM });
     const d = createDecipheriv("aes-256-gcm", key, Buffer.from(f.iv, "base64"));
     d.setAAD(aad(f));
     d.setAuthTag(Buffer.from(f.tag, "base64"));
@@ -121,10 +130,10 @@ const oneLine = (e) => safeText(String(e && /** @type {Error} */ (e).message || 
  * Make the key pair, seal the private half, commit-ready public half. Refuses (one sentence, and nothing left behind) without a
  * terminal, with a passphrase that is short or typed differently twice, over an existing key, or over an existing public key
  * file. Nothing is created before the last refusal that can be judged first; a write that fails later removes what it made.
- * @param {{ keyDir: string, pubPath: string, readPassphrase: (prompt: string) => Promise<string>, isTty: (() => boolean) | boolean }} a
+ * @param {{ keyDir: string, pubPath: string, readPassphrase: (prompt: string) => Promise<string>, isTty: (() => boolean) | boolean, writeData?: (fd: number, data: string) => void }} a
  * @returns {Promise<{ ok: boolean, why: string, fingerprint: string, keyPath: string }>}
  */
-export async function initOwnerKey({ keyDir, pubPath, readPassphrase, isTty }) {
+export async function initOwnerKey({ keyDir, pubPath, readPassphrase, isTty, writeData = (fd, data) => { writeSync(fd, data); } }) {
   const no = (/** @type {string} */ why) => ({ ok: false, why, fingerprint: "", keyPath: "" });
   if (!tty(isTty)) return no(`owner-key init needs a real terminal on both stdin and stdout (a passphrase typed into a pipe is one an agent can supply); ${terminalHint()}`);
   const keyPath = join(keyDir, KEY_FILE);
@@ -139,12 +148,14 @@ export async function initOwnerKey({ keyDir, pubPath, readPassphrase, isTty }) {
   const pubPem = String(publicKey.export({ type: "spki", format: "pem" }));
   const tmp = `${keyPath}.tmp-${process.pid}`;
   let madePub = false, madeTmp = false;
-  const writeNew = (/** @type {string} */ path, /** @type {string} */ data, /** @type {number} */ mode) => { const fd = openSync(path, "wx", mode); try { writeSync(fd, data); } finally { closeSync(fd); } };
+  // `made` is called the moment the exclusive open has CREATED the file and before the write: a write that throws (a full disk, a
+  // quota) leaves a file that the catch must remove, while an open that fails EEXIST made nothing and must never remove a stranger's.
+  const writeNew = (/** @type {string} */ path, /** @type {string} */ data, /** @type {number} */ mode, /** @type {() => void} */ made) => { const fd = openSync(path, "wx", mode); made(); try { writeData(fd, data); } finally { closeSync(fd); } };
   try {
     mkdirSync(keyDir, { recursive: true, mode: 0o700 });
     mkdirSync(dirname(pubPath), { recursive: true });
-    writeNew(pubPath, pubPem, 0o644); madePub = true;
-    writeNew(tmp, sealed, 0o600); madeTmp = true;
+    writeNew(pubPath, pubPem, 0o644, () => { madePub = true; });
+    writeNew(tmp, sealed, 0o600, () => { madeTmp = true; });
     renameSync(tmp, keyPath);
   } catch (e) {
     if (madeTmp) rmSync(tmp, { force: true });
@@ -163,11 +174,13 @@ export async function unsealOwnerKey({ keyDir, readPassphrase }) {
   const keyPath = join(keyDir, KEY_FILE);
   const no = (/** @type {string} */ why) => ({ key: null, why });
   let st;
-  try { st = lstatSync(keyPath); } catch { return no(`there is no owner key at ${keyPath}; run "arc-inbox owner-key init" in a terminal first`); }
+  try { st = lstatSync(keyPath, { bigint: true }); } catch { return no(`there is no owner key at ${keyPath}; run "arc-inbox owner-key init" in a terminal first`); }
   if (!st.isFile() || st.isSymbolicLink()) return no(`${keyPath} is not a regular file, so it is not an owner key; nothing was signed`);
-  if (st.size > 16384) return no(`${keyPath} is too large to be an owner key; nothing was signed`);
-  let text = "";
-  try { text = readFileSync(keyPath, "utf8"); } catch (e) { return no(`the owner key could not be read (${oneLine(e)}); nothing was signed`); }
+  if (st.size > 16384n) return no(`${keyPath} is too large to be an owner key; nothing was signed`);
+  // Read from the descriptor that was checked, not from the path again (attack r2 B9).
+  const read = readCheckedFile(keyPath, st, 16384);
+  if (read.buf === null) return no(`the owner key ${read.why}; nothing was signed`);
+  const text = read.buf.toString("utf8");
   const pass = await readPassphrase("Passphrase for the owner key (not shown): ");
   const o = openKey(text, String(pass));
   if (!o.raw) return no(o.why);
@@ -203,6 +216,8 @@ export async function signAccept({ approval, pages, keyDir, readPassphrase, isTt
   if (!tty(isTty)) return no(`approving narrative pages needs a real terminal on both stdin and stdout, and is signed with your passphrase; ${terminalHint()}`);
   if (!isUlid(approval)) return no("the approval id is not a ULID");
   if (!Array.isArray(pages) || pages.length === 0) return no("the request lists no pages, so there is nothing to sign");
+  // Counted before anything is read or typed: a refusal after the passphrase wastes the owner's one typed proof (attack r2 B6).
+  if (pages.length > MAX_SIGNED_PAGES) return no(`the request names ${pages.length} pages, the ceiling is ${MAX_SIGNED_PAGES}; approve fewer pages per request; nothing was signed`);
   /** @type {Map<string, string>} */ const byPage = new Map();
   for (const x of pages) {
     const page = x && typeof x === "object" ? /** @type {any} */ (x).page : undefined, hash = x && typeof x === "object" ? /** @type {any} */ (x).sha256 : undefined;
@@ -210,6 +225,7 @@ export async function signAccept({ approval, pages, keyDir, readPassphrase, isTt
     if (byPage.has(page) && byPage.get(page) !== hash) return no(`the request lists ${page} twice with different hashes; nothing was signed`);
     byPage.set(page, hash);
   }
+  if (byPage.size > MAX_SIGNED_PAGES) return no(`the request names ${byPage.size} distinct pages, the ceiling is ${MAX_SIGNED_PAGES}; approve fewer pages per request; nothing was signed`);
   const big = decisionSizeProblem(approval, reason, pages);
   if (big) return no(`${big}; nothing was signed`);
   const u = await unsealOwnerKey({ keyDir, readPassphrase });

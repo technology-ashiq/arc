@@ -6,7 +6,7 @@
 // (docs/narrative-anchors.mjs, which may import no child_process) and narrative-proof.mjs -- and what lets the signer
 // (owner-key.mjs) and the verifier never drift apart.
 import { createHash, createPublicKey, verify } from "node:crypto";
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, sep } from "node:path";
 
 /** The gate string of a narrative acceptance request (the docs gate's ACCEPT_GATE; the self-test pins them equal). */
@@ -86,6 +86,8 @@ export function payloadCostProblem(payload) {
  */
 export function decisionSizeProblem(approval, reason, pages) {
   if (!Array.isArray(pages)) return "";
+  // Count first: 201 short ids fit the byte ceiling and are refused only by the page ceiling, which must not wait for the passphrase (attack r2 B6).
+  if (pages.length > MAX_SIGNED_PAGES) return `the request names ${pages.length} pages, the ceiling is ${MAX_SIGNED_PAGES}; approve fewer pages per request`;
   /** @type {Record<string, string>} */ const sigs = {};
   for (const x of pages) { const p = x && typeof x === "object" ? /** @type {any} */ (x).page : undefined; if (typeof p === "string" && PAGE_ID_RE.test(p)) sigs[p] = `${"A".repeat(86)}==`; }
   return payloadCostProblem({ decides: approval, reason, verdict: "approve", sigs });
@@ -111,6 +113,28 @@ export function verifyOwnerSig(pubPem, message, sig) {
 }
 
 /**
+ * The bytes of a regular file, read from the descriptor that was checked (attack r2 B9): open without following a link where the
+ * platform can, fstat that descriptor, refuse anything but a regular file of the same identity (device and inode) as the earlier
+ * lstat `before` (taken with { bigint: true }), and read from the descriptor, never from the path again. A file swapped between
+ * the check and the open is a different inode and is refused.
+ * @param {string} abs @param {import("node:fs").BigIntStats} before the lstat the caller judged @param {number} max
+ * @returns {{ buf: Buffer | null, why: string }}
+ */
+export function readCheckedFile(abs, before, max) {
+  const no = (/** @type {string} */ why) => ({ buf: null, why });
+  let fd = -1;
+  try {
+    fd = openSync(abs, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+    const now = fstatSync(fd, { bigint: true });
+    if (!now.isFile()) return no("is not a regular file");
+    if (now.ino !== before.ino || now.dev !== before.dev) return no("changed between the check and the read");
+    if (now.size > BigInt(max)) return no("is too large");
+    return { buf: readFileSync(fd), why: "" };
+  } catch { return no("cannot be read"); }
+  finally { if (fd >= 0) try { closeSync(fd); } catch { /* nothing to release */ } }
+}
+
+/**
  * THE reader of the committed public key file (attack r1 B3): `--accept`, the gate and the base-ref comparison all read it
  * through here, so all three judge the same bytes by one rule. A regular file only -- a symlink, a directory or anything else
  * is refused by name, never followed -- of at most MAX_PUB_BYTES, whose real path stays inside the tree (the tree is the
@@ -122,18 +146,17 @@ export function readOwnerPubFile(abs) {
   const no = (/** @type {string} */ why, missing = false) => ({ pem: "", why, missing });
   if (typeof abs !== "string" || abs === "") return no("has no path");
   let st;
-  try { st = lstatSync(abs); } catch (e) { const c = /** @type {any} */ (e) && /** @type {any} */ (e).code; return c === "ENOENT" || c === "ENOTDIR" ? no("is missing", true) : no("cannot be read"); }
+  try { st = lstatSync(abs, { bigint: true }); } catch (e) { const c = /** @type {any} */ (e) && /** @type {any} */ (e).code; return c === "ENOENT" || c === "ENOTDIR" ? no("is missing", true) : no("cannot be read"); }
   if (st.isSymbolicLink()) return no("is a symlink, which is never followed");
   if (!st.isFile()) return no("is not a regular file");
-  if (st.size > MAX_PUB_BYTES) return no(`is ${st.size} bytes, too large for a public key`);
+  if (st.size > BigInt(MAX_PUB_BYTES)) return no(`is ${st.size} bytes, too large for a public key`);
   try {
     const rootReal = realpathSync(dirname(dirname(abs)));
     if (!realpathSync(abs).startsWith(rootReal + sep)) return no("resolves outside the tree");
   } catch { return no("cannot be resolved"); }
-  let buf;
-  try { buf = readFileSync(abs); } catch { return no("cannot be read"); }
-  if (buf.length > MAX_PUB_BYTES) return no("is too large for a public key");
-  const pem = buf.toString("utf8");
+  const read = readCheckedFile(abs, st, MAX_PUB_BYTES);
+  if (read.buf === null) return no(read.why);
+  const pem = read.buf.toString("utf8");
   try { if (createPublicKey(pem).asymmetricKeyType !== "ed25519") return no("is not an Ed25519 public key"); } catch { return no("is not a public key"); }
   return { pem, why: "", missing: false };
 }
