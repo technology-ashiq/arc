@@ -264,10 +264,21 @@ check("C: face-coverage exports the surface half (vacuous-pass guard)",
     "const Lazy = lazy(() => import('./later/Lazy'))",
     "import './index.css'",
     "import R from 'react'",
+    "import Ghost from './ghostdoor'",
+    "const G2 = require('./viaRequire/x')",
+    "const G3 = import.meta.glob('./*/Door.tsx')",
+    "import App2 from './App2'",
   ].join("\n");
-  const dirs = fc.appImportDirs(text);
-  check("C: appImportDirs reads static and dynamic imports, skips comments, bare files and packages",
-    JSON.stringify(dirs) === JSON.stringify(["frontdoor", "later", "lib"]), JSON.stringify(dirs));
+  const dirs = fc.appImportDirs(text, ["frontdoor", "ghostdoor", "lib", "modules"]);
+  check("C: appImportDirs reads static, dynamic, glob and require imports, a bare directory import and a wildcard dir, skips comments, bare files and packages",
+    JSON.stringify(dirs) === JSON.stringify(["*", "frontdoor", "ghostdoor", "later", "lib", "modules", "viaRequire"]), JSON.stringify(dirs));
+  // MUTANT CONTROL: with no disk listing, `./ghostdoor` cannot be told from a bare file and is not claimed.
+  check("C: MUTANT CONTROL -- without the disk, a one-segment import is not claimed as a directory (the disk is what tells them apart)",
+    !fc.appImportDirs("import Ghost from './ghostdoor'").includes("ghostdoor"));
+  // attack e40b65f B1: a second surface reached only through `./dir` FAILs the gate like any other.
+  const ghostTree = { imports: fc.appImportDirs("import FD from './frontdoor/FrontDoor'\nimport Ghost from './ghostdoor'", ["frontdoor", "ghostdoor"]), dirs: ["frontdoor", "ghostdoor"] };
+  check("C: a second surface imported as a bare directory FAILs, named",
+    fc.surfaceFindings(ghostTree, contract.surfaces, roomIds).findings.some((f) => f.includes("face/src/ghostdoor")));
 
   // The CLI, the way CI calls it: the surface half line is printed and names the row.
   const r = spawnSync(process.execPath, [COVERAGE, REPO], { encoding: "utf8", cwd: REPO });
@@ -283,6 +294,14 @@ check("D: the lint exports its roots, its allowance and its walk (vacuous-pass g
   typeof lint.lintRoots === "function" && Array.isArray(lint.DEFAULT_ROOTS) && lint.NEON_FILE === "face/src/frontdoor/neon.mjs");
 check("D: face/src/face and face/src/frontdoor are default roots, and both must exist",
   ["face/src/face", "face/src/frontdoor"].every((r) => lint.DEFAULT_ROOTS.includes(r) && lint.REQUIRED_DEFAULT_ROOTS.includes(r)));
+// attack e40b65f B2: the stage's palette file is read, not outside every root, so a literal moved out of the stage is still seen.
+check("D: face/src/lib/stage.mjs is a required default root and a named allowance",
+  lint.STAGE_FILE === "face/src/lib/stage.mjs" && lint.DEFAULT_ROOTS.includes(lint.STAGE_FILE) && lint.REQUIRED_DEFAULT_ROOTS.includes(lint.STAGE_FILE));
+{
+  const bare = lint.lintRoots([lint.STAGE_FILE], REPO, { required: [lint.STAGE_FILE], allow: [] });
+  check("D: MUTANT CONTROL -- with no allowance the real stage.mjs FAILs (the lint reads it; the clean pass is the allowance)",
+    bare.scanned === 1 && bare.findings.length > 0, `scanned=${bare.scanned} findings=${bare.findings.length}`);
+}
 {
   const tmp = mkdtempSync(join(tmpdir(), "front-door-lint-"));
   try {
@@ -340,4 +359,4 @@ check("D: face/src/face and face/src/frontdoor are default roots, and both must 
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 43 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 47 ? 0 : 1;

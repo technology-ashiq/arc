@@ -36,10 +36,12 @@
 // its palette is not a token -- it is allowed BY NAME in exactly one file, NEON_FILE, and nowhere
 // else: a literal anywhere else under either root FAILs like one under modules/. The allowance
 // covers colour literals only; a binary, symlinked or special file there is still a finding, and
-// the file must exist while its root does, or the allowance would name nothing.
+// the file must exist while its root does, or the allowance would name nothing. The stage's palette file,
+// face/src/lib/stage.mjs, is a root and a second named allowance: the face's hues are the reference's literals.
 //
 // Usage: face-colour-literal.mjs [--root PATH]...  (default: face/src/ui, face/src/modules,
-//        face/src/shell, face/src/App.tsx, face/src/face and face/src/frontdoor, every one of
+//        face/src/shell, face/src/App.tsx, face/src/face, face/src/frontdoor and
+//        face/src/lib/stage.mjs, every one of
 //        which must exist; an explicit --root gets no allowance)
 // Exit:  0 scanned more than zero files and found nothing · 1 a finding, or nothing scanned
 //        2 could not run (bad argument, a root given twice or inside another, unreadable root)
@@ -49,11 +51,16 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
-export const DEFAULT_ROOTS = ["face/src/ui", "face/src/modules", "face/src/shell", "face/src/App.tsx", "face/src/face", "face/src/frontdoor"];
+export const DEFAULT_ROOTS = ["face/src/ui", "face/src/modules", "face/src/shell", "face/src/App.tsx", "face/src/face", "face/src/frontdoor", "face/src/lib/stage.mjs"];
 /** A default root that must exist: a renamed or re-cased folder is a finding, not a clean tree. */
 export const REQUIRED_DEFAULT_ROOTS = [...DEFAULT_ROOTS];
 /** The one file whose colour literals are allowed: the front door's neon palette (ADR-1349). */
 export const NEON_FILE = "face/src/frontdoor/neon.mjs";
+/**
+ * The stage palette and sprite paint (lib/stage.mjs): the face's own hues, which three needs as literals. A root of its
+ * own and allowed by name, so a literal moved out of FaceStage.tsx lands where it is still read (attack e40b65f B2).
+ */
+export const STAGE_FILE = "face/src/lib/stage.mjs";
 /** The colour-literal kinds an allowed file may carry; anything else found in it is still a finding. */
 const COLOUR_KINDS = new Set(["hex", "named", "function", "palette"]);
 
@@ -275,7 +282,7 @@ export function parseArgs(argv) {
   // An explicit root must exist; a default one must exist only when it is required.
   return roots.length
     ? { roots, custom: true, required: roots, allow: [] }
-    : { roots: DEFAULT_ROOTS, custom: false, required: REQUIRED_DEFAULT_ROOTS, allow: [NEON_FILE] };
+    : { roots: DEFAULT_ROOTS, custom: false, required: REQUIRED_DEFAULT_ROOTS, allow: [NEON_FILE, STAGE_FILE] };
 }
 
 function main(argv) {
@@ -285,7 +292,7 @@ function main(argv) {
   try { report = lintRoots(opts.roots, opts.custom ? process.cwd() : REPO, { required: opts.required, allow: opts.allow }); }
   catch (e) { console.error(`face-colour-literal: ${e.message}`); return 2; }
   for (const r of report.roots) console.log(`root ${r.root}: ${r.state === "present" ? `files=${r.files}` : r.state}`);
-  for (const a of report.allowed) console.log(`allowed ${a.file}: literals=${a.literals} (the neon palette, by name -- ADR-1349)`);
+  for (const a of report.allowed) console.log(`allowed ${a.file}: literals=${a.literals} (a palette allowed by name -- ADR-1349)`);
   for (const f of report.findings) console.log(`FAIL ${f.file}:${f.line}:${f.col} ${f.kind} ${f.literal}`);
   if (report.scanned === 0) console.log("FAIL nothing was scanned -- zero files is not a clean tree");
   console.log(`colour-literal: scanned=${report.scanned} files findings=${report.findings.length}`);

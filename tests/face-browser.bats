@@ -128,6 +128,10 @@ frontdoor_verdict() {
   [ "${BASH_REMATCH[3]}" -eq "$FRONT_DOOR_CHECKS" ] || { echo "mood=$mood: ran ${BASH_REMATCH[3]} of $FRONT_DOOR_CHECKS front-door checks: $line"; return 1; }
   [ "${BASH_REMATCH[4]}" -eq "$FRONT_DOOR_CHECKS" ] || { echo "mood=$mood: ${BASH_REMATCH[4]} of $FRONT_DOOR_CHECKS front-door checks held: $line"; return 1; }
   [ "${BASH_REMATCH[6]}" -eq 3 ] || { echo "mood=$mood: ${BASH_REMATCH[6]} crossings into the workroom, the pass makes 3: $line"; return 1; }
+  # The warp itself (attack e40b65f B3): the stage must still be mounted right after at least one crossing. One of three,
+  # not three of three, because each read races the 1750 ms hold on a slow leg -- but 0 of 3 is a workroom that dropped
+  # the face on the spot, with no fly-through at all.
+  [ "${BASH_REMATCH[5]}" -ge 1 ] || { echo "mood=$mood: the stage was gone right after every crossing (warp-held=${BASH_REMATCH[5]}/${BASH_REMATCH[6]}) -- no warp: $line"; return 1; }
   [ "${BASH_REMATCH[7]}" = "none" ] || { echo "mood=$mood: failed front-door checks: ${BASH_REMATCH[7]}"; return 1; }
   echo "front-door verdict: mood=$mood ran=$FRONT_DOOR_CHECKS ok=$FRONT_DOOR_CHECKS failed=none"
 }
@@ -416,6 +420,8 @@ heading_verdict() {
   [ "$status" -ne 0 ] || { echo "a smoke with a check deleted passed: $output"; false; }
   run frontdoor_verdict "smoke: front-door mood=dark expected=21 ran=21 ok=21 warp-held=1/1 failed=none" dark
   [ "$status" -ne 0 ] || { echo "a pass that crossed once passed: $output"; false; }
+  run frontdoor_verdict "smoke: front-door mood=dark expected=21 ran=21 ok=21 warp-held=0/3 failed=none" dark
+  [ "$status" -ne 0 ] || { echo "a workroom that unmounted the stage with no warp passed: $output"; false; }
   run frontdoor_verdict "$good" light
   [ "$status" -ne 0 ] || { echo "light passed on a dark line: $output"; false; }
   run frontdoor_verdict "" dark

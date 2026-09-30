@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-coverage.mjs:appImportDirs (`if (parts[0] !== \".\" || parts.length < 3) continue;`)",
+      "breaking_input": "App.tsx gains `import GhostDoor from './ghostdoor'` (resolves to face/src/ghostdoor/index.tsx) or `lazy(() => import('./ghostdoor'))`. The specifier splits to [\".\",\"ghostdoor\"], length 2, and is skipped. A `require('./ghostdoor/x')` or `import.meta.glob('./ghostdoor/*.tsx')` is never matched by the `specs` regex either.",
+      "why": "The gate promises that a second, unnamed surface FAILs. A directory imported by its index, a glob or a require is invisible to it, so the unnamed surface passes with no row in expected-set.json. The selftest plant only covers the `./dir/File` spelling.",
+      "fix": "Count a one-segment specifier (`./dir`) as naming the directory. Also match `import.meta.glob(` and `require(` specifiers. Add each spelling as a planted arm with a mutant control.",
+      "twin_of": "A structural gate that knew one spelling -> Judge the identifier and the route, not one formatting of one hook."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/src/lib/stage.mjs (new SPRITE) and .claude/scripts/core/face-colour-literal.mjs DEFAULT_ROOTS",
+      "breaking_input": "Edit SPRITE.glow[2] in face/src/lib/stage.mjs to `[0.5, '#ff00ff']`, or add any new rgba literal to that file. face/src/lib is not a lint root, so face-colour-literal exits 0 with `findings=0`.",
+      "why": "FaceStage.tsx now passes the colour-literal lint because its 13 literals were moved into stage.mjs, not tokenised. The debt row is marked PAID, but the literals sit in a directory that no root reads. The lint still says nothing about them, so the gate is satisfied by relocating the literals, not by reading them.",
+      "fix": "Add face/src/lib/stage.mjs to the roots with a named allowance, as NEON_FILE has. Or declare in the lint header that the stage palette lives outside every root, and do not mark the row PAID.",
+      "twin_of": "A gate that transforms what it measures must declare what the transform destroys"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/face-browser.bats:frontdoor_verdict and face/scripts/smoke.mjs:cross (warpHeld)",
+      "breaking_input": "An App that unmounts the stage synchronously on ENTER HQ, with no warp at all. smoke prints `warp-held=0/3` and every other check holds, including the post-delay `*-unmount` checks. The bats verdict reads group 6 (crossings) and never group 5 (warp-held). The mutant control only tries `warp-held=1/1`.",
+      "why": "REQ-13 and ADR-1349 ship the warp, but no gate asserts that the stage is still mounted right after the crossing. The counter is printed and judged by nobody, so a front door with no warp passes in both moods.",
+      "fix": "In frontdoor_verdict require warp-held == crossings == 3, and add a mutant-control row with `warp-held=0/3`.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/face-dash.bats:front door test (`! grep -q '^FAIL ' <<< \"$output\" || {...}`)",
+      "breaking_input": "front-door.mjs prints a `FAIL ...` line. In bash, `! pipeline || {...}` is exempt from errexit, and the `||` group is meant to run only when grep succeeds. The comment cites the glob bug this line replaced, but no mutant shows the line can fail. The only real protection is the earlier `[ \"$status\" -eq 0 ]`, which depends on front-door.mjs's own exit logic (`ran >= 43`).",
+      "why": "The line is written as an extra guard but was never proven able to fail. A regression in the script's exit-code computation would leave it as the only guard.",
+      "fix": "Replace it with `if grep -q '^FAIL ' <<< \"$output\"; then echo \"$output\"; false; fi`, and add a MUTANT CONTROL that feeds it a FAIL line.",
+      "twin_of": "Tests that could not fail, or could not pass -> the mutant is the negative control; write the check it fails."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "face/src/face/FaceStage.tsx: ResizeObserver try/catch around line 482",
+      "breaking_input": "The throwing-stage case (`window.ResizeObserver = undefined`). The new catch disposes only the renderer and cancels the loop. The rest of the scene is left alive: textures, geometries, materials, the composer and any listeners registered before this point. The teardown function is never returned, so none of it is released.",
+      "why": "The comment says the catch gives back the loop and the GPU context. The remaining resources leak on every door mount or remount (for example, going back out of HQ repeatedly). The throw is caught by StageGuard, so the page does not crash and the leak goes unnoticed.",
+      "fix": "Run the same full teardown on this path: call the cleanup closure, or build the ResizeObserver before any resource is allocated.",
+      "twin_of": "A throw inside the proof skipped the scaffold's rollback -> every step after a write is inside the path that undoes the write."
+    }
+  ]
+}

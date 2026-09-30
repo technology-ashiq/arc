@@ -479,37 +479,18 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
     }
     animate()
 
-    let resizeObserver: ResizeObserver
-    try {
-      resizeObserver = new ResizeObserver(() => {
-        if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
-        resizeFrameId = window.requestAnimationFrame(() => {
-          resizeFrameId = 0
-          applyResolution()
-        })
-      })
-    } catch (err) {
-      // A throw here skips the teardown below, so the running loop and the GPU context would outlive
-      // the stage. Give both back, then let the door's boundary catch it.
-      dead = true
-      cancelAnimationFrame(animationFrameId)
-      renderer.domElement.remove()
-      renderer.dispose()
-      renderer.forceContextLoss()
-      throw err
-    }
-    resizeObserver.observe(container)
 
     // ── teardown ──────────────────────────────────────────────────────────────
     // The stage is meant to outlive every room, so the one time it does come down
     // it has to come down completely. A GPU context that survives an unmount is
     // permanent -- browsers keep a handful and then start killing the oldest, which
     // is a blank canvas somewhere else in the product, not an error here.
-    return () => {
+    let resizeObserver: ResizeObserver | null = null
+    const teardown = () => {
       dead = true
       cancelAnimationFrame(animationFrameId)
       if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
-      resizeObserver.disconnect()
+      resizeObserver?.disconnect()
       window.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseleave', onMouseLeave)
       if (motionQuery && typeof motionQuery.removeEventListener === 'function') {
@@ -533,6 +514,24 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
       renderer.dispose()
       renderer.forceContextLoss()
     }
+
+    // A throw here (no ResizeObserver in this browser) would skip the returned teardown, leaving the loop, the
+    // listeners and every GPU resource alive. Release them all, then let the door's boundary catch it.
+    try {
+      resizeObserver = new ResizeObserver(() => {
+        if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
+        resizeFrameId = window.requestAnimationFrame(() => {
+          resizeFrameId = 0
+          applyResolution()
+        })
+      })
+      resizeObserver.observe(container)
+    } catch (err) {
+      teardown()
+      throw err
+    }
+
+    return teardown
   }, [])
 
   return <div ref={containerRef} data-stage="face" aria-hidden="true" style={STAGE_STYLE} />

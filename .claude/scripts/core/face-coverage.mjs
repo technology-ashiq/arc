@@ -527,12 +527,15 @@ const SURFACE_ADR = /^ADR-\d{4}$/;
 
 /**
  * The face/src directories an App.tsx source imports from, sorted and unique. Every static `from '...'`, bare
- * `import '...'` and dynamic `import('...')` counts; comments are removed first so a commented-out import is not a
- * surface. Only relative specifiers one segment deep or more (`./frontdoor/FrontDoor`) name a directory.
+ * `import '...'`, dynamic `import('...')`, `import.meta.glob('...')` and `require('...')` counts; comments are removed
+ * first so a commented-out import is not a surface. A relative specifier one segment deep or more
+ * (`./frontdoor/FrontDoor`) names a directory, a wildcard directory segment is kept as written (no row can name it, so
+ * it FAILs), and a bare `./dir` names one when `onDisk` lists that directory.
  * @param {string} text
+ * @param {string[]} [onDisk]  the directories under face/src
  * @returns {string[]}
  */
-export function appImportDirs(text) {
+export function appImportDirs(text, onDisk = []) {
   // One pass that knows strings from comments: a regex strip read the `/*` inside a glob string ('./modules/*/*')
   // as a comment opening and ate every import after it.
   const t = String(text);
@@ -551,11 +554,16 @@ export function appImportDirs(text) {
     src += c;
   }
   const dirs = new Set();
-  const specs = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'`])([^"'`\n]+)\1/g;
+  // Every way a bundler follows a path: from, import(), a bare import, import.meta.glob(), require() (attack e40b65f B1).
+  const specs = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bimport\.meta\.glob\s*\(\s*\[?\s*|\brequire\s*\(\s*)(["'`])([^"'`\n]+)\1/g;
+  const disk = new Set(onDisk);
   for (const m of src.matchAll(specs)) {
     const parts = m[2].split("/");
-    if (parts[0] !== "." || parts.length < 3) continue;
-    if (parts[1] && parts[1] !== "." && parts[1] !== "..") dirs.add(parts[1]);
+    if (parts[0] !== "." || !parts[1] || parts[1] === "." || parts[1] === "..") continue;
+    // A wildcard in the directory segment can reach any directory, so it is kept as written and no row can name it.
+    if (parts.length >= 3 || /[*?[{]/.test(parts[1])) dirs.add(parts[1]);
+    // `./dir` resolves to dir/index: a directory import, told from a bare file (`./index.css`) by the disk.
+    else if (disk.has(parts[1])) dirs.add(parts[1]);
   }
   return [...dirs].sort();
 }
@@ -576,7 +584,7 @@ export function treeSurfaces(repo) {
   } catch (e) {
     return { unreadable: `face/src could not be listed (${e.code ?? e.message})` };
   }
-  return { imports: appImportDirs(text), dirs };
+  return { imports: appImportDirs(text, dirs), dirs };
 }
 
 /**

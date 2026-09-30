@@ -183,3 +183,15 @@ load 'test_helper'
   [[ "$output" == *"ok D: a planted literal in the door outside neon.mjs FAILs, named"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok D: MUTANT CONTROL -- with no allowance the same neon.mjs FAILs (the clean pass was the allowance, not a blind scan)"* ]] || { echo "$output"; false; }
 }
+
+@test "front door: MUTANT CONTROL -- the FAIL-line guard catches a failed check the exit code hid" {
+  # The guard above was never proven able to fail (attack e40b65f B4). Here it is fed a run that printed a FAIL and
+  # still exited 0 and printed RAN, the shape of a broken exit code, and it must catch it; the clean shape must pass.
+  local bad good
+  bad=$'ok A: something held\nFAIL A: a check that did not hold -- detail\nRAN: 47 checks, 0 failed'
+  good=$'ok A: something held\nok C: MUTANT CONTROL -- a mutant FAILs, named\nRAN: 47 checks, 0 failed'
+  run bash -c '! grep -q "^FAIL " <<< "$1"' _ "$bad"
+  [ "$status" -ne 0 ] || { echo "the guard passed a run that printed a FAIL line"; false; }
+  run bash -c '! grep -q "^FAIL " <<< "$1"' _ "$good"
+  [ "$status" -eq 0 ] || { echo "the guard failed a clean run whose ok lines name mutants that FAIL"; false; }
+}
