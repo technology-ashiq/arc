@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 07
+phase: 08
 appetite: 31.5d
-burn: 10d
+burn: 12d
 blocked-on: —
 depends-on: —
 
@@ -31,10 +31,10 @@ depends-on: —
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | ✅ **CLOSED 2026-09-18** — 0.5d of 3d; 18 routes served, 35 of 50 panels (39 tables), residue 15 panels on 10 routes approved by the owner (ADR-1338); four attacker rounds, `phase04-folds` 141 checks; merged `0a4cb262` (#248), PR head 19/19 (run 35367884908), `main` re-verified 19/19 (run 35369459599), suite 1..3415; live door 19 of 19 routes 200; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` · `01M2TPXZGPTN08BN98G6TCRZ5J` |
 | 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | ✅ **CLOSED 2026-09-23** — 3d of 10d; 31 of 31 work verbs ship as ops, residue none (`residue.md`, held both ways by `tests/face/work-door.mjs`); eight PRs (#252 · #253 · #254 · #255 · #257 · #258 · #259 · #261) + the close's #262/#263, 20 attacker rounds, 175 fixed-defect rows; final tree `2fba48f7` 19/19 (run 35870851639), suite 1..3427; live door from the main clone, one real apply receipted (`01M37CDRK7E03P67E45Y1BDT4E`); spec-fidelity drift dispositioned; receipts `01M37D0KHFPXBDBWQRYPMEXVT8` · `01M37D0M5F55KH2D8A5ZWJG6TA` |
 | 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | ✅ **CLOSED 2026-09-26** — 3d of 5d; of 15 SESSION verbs 5 ship with the receipt read back (the live council convene among them), 4 start with the read-back owed, 6 residue filed to their lanes (`residue.md`, held to the registry by `tests/face/session-door.mjs`); PRs #269 · #270 · #271 · #272 · #273 · #274 · #276 · #278 · #282 + the close #285/#286; 13 boundary rounds, 118 fixed-defect rows, the logic surface never ran (debt row); `main` `465f5b82` 19/19 (run 36225129900), suite 1..3545; spec-fidelity drift dispositioned; receipts `01M3EBD91R95PZD0EPQ1QB4TS2` · `01M3EBDGQ70ETM8PXDHNKHSZXJ` |
-| 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 10.5d | spec'd — /arc-change 2026-09-26, awaiting the owner's OK |
+| 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 10.5d | ✅ **CLOSED 2026-09-30** — 5d of 10.5d (worked 09-26, -27, -28, -29, -30); REQ-12 validated. The room, a Reference link from every room, page shape v1, 34 pages rewritten and accepted, and the owner-key proof. Two DoD rows ticked narrower than written (see the done log) |
 | 08 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 7d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
+**Appetite burn: 12d of 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
 C · verbs (05–06) 3/15d — **Phase 05 CLOSED at 3d of its 10d** (worked 2026-09-19, -20 and -23) — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
 3d unallocated. Tripwires: Block A day 3 · Block B day 5 · Block C at Phase 05 day 5 (burn 9d) · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
@@ -422,7 +422,67 @@ stay bespoke folds.
   `approval.requested{gate: phase-done}` `01M3EBDGQ70ETM8PXDHNKHSZXJ`. The second waits on the owner's stamp, which
   also approves `residue.md` as a whole.
 
+- **Phase 07 — Reference room, page shape v1, the 34 pages and the owner proof. CLOSED 2026-09-30.**
+  **What shipped.** The docs wiki inside the face: `GET /api/reference` (one extract, GET-only, no live facts), the Reference
+  room (index, type, entity; five sections; both moods), a Reference link from every served room, page shape v1 (kit parts and
+  our own `flow` and `loop` Diagram), and **all 34 product and lane pages rewritten and accepted**, explanation debt 0 of
+  119. The accept step became authentication: `--accept` needs an owner-approved request (Amendment 1), and now a signature
+  per page made with the owner's passphrase-sealed key and checked on CI against the committed public key (Amendment 2). PRs:
+  door #291 · room #294 · links #295 · change routing #296 · render and gate #297 · harness #298 · first 34 pages #299 (the
+  owner rejected them) · page shape v1 and the rewrite #300 (`9979a266`) · owner key #303 (`525042e7`).
+  **What the phase cost.** 5d of its 10.5d appetite. The first 34 pages cost about 40% of a week's tokens and were thrown
+  away; the rewrite on Sonnet 5.5 cost about 3.5M tokens (29 pages at ~110k each), and the attack and fix rounds on the
+  proof code about 1.2M more.
+  **Tests:** CI green per job, 19 of 19: PR #300 head `0c411f80` (run 36618313972) and PR #303 head `5c8cbf13` (run
+  36658433718). The owner-key PR was red twice first, for causes CI alone could see: a sandbox that copies a hand-kept file
+  list (`owner-sig.mjs` missing), and, on #300, the sync golden, the docs-scripts no-spawn rule, a missing PLAN-org room and a
+  stale `rooms.generated.json`. Each is a fixed-defect row. Log: `evidence/phase-07/test-output.log`.
+  **Live demo:** the door was run from the MAIN clone on the canonical spine (`evidence/phase-07/live-door-main-clone.txt`):
+  GET 200, POST 404, no token 401, 34 narratives, debt 0, no fingerprint line, no script tag. **The room UI in a browser was
+  read by the owner in a sim door from a worktree on 2026-09-29, not from the main clone**; the UI is covered on every CI leg
+  by the browser harness. Declared.
+  **Attackers:** boundary ran on every PR of the phase (rounds under `evidence/phase-07/attack-*.json`). On PR #300:
+  boundary 4 and 7 findings, logic 7 (GLM); on PR #303: boundary 13 and 10, all fixed, each with a fixed-defect row.
+  **The logic surface did NOT run on the owner-key code** (GLM timed out on every attempt, deepseek answered empty), and did not
+  run its second round on #300: a debt row, DECLARED at the stamp.
+  **Spec-fidelity:** not run for this phase. Declared.
+  **What the owner proof does and does not prove** (ADR-1514 Amendment 2, corrected before the build): invented ULIDs,
+  hand-edited entries, a bare `--accept`, a fake spine and a copied signature all fail; a deliberate swap of the public key
+  does not fail but is a loud WARN. What stops a swap is a GitHub CODEOWNERS review on `.claude/owner-key.pub`,
+  `narrative-anchors.mjs` and `narrative-proof.mjs`, a repository setting only the owner can turn on. Not turned on yet.
+  **Debt rows opened:** the logic surface unrun on the owner-key code; the owner public key is synced to consumer repos; the
+  self-test takes over two minutes (scrypt cost); a shallow CI checkout leaves the key-swap check to CODEOWNERS.
+  **Assumptions and triggers:** no ledger row fired; no ADR is DEFERRED; ADR-1514's revisit trigger (a false claim passing
+  the drift check) has not fired. REQ-12 is validated (11 of 12). Evidence: `initiatives/face/evidence/phase-07/`, sha256
+  manifest from `arc-evidence.sh bundle 07 --lane face` (verified).
+  amendments: 5 (2026-09-26 Reference room; 09-27 rich narrative; 09-27 page shape; 09-29 owner proof; 09-30 owner key) ·
+  reopened: n.
+  Receipts (main clone spine, `2026-09-30.jsonl`): `phase.closed` `01M3R3P1PJXDA0JZ8FJZ9NR217` ·
+  `approval.requested{gate: phase-done}` `01M3R3P3XF2CXK3S695N61EX1E`. The second waits on the owner's stamp, which also
+  accepts the two declared gaps above.
+
 ## Now
+
+**RESUME HERE (2026-09-30):** **Phase 07 is CLOSED** (done log). **Phase 08 is next, and it is the owner's two real days**
+(REQ-10, plan in `phases/phase-08-spec.md`): from the MAIN clone, `node .claude/scripts/hq/arc-face.mjs`, every decision through
+the face and at least one op a day; `face-dogfood` reads each day. Then the retro, the HISTORY row and `/arc-phase-done 08`.
+Owner steps still open: the stamp on `01M3R3P3XF2CXK3S695N61EX1E`, and GitHub CODEOWNERS review on the three owner-key files.
+
+**PHASE 08 PLAN REFINED (2026-09-30, `/arc-change --lane face`, owner: "complete everything, all phases, don't stop for anything"):**
+its coarse one-line verification plan is now a table with one exact check per exit criterion, an evidence file each, and who does
+it (`phases/phase-08-spec.md`). Tracker only, no code. The two real days are the owner's and no session can run them for him;
+Phase 08 opens after `/arc-phase-done 07` (now closed). Assumptions ledger: nothing fired.
+
+**CHANGE ROUTED (2026-09-30, `/arc-change --lane face`, owner: "owner-token first"):** PR #300 merged (`9979a266`). Its round-3
+attack (boundary B1, B2) showed the accept proof is a deliberate step, not authentication: CI cannot re-verify the ULID, and a
+shell in the main clone can write both events. **ADR-1514 Amendment 2** (decision, proposed) makes it authentication: an
+Ed25519 owner key sealed by a passphrase, `arc-inbox approve` on `gate: narrative-accept` needs a terminal and writes a `sig`,
+the validator requires it for that gate only, the public key is committed and the gate verifies every entry against it. New
+exit criterion "Owner-authenticated" under Phase 07. Classified as a decision plus in-scope build (no new REQ). Assumptions
+ledger: nothing fired; Amendment 1 had named the limit. Estimate 1.5d, charged to Phase 07 and booked at the next burn update
+(10d booked, plus 0.75d for Amendment 1 not yet booked, of 31.5d; no tripwire near). **BUILT and merged as #303 (`525042e7`).**
+The owner ran `owner-key init` and approved the batch with his passphrase; the 34 entries carry one signature each. The build
+changed from this note in one way: the decision carries `sigs` (one per page) so CI can rebuild each message without the spine.
 
 **CHANGE ROUTED (2026-09-29, `/arc-change --lane face`, owner: "a pannu, debt vachu poga thaa"):** the round-2 attack (B6, medium)
 found that `narrative-anchors --accept` stamps `by: "owner"` for whoever runs it, so an agent could self-accept every page and

@@ -11,6 +11,10 @@
 //   arc-inbox inbox                       # list OPEN approvals (approval.requested, undecided)
 //   arc-inbox approve <ULID> --reason R   # record decision.recorded verdict=approve
 //   arc-inbox reject  <ULID> --reason R   # record decision.recorded verdict=reject
+//   arc-inbox owner-key init              # once, at a terminal: make + seal the owner key (ADR-1514 amendment 2)
+//
+// approve on a `narrative-accept` request is signed: it needs a terminal, asks for the owner passphrase, and the
+// decision carries `sigs` (one Ed25519 signature per page). Every other gate approves exactly as before.
 
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -24,6 +28,8 @@ import { venturesPath } from "./lib/ledger/kill-panel.mjs";
 import { parseVentures } from "./lib/ledger/ventures.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { query } from "./spine.mjs";
+import { initOwnerKey, ownerKeyDir, ownerPubPath, pageListing, readPassphraseTty, signAccept, stdioIsTty } from "./lib/owner-key.mjs";
+import { ACCEPT_GATE } from "./lib/owner-sig.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_EVENT = join(HERE, "arc-event.mjs");
@@ -143,7 +149,13 @@ function criteriaDetail(digest) {
   }
 }
 
-export async function decide(root, verdict, id, reason) {
+/**
+ * @param {string} root the spine @param {string} verdict approve | reject @param {string} id @param {string} reason
+ * @param {{ keyDir?: string, readPassphrase?: (prompt: string) => Promise<string>, isTty?: (() => boolean) | boolean }} [signer]
+ *   the owner key, terminal and prompt for a narrative-accept approve. Production passes nothing: the key is at the fixed
+ *   ~/.arc-private/owner path and the prompt is the real terminal. Only a caller's own code can inject (no env, no flag).
+ */
+export async function decide(root, verdict, id, reason, signer = {}) {
   if (typeof id !== "string" || !ULID_RE.test(id))
     throw new SpineError("BAD_ARGS", `<id> ${JSON.stringify(id)} is not a ULID`);
   if (typeof reason !== "string" || reason.length === 0)
@@ -161,7 +173,18 @@ export async function decide(root, verdict, id, reason) {
   if (decidedIds.has(id))
     throw new SpineError("ALREADY_DECIDED", `${id} already has a decision -- decisions are final (supersede on a new day if truly needed)`);
 
-  const payload = JSON.stringify({ decides: id, reason, verdict });
+  // ADR-1514 amendment 2: approving a narrative-accept request is AUTHENTICATED. It is signed, page by page, with the owner
+  // key, which only a passphrase typed at a terminal unseals. A reject needs no signature, and every other gate is untouched.
+  const ap = approval.event.payload || {};
+  /** @type {Record<string, string> | null} */ let sigs = null;
+  if (verdict === "approve" && ap.gate === ACCEPT_GATE) {
+    // Only validated entries are drawn raw; the request is an agent's text and this is the screen the passphrase is typed at.
+    process.stderr.write(pageListing(id, ap.pages));
+    const s = await signAccept({ approval: id, pages: ap.pages, keyDir: signer.keyDir ?? ownerKeyDir(), readPassphrase: signer.readPassphrase ?? readPassphraseTty, isTty: signer.isTty ?? stdioIsTty, reason });
+    if (!s.sigs) throw new SpineError("SIGN_REFUSED", s.why);
+    sigs = s.sigs;
+  }
+  const payload = JSON.stringify(sigs ? { decides: id, reason, verdict, sigs } : { decides: id, reason, verdict });
   // The one writer, strict. A malformed decision (assertDecision) or a decision lost to a
   // concurrent decider -- which lands as DUP_IDEM on the shared key above -- exits non-zero,
   // and we surface it rather than pretend the decision was recorded.
@@ -180,6 +203,20 @@ export async function decide(root, verdict, id, reason) {
   }
   process.stderr.write(`inbox: ${verdict} recorded for ${id}\n`);
   return 0;
+}
+
+/**
+ * Why the owner's public key must not be written into this checkout, or "": it is a change to a committed trust anchor, so it
+ * belongs on a feature branch, never on main or master (attack r1 B11). One line; a git that cannot answer is no objection.
+ * @param {string} repo the checkout that would hold .claude/owner-key.pub
+ */
+export function ownerKeyRepoProblem(repo) {
+  const DROP = new Set(["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES"]);
+  /** @type {NodeJS.ProcessEnv} */ const env = {};
+  for (const [k, v] of Object.entries(process.env)) if (!DROP.has(k.toUpperCase())) env[k] = v;
+  let branch = "";
+  try { branch = execFileSync("git", ["-C", repo, "branch", "--show-current"], { encoding: "utf8", env, timeout: 30000, stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return ""; }
+  return branch === "main" || branch === "master" ? `this checkout (${repo}) is on ${branch}; the public key is a committed trust anchor, so run owner-key init from a feat/* branch checkout` : "";
 }
 
 function parse(argv) {
@@ -204,11 +241,26 @@ function parse(argv) {
 async function main(argv) {
   const { positional, flags } = parse(argv);
   const command = positional[0] || "inbox";
+  if (command === "owner-key") {
+    if (positional[1] !== "init" || positional.length !== 2) throw new SpineError("BAD_ARGS", "usage: arc-inbox owner-key init");
+    // A mode that ignores what it was given answers a question nobody asked (attack r1 B11): owner-key init takes no flag at all.
+    const given = Object.keys(flags);
+    if (given.length) throw new SpineError("BAD_ARGS", `owner-key init takes no flag (got --${given[0]}); usage: arc-inbox owner-key init`);
+    const repo = join(HERE, "..", "..", "..");
+    process.stdout.write(`owner-key: the public key will be written to ${ownerPubPath(repo)}\n`);
+    // Only where a real terminal exists: without one, init refuses for that reason, first and alone.
+    const wrong = stdioIsTty() ? ownerKeyRepoProblem(repo) : "";
+    if (wrong) { process.stderr.write(`owner-key: refused -- ${wrong}\n`); return 1; }
+    const r = await initOwnerKey({ keyDir: ownerKeyDir(), pubPath: ownerPubPath(repo), readPassphrase: readPassphraseTty, isTty: stdioIsTty });
+    if (!r.ok) { process.stderr.write(`owner-key: refused -- ${r.why}\n`); return 1; }
+    process.stdout.write(`owner key made. fingerprint ${r.fingerprint}\nprivate key (sealed by your passphrase): ${r.keyPath}\npublic key: ${ownerPubPath(repo)} -- commit that file; it is what CI checks every accepted page against\n`);
+    return 0;
+  }
   const root = spineRoot();
   if (command === "inbox") return listInbox(root);
   if (command === "approve" || command === "reject")
     return decide(root, command, positional[1], flags.reason);
-  throw new SpineError("BAD_ARGS", `unknown command ${JSON.stringify(command)} (inbox | approve <id> --reason R | reject <id> --reason R)`);
+  throw new SpineError("BAD_ARGS", `unknown command ${JSON.stringify(command)} (inbox | approve <id> --reason R | reject <id> --reason R | owner-key init)`);
 }
 
 // Only run the CLI when invoked directly -- importers (arc-dash, ADR-1302) get the

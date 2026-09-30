@@ -85,6 +85,7 @@
 .claude/hooks/_dispatch.sh	e04106b3c1b34910eda738b4a7c65cfd7078e616044833c8d594b77b44c2d140
 .claude/hooks/policy-decide.sh	e0d58ba33ac9a210c18111a705b594c1232c8be875eef3755e92fc5e837b5802
 .claude/output-styles/terse.md	9c2db0cadb2584ae219c8ea8d28a786f5842df8f9d488ba91c53ef4847476fee
+.claude/owner-key.pub	9a15a5c1e0185757acbd206be8ac92d155ef115da5fc3c3f3925d1ed23abea2d
 .claude/rules/api.md	747e53148f4a6eddbce984c08b932d2f47a7875401d52a1623f711be59e18524
 .claude/rules/lanes.md	2adeb458b8a2a25aed08ce0ecaac8aeb460cf33cfc35fd5b3b389005df9e218d
 .claude/rules/security-sensitive.md	53a673bc21f95d31599991a347922e542fbfad57448645cbf5b696cf85912061
@@ -166,7 +167,7 @@
 .claude/scripts/develop/quality.mjs	c656a0ae844b50f3e0435d11f916aead7161a107a714cabca63521e3a62f319f
 .claude/scripts/develop/replay-child.mjs	1d641ffb0ad349084a14be12df3b3c8863e370e2f191b9e78d6214097be5749c
 .claude/scripts/develop/stuck.mjs	7f3d64a9341e180186df5e892cfa6bfcffc676836739a3ac7c810cb19eb9531e
-.claude/scripts/docs/narrative-anchors.mjs	5c2da142b91ef44f47f6ccb46423316771fa3679b2c365bd331af1030f953c41
+.claude/scripts/docs/narrative-anchors.mjs	e6e9eec5bdca03dae720a32e4f412529dc09233f0a5ead6a859bde3d8d0c30de
 .claude/scripts/docs/wiki-build.mjs	e387b53c28bfa9ef91ffa7f33b85f89b77c02554939ba0d378f577095987f79f
 .claude/scripts/docs/wiki-coverage.mjs	08626d1c44e0eef10779d9234e96b24683ec23750def596c354dce637f799774
 .claude/scripts/docs/wiki-drift.mjs	520d4116f93e5b2dd3dc61695101dde0f6f491f3f642af9551017f7e03d004e7
@@ -238,7 +239,7 @@
 .claude/scripts/hq/arc-event.mjs	a1f8353efe971fa13dec4664d998ff33b7fffdce0e4e9850a12d6c26834cea05
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	00b09e6fa03156cdadc04870216c34b037f4ea90e4a938ad7d89de839b9aec19
-.claude/scripts/hq/arc-inbox.mjs	30c5d19a5fe5aa23cc01f72df53316b6d850f5290ffb92922af886a1132e809e
+.claude/scripts/hq/arc-inbox.mjs	01f21635127f522378a2a04ceaf60e7c5c690db9d0e8a4ca4fdb1b411b588aa5
 .claude/scripts/hq/arc-jobs.mjs	d6e9c51919bb603d78a67cb399cfcbcebc5314d1dce080a253973f80ee69ae0a
 .claude/scripts/hq/arc-jobs.sh	ac0dd934e1c6959f512e283d9411382a29bd3671bc4542ba05b74371d204323b
 .claude/scripts/hq/arc-pnl.mjs	1c79af9b70cde51f419f413335765598fb37e393cdef2fedf2cbb1b52495c237
@@ -276,7 +277,9 @@
 .claude/scripts/hq/lib/ledger/pnl.mjs	238dc9d9fe07cdacc6ac8d9bb48b0e9211c3c714651f612a48ced9e0279c3699
 .claude/scripts/hq/lib/ledger/reconcile.mjs	ba148b3bddf9516b026dcae34992de5707bb8b24034791b5c9c6b23f8456260b
 .claude/scripts/hq/lib/ledger/ventures.mjs	a61b52d3c2cf7efa9133749993bb175aba67924cbd63973be1a5d7b249b400db
-.claude/scripts/hq/lib/narrative-proof.mjs	82586213bd78135781deb08d4c9d3c61fa17d9a893dfafe8564f7e8c591c8ea2
+.claude/scripts/hq/lib/narrative-proof.mjs	8e8003a45e34c7888a0d47395a9ae1c45be9318890087ed6d7a205a03c6d7d7c
+.claude/scripts/hq/lib/owner-key.mjs	363a037ce80983aef12294b0d08f2a47c3bb3fac5c1627d909503b77dea66586
+.claude/scripts/hq/lib/owner-sig.mjs	33828b142f9f4a5b651026dbf711ce91db1572e3af164d11ce7d20ac296c62d0
 .claude/scripts/hq/lib/policy/authorize.mjs	993b72bcde4c99721535b15ca5ec2ee155610308ceadd517716ab8cb67d66b78
 .claude/scripts/hq/lib/policy/constitution.mjs	c2dd14eb505cce4a9dd131b33ad29cc1388ba37a7428be39e599d7474c642f3f
 .claude/scripts/hq/lib/policy/encode.mjs	436c17ed6bd3269e8ce39383803706da27064531b112f2f43feb10bf5487bcb1
@@ -300,7 +303,7 @@
 .claude/scripts/hq/lib/validate-leads.mjs	39a0cd45bb54caf2307366a4e42389227221995d1285c35817640b1d948a75eb
 .claude/scripts/hq/lib/validate-ledger.mjs	5ee5e61d395eccaa732f5c49215d6db80873ef030bc6027a675a5837ce010d88
 .claude/scripts/hq/lib/validate-policy.mjs	6b5bd88f51b75956bbf1b3bc755360002e27db431d7488695c96c8c2456be657
-.claude/scripts/hq/lib/validate.mjs	0743ba5cd273c5e976e53ed06e7e8d43221cc016db204d40e176f3175ab5346b
+.claude/scripts/hq/lib/validate.mjs	e41d47136b821c8a20b448526944d2ad0c3dd3aa5d9d995167c062a9b0575554
 .claude/scripts/hq/policy-hook.mjs	d1f038fb8a16ee229673ec7886e130835b26bd22e17f9f7176ccc635f06aad76
 .claude/scripts/hq/policy-lint.mjs	2a6d1101f2de3e84dbb650be3b07a90ccf124ce07595c658ac3c9b1e87370e5a
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb

@@ -1,0 +1,13 @@
+Phase 07 live door check, 2026-09-30 (session, from the MAIN clone, canonical spine, port 8419, token not printed)
+main clone HEAD: 525042e7 feat(hq,docs): owner key ... (#303)
+command: node .claude/scripts/hq/arc-dash.mjs --port 8419        -> "live mode ... (spine: canonical)"
+GET  /api/reference with token      -> http 200
+POST /api/reference with token      -> http 404 (only GET is served)
+GET  /api/reference without token   -> http 401
+--- summary of the GET body (tests: node summary script over the saved response) ---
+mode: live | schema: 1 | badge: file, not log
+stats: {"products":17,"lanes":17,"processes":13,"adrBands":16,"commands":28,"agents":30,"rules":7,"gates":7,"adrs":334}
+narratives: 34 | products: 17 | lanes: 17
+explanation: {"total":119,"explained":119,"debt":0}
+fingerprint lines present: 0 | script tags: 0
+NOT covered by this transcript: the room UI in a browser from the main clone. The owner read and accepted the 34 pages in the room (sim door, worktree) on 2026-09-29; the UI is covered on every CI leg by the browser harness (smoke.mjs + flows.mjs), green per job on PR 300 (0c411f80) and PR 303 (5c8cbf13).
