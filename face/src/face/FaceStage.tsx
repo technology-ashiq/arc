@@ -134,6 +134,30 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
       unavailableRef.current?.()
       return
     }
+    // Everything the stage takes is registered the moment it exists, and ONE teardown gives back what was registered,
+    // newest first. A throw at any later step of the setup (a composer on a context with no float targets, a texture, a
+    // geometry) releases exactly what had been built, and an unmount releases all of it (attack 1bc1328 B6). A GPU
+    // context that outlives the stage is permanent: browsers keep a handful and then kill the oldest, a blank canvas
+    // somewhere else in the product.
+    let dead = false
+    const release: Array<() => void> = [
+      () => {
+        renderer.domElement.remove()
+        renderer.dispose()
+        renderer.forceContextLoss()
+      },
+    ]
+    const teardown = () => {
+      dead = true
+      for (const give of release.splice(0).reverse()) {
+        try {
+          give()
+        } catch {
+          /* keep giving back the rest */
+        }
+      }
+    }
+    try {
     renderer.setSize(width, height)
     container.appendChild(renderer.domElement)
 
@@ -146,6 +170,7 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
       BLOOM.threshold,
     )
     const composer = new EffectComposer(renderer)
+    release.push(() => renderPass.dispose(), () => bloomPass.dispose(), () => composer.dispose())
     composer.addPass(renderPass)
     composer.addPass(bloomPass)
 
@@ -178,6 +203,7 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
         paint(ctx)
       }
       const texture = new THREE.CanvasTexture(canvas)
+      release.push(() => texture.dispose())
       texture.minFilter = THREE.LinearMipmapLinearFilter
       texture.magFilter = THREE.LinearFilter
       texture.anisotropy = maxAnisotropy
@@ -254,6 +280,7 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
       opacity: MASK.opacity,
     })
     const maskPoints = new THREE.Points(maskGeometry, maskMaterial)
+    release.push(() => { scene.remove(maskPoints); maskGeometry.dispose(); maskMaterial.dispose() })
     scene.add(maskPoints)
 
     // ── 5. the ambient cloud ──────────────────────────────────────────────────
@@ -281,6 +308,7 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
       opacity: CLOUD.opacity,
     })
     const cloudPoints = new THREE.Points(cloudGeometry, cloudMaterial)
+    release.push(() => { scene.remove(cloudPoints); cloudGeometry.dispose(); cloudMaterial.dispose() })
     scene.add(cloudPoints)
 
     // ── 6. the cursor ─────────────────────────────────────────────────────────
@@ -305,6 +333,7 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
     }
     window.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseleave', onMouseLeave)
+    release.push(() => { window.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseleave', onMouseLeave) })
 
     // ── reduced motion ────────────────────────────────────────────────────────
     // A contract, not a courtesy: under it the ambient drift STOPS. It is also
@@ -318,6 +347,7 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
     }
     if (motionQuery && typeof motionQuery.addEventListener === 'function') {
       motionQuery.addEventListener('change', onMotionChange)
+      release.push(() => motionQuery.removeEventListener('change', onMotionChange))
     }
 
     // ── the loop ──────────────────────────────────────────────────────────────
@@ -339,7 +369,6 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
     let warpScaleMul = 1
     let warpOpacityMul = 1
     let warpFlash = 0
-    let dead = false
     let lastT = 0
     let frameAcc = 0
     let frameN = 0
@@ -480,52 +509,21 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
     animate()
 
 
-    // ── teardown ──────────────────────────────────────────────────────────────
-    // The stage is meant to outlive every room, so the one time it does come down
-    // it has to come down completely. A GPU context that survives an unmount is
-    // permanent -- browsers keep a handful and then start killing the oldest, which
-    // is a blank canvas somewhere else in the product, not an error here.
-    let resizeObserver: ResizeObserver | null = null
-    const teardown = () => {
-      dead = true
+    release.push(() => {
       cancelAnimationFrame(animationFrameId)
       if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
-      resizeObserver?.disconnect()
-      window.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseleave', onMouseLeave)
-      if (motionQuery && typeof motionQuery.removeEventListener === 'function') {
-        motionQuery.removeEventListener('change', onMotionChange)
-      }
+    })
 
-      scene.remove(maskPoints)
-      scene.remove(cloudPoints)
-      maskGeometry.dispose()
-      maskMaterial.dispose()
-      ringTexture.dispose()
-      cloudGeometry.dispose()
-      cloudMaterial.dispose()
-      glowTexture.dispose()
-
-      bloomPass.dispose()
-      renderPass.dispose()
-      composer.dispose()
-
-      renderer.domElement.remove()
-      renderer.dispose()
-      renderer.forceContextLoss()
-    }
-
-    // A throw here (no ResizeObserver in this browser) would skip the returned teardown, leaving the loop, the
-    // listeners and every GPU resource alive. Release them all, then let the door's boundary catch it.
-    try {
-      resizeObserver = new ResizeObserver(() => {
-        if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
-        resizeFrameId = window.requestAnimationFrame(() => {
-          resizeFrameId = 0
-          applyResolution()
-        })
+    // No ResizeObserver in this browser throws here, like any step above: the catch below gives everything back.
+    const resizeObserver = new ResizeObserver(() => {
+      if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
+      resizeFrameId = window.requestAnimationFrame(() => {
+        resizeFrameId = 0
+        applyResolution()
       })
-      resizeObserver.observe(container)
+    })
+    release.push(() => resizeObserver.disconnect())
+    resizeObserver.observe(container)
     } catch (err) {
       teardown()
       throw err

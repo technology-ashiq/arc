@@ -522,6 +522,13 @@ export function moduleFindings(tree) {
 
 /** The face/src directories that are the workroom shell itself, never a surface. */
 export const SHELL_DIRS = Object.freeze(["lib", "shell", "ui", "modules", "rooms", "face"]);
+/**
+ * The files face/src holds at its top: the entry, the shell, the styles and the type shim. Anything else at the top is
+ * a surface or a finding. The DISK is judged, not only App.tsx's import spellings: an import can be spelled more ways
+ * than a scanner knows (`./dir`, `../src/dir`, an alias, a glob array, a Worker URL) and mounted from any file, while a
+ * top-level entry cannot hide from a directory listing (attack 1bc1328 B1-B5).
+ */
+export const SHELL_FILES = Object.freeze(["App.tsx", "main.tsx", "index.css", "tokens.css", "vite-env.d.ts"]);
 const SURFACE_ID = /^[a-z][a-z0-9-]*$/;
 const SURFACE_ADR = /^ADR-\d{4}$/;
 
@@ -579,12 +586,17 @@ export function treeSurfaces(repo) {
   try { text = readFileSync(join(src, "App.tsx"), "utf8"); }
   catch (e) { return { unreadable: `face/src/App.tsx could not be read (${e.code ?? e.message})` }; }
   let dirs;
+  let entries;
   try {
-    dirs = readdirSync(src).filter((n) => { const s = lstatSync(join(src, n)); return s.isDirectory() && !s.isSymbolicLink(); }).sort();
+    entries = readdirSync(src).sort().map((n) => {
+      const s = lstatSync(join(src, n));
+      return { name: n, kind: s.isSymbolicLink() ? "symlink" : s.isDirectory() ? "dir" : s.isFile() ? "file" : "special" };
+    });
+    dirs = entries.filter((e) => e.kind === "dir").map((e) => e.name);
   } catch (e) {
     return { unreadable: `face/src could not be listed (${e.code ?? e.message})` };
   }
-  return { imports: appImportDirs(text, dirs), dirs };
+  return { imports: appImportDirs(text, dirs), dirs, entries };
 }
 
 /**
@@ -624,6 +636,16 @@ export function surfaceFindings(tree, section, roomIds = new Set()) {
     if (!mounted.has(d)) findings.push(`[surface] "${row.id}" names face/src/${d}, which App.tsx never mounts -- a surface nothing mounts`);
   }
   const rowDirs = new Set(named.values());
+  // The disk, both kinds: every top-level entry of face/src is the shell, a named surface, or a finding. A tree built
+  // without `entries` (a hand-made one) is judged by its directories alone.
+  const shellFiles = new Set(SHELL_FILES);
+  const entries = Array.isArray(tree.entries) ? tree.entries : tree.dirs.map((name) => ({ name, kind: "dir" }));
+  for (const e of entries) {
+    if (e.kind === "dir" && (shell.has(e.name) || rowDirs.has(e.name))) continue;
+    if (e.kind === "file" && shellFiles.has(e.name)) continue;
+    if (e.kind === "symlink" || e.kind === "special") { findings.push(`[surface] face/src/${e.name} is a ${e.kind}, not a real directory or file -- not followed, and a surface is never one (ADR-1349)`); continue; }
+    findings.push(`[surface] face/src/${e.name} is a top-level ${e.kind} that is neither the shell nor a surface a row in expected-set.json names -- a second, unnamed surface (ADR-1349)`);
+  }
   for (const d of tree.imports) {
     if (shell.has(d) || rowDirs.has(d)) continue;
     findings.push(`[surface] face/src/App.tsx imports face/src/${d}, a surface no row in expected-set.json names -- a second, unnamed surface (ADR-1349)`);

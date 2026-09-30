@@ -280,6 +280,22 @@ check("C: face-coverage exports the surface half (vacuous-pass guard)",
   check("C: a second surface imported as a bare directory FAILs, named",
     fc.surfaceFindings(ghostTree, contract.surfaces, roomIds).findings.some((f) => f.includes("face/src/ghostdoor")));
 
+  // attack 1bc1328 B1-B4: the DISK is judged, so no import spelling (../src/x, an alias, a glob array, a Worker URL, a
+  // mount from Rail.tsx instead of App.tsx) hides a top-level surface. These trees carry NO import of the plant at all.
+  const realEntries = tree.entries;
+  check("C: the real tree was listed with kinds (vacuous-pass guard for the disk arm)",
+    Array.isArray(realEntries) && realEntries.some((e) => e.name === "frontdoor" && e.kind === "dir") && realEntries.some((e) => e.name === "App.tsx" && e.kind === "file"),
+    JSON.stringify(realEntries));
+  const withEntry = (e) => ({ ...tree, entries: [...realEntries, e], dirs: e.kind === "dir" ? [...tree.dirs, e.name] : tree.dirs });
+  check("C: MUTANT CONTROL -- the real listing raises no surface finding (the FAILs below are the plant, not the arm)",
+    fc.surfaceFindings(tree, contract.surfaces, roomIds).findings.length === 0);
+  check("C: an unnamed top-level directory that App.tsx never imports FAILs (mounted from anywhere else)",
+    fc.surfaceFindings(withEntry({ name: "ghostdoor", kind: "dir" }), contract.surfaces, roomIds).findings.some((f) => f.includes("face/src/ghostdoor is a top-level dir")));
+  check("C: an unnamed top-level file (face/src/GhostDoor.tsx) FAILs",
+    fc.surfaceFindings(withEntry({ name: "GhostDoor.tsx", kind: "file" }), contract.surfaces, roomIds).findings.some((f) => f.includes("face/src/GhostDoor.tsx is a top-level file")));
+  check("C: a symlinked top-level entry FAILs by name, never followed",
+    fc.surfaceFindings(withEntry({ name: "ghostdoor", kind: "symlink" }), contract.surfaces, roomIds).findings.some((f) => f.includes("face/src/ghostdoor is a symlink")));
+
   // The CLI, the way CI calls it: the surface half line is printed and names the row.
   const r = spawnSync(process.execPath, [COVERAGE, REPO], { encoding: "utf8", cwd: REPO });
   const line = (r.stdout.split("\n").find((l) => l.startsWith("face-coverage: surface half ")) ?? "");
@@ -359,4 +375,4 @@ check("D: face/src/lib/stage.mjs is a required default root and a named allowanc
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 47 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 52 ? 0 : 1;
