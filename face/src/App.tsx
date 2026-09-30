@@ -77,7 +77,15 @@ export default function App() {
     setWarp((w) => ({ dir, id: (w ? w.id : 0) + 1 }))
     if (dir === -1) { setWarping(false); return }
     setWarping(true)
-    const t = window.setTimeout(() => setWarping(false), STAGE_UNMOUNT_MS)
+    // How long the stage stayed for the fly-through, on <html> once it leaves: the harness judges the warp from this
+    // record instead of a read that races the hold on a loaded machine. Cleared at the start of each crossing.
+    const root = document.documentElement
+    delete root.dataset.warpHeldMs
+    const t0 = performance.now()
+    const t = window.setTimeout(() => {
+      root.dataset.warpHeldMs = String(Math.round(performance.now() - t0))
+      setWarping(false)
+    }, STAGE_UNMOUNT_MS)
     return () => window.clearTimeout(t)
   }, [surface])
   const [registry, setRegistry] = useState<Registry | null>(null)

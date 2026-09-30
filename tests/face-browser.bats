@@ -128,10 +128,10 @@ frontdoor_verdict() {
   [ "${BASH_REMATCH[3]}" -eq "$FRONT_DOOR_CHECKS" ] || { echo "mood=$mood: ran ${BASH_REMATCH[3]} of $FRONT_DOOR_CHECKS front-door checks: $line"; return 1; }
   [ "${BASH_REMATCH[4]}" -eq "$FRONT_DOOR_CHECKS" ] || { echo "mood=$mood: ${BASH_REMATCH[4]} of $FRONT_DOOR_CHECKS front-door checks held: $line"; return 1; }
   [ "${BASH_REMATCH[6]}" -eq 3 ] || { echo "mood=$mood: ${BASH_REMATCH[6]} crossings into the workroom, the pass makes 3: $line"; return 1; }
-  # The warp itself (attacks e40b65f B3, 1bc1328 B7): the stage is still mounted right after EVERY crossing. The read
-  # comes as soon as the hash moves (a synchronous write on the click), far inside the 1750 ms hold, so a crossing that
-  # dropped the face at once -- no fly-through -- is a failure, not timing.
-  [ "${BASH_REMATCH[5]}" -eq "${BASH_REMATCH[6]}" ] || { echo "mood=$mood: the stage was gone right after $(( BASH_REMATCH[6] - BASH_REMATCH[5] )) of ${BASH_REMATCH[6]} crossings (warp-held=${BASH_REMATCH[5]}/${BASH_REMATCH[6]}) -- no warp there: $line"; return 1; }
+  # The warp itself (attacks e40b65f B3, 1bc1328 B7): every crossing records a hold of at least WARP_HELD_MIN_MS, read
+  # from the page once the stage has left (never a read that races the hold), so a crossing that dropped the face
+  # at once -- no fly-through -- fails on any runner, however loaded.
+  [ "${BASH_REMATCH[5]}" -eq "${BASH_REMATCH[6]}" ] || { echo "mood=$mood: $(( BASH_REMATCH[6] - BASH_REMATCH[5] )) of ${BASH_REMATCH[6]} crossings recorded no fly-through hold of 1500 ms or more (warp-held=${BASH_REMATCH[5]}/${BASH_REMATCH[6]}) -- no warp there: $line"; return 1; }
   [ "${BASH_REMATCH[7]}" = "none" ] || { echo "mood=$mood: failed front-door checks: ${BASH_REMATCH[7]}"; return 1; }
   echo "front-door verdict: mood=$mood ran=$FRONT_DOOR_CHECKS ok=$FRONT_DOOR_CHECKS failed=none"
 }

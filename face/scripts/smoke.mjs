@@ -1065,6 +1065,12 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
  * still FAILs at the cap; the time it took is printed either way.
  */
 export const UNMOUNT_MARGIN_MS = 8000;
+/**
+ * The shortest hold that is a warp: the fly-through is 1.6 s (WARP_IN_S) and the stage is kept STAGE_UNMOUNT_MS. A stage
+ * that left in under 1.5 s did not fly through. Written here, not read from mode.mjs, so a changed constant there cannot
+ * move the bar with it.
+ */
+export const WARP_HELD_MIN_MS = 1500;
 /** WebGL refused before any page script runs: three's renderer constructor throws, and FaceStage must catch it. */
 export const NO_WEBGL_SCRIPT = `(function () { var get = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (kind) { if (kind === "webgl" || kind === "webgl2" || kind === "experimental-webgl") return null; return get.apply(this, arguments); }; })();`;
 /** A stage that throws after its renderer exists: only FaceStage uses ResizeObserver, so its effect throws. */
@@ -1142,7 +1148,7 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
     const cross = async (page, name, unmountName, act) => {
       const acted = await act();
       const reached = acted && (await until(async () => String(await hash(page)).startsWith("#hq"), 5000));
-      if (reached) { report.crossings++; if ((await count(page, "[data-stage]")) > 0) report.warpHeld++; }
+      if (reached) report.crossings++;
       record(name, reached, acted ? `the hash stayed ${JSON.stringify(redactSecrets(String(await hash(page)), [token]))}` : "the control was not there to act on");
       if (!reached) { record(unmountName, false, "never crossed"); return; }
       const crossedAt = Date.now();
@@ -1150,6 +1156,11 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       await until(async () => (await count(page, "[data-stage]")) === 0, UNMOUNT_MARGIN_MS, 150);
       const stages = await count(page, "[data-stage]");
       const opened = await inWorkroom(page);
+      // The warp is judged from what the page recorded, not from a read that races it: a read "right after" the crossing
+      // could land past the hold on a loaded runner (CI 2026-10-01, warp-held=2/3 with every unmount clean). The app
+      // writes how long the stage stayed on once it leaves; a crossing that dropped the face at once has no fly-through.
+      const held = Number(await val(page, "document.documentElement.dataset.warpHeldMs || 'NaN'"));
+      if (stages === 0 && held >= WARP_HELD_MIN_MS) report.warpHeld++;
       record(unmountName, stages === 0 && opened, `stage nodes=${stages} workroom opened=${opened} after ${Date.now() - crossedAt} ms`);
     };
     const step = async (fn, names) => {
