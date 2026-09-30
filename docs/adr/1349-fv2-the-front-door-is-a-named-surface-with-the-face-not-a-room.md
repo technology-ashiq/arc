@@ -1,6 +1,6 @@
 # ADR 1349 — FV2-Q: the front door is a named surface that carries the face, not a room
 
-**Status:** proposed (the owner's `/arc-change --lane face` of 2026-09-30; waiting on the owner's OK)
+**Status:** accepted (the owner chose option A, the hero, on 2026-09-30 during `/arc-resume --lane face`; option B stays his next question)
 **Date:** 2026-09-30
 **Product:** face
 **Reversibility:** two-way

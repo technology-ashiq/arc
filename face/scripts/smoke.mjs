@@ -41,6 +41,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   findChrome, chromeArgs, launchChrome, waitForDevTools, openSocket, CdpSession, openPage,
 } from "./cdp.mjs";
+import { modeOf, exitHash, STAGE_UNMOUNT_MS } from "../src/lib/mode.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const MIN_WATCH_MS = 900;
@@ -1039,6 +1040,189 @@ export async function runProbe(file, log = (line) => process.stdout.write(line +
     log(`probe: errors=${errors.length} chrome=${found.path}`);
     return errors.length;
   });
+}
+
+// ─────────────────────────────── the front door (face v2 Phase 09, REQ-13, ADR-1349) ───────────────────────────────
+//
+// One pass per mood, beside the room smoke and never inside it: the rooms' mood rules (moodHolds) apply to the
+// workroom, and the door has one look in both moods. Every check is NAMED, and the line counts how many RAN as well as
+// how many passed -- a pass that died at step three prints ran=3, never a clean tail (the vacuous-pass rule).
+
+/** The checks one mood's front-door pass runs, in order. The verdict holds ran == ok == this length. */
+export const FRONT_DOOR_CHECKS = Object.freeze([
+  "door-surface", "door-canvas", "door-one-enter", "door-no-fallback",
+  "hq-no-stage", "hq-mood",
+  "pointer-enter", "pointer-unmount",
+  "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
+  "exit-to-door", "palette-on-door", "healthy-no-exception",
+  "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
+  "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
+]);
+/** How long past STAGE_UNMOUNT_MS the pass waits before asking whether the stage is gone. */
+export const UNMOUNT_MARGIN_MS = 1250;
+/** WebGL refused before any page script runs: three's renderer constructor throws, and FaceStage must catch it. */
+export const NO_WEBGL_SCRIPT = `(function () { var get = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (kind) { if (kind === "webgl" || kind === "webgl2" || kind === "experimental-webgl") return null; return get.apply(this, arguments); }; })();`;
+/** A stage that throws after its renderer exists: only FaceStage uses ResizeObserver, so its effect throws. */
+export const THROWING_STAGE_SCRIPT = `window.ResizeObserver = undefined;`;
+
+/** The one line a mood's front-door pass prints; the bats verdict reads nothing else. */
+export function frontDoorLine(r) {
+  const failedNames = r.checks.filter((c) => !c.ok).map((c) => c.name);
+  return `smoke: front-door mood=${r.mood} expected=${FRONT_DOOR_CHECKS.length} ran=${r.checks.length} ok=${r.checks.filter((c) => c.ok).length} warp-held=${r.warpHeld}/${r.crossings} failed=${failedNames.join(",") || "none"}`;
+}
+
+/** Whether a front-door report passes: every named check ran, in order, and held. */
+export function judgeFrontDoor(r) {
+  const names = r.checks.map((c) => c.name);
+  const ok = names.length === FRONT_DOOR_CHECKS.length && names.every((n, i) => n === FRONT_DOOR_CHECKS[i]) && r.checks.every((c) => c.ok);
+  return { ok, reasons: ok ? [] : r.checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.why}`).concat(names.length === FRONT_DOOR_CHECKS.length ? [] : [`ran ${names.length} of ${FRONT_DOOR_CHECKS.length} checks`]) };
+}
+
+export async function runFrontDoor(opts, log = (line) => process.stdout.write(line + "\n")) {
+  const mood = opts.mood ?? "dark";
+  if (!MOODS.includes(mood)) throw new SetupError(`mood must be one of ${MOODS.join(", ")}, got ${JSON.stringify(mood)}`);
+  const token = opts.token;
+  const tokenPart = `token=${encodeURIComponent(token)}`;
+  const capMs = opts.roomTimeoutMs ?? 15000;
+  const report = { mood, checks: [], warpHeld: 0, crossings: 0, notes: [] };
+  const record = (name, ok, why = "") => {
+    report.checks.push({ name, ok: ok === true, why: ok === true ? "" : String(why || "did not hold") });
+    if (ok !== true) log(`smoke: front-door mood=${mood} FAIL ${name} -- ${oneLine(redactSecrets(why || "did not hold", [token]))}`);
+  };
+
+  return withChrome(async (session) => {
+    let n = 0;
+    /** A fresh page in the mood, with its own exception count and an optional script that runs before the app. */
+    const fresh = async (extraScript) => {
+      const page = await openPage(session);
+      const exceptions = [];
+      page.on("Runtime.exceptionThrown", (p) => exceptions.push(String(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text ?? "").slice(0, 200)));
+      await page.send("Page.enable");
+      await page.send("Runtime.enable");
+      await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+      await page.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `try { window.localStorage.setItem(${JSON.stringify(MOOD_KEY)}, ${JSON.stringify(mood)}); } catch (e) { /* storage refused: hq-mood reports the miss */ }`,
+      });
+      if (extraScript) await page.send("Page.addScriptToEvaluateOnNewDocument", { source: extraScript });
+      await page.send("Page.bringToFront").catch(() => {});
+      return { page, exceptions };
+    };
+    const close = async (page) => { await session.send("Target.closeTarget", { targetId: page.targetId }).catch(() => {}); };
+    const val = async (page, expression) => (await page.send("Runtime.evaluate", { expression, returnByValue: true })).result?.value;
+    // A fresh load every time: the query differs, so the browser never treats it as a fragment change on the last page.
+    const go = async (page, fragment) => { n++; await page.send("Page.navigate", { url: `${opts.base}?fd=${n}${fragment}` }); };
+    const hash = (page) => val(page, "location.hash");
+    const count = (page, sel) => val(page, `document.querySelectorAll(${JSON.stringify(sel)}).length`);
+    const onDoor = (page) => until(async () => (await count(page, '[data-surface="front-door"]')) === 1, capMs);
+    const inWorkroom = (page) => until(async () => modeOf(await hash(page)) === "hq" && (await count(page, "section[data-room]")) > 0, capMs);
+    const visible = (page, sel) => val(page, `(function () { var e = document.querySelector(${JSON.stringify(sel)}); if (!e) return false; var s = getComputedStyle(e); return e.getClientRects().length > 0 && s.visibility !== "hidden" && s.display !== "none" && Number(s.opacity) > 0 && e.textContent.trim().length > 0; })()`);
+    /** A real pointer click at the centre of the first VISIBLE match (the rail's exit on desktop, not the header's). */
+    const click = async (page, sel) => {
+      const at = await val(page, `(function () { var all = document.querySelectorAll(${JSON.stringify(sel)}); for (var i = 0; i < all.length; i++) { var e = all[i]; if (e.getClientRects().length === 0) continue; e.scrollIntoView({ block: "center" }); var r = e.getBoundingClientRect(); return JSON.stringify({ x: r.left + r.width / 2, y: r.top + r.height / 2 }); } return null; })()`);
+      if (typeof at !== "string") return false;
+      const { x, y } = JSON.parse(at);
+      await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+      await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
+      await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+      return true;
+    };
+    const press = async (page, k) => {
+      await page.send("Input.dispatchKeyEvent", { type: k.text ? "keyDown" : "rawKeyDown", key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk, modifiers: k.modifiers ?? 0, ...(k.text ? { text: k.text, unmodifiedText: k.text } : {}) });
+      await page.send("Input.dispatchKeyEvent", { type: "keyUp", key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk, modifiers: k.modifiers ?? 0 });
+    };
+    const ENTER = { key: "Enter", code: "Enter", vk: 13, text: "\r" };
+    const SPACE = { key: " ", code: "Space", vk: 32, text: " " };
+    const CTRL_K = { key: "k", code: "KeyK", vk: 75, modifiers: 2 };
+    /** Cross from the door and judge the crossing: the hash reaches the workroom, then the stage is gone. */
+    const cross = async (page, name, unmountName, act) => {
+      const acted = await act();
+      const reached = acted && (await until(async () => String(await hash(page)).startsWith("#hq"), 5000));
+      if (reached) { report.crossings++; if ((await count(page, "[data-stage]")) > 0) report.warpHeld++; }
+      record(name, reached, acted ? `the hash stayed ${JSON.stringify(redactSecrets(String(await hash(page)), [token]))}` : "the control was not there to act on");
+      if (!reached) { record(unmountName, false, "never crossed"); return; }
+      await sleep(STAGE_UNMOUNT_MS + UNMOUNT_MARGIN_MS);
+      const stages = await count(page, "[data-stage]");
+      const opened = await inWorkroom(page);
+      record(unmountName, stages === 0 && opened, `stage nodes=${stages} workroom opened=${opened}`);
+    };
+    const step = async (fn, names) => {
+      const before = report.checks.length;
+      try { await fn(); } catch (e) {
+        // A step that threw records every check it still owed as FAILED, so ran counts stay honest.
+        const done = new Set(report.checks.slice(before).map((c) => c.name));
+        for (const nm of names) if (!done.has(nm)) record(nm, false, `threw: ${e?.message ?? e}`);
+      }
+    };
+
+    // ── the healthy door, in this mood ──
+    const healthy = await fresh(null);
+    const P = healthy.page;
+    await step(async () => {
+      await go(P, `#${tokenPart}`);
+      record("door-surface", await onDoor(P), "no [data-surface=front-door] on /");
+      record("door-canvas", await until(async () => (await count(P, '[data-stage="face"] canvas')) > 0, capMs), "no canvas inside [data-stage=face]");
+      const enters = await count(P, "[data-enter-hq]");
+      record("door-one-enter", enters === 1, `[data-enter-hq] count=${enters}`);
+      const fallback = await count(P, "[data-stage-fallback]");
+      record("door-no-fallback", fallback === 0, `a healthy stage showed the fallback line (${fallback})`);
+    }, ["door-surface", "door-canvas", "door-one-enter", "door-no-fallback"]);
+    await step(async () => {
+      await go(P, `#hq&${tokenPart}`);
+      const opened = await inWorkroom(P);
+      await sleep(MIN_WATCH_MS);
+      const stages = await count(P, "[data-stage]");
+      record("hq-no-stage", opened && stages === 0, `workroom opened=${opened} stage nodes=${stages}`);
+      const cls = await val(P, "document.documentElement.className");
+      record("hq-mood", opened && moodHolds(cls, mood), `html class=${JSON.stringify(cls)}`);
+    }, ["hq-no-stage", "hq-mood"]);
+    await step(async () => {
+      await go(P, `#${tokenPart}`);
+      await onDoor(P);
+      await cross(P, "pointer-enter", "pointer-unmount", () => click(P, "[data-enter-hq]"));
+    }, ["pointer-enter", "pointer-unmount"]);
+    for (const [name, key] of [["enter-key", ENTER], ["space-key", SPACE]]) {
+      await step(async () => {
+        await go(P, `#${tokenPart}`);
+        await onDoor(P);
+        await cross(P, name, `${name}-unmount`, async () => {
+          const focused = await val(P, `(function () { var b = document.querySelector("[data-enter-hq]"); if (!b) return false; b.focus(); return document.activeElement === b; })()`);
+          if (focused !== true) return false;
+          await press(P, key);
+          return true;
+        });
+      }, [name, `${name}-unmount`]);
+    }
+    await step(async () => {
+      // From the workroom the last crossing left open: the exit is the rail's brand on desktop.
+      const clicked = await click(P, "button[data-exit-hq]");
+      const back = clicked && (await until(async () => modeOf(await hash(P)) === "door" && (await count(P, '[data-surface="front-door"]')) === 1, capMs));
+      const h = String(await hash(P));
+      record("exit-to-door", back && h === exitHash(`#hq&${tokenPart}`), clicked ? `the hash reads ${JSON.stringify(redactSecrets(h, [token]))}` : "no visible [data-exit-hq] in the workroom");
+    }, ["exit-to-door"]);
+    await step(async () => {
+      await onDoor(P);
+      await val(P, "document.activeElement && document.activeElement.blur && document.activeElement.blur()");
+      await press(P, CTRL_K);
+      record("palette-on-door", await until(async () => (await count(P, '[role="dialog"][aria-modal="true"]')) === 1, capMs), "Ctrl+K opened no palette on the door");
+    }, ["palette-on-door"]);
+    record("healthy-no-exception", healthy.exceptions.length === 0, healthy.exceptions.slice(0, 3).join(" | "));
+    await close(P);
+
+    // ── the guards: WebGL refused, and a stage that throws ──
+    for (const [prefix, script] of [["webgl-off", NO_WEBGL_SCRIPT], ["throwing-stage", THROWING_STAGE_SCRIPT]]) {
+      const g = await fresh(script);
+      await step(async () => {
+        await go(g.page, `#${tokenPart}`);
+        await onDoor(g.page);
+        record(`${prefix}-fallback`, await until(async () => (await visible(g.page, "[data-stage-fallback]")) === true, capMs), "no visible [data-stage-fallback] line");
+        const clicked = await click(g.page, "[data-enter-hq]");
+        record(`${prefix}-enter`, clicked && (await inWorkroom(g.page)), clicked ? `ENTER HQ did not open the workroom (hash ${JSON.stringify(redactSecrets(String(await hash(g.page)), [token]))})` : "no [data-enter-hq] to press");
+      }, [`${prefix}-fallback`, `${prefix}-enter`]);
+      record(`${prefix}-no-exception`, g.exceptions.length === 0, g.exceptions.slice(0, 3).join(" | "));
+      await close(g.page);
+    }
+    return report;
+  }, log);
 }
 
 async function main(argv) {
