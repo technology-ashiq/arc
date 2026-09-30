@@ -57,6 +57,8 @@ Receipts (main clone): `kickoff.done` `01M3QF38HX8BA33G1B52RRQZ3G` · approval r
 
 - P03 built: org/stages.yaml (8 stages, receipt-measured exit criteria), the deterministic dispatcher (lib/dispatch.mjs + org-dispatch CLI, dry-run by default, --emit as scheduler:org-dispatch, and a jobs/ wrapper as the scheduler entry). It proposes only for governed teams, carries goal ancestry, enforces the queue cap of 7, counts vacancy demands (a hire at 3), sends one budget-cap request per spent seat, proposes a stage change when every criterion is met, and never duplicates an open proposal. The first org review (--verdicts) ran over 37 staffed seats: keep 35, promote 0, retrain 1 (board-advisors, 1/4 ok), retire 1 (devops-release, 8 runs none ok). Heartbeat evidence never promotes. The job registration waits on the owner policy row (owner-actions.md section 2).
 
+- **CI GREEN 2026-09-30: run 36658835170, 19/19 jobs at 3d1a29dc** (head SHA confirmed; the last Windows shard ran long and finished success). Boundary attack: 4 passes, 39 findings, all fixed except 2 LOW in debt. The logic surface never produced a result: the free model timed out, then deepseek via OpenRouter returned HTTP 403 (debt row 3, owner account).
+
 **Next step:** P02 needs Nilluvai registered (ADR-1612) -- asked of the owner; P02 non-pilot parts (team schema, digest gate, sync --team, hire path) build meanwhile.
 
 **Open owner items (not blocking Phase 00):** register Nilluvai via `venture-register` by the end of
