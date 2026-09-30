@@ -20,10 +20,10 @@ depends-on: —
 |---|---|---|---|
 | 00 | The catalog + its gate — ruling on the spine, `products/org`, 71 cards, `org-coverage` + `--mutant-selftest`, generated chart, genesis digest | 2.5d | 🔨 built, closes on CI green + ruling approval |
 | 01 | Attribution + scorecard — `org/attribution.yaml`, `org review --role` + `--audit`; **day-3 kill checkpoint**; Nilluvai pilot gate | 1.5d | 🔨 built, day-3 checkpoint PROCEED (5 seated roles) |
-| 02 | Staffing — team manifest + `org.team` digest, `sync-to-project --team`, Nilluvai staffed, hire path + bench interview, three skills | 2.5d | 🔨 mechanism built; pilot parts wait on Nilluvai |
-| 03 | The COO + the review loop — `org-dispatch` script-job, five pilot days, first `org review`, retro + seal | 2d + 5 elapsed | 🔨 dispatcher + review built; the live five days wait on Nilluvai + the owner policy row |
+| 02 | Staffing — team manifest + `org.team` digest, `sync-to-project --team`, Nilluvai staffed, hire path + bench interview, three skills | 2.5d | 🔨 mechanism built; pilot parts deferred to the first venture (ADR-1612 Am. 1) |
+| 03 | The COO + the review loop — `org-dispatch` script-job, five pilot days, first `org review`, retro + seal | 2d | 🔨 dispatcher + review built; the five pilot days deferred to the first venture (ADR-1612 Am. 1); job registration waits on the owner policy row |
 
-**Appetite burn:** 6.5 of 10 days used (8.5 d planned · 1.5 d slack · + 5 elapsed pilot days in Phase 03).
+**Appetite burn:** 6.5 of 10 days used (8.5 d planned · 1.5 d slack; the 5 elapsed pilot days moved to the first venture).
 
 ## Done-log
 
@@ -59,8 +59,8 @@ Receipts (main clone): `kickoff.done` `01M3QF38HX8BA33G1B52RRQZ3G` · approval r
 
 - **CI GREEN 2026-09-30: run 36658835170, 19/19 jobs at 3d1a29dc** (head SHA confirmed; the last Windows shard ran long and finished success). Boundary attack: 4 passes, 39 findings, all fixed except 2 LOW in debt. The logic surface never produced a result: the free model timed out, then deepseek via OpenRouter returned HTTP 403 (debt row 3, owner account).
 
-**Next step:** P02 needs Nilluvai registered (ADR-1612) -- asked of the owner; P02 non-pilot parts (team schema, digest gate, sync --team, hire path) build meanwhile.
+**Next step:** close Phases 00 → 03 via `/arc-phase-done` (CI 19/19 green at 6098f8a3 after the main merge), raise a fresh genesis request over the final catalog, then merge PR #302.
 
-**Open owner items (not blocking Phase 00):** register Nilluvai via `venture-register` by the end of
+**Change 2026-10-01 (`/arc-change`, owner-approved in session):** the Nilluvai pilot is deferred to the first registered venture (ADR-1612 Amendment 1). REQ-08 dropped (acceptance carried verbatim), A-06 deferred, the Kill-criteria pilot gate marked FIRED and routed. Nilluvai registration is no longer an owner blocker for this cycle. **Open owner items:** the `process:org-dispatch` policy row (job registration only, not a close blocker) · the OpenRouter 403 (logic attack surface) · rejustify-or-retire the expired `build-in-public-draft` router hire (engine lane, ADR-1622).
 Phase 01 (else the cycle pauses there, ADR-1612) · rejustify-or-retire the expired
 `build-in-public-draft` router hire (engine lane, ADR-1622).

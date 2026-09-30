@@ -3,10 +3,10 @@
 **Goal (one line):** a ₹0 deterministic dispatcher proposes Nilluvai's next jobs daily with goal
 ancestry, within a cap of 7 and every seat's budget, for five live days — and the first monthly
 `org review` scores every staffed seat.
-**Appetite:** 2 days + 5 heartbeat-days (≤ 9 calendar)
+**Appetite:** 2 days (the 5 heartbeat-days moved to the first venture, ADR-1612 Amendment 1)
 **Depends on:** phase-02
 **Owner prerequisite:** the `process:org-dispatch` row in `hq.policy.yaml` (ADR-1623) — absent → dry-run only.
-**REQs closed here:** REQ-08, REQ-10 (absorbs REQ-12).
+**REQs closed here:** REQ-10 (absorbs REQ-12). REQ-08 deferred (ADR-1612 Amendment 1).
 
 ## Scope
 - `org-dispatch` as a `type: script` job in `hq.jobs.yaml`, `catchup: run`, subject
@@ -22,7 +22,7 @@ ancestry, within a cap of 7 and every seat's budget, for five live days — and 
 - Retro and seal: HISTORY, PORTFOLIO row, lane header in the same commit as the close.
 
 ## Exit criteria (Definition of Done)
-- [ ] REQ-08: 5 heartbeat-days, 0 executions, ≥ 10 decided, accept rate recorded from the spine (≥ 50% or reported **failed**, not re-scoped)
+- [~] REQ-08 — DEFERRED to the first registered venture (ADR-1612 Amendment 1); REQ dropped from this cycle, acceptance carried verbatim in PLAN
 - [ ] REQ-10: ≤ 7 proposals/day held or the over-cap day printed; budget-cap arm proven
 - [ ] first `org review` receipts; two-surface `/arc-attack` on the dispatcher (ADR-1611); CI green per JOB; tracker updated
 
@@ -53,7 +53,7 @@ Model-written proposals · raising the dispatcher above L1 · a face room for th
 - ORG-R: the process `role:` slot, `arc skill import`, head-judge emission and the hire-to-own command are v2 — not built this cycle, triggers recorded (ADR-1618).
 - Phase order is catalog+gate → attribution+scorecard → staffing → dispatcher+review; it is never reordered.
 - The day-3 kill checkpoint asks whether the attribution map places today's live-spine receipts on at least three seated roles; if not, the cycle STOPs and the finding is recorded (ADR-1604).
-- ORG-L: the pilot is Nilluvai, registered through `venture-register` before Phase 02; arc itself is never the pilot (`venture-register.mjs:73`); if it is not registered, the cycle pauses after Phase 01 (ADR-1612).
+- ORG-L: the pilot venture is registered through `venture-register` and is never arc itself (`venture-register.mjs:73`); the five-day pilot runs when the first real venture (Nilluvai or another) is registered, not inside Cycle 18 (ADR-1612 Amendment 1, owner ruling 2026-10-01).
 - ORG-M: the org is its own product — `products/org`, data under `org/`, scripts under `.claude/scripts/org/` (ADR-1613).
 - The owner ruling of 2026-09-29 is recorded on the spine as a `decision.recorded` before any org file ships, and ADR century 1600–1699 is this lane's only band (ADR-1600).
 - Nothing about an unannounced venture's positioning is committed to this public repo; team manifests carry ids, stages, heads and budgets only (ADR-1619).

@@ -79,7 +79,7 @@ acceptance line was lost**; each survives verbatim inside its host row.
 | REQ-05 | A staffed role's performance is derived from receipts, never typed. | `org review --role R` re-derives runs, accepts, rejects, incidents and cost from the spine; `--audit` recomputes every number and diffs to 0; a role with 0 attributable receipts prints `no evidence`, never `0%`/`100%`. | 1 | active |
 | REQ-06 | A team manifest cannot change silently. | Mutant edit to `org/teams/VENTURE.team.yaml` with no approving `decision.recorded` over its digest (profile `org.team`) exits 1 — the ADR-1017 pattern. | 2 | active |
 | REQ-07 | Installing a team installs its staffed roles and only what they need. | `sync-to-project DIR --team VENTURE` golden test: installed set = product closure of bound agents/skills/scripts via `arc-products.mjs` + `core`, nothing else (diff = 0 lines). | 2 | active |
-| REQ-08 | The dispatcher proposes real work the owner wants. | Pilot venture, 5 heartbeat-days (each proven by an `org-dispatch` run for that IST date; window ≤ 9 calendar days): every proposal names role · task · goal ancestry · budget; **0 executions**; ≥ 10 proposals decided and owner accept rate ≥ 50% (accepts ÷ decided, undecided printed and counted against); < 10 decided = reported failed-for-insufficient-evidence. | 3 | active |
+| REQ-08 | _(deferred 2026-10-01 to the first registered venture, ADR-1612 Amendment 1; acceptance carried verbatim)_ The dispatcher proposes real work the owner wants. | Pilot venture, 5 heartbeat-days (each proven by an `org-dispatch` run for that IST date; window ≤ 9 calendar days): every proposal names role · task · goal ancestry · budget; **0 executions**; ≥ 10 proposals decided and owner accept rate ≥ 50% (accepts ÷ decided, undecided printed and counted against); < 10 decided = reported failed-for-insufficient-evidence. | 3 | dropped |
 | REQ-09 | _(merged into REQ-11 at kickoff — tier-M cap; acceptance carried verbatim)_ | A vacancy is filled only through `agent-scaffold` (or the router hire path) with the card change in the same proposal branch; a card flipped to `staffed` without it FAILs. Genesis: one owner `decision.recorded` over the catalog digest (profile `org.role`). | 2 | dropped |
 | REQ-10 | The company does not eat the CEO — the dispatcher throttles itself. | Owner load/day = `decision.recorded` count by kind; queue cap holds proposals ≤ 7/day and a day over cap is printed; a seat over its budget line gets 0 further proposals and exactly 1 `approval.requested` (`why_now: budget-cap`) (was REQ-10 + REQ-12). | 3 | active |
 | REQ-11 | A seat reaches `staffed` only through a hire and an interview — and a hired seat only through the engine. | Mutants exit 1: `origin: hired` with no `hire.runtime`; staffed with no fixture verdict; staffed with no scaffold/hire branch; a card naming a model string. Hired receipts carry `model_source` of `router` or `trial`, never `none` (absorbs REQ-09). | 2 | active |
@@ -102,7 +102,7 @@ inside Phase 03. A constraint, not an estimate: blown → cut scope or kill a ph
   count, and the map's digest is committed BEFORE the count runs. If not → **STOP the cycle and record
   the finding** (the premise that roles can be managed like employees is unproven). ADR-1604.
 - **50% tripwire (day 5):** Phase 01 not closed → mandatory scope-cut conversation.
-- **Pilot gate (end of Phase 01):** Nilluvai not registered with an approved `ledger.criteria` receipt →
+- **Pilot gate (end of Phase 01) — FIRED 2026-10-01, routed to ADR-1612 Amendment 1 (pilot deferred, cycle continues without it):** Nilluvai not registered with an approved `ledger.criteria` receipt →
   the cycle **pauses** with P00–P01 banked; no substitute pilot (ADR-1612).
 - **100%:** cut or kill, never extend.
 
@@ -161,7 +161,7 @@ flowchart TB
 | 1609 | ORG-I — E2 roles are human-seated; verbatim `ungrantable_actions` only | accepted |
 | 1610 | ORG-J — `org-coverage` FAIL-FROM-BIRTH, `--mutant-selftest`, walkers imported | accepted |
 | 1611 | ORG-K — two-surface adversarial pass on each gate and the dispatcher | accepted |
-| 1612 | ORG-L — pilot is Nilluvai, registered before P02, or pause after P01 | accepted |
+| 1612 | ORG-L — pilot is Nilluvai, registered before P02, or pause after P01; Amendment 1: pilot deferred to the first registered venture | accepted, amended 2026-10-01 |
 | 1613 | **ORG-M — the org is its own product: `products/org`, data under `org/`, scripts under `.claude/scripts/org/`** | accepted |
 | 1614 | ORG-N — origin `own` or `hired` only; hires enter through `arc-run`; bench interview; no model strings | accepted |
 | 1615 | ORG-O — a head is a judge, never a relay; ≥ 2 staffed workers; `high-judgment` head | accepted |
@@ -187,7 +187,7 @@ flowchart TB
 - ORG-R: the process `role:` slot, `arc skill import`, head-judge emission and the hire-to-own command are v2 — not built this cycle, triggers recorded (ADR-1618).
 - Phase order is catalog+gate → attribution+scorecard → staffing → dispatcher+review; it is never reordered.
 - The day-3 kill checkpoint asks whether the attribution map places today's live-spine receipts on at least three seated roles; if not, the cycle STOPs and the finding is recorded (ADR-1604).
-- ORG-L: the pilot is Nilluvai, registered through `venture-register` before Phase 02; arc itself is never the pilot (`venture-register.mjs:73`); if it is not registered, the cycle pauses after Phase 01 (ADR-1612).
+- ORG-L: the pilot venture is registered through `venture-register` and is never arc itself (`venture-register.mjs:73`); the five-day pilot runs when the first real venture (Nilluvai or another) is registered, not inside Cycle 18 (ADR-1612 Amendment 1, owner ruling 2026-10-01).
 - ORG-M: the org is its own product — `products/org`, data under `org/`, scripts under `.claude/scripts/org/` (ADR-1613).
 - The owner ruling of 2026-09-29 is recorded on the spine as a `decision.recorded` before any org file ships, and ADR century 1600–1699 is this lane's only band (ADR-1600).
 - Nothing about an unannounced venture's positioning is committed to this public repo; team manifests carry ids, stages, heads and budgets only (ADR-1619).
@@ -241,7 +241,7 @@ flowchart TB
 | A-03: an `approval.requested` profile governs `team.yaml` with zero new kinds (ADR-1017 precedent). | The digest pattern cannot express per-stage edits → one ADR for a finer profile, still zero kinds (ADR-1603). | 2 |
 | A-04: `org-dispatch` registers as a `type: script` job on `process:org-dispatch` (a `job_stub: true` process) that `jobs-lint` and `policy-lint` accept at ₹0 once the owner lands its policy row. | The owner's row is absent when Phase 03 opens → dispatcher dry-run only (prints, emits nothing) until it lands; `job:` subjects stay forbidden, the INR ceiling is never raised (ADR-1623). | 3 |
 | A-05: `org-coverage` and `org review` read real inputs, not empty sets. | Any of: the walker's agent count ≠ `.claude/agents/*.md` file count; `org review --all` reads 0 events from the main-clone spine; a Phase 03 dry run prints 0 proposals for a pilot with ≥ 1 staffed seat — each is a wrong line, not a wrong idea → fix and re-run the mutant arm before proceeding (ADR-1610). | 0 |
-| A-06: the owner accepts ≥ 50% of dispatch proposals over five heartbeat-days. | < 10 decided or < 50% accepted → dispatcher stays L1, misses classified in retro, REQ-08 reported **failed**, not re-scoped (ADR-1605). | 3 |
+| A-06: the owner accepts ≥ 50% of dispatch proposals over five heartbeat-days. | < 10 decided or < 50% accepted → dispatcher stays L1, misses classified in retro, REQ-08 reported **failed**, not re-scoped (ADR-1605). | 3 | DEFERRED 2026-10-01 with REQ-08 (ADR-1612 Amendment 1) |
 | A-07: bench can run a role's fixture set as an ordinary bench event with a human verdict, no new event type, no router row (ADR-0912 / ADR-0220). | Bench needs a new event shape → the interview is hand-recorded (`decision.recorded`, profile `org.role`) and the bench change becomes a bench-lane item; REQ-11 still holds (ADR-1614). | 2 |
 
 _Dropped from the design source's eight to fit the cap of 7:_ its A-07 (face-coverage exports stay
@@ -303,8 +303,8 @@ green on the tree and red on every mutant → generated chart. No external depen
 |---|---|---|---|
 | 00 | **The catalog + its gate.** Ruling on the spine; `products/org` born; card schema incl. `origin`/`hire`/`produces`/`consumes`/`escalate_to`/`fixtures`; 71 cards; `treeScripts` additive export; `org-coverage.mjs` + `--mutant-selftest`; generated org chart with own/hired counts; genesis `decision.recorded` over the catalog digest; blueprint §4 → pointer. | 2.5 days | none |
 | 01 | **Attribution + scorecard.** `org/attribution.yaml` over today's actors/processes/kinds; `org review --role` + `--audit` (runs, accepts, rejects, incidents, cost); **day-3 kill checkpoint**; Nilluvai pilot gate read at close. | 1.5 days | phase-00 |
-| 02 | **Staffing.** `team.yaml` schema (`heads:`, per-seat `budget`) + `org.team` digest governance; `sync-to-project --team` golden; Nilluvai team staffed; hire path wired to cards with the bench interview; pilot chain schemas; three skills. | 2.5 days | phase-01 |
-| 03 | **The COO + the review loop.** `org-dispatch` script-job on a heartbeat (proposals only, cap 7, vacancy counter, stage criteria, budget-cap skip); five pilot heartbeat-days; first `org review`; retro and seal. | 2 days + 5 heartbeat-days (≤ 9 calendar) | phase-02 + owner policy row (ADR-1623) |
+| 02 | **Staffing.** `team.yaml` schema (`heads:`, per-seat `budget`) + `org.team` digest governance; `sync-to-project --team` golden; (Nilluvai team staffed: deferred to the first venture, ADR-1612 Amendment 1); hire path wired to cards with the bench interview; pilot chain schemas; three skills. | 2.5 days | phase-01 |
+| 03 | **The COO + the review loop.** `org-dispatch` script-job on a heartbeat (proposals only, cap 7, vacancy counter, stage criteria, budget-cap skip); (five pilot heartbeat-days: deferred to the first venture, ADR-1612 Amendment 1); first `org review`; retro and seal. | 2 days | phase-02 + owner policy row (ADR-1623) |
 
 **Planned 8.5 d effort + 5 pilot heartbeat-days · cap 10 d · 1.5 d slack.**
 

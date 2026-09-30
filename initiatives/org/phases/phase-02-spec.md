@@ -23,8 +23,8 @@ exactly its staffed seats, and no seat reaches `staffed` without a hire branch a
 
 ## Exit criteria (Definition of Done)
 - [ ] REQ-06, REQ-07, REQ-11 acceptance lines pass on CI; mutant arms name their plants
-- [ ] Nilluvai team manifest approved by `decision.recorded` over its digest
-- [ ] ≥ 1 seat staffed through a real hire branch + interview verdict
+- [~] Nilluvai team manifest approved by `decision.recorded` over its digest — DEFERRED to the first registered venture (ADR-1612 Amendment 1)
+- [~] ≥ 1 seat staffed through a real hire branch + interview verdict — DEFERRED to the first registered venture (ADR-1612 Amendment 1)
 - [ ] two-surface `/arc-attack` on digest gate + sync `--team` (ADR-1611); CI green per JOB; tracker updated
 
 ## Verification plan
@@ -40,7 +40,7 @@ Coarse at kickoff (refined via `/arc-change` when the phase starts): `bats tests
 Dispatcher and review loop (Phase 03) · process `role:` slot, `arc skill import`, head-judge emission, hire-to-own command (ADR-1618).
 
 ## Your-setup / pending
-- Owner: Nilluvai registered (ADR-1612) — else this phase does not start.
+- Owner: Nilluvai registration is no longer a gate for this phase (ADR-1612 Amendment 1, 2026-10-01); the pilot parts run with the first venture.
 - Owner: approve the team digest and each interview verdict.
 
 ## Non-negotiables (verbatim from PLAN)
@@ -56,7 +56,7 @@ Dispatcher and review loop (Phase 03) · process `role:` slot, `arc skill import
 - ORG-R: the process `role:` slot, `arc skill import`, head-judge emission and the hire-to-own command are v2 — not built this cycle, triggers recorded (ADR-1618).
 - Phase order is catalog+gate → attribution+scorecard → staffing → dispatcher+review; it is never reordered.
 - The day-3 kill checkpoint asks whether the attribution map places today's live-spine receipts on at least three seated roles; if not, the cycle STOPs and the finding is recorded (ADR-1604).
-- ORG-L: the pilot is Nilluvai, registered through `venture-register` before Phase 02; arc itself is never the pilot (`venture-register.mjs:73`); if it is not registered, the cycle pauses after Phase 01 (ADR-1612).
+- ORG-L: the pilot venture is registered through `venture-register` and is never arc itself (`venture-register.mjs:73`); the five-day pilot runs when the first real venture (Nilluvai or another) is registered, not inside Cycle 18 (ADR-1612 Amendment 1, owner ruling 2026-10-01).
 - ORG-M: the org is its own product — `products/org`, data under `org/`, scripts under `.claude/scripts/org/` (ADR-1613).
 - The owner ruling of 2026-09-29 is recorded on the spine as a `decision.recorded` before any org file ships, and ADR century 1600–1699 is this lane's only band (ADR-1600).
 - Nothing about an unannounced venture's positioning is committed to this public repo; team manifests carry ids, stages, heads and budgets only (ADR-1619).
