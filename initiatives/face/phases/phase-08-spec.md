@@ -2,10 +2,10 @@
 
 **Goal (one line):** REQ-10 — two real days where every decision goes through the face and ≥1 op per day is run from it, measured by `face-dogfood`; the retro and HISTORY close the cycle. Claims the surface is operable, never that the habit holds (ADR-1329).
 **Appetite:** 2 days (real calendar days)
-**Depends on:** phase-05, phase-06, phase-07
+**Depends on:** phase-05, phase-06, phase-07, phase-09
 **Serves:** REQ-10
 **Branch:** `feat/face-v2-08` (retro, HISTORY, tracker only)
-**Preconditions (STOP if absent):** Phase 07's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 07` from the main clone.
+**Preconditions (STOP if absent):** Phase 07's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 07` from the main clone, **and Phase 09 (the front door, ADR-1349) reads ✅ CLOSED via `/arc-phase-done 09`, or the owner has said in writing that the two days run without it.**
 
 ## Exit criteria (Definition of Done)
 
