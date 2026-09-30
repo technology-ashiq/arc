@@ -1,0 +1,88 @@
+{
+  "phase": "07",
+  "commit": "525042e78b2399953c933dd467c9b8d2937d7bdc",
+  "short": "525042e7",
+  "generated": "2026-09-30T02:48:11Z",
+  "files": [
+    {
+      "name": "attack-1f95807-r1-logic.json",
+      "sha256": "e5dc71af1a52ac59b8489396b9df75410f1e4c023e2300c8def58496e9765821"
+    },
+    {
+      "name": "attack-2436d05-r1-boundary.json",
+      "sha256": "50e8db4e1b3193ea70c27d63b79b18a21f910028f36f11087e82fcb7c6096d58"
+    },
+    {
+      "name": "attack-5308c9c-r1-boundary.json",
+      "sha256": "a009556f7788894b508411012dc98cd9d3126bcf028cdf471b86219e3249b308"
+    },
+    {
+      "name": "attack-53ee223-r1-boundary.json",
+      "sha256": "289b01378054231dcaacea35c36b8a99e2213eb6daa7002b74969eafec28a4fe"
+    },
+    {
+      "name": "attack-53ee223-r1-logic.json",
+      "sha256": "233f6c7513498d459cfc94d7eb78cf4733dd5918eb568432b668ab2e353ac267"
+    },
+    {
+      "name": "attack-60c13e9-r1-logic.json",
+      "sha256": "cf4bdf5a8e108f62018d154183ad918d6958679c388ec76b6e629312c59a37e8"
+    },
+    {
+      "name": "attack-6464aab-r2-boundary.json",
+      "sha256": "40c3f7bb928bfd856de49c38eb8e50f701a406c80261161835c0e0998402ee52"
+    },
+    {
+      "name": "attack-7d9d906-r2-boundary.json",
+      "sha256": "74ce063771f1a633c6f4fafe5f1035603476c72cb568831ac72e27407b9b7c0d"
+    },
+    {
+      "name": "attack-845e0a5-r1-boundary.json",
+      "sha256": "b3267ab9b24b75d9cd6b4060940580df0f455cce41d693c56a53269dc28477e2"
+    },
+    {
+      "name": "attack-94ffba3-r1-boundary.json",
+      "sha256": "0287198ecdb617ef5316119433e59030b50238484c2953911f16331ef54beee4"
+    },
+    {
+      "name": "attack-94ffba3-r1-logic.json",
+      "sha256": "80061b2d9468aec268c6c80c7b2c9cf5c7ebb04d5f8e12d46084891c7000d5ef"
+    },
+    {
+      "name": "attack-b5f5e03-r1-boundary.json",
+      "sha256": "ce882b264465ab2dce1cb103fedc905c3143a271f03beadf0a9c7ed996a16266"
+    },
+    {
+      "name": "attack-b8707be-r2-boundary.json",
+      "sha256": "8a219d46b053431a8523f2d2e6982ed72d7a6007c9c1b4a74b871d326a89f772"
+    },
+    {
+      "name": "attack-bb05c1e-r1-boundary.json",
+      "sha256": "d07133d43c19ff3241f14eefd624f6b980a7751401ac464936b4400a91b31f71"
+    },
+    {
+      "name": "attack-bb05c1e-r1-logic.json",
+      "sha256": "972900c44d76eca509c83a7f521c16ee7478bf29041085920aeb7fbdb9609fcb"
+    },
+    {
+      "name": "attack-da7d131-r1-boundary.json",
+      "sha256": "b49d385f37a1934d56e0457f0d5a2173d1e84fb77b2f56c753ee7b8d102f326f"
+    },
+    {
+      "name": "attack-da7d131-r1-logic.json",
+      "sha256": "9ee47184dc5aa489c844205495e77ebf4863c58df9d4c829a5e5d6037a9a8502"
+    },
+    {
+      "name": "attack-f1ccac3-r1-boundary.json",
+      "sha256": "9c57481fabc3550609303f74e19827f97aca480bfcd50b89057a496e9a9a6ed1"
+    },
+    {
+      "name": "live-door-main-clone.txt",
+      "sha256": "8b08b1f1080506d78f98b97672a14a2fccb5d85e39ed9c1f73073e0a9aa63bf3"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "95f34624975b7cd4186ed6b4d737a4eec5d625ab031b4a00cbf9c9bcb848598d"
+    }
+  ]
+}
