@@ -756,15 +756,27 @@ async function apiAsk(ctx, body) {
   return { mode: ctx.mode, ...judgeModelAnswer(res.stdout, res.stderr, await spineIds(ctx)), model: { name: active.name, id: active.model } };
 }
 
-/** A key never leaves the door, including inside an error the driver printed. @param {string} text @param {string | undefined} key */
+/**
+ * A key never leaves the door, including inside an error the driver printed -- raw, JSON-escaped or URL-encoded (attack
+ * c50172d B6). models.mjs refuses a key under 8 characters, so redaction never eats a common character.
+ * @param {string} text @param {string | undefined} key
+ */
 function redactKey(text, key) {
-  return key ? text.split(key).join("[key]") : text;
+  if (!key) return text;
+  const forms = [...new Set([key, JSON.stringify(key).slice(1, -1), encodeURIComponent(key)])].filter((f) => f.length >= 4);
+  return forms.reduce((t, f) => t.split(f).join("[key]"), text);
 }
 
-/** Every receipt id on the spine the door reads, so a citation is checked against the record and not against itself. */
+/**
+ * Every receipt id on the spine the door reads, so a citation is checked against the record and not against itself,
+ * and the face-ask run.completed ids, so the receipt the answer names is one this process really wrote.
+ */
 async function spineIds(ctx) {
   const { events } = await readAll(ctx.root);
-  return new Set(events.map((e) => e.event.id));
+  const ids = new Set(events.map((e) => e.event.id));
+  /** @type {Set<string>} */
+  const runs = new Set(events.filter((e) => e.event.kind === "run.completed" && String(e.event.process ?? "").startsWith("face-ask@")).map((e) => e.event.id));
+  return Object.assign(ids, { runs });
 }
 
 // The labels the face shows, held in one place so the fixture and the client read the same words (ADR-1350 section 3).
@@ -785,7 +797,11 @@ export function judgeModelAnswer(stdout, stderr, ids) {
   if (!out || typeof out !== "object" || typeof out.answer !== "string" || !out.answer.trim() || !["arc", "general"].includes(out.lane) || !Array.isArray(out.citations)) {
     throw new DashError("ASK_FAILED", "the model's answer did not come back as the face-ask contract");
   }
-  const receipt = (String(stderr).match(/^arc-run: receipt run\.completed ([0-9A-HJKMNP-TV-Z]{26})$/m) || [])[1] ?? null;
+  // The LAST receipt line, and only if the spine holds it as a face-ask run.completed: a driver or a provider error can
+  // print a well-formed line of its own, and a claimed receipt nobody wrote is worse than none (attack c50172d B1).
+  const said = [...String(stderr).matchAll(/^arc-run: receipt run\.completed ([0-9A-HJKMNP-TV-Z]{26})$/gm)].map((m) => m[1]).pop() ?? null;
+  const runs = /** @type {Set<string> & { runs?: Set<string> }} */ (ids).runs;
+  const receipt = said && runs && runs.has(said) ? said : null;
   if (out.lane === "general") {
     return { source: "model", lane: "general", label: GENERAL_LABEL, answer: out.answer, citations: [], verified: false, unresolved: [], receipt };
   }
@@ -831,7 +847,8 @@ function apiModelsChange(ctx, body) {
   if (!got.ok) throw new DashError("MODELS_UNAVAILABLE", got.why);
   const step = models.applyChange(got.reg, body);
   if (!step.ok) throw new DashError("BAD_MODEL", step.why);
-  models.saveRegistry(got.path, step.reg);
+  const saved = models.saveRegistry(got.path, step.reg);
+  if (!saved.ok) throw new DashError("MODELS_UNAVAILABLE", saved.why);
   return { mode: ctx.mode, ...models.publicView(step.reg) };
 }
 

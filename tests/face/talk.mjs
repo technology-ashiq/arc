@@ -14,7 +14,10 @@
 //
 // Every section first asserts it RAN (the module loaded, the door came up) before asserting what it printed.
 
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, spawnSync, execFileSync } from "node:child_process";
+import { createServer } from "node:net";
+import { randomBytes } from "node:crypto";
+import * as fs from "node:fs";
 import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
@@ -27,9 +30,12 @@ import { unescapeDoorText } from "../../face/src/lib/door.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");
 const MODELS = join(REPO, ".claude", "scripts", "hq", "lib", "face", "models.mjs");
-const PORT = 8461;
-const LLM_PORT = 8462;
-const TOKEN = "talk-token";
+/** A port nothing holds right now, from a listen(0) probe (attack c50172d B2: fixed ports collided across shards). */
+const freePort = () => new Promise((res, rej) => { const srv = createServer(); srv.once("error", rej); srv.listen(0, "127.0.0.1", () => { const p = srv.address().port; srv.close(() => res(p)); }); });
+const PORT = await freePort();
+const LLM_PORT = await freePort();
+// Per run: a door this suite did not start cannot hold this token, so a 200 on it is this suite's own door.
+const TOKEN = `talk-${randomBytes(8).toString("hex")}`;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 // Built from parts so the literal never sits in this file whole: the repo-tree check below must find it nowhere.
 const PLANTED = ["sk", "or", "v1", "PLANTEDtalkKEY", "9f3a"].join("-");
@@ -86,6 +92,7 @@ const badFields = [
   { op: "activate", name: "OpenRouter free", key: "x" },
 ];
 check("A: a malformed change is refused (7 of 7), and no op reads a record back", badFields.every((b) => !m.applyChange(reg, b).ok));
+check("A: a key under 8 characters is refused, so redaction never has to eat a common character (attack c50172d B6)", !add(m.emptyRegistry(), { name: "k", baseUrl: "https://a.b/v1", model: "a", key: "abc1234" }).ok && add(m.emptyRegistry(), { name: "k", baseUrl: "https://a.b/v1", model: "a", key: "abcd1234" }).ok);
 
 const view = m.publicView(reg);
 check("A: the public view carries no key -- hasKey and the last four characters only",
@@ -140,11 +147,15 @@ check("E: modelsView -- rows from the door's public view, the key as its tail on
 check("E: modelsView -- a body that is not the list is no list, never a guessed one", T.modelsView({ models: "x" }).ok === false && T.modelsView(null).ok === false);
 
 // ── C0: the door's judge of a model reply, held directly ──
-const ids = new Set(["01J0000000000000000000000A"]);
+const ids = Object.assign(new Set(["01J0000000000000000000000A", "01J0000000000000000000000B"]), { runs: new Set(["01J0000000000000000000000B"]) });
 const jg = judgeModelAnswer(JSON.stringify({ lane: "general", answer: "x", citations: ["01J0000000000000000000000A"] }), "", ids);
 check("C0: a general reply is labelled general and its citations are DROPPED, whatever the model sent", jg.label === GENERAL_LABEL && jg.citations.length === 0 && jg.verified === false);
 const ja = judgeModelAnswer(JSON.stringify({ lane: "arc", answer: "x", citations: ["01J0000000000000000000000A"] }), "arc-run: receipt run.completed 01J0000000000000000000000B\n", ids);
 check("C0: an arc reply whose every citation is on the record is verified, and the receipt line is read", ja.verified === true && ja.label === ARC_LABEL && ja.receipt === "01J0000000000000000000000B");
+const forged = judgeModelAnswer(JSON.stringify({ lane: "general", answer: "x", citations: [] }), "arc-run: receipt run.completed 01ARZ3NDEKTSV4RRFFQ69G5FAV\n", ids);
+const lastWins = judgeModelAnswer(JSON.stringify({ lane: "general", answer: "x", citations: [] }), "arc-run: receipt run.completed 01ARZ3NDEKTSV4RRFFQ69G5FAV\narc-run: receipt run.completed 01J0000000000000000000000B\n", ids);
+check("C0: a receipt line naming a run the spine does not hold as a face-ask run.completed is dropped; the last line is the one read (attack c50172d B1)",
+  forged.receipt === null && lastWins.receipt === "01J0000000000000000000000B");
 const ju = judgeModelAnswer(JSON.stringify({ lane: "arc", answer: "x", citations: ["01J0000000000000000000000A", "01ZZZZZZZZZZZZZZZZZZZZZZZZ", "not-an-id"] }), "", ids);
 check("C0: one citation off the record makes the whole arc answer unverified, each bad id named", ju.verified === false && ju.label === UNVERIFIED_LABEL && ju.unresolved.length === 2);
 const jn = judgeModelAnswer(JSON.stringify({ lane: "arc", answer: "x", citations: [] }), "", ids);
@@ -163,11 +174,14 @@ const modelsFile = join(sandbox, "private", "models.json");
 const spineDir = join(sandbox, "spine");
 const gen = JSON.parse(execFileSync(process.execPath, [join(REPO, "tests/fixtures/face/gen-spine.mjs"), "--out", spineDir, "--count", "200", "--days", "3", "--seed", "talk-1"], { stdio: ["ignore", "pipe", "inherit"] }).toString());
 const CITE = gen.openApproval;
-const llm = await startFakeLlm({ port: LLM_PORT, citeId: CITE });
+/** @type {{ close: () => Promise<void>, requests: any[] } | null} */
+let llm = null;
 const dash = spawn(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--spine", spineDir, "--port", String(PORT)],
   { env: { ...process.env, ARC_DASH_TOKEN: TOKEN, ARC_DASH_JOURNAL_DIR: join(sandbox, "journal"), ARC_FACE_MODELS_FILE: modelsFile }, stdio: ["ignore", "ignore", "pipe"] });
 let stderr = "";
 dash.stderr.on("data", (d) => { stderr += d; });
+let spawnError = null;
+dash.on("error", (e) => { spawnError = e; });
 const H = { Authorization: `Bearer ${TOKEN}` };
 const bodies = [];
 const j = async (path, opts = {}) => {
@@ -180,12 +194,13 @@ const j = async (path, opts = {}) => {
 const post = (path, body) => j(path, { method: "POST", headers: { ...H, Origin: ORIGIN, "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 let up = false;
-for (let i = 0; i < 50 && !up; i++) {
+for (let i = 0; i < 50 && !up && !spawnError; i++) {
   await new Promise((r) => setTimeout(r, 200));
   try { up = (await j("/api/health", { headers: H })).status === 200; } catch { /* not yet */ }
 }
 try {
-  check("B: the door came up (vacuous-pass guard)", up, stderr.slice(0, 300));
+  check("B: the door came up (vacuous-pass guard)", up && !spawnError, String(spawnError ?? stderr.slice(0, 300)));
+  llm = await startFakeLlm({ port: LLM_PORT, citeId: CITE });
   check("C: the fixture spine names an open approval to cite (vacuous-pass guard)", typeof CITE === "string" && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(CITE), String(CITE));
   // ── D: no model added yet ──
   let d = await post("/api/ask", { q: "What is the boiling point of water at sea level?" });
@@ -235,14 +250,24 @@ try {
   const act = await post("/api/ask", { q: "approve the oldest one" });
   check("C: an action request is still refused by the reader, never handed to a model", act.status === 200 && /I read; I do not act/.test(unescapeDoorText(String(act.body.answer))) && llm.requests.length === 3);
   check("B: the planted key appears in NO door response (every body this suite read)", bodies.length >= 7 && bodies.every((b) => !b.includes(PLANTED)), `bodies=${bodies.length}`);
-  let grepHit = "";
-  try { grepHit = execFileSync("git", ["grep", "-l", "--untracked", "-F", PLANTED], { cwd: REPO, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch { grepHit = ""; }
-  check("B: the planted key is nowhere in the repo tree (tracked or untracked)", grepHit.trim() === "", grepHit.trim());
+  const grep = (needle) => spawnSync("git", ["grep", "-l", "--untracked", "--no-exclude-standard", "-F", needle], { cwd: REPO, encoding: "utf8" });
+  const g0 = grep(PLANTED);
+  check("B: the planted key is nowhere in the repo tree, ignored files included (git grep looked: exit 1, no output)", g0.status === 1 && String(g0.stdout).trim() === "", `status=${g0.status} error=${g0.error?.code ?? ""} hits=${String(g0.stdout).trim()}`);
+  // POSITIVE CONTROL (attack c50172d B3): the same search FINDS a needle planted in an ignored-or-untracked file, or
+  // the clean result above proved nothing. The file is removed whatever happens.
+  const needle = ["talk", "control", randomBytes(6).toString("hex")].join("-");
+  const probe = join(REPO, `.talk-control-${process.pid}.tmp`);
+  let g1 = null;
+  try { fs.writeFileSync(probe, needle); g1 = grep(needle); } finally { try { fs.rmSync(probe, { force: true }); } catch { /* best effort */ } }
+  check("B: MUTANT CONTROL -- the same search finds a needle planted in the tree (exit 0)", g1 && g1.status === 0 && String(g1.stdout).includes(".talk-control-"), `status=${g1 && g1.status}`);
 } finally {
   dash.kill();
-  await llm.close();
+  if (llm) await llm.close();
   try { rmSync(sandbox, { recursive: true, force: true }); } catch { /* a held handle on Windows; the sandbox is temp */ }
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exit(failed === 0 && ran >= 58 ? 0 : 1);
+// Exact, not a floor (attack c50172d B8): a check deleted from this file is a short run, never a clean one.
+const EXPECTED = 61;
+if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
+process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);

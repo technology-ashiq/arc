@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:judgeModelAnswer (receipt regex)",
+      "breaking_input": "A local or malicious provider returns an error body, or a driver prints a stderr line, such as `arc-run: receipt run.completed 01ARZ3NDEKTSV4RRFFQ69G5FAV`. This is a well-formed ULID for a run that never happened. The door takes the first /m match from the whole stderr stream.",
+      "why": "The door never checks the printed id against the spine, although the `ids` set is already in hand. Anyone who can write to stderr can forge the receipt id the face then shows as proof the answer was receipted. This is the twin of 'A printed id credited as a receipt' and 'a line in a shared stream proves nothing about who wrote it'.",
+      "fix": "Accept the receipt only if `ids.has(id)` and the event on the spine is kind run.completed for process face-ask. Otherwise return `receipt: null`. Take the last match rather than the first, or have arc-run print the id on a channel the driver cannot write to.",
+      "twin_of": "A printed id credited as a receipt -> A line in a shared stream proves nothing about who wrote it."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/face/talk.mjs:PORT/LLM_PORT, spawn(dash)",
+      "breaking_input": "Two bats shards, or a stale door left from a previous run, hold 8461 or 8462. `startFakeLlm` rejects with EADDRINUSE at top level, outside the try/finally. The suite crashes with no RAN line and leaks the sandbox. If only 8461 is taken, the health poll talks to the other process. The spawned dash has no 'error' listener, so a spawn failure is an unhandled event.",
+      "why": "These are fixed ports with no proof that the answer came from this suite's own door. They match the patterns 'A fixed port with no proof the answer came from this suite's door' and 'Every spawned child gets its error listener before anything else'. The suite is flaky under parallel shards.",
+      "fix": "Take free ports from a listen(0) probe, as harness-run's freePort does. Put the fake LLM start inside the try. Attach `dash.on('error')` immediately after spawn. Confirm the door's identity, for example a per-run token or a boot line carrying the pid, before trusting its health.",
+      "twin_of": "A fixed port with no proof the answer came from this suite's door -> A twin resource gets the same check twice."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/face/talk.mjs: git grep for PLANTED",
+      "breaking_input": "CI runs with `git` missing, the checkout not a repo, or git failing with exit 128. A leak into a gitignored file is also never searched. The catch sets grepHit to '' and the check 'planted key is nowhere in the repo tree' passes.",
+      "why": "An exit code with three answers is read as two: 1 means no match, 0 means match, and 128 or ENOENT means 'did not look'. A failure to look is read as an empty result, so the check can pass vacuously.",
+      "fix": "Read `status` from spawnSync. Pass only on exit 1 with empty output. Treat any other exit as FAIL and name it. Add `--no-index` or `--exclude-standard` handling so ignored files are scanned too. Add a positive control that plants the key in a temp file inside the repo and expects a hit.",
+      "twin_of": "An exit code with three answers read as two -> A failure to look is never an empty result."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:registryPath",
+      "breaking_input": "ARC_FACE_MODELS_FILE points at the repo through a spelling that JS `realpathSync` does not canonicalise. Examples are an 8.3 short name such as `C:\\Users\\ASHIQ~1\\orca\\...\\models.json` on Windows, or a re-cased path on macOS APFS. The in-repo check passes and the key is written inside the repo, one git add from public.",
+      "why": "`realpathSync` (the JS implementation) does not expand short names or fold case. The check compares names differently from the way the filesystem does. A repo at a drive root also fails, because `root + sep` becomes `C:\\\\`.",
+      "fix": "Use `realpathSync.native` on both sides. Compare with path.relative: refuse when the result does not start with `..` and is not absolute, and handle the drive-root case.",
+      "twin_of": "A holding check that sees too little -> compare the way the filesystem and the remote will."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:loadRegistry/saveRegistry",
+      "breaking_input": "models.json is a directory, is unreadable (EACCES), or is locked by an antivirus scan on Windows. `readFileSync` or `renameSync` throws raw. A leftover `models.json.<pid>.tmp` can also survive a crash and be reused after pid reuse, keeping its old permissions.",
+      "why": "These are filesystem throws inside the door's handler. They surface as a generic 500 INTERNAL, not as the MODELS_UNAVAILABLE the code promises ('never a silent empty list'). The tmp file that holds keys is not cleaned up on a failed rename.",
+      "fix": "Wrap read, write and rename in try/catch and return `{ok:false, why}` with the errno code. Unlink the tmp file on failure. Use an exclusive tmp name (`wx` flag, random suffix).",
+      "twin_of": "A failure to look is never an empty result."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:redactKey",
+      "breaking_input": "A key such as `ab\"c\\d` (KEY_RE allows `\"` and `\\`) is stored. A provider error echoed in the driver's stderr JSON-escapes it as `ab\\\"c\\\\d`, or it appears URL-encoded. `split(key)` does not match, and the key reaches the 500-character ASK_FAILED message. A one-character key also redacts every occurrence of that character.",
+      "why": "Redaction handles only the raw spelling. The same secret appears in encoded forms in JSON and URL errors.",
+      "fix": "Redact the raw, JSON-escaped (`JSON.stringify(key).slice(1,-1)`) and encodeURIComponent forms. Also run the secret scrubber over stderr before slicing, and refuse keys shorter than 8 characters.",
+      "twin_of": "Redaction after the cut -> Redact before you truncate."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:~1864 fallback loop",
+      "breaking_input": "`--driver generic-api --owner-model X` and generic-api fails with verdict `driver`. The fallback loop moves to another driver. `effectiveModel` stays X because `tier` is falsy and the recompute branch is skipped, and the owner model id is handed to a driver that was never checked against MODEL_CAPABLE.",
+      "why": "The capability and clean-id guards run once, for the initial driver. The fallback applies the owner model to a different driver, and the receipt still says `model_source: owner`. A driver that cannot apply a model records a pin that was never used.",
+      "fix": "In the fallback loop, if `ownerModel` is set, either stop falling back or re-run the MODEL_CAPABLE check for the new driver. Never carry an owner model across drivers.",
+      "twin_of": "A fence one driver draws and the others widen -> A fence that holds on one adapter is a fence on one adapter."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/face/talk.mjs:last line (ran >= 58)",
+      "breaking_input": "About 70 checks are defined, so deleting around 15 of them still exits 0 under the floor of 58. The `ran >= 58` literal also needs a hand edit whenever a check is added.",
+      "why": "The floor is hand-kept and below the real count, so deleted checks are not caught. The test is only partly guarded against silent shrinkage.",
+      "fix": "Pin the exact expected count, derived from a list of check names declared once. The bats test should also assert the exact `RAN: N` value.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    }
+  ]
+}

@@ -13,7 +13,8 @@
 // Every decision here is a pure function over a plain object, so `tests/face/talk.mjs` holds each one with node and
 // no install; the file I/O is the two small functions at the bottom.
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, realpathSync, unlinkSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 
@@ -23,7 +24,7 @@ const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}$/;
 // A model id is what the provider names it: `meta-llama/llama-3.3-70b-instruct:free`, `gpt-4o-mini`, `llama3.2`.
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$/;
 // A key is opaque printable ASCII with no whitespace; anything else is a paste accident, refused rather than stored.
-const KEY_RE = /^[\x21-\x7e]{1,400}$/;
+const KEY_RE = /^[\x21-\x7e]{8,400}$/;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /** @typedef {{ name: string, baseUrl: string, model: string, key?: string }} ModelRecord */
@@ -72,7 +73,7 @@ export function checkRecord(input) {
   /** @type {ModelRecord} */
   const record = { name: r.name.trim(), baseUrl: url.url, model: r.model.trim() };
   if (r.key !== undefined && r.key !== null && r.key !== "") {
-    if (typeof r.key !== "string" || !KEY_RE.test(r.key.trim())) return { ok: false, why: "the key is up to 400 printable characters with no spaces" };
+    if (typeof r.key !== "string" || !KEY_RE.test(r.key.trim())) return { ok: false, why: "the key is 8 to 400 printable characters with no spaces" };
     record.key = r.key.trim();
   }
   return { ok: true, record };
@@ -177,14 +178,27 @@ export function loadRegistry(repo) {
   const p = registryPath(repo);
   if (!p.ok) return p;
   if (!existsSync(p.path)) return { ok: true, reg: emptyRegistry(), path: p.path };
-  const parsed = parseRegistry(readFileSync(p.path, "utf8"));
+  let text;
+  // A directory, an unreadable file or a Windows lock is a named refusal, never a raw 500 (attack c50172d B5).
+  try { text = readFileSync(p.path, "utf8"); } catch (e) { return { ok: false, why: `the models file could not be read (${/** @type {any} */ (e).code ?? "error"})` }; }
+  const parsed = parseRegistry(text);
   return parsed.ok ? { ...parsed, path: p.path } : parsed;
 }
 
-/** Write whole-file, via a temp file and a rename, owner-only where the OS has modes. @param {string} path @param {Registry} reg */
+/**
+ * Write whole-file, via an exclusive temp file and a rename, owner-only where the OS has modes. Answers why it failed
+ * rather than throwing, and leaves no temp file behind (attack c50172d B5).
+ * @param {string} path @param {Registry} reg @returns {{ ok: true } | { ok: false, why: string }}
+ */
 export function saveRegistry(path, reg) {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(reg, null, 2) + "\n", { mode: 0o600 });
-  renameSync(tmp, path);
+  const tmp = `${path}.${randomBytes(6).toString("hex")}.tmp`;
+  try {
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+    writeFileSync(tmp, JSON.stringify(reg, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+    renameSync(tmp, path);
+    return { ok: true };
+  } catch (e) {
+    try { unlinkSync(tmp); } catch { /* never written */ }
+    return { ok: false, why: `the models file could not be written (${/** @type {any} */ (e).code ?? "error"})` };
+  }
 }
