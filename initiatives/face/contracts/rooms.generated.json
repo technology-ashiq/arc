@@ -1370,5 +1370,13 @@
       "workflow:shard-calibrate": "review-ship",
       "workflow:weigh-tests": "review-ship"
     }
-  }
+  },
+  "surfaces": [
+    {
+      "id": "front-door",
+      "name": "The front door",
+      "dir": "face/src/frontdoor",
+      "adr": "ADR-1349"
+    }
+  ]
 }

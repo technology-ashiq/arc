@@ -24,7 +24,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runFlows, flowsLine } from "./flows.mjs";
-import { runSmoke, summaryLines, renderLine, notServedLine, servedLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, extrasLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds, expectedExtras } from "./smoke.mjs";
+import { runFrontDoor, frontDoorLine, judgeFrontDoor, FRONT_DOOR_CHECKS, runSmoke, summaryLines, renderLine, notServedLine, servedLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, extrasLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds, expectedExtras } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FACE_DEFAULT = resolve(HERE, "..");
@@ -196,6 +196,18 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
       log(`SMOKE_REPORT ${JSON.stringify({ ...report, errors: undefined, rooms: undefined, shots: undefined })}`);
       const verdict = judge(report);
       if (!verdict.ok) { failedMoods++; log(`smoke: FAIL mood=${mood} -- ${oneLine(verdict.reasons.join("; "))}`); }
+      // THE FRONT DOOR (face v2 Phase 09, REQ-13, ADR-1349): its own pass in its own Chrome, in this mood, after the
+      // rooms -- a failure here fails the mood, and a crash here still prints the line with what ran.
+      let frontDoor;
+      try {
+        frontDoor = await runFrontDoor({ base: `http://127.0.0.1:${appPort}/`, token, mood, roomTimeoutMs: 15000 }, log);
+      } catch (e) {
+        frontDoor = { mood, checks: [], warpHeld: 0, crossings: 0 };
+        log(`smoke: front-door mood=${mood} SETUP-FAIL -- ${oneLine(redactSecrets(e?.message ?? e, [token]))}`);
+      }
+      log(frontDoorLine(frontDoor));
+      const doorVerdict = judgeFrontDoor(frontDoor);
+      if (!doorVerdict.ok) { failedMoods++; log(`smoke: FAIL front-door mood=${mood} -- ${oneLine(redactSecrets(doorVerdict.reasons.join("; ") || `ran 0 of ${FRONT_DOOR_CHECKS.length}`, [token]))}`); }
     }
     // THE FLOWS (face v2 Phase 05, REQ-09, REQ-11): every op driven through its room's dock, its receipt read back
     // through the door, then the live flow -- once, after every mood's smoke has counted the fixture, because the

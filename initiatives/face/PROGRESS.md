@@ -2,8 +2,8 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 08
-appetite: 31.5d
+phase: 09
+appetite: 33d
 burn: 12d
 blocked-on: —
 depends-on: —
@@ -32,6 +32,7 @@ depends-on: —
 | 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | ✅ **CLOSED 2026-09-23** — 3d of 10d; 31 of 31 work verbs ship as ops, residue none (`residue.md`, held both ways by `tests/face/work-door.mjs`); eight PRs (#252 · #253 · #254 · #255 · #257 · #258 · #259 · #261) + the close's #262/#263, 20 attacker rounds, 175 fixed-defect rows; final tree `2fba48f7` 19/19 (run 35870851639), suite 1..3427; live door from the main clone, one real apply receipted (`01M37CDRK7E03P67E45Y1BDT4E`); spec-fidelity drift dispositioned; receipts `01M37D0KHFPXBDBWQRYPMEXVT8` · `01M37D0M5F55KH2D8A5ZWJG6TA` |
 | 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | ✅ **CLOSED 2026-09-26** — 3d of 5d; of 15 SESSION verbs 5 ship with the receipt read back (the live council convene among them), 4 start with the read-back owed, 6 residue filed to their lanes (`residue.md`, held to the registry by `tests/face/session-door.mjs`); PRs #269 · #270 · #271 · #272 · #273 · #274 · #276 · #278 · #282 + the close #285/#286; 13 boundary rounds, 118 fixed-defect rows, the logic surface never ran (debt row); `main` `465f5b82` 19/19 (run 36225129900), suite 1..3545; spec-fidelity drift dispositioned; receipts `01M3EBD91R95PZD0EPQ1QB4TS2` · `01M3EBDGQ70ETM8PXDHNKHSZXJ` |
 | 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 10.5d | ✅ **CLOSED 2026-09-30** — 5d of 10.5d (worked 09-26, -27, -28, -29, -30); REQ-12 validated. The room, a Reference link from every room, page shape v1, 34 pages rewritten and accepted, and the owner-key proof. Two DoD rows ticked narrower than written (see the done log) |
+| 09 | Front door — the face at `/`, ENTER HQ with the warp, WebGL guard, a named surface (REQ-13, ADR-1349); runs BEFORE 08 | 1.5d | building — the owner chose option A (the hero) on 2026-10-01; branch `feat/face-v2-09` |
 | 08 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
 **Appetite burn: 12d of 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
@@ -462,6 +463,23 @@ stay bespoke folds.
   accepts the two declared gaps above.
 
 ## Now
+
+**OWNER CHOSE A (2026-10-01, during `/arc-resume --lane face`):** ADR-1349 is accepted with option A, the hero; option B stays his
+next question. Phase 09 is building on `feat/face-v2-09` (renamed from `feat/face-front-door`, carrying `c399aab2`): `lib/mode.mjs`
+(the surface decision and the warp timeline), the warp ported into `FaceStage.tsx`, `face/src/frontdoor/` (the hero, the neon file,
+the stage boundary), the rail and header brands back as v0.7's exit, and the gates, harness and `tests/face/front-door.mjs`.
+Assumptions ledger: nothing fired.
+
+**CHANGE ROUTED (2026-09-30, `/arc-change --lane face`, owner: "home la face irunthathu, ithula varatha, plan pannalaya"):** the owner's design has a FRONT
+DOOR (the Landing: neon particle face, a message, ENTER HQ with a warp) and a clean-room workroom. The v2 plan ported only the workroom
+and never listed the front door; on 2026-09-17 a session unmounted `FaceStage.tsx` on its own reading of v0.7 ("the product has no front
+door") **without asking the owner**. **ADR-1349** (decision, proposed) names the front door as a surface (not a room), and offers two sizes:
+**A, the hero** (the face at `/`, one ENTER HQ, the warp, a WebGL guard; **1.5d**) and **B, the faithful landing** (sections S1..S6 and chapters
+C01..C09 with live spine panels; about 2,700 lines of design JSX, an effort of 5 to 8 days that is a guess, not a measure). This change files A as
+**REQ-13 / Phase 09**, placed before the dogfood days (Phase 08 waits on it), and leaves B as the owner's next question. Classified as new capability
+(REQ-13, 1 active REQ of a cap of 10). Appetite: burn 12d of 33d (36%, from 31.5d: +1.5d); with B instead the total would pass 38d and burn 18d (about 55%),
+which is the scope-cut conversation the plan requires, so B is not filed. Kill-criteria tripwires are all in the closed blocks. Assumptions ledger: nothing
+fired. **Waiting on the owner's OK before any code** (a new surface and the face back in the product). Branch `feat/face-front-door`.
 
 **RESUME HERE (2026-09-30):** **Phase 07 is CLOSED** (done log). **Phase 08 is next, and it is the owner's two real days**
 (REQ-10, plan in `phases/phase-08-spec.md`): from the MAIN clone, `node .claude/scripts/hq/arc-face.mjs`, every decision through

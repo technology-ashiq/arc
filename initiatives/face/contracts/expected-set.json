@@ -1455,5 +1455,16 @@
       "workflow:shard-calibrate": "review-ship",
       "workflow:weigh-tests": "review-ship"
     }
+  },
+  "surfaces": {
+    "$comment": "Screens the shell draws that are NOT rooms (ADR-1349). Not served by /api/rooms, never in the rail. face-coverage holds these rows EQUAL to the face/src directories App.tsx imports beyond the shell's own, both ways; a second, unnamed surface FAILs.",
+    "list": [
+      {
+        "id": "front-door",
+        "name": "The front door",
+        "dir": "face/src/frontdoor",
+        "adr": "ADR-1349"
+      }
+    ]
   }
 }

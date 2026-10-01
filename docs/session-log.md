@@ -658,3 +658,11 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
 ## 2026-09-15 19:03 — main
 - Last commit: 0983b865 feat(face): arc face v1 -- the owner's design, running, with every room covered
 - Uncommitted files at exit: 9
+
+## 2026-09-30 03:33 — feat/face-owner-token
+- Last commit: f1ccac3f chore(sync-golden): hashes for owner-key.mjs and narrative-proof.mjs after the scan fix
+- Uncommitted files at exit: 4
+
+## 2026-09-30 04:50 — feat/face-owner-token
+- Last commit: 7d9d906d docs(face): fixed-defects rows for the owner-key attack round
+- Uncommitted files at exit: 5

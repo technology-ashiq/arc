@@ -111,6 +111,31 @@ list_distribution() {
   printf '%s\n%s\n' "$total" "${dist:-none}"
 }
 
+# The front door (face v2 Phase 09, REQ-13, ADR-1349): one line per mood from smoke.mjs's front-door pass. Every named
+# check must have RUN and held -- the door's canvas on /, no stage node under #hq (the clean room), ENTER HQ by pointer,
+# Enter and Space with the stage gone after the warp, the exit back to the door, Ctrl+K on the door, and both guards
+# (WebGL refused, a stage that throws) showing the fallback with ENTER HQ still opening the workroom. The count is
+# pinned here, so a check deleted from smoke.mjs shows as a short run rather than a clean one.
+FRONT_DOOR_CHECKS=21
+frontdoor_verdict() {
+  local out="$1" mood="$2" line
+  case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
+  line="$(printf '%s\n' "$out" | grep "^smoke: front-door mood=$mood expected=" | tail -1)"
+  [ -n "$line" ] || { echo "no front-door line for mood=$mood"; return 1; }
+  [[ "$line" =~ ^smoke:\ front-door\ mood=(dark|light)\ expected=([0-9]+)\ ran=([0-9]+)\ ok=([0-9]+)\ warp-held=([0-9]+)/([0-9]+)\ failed=(.*)$ ]] || { echo "the front-door line is not in its shape: $line"; return 1; }
+  [ "${BASH_REMATCH[1]}" = "$mood" ] || { echo "the front-door line is for mood=${BASH_REMATCH[1]}, not $mood: $line"; return 1; }
+  [ "${BASH_REMATCH[2]}" -eq "$FRONT_DOOR_CHECKS" ] || { echo "smoke declares ${BASH_REMATCH[2]} front-door checks, this suite pins $FRONT_DOOR_CHECKS: $line"; return 1; }
+  [ "${BASH_REMATCH[3]}" -eq "$FRONT_DOOR_CHECKS" ] || { echo "mood=$mood: ran ${BASH_REMATCH[3]} of $FRONT_DOOR_CHECKS front-door checks: $line"; return 1; }
+  [ "${BASH_REMATCH[4]}" -eq "$FRONT_DOOR_CHECKS" ] || { echo "mood=$mood: ${BASH_REMATCH[4]} of $FRONT_DOOR_CHECKS front-door checks held: $line"; return 1; }
+  [ "${BASH_REMATCH[6]}" -eq 3 ] || { echo "mood=$mood: ${BASH_REMATCH[6]} crossings into the workroom, the pass makes 3: $line"; return 1; }
+  # The warp itself (attacks e40b65f B3, 1bc1328 B7): every crossing records a hold of at least WARP_HELD_MIN_MS, read
+  # from the page once the stage has left (never a read that races the hold), so a crossing that dropped the face
+  # at once -- no fly-through -- fails on any runner, however loaded.
+  [ "${BASH_REMATCH[5]}" -eq "${BASH_REMATCH[6]}" ] || { echo "mood=$mood: $(( BASH_REMATCH[6] - BASH_REMATCH[5] )) of ${BASH_REMATCH[6]} crossings recorded no fly-through hold of 1500 ms or more (warp-held=${BASH_REMATCH[5]}/${BASH_REMATCH[6]}) -- no warp there: $line"; return 1; }
+  [ "${BASH_REMATCH[7]}" = "none" ] || { echo "mood=$mood: failed front-door checks: ${BASH_REMATCH[7]}"; return 1; }
+  echo "front-door verdict: mood=$mood ran=$FRONT_DOOR_CHECKS ok=$FRONT_DOOR_CHECKS failed=none"
+}
+
 # The flows (face v2 Phase 05, REQ-09, REQ-11): every op the registry holds was driven through its room's dock, its
 # receipt read back through the door, and the live flow saw a receipt appended behind the page within 5 s. Judged from
 # the ONE line flows.mjs prints, against the registry's own op count -- a run that drove fewer ops cannot pass.
@@ -374,12 +399,35 @@ heading_verdict() {
     # Every ring has shipped, so every module room opens with the contract's frozen sentence as its heading -- an
     # exempted extra with its exemption row's -- and none missed (a blank room is not an opened one).
     heading_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
+    frontdoor_verdict "$output" "$mood" || { echo "(harness exit $status)"; false; }
     verdicts=$((verdicts + 1))
   done
   [ "$verdicts" -eq 2 ] || { echo "judged $verdicts of 2 moods"; false; }
   flows_verdict "$output" "$opsCount" || { echo "(harness exit $status)"; false; }
   sessions_verdict "$output" || { echo "(harness exit $status)"; false; }
   [ "$status" -eq 0 ]
+}
+
+@test "face-browser: MUTANT CONTROL -- the front-door verdict refuses a short run, a failed check, a wrong mood and no line" {
+  local good="smoke: front-door mood=dark expected=21 ran=21 ok=21 warp-held=3/3 failed=none"
+  run frontdoor_verdict "$good" dark
+  [ "$status" -eq 0 ] || { echo "the front-door verdict refused the clean line: $output"; false; }
+  run frontdoor_verdict "smoke: front-door mood=dark expected=21 ran=3 ok=3 warp-held=0/0 failed=none" dark
+  [ "$status" -ne 0 ] || { echo "a pass that died after three checks passed: $output"; false; }
+  run frontdoor_verdict "smoke: front-door mood=dark expected=21 ran=21 ok=20 warp-held=3/3 failed=webgl-off-enter" dark
+  [ "$status" -ne 0 ] || { echo "a failed guard passed: $output"; false; }
+  run frontdoor_verdict "smoke: front-door mood=dark expected=20 ran=20 ok=20 warp-held=3/3 failed=none" dark
+  [ "$status" -ne 0 ] || { echo "a smoke with a check deleted passed: $output"; false; }
+  run frontdoor_verdict "smoke: front-door mood=dark expected=21 ran=21 ok=21 warp-held=1/1 failed=none" dark
+  [ "$status" -ne 0 ] || { echo "a pass that crossed once passed: $output"; false; }
+  run frontdoor_verdict "smoke: front-door mood=dark expected=21 ran=21 ok=21 warp-held=0/3 failed=none" dark
+  [ "$status" -ne 0 ] || { echo "a workroom that unmounted the stage with no warp passed: $output"; false; }
+  run frontdoor_verdict "smoke: front-door mood=dark expected=21 ran=21 ok=21 warp-held=1/3 failed=none" dark
+  [ "$status" -ne 0 ] || { echo "a warp held on one crossing of three passed: $output"; false; }
+  run frontdoor_verdict "$good" light
+  [ "$status" -ne 0 ] || { echo "light passed on a dark line: $output"; false; }
+  run frontdoor_verdict "" dark
+  [ "$status" -ne 0 ] || { echo "no line at all passed: $output"; false; }
 }
 
 @test "face-browser: MUTANT CONTROL -- the sessions verdict refuses a start with no click, a dead counter and a short run" {
@@ -569,5 +617,5 @@ heading_verdict() {
   local declared
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared declared"; false; }
-  [ "$declared" -eq 13 ] || { echo "expected 13 @test lines, found $declared -- update this floor with the file"; false; }
+  [ "$declared" -eq 14 ] || { echo "expected 14 @test lines, found $declared -- update this floor with the file"; false; }
 }
