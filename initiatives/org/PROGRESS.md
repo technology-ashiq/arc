@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-org (Cycle 18, opened 2026-09-29)
 phase: 03
 appetite: 10d
-burn: 6.5d
+burn: 7.0d
 blocked-on: —
 depends-on: —
 
@@ -18,16 +18,20 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | The catalog + its gate — ruling on the spine, `products/org`, 71 cards, `org-coverage` + `--mutant-selftest`, generated chart, genesis digest | 2.5d | 🔨 built, closes on CI green + ruling approval |
-| 01 | Attribution + scorecard — `org/attribution.yaml`, `org review --role` + `--audit`; **day-3 kill checkpoint**; Nilluvai pilot gate | 1.5d | 🔨 built, day-3 checkpoint PROCEED (5 seated roles) |
-| 02 | Staffing — team manifest + `org.team` digest, `sync-to-project --team`, Nilluvai staffed, hire path + bench interview, three skills | 2.5d | 🔨 mechanism built; pilot parts deferred to the first venture (ADR-1612 Am. 1) |
-| 03 | The COO + the review loop — `org-dispatch` script-job, five pilot days, first `org review`, retro + seal | 2d | 🔨 dispatcher + review built; the five pilot days deferred to the first venture (ADR-1612 Am. 1); job registration waits on the owner policy row |
+| 00 | The catalog + its gate — ruling on the spine, `products/org`, 71 cards, `org-coverage` + `--mutant-selftest`, generated chart, genesis digest | 2.5d | ✅ closed 2026-10-01 |
+| 01 | Attribution + scorecard — `org/attribution.yaml`, `org review --role` + `--audit`; **day-3 kill checkpoint**; Nilluvai pilot gate | 1.5d | ✅ closed 2026-10-01 |
+| 02 | Staffing — team manifest + `org.team` digest, `sync-to-project --team`, Nilluvai staffed, hire path + bench interview, three skills | 2.5d | ✅ closed 2026-10-01 |
+| 03 | The COO + the review loop — `org-dispatch` script-job, five pilot days, first `org review`, retro + seal | 2d | ✅ closed 2026-10-01 |
 
-**Appetite burn:** 6.5 of 10 days used (8.5 d planned · 1.5 d slack; the 5 elapsed pilot days moved to the first venture).
+**Appetite burn:** 7.0 of 10 days used (8.5 d planned; Phases 00-03 closed 2026-10-01; the 5 pilot days moved to the first venture, ADR-1612 Am. 1). Tripwires: day-3 checkpoint PROCEED; the 50% tripwire passed with Phase 01 built but unclosed, under the owner ruling of one PR merged once.
 
 ## Done-log
 
-_(empty — nothing closed yet)_
+- **Phase 00 — catalog + gate — closed 2026-10-01.** 71 role cards, `org-coverage` with its mutant self-test (15 arms through the real CLI), the generated chart, `products/org` and its birth rows. Ruling approved `01M3QSAJ8R7P6NQW2JJB776330`; genesis over the final catalog digest `99e6694e…` approved `01M3SZJ7VBT97Y8ZGXK5E76P20` (the earlier `01M3QSK9…` was over a stale digest). REQ-01, 03, 04, 13 validated. Tests: org-card 9 · org-chart 6 · org-coverage 7. Time 2.5 d vs 2.5 d. amendments: 1 (ADR-1612 Am. 1 resynced ORG-L) · reopened: n · t-to-phase0: 2 days.
+- **Phase 01 — attribution + scorecard — closed 2026-10-01.** `org/attribution.yaml`, `org-review` (--role/--all/--audit/--checkpoint/--kinds-table). Day-3 checkpoint PROCEED, 5 seated roles. REQ-05 validated. Pilot gate FIRED and routed to ADR-1612 Am. 1 (the pilot is deferred, the cycle is not paused). Tests: org-review 13 (incl. the BOM+CRLF map, logic L4). Time 1.5 d vs 1.5 d. amendments: 1 · reopened: n.
+- **Phase 02 — staffing — closed 2026-10-01.** Team manifest grammar and `org.team` digest gate, `sync-to-project --team`, the hire stamp checking the interview on the spine, three skills. REQ-06, 07, 11 validated on fixture teams and mutants. The Nilluvai team and one real hire are DEFERRED to the first venture (ADR-1612 Am. 1); they are not counted as met. Tests: org-team 11 (incl. the decided-twice refusals, logic L1/L5). Time 2.0 d vs 2.5 d. amendments: 1 · reopened: n.
+- **Phase 03 — COO + review loop — closed 2026-10-01.** `org/stages.yaml`, the deterministic dispatcher (dry-run default, `--emit`, scheduler wrapper), first `org-review --verdicts` (keep 35 · promote 0 · retrain 1 · retire 1). REQ-10 validated; REQ-08 dropped to the first venture (acceptance kept verbatim; the claim "the dispatcher proposes work the owner wants" is UNPROVEN). The scheduler job waits on the owner's `process:org-dispatch` policy row. Tests: org-dispatch 9. Time 1.0 d vs 2 d. amendments: 1 · reopened: n.
+- **Attack + CI for the whole cycle:** boundary 4 passes, 39 findings, all fixed but 2 LOW (debt). Logic surface: first result only on 2026-10-01, after fixing the engine's generic-api driver (it did not stream, and Node fetch cut every answer at 300 s); 6 findings, 3 real fixed (L1/L4/L5), 2 rejected by design (L2/L3), 1 LOW to debt (L6). CI at d155ab99: 18/19 green; the one red (face-browser, windows shard 1) is red on main too (dispatch 36873468339). Evidence bundles 00-03 written and verified.
 
 ## Now
 
@@ -59,7 +63,7 @@ Receipts (main clone): `kickoff.done` `01M3QF38HX8BA33G1B52RRQZ3G` · approval r
 
 - **CI GREEN 2026-09-30: run 36658835170, 19/19 jobs at 3d1a29dc** (head SHA confirmed; the last Windows shard ran long and finished success). Boundary attack: 4 passes, 39 findings, all fixed except 2 LOW in debt. The logic surface never produced a result: the free model timed out, then deepseek via OpenRouter returned HTTP 403 (debt row 3, owner account).
 
-**Next step:** close Phases 00 → 03 via `/arc-phase-done` (CI 19/19 green at 6098f8a3 after the main merge), raise a fresh genesis request over the final catalog, then merge PR #302.
+**Next step:** Phases 00-03 CLOSED 2026-10-01. Next: merge PR #302 (CI 18/19, the one red is red on main too), emit `phase.closed` receipts from the main clone after the merge, then `/arc-retro --lane org` to seal the cycle (HISTORY row, lane header to IDLE, PORTFOLIO row).
 
 **Change 2026-10-01 (`/arc-change`, owner-approved in session):** the Nilluvai pilot is deferred to the first registered venture (ADR-1612 Amendment 1). REQ-08 dropped (acceptance carried verbatim), A-06 deferred, the Kill-criteria pilot gate marked FIRED and routed. Nilluvai registration is no longer an owner blocker for this cycle. **Open owner items:** the `process:org-dispatch` policy row (job registration only, not a close blocker) · the OpenRouter 403 (logic attack surface) · rejustify-or-retire the expired `build-in-public-draft` router hire (engine lane, ADR-1622).
 **Engine bug found and fixed 2026-10-01 (owner chose the fix in session):** the logic attack never produced a result because `drivers/generic-api.mjs` used a non-streamed `fetch`, and Node's fetch (undici) gives up on response HEADERS at 300 s whatever `ARC_LLM_TIMEOUT_MS` says. Six attempts across two models and two input sizes all ended at 304-306 s. A local repro reproduced it exactly (`UND_ERR_HEADERS_TIMEOUT` at 305 s, Node 24.18). Fix: the driver asks for `stream: true` and folds the SSE chunks back into the same envelope; a plain-JSON reply is still read. Pinned by checks D and E in `tests/engine-driver-deadline.mjs` (run by `engine-driver-contract.bats`). Shared engine file, so it rides this PR; every lane's logic attack was affected.
