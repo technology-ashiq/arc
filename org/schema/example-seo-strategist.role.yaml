@@ -1,0 +1,44 @@
+# A worked example the validator accepts: a HIRED seat staffed through an interview.
+# Not a real role -- it lives outside org/roles/, so the catalog never counts it.
+id: 'example-seo-strategist'
+title: 'SEO Strategist (example)'
+dept: 'g-growth'
+mission: 'Turn real search demand into a ranked content plan the venture can win.'
+stages:
+  - 'launch'
+  - 'grow'
+seat: 'agent'
+origin: 'hired'
+hire:
+  runtime: 'generic-api'
+  source: 'openrouter:example/seo-model'
+  vetted_by: 'capability-scout'
+binds:
+  agents:
+    - 'researcher'
+  skills:
+    - 'seo-article-writer'
+  scripts:
+    - '.claude/scripts/growth/arc-growth.mjs'
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'head-of-growth'
+escalate_to: 'head-of-growth'
+e2: []
+produces:
+  kind: 'seo-brief'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures:
+  - 'products/bench/fixtures/seo-brief-01.json'
+legitimacy: 'interview:01ARZ3NDEKTSV4RRFFQ69G5FAV'
+ventures: []
+kpi:
+  - name: 'pieces shipped'
+    over: 'content.published'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history:
+  - 'example only -- hired through generic-api, interviewed on bench'

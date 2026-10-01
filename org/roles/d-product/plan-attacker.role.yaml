@@ -1,0 +1,39 @@
+# Plan attacker -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'plan-attacker'
+title: 'Plan attacker'
+dept: 'd-product'
+mission: 'Break a drafted plan from a fresh context before the build pays for its blind spots.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'plan-attacker'
+    - 'plan-simulator'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'plan-attacker-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

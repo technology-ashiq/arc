@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "tests/org-card.bats:20, tests/org-chart.bats:41, tests/org-coverage.bats:76 (sed and grep anchors)",
+      "breaking_input": "A Windows CI leg where checkout applies core.autocrlf=true and no .gitattributes rule pins org/** to eol=lf. Every card is checked out with CRLF.",
+      "why": "The earlier CRLF finding (B4) had two halves: fold CRLF in readOr, and pin eol=lf plus make the test anchors tolerate \\r. Only readOr was fixed. `sed \"s/^tier: '...'$/\"` and `grep \"^seat: 'vacant'$\"` do not match before a \\r. The mutant helper then dies with \"sed changed nothing\" and the vacant count reads 0. That is green locally and red on one CI leg. The digest is also computed over cards parsed from CRLF text, so its stability across legs depends on parseYamlSubset stripping \\r, which nothing asserts.",
+      "fix": "Add `org/** text eol=lf` to .gitattributes. Make every anchor `\\r\\?$`. Add a bats test that runs --digest on an LF tree and a CRLF copy of it and asserts the two digests are equal.",
+      "twin_of": "`--chart --check` compared raw bytes, so an autocrlf checkout read as a hand edit"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/org/probe.mjs:20-21 (process.exit(1) after console.log)",
+      "breaking_input": "`run node probe.mjs validate ROOT CARD` on a mutant card that yields several FINDING lines, run under bats with stdout piped on the Windows leg.",
+      "why": "`for (const x of f) console.log(...); process.exit(1)` is the same hard exit right after a burst of output that the fix in both CLIs removed. Piped stdout can be cut short, so the finding text the test matches (`binds.tier names a model`) can be lost. The result is an intermittent failure on one leg only. The fix was applied to two CLI tails but not to this helper.",
+      "fix": "Set process.exitCode and return instead of calling process.exit. Apply the same change to the PARSE-ERROR branch and the usage branch.",
+      "twin_of": "`process.exit(c)` right after a burst of console.log can truncate piped stdout"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "org-coverage.mjs:runCli (spawnSync with no timeout) and mutantSelftest SIGINT handler",
+      "breaking_input": "An arm's child gate hangs, for example a readdir on a locked or antivirus-scanned file on Windows, or an infinite loop introduced by a mutant. Alternatively press Ctrl-C while an arm is running, or send SIGTERM.",
+      "why": "spawnSync has no `timeout`, so a hung child blocks the whole self-test until the CI job limit. The repo already has a documented ~66-minute Windows shard hang class. While spawnSync blocks, the event loop is stopped, so the SIGINT `once` handler cannot run until the loop resumes. Meanwhile it has replaced Node's default kill-on-SIGINT, so the parent keeps running all remaining arms. SIGTERM has no handler and leaks the scratch tree, which holds a full copy of .claude/scripts.",
+      "fix": "Pass `{timeout: 120000, killSignal: 'SIGKILL'}` to spawnSync and report a timed-out arm as FAILED-ARM. Handle SIGTERM as well as SIGINT. Do not swallow SIGINT while a synchronous child is running.",
+      "twin_of": "The self-test built its scratch tree before the try/finally, so a throw during the build leaked a temp tree"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-catalog.mjs:parseArgs and org-coverage.mjs:parseArgs",
+      "breaking_input": "`org-catalog --draft --seed a.yaml --seed b.yaml --root X --root Y`, or `org-coverage --root X --root Y`.",
+      "why": "A repeated flag silently takes the last value. lanes.md says two conflicting values for one flag are an operator error, never a last-wins override. For --draft this decides which tree gets a whole catalog written into it.",
+      "fix": "Throw `${a} given twice` when a value flag is seen a second time.",
+      "twin_of": "every CLI that writes under a caller-given root"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "org-catalog.mjs:draft (readFileSync seed), org-coverage.mjs:readText, org-catalog.mjs:agentTier",
+      "breaking_input": "A seed file, card or agent .md saved with a UTF-8 BOM. PowerShell 5 Out-File/Set-Content -Encoding utf8 and Notepad both add one.",
+      "why": "The BOM stays in the string. The seed parse then sees a `\\uFEFFroles` key. A card fails as an unknown or missing first key. An agent's frontmatter regex `^---` no longer matches, so agentTier takes the 'no model line' path and defaults an opus agent to balanced-workhorse. That lands only in a printed list and does not stop the draft.",
+      "fix": "Strip a leading \\uFEFF in every text read, or reject a BOM with a named error.",
+      "twin_of": "An agent file that was missing, or a `model:` value outside the map, defaulted the tier silently"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-coverage.mjs:treeScripts (readdirSync/lstatSync bare catches)",
+      "breaking_input": "A subdirectory under .claude/scripts/ that cannot be read (EPERM/EBUSY on Windows, a locked directory), or any programming error thrown inside the walk.",
+      "why": "Both bare `catch` blocks silently drop the directory or entry. The inventory shrinks with no signal. WALKER EMPTY fires only when the total is 0. The gate then blames the cards with 'binds script X, which does not exist' instead of naming the unreadable directory. The bare catch would also hide a thrown ReferenceError or TypeError. A shared walker that reports misses as absence is the trap the ADR-1610 walker rule exists to prevent.",
+      "fix": "Collect read failures and return them, for example as `{names, unreadable}` like treeCapabilities. Have org-coverage push each one to w.errors. Catch only ENOENT and EACCES/EPERM, not everything.",
+      "twin_of": "An agent file that was missing, or a `model:` value outside the map, defaulted the tier silently"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-catalog.mjs:draft() write loop",
+      "breaking_input": "Draft run A fails on card 40 and removes cards 1-39 while draft run B, started in parallel on the same seed, has already counted card 1 as `kept` (EEXIST). Also a failure after `mkdirSync` created a new department directory.",
+      "why": "Rollback deletes every path this run wrote, but B reported those files as existing and exits 0 after A removed them. The directories created during the run are never removed, so a failed draft leaves empty org/roles/<dept> trees. This is the half-drafted-catalog class again, through concurrency and directories.",
+      "fix": "Take an exclusive lock file under org/ for the whole draft. Also remove any directory the run created if it is empty after rollback.",
+      "twin_of": "Draft was all-or-nothing for validation but not for I/O"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-catalog.mjs:main and org-coverage.mjs:main (`isDir` uses lstatSync)",
+      "breaking_input": "`--root` given as a Windows junction or symlink to the arc tree, or a `.claude/agents` that is a symlink or junction to a shared agents directory.",
+      "why": "lstat reports a link as not a directory. The gate answers 'no such directory' or 'not an arc tree' with exit 2, even though existsSync and readdirSync would have followed the link. A worktree setup that uses junctions cannot run the gate at all. The same lstat call also rejects a symlinked department directory as 'not a department directory'.",
+      "fix": "Use statSync in isDir for the --root and .claude/agents checks. Keep lstat only where a link is meant to be refused, such as card files.",
+      "twin_of": "every CLI that writes under a caller-given root"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-catalog.mjs:renderChart (table rows)",
+      "breaking_input": "A card with `title: 'Build | Ship'` or a title containing a backtick or `<!--`.",
+      "why": "The title is interpolated raw into a markdown table row, and only \\r and \\n are refused upstream. The `|` splits the row into extra columns, so the chart renders wrong. `--chart --check` still passes because the output is deterministic, so no gate notices the mis-rendered org chart.",
+      "fix": "Escape `|` and backticks in every interpolated cell, or refuse those characters in title in validateCard.",
+      "twin_of": "every comment or header written from data"
+    }
+  ]
+}

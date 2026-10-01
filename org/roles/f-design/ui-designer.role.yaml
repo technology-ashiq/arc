@@ -1,0 +1,37 @@
+# UI designer -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'ui-designer'
+title: 'UI designer'
+dept: 'f-design'
+mission: 'Build one complete variant from the brief and its assigned product thesis.'
+stages:
+  - 'build'
+  - 'launch'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'ui-composer'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'design-director'
+escalate_to: 'design-director'
+e2: []
+produces:
+  kind: 'ui-designer-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

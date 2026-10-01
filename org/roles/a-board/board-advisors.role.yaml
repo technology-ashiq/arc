@@ -1,0 +1,54 @@
+# Board advisors -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'board-advisors'
+title: 'Board advisors'
+dept: 'a-board'
+mission: 'Debate any consequential decision from every side and hand the owner one graded verdict.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+  - 'launch'
+  - 'grow'
+  - 'sell'
+  - 'support'
+  - 'operate'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'council-advocate'
+    - 'council-designer'
+    - 'council-engineer'
+    - 'council-life-counselor'
+    - 'council-marketer'
+    - 'council-neutral'
+    - 'council-policy-analyst'
+    - 'council-researcher'
+    - 'council-risk-analyst'
+    - 'council-skeptic'
+    - 'council-strategist'
+    - 'council-verifier'
+  skills: []
+  scripts: []
+  process: 'council-convene'
+  tier: 'balanced-workhorse'
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'board-advisors-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

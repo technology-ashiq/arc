@@ -1,0 +1,33 @@
+# Data engineer -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'data-engineer'
+title: 'Data engineer'
+dept: 'e-engineering'
+mission: 'Owns the Data engineer job in Engineering.'
+stages:
+  - 'build'
+  - 'launch'
+  - 'support'
+  - 'operate'
+seat: 'vacant'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts: []
+  process: null
+  tier: null
+reports_to: 'solution-architect'
+escalate_to: 'solution-architect'
+e2: []
+produces:
+  kind: 'data-engineer-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []

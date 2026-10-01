@@ -1,0 +1,32 @@
+# UX researcher -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'ux-researcher'
+title: 'UX researcher'
+dept: 'd-product'
+mission: 'Owns the UX researcher job in Product.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+seat: 'vacant'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts: []
+  process: null
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'ux-researcher-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []

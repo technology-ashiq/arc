@@ -1,0 +1,32 @@
+# Support L1 -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'support-l1'
+title: 'Support L1'
+dept: 'i-support'
+mission: 'Owns the Support L1 job in Customer Success & Support.'
+stages:
+  - 'support'
+  - 'operate'
+seat: 'vacant'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills:
+    - 'support-reply'
+  scripts: []
+  process: null
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'support-l1-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []

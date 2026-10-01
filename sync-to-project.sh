@@ -23,12 +23,14 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RESOLVER="$SRC/.claude/scripts/core/arc-products.mjs"
 
 # ---------- args: <target> [--products a,b | --list] ----------
-TARGET=""; MODE="full"; PRODUCTS=""
+TARGET=""; MODE="full"; PRODUCTS=""; TEAM=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --list)         MODE="list" ;;
     --products)     MODE="products"; PRODUCTS="${2:?sync: --products needs a value}"; shift ;;
     --products=*)   MODE="products"; PRODUCTS="${1#*=}" ;;
+    --team)         MODE="products"; TEAM="${2:?sync: --team needs a venture}"; shift ;;
+    --team=*)       MODE="products"; TEAM="${1#*=}" ;;
     --prune-report) MODE="prune-report" ;;
     -*)             echo "sync: unknown option: $1" >&2; exit 2 ;;
     *)              if [ -z "$TARGET" ]; then TARGET="$1"; else echo "sync: unexpected argument: $1" >&2; exit 2; fi ;;
@@ -41,7 +43,16 @@ if [ "$MODE" = "list" ]; then
   exec node "$RESOLVER" --list --root "$SRC"
 fi
 
-: "${TARGET:?usage: sync-to-project.sh <target-project-dir> [--products a,b | --list | --prune-report]}"
+: "${TARGET:?usage: sync-to-project.sh <target-project-dir> [--products a,b | --team <venture> | --list | --prune-report]}"
+
+# ---------- --team: a venture's staffed seats become the --products list (org, REQ-07) ----------
+# No second installer: org-team resolves which products ship the agents, skills and scripts the
+# team's STAFFED seats bind (plus core), and the ordinary --products path below installs them.
+if [ -n "$TEAM" ]; then
+  [ -z "$PRODUCTS" ] || { echo "sync: --team and --products are exclusive" >&2; exit 2; }
+  PRODUCTS="$(node "$SRC/.claude/scripts/org/org-team.mjs" --products-for "$TEAM" --root "$SRC")" || { echo "sync: --team $TEAM did not resolve (see above)" >&2; exit 2; }
+  echo "sync: team $TEAM -> products $PRODUCTS"
+fi
 [ -d "$TARGET" ] || { echo "sync: target folder not found: $TARGET" >&2; exit 1; }
 [ -d "$TARGET/.git" ] || echo "sync: note -- target has no .git, is this really a project root?" >&2
 

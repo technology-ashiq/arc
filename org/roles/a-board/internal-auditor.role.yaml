@@ -1,0 +1,43 @@
+# Internal auditor -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'internal-auditor'
+title: 'Internal auditor'
+dept: 'a-board'
+mission: 'Grade the evidence behind every claim so no verdict rests on an unsupported point.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+  - 'launch'
+  - 'grow'
+  - 'sell'
+  - 'support'
+  - 'operate'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'council-verifier'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'high-judgment'
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'internal-auditor-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

@@ -1,0 +1,36 @@
+# Support L2 (bug to fix) -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'support-l2'
+title: 'Support L2 (bug to fix)'
+dept: 'i-support'
+mission: 'Turn a reproduced customer bug into a proven fix through the develop and review loop.'
+stages:
+  - 'support'
+  - 'operate'
+seat: 'process'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts: []
+  process: 'develop-proof'
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'support-l2-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

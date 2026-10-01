@@ -1,0 +1,39 @@
+# Spec-fidelity checker -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'spec-fidelity-checker'
+title: 'Spec-fidelity checker'
+dept: 'e-engineering'
+mission: 'Confirm that what was built is what the spec asked for, before hand-off.'
+stages:
+  - 'build'
+  - 'launch'
+  - 'support'
+  - 'operate'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'spec-fidelity'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'solution-architect'
+escalate_to: 'solution-architect'
+e2: []
+produces:
+  kind: 'spec-fidelity-checker-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

@@ -1,0 +1,72 @@
+board-advisors           agent    receipts 6 (6 sourced) · runs 4 (1 ok, 3 fail) · accepts 0 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+calibration-keeper       script   no evidence
+constitution-keeper      human    receipts 1 (1 sourced) · runs 0 (0 ok, 0 fail) · accepts 0 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+internal-auditor         agent    no evidence
+policy-officer           script   no evidence
+ceo                      human    no evidence
+chief-of-staff           script   receipts 5 (0 sourced) · runs 5 (5 ok, 0 fail) · accepts 0 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+coo-dispatcher           vacant   no evidence
+knowledge-manager        script   no evidence
+pmo-scheduler            script   receipts 35 (0 sourced) · runs 35 (35 ok, 0 fail) · accepts 0 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+competitive-intel        agent    no evidence
+market-researcher        vacant   no evidence
+pain-point-miner         vacant   no evidence
+pricing-strategist       human    no evidence
+risk-analyst             agent    no evidence
+strategy-analyst         agent    no evidence
+business-analyst         agent    no evidence
+plan-attacker            agent    no evidence
+product-manager          partial  receipts 15 (0 sourced) · runs 0 (0 ok, 0 fail) · accepts 0 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+technical-writer         script   no evidence
+ux-researcher            vacant   no evidence
+ux-writer                vacant   no evidence
+ai-ml-engineer           vacant   no evidence
+capability-scout         agent    no evidence
+code-reviewer            agent    receipts 22 (0 sourced) · runs 0 (0 ok, 0 fail) · accepts 0 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+data-engineer            vacant   no evidence
+developer                partial  receipts 45 (0 sourced) · runs 0 (0 ok, 0 fail) · accepts 0 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+devops-release           script   receipts 14 (14 sourced) · runs 8 (0 ok, 8 fail) · accepts 3 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+log-analyst              agent    no evidence
+qa-tester                agent    no evidence
+security-engineer        agent    no evidence
+solution-architect       partial  no evidence
+spec-fidelity-checker    agent    no evidence
+sre-oncall               vacant   no evidence
+brand-designer           vacant   no evidence
+design-critic            agent    no evidence
+design-director          agent    receipts 3 (3 sourced) · runs 0 (0 ok, 0 fail) · accepts 1 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+design-jury              agent    no evidence
+design-reviewer          agent    no evidence
+graphics-video           vacant   no evidence
+ui-designer              agent    no evidence
+build-in-public-social   human    receipts 20 (20 sourced) · runs 12 (6 ok, 6 fail) · accepts 0 · rejects 4 · incidents 0 · handoffs 0 · cost no evidence
+community-manager        vacant   no evidence
+content-editor           script   no evidence
+content-writer           skill    receipts 4 (0 sourced) · runs 0 (0 ok, 0 fail) · accepts 0 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+email-lifecycle          vacant   no evidence
+head-of-growth           vacant   no evidence
+launch-pr                vacant   no evidence
+marketing-analyst        script   no evidence
+performance-ads          human    no evidence
+seo-strategist           script   no evidence
+account-executive        human    no evidence
+lead-researcher          script   receipts 15 (15 sourced) · runs 0 (0 ok, 0 fail) · accepts 0 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+proposal-writer          vacant   no evidence
+revops-crm               vacant   no evidence
+sales-engineer           vacant   no evidence
+sdr-outbound             script   receipts 10 (10 sourced) · runs 0 (0 ok, 0 fail) · accepts 5 · rejects 0 · incidents 0 · handoffs 0 · cost no evidence
+customer-success         vacant   no evidence
+kb-writer                vacant   no evidence
+onboarding-specialist    vacant   no evidence
+support-l1               vacant   no evidence
+support-l2               process  no evidence
+voc-analyst              vacant   no evidence
+billing-payments-ops     vacant   no evidence
+bookkeeper               script   no evidence
+compliance-dpdp          vacant   no evidence
+finops                   script   no evidence
+hr-performance           process  no evidence
+legal-counsel            script   no evidence
+recruiter                script   no evidence
+tax-gst                  human    no evidence
+org-review: 13 of 71 role(s) with evidence · unattributed 1265 of 1460 receipt(s)

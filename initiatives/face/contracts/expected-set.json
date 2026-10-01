@@ -739,7 +739,8 @@
       "policy": "policy",
       "portfolio": "board",
       "scheduler": "scheduler",
-      "docs": "lane"
+      "docs": "lane",
+      "org": "lane"
     }
   },
   "commands": {
@@ -1345,6 +1346,7 @@
     "map": {
       "hq": "spine",
       "core": "toolbelt",
+      "org": "toolbelt",
       "plan": "lane",
       "review": "review-ship",
       "git": "review-ship",
@@ -1370,6 +1372,7 @@
       "1300": "toolbelt",
       "1400": "design-studio",
       "1500": "lane",
+      "1600": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1427,6 +1430,9 @@
   "capabilities": {
     "map": {
       "skill:seo-article-writer": "toolbelt",
+      "skill:council-consult": "toolbelt",
+      "skill:outreach-draft": "toolbelt",
+      "skill:support-reply": "toolbelt",
       "mcp:supabase": "toolbelt",
       "mcp:playwright": "toolbelt",
       "mcp:context7": "toolbelt",

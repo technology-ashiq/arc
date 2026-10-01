@@ -1,0 +1,32 @@
+# Account executive / closer -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'account-executive'
+title: 'Account executive / closer'
+dept: 'h-sales'
+mission: 'Owns the Account executive / closer job in Sales.'
+stages:
+  - 'sell'
+seat: 'human'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts: []
+  process: null
+  tier: null
+reports_to: 'human:ashiq'
+escalate_to: 'human:ashiq'
+e2:
+  - 'changing prices'
+  - 'moving money'
+produces:
+  kind: 'account-executive-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []
