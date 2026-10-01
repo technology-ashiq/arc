@@ -1,0 +1,12 @@
+{
+  "note": "Eval fixture (ADR-1350). A general question the record does not describe: the expected answer is labelled general and cites nothing. `expected` asserts the SHAPE of the reply and the lane; the answer's wording is the model's.",
+  "input": {
+    "q": "What is the boiling point of water at sea level, in Celsius?",
+    "state": "SPINE: 200 receipts · 2 day.closed seals · 9 of 46 kinds have ever fired · 0 refused (held separately, never counted as receipts).\nAPPROVALS: 3 raised · 2 decided · 1 OPEN\nBOARD: face phase 10 burn 13d/37d\nMODE: sim (SIMULATED — every value here is fixture data, never real)"
+  },
+  "expected": {
+    "lane": "general",
+    "answer": "100 °C at sea level (standard atmospheric pressure).",
+    "citations": []
+  }
+}

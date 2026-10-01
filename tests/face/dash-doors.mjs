@@ -297,11 +297,14 @@ try {
   // route enumeration off the table the server actually dispatches from
   const routes = JSON.parse(execFileSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--routes"], { stdio: ["ignore", "pipe", "inherit"] }).toString());
   const mutating = routes.filter((x) => x.mutates);
-  // Phase 05 (REQ-07, ADR-1339) and Phase 06 (REQ-08, ADR-1326): EXACTLY three mutating routes, as a SET -- the one
-  // decision door, the work door's apply (one plan id) and the session door's start (one session, one click). A fourth,
-  // or any of these renamed, is a change this suite must be told about.
-  check("route enumeration: the mutating routes are exactly /api/decide, /api/op/:id/apply and /api/session/:id/start",
-    JSON.stringify(mutating.map((x) => x.path).sort()) === JSON.stringify(["/api/decide", "/api/op/:id/apply", "/api/session/:id/start"]), mutating.map((x) => x.path).join(","));
+  // Phase 05 (REQ-07, ADR-1339) and Phase 06 (REQ-08, ADR-1326): the one decision door, the work door's apply (one plan
+  // id) and the session door's start (one session, one click). Phase 10 (REQ-14, ADR-1350) adds the fourth, named here:
+  // POST /api/models/set writes the owner's model registry OUTSIDE the repo and touches no spine (spineEffect "none"). A
+  // fifth, or any of these renamed, is a change this suite must be told about.
+  check("route enumeration: the mutating routes are exactly /api/decide, /api/models/set, /api/op/:id/apply and /api/session/:id/start",
+    JSON.stringify(mutating.map((x) => x.path).sort()) === JSON.stringify(["/api/decide", "/api/models/set", "/api/op/:id/apply", "/api/session/:id/start"]), mutating.map((x) => x.path).join(","));
+  check("route enumeration: the models write is a file write, not a spine write (spineEffect none, POST only)",
+    mutating.filter((x) => x.path === "/api/models/set").every((x) => x.method === "POST" && x.spineEffect === "none") && mutating.some((x) => x.path === "/api/models/set"), JSON.stringify(mutating.filter((x) => x.path === "/api/models/set")));
   // No bulk write path appeared: no route is named for a batch, and apply and start are the only mutating prefix routes.
   check("route enumeration: no bulk write path -- no route names a batch, and apply and start are the only mutating prefix routes",
     routes.every((x) => !/bulk|batch|all\b/.test(x.path)) && mutating.filter((x) => x.path.includes(":")).map((x) => x.path).sort().join(",") === "/api/op/:id/apply,/api/session/:id/start",
