@@ -195,3 +195,20 @@ load 'test_helper'
   run bash -c '! grep -q "^FAIL " <<< "$1"' _ "$good"
   [ "$status" -eq 0 ] || { echo "the guard failed a clean run whose ok lines name mutants that FAIL"; false; }
 }
+
+@test "the face talks: the owner's model registry, the key never returned, labelled answers, receipted runs" {
+  # Phase 10 (REQ-14, ADR-1350). tests/face/talk.mjs drives the real door, arc-run and generic-api against
+  # tests/face/fake-llm.mjs -- CI never calls a real provider.
+  run node "$ARC_ROOT/tests/face/talk.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- suite did not finish: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok A: models.mjs loaded its decisions (vacuous-pass guard)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok E: talk.mjs loaded its decisions (vacuous-pass guard)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok E: the face's labels are the door's, word for word"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok A: MUTANT CONTROL -- a view that echoes the record FAILs the same check"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok B: the planted key appears in NO door response (every body this suite read)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok C: a general question -- answered by the model, labelled general, no citations"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok C: an arc answer citing an id that is not on the spine is UNVERIFIED, and names the id"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok D: no model added -- the reader answers and the door says a model is needed (200, never an error page)"* ]] || { echo "$output"; false; }
+}

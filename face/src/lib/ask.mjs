@@ -898,11 +898,16 @@ export function askThrough(handle, q) {
  * @property {string[]} citations
  * @property {boolean|null} selfVerified   what the brain said about itself; null when it said nothing
  * @property {string|null} mode            the door's data mode, "sim" for a fixture spine
- * @property {"deterministic"|"governed"|"unknown"} half
+ * @property {"deterministic"|"governed"|"model"|"unknown"} half
  * @property {string} halfLabel
  * @property {string} halfLine
  * @property {string|null} source          the door's own `source` string, verbatim
  * @property {string|null} shape           how a governed answer arrived: "json" | "text"
+ * @property {"arc"|"general"|null} lane    Phase 10: the lane the door judged a model answer in, else null
+ * @property {string|null} label           Phase 10: the label the door wrote for a model answer, verbatim
+ * @property {string[]} unresolved          Phase 10: citations the door could not find on the spine
+ * @property {string|null} model           Phase 10: the name of the owner's model that answered, else null
+ * @property {boolean} needsModel           Phase 10: the door said no model is added yet
  */
 
 /**
@@ -916,7 +921,7 @@ export function askThrough(handle, q) {
  * The door's own field is `source`, and it is the only signal: `apiAsk` strips the matcher id
  * out of the body before serving it. When `source` is absent, the governed process answered.
  * @param {Record<string, unknown>} body
- * @returns {{ half: "deterministic"|"governed"|"unknown", halfLabel: string, halfLine: string }}
+ * @returns {{ half: "deterministic"|"governed"|"model"|"unknown", halfLabel: string, halfLine: string }}
  */
 export function answerHalf(body) {
   const source = typeof body.source === "string" ? body.source : null;
@@ -925,6 +930,14 @@ export function answerHalf(body) {
       half: "deterministic",
       halfLabel: "ANSWERED BY THE READER",
       halfLine: `No model, no key, no spend. Every number below was computed from the log by L2 — ${source}. This half cannot hallucinate a receipt because it never writes a sentence a matcher did not compute.`,
+    };
+  }
+  // Phase 10 (REQ-14, ADR-1350): the owner's model answered, and the DOOR checked it and wrote its label.
+  if (source === "model") {
+    return {
+      half: "model",
+      halfLabel: "ANSWERED BY YOUR MODEL",
+      halfLine: "The reader could not reach this one, so the model you added in the face answered it under face-ask, receipted. The door, not the model, checked every citation against the spine and wrote the label.",
     };
   }
   if (source) {
@@ -986,11 +999,22 @@ export function readAnswer(raw) {
   if (!answer) {
     return { ok: false, code: "EMPTY_ANSWER", human: "The door answered with an empty answer. An empty string is not a result and is not shown as one." };
   }
+  // Phase 10: what the door said about a model answer, passed through as the door wrote it (never re-derived here).
+  const lane = body.lane === "arc" || body.lane === "general" ? body.lane : null;
+  const label = typeof body.label === "string" ? unescapeDoorText(body.label) : null;
+  const unresolved = Array.isArray(body.unresolved) ? body.unresolved.filter((c) => typeof c === "string").map((c) => unescapeDoorText(c)) : [];
+  const m = /** @type {Record<string, unknown> | null} */ (body.model && typeof body.model === "object" ? body.model : null);
+  const model = m && typeof m.name === "string" ? unescapeDoorText(m.name) : null;
   return {
     ok: true,
     answer: unescapeDoorText(answer),
     citations: citations.map((c) => unescapeDoorText(c)),
     selfVerified,
+    lane,
+    label,
+    unresolved,
+    model,
+    needsModel: body.needsModel === true,
     mode,
     source,
     shape,
