@@ -97,6 +97,8 @@ check("A: a key under 8 characters is refused, so redaction never has to eat a c
 const view = m.publicView(reg);
 check("A: the public view carries no key -- hasKey and the last four characters only",
   !JSON.stringify(view).includes(PLANTED) && view.models[0].hasKey === true && view.models[0].keyTail === PLANTED.slice(-4) && !("key" in view.models[0]));
+check("A: a key under 20 characters shows no tail at all -- four characters of a short key are too much of it (attack b8271c1 B7)", m.publicView(add(m.emptyRegistry(), { name: "s", baseUrl: "https://a.b/v1", model: "a", key: "short-key-123" }).reg).models[0].keyTail === null);
+check("A: the registry and arc-run read a model id with one grammar -- an id arc-run refuses is refused at add (attack b8271c1 B8)", !add(m.emptyRegistry(), { name: "g", baseUrl: "https://a.b/v1", model: "vendor/model@v1+x" }).ok);
 // MUTANT CONTROL: a view that leaks the record whole. The same assertion must FAIL it, or the check above proved nothing.
 const leaky = { ...view, models: reg.models };
 check("A: MUTANT CONTROL -- a view that echoes the record FAILs the same check", JSON.stringify(leaky).includes(PLANTED));
@@ -147,7 +149,11 @@ check("E: modelsView -- rows from the door's public view, the key as its tail on
 check("E: modelsView -- a body that is not the list is no list, never a guessed one", T.modelsView({ models: "x" }).ok === false && T.modelsView(null).ok === false);
 
 // ── C0: the door's judge of a model reply, held directly ──
-const ids = Object.assign(new Set(["01J0000000000000000000000A", "01J0000000000000000000000B"]), { runs: new Set(["01J0000000000000000000000B"]) });
+const NOW = Date.now();
+const ids = Object.assign(new Set(["01J0000000000000000000000A", "01J0000000000000000000000B", "01J0000000000000000000000C"]), { runs: new Map([
+  ["01J0000000000000000000000B", { ms: NOW, model: "owner/m" }],
+  ["01J0000000000000000000000C", { ms: NOW - 3_600_000, model: "owner/m" }],
+]) });
 const jg = judgeModelAnswer(JSON.stringify({ lane: "general", answer: "x", citations: ["01J0000000000000000000000A"] }), "", ids);
 check("C0: a general reply is labelled general and its citations are DROPPED, whatever the model sent", jg.label === GENERAL_LABEL && jg.citations.length === 0 && jg.verified === false);
 const ja = judgeModelAnswer(JSON.stringify({ lane: "arc", answer: "x", citations: ["01J0000000000000000000000A"] }), "arc-run: receipt run.completed 01J0000000000000000000000B\n", ids);
@@ -156,6 +162,14 @@ const forged = judgeModelAnswer(JSON.stringify({ lane: "general", answer: "x", c
 const lastWins = judgeModelAnswer(JSON.stringify({ lane: "general", answer: "x", citations: [] }), "arc-run: receipt run.completed 01ARZ3NDEKTSV4RRFFQ69G5FAV\narc-run: receipt run.completed 01J0000000000000000000000B\n", ids);
 check("C0: a receipt line naming a run the spine does not hold as a face-ask run.completed is dropped; the last line is the one read (attack c50172d B1)",
   forged.receipt === null && lastWins.receipt === "01J0000000000000000000000B");
+const receiptLine = (id) => `arc-run: receipt run.completed ${id}` + String.fromCharCode(10);
+const stale = judgeModelAnswer(JSON.stringify({ lane: "general", answer: "x", citations: [] }), receiptLine("01J0000000000000000000000C"), ids, { since: NOW - 5000, model: "owner/m" });
+const fresh = judgeModelAnswer(JSON.stringify({ lane: "general", answer: "x", citations: [] }), receiptLine("01J0000000000000000000000B"), ids, { since: NOW - 5000, model: "owner/m" });
+const otherModel = judgeModelAnswer(JSON.stringify({ lane: "general", answer: "x", citations: [] }), receiptLine("01J0000000000000000000000B"), ids, { since: NOW - 5000, model: "someone/else" });
+check("C0: the receipt must be THIS run's -- an older face-ask run, or one by another model, is not claimed (attack b8271c1 B9)", stale.receipt === null && otherModel.receipt === null && fresh.receipt === "01J0000000000000000000000B");
+const mixed = judgeModelAnswer(JSON.stringify({ lane: "arc", answer: "x", citations: ["01J0000000000000000000000A", 42, null] }), "", ids);
+let tooMany = null; try { judgeModelAnswer(JSON.stringify({ lane: "arc", answer: "x", citations: Array(21).fill("01J0000000000000000000000A") }), "", ids); } catch (e) { tooMany = e.code; }
+check("C0: a non-string citation is unresolved and named, never dropped; more than 20 citations is refused (attack b8271c1 B3)", mixed.verified === false && mixed.label === UNVERIFIED_LABEL && mixed.unresolved.length === 2 && mixed.unresolved.every((c) => c === "(non-id)") && tooMany === "ASK_FAILED");
 const ju = judgeModelAnswer(JSON.stringify({ lane: "arc", answer: "x", citations: ["01J0000000000000000000000A", "01ZZZZZZZZZZZZZZZZZZZZZZZZ", "not-an-id"] }), "", ids);
 check("C0: one citation off the record makes the whole arc answer unverified, each bad id named", ju.verified === false && ju.label === UNVERIFIED_LABEL && ju.unresolved.length === 2);
 const jn = judgeModelAnswer(JSON.stringify({ lane: "arc", answer: "x", citations: [] }), "", ids);
@@ -268,6 +282,6 @@ try {
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // Exact, not a floor (attack c50172d B8): a check deleted from this file is a short run, never a clean one.
-const EXPECTED = 61;
+const EXPECTED = 65;
 if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
 process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);

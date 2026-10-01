@@ -67,7 +67,8 @@ export function startFakeLlm({ port, citeId }) {
     server.once("error", reject);
     server.listen(port, "127.0.0.1", () => resolve({
       requests,
-      close: () => new Promise((r) => server.close(() => r())),
+      // Keep-alive sockets would hold close() open forever; drop them, and never wait more than 2 s (attack b8271c1 B6).
+      close: () => new Promise((r) => { const t = setTimeout(r, 2000); server.closeAllConnections?.(); server.close(() => { clearTimeout(t); r(); }); }),
     }));
   });
 }

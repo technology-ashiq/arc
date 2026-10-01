@@ -721,6 +721,7 @@ async function apiAsk(ctx, body) {
   if (!existsSync(proc)) {
     return { mode: ctx.mode, source: "deterministic (face-ask process not on this tree)", ...offline };
   }
+  const askedAt = nowMs();
 
   // Phase 10 (REQ-14, ADR-1350): the model half runs on the model the OWNER added in the face, never on a default the
   // owner did not pick. With none added, the reader's own answer stands and the face is told how to add one -- never a
@@ -748,12 +749,14 @@ async function apiAsk(ctx, body) {
     timeoutMs: 120_000, outputCap: 4 * 1024 * 1024,
     // The key reaches the driver through the environment of this one child, never an argument (argv is readable by
     // every process on the box) and never a response. A model with no key (a local one) sends a placeholder bearer.
-    env: { ARC_LLM_ENDPOINT: models.endpointOf(active.baseUrl), ARC_LLM_API_KEY: active.key ?? "none" },
+    // The receipt lands on the spine the door reads, named, not inherited (attack b8271c1 B1): a door over a fixture
+    // spine checks its answers against that spine, so the run must be written there too.
+    env: { ARC_LLM_ENDPOINT: models.endpointOf(active.baseUrl), ARC_LLM_API_KEY: active.key ?? "none", ...(ctx.mode === "sim" ? { ARC_SPINE_ROOT: ctx.root } : {}) },
   });
   if (res.timedOut) throw new DashError("ASK_FAILED", "the ask ran past 120 s and was ended, with everything it had started");
   if (res.exit !== 0) throw new DashError("ASK_FAILED", redactKey(String(res.stderr || `arc-run exited ${res.exit ?? res.signal}`), active.key).slice(0, 500));
   if (res.droppedOut) throw new DashError("ASK_FAILED", `the answer ran past the door's output cap (${res.droppedOut} characters over); it is not served cut`);
-  return { mode: ctx.mode, ...judgeModelAnswer(res.stdout, res.stderr, await spineIds(ctx)), model: { name: active.name, id: active.model } };
+  return { mode: ctx.mode, ...judgeModelAnswer(res.stdout, res.stderr, await spineIds(ctx), { since: askedAt, model: active.model }), model: { name: active.name, id: active.model } };
 }
 
 /**
@@ -772,10 +775,15 @@ function redactKey(text, key) {
  * and the face-ask run.completed ids, so the receipt the answer names is one this process really wrote.
  */
 async function spineIds(ctx) {
-  const { events } = await readAll(ctx.root);
+  let events;
+  // The run already happened and was paid for: a spine read that fails now serves the answer with nothing verified
+  // and no receipt claimed, never a 500 that loses it (attack b8271c1 B2).
+  try { ({ events } = await readAll(ctx.root)); } catch { events = []; }
   const ids = new Set(events.map((e) => e.event.id));
-  /** @type {Set<string>} */
-  const runs = new Set(events.filter((e) => e.event.kind === "run.completed" && String(e.event.process ?? "").startsWith("face-ask@")).map((e) => e.event.id));
+  /** @type {Map<string, { ms: number, model: string | null }>} */
+  const runs = new Map(events
+    .filter((e) => e.event.kind === "run.completed" && String(e.event.process ?? "").startsWith("face-ask@"))
+    .map((e) => [e.event.id, { ms: Date.parse(String(e.event.ts)), model: typeof e.event.model === "string" ? e.event.model : null }]));
   return Object.assign(ids, { runs });
 }
 
@@ -791,7 +799,7 @@ export const UNVERIFIED_LABEL = "unverified — a citation is not on arc's recor
  * verified, because nothing was checked.
  * @param {string} stdout @param {string} stderr @param {Set<string>} ids
  */
-export function judgeModelAnswer(stdout, stderr, ids) {
+export function judgeModelAnswer(stdout, stderr, ids, run = {}) {
   let out;
   try { out = JSON.parse(String(stdout).trim()); } catch { throw new DashError("ASK_FAILED", "the model's answer did not come back as the face-ask contract"); }
   if (!out || typeof out !== "object" || typeof out.answer !== "string" || !out.answer.trim() || !["arc", "general"].includes(out.lane) || !Array.isArray(out.citations)) {
@@ -800,12 +808,18 @@ export function judgeModelAnswer(stdout, stderr, ids) {
   // The LAST receipt line, and only if the spine holds it as a face-ask run.completed: a driver or a provider error can
   // print a well-formed line of its own, and a claimed receipt nobody wrote is worse than none (attack c50172d B1).
   const said = [...String(stderr).matchAll(/^arc-run: receipt run\.completed ([0-9A-HJKMNP-TV-Z]{26})$/gm)].map((m) => m[1]).pop() ?? null;
-  const runs = /** @type {Set<string> & { runs?: Set<string> }} */ (ids).runs;
-  const receipt = said && runs && runs.has(said) ? said : null;
+  // And it must be THIS run's: written at or after the ask began, by the owner's model (attack b8271c1 B9) -- an older
+  // real face-ask receipt printed by a driver is not this answer's.
+  const runs = /** @type {Set<string> & { runs?: Map<string, { ms: number, model: string | null }> }} */ (ids).runs;
+  const ev = said && runs ? runs.get(said) : undefined;
+  const receipt = ev && (run.since === undefined || ev.ms >= run.since - 1000) && (run.model === undefined || ev.model === run.model) ? said : null;
   if (out.lane === "general") {
     return { source: "model", lane: "general", label: GENERAL_LABEL, answer: out.answer, citations: [], verified: false, unresolved: [], receipt };
   }
-  const citations = out.citations.filter((c) => typeof c === "string");
+  // Every entry counts: a number, an object or a null in the list is a citation that resolves to nothing, named, never
+  // dropped to make the rest look clean (attack b8271c1 B3). More than 20 is not a citation list.
+  if (out.citations.length > 20) throw new DashError("ASK_FAILED", "the model's answer cited more than 20 receipts");
+  const citations = out.citations.map((c) => (typeof c === "string" ? c : "(non-id)"));
   const unresolved = citations.filter((c) => !ULID_RE.test(c) || !ids.has(c));
   const verified = citations.length > 0 && unresolved.length === 0;
   return {

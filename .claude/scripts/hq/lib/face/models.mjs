@@ -15,14 +15,15 @@
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, realpathSync, unlinkSync } from "node:fs";
 import { randomBytes } from "node:crypto";
+// The spine's grammar for a model id, which arc-run applies to --owner-model: one grammar, so an id the registry
+// accepts is never one every ask then refuses (attack b8271c1 B8).
+import { MODEL_RE } from "../validate.mjs";
 import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 
 export const SCHEMA = 1;
 export const MAX_MODELS = 20;
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}$/;
-// A model id is what the provider names it: `meta-llama/llama-3.3-70b-instruct:free`, `gpt-4o-mini`, `llama3.2`.
-const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$/;
 // A key is opaque printable ASCII with no whitespace; anything else is a paste accident, refused rather than stored.
 const KEY_RE = /^[\x21-\x7e]{8,400}$/;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -123,7 +124,8 @@ export function publicView(reg) {
       baseUrl: m.baseUrl,
       model: m.model,
       hasKey: typeof m.key === "string",
-      keyTail: typeof m.key === "string" && m.key.length >= 8 ? m.key.slice(-4) : null,
+      // Four characters of a 40-character key tell two keys apart; four of an 8-character key are half of it (b8271c1 B7).
+      keyTail: typeof m.key === "string" && m.key.length >= 20 ? m.key.slice(-4) : null,
     })),
   };
 }

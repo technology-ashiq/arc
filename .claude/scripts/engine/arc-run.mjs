@@ -1854,7 +1854,9 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
   validateDriverSelection(next, " on a fallback hop");
   // An owner model was checked against ONE driver (ADR-1350). A hop to a driver that cannot apply a model would record
   // the owner's choice for a run that never used it (attack c50172d B7): stop instead of carrying it across.
-  if (ownerModel && !MODEL_CAPABLE.includes(next)) { console.error(`arc-run: no fallback to \`${next}\` -- it cannot apply the owner model`); break; }
+  // The owner chose a model at ONE endpoint (generic-api, the owner's base URL); another driver, capable or not, would send that
+  // id somewhere it was never chosen for (attack b8271c1 B4). An owner-model run does not fall back.
+  if (ownerModel) { console.error(`arc-run: no fallback to \`${next}\` -- an owner-model run stays on the driver it was chosen for`); break; }
   driver = next;
   // THE PIN IS PER-DRIVER, SO IT IS RECOMPUTED PER HOP. It was resolved once from the ORIGINAL
   // driver and never revisited, so a fallback was spawned with the previous driver's model --
