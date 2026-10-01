@@ -199,7 +199,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/face/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/face/PROGRESS.md)
 
-## Decisions (49)
+## Decisions (50)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -254,6 +254,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1347`](../../../docs/adr/1347-fv2-the-reference-room-explains-every-product-and-lane-in-plain-words.md) | The Reference room explains every product and lane in plain words (widens REQ-12; Phase 07 +5.5d) | accepted (the owner's ruling on the `/arc-change --lane face` of 2026-09-27) | 2026-09-27 |
 | [`1348`](../../../docs/adr/1348-fv2-the-reference-room-draws-the-owners-page-shape-with-its-own-diagrams.md) | FV2: the Reference room draws the owner's page shape, with its own flow and loop diagrams | proposed (the owner's `/arc-change --lane face` of 2026-09-27, second pass) | 2026-09-27 |
 | [`1349`](../../../docs/adr/1349-fv2-the-front-door-is-a-named-surface-with-the-face-not-a-room.md) | FV2-Q: the front door is a named surface that carries the face, not a room | accepted (the owner chose option A, the hero, on 2026-09-30 during `/arc-resume --lane face`; option B stays his next question) | 2026-09-30 |
+| [`1350`](../../../docs/adr/1350-fv2-the-face-talks-owner-chosen-model-any-question-voice.md) | FV2-R: the face talks: any question, a model the owner picks in the face, answers by voice | accepted 2026-10-01 by the owner (the owner asked for it on 2026-10-01 during `/arc-resume --lane face`, after the Phase 09 live demo; code waits on his OK) | 2026-10-01 |
 
 ## Source
 
