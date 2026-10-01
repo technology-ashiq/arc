@@ -1,0 +1,24 @@
+{
+  "phase": "09",
+  "commit": "87d899513e8697595ef09b54324d9a1069f1c147",
+  "short": "87d89951",
+  "generated": "2026-10-01T12:49:30Z",
+  "files": [
+    {
+      "name": "attack-1bc1328-r2-boundary.json",
+      "sha256": "745473f3ee6aba469a556edc8d4a66aab98ad4074f244d257eeaf475624b8e58"
+    },
+    {
+      "name": "attack-e40b65f-r1-boundary.json",
+      "sha256": "11cdb5a08d594b845ace164a0979969829166df656d5d7b4a445b28d8bd02c84"
+    },
+    {
+      "name": "owner-demo.md",
+      "sha256": "992585c0f4882817f8cc2b4fa2064d78099f4c51ee04fbdebf4f77c8e5695274"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "0c2f89b56db9231ccbb9842293ddb346d3b4568dc96d5189b95af357a4441ace"
+    }
+  ]
+}
