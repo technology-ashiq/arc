@@ -1,4 +1,4 @@
-// ModelsPanel.tsx -- the face's settings for talking (face v2 Phase 10, REQ-14, ADR-1350).
+// ModelsPanel.tsx -- HQ's settings for talking (face v2 Phase 10, REQ-14, ADR-1350), opened from the workroom header.
 //
 // The owner adds the model the face answers with -- any OpenAI-compatible endpoint, free or paid, or a local one --
 // switches between them and removes them, and turns voice on or off. The key is typed here once and sent to the door,

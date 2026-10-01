@@ -13,7 +13,7 @@ export const GENERAL_LABEL = "general — not from arc's record";
 export const ARC_LABEL = "from arc's record";
 export const UNVERIFIED_LABEL = "unverified — a citation is not on arc's record";
 export const READER_TAG = "from arc's record — the reader, no model";
-export const NEEDS_MODEL_LINE = "No model is added yet, so only questions about arc's record can be answered. Open the settings (the gear) and add one: any OpenAI-compatible model, free or paid, or a local one.";
+export const NEEDS_MODEL_LINE = "No model is added yet, so only questions about arc's record can be answered. Enter HQ and open Settings (top right) to add one: any OpenAI-compatible model, free or paid, or a local one.";
 
 /**
  * What the face says about where an answer came from, from readAnswer's result. A model answer carries the label the

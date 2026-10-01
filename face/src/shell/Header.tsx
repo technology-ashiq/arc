@@ -10,7 +10,7 @@
 //     non-real family's, never green (green is real money's alone);
 //   - the inbox chip counts what the door's inbox holds open and opens the room that homes
 //     `approval.requested`; a read that failed says so instead of claiming inbox zero.
-import { MoonStars, SunDim, Tray } from '@phosphor-icons/react'
+import { GearSix, MoonStars, SunDim, Tray } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import type { Room } from '../lib/rooms.mjs'
 import { moodToggleLabel } from '../lib/mood.mjs'
@@ -23,7 +23,7 @@ import { HEAD_H } from './Rail'
 type Group = { ring: string; rooms: Room[] }
 
 export default function Header({
-  room, mode, inbox, onOpen, onExit, mood, onToggleMood, asOf, today, asOfSupported, onAsOf, groups, current, reference, onReference,
+  room, mode, inbox, onOpen, onExit, mood, onToggleMood, asOf, today, asOfSupported, onAsOf, groups, current, reference, onReference, onSettings,
 }: {
   room: Room | null
   mode: { label: string; tone: 'live' | 'sim' | 'unknown'; dot: string; title: string }
@@ -35,6 +35,8 @@ export default function Header({
   onReference: (at: string) => void
   mood: Mood
   onToggleMood: () => void
+  /** HQ's settings: the models the face answers with, and voice (Phase 10, ADR-1350) -- configured here, never on the ask bar */
+  onSettings: () => void
   asOf: string | null
   today: string | null
   asOfSupported: boolean
@@ -86,6 +88,17 @@ export default function Header({
               <Tray size={14} weight={chip.isWaiting ? 'fill' : 'regular'} aria-hidden="true" />
               {chip.label}
             </BarChip>
+            <button
+              type="button"
+              data-hq-settings
+              onClick={onSettings}
+              title="Settings: models and voice"
+              aria-label="Settings: models and voice"
+              className="inline-flex items-center justify-center w-[30px] h-[30px] cursor-pointer transition-colors duration-200 hover:bg-(--bg-3) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)"
+              style={{ border: '1px solid var(--line-2)', borderRadius: 'var(--r-md)', color: 'var(--text-2)' }}
+            >
+              <GearSix size={16} aria-hidden="true" />
+            </button>
             <button
               type="button"
               onClick={onToggleMood}

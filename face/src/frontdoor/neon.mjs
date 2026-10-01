@@ -19,4 +19,12 @@ export const NEON = Object.freeze({
   muted: "rgba(255, 255, 255, 0.62)",
   /** the arrow chip inside the button */
   chip: "rgba(0, 0, 0, 0.16)",
+  /** the ask bar's glass over the face (Phase 10, ADR-1350): the ground shows through, never a white panel */
+  glass: "rgba(255, 255, 255, 0.06)",
+  /** the ask bar's hairline */
+  line: "rgba(255, 255, 255, 0.14)",
+  /** behind an answer, so it reads over the particles */
+  veil: "rgba(0, 0, 0, 0.55)",
+  /** an answer whose citation is not on arc's record */
+  warn: "#ff8f7a",
 });

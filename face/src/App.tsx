@@ -32,12 +32,15 @@ import Rail from './shell/Rail'
 import Header from './shell/Header'
 import Palette from './shell/Palette'
 import Dock from './shell/Dock'
+import ModelsPanel from './shell/ModelsPanel'
+import { readVoicePref, voiceSupport, writeVoicePref } from './lib/talk.mjs'
 import RoomFrame from './shell/RoomFrame'
 import type { PaletteItem } from './shell/Palette'
 import { Failure, Loading } from './ui/legacy'
 import { UI } from './ui/kit'
 import FaceStage from './face/FaceStage'
 import FrontDoor from './frontdoor/FrontDoor'
+import FrontDoorAsk from './frontdoor/FrontDoorAsk'
 import StageGuard from './frontdoor/StageGuard'
 
 // `inventories` is nullable, not optional-with-a-default. A door serving a registry generated
@@ -106,6 +109,12 @@ export default function App() {
     storeMood(storage(), mood)
   }, [mood])
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // HQ's settings (Phase 10, ADR-1350): the owner's models and the voice switch. Opened from the workroom's header only;
+  // the voice switch is held here so the door's bar and the workroom's dock both follow it at once.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [voiceOn, setVoiceOn] = useState(() => { try { return readVoicePref(window.localStorage) } catch { return false } })
+  const speech = useMemo(() => voiceSupport(window), [])
+  const setVoice = useCallback((on: boolean) => { setVoiceOn(on); try { writeVoicePref(window.localStorage, on) } catch { /* private mode: this page only */ } }, [])
   const [asOf, setAsOf] = useState<string | null>(() => parseHash(window.location.hash).asOf)
   const [at, setAt] = useState<string | null>(() => parseHash(window.location.hash).at)
   const [today, setToday] = useState<string | null>(null)
@@ -332,8 +341,8 @@ export default function App() {
           />
         )}
         <FrontDoor onEnter={enter} stageFailed={stageFailed} />
-        {/* Phase 10 (REQ-14, ADR-1350): the face is asked on its own door, by typing or by voice. */}
-        <Dock door={door} onDoor />
+        {/* Phase 10 (REQ-14, ADR-1350): the face is asked on its own door, in its own look; nothing is configured here. */}
+        <FrontDoorAsk door={door} voiceOn={voiceOn} />
       </>
     )
   }
@@ -406,6 +415,7 @@ export default function App() {
         onExit={exit}
         mood={mood}
         onToggleMood={toggleMood}
+        onSettings={() => setSettingsOpen(true)}
         asOf={asOf}
         today={today}
         asOfSupported={openable !== null && ASOF_ROUTES.length > 0 && asOfReaches(openable, attached ? attached.manifest : null)}
@@ -444,7 +454,10 @@ export default function App() {
         </div>
       </main>
 
-      <Dock door={door} />
+      <Dock door={door} voiceOn={voiceOn} />
+      {settingsOpen ? (
+        <ModelsPanel door={door} onClose={() => setSettingsOpen(false)} voiceOn={voiceOn} onVoice={setVoice} voiceAvailable={speech.listen || speech.speak} />
+      ) : null}
     </div>
   )
   })()
