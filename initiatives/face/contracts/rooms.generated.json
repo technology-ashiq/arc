@@ -200,7 +200,7 @@
           "run.completed"
         ],
         "processes": [
-          "face-ask (Phase 07)"
+          "face-ask"
         ]
       },
       "itemCount": 2

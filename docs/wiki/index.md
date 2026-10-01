@@ -7,15 +7,15 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 |---|---|---|
 | [Products](#products) | 17 | 17 |
 | [Lanes](#lanes) | 17 | 17 |
-| [Processes](#processes) | 13 | 0 |
+| [Processes](#processes) | 14 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 16 | 0 |
 | [Commands](#commands) | 28 | 0 |
 | [Agents](#agents) | 30 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **135** | **34** |
+| **Total** | **136** | **34** |
 
-Narrative debt: **101 of 135** pages have no narrative yet. ADR headers: 271 of 336 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **102 of 136** pages have no narrative yet. ADR headers: 271 of 336 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -31,7 +31,7 @@ Narrative debt: **101 of 135** pages have no narrative yet. ADR headers: 271 of 
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
-| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 77 |
+| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 78 |
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
 | [memory](products/memory.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
@@ -73,6 +73,7 @@ Narrative debt: **101 of 135** pages have no narrative yet. ADR headers: 271 of 
 | [council-convene](processes/council-convene.md) | 1.0.0 | Convene the full arc council on one question, headless, and end on its council.verdict receipt. |
 | [day-close-roll](processes/day-close-roll.md) | 1.0.0 | Seal every unsealed day up to yesterday, oldest first, idempotently. |
 | [develop-proof](processes/develop-proof.md) | 1.0.0 | Prove the next unproven slice of a LIVE lane from evidence already recorded, and end on its slice.done receipt. |
+| [face-ask](processes/face-ask.md) | 1.0.0 | Answer the owner's question in the face: about arc from arc's own record with citations, or a general question from the owner's chosen model, always saying which. |
 | [kickoff-plan](processes/kickoff-plan.md) | 1.0.0 | Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated. |
 | [lesson-log](processes/lesson-log.md) | 1.0.0 | Log one lesson as a docs/retro-log.md row, after the near-duplicate check, and end on its note.logged receipt. |
 | [narrative-verify](processes/narrative-verify.md) | 1.0.0 | Judge every block of one drafted wiki narrative against the sources its anchors name, and return one verdict per block. |

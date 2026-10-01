@@ -73,6 +73,9 @@ export default function App() {
   useEffect(() => {
     const dir = warpDir(prevSurface.current, surface)
     prevSurface.current = surface
+    // The last few surfaces this page took, with when: printed by the harness beside a stage that did not leave.
+    const trail = (document.documentElement.dataset.surfaceTrail || '').split(' ').filter(Boolean)
+    document.documentElement.dataset.surfaceTrail = [...trail, `${surface}@${Math.round(performance.now())}`].slice(-6).join(' ')
     if (dir === 0) return
     setWarp((w) => ({ dir, id: (w ? w.id : 0) + 1 }))
     if (dir === -1) { setWarping(false); return }
@@ -329,6 +332,8 @@ export default function App() {
           />
         )}
         <FrontDoor onEnter={enter} stageFailed={stageFailed} />
+        {/* Phase 10 (REQ-14, ADR-1350): the face is asked on its own door, by typing or by voice. */}
+        <Dock door={door} onDoor />
       </>
     )
   }

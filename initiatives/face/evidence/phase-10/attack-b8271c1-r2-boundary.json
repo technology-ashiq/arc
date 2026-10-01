@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "arc-dash.mjs:apiAsk (runTool of arc-run) and spineIds(ctx); tests/face/talk.mjs C receipt check; face/scripts/harness-run.mjs",
+      "breaking_input": "The door is started with `--spine <fixture dir>`, as talk.mjs and harness-run both do. arc-run is spawned with cwd=ctx.repo and no `--root` or spine env, so its run.completed receipt lands on the repo's own spine, not the fixture spine. `spineIds(ctx)` reads `ctx.root`, which is the fixture spine.",
+      "why": "The B1 fix checks the printed receipt id against the door's spine, but nothing ties that spine to the one arc-run writes to. Either `receipt` is always null when the door is on a named spine, so the 'run is receipted' check fails, or the suite passes only because both resolve to the same directory and every test ask writes real face-ask receipts into the checkout's real spine. That is an artifact written into the repo by a probe.",
+      "fix": "Pass the door's spine to the child explicitly (an env var or `--root`) so the writer and the checker are the same place, and assert it in the suite. Otherwise point the child at a scratch spine.",
+      "twin_of": "A printed id credited as a receipt -> A line in a shared stream proves nothing about who wrote it."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "arc-dash.mjs:apiAsk, `await spineIds(ctx)` in the return expression",
+      "breaking_input": "The model answers, the provider is paid, and arc-run exits 0. The spine read then throws: a torn day file, an EBUSY on Windows, or a day file that cannot be opened. The throw happens after the effect.",
+      "why": "The unguarded read turns a completed paid run into a raw 500 INTERNAL and the answer is lost, so the owner retries and pays again. This is the 'line after the effect can be lost; it can never turn the effect into a refusal' defect.",
+      "fix": "Wrap spineIds in try/catch and fall back to an empty id set plus `runs`. Every arc citation then shows as unverified and `receipt` is null, so the answer is still served, never silently trusted.",
+      "twin_of": "An id line that throws after the write -> The line after the effect can be lost; it can never turn the effect into a refusal."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "arc-dash.mjs:judgeModelAnswer, `out.citations.filter((c) => typeof c === \"string\")`",
+      "breaking_input": "The model replies `{lane:\"arc\", answer:\"x\", citations:[\"<valid id on spine>\", 42, {\"id\":\"x\"}, null]}`.",
+      "why": "Non-string citations are dropped silently, so `unresolved` is empty and the answer is labelled 'from arc's record', verified, although the model made claims the door never checked. If every citation is non-string the answer shows as 'uncited', not unverified.",
+      "fix": "Count every non-string or malformed entry as unresolved (name it as `(non-id)`) and return the unverified label. Also cap the citation count.",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "arc-run.mjs fallback hop, `if (ownerModel && !MODEL_CAPABLE.includes(next))`",
+      "breaking_input": "`--driver generic-api --owner-model gpt-4o-mini` fails with verdict driver, and the fallback list names another MODEL_CAPABLE driver (a vendor CLI driver). The hop passes the guard.",
+      "why": "The guard re-checks capability, not identity. The owner's model id, valid only at the owner's chosen endpoint, is handed to a different driver and provider. The child env still carries ARC_LLM_API_KEY, so the key can reach a provider the owner never named. The receipt still says `model_source: owner`.",
+      "fix": "With an owner model, never fall back (`break` unconditionally), or allow only a hop to the same driver.",
+      "twin_of": "A guard applied to the first driver only -> Re-run the capability guard on every hop, or stop the hop."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/face/talk.mjs:PORT/LLM_PORT; face/scripts/harness-run.mjs llmPort/doorPort",
+      "breaking_input": "`freePort()` is awaited twice in sequence, and each probe closes its listener before returning. The OS can hand the same ephemeral port to both probes, or to another shard before the real bind.",
+      "why": "The fix for fixed ports is a probe-then-release TOCTOU. A collision makes `startFakeLlm` reject with EADDRINUSE, or the door bind fail on a port the fake already holds. The suite then crashes with no RAN line.",
+      "fix": "Hold probe A open while probing B, then release both. Also retry the bind on EADDRINUSE with a new port.",
+      "twin_of": "Pre-flighted the APP port and not the DOOR port -> any twin resource gets the same check twice."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/face/fake-llm.mjs close(); harness-run.mjs finally `llm.close()`",
+      "breaking_input": "The door's arc-run uses an undici fetch with keep-alive to the fake. On Node versions whose `server.close()` does not close idle connections, the close callback never fires.",
+      "why": "`await llm.close()` in finally hangs the harness or suite after the verdict. The hang has no deadline, and stopTree has already run.",
+      "fix": "Call `server.closeAllConnections?.()` before close, race the close with a bounded timer that is cleared once it settles, or `unref` the sockets.",
+      "twin_of": "A sleep(5000) raced against 'exit' was never cleared -> a race timer is cleared or unref()ed."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "models.mjs:publicView keyTail",
+      "breaking_input": "The owner stores an 8-character key (KEY_RE minimum). GET /api/models returns its last 4 characters.",
+      "why": "Half of a short key is served on every poll. The 'last four characters is useless to steal' claim only holds for long provider keys.",
+      "fix": "Show the tail only when the key is at least 20 characters, otherwise `hasKey` only. Raise the key minimum to match.",
+      "twin_of": ""
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "models.mjs MODEL_RE vs arc-run.mjs MODEL_RE",
+      "breaking_input": "The registry accepts a model id such as `vendor/model@v1+x` through its own MODEL_RE. arc-run applies its own, possibly narrower, MODEL_RE and exits 2.",
+      "why": "Two grammars for one value. The add succeeds and every ask then fails with an arc-run usage error, and the owner cannot tell why. This is 'validate one read, compare another' across processes.",
+      "fix": "Export one MODEL_RE and import it in both places, or add a fixture that runs every registry-accepted id through arc-run's check.",
+      "twin_of": "A second copy of \"what a name is\" -> Two readers of one fact share one predicate."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "arc-dash.mjs:judgeModelAnswer receipt selection",
+      "breaking_input": "arc-run's own receipt line is not printed because the emit failed or was lost. Earlier, a driver or provider error prints `arc-run: receipt run.completed <id of an older real face-ask run>`.",
+      "why": "The last-line rule plus a spine membership check proves only that some face-ask run existed, not that it is this run. An old receipt is credited to a new answer.",
+      "fix": "Require the run's event to be newer than the ask's start and to carry `model_source: owner` and the owner model id, or have arc-run print the id on a channel drivers cannot write.",
+      "twin_of": "A vouch that any run's receipt could pass -> Tie a receipt to its run, not to a time window."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/face/talk.mjs:EXPECTED = 61",
+      "breaking_input": "One check is deleted and another added in the same edit, or a check is skipped inside a conditional. The count still equals 61.",
+      "why": "B8's fix replaced a hand-kept floor with a hand-kept exact number. It catches shrinkage only if nobody edits it, and the bats test still asserts only that a `RAN: ` line exists.",
+      "fix": "Derive the expected check names from a list declared once, and have the bats test assert that each named check printed `ok`.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    }
+  ]
+}

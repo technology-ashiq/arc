@@ -233,6 +233,10 @@ export const DOOR_ROUTES = Object.freeze({
   "/api/reference": read(),
   "/api/decide": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: true }),
   "/api/ask": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
+  // Phase 10 (REQ-14, ADR-1350): the owner's models. GET shows each key as set-or-not and its last four characters only;
+  // the write takes one change and answers with the same redacted view, so the face never holds a key after a save.
+  "/api/models": read(),
+  "/api/models/set": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
   // Phase 05 (REQ-07, ADR-1339): the work door. No module declares these in its `routes` -- the host's ops dock
   // reaches them through the methods below, for the ops a module names in its ops.mjs.
   "/api/ops": read(),
@@ -409,6 +413,9 @@ export class Door {
 
   /** @param {string} q */
   ask(q) { return this.call("/api/ask", { method: "POST", body: { q } }); }
+  models() { return this.call("/api/models"); }
+  /** @param {{ op: "add" | "activate" | "remove", [k: string]: unknown }} change */
+  setModels(change) { return this.call("/api/models/set", { method: "POST", body: change }); }
 
   // ---- the work door (face v2 Phase 05, ADR-1339) ----
 

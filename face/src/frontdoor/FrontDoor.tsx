@@ -4,7 +4,8 @@
 //   1. the hero only: the nav's section links, the stats band, the platform, loop, spine and ventures sections and the
 //      chapters are option B, the faithful landing, and are not here until the owner asks for them;
 //   2. one message line under the face, as ADR-1349 §2 has it (v0.7's hero is the face alone);
-//   3. no voice: ADR-1315 stands, so the dock and the conversation fade are not ported;
+//   3. the ask dock sits under the hero (App renders it, Phase 10, ADR-1350): typed or spoken, the owner's model for
+//      what arc's record cannot answer; the conversation fade is not ported;
 //   4. a visible line when the stage cannot draw, the guard the debt ledger asked for.
 // The face itself is App's, a sibling of this surface: it has to outlive the door for the warp into the workroom.
 // Its colours are the door's one look in both moods, from neon.mjs, never a literal here (ADR-1349 §4).
@@ -41,7 +42,7 @@ export default function FrontDoor({ onEnter, stageFailed }: { onEnter: () => voi
 
       {/* the hero: the face alone owns it. The nav carries ENTER HQ. */}
       <section aria-label="arc — the face" className="relative min-h-[100dvh] overflow-hidden">
-        <div className="absolute bottom-0 left-0 right-0 px-5 sm:px-8 pb-12">
+        <div className="absolute bottom-0 left-0 right-0 px-5 sm:px-8 pb-32">
           <div className="max-w-[1360px] mx-auto">
             <h1 className="text-[28px] sm:text-[40px] leading-[1.04] tracking-tight" style={{ fontFamily: FONT, fontWeight: 600, color: NEON.text }}>
               Speak to the company.

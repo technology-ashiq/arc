@@ -29,7 +29,7 @@
  * Usage:
  *   arc-run.mjs --process NAME [--driver NAME|auto] [--budget inr=N,min=M]
  *               [--input JSON|@FILE] [--root PATH] [--work-root PATH]
- *               [--trial-model ID] [--transcript-dir PATH] [--dry-run]
+ *               [--trial-model ID|--owner-model ID] [--transcript-dir PATH] [--dry-run]
  *
  * `--root` is where ARC lives; `--work-root` is where the DRIVER works (ADR-0220). They default
  * to the same place. `--trial-model` names a model for this invocation only, under ADR-0069(g)
@@ -125,6 +125,8 @@ let budgetStr = "";
 let inputArg = "";
 let root = "";
 let trialModel = "";
+// The model the OWNER chose in the face (ADR-1350). Not a trial and not a route: see the `owner` source below.
+let ownerModel = "";
 let workRootArg = "";
 let transcriptDirArg = "";
 let dryRun = false;
@@ -200,6 +202,8 @@ for (let i = 0; i < argv.length; i++) {
   // argument ADR-0220 made for --trial-model and --work-root; the env var stays for the callers
   // that already set it, and the flag wins when both are present.
   else if (a === "--trial-model") trialModel = takeValue(a, i++);
+  // ADR-1350: the face's Ask runs the owner's own model. Explicit and opt-in like --trial-model, for the same reason.
+  else if (a === "--owner-model") ownerModel = takeValue(a, i++);
   else if (a === "--work-root") workRootArg = takeValue(a, i++);
   else if (a === "--transcript-dir") transcriptDirArg = takeValue(a, i++);
   else if (a === "--dry-run") dryRun = true;
@@ -694,12 +698,35 @@ if (tier) {
  *             isolated and receipted. It writes no router row, changes no tier, and cannot affect
  *             any run that did not ask for it.
  * `none`   -- nothing pinned it; the driver's own default applies and the receipt says so.
+ * `owner`  -- the owner chose this model himself, in the face's settings (ADR-1350). It is neither a route (no reviewed
+ *             router row picked it) nor a trial (nothing is being measured): it is his standing choice for one
+ *             process, recorded as exactly that. It takes the trial's guards -- an explicit driver that can apply a
+ *             model, a clean id, no routed tier to override -- and never combines with --trial-model.
  *
  * The two are never silently merged. A receipt that read like a routed pin when a trial supplied
  * the model would assert a routing decision nothing applied -- the false-claim-in-an-append-only-
  * ledger failure this file already refuses at the tier label (see emitRun).
  */
 modelSource = pinnedModel ? "router" : "none";
+if (trialModel && ownerModel) {
+  console.error("arc-run: --trial-model and --owner-model name two models for one run -- pass one (never last-wins)");
+  process.exit(2);
+}
+if (ownerModel) {
+  if (tier) {
+    console.error(`arc-run: --owner-model ${JSON.stringify(ownerModel)} conflicts with routed tier \`${tier}\`; name a driver explicitly (--driver NAME)`);
+    process.exit(2);
+  }
+  if (!MODEL_RE.test(ownerModel)) {
+    console.error(`arc-run: --owner-model ${JSON.stringify(ownerModel)} is not a clean model id`);
+    process.exit(2);
+  }
+  if (!MODEL_CAPABLE.includes(driver)) {
+    console.error(`arc-run: driver \`${driver}\` cannot apply a model, so --owner-model would be recorded but never used`);
+    process.exit(2);
+  }
+  modelSource = "owner";
+}
 if (trialModel) {
   // THE GUARD KEYS ON `tier`, NOT ON `pinnedModel`. The TIER is the reviewed routing decision;
   // `pinnedModel` is a derived lookup that can be ABSENT while that decision exists -- which is
@@ -740,7 +767,7 @@ if (trialModel) {
 }
 // The one value handed to the driver, whatever produced it. Drivers are untouched by this
 // change: they still read ARC_DRIVER_MODEL and know nothing about routers, tiers or trials.
-effectiveModel = trialModel || pinnedModel;
+effectiveModel = trialModel || ownerModel || pinnedModel;
 
 // ---------- budget ----------
 const BUDGET_KEYS = ["inr", "min"];
@@ -1825,6 +1852,11 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
   // ADR-0225 grant were both bypassed by a fallback entry -- proved, with an arbitrary script
   // outside the drivers directory executed from a router row.
   validateDriverSelection(next, " on a fallback hop");
+  // An owner model was checked against ONE driver (ADR-1350). A hop to a driver that cannot apply a model would record
+  // the owner's choice for a run that never used it (attack c50172d B7): stop instead of carrying it across.
+  // The owner chose a model at ONE endpoint (generic-api, the owner's base URL); another driver, capable or not, would send that
+  // id somewhere it was never chosen for (attack b8271c1 B4). An owner-model run does not fall back.
+  if (ownerModel) { console.error(`arc-run: no fallback to \`${next}\` -- an owner-model run stays on the driver it was chosen for`); break; }
   driver = next;
   // THE PIN IS PER-DRIVER, SO IT IS RECOMPUTED PER HOP. It was resolved once from the ORIGINAL
   // driver and never revisited, so a fallback was spawned with the previous driver's model --
@@ -1837,7 +1869,7 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
   if (tier) {
     const router = loadRouter();
     pinnedModel = router?.models?.[tier]?.[driver] ?? null;
-    effectiveModel = trialModel || pinnedModel;
+    effectiveModel = trialModel || ownerModel || pinnedModel;
     modelSource = pinnedModel ? "router" : "none";
   }
   a = await attempt(driver);

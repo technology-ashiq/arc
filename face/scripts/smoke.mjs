@@ -42,6 +42,7 @@ import {
   findChrome, chromeArgs, launchChrome, waitForDevTools, openSocket, CdpSession, openPage,
 } from "./cdp.mjs";
 import { modeOf, exitHash, STAGE_UNMOUNT_MS } from "../src/lib/mode.mjs";
+import { GENERAL_LABEL, ARC_LABEL } from "../src/lib/talk.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const MIN_WATCH_MS = 900;
@@ -1054,7 +1055,7 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
   "hq-no-stage", "hq-mood",
   "pointer-enter", "pointer-unmount",
   "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
-  "exit-to-door", "palette-on-door", "healthy-no-exception",
+  "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "healthy-no-exception",
   "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
   "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
 ]);
@@ -1144,6 +1145,7 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
     const ENTER = { key: "Enter", code: "Enter", vk: 13, text: "\r" };
     const SPACE = { key: " ", code: "Space", vk: 32, text: " " };
     const CTRL_K = { key: "k", code: "KeyK", vk: 75, modifiers: 2 };
+    const ESCAPE = { key: "Escape", code: "Escape", vk: 27 };
     /** Cross from the door and judge the crossing: the hash reaches the workroom, then the stage is gone. */
     const cross = async (page, name, unmountName, act) => {
       const acted = await act();
@@ -1161,7 +1163,9 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       // writes how long the stage stayed on once it leaves; a crossing that dropped the face at once has no fly-through.
       const held = Number(await val(page, "document.documentElement.dataset.warpHeldMs || 'NaN'"));
       if (stages === 0 && held >= WARP_HELD_MIN_MS) report.warpHeld++;
-      record(unmountName, stages === 0 && opened, `stage nodes=${stages} workroom opened=${opened} after ${Date.now() - crossedAt} ms`);
+      // On a stage that stayed, say what the page did: how many scenes it built and which surfaces it took, when.
+      const trace = stages === 0 ? "" : ` mounts=${await val(page, "document.documentElement.dataset.stageMounts || '0'")} trail=${JSON.stringify(String(await val(page, "document.documentElement.dataset.surfaceTrail || ''")))} held=${held}`;
+      record(unmountName, stages === 0 && opened, `stage nodes=${stages} workroom opened=${opened} after ${Date.now() - crossedAt} ms${trace}`);
     };
     const step = async (fn, names) => {
       const before = report.checks.length;
@@ -1223,6 +1227,25 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       await press(P, CTRL_K);
       record("palette-on-door", await until(async () => (await count(P, '[role="dialog"][aria-modal="true"]')) === 1, capMs), "Ctrl+K opened no palette on the door");
     }, ["palette-on-door"]);
+    // Phase 10 (REQ-14, ADR-1350): the face is asked on its own door. The harness's door holds one model, the fake
+    // provider (tests/face/fake-llm.mjs), so a general question comes back labelled general and one about the record
+    // comes back from arc's record -- the label the DOOR wrote, read off the page.
+    await step(async () => {
+      await press(P, ESCAPE);
+      await until(async () => (await count(P, '[role="dialog"][aria-modal="true"]')) === 0, capMs);
+      const tagOf = () => val(P, "(function () { var e = document.querySelector('[data-answer-tag]'); return e ? e.getAttribute('data-answer-tag') + '|' + e.textContent : ''; })()");
+      for (const [name, q, tone, label] of [
+        ["ask-general-label", "What is the boiling point of water at sea level?", "general", GENERAL_LABEL],
+        ["ask-arc-label", "Which gate is the oldest approval in the queue for?", "plain", ARC_LABEL],
+      ]) {
+        const focused = await val(P, "(function () { var i = document.getElementById('ask-arc-dock'); if (!i) return false; i.focus(); return document.activeElement === i; })()");
+        if (focused !== true) { record(name, false, "no ask box on the door"); continue; }
+        await P.send("Input.insertText", { text: q });
+        await press(P, ENTER);
+        const ok = await until(async () => String(await tagOf()).startsWith(`${tone}|${label}`), 30000, 250);
+        record(name, ok, `the answer's tag read ${JSON.stringify(String(await tagOf()).slice(0, 120))}`);
+      }
+    }, ["ask-general-label", "ask-arc-label"]);
     record("healthy-no-exception", healthy.exceptions.length === 0, healthy.exceptions.slice(0, 3).join(" | "));
     await close(P);
 

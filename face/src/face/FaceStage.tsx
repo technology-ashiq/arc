@@ -103,6 +103,10 @@ export default function FaceStage({ presence = 1, state = 'idle', warp, neon = f
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
+    // How many times a scene was built on this page, on <html>: the harness prints it when a crossing leaves a stage
+    // behind, so a remount is a number in the CI log rather than a guess (debt ledger, Phase 10: the Space-key crossing).
+    const doc = document.documentElement
+    doc.dataset.stageMounts = String(Number(doc.dataset.stageMounts || '0') + 1)
 
     const width = container.clientWidth || window.innerWidth
     const height = container.clientHeight || window.innerHeight
