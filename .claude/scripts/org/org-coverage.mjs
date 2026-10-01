@@ -200,6 +200,9 @@ export function check(w) {
       const req = d && d.kind === "decision.recorded" ? byId.get(d.payload?.decides) : null;
       if (!d || d.kind !== "decision.recorded") f.push(`${c.id}: interview ${c.legitimacy.slice(10)} is not a decision on this spine (REQ-11)`);
       else if (d.payload?.verdict !== "approve") f.push(`${c.id}: interview ${d.id} was not approved (REQ-11)`);
+      // Decided twice = an edited spine (the emitter binds a decision's idem to its request): fail closed (logic attack L5).
+      else if (w.spineEvents.filter((e) => e.kind === "decision.recorded" && e.payload?.decides === d.payload?.decides).length > 1)
+        f.push(`${c.id}: interview ${d.id} decides a request that carries more than one decision -- a spine the emitter would refuse (REQ-11)`);
       else if (!req || req.kind !== "approval.requested" || req.payload?.subject !== "org.role" || req.payload?.role !== c.id)
         f.push(`${c.id}: interview ${d.id} decides no org.role request naming this role (REQ-11)`);
     }

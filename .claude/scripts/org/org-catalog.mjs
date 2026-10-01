@@ -187,6 +187,9 @@ async function hire(repo, role, interview, spineDir) {
   const req = d && d.kind === "decision.recorded" ? byId.get(d.payload?.decides) : null;
   if (!d || d.kind !== "decision.recorded") { console.log(`FAIL ${role}: ${interview} is not a decision on this spine`); return 1; }
   if (d.payload?.verdict !== "approve") { console.log(`FAIL ${role}: interview ${interview} was not approved`); return 1; }
+  // Decided twice = an edited spine (the emitter binds a decision's idem to its request): never read as approved (logic attack L5).
+  if (events.filter((e) => e.kind === "decision.recorded" && e.payload?.decides === d.payload?.decides).length > 1)
+    { console.log(`FAIL ${role}: the request ${interview} decides carries more than one decision -- a spine the emitter would refuse`); return 1; }
   if (!req || req.kind !== "approval.requested" || req.payload?.subject !== "org.role" || req.payload?.role !== role)
     { console.log(`FAIL ${role}: ${interview} decides no org.role request naming this role`); return 1; }
   const day = String(d.ts).slice(0, 10);

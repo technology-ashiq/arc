@@ -105,6 +105,19 @@ spine() {
   [[ "$output" == *"nothing scored"* ]] || { echo "$output"; false; }
 }
 
+@test "org-review: a map saved with a BOM and CRLF scores exactly as the plain map (logic attack L4)" {
+  local t="$BATS_TEST_TMPDIR/tree"
+  mkdir -p "$t/.claude" "$t/engine" && cp -r "$ARC_ROOT/.claude/agents" "$ARC_ROOT/.claude/skills" "$ARC_ROOT/.claude/scripts" "$t/.claude/"
+  cp -r "$ARC_ROOT/processes" "$ARC_ROOT/org" "$t/" && cp "$ARC_ROOT/engine/router.yaml" "$t/engine/" && cp "$ARC_ROOT/hq.policy.yaml" "$ARC_ROOT/ventures.yaml" "$t/"
+  node -e 'const fs=require("fs");const p=process.argv[1];const t=fs.readFileSync(p,"utf8").replace(/\r\n/g,"\n");fs.writeFileSync(p,"﻿"+t.replace(/\n/g,"\r\n"))' "$t/org/attribution.yaml"
+  [ "$(head -c 3 "$t/org/attribution.yaml" | od -An -tx1 | tr -d ' \n')" = "efbbbf" ] || { echo "the BOM was not written"; false; }
+  local s; s=$(spine full) || false
+  run node "$(REVIEW)" --role devops-release --spine-dir "$s" --root "$t"
+  [[ "$output" == *"org-review: "* ]] || { echo "did not run: $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"devops-release "*"runs 2 (1 ok, 1 fail)"* ]] || { echo "$output"; false; }
+}
+
 @test "org-review: modes are exclusive, flags are never given twice, unknown flags refused" {
   run node "$(REVIEW)" --all --audit
   [ "$status" -eq 2 ] && [[ "$output" == *"exactly one of"* ]] || { echo "$output"; false; }

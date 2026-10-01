@@ -129,6 +129,10 @@ export function teamApproval(events, venture, digest) {
   if (!reqs.length) return { approved: false, why: "no approval.requested carries this digest" };
   const ids = new Set(reqs.map((r) => r.id));
   const decisions = events.filter((e) => e.kind === "decision.recorded" && ids.has(e.payload?.decides));
+  // A request decided twice is a spine the emitter refuses to write (validate.mjs binds a decision's idem to the
+  // request it decides), so this one was edited: fail closed rather than pick either verdict (logic attack L1).
+  const twice = [...ids].find((id) => decisions.filter((d) => d.payload?.decides === id).length > 1);
+  if (twice) return { approved: false, request: twice, why: `request ${twice} carries more than one decision -- a spine the emitter would refuse, so not read as approved` };
   const yes = decisions.filter((d) => d.payload?.verdict === "approve");
   if (!yes.length) return { approved: false, request: reqs.at(-1).id, why: decisions.length ? "the request was rejected" : "the request is undecided" };
   return { approved: true, request: yes.at(-1).payload.decides, decision: yes.at(-1).id, why: "approved" };

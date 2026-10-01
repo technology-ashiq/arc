@@ -44,7 +44,8 @@ export async function loadOrg(root) {
   const cards = w.cards.map((c) => c.card).filter((c) => c && typeof c.id === "string");
   const roleIds = new Set(cards.map((c) => c.id));
   let text = null;
-  try { text = readFileSync(join(root, "org", "attribution.yaml"), "utf8"); } catch { /* reported below */ }
+  // BOM dropped and CRLF folded, as every other org reader does: a map saved by Notepad is not a different map (logic attack L4).
+  try { text = readFileSync(join(root, "org", "attribution.yaml"), "utf8").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n"); } catch { /* reported below */ }
   if (text === null) return { findings: ["org/attribution.yaml is missing -- nothing can be placed"], cards, roleIds, rules: [] };
   const r = parseYamlSubset(text);
   if (!r.ok) return { findings: [`org/attribution.yaml: ${r.error.message}`], cards, roleIds, rules: [] };

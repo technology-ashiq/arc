@@ -1,0 +1,55 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "critical",
+      "where": ".claude/scripts/org/lib/team.mjs:teamApproval",
+      "breaking_input": "A spine whose events are: approval.requested id R, decision.recorded id D1 with verdict approve and payload.decides R, then decision.recorded id D2 with verdict reject and payload.decides R (D2 later). Run org-team --check lexos --spine-dir <that spine> with a team digest that R was requested for.",
+      "why": "teamApproval returns approved=true whenever there is at least one approve decision, ignoring later reject decisions on the same request. The comment says 'the newest ... must be decided approve', but the code never checks which decision is the newest. A later rejection therefore still governs the team, and org-dispatch will emit proposals for an ungoverned team.",
+      "fix": "For each approval.requested, find the latest decision (by spine order or timestamp) and require that decision's verdict to be approve; reject if any later decision exists."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/org/lib/dispatch.mjs:vacant-branch",
+      "breaking_input": "Two ventures 'lexos' and 'other' both with team manifests and on discover. Spine contains two note.logged events with signal org.vacancy-demand and role pain-point-miner carrying payload.venture lexos. Run org-dispatch --venture other --root <tree> --spine-dir <spine> --today 2026-09-30.",
+      "why": "The prior-demand count filters events only by kind, signal and role — never by venture. So demand signals recorded for lexos inflate the count for 'other'. When a real criterion for pain-point-miner appears in 'other', prior=2, demand becomes 3, and a hire proposal is emitted for 'other' even though that venture has never wanted the role.",
+      "fix": "Filter prior demand events by e.payload.venture === venture (or by e.venture when present) before counting."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/org/lib/dispatch.mjs:have",
+      "breaking_input": "A team on discover with criterion {id: 'board-verdict', kind: 'council.verdict', count: 1, role: 'board-advisors'}. The spine holds one council.verdict event placed (via payload.role or map) on a different role such as devops-release. Run org-dispatch --venture lexos --root <tree> --spine-dir <spine> --today 2026-09-30.",
+      "why": "have() counts events by kind and venture alone, ignoring criterion.role. The council.verdict produced by devops-release satisfies board-advisors' criterion, so the criterion is treated as met. The dispatcher then proposes the stage change without ever proposing work for board-advisors, violating the criterion's role.",
+      "fix": "Count only events whose placement role equals c.role (use the placements map already passed to dispatch), not every event of that kind."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-review.mjs:loadOrg",
+      "breaking_input": "org/attribution.yaml begins with a UTF-8 BOM (as Notepad would write it). Run org-review --all --root <tree> --spine-dir <spine>.",
+      "why": "loadOrg reads attribution.yaml with readFileSync and calls parseYamlSubset directly, without stripping a BOM. The BOM becomes part of the first top-level key (e.g. '\\uFEFFversion'), so the map fails to parse and the tool reports findings and exits 1, even though the file is otherwise valid. This is a twin of the documented BOM defect elsewhere in the repo.",
+      "fix": "Strip a leading \\uFEFF before parsing, as the other readers in this diff do.",
+      "twin_of": "A UTF-8 BOM (Notepad) became part of the first key and failed a card for an invisible byte -> every readFileSync of a hand-editable file"
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/org/org-catalog.mjs:hire and .claude/scripts/org/org-coverage.mjs:REQ-11",
+      "breaking_input": "A card for role r has legitimacy 'interview:01M0VEWDEC0000000000000001'. The spine has decision D1 with id 01M0VEWDEC0000000000000001, verdict approve, payload.decides an approval.requested R with subject org.role and role r. Later the same R is decided again by D2 with verdict reject. Run org-catalog --hire r --interview 01M0VEWDEC0000000000000001 --spine-dir <spine> and org-coverage --spine-dir <spine>.",
+      "why": "Both hire() and org-coverage's REQ-11 check look up the decision by the cited ULID and only verify that decision's verdict. They never check whether a later decision on the same request overrides it. An owner-approved interview can therefore remain 'approved' even after a subsequent rejection, letting a seat be stamped as staffed and the gate pass on a retracted approval.",
+      "fix": "When validating an interview:ULID, also check that no later decision (by spine order) exists on the same request; if any does, require that latest decision's verdict to be approve."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/org/jobs/org-dispatch.mjs:spawnSync timeout",
+      "breaking_input": "Run the scheduler wrapper (org-dispatch job) with --all --emit on a tree with many teams, each having several proposals. Each inner emit in org-dispatch.mjs can take up to 8s; the wrapper's hard timeout is 110s and the inner emits are not bounded together.",
+      "why": "The wrapper's 110s ceiling can be exceeded by the sum of many 8s inner emits, so the wrapper kills the whole dispatch mid-run. This is a twin of the nested-timeout defect pattern already called out.",
+      "fix": "Give the wrapper a timeout that accounts for the worst-case inner emit sum, or bound the total inner execution time rather than capping each emit independently.",
+      "twin_of": "The scheduler wrapper's 110 s ceiling held only about two of the dispatcher's 60 s emits -> nested timeouts whose inner sum can exceed the outer"
+    }
+  ]
+}

@@ -51,12 +51,15 @@ digest_of() { node "$(TEAM)" --digest lexos --root "$1" | sed -n 's/^digest: //p
 @test "org-team: an unapproved team is an UNRECEIPTED TEAM CHANGE (REQ-06)" {
   local t; t=$(team_tree none) || { echo "fixture failed"; false; }
   local d; d=$(digest_of "$t"); [[ "$d" =~ ^[0-9a-f]{64}$ ]] || { echo "no digest"; false; }
-  for mode in none reject near-miss; do
+  for mode in none reject near-miss twice; do
     node "$ARC_ROOT/tests/org/team-spine.mjs" "$t/sp-$mode" lexos "$d" "$mode" >/dev/null || false
     run node "$(TEAM)" --check lexos --root "$t" --spine-dir "$t/sp-$mode"
     [ "$status" -eq 1 ] || { echo "$mode governed a team: $output"; false; }
     [[ "$output" == "UNRECEIPTED TEAM CHANGE: "* ]] || { echo "$mode: $output"; false; }
   done
+  # logic attack L1: approve then a second decision is refused by name, not read as the later or the earlier verdict
+  run node "$(TEAM)" --check lexos --root "$t" --spine-dir "$t/sp-twice"
+  [[ "$output" == *"carries more than one decision"* ]] || { echo "twice: $output"; false; }
 }
 
 @test "org-team: an approved digest governs, a comment keeps it, a value change breaks it" {
@@ -128,7 +131,7 @@ digest_of() { node "$(TEAM)" --digest lexos --root "$1" | sed -n 's/^digest: //p
   # portable on all three legs: no sed replacement newlines (BSD sed does not expand them)
   grep -v "^fixtures: 'pending'$" "$c" > "$c.new" && printf "fixtures:\n  - 'products/bench/fixtures/qa-01.json'\n" >> "$c.new" && mv "$c.new" "$c"
   grep -q "qa-01.json" "$c" || { echo "fixture edit failed"; false; }
-  for mode in reject other-role wrong-subject; do
+  for mode in reject other-role wrong-subject twice; do
     node "$ARC_ROOT/tests/org/interview-spine.mjs" "$t/sp-$mode" qa-tester "$mode" >/dev/null || false
     run node "$ARC_ROOT/.claude/scripts/org/org-catalog.mjs" --hire qa-tester --interview "$u" --spine-dir "$t/sp-$mode" --root "$t"
     [ "$status" -eq 1 ] && [[ "$output" == "FAIL qa-tester: "* ]] || { echo "$mode hired: $output"; false; }
@@ -141,4 +144,18 @@ digest_of() { node "$(TEAM)" --digest lexos --root "$1" | sed -n 's/^digest: //p
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   run node "$ARC_ROOT/.claude/scripts/org/org-coverage.mjs" --root "$t" --spine-dir "$t/sp-reject"
   [ "$status" -eq 1 ] && [[ "$output" == *"qa-tester: interview $u was not approved (REQ-11)"* ]] || { echo "$output"; false; }
+  # logic attack L5: an approve followed by a second decision on the same request is an edited spine, never a hire
+  run node "$ARC_ROOT/.claude/scripts/org/org-coverage.mjs" --root "$t" --spine-dir "$t/sp-twice"
+  [ "$status" -eq 1 ] && [[ "$output" == *"qa-tester: interview $u decides a request that carries more than one decision"* ]] || { echo "$output"; false; }
+}
+
+@test "org-hire: a request decided twice refuses the hire stamp by name (logic attack L5)" {
+  local t; t=$(team_tree twice) || { echo "fixture failed"; false; }
+  local c="$t/org/roles/e-engineering/qa-tester.role.yaml" u=01M0VEWDEC0000000000000001
+  grep -v "^fixtures: 'pending'$" "$c" > "$c.new" && printf "fixtures:\n  - 'products/bench/fixtures/qa-01.json'\n" >> "$c.new" && mv "$c.new" "$c"
+  node "$ARC_ROOT/tests/org/interview-spine.mjs" "$t/sp" qa-tester twice >/dev/null || false
+  [ "$(wc -l < "$t/sp/events/2026-09-03.jsonl")" -eq 3 ] || { echo "twice fixture is not three events"; false; }
+  run node "$ARC_ROOT/.claude/scripts/org/org-catalog.mjs" --hire qa-tester --interview "$u" --spine-dir "$t/sp" --root "$t"
+  [ "$status" -eq 1 ] && [[ "$output" == *"carries more than one decision"* ]] || { echo "$output"; false; }
+  ! grep -q "^legitimacy: 'interview:" "$c" || { echo "the card was stamped"; false; }
 }
