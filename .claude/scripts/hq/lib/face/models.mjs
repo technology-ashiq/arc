@@ -130,6 +130,27 @@ export function publicView(reg) {
   };
 }
 
+/**
+ * What the owner reads when the model's provider refuses an ask, from arc-run's stderr. The owner saw the raw driver
+ * log on the door (a 429 from a free OpenRouter model, 2026-10-02); a person needs the cause and the next step, not a
+ * transcript warning. The last `status NNN` the driver printed decides; a timeout says so; anything else is generic.
+ * Never echoes the stderr itself, so nothing the provider sent back (a key in an error) can reach the page.
+ * @param {string} stderr @returns {string}
+ */
+export function providerFault(stderr) {
+  const s = String(stderr ?? "");
+  const codes = [...s.matchAll(/\bstatus (\d{3})\b/g)].map((m) => Number(m[1]));
+  const code = codes.length ? codes[codes.length - 1] : null;
+  if (code === 429) return "Your model's provider is busy and turned the question away (429, too many requests). Free models share one limit, so this is common: ask again in a minute, or pick another model in HQ Settings.";
+  if (code === 401 || code === 403) return `The provider refused the key (${code}). Check the key for this model in HQ Settings.`;
+  if (code === 402) return "The provider says the account has no credits left (402). Add credits there, or pick a free model in HQ Settings.";
+  if (code === 404) return "The provider does not know this model id or URL (404). Check both in HQ Settings.";
+  if (code !== null && code >= 500) return `The provider had an error of its own (${code}). Ask again in a minute, or pick another model in HQ Settings.`;
+  if (/timeout|timed out|AbortError|ECONNREFUSED|ENOTFOUND|fetch failed/i.test(s)) return "The model did not answer in time, or could not be reached. If it is a local model, check that it is running; otherwise ask again or pick another model in HQ Settings.";
+  if (/response envelope carried no message content|did not come back as/i.test(s)) return "The model answered with nothing usable. Some free models do this under load: ask again, or pick another model in HQ Settings.";
+  return code !== null ? `The model's provider refused the question (${code}). Pick another model in HQ Settings, or ask again.` : "The model could not answer this time. Ask again, or pick another model in HQ Settings.";
+}
+
 /** The active record, key included, for the door's own use only. @param {Registry} reg */
 export function activeModel(reg) {
   return reg.models.find((m) => m.name === reg.active) ?? null;

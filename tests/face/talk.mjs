@@ -111,6 +111,11 @@ process.env.ARC_FACE_MODELS_FILE = join(REPO, "initiatives", "face", "models.jso
 const inRepo = m.registryPath(REPO);
 if (prevEnv === undefined) delete process.env.ARC_FACE_MODELS_FILE; else process.env.ARC_FACE_MODELS_FILE = prevEnv;
 check("A: a models file inside the repo is refused (a key there is one git add from public)", !inRepo.ok && /inside the repo/.test(inRepo.why));
+const f429 = m.providerFault("arc-run: WARN generic-api attempt 1 produced 234 bytes of transcript\ngeneric-api: attempt 3/3: status 429 after 0s\ngeneric-api: transport failed after 3 attempt(s): status 429");
+check("A: providerFault -- a 429 reads as busy with the next step, never the driver's log (owner, 2026-10-02)", /busy/.test(f429) && /HQ Settings/.test(f429) && !/transcript|attempt|generic-api/.test(f429));
+check("A: providerFault -- 401, 402, 404, 5xx, a timeout and an empty answer each name their own cause",
+  /refused the key/.test(m.providerFault("status 401")) && /no credits/.test(m.providerFault("status 402")) && /model id or URL/.test(m.providerFault("status 404"))
+  && /error of its own/.test(m.providerFault("status 503")) && /in time/.test(m.providerFault("timeout after 60s")) && /nothing usable/.test(m.providerFault("response envelope carried no message content")));
 
 // ── E: the face's decisions ──
 const T = await import(pathToFileURL(join(REPO, "face", "src", "lib", "talk.mjs")).href);
@@ -259,10 +264,15 @@ try {
   check("C: an arc answer citing an id that is not on the spine is UNVERIFIED, and names the id",
     u.status === 200 && u.body.lane === "arc" && u.body.verified === false && u.label === UNVERIFIED_LABEL && u.body.unresolved.length === 1 && u.body.unresolved[0] === GHOST_ID,
     JSON.stringify(u.body).slice(0, 400));
+  const busy = await post("/api/ask", { q: "Is there a rate limit on this?" });
+  check("C: a provider's 429 reaches the face as MODEL_FAILED with a sentence, not the driver's log",
+    busy.status === 502 && busy.body.error === "MODEL_FAILED" && /busy/.test(unescapeDoorText(String(busy.body.message ?? ""))) && !/transcript|generic-api|attempt/.test(String(busy.body.message ?? "")),
+    JSON.stringify(busy.body).slice(0, 300));
+  const calls = llm.requests.length;
   const det = await post("/api/ask", { q: "status" });
-  check("C: deterministic first -- a question the reader reaches never calls the model", det.status === 200 && String(det.body.source).startsWith("deterministic") && llm.requests.length === 3, `requests=${llm.requests.length}`);
+  check("C: deterministic first -- a question the reader reaches never calls the model", det.status === 200 && String(det.body.source).startsWith("deterministic") && llm.requests.length === calls, `requests=${llm.requests.length} before=${calls}`);
   const act = await post("/api/ask", { q: "approve the oldest one" });
-  check("C: an action request is still refused by the reader, never handed to a model", act.status === 200 && /I read; I do not act/.test(unescapeDoorText(String(act.body.answer))) && llm.requests.length === 3);
+  check("C: an action request is still refused by the reader, never handed to a model", act.status === 200 && /I read; I do not act/.test(unescapeDoorText(String(act.body.answer))) && llm.requests.length === calls);
   check("B: the planted key appears in NO door response (every body this suite read)", bodies.length >= 7 && bodies.every((b) => !b.includes(PLANTED)), `bodies=${bodies.length}`);
   const grep = (needle) => spawnSync("git", ["grep", "-l", "--untracked", "--no-exclude-standard", "-F", needle], { cwd: REPO, encoding: "utf8" });
   const g0 = grep(PLANTED);
@@ -282,6 +292,6 @@ try {
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // Exact, not a floor (attack c50172d B8): a check deleted from this file is a short run, never a clean one.
-const EXPECTED = 65;
+const EXPECTED = 68;
 if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
 process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);
