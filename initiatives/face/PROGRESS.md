@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 09
+phase: 10
 appetite: 37d
-burn: 12d
+burn: 13d
 blocked-on: —
 depends-on: —
 
@@ -32,11 +32,11 @@ depends-on: —
 | 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | ✅ **CLOSED 2026-09-23** — 3d of 10d; 31 of 31 work verbs ship as ops, residue none (`residue.md`, held both ways by `tests/face/work-door.mjs`); eight PRs (#252 · #253 · #254 · #255 · #257 · #258 · #259 · #261) + the close's #262/#263, 20 attacker rounds, 175 fixed-defect rows; final tree `2fba48f7` 19/19 (run 35870851639), suite 1..3427; live door from the main clone, one real apply receipted (`01M37CDRK7E03P67E45Y1BDT4E`); spec-fidelity drift dispositioned; receipts `01M37D0KHFPXBDBWQRYPMEXVT8` · `01M37D0M5F55KH2D8A5ZWJG6TA` |
 | 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | ✅ **CLOSED 2026-09-26** — 3d of 5d; of 15 SESSION verbs 5 ship with the receipt read back (the live council convene among them), 4 start with the read-back owed, 6 residue filed to their lanes (`residue.md`, held to the registry by `tests/face/session-door.mjs`); PRs #269 · #270 · #271 · #272 · #273 · #274 · #276 · #278 · #282 + the close #285/#286; 13 boundary rounds, 118 fixed-defect rows, the logic surface never ran (debt row); `main` `465f5b82` 19/19 (run 36225129900), suite 1..3545; spec-fidelity drift dispositioned; receipts `01M3EBD91R95PZD0EPQ1QB4TS2` · `01M3EBDGQ70ETM8PXDHNKHSZXJ` |
 | 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 10.5d | ✅ **CLOSED 2026-09-30** — 5d of 10.5d (worked 09-26, -27, -28, -29, -30); REQ-12 validated. The room, a Reference link from every room, page shape v1, 34 pages rewritten and accepted, and the owner-key proof. Two DoD rows ticked narrower than written (see the done log) |
-| 09 | Front door — the face at `/`, ENTER HQ with the warp, WebGL guard, a named surface (REQ-13, ADR-1349); runs BEFORE 08 | 1.5d | building — the owner chose option A (the hero) on 2026-10-01; branch `feat/face-v2-09` |
+| 09 | Front door — the face at `/`, ENTER HQ with the warp, WebGL guard, a named surface (REQ-13, ADR-1349); runs BEFORE 08 | 1.5d | ✅ **CLOSED 2026-10-01** — 1d of 1.5d (built 10-01); REQ-13 validated. The face at `/`, ENTER HQ with the warp both ways, the WebGL guard, a named surface in coverage, the lint reading the stage; the owner read it against his design ("design ithu"). One DoD row ticked narrower than written: only the boundary attacker ran (see the done log) |
 | 10 | The face talks — any question, the owner's model added in the face, arc answers cited, general labelled, voice (REQ-14, ADR-1350); runs BEFORE 08 | 4d | spec'd — ADR-1350 accepted 2026-10-01 |
 | 08 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 12d of 37d (33d until ADR-1350 added Phase 10's 4d on 2026-10-01; 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
+**Appetite burn: 13d of 37d (Phase 09 closed 2026-10-01: 1d of 1.5d; 33d until ADR-1350 added Phase 10's 4d on 2026-10-01; 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
 C · verbs (05–06) 3/15d — **Phase 05 CLOSED at 3d of its 10d** (worked 2026-09-19, -20 and -23) — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
 3d unallocated. Tripwires: Block A day 3 · Block B day 5 · Block C at Phase 05 day 5 (burn 9d) · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
@@ -463,7 +463,17 @@ stay bespoke folds.
   `approval.requested{gate: phase-done}` `01M3R3P3XF2CXK3S695N61EX1E`. The second waits on the owner's stamp, which also
   accepts the two declared gaps above.
 
+- **Phase 09 — The front door. CLOSED 2026-10-01.** `/` draws the owner's neon face at full presence with one message and one ENTER HQ control; ENTER HQ by pointer, Enter or Space runs the warp in and lands on `#hq`, the exit runs it back; the workroom never mounts the stage in either mood; with WebGL refused, or a stage that throws, the door shows a fallback line and ENTER HQ still opens the workroom; the front door is one named surface in `expected-set.json` and `face-coverage` FAILs a second; the colour lint reads `face/src/face` and `face/src/frontdoor` with the neon palette allowed in one file; Ctrl+K opens the palette on the door. One PR, #305 (`ad83b34f`), PR head 19 of 19.
+  **Tests:** CI only, per job: `main` `ad83b34f` run 36858931483, 19 of 19 green after one rerun of Windows shard 1/12 (Chrome failed to start, `EBUSY` on `DevToolsActivePort`, the same flake #305 met; now a debt row); suite 1..3829.
+  **Live demo:** from the MAIN clone (`arc-face.mjs --port 8327`), the owner opened `/`, entered HQ and came back, and read it against his design: "design ithu machi, nalla iruka simple ah sleek ah" (`evidence/phase-09/owner-demo.md`). In the same message he asked for the face to talk; that is new capability, routed as ADR-1350 / REQ-14 / Phase 10, not a reopening of REQ-13.
+  **Ticked narrower than written:** "Two fresh attackers (logic · boundary)" -- only the boundary surface attacked this code (two rounds, 5 + 12 findings, every medium fixed, six LOW rows in the debt ledger); the logic surface never ran (round 1 was refused before sending: the model id carried a `~`). Recorded in the debt ledger's Phase 09 row, to be carried by the next logic-surface run on the lane.
+  **Assumptions and triggers:** no ledger row fired; no ADR is DEFERRED; ADR-1349's revisit trigger (the owner asks for the story sections, or finds the warp or presence wrong) did not fire; ADR-1315's fired early and is routed by ADR-1350. REQ-13 is validated (12 of 14). Evidence: `initiatives/face/evidence/phase-09/`, sha256 manifest from `arc-evidence.sh bundle 09 --lane face` (verified).
+  amendments: 1 (2026-09-30 the front door, ADR-1349) · reopened: n.
+  Receipts (main clone spine, `2026-10-01.jsonl`): `phase.closed` `01M3VR2HF2DYNZZ9N3JP6YES8G` · `approval.requested{gate: phase-done}` `01M3VR2JTVMM5XRTK66QQ25SYY`. The second waits on the owner's stamp, which also accepts the narrower attacker row.
+
 ## Now
+
+**RESUME HERE (2026-10-01):** **Phase 09 is CLOSED** (done log). **Phase 10 is next: the face talks** (REQ-14, ADR-1350 accepted, `phases/phase-10-spec.md`, branch `feat/face-v2-10`), then Phase 08, the owner's two dogfood days on a face that talks. Owner steps open: the stamp on `01M3VR2JTVMM5XRTK66QQ25SYY` (and the older `01M3R3P3XF2CXK3S695N61EX1E`).
 
 **CHANGE ROUTED (2026-10-01, `/arc-change --lane face`, owner: "arc face athoda product la ethathu keta ellame proper ah ans pannanum, arc ku oru llm connect pannuvom, ui la add panra maari irukanum, en istathuku na atha add pannuven, free/paid model ethunalaum, genral ah ketalum ans pannanum, arc ah pathi ketalum correct ah ans pannanum"):** at the Phase 09 live demo the owner accepted the front door ("design ithu machi, nalla iruka simple ah sleek ah") and asked where the talking was. **ADR-1350** (decision, proposed): a model the owner adds in the face (any OpenAI-compatible endpoint, free or paid, the key kept on the door at `~/.arc-private/face/models.json` and never returned), two labelled answer lanes (arc: cited and verified, ADR-1325 kept; general: "not from arc's record"), every model answer receipted through `arc-run`, voice as a setting (amends ADR-1315 and ADR-1325, lifts two no-gos). Filed as **REQ-14 / Phase 10** (new capability, 3 active REQs of a cap of 10), placed after 09 and before the dogfood (Phase 08), so the dogfood runs on a face that talks. Appetite: total 33d to **37d** (+4d); burn 12d (32%), projected about 17.5d at Phase 10's close (47%), under the 50% line; all block tripwires are in closed blocks. Assumptions ledger: nothing fired (ADR-1315's revisit trigger fired early, routed here). ADR-1350 status: accepted (its own Status line, 2026-10-01). Phase 09 still closes first, from the main clone.
 
