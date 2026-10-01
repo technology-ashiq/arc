@@ -3,7 +3,7 @@
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
 phase: 09
-appetite: 33d
+appetite: 37d
 burn: 12d
 blocked-on: —
 depends-on: —
@@ -33,9 +33,10 @@ depends-on: —
 | 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | ✅ **CLOSED 2026-09-26** — 3d of 5d; of 15 SESSION verbs 5 ship with the receipt read back (the live council convene among them), 4 start with the read-back owed, 6 residue filed to their lanes (`residue.md`, held to the registry by `tests/face/session-door.mjs`); PRs #269 · #270 · #271 · #272 · #273 · #274 · #276 · #278 · #282 + the close #285/#286; 13 boundary rounds, 118 fixed-defect rows, the logic surface never ran (debt row); `main` `465f5b82` 19/19 (run 36225129900), suite 1..3545; spec-fidelity drift dispositioned; receipts `01M3EBD91R95PZD0EPQ1QB4TS2` · `01M3EBDGQ70ETM8PXDHNKHSZXJ` |
 | 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 10.5d | ✅ **CLOSED 2026-09-30** — 5d of 10.5d (worked 09-26, -27, -28, -29, -30); REQ-12 validated. The room, a Reference link from every room, page shape v1, 34 pages rewritten and accepted, and the owner-key proof. Two DoD rows ticked narrower than written (see the done log) |
 | 09 | Front door — the face at `/`, ENTER HQ with the warp, WebGL guard, a named surface (REQ-13, ADR-1349); runs BEFORE 08 | 1.5d | building — the owner chose option A (the hero) on 2026-10-01; branch `feat/face-v2-09` |
+| 10 | The face talks — any question, the owner's model added in the face, arc answers cited, general labelled, voice (REQ-14, ADR-1350); runs BEFORE 08 | 4d | spec'd — ADR-1350 accepted 2026-10-01 |
 | 08 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 12d of 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
+**Appetite burn: 12d of 37d (33d until ADR-1350 added Phase 10's 4d on 2026-10-01; 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
 C · verbs (05–06) 3/15d — **Phase 05 CLOSED at 3d of its 10d** (worked 2026-09-19, -20 and -23) — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
 3d unallocated. Tripwires: Block A day 3 · Block B day 5 · Block C at Phase 05 day 5 (burn 9d) · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
@@ -463,6 +464,8 @@ stay bespoke folds.
   accepts the two declared gaps above.
 
 ## Now
+
+**CHANGE ROUTED (2026-10-01, `/arc-change --lane face`, owner: "arc face athoda product la ethathu keta ellame proper ah ans pannanum, arc ku oru llm connect pannuvom, ui la add panra maari irukanum, en istathuku na atha add pannuven, free/paid model ethunalaum, genral ah ketalum ans pannanum, arc ah pathi ketalum correct ah ans pannanum"):** at the Phase 09 live demo the owner accepted the front door ("design ithu machi, nalla iruka simple ah sleek ah") and asked where the talking was. **ADR-1350** (decision, proposed): a model the owner adds in the face (any OpenAI-compatible endpoint, free or paid, the key kept on the door at `~/.arc-private/face/models.json` and never returned), two labelled answer lanes (arc: cited and verified, ADR-1325 kept; general: "not from arc's record"), every model answer receipted through `arc-run`, voice as a setting (amends ADR-1315 and ADR-1325, lifts two no-gos). Filed as **REQ-14 / Phase 10** (new capability, 3 active REQs of a cap of 10), placed after 09 and before the dogfood (Phase 08), so the dogfood runs on a face that talks. Appetite: total 33d to **37d** (+4d); burn 12d (32%), projected about 17.5d at Phase 10's close (47%), under the 50% line; all block tripwires are in closed blocks. Assumptions ledger: nothing fired (ADR-1315's revisit trigger fired early, routed here). ADR-1350 status: accepted (its own Status line, 2026-10-01). Phase 09 still closes first, from the main clone.
 
 **OWNER CHOSE A (2026-10-01, during `/arc-resume --lane face`):** ADR-1349 is accepted with option A, the hero; option B stays his
 next question. Phase 09 is building on `feat/face-v2-09` (renamed from `feat/face-front-door`, carrying `c399aab2`): `lib/mode.mjs`
