@@ -81,7 +81,7 @@ const urlVerdicts = badUrls.map(([u, re]) => { const r = add(reg, { name: `bad${
 check("A: a bad base URL is refused, each for its own reason (6 of 6)", urlVerdicts.every(Boolean), JSON.stringify(urlVerdicts));
 s = add(reg, { name: "trailing", baseUrl: "https://openrouter.ai/api/v1/chat/completions", model: "a" });
 check("A: a pasted full endpoint is reduced to its base, and endpointOf rebuilds it once",
-  s.ok && s.reg.models[1].baseUrl === "https://openrouter.ai/api/v1" && m.endpointOf(s.reg.models[1].baseUrl) === "https://openrouter.ai/api/v1/chat/completions");
+  s.ok && s.reg.models.at(-1).name === "trailing" && s.reg.models.at(-1).baseUrl === "https://openrouter.ai/api/v1" && m.endpointOf(s.reg.models.at(-1).baseUrl) === "https://openrouter.ai/api/v1/chat/completions");
 const badFields = [
   { op: "add", model: { name: "x", baseUrl: "https://a.b/v1", model: "a", extra: 1 } },
   { op: "add", model: { name: " ", baseUrl: "https://a.b/v1", model: "a" } },
@@ -145,7 +145,7 @@ check("E: addChange -- trims, leaves an empty key out, and sends one add", okAdd
 check("E: addChange -- an empty name, URL or model id is caught before a round trip", ["name", "baseUrl", "model"].every((k) => !T.addChange({ ...{ name: "a", baseUrl: "https://x/v1", model: "m", key: "" }, [k]: "" }).ok));
 check("E: every preset's base URL passes the door's own check", T.PRESETS.length >= 5 && T.PRESETS.every((p) => m.checkBaseUrl(p.baseUrl).ok));
 const mv = T.modelsView(m.publicView(reg));
-check("E: modelsView -- rows from the door's public view, the key as its tail only", mv.ok && mv.rows.length === 1 && mv.rows[0].key === `key …${PLANTED.slice(-4)}` && mv.rows[0].active === true && !JSON.stringify(mv).includes(PLANTED));
+check("E: modelsView -- rows from the door's public view, the key as its tail only", mv.ok && mv.rows.length === reg.models.length && mv.rows.length === 2 && mv.rows[1].key === "no key" && mv.rows[0].key === `key …${PLANTED.slice(-4)}` && mv.rows[0].active === true && !JSON.stringify(mv).includes(PLANTED));
 check("E: modelsView -- a body that is not the list is no list, never a guessed one", T.modelsView({ models: "x" }).ok === false && T.modelsView(null).ok === false);
 
 // ── C0: the door's judge of a model reply, held directly ──

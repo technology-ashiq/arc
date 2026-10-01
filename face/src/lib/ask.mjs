@@ -898,11 +898,16 @@ export function askThrough(handle, q) {
  * @property {string[]} citations
  * @property {boolean|null} selfVerified   what the brain said about itself; null when it said nothing
  * @property {string|null} mode            the door's data mode, "sim" for a fixture spine
- * @property {"deterministic"|"governed"|"unknown"} half
+ * @property {"deterministic"|"governed"|"model"|"unknown"} half
  * @property {string} halfLabel
  * @property {string} halfLine
  * @property {string|null} source          the door's own `source` string, verbatim
  * @property {string|null} shape           how a governed answer arrived: "json" | "text"
+ * @property {"arc"|"general"|null} lane    Phase 10: the lane the door judged a model answer in, else null
+ * @property {string|null} label           Phase 10: the label the door wrote for a model answer, verbatim
+ * @property {string[]} unresolved          Phase 10: citations the door could not find on the spine
+ * @property {string|null} model           Phase 10: the name of the owner's model that answered, else null
+ * @property {boolean} needsModel           Phase 10: the door said no model is added yet
  */
 
 /**
@@ -916,7 +921,7 @@ export function askThrough(handle, q) {
  * The door's own field is `source`, and it is the only signal: `apiAsk` strips the matcher id
  * out of the body before serving it. When `source` is absent, the governed process answered.
  * @param {Record<string, unknown>} body
- * @returns {{ half: "deterministic"|"governed"|"unknown", halfLabel: string, halfLine: string }}
+ * @returns {{ half: "deterministic"|"governed"|"model"|"unknown", halfLabel: string, halfLine: string }}
  */
 export function answerHalf(body) {
   const source = typeof body.source === "string" ? body.source : null;
@@ -998,7 +1003,8 @@ export function readAnswer(raw) {
   const lane = body.lane === "arc" || body.lane === "general" ? body.lane : null;
   const label = typeof body.label === "string" ? unescapeDoorText(body.label) : null;
   const unresolved = Array.isArray(body.unresolved) ? body.unresolved.filter((c) => typeof c === "string").map((c) => unescapeDoorText(c)) : [];
-  const model = body.model && typeof body.model === "object" && typeof body.model.name === "string" ? unescapeDoorText(body.model.name) : null;
+  const m = /** @type {Record<string, unknown> | null} */ (body.model && typeof body.model === "object" ? body.model : null);
+  const model = m && typeof m.name === "string" ? unescapeDoorText(m.name) : null;
   return {
     ok: true,
     answer: unescapeDoorText(answer),

@@ -103,9 +103,9 @@ export function speakable(text) {
 // ── the voice switch, per browser ──
 
 export const VOICE_KEY = "arc.face.voice";
-/** @param {{ getItem(k: string): string | null } | null | undefined} storage */
+/** @param {{ getItem(k: string): string | null } | null | undefined} storage @returns {boolean} */
 export function readVoicePref(storage) {
-  try { return storage && storage.getItem(VOICE_KEY) === "on"; } catch { return false; }
+  try { return !!storage && storage.getItem(VOICE_KEY) === "on"; } catch { return false; }
 }
 /** @param {{ setItem(k: string, v: string): void } | null | undefined} storage @param {boolean} on */
 export function writeVoicePref(storage, on) {

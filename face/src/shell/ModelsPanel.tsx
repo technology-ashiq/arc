@@ -90,7 +90,7 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
           <div className="text-[11px] uppercase tracking-[0.12em]" style={{ fontWeight: 600, color: 'var(--text-3)' }}>add a model</div>
           <div className="flex flex-wrap gap-2">
             {PRESETS.map((p) => (
-              <button key={p.label} type="button" onClick={() => setForm((f) => ({ ...f, name: f.name || p.label.split(' ')[0], baseUrl: p.baseUrl, model: p.model }))} className={small} style={smallStyle}>{p.label}</button>
+              <button key={p.label} type="button" onClick={() => setForm((f) => ({ ...f, name: f.name || (p.label.split(' ')[0] ?? ''), baseUrl: p.baseUrl, model: p.model }))} className={small} style={smallStyle}>{p.label}</button>
             ))}
           </div>
           <label className="sr-only" htmlFor="model-name">Name</label>
