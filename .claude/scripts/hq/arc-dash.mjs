@@ -158,7 +158,7 @@ const STATUS = Object.freeze({
   PHASES_OUTSIDE: 403,
   // Phase 10 (ADR-1350): a model change the registry refuses is the caller's to fix; a models file the door cannot
   // place or read is a precondition, never a silent empty list.
-  BAD_MODEL: 400, MODELS_UNAVAILABLE: 503,
+  BAD_MODEL: 400, MODELS_UNAVAILABLE: 503, MODEL_FAILED: 502,
   DECISION_REFUSED: 502,
   // Phase 04 (REQ-06). A file a route parses that is not on this tree is a precondition, like REGISTRY_ABSENT; a
   // file the owning lane's parser refuses is unprocessable, not an internal fault; a lane module that will not load
@@ -754,7 +754,8 @@ async function apiAsk(ctx, body) {
     env: { ARC_LLM_ENDPOINT: models.endpointOf(active.baseUrl), ARC_LLM_API_KEY: active.key ?? "none", ...(ctx.mode === "sim" ? { ARC_SPINE_ROOT: ctx.root } : {}) },
   });
   if (res.timedOut) throw new DashError("ASK_FAILED", "the ask ran past 120 s and was ended, with everything it had started");
-  if (res.exit !== 0) throw new DashError("ASK_FAILED", redactKey(String(res.stderr || `arc-run exited ${res.exit ?? res.signal}`), active.key).slice(0, 500));
+  // The owner reads the cause and the next step, never the driver's log (2026-10-02: a raw 429 transcript on the door).
+  if (res.exit !== 0) throw new DashError("MODEL_FAILED", models.providerFault(redactKey(String(res.stderr ?? ""), active.key)));
   if (res.droppedOut) throw new DashError("ASK_FAILED", `the answer ran past the door's output cap (${res.droppedOut} characters over); it is not served cut`);
   return { mode: ctx.mode, ...judgeModelAnswer(res.stdout, res.stderr, await spineIds(ctx), { since: askedAt, model: active.model }), model: { name: active.name, id: active.model } };
 }
