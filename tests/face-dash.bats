@@ -204,6 +204,8 @@ load 'test_helper'
   [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- suite did not finish: $output"; false; }
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
   [[ "$output" == *"ok A: models.mjs loaded its decisions (vacuous-pass guard)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok E: talk.mjs loaded its decisions (vacuous-pass guard)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok E: the face's labels are the door's, word for word"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok A: MUTANT CONTROL -- a view that echoes the record FAILs the same check"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok B: the planted key appears in NO door response (every body this suite read)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok C: a general question -- answered by the model, labelled general, no citations"* ]] || { echo "$output"; false; }

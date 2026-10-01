@@ -16,13 +16,13 @@
 // Usage: harness-run.mjs [--face DIR] [--exclude id,id] [--moods dark,light] [--shots DIR]
 // Exit:  0 smoke passed in every mood · 1 a mood failed · 2 setup failed (no dist, door or preview never up).
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { spawnTracked, isDead, deathReason, stopTree, removeDir, delay } from "./proc.mjs";
 import { findChrome } from "./cdp.mjs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { runFlows, flowsLine } from "./flows.mjs";
 import { runFrontDoor, frontDoorLine, judgeFrontDoor, FRONT_DOOR_CHECKS, runSmoke, summaryLines, renderLine, notServedLine, servedLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, extrasLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds, expectedExtras } from "./smoke.mjs";
 
@@ -119,6 +119,8 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
   const token = `face-browser-${process.pid}`;
   let door = null;
   let preview = null;
+  /** @type {{ close: () => Promise<void> } | null} */
+  let llm = null;
   try {
     const gen = JSON.parse(execFileSync(process.execPath,
       [join(REPO, "tests", "fixtures", "face", "gen-spine.mjs"), "--out", spine, "--count", "2000", "--days", "10", "--seed", "face-browser-1"],
@@ -139,9 +141,19 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
     }
     log("fixture: leads store with the browser-flow campaign");
 
+    // Phase 10 (REQ-14, ADR-1350): the owner's model is the fake provider, so the front door's ask is answered with no
+    // network and no key anyone owns. The registry file lives in the scratch dir, never the repo.
+    const llmPort = await freePort();
+    const { startFakeLlm } = await import(pathToFileURL(join(REPO, "tests", "face", "fake-llm.mjs")).href);
+    llm = await startFakeLlm({ port: llmPort, citeId: gen.openApproval });
+    const modelsFile = join(tmp, "private", "models.json");
+    mkdirSync(dirname(modelsFile), { recursive: true });
+    writeFileSync(modelsFile, JSON.stringify({ schema: 1, active: "Fake", models: [{ name: "Fake", baseUrl: `http://127.0.0.1:${llmPort}/v1`, model: "fake/owner-model:free", key: "fake-browser-key" }] }));
+    log(`fake model: up on ${llmPort}`);
+
     const doorPort = await freePort();
     door = start("arc-dash", [join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "--spine", spine, "--port", String(doorPort)],
-      { cwd: REPO, env: { ...leadsEnv, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal") } });
+      { cwd: REPO, env: { ...leadsEnv, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal"), ARC_FACE_MODELS_FILE: modelsFile } });
     const headers = { Authorization: `Bearer ${token}` };
     await waitHttp(`http://127.0.0.1:${doorPort}/api/health`, headers, door, 20000, [token]);
     log(`door: up on ${doorPort}`);
@@ -237,6 +249,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
   } finally {
     await stopTree(preview);
     await stopTree(door);
+    if (llm) await llm.close().catch(() => {});
     await removeDir(tmp, "harness-run");
   }
 }

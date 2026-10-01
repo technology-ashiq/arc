@@ -209,7 +209,7 @@ ledger: the list of money in and money out.
 
 None declared.
 
-## Scripts (77)
+## Scripts (78)
 
 - [`.claude/scripts/hq/adr-record.mjs`](../../../.claude/scripts/hq/adr-record.mjs)
 - [`.claude/scripts/hq/arc-brief.mjs`](../../../.claude/scripts/hq/arc-brief.mjs)
@@ -233,6 +233,7 @@ None declared.
 - [`.claude/scripts/hq/ledger-ingest.mjs`](../../../.claude/scripts/hq/ledger-ingest.mjs)
 - [`.claude/scripts/hq/lib/canonical.mjs`](../../../.claude/scripts/hq/lib/canonical.mjs)
 - [`.claude/scripts/hq/lib/face/ask-offline.mjs`](../../../.claude/scripts/hq/lib/face/ask-offline.mjs)
+- [`.claude/scripts/hq/lib/face/models.mjs`](../../../.claude/scripts/hq/lib/face/models.mjs)
 - [`.claude/scripts/hq/lib/face/reads.mjs`](../../../.claude/scripts/hq/lib/face/reads.mjs)
 - [`.claude/scripts/hq/lib/face/reference/route.mjs`](../../../.claude/scripts/hq/lib/face/reference/route.mjs)
 - [`.claude/scripts/hq/lib/face/session-door.mjs`](../../../.claude/scripts/hq/lib/face/session-door.mjs)

@@ -9,6 +9,8 @@
 //      question comes back labelled general with no citations; an arc answer citing a receipt on the spine is verified;
 //      one citing an id off the spine is unverified; the provider got the owner's key and model id; the run is receipted.
 //   D  with no model added, a question the reader cannot reach says how to add one -- never a blank, never an error.
+//   E  the face's own decisions (face/src/lib/talk.mjs): the label an answer shows, the voice loop, what is read aloud,
+//      where voice exists, what the add form sends; the client's labels are the door's, word for word.
 //
 // Every section first asserts it RAN (the module loaded, the door came up) before asserting what it printed.
 
@@ -100,6 +102,42 @@ process.env.ARC_FACE_MODELS_FILE = join(REPO, "initiatives", "face", "models.jso
 const inRepo = m.registryPath(REPO);
 if (prevEnv === undefined) delete process.env.ARC_FACE_MODELS_FILE; else process.env.ARC_FACE_MODELS_FILE = prevEnv;
 check("A: a models file inside the repo is refused (a key there is one git add from public)", !inRepo.ok && /inside the repo/.test(inRepo.why));
+
+// ── E: the face's decisions ──
+const T = await import(pathToFileURL(join(REPO, "face", "src", "lib", "talk.mjs")).href);
+check("E: talk.mjs loaded its decisions (vacuous-pass guard)", ["answerTag", "voiceStep", "speakable", "voiceSupport", "addChange", "modelsView"].every((k) => typeof T[k] === "function"));
+check("E: the face's labels are the door's, word for word", T.GENERAL_LABEL === GENERAL_LABEL && T.ARC_LABEL === ARC_LABEL && T.UNVERIFIED_LABEL === UNVERIFIED_LABEL);
+const tg = T.answerTag({ half: "model", lane: "general", label: GENERAL_LABEL });
+const ta = T.answerTag({ half: "model", lane: "arc", label: ARC_LABEL, unresolved: [] });
+const tu = T.answerTag({ half: "model", lane: "arc", label: ARC_LABEL, unresolved: ["01ZZZZZZZZZZZZZZZZZZZZZZZZ"] });
+const tx = T.answerTag({ half: "model", lane: "arc", label: "verified by the model itself" });
+const tr = T.answerTag({ half: "deterministic", needsModel: true });
+check("E: answerTag -- general, arc, unverified-by-the-door, an unknown model label never shown as checked, the reader with a how-to",
+  tg.tag === GENERAL_LABEL && tg.tone === "general" && ta.tag === ARC_LABEL && ta.tone === "plain" && tu.tag === UNVERIFIED_LABEL && tu.tone === "warn"
+  && tx.tag === UNVERIFIED_LABEL && tr.tag === T.READER_TAG && tr.howTo === T.NEEDS_MODEL_LINE && ta.howTo === null,
+  JSON.stringify({ tg, ta, tu, tx, tr }));
+const walk = (events) => events.reduce((acc, ev) => { const n = T.voiceStep(acc.state, ev); acc.state = n.state; acc.effects.push(n.effect); return acc; }, { state: "idle", effects: [] });
+const full = walk([{ type: "press" }, { type: "heard", text: " what is open " }, { type: "answer", speak: true }, { type: "spoken" }]);
+check("E: voice loop -- press, heard, answer spoken, back to idle", full.state === "idle" && JSON.stringify(full.effects) === JSON.stringify(["start-listening", "ask", "speak", null]), JSON.stringify(full));
+check("E: voice loop -- heard text is trimmed and handed to the ask", T.voiceStep("listening", { type: "heard", text: "  hi  " }).text === "hi");
+const quiet = walk([{ type: "press" }, { type: "answer", speak: true }, { type: "heard", text: "" }]);
+check("E: voice loop -- an event out of turn changes nothing, and empty speech asks nothing", quiet.state === "idle" && JSON.stringify(quiet.effects) === JSON.stringify(["start-listening", null, null]), JSON.stringify(quiet));
+check("E: voice loop -- press stops listening and stops speaking; an error from any state returns to idle",
+  T.voiceStep("listening", { type: "press" }).effect === "stop-listening" && T.voiceStep("speaking", { type: "press" }).effect === "stop-speaking"
+  && ["idle", "listening", "thinking", "speaking"].every((st) => T.voiceStep(st, { type: "error" }).state === "idle")
+  && T.voiceStep("thinking", { type: "answer", speak: false }).state === "idle");
+check("E: speakable -- a receipt id is said as 'a receipt', and a long answer is cut at a sentence with a pointer to the screen",
+  T.speakable("Open: 01J0000000000000000000000A now.") === "Open: a receipt now." && /The rest is on screen\.$/.test(T.speakable("A sentence here. ".repeat(80))) && T.speakable("A sentence here. ".repeat(80)).length < 640);
+check("E: voiceSupport -- none in a bare object, both halves in a browser that has them, listen via the webkit prefix",
+  JSON.stringify(T.voiceSupport({})) === JSON.stringify({ listen: false, speak: false })
+  && JSON.stringify(T.voiceSupport({ webkitSpeechRecognition: function () {}, speechSynthesis: {}, SpeechSynthesisUtterance: function () {} })) === JSON.stringify({ listen: true, speak: true }));
+const okAdd = T.addChange({ name: " Local ", baseUrl: " http://localhost:11434/v1 ", model: "llama3.2", key: "  " });
+check("E: addChange -- trims, leaves an empty key out, and sends one add", okAdd.ok && okAdd.change.op === "add" && okAdd.change.model.name === "Local" && !("key" in okAdd.change.model));
+check("E: addChange -- an empty name, URL or model id is caught before a round trip", ["name", "baseUrl", "model"].every((k) => !T.addChange({ ...{ name: "a", baseUrl: "https://x/v1", model: "m", key: "" }, [k]: "" }).ok));
+check("E: every preset's base URL passes the door's own check", T.PRESETS.length >= 5 && T.PRESETS.every((p) => m.checkBaseUrl(p.baseUrl).ok));
+const mv = T.modelsView(m.publicView(reg));
+check("E: modelsView -- rows from the door's public view, the key as its tail only", mv.ok && mv.rows.length === 1 && mv.rows[0].key === `key …${PLANTED.slice(-4)}` && mv.rows[0].active === true && !JSON.stringify(mv).includes(PLANTED));
+check("E: modelsView -- a body that is not the list is no list, never a guessed one", T.modelsView({ models: "x" }).ok === false && T.modelsView(null).ok === false);
 
 // ── C0: the door's judge of a model reply, held directly ──
 const ids = new Set(["01J0000000000000000000000A"]);
@@ -207,4 +245,4 @@ try {
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exit(failed === 0 && ran >= 44 ? 0 : 1);
+process.exit(failed === 0 && ran >= 58 ? 0 : 1);

@@ -927,6 +927,14 @@ export function answerHalf(body) {
       halfLine: `No model, no key, no spend. Every number below was computed from the log by L2 — ${source}. This half cannot hallucinate a receipt because it never writes a sentence a matcher did not compute.`,
     };
   }
+  // Phase 10 (REQ-14, ADR-1350): the owner's model answered, and the DOOR checked it and wrote its label.
+  if (source === "model") {
+    return {
+      half: "model",
+      halfLabel: "ANSWERED BY YOUR MODEL",
+      halfLine: "The reader could not reach this one, so the model you added in the face answered it under face-ask, receipted. The door, not the model, checked every citation against the spine and wrote the label.",
+    };
+  }
   if (source) {
     return { half: "unknown", halfLabel: "SOURCE NOT RECOGNISED", halfLine: `The door named its source as "${source}", which is not a half this shell knows. The answer is shown; the claim about where it came from is not.` };
   }
@@ -986,11 +994,21 @@ export function readAnswer(raw) {
   if (!answer) {
     return { ok: false, code: "EMPTY_ANSWER", human: "The door answered with an empty answer. An empty string is not a result and is not shown as one." };
   }
+  // Phase 10: what the door said about a model answer, passed through as the door wrote it (never re-derived here).
+  const lane = body.lane === "arc" || body.lane === "general" ? body.lane : null;
+  const label = typeof body.label === "string" ? unescapeDoorText(body.label) : null;
+  const unresolved = Array.isArray(body.unresolved) ? body.unresolved.filter((c) => typeof c === "string").map((c) => unescapeDoorText(c)) : [];
+  const model = body.model && typeof body.model === "object" && typeof body.model.name === "string" ? unescapeDoorText(body.model.name) : null;
   return {
     ok: true,
     answer: unescapeDoorText(answer),
     citations: citations.map((c) => unescapeDoorText(c)),
     selfVerified,
+    lane,
+    label,
+    unresolved,
+    model,
+    needsModel: body.needsModel === true,
     mode,
     source,
     shape,
