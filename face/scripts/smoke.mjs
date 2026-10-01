@@ -1055,7 +1055,7 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
   "hq-no-stage", "hq-mood",
   "pointer-enter", "pointer-unmount",
   "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
-  "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "healthy-no-exception",
+  "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "door-no-settings", "healthy-no-exception",
   "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
   "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
 ]);
@@ -1246,6 +1246,11 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
         record(name, ok, `the answer's tag read ${JSON.stringify(String(await tagOf()).slice(0, 120))}`);
       }
     }, ["ask-general-label", "ask-arc-label"]);
+    // The owner's ruling (2026-10-01): configuration lives inside HQ, never on the door's ask bar.
+    await step(async () => {
+      const n = await count(P, "[data-hq-settings], [data-models-panel], [data-ask-settings]");
+      record("door-no-settings", n === 0, `the door shows ${n} settings control(s)`);
+    }, ["door-no-settings"]);
     record("healthy-no-exception", healthy.exceptions.length === 0, healthy.exceptions.slice(0, 3).join(" | "));
     await close(P);
 
