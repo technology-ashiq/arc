@@ -5,14 +5,14 @@
 
 > **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/lanes/org.md` -- hand-written, never generated (ADR-1505, ADR-1508).
 
-*org v1 "arc's company layer"*
+*org v2 "the org room"*
 
 ## At a glance
 
 | | |
 |---|---|
-| Status | IDLE |
-| Cycle | arc-org (Cycle 18, opened 2026-09-29, closed 2026-10-02) |
+| Status | LIVE |
+| Cycle | arc-org (Cycle 19, opened 2026-10-03) |
 | Product | [org](../products/org.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/org/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/org/PROGRESS.md)
 
-## Decisions (24)
+## Decisions (26)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -52,6 +52,8 @@ ADRs whose `Product:` line names this lane first.
 | [`1621`](../../../docs/adr/1621-the-hired-seat-dry-run-is-recorded-unproven-unless-free.md) | Phase 02's hired-seat dry run through `generic-api` runs only if it is reachable at ₹0; otherwise REQ-11 is recorded unproven-live | accepted | 2026-09-29 |
 | [`1622`](../../../docs/adr/1622-the-expired-build-in-public-hire-is-written-as-it-is.md) | The social seat card is written against the expired `build-in-public-draft` hire as it stands; retiring the router row is its owning lane's call | accepted | 2026-09-29 |
 | [`1623`](../../../docs/adr/1623-org-dispatch-is-a-job-stub-process-with-an-owner-authored-policy-row.md) | `org-dispatch` is a job-stub process whose policy row the owner authors | accepted | 2026-09-29 |
+| [`1624`](../../../docs/adr/1624-the-roles-view-is-a-section-of-the-existing-org-room.md) | The roles view is a section of the existing `company/org` room, not a new room | accepted | 2026-10-03 |
+| [`1625`](../../../docs/adr/1625-get-api-org-serves-orgs-own-extract.md) | `GET /api/org` serves org's own extract: the chart model, the teams and the scorecards, imported, never re-derived | accepted | 2026-10-03 |
 
 ## Source
 
