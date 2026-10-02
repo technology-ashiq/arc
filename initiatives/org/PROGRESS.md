@@ -1,8 +1,8 @@
 # PROGRESS.md — org v1 "arc's company layer"
 
-status: LIVE
-cycle: arc-org (Cycle 18, opened 2026-09-29)
-phase: 03
+status: IDLE
+cycle: arc-org (Cycle 18, opened 2026-09-29, closed 2026-10-02)
+phase: 03 (cycle closed)
 appetite: 10d
 burn: 7.0d
 blocked-on: —
@@ -34,6 +34,8 @@ depends-on: —
 - **Attack + CI for the whole cycle:** boundary 4 passes, 39 findings, all fixed but 2 LOW (debt). Logic surface: first result only on 2026-10-01, after fixing the engine's generic-api driver (it did not stream, and Node fetch cut every answer at 300 s); 6 findings, 3 real fixed (L1/L4/L5), 2 rejected by design (L2/L3), 1 LOW to debt (L6). CI at d155ab99: 18/19 green; the one red (face-browser, windows shard 1) is red on main too (dispatch 36873468339). Evidence bundles 00-03 written and verified.
 
 ## Now
+
+**CYCLE CLOSED 2026-10-02 (retro, owner approved in session: "ellame pannu").** Lane sealed LIVE → IDLE with its PORTFOLIO row in the same commit. Retro: three rows in `docs/retro-log.md` (the 300 s transport cap misread as model faults; an owner-only dateless DoD item; never hand-merge a generated file) plus the scoreboard row, one `.claude/rules/lanes.md` rule, a HISTORY C18 row and one silent trial-ledger row (no promotion). Owner ruling: the org-chart face room is **org Cycle 19** (`/arc-kickoff --lane org`), not a face phase.
 
 **Current position:** kickoff complete 2026-09-29 — PLAN, four phase specs, ADR-1600..1623 written;
 century 1600 claimed after a 13-worktree + remote-branch sweep. `kickoff-lint` PASSES (two honest
