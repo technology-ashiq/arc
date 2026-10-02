@@ -19,10 +19,23 @@
  *  (Ordering is load-bearing: "which kinds have never fired?" matched the general
  *  spine-shape matcher before the specific unexercised one, found by driving it live.) Deliberately explicit -- a
  *  question that matches nothing gets the honest refusal, never a nearest-neighbour guess. */
+// A question is arc's only when its words say so (owner, 2026-10-02: "general questions keta ans pannala"). Bare
+// substrings sent "learn" to revenue, "blog" to the spine, "keyboard" and "deliver" to the board, so 8 of 14 general
+// questions never reached the owner's model. Every pattern is whole-word, and a word that also means something outside
+// arc (status, live, log, money, send) answers only beside a word that is arc's: a lane's name or one below.
+const ARC_WORDS = /\b(arc|hq|lanes?|phases?|approvals?|receipts?|spine|ventures?|revenue|mrr|appetite|tripwire|wip|inbox|cycle)\b/i;
+const WE = /\b(we|our|us)\b/i;
+const ME = /\b(me|my|i)\b/i;
+/** @param {string} q @param {{ lanes?: { lane: string }[] }} s */
+function arcContext(q, s) {
+  return ARC_WORDS.test(q) || (s.lanes || []).some((l) => new RegExp(`\\b${l.lane}\\b`, "i").test(q));
+}
+
 const MATCHERS = [
   {
     id: "needs-you",
-    when: (q) => /(needs?\s+me|need\s+you|waiting|open\s+approv|inbox|to\s?do|what.*decide)/i.test(q),
+    when: (q, s) => /\b(needs?\s+me|need\s+you|open\s+approv\w*|inbox)\b/i.test(q) ||
+      (/\b(waiting|to\s?do|decide)\b/i.test(q) && (arcContext(q, s) || ME.test(q) || WE.test(q))),
     answer(s) {
       if (!s.open.length) {
         return {
@@ -46,7 +59,8 @@ const MATCHERS = [
   },
   {
     id: "revenue",
-    when: (q) => /(revenue|money|earn|income|mrr|profit|paid|₹|rupee)/i.test(q),
+    when: (q, s) => /\b(revenue|mrr)\b/i.test(q) ||
+      ((/\b(money|earn(ed|ings?)?|income|profit|paid|rupees?)\b/i.test(q) || q.includes("₹")) && (arcContext(q, s) || WE.test(q))),
     answer(s) {
       const real = s.kinds["revenue.received"] || 0;
       if (real === 0) {
@@ -68,7 +82,7 @@ const MATCHERS = [
   },
   {
     id: "lane-burn",
-    when: (q) => /(burn|appetite|tripwire|how\s+far|budget)/i.test(q),
+    when: (q, s) => /\b(appetite|tripwire)\b/i.test(q) || (/\b(burn|budget|how\s+far)\b/i.test(q) && arcContext(q, s)),
     answer(s, q) {
       const named = s.lanes.find((l) => new RegExp(`\\b${l.lane}\\b`, "i").test(q));
       const rows = named ? [named] : s.lanes.filter((l) => l.status === "LIVE");
@@ -85,7 +99,9 @@ const MATCHERS = [
   },
   {
     id: "board",
-    when: (q) => /(lanes?|board|live|what.*running|status|wip)/i.test(q),
+    when: (q, s) => /\b(lanes?|wip)\b/i.test(q) || /\bwhat('s|\s+is)\s+running(\s+right)?\s+now\b/i.test(q) ||
+      // A bare "status" typed into arc's own HQ asks about arc.
+      (/\b(board|live|running|status)\b/i.test(q) && (arcContext(q, s) || /^\s*(status|board|live)\s*\??\s*$/i.test(q))),
     answer(s) {
       const live = s.lanes.filter((l) => l.status === "LIVE");
       return {
@@ -99,7 +115,7 @@ const MATCHERS = [
   },
   {
     id: "unexercised",
-    when: (q) => /(unexercised|never\s+fired|not\s+used|dashed|zero\s+receipts)/i.test(q),
+    when: (q, s) => /\b(unexercised|never\s+fired|dashed|zero\s+receipts)\b/i.test(q) || (/\bnot\s+used\b/i.test(q) && arcContext(q, s)),
     answer(s) {
       const fired = Object.keys(s.kinds);
       return {
@@ -112,7 +128,8 @@ const MATCHERS = [
     },
   },  {
     id: "spine-shape",
-    when: (q) => /(receipts?|spine|kinds?|how\s+many\s+event|log)/i.test(q),
+    when: (q, s) => /\b(receipts?|spine|how\s+many\s+events?)\b/i.test(q) || /\bkinds?\b.*\bfired\b/i.test(q) ||
+      /\bthe\s+log\b(?!\s+of)/i.test(q) || (/\b(kinds?|log)\b/i.test(q) && arcContext(q, s)),
     answer(s) {
       const fired = Object.keys(s.kinds).length;
       const top = Object.entries(s.kinds).sort((a, b) => b[1] - a[1]).slice(0, 3)
@@ -148,7 +165,11 @@ export function askOffline(question, state) {
   }
   // An action request is refused BEFORE any matcher runs: the refusal is the answer, and it
   // must not depend on whether some matcher happened to fire first (E2, ADR-1307).
-  if (/(approve|reject|merge|publish|promote|kill|send|deploy|run it|do it)\b/i.test(q)) {
+  // arc's own verbs always refuse; send, publish and kill also name everyday how-tos ("how to send an email"), so they
+  // refuse only as an order, about something named (it, this) or beside an arc word -- the model refuses an act anyway.
+  const order = !/^\s*(how|what|why|when|where|who|which|explain|tell|is|are|does|do)\b/i.test(q);
+  if (/\b(approve|reject|merge|promote|deploy|run\s+it|do\s+it)\b/i.test(q) ||
+      (/\b(send|publish|kill)\b/i.test(q) && (order || /\b(send|publish|kill)\s+(it|this|that|them)\b/i.test(q) || arcContext(q, state || {})))) {
     return {
       answer: "I read; I do not act. That is structural, not a setting (Constitution E2): the " +
         "only write outside the factory is your stamp, and publishing, merging, promoting, " +
@@ -160,7 +181,7 @@ export function askOffline(question, state) {
     };
   }
   for (const m of MATCHERS) {
-    if (!m.when(q)) continue;
+    if (!m.when(q, state || {})) continue;
     const out = m.answer(state, q);
     if (out) return { ...out, verified: true, matched: m.id };
   }
