@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 10
+phase: 08
 appetite: 37d
-burn: 13d
+burn: 14d
 blocked-on: —
 depends-on: —
 
@@ -33,10 +33,10 @@ depends-on: —
 | 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | ✅ **CLOSED 2026-09-26** — 3d of 5d; of 15 SESSION verbs 5 ship with the receipt read back (the live council convene among them), 4 start with the read-back owed, 6 residue filed to their lanes (`residue.md`, held to the registry by `tests/face/session-door.mjs`); PRs #269 · #270 · #271 · #272 · #273 · #274 · #276 · #278 · #282 + the close #285/#286; 13 boundary rounds, 118 fixed-defect rows, the logic surface never ran (debt row); `main` `465f5b82` 19/19 (run 36225129900), suite 1..3545; spec-fidelity drift dispositioned; receipts `01M3EBD91R95PZD0EPQ1QB4TS2` · `01M3EBDGQ70ETM8PXDHNKHSZXJ` |
 | 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 10.5d | ✅ **CLOSED 2026-09-30** — 5d of 10.5d (worked 09-26, -27, -28, -29, -30); REQ-12 validated. The room, a Reference link from every room, page shape v1, 34 pages rewritten and accepted, and the owner-key proof. Two DoD rows ticked narrower than written (see the done log) |
 | 09 | Front door — the face at `/`, ENTER HQ with the warp, WebGL guard, a named surface (REQ-13, ADR-1349); runs BEFORE 08 | 1.5d | ✅ **CLOSED 2026-10-01** — 1d of 1.5d (built 10-01); REQ-13 validated. The face at `/`, ENTER HQ with the warp both ways, the WebGL guard, a named surface in coverage, the lint reading the stage; the owner read it against his design ("design ithu"). One DoD row ticked narrower than written: only the boundary attacker ran (see the done log) |
-| 10 | The face talks — any question, the owner's model added in the face, arc answers cited, general labelled, voice (REQ-14, ADR-1350); runs BEFORE 08 | 4d | spec'd — ADR-1350 accepted 2026-10-01 |
+| 10 | The face talks — any question, the owner's model added in the face, arc answers cited, general labelled, voice (REQ-14, ADR-1350); runs BEFORE 08 | 4d | ✅ **CLOSED 2026-10-02** — 1d of 4d (built 10-01..10-02); REQ-14 validated. The owner adds a model from HQ Settings, the key never returns, arc answers cited, general answers labelled, every model answer receipted, a neon ask bar on `/`, voice behind one switch, a fake provider in CI; the owner read it ("okay va iruku"). One DoD row ticked narrower than written: only the boundary attacker ran (see the done log) |
 | 08 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 13d of 37d (Phase 09 closed 2026-10-01: 1d of 1.5d; 33d until ADR-1350 added Phase 10's 4d on 2026-10-01; 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
+**Appetite burn: 14d of 37d (Phase 10 closed 2026-10-02: 1d of 4d; Phase 09 closed 2026-10-01: 1d of 1.5d; 33d until ADR-1350 added Phase 10's 4d on 2026-10-01; 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
 C · verbs (05–06) 3/15d — **Phase 05 CLOSED at 3d of its 10d** (worked 2026-09-19, -20 and -23) — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
 3d unallocated. Tripwires: Block A day 3 · Block B day 5 · Block C at Phase 05 day 5 (burn 9d) · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
@@ -463,6 +463,12 @@ stay bespoke folds.
   `approval.requested{gate: phase-done}` `01M3R3P3XF2CXK3S695N61EX1E`. The second waits on the owner's stamp, which also
   accepts the two declared gaps above.
 
+- **Phase 10 — The face talks. CLOSED 2026-10-02.** The owner adds a model (any OpenAI-compatible endpoint, free or paid) from HQ's header (Settings), never from the ask bar; the key is written to `~/.arc-private/face/models.json` and every door response returns only its last four characters; arc questions stay deterministic first and a citation that does not resolve marks the answer unverified; a general question is answered and labelled "general — not from arc's record"; every model answer runs through `arc-run --process face-ask` and its receipt names the model and the lane; the front door has its own neon ask bar with no settings control, sharing one brain with the workroom dock; voice in and out sits behind one switch, off by default, absent where the browser has no speech API; a provider's refusal (a 429) reaches the face as one sentence with the next step. Four PRs: #307 (`4c8a0407`), #308 (`c6eece01`, the owner's correction at the demo), #309 (`41b0e365`, the raw 429), #310 (`2ce32323`, the demo read).
+  **Tests:** CI only, per job: `main` `2ce32323` run 37001289342 (workflow_dispatch), 19 of 19 green on the first attempt; suite 1..3885, the face-talk fixture is ok 1702. PR #310's run met the front-door `space-key-unmount` flake once on macOS dark (already debt row 107) and was green on rerun.
+  **Live demo:** from the MAIN clone at `41b0e365` (`arc-face.mjs`), the owner checked the talking face and said "check pannen, okay va iruku" (`evidence/phase-10/owner-demo.md`). He did not say which model or questions, so the file does not claim voice or either label was exercised by hand; both are asserted on every CI leg.
+  **Ticked narrower than written:** "Two fresh attackers (logic · boundary)" -- only the boundary surface attacked this code (two rounds, 8 + 10 findings, fixed or carried as debt rows 108-109); the logic surface never ran (the free trial model returned an empty envelope). The second Phase in a row without a logic run; the next logic-surface run on the lane carries both.
+  **Metrics:** amendments: 1 (the owner's 2026-10-01 correction: Settings to HQ, the door's own ask bar) · reopened: n.
+  **Assumptions and triggers:** no ledger row fired; no ADR is DEFERRED; ADR-1350's revisit trigger (an unlabelled general answer, a verified answer on a citation that does not resolve, a key read back, voice mishearing arc's words) did not fire. REQ-14 is validated (13 of 14). Evidence: `initiatives/face/evidence/phase-10/`, sha256 manifest from `arc-evidence.sh bundle 10 --lane face` (verified).
 - **Phase 09 — The front door. CLOSED 2026-10-01.** `/` draws the owner's neon face at full presence with one message and one ENTER HQ control; ENTER HQ by pointer, Enter or Space runs the warp in and lands on `#hq`, the exit runs it back; the workroom never mounts the stage in either mood; with WebGL refused, or a stage that throws, the door shows a fallback line and ENTER HQ still opens the workroom; the front door is one named surface in `expected-set.json` and `face-coverage` FAILs a second; the colour lint reads `face/src/face` and `face/src/frontdoor` with the neon palette allowed in one file; Ctrl+K opens the palette on the door. One PR, #305 (`ad83b34f`), PR head 19 of 19.
   **Tests:** CI only, per job: `main` `ad83b34f` run 36858931483, 19 of 19 green after one rerun of Windows shard 1/12 (Chrome failed to start, `EBUSY` on `DevToolsActivePort`, the same flake #305 met; now a debt row); suite 1..3829.
   **Live demo:** from the MAIN clone (`arc-face.mjs --port 8327`), the owner opened `/`, entered HQ and came back, and read it against his design: "design ithu machi, nalla iruka simple ah sleek ah" (`evidence/phase-09/owner-demo.md`). In the same message he asked for the face to talk; that is new capability, routed as ADR-1350 / REQ-14 / Phase 10, not a reopening of REQ-13.
@@ -472,6 +478,8 @@ stay bespoke folds.
   Receipts (main clone spine, `2026-10-01.jsonl`): `phase.closed` `01M3VR2HF2DYNZZ9N3JP6YES8G` · `approval.requested{gate: phase-done}` `01M3VR2JTVMM5XRTK66QQ25SYY`. The second waits on the owner's stamp, which also accepts the narrower attacker row.
 
 ## Now
+
+**RESUME HERE (2026-10-02):** **Phase 10 is CLOSED** (done log). **Phase 08 is next, and it is the owner's two real days** on a face that talks (REQ-10, `phases/phase-08-spec.md`): from the MAIN clone, `node .claude/scripts/hq/arc-face.mjs`, every decision through the face and at least one op a day; `face-dogfood` reads each day. Then the retro, the HISTORY row and `/arc-phase-done 08`. Owner steps open: the stamp on the Phase 10 sign-off request, `01M3VR2JTVMM5XRTK66QQ25SYY` and `01M3R3P3XF2CXK3S695N61EX1E`. Debt carried: the logic attacker has not run on Phases 09 or 10; `arc-run` drops its transcript on a 429.
 
 **OWNER DEMO READ (2026-10-02, main clone at `41b0e365`):** "check pannen, okay va iruku" -- the Phase 10 owner criterion is ticked (`evidence/phase-10/owner-demo.md`; it records only his words, not which model or questions, and says so). Next: `/arc-phase-done 10` from the main clone, then Phase 08, the dogfood days. Assumptions ledger: nothing fired.
 
