@@ -17,7 +17,7 @@
 - [ ] **Asking on the front door:** one sleek ask bar in the door's neon look under the face on `/`, with no settings control and no white panel (owner, 2026-10-01; the smoke's `door-no-settings` holds it); the workroom dock uses the same brain. The browser smoke asks one arc question and one general question on `/` against the fake provider and reads both labels, in dark and in light.
 - [ ] **Voice, as a setting (ADR-1350 §6):** speech in (`SpeechRecognition`) and speech out (`speechSynthesis`) behind one switch, off until the owner turns it on; the panel says where the browser sends audio. Where the browser has no speech API the mic control is absent and typing works. The pure voice state machine (idle · listening · thinking · speaking) is held by a fixture.
 - [ ] **Offline-first (PLAN External dependencies):** the model provider has an interface, a fake (`tests/face/fake-llm.mjs`, an OpenAI-compatible local server) and the real `generic-api` path, plus a contract test; CI never calls a real provider.
-- [ ] **Owner talks to it:** from the MAIN clone the owner adds his own model in the face, asks an arc question and a general one, by typing and by voice, and says whether it is what he asked for. The transcript goes to `evidence/phase-10/`. This is the criterion only he can tick.
+- [x] **Owner talks to it:** from the MAIN clone the owner adds his own model in the face, asks an arc question and a general one, by typing and by voice, and says whether it is what he asked for. The transcript goes to `evidence/phase-10/`. This is the criterion only he can tick.
 - [ ] Two fresh attackers (logic · boundary); CI green per job; `/arc-phase-done 10` from the main clone.
 
 ## Verification plan
