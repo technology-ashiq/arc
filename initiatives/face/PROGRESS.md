@@ -473,6 +473,8 @@ stay bespoke folds.
 
 ## Now
 
+**OWNER DEMO READ (2026-10-02, main clone at `41b0e365`):** "check pannen, okay va iruku" -- the Phase 10 owner criterion is ticked (`evidence/phase-10/owner-demo.md`; it records only his words, not which model or questions, and says so). Next: `/arc-phase-done 10` from the main clone, then Phase 08, the dogfood days. Assumptions ledger: nothing fired.
+
 **OWNER CORRECTION (2026-10-01, at the Phase 10 live demo, in-scope -- no new REQ):** "configuration ah ask panel la add panniruka, athu hq ulla thana varaunm ... design la white background ask panel la ethathu panatha ... sleek ah awesome ah oru ask bar vai". PR #307 put the models panel behind a gear on the ask bar and reused the workroom's dock on the door (a white panel in the light mood). Fixed on `feat/face-v2-10b`: the door gets its own neon glass ask bar (`frontdoor/FrontDoorAsk.tsx`), models and voice move to HQ's header (Settings), one shared brain (`shell/useAsk.ts`), and the smoke's new `door-no-settings` check holds the ruling (front-door checks 24). Phase 10 stays open until the owner's demo read.
 
 **RESUME HERE (2026-10-01):** **Phase 09 is CLOSED** (done log). **Phase 10 is next: the face talks** (REQ-14, ADR-1350 accepted, `phases/phase-10-spec.md`, branch `feat/face-v2-10`), then Phase 08, the owner's two dogfood days on a face that talks. Owner steps open: the stamp on `01M3VR2JTVMM5XRTK66QQ25SYY` (and the older `01M3R3P3XF2CXK3S695N61EX1E`).
