@@ -147,13 +147,29 @@ check("a bare \"status\" in arc's HQ is still arc's (talk.mjs and dash-doors ask
   const src = readFileSync(join(REPO, ".claude/scripts/hq/lib/face/ask-offline.mjs"), "utf8");
   const mutant = src.split("\\\\b").join("").split("\\b").join("").replace(/function arcContext\([^)]*\) \{/, "$& return true;");
   const dir = mkdtempSync(join(tmpdir(), "ask-mutant-"));
+  // The copy lives outside the repo, so a relative import added to the module later would not resolve there: that is
+  // named as a FAIL here, never left to crash before the RAN line (attack 7bbd4e6 B4).
+  let hijacked = -1, why = "";
   try {
+    if (/\bfrom\s+["']\./.test(src)) throw new Error("ask-offline.mjs gained a relative import; the mutant copy cannot load it");
     writeFileSync(join(dir, "ask-offline.mjs"), mutant);
     const m = await import(pathToFileURL(join(dir, "ask-offline.mjs")).href);
-    const hijacked = GENERAL.filter((q) => m.askOffline(q, STATE).matched !== null).length;
-    check("mutant (no word boundaries, no context gate) hijacks general questions -- the list can FAIL", hijacked >= 8, `hijacked=${hijacked}/${GENERAL.length}`);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+    hijacked = GENERAL.filter((q) => m.askOffline(q, STATE).matched !== null).length;
+  } catch (e) { why = String(e && e.message); } finally { rmSync(dir, { recursive: true, force: true }); }
+  check("mutant (no word boundaries, no context gate) loaded and hijacks general questions -- the list can FAIL", hijacked >= 8, `hijacked=${hijacked}/${GENERAL.length} ${why}`);
 }
+let shapeOk = false, shapeWhy = "";
+try {
+  shapeOk = askOffline("how to kill a process", { ...STATE, lanes: {} }).matched === null &&
+    askOffline("what is the capital of France", { ...STATE, lanes: [null, { lane: "c++" }, { lane: "(" }] }).matched === null;
+} catch (e) { shapeWhy = String(e && e.message); }
+check("a lane list that is not a list, or a lane name that is not one, never throws on a general question", shapeOk, shapeWhy);
+const t0 = Date.now();
+const spaced = askOffline("status" + " ".repeat(200000) + "x", STATE);
+check("a question of 200,000 spaces between words answers in under a second", typeof spaced.answer === "string" && Date.now() - t0 < 1000, `ms=${Date.now() - t0}`);
 
+// The floor follows the lists: 36 checks before the general block, one per general question but the spine-pain
+// one, and five more (send it, status, the mutant, the lane shapes, the spaces).
+const FLOOR = 36 + (GENERAL.length - 1) + 5;
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 52 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= FLOOR ? 0 : 1;

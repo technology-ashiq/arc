@@ -28,7 +28,11 @@ const WE = /\b(we|our|us)\b/i;
 const ME = /\b(me|my|i)\b/i;
 /** @param {string} q @param {{ lanes?: { lane: string }[] }} s */
 function arcContext(q, s) {
-  return ARC_WORDS.test(q) || (s.lanes || []).some((l) => new RegExp(`\\b${l.lane}\\b`, "i").test(q));
+  // A lane name read from disk becomes a pattern only if it is a lane name by the grammar (attack 7bbd4e6 B2, B3): a
+  // row that is not, or a list that is not a list, makes no context -- it never throws on an unrelated question.
+  const lanes = Array.isArray(s.lanes) ? s.lanes : [];
+  return ARC_WORDS.test(q) || lanes.some((l) => typeof l?.lane === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(l.lane) &&
+    new RegExp(`\\b${l.lane}\\b`, "i").test(q));
 }
 
 const MATCHERS = [
@@ -101,7 +105,7 @@ const MATCHERS = [
     id: "board",
     when: (q, s) => /\b(lanes?|wip)\b/i.test(q) || /\bwhat('s|\s+is)\s+running(\s+right)?\s+now\b/i.test(q) ||
       // A bare "status" typed into arc's own HQ asks about arc.
-      (/\b(board|live|running|status)\b/i.test(q) && (arcContext(q, s) || /^\s*(status|board|live)\s*\??\s*$/i.test(q))),
+      (/\b(board|live|running|status)\b/i.test(q) && (arcContext(q, s) || /^(status|board|live) ?\??$/i.test(q))),
     answer(s) {
       const live = s.lanes.filter((l) => l.status === "LIVE");
       return {
@@ -154,7 +158,9 @@ const MATCHERS = [
  * @returns {{answer:string, citations:string[], verified:boolean}}
  */
 export function askOffline(question, state) {
-  const q = String(question || "");
+  // One space per gap and a bounded length before any pattern runs (attack 7bbd4e6 B1): a run of 200,000 spaces must
+  // not make a matcher backtrack on the door's only thread. The door still sends the model the question as typed.
+  const q = String(question || "").replace(/\s+/g, " ").trim().slice(0, 2000);
   if (!q.trim()) {
     return {
       answer: "No question was asked.",
