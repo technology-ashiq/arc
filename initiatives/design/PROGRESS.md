@@ -610,6 +610,11 @@ consumer projects — it carries the owner's approvals.
        `a3a927c3`/`04b31d3b`; the logic half skipped by the owner (debt-ledger row). Pushed once.
      - **Then ask the owner before S5:** cost estimate for the live explore + plain-prompt control,
        and a rubric/anchors draft at `docs/design/rubrics/` for him to approve before the deal.
+       **Done:** rubric approved 2026-09-30; S5 ran 2026-09-30 (3 variants + fresh control, jury 0
+       deviations); owner blind score 2026-10-02: best arc 66 vs control 51 (arc mean 49.3).
+       Owner ruling 2026-10-03: improvement exists, continue -- the taste tripwire does not fire.
+       Text evidence: [`evidence/phase-03/s5-live-explore.md`](evidence/phase-03/s5-live-explore.md).
+       **Next:** `/arc-phase-done 03 --lane design` against the DoD.
      - Logic surface: runs only with `ARC_LLM_REASONING=off` and is shallow; S2 never produced a
        result (debt-ledger). Two background jobs were reaped for memory; do not auto-restart them.
    - **Resume here:** Phase 03, starting with `/arc-change` to refine its coarse spec into slices (there is no
