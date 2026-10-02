@@ -101,6 +101,11 @@ re-measure on the merged tree. Six files came out of that merge with no entry at
 16s default against real costs up to 123s, because a missing entry is a default rather than an
 error. Make unmeasured entries visible as a count.
 
+**A conflict on a generated file is never hand-merged.** `docs/wiki/**`, the sync golden and
+`rooms.generated.json` are outputs: resolve the conflict by re-running the generator on the merged
+tree, then run its `--check`. arc-org hit this twice in one PR (2026-10-01); a hand-merged line is
+a guess the next `--check` rejects.
+
 ## Lane names
 
 `[a-z][a-z0-9-]*`, 64 chars max, and never a Windows reserved device name (`con`, `prn`,
