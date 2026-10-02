@@ -371,7 +371,9 @@
         "ring": "company",
         "status": "built",
         "sources": [
-          "arc-company-org-blueprint.md"
+          "arc-company-org-blueprint.md",
+          "org/roles/**",
+          "GET /api/org"
         ]
       },
       {

@@ -235,7 +235,7 @@
 .claude/scripts/growth/lib/text.mjs	699f00fb5caf44c43a7e0b082bcf1c07243f42e6b51bda5058c8910dcfdfcf01
 .claude/scripts/hq/adr-record.mjs	4610932bf8b33d35ea7656cfcb8c62d87ac4b55cae7f01b4b696280350c7e4f1
 .claude/scripts/hq/arc-brief.mjs	5e28a3ea0a78e67d3ce77b6a5c1e59ba7eb4f229e6e4c9368c2104f5734b107f
-.claude/scripts/hq/arc-dash.mjs	198a53b681fdb5ec0c722e907bad3f68bbca056c4835223222776fe46af726d2
+.claude/scripts/hq/arc-dash.mjs	0170a07543d6df1b7f27e8f7913acf890f42a68588957d555edb4c1bd3108a7b
 .claude/scripts/hq/arc-event.mjs	a1f8353efe971fa13dec4664d998ff33b7fffdce0e4e9850a12d6c26834cea05
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	00b09e6fa03156cdadc04870216c34b037f4ea90e4a938ad7d89de839b9aec19
@@ -256,6 +256,7 @@
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
 .claude/scripts/hq/lib/face/models.mjs	b0b90c7712ba87aae767e2d47be13d1582a08af2cecaa6d459c259988cc5ca23
+.claude/scripts/hq/lib/face/org/route.mjs	033a74506b7131b3b1bf05cd1111063d3b57f0fb4fd012190f60bcdc33096035
 .claude/scripts/hq/lib/face/reads.mjs	dd206a37132509c754eb89ccc34f7eae2d09dcb228954ff233f66b9c332c6241
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	f1e95bbda2066ca6b6172fa020745b407d740919db08aeab32ebf754c64e608f
@@ -366,7 +367,7 @@
 .claude/scripts/org/org-coverage.mjs	0463d70b498f8c82ce3fdeaeef1d11c2117100ebeb5cb418b9a97840e1334963
 .claude/scripts/org/org-dispatch.mjs	b9e81ff1cfa7495863545b981dd34125b1d1399478f85a52c7b116fec4922ba8
 .claude/scripts/org/org-review.mjs	1a6db11495ac6bcf1d5944329b3960755d555b445d8f92992a401724cef8635b
-.claude/scripts/org/org-team.mjs	6dbdf86946aa548c1448d42acbf717a9fd52944b206f03a880f22ec1e77f6dbf
+.claude/scripts/org/org-team.mjs	ea780d578ad1f76c4bcc2add5412c8c71a879eb90e05b500978524798f34a3c2
 .claude/scripts/plan/arc-bytediff.sh	252b971a2c8a7e2267fcdedcec34c85ecfa4a520d65590c0995c29f6d0e424f8
 .claude/scripts/plan/arc-evidence.sh	ddbc49a3da693499d34d2e7e904db017a045e6fb4558f5b0c867c432b9f013e0
 .claude/scripts/plan/kickoff-lint.mjs	86c8b59ff08508a5f0655b2a90d009fd4af04d6f22870cc222126208c4fb93b3

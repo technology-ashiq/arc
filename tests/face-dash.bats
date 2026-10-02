@@ -212,3 +212,20 @@ load 'test_helper'
   [[ "$output" == *"ok C: an arc answer citing an id that is not on the spine is UNVERIFIED, and names the id"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok D: no model added -- the reader answers and the door says a model is needed (200, never an error page)"* ]] || { echo "$output"; false; }
 }
+
+@test "org door: one count with org-catalog and org-review, the spine the door reads, refused never half-drawn, the scrub names what it withheld" {
+  run node "$ARC_ROOT/tests/face/org-door.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  local arm
+  for arm in "A: the route's chart is org-catalog's chartModel over collect, byte for byte" \
+             "A: the route's scorecard rows are org-review --all --json's rows, byte for byte (verdict fields aside)" \
+             "B: a spine root with no events/ refuses the scorecards (SPINE_UNAVAILABLE), never scores every seat no evidence" \
+             "C: an attribution map with findings refuses the scorecards by name, with the finding, and serves the chart" \
+             "C: a producer set without loadOrg as an own function is refused PARSER_UNAVAILABLE" \
+             "D: and that role is named in \`scrubbed\`, never changed silently" \
+             "E: two concurrent requests are answered from one body, not two"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}

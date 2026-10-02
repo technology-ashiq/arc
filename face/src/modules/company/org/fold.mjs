@@ -10,6 +10,7 @@ import { notServed, payloadOf, readProblem, verbPending } from "../../../lib/reg
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { boardRows, boardTotals } from "../../../lib/spine.mjs";
 import { bandsOf, boardLanes, fileText, laneLinks } from "../../../lib/company-room.mjs";
+import { unescapeDoorText } from "../../../lib/door.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 /** @typedef {import("../../../lib/registry.mjs").Read} Read */
@@ -30,10 +31,133 @@ import { bandsOf, boardLanes, fileText, laneLinks } from "../../../lib/company-r
  * @property {import("../../../lib/lane-room.mjs").SourceFile} portfolio
  * @property {import("../../../lib/registry.mjs").NotServed} today
  * @property {{ isVerbPending: true, verb: string, sentence: string }} birthVerb
+ * @property {OrgView} org
  * @property {Read[]} reads
  */
 
+/**
+ * The roles, scorecards and teams section (org Cycle 19, ADR-1624/1625): every value as /api/org served it. The fold
+ * maps and words; it never counts a receipt or re-tests a seat -- the producer's own flags decide (twin-fix retro).
+ * @typedef {{ key: string, id: string, title: string, state: string, seat: string, origin: string }} RoleRow
+ * @typedef {{ key: string, role: string, seat: string, isVerdict: boolean, verdict: string, why: string, due: string, line: string }} ScoreRow
+ * @typedef {{ key: string, venture: string, stage: string, valid: boolean, status: string, seats: string, findings: string[] }} TeamRow
+ * @typedef {object} OrgView
+ * @property {boolean} isReading
+ * @property {boolean} isRefused
+ * @property {{ code: string, human: string }} refusal
+ * @property {string} countsLine
+ * @property {boolean} hasCountsLine
+ * @property {number} roleCount
+ * @property {{ key: string, name: string, roles: RoleRow[] }[]} departments
+ * @property {{ isRefused: boolean, refusal: { code: string, human: string }, rows: ScoreRow[], others: ScoreRow[], hasOthers: boolean, footnote: string, hasFootnote: boolean }} scores
+ * @property {{ isEmpty: boolean, empty: string, rows: TeamRow[] }} teams
+ * @property {string[]} notes
+ */
+
 const NO_REFUSAL = Object.freeze({ code: "", human: "" });
+
+/** The six seat classes of the chart, in the order the counts line names them; `own`/`hired` are origins, not states. */
+export const STATE_CLASSES = Object.freeze([
+  { key: "staffed", label: "staffed" }, { key: "partial", label: "partial" }, { key: "seated-unlegitimised", label: "seated, not yet legitimised" },
+  { key: "human", label: "human" }, { key: "vacant", label: "vacant" },
+]);
+
+const isObj = (/** @type {unknown} */ v) => v !== null && typeof v === "object" && !Array.isArray(v);
+// The door escapes every string it serves (escapeDeep); the room draws the text, so it is unescaped once here.
+const str = (/** @type {unknown} */ v) => (typeof v === "string" ? unescapeDoorText(v) : "");
+const int = (/** @type {unknown} */ v) => (Number.isInteger(v) ? /** @type {number} */ (v) : null);
+
+/**
+ * One seat's receipts in words. A seat no receipt is placed on reads `no evidence`, never 0 or a rate; cost with no
+ * cost receipt is absent, not zero (org-review's own rule, ADR-1604).
+ * @param {Record<string, unknown>} r
+ */
+export function receiptsLine(r) {
+  if (r["evidence"] !== true) return "no evidence";
+  const n = (/** @type {string} */ k) => fmtInt(int(r[k]) ?? 0);
+  const cost = int(r["cost_minor"]);
+  return `receipts ${n("receipts")} (${n("sourced")} sourced) · runs ${n("runs")} (${n("runs_ok")} ok, ${n("runs_fail")} fail) · accepts ${n("accepts")} · rejects ${n("rejects")} · incidents ${n("incidents")} · cost ${cost === null ? "no evidence" : fmtInt(cost)}`;
+}
+
+/**
+ * @param {Payload} p  the /api/org payload, or a refusal the fold made itself
+ * @returns {OrgView}
+ */
+export function foldOrg(p) {
+  /** @type {OrgView["scores"]} */
+  const none = { isRefused: false, refusal: { code: "", human: "" }, rows: [], others: [], hasOthers: false, footnote: "", hasFootnote: false };
+  const empty = /** @type {OrgView} */ ({
+    isReading: p.state === "loading" || p.state === "pending", isRefused: false, refusal: NO_REFUSAL, countsLine: "", hasCountsLine: false, roleCount: 0,
+    departments: [], scores: none, teams: { isEmpty: false, empty: "", rows: [] }, notes: [],
+  });
+  if (p.state === "refused") return { ...empty, isRefused: true, refusal: { code: str(p.code), human: str(p.human) } };
+  if (p.state !== "ok") return empty;
+  const body = isObj(p.data) ? /** @type {Record<string, unknown>} */ (p.data) : {};
+  const chart = isObj(body["chart"]) ? /** @type {Record<string, unknown>} */ (body["chart"]) : null;
+  const depts = chart && Array.isArray(chart["departments"]) ? chart["departments"] : null;
+  const counts = chart && isObj(chart["counts"]) ? /** @type {Record<string, unknown>} */ (chart["counts"]) : null;
+  if (body["schema"] !== 1 || !depts || !counts) {
+    return { ...empty, isRefused: true, refusal: { code: "SOURCE_INVALID", human: `the door's /api/org body is not schema 1 with a chart -- refused whole, never drawn in part (schema ${JSON.stringify(body["schema"] ?? null)})` } };
+  }
+
+  /** @type {{ key: string, name: string, roles: RoleRow[] }[]} */
+  const departments = depts.filter(isObj).map((d, i) => {
+    const dd = /** @type {Record<string, unknown>} */ (d);
+    const roles = (Array.isArray(dd["roles"]) ? dd["roles"] : []).filter(isObj).map((r, j) => {
+      const rr = /** @type {Record<string, unknown>} */ (r);
+      return { key: `${i}-${j}-${str(rr["id"])}`, id: str(rr["id"]), title: str(rr["title"]), state: str(rr["state"]), seat: str(rr["seat"]), origin: str(rr["origin"]) };
+    });
+    return { key: `${i}-${str(dd["dept"])}`, name: str(dd["name"]) || str(dd["dept"]), roles };
+  });
+  const roleCount = departments.reduce((n, d) => n + d.roles.length, 0);
+  const total = int(counts["roles"]);
+  const classSum = STATE_CLASSES.reduce((n, c) => n + (int(counts[c.key]) ?? 0), 0);
+  const countsLine = [`${fmtInt(total ?? 0)} roles`, ...STATE_CLASSES.map((c) => `${fmtInt(int(counts[c.key]) ?? 0)} ${c.label}`)].join(" · ");
+  /** @type {string[]} */
+  const notes = [];
+  // The chart's own classes must account for every role it lists; a mismatch is shown, never smoothed over.
+  if (total !== roleCount || classSum !== roleCount) notes.push(`The chart lists ${fmtInt(roleCount)} role rows, its count says ${fmtInt(total ?? 0)}, and its seat classes add up to ${fmtInt(classSum)} -- these should be one number.`);
+  const scrubbed = Array.isArray(body["scrubbed"]) ? body["scrubbed"].filter((x) => typeof x === "string") : [];
+  if (scrubbed.length > 0) notes.push(`The door withheld a path or an address in ${scrubbed.length === 1 ? "this role" : "these roles"}: ${scrubbed.join(", ")}.`);
+
+  const sc = isObj(body["scorecards"]) ? /** @type {Record<string, unknown>} */ (body["scorecards"]) : {};
+  /** @type {OrgView["scores"]} */
+  let scores = none;
+  if (sc["state"] !== "ok") {
+    scores = { ...none, isRefused: true, refusal: { code: str(sc["code"]) || "SOURCE_INVALID", human: str(sc["human"]) || "the door served no scorecards" } };
+  } else {
+    const rows = (Array.isArray(sc["rows"]) ? sc["rows"] : []).filter(isObj).map((r) => /** @type {Record<string, unknown>} */ (r));
+    const toRow = (/** @type {Record<string, unknown>} */ r, /** @type {number} */ i) => ({
+      isVerdict: r["staffed"] === true,
+      key: `${i}-${str(r["role"])}`, role: str(r["role"]), seat: str(r["seat"]),
+      verdict: str(r["verdict"]).toUpperCase(), why: str(r["why"]), due: str(r["due"]), line: receiptsLine(r),
+    });
+    const damage = isObj(sc["spineDamage"]) ? /** @type {Record<string, unknown>} */ (sc["spineDamage"]) : {};
+    const torn = int(damage["torn"]) ?? 0, unreadable = int(damage["unreadable"]) ?? 0;
+    const foot = [`${fmtInt(int(sc["total"]) ?? 0)} receipts read · ${fmtInt(int(sc["unattributed"]) ?? 0)} placed on no role`];
+    if ((int(sc["conflicts"]) ?? 0) > 0) foot.push(`${fmtInt(int(sc["conflicts"]) ?? 0)} where a receipt's role and the map disagree`);
+    if (torn + unreadable > 0) foot.push(`spine damage: ${fmtInt(torn)} torn line(s), ${fmtInt(unreadable)} unreadable day(s), not scored`);
+    const others = rows.filter((r) => r["staffed"] !== true && r["evidence"] === true).map(toRow);
+    scores = {
+      isRefused: false, refusal: NO_REFUSAL,
+      rows: rows.filter((r) => r["staffed"] === true).map(toRow),
+      others, hasOthers: others.length > 0,
+      footnote: foot.join(" · "), hasFootnote: true,
+    };
+  }
+
+  const tm = isObj(body["teams"]) ? /** @type {Record<string, unknown>} */ (body["teams"]) : {};
+  const teamRows = (Array.isArray(tm["rows"]) ? tm["rows"] : []).filter(isObj).map((t, i) => {
+    const tt = /** @type {Record<string, unknown>} */ (t);
+    const seats = (Array.isArray(tt["seats"]) ? tt["seats"] : []).filter(isObj).map((s) => str(/** @type {Record<string, unknown>} */ (s)["id"])).filter(Boolean);
+    const valid = tt["valid"] === true;
+    const findings = (Array.isArray(tt["findings"]) ? tt["findings"] : []).map(str).filter(Boolean);
+    return { key: `${i}-${str(tt["venture"])}`, venture: str(tt["venture"]), stage: str(tt["stage"]), valid, status: valid ? "checks clean" : `${fmtInt(findings.length)} finding(s)`, seats: seats.join(", "), findings };
+  });
+  const teams = { isEmpty: teamRows.length === 0, empty: teamRows.length === 0 ? (str(tm["why"]) || "The door served no venture team.") : "", rows: teamRows };
+
+  return { isReading: false, isRefused: false, refusal: NO_REFUSAL, countsLine, hasCountsLine: true, roleCount, departments, scores, teams, notes };
+}
 
 /**
  * @param {Record<string, Payload>} payloads
@@ -101,6 +225,12 @@ export function fold(payloads, ctx) {
   const rawBoard = boardP.state === "ok" && boardP.data !== null && typeof boardP.data === "object" ? /** @type {Record<string, unknown>} */ (boardP.data) : {};
   const outsideLanes = (Array.isArray(rawBoard["outside"]) ? rawBoard["outside"] : []).filter((l) => typeof l === "string" && l !== "");
 
+  /** @type {Read} */
+  const orgRead = { route: "/api/org" };
+  const orgWhy = readProblem(orgRead, ctx.manifest);
+  if (orgWhy === null) reads.push(orgRead);
+  const org = foldOrg(orgWhy === null ? payloadOf(payloads, orgRead) : { state: "refused", code: "READ_REFUSED", human: orgWhy });
+
   return {
     sentence: String(ctx.room.sentence ?? ""),
     lede: String(ctx.room.lede ?? ""),
@@ -137,6 +267,7 @@ export function fold(payloads, ctx) {
       "Birth a lane",
       "Only /arc-kickoff births a lane: it claims the next ADR century and lands the lane's room in the same change. The work door will start that ceremony from here.",
     ),
+    org,
     reads,
   };
 }
