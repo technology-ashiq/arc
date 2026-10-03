@@ -260,7 +260,7 @@
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
 .claude/scripts/hq/lib/face/models.mjs	faa4639dd6a3386882eb39d7589f57c23fde8bc6b738be8bd01a640c8612e2aa
-.claude/scripts/hq/lib/face/org/route.mjs	e0611666c4068a4732052aefe8fa93a6ab84f02cda87a46cffe65aba5810e876
+.claude/scripts/hq/lib/face/org/route.mjs	f5390d1f207d5c4b29f5496bd496bd3d3e331bb2f46072ec578f5de3221d886c
 .claude/scripts/hq/lib/face/reads.mjs	dd206a37132509c754eb89ccc34f7eae2d09dcb228954ff233f66b9c332c6241
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	f1e95bbda2066ca6b6172fa020745b407d740919db08aeab32ebf754c64e608f
