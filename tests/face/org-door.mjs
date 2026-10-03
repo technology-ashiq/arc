@@ -9,7 +9,7 @@
 //   F. A FAILED IMPORT IS FORGOTTEN: a transient producer import error refuses one request, not every later one.
 // The live door (token, Origin, GET-only) is held in tests/face/dash-doors.mjs.
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -113,6 +113,32 @@ try {
     check("C: a teams part that throws is refused with a path-free why and the chart is still served",
       teamThrows.teams.state === "refused" && teamThrows.teams.why.includes("EBADLINE") && !teamThrows.teams.why.includes(REPO) && teamThrows.chart.counts.roles >= 50,
       JSON.stringify(teamThrows.teams).slice(0, 160));
+    check("C: a refused teams part carries the same code as a refused scorecards part (close attack B2)", teamThrows.teams.code === "SOURCE_INVALID", JSON.stringify(teamThrows.teams.code));
+    // Close attack L1: a card collect() could not read refuses the chart whole, as `org-catalog --chart --check` does.
+    const dropped = await refusal(() => R.orgBody(REPO, spine, { producers: { ...REAL, collect: async (r) => ({ ...(await REAL.collect(r)), errors: ["org/roles/d-product/broken.role.yaml: bad indentation"] }) } }));
+    check("C: a catalog with an unreadable card refuses the chart whole (SOURCE_INVALID), never a chart one card shorter",
+      dropped !== null && dropped.code === "SOURCE_INVALID" && dropped.message.includes("broken.role.yaml"), JSON.stringify(dropped));
+    // Close attack L4: zero cards is the same empty read as zero events.
+    const noCards = await R.orgBody(REPO, spine, { producers: { ...REAL, loadOrg: async (root) => ({ ...(await rev.loadOrg(root)), cards: [] }) } });
+    check("C: an org with zero role cards refuses the scorecards by name, never an ok part with no rows",
+      noCards.scorecards.state === "refused" && noCards.scorecards.code === "SOURCE_INVALID" && noCards.scorecards.human.includes("zero role cards"), JSON.stringify(noCards.scorecards).slice(0, 160));
+    // Close attack L2/L3: only an ABSENT org/teams says "no venture team"; a link or a non-directory is refused.
+    const frepo = join(tmp, "file-teams-repo");
+    mkdirSync(join(frepo, "org"), { recursive: true });
+    writeFileSync(join(frepo, "org", "teams"), "not a directory\n");
+    const fileTeams = await R.orgBody(frepo, spine, { producers: { ...REAL, ...offRepo } });
+    check("C: an org/teams that is not a directory is refused by code, never read as no venture team",
+      fileTeams.teams.state === "refused" && fileTeams.teams.why.includes("NOT_A_DIRECTORY"), JSON.stringify(fileTeams.teams).slice(0, 160));
+    const outside = join(tmp, "outside-teams");
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(join(outside, "acme.team.yaml"), "venture: acme\n");
+    const lrepo = join(tmp, "linked-teams-repo");
+    mkdirSync(join(lrepo, "org"), { recursive: true });
+    symlinkSync(outside, join(lrepo, "org", "teams"), process.platform === "win32" ? "junction" : "dir");
+    const linkedOpened = [];
+    const linked = await R.orgBody(lrepo, spine, { producers: { ...REAL, ...offRepo, readTeam: (_r, stem) => { linkedOpened.push(stem); return { error: "stub" }; } } });
+    check("C: an org/teams that is a link out of the repo is refused (LINK) and nothing behind it is opened",
+      linked.teams.state === "refused" && linked.teams.why.includes("LINK") && linkedOpened.length === 0, JSON.stringify({ t: linked.teams, linkedOpened }).slice(0, 200));
     // Attack r1 B1/B2: a team listing is opened only for a regular file with a slug stem.
     const trepo = join(tmp, "teams-repo");
     mkdirSync(join(trepo, "org", "teams", "evil.team.yaml"), { recursive: true });

@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:teamsOf",
+      "breaking_input": "Two team files whose stems differ only by case on a case-insensitive filesystem, or a stem such as a Windows 8.3 alias or one with a trailing dot or space. isId must accept it for it to be read. A file named Acme.team.yaml next to acme.team.yaml. Whether isId is lowercase-only is not shown.",
+      "why": "The stem is checked with isId, but the diff never shows that isId rejects uppercase. If it accepts uppercase, both names resolve to one file on Windows and the same team is served twice with different venture labels. Prior B8 was not fixed or pinned by any test or fixed-defects entry.",
+      "fix": "Fold the stem to lowercase, dedupe case-insensitively before reading, and add an arm planting Acme.team.yaml beside acme.team.yaml.",
+      "twin_of": "Role ids and produced kinds become file names, and Windows opens `con.role.yaml` as a device whatever the extension"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:teamsOf (readdirSync)",
+      "breaking_input": "org/teams exists but readdirSync throws (EACCES, or the dir removed between isDir and readdirSync), or t.doc is a non-object after readTeam succeeds.",
+      "why": "The throw is caught by orgBody's try/catch and mapped to a teams refusal, which is fine. But in that catch the teams value is built as { state, why, rows }, while scorecards is built as the full partRefused object with code SOURCE_INVALID. Teams drops the code field, so the fold's refusal shape differs between parts and a consumer reading teams.code gets undefined.",
+      "fix": "Use the same partRefused object for teams, with state, code, human and rows.",
+      "twin_of": "A throw from the teams reader or the spine read refused the whole /api/org route, chart included"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:apiOrg (inflight)",
+      "breaking_input": "Request 1 starts a computation. While it runs synchronously over a large spine, the file tree or spine changes, then request 2 arrives after the first resolved but before .finally ran the delete. Or two doors in one process with the same mode, repo and root but different token or sim state.",
+      "why": "The single flight shares one body object across callers. answer() receives the same data object for every awaiter, so any later mutation by answer or by the door's escaping of that shared object affects every caller. Test E asserts a.chart === b.chart, which proves the objects are shared. If answer or escapeDeep mutates in place, concurrent responses corrupt each other.",
+      "fix": "Confirm answer deep-copies. Otherwise structuredClone the shared body per caller. Add an arm that mutates one response and checks the other.",
+      "twin_of": "every in-flight or memo cache keyed off a request context"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:scorecardsOf",
+      "breaking_input": "The spine's events/ is a directory but sp.torn or sp.unreadable is undefined because a producer variant returns a different shape. Or sp.torn is a string.",
+      "why": "The body reads sp.torn.length and sp.unreadable.length unguarded in the ok result, while the earlier branch uses optional chaining. A readSpine that returns events without torn throws TypeError after the events check passed, which is caught as a refusal named TypeError. The healthy scorecards are lost to an inconsistent guard.",
+      "fix": "Use the same guarded form in both places, e.g. (sp.torn?.length ?? 0).",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:servedOrg (scrubbed diff)",
+      "breaking_input": "scrubDeep reorders keys or drops an undefined-valued property in a role row.",
+      "why": "Alteration is detected by comparing JSON.stringify of the original and served values. A property whose value is undefined, or a key-order difference, is reported as altered, so a role id is listed in scrubbed though nothing was withheld. Scorecard rows are also compared by position, so if scrub removed a row, every later row is misreported as altered.",
+      "fix": "Compare by id, and compare values with a canonical stable stringify. Assert the served row count equals the body's.",
+      "twin_of": "A gate that transforms what it measures must declare what the transform destroys"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/face/org-door.mjs:55-58",
+      "breaking_input": "org-review --all --json prints a banner line beginning with { before the real JSON, or the JSON is preceded by a warning line starting with {.",
+      "why": "The fixed-defects entry claims an unparseable org-review JSON is a named failing check, but cli.stdout.search(/^\\{/m) still takes the first brace-initial line. A banner starting with a brace yields a named failure on valid output, and the later byte-for-byte arm then compares against an empty list.",
+      "fix": "Parse the last brace-initial line or use an explicit marker, and skip the dependent arm when the parse failed.",
+      "twin_of": "The door fixture carried on after its spine fixture failed, so later arms threw and buried the cause"
+    }
+  ]
+}
