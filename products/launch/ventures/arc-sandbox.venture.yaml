@@ -1,0 +1,15 @@
+# venture.yaml -- the only input `arc launch` reads (ADR-1710). Block style only (ADR-0200).
+# arc-sandbox is a REHEARSAL venture (ADR-1700): every receipt it emits is honesty_class rehearsal, never real.
+slug: arc-sandbox
+type: saas-b2b
+region: in
+payment_model: gateway
+tenancy: multi
+ai: false
+honesty_class: rehearsal
+compliance:
+  - dpdp
+  - gst
+brand:
+  name: arc sandbox
+  domain: sandbox.automemory.ai

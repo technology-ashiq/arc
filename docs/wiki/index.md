@@ -5,7 +5,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 
 | Part | Count | With narrative |
 |---|---|---|
-| [Products](#products) | 18 | 17 |
+| [Products](#products) | 19 | 17 |
 | [Lanes](#lanes) | 19 | 17 |
 | [Processes](#processes) | 14 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 18 | 0 |
@@ -13,9 +13,9 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Agents](#agents) | 30 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **141** | **34** |
+| **Total** | **142** | **34** |
 
-Narrative debt: **107 of 141** pages have no narrative yet. ADR headers: 322 of 387 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **108 of 142** pages have no narrative yet. ADR headers: 322 of 387 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -32,6 +32,7 @@ Narrative debt: **107 of 141** pages have no narrative yet. ADR headers: 322 of 
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
 | [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 79 |
+| [launch](products/launch.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 10 |
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
 | [memory](products/memory.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |

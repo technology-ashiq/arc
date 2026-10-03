@@ -197,7 +197,7 @@ ledger: the list of money in and money out.
 |---|---|
 | Version | 1.0.0 |
 | Requires | [core](core.md) |
-| Required by | [absorb](absorb.md), [design](design.md), [develop](develop.md), [docs](docs.md), [engine](engine.md), [evolve](evolve.md), [growth](growth.md), [leads](leads.md), [legal](legal.md), [memory](memory.md), [org](org.md) |
+| Required by | [absorb](absorb.md), [design](design.md), [develop](develop.md), [docs](docs.md), [engine](engine.md), [evolve](evolve.md), [growth](growth.md), [launch](launch.md), [leads](leads.md), [legal](legal.md), [memory](memory.md), [org](org.md) |
 | Lane | — |
 | Face room | spine (ring command) |
 

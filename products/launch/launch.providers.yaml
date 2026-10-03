@@ -1,0 +1,734 @@
+# launch.providers.yaml -- LAYER 2: which tool may fill which slot (ADR-1701, ADR-1719). Block style only.
+# OWNER-ONLY BIRTH (ADR-1702): approved_by is linted against the owner. These rows were SEEDED by the kickoff
+# session on 2026-10-03 under the owner's standing instruction and land through a reviewed PR; every row is a
+# candidate, and no candidate is ever recommended or run -- only a vetted row is (ADR-1703, ADR-1705).
+# status = the owner's intent; last_verified = observed and runner-written. Never collapse the two.
+providers:
+  - id: cloudflare-registrar
+    slot: domain
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - CLOUDFLARE_API_TOKEN
+    hosts:
+      - api.cloudflare.com
+    credentials:
+      scope: "registrar read; purchase only behind gate-1"
+    sensitive_actions:
+      - purchase
+    adapter: providers/domain/cloudflare-registrar.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: cloudflare-dns
+    slot: dns
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - CLOUDFLARE_API_TOKEN
+    hosts:
+      - api.cloudflare.com
+    credentials:
+      scope: "zone DNS edit on one zone"
+    adapter: providers/dns/cloudflare-dns.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: github
+    slot: repo
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - GITHUB_TOKEN
+    hosts:
+      - api.github.com
+    credentials:
+      scope: "repo create + admin on the venture repo only"
+    sensitive_actions:
+      - delete
+    adapter: providers/repo/github.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: github-actions
+    slot: ci
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - GITHUB_TOKEN
+    hosts:
+      - api.github.com
+    credentials:
+      scope: "workflow + branch protection on the venture repo"
+    adapter: providers/ci/github-actions.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: vercel
+    slot: hosting
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - VERCEL_TOKEN
+    hosts:
+      - api.vercel.com
+    credentials:
+      scope: "project create + deploy on one team"
+    adapter: providers/hosting/vercel.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: vercel-environments
+    slot: environments
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - VERCEL_TOKEN
+    hosts:
+      - api.vercel.com
+    credentials:
+      scope: "project settings read"
+    adapter: providers/environments/vercel-environments.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: vercel-managed-tls
+    slot: tls
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - VERCEL_TOKEN
+    hosts:
+      - api.vercel.com
+      - api.ssllabs.com
+    credentials:
+      scope: "domain config read"
+    adapter: providers/tls/vercel-managed-tls.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: vercel-env-store
+    slot: secrets
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - VERCEL_TOKEN
+    hosts:
+      - api.vercel.com
+    credentials:
+      scope: "env var NAMES list; values are placed by the owner"
+    adapter: providers/secrets/vercel-env-store.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: arc-ship-release
+    slot: release
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - VERCEL_TOKEN
+      - GITHUB_TOKEN
+    hosts:
+      - api.vercel.com
+      - api.github.com
+    credentials:
+      scope: "tag + deployment read"
+    sensitive_actions:
+      - deploy-prod-first
+    adapter: providers/release/arc-ship-release.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: nextjs-shell
+    slot: frontend
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- probes the live site"
+    adapter: providers/frontend/nextjs-shell.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: next-route-handlers
+    slot: backend
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- probes the live site"
+    adapter: providers/backend/next-route-handlers.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: supabase
+    slot: database
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - SUPABASE_ACCESS_TOKEN
+    hosts:
+      - api.supabase.com
+    credentials:
+      scope: "project create in one organization"
+    adapter: providers/database/supabase.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: drizzle
+    slot: orm
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- probes the live site"
+    adapter: providers/orm/drizzle.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: resend
+    slot: email-transactional
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - RESEND_API_KEY
+    hosts:
+      - api.resend.com
+    credentials:
+      scope: "domain create + send on one domain"
+    adapter: providers/email-transactional/resend.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: supabase-auth
+    slot: auth
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - SUPABASE_ACCESS_TOKEN
+    hosts:
+      - api.supabase.com
+      - sandbox.automemory.ai
+    credentials:
+      scope: "auth config on one project"
+    adapter: providers/auth/supabase-auth.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: rls-roles
+    slot: authz
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- probes the live site"
+    adapter: providers/authz/rls-roles.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: org-invite
+    slot: tenancy
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- probes the live site"
+    adapter: providers/tenancy/org-invite.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: plans-yaml
+    slot: plans
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- probes the live site"
+    adapter: providers/plans/plans-yaml.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: razorpay
+    slot: payment-test
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: in
+    payment_model: gateway
+    env_keys:
+      - RAZORPAY_KEY_ID
+      - RAZORPAY_KEY_SECRET
+    hosts:
+      - api.razorpay.com
+    credentials:
+      scope: "test-mode keys; no payout or settlement scope"
+    adapter: providers/payment-test/razorpay.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: dodo
+    slot: payment-test
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: global
+    payment_model: mor
+    env_keys:
+      - DODO_API_KEY
+    hosts:
+      - live.dodopayments.com
+    credentials:
+      scope: "test-mode key"
+    adapter: providers/payment-test/dodo.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: stripe
+    slot: payment-test
+    status: blocked
+    reason: "India new-account onboarding assumed closed (master plan section 5) -- re-verify before unblocking"
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - STRIPE_SECRET_KEY
+    hosts:
+      - api.stripe.com
+    credentials:
+      scope: "test-mode key"
+    adapter: providers/payment-test/stripe.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: razorpay-checkout
+    slot: checkout-portal
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: in
+    payment_model: gateway
+    env_keys:
+      - RAZORPAY_KEY_ID
+      - RAZORPAY_KEY_SECRET
+    hosts:
+      - api.razorpay.com
+    credentials:
+      scope: "test-mode keys"
+    adapter: providers/checkout-portal/razorpay-checkout.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: razorpay-webhook
+    slot: webhooks-ledger
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: in
+    payment_model: gateway
+    env_keys:
+      - RAZORPAY_KEY_ID
+      - RAZORPAY_KEY_SECRET
+      - RAZORPAY_WEBHOOK_SECRET
+    hosts:
+      - api.razorpay.com
+      - sandbox.automemory.ai
+    credentials:
+      scope: "test-mode keys; webhook secret"
+    adapter: providers/webhooks-ledger/razorpay-webhook.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: razorpay-refunds
+    slot: refunds
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: in
+    payment_model: gateway
+    env_keys:
+      - RAZORPAY_KEY_ID
+      - RAZORPAY_KEY_SECRET
+    hosts:
+      - api.razorpay.com
+    credentials:
+      scope: "test-mode refund"
+    adapter: providers/refunds/razorpay-refunds.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: arc-legal
+    slot: legal-pages
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- probes the live site"
+    adapter: providers/legal-pages/arc-legal.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: next-headers
+    slot: security-headers
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- probes the live site"
+    adapter: providers/security-headers/next-headers.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: arc-scan-dependabot
+    slot: dependency-scan
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - GITHUB_TOKEN
+    hosts:
+      - api.github.com
+    credentials:
+      scope: "repo security settings read"
+    adapter: providers/dependency-scan/arc-scan-dependabot.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: sentry
+    slot: errors
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - SENTRY_AUTH_TOKEN
+    hosts:
+      - sentry.io
+    credentials:
+      scope: "project issues read in one org"
+    adapter: providers/errors/sentry.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: pg-dump
+    slot: backup
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - SUPABASE_DB_URL
+    hosts:
+      - pooler.supabase.com
+    credentials:
+      scope: "read-only dump role"
+    adapter: providers/backup/pg-dump.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: pg-restore-scratch
+    slot: restore-drill
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - SUPABASE_DB_URL
+    hosts:
+      - pooler.supabase.com
+    credentials:
+      scope: "read-only dump role; restore target is local scratch"
+    adapter: providers/restore-drill/pg-restore-scratch.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: drizzle-down
+    slot: migration-rollback
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - GITHUB_TOKEN
+    hosts:
+      - api.github.com
+    credentials:
+      scope: "workflow run read"
+    adapter: providers/migration-rollback/drizzle-down.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: venture-register
+    slot: passport
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- runs venture-register --dry-run"
+    adapter: providers/passport/venture-register.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: ledger-source
+    slot: ledger-source
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- registers the ledger feed"
+    adapter: providers/ledger-source/ledger-source.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: face-planned
+    slot: face-room
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- face contract row"
+    adapter: providers/face-room/face-planned.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
+  - id: teardown-render
+    slot: teardown-plan
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- renders the exit plan"
+    adapter: providers/teardown-plan/teardown-render.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null

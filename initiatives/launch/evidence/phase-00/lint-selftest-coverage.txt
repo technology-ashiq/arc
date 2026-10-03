@@ -1,0 +1,33 @@
+launch-lint: ok -- 85 slots, 35 provider rows, 35 candidate-unbuilt
+RAN baseline clean (85 slots, 36 rows)
+RAN mutant row-without-adapter
+REFUSED row-without-adapter
+RAN mutant adapter-without-row
+REFUSED adapter-without-row
+RAN mutant unknown-slot
+REFUSED unknown-slot
+RAN mutant slot-names-provider
+REFUSED slot-names-provider
+RAN mutant vetted-by
+REFUSED vetted-by
+RAN mutant approved-by
+REFUSED approved-by
+RAN mutant yaml
+REFUSED yaml
+RAN mutant dag-cycle
+REFUSED dag-cycle
+RAN mutant core-to-noncore
+REFUSED core-to-noncore
+RAN mutant edge-unresolved
+REFUSED edge-unresolved
+RAN mutant default-word
+REFUSED default-word
+RAN mutant zero-dep-leg
+REFUSED zero-dep-leg
+RAN mutant verify-is-probe
+REFUSED verify-is-probe
+13/13 mutants refused
+launch-coverage: 85 slots (33 core · 35 required · 17 optional)
+launch-coverage: 35 provider rows (34 candidate · 0 vetted · 0 retired · 1 blocked)
+launch-coverage: core slots with a row 33/33 · core slots with zero vetted providers 33/33
+launch-coverage: slot dirs holding adapters 0

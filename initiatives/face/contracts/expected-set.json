@@ -900,7 +900,8 @@
       "capability-vet": "develop",
       "arc-bytediff": "toolbelt",
       "face-coverage": "toolbelt",
-      "design-sources-lint": "design-studio"
+      "design-sources-lint": "design-studio",
+      "launch-lint": "lane"
     }
   },
   "concepts": {
@@ -1364,7 +1365,8 @@
       "leads": "leads",
       "legal": "legal",
       "memory": "memory",
-      "docs": "lane"
+      "docs": "lane",
+      "launch": "lane"
     }
   },
   "adrs": {

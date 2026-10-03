@@ -1266,7 +1266,7 @@
       "indexes": "products",
       "stations": [],
       "holds": {},
-      "itemCount": 18
+      "itemCount": 19
     },
     {
       "id": "lane",
@@ -1309,7 +1309,8 @@
           "researcher"
         ],
         "lints": [
-          "kickoff-lint"
+          "kickoff-lint",
+          "launch-lint"
         ],
         "concepts": [
           "50% tripwire",
@@ -1323,6 +1324,7 @@
         ],
         "products": [
           "docs",
+          "launch",
           "plan"
         ],
         "adrs": [
@@ -1331,7 +1333,7 @@
           "1700"
         ]
       },
-      "itemCount": 29
+      "itemCount": 31
     }
   ],
   "inventories": {

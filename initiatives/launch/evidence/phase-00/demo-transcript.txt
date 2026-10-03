@@ -1,0 +1,19 @@
+# Phase 00 live demo transcript (fixture venture fx-sandbox, temp spine; paths shortened to FX)
+
+$ arc-launch new --venture fx-sandbox
+fx-sandbox (rehearsal) -- board created
+  7 slots: 7 core · 0 required · 0 optional
+  applies to this venture: 6 · skipped: 1
+exit 0
+
+$ arc-launch apply probe --venture fx-sandbox --provider fake
+FAKE_CREATED r1
+FAKE_CREATED r2
+probe: verified -- attempt 1, receipt 01M411MNJ0WWC6XCC45AN1J86A
+exit 0
+
+$ arc-launch apply probe (again)
+probe: verified -- no-op (receipt 01M411MNJ0WWC6XCC45AN1J86A)
+exit 0
+
+spine events: 1

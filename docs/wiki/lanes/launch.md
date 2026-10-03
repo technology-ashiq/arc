@@ -13,7 +13,7 @@
 |---|---|
 | Status | LIVE |
 | Cycle | arc-launch (Cycle 1, opened 2026-10-03) |
-| Product | — |
+| Product | [launch](../products/launch.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
 

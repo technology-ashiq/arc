@@ -1,0 +1,949 @@
+# launch.slots.yaml -- LAYER 1, the fixed process (ADR-1701). A slot is a contract: what must be provably true at
+# exit. It never names a tool; tools live in launch.providers.yaml. Block style only (ADR-0200).
+# Seeded 2026-10-03 by copying docs/strategy/plans/PLAN-launch.md catalog tables row for row (phase-00-spec C1b).
+# Counts are derived by launch-coverage.mjs, never kept here. Adding a slot is an ADR plus a row plus a provider row.
+slots:
+  - id: domain
+    group: identity
+    tier: core
+    exit_criteria:
+      - "registered, WHOIS privacy; approval gate 1. Rehearsal: refusal path + --dry-run only"
+    verify: domain-probe
+    gate: gate-1
+    approval: true
+    sensitive_actions:
+      - purchase
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: dns
+    group: identity
+    tier: core
+    exit_criteria:
+      - "resolves from 8.8.8.8 and 1.1.1.1"
+    verify: dns-probe
+    depends_on:
+      - domain
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: tls
+    group: identity
+    tier: core
+    exit_criteria:
+      - "scanner grade ≥ A; HSTS"
+    verify: tls-probe
+    depends_on:
+      - dns
+      - hosting
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: email-transactional
+    group: identity
+    tier: core
+    exit_criteria:
+      - "SPF/DKIM/DMARC live, p=quarantine; probe dkim=pass (leads preflight.mjs)"
+    verify: email-transactional-probe
+    depends_on:
+      - dns
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: email-inbox
+    group: identity
+    tier: required
+    exit_criteria:
+      - "send + receive probe"
+    verify: deferred-c2
+    depends_on:
+      - dns
+    required_when: "always"
+  - id: email-outbound-domain
+    group: identity
+    tier: optional
+    exit_criteria:
+      - "warm-up log"
+    verify: deferred-c2
+    depends_on:
+      - email-transactional
+    required_when: "always"
+    optional_for:
+      - saas-b2b
+      - saas-b2c
+  - id: brand-kit
+    group: identity
+    tier: required
+    exit_criteria:
+      - "critic score ≥ 8 receipt"
+    verify: deferred-c2
+    required_when: "always"
+  - id: repo
+    group: delivery
+    tier: core
+    exit_criteria:
+      - "/arc green inside the venture"
+    verify: repo-probe
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: ci
+    group: delivery
+    tier: core
+    exit_criteria:
+      - "required checks on, 3 legs green"
+    verify: ci-probe
+    depends_on:
+      - repo
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: environments
+    group: delivery
+    tier: core
+    exit_criteria:
+      - "preview URL per PR"
+    verify: environments-probe
+    depends_on:
+      - hosting
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: hosting
+    group: delivery
+    tier: core
+    exit_criteria:
+      - "git-triggered deploy with githubDeployment: 1"
+    verify: hosting-probe
+    depends_on:
+      - repo
+    gate: none
+    approval: false
+    timeout: 900
+    resume: resources
+    required_when: "always"
+  - id: secrets
+    group: delivery
+    tier: core
+    exit_criteria:
+      - "contract lint; no key in git; owner places keys"
+    verify: secrets-probe
+    depends_on:
+      - hosting
+      - ci
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: feature-flags
+    group: delivery
+    tier: optional
+    exit_criteria:
+      - "one flag toggles one route"
+    verify: deferred-c2
+    depends_on:
+      - frontend
+    required_when: "always"
+    optional_for:
+      - saas-b2b
+      - saas-b2c
+  - id: release
+    group: delivery
+    tier: core
+    exit_criteria:
+      - "tag → deploy receipt"
+    verify: release-probe
+    depends_on:
+      - ci
+      - hosting
+    gate: gate-2
+    approval: true
+    sensitive_actions:
+      - deploy-prod-first
+    timeout: 900
+    resume: resources
+    required_when: "always"
+  - id: frontend
+    group: stack
+    tier: core
+    exit_criteria:
+      - "Lighthouse ≥ 90 ×4"
+    verify: frontend-probe
+    depends_on:
+      - repo
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: backend
+    group: stack
+    tier: core
+    exit_criteria:
+      - "zod contract; /health"
+    verify: backend-probe
+    depends_on:
+      - frontend
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: database
+    group: stack
+    tier: core
+    exit_criteria:
+      - "up/down fixture; RLS denies unless a policy grants"
+    verify: database-probe
+    depends_on:
+      - secrets
+    gate: none
+    approval: false
+    timeout: 900
+    resume: resources
+    required_when: "always"
+  - id: orm
+    group: stack
+    tier: core
+    exit_criteria:
+      - "typed schema generated"
+    verify: orm-probe
+    depends_on:
+      - database
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: storage
+    group: stack
+    tier: optional
+    exit_criteria:
+      - "signed-URL probe"
+    verify: deferred-c2
+    depends_on:
+      - database
+    required_when: "always"
+    optional_for:
+      - any
+  - id: jobs
+    group: stack
+    tier: optional
+    exit_criteria:
+      - "retry + dead-letter"
+    verify: deferred-c2
+    depends_on:
+      - backend
+    required_when: "always"
+    optional_for:
+      - any
+  - id: cache-ratelimit
+    group: stack
+    tier: required
+    exit_criteria:
+      - "a 429 observed"
+    verify: deferred-c2
+    depends_on:
+      - backend
+    required_when: "always"
+  - id: search
+    group: stack
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - database
+    required_when: "always"
+    optional_for:
+      - any
+  - id: realtime
+    group: stack
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - database
+    required_when: "always"
+    optional_for:
+      - any
+  - id: document-gen
+    group: stack
+    tier: optional
+    exit_criteria:
+      - "PDF renders"
+    verify: deferred-c2
+    depends_on:
+      - backend
+    required_when: "always"
+    optional_for:
+      - saas-b2b
+      - saas-b2c
+  - id: i18n-locale
+    group: stack
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - frontend
+    required_when: "always"
+    optional_for:
+      - any
+  - id: auth
+    group: users
+    tier: core
+    exit_criteria:
+      - "login → session → logout"
+    verify: auth-probe
+    depends_on:
+      - database
+      - email-transactional
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: authz
+    group: users
+    tier: core
+    exit_criteria:
+      - "cross-tenant 403"
+    verify: authz-probe
+    depends_on:
+      - auth
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: tenancy
+    group: users
+    tier: core
+    exit_criteria:
+      - "invite → join → scoped"
+    verify: tenancy-probe
+    depends_on:
+      - authz
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "tenancy == multi"
+  - id: onboarding
+    group: users
+    tier: required
+    exit_criteria:
+      - "activated event"
+    verify: deferred-c2
+    depends_on:
+      - tenancy
+    required_when: "always"
+  - id: account
+    group: users
+    tier: required
+    exit_criteria:
+      - "delete = purge probe"
+    verify: deferred-c2
+    depends_on:
+      - tenancy
+    required_when: "always"
+  - id: sessions
+    group: users
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - auth
+    required_when: "always"
+    optional_for:
+      - any
+  - id: plans
+    group: money
+    tier: core
+    exit_criteria:
+      - "downgrade blocks a gated route"
+    verify: plans-probe
+    depends_on:
+      - authz
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "payment_model != none"
+  - id: checkout-portal
+    group: money
+    tier: core
+    exit_criteria:
+      - "portal probe (test mode)"
+    verify: checkout-portal-probe
+    depends_on:
+      - plans
+      - payment-test
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "payment_model != none"
+  - id: payment-test
+    group: money
+    tier: core
+    exit_criteria:
+      - "test-mode purchase + refund e2e"
+    verify: payment-test-probe
+    depends_on:
+      - secrets
+      - backend
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "payment_model != none"
+  - id: webhooks-ledger
+    group: money
+    tier: core
+    exit_criteria:
+      - "round-trip receipt; replay = one event"
+    verify: webhooks-ledger-probe
+    depends_on:
+      - payment-test
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "payment_model != none"
+  - id: refunds
+    group: money
+    tier: core
+    exit_criteria:
+      - "refund nets in arc pnl"
+    verify: refunds-probe
+    depends_on:
+      - webhooks-ledger
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "payment_model != none"
+  - id: payment-live
+    group: money
+    tier: required
+    exit_criteria:
+      - "approval gate 3; activation checklist green"
+    verify: deferred-c2
+    depends_on:
+      - payment-test
+      - legal-pages
+      - invoices-gst
+      - refunds
+    gate: gate-3
+    approval: true
+    sensitive_actions:
+      - enable-live-keys
+    required_when: "payment_model != none"
+  - id: pricing-page
+    group: money
+    tier: required
+    exit_criteria:
+      - "one price, one tier at launch"
+    verify: deferred-c2
+    depends_on:
+      - plans
+    required_when: "payment_model != none"
+  - id: invoices-gst
+    group: money
+    tier: required
+    exit_criteria:
+      - "validates against fixture"
+    verify: deferred-c2
+    depends_on:
+      - webhooks-ledger
+    required_when: "region == in"
+  - id: dunning
+    group: money
+    tier: required
+    exit_criteria:
+      - "fixture"
+    verify: deferred-c2
+    depends_on:
+      - payment-live
+    required_when: "payment_model != none"
+  - id: trials-coupons
+    group: money
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - plans
+    required_when: "payment_model != none"
+    optional_for:
+      - any
+  - id: usage-metering
+    group: money
+    tier: optional
+    exit_criteria:
+      - "over-limit soft block"
+    verify: deferred-c2
+    depends_on:
+      - llm-gateway
+    required_when: "ai == true"
+    optional_for:
+      - any
+  - id: legal-pages
+    group: trust
+    tier: core
+    exit_criteria:
+      - "legal.publish receipt or ABSENT: legal renderer not ready"
+    verify: legal-pages-probe
+    depends_on:
+      - frontend
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: security-headers
+    group: trust
+    tier: core
+    exit_criteria:
+      - "headers read live, grade A"
+    verify: security-headers-probe
+    depends_on:
+      - hosting
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: dependency-scan
+    group: trust
+    tier: core
+    exit_criteria:
+      - "CI gate"
+    verify: dependency-scan-probe
+    depends_on:
+      - ci
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: consent-dpdp
+    group: trust
+    tier: required
+    exit_criteria:
+      - "consent row written"
+    verify: deferred-c2
+    depends_on:
+      - frontend
+    required_when: "region == in"
+  - id: app-security
+    group: trust
+    tier: required
+    exit_criteria:
+      - "OWASP fixture set"
+    verify: deferred-c2
+    depends_on:
+      - backend
+    required_when: "always"
+  - id: privacy-ops
+    group: trust
+    tier: required
+    exit_criteria:
+      - "export + delete probe"
+    verify: deferred-c2
+    depends_on:
+      - account
+    required_when: "always"
+  - id: bot-abuse
+    group: trust
+    tier: required
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - auth
+    required_when: "always"
+  - id: audit-log
+    group: trust
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - tenancy
+    required_when: "always"
+    optional_for:
+      - saas-b2b
+  - id: mfa
+    group: trust
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - auth
+    required_when: "always"
+    optional_for:
+      - any
+  - id: errors
+    group: observability
+    tier: core
+    exit_criteria:
+      - "fixture error → issue"
+    verify: errors-probe
+    depends_on:
+      - hosting
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: logs
+    group: observability
+    tier: required
+    exit_criteria:
+      - "one request id end to end"
+    verify: deferred-c2
+    depends_on:
+      - hosting
+    required_when: "always"
+  - id: uptime
+    group: observability
+    tier: required
+    exit_criteria:
+      - "drill incident"
+    verify: deferred-c2
+    depends_on:
+      - hosting
+    required_when: "always"
+  - id: product-analytics
+    group: observability
+    tier: required
+    exit_criteria:
+      - "funnel visit→signup→pay visible"
+    verify: deferred-c2
+    depends_on:
+      - frontend
+    required_when: "always"
+  - id: web-analytics
+    group: observability
+    tier: required
+    exit_criteria:
+      - "pageview reaches sink"
+    verify: deferred-c2
+    depends_on:
+      - frontend
+    required_when: "always"
+  - id: performance
+    group: observability
+    tier: required
+    exit_criteria:
+      - "budget gate"
+    verify: deferred-c2
+    depends_on:
+      - ci
+    required_when: "always"
+  - id: alerts-spine
+    group: observability
+    tier: required
+    exit_criteria:
+      - "test alert in brief"
+    verify: deferred-c2
+    depends_on:
+      - errors
+    required_when: "always"
+  - id: session-replay
+    group: observability
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - consent-dpdp
+    required_when: "always"
+    optional_for:
+      - any
+  - id: backup
+    group: data
+    tier: core
+    exit_criteria:
+      - "dump + checksum"
+    verify: backup-probe
+    depends_on:
+      - database
+    gate: none
+    approval: false
+    timeout: 900
+    resume: resources
+    required_when: "always"
+  - id: restore-drill
+    group: data
+    tier: core
+    exit_criteria:
+      - "restore receipt (LAU-I)"
+    verify: restore-drill-probe
+    depends_on:
+      - backup
+    gate: none
+    approval: false
+    timeout: 900
+    resume: resources
+    required_when: "always"
+  - id: migration-rollback
+    group: data
+    tier: core
+    exit_criteria:
+      - "fixture"
+    verify: migration-rollback-probe
+    depends_on:
+      - orm
+      - ci
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: retention
+    group: data
+    tier: required
+    exit_criteria:
+      - "purge probe"
+    verify: deferred-c2
+    depends_on:
+      - database
+    required_when: "always"
+  - id: schema-parity
+    group: data
+    tier: required
+    exit_criteria:
+      - "zero drift"
+    verify: deferred-c2
+    depends_on:
+      - orm
+    required_when: "always"
+  - id: seo-baseline
+    group: growth
+    tier: required
+    exit_criteria:
+      - "GSC verified, sitemap submitted"
+    verify: deferred-c2
+    depends_on:
+      - frontend
+      - dns
+    required_when: "always"
+  - id: content-route
+    group: growth
+    tier: required
+    exit_criteria:
+      - "first content.published"
+    verify: deferred-c2
+    depends_on:
+      - seo-baseline
+    required_when: "always"
+  - id: landing-waitlist
+    group: growth
+    tier: required
+    exit_criteria:
+      - "lead in private store (LEA law)"
+    verify: deferred-c2
+    depends_on:
+      - frontend
+    required_when: "always"
+  - id: lifecycle-email
+    group: growth
+    tier: required
+    exit_criteria:
+      - "email.sent receipts"
+    verify: deferred-c2
+    depends_on:
+      - email-transactional
+    required_when: "always"
+  - id: support-inbox
+    group: growth
+    tier: required
+    exit_criteria:
+      - "ticket → draft receipt"
+    verify: deferred-c2
+    depends_on:
+      - email-inbox
+    required_when: "always"
+  - id: launch-kit
+    group: growth
+    tier: required
+    exit_criteria:
+      - "checklist rendered, owner-approved"
+    verify: deferred-c2
+    depends_on:
+      - brand-kit
+    required_when: "always"
+  - id: changelog-status
+    group: growth
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - frontend
+    required_when: "always"
+    optional_for:
+      - any
+  - id: feedback
+    group: growth
+    tier: optional
+    exit_criteria:
+      - "stated at Cycle 2 kickoff"
+    verify: deferred-c2
+    depends_on:
+      - frontend
+    required_when: "always"
+    optional_for:
+      - any
+  - id: llm-gateway
+    group: ai
+    tier: required
+    exit_criteria:
+      - "key swap = model swap"
+    verify: deferred-c2
+    depends_on:
+      - secrets
+    required_when: "ai == true"
+  - id: prompt-evals
+    group: ai
+    tier: required
+    exit_criteria:
+      - "trace per request"
+    verify: deferred-c2
+    depends_on:
+      - llm-gateway
+    required_when: "ai == true"
+  - id: ai-cost-metering
+    group: ai
+    tier: required
+    exit_criteria:
+      - "arc pnl shows AI cost"
+    verify: deferred-c2
+    depends_on:
+      - llm-gateway
+      - ledger-source
+    required_when: "ai == true"
+  - id: guardrails
+    group: ai
+    tier: required
+    exit_criteria:
+      - "hostile fixture set"
+    verify: deferred-c2
+    depends_on:
+      - llm-gateway
+    required_when: "ai == true"
+  - id: eval-gate
+    group: ai
+    tier: required
+    exit_criteria:
+      - "planted regression blocks"
+    verify: deferred-c2
+    depends_on:
+      - ci
+      - prompt-evals
+    required_when: "ai == true"
+  - id: document-ingest
+    group: ai
+    tier: optional
+    exit_criteria:
+      - "fixture parse"
+    verify: deferred-c2
+    depends_on:
+      - storage
+    required_when: "ai == true"
+    optional_for:
+      - any
+  - id: passport
+    group: wiring
+    tier: core
+    exit_criteria:
+      - "approved receipt / dry-run output"
+    verify: passport-probe
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: ledger-source
+    group: wiring
+    tier: core
+    exit_criteria:
+      - "first ingest receipt"
+    verify: ledger-source-probe
+    depends_on:
+      - webhooks-ledger
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: face-room
+    group: wiring
+    tier: core
+    exit_criteria:
+      - "face-coverage green"
+    verify: face-room-probe
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: teardown-plan
+    group: wiring
+    tier: core
+    exit_criteria:
+      - "plan file + receipt"
+    verify: teardown-plan-probe
+    after: all
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
+  - id: team-manifest
+    group: wiring
+    tier: required
+    exit_criteria:
+      - "org.team digest valid"
+    verify: deferred-c2
+    depends_on:
+      - passport
+    required_when: "always"
+  - id: ops-row
+    group: wiring
+    tier: required
+    exit_criteria:
+      - "row or ABSENT: ops not born"
+    verify: deferred-c2
+    depends_on:
+      - passport
+    required_when: "always"
+  - id: growth-config
+    group: wiring
+    tier: required
+    exit_criteria:
+      - "mine reads the site"
+    verify: deferred-c2
+    depends_on:
+      - content-route
+    required_when: "always"
