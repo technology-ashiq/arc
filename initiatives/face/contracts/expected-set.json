@@ -371,7 +371,9 @@
         "ring": "company",
         "status": "built",
         "sources": [
-          "arc-company-org-blueprint.md"
+          "arc-company-org-blueprint.md",
+          "org/roles/**",
+          "GET /api/org"
         ]
       },
       {
@@ -1415,6 +1417,7 @@
       "PLAN-executor": "strategy",
       "PLAN-face": "strategy",
       "PLAN-face-v2": "strategy",
+      "PLAN-launch": "strategy",
       "PLAN-growth": "strategy",
       "PLAN-leads": "strategy",
       "PLAN-ledger": "strategy",

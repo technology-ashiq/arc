@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:teamsOf",
+      "breaking_input": "A team file org/teams/con.team.yaml, or a file whose name has a trailing dot or space, or a symlink named x.team.yaml pointing at a directory or outside org/teams, is listed by readdirSync and passed to readTeam(repo, stem).",
+      "why": "The stem comes from a directory listing and goes straight into a path built by teamPath. Windows opens device names as devices whatever the extension, and a symlink is followed. No check that the entry is a regular file or that the stem is a legal slug, so the route can hang on a device read or serve content from outside the repo.",
+      "fix": "Reject any stem that does not match the lane slug grammar and is not a Windows reserved name. lstat each entry and require a regular file before readTeam.",
+      "twin_of": "Role ids and produced kinds become file names, and Windows opens `con.role.yaml` as a device whatever the extension"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:teamsOf",
+      "breaking_input": "org/teams/ contains a directory named evil.team.yaml, or an unreadable file (EACCES).",
+      "why": "readdirSync is not wrapped in try/catch, and readTeam returns an error row only for its own read failure. Any readdirSync throw (EACCES on the dir, or the dir removed between isDir and readdirSync) escapes as a plain Error. The door sees an unclassified exception rather than a named refusal, and the whole route fails including the chart that the header comment promises is still served.",
+      "fix": "Wrap the listing in try/catch and return a teams part of state refused with a code, so the chart is still served. Filter to regular files.",
+      "twin_of": "treeScripts swallowed every read error / every walker's bare catch (here the opposite: no catch, no named report)"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:teamsOf and scorecardsOf",
+      "breaking_input": "Any throw from p.validateTeam, p.readSpine, p.placeAll or p.scorecard, for example a malformed event in the spine, or t.doc that is not an object, so `t.doc.seats[id]?.holder` or `t.doc.stage` throws.",
+      "why": "Only loadOrg findings are handled as data. The other throws propagate out of orgBody and refuse the whole route, contradicting the claim that parts refuse on their own. A single broken team file or one bad spine line removes the chart from the room.",
+      "fix": "Catch per part. Serve teams and scorecards as refused with the error code only (scrubbed), and keep the chart.",
+      "twin_of": "Draft was all-or-nothing for validation but not for I/O"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:apiOrg",
+      "breaking_input": "Two requests with different ctx.root but one repo, or a request that arrives while the spine gains events between the first request's read and its resolution. Also a rejected computation: p rejects, `.finally` removes the key, but the `inflight.set` happens after `.finally` returns a new promise that has no catch attached.",
+      "why": "The `.finally()` branch returns a derived promise and that is the one stored and awaited, so rejection is observed by the awaiter. But `servedOrg(...)` can throw synchronously inside an async function only as a rejection, fine. The real hazard: a failure in `await p` for one request is shared by all concurrent callers, and a slow sync scan blocks the event loop for every caller anyway. The key does not include the mode, so a sim-mode and a live-mode ctx with the same repo and root share a body that scrubDeep/answer built for the first.",
+      "fix": "Include ctx.mode in the key. Document that the single flight does not bound the synchronous spine scan.",
+      "twin_of": "every tool that reads state from one place and writes it to another"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:scorecardsOf",
+      "breaking_input": "spineDir is a path where `events` is a symlink or junction to a directory, or where events/ exists but is a plain empty dir.",
+      "why": "isDir uses statSync, so a junction passes (good), but an empty events/ directory passes the existence check and then every seat scores no evidence with state ok, the exact empty read that looked measured which the comment says the check prevents. The check proves a directory exists, not that anything was read.",
+      "fix": "Refuse or flag when sp.events.length is 0 (state ok with total 0 and a stated note), and test that arm.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:servedOrg",
+      "breaking_input": "scrubDeep alters a path in a place other than chart roles or scorecard rows: teams[].findings, teams[].venture, scorecards.human, or chart department names.",
+      "why": "The `scrubbed` list is computed only over chart role rows and scorecard rows. A withheld path in a team finding or in the refusal text is altered with no entry in scrubbed, so the claim that a withheld path is never silent is false for those parts. Also scorecard rows are indexed by position and altered.add(r.role) uses the unscrubbed id.",
+      "fix": "Compare the whole body and served value part by part, or have scrubDeep report paths touched. List team and department keys too.",
+      "twin_of": "A gate that transforms what it measures must declare what the transform destroys"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:producers",
+      "breaking_input": "Loader failure occurs once (a transient EMFILE or a half-written file during a git checkout).",
+      "why": "`loading` caches the resolved failure object forever, so one transient import error refuses /api/org until the door process restarts. Opposite of the per-request recovery the plan promises.",
+      "fix": "Clear `loading` when the result is an error so the next request retries.",
+      "twin_of": "Windows concurrent git object-write race"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:teamsOf",
+      "breaking_input": "Two files in org/teams/: `Nilluvai.team.yaml` and `nilluvai.team.yaml` on a case-insensitive filesystem, or a stem that differs by Unicode normalisation; or a file with a BOM or CRLF.",
+      "why": "Stem is passed to readTeam, which reads by path. On Windows the two names collide into one file, so one team is listed twice with identical content and the venture check validates against the wrong stem. BOM is handled by readTeam, but CRLF handling inside validateTeam is not visible in this diff.",
+      "fix": "Require the stem to match the lowercase slug grammar and dedupe case-insensitively before reading.",
+      "twin_of": "org-review read the attribution map without dropping a BOM or folding CRLF"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "tests/face/org-door.mjs:spawnSync fixture and org-review CLI",
+      "breaking_input": "The org-review CLI child hangs or the spine-fixture writes to a path with spaces on a Windows runner.",
+      "why": "Both spawnSync calls carry a 60000 ms timeout, but a timeout kill yields status null and the check message prints it only in the detail; later arms still run against an unwritten spine, then `R.orgBody(REPO, spine)` throws and the suite dies before printing RAN, which the bats wrapper reports as the suite never reached its end. Also stdout is scanned with `search(/^\\{/m)`, so a log line starting with a brace before the JSON is parsed as the payload and JSON.parse throws.",
+      "fix": "Exit early with a clear failure when the fixture check fails. Parse the last JSON object, or use a marker.",
+      "twin_of": "The self-test spawned each arm with no timeout"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/face-dash.bats and tests/face-l3.bats",
+      "breaking_input": "An arm name containing a backtick, as in `scrubbed` and `no evidence` inside the double-quoted bash strings.",
+      "why": "The new arm strings are in double quotes with the backticks escaped as \\`, which works, but one missed escape makes bash run a command substitution. The repo rule bans backticks inside double-quoted shell strings. The arms 'scrubbed' and 'no evidence' depend on escaping being exactly right on every edit.",
+      "fix": "Move the arm names into a plain file read with a while-read loop, or use single-quoted strings.",
+      "twin_of": "A program embedded in a shell string carries no apostrophes and no single quotes"
+    }
+  ]
+}

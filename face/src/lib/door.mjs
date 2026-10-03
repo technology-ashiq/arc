@@ -231,6 +231,8 @@ export const DOOR_ROUTES = Object.freeze({
   "/api/absorb": read(),
   // Phase 07 (REQ-12, ADR-1346): the docs wiki's own extract, build-time facts only, for the Reference room.
   "/api/reference": read(),
+  // org Cycle 19 (ADR-1625): the org's own chart model, teams and scorecards, for the org room's roles section.
+  "/api/org": read(),
   "/api/decide": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: true }),
   "/api/ask": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
   // Phase 10 (REQ-14, ADR-1350): the owner's models. GET shows each key as set-or-not and its last four characters only;

@@ -681,3 +681,19 @@ load 'test_helper'
   local n; n=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks.*/\1/p')
   [ -n "$n" ] && [ "$n" -ge 18 ] || { echo "only $n checks ran: $output"; false; }
 }
+
+@test "org room: roles by department, scorecards from the producer's staffed rows, no evidence never a zero, teams or the reason there are none" {
+  run node "$ARC_ROOT/tests/face/org-fold.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  local arm
+  for arm in "roles: one role row per card, in the served departments" \
+             "roles: the counts line names every seat class, and the classes sum to the row count" \
+             "scores: a seat with no receipts reads \`no evidence\` -- never 0 and never a rate" \
+             "scores: a refused scorecards part renders the refusal and no seat at all -- never a room of \`no evidence\`" \
+             "teams: with no team the room says why, naming ADR-1612" \
+             "whole: a body of another schema is refused whole -- no role, no score drawn"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}

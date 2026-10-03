@@ -1,0 +1,57 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-face.mjs:134",
+      "breaking_input": "On Windows set Path to `C:\\Program Files\\MyToolGit\\cmd;C:\\Windows\\system32` and have `C:\\Program Files\\MyToolGit\\bin\\bash.exe` be a non-Git bash (for example a copy of WSL's launcher or a stub without /usr/bin). gitBashEnv's regex `^(.*[\\\\/]Git)[\\\\/]...` matches `MyToolGit` as a Git root, prepends its bin, and suppresses the WARN; the door's `bash arc-event.sh` then cannot write run.completed, so every answer still fails.",
+      "why": "The regex's `.*[\\\\/]Git` accepts any last path segment ending in `Git`, not only the exact `Git` directory, so a look-alike directory is trusted as Git for Windows.",
+      "fix": "Anchor the match to a path segment exactly `Git` (case-insensitive) separated on both sides, e.g. `/^(.*[\\\\/])Git[\\\\/](?:cmd|bin|usr[\\\\/]bin|mingw64[\\\\/]bin)[\\\\/]?$/i`, or verify `win32.basename(root).toLowerCase() === 'git'`.",
+      "twin_of": "A `grep 'face/src'` matched `arcface/src` inside a reference path -> a path grep is bounded on the left."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-face.mjs:139",
+      "breaking_input": "On Windows, with the current directory on C: and the repo on D:, set Path to `\\Program Files\\Git\\cmd;C:\\Windows\\system32` (a drive-relative PATH entry) and have Git installed at `C:\\Program Files\\Git`. gitBashEnv checks `\\Program Files\\Git\\bin\\bash.exe` from C: and returns bashDir = `\\Program Files\\Git\\bin`; the door child is spawned with cwd D:\\repo, so that same PATH entry resolves to `D:\\Program Files\\Git\\bin\\bash.exe`, which does not exist, and the receipt still fails.",
+      "why": "The existence check resolves the relative root against the parent's cwd, while the PATH entry is later resolved by the child against the child's cwd; the two resolvers disagree.",
+      "fix": "Convert each root to an absolute path with `win32.resolve(root)` before the existence check and put the absolute path in the child's PATH, or refuse roots that are not absolute (drive letter or UNC).",
+      "twin_of": "A caller path opened on existsSync alone -> A path from a caller is a claim about a file; resolve it before trusting it."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-face.mjs:481",
+      "breaking_input": "Start arc-face from a shell with `GIT_DIR=C:\\other\\.git` and `GIT_WORK_TREE=C:\\other` exported. The spawn env is `{ ...bash.env, ARC_DASH_TOKEN: token }`, so the door child inherits those git location variables and its git reads/writes (spine, receipts) target `C:\\other` instead of the repo the launcher resolved, so run.completed lands in the wrong repository and answers are not served.",
+      "why": "The launcher passes the whole parent environment to the door; git's location variables override the child's notion of which repository it is in.",
+      "fix": "Build the child env from `bash.env` minus `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_COMMON_DIR` and set `GIT_OPTIONAL_LOCKS=0`.",
+      "twin_of": "The resolver was fed another repo -> a child the door runs inherits the door's env minus git's location variables (`childEnv`)."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-face.mjs:476",
+      "breaking_input": "On Windows with no Git for Windows installed and `C:\\Windows\\System32\\bash.exe` (WSL) first on PATH, run `node .claude/scripts/hq/arc-face.mjs`. gitBashEnv returns bashDir:null; the code writes a WARN and still spawns the door with the broken env, so the original MODEL_FAILED-on-every-answer failure continues.",
+      "why": "The launcher knows the door cannot write receipts in this configuration but only warns and proceeds; a known-broken run is not refused.",
+      "fix": "Exit non-zero with a named error when `process.platform === 'win32' && !bash.bashDir`, or probe `bash -c 'true'` with the constructed env and refuse if the probe fails."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-face.mjs:139",
+      "breaking_input": "On Windows, create a directory at `C:\\Program Files\\Git\\bin\\bash.exe` (or `C:\\evil\\Git\\bin\\bash.exe` with a PATH entry `C:\\evil\\Git\\cmd`) and run arc-face. existsSync returns true for the directory, so gitBashEnv reports a bashDir and suppresses the WARN; the later spawn of `bash` fails because it is a directory, and the receipt is not written.",
+      "why": "The check is existence, not a regular file; a directory named bash.exe is accepted as proof that Git bash is present.",
+      "fix": "Use `statSync` and require `isFile()` (and ideally execute a probe) before accepting a root.",
+      "twin_of": "`existsSync` accepted a directory as an executable, and a spawn error was an unhandled `'error'` event -> require `isFile()`, and every spawned child gets an `'error'` listener before anything else."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:144",
+      "breaking_input": "Make a provider (or any child) write to stderr: `provider error: the gateway could not emit run.completed because the model timed out`. providerFault returns the receipt/WSL message, hiding the real timeout/provider fault; conversely a 429 with that phrase is no longer reported as busy.",
+      "why": "The receipt regex is not anchored to arc-run's own line, so any substring match wins over the more specific status-code and timeout branches.",
+      "fix": "Anchor the receipt test to the arc-run prefix (e.g. `/arc-run: could not emit run\\.completed/`) and let other phrases fall through to their named causes."
+    }
+  ]
+}

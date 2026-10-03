@@ -489,6 +489,22 @@ try {
       check("P07 reference posture: no token is 401, a foreign Origin is 403",
         noTok.status === 401 && noTok.body.error === "NO_TOKEN" && foreign.status === 403 && foreign.body.error === "BAD_ORIGIN", `${noTok.status} ${foreign.status}`);
     }
+    // /api/org (org Cycle 19, ADR-1625) -- org's own chart, teams and scorecards on the live door over THIS repo and the
+    // fixture spine the door was handed: named, schema 1, the chart served, GET-only, no query, posture held.
+    {
+      const og = await route("/api/org");
+      const roles = og.body && og.body.chart && og.body.chart.counts ? og.body.chart.counts.roles : 0;
+      check("C19 org: named, schema 1, the chart served with at least 50 roles, and scorecards answered with a state",
+        og.named && og.body.schema === 1 && roles >= 50 && og.body.scorecards && ["ok", "refused"].includes(og.body.scorecards.state), `schema=${og.body && og.body.schema} roles=${roles}`);
+      const post = await j("/api/org", { method: "POST", headers: { ...H, "Content-Type": "application/json" }, body: "{}" });
+      check("C19 org: a POST is UNKNOWN_ROUTE -- the route is GET-only", post.status === 404 && post.body.error === "UNKNOWN_ROUTE", `${post.status} ${post.body && post.body.error}`);
+      const q = await j("/api/org?role=qa-tester", { headers: H });
+      check("C19 org: a query key is BAD_ARGS", q.status === 400 && q.body.error === "BAD_ARGS", `${q.status} ${q.body.error}`);
+      const noTok = await j("/api/org");
+      const foreign = await j("/api/org", { headers: { ...H, Origin: "http://evil.example" } });
+      check("C19 org posture: no token is 401, a foreign Origin is 403",
+        noTok.status === 401 && noTok.body.error === "NO_TOKEN" && foreign.status === 403 && foreign.body.error === "BAD_ORIGIN", `${noTok.status} ${foreign.status}`);
+    }
     // /api/bench, /api/council, /api/roster -- receipts only the fixture's Phase 04 block wrote.
     {
       const b = await route("/api/bench");
