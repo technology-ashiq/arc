@@ -116,3 +116,47 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   [ "$status" -eq 2 ] || { echo "$output"; false; }
   [[ "$output" == *"no board for fx-sandbox -- run new first"* ]] || { echo "$output"; false; }
 }
+
+@test "launch-cli: verify refuses a venture root inside arc's own tree, and a missing one by name (405007a B2)" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local base="--catalog $FX_DIR/catalog.yaml --registry $FX_DIR/registry.yaml --providers-dir $FX_DIR/providers --ventures-dir $FX_DIR/ventures --state-dir $FX_DIR/state"
+  run node "$(L)" verify --all --venture fx-sandbox $base --venture-root "$ARC_ROOT"
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"is arc's own tree"* ]] || { echo "$output"; false; }
+  run node "$(L)" verify --all --venture fx-sandbox $base --venture-root "$FX_DIR/nope"
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"does not exist"* && "$output" != *"ENOENT"* ]] || { echo "$output"; false; }
+}
+
+@test "launch-cli: verify refuses an adapter path that climbs out of the providers tree (405007a B1)" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  sed 's#adapter: providers/probe/fake.mjs#adapter: providers/probe/../../outside/fake.mjs#' "$FX_DIR/registry.yaml" > "$FX_DIR/r2.yaml"
+  grep -q 'outside/fake.mjs' "$FX_DIR/r2.yaml" || { echo "fixture edit did not land"; false; }
+  run node "$(L)" verify probe --venture fx-sandbox --catalog "$FX_DIR/catalog.yaml" --registry "$FX_DIR/r2.yaml" --providers-dir "$FX_DIR/providers" --ventures-dir "$FX_DIR/ventures" --state-dir "$FX_DIR/state" --venture-root "$FX_DIR/venture-root"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"probe: UNVERIFIABLE -- "*"is not <id>.mjs inside the providers tree"* ]] || { echo "$output"; false; }
+}
+
+@test "launch-cli: verify --all skips a slot whose lock a live apply holds and still verifies the rest (405007a B6)" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  ( FAKE_HOLD_MS=6000 node "$(L)" apply slow --venture fx-sandbox $FX_FLAGS > "$BATS_TEST_TMPDIR/a.out" 2>&1 ) &
+  local i; for i in $(seq 1 100); do grep -q FAKE_HOLDING "$BATS_TEST_TMPDIR/a.out" 2>/dev/null && break; sleep 0.1; done
+  grep -q FAKE_HOLDING "$BATS_TEST_TMPDIR/a.out" || { echo "holder never started"; false; }
+  run node "$(L)" verify --all --venture fx-sandbox $FX_FLAGS
+  wait
+  [ "$status" -eq 3 ] || { echo "$output"; false; }
+  [[ "$output" == *"probe: SKIPPED -- another apply holds"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"0/1 slot(s) verified now · 1 skipped (locked)"* ]] || { echo "$output"; false; }
+}
+
+@test "launch-cli: adapter-supplied text is printed with control characters replaced (405007a B7)" {
+  run node -e 'import(require("url").pathToFileURL(process.argv[1]).href).then(m=>console.log(JSON.stringify(m.clean("a\nverified now\u001b[2K"))))' "$ARC_ROOT/.claude/scripts/launch/lib/board.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = '"a?verified now?[2K"' ] || { echo "$output"; false; }
+}
