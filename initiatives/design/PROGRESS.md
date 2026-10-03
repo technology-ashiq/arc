@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
-phase: 02
+phase: 04
 appetite: 12.5d
-burn: 5d
+burn: 12d
 blocked-on: —
 depends-on: —
 
@@ -22,8 +22,8 @@ depends-on: —
 |---|---|---|---|
 | 00 | Renderer proof + isolation — `--session` mandatory in explore mode, `(route, session)` duplicate discriminator, session-less meta refuses, stable-shutter re-proved, callers swept mechanically, and the route-keyed output path re-scoped so two renders of one route can coexist | 1.5d | ✅ 2026-08-23 |
 | 01 | Eyes + viewports + canvas gate — composer scoped-Bash render grant, iron-law read allowlist, ≤3 immutable iterations, platform-contract viewports, marker-based doc-surface gate, sibling-render negative control | 1.5d | ✅ 2026-09-17 |
-| 02 | Registry + curator — `design.sources.yaml` + lint, `design-curator` at balanced-workhorse, robots.txt preflight, real pack from the two permitted galleries, planted-PNG ignore assertion | 1.5d | pending |
-| 03 | Taste loop — jury amended FOUR→N, one juror at high-judgment, pack-anchored BELOW-BAR, controlled owner blind score. **Carries the taste tripwire that gates phases 05–07** | 2d | pending |
+| 02 | Registry + curator — `design.sources.yaml` + lint, `design-curator` at balanced-workhorse, robots.txt preflight, real pack from the two permitted galleries, planted-PNG ignore assertion | 1.5d | ✅ 2026-09-27 |
+| 03 | Taste loop — jury amended FOUR→N, one juror at high-judgment, pack-anchored BELOW-BAR, controlled owner blind score. **Carries the taste tripwire that gates phases 05–07** | 2d | ✅ 2026-10-03 |
 | 04 | EXP-A1 — ADR-0070's paired harness in the new regime, prediction pre-registered, reference item present, zero writes into model-policy's sealed bundle | 0.5d | pending |
 | 05 | Live sources — shadcn + 21st.dev search wiring, `.mcp.json` under the shared-file protocol, per-run availability lines, COULD-NOT-SCAN as its own outcome | 1.5d | pending |
 | 06 | Rival spike — terms clearance recorded FIRST, one provider one fixture, version+request+schema receipted, offline self-containment check, no adapter before the receipt | 1d | pending |
@@ -31,6 +31,64 @@ depends-on: —
 | 08 | Governance + retro — packager refuses non-arc renders and absent provenance, spend caps, manual-drop door, all three sealed predictions settled | 1d | pending |
 
 ## Done-log
+
+**Phase 03 — CLOSED 2026-10-03.** REQ-05 validated. The taste tripwire does not fire.
+
+- **CI.** `arc-ci` run **37124758126**, head SHA `05b9d838` (the branch tip), read per JOB:
+  **19/19 green**. The run before it (`9da5c72d`) needed two reruns of Windows shard 1/12: one
+  58-minute hang with no log, then `net::ERR_NO_BUFFER_SPACE` on the runner; the third attempt
+  was green. Phase 03 suites: `design-jury.bats` (N=4/5/6 deals, the planted skip-one deviation
+  caught), `design-critique-pack.bats` 8, the S3/S4 cases in `design-composer-eyes.bats` and
+  `design-selfreview.bats`, and three new `design-render-session.bats` cases for case 3.
+- **Live demo.** S5 ran on `lexos-case-workspace-v3`: three arc variants and a fresh
+  plain-prompt control, N=5 with one pack reference, divergence call passed, `jury-check` 0
+  deviations. Owner blind score 2026-10-02 (receipt before unblind): best arc **66**, control
+  **51**, reference 45. Owner ruling 2026-10-03: best-of, continue. Critiques of variants b and c
+  ran on 2026-10-03 with the pack and both viewports: both PASS. The session opened every render
+  it carried a verdict on. `evidence/phase-03/s5-live-explore.md`.
+- **Found at the close.** S5 had run no critique: the renderer refused the critic, reading its
+  render of a page the composer had rendered as a crash-retry. ADR-1417 Amendment 1 admits
+  exactly the explore/critique recipe pair. Two attack rounds (18 + 10 findings), the pair
+  narrowed to one transport token, both orders pinned, LOW leftovers on the debt ledger.
+- **Triggers.** Single-gallery bias read: not fired. The variant-b split (owner 18, critic PASS,
+  two jurors top-two) is calibration input for later phases.
+- **Not proven live.** No live BELOW-BAR was raised, so the pack citation is proved by CI only;
+  the swapped-pack mutant needs a second gallery. Both rows are in `debt-ledger.md`.
+- **Evidence:** `initiatives/design/evidence/phase-03/` (manifest verified by `arc-evidence.sh`).
+- **Metrics.** Actual ~4 build days (09-27, 09-28, 09-29, 10-03, plus the in-person S5 run on
+  09-30 and the owner score on 10-02) against a 2d appetite. `amendments: 3` (`/arc-change`
+  2026-09-17 viewports moved in, 2026-09-27 slices + fresh control, 2026-09-27 gallery-bias
+  trigger) · ADR-1417 Amendment 1 · `reopened: n`.
+- **Carried forward.** `phase.closed`, its approval request and the two critique receipts go out
+  from the main clone (`SKIP WORKTREE_SPINE` here).
+
+**Phase 02 — CLOSED 2026-09-27.** REQ-04 validated, as amended to ≥1 active source.
+
+- **CI.** `arc-ci` run **36324180495**, head SHA `4a7f26b1`, confirmed equal to the tip, read per
+  JOB: **19/19 green**. The ubuntu-20 leg reconciles `declared 3847, executed 3847`, 0 failures.
+  Phase 02's own suites: `design-sources.bats` 17, `design-refpack.bats` 28, and the ADR-1420
+  curator cases in `design-composer-bash.bats` (48 in the file).
+- **Live demo.** Three curator runs built the `lexos-case-workspace` pack: 6 nicelydone screens
+  in `.claude/state/`, one `sources.md` row each, refusals exercised on an off source (lapa.ninja)
+  and an off-registry host (Dribbble) before any request. The session opened every image. Two
+  principles overstated a single frame: one row was removed, one was rewritten to what is visible.
+  `evidence/phase-02/live-demo-real-pack.md`.
+- **Adversarial passes.** Boundary: seven rounds across slices B and ADR-1420 before today, then a
+  whole-diff round and three split rounds on the fixed code. **Logic ran for the first time on
+  2026-09-27**, after ADR-0226 Amendment 3 (`ARC_LLM_REASONING=off`): 15 findings on the lint;
+  zero on robots and refpack, which the debt ledger records as weak evidence. Fixed today: DNS
+  rebinding in the real transport, unguarded verdict lookups, unscrubbed separators in two files,
+  a same-host redirect to another port, a 3.5-billion-step robots matcher, the id grammar gap
+  between lint and builder. Rejected with reasons or carried to `debt-ledger.md`.
+- **Gallery reality.** Six of eight candidate galleries failed on permission (robots 403, shared
+  CDNs, terms). REQ-04 was amended to one source by the owner, with a Phase 03 trigger for
+  single-gallery bias in PLAN's ledger.
+- **Evidence:** `initiatives/design/evidence/phase-02/` (manifest verified by `arc-evidence.sh`).
+- **Metrics.** Actual ~4 build days (09-18, 09-20, 09-26, 09-27) against a 1.5d appetite.
+  `amendments: 4` (`/arc-change` 2026-09-18, 2026-09-26 ×2, 2026-09-27) · ADR-1412 amended twice,
+  ADR-1419 and ADR-1420 new, ADR-0226 Amendment 3 · `reopened: n`.
+- **Carried forward.** `phase.closed` and its approval request go out from the main clone. The
+  single-gallery trigger is tested in Phase 03.
 
 **Phase 01 — CLOSED 2026-09-17.** REQ-02 and REQ-03 validated.
 
@@ -96,6 +154,14 @@ the engine lane recorded at 18 -> 6. A third round would be patching against the
 
 ## Appetite burn
 
+**Re-count 2026-10-03: 12 of 12.5 days (96%)**, same rule: the nine below plus 09-28, 09-29 and
+10-03. The taste tripwire did not fire (owner, 10-03), so Phases 04-08 continue; their 8d of
+appetite now sits past the cycle total, which the owner's 09-16 no-cut ruling already covers.
+
+**Re-count 2026-09-27: 9 of 12.5 days (72%)**, by the same rule (calendar days carrying lane
+commits): the five below plus 09-18, 09-20, 09-26 and 09-27. The owner's 09-16 no-cut ruling
+stands; the next gate is still the taste tripwire after Phase 03.
+
 **5 of 12.5 days used (40%)** — re-counted 2026-09-17 by the same rule as the 09-16 correction,
 calendar days carrying lane commits: 08-23, 08-24, 08-25, 09-16, 09-17. What is left is 7.5d
 against 9.5d of appetite for phases 02–08 plus Phase 01's remainder, so the cycle already runs
@@ -113,7 +179,7 @@ count and panel before comparing.
 
 ## Now
 
-**Position:** **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
+**Position (2026-10-03):** **Phases 00-03 are CLOSED; Phase 04 (EXP-A1) is next**. **Phase 04 opened 2026-10-04** via `/arc-change`: three slices (S1 seal + byte-flip control, S2 paired harness, S3 live run) in `phases/phase-04-spec.md`. Owner 2026-10-04: paid run approved, ADR-1416 session prediction kept., on the same branch and PR #292. Earlier position: **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
 (01 on 2026-09-17); **Phase 02 is open**, with Slice A in and Slice B's 14 red-first tests on the
 branch. Working mode
 set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-c16`, pushed
@@ -523,6 +589,71 @@ consumer projects — it carries the owner's approvals.
    - **CI on the r2 fixes** (run 36253802366) found two more: an old test fed an empty payload
      that is now unreadable, and the read, write and critic checks chose jq by `command -v`,
      so a broken jq failed a composer's Read open (the Bash check's BL-3 twin). Both fixed.
+   - **Merged 2026-09-26 as #289** (`3cb0c0cb`), run 36254900364 green 19/19 on the head.
+1a. **The curator — built, and the first real pack exists.** Working mode reset by the owner
+   2026-09-26: **every remaining phase on one branch `feat/arc-design-v2-c16-rest` (PR #292,
+   draft), pushed freely, merged ONCE when all phases are done; no local tests, CI only; ask
+   only when truly blocked.**
+   - [ADR-1420](../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md)
+     (owner "Hook-la scope"): the curator's Bash runs only `design-refpack.mjs`, its WebFetch
+     only an active registry host with a robots ALLOW, its reads only the registry,
+     `docs/design/` and its own `staged/`. Red-first on CI (run 36259855277), two attack rounds,
+     green 19/19 at `1e212582`; a staging attack round after that, fixed at `b43e1062`.
+   - `design-curator` landed through this PR as a reviewed diff citing ADR-0069, using the four
+     files `agent-scaffold.mjs --dry-run` computed, not a separate proposal branch.
+   - **Gallery assumption FIRED 2026-09-27** (PLAN ledger): Lapa Ninja blocks Claude, SaaSFrame's
+     images sit on a shared CDN. Owner: both `off`; `nicelydone`, `collectui` and then `saasui`
+     `active` (ADR-1412 amendment). collectui is a client-rendered app with no fetchable screen.
+   - Fixed on the way: a comments-only robots.txt read as UNREADABLE, content signals honoured,
+     `image/jpg` accepted, and `--stage` / `--staged` so the curator LOOKS before it writes and
+     the add is bound to the bytes it looked at.
+   - Evidence: [`evidence/phase-02/live-demo-real-pack.md`](evidence/phase-02/live-demo-real-pack.md).
+     The session opened every image; one principle overstated its screen and was removed. The
+     owner delegated his two-row principle reading to that image check (2026-09-27).
+   - **Session closed 2026-09-27 ~03:00 with two things unfinished.** (a) PR #292 is
+     `CONFLICTING` with main, so GitHub started NO CI run for `b43e1062` onward: merge
+     `origin/main` first (shared files: golden manifest, face contract, wiki), re-derive the
+     golden manifest on the merged tree, push, then read CI. (b) A curator run adding `saasui`
+     screens and re-adding the Dock row with a corrected principle was in flight at the close;
+     check `docs/design/refpacks/lexos-case-workspace/sources.md` (5 rows committed) for rows it
+     added, look at each new image, and commit them.
+   - **2026-09-27 (later): REQ-04 amended to ≥1 source.** saasui went off (screens on the
+     shared cdn.sanity.io; the owner declined widening ADR-1420's 64-byte query cap for its
+     proxy), screensdesign was born off (terms forbid scrapers), and no clean second source
+     was found. Owner chose the amendment via `/arc-change` (ADR-1412, PLAN ledger row + a new
+     single-gallery-bias trigger tested in Phase 03). The pack is 6 nicelydone screens.
+     Debt: `design-robots.mjs` prints its answer then exits 127 on Windows (libuv
+     `UV_HANDLE_CLOSING` assertion) — fail-closed, not a blocker.
+   - **Phase 02 CLOSED 2026-09-27** (done-log above), CI 19/19 at `4a7f26b1`.
+   - **Phase 03 opened 2026-09-27** via `/arc-change`: the coarse verification plan is now five slices
+     (S1 jury + deviation logger, S2 critic gets the pack, S3 composer reads the real pack, S4 owner
+     ritual as a mechanism, S5 the live run) in `phases/phase-03-spec.md`, plus two exit criteria
+     (fresh plain-prompt control, single-gallery-bias read). **Owner OK 2026-09-27: build S1-S4 without
+     stopping; ask before S5**, which carries the paid live runs and his in-person blind score.
+   - **Session stop 2026-09-28 ~00:40 (owner went to sleep). S1-S4 are BUILT; S5 not started.**
+     - Pushed and on PR #292: S1 (jury deal/check, design-jury-hj), S2 (critic pack + viewports),
+       S3 (composer reads the brief's pack), merge of main at `3974a3d9`. Red-first proven by
+       dispatch run 36340213760 (S2 5 red, S3 2 red, controls green). Head run 36340404593: 14 green,
+       4 red on portability's locale allowlist only (lines moved in design-critique.sh), 1 unread.
+     - **Local, NOT pushed:** `722b862c` S4 red-first tests, `56cc0190` S4 ritual (rubric frozen at
+       the deal, blind score once + note.logged, unblind refused before the score, --control,
+       catch-rate), `d94221d4` the portability allowlist fix.
+     - **Owed before the push:** the S4 two-surface attack (killed by low system memory, no result).
+       Run it on the local commits (`--since 3974a3d9`), fix, push once, read CI per job.
+       **Done 2026-09-29:** the boundary half's four findings (B1-B4) closed red-first at
+       `a3a927c3`/`04b31d3b`; the logic half skipped by the owner (debt-ledger row). Pushed once.
+     - **Then ask the owner before S5:** cost estimate for the live explore + plain-prompt control,
+       and a rubric/anchors draft at `docs/design/rubrics/` for him to approve before the deal.
+       **Done:** rubric approved 2026-09-30; S5 ran 2026-09-30 (3 variants + fresh control, jury 0
+       deviations); owner blind score 2026-10-02: best arc 66 vs control 51 (arc mean 49.3).
+       Owner ruling 2026-10-03: improvement exists, continue -- the taste tripwire does not fire.
+       Text evidence: [`evidence/phase-03/s5-live-explore.md`](evidence/phase-03/s5-live-explore.md).
+       **Next:** `/arc-phase-done 03 --lane design` against the DoD.
+     - Logic surface: runs only with `ARC_LLM_REASONING=off` and is shallow; S2 never produced a
+       result (debt-ledger). Two background jobs were reaped for memory; do not auto-restart them.
+   - **Resume here:** Phase 03, starting with `/arc-change` to refine its coarse spec into slices (there is no
+     jury runner today: N-item pack assembly, ranking collection and deviation logging all have
+     to be built). Phase 03's gate is the owner's blind 0-100 score, in person.
 2. ~~**Phase 02 Slice B.**~~ Done: the robots.txt preflight and the pack builder landed at
    `a0c0cfee`, two attack rounds closed at `77dc42bf` and `873fdab1`, and the refpack 14 are
    green. **PR #222 was merged by the owner 2026-09-26** at `1a8bf012` with 19/19 jobs green,

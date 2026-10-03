@@ -59,6 +59,11 @@ approves its own edits has verified nothing (ADR-0034).
 
 - the **route** under critique and its **rendered PNG** (`.claude/state/design/renders/design-critic/<slug>.png`)
 - its render meta (`<slug>.json`) — screenshot hash, viewport, determinism recipe
+- **begun with `--brief`**: one render per viewport the brief declares
+  (`<slug>--<WxH>.png`, meta alongside) instead of the single one, and the brief's **reference
+  pack** — the images under `.claude/state/design/refpacks/<brief>/` and their rows in
+  `docs/design/refpacks/<brief>/sources.md`. Read every render and the pack screens you will
+  cite. Judge **each viewport on its own**: a layout that holds at 1440 can fall apart at 390.
 - the **brief** if one exists, else `docs/templates/design-brief-template.md` for the shape
   of the four contracts. **No brief = judge against the four contracts as declared intent is
   missing** — say plainly that intent was undeclared, and critique only what is objectively
@@ -114,6 +119,13 @@ the four contracts were written to prevent:
 - **or to Contract B (art direction)** — the feel words are a promise the page either keeps or
   does not. A brief promising *confident* on a page that whispers is a real miss.
 
+**When the run was begun with `--brief`, every `BELOW-BAR` also cites the pack** (Phase 03,
+ADR-1405). The brief's reference pack is real shipped screens, each with an adaptable principle
+in `docs/design/refpacks/<brief>/sources.md`. Name the screen the page falls short of as
+`pack:<sha16>` — the first 16 hex of that row's sha256 — on the finding's own line. Look at the
+pack screen before you cite it. The runner refuses a `BELOW-BAR` with no citation, or with one
+that is not in the pack: a bar nobody can point at is taste, not a bar.
+
 Say what is missing and where, in the same evidence-naming style as every other class. Good
 `BELOW-BAR` findings sound like: *the page has no focal point — nothing on it is bigger, darker
 or more deliberate than anything else, so the eye lands nowhere and the primary action carries
@@ -151,7 +163,7 @@ Write **one** artifact to the path `begin` printed:
 ## Findings
 
 - VIOLATION: <what is wrong> — <where on the page> — breaks <contract/principle>
-- BELOW-BAR: <what is not good enough> — <where> — <against the Reference bar / which feel word>
+- BELOW-BAR: <what is not good enough> — <where> — <against the Reference bar / which feel word> — pack:<sha16>
 - WEAKNESS: <what is weak> — <where> — <why it matters>
 - POLISH: <what could be better> — <where>
 
@@ -165,6 +177,12 @@ runner counts declared findings to compute PASS/FAIL, and **PASS now requires ze
 two**. Never write the bare word at the start of a list item unless it IS a finding of that
 class. Write `BELOW-BAR` exactly, hyphenated and upper-case; a different spelling is invisible
 to the runner and your finding will not reach the verdict.
+
+**Begun with `--brief`, the artifact has one `## Viewport <WxH>` heading per rendered viewport**
+(for example `## Viewport 390x844`, exactly that shape, on its own line), each followed by that
+viewport's own findings. The runner counts findings across every section, and a declared viewport
+with no section cannot PASS: an unjudged render is not a clean one. Say plainly when a viewport has
+nothing to report rather than leaving its section out.
 
 Zero findings is a legitimate result on a genuinely clean surface. Say so rather than
 manufacturing a POLISH to look thorough — and equally, do not manufacture a `BELOW-BAR` to look

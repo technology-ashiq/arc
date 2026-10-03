@@ -39,10 +39,13 @@
 // Usage:  design-refpack.mjs --brief <id> --source <registry id> --url <screen url>
 //           --principle <text> --avoid <text>
 //           [--registry <path>] [--robots-file <path> | --robots-status <n>] [--fixture <path>]
+//         design-refpack.mjs --brief <id> --source <id> --url <url> --stage 1   (fetch for viewing only; no row)
+//         design-refpack.mjs --check-browse <url> [--registry <path>] [--robots-file <path> | --robots-status <n>]
+//           (may a design-curator WebFetch this page -- ADR-1420; see checkBrowse)
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
-import { appendFileSync, existsSync, linkSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -55,9 +58,11 @@ const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 // Pass the grammar and still break mkdir on the Windows leg (lanes.md, same list).
 const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
-const IMAGE_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/avif": "avif", "image/gif": "gif" };
+// "image/jpg" is non-standard, and real CDNs send it (nicelydone, Phase 02 real build); the magic
+// bytes below still decide whether the body IS a jpeg.
+const IMAGE_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/avif": "avif", "image/gif": "gif" };
 const MAX_HOPS = 3;
-const SEAMS = ["--registry", "--robots-file", "--robots-status", "--fixture"];
+const SEAMS = ["--registry", "--robots-file", "--robots-status", "--fixture", "--redirect"];
 
 function fail(code, msg) {
   console.error(`design-refpack: ${msg}`);
@@ -65,7 +70,7 @@ function fail(code, msg) {
 }
 
 function parseArgs(argv) {
-  const known = new Set(["--brief", "--source", "--url", "--principle", "--avoid", ...SEAMS]);
+  const known = new Set(["--brief", "--source", "--url", "--principle", "--avoid", "--stage", "--staged", ...SEAMS]);
   const opts = {};
   for (let i = 0; i < argv.length; i += 2) {
     const k = argv[i];
@@ -80,7 +85,7 @@ function parseArgs(argv) {
 // Remote text reaches the logs (a rule line, a content-type, an error message). One line, one
 // field: no tab, no line break, no control character can forge a row.
 function field(v) {
-  return String(v).replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+  return String(v).replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g, " ").trim();
 }
 
 // One markdown table cell: a pipe or a line break inside a principle must not become a column.
@@ -102,6 +107,12 @@ const MAGIC = {
   webp: (b) => b.length > 12 && b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP",
   avif: (b) => b.length > 12 && b.toString("latin1", 4, 8) === "ftyp" && /^avi[fs]$/.test(b.toString("latin1", 8, 12)),
 };
+
+// A port or userinfo on ANY hop, not only the first: hostAllowed reads the hostname alone, so a redirect to the same
+// host on another port passed every hop's check (phase-02 attack G3 B1).
+function portOrUser(u) {
+  return u.port || u.username || u.password ? "carries a port or userinfo; the registry binds hosts" : null;
+}
 
 function validId(v) {
   return ID.test(v) && !RESERVED.test(v);
@@ -133,15 +144,117 @@ function hostAllowed(hostname, hosts) {
   return hosts.some((d) => h === d || h.endsWith("." + d));
 }
 
+// --check-browse <url>: may a design-curator WebFetch this page (ADR-1420)? The curator browses a
+// gallery to choose screens, and a plain WebFetch never passes the preflight the image fetch does,
+// so the Bash boundary's hook asks this before a curator's WebFetch runs. The same registry rules
+// as a pack fetch, applied to ANY eligible row: https only, a host of an active, fetchable row
+// whose allowed_use carries reference-pack, and a robots ALLOW for this exact URL. Every answer
+// is appended to .claude/state/design/curator-browse.log: a refusal not written down is a silent
+// skip. The whole check answers inside 40 s, or refuses: a hook that times out is read as allow.
+// Exit: 0 ALLOW | 1 usage | 2 registry or host refusal | 3 DISALLOW | 4 UNREADABLE.
+//
+// Attack r1 (ADR-1420) shaped four of its rules:
+// - robots is asked for EVERY token the fetch may be judged under: arc's ClaudeBot and Claude-User,
+//   the token the harness's WebFetch answers to. A site that disallows the fetcher while allowing
+//   `*` must not be read as permission (B3). Every token must ALLOW.
+// - the page is probed once without following redirects. WebFetch follows a same-host redirect on
+//   its own, so a redirect is refused and its target named: the curator asks for that URL, and it
+//   is checked in its own right (B4).
+// - a port or userinfo in the URL is refused: the registry binds hosts, not whatever listens on
+//   another port of one (B9).
+// - only the verdict ALLOW exits 0. Any verdict this file does not know is UNREADABLE (B2).
+const BROWSE_DEADLINE_MS = 40000;
+const BROWSE_UAS = [DEFAULT_UA, "Claude-User"];
+async function checkBrowse(argv) {
+  const logPath = join(ROOT, ".claude", "state", "design", "curator-browse.log");
+  let url = null;
+  let via = "network";
+  const answer = (code, verdict, reason) => {
+    const exitCode = verdict === "ALLOW" && code === 0 ? 0 : (code === 0 || code == null ? EXIT.UNREADABLE : code);
+    try {
+      mkdirSync(dirname(logPath), { recursive: true });
+      appendFileSync(logPath, `${new Date().toISOString()}\t${verdict}\t${via}\t${url ? field(shown(url)) : "-"}\t${field(reason)}\n`);
+    } catch { /* the refusal still stands; an unwritable log never turns one into an allow */ }
+    if (exitCode !== 0) console.error(`design-refpack: ${verdict} -- ${field(reason)}`);
+    process.exit(exitCode);
+  };
+  setTimeout(() => answer(EXIT.UNREADABLE, "UNREADABLE", `the preflight did not answer within ${BROWSE_DEADLINE_MS / 1000} s; permission unknown`), BROWSE_DEADLINE_MS);
+  try {
+    const known = new Set(["--check-browse", "--registry", "--robots-file", "--robots-status"]);
+    const o = {};
+    for (let i = 0; i < argv.length; i += 2) {
+      const k = argv[i];
+      if (!known.has(k)) answer(1, "USAGE", `unknown argument '${k}'`);
+      if (i + 1 >= argv.length || argv[i + 1] === "") answer(1, "USAGE", `${k} needs a value`);
+      if (k in o) answer(1, "USAGE", `${k} given twice`);
+      o[k] = argv[i + 1];
+    }
+    const seamsUsed = ["--registry", "--robots-file", "--robots-status"].filter((k) => o[k] != null);
+    if (seamsUsed.length && process.env.ARC_DESIGN_OFFLINE !== "1") answer(1, "USAGE", `${seamsUsed.join(", ")}: test seams; set ARC_DESIGN_OFFLINE=1`);
+    if (o["--robots-status"] != null && !/^[1-5][0-9][0-9]$/.test(o["--robots-status"])) answer(1, "USAGE", "--robots-status must be an HTTP status");
+    const fake = o["--robots-file"] != null || o["--robots-status"] != null;
+    if (fake) via = "fixture";
+    url = parseHttpUrl(o["--check-browse"]);
+    if (!url) answer(1, "USAGE", "--check-browse needs an http(s) URL with a host");
+    if (url.protocol !== "https:") answer(2, "REFUSED", "a curator fetches over https only");
+    if (url.port || url.username || url.password) answer(2, "REFUSED", "a curator's URL carries no port and no userinfo; the registry binds hosts");
+    const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
+    const eligible = sources.filter((s) => s && String(s.status) === "active" && String(s.access) === "fetch"
+      && asList(s.allowed_use).includes("reference-pack"));
+    const hostsOf = (s) => asList(s.hosts).map((h) => h.toLowerCase()).filter((h) => HOST.test(h));
+    const match = eligible.filter((s) => hostsOf(s).length > 0 && hostAllowed(url.hostname, hostsOf(s)));
+    if (match.length === 0) answer(2, "REFUSED", `${url.hostname} is not a host of an active registry row whose allowed_use carries reference-pack`);
+    const allHosts = match.flatMap(hostsOf);
+    const guard = (u) => portOrUser(u) ?? (hostAllowed(u.hostname, allHosts) ? null : "is not a registry host");
+    for (const ua of BROWSE_UAS) {
+      const transport = fake
+        ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null })
+        : realTransport({ ua });
+      const d = await preflight({ url, ua, transport, guard });
+      if (d.verdict !== "ALLOW") answer(Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE, String(d.verdict), `as ${ua}: ${d.reason}`);
+    }
+    const probe = fake
+      ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null })
+      : realTransport({ ua: "Claude-User" });
+    let page;
+    try { page = await probe.get(url.href, { maxBytes: 64 * 1024, truncate: true }); } catch (e) {
+      answer(EXIT.UNREADABLE, "UNREADABLE", `the page could not be reached (${e && e.message ? e.message : "transport error"})`);
+    }
+    // A status that is missing or not an HTTP number is not "no redirect" (attack r2, B3).
+    const s = Number(page && page.status);
+    if (!Number.isInteger(s) || s < 100 || s > 599) answer(EXIT.UNREADABLE, "UNREADABLE", "the page probe returned no HTTP status");
+    if (s >= 300 && s < 400) {
+      let to = "an unreadable location";
+      try { to = field(shown(new URL(page.location, url.href))); } catch { /* named as unreadable */ }
+      answer(2, "REFUSED", `the page redirects (${s}) to ${to}; ask for that URL, and it is checked in its own right`);
+    }
+    answer(0, "ALLOW", `every token (${BROWSE_UAS.join(", ")}) allowed, and the page does not redirect`);
+  } catch (e) {
+    answer(EXIT.UNREADABLE, "UNREADABLE", `the check failed (${e && e.message ? e.message : "error"}); permission unknown`);
+  }
+}
+
 async function main(argv) {
+  if (argv[0] === "--check-browse") return checkBrowse(argv);
   const o = parseArgs(argv);
   for (const k of ["--brief", "--source", "--url"]) if (!o[k]) fail(1, `${k} is required`);
   const brief = o["--brief"];
+  // --stage 1: fetch for viewing, write no row (the curator looks before it writes a principle).
+  if (o["--stage"] != null && o["--stage"] !== "1") fail(1, "--stage takes 1");
+  const stage = o["--stage"] === "1";
+  if (stage && (o["--principle"] != null || o["--avoid"] != null)) fail(1, "a call is a --stage OR an add: a staged screen carries no principle yet");
+  // --staged <16 hex>: the add is bound to the bytes the curator looked at. A host that serves
+  // one image to the stage and another to the add is refused, not recorded under a principle
+  // written about the first (staging attack, B8).
+  if (o["--staged"] != null && (stage || !/^[0-9a-f]{16}$/.test(o["--staged"]))) fail(1, "--staged takes the 16-hex sha prefix a --stage printed, on an add only");
   const id = o["--source"];
   if (!validId(brief)) fail(1, `--brief must match ${ID} and not be a reserved device name, got '${field(brief)}'`);
   if (!validId(id)) fail(1, `--source must match ${ID} and not be a reserved device name, got '${field(id)}'`);
   const url = parseHttpUrl(o["--url"]);
   if (!url) fail(1, `--url must be an http(s) URL with a host, got '${field(o["--url"])}'`);
+  // The registry binds hosts, not whatever listens on another port of one (ADR-1420 r2 B4, the
+  // pack-path twin of --check-browse's rule).
+  if (url.port || url.username || url.password) fail(2, "refused: a pack URL carries no port and no userinfo; the registry binds hosts");
   if (o["--robots-status"] != null && !/^[1-5][0-9][0-9]$/.test(o["--robots-status"])) fail(1, "--robots-status must be an HTTP status");
   const seamsUsed = SEAMS.filter((k) => o[k] != null);
   if (seamsUsed.length && process.env.ARC_DESIGN_OFFLINE !== "1") {
@@ -166,13 +279,13 @@ async function main(argv) {
   if (String(src.access) !== "fetch") fail(2, `refused: source '${id}' has access: ${field(src.access)}; this builder only fetches`);
 
   // 2. host binding. A scratch registry may omit hosts; the real one may not.
-  const fake = ["--robots-file", "--robots-status", "--fixture"].some((k) => o[k] != null);
+  const fake = ["--robots-file", "--robots-status", "--fixture", "--redirect"].some((k) => o[k] != null);
   const hosts = src.hosts === undefined ? null : asList(src.hosts).map((h) => h.toLowerCase());
   if (hosts !== null && (hosts.length === 0 || !hosts.every((h) => HOST.test(h)))) {
     fail(2, `refused: source '${id}' has a hosts list that is empty or not bare host names`);
   }
   if (hosts === null && !fake) fail(2, `refused: source '${id}' names no hosts, so a URL cannot be bound to it; the owner adds hosts to its registry row`);
-  const outsideHosts = (u) => (hosts !== null && !hostAllowed(u.hostname, hosts) ? `is not one of source '${id}' hosts [${hosts.join(", ")}]` : null);
+  const outsideHosts = (u) => portOrUser(u) ?? (hosts !== null && !hostAllowed(u.hostname, hosts) ? `is not one of source '${id}' hosts [${hosts.join(", ")}]` : null);
   const bind = (u) => {
     const why = outsideHosts(u);
     if (why) fail(2, `refused: ${u.hostname} ${why}`);
@@ -181,7 +294,7 @@ async function main(argv) {
 
   // Every attempt is written BEFORE it is made, so a crash mid-request still counts.
   const inner = fake
-    ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null, fixture: o["--fixture"] ?? null })
+    ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null, fixture: o["--fixture"] ?? null, redirect: o["--redirect"] ?? null })
     : realTransport({ ua: DEFAULT_UA });
   const via = fake ? "fixture" : "network";
   mkdirSync(stateDir, { recursive: true });
@@ -200,16 +313,17 @@ async function main(argv) {
   const check = async (u) => {
     const d = await preflight({ url: u, ua: DEFAULT_UA, transport, guard: outsideHosts });
     record(u, d.verdict, d.reason);
-    if (d.verdict !== "ALLOW") fail(EXIT[d.verdict], `${d.verdict} ${field(shown(u))} -- ${field(d.reason)}`);
+    if (d.verdict !== "ALLOW") fail(Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE, `${d.verdict} ${field(shown(u))} -- ${field(d.reason)}`);
   };
   await check(url);
 
   // 4. a row without a principle is not evidence -- judged on the text that would be written,
-  // so a principle of control characters alone is empty (attack r2 B7).
+  // so a principle of control characters alone is empty (attack r2 B7). A staging call writes no
+  // row, so it carries none: its only product is an image the curator can look at.
   const principle = field(o["--principle"] || "");
   const avoid = field(o["--avoid"] || "");
-  if (!principle) fail(1, "--principle is required: a row with no adaptable principle is not evidence");
-  if (!avoid) fail(1, "--avoid is required: every row names what not to copy");
+  if (!stage && !principle) fail(1, "--principle is required: a row with no adaptable principle is not evidence");
+  if (!stage && !avoid) fail(1, "--avoid is required: every row names what not to copy");
 
   // 5. fetch, following redirects by hand; every hop is bound and preflighted again.
   let current = url;
@@ -243,6 +357,25 @@ async function main(argv) {
     fail(5, `the screen was not cached: ${field(bad)}`);
   }
   const sha = createHash("sha256").update(res.body).digest("hex");
+  if (stage) {
+    // Staged for viewing only: a separate directory the curator may Read, no provenance row, no
+    // commit mark. The add that follows fetches again and passes every check again.
+    const stagedDir = join(stateDir, "staged");
+    const staged = join(stagedDir, `${id}-${sha.slice(0, 16)}.${ext}`);
+    if (!resolve(staged).startsWith(resolve(stagedDir) + sep)) fail(1, `refused: the staged path left the staging directory: ${staged}`);
+    mkdirSync(stagedDir, { recursive: true });
+    // Whole or not at all: a private temp name, then a rename, so a reader never opens a
+    // half-written file under a name that promises its sha (staging attack, B9).
+    const tmp = `${staged}.${process.pid}.${Date.now()}.tmp`;
+    writeFileSync(tmp, res.body);
+    try { renameSync(tmp, staged); } catch (e) { try { unlinkSync(tmp); } catch { /* gone */ } fail(5, `the screen could not be staged: ${field(e.message)}`); }
+    console.log(`staged: ${relative(ROOT, staged).split("\\").join("/")} (sha256 ${sha}) -- Read it, then add it with --principle, --avoid and --staged ${sha.slice(0, 16)}`);
+    process.exit(0);
+  }
+  if (o["--staged"] != null && sha.slice(0, 16) !== o["--staged"]) {
+    record(current, "FETCH-FAILED", "the screen changed since it was staged");
+    fail(5, `refused: the screen fetched now (sha ${sha.slice(0, 16)}) is not the one staged (${o["--staged"]}); stage it again and look again`);
+  }
   const image = join(stateDir, `${id}-${sha.slice(0, 16)}.${ext}`);
   if (!resolve(image).startsWith(resolve(stateDir) + sep)) fail(1, `refused: the image path left the pack directory: ${image}`);
   // The path is content-addressed, so the same screen twice lands on the same file. Only an
@@ -278,11 +411,14 @@ async function main(argv) {
   }
   if (isTree) {
     let marked = false;
-    for (let attempt = 0; attempt < 2 && !marked; attempt++) {
+    // Three attempts with a pause: another git holding .git/index.lock fails an add at once, and two adds
+    // back to back both lost to it (phase-02 attack G3 B3).
+    for (let attempt = 0; attempt < 3 && !marked; attempt++) {
+      if (attempt) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250 * attempt);
       const r = spawnSync("git", ["-C", ROOT, "add", "-N", "--", rel], { encoding: "utf8" });
       marked = !r.error && r.status === 0;
     }
-    if (!marked) fail(6, `${rel} was written but could not be marked for commit (git add -N failed twice); add it by hand before the pack is used`);
+    if (!marked) fail(6, `${rel} was written but could not be marked for commit (git add -N failed three times); add it by hand before the pack is used`);
   }
 
   console.log(`added ${field(shown(current))} from ${id} -> ${relative(ROOT, image).split("\\").join("/")} (sha256 ${sha})`);

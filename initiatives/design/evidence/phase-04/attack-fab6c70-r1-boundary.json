@@ -1,0 +1,104 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-expa1.mjs:152",
+      "breaking_input": "Pairs.json from a 2nd `pair` call after a crash, or a stale variant-<to>/ directory holding only a thesis.txt: `pair` writes thesis.txt into variant-<to> BEFORE the pairs.json write; if the pairs.json write fails or the process dies, a thesis copy exists with no record. Re-run with a different --from is refused only by hash mismatch, but a re-run with the same from succeeds and pushes a duplicate-free record, while an interrupted run leaves variant-<to>/thesis.txt that pair-guard never covers (no pairs.json -> no-op).",
+      "why": "The thesis copy and the pairs record are two non-atomic writes. pairs.json is written with a truncating writeFileSync (non-exclusive, check-then-write via existsSync/loadJson), so two concurrent `pair` invocations read the same pairs.json and the last writer silently drops the other's pair.",
+      "fix": "Write pairs.json atomically (temp file + rename) under an exclusive claim (mkdir lock) taken before the thesis copy, and re-read pairs.json after taking the lock.",
+      "twin_of": "Check-then-create with a truncating write -> create exclusively (`wx`) and append; never exists()-then-write."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-expa1.mjs:128",
+      "breaking_input": "seal run with state dir marker absent but composer armed under a different spelling, e.g. `.claude/state/design/composer-session--ex1--variant-a` exists as a DIRECTORY or the check is raced: a composer arms between the `readdirSync(state)` scan and the `wx` write. Also: variant-<x>/index.html check uses existsSync, which follows symlinks and treats a dangling symlink as absent.",
+      "why": "The seal's 'before any composer' guarantee is check-then-write with no claim; the shared state (seal file) is written at the end after multiple checks. A page placed as a dangling symlink named index.html passes the check, and a composer arming right after is not blocked since pair-guard is a no-op without pairs.json.",
+      "fix": "Use lstat-based checks (lstatSync, treat any entry as present), and make `compose` itself refuse for an explore with a seal-capable record unless the seal predates the marker; claim with an atomic mkdir before the checks.",
+      "twin_of": "An exclusive write at the end of a job whose middle already wrote shared state -> claim first (an atomic mkdir after every check), then write."
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-explore.sh:703",
+      "breaking_input": "An EXP-A1 explore where `pairs.json` is deleted (or never created) before `compose ex1 --variant d`: the guard is `[ -f \"$EX/pairs.json\" ]` and pair-guard itself returns if the file is absent.",
+      "why": "The whole seal/thesis protection is opt-in by the presence of an unsigned, mutable file. Deleting pairs.json (or a symlink to a nonexistent file via -f false) disables the bundle-tamper check and the thesis check, and compose arms with a moved thesis. The spec says compose refuses for an EXP-A1 explore until a seal exists; the code never refuses on a missing pairs.json when a seal exists.",
+      "fix": "If a seal-<id>.json exists, pair-guard must require pairs.json and fail when it is absent; the shell must call pair-guard whenever a seal exists, not only when pairs.json exists.",
+      "twin_of": "An absent field read as \"some other value\" and allowed -> an allow list, never a catch-all exit 0."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:70",
+      "breaking_input": "--root given with a trailing-flag-looking value or id such as `con`, `nul`, `aux`, `com1` (matches ID grammar `[a-z0-9-]+`); also an id of `-` or `--` is not matched but `-x` passes and reaches `join(root,...)`.",
+      "why": "ID grammar has no reserved-device-name half: `--id con` becomes docs/design/explore/con and seal-con.json, which breaks mkdir/writes on the Windows CI leg only. Also a leading '-' is permitted.",
+      "fix": "Reject Windows reserved names (con, prn, aux, nul, com0-9, lpt0-9) and require a leading [a-z]; cap length at 64.",
+      "twin_of": "A name grammar copied without its reserved-word half -> a name that becomes a path carries both halves of the grammar, everywhere it is accepted."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:149",
+      "breaking_input": "variant-<to> is a symlink (or its parent is) pointing outside the explore dir, e.g. docs/design/explore/ex1/variant-d -> /some/other/dir; `existsSync(join(toDir,\"index.html\"))` and `mkdirSync(toDir,{recursive:true})` follow it, then `writeFileSync(toThesis, thesis)` writes through the link.",
+      "why": "Only the final thesis.txt is lstat-checked (readRegular on the source and on an existing destination); the destination directory and the explore dir itself are never checked for being links or contained under root, so the copy writes outside the explore tree. Also `ex` itself and `--root` are never realpath-contained.",
+      "fix": "lstat variant-<to> and the explore dir; refuse links; realpath-contain toDir under root/docs/design/explore/<id>; write the thesis with flag wx or after an lstat of the destination file.",
+      "twin_of": "An id validated on one argument and used raw from another source -> validate every value at the point it becomes a path or a log field, and assert containment."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:186",
+      "breaking_input": "unblind.json rows containing two rows with source `variant-a` (a duplicate), or `ub.scored` absent so Date.parse(undefined) is NaN.",
+      "why": "scoreOf uses `.find()` and takes the first of duplicate rows, so a duplicated row with a different score is silently ignored. Also the report never counts matches, and the pair's two sides are not checked to resolve to different rows.",
+      "fix": "Filter rows by source; require exactly one match, else refuse.",
+      "twin_of": "`find()` took the first of duplicate rows -> count matches; exactly one or refuse."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:183",
+      "breaking_input": "pairs.json hand-edited so a pair has fromArm == toArm (both high-judgment) or an arm outside TIERS; or pairs.pairs holds a pair whose from/to is not a single letter.",
+      "why": "The report trusts pairs.json: `s = {[fromArm]: .., [toArm]: ..}` with fromArm==toArm collapses to one key, leaving s[\"balanced-workhorse\"] undefined, so comparisons are against undefined; hj gets a number, wh gets undefined, mean(wh) is NaN, gap NaN, `gain` false and prints 'NaN' rather than refusing. Also pair-guard never re-validates arms or letters read back from the file (validated on write, used raw on read for paths: `variant-${side}`).",
+      "fix": "Re-validate every pairs.json row on read (letters, TIERS membership, fromArm !== toArm, finite scores) and refuse otherwise; also re-verify that thesisSha256 is a 64-hex string.",
+      "twin_of": "An id validated on one argument and used raw from another source -> validate every value at the point it becomes a path or a log field, and assert containment."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:111",
+      "breaking_input": "A bundle file whose name contains a newline or a backslash on POSIX (e.g. `a\\\\b.png`), or two files that differ only by case on Windows/macOS.",
+      "why": "hashTree keys use `relative(...).split(sep).join('/')`: on POSIX a file literally named `a\\b` is fine, but on Windows the same name cannot exist, so the seal produced on one leg is not reproducible on the other; file names are also printed into the `fail` message after only control-char scrubbing, which keeps ` `/quotes, and diffs are concatenated with `, ` so a filename containing `, changed X` forges a difference line. Seal and check also read the whole file into memory with no size cap.",
+      "fix": "Reject bundle names outside a plain alphabet, refuse case-colliding names, and cap per-file and total size before reading.",
+      "twin_of": "A size guard written for one tool reached another through a new entry point -> a guard reused by a new caller is re-checked against that caller's real inputs."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-explore.sh:785",
+      "breaking_input": "`design-explore.sh pair ex1 --from a --to d ...` or `exp-a1 ex1 extra args`: the shell forwards `\"$@\"` after `--root ... --id ...`; a caller passing `--root /elsewhere` in the trailing args.",
+      "why": "parse() rejects a repeated flag (`--root given twice`), but the failure message and exit are only reached after the shell has already decided ROOT; there is no check that the shell's ROOT equals the node root. More importantly `$ID` is whatever the shell took as the second positional; if `seal ex1` is called with ID missing the shell may pass an empty --id, producing a confusing refusal rather than the shell's own validation.",
+      "fix": "Have the shell validate ID with the same grammar (including reserved names) before dispatch, and add a test passing a repeated --root.",
+      "twin_of": "A seam gate added to one CLI and not its sibling -> a fix to one entry point is checked in every entry point that shares the seam."
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:178",
+      "breaking_input": "unblind.json whose `scored` is a valid date but the seal file `sealed` field was edited, or the seal JSON rewritten wholesale (rec.files and rec.formula replaced) after the fact.",
+      "why": "The seal is a plain JSON file with no self-hash and no tie to git: `seal-check` and `exp-a1` trust rec.files, rec.sealed and rec.formula (minPairsWon/minMeanGap) read back from the same mutable file, so lowering minMeanGap or re-hashing a tampered bundle yields MET/match while every check passes. report() reads the thresholds from the file rather than the compiled FORMULA constant.",
+      "fix": "Compare rec.formula against the compiled FORMULA (and the prediction hash against ADR-1416's current hash) and require the seal file to be committed (git blob hash) before the run.",
+      "twin_of": "The licence was checked on one input and the fetch made on another -> every permission check binds to the exact value that is then used."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:101",
+      "breaking_input": "lstatSync(dir) succeeds for `--bundle` pointing at any directory (including the real bundle's parent) because --bundle is accepted verbatim with no containment, and `catch { fail(...) }` after lstat treats EACCES the same as missing.",
+      "why": "A permission error or any lstat failure is reported as 'is missing' (a failing probe read as one specific cause), and `--bundle` is an unrestricted path used for a verdict that prints 'match the seal'.",
+      "fix": "Distinguish ENOENT from other errors in messages; document --bundle as test-only and gate it behind an explicit env, since it lets a seal-check be run against a copy and read as the real bundle.",
+      "twin_of": "Test seams shipped ungated in a production CLI -> a fake transport needs an explicit env and stamps what it produced."
+    }
+  ]
+}

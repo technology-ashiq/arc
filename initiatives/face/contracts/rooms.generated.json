@@ -711,8 +711,10 @@
         ],
         "agents": [
           "design-critic",
+          "design-curator",
           "design-director",
           "design-jury",
+          "design-jury-hj",
           "design-reviewer (legacy)",
           "ui-composer"
         ],
@@ -736,7 +738,7 @@
           "1400"
         ]
       },
-      "itemCount": 23
+      "itemCount": 25
     },
     {
       "id": "toolbelt",
@@ -1192,6 +1194,7 @@
           "PLAN-face",
           "PLAN-face-v2",
           "PLAN-growth",
+          "PLAN-launch",
           "PLAN-leads",
           "PLAN-ledger",
           "PLAN-legal-pack",
@@ -1205,7 +1208,7 @@
           "PLAN-trader"
         ]
       },
-      "itemCount": 30
+      "itemCount": 31
     },
     {
       "id": "org",

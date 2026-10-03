@@ -25,6 +25,13 @@ const MODEL = pinnedModel() || process.env.ARC_LLM_MODEL || "";
 const TIMEOUT_RAW = process.env.ARC_LLM_TIMEOUT_MS;
 const TIMEOUT_MS = TIMEOUT_RAW === undefined || TIMEOUT_RAW === "" ? 60_000 : Number(TIMEOUT_RAW);
 const TIMEOUT_BAD = !(Number.isFinite(TIMEOUT_MS) && TIMEOUT_MS >= 1000 && TIMEOUT_MS <= 3_600_000);
+// Opt-in, env only: `off` sends `reasoning: {enabled: false}`. A reasoning model given a whole diff spent every
+// attempt thinking -- 11893 of 12000 tokens and 0 characters of answer in 411 s; off answered in 9 s (measured
+// 2026-09-27, ADR-0226 Amendment 3). Unset leaves the request byte-identical, so bench runs keep their shape. Any
+// other value is refused, never read as "on".
+const REASONING_RAW = process.env.ARC_LLM_REASONING;
+const REASONING_OFF = REASONING_RAW === "off";
+const REASONING_BAD = !(REASONING_RAW === undefined || REASONING_RAW === "" || REASONING_OFF);
 const MAX_TRANSPORT_RETRIES = 2;
 // An attempt ends this long before the RUN's deadline, so the driver says what happened and exits on its own terms
 // rather than being killed mid-line by arc-run's timeout at the same instant.
@@ -82,6 +89,7 @@ function fromSse(text) {
 
 await runDriver("generic-api", async ({ processName, input }) => {
   if (TIMEOUT_BAD) throw new Error(`ARC_LLM_TIMEOUT_MS=${JSON.stringify(TIMEOUT_RAW)} is not a per-attempt cap from 1000 to 3600000 ms -- refused, not used`);
+  if (REASONING_BAD) throw new Error(`ARC_LLM_REASONING=${JSON.stringify(REASONING_RAW)} is not "off" or unset -- refused, not used`);
   if (!ENDPOINT || !API_KEY || !MODEL) {
     // Named, not guessed. An absent endpoint is a setup fact the operator must see, and
     // "not configured" must never be reported as "the model answered badly".
@@ -111,10 +119,12 @@ await runDriver("generic-api", async ({ processName, input }) => {
       { role: "system", content: `You are executing the arc process \`${processName}\`. Reply with ONE JSON document and nothing else — no prose, no code fence.` },
       { role: "user", content: prompt },
     ],
+    ...(REASONING_OFF ? { reasoning: { enabled: false } } : {}),
     // Streamed to get past undici's 300 s headers cap (see fromSse); usage rides the last chunk.
     stream: true,
     stream_options: { include_usage: true },
   };
+  if (REASONING_OFF) process.stderr.write("generic-api: reasoning off (ARC_LLM_REASONING=off)\n");
 
   let last = null;
   const tries = MAX_TRANSPORT_RETRIES + 1;

@@ -26,7 +26,7 @@
 // Exit:   0 clean | 1 findings or unreadable. Never 2.
 
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -46,21 +46,32 @@ const USE = new Set(["reference-pack", "provenance", "link-only", "draft-variant
 const AVAILABILITY_BY_HAND = new Set(["unknown"]);
 
 const findings = [];
-const fail = (id, code, msg) => findings.push(`ERR  [${code}] ${id}: ${msg}`);
+// Every finding is one line. Its id and values are registry text, and a newline or a U+2028 in an id forged a clean
+// `ok` line under a real violation (phase-02 attack G1 B1, the twin of refpack's field()).
+const clean = (v) => String(v).replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g, " ");
+const fail = (id, code, msg) => findings.push(clean(`ERR  [${code}] ${id}: ${msg}`));
+// Every line this tool prints goes through clean(): a path, a parser error and an OS message carry remote or registry
+// text too, and the parser's error quoted the forged line whole (phase-02 CI, the twin of G1 B1).
+const out = (line) => console.log(clean(line));
 
 const target = process.argv[2] ? resolve(process.argv[2]) : join(ROOT, "design.sources.yaml");
+// A Windows device name as the file blocks a read on the console instead of failing (phase-02 attack G1 B2).
+if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i.test(basename(target))) {
+  out(`ERR  [registry-device-name] ${clean(target)} names a device, not a file`);
+  process.exit(1);
+}
 
 if (!existsSync(target)) {
   // A missing registry is a NAMED refusal. Returning 0 here would make "no registry" and "a
   // clean registry" the same observable, which is the exact shape that lets a gate certify its
   // own absence.
-  console.log(`ERR  [registry-missing] no registry at ${target} -- a permission surface that is absent is not a permission surface that is empty`);
+  out(`ERR  [registry-missing] no registry at ${target} -- a permission surface that is absent is not a permission surface that is empty`);
   process.exit(1);
 }
 
 let text;
 try { text = readFileSync(target, "utf8"); }
-catch (e) { console.log(`ERR  [registry-unreadable] ${target}: ${e.code || e.message}`); process.exit(1); }
+catch (e) { out(`ERR  [registry-unreadable] ${target}: ${e.code || e.message}`); process.exit(1); }
 
 // Parse through the repo's OWN frozen subset, never a general YAML library. Two readers of one
 // file drift the first time either is touched, and this file is consumed by the curator through
@@ -69,32 +80,44 @@ let parseYamlSubset;
 try {
   ({ parseYamlSubset } = await import(pathToFileURL(join(ROOT, ".claude", "scripts", "engine", "yaml-subset.mjs")).href));
 } catch (e) {
-  console.log(`ERR  [parser-missing] cannot load the repo yaml subset: ${e.message}`);
+  out(`ERR  [parser-missing] cannot load the repo yaml subset: ${e.message}`);
   process.exit(1);
 }
 
-const parsed = parseYamlSubset(text);
+// A throw is an unparseable registry too, reported by name, not left to a stack trace (phase-02
+// attack G1 B3).
+let parsed;
+try { parsed = parseYamlSubset(text); }
+catch (e) { out(`ERR  [registry-unparseable] ${target}: ${e && e.message ? e.message : "parser threw"}`); process.exit(1); }
 if (!parsed || parsed.ok === false) {
   const err = parsed && parsed.error ? JSON.stringify(parsed.error) : "unparseable";
-  console.log(`ERR  [registry-unparseable] ${target}: ${err}`);
+  out(`ERR  [registry-unparseable] ${target}: ${err}`);
   process.exit(1);
 }
 const doc = parsed.doc ?? parsed.value ?? parsed;
 
 const sources = doc && doc.sources;
 if (!Array.isArray(sources) || sources.length === 0) {
-  console.log("ERR  [registry-empty] the registry declares no sources -- an empty result set is the one thing a broken reader and a clean file agree on");
+  out("ERR  [registry-empty] the registry declares no sources -- an empty result set is the one thing a broken reader and a clean file agree on");
   process.exit(1);
 }
 
+// The id grammar the consumer enforces (design-refpack.mjs ID and RESERVED): an id the lint
+// accepts and the builder refuses is a registry row that can never be used (phase-02 attack G1 B1).
+const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 const seen = new Set();
 for (const s of sources) {
   const id = (s && s.id) || "<no id>";
 
   if (!s || typeof s !== "object") { fail(id, "entry-shape", "entry is not a mapping"); continue; }
   if (typeof s.id !== "string" || !s.id.trim()) fail(id, "id-missing", "every entry needs a string id");
-  if (seen.has(s.id)) fail(id, "id-duplicate", "two entries share this id -- the registry is keyed by it");
-  seen.add(s.id);
+  else if (!ID.test(s.id) || RESERVED.test(s.id)) fail(id, "id-grammar", "an id matches [a-z0-9][a-z0-9-]{0,63} and is not a Windows device name -- the pack builder refuses any other");
+  // Only a real id can collide: two entries that both lack one are two missing ids, not a duplicate (G1 L14).
+  if (typeof s.id === "string") {
+    if (seen.has(s.id)) fail(id, "id-duplicate", "two entries share this id -- the registry is keyed by it");
+    seen.add(s.id);
+  }
 
   // Arrays first, because every check after them reads a member.
   for (const [field, allowed] of [["kind", KIND], ["allowed_use", USE]]) {
@@ -105,6 +128,7 @@ for (const s of sources) {
     }
     if (v.length === 0) fail(id, `${field}-empty`, `${field} is an empty list, which says nothing`);
     for (const m of v) if (!allowed.has(m)) fail(id, `${field}-unknown`, `${field} carries "${m}" -- the vocabulary is ${[...allowed].join(" / ")}`);
+    if (new Set(v).size !== v.length) fail(id, `${field}-duplicate`, `${field} names a member twice -- a list of uses is a set`);
   }
 
   for (const [field, allowed] of [["access", ACCESS], ["auth", AUTH], ["status", STATUS]]) {
@@ -147,7 +171,8 @@ for (const s of sources) {
       fail(id, "hosts-not-array", "hosts must be a non-empty block sequence of host names");
     } else {
       for (const h of s.hosts) {
-        if (typeof h !== "string" || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(h)) {
+        // A dotted quad passes the label grammar, and an owner approves a host name, not an address (G1 L3).
+        if (typeof h !== "string" || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(h) || /\.[0-9]+$/.test(h)) {
           fail(id, "hosts-not-hostname", `hosts carries "${h}" -- a bare lower-case host name, no scheme, path or port`);
         }
       }
@@ -163,9 +188,9 @@ for (const s of sources) {
 }
 
 if (findings.length) {
-  for (const f of findings) console.log(f);
-  console.log(`design-sources-lint: ${findings.length} finding(s) in ${sources.length} source(s)`);
+  for (const f of findings) out(f);
+  out(`design-sources-lint: ${findings.length} finding(s) in ${sources.length} source(s)`);
   process.exit(1);
 }
-console.log(`design-sources-lint: ok -- ${sources.length} source(s), ${sources.filter((s) => s.status === "active").length} active`);
+out(`design-sources-lint: ok -- ${sources.length} source(s), ${sources.filter((s) => s.status === "active").length} active`);
 process.exit(0);

@@ -94,6 +94,29 @@ face Phase 06) -- but it runs on the final code, once, not on each draft.
 
 Changed: `.claude/commands/arc-attack.md` (the heading, "Where and when this runs", step 3).
 
+## Amendment 3 — 2026-09-27: a reasoning model may be told not to reason (owner choice)
+
+The logic surface never ran on design Phase 02. deepseek-v4-flash and glm-5.3-flash timed out at 420 s on every
+attempt, on a 1600-line diff and on a 378-line split alike, while a one-line request answered in 1–3 s. So the input
+size was not the cause. Measured on one 22 KB module (design lane, 2026-09-27):
+
+| request | result |
+|---|---|
+| as the driver sent it (no cap) | timeout at 430 s |
+| `reasoning.effort: low`, `max_tokens: 12000` | 411 s; 11893 of 12000 tokens were reasoning; **0 characters** of answer |
+| `reasoning.max_tokens: 3000`, fastest provider | 53 s; 12000 reasoning tokens; 0 characters (the budget was not honoured) |
+| `reasoning.enabled: false` | **9 s**; 1190 characters of answer |
+
+The provider ignored every soft limit. Only switching reasoning off produced an answer. **`generic-api` gains one
+opt-in, env-only knob: `ARC_LLM_REASONING=off` sends `reasoning: {enabled: false}`.** When it is unset, the request stays
+byte-identical, so bench trials through the same driver keep their shape. Any other value is refused before the
+endpoint is reached. The driver prints one line when the knob is on, so a run without reasoning never looks like
+one with it. The price is a shallower attacker: the logic surface trades depth of thought for an answer at all, and
+the boundary surface (claude-code) is unchanged.
+
+Changed: `.claude/scripts/engine/drivers/generic-api.mjs`, `tests/engine-driver-deadline.mjs` (section D),
+`tests/engine-driver-contract.bats`.
+
 ## Related
 
 ADR-0069 (a)(g) · ADR-0219 · ADR-0220 · ADR-0223 · ADR-0225 · ADR-1326 (the session door starts `arc-run`, so `/arc-attack` becomes a face button with no face code) · CLAUDE.md attacker and CI laws.
