@@ -582,6 +582,7 @@ is still not evidence of correctness.
 | 2026-09-16 | `adr-wired` | arc-face Cycle 15 | **no** | **missed true positive**: ADR-1316 was cited by no phase spec and absent from the index, and an index row is what the gate walks |
 | 2026-09-16 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `current-state-structure` · `verify-red` · `birth-rule(kickoff-lint)` | arc-face kickoff + every run cycle-long | **no** | n/a: silent runs |
 | 2026-10-02 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `current-state-structure` · `verify-red` · `birth-rule(kickoff-lint)` | arc-org Cycle 18 kickoff + every run cycle-long | **no** | n/a: silent runs, no promotion |
+| 2026-10-03 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `current-state-structure` · `verify-red` · `birth-rule(kickoff-lint)` | arc-org Cycle 19 kickoff + every run cycle-long | **no** | n/a: silent runs, no promotion |
 
 **No gate is promotable.** Promotion needs ≥ 3 clean runs with zero false positives, and this cycle's
 silence was not clean. Three gates stayed quiet over defects squarely in their domain, because every
