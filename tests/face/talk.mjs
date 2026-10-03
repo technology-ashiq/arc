@@ -9,6 +9,9 @@
 //      question comes back labelled general with no citations; an arc answer citing a receipt on the spine is verified;
 //      one citing an id off the spine is unverified; the provider got the owner's key and model id; the run is receipted.
 //   D  with no model added, a question the reader cannot reach says how to add one -- never a blank, never an error.
+//   T  Phase 11 (REQ-15): POST /api/models/test -- ok with seconds, a busy provider in plain words, the active model
+//      unmoved, a bad name or body refused with no provider call, each last test on GET and forgotten on remove.
+//   V  Phase 11: the voice choice -- the voice list, a saved voice gone falls back, the speed clamped, the test line.
 //   E  the face's own decisions (face/src/lib/talk.mjs): the label an answer shows, the voice loop, what is read aloud,
 //      where voice exists, what the add form sends; the client's labels are the door's, word for word.
 //
@@ -123,6 +126,29 @@ check("A: providerFault -- a receipt that could not be written is named with its
   && /receipt/.test(m.providerFault("status 429\narc-run: could not emit run.completed: x"))
   // A provider body quoting the phrase mid-line does not override its own 429 (attack d102d9c L6).
   && /busy/.test(m.providerFault("generic-api: status 429 body: see arc-run: could not emit run.completed: x")));
+
+// ── V: the voice choice (Phase 11, REQ-15) ──
+{
+  const Tv = await import(pathToFileURL(join(REPO, "face", "src", "lib", "talk.mjs")).href);
+  check("V: talk.mjs loaded its voice decisions (vacuous-pass guard)", ["voiceList", "voicePick", "voiceRate", "readVoiceChoice", "writeVoiceChoice", "testLine"].every((k) => typeof Tv[k] === "function"));
+  const list = Tv.voiceList([{ name: "Zira", lang: "en-US" }, { name: "Heera", lang: "en-IN", default: true }, { name: "Zira", lang: "en-US" }, { lang: "x" }, null]);
+  check("V: voiceList -- named voices once each, the browser's default first", list.map((v) => v.name).join(",") === "Heera,Zira", JSON.stringify(list));
+  check("V: voicePick -- a saved voice still installed is kept; one no longer installed falls back to the default (null)",
+    Tv.voicePick("Zira", list) === "Zira" && Tv.voicePick("Gone", list) === null && Tv.voicePick(null, list) === null);
+  check("V: voiceRate -- clamped to 0.75x..1.5x, and junk is the default 1x",
+    Tv.voiceRate(9) === 1.5 && Tv.voiceRate("0.1") === 0.75 && Tv.voiceRate("1.25") === 1.25 && Tv.voiceRate("fast") === 1 && Tv.voiceRate(null) === 1 && Tv.voiceRate("") === 1);
+  const store = new Map();
+  const mem = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+  Tv.writeVoiceChoice(mem, { name: "Heera", rate: 3 });
+  const back = Tv.readVoiceChoice(mem);
+  Tv.writeVoiceChoice(mem, { name: null, rate: 1 });
+  check("V: the choice round-trips through storage (rate clamped on the way), and choosing the default clears the name",
+    back.name === "Heera" && back.rate === 1.5 && Tv.readVoiceChoice(mem).name === null && Tv.readVoiceChoice(null).rate === 1, JSON.stringify(back));
+  check("V: testLine -- ok and fail name the seconds; anything malformed reads as not tested, never as a pass",
+    Tv.testLine({ ok: true, seconds: 3.4, why: null, at: "2026-10-03T18:02:42+05:30" }).text === "✓ answered in 3.4 s · 18:02"
+    && Tv.testLine({ ok: false, seconds: 0.8, why: "busy", at: "x" }).state === "fail"
+    && Tv.testLine({ ok: true }).state === "none" && Tv.testLine(null).state === "none" && Tv.testLine({ ok: "yes", seconds: 1 }).state === "none");
+}
 
 // ── E: the face's decisions ──
 const T = await import(pathToFileURL(join(REPO, "face", "src", "lib", "talk.mjs")).href);
@@ -280,6 +306,39 @@ try {
   check("C: deterministic first -- a question the reader reaches never calls the model", det.status === 200 && String(det.body.source).startsWith("deterministic") && llm.requests.length === calls, `requests=${llm.requests.length} before=${calls}`);
   const act = await post("/api/ask", { q: "approve the oldest one" });
   check("C: an action request is still refused by the reader, never handed to a model", act.status === 200 && /I read; I do not act/.test(unescapeDoorText(String(act.body.answer))) && llm.requests.length === calls);
+  // ── T: testing a model (Phase 11, REQ-15, ADR-1350 Amendment 1) ──
+  const before = llm.requests.length;
+  let t = await post("/api/models/test", { name: "fake" });
+  check("T: a healthy model tests ok, with the seconds it took, and the active model does not move",
+    t.status === 200 && t.body.ok === true && t.body.tested === "Fake" && typeof t.body.seconds === "number" && t.body.seconds >= 0 && t.body.why === null && t.body.active === "Fake",
+    JSON.stringify(t.body).slice(0, 300));
+  const sentProbe = llm.requests[before] ?? {};
+  check("T: the test asked the provider ONE fixed general question, on that model, with its key",
+    llm.requests.length === before + 1 && /2 \+ 2/.test(String(sentProbe.q)) && sentProbe.model === "fake/owner-model:free" && sentProbe.bearer === PLANTED,
+    JSON.stringify({ n: llm.requests.length - before, q: sentProbe.q, model: sentProbe.model }));
+  r = await post("/api/models/set", { op: "add", model: { name: "Busy", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/busy-model:free", key: PLANTED } });
+  t = r.status === 200 ? await post("/api/models/test", { name: "Busy" }) : r;
+  check("T: a busy provider tests as busy, in the owner's words, and the active model still does not move",
+    t.status === 200 && t.body.ok === false && /busy/.test(unescapeDoorText(String(t.body.why ?? ""))) && !/transcript|generic-api|attempt/.test(String(t.body.why ?? "")) && t.body.active === "Fake",
+    JSON.stringify(t.body).slice(0, 300));
+  r = await j("/api/models", { headers: H });
+  const row = (n) => (r.body.models ?? []).find((m) => m.name === n) ?? {};
+  check("T: GET /api/models shows each model's last test beside it -- ok with seconds, busy with why, untested as null",
+    r.status === 200 && row("Fake").lastTest?.ok === true && typeof row("Fake").lastTest?.seconds === "number" && typeof row("Fake").lastTest?.at === "string"
+    && row("Busy").lastTest?.ok === false && /busy/.test(unescapeDoorText(String(row("Busy").lastTest?.why ?? ""))) && row("OpenRouter free").lastTest === null,
+    JSON.stringify(r.body.models).slice(0, 400));
+  check("T: the face reads those rows -- ok, fail, and not tested yet",
+    T.modelsView(r.body).rows.map((x) => x.test.state).join(",") === "none,ok,fail", JSON.stringify(T.modelsView(r.body).rows.map((x) => x.test)));
+  const n0 = llm.requests.length;
+  t = await post("/api/models/test", { name: "ghost" });
+  const t2 = await post("/api/models/test", { name: "Fake", model: "x" });
+  check("T: a name not in the registry is refused (400 BAD_MODEL), and so is a body with another field (400 BAD_BODY), with no provider call",
+    t.status === 400 && t.body.error === "BAD_MODEL" && t2.status === 400 && t2.body.error === "BAD_BODY" && llm.requests.length === n0,
+    JSON.stringify([t.body, t2.body]).slice(0, 300));
+  r = await post("/api/models/set", { op: "remove", name: "Busy" });
+  r = r.status === 200 ? await post("/api/models/set", { op: "add", model: { name: "Busy", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/busy-model:free" } }) : r;
+  check("T: a removed model's test is forgotten -- added again, it reads untested",
+    r.status === 200 && ((r.body.models ?? []).find((m) => m.name === "Busy") ?? {}).lastTest === null, JSON.stringify(r.body.models).slice(0, 300));
   check("B: the planted key appears in NO door response (every body this suite read)", bodies.length >= 7 && bodies.every((b) => !b.includes(PLANTED)), `bodies=${bodies.length}`);
   const grep = (needle) => spawnSync("git", ["grep", "-l", "--untracked", "--no-exclude-standard", "-F", needle], { cwd: REPO, encoding: "utf8" });
   const g0 = grep(PLANTED);
@@ -299,6 +358,6 @@ try {
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // Exact, not a floor (attack c50172d B8): a check deleted from this file is a short run, never a clean one.
-const EXPECTED = 69;
+const EXPECTED = 82;
 if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
 process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);

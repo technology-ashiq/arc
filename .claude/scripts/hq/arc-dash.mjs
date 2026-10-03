@@ -855,7 +855,7 @@ export function judgeModelAnswer(stdout, stderr, ids, run = {}) {
 function apiModels(ctx) {
   const got = models.loadRegistry(ctx.repo);
   if (!got.ok) throw new DashError("MODELS_UNAVAILABLE", got.why);
-  return { mode: ctx.mode, ...models.publicView(got.reg) };
+  return { mode: ctx.mode, ...models.withTests(models.publicView(got.reg), testsOf(ctx)) };
 }
 
 function apiModelsChange(ctx, body) {
@@ -865,7 +865,52 @@ function apiModelsChange(ctx, body) {
   if (!step.ok) throw new DashError("BAD_MODEL", step.why);
   const saved = models.saveRegistry(got.path, step.reg);
   if (!saved.ok) throw new DashError("MODELS_UNAVAILABLE", saved.why);
-  return { mode: ctx.mode, ...models.publicView(step.reg) };
+  return { mode: ctx.mode, ...models.withTests(models.publicView(step.reg), testsOf(ctx)) };
+}
+
+// ---------- testing a model (Phase 11, REQ-15, ADR-1350 Amendment 1) ----------
+// Each model's last test lives in this door's memory for as long as it runs: never on disk, and never a key (a result
+// is ok, seconds, a plain cause and a time). Keyed by the context, so two doors in one process never share results.
+const MODEL_TESTS = new WeakMap();
+function testsOf(ctx) {
+  let m = MODEL_TESTS.get(ctx);
+  if (!m) { m = new Map(); MODEL_TESTS.set(ctx, m); }
+  return m;
+}
+
+// One fixed question, so a test measures the provider and not the question. It runs the same governed process as an
+// answer (receipted, naming the model), on the model asked for, and never moves the active model.
+// A general question, so a test passes exactly when a real general answer would: the same schema, the same labels.
+const PROBE = "What is 2 + 2? Answer in one word.";
+const TEST_TIMEOUT_MS = 60_000;
+
+async function apiModelsTest(ctx, body) {
+  if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some((k) => k !== "name") || typeof body.name !== "string")
+    throw new DashError("BAD_BODY", "a test is { name: \"<model name>\" }");
+  const got = models.loadRegistry(ctx.repo);
+  if (!got.ok) throw new DashError("MODELS_UNAVAILABLE", got.why);
+  const hit = models.findModel(got.reg, body.name);
+  if (!hit) throw new DashError("BAD_MODEL", `no model is named ${JSON.stringify(body.name.slice(0, 80))}`);
+  if (!existsSync(join(ctx.repo, "processes", "face-ask.process.yaml")))
+    throw new DashError("MODELS_UNAVAILABLE", "the face-ask process is not on this tree, so no model can be tested here");
+
+  const started = nowMs();
+  const res = await runTool(ctx, {
+    script: "engine/arc-run.mjs",
+    args: ["--process", "face-ask", "--driver", "generic-api", "--owner-model", hit.model, "--input", JSON.stringify({ q: PROBE, state: `MODE: ${ctx.mode} (a model test, no arc state)` })],
+  }, {
+    timeoutMs: TEST_TIMEOUT_MS, outputCap: 256 * 1024,
+    env: { ARC_LLM_ENDPOINT: models.endpointOf(hit.baseUrl), ARC_LLM_API_KEY: hit.key ?? "none", ...(ctx.mode === "sim" ? { ARC_SPINE_ROOT: ctx.root } : {}) },
+  });
+  const seconds = Math.round((nowMs() - started) / 100) / 10;
+  const result = res.timedOut
+    ? { ok: false, seconds, why: `No answer within ${TEST_TIMEOUT_MS / 1000} s. The provider is overloaded or unreachable: try again later, or pick another model.` }
+    : res.exit !== 0
+      ? { ok: false, seconds, why: models.providerFault(redactKey(String(res.stderr ?? ""), hit.key)) }
+      : { ok: true, seconds, why: null };
+  const tests = testsOf(ctx);
+  tests.set(hit.name.toLowerCase(), { ...result, at: formatIst(nowMs()) });
+  return { mode: ctx.mode, tested: hit.name, ...result, ...models.withTests(models.publicView(got.reg), tests) };
 }
 
 const ROUTES = Object.freeze([
@@ -906,6 +951,8 @@ const ROUTES = Object.freeze([
   // A file write outside the repo, not a spine write: the one door write that is neither a decision, an op nor a
   // session, named by ADR-1350 and held by the route fixture as its own row.
   { method: "POST", path: "/api/models/set", mutates: true, spineEffect: "none", handler: (ctx, url, tail, body) => apiModelsChange(ctx, body) },
+  // Phase 11 (REQ-15, ADR-1350 Amendment 1): one probe question to a named model, receipted like an answer.
+  { method: "POST", path: "/api/models/test", mutates: false, spineEffect: "receipt", proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiModelsTest(ctx, body) },
   { method: "POST", path: "/api/ask", mutates: false, spineEffect: "receipt", proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiAsk(ctx, body) },
   // Phase 05 (REQ-07, ADR-1339): the WORK door. `plan` runs an op's dry run, which writes nothing (the per-op fixture
   // holds the spine byte-identical across every plan); `apply` runs the owning lane's own CLI, which writes that

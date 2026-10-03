@@ -1055,7 +1055,8 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
   "hq-no-stage", "hq-mood",
   "pointer-enter", "pointer-unmount",
   "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
-  "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "door-no-settings", "healthy-no-exception",
+  "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "door-no-settings",
+  "hq-settings-menu", "hq-settings-test", "hq-settings-voice", "palette-settings", "healthy-no-exception",
   "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
   "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
 ]);
@@ -1251,6 +1252,32 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       const n = await count(P, "[data-hq-settings], [data-models-panel], [data-ask-settings]");
       record("door-no-settings", n === 0, `the door shows ${n} settings control(s)`);
     }, ["door-no-settings"]);
+    // Phase 11 (REQ-15, ADR-1350 Amendment 1): one Settings menu inside HQ -- Models and Voice -- and a model Test that
+    // reads ok and its seconds off the page. The harness's door holds one model, the fake provider, so a test passes.
+    await step(async () => {
+      await go(P, `#hq&${tokenPart}`);
+      const opened = (await inWorkroom(P)) && (await click(P, "[data-hq-settings]"));
+      const menu = opened && (await until(async () => (await count(P, "[data-models-panel] [data-settings-tab]")) === 2 && (await count(P, '[data-settings-section="models"]')) === 1, capMs));
+      record("hq-settings-menu", menu, opened ? "Settings opened without both sections (Models, Voice)" : "no visible [data-hq-settings] in the workroom");
+      const tested = menu && (await until(async () => (await count(P, "[data-model-test]")) > 0, capMs)) && (await click(P, "[data-model-test]"));
+      const line = () => val(P, "(function () { var e = document.querySelector('[data-test-line]'); return e ? e.getAttribute('data-test-line') + '|' + e.textContent : ''; })()");
+      const ok = tested && (await until(async () => /^ok\|.*answered in [0-9.]+ s/.test(String(await line())), 30000, 250));
+      record("hq-settings-test", ok, `the test line read ${JSON.stringify(String(await line()).slice(0, 160))}`);
+      const voice = menu && (await click(P, '[data-settings-tab="voice"]')) && (await until(async () => (await count(P, '[data-settings-section="voice"] [data-voice-switch]')) === 1, capMs));
+      record("hq-settings-voice", voice, "the Voice section did not open with its switch");
+      await press(P, ESCAPE);
+      await until(async () => (await count(P, "[data-models-panel]")) === 0, capMs);
+    }, ["hq-settings-menu", "hq-settings-test", "hq-settings-voice"]);
+    await step(async () => {
+      await val(P, "document.activeElement && document.activeElement.blur && document.activeElement.blur()");
+      await press(P, CTRL_K);
+      const pal = await until(async () => (await count(P, '[role="dialog"][aria-modal="true"]')) === 1, capMs);
+      await P.send("Input.insertText", { text: "Settings" });
+      const picked = pal && (await val(P, "(function () { var bs = document.querySelectorAll('[role=dialog] li button'); for (var i = 0; i < bs.length; i++) { var t = bs[i].querySelector('span'); if (t && t.textContent.trim() === 'Settings') { bs[i].click(); return true; } } return false; })()"));
+      const opened = picked === true && (await until(async () => (await count(P, "[data-models-panel]")) === 1, capMs));
+      record("palette-settings", opened, pal ? (picked === true ? "the palette's Settings opened no menu" : "the palette lists no Settings entry") : "Ctrl+K opened no palette in the workroom");
+      await press(P, ESCAPE);
+    }, ["palette-settings"]);
     record("healthy-no-exception", healthy.exceptions.length === 0, healthy.exceptions.slice(0, 3).join(" | "));
     await close(P);
 

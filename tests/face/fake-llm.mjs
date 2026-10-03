@@ -8,6 +8,7 @@
 //   a question naming "which gate"  -> lane arc, citing `citeId` (a receipt that IS on the spine the test hands the door)
 //   a question naming "who wrote"   -> lane arc, citing a well-formed id that is NOT on any spine (must show unverified)
 //   a question naming "rate limit"  -> HTTP 429, as a busy free provider answers
+//   a model id naming "busy"        -> HTTP 429 for any question (Phase 11: a model test sends one fixed question)
 //   anything else                   -> lane general, "fake: no script for this question"
 //
 // Every request is recorded (path, bearer, model, the question), so a test can assert what the door SENT -- the key
@@ -56,7 +57,7 @@ export function startFakeLlm({ port, citeId }) {
         res.end(JSON.stringify({ error: { message: "not a chat completion" } }));
         return;
       }
-      if (String(q ?? "").toLowerCase().includes("rate limit")) {
+      if (String(q ?? "").toLowerCase().includes("rate limit") || String(body.model ?? "").toLowerCase().includes("busy")) {
         res.writeHead(429, { "content-type": "application/json" });
         res.end(JSON.stringify({ error: { message: "Rate limit exceeded: free-models-per-min" } }));
         return;
