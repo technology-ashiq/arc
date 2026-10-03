@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-launch (Cycle 1, opened 2026-10-03)
-phase: 00
+phase: 01
 appetite: 18d
-burn: 0d
+burn: 1d
 blocked-on: —
 depends-on: —
 
@@ -15,8 +15,8 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Contracts + registry + lint + durable runner on fakes | 2.5d | ⏳ next |
-| 01 | Steel thread on `arc-sandbox` (day-3 kill inside) | 5d | ⏳ |
+| 00 | Contracts + registry + lint + durable runner on fakes | 2.5d | ✅ 2026-10-04 |
+| 01 | Steel thread on `arc-sandbox` (day-3 kill inside) | 5d | ⏳ next |
 | 02 | Money, test mode | 3d | ⏳ |
 | 03 | Trust + data minimum | 2d | ⏳ |
 | 04 | Recommendation + REQ-08 + trust runtime + wiring + drift + teardown | 2d | ⏳ |
@@ -24,26 +24,25 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
 
 ## Done-log
 
-(none yet)
+- **Phase 00 ✅ 2026-10-04** — 85-slot catalog (33 core · 35 required · 17 optional, copied row for row) + 35 provider
+  rows (all candidate, Stripe blocked) + `arc-sandbox` profile; `launch-lint` fails from birth and its self-test refuses
+  13/13 mutants after a clean baseline; `launch-coverage` derives every count; the durable runner (lock, child worker
+  killed at the slot timeout, resource tags, orphan-attempt receipt) and the `ctx` trust boundary. PR #320 (`9827782d`),
+  CI run 37146455574 19/19 green, **44/44 launch tests** on every leg. Attack: logic r1 3 + r2 2, boundary 15 + 15 —
+  every high/medium fixed; 2 lows + 1 follow-up in `debt-ledger.md`; 25 patterns in `fixed-defects.md`. CI run
+  37144642041 was red on two causes (CATALOG row, a Windows-only CR guard), both fixed. 1 day vs 2.5d.
+  amendments: 0 · reopened: n · t-to-phase0: 1 day (kickoff 2026-10-03).
 
-**Appetite burn:** 0 of 15.5 days planned (18-day cap). 50% tripwire at the Phase 02 exit (9 days).
+**Appetite burn:** 1 of 15.5 days planned (18-day cap; 6%). 50% tripwire at the Phase 02 exit (9 days).
 
 ## Now
 
-**Current position:** kickoff 2026-10-03 (tier L). Owner standing instruction the same day: build every phase
-without waiting, push freely, CI is the only test runner — so the kickoff approval request is recorded and the
-build proceeds on that instruction.
+**Current position:** Phase 00 closed 2026-10-04 (PR #320). The runner, lints and trust boundary run on fakes; no real
+provider has been called.
+**Next step:** Phase 01 — the four read verbs (`plan · status · verify · teardown --plan`) on fakes first; then the real
+adapters, which need the owner's tokens (below). Day-3 kill question is asked inside this phase.
 
-**Kickoff gates:** kickoff-lint green · attack ×3 (A, B, C): 21 findings, 20 applied (duplicates merged), 1
-REJECTED (`violates-no-go`, REQ-12 is owner-locked) · simulation gate 11 → 3 blockers in two rounds; the gate rule
-makes a second non-zero round the owner's call, but all three were information the executor holds (the frozen
-catalog, an adapter rule, one command), so they were closed in `phase-00-spec.md` C1b/C3b/C10 under the standing
-instruction and this line is the record · tier-L re-verify by researcher (3 claims; findings folded into PLAN
-§Evidence) · cross-model second opinion **UNAVAILABLE** (Codex refused every model on this ChatGPT account).
-
-**Next step:** Phase 00 — write `tests/launch-lint.bats` and `tests/launch-runner.bats` red first, then the
-catalog, registry, lints and runner.
-
-**Owner actions ahead (one line each, not blocking Phase 00):** before Phase 01 — `CLOUDFLARE_API_TOKEN` (DNS edit,
-zone automemory.ai) and a valid `VERCEL_TOKEN`; before Phase 02 — Razorpay test keys; before Phase 04 —
-`NEON_API_KEY` (ADR-1724).
+**Owner actions (one message unblocks Phase 01's real half):** `CLOUDFLARE_API_TOKEN` (DNS edit, zone automemory.ai) ·
+a new `VERCEL_TOKEN` (the current one is invalid) · the Vercel GitHub App installed with access to `arc-sandbox` and the
+GitHub login connected to Vercel (browser-only) · `SUPABASE_ACCESS_TOKEN` · `RESEND_API_KEY`. Stamps waiting in
+arc-inbox: kickoff `01M40ZHP72PYVBJT17R7A4WZ3W`, owner rulings `01M41MH9JG9VEN5G085T56CNHH` + `01M41MHA25TV1WXYHHGM59ND5V`.
