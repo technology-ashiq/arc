@@ -196,6 +196,34 @@ teardown() { _arc_teardown; }
   done
 }
 
+@test "case 3 pair works in BOTH orders, and a doubled transport token is not the pair (attack 5cf49d3 B1 L16 L20)" {
+  _session_sandbox
+  # Critique first, then the explore render of the same page: the pair, the other way round.
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html
+  [ "$status" -eq 0 ]
+  local cr="$RENDERS/design-critic/docs--design--explore--t--variant-a--one-html.json"
+  [ -f "$cr" ] || { echo "the critique meta never landed"; false; }
+  _reset_shots
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1
+  [ "$status" -eq 0 ] || { echo "the explore render after a critique was refused: $output"; false; }
+  local ex="$RENDERS/s1/docs--design--explore--t--variant-a--one-html--1440x900.json"
+  [ -f "$ex" ] || { echo "the explore meta never landed"; false; }
+  # A planted meta whose recipe is the explore recipe with the token doubled: an explore render
+  # under a fresh session must not read it as the critique half of the pair.
+  local exr; exr="$(grep -o '"recipe": "[^"]*"' "$ex" | cut -d'"' -f4)"
+  [ -n "$exr" ] || { echo "no recipe read from $ex"; false; }
+  cp "$ex" "$BATS_TEST_TMPDIR/ex.json"
+  rm -f "$cr" "$ex" "$RENDERS/s1/"*.png
+  mkdir -p "$RENDERS/planted"
+  node -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));m.session="planted";m.recipe=process.argv[3];fs.writeFileSync(process.argv[2],JSON.stringify(m,null,2)+"\n")' \
+    "$BATS_TEST_TMPDIR/ex.json" "$RENDERS/planted/x.json" "$exr;confined-loopback"
+  grep -q 'confined-loopback;confined-loopback' "$RENDERS/planted/x.json" || { echo "the doubled-token fixture was not planted"; false; }
+  _reset_shots
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s2
+  [ "$status" -eq 1 ] || { echo "a doubled token was read as the pair: $output"; false; }
+  echo "$output" | grep -q "in session 'planted'" || { echo "refused for another reason: $output"; false; }
+}
+
 @test "a slug collision REFUSES instead of silently overwriting the other route" {
   _session_sandbox
   # docs/design/explore/t/variant-a/a.b.html and docs/design/explore/t/variant-a/a-b.html both slug to docs--design--explore--t--variant-a--a-b-html. Trusting the previous meta's

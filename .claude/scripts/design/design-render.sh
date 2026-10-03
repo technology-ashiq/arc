@@ -759,6 +759,9 @@ for m in "$RENDER_ROOT"/*.json "$RENDER_ROOT"/*/*.json; do
     # through -- the two recipes differing by the explore transport token and nothing else -- so
     # an empty, unreadable or otherwise different recipe still refuses (attack 9ea7d9b B2).
     other_recipe="$(_meta_field "$m" recipe)" || other_recipe=""
+    # The legitimate pair carries the transport token ONCE between them; a doubled token would
+    # otherwise pass as the pair (attack 5cf49d3 L16).
+    case "$other_recipe$RECIPE" in *confined-loopback*confined-loopback*) other_recipe="";; esac
     if [ -n "$other_recipe" ] && [ -n "$RECIPE" ] && \
        { [ "$other_recipe" = "$RECIPE;confined-loopback" ] || [ "$RECIPE" = "$other_recipe;confined-loopback" ]; }; then
       continue
