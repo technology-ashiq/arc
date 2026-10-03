@@ -132,6 +132,12 @@ export async function apply(opts, log = console.log) {
 
 async function gate(P, slug, slot, prow, profile, state, row, log) {
   const rehearsalRefuses = profile.honesty_class === "rehearsal" && ROLLING.has(slot.gate);
+  // A rehearsal's refusal is terminal: a re-run refuses again from the record, never "awaiting" a decision that
+  // could not change the answer, and never a second approval.requested (attack 06cbc03 L2).
+  if (rehearsalRefuses && row.approval_id) {
+    log(`${slot.id}: REFUSED -- a rehearsal venture never crosses ${slot.gate} (already recorded: ${row.approval_id})`);
+    return EXIT.REFUSED;
+  }
   if (row.approval_id && !row.gate_approved) {
     const verdict = await decisionFor(row.approval_id);
     if (!verdict) { log(`${slot.id}: awaiting the owner's decision on ${row.approval_id} (${slot.gate})`); return EXIT.AWAITING; }

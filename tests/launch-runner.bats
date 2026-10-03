@@ -179,3 +179,21 @@ spine_kind() { cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c "\"kin
   [ "$status" -eq 2 ] || { echo "$output"; false; }
   [[ "$output" == *"--venture-root is required"* ]] || { echo "$output"; false; }
 }
+
+@test "launch-runner: a second gate-3 apply on a rehearsal refuses again from the record, no new request (L2)" {
+  run node "$(L)" apply live-money --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  run node "$(L)" apply live-money --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"never crosses gate-3 (already recorded: "* ]] || { echo "$output"; false; }
+  [ "$(spine_kind approval.requested)" -eq 1 ]
+}
+
+@test "launch-runner: a state file whose slots is null is a named refusal, not a crash (L3)" {
+  mkdir -p "$FX_DIR/state"
+  printf '{"schema":1,"venture":"fx-sandbox","slots":null,"generation":5}' > "$FX_STATE"
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"is not a schema-1 launch state"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"TypeError"* ]] || { echo "$output"; false; }
+}

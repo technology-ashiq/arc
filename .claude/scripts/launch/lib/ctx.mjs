@@ -1,8 +1,8 @@
 // The adapter's whole world (ADR-1704, ADR-1719). An adapter gets this object and nothing else: a fetch wrapped to
 // its row's hosts, a writer confined to the venture root, a resource reporter that persists before returning, and a
 // sensitive-action check that pauses for the owner. Every refusal is an Error with a .code an adapter cannot mistake.
-import { mkdirSync, writeFileSync, existsSync, realpathSync } from "node:fs";
-import { dirname, resolve, relative, isAbsolute } from "node:path";
+import { mkdirSync, writeFileSync, realpathSync, lstatSync } from "node:fs";
+import { dirname, resolve, relative, isAbsolute, join, sep } from "node:path";
 
 export function refusal(code, message, extra = {}) {
   return Object.assign(new Error(message), { code }, extra);
@@ -13,26 +13,22 @@ export function hostAllowed(host, hosts) {
   return (hosts || []).some((a) => h === a.toLowerCase() || h.endsWith(`.${a.toLowerCase()}`));
 }
 
-// The nearest existing ancestor, resolved through symlinks -- so a link inside the venture root that points
-// outside it cannot carry a write out (the path string alone would look confined).
-function realAncestor(p) {
-  let cur = p;
-  while (!existsSync(cur)) {
-    const up = dirname(cur);
-    if (up === cur) return cur;
-    cur = up;
-  }
-  return realpathSync(cur);
-}
-
+// Every component from the root down to the LEAF is lstat'ed, and any symlink refuses -- wherever it points, dangling
+// included. Resolving only the ancestors (the first version) let `root/evil -> /outside` carry a write out through
+// the leaf itself (attack 06cbc03 L1). An adapter never needs to write through a link, so none is followed.
 export function confinedPath(root, rel) {
   if (typeof rel !== "string" || rel === "" || isAbsolute(rel)) throw refusal("WRITE_REFUSED", `write path ${JSON.stringify(rel)} must be relative to the venture root`);
   const realRoot = realpathSync(root);
   const abs = resolve(realRoot, rel);
-  const inside = (p) => { const r = relative(realRoot, p); return r === "" ? false : !r.startsWith("..") && !isAbsolute(r); };
-  if (!inside(abs)) throw refusal("WRITE_REFUSED", `write ${rel} resolves outside the venture root`);
-  const anc = realAncestor(dirname(abs));
-  if (anc !== realRoot && !inside(anc)) throw refusal("WRITE_REFUSED", `write ${rel} passes through a link that leaves the venture root`);
+  const r = relative(realRoot, abs);
+  if (r === "" || r.startsWith("..") || isAbsolute(r)) throw refusal("WRITE_REFUSED", `write ${rel} resolves outside the venture root`);
+  let cur = realRoot;
+  for (const part of r.split(sep)) {
+    cur = join(cur, part);
+    let st;
+    try { st = lstatSync(cur); } catch (e) { if (e.code === "ENOENT") break; throw e; }
+    if (st.isSymbolicLink()) throw refusal("WRITE_REFUSED", `write ${rel} passes through a link (${relative(realRoot, cur)}); adapters never write through links`);
+  }
   return abs;
 }
 

@@ -32,7 +32,7 @@ export function loadState(dir, slug, { onFallback = () => {} } = {}) {
 }
 
 function check(s, p) {
-  if (!s || s.schema !== 1 || typeof s.slots !== "object") throw new LaunchError("STATE_SHAPE", `${p} is not a schema-1 launch state`);
+  if (!s || s.schema !== 1 || !s.slots || typeof s.slots !== "object" || Array.isArray(s.slots)) throw new LaunchError("STATE_SHAPE", `${p} is not a schema-1 launch state`);
   for (const [id, row] of Object.entries(s.slots))
     if (!STATES.has(row.state)) throw new LaunchError("STATE_SHAPE", `${p} slot ${id} has state ${JSON.stringify(row.state)}`);
   return s;

@@ -88,3 +88,21 @@ provider_total() { node -e 'const fs=require("fs");const f=process.argv[1];conso
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$(slot_field probe reason)" == "refused:SENSITIVE_UNDECLARED"* ]] || { echo "$(slot_field probe reason)"; false; }
 }
+
+@test "launch-trust: a write through a linked directory inside the root is refused (L1, junction)" {
+  mkdir -p "$FX_DIR/outside"
+  node -e 'require("fs").symlinkSync(process.argv[1],process.argv[2],"junction")' "$FX_DIR/outside" "$FX_DIR/venture-root/evildir" || { echo "could not create the link"; false; }
+  run env FAKE_WRITE=evildir/x.txt node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$(slot_field probe reason)" == "refused:WRITE_REFUSED"*"passes through a link"* ]] || { echo "$(slot_field probe reason)"; false; }
+  [ ! -e "$FX_DIR/outside/x.txt" ]
+}
+
+@test "launch-trust: a write to a leaf that is a symlink out of the root is refused (L1, file link)" {
+  mkdir -p "$FX_DIR/outside"
+  node -e 'require("fs").symlinkSync(process.argv[1],process.argv[2],"file")' "$FX_DIR/outside/target.txt" "$FX_DIR/venture-root/evil" 2>/dev/null || skip "this OS refuses unprivileged file symlinks; the junction test covers the rule"
+  run env FAKE_WRITE=evil node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$(slot_field probe reason)" == "refused:WRITE_REFUSED"*"passes through a link"* ]] || { echo "$(slot_field probe reason)"; false; }
+  [ ! -e "$FX_DIR/outside/target.txt" ]
+}
