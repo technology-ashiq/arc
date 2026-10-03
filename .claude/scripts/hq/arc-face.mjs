@@ -25,8 +25,8 @@
 // intact and the repo split stays a directory move.
 
 import { spawn } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { existsSync, realpathSync, statSync } from "node:fs";
+import { join, dirname, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 
@@ -106,6 +106,53 @@ export function appSpawnPlan(faceDir, appPort, exists = existsSync) {
   if (!exists(entry))
     throw new Error(`no dev server at ${entry} -- the app's dependencies are incomplete. Delete face/node_modules and let this launcher reinstall them.`);
   return { cmd: process.execPath, args: [entry, "--port", String(appPort), "--strictPort"], shell: false };
+}
+
+/** A regular file, not merely a name that exists. @param {string} p */
+function isFile(p) {
+  try { return statSync(p).isFile(); } catch { return false; }
+}
+
+/**
+ * The door's environment with Git for Windows' bash ahead of every other `bash` on PATH.
+ *
+ * Every model answer is receipted: arc-run emits run.completed by running `bash arc-event.sh`,
+ * and an answer whose receipt was not written is never served. Started from PowerShell, the
+ * owner's real PATH holds only Git's `cmd` dir, so `bash` resolved to System32's WSL launcher
+ * (which has no /bin/bash) and every answer failed as MODEL_FAILED (owner, 2026-10-03). Git's
+ * `bin/bash.exe` is the login wrapper that sets up its own /usr/bin, so `bin` alone is enough
+ * and does not put Git's coreutils ahead of Windows' own.
+ *
+ * Windows names the variable `Path`, not `PATH`, and a spread of process.env keeps that case:
+ * the existing key is rewritten in place, never shadowed by a second spelling.
+ *
+ * @param {string} platform @param {Record<string, string | undefined>} env @param {(p: string) => boolean} exists
+ * @returns {{ env: Record<string, string | undefined>, bashDir: string | null }}
+ */
+export function gitBashEnv(platform, env, exists = isFile) {
+  if (platform !== "win32") return { env, bashDir: null };
+  const get = (name) => { const k = Object.keys(env).find((x) => x.toUpperCase() === name.toUpperCase()); return k ? env[k] : undefined; };
+  const pathKey = Object.keys(env).find((k) => k.toUpperCase() === "PATH") ?? "Path";
+  // Windows allows a quoted PATH entry; the quotes are not part of the directory (attack d102d9c B3).
+  const parts = String(env[pathKey] ?? "").split(";").map((p) => p.replace(/^"(.*)"$/, "$1")).filter(Boolean);
+  const roots = [];
+  // The segment must be exactly `Git`, never `MyGit` or `NotGit` (attack d102d9c L1).
+  for (const p of parts) {
+    const m = /^(.*[\\/]Git)[\\/](?:cmd|bin|usr[\\/]bin|mingw64[\\/]bin)[\\/]?$/i.exec(p);
+    if (m && /(?:^|[\\/])Git$/i.test(m[1])) roots.push(m[1]);
+  }
+  for (const base of [get("ProgramW6432"), get("ProgramFiles"), get("ProgramFiles(x86)"), get("LOCALAPPDATA") && win32.join(get("LOCALAPPDATA"), "Programs")])
+    if (base) roots.push(win32.join(base, "Git"));
+  // A relative root resolves against the launcher's cwd here and the door's there, so only an absolute one is
+  // trusted (attack d102d9c L2/B2); a directory named bash.exe is not bash (B1/L5).
+  const root = roots.find((r) => win32.isAbsolute(r) && /^[A-Za-z]:[\\/]|^\\\\/.test(r) && exists(win32.join(r, "bin", "bash.exe")));
+  if (!root) return { env, bashDir: null };
+  const bashDir = win32.join(root, "bin");
+  const same = (p) => p.replace(/[\\/]+$/, "").toLowerCase() === bashDir.toLowerCase();
+  const out = { ...env };
+  for (const k of Object.keys(out)) if (k.toUpperCase() === "PATH") delete out[k];
+  out[pathKey] = [bashDir, ...parts.filter((p) => !same(p))].join(";");
+  return { env: out, bashDir };
 }
 
 /**
@@ -435,9 +482,12 @@ async function main(argv) {
   //    and every one of them is instant. Downloading the app's dependencies first means paying
   //    a network install to reach a failure that was knowable in a second, which is exactly the
   //    friction this file exists to remove.
+  const bash = gitBashEnv(process.platform, process.env);
+  if (process.platform === "win32" && !bash.bashDir)
+    process.stderr.write("arc-face: WARN -- no Git for Windows bash found; if `bash` here is WSL's, every model answer fails because its receipt cannot be written. Install Git for Windows, or start this from Git Bash.\n");
   const door = spawn(process.execPath, [join(HERE, "arc-dash.mjs"), ...doorArgs({ port: doorPort, spine })], {
     cwd: repo,
-    env: { ...process.env, ARC_DASH_TOKEN: token },
+    env: { ...bash.env, ARC_DASH_TOKEN: token },
     stdio: ["ignore", "inherit", "pipe"],
   });
   children.push(door);
@@ -576,6 +626,25 @@ function selftest() {
   armed("a live child + a silent port is still starting", appReady({ childAlive: true, portAnswers: false }) === "waiting");
   armed("a DEAD child is reported, never waited out", appReady({ childAlive: false, portAnswers: false }) === "child-died");
   armed("and a dead child does not pass because the port answers", appReady({ childAlive: false, portAnswers: true }) === "child-died");
+
+  // The owner's real PowerShell PATH (2026-10-03): System32 (WSL's bash) first, only Git's cmd dir.
+  const gitOnly = (p) => p === "C:\\Program Files\\Git\\bin\\bash.exe";
+  const ps = { Path: "C:\\Windows\\system32;C:\\Program Files\\Git\\cmd", ProgramFiles: "C:\\Program Files" };
+  const fixed = gitBashEnv("win32", ps, gitOnly);
+  armed("Git's bash goes ahead of System32's WSL bash", fixed.env.Path?.split(";")[0] === "C:\\Program Files\\Git\\bin", fixed.env.Path);
+  armed("and the PATH keeps everything it had", fixed.env.Path?.split(";").slice(1).join(";") === ps.Path);
+  armed("in the key Windows used, with no second spelling", Object.keys(fixed.env).filter((k) => k.toUpperCase() === "PATH").join() === "Path");
+  armed("found from ProgramFiles when PATH names no Git dir", gitBashEnv("win32", { Path: "C:\\Windows\\system32", ProgramFiles: "C:\\Program Files" }, gitOnly).bashDir === "C:\\Program Files\\Git\\bin");
+  armed("already first is not added twice", gitBashEnv("win32", fixed.env, gitOnly).env.Path === fixed.env.Path);
+  armed("no Git bash on the box leaves the env as it was", gitBashEnv("win32", ps, () => false).env === ps);
+  armed("and nothing changes off Windows", gitBashEnv("linux", ps, gitOnly).env === ps);
+  // Attack d102d9c: a look-alike segment, a relative root and a quoted entry.
+  const any = () => true;
+  armed("a dir merely ending in Git is not Git (MyGit)", gitBashEnv("win32", { Path: "C:\\Tools\\MyGit\\cmd" }, any).bashDir === null);
+  armed("a relative Git root is never trusted", gitBashEnv("win32", { Path: "Git\\cmd;.\\Git\\bin" }, any).bashDir === null);
+  armed("a quoted PATH entry is read without its quotes", gitBashEnv("win32", { Path: "\"D:\\Git\\cmd\"" }, (p) => p === "D:\\Git\\bin\\bash.exe").bashDir === "D:\\Git\\bin");
+  armed("ProgramFiles(x86) is a fallback too", gitBashEnv("win32", { Path: "", "ProgramFiles(x86)": "C:\\Program Files (x86)" }, (p) => p === "C:\\Program Files (x86)\\Git\\bin\\bash.exe").bashDir === "C:\\Program Files (x86)\\Git\\bin");
+  armed("a directory named bash.exe is not bash", isFile(HERE) === false && isFile(join(HERE, "arc-face.mjs")) === true);
 
   armed("a worktree refusal is named as such", classifyDoorExit(1, "arc-dash: ERROR WORKTREE_SPINE -- ...").includes("MAIN clone"));
   armed("a busy port is named as such", classifyDoorExit(1, "Error: listen EADDRINUSE").includes("already listening"));
