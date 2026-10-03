@@ -179,7 +179,7 @@ count and panel before comparing.
 
 ## Now
 
-**Position (2026-10-03):** **Phases 00-03 are CLOSED; Phase 04 (EXP-A1) is next**, on the same branch and PR #292. Earlier position: **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
+**Position (2026-10-03):** **Phases 00-03 are CLOSED; Phase 04 (EXP-A1) is next**. **Phase 04 opened 2026-10-04** via `/arc-change`: three slices (S1 seal + byte-flip control, S2 paired harness, S3 live run) in `phases/phase-04-spec.md`. Owner 2026-10-04: paid run approved, ADR-1416 session prediction kept., on the same branch and PR #292. Earlier position: **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
 (01 on 2026-09-17); **Phase 02 is open**, with Slice A in and Slice B's 14 red-first tests on the
 branch. Working mode
 set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-c16`, pushed

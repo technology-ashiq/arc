@@ -192,13 +192,14 @@ hook: a small guard that blocks an action, such as a write outside an agent's ow
 - [design-jury](../agents/design-jury.md) — Explore-mode blind juror. Ranks N unlabelled items — the explore's variants plus at least one world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact.
 - [ui-composer](../agents/ui-composer.md) — Explore-mode composer. Builds exactly ONE variant from the brief and its assigned thesis — its own directory, its own invented visual system, realistic content. Blind to the other variants and never edits the brief, the matrix, or anything outside its own variant dir.
 
-## Scripts (16)
+## Scripts (17)
 
 - [`.claude/scripts/design/composer-bash-check.sh`](../../../.claude/scripts/design/composer-bash-check.sh)
 - [`.claude/scripts/design/composer-scope-check.sh`](../../../.claude/scripts/design/composer-scope-check.sh)
 - [`.claude/scripts/design/composer-write-check.sh`](../../../.claude/scripts/design/composer-write-check.sh)
 - [`.claude/scripts/design/critic-scope-check.sh`](../../../.claude/scripts/design/critic-scope-check.sh)
 - [`.claude/scripts/design/design-critique.sh`](../../../.claude/scripts/design/design-critique.sh)
+- [`.claude/scripts/design/design-expa1.mjs`](../../../.claude/scripts/design/design-expa1.mjs)
 - [`.claude/scripts/design/design-explore.sh`](../../../.claude/scripts/design/design-explore.sh)
 - [`.claude/scripts/design/design-gate.sh`](../../../.claude/scripts/design/design-gate.sh)
 - [`.claude/scripts/design/design-jury.mjs`](../../../.claude/scripts/design/design-jury.mjs)

@@ -698,6 +698,11 @@ EOF
     _CS_MARKER="$ROOT/.claude/state/design/composer-session--$ID--variant-$V"
 
     if [ "$CMD" = "compose" ]; then
+      # EXP-A1 (Phase 04 S1/S2): a paired explore arms nothing while the sealed bundle or a
+      # paired thesis has moved. No pairs file, no check.
+      if [ -f "$EX/pairs.json" ]; then
+        node "$DESIGN_DIR/design-expa1.mjs" pair-guard --root "$ROOT" --id "$ID" --variant "$V" || exit 1
+      fi
       # `env -u ARC_SCOPE_FORWARDED`, and then CHECK.
       #
       # composer-scope-check.sh honours --begin/--end only when ARC_SCOPE_FORWARDED != 1, and it
@@ -773,6 +778,13 @@ EOF
     exit 0
     ;;
 
+  seal|seal-check|pair|exp-a1)
+    # EXP-A1's harness (Phase 04): the seal over model-policy's bundle and the prediction, the
+    # thesis pairs, and the per-pair report. Its own node module, like the jury.
+    command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- exp-a1 needs it" >&2; exit 1; }
+    node "$DESIGN_DIR/design-expa1.mjs" "$CMD" --root "$ROOT" --id "$ID" "$@"
+    exit $?
+    ;;
   jury|jury-check|score|unblind|catch-rate)
     # The jury step (Phase 03 S1, ADR-1405). Its logic is a node module, not a program in this
     # shell string: it parses rankings and hashes images, and belongs in its own file.

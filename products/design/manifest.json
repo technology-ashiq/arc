@@ -27,6 +27,7 @@
     ".claude/scripts/design/design-lint.mjs",
     ".claude/scripts/design/design-refpack.mjs",
     ".claude/scripts/design/design-jury.mjs",
+    ".claude/scripts/design/design-expa1.mjs",
     ".claude/scripts/design/design-render-serve.mjs",
     ".claude/scripts/design/design-render.sh",
     ".claude/scripts/design/design-robots.mjs",
