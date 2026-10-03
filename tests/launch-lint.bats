@@ -57,8 +57,9 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
 }
 
 @test "launch-lint: a predicate outside the grammar is refused, not read as true or false" {
-  tr -d '' < "$ARC_ROOT/products/launch/launch.slots.yaml" | sed 's/required_when: "tenancy == multi"/required_when: "tenancy is multi"/' > "$BATS_TEST_TMPDIR/s.yaml"
-  ! cmp -s "$ARC_ROOT/products/launch/launch.slots.yaml" "$BATS_TEST_TMPDIR/s.yaml" || { echo "fixture edit did not land"; false; }
+  # CR stripped first: on an autocrlf checkout a sed `$` anchor sits after the CR and the edit silently misses.
+  tr -d '\r' < "$ARC_ROOT/products/launch/launch.slots.yaml" | sed 's/required_when: "tenancy == multi"/required_when: "tenancy is multi"/' > "$BATS_TEST_TMPDIR/s.yaml"
+  grep -q 'required_when: "tenancy is multi"' "$BATS_TEST_TMPDIR/s.yaml" || { echo "fixture edit did not land"; false; }
   run node "$(LINT)" --catalog "$BATS_TEST_TMPDIR/s.yaml"
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$output" == *"FAIL [predicate] tenancy"* ]] || { echo "$output"; false; }
