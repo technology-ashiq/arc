@@ -74,7 +74,7 @@ try {
       && o.scores.others.length === body.scorecards.rows.filter((r) => !r.staffed && r.evidence).length);
     check("scores: the footnote names the receipts read and how many no role holds", o.scores.hasFootnote && o.scores.footnote.includes("receipts read") && o.scores.footnote.includes("placed on no role"), o.scores.footnote);
     const refused = clone(body);
-    refused.scorecards = { state: "refused", code: "SPINE_UNAVAILABLE", human: "the door has no spine with an events/ directory to score from", rows: [] };
+    refused.scorecards = { state: "refused", code: "SPINE_UNAVAILABLE", human: "the door has no spine with an events directory to score from", rows: [] };
     const r = F.foldOrg(ok(refused));
     check("scores: a refused scorecards part renders the refusal and no seat at all -- never a room of `no evidence`",
       r.scores.isRefused && r.scores.refusal.code === "SPINE_UNAVAILABLE" && r.scores.rows.length === 0 && r.scores.others.length === 0 && r.roleCount > 0, JSON.stringify(r.scores.refusal));

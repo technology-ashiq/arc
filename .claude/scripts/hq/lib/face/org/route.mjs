@@ -97,7 +97,7 @@ async function scorecardsOf(repo, spineDir, p) {
   if (org.findings.length) return { state: "refused", code: "SOURCE_INVALID", human: `org/attribution.yaml has ${org.findings.length} finding(s); nothing is scored: ${org.findings.slice(0, 3).join(" · ")}`, rows: [] };
   // A spine root holds events/; a directory without one scored every seat "no evidence" and answered ok -- an empty
   // read that looked measured (found by the Phase 00 smoke, which was handed the events/ dir itself).
-  if (typeof spineDir !== "string" || !isDir(join(spineDir, "events"))) return { state: "refused", code: "SPINE_UNAVAILABLE", human: "the door has no spine with an events/ directory to score from", rows: [] };
+  if (typeof spineDir !== "string" || !isDir(join(spineDir, "events"))) return { state: "refused", code: "SPINE_UNAVAILABLE", human: "the door has no spine with an events directory to score from", rows: [] };
   const sp = await p.readSpine(repo, spineDir);
   // An events/ dir that yields no event (empty, or every day file torn or unreadable) is the same empty read.
   if (!Array.isArray(sp.events) || sp.events.length === 0) return { state: "refused", code: "SPINE_UNAVAILABLE", human: `the door's spine holds no readable event (${(sp.torn?.length ?? 0) + (sp.unreadable?.length ?? 0)} day file(s) torn or unreadable); nothing is scored`, rows: [] };
