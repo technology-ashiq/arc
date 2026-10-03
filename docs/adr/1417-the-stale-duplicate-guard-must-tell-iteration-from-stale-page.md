@@ -73,7 +73,9 @@ its composer had rendered it.
 
 A crash-retry runs the same recipe again under a fresh session id. A render under a different
 recipe is a second look at the page, and matching pixels are what it should produce. Case 3 now
-refuses only when the other meta's recipe equals this render's. A meta whose recipe cannot be
-read is not known to differ, so it still refuses, failing closed the way a meta with no session
-does. The cross-route case and the iteration case are unchanged. Pinned in
+lets through exactly one pair: two recipes that differ by the explore transport token
+`;confined-loopback` and nothing else. Any other difference, and an empty or unreadable recipe,
+still refuses, failing closed the way a meta with no session does. The first draft allowed any
+non-empty difference; the attack on it (9ea7d9b, B2) showed that let a whitespace or arbitrary
+recipe through. The cross-route case and the iteration case are unchanged. Pinned in
 `tests/design-render-session.bats`, with a same-recipe fresh-session render as the control.

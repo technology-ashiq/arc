@@ -754,11 +754,13 @@ for m in "$RENDER_ROOT"/*.json "$RENDER_ROOT"/*/*.json; do
     exit 1
   fi
   if [ "$other_session" != "$SESSION" ]; then
-    # A retry repeats the recipe. The critic rendering what a composer rendered (explore adds
-    # confined-loopback) is a second look at one page, and matching pixels are expected (Phase 03
-    # close). A meta with no readable recipe is not known to differ, so it still refuses.
+    # A retry repeats the recipe. The critic rendering what a composer rendered is a second look
+    # at one page, and matching pixels are expected (Phase 03 close). Only that exact pair is let
+    # through -- the two recipes differing by the explore transport token and nothing else -- so
+    # an empty, unreadable or otherwise different recipe still refuses (attack 9ea7d9b B2).
     other_recipe="$(_meta_field "$m" recipe)" || other_recipe=""
-    if [ -n "$other_recipe" ] && [ "$other_recipe" != "$RECIPE" ]; then
+    if [ -n "$other_recipe" ] && [ -n "$RECIPE" ] && \
+       { [ "$other_recipe" = "$RECIPE;confined-loopback" ] || [ "$RECIPE" = "$other_recipe;confined-loopback" ]; }; then
       continue
     fi
     # Case 3, which ADR-1417 left unspecified and the simulation gate caught: a crash-retry
