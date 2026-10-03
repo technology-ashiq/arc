@@ -35,7 +35,7 @@ async function context(root) {
   return { w, cards: new Map(w.cards.map((c) => [c.card?.id, c.card]).filter(([id]) => typeof id === "string")), ventures: new Set(w.ventures) };
 }
 
-function readTeam(root, v) {
+export function readTeam(root, v) {
   let text;
   try { text = readFileSync(teamPath(root, v), "utf8").replace(/^﻿/, ""); }
   catch { return { error: `org/teams/${v}.team.yaml does not exist` }; }

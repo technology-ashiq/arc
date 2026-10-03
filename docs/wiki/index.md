@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **139** | **34** |
 
-Narrative debt: **105 of 139** pages have no narrative yet. ADR headers: 295 of 360 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **105 of 139** pages have no narrative yet. ADR headers: 297 of 362 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -31,7 +31,7 @@ Narrative debt: **105 of 139** pages have no narrative yet. ADR headers: 295 of 
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
-| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 78 |
+| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 79 |
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
 | [memory](products/memory.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
@@ -58,7 +58,7 @@ Narrative debt: **105 of 139** pages have no narrative yet. ADR headers: 295 of 
 | [legal](lanes/legal.md) | LIVE | arc-legal (Cycle 14, opened 2026-08-12) |
 | [memory](lanes/memory.md) | IDLE | arc-memory (Cycle 11, closed 2026-08-12) |
 | [model-policy](lanes/model-policy.md) | IDLE | model-policy (Cycle 5, closed 2026-08-02) |
-| [org](lanes/org.md) | IDLE | arc-org (Cycle 18, opened 2026-09-29, closed 2026-10-02) |
+| [org](lanes/org.md) | LIVE | arc-org (Cycle 19, opened 2026-10-03) |
 | [policy](lanes/policy.md) | IDLE | arc-policy (Cycle 9, closed 2026-08-10) |
 | [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) |
 | [scheduler](lanes/scheduler.md) | LIVE | arc-scheduler (Cycle 12, opened 2026-08-12) |
@@ -102,7 +102,7 @@ Narrative debt: **105 of 139** pages have no narrative yet. ADR headers: 295 of 
 | [1300–1399](adr/1300.md) | 51 | 1 |
 | [1400–1499](adr/1400.md) | 20 | 0 |
 | [1500–1599](adr/1500.md) | 15 | 0 |
-| [1600–1699](adr/1600.md) | 24 | 0 |
+| [1600–1699](adr/1600.md) | 26 | 0 |
 
 ## Commands
 
