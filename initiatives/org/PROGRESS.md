@@ -1,6 +1,6 @@
 # PROGRESS.md — org v2 "the org room"
 
-status: LIVE
+status: IDLE
 cycle: arc-org (Cycle 19, opened 2026-10-03)
 phase: 01
 appetite: 3d
@@ -35,8 +35,8 @@ depends-on: —
 
 ## Now
 
-**Current position:** Phases 00 and 01 closed 2026-10-03; every REQ validated. The org room is live on main.
-**Next step:** `/arc-retro --lane org` for Cycle 19, then seal (LIVE → IDLE) once the phase approvals are stamped.
+**Current position:** Cycle 19 sealed 2026-10-03 (retro: docs/retro-log.md, HISTORY C19). Lane IDLE.
+**Next step:** none queued. Owner: stamp the two phase approvals (`arc-inbox approve`). A new org cycle starts by `/arc-kickoff --lane org`.
 
 **Kickoff attack (tier S, one merged A+C run):** 7 findings, 7 applied. F1's premise ("the door's ctx has no
 `root`") was false (`arc-dash.mjs:226` reads `ctx.root`); its mutation was applied with that corrected.
