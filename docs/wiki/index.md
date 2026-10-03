@@ -5,17 +5,17 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 
 | Part | Count | With narrative |
 |---|---|---|
-| [Products](#products) | 17 | 17 |
-| [Lanes](#lanes) | 17 | 17 |
-| [Processes](#processes) | 13 | 0 |
-| [Decisions (ADR bands)](#decisions-adr-bands) | 16 | 0 |
+| [Products](#products) | 18 | 17 |
+| [Lanes](#lanes) | 18 | 17 |
+| [Processes](#processes) | 14 | 0 |
+| [Decisions (ADR bands)](#decisions-adr-bands) | 17 | 0 |
 | [Commands](#commands) | 28 | 0 |
 | [Agents](#agents) | 32 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **137** | **34** |
+| **Total** | **141** | **34** |
 
-Narrative debt: **103 of 137** pages have no narrative yet. ADR headers: 268 of 333 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **107 of 141** pages have no narrative yet. ADR headers: 296 of 361 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -31,10 +31,11 @@ Narrative debt: **103 of 137** pages have no narrative yet. ADR headers: 268 of 
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
-| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 74 |
+| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 78 |
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
 | [memory](products/memory.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
+| [org](products/org.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 11 |
 | [plan](products/plan.md) | 1.0.0 | [core](products/core.md) | 5 | 5 | 3 |
 | [qa](products/qa.md) | 1.0.0 | [core](products/core.md) | 3 | 2 | 0 |
 | [review](products/review.md) | 1.0.0 | [core](products/core.md) | 4 | 2 | 22 |
@@ -57,6 +58,7 @@ Narrative debt: **103 of 137** pages have no narrative yet. ADR headers: 268 of 
 | [legal](lanes/legal.md) | LIVE | arc-legal (Cycle 14, opened 2026-08-12) |
 | [memory](lanes/memory.md) | IDLE | arc-memory (Cycle 11, closed 2026-08-12) |
 | [model-policy](lanes/model-policy.md) | IDLE | model-policy (Cycle 5, closed 2026-08-02) |
+| [org](lanes/org.md) | IDLE | arc-org (Cycle 18, opened 2026-09-29, closed 2026-10-02) |
 | [policy](lanes/policy.md) | IDLE | arc-policy (Cycle 9, closed 2026-08-10) |
 | [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) |
 | [scheduler](lanes/scheduler.md) | LIVE | arc-scheduler (Cycle 12, opened 2026-08-12) |
@@ -73,6 +75,7 @@ Narrative debt: **103 of 137** pages have no narrative yet. ADR headers: 268 of 
 | [council-convene](processes/council-convene.md) | 1.0.0 | Convene the full arc council on one question, headless, and end on its council.verdict receipt. |
 | [day-close-roll](processes/day-close-roll.md) | 1.0.0 | Seal every unsealed day up to yesterday, oldest first, idempotently. |
 | [develop-proof](processes/develop-proof.md) | 1.0.0 | Prove the next unproven slice of a LIVE lane from evidence already recorded, and end on its slice.done receipt. |
+| [face-ask](processes/face-ask.md) | 1.0.0 | Answer the owner's question in the face: about arc from arc's own record with citations, or a general question from the owner's chosen model, always saying which. |
 | [kickoff-plan](processes/kickoff-plan.md) | 1.0.0 | Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated. |
 | [lesson-log](processes/lesson-log.md) | 1.0.0 | Log one lesson as a docs/retro-log.md row, after the near-duplicate check, and end on its note.logged receipt. |
 | [narrative-verify](processes/narrative-verify.md) | 1.0.0 | Judge every block of one drafted wiki narrative against the sources its anchors name, and return one verdict per block. |
@@ -96,9 +99,10 @@ Narrative debt: **103 of 137** pages have no narrative yet. ADR headers: 268 of 
 | [1000–1099](adr/1000.md) | 19 | 0 |
 | [1100–1199](adr/1100.md) | 21 | 0 |
 | [1200–1299](adr/1200.md) | 14 | 0 |
-| [1300–1399](adr/1300.md) | 48 | 1 |
+| [1300–1399](adr/1300.md) | 51 | 1 |
 | [1400–1499](adr/1400.md) | 21 | 0 |
-| [1500–1599](adr/1500.md) | 14 | 0 |
+| [1500–1599](adr/1500.md) | 15 | 0 |
+| [1600–1699](adr/1600.md) | 24 | 0 |
 
 ## Commands
 

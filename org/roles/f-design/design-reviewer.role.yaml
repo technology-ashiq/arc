@@ -1,0 +1,37 @@
+# Design reviewer -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'design-reviewer'
+title: 'Design reviewer'
+dept: 'f-design'
+mission: 'Score shipped UI per dimension, remove AI slop and fix it with before-and-after proof.'
+stages:
+  - 'build'
+  - 'launch'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'design-reviewer'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'design-director'
+escalate_to: 'design-director'
+e2: []
+produces:
+  kind: 'design-reviewer-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

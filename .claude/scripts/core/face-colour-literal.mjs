@@ -28,13 +28,21 @@
 // What it does NOT see, declared: CSS named colours other than white and black (red, teal, ...),
 // which are ordinary English words in a room's copy; system colours (Canvas, CanvasText); colours
 // built at runtime from numbers or by string concatenation; and anything outside its roots --
-// today that is the v1 renderers under face/src/rooms, which Phase 03 replaces with modules, and
-// the unmounted face stage under face/src/face, whose particle palette joins a root when a room
-// draws the stage again. The v0.7 shell ported in Phase 02 lives under face/src/shell and
-// face/src/App.tsx, and both are read.
+// today that is the v1 renderers under face/src/rooms, which Phase 03 replaces with modules. The
+// v0.7 shell ported in Phase 02 lives under face/src/shell and face/src/App.tsx, and both are read.
+//
+// The front door (face v2 Phase 09, ADR-1349 section 4): face/src/face (the stage) and
+// face/src/frontdoor (the door) are roots too. The door keeps the neon identity in both moods, so
+// its palette is not a token -- it is allowed BY NAME in exactly one file, NEON_FILE, and nowhere
+// else: a literal anywhere else under either root FAILs like one under modules/. The allowance
+// covers colour literals only; a binary, symlinked or special file there is still a finding, and
+// the file must exist while its root does, or the allowance would name nothing. The stage's palette file,
+// face/src/lib/stage.mjs, is a root and a second named allowance: the face's hues are the reference's literals.
 //
 // Usage: face-colour-literal.mjs [--root PATH]...  (default: face/src/ui, face/src/modules,
-//        face/src/shell and face/src/App.tsx, every one of which must exist)
+//        face/src/shell, face/src/App.tsx, face/src/face, face/src/frontdoor and
+//        face/src/lib/stage.mjs, every one of
+//        which must exist; an explicit --root gets no allowance)
 // Exit:  0 scanned more than zero files and found nothing · 1 a finding, or nothing scanned
 //        2 could not run (bad argument, a root given twice or inside another, unreadable root)
 import { readdirSync, readFileSync, lstatSync, realpathSync } from "node:fs";
@@ -43,9 +51,18 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
-export const DEFAULT_ROOTS = ["face/src/ui", "face/src/modules", "face/src/shell", "face/src/App.tsx"];
+export const DEFAULT_ROOTS = ["face/src/ui", "face/src/modules", "face/src/shell", "face/src/App.tsx", "face/src/face", "face/src/frontdoor", "face/src/lib/stage.mjs"];
 /** A default root that must exist: a renamed or re-cased folder is a finding, not a clean tree. */
-export const REQUIRED_DEFAULT_ROOTS = ["face/src/ui", "face/src/modules", "face/src/shell", "face/src/App.tsx"];
+export const REQUIRED_DEFAULT_ROOTS = [...DEFAULT_ROOTS];
+/** The one file whose colour literals are allowed: the front door's neon palette (ADR-1349). */
+export const NEON_FILE = "face/src/frontdoor/neon.mjs";
+/**
+ * The stage palette and sprite paint (lib/stage.mjs): the face's own hues, which three needs as literals. A root of its
+ * own and allowed by name, so a literal moved out of FaceStage.tsx lands where it is still read (attack e40b65f B2).
+ */
+export const STAGE_FILE = "face/src/lib/stage.mjs";
+/** The colour-literal kinds an allowed file may carry; anything else found in it is still a finding. */
+const COLOUR_KINDS = new Set(["hex", "named", "function", "palette"]);
 
 // Letters and digits only: `_` and `$` are separators here, because Tailwind reads `_` as a space
 // inside an arbitrary value and a literal assembled that way is still a literal.
@@ -163,8 +180,8 @@ function exactCase(abs) {
  * file is a named finding rather than a file quietly left out of the count.
  * @returns {{ roots: { root: string, state: string, files: number }[], scanned: number, findings: object[] }}
  */
-export function lintRoots(roots, base = REPO, { required = [] } = {}) {
-  const report = { roots: [], scanned: 0, findings: [] };
+export function lintRoots(roots, base = REPO, { required = [], allow = [] } = {}) {
+  const report = { roots: [], scanned: 0, findings: [], allowed: [] };
   const show = (p) => relative(base, p).split(sep).join("/") || ".";
   const finding = (p, kind, literal) => report.findings.push({ file: show(p), line: 0, col: 0, kind, literal });
 
@@ -184,7 +201,16 @@ export function lintRoots(roots, base = REPO, { required = [] } = {}) {
     report.scanned++;
     const buf = readFileSync(path);
     if (buf.includes(0)) { finding(path, "binary", "file carries a NUL byte and cannot be scanned"); return; }
-    report.findings.push(...scanText(buf.toString("utf8"), show(path)));
+    const found = scanText(buf.toString("utf8"), show(path));
+    // Matched on the path relative to the base, exact case and separator: a neon2.mjs, a NEON.mjs or
+    // a neon.mjs in another directory is not the named file.
+    if (allow.includes(show(path))) {
+      const bare = (k) => k.replace(/^escaped-/, "");
+      report.allowed.push({ file: show(path), literals: found.filter((f) => COLOUR_KINDS.has(bare(f.kind))).length });
+      report.findings.push(...found.filter((f) => !COLOUR_KINDS.has(bare(f.kind))));
+      return;
+    }
+    report.findings.push(...found);
   };
   const walk = (dir, counter) => {
     const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
@@ -197,6 +223,17 @@ export function lintRoots(roots, base = REPO, { required = [] } = {}) {
       else finding(p, "special", "neither a file nor a directory");
     }
   };
+  // An allowance for a file that is not there names nothing: while its root is walked, it must exist.
+  for (const a of allow) {
+    const owner = resolved.find(({ abs }) => resolve(base, a).toLowerCase().startsWith(abs.toLowerCase() + sep.toLowerCase()));
+    if (!owner) continue;
+    let rootIsDir = false;
+    try { rootIsDir = lstatSync(owner.abs).isDirectory(); } catch { /* an absent root is its own finding below */ }
+    if (!rootIsDir) continue;
+    let ok = false;
+    try { ok = lstatSync(resolve(base, a)).isFile() && exactCase(resolve(base, a)); } catch { ok = false; }
+    if (!ok) finding(resolve(base, a), "allow-absent", "the one file whose neon literals are allowed is not on this tree -- renamed, moved or re-cased? (ADR-1349)");
+  }
   for (const { r, abs } of resolved) {
     let st;
     try { st = lstatSync(abs); } catch (e) {
@@ -244,17 +281,18 @@ export function parseArgs(argv) {
   }
   // An explicit root must exist; a default one must exist only when it is required.
   return roots.length
-    ? { roots, custom: true, required: roots }
-    : { roots: DEFAULT_ROOTS, custom: false, required: REQUIRED_DEFAULT_ROOTS };
+    ? { roots, custom: true, required: roots, allow: [] }
+    : { roots: DEFAULT_ROOTS, custom: false, required: REQUIRED_DEFAULT_ROOTS, allow: [NEON_FILE, STAGE_FILE] };
 }
 
 function main(argv) {
   let opts;
   try { opts = parseArgs(argv); } catch (e) { console.error(`face-colour-literal: ${e.message}`); return 2; }
   let report;
-  try { report = lintRoots(opts.roots, opts.custom ? process.cwd() : REPO, { required: opts.required }); }
+  try { report = lintRoots(opts.roots, opts.custom ? process.cwd() : REPO, { required: opts.required, allow: opts.allow }); }
   catch (e) { console.error(`face-colour-literal: ${e.message}`); return 2; }
   for (const r of report.roots) console.log(`root ${r.root}: ${r.state === "present" ? `files=${r.files}` : r.state}`);
+  for (const a of report.allowed) console.log(`allowed ${a.file}: literals=${a.literals} (a palette allowed by name -- ADR-1349)`);
   for (const f of report.findings) console.log(`FAIL ${f.file}:${f.line}:${f.col} ${f.kind} ${f.literal}`);
   if (report.scanned === 0) console.log("FAIL nothing was scanned -- zero files is not a clean tree");
   console.log(`colour-literal: scanned=${report.scanned} files findings=${report.findings.length}`);

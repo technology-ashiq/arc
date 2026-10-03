@@ -52,10 +52,39 @@ async function callOnce(body, capMs) {
       signal: ctl.signal,
     });
     const text = await res.text();
-    return { status: res.status, text };
+    const sse = /text\/event-stream/i.test(res.headers.get("content-type") || "");
+    return { status: res.status, text: sse && res.status >= 200 && res.status < 300 ? fromSse(text) : text };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * The request asks for a stream because Node's fetch (undici) waits at most 300 s for response HEADERS and 300 s
+ * between body chunks, whatever the AbortSignal allows: a non-streamed answer longer than 5 min was cut at ~300 s as
+ * `status 0` however high ARC_LLM_TIMEOUT_MS was set (engine bug, 2026-10-01: six logic-attack attempts across two
+ * models and two input sizes, every one ending at 304-306 s). A stream gets its headers at once, and the provider's
+ * chunks and keep-alive comments keep the body moving. This folds the chunks back into the one envelope the rest of
+ * the driver reads, so nothing downstream changes.
+ * @param {string} text
+ */
+function fromSse(text) {
+  let content = "", usage, model, error;
+  for (const raw of text.split(/\r?\n/)) {
+    if (!raw.startsWith("data:")) continue;
+    const data = raw.slice(5).trim();
+    if (!data || data === "[DONE]") continue;
+    let ev;
+    try { ev = JSON.parse(data); } catch { continue; }
+    if (ev.error) error = ev.error;
+    const piece = ev.choices?.[0]?.delta?.content ?? ev.choices?.[0]?.message?.content;
+    if (typeof piece === "string") content += piece;
+    if (ev.usage) usage = ev.usage;
+    if (ev.model) model = ev.model;
+  }
+  // An error mid-stream is not an answer: hand back an envelope with no content, which the driver already refuses.
+  if (error) return JSON.stringify({ error });
+  return JSON.stringify({ model, usage, choices: [{ message: { role: "assistant", content } }] });
 }
 
 await runDriver("generic-api", async ({ processName, input }) => {
@@ -91,6 +120,9 @@ await runDriver("generic-api", async ({ processName, input }) => {
       { role: "user", content: prompt },
     ],
     ...(REASONING_OFF ? { reasoning: { enabled: false } } : {}),
+    // Streamed to get past undici's 300 s headers cap (see fromSse); usage rides the last chunk.
+    stream: true,
+    stream_options: { include_usage: true },
   };
   if (REASONING_OFF) process.stderr.write("generic-api: reasoning off (ARC_LLM_REASONING=off)\n");
 

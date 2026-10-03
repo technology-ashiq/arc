@@ -6,7 +6,9 @@
 //   A. an endpoint that accepts and NEVER answers, a 60 s per-attempt cap and a ~6 s run budget: the run ends on the
 //      deadline (well under one cap), and says so attempt by attempt.
 //   B. an endpoint that answers 503 at once: three attempts, three lines, each naming its status, the last not retrying.
-//   D. ARC_LLM_REASONING=off puts reasoning {enabled: false} on the request, unset leaves no reasoning key at all, and
+//   D/E. (engine bug, 2026-10-01) the request asks for a stream and a streamed answer is folded back whole; a provider
+//      that ignores the stream flag and answers plain JSON is still read.
+//   F. ARC_LLM_REASONING=off puts reasoning {enabled: false} on the request, unset leaves no reasoning key at all, and
 //      any other value is refused before the endpoint is reached (ADR-0226 Amendment 3).
 // Asserts each run RAN (a spawned child, a started server) before asserting what it printed.
 import { spawn } from "node:child_process";
@@ -76,6 +78,45 @@ try {
       lines.length === 3 && lines.every((l, i) => l.startsWith(`generic-api: attempt ${i + 1}/3: status 503 after `))
       && lines[0].endsWith(", retrying") && lines[1].endsWith(", retrying") && !lines[2].endsWith(", retrying"), JSON.stringify(lines));
   }
+  // ---- D. the request streams, and a streamed answer is folded back (engine bug, 2026-10-01) ----
+  // undici cuts a non-streamed answer at 300 s however high ARC_LLM_TIMEOUT_MS is set; a stream gets past it. A real
+  // 300 s wait is not run here: this pins that the request asks for a stream and that the chunks reach the output whole.
+  {
+    const answer = JSON.stringify({ commits: [{ sha: "4936371", subject: "fix(engine): stream generic-api" }] });
+    const half = Math.floor(answer.length / 2);
+    let hits = 0, body = "";
+    const s = await serve((req, res) => {
+      hits++;
+      req.on("data", (c) => { body += c; });
+      req.on("end", () => {
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        res.write(": OPENROUTER PROCESSING\n\n");
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: answer.slice(0, half) } }] })}\n\n`);
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: answer.slice(half) } }] })}\n\n`);
+        res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 11, completion_tokens: 7 } })}\n\n`);
+        res.end("data: [DONE]\n\n");
+      });
+    });
+    const r = await run(s.address().port, 2, join(tmp, "spine-d"));
+    s.close();
+    let asked = {};
+    try { asked = JSON.parse(body); } catch { /* checked below */ }
+    check("fixture: the streaming endpoint was hit once and read a request body (vacuous-pass guard)", r.spawned && hits === 1 && body.length > 0, `hits=${hits} body=${body.length}`);
+    check("D: the request asks for a stream with usage, and a streamed answer split across chunks reaches the run whole",
+      asked.stream === true && asked.stream_options?.include_usage === true && r.code === 0, `stream=${asked.stream} code=${r.code} err=${r.err.slice(-400)}`);
+  }
+  // ---- E. an endpoint that ignores the stream flag and answers plain JSON still works ----
+  {
+    const answer = JSON.stringify({ commits: [{ sha: "4936371", subject: "fix(engine): plain json still read" }] });
+    let hits = 0;
+    const s = await serve((req, res) => { hits++; req.resume(); req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: answer } }], usage: { prompt_tokens: 3, completion_tokens: 2 } }));
+    }); });
+    const r = await run(s.address().port, 2, join(tmp, "spine-e"));
+    s.close();
+    check("E: a provider that ignores the stream flag and answers plain JSON is still read (control for D)", r.spawned && hits === 1 && r.code === 0, `hits=${hits} code=${r.code} err=${r.err.slice(-400)}`);
+  }
   // ---- C. a deadline that is digits but no epoch millisecond fails CLOSED (attack 415d3a3 L2) ----
   {
     const common = await import(new URL("../.claude/scripts/engine/drivers/common.mjs", import.meta.url).href);
@@ -104,16 +145,16 @@ try {
     const parse = (i) => { try { return JSON.parse(bodies[i]); } catch { return null; } };
     check("fixture: the off run and the unset run each reached the endpoint (vacuous-pass guard)", off >= 1 && unset > off, `off=${off} unset=${unset}`);
     const o = parse(0);
-    check("D: ARC_LLM_REASONING=off sends reasoning {enabled: false}",
+    check("F: ARC_LLM_REASONING=off sends reasoning {enabled: false}",
       !!o && JSON.stringify(o.reasoning) === JSON.stringify({ enabled: false }), String(bodies[0]).slice(0, 200));
     const u = parse(off);
-    check("D: unset sends no reasoning key at all, so the request keeps its old shape",
+    check("F: unset sends no reasoning key at all, so the request keeps its old shape",
       !!u && !Object.hasOwn(u, "reasoning") && Array.isArray(u.messages), String(bodies[off]).slice(0, 200));
-    check("D: any other value is refused before the endpoint is reached",
+    check("F: any other value is refused before the endpoint is reached",
       bad.code !== 0 && bodies.length === unset && /ARC_LLM_REASONING="on" is not "off" or unset/.test(bad.err), `code=${bad.code} bodies=${bodies.length} err=${bad.err.slice(-300)}`);
   }
 } finally {
   try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { console.log(`WARN the scratch dir was not removed: ${tmp} (${e.code || "error"})`); }
 }
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 10 ? 0 : 1;
+process.exitCode = failed === 0 && ran === 13 ? 0 : 1;

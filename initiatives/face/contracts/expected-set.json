@@ -739,7 +739,8 @@
       "policy": "policy",
       "portfolio": "board",
       "scheduler": "scheduler",
-      "docs": "lane"
+      "docs": "lane",
+      "org": "lane"
     }
   },
   "commands": {
@@ -813,7 +814,7 @@
     }
   },
   "processes": {
-    "$comment": "10 live + develop-proof and adr-record (Phase 06; a live run waits on their hq.policy.yaml rows) + face-ask lands in Phase 07",
+    "$comment": "10 live + develop-proof and adr-record (Phase 06; a live run waits on their hq.policy.yaml rows) + face-ask, landed in Phase 10 (ADR-1350)",
     "map": {
       "commit-msg-draft": "engine-room",
       "review-diff": "engine-room",
@@ -828,7 +829,7 @@
       "rule-promote": "memory",
       "develop-proof": "develop",
       "adr-record": "strategy",
-      "face-ask (Phase 07)": "ask-arc"
+      "face-ask": "ask-arc"
     }
   },
   "gates": {
@@ -1347,6 +1348,7 @@
     "map": {
       "hq": "spine",
       "core": "toolbelt",
+      "org": "toolbelt",
       "plan": "lane",
       "review": "review-ship",
       "git": "review-ship",
@@ -1372,6 +1374,7 @@
       "1300": "toolbelt",
       "1400": "design-studio",
       "1500": "lane",
+      "1600": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1419,6 +1422,7 @@
       "PLAN-memory": "strategy",
       "PLAN-model-policy": "strategy",
       "PLAN-ops": "strategy",
+      "PLAN-org": "strategy",
       "PLAN-policy": "strategy",
       "PLAN-portfolio": "strategy",
       "PLAN-scheduler": "strategy",
@@ -1428,6 +1432,9 @@
   "capabilities": {
     "map": {
       "skill:seo-article-writer": "toolbelt",
+      "skill:council-consult": "toolbelt",
+      "skill:outreach-draft": "toolbelt",
+      "skill:support-reply": "toolbelt",
       "mcp:supabase": "toolbelt",
       "mcp:playwright": "toolbelt",
       "mcp:context7": "toolbelt",
@@ -1450,5 +1457,16 @@
       "workflow:shard-calibrate": "review-ship",
       "workflow:weigh-tests": "review-ship"
     }
+  },
+  "surfaces": {
+    "$comment": "Screens the shell draws that are NOT rooms (ADR-1349). Not served by /api/rooms, never in the rail. face-coverage holds these rows EQUAL to the face/src directories App.tsx imports beyond the shell's own, both ways; a second, unnamed surface FAILs.",
+    "list": [
+      {
+        "id": "front-door",
+        "name": "The front door",
+        "dir": "face/src/frontdoor",
+        "adr": "ADR-1349"
+      }
+    ]
   }
 }

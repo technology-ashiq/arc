@@ -1,0 +1,39 @@
+# Code reviewer -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'code-reviewer'
+title: 'Code reviewer'
+dept: 'e-engineering'
+mission: 'Review every diff with scanners plus an OWASP-mapped pass before it merges.'
+stages:
+  - 'build'
+  - 'launch'
+  - 'support'
+  - 'operate'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'code-reviewer'
+  skills: []
+  scripts: []
+  process: 'review-diff'
+  tier: 'high-judgment'
+reports_to: 'solution-architect'
+escalate_to: 'solution-architect'
+e2: []
+produces:
+  kind: 'code-reviewer-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

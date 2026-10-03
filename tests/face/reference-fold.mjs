@@ -16,7 +16,9 @@ const reg = await import(u(join(REPO, "face", "src", "lib", "registry.mjs")));
 const route = await import(u(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reference", "route.mjs")));
 const dir = join(REPO, "face", "src", "modules", "company", "reference");
 const manifest = (await import(u(join(dir, "module.mjs")))).default;
-const { fold, splitNarrative, splitBlocks } = await import(u(join(dir, "fold.mjs")));
+const { fold, splitNarrative, splitBlocks, narrativeBlocks } = await import(u(join(dir, "fold.mjs")));
+// Only a test may import both: the face keeps its own copy of the gate's fence tokenizer (it must not import from .claude/scripts).
+const gate = await import(u(join(REPO, ".claude", "scripts", "docs", "narrative-anchors.mjs")));
 const registry = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
 let ran = 0, failed = 0;
 const check = (name, cond, detail = "") => {
@@ -238,5 +240,72 @@ check("loading: before the door answers, the room says it is reading, and draws 
     JSON.stringify({ debt: idx.debt, prod: prod && prod.id, missing: pf && pf.entity.missing }));
 }
 
+// ---- page shape v1 (ADR-1348): products and lanes draw the owner's page; other entities keep the plain one ----
+{
+  const { pageOf } = await import(u(join(dir, "fold.mjs")));
+  const qa = body.entities.products.find((e) => e.id === "qa");
+  const pf = foldAt("products/qa");
+  const sec = (f, title) => f.shape.groups.flatMap((g) => g.sections).find((s) => s.title.map((x) => x.text).join("") === title);
+  const installs = sec(pf, "What it installs");
+  const want = (qa?.facts.commands || []).length + (qa?.facts.agents || []).length;
+  const groupKeys = pf.shape.groups.map((g) => g.key);
+  check("page shape: a product page draws its groups and nav, chips from the extract, and generated sections from the extract",
+    !!qa && pf.isShaped === true && pf.isPlainEntity === false && ["reference", "evidence", "meta"].every((k) => groupKeys.includes(k))
+    && pf.shape.nav.length >= 3 && pf.shape.chips.some((c) => c.k === "requires")
+    && !!installs && installs.isGenerated === true && installs.blocks[0].isTable === true && installs.blocks[0].rows.length === want
+    && ["How it connects", "Drift check", "Sources"].every((t) => !!sec(pf, t)),
+    JSON.stringify({ shaped: pf.isShaped, groupKeys, nav: pf.shape.nav.length, rows: installs && installs.blocks[0].rows.length, want }));
+  const lf = foldAt("lanes/face");
+  const status = sec(lf, "Lane status");
+  const laneFacts = body.entities.lanes.find((e) => e.id === "face")?.facts || {};
+  check("page shape: a lane page draws its status as stat boxes read from its PROGRESS header",
+    lf.isShaped === true && !!status && status.blocks[0].isStats === true && status.blocks[0].stats[0].value === String(laneFacts.status),
+    JSON.stringify(status && status.blocks[0].stats));
+  const cf = foldAt(`commands/${ids("commands")[0]}`);
+  check("plain entity: a command page keeps the plain layout, not the page shape", cf.isPlainEntity === true && cf.isShaped === false);
+  const text = [
+    "```tagline", "The people who press the buttons.", "```",
+    "# Start here", "## In plain words", "Think of it as a shop.",
+    "```lede", "One line <script>alert(1)</script>.", "```",
+    "```steps", "t: Look", "plain: open the app", "d: agent-browser drives it", "f: qa-tester.md", "t: Fix", "plain: one bug, one commit", "```",
+    "```panel warn", "title: live position", "Something is late.", "```",
+    "```stats", "3 | commands", "2 | agents", "```",
+    "```rosetta", "flow | one user journey | the unit tested", "```",
+    "# Meta", "## Glossary", "```gloss", "WCAG: the accessibility bar", "```",
+    "```stats", "no bar here", "```",
+    "```bash", "echo quoted", "```",
+  ].join("\n");
+  const p = pageOf(text);
+  const blocks = Object.values(p.groups).flat().flatMap((s) => s.blocks);
+  const kinds = ["isLede", "isSteps", "isPanel", "isStats", "isRosetta", "isGloss", "isBad", "isCode"].filter((k) => blocks.some((b) => b[k]));
+  const lede = blocks.find((b) => b.isLede);
+  const badBlock = blocks.find((b) => b.isBad);
+  check("fenced: every page-shape block parses to its kind, a tagline goes to the masthead, and a malformed block is drawn as its source with the reason",
+    p.tagline.map((s) => s.text).join("") === "The people who press the buttons." && kinds.length === 8
+    && blocks.find((b) => b.isSteps).steps.length === 2 && blocks.find((b) => b.isPanel).isWarn === true
+    && !!badBlock && badBlock.bad.includes("no \"value | label\" bar") && badBlock.text === "no bar here"
+    && lede.spans.length === 1 && lede.spans[0].isText === true && lede.spans[0].text.includes("<script>"),
+    JSON.stringify({ kinds, tagline: p.tagline }));
+  const figs = pageOf("## F\n```flow\nbox: A | a\nbox: B | b\nlabels: go\n```\n```flow\nbox: only one\n```\n```loop\nstage: A\nstage: B\nback: last -> 1 | again\n```").groups.start.flatMap((s) => s.blocks);
+  check("figure: a flow and a loop become geometry; a flow that cannot be drawn is a visible bad block, never a wrong picture",
+    figs.length === 3 && figs[0].isFigure === true && figs[0].figure.boxes.length === 2 && figs[1].isBad === true && figs[1].bad.includes("a flow draws 2 to 7")
+    && figs[2].isFigure === true && figs[2].figure.arrows.some((a) => a.key === "back"),
+    JSON.stringify(figs.map((b) => [b.isFigure, b.isBad, b.bad])));
+}
+
+{
+  // attack b8707be B4: the gate and the renderer must read one fence the same way. A longer fence closes only on a bare
+  // fence of its own character and at least its length, so the inner ```steps below is QUOTED text to both.
+  const nested = "## S\n\n````md\n```steps\nt: x\nplain: `/arc-gone`\n```\n````\n\nAfter `/arc-x`.\n";
+  const tilde = "```bash\n~~~\n`/arc-gone`\n```\n\nAfter `/arc-x`.\n";
+  const loopQuoted = "Intro.\n\n````md\n```\n## The bigger loop\n```\n````\n\nMore.\n";
+  const kinds = (t) => narrativeBlocks(t).filter((b) => !b.isHeading).map((b) => (b.isCode ? "code" : b.isSteps ? "steps" : b.isPara ? "para" : "other")).join();
+  const gateKinds = (t) => `${gate.blocksOf(t).length}:${gate.namesOf(t).commands.join()}`;
+  check("fence agreement: the fold and the gate treat a nested inner fence, and a fence of the other character, as quoted text alike",
+    kinds(nested) === "code,para" && gateKinds(nested) === "1:arc-x" && kinds(tilde) === "code,para" && gateKinds(tilde) === "1:arc-x"
+    && splitBlocks(loopQuoted).loop.length === 0 && splitNarrative(loopQuoted).loop.length === 0 && gate.blocksOf(loopQuoted).length === 2,
+    JSON.stringify({ nested: [kinds(nested), gateKinds(nested)], tilde: [kinds(tilde), gateKinds(tilde)], loop: [splitBlocks(loopQuoted).loop.length, splitNarrative(loopQuoted).loop.length] }));
+}
+
 console.log(`RAN: ${ran} checks`);
-process.exitCode = failed === 0 && ran === 20 ? 0 : 1;
+process.exitCode = failed === 0 && ran === 26 ? 0 : 1;

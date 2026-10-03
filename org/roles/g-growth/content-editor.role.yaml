@@ -1,0 +1,37 @@
+# Content editor -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'content-editor'
+title: 'Content editor'
+dept: 'g-growth'
+mission: 'Refuse slop and unsupported citations before any piece is published.'
+stages:
+  - 'launch'
+  - 'grow'
+seat: 'script'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts:
+    - '.claude/scripts/growth/arc-growth.mjs'
+  process: null
+  tier: null
+reports_to: 'head-of-growth'
+escalate_to: 'head-of-growth'
+e2: []
+produces:
+  kind: 'content-editor-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

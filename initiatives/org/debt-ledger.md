@@ -1,0 +1,11 @@
+# org — debt ledger
+
+LOW findings left after the attack rounds, and gaps accepted in writing. Each row names what it
+would take to close.
+
+| # | Opened | Item | Why not now | Closes when |
+|---|---|---|---|---|
+| 1 | 2026-09-30 | The yaml-subset parser (engine lane, ADR-0200) misreads a quoted list item holding `": "` as a mapping. | The parser is the engine lane's shared organ. org works around it (the emitter refuses; the gate fails the misread) and does not edit it. | The engine lane fixes `parseYamlSubset` and a paste-ready report is delivered to that lane. |
+| 2 | 2026-09-30 | Two concurrent `org-catalog --draft` runs: A's rollback can delete a file B reported as existing (attack c7eddd6 B7, low). | Draft is a one-time, single-operator bootstrap; a lock costs more than the race. | Draft runs in any automated path, or a second operator drafts. |
+| 3 | 2026-09-30 | The LOGIC attack surface has not produced a result for Phase 00: the free qwen trial and deepseek-v4-flash both hit the driver's 60 s per-attempt default (`ARC_LLM_TIMEOUT_MS`). | Found after three boundary passes; the next logic run sets `ARC_LLM_TIMEOUT_MS=420000` and covers the Phase 00 code in its diff. | A logic result is recorded for a diff that includes Phase 00. Update 2026-09-30: a third attempt with ARC_LLM_TIMEOUT_MS=420000 on deepseek-v4-flash via OpenRouter got HTTP 403 on all 3 transport attempts (key or credits). The owner's OpenRouter account must be checked. **CLOSED 2026-10-01:** the cause was a driver bug, not the model: generic-api did not stream, and Node fetch drops a response whose headers take more than 300 s. Fixed in this PR; the first logic result is `evidence/phase-03/attack-c4b6f73-r1-logic.json` (6 findings, triage beside it). |
+| 4 | 2026-10-01 | The scheduler wrapper caps `org-dispatch --all --emit` at 110 s, and each emit inside it at 8 s. One team fits (B6), but several teams with full queues could exceed it (logic attack L6, low). | Only one team can be governed until the first venture registers. | A second team is governed, or a run is killed by the 110 s cap. |

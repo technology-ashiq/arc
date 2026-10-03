@@ -1,0 +1,37 @@
+# SDR / outbound -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'sdr-outbound'
+title: 'SDR / outbound'
+dept: 'h-sales'
+mission: 'Send researched, personal first messages and record every one that goes out.'
+stages:
+  - 'sell'
+seat: 'script'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills:
+    - 'outreach-draft'
+  scripts:
+    - '.claude/scripts/leads/arc-leads.mjs'
+  process: null
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'sdr-outbound-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

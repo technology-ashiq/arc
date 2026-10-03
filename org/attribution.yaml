@@ -1,0 +1,114 @@
+# org/attribution.yaml -- which role a spine receipt belongs to (org Phase 01, ADR-1604 / ORG-D).
+#
+# Ordered: the FIRST rule that matches a receipt places it, so specific rules sit above general
+# ones. A rule matches on what a receipt already carries -- actor, process (the stem before "@",
+# or payload.process on a run receipt), kind -- and the actor field is never rewritten.
+# A receipt no rule matches is counted UNATTRIBUTED; nothing is guessed.
+#
+# Rules that match on a process, or on an exact non-scheduler actor, "name their source". Only
+# those count toward the day-3 kill checkpoint; kind-only and scheduler rules still place a
+# receipt on the scorecard, but they cannot make a premise pass.
+version: 1
+rules:
+  # ---- process-named: the strongest evidence, a governed process ran for this seat ----
+  - id: 'commit-msg-draft'
+    match:
+      process: 'commit-msg-draft'
+    role: 'devops-release'
+  - id: 'council-convene'
+    match:
+      process: 'council-convene'
+    role: 'board-advisors'
+  - id: 'build-in-public-draft'
+    match:
+      process: 'build-in-public-draft'
+    role: 'build-in-public-social'
+  - id: 'adr-record'
+    match:
+      process: 'adr-record'
+    role: 'solution-architect'
+  - id: 'develop-proof'
+    match:
+      process: 'develop-proof'
+    role: 'developer'
+  - id: 'review-diff'
+    match:
+      process: 'review-diff'
+    role: 'code-reviewer'
+  - id: 'attack-diff'
+    match:
+      process: 'attack-diff'
+    role: 'security-engineer'
+  - id: 'narrative-verify'
+    match:
+      process: 'narrative-verify'
+    role: 'technical-writer'
+  - id: 'kickoff-plan'
+    match:
+      process: 'kickoff-plan'
+    role: 'product-manager'
+  - id: 'lesson-log'
+    match:
+      process: 'lesson-log'
+    role: 'hr-performance'
+  - id: 'rule-promote'
+    match:
+      process: 'rule-promote'
+    role: 'hr-performance'
+  - id: 'design-explore'
+    match:
+      process: 'arc-design-explore'
+    role: 'design-director'
+  # ---- actor-named: an emitter that belongs to one job ----
+  - id: 'leads-research'
+    match:
+      actor: 'arc-leads'
+      kind: 'lead.researched'
+    role: 'lead-researcher'
+  - id: 'leads-outbound'
+    match:
+      actor: 'arc-leads'
+    role: 'sdr-outbound'
+  - id: 'owner-constitution'
+    match:
+      actor: 'human:ashiq'
+      kind: 'constitution.adopted'
+    role: 'constitution-keeper'
+  # ---- scheduler: heartbeats, placed but never counted as a role doing work ----
+  - id: 'brief-materialize'
+    match:
+      actor: 'scheduler:brief-materialize'
+    role: 'chief-of-staff'
+  - id: 'scheduler'
+    match:
+      actor: 'scheduler:*'
+    role: 'pmo-scheduler'
+  # ---- kind-only: the weakest evidence, placed for the scorecard, never for the checkpoint ----
+  - id: 'kind-kickoff'
+    match:
+      kind: 'kickoff.done'
+    role: 'product-manager'
+  - id: 'kind-review'
+    match:
+      kind: 'review.completed'
+    role: 'code-reviewer'
+  - id: 'kind-slice'
+    match:
+      kind: 'slice.done'
+    role: 'developer'
+  - id: 'kind-phase'
+    match:
+      kind: 'phase.closed'
+    role: 'developer'
+  - id: 'kind-content'
+    match:
+      kind: 'content.published'
+    role: 'content-writer'
+  - id: 'kind-month'
+    match:
+      kind: 'month.closed'
+    role: 'bookkeeper'
+  - id: 'kind-cost'
+    match:
+      kind: 'cost.incurred'
+    role: 'finops'

@@ -66,6 +66,32 @@ export function yamlStems(p) {
   const suffix = ".process.yaml";
   return readdirSync(p).filter((n) => n.endsWith(suffix)).map((n) => n.slice(0, -suffix.length));
 }
+/**
+ * Every script under .claude/scripts/ as a sorted repo-relative POSIX path (*.mjs, *.js, *.sh).
+ * Added for org-coverage (ADR-1620), which must resolve a role card's `binds.scripts` through
+ * this module rather than a second walker of its own. Symlinks are neither followed nor listed:
+ * a link cannot pull a tree from outside the repo in, and a link named x.mjs is not a script.
+ */
+export function treeScripts(repo) {
+  const base = join(repo, ".claude", "scripts");
+  const out = [];
+  const walk = (dir, rel) => {
+    let names;
+    // Only a MISSING directory is an empty answer; EACCES or EIO would silently shrink the inventory.
+    try { names = readdirSync(dir); } catch (e) { if (e && e.code === "ENOENT") return; throw e; }
+    for (const n of names) {
+      if (n === "node_modules") continue;
+      const abs = join(dir, n);
+      const r = rel ? `${rel}/${n}` : n;
+      let st;
+      try { st = lstatSync(abs); } catch (e) { if (e && e.code === "ENOENT") continue; throw e; }
+      if (st.isDirectory()) walk(abs, r);
+      else if (st.isFile() && /\.(mjs|js|sh)$/.test(n)) out.push(`.claude/scripts/${r}`);
+    }
+  };
+  walk(base, "");
+  return out.sort();
+}
 
 // ---------- the seven inventories added by ADR-1317 ----------
 //
@@ -511,6 +537,148 @@ export function moduleFindings(tree) {
   return { findings, generic, folders: tree.folders.length, served: openable.length, orphans, exemptions: tree.exemptions.length, exempted: [...exempt].sort() };
 }
 
+// ---------- the surface half (face v2 Phase 09, REQ-13, ADR-1349) ----------
+//
+// A SURFACE is a screen the shell draws that is not a room: today exactly one, the front door at `/`, which carries the
+// face. It is not served by /api/rooms and has no module, so the room checks above can never see it -- and an unnamed
+// second screen is precisely how a scope decision gets made without the owner. So a surface is named ONCE, as a row in
+// expected-set.json's `surfaces.list`, and reconciled both ways against the one file that mounts it, face/src/App.tsx:
+// every face/src directory App.tsx imports from, other than the shell's own, must have a row, and every row must name a
+// directory that exists and that App.tsx imports. The served registry stays the only room list (ADR-1306, ADR-1321).
+
+/** The face/src directories that are the workroom shell itself, never a surface. */
+export const SHELL_DIRS = Object.freeze(["lib", "shell", "ui", "modules", "rooms", "face"]);
+/**
+ * The files face/src holds at its top: the entry, the shell, the styles and the type shim. Anything else at the top is
+ * a surface or a finding. The DISK is judged, not only App.tsx's import spellings: an import can be spelled more ways
+ * than a scanner knows (`./dir`, `../src/dir`, an alias, a glob array, a Worker URL) and mounted from any file, while a
+ * top-level entry cannot hide from a directory listing (attack 1bc1328 B1-B5).
+ */
+export const SHELL_FILES = Object.freeze(["App.tsx", "main.tsx", "index.css", "tokens.css", "vite-env.d.ts"]);
+const SURFACE_ID = /^[a-z][a-z0-9-]*$/;
+const SURFACE_ADR = /^ADR-\d{4}$/;
+
+/**
+ * The face/src directories an App.tsx source imports from, sorted and unique. Every static `from '...'`, bare
+ * `import '...'`, dynamic `import('...')`, `import.meta.glob('...')` and `require('...')` counts; comments are removed
+ * first so a commented-out import is not a surface. A relative specifier one segment deep or more
+ * (`./frontdoor/FrontDoor`) names a directory, a wildcard directory segment is kept as written (no row can name it, so
+ * it FAILs), and a bare `./dir` names one when `onDisk` lists that directory.
+ * @param {string} text
+ * @param {string[]} [onDisk]  the directories under face/src
+ * @returns {string[]}
+ */
+export function appImportDirs(text, onDisk = []) {
+  // One pass that knows strings from comments: a regex strip read the `/*` inside a glob string ('./modules/*/*')
+  // as a comment opening and ate every import after it.
+  const t = String(text);
+  let src = "";
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (c === "/" && t[i + 1] === "/") { while (i < t.length && t[i] !== "\n") i++; src += "\n"; continue; }
+    if (c === "/" && t[i + 1] === "*") { const end = t.indexOf("*/", i + 2); i = end === -1 ? t.length : end + 1; src += " "; continue; }
+    if (c === "'" || c === '"' || c === "`") {
+      let j = i + 1;
+      while (j < t.length && t[j] !== c && !(c !== "`" && t[j] === "\n")) j += t[j] === "\\" ? 2 : 1;
+      src += t.slice(i, j + 1);
+      i = j;
+      continue;
+    }
+    src += c;
+  }
+  const dirs = new Set();
+  // Every way a bundler follows a path: from, import(), a bare import, import.meta.glob(), require() (attack e40b65f B1).
+  const specs = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bimport\.meta\.glob\s*\(\s*\[?\s*|\brequire\s*\(\s*)(["'`])([^"'`\n]+)\1/g;
+  const disk = new Set(onDisk);
+  for (const m of src.matchAll(specs)) {
+    const parts = m[2].split("/");
+    if (parts[0] !== "." || !parts[1] || parts[1] === "." || parts[1] === "..") continue;
+    // A wildcard in the directory segment can reach any directory, so it is kept as written and no row can name it.
+    if (parts.length >= 3 || /[*?[{]/.test(parts[1])) dirs.add(parts[1]);
+    // `./dir` resolves to dir/index: a directory import, told from a bare file (`./index.css`) by the disk.
+    else if (disk.has(parts[1])) dirs.add(parts[1]);
+  }
+  return [...dirs].sort();
+}
+
+/**
+ * The surface half's tree: which face/src directories App.tsx imports, and which directories exist under face/src.
+ * Unreadable -- never empty -- when either cannot be read.
+ * @param {string} repo
+ */
+export function treeSurfaces(repo) {
+  const src = join(repo, "face", "src");
+  let text;
+  try { text = readFileSync(join(src, "App.tsx"), "utf8"); }
+  catch (e) { return { unreadable: `face/src/App.tsx could not be read (${e.code ?? e.message})` }; }
+  let dirs;
+  let entries;
+  try {
+    entries = readdirSync(src).sort().map((n) => {
+      const s = lstatSync(join(src, n));
+      return { name: n, kind: s.isSymbolicLink() ? "symlink" : s.isDirectory() ? "dir" : s.isFile() ? "file" : "special" };
+    });
+    dirs = entries.filter((e) => e.kind === "dir").map((e) => e.name);
+  } catch (e) {
+    return { unreadable: `face/src could not be listed (${e.code ?? e.message})` };
+  }
+  return { imports: appImportDirs(text, dirs), dirs, entries };
+}
+
+/**
+ * The surface half's findings, reconciled both ways, and what it REPORTS.
+ * @param {ReturnType<typeof treeSurfaces> | undefined} tree
+ * @param {{ list?: unknown } | undefined} section  expected-set.json's `surfaces`
+ * @param {Set<string>} roomIds  the contract's room ids: a surface is never one of them
+ */
+export function surfaceFindings(tree, section, roomIds = new Set()) {
+  const findings = [];
+  if (!tree || tree.unreadable) {
+    findings.push(`[surface] could not be read from the tree -- ${tree ? tree.unreadable : "no surface tree was gathered"}. A source that cannot be read is not a source with nothing in it`);
+    return { findings, surfaces: 0, named: [] };
+  }
+  if (!section || !Array.isArray(section.list)) {
+    findings.push(`[surface] expected-set.json carries no surfaces.list -- the front door is named there (ADR-1349)`);
+    return { findings, surfaces: 0, named: [] };
+  }
+  const shell = new Set(SHELL_DIRS);
+  const mounted = new Set(tree.imports);
+  const onDisk = new Set(tree.dirs);
+  const named = new Map();
+  const seenIds = new Set();
+  for (const row of section.list) {
+    if (!row || typeof row !== "object" || typeof row.id !== "string" || !SURFACE_ID.test(row.id)) { findings.push(`[surface] a row with no kebab-case id -- a surface is named by one (ADR-1349)`); continue; }
+    if (seenIds.has(row.id)) { findings.push(`[surface] "${row.id}" is listed twice`); continue; }
+    seenIds.add(row.id);
+    if (roomIds.has(row.id)) findings.push(`[surface] "${row.id}" is a room id -- a surface is not a room, and a room is a served id (ADR-1306, ADR-1349)`);
+    if (typeof row.adr !== "string" || !SURFACE_ADR.test(row.adr)) findings.push(`[surface] "${row.id}" cites ${JSON.stringify(row.adr ?? null)}, not an ADR -- a surface exists by a decision the owner made`);
+    const m = typeof row.dir === "string" ? /^face\/src\/([a-z][a-z0-9-]*)$/.exec(row.dir) : null;
+    if (!m) { findings.push(`[surface] "${row.id}" names dir ${JSON.stringify(row.dir ?? null)}, not face/src/<dir>`); continue; }
+    const d = m[1];
+    if (shell.has(d)) { findings.push(`[surface] "${row.id}" names face/src/${d}, which is the workroom shell, not a surface`); continue; }
+    if ([...named.values()].includes(d)) { findings.push(`[surface] "${row.id}" names face/src/${d}, which another surface row already names`); continue; }
+    named.set(row.id, d);
+    if (!onDisk.has(d)) findings.push(`[surface] "${row.id}" names face/src/${d}, which is not a directory on this tree`);
+    if (!mounted.has(d)) findings.push(`[surface] "${row.id}" names face/src/${d}, which App.tsx never mounts -- a surface nothing mounts`);
+  }
+  const rowDirs = new Set(named.values());
+  // The disk, both kinds: every top-level entry of face/src is the shell, a named surface, or a finding. A tree built
+  // without `entries` (a hand-made one) is judged by its directories alone.
+  const shellFiles = new Set(SHELL_FILES);
+  const entries = Array.isArray(tree.entries) ? tree.entries : tree.dirs.map((name) => ({ name, kind: "dir" }));
+  for (const e of entries) {
+    if (e.kind === "dir" && (shell.has(e.name) || rowDirs.has(e.name))) continue;
+    if (e.kind === "file" && shellFiles.has(e.name)) continue;
+    if (e.kind === "symlink" || e.kind === "special") { findings.push(`[surface] face/src/${e.name} is a ${e.kind}, not a real directory or file -- not followed, and a surface is never one (ADR-1349)`); continue; }
+    findings.push(`[surface] face/src/${e.name} is a top-level ${e.kind} that is neither the shell nor a surface a row in expected-set.json names -- a second, unnamed surface (ADR-1349)`);
+  }
+  for (const d of tree.imports) {
+    if (shell.has(d) || rowDirs.has(d)) continue;
+    findings.push(`[surface] face/src/App.tsx imports face/src/${d}, a surface no row in expected-set.json names -- a second, unnamed surface (ADR-1349)`);
+  }
+  return { findings, surfaces: section.list.length, named: [...named.entries()].map(([id, d]) => `${id}=face/src/${d}`) };
+}
+
 // ---------- the op half (face v2 Phase 05, REQ-04, ADR-1326, ADR-1339) ----------
 //
 // A module's ops.mjs names op ids; the WORK door's server registry (.claude/scripts/hq/face-ops.mjs) holds each op's
@@ -598,7 +766,9 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
   // face v2 Phase 02: module folders reconciled with the served registry (ADR-1321, ADR-1327).
   modules,
   // face v2 Phase 05: module ops reconciled with the work door's registry (REQ-04, ADR-1339).
-  ops }) {
+  ops,
+  // face v2 Phase 09: surfaces App.tsx mounts reconciled with the contract's surface rows (REQ-13, ADR-1349).
+  surfaces }) {
   const findings = [];
   findings.push(...moduleFindings(modules).findings);
   findings.push(...opFindings(ops, kinds));
@@ -617,6 +787,7 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
     findings.push(`[contract] rooms.list has duplicate ids — ${ids.length} rows, ${new Set(ids).size} distinct`);
   const tplId = contract.rooms?.template?.id;
   const roomIds = new Set([...ids.filter((i) => typeof i === "string" && i), ...(tplId ? [tplId] : [])]);
+  findings.push(...surfaceFindings(surfaces, contract.surfaces, roomIds).findings);
   const rings = new Set(contract.rings || []);
   for (const r of roomRows)
     if (r && r.id && rings.size && !rings.has(r.ring))
@@ -916,7 +1087,8 @@ async function gather(repo) {
   const kinds = await treeKinds(repo);
   const contract = loadContract(repo);
   const { kinds: _k, lanes, commands, agents, products, rules, processes, ...rest } = await treeWorld(repo, kinds);
-  return { kinds, lanes, commands, agents, products, rules, processes, contract, ...rest };
+  // Outside treeWorld on purpose: the wiki decides about every treeWorld key (ADR-1501), and a surface has no page.
+  return { kinds, lanes, commands, agents, products, rules, processes, contract, ...rest, surfaces: treeSurfaces(repo) };
 }
 
 /** @param repoOrData a repo path, or a pre-gathered data object (the selftest's exit arm). */
@@ -934,6 +1106,11 @@ async function run(repoOrData, quiet = false) {
   if (data.ops && !data.ops.unreadable) {
     const rooms = data.ops.modules.filter((m) => m.ops.length > 0).map((m) => m.id);
     process.stdout.write(oneLine(`face-coverage: op half registry=${data.ops.registry.length} named=${data.ops.modules.reduce((n, m) => n + m.ops.length, 0)} rooms=${rooms.join(",") || "none"} -- every op a room names is served, and every served op is named (REQ-04)`) + "\n");
+  }
+  // What the surface half REPORTS (face v2 Phase 09): the rows, what App.tsx imports, and which rows name which dir.
+  if (data.surfaces && !data.surfaces.unreadable) {
+    const sh = surfaceFindings(data.surfaces, data.contract?.surfaces);
+    process.stdout.write(oneLine(`face-coverage: surface half rows=${sh.surfaces} app-imports=${data.surfaces.imports.join(",") || "none"} named=${sh.named.join(",") || "none"} -- a screen that is not a room is named once, both ways (ADR-1349)`) + "\n");
   }
   if (findings.length) {
     for (const f of findings) process.stderr.write(`FAIL  ${oneLine(f)}\n`);
@@ -1053,6 +1230,22 @@ async function selftest(repo) {
     ["an op writing a kind the spine lacks", withOpKind(clean, "ghost.kind-op"), "ghost.kind-op"],
     ["an op id whose room half is not its room", withRegistryOp(clean, { id: "ghostroom.op-misplaced", room: "otherroom", kind: firstKind(clean) }), "an op id's first half names its room"],
     ["an unreadable op tree", { ...clean, ops: { unreadable: "the selftest made it unreadable" } }, "[op] could not be read"],
+
+    // ---- the surface half (face v2 Phase 09, REQ-13, ADR-1349) --------------------------------
+    //
+    // The planted second surface is App.tsx importing a directory no row names. Its PASS twin carries the control: the
+    // same planted directory WITH a row passes, so the FAIL is the missing row and not a gate that fails everything.
+    ["a second, unnamed surface", withSurfaceImport(clean, "ghostdoor"), "face/src/ghostdoor, a surface no row"],
+    ["the same surface, named by a row, passes", withSurfaceRow(withSurfaceImport(clean, "ghostdoor"), { id: "ghost-door", dir: "face/src/ghostdoor", adr: "ADR-1349" }), null, (findings) =>
+      !findings.some((f) => f.includes("ghostdoor"))
+      && coverageFindings(withSurfaceImport(clean, "ghostdoor")).findings.some((f) => f.includes("ghostdoor"))],
+    ["a surface row App.tsx never mounts", withSurfaceRow(withSurfaceDir(clean, "ghostdoor"), { id: "ghost-door", dir: "face/src/ghostdoor", adr: "ADR-1349" }), "a surface nothing mounts"],
+    ["a surface row naming no directory", withSurfaceRow(withSurfaceImport(clean, "ghostdoor", false), { id: "ghost-door", dir: "face/src/ghostdoor", adr: "ADR-1349" }), "not a directory on this tree"],
+    ["a surface row with a room id", withSurfaceRow(withSurfaceImport(clean, "ghostdoor"), { id: clean.contract.rooms?.list?.[0]?.id ?? "?", dir: "face/src/ghostdoor", adr: "ADR-1349" }), "a surface is not a room"],
+    ["a surface row citing no ADR", withSurfaceRow(withSurfaceImport(clean, "ghostdoor"), { id: "ghost-door", dir: "face/src/ghostdoor" }), "not an ADR"],
+    ["a surface row naming the shell", withSurfaceRow(clean, { id: "ghost-door", dir: "face/src/shell", adr: "ADR-1349" }), "is the workroom shell"],
+    ["a contract with no surfaces list", { ...clean, contract: { ...clean.contract, surfaces: undefined } }, "carries no surfaces.list"],
+    ["an unreadable surface tree", { ...clean, surfaces: { unreadable: "the selftest made it unreadable" } }, "[surface] could not be read"],
   ];
 
   let allArmsWiring = true;
@@ -1105,6 +1298,17 @@ async function selftest(repo) {
     if (!populated) allArmsWiring = false;
     lines.push(`wiring ${"ops".padEnd(26)} reads something: ${populated ? "PASS" : "FAIL (read no op on a tree that has some)"}`);
   }
+  // And the surface reader (face v2 Phase 09): gather's surface tree is what treeSurfaces reads directly, and App.tsx
+  // imports at least the shell -- an App.tsx that imports nothing was not read.
+  {
+    const direct = treeSurfaces(repo);
+    const same = JSON.stringify(clean.surfaces) === JSON.stringify(direct);
+    if (!same) allArmsWiring = false;
+    lines.push(`wiring ${"surfaces".padEnd(26)} gather==reader: ${same ? "PASS" : "FAIL (gather and treeSurfaces disagree)"}`);
+    const populated = Boolean(direct?.unreadable) || ((direct?.imports ?? []).includes("shell") && (direct?.dirs?.length ?? 0) > 0);
+    if (!populated) allArmsWiring = false;
+    lines.push(`wiring ${"surfaces".padEnd(26)} reads something: ${populated ? "PASS" : "FAIL (read no import of the shell from App.tsx)"}`);
+  }
   let allArms = allArmsWiring;
   for (const [label, mutant, needle, judgeArm] of arms) {
     const { findings } = coverageFindings(mutant);
@@ -1155,6 +1359,7 @@ async function selftest(repo) {
     ["orphan module folder", withModuleFolder(clean, firstServedRing(clean), "ghost-module")],
     ["module op the door does not serve", withModuleOp(clean, "ghost.op-unserved")],
     ["registry op no module names", withRegistryOp(clean, { id: "ghost.op-undeclared", room: "ghost", kind: firstKind(clean) })],
+    ["second, unnamed surface", withSurfaceImport(clean, "ghostdoor")],
   ];
   let allExits = true;
   for (const [label, mutant] of exitArms) {
@@ -1267,6 +1472,23 @@ function withModuleFolder(data, ring, id) {
   const m = data.modules || {};
   return { ...data, modules: { ...m, folders: [...(m.folders || []), { ring, id }] } };
 }
+/** App.tsx importing face/src/<dir> as gathered; `onDisk` false leaves the directory off the tree. */
+function withSurfaceImport(data, dir, onDisk = true) {
+  const t = data.surfaces || {};
+  return { ...data, surfaces: { ...t, imports: [...new Set([...(t.imports || []), dir])].sort(), dirs: onDisk ? [...new Set([...(t.dirs || []), dir])].sort() : (t.dirs || []) } };
+}
+/** face/src/<dir> on the tree, imported by nothing. */
+function withSurfaceDir(data, dir) {
+  const t = data.surfaces || {};
+  return { ...data, surfaces: { ...t, dirs: [...new Set([...(t.dirs || []), dir])].sort() } };
+}
+/** A surface row added to expected-set.json's surfaces.list as gathered. */
+function withSurfaceRow(data, row) {
+  const contract = JSON.parse(JSON.stringify(data.contract));
+  contract.surfaces = { ...(contract.surfaces || {}), list: [...(contract.surfaces?.list || []), row] };
+  return { ...data, contract };
+}
+
 /** An exemption row added to module-exemptions.json as gathered. */
 function withExemptionRow(data, row) {
   const m = data.modules || {};

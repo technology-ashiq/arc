@@ -1,0 +1,31 @@
+# Onboarding specialist -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'onboarding-specialist'
+title: 'Onboarding specialist'
+dept: 'i-support'
+mission: 'Owns the Onboarding specialist job in Customer Success & Support.'
+stages:
+  - 'support'
+  - 'operate'
+seat: 'vacant'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts: []
+  process: null
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'onboarding-specialist-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []

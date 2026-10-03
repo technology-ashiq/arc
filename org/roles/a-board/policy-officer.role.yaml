@@ -1,0 +1,43 @@
+# Policy officer -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'policy-officer'
+title: 'Policy officer'
+dept: 'a-board'
+mission: 'Keep every autonomy grant inside the ladder and the ungrantable list.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+  - 'launch'
+  - 'grow'
+  - 'sell'
+  - 'support'
+  - 'operate'
+seat: 'script'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts:
+    - '.claude/scripts/hq/policy-lint.mjs'
+  process: null
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'policy-officer-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

@@ -12,7 +12,7 @@
 //      StatusDot renders live in green, and green is real money's alone.
 //
 // The landing-only pieces of the reference (Reveal, Chapter, Head, Stat) are not ported: the
-// product has no landing page, and a component with no reader is a component nobody checks.
+// front door is the hero alone (ADR-1349 option A), and a component with no reader is a component nobody checks.
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 
 export const FONT = 'var(--font-display)' // display: arc's identity, for sentences and figures

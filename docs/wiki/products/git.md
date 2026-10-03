@@ -5,247 +5,168 @@
 
 ## Why it exists
 
+```tagline
+The shipping clerk. It packs your finished work into neat labelled boxes, prepares the paperwork to send
+them out, and never puts anything on the truck until you say so.
+```
+
+# Start here
 
 ## In plain words
 
-**`git` runs four commands and owns no script of its own.** <!-- src: products/git/manifest.json -->
-`/arc-commit` stages related changes and writes a conventional commit — splitting unrelated changes into separate commits — and never pushes. <!-- src: .claude/commands/arc-commit.md --> `/arc-pr` opens a pull request for the current branch. <!-- src: .claude/commands/arc-pr.md --> `/arc-fix-issue` reads a GitHub issue, finds the root cause, and proposes a conventional commit message. <!-- src: .claude/commands/arc-fix-issue.md --> `/arc-ship` lints, builds and tests, then deploys — in one shot. <!-- src: .claude/commands/arc-ship.md -->
+Think of arc as a small company whose staff are AI models. Making the work is one job. Getting it out
+of the building safely is another.
 
-It requires only `core` — nothing else in arc. <!-- src: products/git/manifest.json -->
+**git is the shipping clerk.** It does not build anything. It takes what is already done and moves it
+along, and it has a few strict habits:
+
+```panel big
+- **The packer** (`/arc-commit`). Looks at everything that changed, sorts it into piles that belong together, and seals each pile in a box with a clear label on the outside. It never loads the truck.
+- **The dispatcher** (`/arc-pr`). Fills in the paperwork that says "these boxes are ready for someone to inspect", and asks you before anything leaves the building.
+- **The complaint handler** (`/arc-fix-issue`). Someone reports a fault. This clerk reads the complaint, hunts for the real cause instead of patching what shows, writes a test that catches it, and suggests the label for the box.
+- **The delivery driver** (`/arc-ship`). Checks the goods one last time, and only if every check passes, drives them to the public.
+
+The rule they all share: the main shelf (`main`) is never touched directly. Work goes on its own side shelf first.
+```
 
 ### Why this needs to be a product at all
 
-If arc only ever ran inside arc's own repository, these four habits could just live in one big
-pile of instructions with everything else. <!-- plain -->
+Without a clerk, the same three slips happen again and again:
 
-Instead, `git` is one entry in the same catalogue of installable products as `core`, `qa` and
-`review`. <!-- src: .claude/scripts/core/arc-products.mjs#CATALOG -->
-The install tool that reads that catalogue can be pointed at exactly `core` plus one named
-product; a dedicated test proves this works by installing `council` and checking that `core`
-rides along while `plan`, `review`, `qa`, and this product's own `/arc-commit` all stay absent. <!-- src: sync-to-project.sh; tests/sync.bats#REQ-01 -->
+| What you lose | What it looks like when it bites | git's answer |
+|---|---|---|
+| **A readable history** | One giant box marked "stuff", holding five unrelated changes nobody can undo separately. | The packer splits unrelated changes and labels each box in a fixed style. |
+| **Control over what goes out** | An assistant pushes work to the world before you have looked at it. | Nothing here pushes on its own. The dispatcher asks for your yes on the exact push each time. |
+| **Safe goods on the truck** | Something half-broken gets deployed because "it worked yesterday". | The driver runs the checks in order and stops at the first failure. |
+
+> The second row is the one that matters most. Sending work outward cannot be taken back, so arc keeps
+> that decision with you, not with the assistant.
 
 ## arc words → normal words
 
-| arc calls it | It really means |
-|---|---|
-| process | The single YAML job description one of these commands is compiled from — here, the file behind `/arc-commit`. <!-- src: processes/commit-msg-draft.process.yaml; .claude/commands/arc-commit.md --> |
-| class | The name that same job goes by on engine's staffing rota, used to look up who should do it. <!-- src: engine/router.yaml --> |
-| tier | The pay grade the rota assigns to that class. The commit job sits at `balanced-workhorse`: bounded, structured production inside a frame someone else already set. <!-- src: engine/router.yaml; docs/adr/0069-balanced-model-policy.md --> |
-| driver / fallback | The worker engine reaches first for a job, and the workers it tries next, in order, if that one reports a driver-fault — never if it reports a process-fault, so a broken schema is not retried down the chain. The commit job's order is `claude-code`, then `codex`, then `generic-api`. <!-- src: engine/router.yaml#commit-msg-draft --> |
-| baseline | The hand-written command file a process replaced, pinned by the exact commit and file hash it matched on the day it was migrated. <!-- src: processes/commit-msg-draft.process.yaml --> |
-| GENERATED FILE header | The warning at the top of `arc-commit.md` saying a hand-edit there is deleted the next time the process is recompiled. <!-- src: .claude/commands/arc-commit.md --> |
-| receipt / the spine | The append-only logbook a commit or a ship writes one line to. The active day's file is append-only, a closed day is immutable, and a correction is only ever a new event that supersedes the old one — nothing is edited or deleted. <!-- src: docs/adr/0029-spine-f-immutability-windows-supersedes.md; .claude/commands/arc-commit.md; .claude/commands/arc-ship.md --> |
-| kind | The fixed name a receipt is filed under, out of a closed list of eighteen. `/arc-commit` writes `commit.done`; `/arc-ship` writes `ship.done`. <!-- src: docs/adr/0026-spine-c-closed-event-kind-vocabulary-v1.md; .claude/commands/arc-commit.md; .claude/commands/arc-ship.md --> |
-| face room | Named in a product's manifest as `face.room`. This product's is `review-ship`. <!-- src: products/git/manifest.json --> |
-| proposal branch | A branch a piece of arc's own tooling writes on a human's behalf, so a machine can offer a change without ever being the one who accepts it. <!-- src: .claude/scripts/core/proposal-branch.mjs --> |
+```lede
+Nine pieces of arc jargon. Each is an ordinary shop-floor thing wearing a technical name.
+```
+
+```rosetta
+commit | one sealed, labelled box of changes | the unit of saved work
+conventional commit | a label in a fixed style: `feat:`, `fix:`, `docs:` and so on | so anyone can read the history at a glance
+branch | a side shelf for work in progress | keeps `main` clean
+`main` | the master shelf everyone trusts | never written directly
+push | putting the box on the truck to leave the building | always needs your explicit yes
+PR (pull request) | the paperwork asking for an inspection before goods join `main` | opened by `/arc-pr`
+deploy | delivering the goods to the public | the last thing `/arc-ship` does
+receipt / the spine | one line in arc's logbook saying "this happened" | `/arc-commit` and `/arc-ship` each write one
+proposal branch | a side shelf a machine writes for you to accept or refuse | the machine never edits `main` itself
+```
 
 ## How a job flows
 
-`git` has four commands: `/arc-commit`, `/arc-pr`, `/arc-fix-issue` and `/arc-ship`. <!-- src: products/git/manifest.json -->
+```lede
+Most days the road is short: pack, then dispatch. Shipping is its own road, and it has stops where it
+refuses to go on.
+```
 
-1. You change files on a branch, checked before every commit. <!-- src: CLAUDE.md -->
-2. `/arc-commit` groups related changes into a conventional commit — splitting unrelated changes
-   into separate commits — never a push. <!-- src: .claude/commands/arc-commit.md -->
-3. Either `/arc-pr` turns that branch into a pull request, or `/arc-ship` deploys straight from
-   the current branch once its own checks pass. <!-- src: .claude/commands/arc-pr.md; .claude/commands/arc-ship.md -->
-4. If the work instead started from a reported bug, `/arc-fix-issue` is the other entry point:
-   it reads the issue, finds the root cause, and proposes a conventional commit message rather
-   than typing one. <!-- src: .claude/commands/arc-fix-issue.md -->
-
-### Why main is never written directly
-
-Under the Constitution, an irreversible action — publishing under the owner's name among them —
-belongs to the human alone, whatever autonomy a session otherwise has: no level of proven autonomy
-ever includes it. <!-- src: CONSTITUTION.md -->
-
-The rule is written down directly, not left to be inferred: work happens on a branch, and a pull
-request gets opened for it — a commit never lands straight on `main`. <!-- src: CLAUDE.md --> Because
-a session's branch can change between one turn and the next without anyone saying so, the rule
-also names exactly when to check: immediately before every commit, by running
-`git branch --show-current`, and stopping to move the work onto a `feat/*` branch if the answer
-is `main`. <!-- src: CLAUDE.md -->
-
-This is not only a typed instruction — it is built into what each command is even allowed to run.
-`/arc-commit`'s own tool grant lists `git status`, `git diff`, `git log`, `git add`, `git commit`,
-and one script call to leave the receipt; there is no `git push` in it anywhere. <!-- src: .claude/commands/arc-commit.md --> `/arc-pr`'s
-grant is narrower still — `git status`, `git diff`, `git log` and `gh pr` — and it does not
-pre-authorize a push either: the command asks for the exact `git push -u origin <branch>` to be
-approved by name before it runs, every time. <!-- src: .claude/commands/arc-pr.md -->
-
-The same boundary shows up one level below the four commands, too. When a piece of arc's own
-tooling needs to change a file on its own — with no person typing the words — it still never
-edits `main`. It writes a brand-new branch by raw git plumbing, based on `main` as it stood the
-moment the edit was read, and it can move nothing else: no checkout, no merge, no push, no reset.
-A human merges that branch, or does not. <!-- src: .claude/scripts/core/proposal-branch.mjs --> The
-same discipline is named as a rule for the whole company, not just for this one file: publishing
-under the owner's name is one of a short list of irreversible acts that belong to the human alone,
-at the strictest tier arc has — the one tier nothing is ever allowed to amend away. <!-- src: CONSTITUTION.md -->
-A sibling product enforces that exact boundary in code rather than by asking: its publish command
-can create a branch and a pull request, but has no merge path and no default-branch push path at
-all, proven by a test that tries all three and requires every one of them to be refused. <!-- src: docs/adr/1102-publish-is-a-pull-request-and-the-machine-never-merges.md -->
+```flow
+source: work on a side shelf
+box: ① Pack | /arc-commit
+box: ② Ask to send | /arc-pr
+box*: ③ You inspect | you merge
+box: ④ Ship | /arc-ship
+labels: boxed, approved, checked
+out: mixed pile | split into separate boxes
+out: on main | stop, move to a side shelf
+out: no yes from you | nothing is pushed
+out: a check fails | stop, nothing delivered
+divider: 3 | reversible | irreversible
+note: Sending outward cannot be undone, so the yes at the dashed line is always yours.
+caption: Figure 1 — from finished work to delivered work. | The dashed line marks where things stop being easy to take back.
+```
 
 ## The stages, one by one
 
-1. **Stay off `main`.**
-   Before any commit, the branch is checked. `main` is never the place work happens. <!-- src: CLAUDE.md -->
+```lede
+Each stage is written twice: first what it does in ordinary words, then what actually happens.
+```
 
-2. **`/arc-commit` — write the commit.**
-   `git status` and `git diff` first, so nothing is committed blind. Unrelated changes are split
-   into separate commits. The message is a conventional commit — `feat:`, `fix:`, `chore:`,
-   `docs:` or `refactor:`, subject under 72 characters, imperative — and untracked junk is never
-   swept in with a blanket `git add .`. The command commits and stops; it does not push. <!-- src: .claude/commands/arc-commit.md -->
-   It then leaves a receipt: a `commit.done` line on the spine, in hook mode, so a telemetry
-   problem can never block the commit that already happened. <!-- src: .claude/commands/arc-commit.md; docs/adr/0031-spine-h-emitter-dual-mode.md -->
+```steps
+t: The packer seals the boxes
+plain: It looks at exactly what changed before anything else, so it never packs blind. If two changes have nothing to do with each other, they go in separate boxes.
+d: Reads the status and the diff, stages explicit paths rather than everything at once when stray files are lying around, writes a conventional message (short, imperative, explaining why), commits, and does not push. Then it leaves a `commit.done` receipt.
+f: `.claude/commands/arc-commit.md`
 
-3. **`/arc-pr` — offer the branch.**
-   It first confirms the branch is not `main` and nothing is uncommitted, then summarises the
-   branch against its base (`main` by default) with `git log` and `git diff --stat`. Pushing is
-   gated here explicitly: the command asks for approval of the exact `git push -u origin` call
-   before it creates anything. Only then does it run `gh pr create`, with a conventional-commit
-   style title and a body carrying a Summary and a Test plan. <!-- src: .claude/commands/arc-pr.md -->
+t: The dispatcher asks first
+plain: It checks you are not on the master shelf and that everything is boxed. Then it stops and asks you to approve the push, by name, before it does anything.
+d: Summarises the branch against `main`, asks for approval of the exact `git push -u origin <branch>`, then opens the pull request with a short title, a summary and a test plan, and replies with the link only.
+f: `.claude/commands/arc-pr.md`
 
-4. **`/arc-fix-issue` — the other way in.**
-   Given an issue number, it reads the issue with `gh issue view`, finds the root cause rather
-   than patching the symptom, writes a failing test that reproduces the bug, then makes it pass,
-   and runs the project's own test and lint commands. It ends by proposing a conventional commit
-   message rather than typing one. <!-- src: .claude/commands/arc-fix-issue.md -->
+t: The complaint handler finds the real cause
+plain: It reads the reported problem, looks for the root cause rather than the symptom, and proves it with a test that fails first and then passes.
+d: Reads the issue, finds the root cause, writes a failing test, makes it pass, runs the test suite and the linter, then proposes a commit message. It does not push.
+f: `.claude/commands/arc-fix-issue.md`
 
-5. **`/arc-ship` — lint, build, test, then deploy.**
-   The four checks run in a fixed order, and the command stops at the first failure rather than
-   continuing past it: lint, build, test, and only if every one of those passed, a production
-   deploy. <!-- src: .claude/commands/arc-ship.md --> The deploy step is watched by a second, independent
-   check outside the command itself: any shell command shaped like a Vercel production deploy is
-   intercepted, the project's tests are rerun from scratch, and arc's own gates are run again —
-   and either one failing blocks the deploy outright rather than merely warning about it. <!-- src: .claude/hooks/PreToolUse.d/50-deploy.sh -->
-   A successful ship leaves its own receipt — a `ship.done` line carrying the production URL and
-   a one-line summary. <!-- src: .claude/commands/arc-ship.md -->
+t: The driver checks, then delivers
+plain: Three checks in a row: tidy, builds, tests. The first one that fails stops the whole trip, and you see the error.
+d: Runs lint, build and test in that order, deploys only if all pass, records a `ship.done` receipt, and replies with the address and a one-line summary.
+f: `.claude/commands/arc-ship.md`
+```
 
-## Every part, explained
+# The bigger loop
 
-### Commands
+## Why main is never written directly
 
-- `/arc-commit` — stages related changes and writes one conventional commit; never pushes; leaves
-  a `commit.done` receipt. Reach for it every time work is ready to be committed. <!-- src: .claude/commands/arc-commit.md -->
-- `/arc-pr` — turns the current branch into a GitHub pull request, with a gated push and a
-  summary-plus-test-plan body. Reach for it once a branch is ready to be reviewed. <!-- src: .claude/commands/arc-pr.md -->
-- `/arc-fix-issue` — investigates one numbered GitHub issue end to end, from root cause to a
-  failing test to a passing fix. Reach for it when the work starts from a filed bug rather than
-  from a change already in hand. <!-- src: .claude/commands/arc-fix-issue.md -->
-- `/arc-ship` — lints, builds and tests the branch, then deploys to production and records the
-  ship. Reach for it to take a finished branch live in one pass. <!-- src: .claude/commands/arc-ship.md -->
+```lede
+The same rule is written down three times, at three levels, so it survives a tired session.
+```
 
-### Agents
+1. **In the house rules.** Work happens on a branch, and a pull request is opened for it. A commit never
+   lands straight on `main`. Before every commit the session must check which branch it is on, and if the
+   answer is `main`, stop and move the work to a `feat/*` branch (`CLAUDE.md`).
+2. **In what each command may run.** The packer's permission list has status, diff, log, add and commit and
+   the logbook script. There is no push in it anywhere. The dispatcher may only look and open the request,
+   and it asks before the push.
+3. **In arc's own tooling.** When a tool has to change a file with nobody typing, it does not touch `main`.
+   It writes a brand-new side branch based on `main` as it stood when the edit was read, and it cannot
+   check out, merge, push or reset anything. A human accepts that branch or does not
+   (`.claude/scripts/core/proposal-branch.mjs`).
 
-None. `products/git/manifest.json` lists no `agents` array, unlike `review` (`code-reviewer`,
-`security-auditor`) and `qa` (`qa-tester`, `design-reviewer`), which each list two. All four of
-this product's entries sit under `commands`, not `agents`. <!-- src: products/git/manifest.json; products/review/manifest.json; products/qa/manifest.json -->
+Underneath all three sits the company constitution: an irreversible action, such as publishing under the
+owner's name, belongs to the human alone, however much freedom a session otherwise has (`CONSTITUTION.md`).
 
-### Processes
+## The logbook
 
-Exactly one of the four commands is compiled rather than hand-written: `/arc-commit` is generated
-from `commit-msg-draft`, a job description with its own version, a required output shape (a list
-of commit `sha`/`subject` pairs), six worked examples, and a baseline pinned to the commit and
-sha256 hash of the hand-written file it replaced. <!-- src: processes/commit-msg-draft.process.yaml --> The
-same job description is also a live row on engine's rota. <!-- src: engine/router.yaml#commit-msg-draft -->
-Separately, the identical commit-writing job can be handed to a different model for a one-off
-trial without touching anything this product owns: a `--trial-model` flag names a model for that
-one run only, writes no router row, and changes no tier. <!-- src: .claude/scripts/engine/arc-run.mjs --> `/arc-pr`, `/arc-fix-issue` and `/arc-ship` are not
-compiled from anything; they are plain hand-written command files. <!-- src: .claude/commands/arc-pr.md; .claude/commands/arc-fix-issue.md; .claude/commands/arc-ship.md -->
+The packer and the driver each write one line to arc's logbook, the spine, so that later anyone can prove
+the commit or the ship really happened. The book is append-only: nothing is edited or deleted, and a
+correction is only ever a new line that replaces the old one (ADR-0029). Every line is filed under one
+fixed name from a closed list (ADR-0026). `/arc-commit` writes `commit.done` and `/arc-ship` writes
+`ship.done`.
 
-### Scripts
+## Who does the commit wording
 
-None owned. `products/git/manifest.json` has no `scripts` array. <!-- src: products/git/manifest.json -->
-Two of the four commands still call out to one script that belongs to a different product,
-though: both `/arc-commit` and `/arc-ship` end by running `bash .claude/scripts/hq/arc-event.sh
-emit ...` to leave their receipt, and that script is listed in `hq`'s manifest, not this one's. <!-- src: .claude/commands/arc-commit.md; .claude/commands/arc-ship.md; products/hq/manifest.json -->
+The commit-message job is one of the commands arc builds from a single job description, and the engine
+staffs it at the balanced tier: steady, structured production inside a frame someone else already set
+(ADR-0069). That is why the file at the top of `arc-commit.md` warns that hand edits are thrown away the next
+time it is rebuilt.
 
-### Gates and rules
+## Where git sits in arc
 
-- **The branch check, before every commit.** `git branch --show-current` is required immediately
-  before committing, because the branch can change between turns without anyone announcing it. <!-- src: CLAUDE.md -->
-- **The deploy guard.** Any Bash command shaped like a Vercel production deploy is intercepted;
-  it reruns the tests and arc's own gates before letting the deploy through, and blocks outright
-  — exit code 2 — if either one fails. <!-- src: .claude/hooks/PreToolUse.d/50-deploy.sh -->
-- **The closed receipt vocabulary.** A receipt can only be filed under one of eighteen fixed
-  kinds; an unknown kind is refused outright in strict mode and quarantined in hook mode. `commit.done`
-  and `ship.done` are two of the eighteen. <!-- src: docs/adr/0026-spine-c-closed-event-kind-vocabulary-v1.md -->
-- **Selective install is tested.** A dedicated test installs one product (`council`) together
-  with `core` and checks that its files land, `core` rides along, and specific files from other
-  products — `plan`, `review`, `qa`, and this product's own `/arc-commit` — are confirmed absent. <!-- src: tests/sync.bats#REQ-01 -->
+- **Under everything.** It only needs `core`, nothing else in arc, so it can be installed on its own.
+- **After qa and review.** `/arc-ship` is where the goods that passed those checks finally leave the
+  building.
+- **In the face.** git lives in the review-and-ship room. The chips at the top of this page name the room
+  and the ring.
 
-## The bigger loop
-
-### One change, from a branch to a ship
-
-A branch is checked out; work happens on it, never on `main`. <!-- src: CLAUDE.md --> When a piece of it
-is ready, `/arc-commit` groups it into one conventional commit and writes a `commit.done` line to
-the spine — the commit exists, and so does the record that it happened. <!-- src: .claude/commands/arc-commit.md -->
-
-From there the branch can go either of two ways. `/arc-pr` can turn it into a pull request: it
-checks the branch is clean and off `main`, asks for the push to be approved by name, and only
-then opens the PR with a summary and a test plan. <!-- src: .claude/commands/arc-pr.md -->
-Whatever reviews that pull request afterward — a person, or a sibling product's own review
-command — is grading a specific commit, not the branch in general: a new commit is a new review,
-and a review stamp from an earlier commit does not carry over to it. <!-- src: face/src/modules/factory/review-ship/View.tsx -->
-No command's own written steps in this product ever run that merge: `/arc-commit`, `/arc-fix-issue`
-and `/arc-ship` carry no `gh pr` or merge call in their tool grants at all, and `/arc-pr`'s own
-instructions never call `gh pr merge` either — though its grant, `Bash(gh pr:*)`, is a wildcard
-broad enough to also permit that call. <!-- src: .claude/commands/arc-pr.md; .claude/commands/arc-commit.md; .claude/commands/arc-fix-issue.md; .claude/commands/arc-ship.md -->
-
-Or the branch goes straight to `/arc-ship`: lint, then build, then test, stopping at the first
-failure, and only past all three does the deploy step run — itself rechecked from outside the
-command by the deploy guard before it is allowed to reach production. <!-- src: .claude/commands/arc-ship.md; .claude/hooks/PreToolUse.d/50-deploy.sh -->
-A successful ship writes its own line to the spine: `ship.done`, carrying the production URL. <!-- src: .claude/commands/arc-ship.md -->
-
-If the work started from a filed bug instead of a change already in hand, `/arc-fix-issue` is
-where it begins — reading the issue, finding the root cause, proving it with a failing test —
-and it ends by proposing a conventional commit message rather than typing one. <!-- src: .claude/commands/arc-fix-issue.md -->
-
-### How it connects to the rest of arc
-
-This product's receipts do not stand alone. They land in `review-ship`, a room two other
-products also write into: `review` (`/arc-review`, `/arc-audit`, `/arc-second-opinion`,
-`/arc-docs`) and `qa` (`/arc-qa`, `/arc-design`, `/arc-canary`). <!-- src: products/git/manifest.json; products/review/manifest.json; products/qa/manifest.json -->
-All four receipt kinds this room is built around — `commit.done`, `review.completed`,
-`qa.completed` and `ship.done` — are named identically in all three products' manifests. <!-- src: products/git/manifest.json; products/review/manifest.json; products/qa/manifest.json -->
-
-The same job can also be run once, for a single trial, against a different model, independent of
-that rota row: a `--trial-model` flag names a model for that one run only, writing no router row
-and changing no tier. <!-- src: .claude/scripts/engine/arc-run.mjs -->
-
-The rule this product enforces by asking — never push, never merge, without a person saying so —
-is enforced elsewhere in arc by code instead. A tool that edits a file on its own writes a fresh
-branch by git plumbing and stops there: no checkout, no merge, no push, no reset; a human merges
-that branch, or does not. <!-- src: .claude/scripts/core/proposal-branch.mjs --> `/arc-pr`'s own tool
-grant is looser than that: `Bash(gh pr:*)` is a wildcard that would also permit `gh pr merge`,
-even though `/arc-pr`'s own written steps never call it. <!-- src: .claude/commands/arc-pr.md -->
-And because `git` requires only `core`, the same install tool that installs this whole product
-can also be pointed at just `core` plus one other named product — proven, for a sibling product,
-by a dedicated test. <!-- src: products/git/manifest.json; sync-to-project.sh; tests/sync.bats#REQ-01 -->
+# Meta
 
 ## Glossary
 
-- **branch** — a separate line of work, not `main`, where changes happen before anyone else has
-  to see them; work never happens on `main` directly. <!-- src: CLAUDE.md -->
-- **commit** — one saved, named snapshot of a set of changes, written with `/arc-commit`. <!-- src: .claude/commands/arc-commit.md -->
-- **conventional commit** — a commit message starting `feat:`, `fix:`, `chore:`, `docs:` or
-  `refactor:`, subject under 72 characters, written in the imperative. <!-- src: .claude/commands/arc-commit.md -->
-- **push** — sending committed work to the shared remote. Never automatic in this product;
-  always a separately approved step. <!-- src: .claude/commands/arc-pr.md -->
-- **pull request (PR)** — a named, reviewable offer to merge one branch into another, opened by
-  `/arc-pr` and carrying a summary and a test plan. <!-- src: .claude/commands/arc-pr.md -->
-- **merge** — accepting a pull request's changes into its base branch. No command's own written
-  steps in this product perform one; `/arc-commit`, `/arc-fix-issue` and `/arc-ship` have no
-  `gh pr` grant at all, and `/arc-pr`'s instructions never call `gh pr merge` either, though its
-  grant (`Bash(gh pr:*)`) is a wildcard that would also allow it. <!-- src: .claude/commands/arc-pr.md; .claude/commands/arc-commit.md; .claude/commands/arc-fix-issue.md; .claude/commands/arc-ship.md -->
-- **receipt / spine** — the append-only logbook a commit or a ship is recorded to; lines are
-  added, never edited. <!-- src: docs/adr/0029-spine-f-immutability-windows-supersedes.md; .claude/commands/arc-commit.md; .claude/commands/arc-ship.md -->
-- **process** — the YAML job description a compiled command is generated from. <!-- src: processes/commit-msg-draft.process.yaml; .claude/commands/arc-commit.md; docs/adr/0201-eng-b-adapters-are-pure-functions-and-a-generated-file-is-never-hand-edited.md -->
-- **baseline** — the hand-written command file a process replaced, pinned by the exact commit and
-  file hash it matched on the day it was migrated. <!-- src: processes/commit-msg-draft.process.yaml; docs/adr/0201-eng-b-adapters-are-pure-functions-and-a-generated-file-is-never-hand-edited.md -->
-- **GENERATED FILE** — the header marking a command file as compiled, meaning a hand-edit to it
-  is deleted the next time it is regenerated. <!-- src: .claude/commands/arc-commit.md -->
-- **face room** — named in a product's manifest as `face.room`; this product's is `review-ship`. <!-- src: products/git/manifest.json -->
+```gloss
+conventional commit: a commit message that starts with a fixed word (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`) so the history reads like a tidy ledger.
+diff: the list of exactly what changed between two versions.
+lint: an automatic tidiness check on the code.
+deploy: making the new version live for real visitors.
+append-only: a record you can add to but never rewrite.
+```
 
 ## At a glance
 

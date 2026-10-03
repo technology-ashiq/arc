@@ -1,0 +1,32 @@
+{
+  "phase": "01",
+  "commit": "d155ab9904a43b83624389498151ac2df494b2be",
+  "short": "d155ab99",
+  "generated": "2026-10-01T14:49:29Z",
+  "files": [
+    {
+      "name": "audit.txt",
+      "sha256": "e5a1e4c4d1e196a721e10fb73833fc835223f20262ceaf0874b9e1e70312dabc"
+    },
+    {
+      "name": "bundle.md",
+      "sha256": "2b743917c86bca602fe0961dc72ce61b8d12762cc9805c0412cac43f63300141"
+    },
+    {
+      "name": "checkpoint.txt",
+      "sha256": "cdde2e6ad5800b90dd4015675e5b9a92bac007b21c9878d7064c29173379bfc6"
+    },
+    {
+      "name": "kinds-table.txt",
+      "sha256": "fc4f9fd1cf3fdcb9ed98137c3947985d66a193d19a3e7a784bcddd10b22a48d0"
+    },
+    {
+      "name": "scorecard.txt",
+      "sha256": "139f8579731f72990a71eaf77c394bb19ad48a8a206ac5de9dc054d3e43d6bef"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "9533685ef47c5b1ccd7f026c8ab021ce020e9e38819423c024f5d7756171e893"
+    }
+  ]
+}

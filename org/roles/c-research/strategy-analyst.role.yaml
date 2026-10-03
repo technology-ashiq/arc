@@ -1,0 +1,37 @@
+# Strategy analyst -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'strategy-analyst'
+title: 'Strategy analyst'
+dept: 'c-research'
+mission: 'Judge market, moat, go-to-market and unit economics before money or time is committed.'
+stages:
+  - 'discover'
+  - 'validate'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'council-strategist'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'strategy-analyst-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

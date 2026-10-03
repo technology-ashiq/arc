@@ -7,10 +7,10 @@
 // states layered on top. Every constant is the reference's; none of them is a taste
 // call this file gets to revisit.
 //
-// It is a PERSISTENT STAGE: one fixed canvas behind the whole product, at full
-// presence on the landing and recessed behind a room, so every screen is a view
-// drawn over the same living presence. Mounting it per route would throw the WebGL
-// context away and rebuild ~19,000 particles on every navigation.
+// It lives on the FRONT DOOR only (face v2 Phase 09, ADR-1349): one fixed canvas at full
+// presence behind the door. Crossing into the workroom fires the warp (the face flies past
+// the camera) and then the door unmounts it -- the workroom is "a clean room, the face
+// belongs to the front door" (v0.7 App.jsx). Coming back out it remounts mid-swoop.
 //
 // This file holds three.js wiring and nothing else. Every decision it makes -- the
 // particle layout, the noise field, the repulsion physics, the reduced-motion
@@ -46,6 +46,8 @@ import {
   nextPixelRatio,
   prefersReducedMotion,
   presenceTarget,
+  FACE_PALETTE,
+  SPRITE,
   resolvePalette,
   shouldReapplyBlend,
   spreadTarget,
@@ -54,6 +56,7 @@ import {
   stepSpeechLevel,
   tiltTargets,
 } from '../lib/stage.mjs'
+import { WARP_IN_S, WARP_OUT_S, warpTargets } from '../lib/mode.mjs'
 
 export type FaceState = 'idle' | 'listening' | 'thinking' | 'talking'
 
@@ -62,6 +65,12 @@ export interface FaceStageProps {
   presence?: number
   /** What arc is doing. The voice always wakes the face, whatever presence says. */
   state?: FaceState
+  /** The door crossing: a new `id` starts a pass, `dir` 1 into the workroom, -1 back out (v0.7's stage.warp). */
+  warp?: { dir: 1 | -1; id: number }
+  /** The door's one look, the neon identity in both moods (ADR-1349 §4), instead of the live tokens. */
+  neon?: boolean
+  /** Called once when the stage cannot draw (no WebGL, or the loop threw), so the door can say so. */
+  onUnavailable?: () => void
 }
 
 const STAGE_STYLE: CSSProperties = {
@@ -74,20 +83,30 @@ const STAGE_STYLE: CSSProperties = {
 /** The cursor's resting place: far enough outside the scene to repel nothing. */
 const AWAY = new THREE.Vector3(-9999, -9999, -9999)
 
-export default function FaceStage({ presence = 1, state = 'idle' }: FaceStageProps) {
+export default function FaceStage({ presence = 1, state = 'idle', warp, neon = false, onUnavailable }: FaceStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   // The render loop samples the props every frame instead of re-running the effect:
   // rebuilding the scene because presence moved would drop the WebGL context sixty
   // times a second.
-  const liveRef = useRef<{ presence: number; state: FaceState }>({ presence, state })
+  const liveRef = useRef<{ presence: number; state: FaceState; warp?: { dir: 1 | -1; id: number } }>({ presence, state, warp })
   useEffect(() => {
-    liveRef.current = { presence, state }
-  }, [presence, state])
+    liveRef.current = { presence, state, warp }
+  }, [presence, state, warp])
+  // Read through a ref so the scene is not rebuilt when the door hands in a new callback.
+  const unavailableRef = useRef(onUnavailable)
+  useEffect(() => {
+    unavailableRef.current = onUnavailable
+  }, [onUnavailable])
+  const neonRef = useRef(neon)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
+    // How many times a scene was built on this page, on <html>: the harness prints it when a crossing leaves a stage
+    // behind, so a remount is a number in the CI log rather than a guess (debt ledger, Phase 10: the Space-key crossing).
+    const doc = document.documentElement
+    doc.dataset.stageMounts = String(Number(doc.dataset.stageMounts || '0') + 1)
 
     const width = container.clientWidth || window.innerWidth
     const height = container.clientHeight || window.innerHeight
@@ -97,7 +116,7 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
     // of a colour is how a design system rots. three needs a number, so the token is
     // resolved once here; the literal fallback lives in stage.mjs, not in this file.
     const styles = getComputedStyle(document.documentElement)
-    const palette = resolvePalette((name: string) => styles.getPropertyValue(name))
+    const palette = neonRef.current ? FACE_PALETTE : resolvePalette((name: string) => styles.getPropertyValue(name))
     const toRGB = memoizeToRGB((hex: string): [number, number, number] => {
       const c = new THREE.Color(hex)
       return [c.r, c.g, c.b]
@@ -116,8 +135,33 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
     } catch {
+      unavailableRef.current?.()
       return
     }
+    // Everything the stage takes is registered the moment it exists, and ONE teardown gives back what was registered,
+    // newest first. A throw at any later step of the setup (a composer on a context with no float targets, a texture, a
+    // geometry) releases exactly what had been built, and an unmount releases all of it (attack 1bc1328 B6). A GPU
+    // context that outlives the stage is permanent: browsers keep a handful and then kill the oldest, a blank canvas
+    // somewhere else in the product.
+    let dead = false
+    const release: Array<() => void> = [
+      () => {
+        renderer.domElement.remove()
+        renderer.dispose()
+        renderer.forceContextLoss()
+      },
+    ]
+    const teardown = () => {
+      dead = true
+      for (const give of release.splice(0).reverse()) {
+        try {
+          give()
+        } catch {
+          /* keep giving back the rest */
+        }
+      }
+    }
+    try {
     renderer.setSize(width, height)
     container.appendChild(renderer.domElement)
 
@@ -130,10 +174,11 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
       BLOOM.threshold,
     )
     const composer = new EffectComposer(renderer)
+    release.push(() => renderPass.dispose(), () => bloomPass.dispose(), () => composer.dispose())
     composer.addPass(renderPass)
     composer.addPass(bloomPass)
 
-    // Supersample the internal resolution -- bright points on black alias badly at
+    // Supersample the internal resolution -- bright points on a dark ground alias badly at
     // 1x -- and let the frame-time guard below step it down if the GPU cannot hold it.
     let dpr = initialPixelRatio(window.devicePixelRatio)
     const applyResolution = () => {
@@ -157,25 +202,26 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
       canvas.height = 128
       const ctx = canvas.getContext('2d')
       if (ctx) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0)'
+        ctx.fillStyle = SPRITE.clear
         ctx.fillRect(0, 0, 128, 128)
         paint(ctx)
       }
       const texture = new THREE.CanvasTexture(canvas)
+      release.push(() => texture.dispose())
       texture.minFilter = THREE.LinearMipmapLinearFilter
       texture.magFilter = THREE.LinearFilter
       texture.anisotropy = maxAnisotropy
       return texture
     }
 
-    // The cloud's sprite: a soft diamond, white core falling through cyan to blue.
+    // The cloud's sprite: a soft diamond, bright core falling through cyan to blue.
     const glowTexture = createSpriteTexture((ctx) => {
       const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
-      gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)')
-      gradient.addColorStop(0.25, 'rgba(255, 255, 255, 0.95)')
-      gradient.addColorStop(0.5, 'rgba(0, 255, 230, 0.6)')
-      gradient.addColorStop(0.8, 'rgba(0, 100, 255, 0.2)')
-      gradient.addColorStop(1.0, 'rgba(0, 0, 0, 0)')
+      gradient.addColorStop(SPRITE.glow[0]![0], SPRITE.glow[0]![1])
+      gradient.addColorStop(SPRITE.glow[1]![0], SPRITE.glow[1]![1])
+      gradient.addColorStop(SPRITE.glow[2]![0], SPRITE.glow[2]![1])
+      gradient.addColorStop(SPRITE.glow[3]![0], SPRITE.glow[3]![1])
+      gradient.addColorStop(SPRITE.glow[4]![0], SPRITE.glow[4]![1])
       ctx.fillStyle = gradient
       ctx.beginPath()
       ctx.moveTo(64, 8)
@@ -190,10 +236,10 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
     // machined cells rather than as a blur.
     const ringTexture = createSpriteTexture((ctx) => {
       const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64)
-      gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)')
-      gradient.addColorStop(0.3, 'rgba(0, 255, 240, 0.8)')
-      gradient.addColorStop(0.7, 'rgba(0, 150, 255, 0.35)')
-      gradient.addColorStop(1.0, 'rgba(0, 0, 0, 0)')
+      gradient.addColorStop(SPRITE.ring[0]![0], SPRITE.ring[0]![1])
+      gradient.addColorStop(SPRITE.ring[1]![0], SPRITE.ring[1]![1])
+      gradient.addColorStop(SPRITE.ring[2]![0], SPRITE.ring[2]![1])
+      gradient.addColorStop(SPRITE.ring[3]![0], SPRITE.ring[3]![1])
       ctx.fillStyle = gradient
       ctx.beginPath()
       ctx.moveTo(64, 12)
@@ -202,7 +248,7 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
       ctx.lineTo(12, 64)
       ctx.closePath()
       ctx.fill()
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+      ctx.strokeStyle = SPRITE.ringEdge
       ctx.lineWidth = 3
       ctx.beginPath()
       ctx.moveTo(64, 28)
@@ -238,6 +284,7 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
       opacity: MASK.opacity,
     })
     const maskPoints = new THREE.Points(maskGeometry, maskMaterial)
+    release.push(() => { scene.remove(maskPoints); maskGeometry.dispose(); maskMaterial.dispose() })
     scene.add(maskPoints)
 
     // ── 5. the ambient cloud ──────────────────────────────────────────────────
@@ -265,6 +312,7 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
       opacity: CLOUD.opacity,
     })
     const cloudPoints = new THREE.Points(cloudGeometry, cloudMaterial)
+    release.push(() => { scene.remove(cloudPoints); cloudGeometry.dispose(); cloudMaterial.dispose() })
     scene.add(cloudPoints)
 
     // ── 6. the cursor ─────────────────────────────────────────────────────────
@@ -289,6 +337,7 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
     }
     window.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseleave', onMouseLeave)
+    release.push(() => { window.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseleave', onMouseLeave) })
 
     // ── reduced motion ────────────────────────────────────────────────────────
     // A contract, not a courtesy: under it the ambient drift STOPS. It is also
@@ -302,6 +351,7 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
     }
     if (motionQuery && typeof motionQuery.addEventListener === 'function') {
       motionQuery.addEventListener('change', onMotionChange)
+      release.push(() => motionQuery.removeEventListener('change', onMotionChange))
     }
 
     // ── the loop ──────────────────────────────────────────────────────────────
@@ -316,12 +366,31 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
     let driftMul = ambientProfile({ reducedMotion }).drift
     let smoothedPresence = clampPresence(liveRef.current.presence)
     let spreadCur = spreadTarget(smoothedPresence)
+    // A stage mounted by a crossing starts that crossing's pass; one mounted fresh has seen nothing.
+    let warpSeen = -1
+    let warpDir = 0
+    let warpStart = -1
+    let warpScaleMul = 1
+    let warpOpacityMul = 1
+    let warpFlash = 0
     let lastT = 0
     let frameAcc = 0
     let frameN = 0
 
     const animate = () => {
+      if (dead) return
       animationFrameId = requestAnimationFrame(animate)
+      // A throw inside a frame reaches no error boundary (it is a rAF callback, not React), and it
+      // would throw again sixty times a second. Stop the loop once and let the door say so.
+      try {
+        frame()
+      } catch {
+        dead = true
+        cancelAnimationFrame(animationFrameId)
+        unavailableRef.current?.()
+      }
+    }
+    const frame = () => {
       const elapsed = clock.getElapsedTime()
       const dt = elapsed - lastT
       lastT = elapsed
@@ -350,8 +419,23 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
       // presence: the caller's target, but the voice always wakes the face
       smoothedPresence = approach(smoothedPresence, presenceTarget(live.presence, live.state), 0.055)
 
+      // the warp: the door <-> workroom fly-through. Reduced motion skips the pass entirely.
+      if (live.warp && live.warp.id !== warpSeen) {
+        warpSeen = live.warp.id
+        if (!reducedMotion) {
+          warpDir = live.warp.dir
+          warpStart = elapsed
+        }
+      }
+      const pass = warpStart >= 0 ? warpTargets(warpDir, (elapsed - warpStart) / (warpDir > 0 ? WARP_IN_S : WARP_OUT_S)) : warpTargets(0, 1)
+      if (pass.done) warpStart = -1
+      warpScaleMul += (pass.scale - warpScaleMul) * 0.14
+      warpOpacityMul += (pass.opacity - warpOpacityMul) * 0.14
+      warpFlash += (pass.flash - warpFlash) * 0.14
+
       const shape = maskTransform({ presence: smoothedPresence, elapsed, level, breath: ambient.breath })
-      maskPoints.scale.setScalar(shape.scale)
+      maskPoints.scale.setScalar(shape.scale * warpScaleMul)
+      maskMaterial.opacity = MASK.opacity * warpOpacityMul
       maskPoints.position.y = shape.maskY
       cloudPoints.position.y = shape.cloudY
 
@@ -367,7 +451,7 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
 
       // thinking: the cloud stirs faster. speaking: the bloom swells.
       driftMul = approach(driftMul, ambient.drift, 0.04)
-      bloomPass.strength = bloomStrength({ level, listen: listenAmt })
+      bloomPass.strength = bloomStrength({ level, listen: listenAmt }) + warpFlash
       cloudPoints.rotation.y += CLOUD.spin * ambient.spin
 
       // the mask follows the cursor, and sways slowly when there is none
@@ -409,7 +493,7 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
 
       localCloudMouse.copy(mouse3D)
       cloudPoints.worldToLocal(localCloudMouse)
-      spreadCur = approach(spreadCur, spreadTarget(smoothedPresence), 0.08)
+      spreadCur = approach(spreadCur, spreadTarget(smoothedPresence) + pass.spread, 0.08)
       stepCloud({
         positions: cloudPositions,
         original: cloudOriginal,
@@ -428,6 +512,13 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
     }
     animate()
 
+
+    release.push(() => {
+      cancelAnimationFrame(animationFrameId)
+      if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
+    })
+
+    // No ResizeObserver in this browser throws here, like any step above: the catch below gives everything back.
     const resizeObserver = new ResizeObserver(() => {
       if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
       resizeFrameId = window.requestAnimationFrame(() => {
@@ -435,41 +526,15 @@ export default function FaceStage({ presence = 1, state = 'idle' }: FaceStagePro
         applyResolution()
       })
     })
+    release.push(() => resizeObserver.disconnect())
     resizeObserver.observe(container)
-
-    // ── teardown ──────────────────────────────────────────────────────────────
-    // The stage is meant to outlive every room, so the one time it does come down
-    // it has to come down completely. A GPU context that survives an unmount is
-    // permanent -- browsers keep a handful and then start killing the oldest, which
-    // is a blank canvas somewhere else in the product, not an error here.
-    return () => {
-      cancelAnimationFrame(animationFrameId)
-      if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
-      resizeObserver.disconnect()
-      window.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseleave', onMouseLeave)
-      if (motionQuery && typeof motionQuery.removeEventListener === 'function') {
-        motionQuery.removeEventListener('change', onMotionChange)
-      }
-
-      scene.remove(maskPoints)
-      scene.remove(cloudPoints)
-      maskGeometry.dispose()
-      maskMaterial.dispose()
-      ringTexture.dispose()
-      cloudGeometry.dispose()
-      cloudMaterial.dispose()
-      glowTexture.dispose()
-
-      bloomPass.dispose()
-      renderPass.dispose()
-      composer.dispose()
-
-      renderer.domElement.remove()
-      renderer.dispose()
-      renderer.forceContextLoss()
+    } catch (err) {
+      teardown()
+      throw err
     }
+
+    return teardown
   }, [])
 
-  return <div ref={containerRef} aria-hidden="true" style={STAGE_STYLE} />
+  return <div ref={containerRef} data-stage="face" aria-hidden="true" style={STAGE_STYLE} />
 }

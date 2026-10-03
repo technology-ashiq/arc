@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 07
-appetite: 29.5d
-burn: 10d
+phase: 08
+appetite: 37d
+burn: 14d
 blocked-on: —
 depends-on: —
 
@@ -31,10 +31,12 @@ depends-on: —
 | 04 | Door read routes — what Phase 03's lists name (REQ-06) | 3d | ✅ **CLOSED 2026-09-18** — 0.5d of 3d; 18 routes served, 35 of 50 panels (39 tables), residue 15 panels on 10 routes approved by the owner (ADR-1338); four attacker rounds, `phase04-folds` 141 checks; merged `0a4cb262` (#248), PR head 19/19 (run 35367884908), `main` re-verified 19/19 (run 35369459599), suite 1..3415; live door 19 of 19 routes 200; receipts `01M2TPXZ16FDQ07K3SWBJ6V44M` · `01M2TPXZGPTN08BN98G6TCRZ5J` |
 | 05 | Work door + every work verb + live rooms + flows in CI + coverage op-side (REQ-04, REQ-07, REQ-09, REQ-11) | 10d | ✅ **CLOSED 2026-09-23** — 3d of 10d; 31 of 31 work verbs ship as ops, residue none (`residue.md`, held both ways by `tests/face/work-door.mjs`); eight PRs (#252 · #253 · #254 · #255 · #257 · #258 · #259 · #261) + the close's #262/#263, 20 attacker rounds, 175 fixed-defect rows; final tree `2fba48f7` 19/19 (run 35870851639), suite 1..3427; live door from the main clone, one real apply receipted (`01M37CDRK7E03P67E45Y1BDT4E`); spec-fidelity drift dispositioned; receipts `01M37D0KHFPXBDBWQRYPMEXVT8` · `01M37D0M5F55KH2D8A5ZWJG6TA` |
 | 06 | Session door — click-started, streamed, receipted; every SESSION verb (15) (REQ-08, ADR-1339) | 5d | ✅ **CLOSED 2026-09-26** — 3d of 5d; of 15 SESSION verbs 5 ship with the receipt read back (the live council convene among them), 4 start with the read-back owed, 6 residue filed to their lanes (`residue.md`, held to the registry by `tests/face/session-door.mjs`); PRs #269 · #270 · #271 · #272 · #273 · #274 · #276 · #278 · #282 + the close #285/#286; 13 boundary rounds, 118 fixed-defect rows, the logic surface never ran (debt row); `main` `465f5b82` 19/19 (run 36225129900), suite 1..3545; spec-fidelity drift dispositioned; receipts `01M3EBD91R95PZD0EPQ1QB4TS2` · `01M3EBDGQ70ETM8PXDHNKHSZXJ` |
-| 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 3d | spec'd — /arc-change 2026-09-26, awaiting the owner's OK |
+| 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 10.5d | ✅ **CLOSED 2026-09-30** — 5d of 10.5d (worked 09-26, -27, -28, -29, -30); REQ-12 validated. The room, a Reference link from every room, page shape v1, 34 pages rewritten and accepted, and the owner-key proof. Two DoD rows ticked narrower than written (see the done log) |
+| 09 | Front door — the face at `/`, ENTER HQ with the warp, WebGL guard, a named surface (REQ-13, ADR-1349); runs BEFORE 08 | 1.5d | ✅ **CLOSED 2026-10-01** — 1d of 1.5d (built 10-01); REQ-13 validated. The face at `/`, ENTER HQ with the warp both ways, the WebGL guard, a named surface in coverage, the lint reading the stage; the owner read it against his design ("design ithu"). One DoD row ticked narrower than written: only the boundary attacker ran (see the done log) |
+| 10 | The face talks — any question, the owner's model added in the face, arc answers cited, general labelled, voice (REQ-14, ADR-1350); runs BEFORE 08 | 4d | ✅ **CLOSED 2026-10-02** — 1d of 4d (built 10-01..10-02); REQ-14 validated. The owner adds a model from HQ Settings, the key never returns, arc answers cited, general answers labelled, every model answer receipted, a neon ask bar on `/`, voice behind one switch, a fake provider in CI; the owner read it ("okay va iruku"). One DoD row ticked narrower than written: only the boundary attacker ran (see the done log) |
 | 08 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 7d of 24d.** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
+**Appetite burn: 14d of 37d (Phase 10 closed 2026-10-02: 1d of 4d; Phase 09 closed 2026-10-01: 1d of 1.5d; 33d until ADR-1350 added Phase 10's 4d on 2026-10-01; 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
 C · verbs (05–06) 3/15d — **Phase 05 CLOSED at 3d of its 10d** (worked 2026-09-19, -20 and -23) — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
 3d unallocated. Tripwires: Block A day 3 · Block B day 5 · Block C at Phase 05 day 5 (burn 9d) · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
@@ -422,7 +424,123 @@ stay bespoke folds.
   `approval.requested{gate: phase-done}` `01M3EBDGQ70ETM8PXDHNKHSZXJ`. The second waits on the owner's stamp, which
   also approves `residue.md` as a whole.
 
+- **Phase 07 — Reference room, page shape v1, the 34 pages and the owner proof. CLOSED 2026-09-30.**
+  **What shipped.** The docs wiki inside the face: `GET /api/reference` (one extract, GET-only, no live facts), the Reference
+  room (index, type, entity; five sections; both moods), a Reference link from every served room, page shape v1 (kit parts and
+  our own `flow` and `loop` Diagram), and **all 34 product and lane pages rewritten and accepted**, explanation debt 0 of
+  119. The accept step became authentication: `--accept` needs an owner-approved request (Amendment 1), and now a signature
+  per page made with the owner's passphrase-sealed key and checked on CI against the committed public key (Amendment 2). PRs:
+  door #291 · room #294 · links #295 · change routing #296 · render and gate #297 · harness #298 · first 34 pages #299 (the
+  owner rejected them) · page shape v1 and the rewrite #300 (`9979a266`) · owner key #303 (`525042e7`).
+  **What the phase cost.** 5d of its 10.5d appetite. The first 34 pages cost about 40% of a week's tokens and were thrown
+  away; the rewrite on Sonnet 5.5 cost about 3.5M tokens (29 pages at ~110k each), and the attack and fix rounds on the
+  proof code about 1.2M more.
+  **Tests:** CI green per job, 19 of 19: PR #300 head `0c411f80` (run 36618313972) and PR #303 head `5c8cbf13` (run
+  36658433718). The owner-key PR was red twice first, for causes CI alone could see: a sandbox that copies a hand-kept file
+  list (`owner-sig.mjs` missing), and, on #300, the sync golden, the docs-scripts no-spawn rule, a missing PLAN-org room and a
+  stale `rooms.generated.json`. Each is a fixed-defect row. Log: `evidence/phase-07/test-output.log`.
+  **Live demo:** the door was run from the MAIN clone on the canonical spine (`evidence/phase-07/live-door-main-clone.txt`):
+  GET 200, POST 404, no token 401, 34 narratives, debt 0, no fingerprint line, no script tag. **The room UI in a browser was
+  read by the owner in a sim door from a worktree on 2026-09-29, not from the main clone**; the UI is covered on every CI leg
+  by the browser harness. Declared.
+  **Attackers:** boundary ran on every PR of the phase (rounds under `evidence/phase-07/attack-*.json`). On PR #300:
+  boundary 4 and 7 findings, logic 7 (GLM); on PR #303: boundary 13 and 10, all fixed, each with a fixed-defect row.
+  **The logic surface did NOT run on the owner-key code** (GLM timed out on every attempt, deepseek answered empty), and did not
+  run its second round on #300: a debt row, DECLARED at the stamp.
+  **Spec-fidelity:** not run for this phase. Declared.
+  **What the owner proof does and does not prove** (ADR-1514 Amendment 2, corrected before the build): invented ULIDs,
+  hand-edited entries, a bare `--accept`, a fake spine and a copied signature all fail; a deliberate swap of the public key
+  does not fail but is a loud WARN. What stops a swap is a GitHub CODEOWNERS review on `.claude/owner-key.pub`,
+  `narrative-anchors.mjs` and `narrative-proof.mjs`, a repository setting only the owner can turn on. Not turned on yet.
+  **Debt rows opened:** the logic surface unrun on the owner-key code; the owner public key is synced to consumer repos; the
+  self-test takes over two minutes (scrypt cost); a shallow CI checkout leaves the key-swap check to CODEOWNERS.
+  **Assumptions and triggers:** no ledger row fired; no ADR is DEFERRED; ADR-1514's revisit trigger (a false claim passing
+  the drift check) has not fired. REQ-12 is validated (11 of 12). Evidence: `initiatives/face/evidence/phase-07/`, sha256
+  manifest from `arc-evidence.sh bundle 07 --lane face` (verified).
+  amendments: 5 (2026-09-26 Reference room; 09-27 rich narrative; 09-27 page shape; 09-29 owner proof; 09-30 owner key) ·
+  reopened: n.
+  Receipts (main clone spine, `2026-09-30.jsonl`): `phase.closed` `01M3R3P1PJXDA0JZ8FJZ9NR217` ·
+  `approval.requested{gate: phase-done}` `01M3R3P3XF2CXK3S695N61EX1E`. The second waits on the owner's stamp, which also
+  accepts the two declared gaps above.
+
+- **Phase 10 — The face talks. CLOSED 2026-10-02.** The owner adds a model (any OpenAI-compatible endpoint, free or paid) from HQ's header (Settings), never from the ask bar; the key is written to `~/.arc-private/face/models.json` and every door response returns only its last four characters; arc questions stay deterministic first and a citation that does not resolve marks the answer unverified; a general question is answered and labelled "general — not from arc's record"; every model answer runs through `arc-run --process face-ask` and its receipt names the model and the lane; the front door has its own neon ask bar with no settings control, sharing one brain with the workroom dock; voice in and out sits behind one switch, off by default, absent where the browser has no speech API; a provider's refusal (a 429) reaches the face as one sentence with the next step. Four PRs: #307 (`4c8a0407`), #308 (`c6eece01`, the owner's correction at the demo), #309 (`41b0e365`, the raw 429), #310 (`2ce32323`, the demo read).
+  **Tests:** CI only, per job: `main` `2ce32323` run 37001289342 (workflow_dispatch), 19 of 19 green on the first attempt; suite 1..3885, the face-talk fixture is ok 1702. PR #310's run met the front-door `space-key-unmount` flake once on macOS dark (already debt row 107) and was green on rerun.
+  **Live demo:** from the MAIN clone at `41b0e365` (`arc-face.mjs`), the owner checked the talking face and said "check pannen, okay va iruku" (`evidence/phase-10/owner-demo.md`). He did not say which model or questions, so the file does not claim voice or either label was exercised by hand; both are asserted on every CI leg.
+  **Ticked narrower than written:** "Two fresh attackers (logic · boundary)" -- only the boundary surface attacked this code (two rounds, 8 + 10 findings, fixed or carried as debt rows 108-109); the logic surface never ran (the free trial model returned an empty envelope). The second Phase in a row without a logic run; the next logic-surface run on the lane carries both.
+  **Metrics:** amendments: 1 (the owner's 2026-10-01 correction: Settings to HQ, the door's own ask bar) · reopened: n.
+  **Assumptions and triggers:** no ledger row fired; no ADR is DEFERRED; ADR-1350's revisit trigger (an unlabelled general answer, a verified answer on a citation that does not resolve, a key read back, voice mishearing arc's words) did not fire. REQ-14 is validated (13 of 14). Evidence: `initiatives/face/evidence/phase-10/`, sha256 manifest from `arc-evidence.sh bundle 10 --lane face` (verified).
+- **Phase 09 — The front door. CLOSED 2026-10-01.** `/` draws the owner's neon face at full presence with one message and one ENTER HQ control; ENTER HQ by pointer, Enter or Space runs the warp in and lands on `#hq`, the exit runs it back; the workroom never mounts the stage in either mood; with WebGL refused, or a stage that throws, the door shows a fallback line and ENTER HQ still opens the workroom; the front door is one named surface in `expected-set.json` and `face-coverage` FAILs a second; the colour lint reads `face/src/face` and `face/src/frontdoor` with the neon palette allowed in one file; Ctrl+K opens the palette on the door. One PR, #305 (`ad83b34f`), PR head 19 of 19.
+  **Tests:** CI only, per job: `main` `ad83b34f` run 36858931483, 19 of 19 green after one rerun of Windows shard 1/12 (Chrome failed to start, `EBUSY` on `DevToolsActivePort`, the same flake #305 met; now a debt row); suite 1..3829.
+  **Live demo:** from the MAIN clone (`arc-face.mjs --port 8327`), the owner opened `/`, entered HQ and came back, and read it against his design: "design ithu machi, nalla iruka simple ah sleek ah" (`evidence/phase-09/owner-demo.md`). In the same message he asked for the face to talk; that is new capability, routed as ADR-1350 / REQ-14 / Phase 10, not a reopening of REQ-13.
+  **Ticked narrower than written:** "Two fresh attackers (logic · boundary)" -- only the boundary surface attacked this code (two rounds, 5 + 12 findings, every medium fixed, six LOW rows in the debt ledger); the logic surface never ran (round 1 was refused before sending: the model id carried a `~`). Recorded in the debt ledger's Phase 09 row, to be carried by the next logic-surface run on the lane.
+  **Assumptions and triggers:** no ledger row fired; no ADR is DEFERRED; ADR-1349's revisit trigger (the owner asks for the story sections, or finds the warp or presence wrong) did not fire; ADR-1315's fired early and is routed by ADR-1350. REQ-13 is validated (12 of 14). Evidence: `initiatives/face/evidence/phase-09/`, sha256 manifest from `arc-evidence.sh bundle 09 --lane face` (verified).
+  amendments: 1 (2026-09-30 the front door, ADR-1349) · reopened: n.
+  Receipts (main clone spine, `2026-10-01.jsonl`): `phase.closed` `01M3VR2HF2DYNZZ9N3JP6YES8G` · `approval.requested{gate: phase-done}` `01M3VR2JTVMM5XRTK66QQ25SYY`. The second waits on the owner's stamp, which also accepts the narrower attacker row.
+
 ## Now
+
+**DEFECT ROUTED (2026-10-02, `/arc-change --lane face`, owner: "machi arc ethathu general questions keta ans pannala yen?", then "ok pannu"):** after the Phase 10 close the owner found general questions answered as arc. The deterministic reader (`ask-offline.mjs`) matched bare substrings ("learn" held "earn", "blog" held "log", "keyboard" held "board", "deliver" held "live") and everyday words ("status", "send"), so 8 of 14 general questions never reached his model. Classified as a **bug against REQ-14** (validated; its acceptance "a non-arc question returns the model's answer labelled general" did not hold in real use), not a new REQ: fixed through the fix-issue flow on `feat/face-v2-10-askfix` -- whole-word matching, and a word that also means something outside arc answers only beside an arc word or a lane name; `tests/face/ask-golden.mjs` pins 13 general questions with a mutant that strips both. Appetite: about 0.25d inside Phase 10's unspent 3d; burn stays 14d of 37d (38%), no tripwire near. Assumptions ledger: nothing fired; ADR-1350's revisit trigger (an unlabelled general answer) did not fire -- these were deterministic arc answers, not model answers shown unlabelled.
+
+**RESUME HERE (2026-10-02):** **Phase 10 is CLOSED** (done log). **Phase 08 is next, and it is the owner's two real days** on a face that talks (REQ-10, `phases/phase-08-spec.md`): from the MAIN clone, `node .claude/scripts/hq/arc-face.mjs`, every decision through the face and at least one op a day; `face-dogfood` reads each day. Then the retro, the HISTORY row and `/arc-phase-done 08`. Owner steps open: the stamp on the Phase 10 sign-off request, `01M3VR2JTVMM5XRTK66QQ25SYY` and `01M3R3P3XF2CXK3S695N61EX1E`. Debt carried: the logic attacker has not run on Phases 09 or 10; `arc-run` drops its transcript on a 429.
+
+**OWNER DEMO READ (2026-10-02, main clone at `41b0e365`):** "check pannen, okay va iruku" -- the Phase 10 owner criterion is ticked (`evidence/phase-10/owner-demo.md`; it records only his words, not which model or questions, and says so). Next: `/arc-phase-done 10` from the main clone, then Phase 08, the dogfood days. Assumptions ledger: nothing fired.
+
+**OWNER CORRECTION (2026-10-01, at the Phase 10 live demo, in-scope -- no new REQ):** "configuration ah ask panel la add panniruka, athu hq ulla thana varaunm ... design la white background ask panel la ethathu panatha ... sleek ah awesome ah oru ask bar vai". PR #307 put the models panel behind a gear on the ask bar and reused the workroom's dock on the door (a white panel in the light mood). Fixed on `feat/face-v2-10b`: the door gets its own neon glass ask bar (`frontdoor/FrontDoorAsk.tsx`), models and voice move to HQ's header (Settings), one shared brain (`shell/useAsk.ts`), and the smoke's new `door-no-settings` check holds the ruling (front-door checks 24). Phase 10 stays open until the owner's demo read.
+
+**RESUME HERE (2026-10-01):** **Phase 09 is CLOSED** (done log). **Phase 10 is next: the face talks** (REQ-14, ADR-1350 accepted, `phases/phase-10-spec.md`, branch `feat/face-v2-10`), then Phase 08, the owner's two dogfood days on a face that talks. Owner steps open: the stamp on `01M3VR2JTVMM5XRTK66QQ25SYY` (and the older `01M3R3P3XF2CXK3S695N61EX1E`).
+
+**CHANGE ROUTED (2026-10-01, `/arc-change --lane face`, owner: "arc face athoda product la ethathu keta ellame proper ah ans pannanum, arc ku oru llm connect pannuvom, ui la add panra maari irukanum, en istathuku na atha add pannuven, free/paid model ethunalaum, genral ah ketalum ans pannanum, arc ah pathi ketalum correct ah ans pannanum"):** at the Phase 09 live demo the owner accepted the front door ("design ithu machi, nalla iruka simple ah sleek ah") and asked where the talking was. **ADR-1350** (decision, proposed): a model the owner adds in the face (any OpenAI-compatible endpoint, free or paid, the key kept on the door at `~/.arc-private/face/models.json` and never returned), two labelled answer lanes (arc: cited and verified, ADR-1325 kept; general: "not from arc's record"), every model answer receipted through `arc-run`, voice as a setting (amends ADR-1315 and ADR-1325, lifts two no-gos). Filed as **REQ-14 / Phase 10** (new capability, 3 active REQs of a cap of 10), placed after 09 and before the dogfood (Phase 08), so the dogfood runs on a face that talks. Appetite: total 33d to **37d** (+4d); burn 12d (32%), projected about 17.5d at Phase 10's close (47%), under the 50% line; all block tripwires are in closed blocks. Assumptions ledger: nothing fired (ADR-1315's revisit trigger fired early, routed here). ADR-1350 status: accepted (its own Status line, 2026-10-01). Phase 09 still closes first, from the main clone.
+
+**OWNER CHOSE A (2026-10-01, during `/arc-resume --lane face`):** ADR-1349 is accepted with option A, the hero; option B stays his
+next question. Phase 09 is building on `feat/face-v2-09` (renamed from `feat/face-front-door`, carrying `c399aab2`): `lib/mode.mjs`
+(the surface decision and the warp timeline), the warp ported into `FaceStage.tsx`, `face/src/frontdoor/` (the hero, the neon file,
+the stage boundary), the rail and header brands back as v0.7's exit, and the gates, harness and `tests/face/front-door.mjs`.
+Assumptions ledger: nothing fired.
+
+**CHANGE ROUTED (2026-09-30, `/arc-change --lane face`, owner: "home la face irunthathu, ithula varatha, plan pannalaya"):** the owner's design has a FRONT
+DOOR (the Landing: neon particle face, a message, ENTER HQ with a warp) and a clean-room workroom. The v2 plan ported only the workroom
+and never listed the front door; on 2026-09-17 a session unmounted `FaceStage.tsx` on its own reading of v0.7 ("the product has no front
+door") **without asking the owner**. **ADR-1349** (decision, proposed) names the front door as a surface (not a room), and offers two sizes:
+**A, the hero** (the face at `/`, one ENTER HQ, the warp, a WebGL guard; **1.5d**) and **B, the faithful landing** (sections S1..S6 and chapters
+C01..C09 with live spine panels; about 2,700 lines of design JSX, an effort of 5 to 8 days that is a guess, not a measure). This change files A as
+**REQ-13 / Phase 09**, placed before the dogfood days (Phase 08 waits on it), and leaves B as the owner's next question. Classified as new capability
+(REQ-13, 1 active REQ of a cap of 10). Appetite: burn 12d of 33d (36%, from 31.5d: +1.5d); with B instead the total would pass 38d and burn 18d (about 55%),
+which is the scope-cut conversation the plan requires, so B is not filed. Kill-criteria tripwires are all in the closed blocks. Assumptions ledger: nothing
+fired. **Waiting on the owner's OK before any code** (a new surface and the face back in the product). Branch `feat/face-front-door`.
+
+**RESUME HERE (2026-09-30):** **Phase 07 is CLOSED** (done log). **Phase 08 is next, and it is the owner's two real days**
+(REQ-10, plan in `phases/phase-08-spec.md`): from the MAIN clone, `node .claude/scripts/hq/arc-face.mjs`, every decision through
+the face and at least one op a day; `face-dogfood` reads each day. Then the retro, the HISTORY row and `/arc-phase-done 08`.
+Owner steps still open: the stamp on `01M3R3P3XF2CXK3S695N61EX1E`, and GitHub CODEOWNERS review on the three owner-key files.
+
+**PHASE 08 PLAN REFINED (2026-09-30, `/arc-change --lane face`, owner: "complete everything, all phases, don't stop for anything"):**
+its coarse one-line verification plan is now a table with one exact check per exit criterion, an evidence file each, and who does
+it (`phases/phase-08-spec.md`). Tracker only, no code. The two real days are the owner's and no session can run them for him;
+Phase 08 opens after `/arc-phase-done 07` (now closed). Assumptions ledger: nothing fired.
+
+**CHANGE ROUTED (2026-09-30, `/arc-change --lane face`, owner: "owner-token first"):** PR #300 merged (`9979a266`). Its round-3
+attack (boundary B1, B2) showed the accept proof is a deliberate step, not authentication: CI cannot re-verify the ULID, and a
+shell in the main clone can write both events. **ADR-1514 Amendment 2** (decision, proposed) makes it authentication: an
+Ed25519 owner key sealed by a passphrase, `arc-inbox approve` on `gate: narrative-accept` needs a terminal and writes a `sig`,
+the validator requires it for that gate only, the public key is committed and the gate verifies every entry against it. New
+exit criterion "Owner-authenticated" under Phase 07. Classified as a decision plus in-scope build (no new REQ). Assumptions
+ledger: nothing fired; Amendment 1 had named the limit. Estimate 1.5d, charged to Phase 07 and booked at the next burn update
+(10d booked, plus 0.75d for Amendment 1 not yet booked, of 31.5d; no tripwire near). **BUILT and merged as #303 (`525042e7`).**
+The owner ran `owner-key init` and approved the batch with his passphrase; the 34 entries carry one signature each. The build
+changed from this note in one way: the decision carries `sigs` (one per page) so CI can rebuild each message without the spine.
+
+**CHANGE ROUTED (2026-09-29, `/arc-change --lane face`, owner: "a pannu, debt vachu poga thaa"):** the round-2 attack (B6, medium)
+found that `narrative-anchors --accept` stamps `by: "owner"` for whoever runs it, so an agent could self-accept every page and
+drive awaiting-owner to 0. The owner chose option A: **`--accept` needs an `arc-inbox` approval** and it is not parked as debt.
+**ADR-1514 Amendment 1** carries the decision; a new exit criterion ("Owner-proved") sits under Phase 07. Classified as a
+decision plus in-scope build (no new REQ: it is how REQ-12's owner-read gate becomes true). Assumptions ledger: nothing fired,
+but ADR-1514 section 4 assumed that only the owner runs `--accept`, and that premise was false. Estimate 0.75d, charged to Phase 07
+and booked at the next burn update (10d of 31.5d today, no tripwire near). **BUILT the same day (owner: "OK, A build pannu"):**
+`--request-accept` and `--accept --approval <ULID>` in `narrative-anchors` (self-test 17 to 41 arms, no hq file touched: the
+gate string needed no validator row). The owner approved ONE batch request for all 34 pages himself through `arc-inbox`
+(`approval.requested` `01M3PX6YZJVB1D7M0CYGRPGMTV`, decided from the main clone) and the 34 entries were re-stamped under it.
+Known limit, stated in the Amendment: CI cannot re-check the ULID (the spine is gitignored), and anything that can run
+`arc-event` from the main clone could still forge a request; this closes the casual `--accept`, not that.
 
 **OUT-OF-PHASE BUG (2026-09-24, `/arc-change --lane face`, owner: "neeye pannu"):** the proposal-branch
 "three writers of one plan at once" check is red on Windows, intermittently. It hit three PRs on 2026-09-19 and
@@ -433,6 +551,10 @@ loose object at once, and Windows refuses the second open. PR #255's lock-wait f
 the two content-addressed, idempotent object writes (`hash-object -w`, `write-tree`), bounded, and make the check
 print each writer's message. Assumptions ledger: nothing fired. Estimate 0.25d, charged to this cycle and booked
 at the next burn update so the header and the board row move together (7 to 7.25 of 24d, no tripwire). Branch `feat/face-proposal-race-fix`. Phase 06 is untouched.
+
+**RESUME HERE (2026-09-28, night):** PR C is committed on `feat/face-v2-07-page-shape` (`fce8b311`) and **not pushed**: page shape v1 (kit parts, `diagram.mjs` flow/loop, generated sections, door text unescaped), gate per ADR-1514, and qa rewritten with three figures. The owner saw qa in the room and said it is good (not yet recorded with `--accept`). Open decision: the other 33 pages through **improved plan B**, one Opus subagent per page with a pre-built source bundle and about 6 calls (roughly 200k cached reads per page), first batch 4 pages with real token counts measured, then his OK for the rest. He asked about secondary models (a Sonnet/DeepSeek bake-off was offered, not decided). Before push: one `/arc-attack` round (paid, needs his OK), then a background ci-digest watch.
+
+**CHANGE ROUTED (2026-09-27, second pass, `/arc-change --lane face`, owner: "seri, vazhi 1 pannu"):** the owner read the 34 slice-3 pages (#299) in the room and rejected them -- unreadable, not the page shape of `arc-wiki-engine_1.html`, 40% of a week's tokens spent. **ADR-1348** (face): the room draws page shape v1 -- kit parts on face tokens (React, the owner's pick over embedding), generated sections from the extract, and our own `Diagram` (`flow` + `loop`) from a spec (vazhi 1, no library). **ADR-1514** (docs, amends ADR-1513 §1-2): facts live in generated blocks; a narrative is drift-checked and owner-accepted against its hash; the per-block verifier becomes advisory. Phase 07 8.5d -> 10.5d, total 29.5d -> 31.5d. Next: PR C on `feat/face-v2-07-page-shape` (parts + Diagram + fold + gate change + the qa sample); the other 33 only after the owner accepts qa. Assumptions ledger: nothing fired. Stale slice-3 drafts from arc-face-3 are parked on local branch `backup/face-3-stale-0927` (never pushed).
 
 **RESUME HERE (2026-09-26, evening):** **Phase 06 is CLOSED** (done log, 2026-09-26) and stamped by the owner.
 **Phase 07 is next: the Reference room** (REQ-12, 3d), then Phase 08, dogfood (REQ-10, 2d). Open: #267 (the Windows

@@ -398,12 +398,14 @@ has_line() { [[ $'\n'"$1" == *$'\n'"$2"* ]]; }
   # attempts and three lines (engine out-of-cycle bug, 2026-09-26). Local server only -- no network, no key.
   run node "$ARC_ROOT/tests/engine-driver-deadline.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"RAN: 10 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
+  [[ "$output" == *"RAN: 13 checks"* ]] || { echo "the suite did not run all its checks: $output"; false; }
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
   [[ "$output" == *"ok A: a never-answering endpoint ends on the run's ~6 s deadline, far inside one 60 s attempt cap"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok B: one line per failed attempt, each with its status, the first two retrying and the last not"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok D: the request asks for a stream with usage, and a streamed answer split across chunks reaches the run whole"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok E: a provider that ignores the stream flag and answers plain JSON is still read (control for D)"* ]] || { echo "$output"; false; }
   # ADR-0226 Amendment 3: the reasoning knob, sent when off, absent when unset, refused otherwise.
-  [[ "$output" == *"ok D: ARC_LLM_REASONING=off sends reasoning {enabled: false}"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok D: unset sends no reasoning key at all, so the request keeps its old shape"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok D: any other value is refused before the endpoint is reached"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok F: ARC_LLM_REASONING=off sends reasoning {enabled: false}"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok F: unset sends no reasoning key at all, so the request keeps its old shape"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok F: any other value is refused before the endpoint is reached"* ]] || { echo "$output"; false; }
 }

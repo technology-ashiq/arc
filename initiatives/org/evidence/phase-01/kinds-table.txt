@@ -1,0 +1,13 @@
+run.completed        payload.role: yes
+approval.requested   payload.role: yes
+decision.recorded    payload.role: no (map-only)  -- decision.recorded payload has unknown key "role" (shape is closed to decides|verdict|reason)
+incident.raised      payload.role: untested  -- no live receipt of this kind
+cost.incurred        payload.role: untested  -- no live receipt of this kind
+handoff.ready        payload.role: untested  -- no live receipt of this kind
+review.completed     payload.role: yes
+slice.done           payload.role: yes
+content.published    payload.role: no (map-only)  -- content.published payload has unknown key "role" (closed to site|slug|url|title|template_id|cluster_id|content_sha|pr_re
+outreach.sent        payload.role: untested  -- no live receipt of this kind
+lead.researched      payload.role: no (map-only)  -- lead.researched payload has unknown key "role" (closed to lead_id|campaign|provenance|geography|email_status|fact_count|
+phase.closed         payload.role: yes
+kickoff.done         payload.role: yes

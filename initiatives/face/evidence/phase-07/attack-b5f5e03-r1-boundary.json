@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:readTree isDir (the `/^.?[A-Za-z0-9_-][w.-]*$/` test)",
+      "breaking_input": "A narrative names `` `docs/nope-does-not-exist.md` ``, `` `.claude/scripts/x.mjs` `` or `` `face/src/gone.mjs` ``. isDir is called with `docs`, `.claude` and `face`.",
+      "why": "The character class `[w.-]` is a literal `w`, `.` or `-`, not `\\w`. Only a name of at most two characters, or one whose tail is made of w, dot and hyphen, passes. `docs`, `face` and `.claude` all fail, so isDir returns false for nearly every real top-level directory. The path arm of the drift check in evaluate() then skips almost every path and the gate stays green on the real tree. The selftest injects a stub `isDir: d => d === \"a\"`, so the bug never shows. The ADR-1514 rule that every path a narrative names must resolve is effectively off.",
+      "fix": "Use `/^\\.?[A-Za-z0-9_-][\\w.-]*$/`. Add a selftest or bats arm that runs against the real readTree with a planted missing `docs/...` path and asserts a FAIL.",
+      "twin_of": "A regex written for a language's grammar that a test never exercises on the real tree (the vacuous-pass rule)"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:main --accept branch (writeFileSync)",
+      "breaking_input": "`docs/narrative-verify/accepted.json` is a symlink or junction to a file outside the tree, or is a directory. Run `--accept products/qa`.",
+      "why": "readTree pushes the file into `rejected` and main appends a `[not-a-file]` fail. acceptEntry only looks at fails that name the page, so it ignores it. `writeFileSync(join(root, ACCEPT_FILE), ...)` then follows the symlink and writes outside the tree. For a directory it throws EISDIR, and the CLI edge prints a raw stack with a machine path instead of a translated refusal. The writer neither realpaths its destination nor refuses on `t.rejected`.",
+      "fix": "Before writing, refuse on any `rejected` entry that names ACCEPT_FILE. Then lstat the destination and its parent, realpath them, and require them to lie inside root. Wrap the write in try/catch and return exit 1 with the reason.",
+      "twin_of": "A writer realpaths its destination and refuses its source (face-tokens symlink/junction defect)"
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:readTree acceptDoc + main --accept",
+      "breaking_input": "`accepted.json` holds truncated or invalid JSON (a torn write, or a merge conflict marker). Run `--accept products/qa`.",
+      "why": "The parse failure only pushes `ACCEPT_FILE (unparseable)` into `rejected` and leaves acceptDoc null. acceptEntry treats null as an empty document and the file is overwritten with just the one new page. Every other page the owner had accepted is silently lost and flips to awaiting-owner. Unreadable is treated as absent.",
+      "fix": "When `rejected` names ACCEPT_FILE, or the file exists but did not parse, refuse `--accept` with exit 1 and leave the file untouched.",
+      "twin_of": "A wrong-shaped source read as empty; empty because absent and empty because unreadable are different results"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:main --accept (read-modify-write) and acceptEntry",
+      "breaking_input": "Two sessions or worktrees run `--accept products/a` and `--accept products/b` at the same time. Alternatively, a page id of `__proto__` is present in the file.",
+      "why": "The file is read in readTree, modified, then written non-atomically with no lock and no re-read. The second writer's file wins and the first acceptance is lost. Separately, acceptEntry builds `pages = {}` and assigns `pages[k] = ...`. For k `__proto__` (a legal own key from JSON.parse) this sets the prototype and the entry vanishes from the serialised output. acceptedOf already uses a null-prototype object; this side does not.",
+      "fix": "Re-read and compare immediately before writing, and write via a temp file plus rename. Build `pages` with `Object.create(null)` or a Map, and refuse a `__proto__` key by name.",
+      "twin_of": "Read, check, write stale -> re-read and compare right before a write; `out[key] =` on a plain object"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:readTree tracked()/isDir and evaluate drift paths",
+      "breaking_input": "A narrative names `` `Docs/adr/1514-x.md` `` (wrong case), or a gitignored local file such as `.claude/state/hq/events/2026-09-28.jsonl`. Run on Windows with a case-insensitive filesystem.",
+      "why": "`tracked` is only `regularInside(resolve(root,p))`. That is a filesystem existence check, not a git-tracked check. It passes on a case-insensitive Windows checkout and on a dev box that holds untracked files. On the Linux CI leg the same narrative FAILs, so the result is green locally and red in CI. The name says 'tracked' but the check is not.",
+      "fix": "Judge paths against the tracked file list from the extract or `git ls-files -z`, or at least compare the case-exact realpath against the input. Rename the function to what it does.",
+      "twin_of": "A host path.join used for another platform's lookup; compare names the way the filesystem and the remote will"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:main (`argv.includes(\"--selftest\")` first)",
+      "breaking_input": "`node narrative-anchors.mjs --accept products/qa --selftest`",
+      "why": "The selftest branch runs before any argument parsing, so the extra `--accept` and its value are silently ignored. The command exits 0 with no acceptance recorded. A mode that ignores what it was given answers a question nobody asked.",
+      "fix": "When `--selftest` is present, refuse any other argument by name with exit 2.",
+      "twin_of": "Extra tokens ignored -> a mode that ignores what it was given answers a question nobody asked"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:namesOf fence handling",
+      "breaking_input": "A quoted fence ` ```bash ` contains a line ` ```steps ` or ` ~~~ `, or a four-backtick fence wraps a three-backtick example naming `` `/arc-gone` ``.",
+      "why": "Any line matching the fence regex toggles state, including a line with an info string. CommonMark closes only on a bare fence at least as long as the opener, with the same fence character. The gate's notion of quoted versus read text can diverge from the renderer. Names inside a quote are read and falsely fail, and names after an early close in a real block are skipped.",
+      "fix": "Track the opener's fence character and length, and close only on a bare fence of the same character and at least that length. Share one fence tokenizer with the fold.",
+      "twin_of": "A heading quoted in a code fence taken as the break -> a parser of the owner's prose tracks fences before reading structure"
+    }
+  ]
+}

@@ -5,7 +5,7 @@
 //   1. the rooms, rings and order are the SERVED registry's (railGroups), never roomRegistry.js;
 //   2. a row's icon is its module's own `Icon` export, and a room with no module wears a dashed
 //      circle -- the rail shows which rooms are still generic before you open one;
-//   3. the brand is not a button: the product has no front door to go back to.
+//   3. (paid, face v2 Phase 09, ADR-1349) the brand is v0.7's button again, back to the front door.
 import type { ComponentType } from 'react'
 import { CircleDashed, MagnifyingGlass } from '@phosphor-icons/react'
 import { stateBadge } from '../lib/rooms.mjs'
@@ -20,12 +20,14 @@ export const RAIL_W = 240
 export const HEAD_H = 56
 
 export default function Rail({
-  groups, current, onOpen, onPalette, attachment, ringCount, extrasNote = '',
+  groups, current, onOpen, onPalette, onExit, attachment, ringCount, extrasNote = '',
 }: {
   groups: Group[]
   current: string | null
   onOpen: (id: string) => void
   onPalette: () => void
+  /** back to the front door (v0.7's brand button) */
+  onExit: () => void
   attachment: Attachment
   ringCount: number
   /** why some exempted extra rooms are not drawn, or empty when every row was */
@@ -36,10 +38,10 @@ export default function Rail({
   return (
     <nav aria-label="Rooms" className="fixed left-0 top-0 bottom-0 z-40 hidden lg:flex flex-col" style={{ width: RAIL_W, background: 'var(--bg-1)', borderRight: '1px solid var(--line-1)' }}>
       <div className="flex items-center gap-2 px-4 shrink-0" style={{ height: HEAD_H }}>
-        <span className="flex items-center gap-2 px-1 -ml-1 h-[32px]">
+        <button type="button" data-exit-hq onClick={onExit} className="flex items-center gap-2 cursor-pointer rounded-md px-1 -ml-1 h-[32px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)" title="Back to the face">
           <span className="text-[19px] leading-none tracking-tight" style={{ fontFamily: FONT, fontWeight: 700, color: 'var(--text-1)' }}>arc</span>
           <span className="text-[10px] uppercase tracking-[0.08em] h-[18px] px-1.5 inline-flex items-center rounded" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.1)' }}>HQ</span>
-        </span>
+        </button>
       </div>
 
       <div className="px-3 pb-2 shrink-0">

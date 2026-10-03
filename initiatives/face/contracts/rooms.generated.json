@@ -200,7 +200,7 @@
           "run.completed"
         ],
         "processes": [
-          "face-ask (Phase 07)"
+          "face-ask"
         ]
       },
       "itemCount": 2
@@ -794,7 +794,8 @@
           "room birth-rule"
         ],
         "products": [
-          "core"
+          "core",
+          "org"
         ],
         "adrs": [
           "1300"
@@ -805,10 +806,13 @@
           "mcp:playwright",
           "mcp:stripe",
           "mcp:supabase",
-          "skill:seo-article-writer"
+          "skill:council-consult",
+          "skill:outreach-draft",
+          "skill:seo-article-writer",
+          "skill:support-reply"
         ]
       },
-      "itemCount": 34
+      "itemCount": 38
     },
     {
       "id": "factory",
@@ -1196,13 +1200,14 @@
           "PLAN-memory",
           "PLAN-model-policy",
           "PLAN-ops",
+          "PLAN-org",
           "PLAN-policy",
           "PLAN-portfolio",
           "PLAN-scheduler",
           "PLAN-trader"
         ]
       },
-      "itemCount": 29
+      "itemCount": 30
     },
     {
       "id": "org",
@@ -1215,7 +1220,7 @@
       "indexes": "lanes",
       "stations": [],
       "holds": {},
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "concepts",
@@ -1262,7 +1267,7 @@
       "indexes": "products",
       "stations": [],
       "holds": {},
-      "itemCount": 17
+      "itemCount": 18
     },
     {
       "id": "lane",
@@ -1286,7 +1291,8 @@
           "phase.closed"
         ],
         "lanes": [
-          "docs"
+          "docs",
+          "org"
         ],
         "commands": [
           "arc-change",
@@ -1320,10 +1326,11 @@
           "plan"
         ],
         "adrs": [
-          "1500"
+          "1500",
+          "1600"
         ]
       },
-      "itemCount": 25
+      "itemCount": 27
     }
   ],
   "inventories": {
@@ -1334,6 +1341,7 @@
       "1300": "toolbelt",
       "1400": "design-studio",
       "1500": "lane",
+      "1600": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1364,5 +1372,13 @@
       "workflow:shard-calibrate": "review-ship",
       "workflow:weigh-tests": "review-ship"
     }
-  }
+  },
+  "surfaces": [
+    {
+      "id": "front-door",
+      "name": "The front door",
+      "dir": "face/src/frontdoor",
+      "adr": "ADR-1349"
+    }
+  ]
 }

@@ -1,0 +1,28 @@
+M0 clean tree: PASS (exit 0, cli)
+M1 orphan agent: PASS (exit 1, cli)
+   EXPECTED-FAIL agent "zz-orphan-agent" belongs to no role (REQ-01)
+M2 role binds a ghost agent: PASS (exit 1, cli)
+   EXPECTED-FAIL zz-mutant-plant: binds agent "ghost-agent", which does not exist in .claude/agents/
+M3 E2 role seated by an agent: PASS (exit 1, cli)
+   EXPECTED-FAIL zz-mutant-plant: touches E2 (moving money) but is seated "agent" -- only human:ashiq may hold it (REQ-03)
+M4 non-verbatim e2 string: PASS (exit 1, cli)
+   EXPECTED-FAIL zz-mutant-plant: e2 "publish" is not a verbatim ungrantable_actions string (REQ-03)
+M5 hired seat with no hire.runtime: PASS (exit 1, cli)
+   EXPECTED-FAIL zz-mutant-plant: hire.runtime "undefined" is not an arc-run driver (REQ-11)
+M6 hired seat staffed with no fixture verdict: PASS (exit 1, cli)
+   EXPECTED-FAIL zz-mutant-plant: staffed by interview with fixtures: pending -- the interview had nothing to run (REQ-11)
+M7 consumes an unproduced kind: PASS (exit 1, cli)
+   EXPECTED-FAIL zz-mutant-plant: consumes "ghost-brief", which no role produces (REQ-13)
+M8 head over fewer than 2 staffed workers: PASS (exit 1, cli)
+   EXPECTED-FAIL zz-mutant-plant: a seated head over 1 staffed worker(s) -- a head needs >= 2 to judge (ORG-O)
+M9 a model string as the tier: PASS (exit 1, cli)
+   EXPECTED-FAIL zz-mutant-plant: binds.tier names a model ("claude") -- a seat binds a tier, never a model (ADR-1614)
+M10 agent and script walkers return nothing: PASS (exit 1, in-process)
+   EXPECTED-FAIL WALKER EMPTY: agents -- the agent walker returned nothing; refusing to call that covered
+M11 venture with a seated card and no team manifest: PASS (exit 1, cli)
+   EXPECTED-FAIL venture "lexos" has 1 seated role(s) (zz-mutant-plant) but no org/teams/lexos.team.yaml
+M12 ghost agent planted in the LAST card in sort order: PASS (exit 1, cli)
+   EXPECTED-FAIL voc-analyst: binds agent "ghost-agent", which does not exist in .claude/agents/
+M13 attribution rule placing receipts on a role that is not a card: PASS (exit 1, cli)
+   EXPECTED-FAIL attribution rule 25 (zz-ghost-rule): role "ghost-role" is not a card id
+mutant-selftest: ran 14 of 14

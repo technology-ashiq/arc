@@ -1,0 +1,113 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-coverage.mjs:appImportDirs (specifier handling `parts[0] !== \".\"`, `parts[1] === \"..\"`)",
+      "breaking_input": "App.tsx adds `import Door from './lib/../ghostdoor/Door'`, `import Door from '../src/ghostdoor/Door'`, `import Door from '/src/ghostdoor/Door'`, or a configured alias spelling such as `@/ghostdoor/Door`. The first spelling is judged by its first segment `lib`, which is a shell dir, so it is skipped. The second is skipped by the explicit `..` rule. The third and fourth never start with `.`.",
+      "why": "The bundler resolves all four spellings to face/src/ghostdoor, but the gate judges only the raw first segment. A second, unnamed surface passes with no row in expected-set.json. This is the B1 class again: one spelling of a path is checked while another resolver loads the file.",
+      "fix": "Normalise each specifier with posix path resolution against face/src before taking its first segment. Treat `/src/`, `../src/` and every configured alias as face/src-relative. Refuse any specifier the gate cannot normalise. Add each spelling as a planted arm with a mutant control.",
+      "twin_of": "A structural gate that knew one spelling -> Judge the identifier and the route, not one formatting of one hook."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-coverage.mjs:appImportDirs `specs` regex",
+      "breaking_input": "`import.meta.glob(['./modules/*/*/View.tsx', './ghostdoor/*.tsx'])` (only the first array element is matched). Also `import.meta.glob<Record<string, unknown>>('./ghostdoor/*.tsx', { eager: true })` (type arguments break `glob\\s*\\(`), `new Worker(new URL('./ghostdoor/w.ts', import.meta.url))`, and `import('./' + dir + '/View')`.",
+      "why": "The `[\\s*` alternative allows only a first quoted element directly after the bracket. Type-argument globs and `new URL` asset imports are not matched at all. A concatenated dynamic import captures `./`, whose `parts[1]` is empty, and is skipped, although it can reach any directory. The wildcard-FAILs comment holds only for the template-literal spelling.",
+      "fix": "Extract every quoted string inside the argument list of glob and require calls. Match `glob` with optional generics. Add `new URL('…', import.meta.url)`. Treat a specifier that is only `./` as an unnameable wildcard and FAIL it.",
+      "twin_of": "A structural gate that knew one spelling -> Judge the identifier and the route, not one formatting of one hook."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-coverage.mjs:treeSurfaces and appImportDirs (`disk.has(parts[1])`)",
+      "breaking_input": "(a) A surface written as a single top-level file: face/src/GhostDoor.tsx with `import Ghost from './GhostDoor'` in App.tsx. (b) face/src/ghostdoor as a symlink or junction with `import Ghost from './ghostdoor'`.",
+      "why": "A one-segment import counts only when `onDisk` lists a real, non-symlink directory. A bare file import is classed as `./index.css` and ignored, so a whole second screen can live in one file. A symlinked directory is filtered out of `dirs` by `!s.isSymbolicLink()`, so its bare import is not claimed either, while the bundler follows it.",
+      "fix": "Classify a one-segment import as a file or a directory by resolving it on disk. Treat any top-level face/src file other than the known assets and entry files as a finding. Keep symlinked dirs in `dirs` and refuse them by name.",
+      "twin_of": "A structural gate that knew one spelling -> Judge the identifier and the route, not one formatting of one hook."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-coverage.mjs:treeSurfaces (reads only face/src/App.tsx)",
+      "breaking_input": "face/src/shell/Rail.tsx, or a module View, adds `import Ghost from '../ghostdoor/Door'` and renders it on a route. App.tsx itself is unchanged.",
+      "why": "The gate reconciles rows only against App.tsx's imports. A surface mounted through any other file is invisible, although the header claims a second unnamed surface FAILs. The shell dirs are exempt wholesale, so the route into a second screen is open.",
+      "fix": "Scan every tracked .ts, .tsx and .mjs under face/src outside the named surface dirs for imports that reach an unnamed top-level dir. Alternatively, declare loudly that only App.tsx is read and pin it with a fixture.",
+      "twin_of": "Two readers of one question are crossed on every input the contract allows, not only on today's tree."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-coverage.mjs:appImportDirs (the pre-pass comment stripper)",
+      "breaking_input": "App.tsx contains a regex literal such as `const re = /[/*]/;` before an import. The pass reads the `/*` inside the regex as a block-comment opener and deletes everything up to the next `*/`. Similarly `/https?:\\/\\//` makes the pass read `//` and delete the rest of the line.",
+      "why": "The pass knows strings and comments but not regex literals, so code is erased as if it were a comment. A `*/` later in the file hides real imports, including a ghost import, without any report that scanning went wrong.",
+      "fix": "Model regex literals in the pass, or refuse with a named finding when a `/*` or `//` opener appears on a line that also contains a regex-literal shape. A stripper that cannot tell must report that it stopped scanning.",
+      "twin_of": "A text scanner's comment stripper read `/*` inside a path, a `//` comment and a string -> a parser reports when it stops scanning; it never goes quiet."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "face/src/face/FaceStage.tsx (effect body: teardown defined after all resource creation)",
+      "breaking_input": "WebGL context creation succeeds, then a later fallible step throws before `teardown` is defined. Examples are EffectComposer or bloom-pass construction on a context lacking render-target support, a sprite texture build, or a geometry allocation failure.",
+      "why": "The B5 fix moved only the ResizeObserver construction under a try/catch that calls teardown. The renderer, its canvas and its GPU context are created well before `teardown` exists. A throw anywhere in that span returns no cleanup, so the context and canvas leak on every door remount. The prior finding asked for the teardown to be built before the first fallible call.",
+      "fix": "Declare the release list and `teardown` immediately after the renderer is constructed. Register each resource as it is created. Wrap the whole setup in one try/catch that runs teardown and rethrows. Add a throwing-composer arm to the smoke.",
+      "twin_of": "An early throw that skips the returned teardown -> Build the teardown before the first fallible call and run all of it on the throw path."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/face-browser.bats:frontdoor_verdict (`BASH_REMATCH[5] -ge 1`) and face/scripts/smoke.mjs:cross (`warpHeld`)",
+      "breaking_input": "A FaceStage that ignores the `warp` prop, or an App where only one of the three crossings holds the stage for the 1750 ms window. The other two unmount the stage at once. `warp-held` is 1/3 and the verdict passes.",
+      "why": "The prior B3 fix asked for warp-held to equal crossings. It was weakened to at least 1 of 3. The counter also measures that a `[data-stage]` node exists right after the hash change, not that a fly-through ran. A door with no warp animation but a 1.75 s hold passes in both moods.",
+      "fix": "Require warp-held == crossings for the pointer and keyboard crossings, reading the stage promptly. Also assert an observable warp effect, such as a changed canvas or scale state, or a warp counter exposed by the stage. Add a mutant row `warp-held=1/3` that must be refused.",
+      "twin_of": "A behaviour printed by the harness and judged by nobody -> Every number a harness prints for a REQ is judged, with a mutant control at the failing value."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/face-dash.bats (MUTANT CONTROL for the FAIL-line guard)",
+      "breaking_input": "Delete or weaken the `! grep -q '^FAIL ' <<< \"$output\" || {...}` line in the front-door test. The mutant-control test still passes, because it runs its own `bash -c '! grep -q \"^FAIL \" <<< \"$1\"'` copy on hand-built strings.",
+      "why": "The control exercises a duplicate of the expression, not the guard in the test it protects. The guard is still never shown able to fail in place, so the prior B4 fix repeats the round-trip-against-itself shape.",
+      "fix": "Put the guard in a shared helper function used by both the real test and the mutant control. The control then calls the same function on a bad string.",
+      "twin_of": "A guard line never shown able to fail -> Feed each guard the shape it exists to catch."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs (imports from ../src/lib/mode.mjs: modeOf, exitHash, STAGE_UNMOUNT_MS)",
+      "breaking_input": "Change mode.mjs so `modeOf` classifies `#hqx` as hq, or `exitHash` returns `#`, or set `STAGE_UNMOUNT_MS` to 0 or to 600000. The smoke judges the app with the same functions and constants, so `inWorkroom` and `exit-to-door` agree with the app. A huge value only makes each crossing sleep for minutes.",
+      "why": "The expected values come from the module under test. Its decisions cannot fail the browser pass, which is the circular-expectation defect. The only independent pin is the node fixture, not the browser.",
+      "fix": "Hard-code the expected hashes and the unmount window in the smoke from the ADR: `#hq…` and `#token=…`, 1750 ms. Cap the sleep at a declared maximum and FAIL if the imported constant differs.",
+      "twin_of": "The route-enumeration gate was circular -> a gate never derives its expectation from the thing under test."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "face/scripts/harness-run.mjs (front-door try/catch) and face/scripts/smoke.mjs:runFrontDoor (`fresh()` for the guard pages, no total deadline)",
+      "breaking_input": "`openPage` fails or a CDP call hangs while the webgl-off or throwing-stage page is opened. `fresh()` runs outside `step`, so the throw leaves runFrontDoor. The harness then replaces the report with `checks: []` and prints `ran=0`, discarding the 15 or more checks already recorded. The open healthy page is never closed on that path.",
+      "why": "The harness comment promises the line is still printed with what ran, but the report is local to runFrontDoor and is lost. There is also no overall deadline: 21 checks, each with a 15 s cap plus about 3 s sleeps per crossing, can run for minutes with no state.",
+      "fix": "Create `report` in the caller and pass it in, so a crash keeps what ran. Wrap `fresh()` in `step`. Close pages in `finally`. Add a total deadline that prints the checks done so far.",
+      "twin_of": "One CDP error mid-run threw away every room already measured -> print each finding when it is final, and catch per item."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "face/src/lib/mode.mjs:readParts",
+      "breaking_input": "`#hq&token=%E0` or `#/today&token=%E0`: the one undecodable part makes the whole fragment unreadable, so `modeOf` answers door even though `hq` and the room are well-formed. Also `#token=a&token=b`: last-wins silently, and `enterHash` carries `b`.",
+      "why": "mode.mjs and shell.mjs `parseHash` both read one fragment by different rules. The surface says door while parseHash may still set the room, leaving a door surface with a room selected. A repeated token key is resolved silently, and ENTER HQ may carry a token the rooms read differently.",
+      "fix": "Decode each part independently and drop only the bad one. Refuse or flag a repeated token key. Have mode.mjs and parseHash share one tokenizer, with a fixture crossing both on the same rows.",
+      "twin_of": "Repeated flags were last-wins and an empty value resolved to the cwd -> a repeated or empty flag is refused by name."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "tests/face/front-door.mjs (last line: `ran >= 47`)",
+      "breaking_input": "Delete three checks from the suite, or add checks so the real count is 50. The floor still passes, because it is a hand-kept number that was bumped from 43 to 45 to 47 by hand.",
+      "why": "A floor below the real count tolerates deleted checks. Only the named `ok` lines in the bats test guard against that, and only for those lines.",
+      "fix": "Print the declared check count from the suite and pin it equal. Or have the bats test read `RAN: n` and compare it to a count derived from the source.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    }
+  ]
+}

@@ -75,10 +75,10 @@ export const WORK_STATUS = Object.freeze({
 /**
  * Spawn one tool, collect what it says, and never let it outlive its timeout.
  * @param {{ repo: string }} ctx @param {{ script: string, args: string[] }} cmd
- * @param {{ timeoutMs: number, onLine?: (stream: "out" | "err", line: string) => void, outputCap?: number }} opts
+ * @param {{ timeoutMs: number, onLine?: (stream: "out" | "err", line: string) => void, outputCap?: number, env?: Record<string, string> }} opts -- `env` is laid over childEnv() for this one child (Phase 10: the owner model's endpoint and key, never an argument)
  * @returns {Promise<{ exit: number | null, signal: string | null, stdout: string, stderr: string, timedOut: boolean, dropped: number, droppedOut: number, droppedErr: number }>}
  */
-export function runTool(ctx, cmd, { timeoutMs, onLine, outputCap = OUTPUT_CAP }) {
+export function runTool(ctx, cmd, { timeoutMs, onLine, outputCap = OUTPUT_CAP, env = {} }) {
   if (!SCRIPT_RE.test(cmd.script)) throw new OpError("TOOL_MISSING", `the registry names "${cmd.script}", which is not a script path the door runs`);
   const script = join(ctx.repo, ".claude", "scripts", ...cmd.script.split("/"));
   if (!existsSync(script)) throw new OpError("TOOL_MISSING", `.claude/scripts/${cmd.script} is not on this tree`);
@@ -115,7 +115,7 @@ export function runTool(ctx, cmd, { timeoutMs, onLine, outputCap = OUTPUT_CAP })
   // The spawn, the tree kill and the settle-on-exit live in core/spawn-bounded.mjs, shared with the proposal writer's
   // git calls: killing only the direct child left a driver it started running, and spending, after the door called the
   // run over (face v2 Phase 05 shell attack).
-  return spawnBounded(process.execPath, [real, ...cmd.args], { cwd: ctx.repo, env: childEnv(), timeoutMs, onData: take })
+  return spawnBounded(process.execPath, [real, ...cmd.args], { cwd: ctx.repo, env: { ...childEnv(), ...env }, timeoutMs, onData: take })
     .then(({ exit, signal, timedOut }) => {
       for (const st of /** @type {const} */ (["out", "err"])) { const rest = decoder[st].end(); if (rest) { buf[st] += rest; partial[st] += rest; } }
       if (onLine) for (const st of /** @type {const} */ (["out", "err"])) if (partial[st]) { onLine(st, cut(partial[st])); partial[st] = ""; }

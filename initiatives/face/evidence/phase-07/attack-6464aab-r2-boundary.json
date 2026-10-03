@@ -1,0 +1,62 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:evaluate ([no-owner-proof] check) and proofsOf",
+      "breaking_input": "Hand-edit docs/narrative-verify/accepted.json so a page carries by \"owner\", the correct sha256 of its text, and approval \"01ARZ3NDEKTSV4RRFFQ69G5FAV\", a well-formed ULID that exists on no spine. Push it. CI runs evaluate() with only the ULID grammar to check.",
+      "why": "The gate accepts any 26-character string in the right alphabet as proof. The real check (approvalProblem against the spine) runs only inside --accept. An agent can skip --accept and drive awaiting-owner to 0 on CI, which is the exact attack ADR-1514 amendment 1 exists to stop. The comment admits CI cannot see the spine, but the file is still forgeable with no spine access at all, which is weaker than the 'arc-event forgery' limit the ADR names.",
+      "fix": "Bind the proof to something committed and checkable. For example, --accept also writes a digest of the approve decision event (the approval id, the page hash and the decision's own id) into the entry, and the gate cross-checks it against a committed receipt. Otherwise, state plainly that the awaiting-owner count on CI is advisory."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:approvalProblem",
+      "breaking_input": "From the main clone, with ARC_SPINE_ROOT unset, run `node .claude/scripts/hq/arc-event.mjs` twice. First emit approval.requested with gate narrative-accept and the page's current hash. Then emit decision.recorded with payload {decides:<that id>, verdict:\"approve\"}. Finally run --accept <page> --approval <id>.",
+      "why": "approvalProblem accepts any decision.recorded whose payload.decides matches and whose verdict is approve. It never checks who wrote it, so nothing distinguishes an arc-inbox approve from a decision an agent emitted directly. The B1 fix closed only the ARC_SPINE_ROOT door. Forging the proof still costs two commands from the same clone the gate trusts.",
+      "fix": "Have arc-inbox stamp its decisions with a marker the plain emitter cannot produce, such as an owner-only token or a field the validator restricts to arc-inbox. Have approvalProblem require that marker. If this cannot be done, say so in the ADR instead of calling it an owner proof."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:readTree (dynamic import of ../hq/lib/narrative-proof.mjs) and products/*/manifest.json",
+      "breaking_input": "Sync only the docs product into a consumer repo with no hq product, or a tarball export with no .git, and run narrative-anchors.mjs. The file path products/hq/manifest.json lists narrative-proof.mjs, but the docs product manifest is not shown listing it or requiring hq.",
+      "why": "Every run, including the plain gate, now imports the hq lane file and runs `git ls-files`. If the file is absent, or the root is not a git checkout, readTree throws and the gate exits 2 for every check, not just --accept. Previously the gate read only regular files by name.",
+      "fix": "Add hq as a declared requirement of docs, or copy the tracked-list helper into the docs lane. Degrade to a named WARN with reduced drift checking when git is unavailable, instead of exit 2 for the whole gate."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/docs-narrative.bats: the '--accept refuses a page that does not exist' test",
+      "breaking_input": "Remove the `no narrative ${page}` check from acceptEntry. The test still passes.",
+      "why": "The invocation `--accept products/zz-no-such-page` has no --approval, so acceptArgProblem refuses it first with 'needs --approval'. The output still matches REFUSED and the status is still 1. The test name claims it covers a missing page but the assertion no longer reaches that branch. This is a weakened test, not a fixed one.",
+      "fix": "Pass a well-formed --approval ULID so the run reaches the page check. Assert the refusal text contains 'no narrative'."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:writeAccept",
+      "breaking_input": "Kill the process between writeFileSync(tmp) and renameSync. A file accepted.json.<pid>.tmp is left in docs/narrative-verify. A later run whose pid collides gets EEXIST from the wx flag. The catch then runs unlinkSync(tmp), which deletes a temp file this run did not create.",
+      "why": "The cleanup runs on every failure path, including EEXIST on a file owned by another writer. Nothing sweeps the leftover, and `git add docs/narrative-verify` would commit it.",
+      "fix": "Use a random suffix (pid plus a random token). Unlink only after a successful wx create. Have the gate report a stray *.tmp in that folder by name."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:mainCloneOf, ownerSpine",
+      "breaking_input": "Run with git older than 2.31, where --path-format=absolute is an unknown option. Or run in a repo with a valid layout but an unusual git version.",
+      "why": "The spawn failure is swallowed to \"\". ownerSpine then blames 'a bare repo, or a git dir not named .git', which is misleading. A user chases the layout when the real cause is the git version. This is the 'refusals under the wrong name' pattern.",
+      "fix": "Distinguish spawn or option failure from a non-.git basename. Report git's own stderr first line in the refusal."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:gitEnv",
+      "breaking_input": "The owner's global git config sets core.fsmonitor or core.hooksPath, or GIT_CONFIG_COUNT/GIT_CONFIG_KEY_n variables are exported. `git ls-files` and `git rev-parse` are spawned with the full remaining environment.",
+      "why": "The strip list covers location variables only. The lane's own rule ('override every config key that can run a program') is not applied to the children the gate spawns. This is the same defect class one helper over.",
+      "fix": "Also drop GIT_CONFIG_* and GIT_EXEC_PATH. Pass `-c core.fsmonitor=false -c core.hooksPath=` and set GIT_CONFIG_NOSYSTEM=1 on the spawn.",
+      "twin_of": "Owner config that runs or hides -> override every config key that can run a program, write beside the index, or change what a diff shows."
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+# Risk analyst -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'risk-analyst'
+title: 'Risk analyst'
+dept: 'c-research'
+mission: 'Name the downside, the ruin risk and the reversibility of every money decision.'
+stages:
+  - 'discover'
+  - 'validate'
+seat: 'agent'
+origin: 'own'
+hire: null
+binds:
+  agents:
+    - 'council-risk-analyst'
+  skills: []
+  scripts: []
+  process: null
+  tier: 'balanced-workhorse'
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'risk-analyst-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

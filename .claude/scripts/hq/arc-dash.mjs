@@ -60,6 +60,8 @@ import { repoRoot } from "./lib/spine-io.mjs";
 import { SpineError, ULID_RE, sha256Hex, formatIst, nowMs, parseStrictJson } from "./lib/canonical.mjs";
 import { laneHeader, validLaneName } from "../core/lane-resolve.mjs";
 import { askOffline } from "./lib/face/ask-offline.mjs";
+// Phase 10 (REQ-14, ADR-1350): the owner's models, kept on the door; no route ever returns a key.
+import * as models from "./lib/face/models.mjs";
 // Phase 04's read routes (REQ-06). The handlers live beside the door; THIS file keeps the one route table.
 import * as reads from "./lib/face/reads.mjs";
 import { apiReference } from "./lib/face/reference/route.mjs";
@@ -154,6 +156,9 @@ const STATUS = Object.freeze({
   // A phases/ that resolves off the tree is a REFUSAL about this server's own layout, not a
   // client mistake -- 500 would be right and unhelpful; 403 says "I will not serve that".
   PHASES_OUTSIDE: 403,
+  // Phase 10 (ADR-1350): a model change the registry refuses is the caller's to fix; a models file the door cannot
+  // place or read is a precondition, never a silent empty list.
+  BAD_MODEL: 400, MODELS_UNAVAILABLE: 503, MODEL_FAILED: 502,
   DECISION_REFUSED: 502,
   // Phase 04 (REQ-06). A file a route parses that is not on this tree is a precondition, like REGISTRY_ABSENT; a
   // file the owning lane's parser refuses is unprocessable, not an internal fault; a lane module that will not load
@@ -714,16 +719,20 @@ async function apiAsk(ctx, body) {
 
   const proc = join(ctx.repo, "processes", "face-ask.process.yaml");
   if (!existsSync(proc)) {
-    // No governed process on this tree: the deterministic answer is ALL there is, and
-    // saying so is better than a refusal that hides an answer we actually have.
     return { mode: ctx.mode, source: "deterministic (face-ask process not on this tree)", ...offline };
   }
+  const askedAt = nowMs();
 
-  // THE PROCESS DECLARES TWO REQUIRED INPUTS, and the first cut sent one. face-ask has
-  // `tools: []` -- it cannot fetch anything -- so a call without `state` hands a brain with
-  // no hands nothing to reason about, and the process's own input contract refuses it. The
-  // pack is the SAME one the deterministic answerer just used, rendered for a reader: one
-  // assembly, one truth, no chance of the two halves of the brain seeing different states.
+  // Phase 10 (REQ-14, ADR-1350): the model half runs on the model the OWNER added in the face, never on a default the
+  // owner did not pick. With none added, the reader's own answer stands and the face is told how to add one -- never a
+  // blank and never an error page.
+  const reg = models.loadRegistry(ctx.repo);
+  if (!reg.ok) throw new DashError("MODELS_UNAVAILABLE", reg.why);
+  const active = models.activeModel(reg.reg);
+  if (!active) {
+    return { mode: ctx.mode, source: "deterministic (no model added in the face)", needsModel: true, ...offline };
+  }
+
   const pack = [
     `SPINE: ${state.events} receipts · ${state.daysClosed} day.closed seals · ` +
       `${Object.keys(state.kinds).length} of 46 kinds have ever fired · ${state.quarantined} refused (held separately, never counted as receipts).`,
@@ -733,21 +742,92 @@ async function apiAsk(ctx, body) {
     `MODE: ${ctx.mode}${ctx.mode === "sim" ? " (SIMULATED — every value here is fixture data, never real)" : ""}`,
   ].join("\n");
 
-  // arc-run takes ONE `--input` carrying a JSON object keyed by the process's declared
-  // input names -- not a flag per input. The first cut invented `--state` and arc-run
-  // rejected it by name, which is the good failure: an unknown flag is a refusal, never
-  // a silently-dropped argument.
-  // Run through the work door's runTool, not execFile: execFile's timeout ends arc-run alone, and a paid driver arc-run
-  // started kept running, and spending, after the ask was called over (face v2 Phase 05 round-2 logic attack, the twin
-  // of the work door's tree kill). runTool leads a process group on POSIX and walks the tree on Windows.
-  // The cap is the one execFile had (4 MiB): an answer the door served before this PR is still served.
-  const res = await runTool(ctx, { script: "engine/arc-run.mjs", args: ["--process", "face-ask", "--input", JSON.stringify({ q, state: pack })] }, { timeoutMs: 120_000, outputCap: 4 * 1024 * 1024 });
+  const res = await runTool(ctx, {
+    script: "engine/arc-run.mjs",
+    args: ["--process", "face-ask", "--driver", "generic-api", "--owner-model", active.model, "--input", JSON.stringify({ q, state: pack })],
+  }, {
+    timeoutMs: 120_000, outputCap: 4 * 1024 * 1024,
+    // The key reaches the driver through the environment of this one child, never an argument (argv is readable by
+    // every process on the box) and never a response. A model with no key (a local one) sends a placeholder bearer.
+    // The receipt lands on the spine the door reads, named, not inherited (attack b8271c1 B1): a door over a fixture
+    // spine checks its answers against that spine, so the run must be written there too.
+    env: { ARC_LLM_ENDPOINT: models.endpointOf(active.baseUrl), ARC_LLM_API_KEY: active.key ?? "none", ...(ctx.mode === "sim" ? { ARC_SPINE_ROOT: ctx.root } : {}) },
+  });
   if (res.timedOut) throw new DashError("ASK_FAILED", "the ask ran past 120 s and was ended, with everything it had started");
-  if (res.exit !== 0) throw new DashError("ASK_FAILED", String(res.stderr || `arc-run exited ${res.exit ?? res.signal}`).slice(0, 500));
-  // A tail is not an answer: an answer past the door's output cap is refused rather than served cut.
-  // Only the ANSWER's overflow refuses: a long stderr (a failed driver's, before the fallback answered) is not the answer.
+  // The owner reads the cause and the next step, never the driver's log (2026-10-02: a raw 429 transcript on the door).
+  if (res.exit !== 0) throw new DashError("MODEL_FAILED", models.providerFault(redactKey(String(res.stderr ?? ""), active.key)));
   if (res.droppedOut) throw new DashError("ASK_FAILED", `the answer ran past the door's output cap (${res.droppedOut} characters over); it is not served cut`);
-  return { mode: ctx.mode, answer: res.stdout };
+  return { mode: ctx.mode, ...judgeModelAnswer(res.stdout, res.stderr, await spineIds(ctx), { since: askedAt, model: active.model }), model: { name: active.name, id: active.model } };
+}
+
+/**
+ * A key never leaves the door, including inside an error the driver printed -- raw, JSON-escaped or URL-encoded (attack
+ * c50172d B6). models.mjs refuses a key under 8 characters, so redaction never eats a common character.
+ * @param {string} text @param {string | undefined} key
+ */
+function redactKey(text, key) {
+  if (!key) return text;
+  const forms = [...new Set([key, JSON.stringify(key).slice(1, -1), encodeURIComponent(key)])].filter((f) => f.length >= 4);
+  return forms.reduce((t, f) => t.split(f).join("[key]"), text);
+}
+
+/**
+ * Every receipt id on the spine the door reads, so a citation is checked against the record and not against itself,
+ * and the face-ask run.completed ids, so the receipt the answer names is one this process really wrote.
+ */
+async function spineIds(ctx) {
+  let events;
+  // The run already happened and was paid for: a spine read that fails now serves the answer with nothing verified
+  // and no receipt claimed, never a 500 that loses it (attack b8271c1 B2).
+  try { ({ events } = await readAll(ctx.root)); } catch { events = []; }
+  const ids = new Set(events.map((e) => e.event.id));
+  /** @type {Map<string, { ms: number, model: string | null }>} */
+  const runs = new Map(events
+    .filter((e) => e.event.kind === "run.completed" && String(e.event.process ?? "").startsWith("face-ask@"))
+    .map((e) => [e.event.id, { ms: Date.parse(String(e.event.ts)), model: typeof e.event.model === "string" ? e.event.model : null }]));
+  return Object.assign(ids, { runs });
+}
+
+// The labels the face shows, held in one place so the fixture and the client read the same words (ADR-1350 section 3).
+export const GENERAL_LABEL = "general — not from arc's record";
+export const ARC_LABEL = "from arc's record";
+export const UNVERIFIED_LABEL = "unverified — a citation is not on arc's record";
+
+/**
+ * The model's reply judged by the door, not by the model: the lane it chose, its citations checked one by one against
+ * the spine, and the label the face must show. A general answer cites nothing whatever the model sent; an arc answer
+ * with any citation off the record is unverified, and an arc answer that cites nothing is shown as uncited -- never as
+ * verified, because nothing was checked.
+ * @param {string} stdout @param {string} stderr @param {Set<string>} ids
+ */
+export function judgeModelAnswer(stdout, stderr, ids, run = {}) {
+  let out;
+  try { out = JSON.parse(String(stdout).trim()); } catch { throw new DashError("ASK_FAILED", "the model's answer did not come back as the face-ask contract"); }
+  if (!out || typeof out !== "object" || typeof out.answer !== "string" || !out.answer.trim() || !["arc", "general"].includes(out.lane) || !Array.isArray(out.citations)) {
+    throw new DashError("ASK_FAILED", "the model's answer did not come back as the face-ask contract");
+  }
+  // The LAST receipt line, and only if the spine holds it as a face-ask run.completed: a driver or a provider error can
+  // print a well-formed line of its own, and a claimed receipt nobody wrote is worse than none (attack c50172d B1).
+  const said = [...String(stderr).matchAll(/^arc-run: receipt run\.completed ([0-9A-HJKMNP-TV-Z]{26})$/gm)].map((m) => m[1]).pop() ?? null;
+  // And it must be THIS run's: written at or after the ask began, by the owner's model (attack b8271c1 B9) -- an older
+  // real face-ask receipt printed by a driver is not this answer's.
+  const runs = /** @type {Set<string> & { runs?: Map<string, { ms: number, model: string | null }> }} */ (ids).runs;
+  const ev = said && runs ? runs.get(said) : undefined;
+  const receipt = ev && (run.since === undefined || ev.ms >= run.since - 1000) && (run.model === undefined || ev.model === run.model) ? said : null;
+  if (out.lane === "general") {
+    return { source: "model", lane: "general", label: GENERAL_LABEL, answer: out.answer, citations: [], verified: false, unresolved: [], receipt };
+  }
+  // Every entry counts: a number, an object or a null in the list is a citation that resolves to nothing, named, never
+  // dropped to make the rest look clean (attack b8271c1 B3). More than 20 is not a citation list.
+  if (out.citations.length > 20) throw new DashError("ASK_FAILED", "the model's answer cited more than 20 receipts");
+  const citations = out.citations.map((c) => (typeof c === "string" ? c : "(non-id)"));
+  const unresolved = citations.filter((c) => !ULID_RE.test(c) || !ids.has(c));
+  const verified = citations.length > 0 && unresolved.length === 0;
+  return {
+    source: "model", lane: "arc",
+    label: unresolved.length ? UNVERIFIED_LABEL : verified ? ARC_LABEL : `${ARC_LABEL} — uncited`,
+    answer: out.answer, citations, verified, unresolved, receipt,
+  };
 }
 
 // ---------- THE route table (single dispatch authority; --routes prints it) ----------
@@ -767,6 +847,26 @@ async function apiAsk(ctx, body) {
 //             but not "none" either -- naming it is the difference between a contract and
 //             a comfortable label.
 //   "none"    reads only. Nothing about this route can reach the spine's writer.
+// ---------- the owner's models (Phase 10, REQ-14, ADR-1350) ----------
+// GET shows the registry with every key reduced to whether it is set and its last four characters. POST takes ONE change
+// (add · activate · remove) and answers with the same redacted view: no request reads a key back, including the one
+// that just wrote it.
+function apiModels(ctx) {
+  const got = models.loadRegistry(ctx.repo);
+  if (!got.ok) throw new DashError("MODELS_UNAVAILABLE", got.why);
+  return { mode: ctx.mode, ...models.publicView(got.reg) };
+}
+
+function apiModelsChange(ctx, body) {
+  const got = models.loadRegistry(ctx.repo);
+  if (!got.ok) throw new DashError("MODELS_UNAVAILABLE", got.why);
+  const step = models.applyChange(got.reg, body);
+  if (!step.ok) throw new DashError("BAD_MODEL", step.why);
+  const saved = models.saveRegistry(got.path, step.reg);
+  if (!saved.ok) throw new DashError("MODELS_UNAVAILABLE", saved.why);
+  return { mode: ctx.mode, ...models.publicView(step.reg) };
+}
+
 const ROUTES = Object.freeze([
   { method: "GET", path: "/api/health", mutates: false, spineEffect: "none", handler: (ctx, url) => apiHealth(ctx, url) },
   { method: "GET", path: "/api/spine", mutates: false, spineEffect: "none", handler: (ctx, url) => apiSpine(ctx, url) },
@@ -800,6 +900,10 @@ const ROUTES = Object.freeze([
   // Phase 07 (REQ-12, ADR-1346): wiki-build's own extract and narrative, imported -- build-time facts, never the spine.
   { method: "GET", path: "/api/reference", mutates: false, spineEffect: "none", handler: (ctx, url) => apiReference(ctx, url) },
   { method: "POST", path: "/api/decide", mutates: true, spineEffect: "write", handler: (ctx, url, tail, body) => apiDecide(ctx, body) },
+  { method: "GET", path: "/api/models", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return apiModels(ctx); } },
+  // A file write outside the repo, not a spine write: the one door write that is neither a decision, an op nor a
+  // session, named by ADR-1350 and held by the route fixture as its own row.
+  { method: "POST", path: "/api/models/set", mutates: true, spineEffect: "none", handler: (ctx, url, tail, body) => apiModelsChange(ctx, body) },
   { method: "POST", path: "/api/ask", mutates: false, spineEffect: "receipt", proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiAsk(ctx, body) },
   // Phase 05 (REQ-07, ADR-1339): the WORK door. `plan` runs an op's dry run, which writes nothing (the per-op fixture
   // holds the spine byte-identical across every plan); `apply` runs the owning lane's own CLI, which writes that

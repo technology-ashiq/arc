@@ -5,123 +5,176 @@
 
 ## Why it exists
 
+```tagline
+The signwriter. It paints the legal signs a shop must hang before it can take payments, from a fixed
+kit of wording, and it never hangs one until a human has read it and said yes.
+```
+
+# Start here
 
 ## In plain words
 
-Picture a small shop that is finally ready to open its doors. Before it can take a single card payment, someone has to write and hang seven signs by the entrance: what we sell and on what terms, what we do with your data, how a refund works, how and when goods or access arrive, how to reach us, what it costs, and who we are. Nobody opens for real business without those seven signs already up. <!-- plain -->
+Think of arc as a small company whose staff are AI models. A new venture, a new shop, is nearly ready
+to open. Before a payment provider lets it take real money, the shop needs a set of signs by the door:
+terms, privacy, refunds, delivery, contact and so on.
 
-`legal` is the arc product that writes those seven signs for a venture, and never invents a single word of them. It takes one venture's facts file plus one pinned set of clause templates and turns them into seven policy pages — terms, privacy, refund/cancellation, shipping/delivery, contact, pricing, about — each one evidence-linked, hash-chained and signed off by a human before it ever reaches a reader, plus a launch checklist that checks what a payment provider actually sees on the live site rather than what the venture merely intended. <!-- src: initiatives/legal/PLAN.md -->
+**legal is the signwriter.** It does not invent wording. It has a kit of pre-approved sentences, and it
+fills the blanks from one sheet of facts about the shop.
 
-It is explicit about what it is not: *"Not legal advice. A template engine with receipts, not a lawyer."* <!-- src: initiatives/legal/PLAN.md -->
+```panel big
+- **The fact sheet** (`facts.yaml`). The shop's own answers: how it takes money, what data it holds, who to complain to. It lives in the venture's own repository, never in arc's public one.
+- **The sentence kit** (a "template set"). Named blocks of wording, versioned like a book edition. Each shop pins one edition by name.
+- **The painter** (`render`). Combines the two into the pages, and checks its own work four ways.
+- **The signature desk** (`propose`, then `publish`). One asks a human to sign. The other refuses to hang anything unless that exact signed version is the one in hand.
+- **The pre-flight sheet** (`checklist`). What the payment provider will look for, row by row.
+
+The line the product draws about itself: *Not legal advice. A template engine with receipts, not a lawyer.*
+```
 
 ### Why this needs to be a product at all
 
-A payment provider withholds live-mode keys until policy pages exist on the merchant's site — an external, operational fact, not something arc invented, and not a claim that any venture is blocked at that gate today. <!-- src: ADR-1200 --> The venture this module was built to unblock, LexOS, turned out not to be waiting on that gate after all; what stayed true and mattered is that LexOS was already in production holding other people's privileged legal matter with zero policy pages and no footer at all. <!-- src: ADR-1200 -->
+| What you lose | What it looks like when it bites | legal's answer |
+|---|---|---|
+| **Wording nobody chose** | A value typed in a hurry lands inside a sentence a stranger will rely on. | Facts are checked by risk before anything is written, and free text is kept short and plain. |
+| **Proof of what was approved** | Later, nobody can say whether the live page is the page a human read. | The approval is tied to the exact facts, kit and page bytes, so any change shows up. |
+| **Doing it again for every shop** | The second venture pays the whole cost again. | One kit, many shops, each pinned to its own edition. |
 
-A facts file describing a venture's legal posture is hostile input by construction: it is edited by a human in a hurry, and its values get stitched straight into sentences a stranger will rely on. <!-- src: ADR-1202 --> A prior arc defect made the exact shape of the danger concrete — a value interpolated into a line that carries meaning can smuggle something the reviewer never sees, because the *clause* traces cleanly to its template while only the *value* was poisoned. <!-- src: ADR-1202 --> `legal` exists to make that structurally hard rather than trusting a careful reader.
-
-Writing each venture's six pages by hand instead was considered and rejected: the second venture would pay the same authoring cost again, nothing about either set of pages would be receipted, and there would be no way to prove that what a customer is actually served still matches what a human approved. <!-- src: ADR-1200 -->
+> The middle row is the one that matters. Legal text goes to the public, so arc keeps the yes with a
+> human and gives the machine no way to publish (`hq.policy.yaml` keeps its publish list empty).
 
 ## arc words → normal words
 
-| arc word | It is really | Meaning |
-|---|---|---|
-| facts file | the shop's own answers | One YAML file per venture (`facts.yaml`) recording its legal posture — how it takes money, whether it is GST-registered, what data it holds, its grievance contact. <!-- src: initiatives/legal/PLAN.md; ADR-1202 --> |
-| template set | the pinned sign-writing kit | A versioned, hash-covered set of clause templates plus the data files that drive them; a venture pins one set by name in its own `pins.yaml`. <!-- src: ADR-1205; .claude/scripts/legal/arc-legal.mjs#pinnedSetFor --> |
-| clause | a named block of wording | A single named block of wording inside a template, opened with a clause ID (`{{#clause id=...}}`) and closed by a matching `{{/clause}}`; every emitted clause writes a marker into the rendered output itself. <!-- src: .claude/scripts/legal/lib/template.mjs --> |
-| risk tier | how dangerous a field is | Every fact field is exactly one of three tiers — a closed choice, a checked format like an email or date, or free text — and the tier decides how it is checked: a closed choice or a format is parsed and checked before anything is rendered, while free text's compliance-claim denylist is checked against the rendered output, not the input value. <!-- src: ADR-1202 --> |
-| canonicaliser | the one true way to weigh the facts | The function that turns a venture's facts into one fixed byte sequence for hashing; it refuses anything it cannot represent exactly rather than guessing. <!-- src: ADR-1204 --> |
-| receipt / hash chain | the signed-and-dated paper trail | A recorded decision binding the exact facts, the exact template set and the exact rendered bytes together, so a later change to any one of them is detectable. <!-- src: ADR-1204 --> |
-| propose | asking for a signature | Rendering a venture's pages and raising one question on arc's event log for a human to decide — nothing is published yet. <!-- src: .claude/scripts/legal/arc-legal.mjs#proposeMain --> |
-| publish | applying the signature | Re-rendering fresh and refusing to go further unless a recorded human decision approved exactly these bytes. <!-- src: .claude/scripts/legal/arc-legal.mjs#publishMain --> |
-| checklist | the pre-flight sheet | A rendered report of what a payment provider will look for, with every row marked as checked-and-clean, checked-and-wrong, not yet looked at, or not applicable here. <!-- src: .claude/scripts/legal/lib/checklist.mjs --> |
-| bump-templates | swapping in a newer sign-writing kit for one shop | Moving a single venture onto a newer pinned template set, which voids its existing approval and forces a fresh human decision. <!-- src: .claude/scripts/legal/arc-legal.mjs#bumpTemplatesMain --> |
+```lede
+Ten pieces of arc jargon. Each is an ordinary sign-shop thing wearing a technical name.
+```
+
+```rosetta
+facts file | the shop's answer sheet | one `facts.yaml` per venture
+template set | the pinned edition of the sentence kit | a shop never floats onto a newer one by accident
+clause | one named block of wording | every clause leaves a marker in the page, so it can be traced
+risk tier | how dangerous a field is | closed choice, checked format, or bounded free text
+receipt | a signed and dated slip | ties facts, kit and page bytes together
+propose | "please sign this" | raises one question for a human, publishes nothing
+publish | hanging the signed version | refused unless the signature matches these exact bytes
+`verify` | a spot check of the signs on the wall | fails if they are not the approved bytes
+`--venture-dir` | "the shop's answer sheet is over there" | how the private facts are reached
+`bump-templates` | moving one shop to a newer edition | voids its old approval, so a human signs again
+```
 
 ## How a job flows
 
-1. A venture's facts (and which template set it pins) live in that venture's own repository, never in arc's public one. <!-- src: ADR-1205 -->
-3. `propose` renders again into a private, temporary location, builds the approval request, and raises exactly one question on arc's event log for a human to decide — the rendered pages only reach the venture's own output folder once every check on the way has passed. <!-- src: .claude/scripts/legal/arc-legal.mjs#proposeMain -->
-4. A human reads the full pages and records a decision, with a reason, through arc's existing inbox. <!-- src: .claude/scripts/legal/arc-legal.mjs#decisionFromSpine; ADR-1203 -->
-5. `publish` re-derives every hash from the tree as it stands right now and refuses to go further unless the recorded decision approved exactly this venture's facts, this template set, and these rendered bytes. <!-- src: .claude/scripts/legal/arc-legal.mjs#publishMain -->
-6. `checklist` reports what a payment provider will look for before activation; `verify` and the generated CI guard then fail the build if the committed pages are not the bytes that were approved. <!-- src: .claude/scripts/legal/lib/checklist.mjs; .claude/scripts/legal/arc-legal.mjs#verifyMain -->
+```lede
+Drafting is free and repeatable. Anything that leaves the building waits for a person, and a changed
+fact voids the signature.
+```
+
+```flow
+source: render, then propose
+box: ① Facts and pin | the answer sheet, one edition
+box: ② Paint | pages plus four checks
+box: ③ Ask for a signature | one question, nothing hung
+box*: ④ A human decides | approve or reject, with a reason
+labels: fill, check, ask
+out: bad facts | refused before any wording
+out: rejected | nothing is published
+out: facts changed | signature no longer counts
+out+: publish | only these exact bytes
+divider: 3 | drafts only | goes public
+note: Nothing is hung by the painter. Only the signature desk can, and only after a recorded yes.
+caption: Figure 1 — one venture's signs. | The line is where drafts stop and the public begins.
+```
 
 ## The stages, one by one
 
-1. **Write the facts.** A venture's operator fills in one facts file: how it is legally organised, how it takes money (`payment_model`, one of `gateway` / `mor` / `none`), whether it is GST-registered, what personal data it holds and why, its grievance contact, its refund window, and more — each field checked at its own risk tier. <!-- src: ADR-1202; ADR-1211 -->
-2. **Pin a template set.** A venture names one template set by version in its own pin file; there is no fallback to "whichever set is newest" — a venture with no pin is refused outright, because floating onto an unreviewed set silently is the exact failure pinning exists to prevent. <!-- src: .claude/scripts/legal/arc-legal.mjs#pinnedSetFor -->
-3. **Render.** The facts, the pinned templates, and every supporting data file (the clause map, the scenario list, the claim denylist, the grievance-response windows, and more) are all read together and hashed together, so a change to any one of them shows up as the render input moving. <!-- src: .claude/scripts/legal/arc-legal.mjs#renderInputs -->
-4. **Lint the rendered bytes, four ways: three per page, one across every page together.** A value check catches a compliance claim, a leftover interpolation, or markup in the output; a trace check confirms no clause from an unselected branch survived; a completeness check fails a page that is missing a mandatory clause or leaves a pinned real-world scenario unanswered; a consistency check — added after reviewers found the worst defects sitting *between* two correctly-formed pages rather than on either one — runs once over every rendered page and fails wherever a page makes a declared commitment without the field's own value appearing on it. <!-- src: .claude/scripts/legal/lib/lints.mjs; ADR-1209; ADR-1213 -->
-5. **Propose.** The render is staged and an approval payload is built naming the venture, the pinned template set, the effective date, and every page's own hash; one question is then raised on arc's event log pointing at that exact payload's hash — refused outright if the very same bytes are already sitting in the inbox. <!-- src: .claude/scripts/legal/arc-legal.mjs#proposeMain; .claude/scripts/legal/lib/receipts.mjs#approvalPayload -->
-6. **A human decides.** The full pages are read, and the decision is recorded through arc's existing inbox, with a mandatory reason — `propose` itself never records a decision, precisely so the one verb that raises the question can never also answer it. <!-- src: .claude/scripts/legal/arc-legal.mjs#proposeMain; ADR-1203 -->
-7. **Publish.** Everything is re-rendered fresh from the tree as it stands now; publish refuses if the facts moved since approval, if the template set moved, if the bytes on disk are not the bytes that were approved, or if the effective date is earlier than the decision date. <!-- src: .claude/scripts/legal/arc-legal.mjs#publishMain; .claude/scripts/legal/lib/receipts.mjs#backdatingErrors -->
-8. **Checklist, then watch.** A launch checklist is rendered against the pinned provider page list; `verify` and a generated, venture-side CI check then keep failing the build if the committed pages are not the bytes that were approved. <!-- src: .claude/scripts/legal/lib/checklist.mjs; .claude/scripts/legal/arc-legal.mjs#verifyMain -->
+```lede
+Each stage is written twice: first in ordinary words, then what actually happens.
+```
 
-## Every part, explained
+```steps
+t: Fill in the answer sheet and pick an edition
+plain: The shop writes down its facts and names one edition of the kit. No name, no signs: the painter refuses rather than guess the newest edition.
+d: The facts are read by a small, strict reader that accepts a short list of shapes and refuses the rest with a named error. The edition comes from the venture's own `pins.yaml`.
+f: `.claude/scripts/legal/arc-legal.mjs` · `.claude/scripts/legal/lib/schema.mjs` · `.claude/scripts/legal/lib/yaml.mjs`
 
-### Scripts
+t: Paint the pages
+plain: The painter fills the blanks in the kit. It is a plain fill-in-the-blanks machine on purpose, so nobody can smuggle logic into a legal sentence.
+d: The renderer knows two constructs: open a named clause and close it, plus a few blanks and one field-equals-value guard. Everything it read is hashed together.
+f: `.claude/scripts/legal/lib/template.mjs` · `.claude/scripts/legal/lib/canonical.mjs`
 
-- `.claude/scripts/legal/arc-legal.mjs` — the CLI itself, carrying eight verbs: `render` (produce and lint pages, publish nothing), `propose` (raise the human approval question), `publish` (refuse unless the recorded decision matches these exact bytes), `verify` (diff a published directory against a fresh re-render), `checklist` (render the launch checklist), `bump-templates` (move one venture to a newer pinned set, voiding its approval), `ci-guard` (emit the venture-side CI check), and `propose-templates` (print one template set's own approval payload, for a human to decide and record separately from any venture). <!-- src: .claude/scripts/legal/arc-legal.mjs#proposeMain; .claude/scripts/legal/arc-legal.mjs#publishMain; .claude/scripts/legal/arc-legal.mjs#verifyMain; .claude/scripts/legal/arc-legal.mjs#checklistMain; .claude/scripts/legal/arc-legal.mjs#bumpTemplatesMain; .claude/scripts/legal/arc-legal.mjs#ciGuardMain; .claude/scripts/legal/arc-legal.mjs#proposeTemplatesMain -->
-- `.claude/scripts/legal/lib/yaml.mjs` — a deliberately small, named-subset YAML parser for the facts file; anything outside a short accepted list (a plain mapping, block sequences, quoted or narrowly-shaped bare values) is a refusal with its own named error code, never a best-effort guess. <!-- src: .claude/scripts/legal/lib/yaml.mjs -->
-- `.claude/scripts/legal/lib/canonical.mjs` — the total, type-tagged canonicaliser that turns a parsed facts object into one fixed byte sequence for hashing, refusing anything it cannot represent rather than coercing it, with its own preimage format version carried inside every hash. <!-- src: .claude/scripts/legal/lib/canonical.mjs; ADR-1204 -->
-- `.claude/scripts/legal/lib/schema.mjs` — the three-tier facts schema: closed choices and formats are parsed and checked at load time, and free text is bounded by length and character set before it ever reaches a template. <!-- src: .claude/scripts/legal/lib/schema.mjs; ADR-1202 -->
-- `.claude/scripts/legal/lib/template.mjs` — the clause renderer, deliberately NOT a language: two constructs, no expressions, no loops the author controls and no conditional beyond one field-equals-value guard, that open and close a named clause block and fill a handful of value and list placeholders — every emitted clause writes a traceable marker into the rendered output itself. <!-- src: .claude/scripts/legal/lib/template.mjs -->
-- `.claude/scripts/legal/lib/lints.mjs` — the four lint groups (value, trace, completeness, consistency) that read the rendered bytes and report findings; all four currently run in a trial mode where findings are recorded but do not change the exit code. <!-- src: .claude/scripts/legal/lib/lints.mjs -->
-- `.claude/scripts/legal/lib/checklist.mjs` — builds the launch checklist from the pinned provider page list and recorded evidence, with every row landing on exactly one of four outcomes and never a blank; it also generates the venture-side CI guard, which calls `arc-legal verify` rather than carrying its own comparison logic. <!-- src: .claude/scripts/legal/lib/checklist.mjs -->
-- `.claude/scripts/legal/lib/receipts.mjs` — the approval chain: `approvalPayload` builds the approval-request payload from a completed run, and `verifyChain` — run at publish time — separately reports a facts change, a template-set change, or a changed page file since the decision was recorded, plus `backdatingErrors`'s check on the effective date. <!-- src: .claude/scripts/legal/lib/receipts.mjs#approvalPayload; .claude/scripts/legal/lib/receipts.mjs#verifyChain; .claude/scripts/legal/lib/receipts.mjs#backdatingErrors -->
-- `.claude/scripts/legal/publish-gate.mjs` — a standing CI check, run on every branch regardless of what it touches, that the shared company policy file's publish target list stays empty — because an empty list is what makes automated publishing unaddressable in the first place. <!-- src: .claude/scripts/legal/publish-gate.mjs -->
+t: Check the paint
+plain: Four inspectors read the finished pages: is anything untrue or unfilled, does every clause trace back, is anything missing, do two pages contradict each other.
+d: Value, trace, completeness and consistency checks. All four are still in trial: they report findings but do not yet change the exit code.
+f: `.claude/scripts/legal/lib/lints.mjs`
 
-### Gates and rules
+t: Ask for a signature
+plain: The painter stages the pages and raises exactly one question in arc's logbook, pointing at the exact pages. It cannot answer that question itself.
+d: `propose` records an `approval.requested` on the event log. The human answers through `arc-inbox`, with a mandatory reason.
+f: `.claude/scripts/legal/arc-legal.mjs` · ADR-1203
 
-- `tests/legal-lints.bats`, `legal-consistency.bats` — each of the four lint groups is proven against a mutant that reintroduces the exact defect it exists to catch, including the cross-page contradiction the consistency group was added for. <!-- src: tests/legal-lints.bats; tests/legal-consistency.bats; ADR-1213 -->
-- `tests/legal-scenarios.bats` — a pinned set of real situations, each mapped to the clause ID that must answer it, so a page can be fully traced and still fail for leaving a real reader's question unanswered. <!-- src: tests/legal-scenarios.bats; ADR-1209 -->
-- `tests/legal-receipts.bats` — the publish gate's own refusals: a facts edit after approval, an edit to the pinned template set, and a backdated effective date must each be refused, not merely warned about. <!-- src: tests/legal-receipts.bats#TEMPLATES_CHANGED; ADR-1204 -->
-- `tests/legal-pins.bats` — a venture with no pinned template set is refused rather than defaulted onto whatever set is newest. <!-- src: tests/legal-pins.bats -->
-- `tests/legal-checklist.bats` — a checklist row can never render blank; it must land on one of the four defined outcomes. <!-- src: tests/legal-checklist.bats; .claude/scripts/legal/lib/checklist.mjs -->
-- `tests/legal-publish-gate.bats` — the shared policy file's publish target list is asserted empty, with a mutant that adds a target proven to turn this check red. <!-- src: tests/legal-publish-gate.bats; .claude/scripts/legal/publish-gate.mjs -->
-- `tests/legal-probe.mjs` — a mutation probe: its `mutate` command plants a specific real-world defect, such as the `cross-page-drift` case that restores the vague price-rise sentence the pricing and terms pages once disagreed on, and its separate `findings` command then prints one lint group's finding count, so a fix is proven by which group's count changes. <!-- src: tests/legal-probe.mjs#cross-page-drift; tests/legal-probe.mjs#findings -->
-- `tests/legal-schema-probe.mjs` — a separate, schema-level probe: builds a facts object in memory and runs it through the real validator, printing only `accepted` or `rejected`, kept apart from `legal-probe.mjs` so no one file both builds a fixture and reads its own result. <!-- src: tests/legal-schema-probe.mjs -->
-- The company-wide policy rule this product rides rather than owns: `hq.policy.yaml`'s publish target list stays an empty, closed enum, so no automation anywhere can name a target to publish through — `legal` requests no exception to it. <!-- src: hq.policy.yaml; ADR-1203 -->
+t: Hang the signed version, or refuse
+plain: Publish re-checks everything fresh. If the facts, the kit or the page bytes moved since the signature, it stops.
+d: The chain is re-derived from the tree as it stands now and compared with the recorded decision. A backdated effective date is also refused.
+f: `.claude/scripts/legal/lib/receipts.mjs` · ADR-1204
 
-## The bigger loop
+t: Pre-flight sheet, then keep watching
+plain: The checklist lists what the payment provider expects, and no row is ever left blank. `verify`, and a check the venture runs in its own CI, keep failing if the signs on the wall drift from what was approved.
+d: Each row is checked and clean, checked and wrong, not yet checked, or not applicable.
+f: `.claude/scripts/legal/lib/checklist.mjs`
+```
 
-### One venture's seven pages, start to finish
+# The bigger loop
 
-An operator writes `facts.yaml` for their venture: how they take money, whether they collect GST, what data they hold on other people, their grievance contact, their refund window. Next to it, a `pins.yaml` names one template set by version. <!-- src: ADR-1202; .claude/scripts/legal/arc-legal.mjs#pinnedSetFor -->
+## The life of one venture's signs
 
-Running the render produces the seven pages and a set of lint findings, recorded in the run's sidecar. Every lint group is still in TRIAL, so a FAIL finding is recorded but does not stop the render — the operator can act on it and render again before ever reaching `propose`. <!-- src: initiatives/legal/PLAN.md; .claude/scripts/legal/lib/lints.mjs#findingsAreFatal -->
+```lede
+One shop, from an empty wall to a verified one, and the day it changes its refund window.
+```
 
-`propose` stages that render, builds the approval payload naming the venture, the pinned template set, and each page's own hash, and raises one question on arc's event log pointing at that payload's hash — the pages themselves only land in the venture's own output folder once every check on the way, including a duplicate-question check, has passed. <!-- src: .claude/scripts/legal/arc-legal.mjs#proposeMain; .claude/scripts/legal/lib/receipts.mjs#approvalPayload -->
+```loop
+top: 1 | the answer sheet
+top: 4 | the signature
+stage: 1 · Facts written | how it takes money, its refund window
+stage: 2 · Painted | pages plus four checks
+stage*: 3 · Signed | a human approves these bytes
+stage: 4 · Hung and watched | verify keeps comparing
+stage!: 5 · A fact changes | the old signature no longer fits
+labels: render, sign, publish, edit
+back: last -> 2 | paint again, sign again
+caption: Figure 2 — the life of a venture's signs. | A changed fact always sends the shop back to the signature desk.
+```
 
-A human reads the pages in full and records a decision — approve or reject, with a mandatory reason — through arc's own inbox; `decision.recorded` is never emitted by the raw emitter, because it enforces a welded idem it does not itself compute, so `arc-inbox approve <id> --reason …` is the only correct path. <!-- src: .claude/scripts/legal/arc-legal.mjs#decisionFromSpine; ADR-1203 -->
+1. The operator writes the shop's facts and pins an edition.
+2. The painter produces the pages and reports what the inspectors found.
+3. A human reads them and approves. The receipt ties that yes to those exact bytes.
+4. The pages go up, and `verify` keeps checking the wall against the signature.
+5. Later the shop changes its refund window. The old signature no longer matches the new facts, so
+   publish refuses until the pages are painted and signed again.
 
-From there, `checklist` reports what a payment provider's own required page list expects to find, row by row, with every row that has not actually been looked at recorded as such rather than left blank; and `verify`, or a generated check running inside the venture's own CI, keeps comparing what is actually served against the last thing that was published. <!-- src: .claude/scripts/legal/lib/checklist.mjs; .claude/scripts/legal/arc-legal.mjs#verifyMain -->
+*The refund-window change is an illustration of how the loop runs, not a real incident.*
 
-The one real venture this product was built against is LexOS. Its own facts turned out not to fit the two payment postures the schema first offered — LexOS is not the merchant on the money a customer pays, and does not run a payment gateway for its own subscription either — so a third posture was added to the schema before any receipt existed rather than forcing a false statement onto the render. <!-- src: ADR-1211 --> LexOS was also confirmed to hold third parties' privileged client records, which is exactly the condition that turns on the processor clause on the privacy page. <!-- src: ADR-1211; initiatives/legal/PLAN.md -->
+## Why the facts stay private
 
-### How the facts stay private: `--venture-dir`
+A shop's real facts never live in arc's public repository. The painter is pointed at them with
+`--venture-dir` (or the `ARC_LEGAL_VENTURE_DIR` setting), and the engine prints only which of the two was used. This is decided in ADR-1205.
 
-A venture's real facts never live inside arc's own public repository — they live in that venture's own repository, and stay there. <!-- src: ADR-1205 --> The engine reaches them by an explicit `--venture-dir` flag (or an environment variable naming the same thing), never a name looked up in arc's own fixtures; and when the engine reports which of the two supplied that path, it prints only *which* source was used, never the path itself, because a machine path in that output would be the operator's own, appearing in a public log. <!-- src: .claude/scripts/legal/arc-legal.mjs#factsPathFor -->
+## Where legal sits in arc
 
-### How it connects to the rest of arc
+- **The first real shop was LexOS.** It was neither the seller of record nor running its own payment gateway, so a third money posture was added for it (ADR-1211).
+- **Pages that contradict each other.** The worst defects turned out to sit between pages, not on them, which is why the fourth check exists (ADR-1213).
+- **No new logbook kinds.** legal reuses the kinds arc already had (ADR-1203).
+- **In the face.** legal lives in the money room. The chips at the top of this page name the room and the ring.
 
-- `legal` requires `core` and `hq`, and nothing else. <!-- src: products/legal/manifest.json -->
-- It adds no new kind to arc's event log at all: every kind it needs — `approval.requested`, `decision.recorded`, `note.logged` — was already live before this module existed, and it tags its publish record as a `note.logged` rather than inventing its own kind. <!-- src: ADR-1203 -->
-- Its face room is named `legal`, sits in the `money` ring, and is sanctioned to show only its own product's files, a venture's own legal directory, and its own tagged log entries; the one station it shows is `verify`, and the one concept on its wall is the hash chain. <!-- src: products/legal/manifest.json -->
-- Its lane holds ADR band 1200–1299, and its own build evidence is lane-scoped at `initiatives/legal/evidence/phase-NN/` rather than living at the repository root. <!-- src: initiatives/legal/PLAN.md -->
+# Meta
 
 ## Glossary
 
-- **facts file** — one venture's own `facts.yaml`, with every field classified into one of three risk tiers that decides how it is validated. <!-- src: initiatives/legal/PLAN.md; ADR-1202 -->
-- **template set** — a versioned, hash-covered directory of clause templates plus their data files; a venture pins exactly one by name in its own `pins.yaml`. <!-- src: ADR-1205; .claude/scripts/legal/arc-legal.mjs#pinnedSetFor -->
-- **risk tier** — the one of three classes (a closed choice, a checked format, or bounded free text) every fact field belongs to, which decides how it is validated. <!-- src: ADR-1202 -->
-- **canonicaliser** — the function that turns parsed facts into one exact byte sequence for hashing, refusing what it cannot represent rather than guessing at it. <!-- src: ADR-1204 -->
-- **preimage version** — the version tag the preimage carries inside the sealed record, so a later change to the hashing format itself is diagnosable as a format change rather than mistaken for tampering. <!-- src: ADR-1204 -->
-- **propose** — rendering a venture's pages and raising one question on arc's event log for a human to decide; nothing is published by this step. <!-- src: .claude/scripts/legal/arc-legal.mjs#proposeMain -->
-- **publish** — re-deriving every hash fresh and refusing unless a recorded human decision approved exactly these bytes. <!-- src: .claude/scripts/legal/arc-legal.mjs#publishMain -->
-- **lint group** — one of four checks (value, trace, completeness, consistency) run over the rendered pages; a finding's level is recorded in the run's sidecar regardless, and while all four stay in TRIAL, none of their findings can move the process exit code. <!-- src: .claude/scripts/legal/lib/lints.mjs#findingsAreFatal -->
-- **checklist row outcome** — one of four states a launch-checklist row can report: checked and clean, checked and wrong, not yet checked, or not applicable, with a blank row treated as a defect in the renderer itself. <!-- src: .claude/scripts/legal/lib/checklist.mjs -->
-- **bump-templates** — moving one venture to a newer pinned template set, which voids its existing approval and requires a fresh human decision. <!-- src: .claude/scripts/legal/arc-legal.mjs#bumpTemplatesMain -->
-- **`--venture-dir`** — the explicit flag (or its matching environment variable) naming where a real venture's own facts and pins actually live, kept out of arc's own repository and out of its own printed logs. <!-- src: .claude/scripts/legal/arc-legal.mjs#factsPathFor -->
+```gloss
+GST: India's goods and services tax. Whether a shop is registered for it changes what its pages must say.
+DPDP: India's data protection law. It is the reason the privacy page has to say what data is held and why.
+YAML: a plain-text way of writing a list of answers. `facts.yaml` is one.
+hash: a fingerprint of some bytes. Change one letter and the fingerprint changes.
+merchant of record: the seller the customer's card payment legally goes to.
+```
 
 ## At a glance
 

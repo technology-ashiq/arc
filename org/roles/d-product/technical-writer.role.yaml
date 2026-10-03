@@ -1,0 +1,38 @@
+# Technical writer -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'technical-writer'
+title: 'Technical writer'
+dept: 'd-product'
+mission: 'Keep arc''s generated reference complete and every narrative anchored to the tree.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+seat: 'script'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts:
+    - '.claude/scripts/docs/wiki-build.mjs'
+  process: 'narrative-verify'
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'technical-writer-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

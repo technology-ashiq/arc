@@ -41,6 +41,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   findChrome, chromeArgs, launchChrome, waitForDevTools, openSocket, CdpSession, openPage,
 } from "./cdp.mjs";
+import { modeOf, exitHash, STAGE_UNMOUNT_MS } from "../src/lib/mode.mjs";
+import { GENERAL_LABEL, ARC_LABEL } from "../src/lib/talk.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const MIN_WATCH_MS = 900;
@@ -1039,6 +1041,234 @@ export async function runProbe(file, log = (line) => process.stdout.write(line +
     log(`probe: errors=${errors.length} chrome=${found.path}`);
     return errors.length;
   });
+}
+
+// ─────────────────────────────── the front door (face v2 Phase 09, REQ-13, ADR-1349) ───────────────────────────────
+//
+// One pass per mood, beside the room smoke and never inside it: the rooms' mood rules (moodHolds) apply to the
+// workroom, and the door has one look in both moods. Every check is NAMED, and the line counts how many RAN as well as
+// how many passed -- a pass that died at step three prints ran=3, never a clean tail (the vacuous-pass rule).
+
+/** The checks one mood's front-door pass runs, in order. The verdict holds ran == ok == this length. */
+export const FRONT_DOOR_CHECKS = Object.freeze([
+  "door-surface", "door-canvas", "door-one-enter", "door-no-fallback",
+  "hq-no-stage", "hq-mood",
+  "pointer-enter", "pointer-unmount",
+  "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
+  "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "door-no-settings", "healthy-no-exception",
+  "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
+  "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
+]);
+/**
+ * How long past STAGE_UNMOUNT_MS the pass keeps asking whether the stage is gone. Polled, not one fixed sleep: under
+ * software WebGL on a CI runner the stage's render loop can hold the main thread, so the unmount timer fires late on
+ * the first crossing (CI 2026-10-01: 3 s and still mounted, on the first crossing only). A stage that never leaves
+ * still FAILs at the cap; the time it took is printed either way.
+ */
+export const UNMOUNT_MARGIN_MS = 8000;
+/**
+ * The shortest hold that is a warp: the fly-through is 1.6 s (WARP_IN_S) and the stage is kept STAGE_UNMOUNT_MS. A stage
+ * that left in under 1.5 s did not fly through. Written here, not read from mode.mjs, so a changed constant there cannot
+ * move the bar with it.
+ */
+export const WARP_HELD_MIN_MS = 1500;
+/** WebGL refused before any page script runs: three's renderer constructor throws, and FaceStage must catch it. */
+export const NO_WEBGL_SCRIPT = `(function () { var get = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (kind) { if (kind === "webgl" || kind === "webgl2" || kind === "experimental-webgl") return null; return get.apply(this, arguments); }; })();`;
+/** A stage that throws after its renderer exists: only FaceStage uses ResizeObserver, so its effect throws. */
+export const THROWING_STAGE_SCRIPT = `window.ResizeObserver = undefined;`;
+
+/** The one line a mood's front-door pass prints; the bats verdict reads nothing else. */
+export function frontDoorLine(r) {
+  const failedNames = r.checks.filter((c) => !c.ok).map((c) => c.name);
+  return `smoke: front-door mood=${r.mood} expected=${FRONT_DOOR_CHECKS.length} ran=${r.checks.length} ok=${r.checks.filter((c) => c.ok).length} warp-held=${r.warpHeld}/${r.crossings} failed=${failedNames.join(",") || "none"}`;
+}
+
+/** Whether a front-door report passes: every named check ran, in order, and held. */
+export function judgeFrontDoor(r) {
+  const names = r.checks.map((c) => c.name);
+  const ok = names.length === FRONT_DOOR_CHECKS.length && names.every((n, i) => n === FRONT_DOOR_CHECKS[i]) && r.checks.every((c) => c.ok);
+  return { ok, reasons: ok ? [] : r.checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.why}`).concat(names.length === FRONT_DOOR_CHECKS.length ? [] : [`ran ${names.length} of ${FRONT_DOOR_CHECKS.length} checks`]) };
+}
+
+export async function runFrontDoor(opts, log = (line) => process.stdout.write(line + "\n")) {
+  const mood = opts.mood ?? "dark";
+  if (!MOODS.includes(mood)) throw new SetupError(`mood must be one of ${MOODS.join(", ")}, got ${JSON.stringify(mood)}`);
+  const token = opts.token;
+  const tokenPart = `token=${encodeURIComponent(token)}`;
+  const capMs = opts.roomTimeoutMs ?? 15000;
+  const report = { mood, checks: [], warpHeld: 0, crossings: 0, notes: [] };
+  const record = (name, ok, why = "") => {
+    report.checks.push({ name, ok: ok === true, why: ok === true ? "" : String(why || "did not hold") });
+    if (ok !== true) log(`smoke: front-door mood=${mood} FAIL ${name} -- ${oneLine(redactSecrets(why || "did not hold", [token]))}`);
+  };
+
+  return withChrome(async (session) => {
+    let n = 0;
+    /** A fresh page in the mood, with its own exception count and an optional script that runs before the app. */
+    const fresh = async (extraScript) => {
+      const page = await openPage(session);
+      const exceptions = [];
+      page.on("Runtime.exceptionThrown", (p) => exceptions.push(String(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text ?? "").slice(0, 200)));
+      await page.send("Page.enable");
+      await page.send("Runtime.enable");
+      await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+      await page.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `try { window.localStorage.setItem(${JSON.stringify(MOOD_KEY)}, ${JSON.stringify(mood)}); } catch (e) { /* storage refused: hq-mood reports the miss */ }`,
+      });
+      if (extraScript) await page.send("Page.addScriptToEvaluateOnNewDocument", { source: extraScript });
+      await page.send("Page.bringToFront").catch(() => {});
+      return { page, exceptions };
+    };
+    const close = async (page) => { await session.send("Target.closeTarget", { targetId: page.targetId }).catch(() => {}); };
+    const val = async (page, expression) => (await page.send("Runtime.evaluate", { expression, returnByValue: true })).result?.value;
+    // A fresh load every time: the query differs, so the browser never treats it as a fragment change on the last page.
+    const go = async (page, fragment) => { n++; await page.send("Page.navigate", { url: `${opts.base}?fd=${n}${fragment}` }); };
+    const hash = (page) => val(page, "location.hash");
+    const count = (page, sel) => val(page, `document.querySelectorAll(${JSON.stringify(sel)}).length`);
+    const onDoor = (page) => until(async () => (await count(page, '[data-surface="front-door"]')) === 1, capMs);
+    const inWorkroom = (page) => until(async () => modeOf(await hash(page)) === "hq" && (await count(page, "section[data-room]")) > 0, capMs);
+    const visible = (page, sel) => val(page, `(function () { var e = document.querySelector(${JSON.stringify(sel)}); if (!e) return false; var s = getComputedStyle(e); return e.getClientRects().length > 0 && s.visibility !== "hidden" && s.display !== "none" && Number(s.opacity) > 0 && e.textContent.trim().length > 0; })()`);
+    /** A real pointer click at the centre of the first VISIBLE match (the rail's exit on desktop, not the header's). */
+    const click = async (page, sel) => {
+      const at = await val(page, `(function () { var all = document.querySelectorAll(${JSON.stringify(sel)}); for (var i = 0; i < all.length; i++) { var e = all[i]; if (e.getClientRects().length === 0) continue; e.scrollIntoView({ block: "center" }); var r = e.getBoundingClientRect(); return JSON.stringify({ x: r.left + r.width / 2, y: r.top + r.height / 2 }); } return null; })()`);
+      if (typeof at !== "string") return false;
+      const { x, y } = JSON.parse(at);
+      await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+      await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
+      await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+      return true;
+    };
+    const press = async (page, k) => {
+      await page.send("Input.dispatchKeyEvent", { type: k.text ? "keyDown" : "rawKeyDown", key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk, modifiers: k.modifiers ?? 0, ...(k.text ? { text: k.text, unmodifiedText: k.text } : {}) });
+      await page.send("Input.dispatchKeyEvent", { type: "keyUp", key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk, modifiers: k.modifiers ?? 0 });
+    };
+    const ENTER = { key: "Enter", code: "Enter", vk: 13, text: "\r" };
+    const SPACE = { key: " ", code: "Space", vk: 32, text: " " };
+    const CTRL_K = { key: "k", code: "KeyK", vk: 75, modifiers: 2 };
+    const ESCAPE = { key: "Escape", code: "Escape", vk: 27 };
+    /** Cross from the door and judge the crossing: the hash reaches the workroom, then the stage is gone. */
+    const cross = async (page, name, unmountName, act) => {
+      const acted = await act();
+      const reached = acted && (await until(async () => String(await hash(page)).startsWith("#hq"), 5000));
+      if (reached) report.crossings++;
+      record(name, reached, acted ? `the hash stayed ${JSON.stringify(redactSecrets(String(await hash(page)), [token]))}` : "the control was not there to act on");
+      if (!reached) { record(unmountName, false, "never crossed"); return; }
+      const crossedAt = Date.now();
+      await sleep(STAGE_UNMOUNT_MS);
+      await until(async () => (await count(page, "[data-stage]")) === 0, UNMOUNT_MARGIN_MS, 150);
+      const stages = await count(page, "[data-stage]");
+      const opened = await inWorkroom(page);
+      // The warp is judged from what the page recorded, not from a read that races it: a read "right after" the crossing
+      // could land past the hold on a loaded runner (CI 2026-10-01, warp-held=2/3 with every unmount clean). The app
+      // writes how long the stage stayed on once it leaves; a crossing that dropped the face at once has no fly-through.
+      const held = Number(await val(page, "document.documentElement.dataset.warpHeldMs || 'NaN'"));
+      if (stages === 0 && held >= WARP_HELD_MIN_MS) report.warpHeld++;
+      // On a stage that stayed, say what the page did: how many scenes it built and which surfaces it took, when.
+      const trace = stages === 0 ? "" : ` mounts=${await val(page, "document.documentElement.dataset.stageMounts || '0'")} trail=${JSON.stringify(String(await val(page, "document.documentElement.dataset.surfaceTrail || ''")))} held=${held}`;
+      record(unmountName, stages === 0 && opened, `stage nodes=${stages} workroom opened=${opened} after ${Date.now() - crossedAt} ms${trace}`);
+    };
+    const step = async (fn, names) => {
+      const before = report.checks.length;
+      try { await fn(); } catch (e) {
+        // A step that threw records every check it still owed as FAILED, so ran counts stay honest.
+        const done = new Set(report.checks.slice(before).map((c) => c.name));
+        for (const nm of names) if (!done.has(nm)) record(nm, false, `threw: ${e?.message ?? e}`);
+      }
+    };
+
+    // ── the healthy door, in this mood ──
+    const healthy = await fresh(null);
+    const P = healthy.page;
+    await step(async () => {
+      await go(P, `#${tokenPart}`);
+      record("door-surface", await onDoor(P), "no [data-surface=front-door] on /");
+      record("door-canvas", await until(async () => (await count(P, '[data-stage="face"] canvas')) > 0, capMs), "no canvas inside [data-stage=face]");
+      const enters = await count(P, "[data-enter-hq]");
+      record("door-one-enter", enters === 1, `[data-enter-hq] count=${enters}`);
+      const fallback = await count(P, "[data-stage-fallback]");
+      record("door-no-fallback", fallback === 0, `a healthy stage showed the fallback line (${fallback})`);
+    }, ["door-surface", "door-canvas", "door-one-enter", "door-no-fallback"]);
+    await step(async () => {
+      await go(P, `#hq&${tokenPart}`);
+      const opened = await inWorkroom(P);
+      await sleep(MIN_WATCH_MS);
+      const stages = await count(P, "[data-stage]");
+      record("hq-no-stage", opened && stages === 0, `workroom opened=${opened} stage nodes=${stages}`);
+      const cls = await val(P, "document.documentElement.className");
+      record("hq-mood", opened && moodHolds(cls, mood), `html class=${JSON.stringify(cls)}`);
+    }, ["hq-no-stage", "hq-mood"]);
+    await step(async () => {
+      await go(P, `#${tokenPart}`);
+      await onDoor(P);
+      await cross(P, "pointer-enter", "pointer-unmount", () => click(P, "[data-enter-hq]"));
+    }, ["pointer-enter", "pointer-unmount"]);
+    for (const [name, key] of [["enter-key", ENTER], ["space-key", SPACE]]) {
+      await step(async () => {
+        await go(P, `#${tokenPart}`);
+        await onDoor(P);
+        await cross(P, name, `${name}-unmount`, async () => {
+          const focused = await val(P, `(function () { var b = document.querySelector("[data-enter-hq]"); if (!b) return false; b.focus(); return document.activeElement === b; })()`);
+          if (focused !== true) return false;
+          await press(P, key);
+          return true;
+        });
+      }, [name, `${name}-unmount`]);
+    }
+    await step(async () => {
+      // From the workroom the last crossing left open: the exit is the rail's brand on desktop.
+      const clicked = await click(P, "button[data-exit-hq]");
+      const back = clicked && (await until(async () => modeOf(await hash(P)) === "door" && (await count(P, '[data-surface="front-door"]')) === 1, capMs));
+      const h = String(await hash(P));
+      record("exit-to-door", back && h === exitHash(`#hq&${tokenPart}`), clicked ? `the hash reads ${JSON.stringify(redactSecrets(h, [token]))}` : "no visible [data-exit-hq] in the workroom");
+    }, ["exit-to-door"]);
+    await step(async () => {
+      await onDoor(P);
+      await val(P, "document.activeElement && document.activeElement.blur && document.activeElement.blur()");
+      await press(P, CTRL_K);
+      record("palette-on-door", await until(async () => (await count(P, '[role="dialog"][aria-modal="true"]')) === 1, capMs), "Ctrl+K opened no palette on the door");
+    }, ["palette-on-door"]);
+    // Phase 10 (REQ-14, ADR-1350): the face is asked on its own door. The harness's door holds one model, the fake
+    // provider (tests/face/fake-llm.mjs), so a general question comes back labelled general and one about the record
+    // comes back from arc's record -- the label the DOOR wrote, read off the page.
+    await step(async () => {
+      await press(P, ESCAPE);
+      await until(async () => (await count(P, '[role="dialog"][aria-modal="true"]')) === 0, capMs);
+      const tagOf = () => val(P, "(function () { var e = document.querySelector('[data-answer-tag]'); return e ? e.getAttribute('data-answer-tag') + '|' + e.textContent : ''; })()");
+      for (const [name, q, tone, label] of [
+        ["ask-general-label", "What is the boiling point of water at sea level?", "general", GENERAL_LABEL],
+        ["ask-arc-label", "Which gate is the oldest approval in the queue for?", "plain", ARC_LABEL],
+      ]) {
+        const focused = await val(P, "(function () { var i = document.getElementById('ask-arc-dock'); if (!i) return false; i.focus(); return document.activeElement === i; })()");
+        if (focused !== true) { record(name, false, "no ask box on the door"); continue; }
+        await P.send("Input.insertText", { text: q });
+        await press(P, ENTER);
+        const ok = await until(async () => String(await tagOf()).startsWith(`${tone}|${label}`), 30000, 250);
+        record(name, ok, `the answer's tag read ${JSON.stringify(String(await tagOf()).slice(0, 120))}`);
+      }
+    }, ["ask-general-label", "ask-arc-label"]);
+    // The owner's ruling (2026-10-01): configuration lives inside HQ, never on the door's ask bar.
+    await step(async () => {
+      const n = await count(P, "[data-hq-settings], [data-models-panel], [data-ask-settings]");
+      record("door-no-settings", n === 0, `the door shows ${n} settings control(s)`);
+    }, ["door-no-settings"]);
+    record("healthy-no-exception", healthy.exceptions.length === 0, healthy.exceptions.slice(0, 3).join(" | "));
+    await close(P);
+
+    // ── the guards: WebGL refused, and a stage that throws ──
+    for (const [prefix, script] of [["webgl-off", NO_WEBGL_SCRIPT], ["throwing-stage", THROWING_STAGE_SCRIPT]]) {
+      const g = await fresh(script);
+      await step(async () => {
+        await go(g.page, `#${tokenPart}`);
+        await onDoor(g.page);
+        record(`${prefix}-fallback`, await until(async () => (await visible(g.page, "[data-stage-fallback]")) === true, capMs), "no visible [data-stage-fallback] line");
+        const clicked = await click(g.page, "[data-enter-hq]");
+        record(`${prefix}-enter`, clicked && (await inWorkroom(g.page)), clicked ? `ENTER HQ did not open the workroom (hash ${JSON.stringify(redactSecrets(String(await hash(g.page)), [token]))})` : "no [data-enter-hq] to press");
+      }, [`${prefix}-fallback`, `${prefix}-enter`]);
+      record(`${prefix}-no-exception`, g.exceptions.length === 0, g.exceptions.slice(0, 3).join(" | "));
+      await close(g.page);
+    }
+    return report;
+  }, log);
 }
 
 async function main(argv) {

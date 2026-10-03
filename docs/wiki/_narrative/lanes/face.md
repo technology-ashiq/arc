@@ -1,193 +1,177 @@
 <!-- facts: appetite=5ba4c16b blocked-on=a68c9074 burn=1858658b cycle=9864c386 depends-on=a68c9074 hasPlan=b5bea41b phase=50fd1513 status=8ddd7aee title=579bedfe -->
+```tagline
+The front office of arc. One screen where the owner sees the company and decides, instead of opening
+binders one at a time. Every room on it reads what arc already knows and writes only through the doors arc already has.
+```
+
+# Start here
 
 ## In plain words
 
-Think of a small company that has been running well for a long time using nothing but binders,
-spreadsheets and a shared logbook, and think of this lane as the project that finally builds the
-company its own front office — the place the owner would walk into to see the whole business
-instead of hunting through the binders one at a time. <!-- plain -->
+Think of arc as a small company whose staff are AI models. For a long time it ran on binders,
+spreadsheets and a shared logbook. It worked, but to see the whole business the owner had to go and
+open each binder.
 
-The lane's own goal, in its own words: the owner's design for arc's frontend becomes real — one
-token source in two moods, one shared kit, one shell, and thirty-six modules that are folders
-reading only what the front door serves and writing only through doors the company's law already
-recognises — so the owner runs the company's daily decisions and its routine work from one
-surface, and the next lane arc grows gets a working room by adding one folder. <!-- src: initiatives/face/PLAN.md -->
+**face is the front office being built for that company.** It is the browser screen (arc calls it "the
+room UI"). Each room on the screen shows one part of the business: the inbox of decisions, the map,
+the logbook, the money. The owner walks in, sees the state of things, and answers the day's questions
+there.
 
-### What it is building
+```panel big
+**The front office has no private files.** A room may only show what the reception desk (the read door) hands it, and may only change something by going through a door arc already had (the work door, the session door). If a room has nothing to show, it says so on the screen. It never makes something up.
+```
 
-That mattered because the plan's own assumptions ledger records Cycle 15's open question as the owner decided in the CLI because the surface arrived late, not because the Inbox is the wrong shape, and the tracker's usage trend counts 6 decisions matched to the face journal against 55 recorded on the spine with no journal line. <!-- src: initiatives/face/PLAN.md; initiatives/face/PROGRESS.md -->
+### What this lane is for
 
-Cycle 15 canonicalised the owner's v0.4 design — an eleven-room application — as its reference, keeping its own two explore rounds for the record; on 2026-09-15 the owner then supplied v0.7, a finished thirty-six-room system, and Cycle 16 makes it the canonical design in v0.4's place. <!-- src: ADR-1318 -->
+The lane's plan (`initiatives/face/PLAN.md`) says the goal in one sentence: the owner's design becomes
+arc's real screen, so the owner runs the company's daily decisions and its routine work from one place.
+And the next new part of arc gets a working room by adding one folder, with no redesign.
+
+The plan also records why this matters. An earlier version of the screen arrived late, so the owner
+kept deciding in the command line. The lane exists so that the screen is where the decisions happen.
+
+### Two cycles, one lane
+
+The lane has built twice. The first cycle made a working screen. Then the owner supplied his own
+finished design, and the lane made that design the reference (ADR-1318). The current cycle, "The
+Workroom", rebuilds the screen to match it. The old cycle's record is kept in the lane's archive folder.
 
 ## arc words → normal words
 
-| arc calls it | It is really |
-|---|---|
-| room | An entry in the served registry (`/api/rooms`), which a module attaches to by id. <!-- src: initiatives/face/PLAN.md -->|
-| module | A folder of four parts — manifest, pure fold, verbs and view — as the plan's Goal states it. <!-- src: initiatives/face/PLAN.md -->|
-| served registry | `/api/rooms`, served from `initiatives/face/contracts/rooms.generated.json` (ADR-1306). <!-- src: initiatives/face/PLAN.md -->|
-| ring | A grouping of the 36 modules — command, kernel, factory, money and company — each ring merged as its own pull request in Phase 03. <!-- src: initiatives/face/PLAN.md; initiatives/face/PROGRESS.md -->|
-| mood | Dark (`html.hq`) or light (`html.hq.hq-light`) — both moods are smoke-tested for every ring before it merges. <!-- src: ADR-1331 -->|
-| NOT SERVED | What a panel with no declared read route renders, per REQ-05, instead of inventing data. <!-- src: initiatives/face/PLAN.md; ADR-1324 -->|
-| the work door | The two-phase door — `plan` then `apply` — where every op calls the same script or emitter a hand-run calls, with no second implementation. <!-- src: ADR-1326 -->|
-| the session door | The path that starts a real run only via `arc-run --driver`, never a harness binary, spent by a single click, and credited only by arc-run's own named line — of the row's claimed kind or `run.completed`. <!-- src: ADR-1326; ADR-1345 -->|
-| birth rule | The rule that a brand-new part of arc gets a working room by adding one folder, without a redesign. <!-- src: initiatives/face/PLAN.md; ADR-1306 -->|
-| residue | A gap a phase found but did not close itself, named and filed to the lane that owns the fix, and approved by the owner as a whole. <!-- src: ADR-1338 -->|
-| dogfood | The requirement that the owner run the company's real decisions and at least one operation through the face on two real days — proving it is operable, not that the habit holds. <!-- src: initiatives/face/PLAN.md#dogfood; ADR-1329 -->|
+```lede
+Eight pieces of arc jargon. Each is an ordinary front-office thing wearing a technical name.
+```
 
-## How the work was planned
+```rosetta
+room | one screen in the office | one part of arc, such as the inbox or the map
+module | the folder behind a room | four parts: what it is, how it decides, what it may do, how it looks
+read door | the reception desk | hands rooms facts and never lets them write (`/api/rooms` lists the rooms)
+work door | the outgoing mail desk | runs the same real tool a person would run by hand, in two steps: `plan`, then `apply`
+session door | the phone line | starts a long job, such as convening a council, only from a click
+NOT SERVED | a sign saying "no data here" | shown when a panel has no read route, instead of invented facts
+residue | a job found but filed to its owner | a gap the phase named and handed to the lane that owns the fix
+birth rule | new department, new office | a new part of arc gets a room by adding one folder
+```
 
-The current cycle's success requirements, condensed from its plan: <!-- src: initiatives/face/PLAN.md -->
+## How one visit works
 
-| REQ | What it demands |
-|---|---|
-| REQ-01 | Design fidelity — the owner sees all 36 v0.7 modules in both moods, judged against the reference with zero VIOLATION and zero BELOW-BAR. <!-- src: initiatives/face/PLAN.md -->|
-| REQ-02 | Token law — one colour source, two moods, and no literal colour, with every contrast ratio computed rather than chosen by eye. <!-- src: initiatives/face/PLAN.md -->|
-| REQ-03 | Module contract — every module is four files, its decisions run under plain node, and `/arc-face-module` scaffolds one already green on `face-pure` and `face-coverage`. <!-- src: initiatives/face/PLAN.md -->|
-| REQ-04 | Coverage both directions — no orphan module, no blank served room, and no module op missing from the server's ops registry. <!-- src: initiatives/face/PLAN.md -->|
-| REQ-05 | Read truth — no module bundles its own facts, and a panel with no declared read route renders NOT SERVED. <!-- src: initiatives/face/PLAN.md -->|
-| REQ-06 | Door read routes — the gaps Phase 03 named are served read-only, or filed as a residue row the owner approves (amended by ADR-1338 from an at-most-three-route cap). <!-- src: initiatives/face/PLAN.md -->|
-| REQ-07 | Work door — the owner's verbs run the real tools with no second path, and the six flagship ops (ADR-1339) may never be left as residue. <!-- src: initiatives/face/PLAN.md -->|
-| REQ-08 | Session door — streaming work, such as a council convened from the face, starts only from a click and lands as a receipt of an existing kind. <!-- src: initiatives/face/PLAN.md -->|
-| REQ-09 | Harness in CI — the design's own `smoke.mjs` and `flows.mjs` run from bats on every CI leg with Node ≥20.19, and Node 18 prints a counted SKIP. <!-- src: initiatives/face/PLAN.md -->|
-| REQ-10 | Dogfood on the final surface — two real days where every `decision.recorded` matches the face's journal and at least one op receipt lands from the face each day. <!-- src: initiatives/face/PLAN.md -->|
-| REQ-11 | Live rooms — an open room re-reads within 5 seconds of a change to the spine or a file it declares in `routes`, and no module can opt out. <!-- src: initiatives/face/PLAN.md -->|
+```lede
+Looking is free and changes nothing. Doing goes through a door arc already trusts, and leaves a
+receipt on the logbook.
+```
 
-The plan's total appetite stayed at twenty-four days after ADR-1339 widened the work door to every verb — Block C's re-banking took 9 of the 12 days Blocks A and B had banked (Phase 05 4d to 10d, Phase 06 2d to 5d), so planned spend was 21d of 24d — and grew to twenty-nine and a half only when ADR-1347 added five and a half days to Phase 07: 0.5d for rendering, 1d for `narrative-anchors` and the verifier harness, 4d for the 34 narratives. <!-- src: initiatives/face/PLAN.md; ADR-1339; ADR-1347 -->
+```flow
+source: the owner opens a room
+box: ① Room opens | asks for its facts
+box: ② Read door | serves the facts
+box: ③ Owner presses a verb | plan, then apply
+box*: ④ Work door | runs the real tool
+labels: asks, shown, confirmed
+out: no read route | panel says NOT SERVED
+out: -
+out: -
+out+: receipt | on arc's logbook
+divider: 2 | only looking | something changes
+note: There is no second path. What the face does is what a person typing the command would do.
+caption: Figure 1 — one visit to a room. | The dashed line is where looking ends and changing begins.
+```
 
-The plan set tripwires at each block's halfway point: if Phase 00's browser suite were not green on CI by day 3 of 6, the cycle would stop before any token work; if the command and kernel rings' 14 modules were not green by day 5 of 10, the remaining bespoke folds would be cut to generic renders; and if the owner scored the ported surface below the reference twice on the same ring, the cycle would stop porting and re-read the spec. <!-- src: initiatives/face/PLAN.md#tripwire -->
+## The parts, one by one
 
-## The phases, one by one
+```lede
+Each part is written twice: first in ordinary words, then what actually exists.
+```
 
-The lane has run two build cycles by name. Its first, "arc face v1: the working HQ" (Cycle 15),
-opened 2026-08-19 with a thirty-two day appetite and built all nine of its planned phases — the
-read-and-decide doors, the face born as its own application, the shell, the room map with a birth
-rule, nine hand-built rooms plus generic ones for the rest, a deterministic question-answering
-room, and a first dogfood harness — but formally closed only its ninth phase through the proper
-closing command, so most of its requirements stayed unvalidated on a surface that otherwise
-worked; its own usage requirement read as not met, with one real decision matched to the face
-against fifty-nine decided outside it. <!-- src: initiatives/face/PROGRESS.md; initiatives/face/archive/PROGRESS-cycle15-2026-09-16.md -->
+```steps
+t: The rooms
+plain: Each room is a folder with four small parts. The list of rooms is handed out by the office, so a new room shows up by adding a folder.
+d: Modules live in `face/src/modules/`. The served list is `initiatives/face/contracts/rooms.generated.json`, and `face-coverage` fails when a module or a served room has no partner (ADR-1306).
+f: `face/src/modules/`
 
-That first cycle's v1 round delegated the brief to four composers and was rejected by the owner at 18/100; its open-brief v2 round then returned six directions with deliberately no pick. On 2026-08-23 the owner supplied his own v0.4 application, which Cycle 15 canonicalised as the reference; on 2026-09-15 he supplied v0.7, and ADR-1318 makes it the canonical design in Cycle 16, with every served room now drawing through a v0.7 module. <!-- src: initiatives/face/archive/PROGRESS-cycle15-2026-09-16.md; ADR-1318; initiatives/face/PROGRESS.md -->
+t: The reception desk
+plain: Rooms read from one desk. If a room asks for something the desk does not serve, the room shows NOT SERVED.
+d: `/api/rooms` and the other read routes are served by arc's dashboard server. Phase 04 served the gaps it could and filed the rest as residue the owner approved as a whole (ADR-1338).
+f: `.claude/scripts/hq/arc-dash.mjs`
 
-The current cycle, "arc-face v2 — The Workroom" (Cycle 16), opened 2026-09-16, and its phases run: <!-- src: fact:lanes/face.title; fact:lanes/face.cycle -->
+t: The work door
+plain: Every verb the owner can press runs the real tool, with no second copy of the logic. The decision path is the very same function the command line uses.
+d: One write path, `/api/decide`, is the `arc-inbox` function itself (ADR-1302). ADR-1339 widened the work door to every verb.
+f: `docs/adr/1339-fv2-flagship-six-and-every-verb-works.md`
 
-| Phase | Set out to prove | What shipped, and what it cost |
-|---|---|---|
-| 00 — harness steel thread | building the application and opening every served room with the ported verification tool | Closed 2026-09-17, one of its two days: 33 of 33 rooms opened with 0 errors on every L3 leg. <!-- src: initiatives/face/PROGRESS.md -->|
-| 01 — tokens + kit | two moods, computed contrast, generated copy, and the kit on Tailwind v4 | Closed 2026-09-17, half of its two days: both moods on every L3 leg, 33 of 33 rooms with 0 errors; the owner's by-eye read, verbatim, was 'Render aagudhu — close pannu'. <!-- src: initiatives/face/PROGRESS.md#verbatim -->|
-| 02 — shell + module frame | the v0.7 shell, `face/src/modules/`, a two-way reconcile, `face-pure` and `/arc-face-module` | Closed 2026-09-17, half of its two days: 9 carried modules plus 24 generic rooms reported by id, both moods 33 of 33 with 0 errors. <!-- src: initiatives/face/PROGRESS.md -->|
-| 03 — the modules, read-side | every module of the design rendering from the read door, ring by ring, each ring closing with its own list of what it could not yet serve | Closed 2026-09-18, one and a half of its seven days: every module rendered in both moods with no console errors, and five rings' worth of gaps were named for the next phase. <!-- src: initiatives/face/PROGRESS.md -->|
-| 04 — door read routes | serving the read gaps the previous phase named, or filing each one as a named residue row | Closed 2026-09-18, 0.5 of its 3 days: 18 routes served (35 of 50 panels), and 15 panels on 10 routes filed as residue, approved by the owner as a whole rather than capped at REQ-06's original three-route bound (ADR-1338). <!-- src: initiatives/face/PROGRESS.md; ADR-1338 -->|
-| 05 — the work door + every verb + live rooms | every one of the 31 work verbs running through its real tool, and live rooms re-reading on the door's pulse | Closed 2026-09-23, three of its ten days: 31 of 31 verbs shipped with residue none, and live rooms re-read at a pulse measured at 922 ms in Chrome. <!-- src: initiatives/face/PROGRESS.md -->|
-| 06 — the session door | streaming work, such as convening a council, starting only from a click and landing as a receipt the face reads back | Closed 2026-09-26, three of its five days: of the streaming verbs in scope, some shipped with their receipt read back, some start from a click with the read-back still owed, and the rest were filed as residue to the lanes that own them. <!-- src: initiatives/face/PROGRESS.md -->|
+t: The session door
+plain: Long jobs, such as convening a council, start only from a click. The result is a receipt the face can read back.
+d: A session starts only through `arc-run --driver`, never a raw binary (ADR-1326, ADR-1345). The council convene runs as the `council-convene` process. Some verbs read their receipt back, some do not yet, and some were filed as residue.
+f: `initiatives/face/phases/phase-06-spec.md`
+```
 
-## What it decided
+# The bigger loop
 
-The lane holds ADR century 1300–1399: its first cycle (Cycle 15) wrote ADR-1300 through ADR-1315 at kickoff and added ADR-1316 and ADR-1317 before it closed. <!-- src: initiatives/face/archive/PROGRESS-cycle15-2026-09-16.md -->
+## How a phase is proven
 
-| # | Decision |
-|---|---|
-| 1300 | The read-and-decide door lives in the arc repository itself, while the browser application lives in its own separate repository. <!-- src: ADR-1300 -->|
-| 1301 | Three layers, one read door and one decision door: L1 truth, L2 one read door + one decision door, and L3 face. <!-- src: ADR-1301 -->|
-| 1302 | There is one write path, `/api/decide`, which IS the `arc-inbox` function itself; a fixture proves its emitted receipt is byte-identical to the CLI's. <!-- src: ADR-1302 -->|
-| 1303 | Every interactive affordance is a Stamp, a Chip or a Seal, and a lint over the component registry forbids a fourth. <!-- src: ADR-1303 -->|
-| 1304 | Map lines and stations are declared in each product's manifest, never hand-drawn. <!-- src: ADR-1304 -->|
-| 1305 | The tape — replaying the log as of an earlier moment — is deterministic and read-only. <!-- src: ADR-1305 -->|
-| 1306 | A new room is born through one rule: a `face:` section in the product's manifest, validated by `face-coverage`. <!-- src: ADR-1306 -->|
-| 1307 | Ask arc runs as a governed engine process, with zero write tools. <!-- src: ADR-1307 -->|
-| 1308 | Art direction is decided by the design lane's blind exploration, not a single hand-picked style. <!-- src: ADR-1308 -->|
-| 1309 | The browser application's stack is Vite, React and TypeScript. <!-- src: initiatives/face/PLAN.md -->|
-| 1310 | Three data modes — live, replay and simulated — are always visible in the surrounding chrome, never hidden. <!-- src: ADR-1310 -->|
-| 1311 | The Coverage map is the v1 contract, asserted by `face-coverage`, which fails from birth. <!-- src: ADR-1311 -->|
-| 1312 | The surface binds to localhost with a per-session token, carries no PII, and escapes text at the serializer. <!-- src: ADR-1312 -->|
-| 1313 | Real, simulated, rehearsal, drill and exploratory states are never mixed together. <!-- src: ADR-1313 -->|
-| 1314 | v1 is single-tenant and local; a hosted, multi-tenant SaaS face is deferred to a later cycle. <!-- src: ADR-1314 -->|
-| 1315 | Voice input and output are optional, behind a setting, and deferred past v1 — revisited at the REQ-10 retro if the owner asks. <!-- src: ADR-1315 -->|
-| 1316 | L3 flips to living inside the main repository, because a brand-new repository would have no CI of its own. <!-- src: ADR-1316 -->|
+```lede
+A phase is finished only when the proof is on the table, and the office will not admit a room it
+cannot check.
+```
 
-| # | Decision |
-|---|---|
-| 1318 | The owner's own working reference is the canonical design; the earlier exploration rounds retire to the record. <!-- src: ADR-1318 -->|
-| 1319 | `face/` stays the one L3 home; no new surface is born outside `.claude/scripts/` this cycle. <!-- src: ADR-1319 -->|
-| 1320 | The module contract is four files — `module.mjs`, `fold.mjs`, `ops.mjs`, `View.tsx` — and no fifth. <!-- src: ADR-1320 -->|
-| 1321 | The registry is served; modules attach to it by id, and an orphan is checked for both ways. <!-- src: ADR-1321 -->|
-| 1322 | The council room renders `--accent-dim`; the violet family stays reserved for the non-real class alone. <!-- src: ADR-1322 -->|
-| 1323 | Tailwind v4 enters L3, and stops there. <!-- src: ADR-1323 -->|
-| 1324 | No snapshot of facts is bundled inside the product's own code. <!-- src: ADR-1324 -->|
-| 1325 | The brain keeps its existing contract: no provider key in the browser, and no `approve`/`reject` in its action vocabulary. <!-- src: ADR-1325 -->|
-| 1326 | The WORK door is two-phase and has no logic of its own; the SESSION door only ever starts `arc-run --driver`. <!-- src: ADR-1326 -->|
-| 1327 | The four extra rooms from the reference that the served registry does not carry — `factory`, `executor`, `agents`, `story` — are kept as modules, each exempted from `face-coverage` by name. <!-- src: ADR-1327 -->|
-| 1328 | The three planned rooms stay dotted, and every write inside them says REHEARSAL. <!-- src: ADR-1328 -->|
-| 1329 | The first cycle closes before this one opens; its usage requirement is carried forward rather than force-closed, at a two-day bar. <!-- src: ADR-1329 -->|
-| 1330 | The reference's own verification harness is ported rather than reinvented from scratch. <!-- src: ADR-1330 -->|
-| 1331 | The light mood ships with the dark, not after it — light is never deferred to a later batch. <!-- src: ADR-1331 -->|
+The lane is built room by room and door by door. Two checks run on every module: `face-pure` (the
+deciding part must run with no browser at all) and `face-coverage` (no orphan room, no blank served
+room). `/arc-face-module` builds a new module already passing both. A phase closes only through
+`/arc-phase-done`, with the tests green on CI, a live look, and the tracker updated.
 
-| # | Decision |
-|---|---|
-| 1332 | This cycle's tracker starts counting at phase zero again, and the first cycle's tracker and evidence move into the lane's own archive. <!-- src: ADR-1332 -->|
-| 1333 | The REQ set is reshaped so every REQ closes in one phase, and the session door earns its own REQ. <!-- src: ADR-1333 -->|
-| 1334 | Ported flow assertions bind to real receipts read from the door; an op with no existing kind does not ship. <!-- src: ADR-1334 -->|
-| 1335 | The browser harness runs from bats on every CI leg that can build L3; Node 18 is a named, counted skip. <!-- src: ADR-1335 -->|
-| 1336 | The very first phase is the harness itself, proved before any token or module work begins. <!-- src: ADR-1336 -->|
-| 1337 | Two of the reference's extra rooms earn a real registry row; two others stay labelled exemptions, by the owner's own ruling. <!-- src: ADR-1337 -->|
-| 1338 | A later phase's leftover gaps are named and filed, not squeezed under an arbitrary cap. <!-- src: ADR-1338 -->|
-| 1339 | The owner widens the work door to every verb in the design, not only a small flagship set. <!-- src: ADR-1339 -->|
-| 1340 | The kernel ring's rooms reach past the spine for real effects, write file changes only through proposal branches, and wire evolve's `measure` and `conclude` to the spine. <!-- src: ADR-1340 -->|
-| 1341 | The factory ring works against the owner's own working state and the company's law files, and two of its verbs only ask. <!-- src: ADR-1341 -->|
-| 1342 | The money ring records revenue by the owner's hand, treats a kill decision as a question, and treats a new venture as a proposal branch. <!-- src: ADR-1342 -->|
-| 1343 | The company ring treats a lane's status as a header edit and a glossary word as a contract edit. <!-- src: ADR-1343 -->|
-| 1344 | A send from the face is bound to the plan that produced it, and a full-read gate reaches the existing approval inbox. <!-- src: ADR-1344 -->|
-| 1345 | The session door is driver-only, starts only from a click, keeps no state of its own, and settles how a council's call lands on the spine. <!-- src: ADR-1345 -->|
-| 1346 | The Reference room's route returns the wiki's build-time extract and the owner-accepted narrative — nothing live, no spine read, no state-file read. <!-- src: ADR-1346 -->|
-| 1347 | The Reference room is widened to explain every product and lane in plain words, adding five and a half days to its phase. <!-- src: ADR-1347 -->|
+## A visit, as a story
 
-The Reference room's verification method — every explained fact anchored to a real source, checked by an independent-family verifier, and read by the owner before it ships — is recorded as ADR-1513, whose own header names it a decision of product `docs`, and ADR-1347 records that Phase 07 verifies its drafts with that method. <!-- src: ADR-1513; ADR-1347 -->
+```loop
+top: 1 | the owner
+top: 5 | the logbook
+stage: 1 · Decision waits | shows in the inbox room
+stage: 2 · The owner reads it | the room shows facts from the read door
+stage: 3 · The owner answers | approve or reject, with a reason
+stage*: 4 · Work door runs it | the same tool as by hand
+stage!: 5 · A receipt lands | the room reads it back
+labels: opened, read, pressed, recorded
+back: last -> 1 | the next decision shows up
+caption: Figure 2 — one decision made in the face. | The receipt is the proof it really happened.
+```
 
-## Where it stands now
+1. A decision is waiting in the inbox room.
+2. The owner opens it and reads the facts on the screen.
+3. He presses approve or reject and gives a reason.
+4. The work door calls the real tool.
+5. A receipt is written on the logbook, and the room shows it.
 
-The tracker reads status live, on phase 07, having burned ten of its twenty-nine and a half day
-appetite. <!-- src: fact:lanes/face.status; fact:lanes/face.phase; fact:lanes/face.burn; fact:lanes/face.appetite -->
+*This story is an illustration of how a visit runs. It is not a real record.*
 
-Phase 06's closing approval was stamped by the owner, and Phase 07 was next; a separately tracked bug has three writers of identical content racing to write one loose git object at once on Windows, which intermittently fails with `Permission denied` when Windows refuses the second writer's open, over the proposal-branch race check. <!-- src: initiatives/face/PROGRESS.md -->
+## Where it stands
 
-## The bigger loop
+The tracker (`initiatives/face/PROGRESS.md`) holds the live numbers in the generated sections. In
+words: the look, the rooms, the read door, the work door and the session door are each built and
+closed through Phase 06.
 
-### What went wrong and what was learned
+Phase 07 is now the work in hand. It puts arc's own docs wiki inside the face as a Reference room, with
+a Reference link from every room. The pages there follow a new page shape. Their explanations are
+checked by `narrative-anchors`, which fails when a named path, command or decision does not exist, and
+each page waits for the owner to read and accept it (the `narrative-verify` harness is advisory). The owner has read one sample page (the qa
+product page) and said it is good. The other pages come after that.
 
-At composition, arc-face's own pack flagged `1,386` as the mistaken one; when judging came, 2 of 3 jurors credited the item they preferred with an amendment the pack never granted, calling it decisive, though every item rendered `1,386` too. The pack is locked when composition ends: correcting it afterward calls for telling the jury what shifted, or remaking every item so it stays matching. <!-- src: docs/retro-log.md#confound -->
+What is next: finish the Reference room, then Phase 08, the dogfood. Dogfood means the owner runs the
+company's real decisions through the face on two real days, to prove it can be operated.
 
-A completeness law at arc-face treated `{}`, `homes: []` and `homes: ["ghost-room"]` alike: it wanted only keys, never their worth, so a room id can vanish or be duplicated while length stays 32. Its own remedy was to remake it, so the corruption remained, lasting and green. Every id resolves to a genuine target, not merely a tally of keys. <!-- src: docs/retro-log.md#ghost-room -->
+## How it connects to the rest of arc
 
-A design fixture asserted `approval.requested 49`, `decision.recorded 41` and 'the only two' open — three numbers that could not all be true — and nobody noticed until a reader derived the real figures through the sanctioned API and got 55/42/13, which closes; the lesson was that a quoted number drifts and eventually contradicts itself, while a derived one reconciles by construction, so a figure should be derived through the owning reader at the moment it is written down. <!-- src: docs/retro-log.md#reader-authority -->
+- **The logbook.** Everything the face changes lands as a receipt on the same logbook as the rest of arc.
+- **The docs lane.** The Reference room reads the docs wiki's own extract, and the page rules come from
+  ADR-1514 and ADR-1347.
+- **Every other lane.** A new lane or product gets a room through the birth rule, and a gap the face
+  cannot close is filed to the lane that owns it.
 
-A completeness law's own roster aimed at what it wanted to see: 'all covered' was its reply, though 9 arc areas stood unseen to it — a 265-ADR pile, ship-gates, scheduled-jobs, ventures, plans, phase-specs, CI, installed-capabilities, and a unit listed in two places but raised by 0 of them — 11 inventories in all, every one just a contract-key, so growth beyond the contract-key had no way to land as a finding. The fix: compute the roster from disk, not from the law's own memory. <!-- src: docs/retro-log.md#derivation -->
-
-A collector and its readers had a join that was disconnected: a selftest mutated what `gather()` yielded, and a crew ran the readers directly, so stubbing one in `gather` gives '0 plans ... all covered.' One arm has to cross that join: run the piece on its own, and see its own yield equals what the collector gives. <!-- src: docs/retro-log.md#stubbing -->
-
-9 stages got raised in one go, wrapping up only 1 of them with `/arc-phase-done`. Others sat unpicked for weeks, because a spare checkout can't send confirmations. <!-- src: docs/retro-log.md#phase-close -->
-
-The usage requirement sat at the end and only got to day 1 of 5: the face worked end to end in one go, yet the person chose things via the CLI, with 6 decisions going into the face and 54 that did not tally that way. The fix: tally from the day the earliest usable piece merges, not after every stage is raised. <!-- src: docs/retro-log.md#usage -->
-
-### How it connects to the rest of arc
-
-Every room reads only through the one pathway to arc's truth — lane files (contracts and lint parsers), the spine, and real CLIs and emitters — the way the architecture diagram depicts it; a module that cannot yet reach a fact through that pathway renders NOT SERVED instead of inventing one. <!-- src: initiatives/face/PLAN.md#emitters; ADR-1324 -->
-
-The work door never carries logic of its own: every operation a room offers shells out to the exact
-same script a person would type by hand, so the face can add a new capability only by reaching into
-another lane's own tools, never by growing a shadow copy of them. <!-- src: ADR-1326 -->
-
-The Reference room reads the documentation wiki's own build-time extract and nothing else (ADR-1346); once a narrative page is anchored and verified, it merges to main and the room can then show it, the same way it shows every other product's and lane's explanation (ADR-1513). <!-- src: ADR-1346; ADR-1513 -->
+# Meta
 
 ## Glossary
 
-- **module** — a folder of four parts: manifest, pure fold, verbs and view. <!-- src: initiatives/face/PLAN.md -->
-- **ring** — a grouping of the 36 modules — command, kernel, factory, money and company — each ring shipped as its own pull request. <!-- src: initiatives/face/PLAN.md; initiatives/face/PROGRESS.md -->
-- **mood** — dark or light, the two colour moods every room ships in together. <!-- src: ADR-1331 -->
-- **the work door** — the plan-then-apply path that runs a real company tool with no logic of its
-  own. <!-- src: ADR-1326 -->
-- **the session door** — the path that starts a real run only via `arc-run --driver`, never a harness binary, spent by a single click, and credited only by arc-run's own named line. <!-- src: ADR-1326; ADR-1345 -->
-- **birth rule** — the rule that a new part of arc gets a working room by adding one folder. <!-- src: initiatives/face/PLAN.md; ADR-1306 -->
-- **residue** — a named, owner-approved gap filed to the lane that owns its fix. <!-- src: ADR-1338 -->
-- **dogfood** — the requirement that the owner's own real decisions and work actually pass through
-  the face, not merely that it renders. <!-- src: ADR-1329 -->
+```gloss
+mood: dark or light. Both are checked for every room.
+ring: a group of rooms, built and merged together.
+dogfood: using the product for real. Here, two real days of decisions made through the face.
+face-pure: the check that a module's decisions run with plain node and no browser.
+face-coverage: the check that every module and every served room has its partner.
+```

@@ -1,0 +1,32 @@
+# Pricing strategist -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'pricing-strategist'
+title: 'Pricing strategist'
+dept: 'c-research'
+mission: 'Owns the Pricing strategist job in Research & Strategy.'
+stages:
+  - 'discover'
+  - 'validate'
+seat: 'human'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts: []
+  process: null
+  tier: null
+reports_to: 'human:ashiq'
+escalate_to: 'human:ashiq'
+e2:
+  - 'changing prices'
+produces:
+  kind: 'pricing-strategist-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+ventures: []
+kpi: 'pending'
+autonomy_ceiling: 'L1'
+history: []

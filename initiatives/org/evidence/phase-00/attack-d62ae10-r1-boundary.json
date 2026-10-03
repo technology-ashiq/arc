@@ -1,0 +1,70 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/org/lib/card.mjs:41 (ID_RE, KIND_ID_RE) and .claude/scripts/org/org-catalog.mjs:97 (draft path build)",
+      "breaking_input": "A seed row or hand-written card with id `aux`, `nul`, `con`, `prn`, `com1` or `lpt1`. All match ^[a-z][a-z0-9-]{1,63}$. `org-catalog --draft` then writes `org/roles/<dept>/nul.role.yaml`. Venture slugs use the same ID_RE for `org/teams/<venture>.team.yaml`.",
+      "why": "Windows treats these names as device files even with an extension. On the Windows leg the write goes to the device or fails, and existsSync/readdirSync disagree with what was written. lanes.md already bans these names for lanes because they break mkdir on exactly one CI leg. The card grammar reuses the id shape without that exclusion.",
+      "fix": "Reject /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i in ID_RE validation for role ids and venture slugs. Apply the same check to the seed row id in draft().",
+      "twin_of": "none (the Windows reserved device name rule from .claude/rules/lanes.md)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-catalog.mjs:159-186 (chart, digest)",
+      "breaking_input": "Corrupt one card so the yaml subset fails to parse (a tab indent, or a `- 'a: b'` history item that turns the parent into an object). Run `org-catalog --digest`. Separately, make a card parse to a scalar or omit `dept`, then run `--chart` (write mode).",
+      "why": "collect() drops unparseable cards from w.cards and records the failure only in w.errors. `--digest` never reads w.errors and never runs check(), so it prints a digest over the catalog minus the broken card and exits 0. That is the value the owner approves at genesis. `--chart` also ignores errors and exits 0, or crashes with a stack trace on `a.dept.localeCompare` or `c.binds` for a non-object card. This is a validate-one-read, use-another gap: the gate sees the card as broken and the digest and chart do not.",
+      "fix": "In digest() and chart() (write mode), run check(w) first. Refuse with exit 1 and print the findings when w.errors is non-empty or any card fails validateCard. Guard chartModel against non-object cards."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-catalog.mjs:95-106 (draft) and :47 (agentTier)",
+      "breaking_input": "Seed row `{id: '../../../.claude/hooks/x', dept: 'a-board', ...}`. Or a seed row whose agents entry is `../../secret`. Or a pre-existing dangling symlink at org/roles/<dept>/<id>.role.yaml.",
+      "why": "row.dept is validated against DEPTS but row.id and agent stems are not. join() normalises `..`, so draft writes outside org/roles, and agentTier reads arbitrary .md files. existsSync returns false for a dangling symlink, so writeFileSync follows the link and writes to its target. The exists-then-write pair is also a TOCTOU race that can overwrite a hand-edited card, which contradicts the never-overwrite promise.",
+      "fix": "Validate row.id against ID_RE and every agent stem against a kebab regex before use. Write with `{flag: 'wx'}` and treat EEXIST as kept instead of pre-checking with existsSync."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-catalog.mjs:157-165 (readOr compare) and tests/org-chart.bats, tests/org-card.bats (sed/grep anchors)",
+      "breaking_input": "Windows CI leg where actions/checkout applies core.autocrlf=true and .gitattributes does not pin `eol=lf` for org/**. org/CHART.md and org/chart.json are checked out with CRLF, and the card files as well.",
+      "why": "`--chart --check` compares the raw file text to a string built with \\n, so it reports STALE org/CHART.md on the Windows leg only. The bats mutants use `sed 's/^  tier: ...$/'` and `grep \"^seat: 'vacant'$\"`, and `$` does not match before a \\r. The mutant helper then fails with `sed changed nothing`, and the vacant count reads 0. The result is green locally and red on one CI leg.",
+      "fix": "Add `org/** text eol=lf` to .gitattributes. Normalise \\r\\n to \\n on both sides in readOr, and make the sed/grep anchors tolerate an optional \\r."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/org/lib/emit.mjs:55-58",
+      "breaking_input": "`emitYaml({history: ['Note:']})` or an item like 'see:\\tfoo'. The guard is /: /, which requires a space after the colon.",
+      "why": "The guard exists because the subset parser splits quoted list items on its own key/value predicate, and the emitter copies that predicate from one observed case. A trailing colon or a colon followed by a tab is written as `- 'Note:'`. If the parser's predicate is `:` followed by whitespace or end of line, the item is read back as a mapping and the round trip breaks silently. This is the same defect as the ADR-0200 misread, in an adjacent input shape.",
+      "fix": "Refuse any list item matching /:(\\s|$)/. Better, add a parse(emit(x)) == x assertion inside emitYaml itself so the guard is derived from the parser's real behaviour."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-catalog.mjs:90-106 (draft loop)",
+      "breaking_input": "A seed whose 40th row has an unknown dept, or an emitYaml throw on a `: ` history item. Also a seed with the same id twice.",
+      "why": "Validation happens row by row while files are being written. Rows 1-39 are already on disk when row 40 throws, and the process exits 2 with a half-drafted catalog. A duplicate id in the same dept is silently counted as `kept` because the first row's file now exists.",
+      "fix": "Validate every row and build every card in memory first, and detect duplicate ids. Write only if all rows pass."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-coverage.mjs:main tail and .claude/scripts/org/org-catalog.mjs:main tail",
+      "breaking_input": "`node org-coverage.mjs | head -1` or a captured pipe on the Windows leg, with dozens of FAIL lines printed.",
+      "why": "`main().then(c => process.exit(c))` calls exit right after a burst of console.log calls. Buffered pipe output can be cut off, and EPIPE from a reader that closed early is an unhandled error. The last summary line, which the bats tests match on, can be lost.",
+      "fix": "Set process.exitCode = c and return. If a hard exit is needed, exit inside a write callback, and ignore EPIPE on stdout."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-coverage.mjs:210-215 (mutantSelftest) and buildScratch",
+      "breaking_input": "cpSync throws partway through buildScratch (disk full, a locked file on Windows), or the user presses Ctrl-C mid-run.",
+      "why": "buildScratch runs before the try/finally that removes the scratch tree, so a failure inside it leaks org-selftest-<pid>-* in tmpdir. There is no signal handler, so an interrupt leaks the tree as well. Each leaked tree holds a full copy of .claude/agents, .claude/skills and processes/, and repeated CI or dev runs accumulate them.",
+      "fix": "Create the scratch directory first and put buildScratch inside the try/finally. Register a SIGINT handler that removes the scratch tree."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+# Knowledge manager -- role card (org, ADR-1601). Binds; never rewrites an agent file.
+# Edit by hand; org-catalog --draft never overwrites an existing card.
+id: 'knowledge-manager'
+title: 'Knowledge manager'
+dept: 'b-ceo-office'
+mission: 'Return what the company already learned whenever a new piece of work starts.'
+stages:
+  - 'discover'
+  - 'validate'
+  - 'build'
+  - 'launch'
+  - 'grow'
+  - 'sell'
+  - 'support'
+  - 'operate'
+seat: 'script'
+origin: 'own'
+hire: null
+binds:
+  agents: []
+  skills: []
+  scripts:
+    - '.claude/scripts/memory/arc-recall.mjs'
+  process: null
+  tier: null
+reports_to: 'ceo'
+escalate_to: 'ceo'
+e2: []
+produces:
+  kind: 'knowledge-manager-output'
+  schema: 'pending'
+  receipt: 'handoff.ready'
+consumes: []
+fixtures: 'pending'
+legitimacy: 'genesis'
+ventures: []
+kpi:
+  - name: 'runs'
+    over: 'run.completed'
+    via: 'attribution-map'
+autonomy_ceiling: 'L1'
+review_by: '2026-10-29'
+history: []

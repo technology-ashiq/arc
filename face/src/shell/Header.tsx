@@ -10,7 +10,7 @@
 //     non-real family's, never green (green is real money's alone);
 //   - the inbox chip counts what the door's inbox holds open and opens the room that homes
 //     `approval.requested`; a read that failed says so instead of claiming inbox zero.
-import { MoonStars, SunDim, Tray } from '@phosphor-icons/react'
+import { GearSix, MoonStars, SunDim, Tray } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import type { Room } from '../lib/rooms.mjs'
 import { moodToggleLabel } from '../lib/mood.mjs'
@@ -23,16 +23,20 @@ import { HEAD_H } from './Rail'
 type Group = { ring: string; rooms: Room[] }
 
 export default function Header({
-  room, mode, inbox, onOpen, mood, onToggleMood, asOf, today, asOfSupported, onAsOf, groups, current, reference, onReference,
+  room, mode, inbox, onOpen, onExit, mood, onToggleMood, asOf, today, asOfSupported, onAsOf, groups, current, reference, onReference, onSettings,
 }: {
   room: Room | null
   mode: { label: string; tone: 'live' | 'sim' | 'unknown'; dot: string; title: string }
   inbox: { open: number | null; room: string | null }
   onOpen: (id: string) => void
+  /** back to the front door: the brand, below `lg` where the rail is hidden (v0.7) */
+  onExit: () => void
   reference: { at: string | null; served: boolean }
   onReference: (at: string) => void
   mood: Mood
   onToggleMood: () => void
+  /** HQ's settings: the models the face answers with, and voice (Phase 10, ADR-1350) -- configured here, never on the ask bar */
+  onSettings: () => void
   asOf: string | null
   today: string | null
   asOfSupported: boolean
@@ -50,10 +54,10 @@ export default function Header({
       <header className="fixed top-0 right-0 left-0 lg:left-[240px] z-40" style={{ background: 'color-mix(in srgb, var(--bg-1) 88%, transparent)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid var(--line-1)' }}>
         <div className="flex items-center justify-between gap-3 px-4 sm:px-6" style={{ height: HEAD_H }}>
           <div className="flex items-center gap-3 min-w-0">
-            <span className="lg:hidden flex items-center gap-2 h-[32px]">
+            <button type="button" data-exit-hq onClick={onExit} className="lg:hidden flex items-center gap-2 cursor-pointer h-[32px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)" title="Back to the face">
               <span className="text-[18px] leading-none tracking-tight" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-1)' }}>arc</span>
               <span className="text-[10px] uppercase tracking-[0.08em] h-[18px] px-1.5 inline-flex items-center rounded" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.1)' }}>HQ</span>
-            </span>
+            </button>
             {room ? (
               <span className="hidden lg:flex items-baseline gap-2 min-w-0">
                 <span className="text-[13.5px] truncate" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{room.name}</span>
@@ -84,6 +88,17 @@ export default function Header({
               <Tray size={14} weight={chip.isWaiting ? 'fill' : 'regular'} aria-hidden="true" />
               {chip.label}
             </BarChip>
+            <button
+              type="button"
+              data-hq-settings
+              onClick={onSettings}
+              title="Settings: models and voice"
+              aria-label="Settings: models and voice"
+              className="inline-flex items-center justify-center w-[30px] h-[30px] cursor-pointer transition-colors duration-200 hover:bg-(--bg-3) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)"
+              style={{ border: '1px solid var(--line-2)', borderRadius: 'var(--r-md)', color: 'var(--text-2)' }}
+            >
+              <GearSix size={16} aria-hidden="true" />
+            </button>
             <button
               type="button"
               onClick={onToggleMood}
