@@ -238,7 +238,7 @@
 .claude/scripts/hq/arc-dash.mjs	198a53b681fdb5ec0c722e907bad3f68bbca056c4835223222776fe46af726d2
 .claude/scripts/hq/arc-event.mjs	a1f8353efe971fa13dec4664d998ff33b7fffdce0e4e9850a12d6c26834cea05
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
-.claude/scripts/hq/arc-face.mjs	00b09e6fa03156cdadc04870216c34b037f4ea90e4a938ad7d89de839b9aec19
+.claude/scripts/hq/arc-face.mjs	a5d3428c0faa315838e3b80c678b02a9a7517c65d34c00ad30007bdd53681284
 .claude/scripts/hq/arc-inbox.mjs	01f21635127f522378a2a04ceaf60e7c5c690db9d0e8a4ca4fdb1b411b588aa5
 .claude/scripts/hq/arc-jobs.mjs	d6e9c51919bb603d78a67cb399cfcbcebc5314d1dce080a253973f80ee69ae0a
 .claude/scripts/hq/arc-jobs.sh	ac0dd934e1c6959f512e283d9411382a29bd3671bc4542ba05b74371d204323b
@@ -255,7 +255,7 @@
 .claude/scripts/hq/ledger-ingest.mjs	196cc1111fc71162fabaea4cb5ebacaef4d7d2e6e00eb99122112bf56ddf1661
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
-.claude/scripts/hq/lib/face/models.mjs	b0b90c7712ba87aae767e2d47be13d1582a08af2cecaa6d459c259988cc5ca23
+.claude/scripts/hq/lib/face/models.mjs	faa4639dd6a3386882eb39d7589f57c23fde8bc6b738be8bd01a640c8612e2aa
 .claude/scripts/hq/lib/face/reads.mjs	dd206a37132509c754eb89ccc34f7eae2d09dcb228954ff233f66b9c332c6241
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	f1e95bbda2066ca6b6172fa020745b407d740919db08aeab32ebf754c64e608f
