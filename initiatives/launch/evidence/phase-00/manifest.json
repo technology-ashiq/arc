@@ -1,0 +1,36 @@
+{
+  "phase": "00",
+  "commit": "9827782d0a06f75027c43e4fc06f8317b6bcdc44",
+  "short": "9827782d",
+  "generated": "2026-10-03T19:41:42Z",
+  "files": [
+    {
+      "name": "attack-05704b3-r2-logic.json",
+      "sha256": "bc2bc37d987e256a8a277ffbbe524b498c95130d3b04f0274c65e697faa6beaf"
+    },
+    {
+      "name": "attack-06cbc03-r1-boundary.json",
+      "sha256": "54f8d16b53e3b2998900edea16703a956fe59f0d973688542292ad0b8fb62bef"
+    },
+    {
+      "name": "attack-06cbc03-r1-logic.json",
+      "sha256": "dd2f913ea846b3aee813c5d01860627685aa5a8f287f9ba119e501afd423c6ca"
+    },
+    {
+      "name": "attack-3b48ed1-r1-boundary.json",
+      "sha256": "f024d44a1f21075855241321ef89caa38b4ac395b4f2b48c310e61cb3fcbcd25"
+    },
+    {
+      "name": "demo-transcript.txt",
+      "sha256": "5a65fa88033ca0018394c85fc3d407c531d149806e1e3245bf737e0706fd5df9"
+    },
+    {
+      "name": "lint-selftest-coverage.txt",
+      "sha256": "f09f5d831d2147929b190d5b9943edff6c5e196eb766228f212031c8b4c73db9"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "322e36aacba36e633ea13065a6661f05b56fdc0f1942464e2a8a7136980dd9e2"
+    }
+  ]
+}
