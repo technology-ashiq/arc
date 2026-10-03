@@ -159,7 +159,7 @@ const STATUS = Object.freeze({
   PHASES_OUTSIDE: 403,
   // Phase 10 (ADR-1350): a model change the registry refuses is the caller's to fix; a models file the door cannot
   // place or read is a precondition, never a silent empty list.
-  BAD_MODEL: 400, MODELS_UNAVAILABLE: 503, MODEL_FAILED: 502,
+  BAD_MODEL: 400, MODELS_UNAVAILABLE: 503, MODEL_FAILED: 502, TEST_BUSY: 429,
   DECISION_REFUSED: 502,
   // Phase 04 (REQ-06). A file a route parses that is not on this tree is a precondition, like REGISTRY_ABSENT; a
   // file the owning lane's parser refuses is unprocessable, not an internal fault; a lane module that will not load
@@ -872,6 +872,8 @@ function apiModelsChange(ctx, body) {
 // Each model's last test lives in this door's memory for as long as it runs: never on disk, and never a key (a result
 // is ok, seconds, a plain cause and a time). Keyed by the context, so two doors in one process never share results.
 const MODEL_TESTS = new WeakMap();
+/** Doors with a model test in flight (attack 8b23b40 B3). */
+const TESTS_RUNNING = new WeakSet();
 function testsOf(ctx) {
   let m = MODEL_TESTS.get(ctx);
   if (!m) { m = new Map(); MODEL_TESTS.set(ctx, m); }
@@ -893,24 +895,47 @@ async function apiModelsTest(ctx, body) {
   if (!hit) throw new DashError("BAD_MODEL", `no model is named ${JSON.stringify(body.name.slice(0, 80))}`);
   if (!existsSync(join(ctx.repo, "processes", "face-ask.process.yaml")))
     throw new DashError("MODELS_UNAVAILABLE", "the face-ask process is not on this tree, so no model can be tested here");
-
-  const started = nowMs();
-  const res = await runTool(ctx, {
-    script: "engine/arc-run.mjs",
-    args: ["--process", "face-ask", "--driver", "generic-api", "--owner-model", hit.model, "--input", JSON.stringify({ q: PROBE, state: `MODE: ${ctx.mode} (a model test, no arc state)` })],
-  }, {
-    timeoutMs: TEST_TIMEOUT_MS, outputCap: 256 * 1024,
-    env: { ARC_LLM_ENDPOINT: models.endpointOf(hit.baseUrl), ARC_LLM_API_KEY: hit.key ?? "none", ...(ctx.mode === "sim" ? { ARC_SPINE_ROOT: ctx.root } : {}) },
-  });
-  const seconds = Math.round((nowMs() - started) / 100) / 10;
-  const result = res.timedOut
-    ? { ok: false, seconds, why: `No answer within ${TEST_TIMEOUT_MS / 1000} s. The provider is overloaded or unreachable: try again later, or pick another model.` }
-    : res.exit !== 0
-      ? { ok: false, seconds, why: models.providerFault(redactKey(String(res.stderr ?? ""), hit.key)) }
-      : { ok: true, seconds, why: null };
-  const tests = testsOf(ctx);
-  tests.set(hit.name.toLowerCase(), { ...result, at: formatIst(nowMs()) });
-  return { mode: ctx.mode, tested: hit.name, ...result, ...models.withTests(models.publicView(got.reg), tests) };
+  // One test at a time per door: each one spends the owner's quota for up to a minute, and the face's own guard is
+  // only in the page (attack 8b23b40 B3). Claimed before the first await, so two requests cannot both pass.
+  if (TESTS_RUNNING.has(ctx)) throw new DashError("TEST_BUSY", "a model test is already running; wait for it to finish");
+  TESTS_RUNNING.add(ctx);
+  try {
+    const started = nowMs();
+    const res = await runTool(ctx, {
+      script: "engine/arc-run.mjs",
+      args: ["--process", "face-ask", "--driver", "generic-api", "--owner-model", hit.model, "--input", JSON.stringify({ q: PROBE, state: `MODE: ${ctx.mode} (a model test, no arc state)` })],
+    }, {
+      timeoutMs: TEST_TIMEOUT_MS, outputCap: 256 * 1024,
+      env: { ARC_LLM_ENDPOINT: models.endpointOf(hit.baseUrl), ARC_LLM_API_KEY: hit.key ?? "none", ...(ctx.mode === "sim" ? { ARC_SPINE_ROOT: ctx.root } : {}) },
+    });
+    const seconds = Math.round((nowMs() - started) / 100) / 10;
+    // A pass means exactly what a real answer needs: arc-run exited 0, the answer meets the face-ask contract, and its
+    // receipt is on the spine as THIS run's (attack 8b23b40 B1) -- the same judge apiAsk uses, never the exit code alone.
+    let result;
+    if (res.timedOut) result = { ok: false, seconds, why: `No answer within ${TEST_TIMEOUT_MS / 1000} s. The provider is overloaded or unreachable: try again later, or pick another model.` };
+    else if (res.exit !== 0) result = { ok: false, seconds, why: models.providerFault(redactKey(String(res.stderr ?? ""), hit.key)) };
+    else if (res.droppedOut) result = { ok: false, seconds, why: "The model answered far more than a one-word question needs. It may not follow instructions well: try another model." };
+    else {
+      let judged = null;
+      try { judged = judgeModelAnswer(res.stdout, res.stderr, await spineIds(ctx), { since: started, model: hit.model }); } catch { judged = null; }
+      result = !judged
+        ? { ok: false, seconds, why: "The model answered, but not in the shape arc needs, so its answers would be refused. Pick another model." }
+        : !judged.receipt
+          ? { ok: false, seconds, why: "The model answered, but arc could not record the answer's receipt, so it would not be shown. Start HQ with node .claude/scripts/hq/arc-face.mjs, or from Git Bash." }
+          : { ok: true, seconds, why: null };
+    }
+    // The registry is read AGAIN after the wait: the owner may have switched or removed a model while the test ran, and
+    // a stale view must not overwrite the newer one in the face (attack 8b23b40 B2). A result is kept only for a model
+    // that is still the same one -- same name, URL and model id.
+    const now = models.loadRegistry(ctx.repo);
+    if (!now.ok) throw new DashError("MODELS_UNAVAILABLE", now.why);
+    const still = models.findModel(now.reg, hit.name);
+    const tests = testsOf(ctx);
+    if (still && still.baseUrl === hit.baseUrl && still.model === hit.model) tests.set(hit.name.toLowerCase(), { ...result, at: formatIst(nowMs()) });
+    return { mode: ctx.mode, tested: hit.name, ...result, ...models.withTests(models.publicView(now.reg), tests) };
+  } finally {
+    TESTS_RUNNING.delete(ctx);
+  }
 }
 
 const ROUTES = Object.freeze([

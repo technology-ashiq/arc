@@ -335,8 +335,21 @@ try {
   check("T: a name not in the registry is refused (400 BAD_MODEL), and so is a body with another field (400 BAD_BODY), with no provider call",
     t.status === 400 && t.body.error === "BAD_MODEL" && t2.status === 400 && t2.body.error === "BAD_BODY" && llm.requests.length === n0,
     JSON.stringify([t.body, t2.body]).slice(0, 300));
-  r = await post("/api/models/set", { op: "remove", name: "Busy" });
-  r = r.status === 200 ? await post("/api/models/set", { op: "add", model: { name: "Busy", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/busy-model:free" } }) : r;
+  // Two tests at once: one runs, the other is refused by the door itself, not by the page (attack 8b23b40 B3).
+  const n1 = llm.requests.length;
+  const both = await Promise.all([post("/api/models/test", { name: "Fake" }), post("/api/models/test", { name: "Fake" })]);
+  const codes = both.map((x) => x.status).sort().join(",");
+  check("T: two tests at once -- one runs and one is refused 429 TEST_BUSY, so the provider is called once",
+    codes === "200,429" && both.some((x) => x.body.error === "TEST_BUSY") && llm.requests.length === n1 + 1, JSON.stringify({ codes, n: llm.requests.length - n1 }));
+  // A model removed while its test ran keeps no result, and the answer is the registry as it is NOW (attack 8b23b40 B2).
+  const racing = post("/api/models/test", { name: "Busy" });
+  const gone = await post("/api/models/set", { op: "remove", name: "Busy" });
+  const late = await racing;
+  check("T: a model removed while its test ran -- the test's answer is built from the registry after the run, with no row for it",
+    // Two connections race: if the remove lands before the test reads the registry, the test is refused by name instead.
+    gone.status === 200 && ((late.status === 200 && !(late.body.models ?? []).some((m) => m.name === "Busy") && late.body.active === "Fake") || (late.status === 400 && late.body.error === "BAD_MODEL")),
+    JSON.stringify({ gone: gone.status, late: late.status, models: (late.body.models ?? []).map((m) => m.name) }));
+  r = await post("/api/models/set", { op: "add", model: { name: "Busy", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/busy-model:free" } });
   check("T: a removed model's test is forgotten -- added again, it reads untested",
     r.status === 200 && ((r.body.models ?? []).find((m) => m.name === "Busy") ?? {}).lastTest === null, JSON.stringify(r.body.models).slice(0, 300));
   check("B: the planted key appears in NO door response (every body this suite read)", bodies.length >= 7 && bodies.every((b) => !b.includes(PLANTED)), `bodies=${bodies.length}`);
@@ -358,6 +371,6 @@ try {
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // Exact, not a floor (attack c50172d B8): a check deleted from this file is a short run, never a clean one.
-const EXPECTED = 82;
+const EXPECTED = 84;
 if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
 process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);
