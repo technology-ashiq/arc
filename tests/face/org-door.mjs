@@ -5,10 +5,10 @@
 //   C. REFUSED, NEVER HALF-DRAWN: a wrong-shaped chart refuses whole; an attribution map with findings (loadOrg returns
 //      those as DATA) refuses the scorecards by name; a producer set missing an export refuses PARSER_UNAVAILABLE.
 //   D. SCRUB SAYS WHAT IT DESTROYED: a role title carrying an absolute path is withheld AND listed in `scrubbed`.
-//   E. ONE COMPUTATION: two concurrent requests share one body; a query key is BAD_ARGS.
+//   E. ONE COMPUTATION: two concurrent requests share one body (keyed by mode too); a query key is BAD_ARGS.
 // The live door (token, Origin, GET-only) is held in tests/face/dash-doors.mjs.
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -26,7 +26,7 @@ const team = await imp(".claude/scripts/org/org-team.mjs");
 const teamLib = await imp(".claude/scripts/org/lib/team.mjs");
 const REAL = Object.freeze({
   collect: cov.collect, chartModel: cat.chartModel, loadOrg: rev.loadOrg, readSpine: rev.readSpine, verdictFor: rev.verdictFor,
-  placeAll: att.placeAll, scorecard: att.scorecard, isStaffed: card.isStaffed, readTeam: team.readTeam, validateTeam: teamLib.validateTeam,
+  placeAll: att.placeAll, scorecard: att.scorecard, isStaffed: card.isStaffed, isId: card.isId, readTeam: team.readTeam, validateTeam: teamLib.validateTeam,
 });
 
 let ran = 0, failed = 0;
@@ -89,6 +89,29 @@ try {
     check("C: a producer set without loadOrg as an own function is refused PARSER_UNAVAILABLE", missing !== null && missing.code === "PARSER_UNAVAILABLE" && missing.message.includes("loadOrg"), JSON.stringify(missing));
     const inherited = await refusal(() => R.orgBody(REPO, spine, { producers: Object.assign(Object.create({ loadOrg: rev.loadOrg }), lacking) }));
     check("C: an INHERITED loadOrg is not an export (own-member check)", inherited !== null && inherited.code === "PARSER_UNAVAILABLE", JSON.stringify(inherited));
+    // Attack r1 B3: a part that THROWS refuses that part only; the chart is still served.
+    const boom = () => { const e = new Error(`bad line in ${REPO}`); /** @type {any} */ (e).code = "EBADLINE"; throw e; };
+    const spineThrows = await R.orgBody(REPO, spine, { producers: { ...REAL, readSpine: async () => boom() } });
+    check("C: a readSpine that throws refuses the scorecards by code, path-free, and serves the chart",
+      spineThrows.scorecards.state === "refused" && spineThrows.scorecards.human.includes("EBADLINE") && !spineThrows.scorecards.human.includes(REPO) && spineThrows.chart.counts.roles >= 50,
+      JSON.stringify(spineThrows.scorecards).slice(0, 160));
+    const offRepo = { collect: async () => REAL.collect(REPO), loadOrg: async () => rev.loadOrg(REPO) };
+    const grepo = join(tmp, "good-team-repo");
+    mkdirSync(join(grepo, "org", "teams"), { recursive: true });
+    writeFileSync(join(grepo, "org", "teams", "acme.team.yaml"), "venture: acme\n");
+    const teamThrows = await R.orgBody(grepo, spine, { producers: { ...REAL, ...offRepo, readTeam: () => ({ doc: {} }), validateTeam: () => boom() } });
+    check("C: a teams part that throws is refused with a path-free why and the chart is still served",
+      teamThrows.teams.state === "refused" && teamThrows.teams.why.includes("EBADLINE") && !teamThrows.teams.why.includes(REPO) && teamThrows.chart.counts.roles >= 50,
+      JSON.stringify(teamThrows.teams).slice(0, 160));
+    // Attack r1 B1/B2: a team listing is opened only for a regular file with a slug stem.
+    const trepo = join(tmp, "teams-repo");
+    mkdirSync(join(trepo, "org", "teams", "evil.team.yaml"), { recursive: true });
+    writeFileSync(join(trepo, "org", "teams", "con.team.yaml"), "venture: con\n");
+    const opened = [];
+    const tb = await R.orgBody(trepo, spine, { producers: { ...REAL, ...offRepo, readTeam: (_r, stem) => { opened.push(stem); return { error: "stub" }; } } });
+    check("C: a device-named team file and a directory named *.team.yaml are listed as not read, never opened",
+      opened.length === 0 && tb.teams.rows.length === 2 && tb.teams.rows.every((r) => !r.valid && r.findings[0].includes("is not read")),
+      JSON.stringify({ opened, rows: tb.teams.rows }).slice(0, 200));
   }
 
   // ---- D. the scrub says what it destroyed ----
@@ -112,6 +135,9 @@ try {
     const ctx = { mode: "sim", repo: REPO, root: spine };
     const [a, b] = await Promise.all([R.apiOrg(ctx, new URL("http://door/api/org")), R.apiOrg(ctx, new URL("http://door/api/org"))]);
     check("E: two concurrent requests are answered from one body, not two", a.route === "/api/org" && a.chart === b.chart && a.chart.counts.roles >= 50);
+    // Attack r1 B4: the single flight is keyed by mode too -- a live and a sim request never share one body.
+    const [s1, l1] = await Promise.all([R.apiOrg(ctx, new URL("http://door/api/org")), R.apiOrg({ ...ctx, mode: "live" }, new URL("http://door/api/org"))]);
+    check("E: a sim and a live request over the same repo and spine are two computations", s1.chart !== l1.chart && s1.chart.counts.roles === l1.chart.counts.roles);
     const q = await refusal(() => R.apiOrg(ctx, new URL("http://door/api/org?role=qa-tester")));
     check("E: a query key is BAD_ARGS", q !== null && q.code === "BAD_ARGS", JSON.stringify(q));
   }

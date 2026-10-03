@@ -256,7 +256,7 @@
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
 .claude/scripts/hq/lib/face/models.mjs	b0b90c7712ba87aae767e2d47be13d1582a08af2cecaa6d459c259988cc5ca23
-.claude/scripts/hq/lib/face/org/route.mjs	033a74506b7131b3b1bf05cd1111063d3b57f0fb4fd012190f60bcdc33096035
+.claude/scripts/hq/lib/face/org/route.mjs	0c108cc66608a4a4265194415597d9ec46f7ad12b54960f01fda1d717d87416b
 .claude/scripts/hq/lib/face/reads.mjs	dd206a37132509c754eb89ccc34f7eae2d09dcb228954ff233f66b9c332c6241
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	f1e95bbda2066ca6b6172fa020745b407d740919db08aeab32ebf754c64e608f
