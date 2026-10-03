@@ -2,12 +2,13 @@
 // slot's timeout (a real process kill, not a timer the adapter can ignore), then writes the receipt. The child
 // persists state as it goes, so a kill at any point leaves what was created on the record for the next attempt.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { join, resolve, dirname, relative, isAbsolute, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { ROOT, PATHS, LaunchError, loadCatalog, loadRegistry, loadProfile, resolveBoard } from "./catalog.mjs";
 import { adapterDigest } from "./scan.mjs";
+import { clean } from "./board.mjs";
 import { emptyState, loadState, saveState, slotRow, setSlot, receiptKey } from "./state.mjs";
 import { withLock, spineRoot, eventsDir } from "../../hq/lib/spine-io.mjs";
 
@@ -71,6 +72,38 @@ export function pickProvider(rows, slotId, profile, providerId, vet) {
   return vetted[0];
 }
 
+// The venture root is ctx.write's whole boundary, and arc's repo is public: a root that is arc itself, inside it,
+// or above it would put venture code where ADR-1722 says it never goes (attack 3b48ed1 B9). ONE function, called
+// by every verb that runs an adapter -- verify re-implemented half of it and left the rest open (attack 405007a B2).
+export function checkVentureRoot(given) {
+  if (!given) throw new LaunchError("REFUSED", "--venture-root is required; launch never guesses where a venture's repo lives");
+  if (!existsSync(resolve(given))) throw new LaunchError("REFUSED", `--venture-root ${resolve(given)} does not exist`);
+  const ventureRoot = realpathSync(resolve(given));
+  const arcRoot = realpathSync(ROOT);
+  const rel = relative(arcRoot, ventureRoot);
+  const insideArc = rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  const up = relative(ventureRoot, arcRoot);
+  const aboveArc = up !== "" && !up.startsWith("..") && !isAbsolute(up);
+  if (insideArc || aboveArc || dirname(ventureRoot) === ventureRoot)
+    throw new LaunchError("REFUSED", `--venture-root ${ventureRoot} is ${insideArc ? "arc's own tree" : "an ancestor of arc's tree or a filesystem root"} -- a venture lives in its own repo (ADR-1722)`);
+  return ventureRoot;
+}
+
+// The row's adapter path is data: it may only name `<id>.mjs` under the providers tree, never climb out of it or
+// spell itself with backslashes that read differently per OS (attack 3b48ed1 B4), and a pinned digest must match.
+// Shared by apply and verify for the same reason as checkVentureRoot (attack 405007a B1).
+export function checkAdapter(P, prow) {
+  const adapterPath = resolve(dirname(P.registry), String(prow.adapter));
+  const inProviders = relative(P.providersDir, adapterPath);
+  if (/\\|(^|\/)\.\.(\/|$)/.test(String(prow.adapter)) || inProviders.startsWith("..") || isAbsolute(inProviders) || basename(adapterPath) !== `${prow.id}.mjs`)
+    throw new LaunchError("REFUSED", `${prow.id}'s adapter path ${prow.adapter} is not <id>.mjs inside the providers tree`);
+  if (!existsSync(adapterPath)) throw new LaunchError("REFUSED", `candidate-unbuilt: ${prow.id}'s adapter ${prow.adapter} does not exist yet`);
+  if (prow.status === "vetted" && !prow.digest) throw new LaunchError("REFUSED", `${prow.id} is vetted with no digest -- the registry is wrong (launch-lint)`);
+  if (prow.digest && adapterDigest(adapterPath) !== prow.digest)
+    throw new LaunchError("DIGEST_DRIFT", `${prow.id}'s adapter changed since it was vetted (digest drift) -- the row reads as candidate until the owner re-vets it`);
+  return adapterPath;
+}
+
 export async function apply(opts, log = console.log) {
   const P = resolvePaths(opts);
   const slug = opts.venture;
@@ -79,16 +112,7 @@ export async function apply(opts, log = console.log) {
     const rows = loadRegistry(P.registry);
     const profile = loadProfile(slug, P.venturesDir);
     if (!opts.ventureRoot) throw new LaunchError("REFUSED", "--venture-root is required; launch never guesses where a venture's repo lives");
-    if (!existsSync(resolve(opts.ventureRoot))) throw new LaunchError("REFUSED", `--venture-root ${resolve(opts.ventureRoot)} does not exist`);
-    const ventureRoot = realpathSync(resolve(opts.ventureRoot));
-    // The venture root is ctx.write's whole boundary, and arc's repo is public: a root that is arc itself, inside it,
-    // or above it would put venture code where ADR-1722 says it never goes (attack 3b48ed1 B9).
-    const arcRoot = realpathSync(ROOT);
-    const rel = relative(arcRoot, ventureRoot);
-    const insideArc = rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-    const aboveArc = (() => { const up = relative(ventureRoot, arcRoot); return up !== "" && !up.startsWith("..") && !isAbsolute(up); })();
-    if (insideArc || aboveArc || dirname(ventureRoot) === ventureRoot)
-      throw new LaunchError("REFUSED", `--venture-root ${ventureRoot} is ${insideArc ? "arc's own tree" : "an ancestor of arc's tree or a filesystem root"} -- a venture lives in its own repo (ADR-1722)`);
+    const ventureRoot = checkVentureRoot(opts.ventureRoot);
     const board = resolveBoard(slots, profile);
     const entry = board.get(opts.slot);
     if (!entry) throw new LaunchError("REFUSED", `unknown slot ${opts.slot}`);
@@ -113,16 +137,7 @@ export async function apply(opts, log = console.log) {
     if (unmet.length) { log(`${slot.id}: waiting on ${unmet.join(", ")} (not verified, skipped or absent)`); return EXIT.DEPS; }
 
     const prow = pickProvider(rows, slot.id, profile, opts.provider, opts.vet);
-    const adapterPath = resolve(dirname(P.registry), prow.adapter);
-    // The row's adapter path is data: it may only name `<id>.mjs` under the providers tree, never climb out of it
-    // or spell itself with backslashes that read differently per OS (attack 3b48ed1 B4).
-    const inProviders = relative(P.providersDir, adapterPath);
-    if (/\\|(^|\/)\.\.(\/|$)/.test(String(prow.adapter)) || inProviders.startsWith("..") || isAbsolute(inProviders) || basename(adapterPath) !== `${prow.id}.mjs`)
-      throw new LaunchError("REFUSED", `${prow.id}'s adapter path ${prow.adapter} is not <id>.mjs inside the providers tree`);
-    if (!existsSync(adapterPath)) throw new LaunchError("REFUSED", `candidate-unbuilt: ${prow.id}'s adapter ${prow.adapter} does not exist yet`);
-    if (prow.status === "vetted" && !prow.digest) throw new LaunchError("REFUSED", `${prow.id} is vetted with no digest -- the registry is wrong (launch-lint)`);
-    if (prow.digest && adapterDigest(adapterPath) !== prow.digest)
-      throw new LaunchError("DIGEST_DRIFT", `${prow.id}'s adapter changed since it was vetted (digest drift) -- the row reads as candidate until the owner re-vets it`);
+    checkAdapter(P, prow);
 
     // Gates: rehearsal ventures exercise gate-1 and gate-3 through their refusal path only (ADR-1700, ADR-1720).
     if (slot.gate && slot.gate !== "none") {
@@ -233,6 +248,74 @@ function underLock(P, slug, fn, log) {
 
 function saveUnderLock(P, slug, mutate, profile, log) {
   return underLock(P, slug, () => saveState(P.stateDir, mutate(loadState(P.stateDir, slug) || emptyState(profile))), log);
+}
+
+// `verify` re-asks the outside world about slots that are already verified or applied, one at a time. Everything a
+// probe depends on -- the slot's state, its provider, its attempt, the adapter check -- is read INSIDE the venture
+// lock, so a concurrent apply cannot change what is verified between the read and the run (attack 405007a B4).
+// A lock held by a live apply skips that one slot and the loop goes on (B6). One run.completed per probe.
+export async function verifySlots(opts, log = console.log) {
+  const P = resolvePaths(opts);
+  const slug = opts.venture;
+  try {
+    const slots = loadCatalog(P.catalog);
+    const rows = loadRegistry(P.registry);
+    const profile = loadProfile(slug, P.venturesDir);
+    const state0 = loadState(P.stateDir, slug, { onFallback: log });
+    if (!state0) throw new LaunchError("REFUSED", `no board for ${slug} -- run new first`);
+    const ventureRoot = checkVentureRoot(opts.ventureRoot || state0.venture_root);
+    if (opts.slot && !slots.some((s) => s.id === opts.slot)) throw new LaunchError("REFUSED", `unknown slot ${opts.slot}`);
+    const ids = opts.slot ? [opts.slot] : slots.map((s) => s.id).filter((id) => ["verified", "applied"].includes(slotRow(state0, id).state));
+    if (!ids.length) { log(`${slug}: nothing applied yet -- nothing to verify`); return EXIT.OK; }
+    let ok = 0, failed = 0, skipped = 0;
+    for (const id of ids) {
+      const slot = slots.find((s) => s.id === id);
+      let res;
+      try {
+        res = underLock(P, slug, () => probeOne(P, slug, slot, rows, profile, ventureRoot, log), log);
+      } catch (e) {
+        if (e.exit === EXIT.LOCKED) { log(`${id}: SKIPPED -- ${e.message}`); skipped++; continue; }
+        if (e instanceof LaunchError || e.code === "DIGEST_DRIFT") { log(`${id}: UNVERIFIABLE -- ${e.message}`); failed++; continue; }
+        throw e;
+      }
+      if (res) ok++; else failed++;
+    }
+    log(`${slug}: ${ok}/${ids.length} slot(s) verified now${failed ? ` · ${failed} failed` : ""}${skipped ? ` · ${skipped} skipped (locked)` : ""}`);
+    return failed ? EXIT.FAILED : skipped ? EXIT.LOCKED : EXIT.OK;
+  } catch (e) {
+    if (e.exit) { log(e.message); return e.exit; }
+    if (e instanceof LaunchError) { log(e.message); return EXIT.REFUSED; }
+    throw e;
+  }
+}
+
+// Runs under the venture lock. Returns true when the provider answered.
+function probeOne(P, slug, slot, rows, profile, ventureRoot, log) {
+  const id = slot.id;
+  const r0 = slotRow(loadState(P.stateDir, slug), id);
+  if (!["verified", "applied"].includes(r0.state)) throw new LaunchError("REFUSED", `${id} is ${r0.state}, not applied -- apply it first`);
+  const prow = rows.find((r) => r.slot === id && r.id === r0.provider);
+  if (!prow) throw new LaunchError("REFUSED", `no provider row ${r0.provider ?? "(none)"} for ${id}`);
+  const adapterPath = checkAdapter(P, prow);
+  // A stale answer must never be read as this probe's: clear it first, so a killed probe leaves "no answer" (B3).
+  saveState(P.stateDir, setSlot(loadState(P.stateDir, slug), id, { last_verify: null }));
+  const args = { ...P, mode: "verify", venture: slug, slot: id, provider: prow.id, row: prow, adapterPath, ventureRoot, attempt: r0.attempt || 0, timeout: slot.timeout };
+  const argsFile = join(P.stateDir, `.${slug}.worker-args.json`);
+  writeFileSync(argsFile, JSON.stringify(args));
+  let r;
+  try {
+    r = spawnSync(process.execPath, [WORKER, argsFile], { stdio: "inherit", timeout: Number(slot.timeout || 300) * 1000, killSignal: "SIGKILL" });
+  } finally {
+    rmSync(argsFile, { force: true });
+  }
+  const lv = slotRow(loadState(P.stateDir, slug), id).last_verify;
+  const timedOut = r.error && r.error.code === "ETIMEDOUT";
+  const good = r.status === 0 && !!lv && lv.ok === true;
+  const reason = good ? null : timedOut ? "timeout" : lv && lv.reason ? lv.reason : `worker ended without an answer (${r.signal ? `signal ${r.signal}` : `exit ${r.status}`})`;
+  if (!lv) saveState(P.stateDir, setSlot(loadState(P.stateDir, slug), id, { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason } }));
+  emit("run.completed", { slot: id, provider: prow.id, honesty_class: profile.honesty_class, attempt: r0.attempt || 0, mode: "verify", outcome: good ? "ok" : "fail" }, slug, log);
+  log(`${id}: ${good ? `verified now (answered by ${clean(lv.answerer)})` : `VERIFY FAILED -- ${clean(reason)}`}`);
+  return good;
 }
 
 function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
