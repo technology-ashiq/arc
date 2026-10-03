@@ -19,7 +19,11 @@ const save = (patch) => {
   const s = loadState(a.stateDir, a.venture);
   saveState(a.stateDir, setSlot(s, a.slot, patch));
 };
-const fail = (reason) => { save({ state: "failed", reason }); process.exit(1); };
+// In verify mode a refusal (missing key, drift) is recorded as the probe's answer; the slot's state is never touched.
+const fail = (reason) => {
+  save(a.mode === "verify" ? { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason } } : { state: "failed", reason });
+  process.exit(1);
+};
 
 // Hash and run the SAME bytes: read once, check the pinned digest, import those bytes from a data: URL -- a file
 // swapped after the check is never the code that runs (attack 3b48ed1 B5).
@@ -55,6 +59,17 @@ const ctx = makeCtx({
     save({ resources: [...cur.resources, resource] });
   },
 });
+
+// verify-only: ask the outside world again about a slot already applied; never scaffold, never change its state --
+// the answer is recorded beside it as last_verify, so drift is visible without un-doing the board (LAU-P).
+if (a.mode === "verify") {
+  let v;
+  try { v = await mod.verify(ctx); } catch (e) { v = { ok: false, reason: e.code ? `refused:${e.code}` : `error:${e.message}` }; }
+  clearTimeout(timer);
+  const ok = !!(v && v.ok === true && typeof v.answerer === "string" && v.answerer);
+  save({ last_verify: { ok, at: new Date().toISOString(), answerer: ok ? v.answerer : null, reason: ok ? null : (v && v.reason) || "verify:no answerer named" } });
+  process.exit(ok ? 0 : 1);
+}
 
 try {
   const out = await mod.scaffold(ctx);

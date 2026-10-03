@@ -235,6 +235,52 @@ function saveUnderLock(P, slug, mutate, profile, log) {
   return underLock(P, slug, () => saveState(P.stateDir, mutate(loadState(P.stateDir, slug) || emptyState(profile))), log);
 }
 
+// `verify` re-asks the outside world about slots that are already verified or applied, one at a time under the
+// venture lock, with the provider and digest the slot ran under. One run.completed per probe, mode verify.
+export async function verifySlots(opts, log = console.log) {
+  const P = resolvePaths(opts);
+  const slug = opts.venture;
+  try {
+    const slots = loadCatalog(P.catalog);
+    const rows = loadRegistry(P.registry);
+    const profile = loadProfile(slug, P.venturesDir);
+    const state = loadState(P.stateDir, slug, { onFallback: log });
+    if (!state) throw new LaunchError("REFUSED", `no board for ${slug} -- run new first`);
+    if (!state.venture_root && !opts.ventureRoot) throw new LaunchError("REFUSED", "--venture-root is required; launch never guesses where a venture's repo lives");
+    const ventureRoot = realpathSync(resolve(opts.ventureRoot || state.venture_root));
+    const ids = opts.slot ? [opts.slot] : slots.map((s) => s.id).filter((id) => ["verified", "applied"].includes(slotRow(state, id).state));
+    if (opts.slot && !slots.some((s) => s.id === opts.slot)) throw new LaunchError("REFUSED", `unknown slot ${opts.slot}`);
+    if (!ids.length) { log(`${slug}: nothing applied yet -- nothing to verify`); return EXIT.OK; }
+    let failed = 0;
+    for (const id of ids) {
+      const slot = slots.find((s) => s.id === id);
+      const r0 = slotRow(state, id);
+      const prow = rows.find((r) => r.slot === id && r.id === r0.provider);
+      if (!prow) { log(`${id}: UNVERIFIABLE -- no provider row ${r0.provider ?? "(none)"}`); failed++; continue; }
+      const adapterPath = resolve(dirname(P.registry), prow.adapter);
+      if (!existsSync(adapterPath) || (prow.digest && adapterDigest(adapterPath) !== prow.digest)) { log(`${id}: UNVERIFIABLE -- ${prow.id}'s adapter is missing or drifted since vet`); failed++; continue; }
+      const code = underLock(P, slug, () => {
+        const args = { ...P, mode: "verify", venture: slug, slot: id, provider: prow.id, row: prow, adapterPath, ventureRoot, attempt: r0.attempt || 0, timeout: slot.timeout };
+        const argsFile = join(P.stateDir, `.${slug}.worker-args.json`);
+        writeFileSync(argsFile, JSON.stringify(args));
+        const r = spawnSync(process.execPath, [WORKER, argsFile], { stdio: "inherit", timeout: Number(slot.timeout || 300) * 1000, killSignal: "SIGKILL" });
+        const lv = slotRow(loadState(P.stateDir, slug), id).last_verify || {};
+        const ok = r.status === 0 && lv.ok === true;
+        emit("run.completed", { slot: id, provider: prow.id, honesty_class: profile.honesty_class, attempt: r0.attempt || 0, mode: "verify", outcome: ok ? "ok" : "fail" }, slug, log);
+        log(`${id}: ${ok ? `verified now (answered by ${lv.answerer})` : `VERIFY FAILED -- ${lv.reason || (r.error && r.error.code === "ETIMEDOUT" ? "timeout" : `exit ${r.status}`)}`}`);
+        return ok ? 0 : 1;
+      }, log);
+      failed += code;
+    }
+    log(`${slug}: ${ids.length - failed}/${ids.length} slot(s) verified now`);
+    return failed ? EXIT.FAILED : EXIT.OK;
+  } catch (e) {
+    if (e.exit) { log(e.message); return e.exit; }
+    if (e instanceof LaunchError) { log(e.message); return EXIT.REFUSED; }
+    throw e;
+  }
+}
+
 function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
   try {
     return underLock(P, slug, () => {
