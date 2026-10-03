@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-face.mjs:140",
+      "breaking_input": "A directory named bin\\bash.exe under a Git root. The root can come from a PATH entry ending in \\Git\\cmd, or from ProgramFiles. gitBashEnv(\"win32\", env, existsSync) accepts it as Git's bash.",
+      "why": "The default `exists` is `existsSync`, which is true for a directory. The launcher then puts a directory ahead of System32 on PATH and prints no WARN. `bash` still resolves to WSL, and every answer fails again with the receipt error. The same shape was fixed before as 'existsSync accepted a directory as an executable', and the shared guard is `isFile()`.",
+      "fix": "Default `exists` to a statSync(...).isFile() check wrapped in try/catch. Add a selftest arm where a directory named bash.exe is refused.",
+      "twin_of": "`existsSync` accepted a directory as an executable, and a spawn error was an unhandled `'error'` event -> require `isFile()`"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-face.mjs:127",
+      "breaking_input": "A PATH entry such as `.\\Git\\cmd` or `Git\\bin`, which are relative. The regex captures root `.\\Git` or `Git`, and the existence check resolves it against the launcher's cwd, which may be a repo holding `Git\\bin\\bash.exe`.",
+      "why": "Nothing requires the discovered root to be absolute. A relative bashDir is put first on the door's PATH. The door runs with cwd set to the repo, so a planted `Git\\bin\\bash.exe` in the repo would run for every receipt emit.",
+      "fix": "Accept only roots where win32.isAbsolute(root) is true, and refuse UNC roots unless that is intended.",
+      "twin_of": "A path from a caller is a claim about a file; resolve it before trusting it"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-face.mjs:141",
+      "breaking_input": "Git installed under `C:\\Program Files (x86)\\Git`, which is a 32-bit install. Or a PATH entry that is quoted, such as `\"C:\\Program Files\\Git\\cmd\"`, so the trailing quote defeats the `$` anchor.",
+      "why": "The only fallbacks are ProgramW6432, ProgramFiles and LOCALAPPDATA\\Programs. ProgramFiles(x86) is never tried, and quoted PATH entries are never unquoted. Both cases silently miss Git and the bug returns. The user sees only a WARN that tells them to install Git, which they already have.",
+      "fix": "Strip surrounding quotes from PATH entries before matching. Add ProgramFiles(x86) as a root candidate. Say in the WARN which locations were searched.",
+      "twin_of": null
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-face.mjs:143",
+      "breaking_input": "Git for Windows installed at Git\\bin, with a different Git or sh earlier on the owner's PATH, for example scoop's git or a mingw sh. After the fix, the door and every child it spawns resolve `git` and `sh` to Git\\bin\\git.exe and sh.exe.",
+      "why": "Git\\bin holds git.exe and sh.exe, not only bash.exe. Prepending it changes which `git` every door child runs, including git version and config behavior. The comment claims only bash is affected. This is a boundary change the selftest does not cover.",
+      "fix": "Resolve only bash. Alternatively, set an explicit ARC_BASH path that arc-run uses to spawn bash instead of reordering PATH. At minimum, document and test that git and sh resolution changes.",
+      "twin_of": null
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:144",
+      "breaking_input": "A model, provider or tool whose stderr contains the text `could not emit run.completed`, for example an echoed prompt. Or an arc-event.sh failure on Linux or macOS caused by a full disk or a lock.",
+      "why": "The check runs first over the whole stderr and is not anchored to arc-run's own line. It overrides the 429, 401 and 402 classification that would be correct. It also tells every OS to start with arc-face.mjs to put Git Bash first, which is wrong for non-Windows causes. This names a cause the data does not prove.",
+      "fix": "Anchor the match to a line start (`^arc-run: could not emit run\\.completed`, multiline). Gate the WSL advice on process.platform === \"win32\", or word it as 'often' with the actual reason taken from arc-event output.",
+      "twin_of": "stderr order as proof -> attribution is by name AND by what the named thing says it is"
+    }
+  ]
+}

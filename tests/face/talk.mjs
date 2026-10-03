@@ -120,7 +120,9 @@ check("A: providerFault -- 401, 402, 404, 5xx, a timeout and an empty answer eac
 const fEmit = m.providerFault("arc-run: could not emit run.completed: Command failed: bash C:/arc/.claude/scripts/hq/arc-event.sh emit run.completed\n         The run is NOT recorded.");
 check("A: providerFault -- a receipt that could not be written is named with its fix, never 'could not answer'",
   /receipt/.test(fEmit) && /Git Bash/.test(fEmit) && !/could not answer this time/.test(fEmit) && !/arc-event|Command failed/.test(fEmit)
-  && /receipt/.test(m.providerFault("status 429\narc-run: could not emit run.completed: x")));
+  && /receipt/.test(m.providerFault("status 429\narc-run: could not emit run.completed: x"))
+  // A provider body quoting the phrase mid-line does not override its own 429 (attack d102d9c L6).
+  && /busy/.test(m.providerFault("generic-api: status 429 body: see arc-run: could not emit run.completed: x")));
 
 // ── E: the face's decisions ──
 const T = await import(pathToFileURL(join(REPO, "face", "src", "lib", "talk.mjs")).href);

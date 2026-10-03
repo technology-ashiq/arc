@@ -25,7 +25,7 @@
 // intact and the repo split stays a directory move.
 
 import { spawn } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { join, dirname, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
@@ -108,6 +108,11 @@ export function appSpawnPlan(faceDir, appPort, exists = existsSync) {
   return { cmd: process.execPath, args: [entry, "--port", String(appPort), "--strictPort"], shell: false };
 }
 
+/** A regular file, not merely a name that exists. @param {string} p */
+function isFile(p) {
+  try { return statSync(p).isFile(); } catch { return false; }
+}
+
 /**
  * The door's environment with Git for Windows' bash ahead of every other `bash` on PATH.
  *
@@ -124,19 +129,23 @@ export function appSpawnPlan(faceDir, appPort, exists = existsSync) {
  * @param {string} platform @param {Record<string, string | undefined>} env @param {(p: string) => boolean} exists
  * @returns {{ env: Record<string, string | undefined>, bashDir: string | null }}
  */
-export function gitBashEnv(platform, env, exists = existsSync) {
+export function gitBashEnv(platform, env, exists = isFile) {
   if (platform !== "win32") return { env, bashDir: null };
   const get = (name) => { const k = Object.keys(env).find((x) => x.toUpperCase() === name.toUpperCase()); return k ? env[k] : undefined; };
   const pathKey = Object.keys(env).find((k) => k.toUpperCase() === "PATH") ?? "Path";
-  const parts = String(env[pathKey] ?? "").split(";").filter(Boolean);
+  // Windows allows a quoted PATH entry; the quotes are not part of the directory (attack d102d9c B3).
+  const parts = String(env[pathKey] ?? "").split(";").map((p) => p.replace(/^"(.*)"$/, "$1")).filter(Boolean);
   const roots = [];
+  // The segment must be exactly `Git`, never `MyGit` or `NotGit` (attack d102d9c L1).
   for (const p of parts) {
     const m = /^(.*[\\/]Git)[\\/](?:cmd|bin|usr[\\/]bin|mingw64[\\/]bin)[\\/]?$/i.exec(p);
-    if (m) roots.push(m[1]);
+    if (m && /(?:^|[\\/])Git$/i.test(m[1])) roots.push(m[1]);
   }
-  for (const base of [get("ProgramW6432"), get("ProgramFiles"), get("LOCALAPPDATA") && win32.join(get("LOCALAPPDATA"), "Programs")])
+  for (const base of [get("ProgramW6432"), get("ProgramFiles"), get("ProgramFiles(x86)"), get("LOCALAPPDATA") && win32.join(get("LOCALAPPDATA"), "Programs")])
     if (base) roots.push(win32.join(base, "Git"));
-  const root = roots.find((r) => exists(win32.join(r, "bin", "bash.exe")));
+  // A relative root resolves against the launcher's cwd here and the door's there, so only an absolute one is
+  // trusted (attack d102d9c L2/B2); a directory named bash.exe is not bash (B1/L5).
+  const root = roots.find((r) => win32.isAbsolute(r) && /^[A-Za-z]:[\\/]|^\\\\/.test(r) && exists(win32.join(r, "bin", "bash.exe")));
   if (!root) return { env, bashDir: null };
   const bashDir = win32.join(root, "bin");
   const same = (p) => p.replace(/[\\/]+$/, "").toLowerCase() === bashDir.toLowerCase();
@@ -629,6 +638,13 @@ function selftest() {
   armed("already first is not added twice", gitBashEnv("win32", fixed.env, gitOnly).env.Path === fixed.env.Path);
   armed("no Git bash on the box leaves the env as it was", gitBashEnv("win32", ps, () => false).env === ps);
   armed("and nothing changes off Windows", gitBashEnv("linux", ps, gitOnly).env === ps);
+  // Attack d102d9c: a look-alike segment, a relative root and a quoted entry.
+  const any = () => true;
+  armed("a dir merely ending in Git is not Git (MyGit)", gitBashEnv("win32", { Path: "C:\\Tools\\MyGit\\cmd" }, any).bashDir === null);
+  armed("a relative Git root is never trusted", gitBashEnv("win32", { Path: "Git\\cmd;.\\Git\\bin" }, any).bashDir === null);
+  armed("a quoted PATH entry is read without its quotes", gitBashEnv("win32", { Path: "\"D:\\Git\\cmd\"" }, (p) => p === "D:\\Git\\bin\\bash.exe").bashDir === "D:\\Git\\bin");
+  armed("ProgramFiles(x86) is a fallback too", gitBashEnv("win32", { Path: "", "ProgramFiles(x86)": "C:\\Program Files (x86)" }, (p) => p === "C:\\Program Files (x86)\\Git\\bin\\bash.exe").bashDir === "C:\\Program Files (x86)\\Git\\bin");
+  armed("a directory named bash.exe is not bash", isFile(HERE) === false && isFile(join(HERE, "arc-face.mjs")) === true);
 
   armed("a worktree refusal is named as such", classifyDoorExit(1, "arc-dash: ERROR WORKTREE_SPINE -- ...").includes("MAIN clone"));
   armed("a busy port is named as such", classifyDoorExit(1, "Error: listen EADDRINUSE").includes("already listening"));
