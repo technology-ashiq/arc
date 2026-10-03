@@ -21,6 +21,10 @@ const cases = {
   barefetch: `await fetch("${H}");`,
   ctxfetch: `await ctx.fetch("${H}");`,
   relative: 'import a from "./b.mjs";',
+  prosefrom: `const n = "see from 'api-reference' for format";`,
+  dynlit: 'const m = await import("lodash");',
+  dyncomputed: "const m = await import(name);",
+  templatespec: "const m = await import(`lo${d}ash`);",
 };
 for (const [name, src] of Object.entries(cases)) console.log(`${name}: ${importFindings(src).map((f) => f.rule).join(",") || "clean"}`);
 console.log("SCAN_PROBE_DONE");

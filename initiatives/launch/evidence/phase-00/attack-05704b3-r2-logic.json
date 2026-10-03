@@ -1,0 +1,21 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/scan.mjs:specifiers (line ~52)",
+      "breaking_input": "An adapter containing a string with the pattern `from '<name>'` in its text, e.g. `export async function verify(ctx){const n=\"see from 'api-reference' for the format\";const r=await ctx.fetch(\"https://api.example.com/v\");return{ok:r.ok,answerer:\"api.example.com\"};}` — the `zero-dep-leg` lint reports `imports package api-reference` and refuses the adapter.",
+      "why": "stripComments blanks comments but intentionally keeps string literals so that real specifiers (which live in quotes) survive. The specifier regex /\\bfrom\\s*[\"']([^\"']+)[\"']/g is then run on that comment-stripped, string-preserving text, so `from 'api-reference'` inside an arbitrary string matches as if it were an import statement. The twin of the fixed verifyBody defect (token inside a string treated as code) survives in specifiers: the fix applied the one-pass tokenizer to verifyBody but left specifiers scanning raw string content. The AMBIENT check two lines below correctly re-blanks strings, but the specifier pass does not.",
+      "fix": "After stripComments, also blank string contents for the specifier scan (same replace as the AMBIENT pass), or restrict the from/import regex to only match when the quoted specifier is preceded by an actual import/export keyword in unquoted code context. Add a scan-probe case `stringFrom: 'const s = \"from \\\\\"pkg\\\\\"\";'` asserting clean."
+    },
+    {
+      "id": "L2",
+      "severity": "low",
+      "where": "tests/launch-lint.bats: line 82 (the B15 host-suffix test)",
+      "breaking_input": "A checkout with CRLF line endings (Windows git autocrlf=true): `sed 's/^      - api\\.cloudflare\\.com$/      - com/'` produces no replacement because the line is `      - api.cloudflare.com\\r` and the `$` anchor in sed sits after the `\\r`, so `com$` does not match. The `! cmp -s` guard then fires and the test fails with 'fixture edit did not land'.",
+      "why": "Twin of the CRLF-literal-edit defect fixed in launch-lint.mjs's baseline(). The baseline() fix normalises to LF before applying indexOf/replace edits, but the bats test edits the checked-out registry file via sed with a `$` end-of-line anchor. On a CRLF file the `\\r` sits between the last character and the `$` anchor, so the pattern silently fails to match. The CI legs are Linux (LF) so CI stays green; a local Windows developer running the suite hits a red test that looks like a lint regression.",
+      "fix": "Either strip `\\r` before the sed (`tr -d '\\r' < file | sed ...`), or use a pattern without the `$` anchor (`s/      - api\\.cloudflare\\.com/      - com/`), matching the same normalise-then-edit approach the lint self-test already uses."
+    }
+  ]
+}

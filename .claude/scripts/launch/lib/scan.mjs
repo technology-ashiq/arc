@@ -21,14 +21,22 @@ export function stripComments(src) {
 
 // Every module specifier an adapter names, whitespace-free syntax included (`import{x}from"pkg"`, `import"pkg"`):
 // any `from "x"`, any bare `import "x"`, any dynamic import() or require(). A non-literal dynamic one is `computed`.
+// String literals are TOKENS, read in one pass: a literal is a specifier only when the code right before it is
+// `from`, `import`, `import(` or `require(`. So `"see from 'x'"` is one string, not an import (attack 05704b3 L1,
+// the verifyBody defect's twin).
 export function specifiers(src) {
   const code = stripComments(src);
   const out = [];
-  for (const re of [/\bfrom\s*["']([^"']+)["']/g, /\bimport\s*["']([^"']+)["']/g]) for (const m of code.matchAll(re)) out.push({ spec: m[1], computed: false });
+  for (const m of code.matchAll(/(["'`])((?:\\.|(?!\1)[^\\])*?)\1/g)) {
+    const before = code.slice(0, m.index).trimEnd();
+    if (/(?:^|[^\w$.])(?:from|import)$/.test(before) || /(?:^|[^\w$.])(?:import|require)\s*\($/.test(before))
+      out.push(m[1] === "`" && m[2].includes("${") ? { spec: m[0], computed: true } : { spec: m[2], computed: false });
+  }
+  const blanked = code.replace(/(["'`])(?:\\.|(?!\1)[^\\])*?\1/g, (m) => m[0] + "x".repeat(m.length - 2) + m[0]);
   for (const re of [/\bimport\s*\(\s*([^)]*)\)/g, /\brequire\s*\(\s*([^)]*)\)/g])
-    for (const m of code.matchAll(re)) {
-      const lit = m[1].trim().match(/^["']([^"']+)["']$/);
-      out.push(lit ? { spec: lit[1], computed: false } : { spec: m[1].trim(), computed: true });
+    for (const m of blanked.matchAll(re)) {
+      if (/^(["'`])x*\1$/.test(m[1].trim())) continue; // a literal: already read above
+      out.push({ spec: m[1].trim(), computed: true });
     }
   return out;
 }

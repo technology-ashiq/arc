@@ -57,7 +57,7 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
 }
 
 @test "launch-lint: a predicate outside the grammar is refused, not read as true or false" {
-  sed 's/required_when: "tenancy == multi"/required_when: "tenancy is multi"/' "$ARC_ROOT/products/launch/launch.slots.yaml" > "$BATS_TEST_TMPDIR/s.yaml"
+  tr -d '' < "$ARC_ROOT/products/launch/launch.slots.yaml" | sed 's/required_when: "tenancy == multi"/required_when: "tenancy is multi"/' > "$BATS_TEST_TMPDIR/s.yaml"
   ! cmp -s "$ARC_ROOT/products/launch/launch.slots.yaml" "$BATS_TEST_TMPDIR/s.yaml" || { echo "fixture edit did not land"; false; }
   run node "$(LINT)" --catalog "$BATS_TEST_TMPDIR/s.yaml"
   [ "$status" -eq 1 ] || { echo "$output"; false; }
@@ -84,14 +84,15 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
   local want
   for want in "minified: zero-dep-leg" "bare: zero-dep-leg" "reexport: zero-dep-leg" "commented: clean" "crypto: clean" \
               "fs: zero-dep-leg" "child: zero-dep-leg" "env: ambient-capability" "template: ambient-capability" \
-              "prose: clean" "barefetch: ambient-capability" "ctxfetch: clean" "relative: import-boundary"; do
+              "prose: clean" "barefetch: ambient-capability" "ctxfetch: clean" "relative: import-boundary" \
+              "prosefrom: clean" "dynlit: zero-dep-leg" "dyncomputed: zero-dep-leg" "templatespec: zero-dep-leg"; do
     [[ "$output" == *"$want"* ]] || { echo "missing: $want"; echo "$output"; false; }
   done
 }
 
 @test "launch-lint: a host entry that is a bare suffix is refused (B15)" {
-  sed 's/^      - api\.cloudflare\.com$/      - com/' "$ARC_ROOT/products/launch/launch.providers.yaml" > "$BATS_TEST_TMPDIR/h.yaml"
-  ! cmp -s "$ARC_ROOT/products/launch/launch.providers.yaml" "$BATS_TEST_TMPDIR/h.yaml" || { echo "fixture edit did not land"; false; }
+  tr -d '\r' < "$ARC_ROOT/products/launch/launch.providers.yaml" | sed 's/^      - api\.cloudflare\.com$/      - com/' > "$BATS_TEST_TMPDIR/h.yaml"
+  grep -q '^      - com$' "$BATS_TEST_TMPDIR/h.yaml" || { echo "fixture edit did not land"; false; }
   run node "$(LINT)" --registry "$BATS_TEST_TMPDIR/h.yaml"
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$output" == *'FAIL [hosts]'*'host "com" is not a bare hostname'* ]] || { echo "$output"; false; }
