@@ -158,6 +158,10 @@ function loadSeal(root, id) {
   if (!rec || typeof rec.files !== "object" || rec.files === null || Array.isArray(rec.files)) fail("the seal carries no file hashes");
   if (JSON.stringify(rec.formula) !== JSON.stringify(FORMULA)) fail("the seal's formula is not the pre-registered one; a bar changed after sealing is not a bar");
   if (!Number.isFinite(Date.parse(rec.sealed))) fail("the seal carries no readable timestamp");
+  const pr = rec.prediction;
+  if (!pr || pr.adr !== ADR || !/^[0-9a-f]{64}$/.test(pr.adrSha256 ?? "") || !/session-authored/.test(pr.authorship ?? "") || typeof pr.text !== "string" || pr.text.trim() === "") {
+    fail("the seal carries no sealed prediction with its authorship; a seal without the prediction seals nothing (attack 67551f8 B3)");
+  }
   return rec;
 }
 
@@ -206,7 +210,10 @@ function pair(argv) {
     const st = lstatSync(toDir);
     if (st.isSymbolicLink() || !st.isDirectory()) fail(`variant-${to} is not a real directory`);
   }
-  if (existsSync(join(toDir, "index.html"))) fail(`variant-${to} already has a page; a pair is made before either side composes`);
+  for (const side of [from, to]) {
+    if (existsSync(join(ex, `variant-${side}`, "index.html"))) fail(`variant-${side} already has a page; a pair is made before either side composes`);
+    if (existsSync(join(root, ".claude", "state", "design", `composer-session--${id}--variant-${side}`))) fail(`variant-${side} has a composer armed; a pair is made before either side composes`);
+  }
   const pp = pairsPath(root, id);
   const pairs = existsSync(pp) ? loadPairs(root, id) : { id, base: null, pairs: [] };
   for (const p of pairs.pairs) {
@@ -221,7 +228,9 @@ function pair(argv) {
   if (existsSync(toThesis) && sha256(readRegular(toThesis, `variant-${to}/thesis.txt`)) !== sha256(thesis)) {
     fail(`variant-${to} already holds a different thesis; a pair copies one thesis, it never merges two`);
   }
-  writeFileSync(toThesis, thesis);
+  const tmpT = `${toThesis}.tmp-${process.pid}`;
+  writeFileSync(tmpT, thesis, { flag: "wx" });
+  renameSync(tmpT, toThesis);
   const sh = sha256(thesis);
   if (sha256(readFileSync(toThesis)) !== sh) fail(`the copy of the thesis into variant-${to} does not hash as the original`);
   pairs.base = base;
@@ -263,6 +272,14 @@ function report(argv) {
   const root = o["--root"], id = o["--id"];
   const pairs = loadPairs(root, id);
   const rec = loadSeal(root, id);
+  const ex = exploreDir(root, id);
+  const drift = compare(rec, join(root, BUNDLE));
+  if (drift.length) fail(`TAMPERED -- the sealed bundle changed: ${drift.join(", ")}`);
+  for (const p of pairs.pairs) {
+    for (const side of [p.from, p.to]) {
+      if (sha256(readRegular(join(ex, `variant-${side}`, "thesis.txt"), `variant-${side}/thesis.txt`)) !== p.thesisSha256) fail(`variant-${side}'s thesis moved since it was paired; this pair compares two variables (attack 67551f8 B4)`);
+    }
+  }
   const ub = loadJson(join(root, ".claude", "state", "design", "explore", id, "jury", "unblind.json"), "the unblinding (run unblind first)");
   if (!Number.isFinite(Date.parse(ub.scored))) fail("the unblinding carries no readable score timestamp");
   if (!(Date.parse(rec.sealed) < Date.parse(ub.scored))) fail("the seal is not dated before the owner's score; it is not a prediction");

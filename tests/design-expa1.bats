@@ -227,6 +227,34 @@ EOF
   [[ "$output" == *"reserved device name"* ]] || { echo "$output"; false; }
 }
 
-@test "this file registers the 11 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 11 -- a @test was silently dropped"; false; }
+@test "attack 67551f8: a pair whose FROM side already composed is refused, a seal without its prediction is refused, a moved thesis fails the report" {
+  _fixture
+  run bash "$(_explore)" seal ex1
+  [ "$status" -eq 0 ]
+  printf '<main>b</main>\n' > docs/design/explore/ex1/variant-b/index.html
+  run bash "$(_explore)" pair ex1 --from b --to e --from-arm balanced-workhorse --to-arm high-judgment
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"variant-b already has a page"* ]] || { echo "$output"; false; }
+  [ ! -e docs/design/explore/ex1/variant-e/thesis.txt ]
+  run bash "$(_explore)" pair ex1 --from a --to d --from-arm balanced-workhorse --to-arm high-judgment
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # B4: the report re-hashes each paired thesis before it reads a score.
+  mkdir -p .claude/state/design/explore/ex1/jury
+  local scored; scored="$(node -e 'console.log(new Date(Date.now()+60000).toISOString())')"
+  printf '{"id":"ex1","scored":"%s","rows":[{"source":"variant-a","score":40},{"source":"variant-d","score":90}]}\n' "$scored" > .claude/state/design/explore/ex1/jury/unblind.json
+  run bash "$(_explore)" exp-a1 ex1
+  [ "$status" -eq 0 ] || { echo "the intact control failed: $output"; false; }
+  printf 'moved\n' >> docs/design/explore/ex1/variant-d/thesis.txt
+  run bash "$(_explore)" exp-a1 ex1
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"thesis moved since it was paired"* ]] || { echo "$output"; false; }
+  # B3: a seal stripped of its prediction is refused.
+  node -e 'const f=process.argv[1],fs=require("fs");const m=JSON.parse(fs.readFileSync(f,"utf8"));delete m.prediction;fs.writeFileSync(f,JSON.stringify(m,null,2)+"\n")' "$(_seal_file)"
+  run bash "$(_explore)" seal-check ex1
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no sealed prediction"* ]] || { echo "$output"; false; }
+}
+
+@test "this file registers the 12 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 12 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 12 -- a @test was silently dropped"; false; }
 }
