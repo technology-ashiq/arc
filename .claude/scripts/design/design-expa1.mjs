@@ -24,7 +24,7 @@
 //
 // Exit: 0 ok | 1 refused, or the bundle does not match the seal.
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 const TIERS = new Set(["balanced-workhorse", "high-judgment"]);
@@ -58,13 +58,15 @@ function parse(argv, known) {
   }
   if (!o["--root"]) fail("--root is required");
   if (!o["--id"] || !ID.test(o["--id"])) fail("--id must be lowercase kebab");
+  // A Windows device name passes the grammar and breaks mkdir on one CI leg (attack fab6c70 B4).
+  if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/.test(o["--id"])) fail(`--id '${o["--id"]}' is a reserved device name`);
   return o;
 }
 
 // A regular file or nothing: a symlink or a directory where a record belongs is a planted input.
 function readRegular(file, what) {
   let st;
-  try { st = lstatSync(file); } catch { fail(`${what} is missing`); }
+  try { st = lstatSync(file); } catch (e) { fail(e.code === "ENOENT" ? `${what} is missing` : `${what} could not be read (${e.code || "error"})`); }
   if (st.isSymbolicLink() || !st.isFile()) fail(`${what} is not a regular file`);
   return readFileSync(file);
 }
@@ -142,18 +144,41 @@ function compare(rec, dir) {
   const now = hashTree(dir);
   const diffs = [];
   for (const [f, h] of Object.entries(rec.files)) {
-    if (!(f in now)) diffs.push(`missing ${f}`);
+    if (!Object.hasOwn(now, f)) diffs.push(`missing ${f}`);
     else if (now[f] !== h) diffs.push(`changed ${f}`);
   }
-  for (const f of Object.keys(now)) if (!(f in rec.files)) diffs.push(`added ${f}`);
+  for (const f of Object.keys(now)) if (!Object.hasOwn(rec.files, f)) diffs.push(`added ${f}`);
   return diffs;
+}
+
+// The seal is a plain file. What it records for the formula must be the formula this code
+// pre-registered, or a hand-edited seal could lower the bar (attack fab6c70 L3 L4 B10).
+function loadSeal(root, id) {
+  const rec = loadJson(sealPath(root, id), `the seal for '${id}'`);
+  if (!rec || typeof rec.files !== "object" || rec.files === null || Array.isArray(rec.files)) fail("the seal carries no file hashes");
+  if (JSON.stringify(rec.formula) !== JSON.stringify(FORMULA)) fail("the seal's formula is not the pre-registered one; a bar changed after sealing is not a bar");
+  if (!Number.isFinite(Date.parse(rec.sealed))) fail("the seal carries no readable timestamp");
+  return rec;
+}
+
+// pairs.json is a plain file too: every entry is re-validated before it is believed (L8 L10 B7).
+function loadPairs(root, id) {
+  const pairs = loadJson(pairsPath(root, id), "pairs.json");
+  if (!pairs || !Array.isArray(pairs.pairs)) fail("pairs.json carries no pairs list");
+  const seen = new Set();
+  for (const p of pairs.pairs) {
+    if (!p || !/^[a-z]$/.test(p.from) || !/^[a-z]$/.test(p.to) || p.from === p.to) fail("pairs.json holds a pair that does not name two variant letters");
+    if (!TIERS.has(p.fromArm) || !TIERS.has(p.toArm) || p.fromArm === p.toArm) fail("pairs.json holds a pair whose arms are not the two tiers");
+    if (!/^[0-9a-f]{64}$/.test(p.thesisSha256 ?? "")) fail("pairs.json holds a pair with no thesis hash");
+    for (const v of [p.from, p.to]) { if (seen.has(v)) fail(`variant-${v} is in two pairs`); seen.add(v); }
+  }
+  return pairs;
 }
 
 function sealCheck(argv) {
   const o = parse(argv, new Set(["--root", "--id", "--bundle"]));
   const root = o["--root"], id = o["--id"];
-  const rec = loadJson(sealPath(root, id), `the seal for '${id}'`);
-  if (!rec.files || typeof rec.files !== "object") fail("the seal carries no file hashes");
+  const rec = loadSeal(root, id);
   const dir = o["--bundle"] ?? join(root, BUNDLE);
   const diffs = compare(rec, dir);
   if (diffs.length) fail(`TAMPERED -- ${diffs.length} difference(s) against the seal: ${diffs.join(", ")}`);
@@ -177,9 +202,13 @@ function pair(argv) {
   if (!existsSync(sealPath(root, id))) fail("no seal for this explore; seal the prediction before pairing");
   const thesis = readRegular(join(ex, `variant-${from}`, "thesis.txt"), `variant-${from}/thesis.txt`);
   const toDir = join(ex, `variant-${to}`);
+  if (existsSync(toDir) || (() => { try { lstatSync(toDir); return true; } catch { return false; } })()) {
+    const st = lstatSync(toDir);
+    if (st.isSymbolicLink() || !st.isDirectory()) fail(`variant-${to} is not a real directory`);
+  }
   if (existsSync(join(toDir, "index.html"))) fail(`variant-${to} already has a page; a pair is made before either side composes`);
   const pp = pairsPath(root, id);
-  const pairs = existsSync(pp) ? loadJson(pp, "pairs.json") : { id, base: null, pairs: [] };
+  const pairs = existsSync(pp) ? loadPairs(root, id) : { id, base: null, pairs: [] };
   for (const p of pairs.pairs) {
     if ([p.from, p.to].includes(from) || [p.from, p.to].includes(to)) fail(`variant-${[p.from, p.to].includes(from) ? from : to} is already in a pair`);
   }
@@ -197,7 +226,9 @@ function pair(argv) {
   if (sha256(readFileSync(toThesis)) !== sh) fail(`the copy of the thesis into variant-${to} does not hash as the original`);
   pairs.base = base;
   pairs.pairs.push({ from, to, fromArm: fa, toArm: ta, thesisSha256: sh });
-  writeFileSync(pp, `${JSON.stringify(pairs, null, 2)}\n`);
+  const tmp = `${pp}.tmp-${process.pid}`;
+  writeFileSync(tmp, `${JSON.stringify(pairs, null, 2)}\n`);
+  renameSync(tmp, pp);
   console.log(`design-explore pair: variant-${from} (${fa}) and variant-${to} (${ta}) share thesis ${sh.slice(0, 16)} at ${base.slice(0, 12)}`);
 }
 
@@ -205,10 +236,14 @@ function pairGuard(argv) {
   const o = parse(argv, new Set(["--root", "--id", "--variant"]));
   const root = o["--root"], id = o["--id"];
   const pp = pairsPath(root, id);
-  if (!existsSync(pp)) return;
+  const sealed = existsSync(sealPath(root, id));
+  if (!existsSync(pp) && !sealed) return;
+  // The seal is committed evidence; the pairs file sits in the explore. Deleting pairs.json must
+  // not turn the guard off for an explore that was sealed as an experiment (attack fab6c70 B3).
+  if (!existsSync(pp)) fail("this explore is sealed for EXP-A1 and has no pairs.json; pair the theses before any composer arms");
   const ex = exploreDir(root, id);
-  const pairs = loadJson(pp, "pairs.json");
-  const rec = loadJson(sealPath(root, id), `the seal for '${id}'`);
+  const pairs = loadPairs(root, id);
+  const rec = loadSeal(root, id);
   const diffs = compare(rec, join(root, BUNDLE));
   if (diffs.length) fail(`TAMPERED -- the sealed bundle changed before this composer armed: ${diffs.join(", ")}`);
   const v = o["--variant"];
@@ -226,14 +261,18 @@ function pairGuard(argv) {
 function report(argv) {
   const o = parse(argv, new Set(["--root", "--id"]));
   const root = o["--root"], id = o["--id"];
-  const pairs = loadJson(pairsPath(root, id), "pairs.json");
-  const rec = loadJson(sealPath(root, id), `the seal for '${id}'`);
+  const pairs = loadPairs(root, id);
+  const rec = loadSeal(root, id);
   const ub = loadJson(join(root, ".claude", "state", "design", "explore", id, "jury", "unblind.json"), "the unblinding (run unblind first)");
-  if (!Date.parse(rec.sealed) || !(Date.parse(rec.sealed) < Date.parse(ub.scored))) fail("the seal is not dated before the owner's score; it is not a prediction");
+  if (!Number.isFinite(Date.parse(ub.scored))) fail("the unblinding carries no readable score timestamp");
+  if (!(Date.parse(rec.sealed) < Date.parse(ub.scored))) fail("the seal is not dated before the owner's score; it is not a prediction");
+  if (!Array.isArray(ub.rows)) fail("the unblinding carries no rows");
   const scoreOf = (v) => {
-    const r = (ub.rows || []).find((x) => x.source === `variant-${v}`);
-    if (!r || typeof r.score !== "number") fail(`variant-${v} has no owner score in the unblinding`);
-    return r.score;
+    const rs = ub.rows.filter((x) => x && x.source === `variant-${v}`);
+    if (rs.length !== 1) fail(`variant-${v} has ${rs.length} rows in the unblinding; exactly one is the record`);
+    const sc = rs[0].score;
+    if (!Number.isInteger(sc) || sc < 0 || sc > 100) fail(`variant-${v}'s score is not a whole number 0-100`);
+    return sc;
   };
   const hj = [], wh = [];
   let hjWins = 0;

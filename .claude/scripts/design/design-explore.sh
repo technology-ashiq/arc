@@ -699,8 +699,9 @@ EOF
 
     if [ "$CMD" = "compose" ]; then
       # EXP-A1 (Phase 04 S1/S2): a paired explore arms nothing while the sealed bundle or a
-      # paired thesis has moved. No pairs file, no check.
-      if [ -f "$EX/pairs.json" ]; then
+      # paired thesis has moved. Keyed on the committed seal as well as the pairs file, so
+      # deleting pairs.json does not switch the check off (attack fab6c70 B3).
+      if [ -f "$EX/pairs.json" ] || [ -f "$ROOT/initiatives/design/evidence/phase-04/seal-$ID.json" ]; then
         node "$DESIGN_DIR/design-expa1.mjs" pair-guard --root "$ROOT" --id "$ID" --variant "$V" || exit 1
       fi
       # `env -u ARC_SCOPE_FORWARDED`, and then CHECK.

@@ -192,6 +192,41 @@ EOF
   [[ "$output" == *"not a prediction"* ]] || { echo "$output"; false; }
 }
 
-@test "this file registers the 10 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 10 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 10 -- a @test was silently dropped"; false; }
+@test "attack fab6c70: a sealed explore with pairs.json deleted arms nothing, a lowered formula is refused, a duplicate row is refused, a device name is refused" {
+  _fixture
+  run bash "$(_explore)" seal ex1
+  [ "$status" -eq 0 ]
+  run bash "$(_explore)" pair ex1 --from a --to d --from-arm balanced-workhorse --to-arm high-judgment
+  [ "$status" -eq 0 ]
+  # B3: deleting the pairs file must not switch the guard off for a sealed explore.
+  rm docs/design/explore/ex1/pairs.json
+  run bash "$(_explore)" compose ex1 --variant a
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"sealed for EXP-A1 and has no pairs.json"* ]] || { echo "$output"; false; }
+  [ ! -e .claude/state/design/composer-session--ex1--variant-a ]
+  run bash "$(_explore)" pair ex1 --from a --to d --from-arm balanced-workhorse --to-arm high-judgment
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # L3 L4 B10: a seal whose bar was lowered by hand is refused, not believed.
+  cp "$(_seal_file)" "$BATS_TEST_TMPDIR/seal.bak"
+  sed -i.bak 's/"minMeanGap": 10/"minMeanGap": 0/' "$(_seal_file)"
+  grep -q '"minMeanGap": 0' "$(_seal_file)" || { echo "the lowered-formula fixture did not take"; false; }
+  run bash "$(_explore)" seal-check ex1
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not the pre-registered one"* ]] || { echo "$output"; false; }
+  cp "$BATS_TEST_TMPDIR/seal.bak" "$(_seal_file)"
+  # L6 B6: two rows for one variant is not a record.
+  mkdir -p .claude/state/design/explore/ex1/jury
+  local scored; scored="$(node -e 'console.log(new Date(Date.now()+60000).toISOString())')"
+  printf '{"id":"ex1","scored":"%s","rows":[{"source":"variant-a","score":40},{"source":"variant-d","score":90},{"source":"variant-d","score":10}]}\n' "$scored" > .claude/state/design/explore/ex1/jury/unblind.json
+  run bash "$(_explore)" exp-a1 ex1
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"variant-d has 2 rows"* ]] || { echo "$output"; false; }
+  # B4: a Windows device name passes the grammar and must still be refused.
+  run node .claude/scripts/design/design-expa1.mjs seal --root "$SANDBOX" --id nul
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"reserved device name"* ]] || { echo "$output"; false; }
+}
+
+@test "this file registers the 11 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 11 -- a @test was silently dropped"; false; }
 }
