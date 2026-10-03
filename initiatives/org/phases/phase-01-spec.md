@@ -11,13 +11,13 @@
 - Fixtures in `tests/face/org-fold.mjs` for `no evidence`, verdict closure, empty teams, a fixture team.
 
 ## Exit criteria (Definition of Done)
-- [ ] scorecards and teams render end-to-end
-- [ ] tests added & green on CI
-- [ ] live demo run + output checked, screenshot of the room opened and looked at
-- [ ] verified against the real system: main clone spine
-- [ ] contract tests: n/a
-- [ ] `/arc-attack` two surfaces (route/decision logic; door/shell boundary) once on the local commit before push, with the lane fixed-defect list
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] scorecards and teams render end-to-end
+- [x] tests added & green on CI
+- [x] live demo run + output checked, screenshot of the room opened and looked at
+- [x] verified against the real system: main clone spine
+- [x] contract tests: n/a
+- [x] `/arc-attack` two surfaces (route/decision logic; door/shell boundary) once on the local commit before push, with the lane fixed-defect list
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan
 - **Test command:** `node tests/face/org-fold.mjs` + `tests/face-browser.bats` on CI

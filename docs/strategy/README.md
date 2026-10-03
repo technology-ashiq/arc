@@ -12,7 +12,7 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-09-29 — PLAN-org added: the `org` lane's company-layer plan (role cards · team manifests · ₹0 dispatcher · org review), trigger fired by owner ruling 2026-09-29, v1.1 after two same-day review rounds; the org-blueprint's §4 chart is MARKED for replacement by its generated chart at P00 exit but does NOT move now; 2026-09-25 — docs Phase 02: `docs/how-it-works.md`, `docs/how-arc-works-simple.md`, `docs/usermanual.md` and `docs/blueprint.md` MOVED to `docs/archive/` and stubbed into the generated reference `docs/wiki/index.md` (ADR-1510, REQ-08); 2026-09-19 — PLAN-docs added: the `docs` lane's generated-wiki plan, trigger fired by owner ruling 2026-09-18; the four overlapping how-it-works/usermanual/blueprint docs are MARKED for supersession by its REQ-08 but do NOT move until its Phase 02; 2026-09-16 — PLAN-face-v2 added: the face lane's Cycle-16 revision — the owner's v0.7 HQ becomes arc's only frontend as 36 four-file modules, PLAN-face.md NOT superseded; 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-10-03 — PLAN-launch added: the `launch` lane's venture-factory plan (fixed slot process · pluggable vetted providers · derived recommendation · durable runner), trigger fired by owner ruling 2026-10-03, v1.1 after one same-day owner-brought external review (8/8 accepted) + the same-day "no Nilluvai — rehearsal venture" ruling; `PLAN-cycle3-venture-launch.md` is MARKED as the `launch-kit` slot's Week-3 checklist but does NOT move; 2026-09-29 — PLAN-org added: the `org` lane's company-layer plan (role cards · team manifests · ₹0 dispatcher · org review), trigger fired by owner ruling 2026-09-29, v1.1 after two same-day review rounds; the org-blueprint's §4 chart is MARKED for replacement by its generated chart at P00 exit but does NOT move now; 2026-09-25 — docs Phase 02: `docs/how-it-works.md`, `docs/how-arc-works-simple.md`, `docs/usermanual.md` and `docs/blueprint.md` MOVED to `docs/archive/` and stubbed into the generated reference `docs/wiki/index.md` (ADR-1510, REQ-08); 2026-09-19 — PLAN-docs added: the `docs` lane's generated-wiki plan, trigger fired by owner ruling 2026-09-18; the four overlapping how-it-works/usermanual/blueprint docs are MARKED for supersession by its REQ-08 but do NOT move until its Phase 02; 2026-09-16 — PLAN-face-v2 added: the face lane's Cycle-16 revision — the owner's v0.7 HQ becomes arc's only frontend as 36 four-file modules, PLAN-face.md NOT superseded; 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
@@ -20,7 +20,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | `docs/archive/how-arc-works-simple.md` | **SUPERSEDED 2026-09-25** by `docs/wiki/` | The hand-kept overview, archived whole. `docs/how-arc-works-simple.md` is now a 7-line stub pointing at `docs/wiki/index.md` and at this copy (ADR-1510). |
 | `docs/archive/usermanual.md` | **SUPERSEDED 2026-09-25** by `docs/wiki/` | The hand-kept overview, archived whole. `docs/usermanual.md` is now a 7-line stub pointing at `docs/wiki/index.md` and at this copy (ADR-1510). |
 | `docs/archive/blueprint.md` | **SUPERSEDED 2026-09-25** by `docs/wiki/` | The hand-kept overview, archived whole. `docs/blueprint.md` is now a 7-line stub pointing at `docs/wiki/index.md` and at this copy (ADR-1510). |
-| `plans/` (28 files) | **ACTIVE — the operational layer** | Kickoff-ready: 26 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
+| `plans/` (29 files) | **ACTIVE — the operational layer** | Kickoff-ready: 27 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -656,6 +656,36 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     org chart is marked for replacement by this plan's generated chart (ORG-J, P00 exit) but
     has NOT moved** — the rest of `arc-company-org-blueprint.md` stays as history; this
     table records the pointer swap in the drop that makes it.
+
+29. **2026-10-03:** `plans/PLAN-launch.md` added (`launch` v1 — the venture factory: one fixed
+    process of 85 capability slots with exit proofs and a `depends_on` DAG, every tool a
+    pluggable vetted provider chosen by derived recommendation, a durable resumable runner, a
+    rehearsal venture scaffolded subdomain → git deploy → login → test-mode purchase with a
+    receipt per slot). **Trigger FIRED by owner ruling 2026-10-03**, recorded on the spine in
+    Phase 0 — chosen after a full-tree analysis found the money chain with three of five links
+    missing (spine: 0 `revenue.received` / 0 `revenue.simulated` / 0 `cost.incurred` across
+    1525 events) while every governance organ was complete. Landed at **v1.1** after one
+    same-day owner-brought external review: eight findings, **all eight accepted** (three with
+    modification, none rejected), adjudicated in-file — the slot count corrected from a stale 48
+    to a derived 85 (the reviewer's literal count was right within two rows; recorded as
+    pre-mortem #7, the ADR-0107 class), `payment` split into `payment-test` / `payment-live` so
+    phase order and dependency agree (**LAU-T**), slot tiers `core|required|optional` + `required_when`
+    predicates (**LAU-Q**), a durable runner state model with resume semantics (**LAU-R**), a
+    registry trust boundary — `hosts[]`, adapter digest pin, `sensitive_actions[]` (**LAU-S**),
+    the word *default* removed from the catalog and forbidden by lint, and **v1 narrowed to 33
+    core slots / 15.5 d** with the 35 `required` slots named as launch Cycle 2 in the same file.
+    Owner ruling in the same round: **no Nilluvai** (*"ippo idea illa"*) — the dogfood is the
+    rehearsal venture `arc-sandbox` (`honesty_class: rehearsal`, no purchase, no live keys); a real
+    venture arrives through `PLAN-discover.md`. Decisions **LAU-A…N and LAU-P…T lock at landing,
+    LAU-O open** (adapter home, decided at kickoff from the dependency read), ADR century **1700**
+    claimed at kickoff per `PORTFOLIO.md` after a sibling-worktree sweep. The load-bearing ones:
+    **LAU-A** (a slot is a contract, a tool is a row — neither may name the other), **LAU-C** (no
+    default, ever — zero vetted providers = REFUSED), **LAU-D** (four-function adapters, zero
+    business logic, check-then-create), **LAU-F** (recommendation derived, never typed), **LAU-H**
+    (zero new spine kinds; three approval gates), **LAU-I** (verify is a probe; a backup is
+    verified only by a restore). **`PLAN-cycle3-venture-launch.md` is NOT superseded** — it is
+    marked as the `launch-kit` slot's Week-3 checklist and stays in `plans/`; the fold is decided
+    at the Cycle 2 retro, and this table records the move in the drop that makes it.
 
 ## Provenance
 

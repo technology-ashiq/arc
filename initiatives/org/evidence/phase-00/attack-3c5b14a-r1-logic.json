@@ -1,0 +1,75 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:124 (orgBody, `const w = await p.collect(repo)`)",
+      "breaking_input": "Add `org/roles/d-product/broken.role.yaml` containing a tab-indented YAML typo. collect() records the parse failure and returns the other 70 cards; chartModel(w) builds a 70-role chart, chartOk passes, and the room's counts line reads '70 roles' with zero notes — while `node .claude/scripts/org/org-catalog.mjs --chart --check` on the same tree exits 1 naming the card.",
+      "why": "The route is a new direct consumer of collect() and reads only w.cards and w.ventures — whatever collect does with an unparseable card (the collector that records failures on a side list, per the recorded cycle-18 defect) is unobservable to this route. The A arm's byte-for-byte equality compares the route against chartModel(collect(REPO)) — the same collector on both sides — so a dropped card keeps every check green and the room serves a chart the CLI refuses: exactly the room-vs-CLI disagreement ADR-1625 claims is impossible, and the pre-mortem's 'two truths about who does what'.",
+      "fix": "After collect, refuse or surface any failure list collect exposes (or make collect throw on an unparseable card), and add an org-door arm: a broken card file must produce a named refusal or a room note, never a silently shorter chart.",
+      "twin_of": "`--chart` and `--digest` ran over whatever `collect()` could parse, silently dropping a broken card -> any reader that renders or digests a collection whose collector records failures on a side list"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:55 (isDir `catch { return false }`) as used by teamsOf",
+      "breaking_input": "Make `org/teams/` unreadable to the door process (chmod 000 on POSIX, or a deny ACL on Windows) while it holds two manifests. statSync throws EACCES, isDir returns false, and the Venture teams panel renders 'no venture team exists yet: the pilot waits for the first registered venture (ADR-1612 Amendment 1)'.",
+      "why": "The r2-B2 fix taught scorecardsOf to refuse a spine that yields nothing, but the teams side still answers a fake absence: isDir's bare catch converts any read error into 'does not exist', and teamsOf maps that to the NO_TEAM sentence instead of a refusal. The owner reads a false statement about the company as measured truth — an unreadable directory and a genuinely empty one are indistinguishable on the wire (both state none, same why).",
+      "fix": "Distinguish ENOENT from other stat errors (or attempt readdirSync and map EACCES/EIO to a teams refusal with a code) so an unreadable teams dir is refused by name and only a truly absent dir says NO_TEAM.",
+      "twin_of": "An events/ dir that existed but yielded no event scored every seat `no evidence` and answered ok -> every existence check standing in for a non-empty read"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:67 (teamsOf — the teams dir resolved with statSync-based isDir, then readdirSync)",
+      "breaking_input": "Replace `org/teams` with a symlink (POSIX) or junction (Windows) pointing at a directory outside the repo that holds `acme.team.yaml`. isDir follows the link, readdirSync lists the outside directory, the entries are regular files with slug stems, and the route serves that team's venture, stage and seat holders as if they were repo data.",
+      "why": "The r1 B1/B2 fix gates each ENTRY (isFile plus isId, so a symlinked file is listed as not read), but the directory itself is resolved with statSync, which follows links. The lane's own rule from the treeScripts fix — links are neither followed nor listed — is broken one level up: the door reads and publishes file content from outside the repo through a repo-committed link, and the scrub withholds paths, not contents.",
+      "fix": "lstat the teams dir and treat a non-regular directory as absent-or-refused (the same rule the walkers apply to entries), so a linked org/teams never lists outside content.",
+      "twin_of": "treeScripts listed a symlink named x.mjs as a script even when it points at a directory -> every walker that classifies by name before type"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:92 (scorecardsOf — org.findings and spine emptiness checked, org.cards emptiness not)",
+      "breaking_input": "An `org/attribution.yaml` whose cards section parses clean to zero rows (renamed or emptied section that loadOrg reports without findings) over a healthy spine: scorecardsOf returns state ok, rows [], total 1457 — the Scorecards panel renders empty with the footnote '1457 receipts read · N placed on no role' and no refusal.",
+      "why": "The route refuses a spine with no readable events (r2 B2) but serves ok for an org with zero cards — the same empty read one level up. The fold has no cross-check between the chart's 71 role rows and an empty scorecard row set, so the room shows a measured-looking empty panel instead of a named refusal; a refused part and an empty ok part differ only in state, and nothing compares row count to the chart.",
+      "fix": "Refuse the scorecards part (SOURCE_INVALID, 'the org loaded zero cards') when org.cards.length === 0, and add the arm to org-door.mjs beside the hollow-spine arm.",
+      "twin_of": "An events/ dir that existed but yielded no event scored every seat `no evidence` and answered ok -> every existence check standing in for a non-empty read"
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "tests/face/dash-doors.mjs:498 (C19 org POST check) vs initiatives/org/PLAN.md REQ-01",
+      "breaking_input": "POST /api/org with a valid token and Origin: the door answers 404 UNKNOWN_ROUTE and the new check asserts exactly that, while REQ-01's acceptance line says 'POST → 405'.",
+      "why": "The route table matches on (method, path), so an unsupported method falls through to UNKNOWN_ROUTE. The check was written to the implementation and pins 404, so the REQ's 405 acceptance is unmet with green CI — the requirement and its own delivered test disagree and nothing flags it.",
+      "fix": "Pick one: either make the door answer 405 for a known path with the wrong method (and update the check), or amend REQ-01's acceptance to 404 UNKNOWN_ROUTE with the owner's sign-off — do not ship a REQ and its test asserting different status codes."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:108 (scorecardsOf, the `due` const)",
+      "breaking_input": "A staffed card whose legitimacy date plus 30 days lands on 2026-10-31 while its review_by field reads 2026-10-29, today being 2026-10-30: the route prints 'not due (review_by 2026-10-29)' from its own comparison while org-review's own due line says otherwise — and the A arm strips {verdict, why, due} before its byte-for-byte comparison, so no check holds the route's due to org-review's.",
+      "why": "The file header claims 'this file re-derives nothing', but due is a second derivation (c.review_by <= today against the door's clock, plus a homemade 'not due (review_by undefined)' string for a card missing the field) of a value org-review owns, and the one-count fixture deliberately excludes it ('verdict fields aside'). The room's due/not-due line has no contract behind it.",
+      "fix": "Take due from org-review's own output (add it to its --json rows) or drop the route's comparison; if it stays, add an equality arm that does not strip due."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:70-72 (teamsOf — cards Map and ventures Set copied from org-team's context())",
+      "breaking_input": "org-team's context() later gains a filter (say, cards bound to governed ventures only); a team manifest citing an ungoverned card id then renders 'checks clean' in the room while `org-team --validate` refuses it — the two validators drift with no fixture comparing the room's context to the CLI's.",
+      "why": "The route imports org-team's readTeam and validateTeam but re-implements its context() by copy — the identical Map/Set build lines exist verbatim in org-team.mjs. Today they agree because they were pasted together; nothing holds them together tomorrow, and the byte-for-byte fixtures cover chart and scorecard rows, not the team-validation context.",
+      "fix": "Export context() from org-team.mjs (one additive export, the ADR-1620 pattern) and have teamsOf call it, or add a fixture asserting the route's team validation equals org-team --validate on the same tree.",
+      "twin_of": "The emitter's `: ` guard copied one misread by hand and could miss a sibling -> any guard that restates another component's behaviour instead of deriving it"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "tests/face/org-door.mjs:22 and tests/face/org-fold.mjs:20 (mkdtempSync with try/finally, no signal handler)",
+      "breaking_input": "Cancel the CI job (SIGTERM) while either fixture runs: default termination skips the finally block, and the face-org-* trees under TMPDIR survive the process, leaving spine and team residue on the runner.",
+      "why": "Cycle 18 recorded exactly this failure for the org self-test (cleaned on SIGINT only; CI cancels send SIGTERM) and fixed it there; the two new fixtures re-introduce the pattern with no handler at all — finally-only cleanup does not run on signal termination.",
+      "fix": "Install the same SIGINT/SIGTERM/SIGHUP handler the org self-test got: rmSync(tmp) then re-raise.",
+      "twin_of": "The self-test cleaned its scratch tree on SIGINT only; a CI cancel sends SIGTERM -> every signal handler in the lane"
+    }
+  ]
+}
