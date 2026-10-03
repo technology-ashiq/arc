@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
-phase: 03
+phase: 04
 appetite: 12.5d
-burn: 9d
+burn: 12d
 blocked-on: —
 depends-on: —
 
@@ -23,7 +23,7 @@ depends-on: —
 | 00 | Renderer proof + isolation — `--session` mandatory in explore mode, `(route, session)` duplicate discriminator, session-less meta refuses, stable-shutter re-proved, callers swept mechanically, and the route-keyed output path re-scoped so two renders of one route can coexist | 1.5d | ✅ 2026-08-23 |
 | 01 | Eyes + viewports + canvas gate — composer scoped-Bash render grant, iron-law read allowlist, ≤3 immutable iterations, platform-contract viewports, marker-based doc-surface gate, sibling-render negative control | 1.5d | ✅ 2026-09-17 |
 | 02 | Registry + curator — `design.sources.yaml` + lint, `design-curator` at balanced-workhorse, robots.txt preflight, real pack from the two permitted galleries, planted-PNG ignore assertion | 1.5d | ✅ 2026-09-27 |
-| 03 | Taste loop — jury amended FOUR→N, one juror at high-judgment, pack-anchored BELOW-BAR, controlled owner blind score. **Carries the taste tripwire that gates phases 05–07** | 2d | pending |
+| 03 | Taste loop — jury amended FOUR→N, one juror at high-judgment, pack-anchored BELOW-BAR, controlled owner blind score. **Carries the taste tripwire that gates phases 05–07** | 2d | ✅ 2026-10-03 |
 | 04 | EXP-A1 — ADR-0070's paired harness in the new regime, prediction pre-registered, reference item present, zero writes into model-policy's sealed bundle | 0.5d | pending |
 | 05 | Live sources — shadcn + 21st.dev search wiring, `.mcp.json` under the shared-file protocol, per-run availability lines, COULD-NOT-SCAN as its own outcome | 1.5d | pending |
 | 06 | Rival spike — terms clearance recorded FIRST, one provider one fixture, version+request+schema receipted, offline self-containment check, no adapter before the receipt | 1d | pending |
@@ -31,6 +31,36 @@ depends-on: —
 | 08 | Governance + retro — packager refuses non-arc renders and absent provenance, spend caps, manual-drop door, all three sealed predictions settled | 1d | pending |
 
 ## Done-log
+
+**Phase 03 — CLOSED 2026-10-03.** REQ-05 validated. The taste tripwire does not fire.
+
+- **CI.** `arc-ci` run **37124758126**, head SHA `05b9d838` (the branch tip), read per JOB:
+  **19/19 green**. The run before it (`9da5c72d`) needed two reruns of Windows shard 1/12: one
+  58-minute hang with no log, then `net::ERR_NO_BUFFER_SPACE` on the runner; the third attempt
+  was green. Phase 03 suites: `design-jury.bats` (N=4/5/6 deals, the planted skip-one deviation
+  caught), `design-critique-pack.bats` 8, the S3/S4 cases in `design-composer-eyes.bats` and
+  `design-selfreview.bats`, and three new `design-render-session.bats` cases for case 3.
+- **Live demo.** S5 ran on `lexos-case-workspace-v3`: three arc variants and a fresh
+  plain-prompt control, N=5 with one pack reference, divergence call passed, `jury-check` 0
+  deviations. Owner blind score 2026-10-02 (receipt before unblind): best arc **66**, control
+  **51**, reference 45. Owner ruling 2026-10-03: best-of, continue. Critiques of variants b and c
+  ran on 2026-10-03 with the pack and both viewports: both PASS. The session opened every render
+  it carried a verdict on. `evidence/phase-03/s5-live-explore.md`.
+- **Found at the close.** S5 had run no critique: the renderer refused the critic, reading its
+  render of a page the composer had rendered as a crash-retry. ADR-1417 Amendment 1 admits
+  exactly the explore/critique recipe pair. Two attack rounds (18 + 10 findings), the pair
+  narrowed to one transport token, both orders pinned, LOW leftovers on the debt ledger.
+- **Triggers.** Single-gallery bias read: not fired. The variant-b split (owner 18, critic PASS,
+  two jurors top-two) is calibration input for later phases.
+- **Not proven live.** No live BELOW-BAR was raised, so the pack citation is proved by CI only;
+  the swapped-pack mutant needs a second gallery. Both rows are in `debt-ledger.md`.
+- **Evidence:** `initiatives/design/evidence/phase-03/` (manifest verified by `arc-evidence.sh`).
+- **Metrics.** Actual ~4 build days (09-27, 09-28, 09-29, 10-03, plus the in-person S5 run on
+  09-30 and the owner score on 10-02) against a 2d appetite. `amendments: 3` (`/arc-change`
+  2026-09-17 viewports moved in, 2026-09-27 slices + fresh control, 2026-09-27 gallery-bias
+  trigger) · ADR-1417 Amendment 1 · `reopened: n`.
+- **Carried forward.** `phase.closed`, its approval request and the two critique receipts go out
+  from the main clone (`SKIP WORKTREE_SPINE` here).
 
 **Phase 02 — CLOSED 2026-09-27.** REQ-04 validated, as amended to ≥1 active source.
 
@@ -124,6 +154,10 @@ the engine lane recorded at 18 -> 6. A third round would be patching against the
 
 ## Appetite burn
 
+**Re-count 2026-10-03: 12 of 12.5 days (96%)**, same rule: the nine below plus 09-28, 09-29 and
+10-03. The taste tripwire did not fire (owner, 10-03), so Phases 04-08 continue; their 8d of
+appetite now sits past the cycle total, which the owner's 09-16 no-cut ruling already covers.
+
 **Re-count 2026-09-27: 9 of 12.5 days (72%)**, by the same rule (calendar days carrying lane
 commits): the five below plus 09-18, 09-20, 09-26 and 09-27. The owner's 09-16 no-cut ruling
 stands; the next gate is still the taste tripwire after Phase 03.
@@ -145,7 +179,7 @@ count and panel before comparing.
 
 ## Now
 
-**Position (2026-09-27):** **Phases 00, 01 and 02 are CLOSED; Phase 03 (taste loop) is next**, on the same branch and PR #292. Earlier position: **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
+**Position (2026-10-03):** **Phases 00-03 are CLOSED; Phase 04 (EXP-A1) is next**, on the same branch and PR #292. Earlier position: **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
 (01 on 2026-09-17); **Phase 02 is open**, with Slice A in and Slice B's 14 red-first tests on the
 branch. Working mode
 set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-c16`, pushed
