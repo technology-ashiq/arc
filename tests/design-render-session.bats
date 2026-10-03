@@ -149,6 +149,26 @@ teardown() { _arc_teardown; }
   echo "$output" | grep -q "never re-rendered"
 }
 
+# Phase 03 close (2026-10-03): the S5 live explore could not be critiqued at all. The composer's
+# explore render and the critic's critique render of the SAME page are the same pixels by design,
+# and case 3 read that as a retry. A retry repeats the recipe; a critique of an explore render
+# does not (the explore recipe carries confined-loopback), so it is a second look, not a retry.
+@test "case 3 is a RETRY: a critique render of an explore-rendered page is allowed, a same-recipe fresh session still refuses" {
+  _session_sandbox
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --mode explore --session s1
+  [ "$status" -eq 0 ]
+  [ -f "$RENDERS/s1/docs--design--explore--t--variant-a--one-html--1440x900.png" ] || { echo "the explore render never landed"; false; }
+  _reset_shots
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html
+  [ "$status" -eq 0 ] || { echo "a critique of the explore render was refused: $output"; false; }
+  [ -f "$RENDERS/design-critic/docs--design--explore--t--variant-a--one-html.png" ] || { echo "no critique render: $(ls -R "$RENDERS")"; false; }
+  # The control: the same critique recipe under a fresh session is still the retry case 3 exists for.
+  _reset_shots
+  FAKE_AB_SHOTS="A A" run bash "$(_rs)" docs/design/explore/t/variant-a/one.html --session other-critic
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q "never re-rendered"
+}
+
 @test "a slug collision REFUSES instead of silently overwriting the other route" {
   _session_sandbox
   # docs/design/explore/t/variant-a/a.b.html and docs/design/explore/t/variant-a/a-b.html both slug to docs--design--explore--t--variant-a--a-b-html. Trusting the previous meta's

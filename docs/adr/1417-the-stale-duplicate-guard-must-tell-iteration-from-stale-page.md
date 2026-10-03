@@ -62,3 +62,18 @@ be present — a meta written without a session must **fail closed**, not fall t
 route-only comparison, or this ADR silently reverts. That negative control is a Phase 00
 fixture: a meta with a missing session must refuse, and it must be attacked by an agent that did
 not write the guard.
+
+## Amendment 1 (2026-10-03, Phase 03 close) -- a retry repeats the recipe
+
+The Phase 03 S5 live explore could not be critiqued. The composer renders a variant in explore
+mode, whose recipe adds `confined-loopback` (ADR-1418). The critic then renders the same page in
+critique mode under its own session. The two are byte-identical by design, and the cross-session
+case read them as a crash-retry and refused, so nothing could critique an explore variant after
+its composer had rendered it.
+
+A crash-retry runs the same recipe again under a fresh session id. A render under a different
+recipe is a second look at the page, and matching pixels are what it should produce. Case 3 now
+refuses only when the other meta's recipe equals this render's. A meta whose recipe cannot be
+read is not known to differ, so it still refuses, failing closed the way a meta with no session
+does. The cross-route case and the iteration case are unchanged. Pinned in
+`tests/design-render-session.bats`, with a same-recipe fresh-session render as the control.
