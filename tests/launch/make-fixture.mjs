@@ -32,6 +32,10 @@ writeFileSync(join(dir, "catalog.yaml"), ["slots:",
 
 const row = (slotId, extra = []) => [
   `  - id: fake`, `    slot: ${slotId}`, "    status: vetted", "    hosts:", "      - fixture.invalid",
+  // The worker strips every key a row does not declare before the adapter loads, so the fake's steering knobs are
+  // declared here exactly as a real provider's token would be.
+  "    env_keys:", ...["FAKE_PROVIDER_FILE", "FAKE_DIE_AFTER", "FAKE_DIE_BEFORE_REPORT", "FAKE_KILL_PARENT", "FAKE_SLEEP_MS",
+    "FAKE_HOLD_MS", "FAKE_FETCH_HOST", "FAKE_WRITE", "FAKE_SENSITIVE", "FAKE_NEEDS_KEY", "LAUNCH_FIXTURE_ABSENT_KEY"].map((k) => `      - ${k}`),
   "    adapter: providers/probe/fake.mjs", `    digest: ${digest}`, "    approved_by: ashiq",
   "    vetted_by: 01M40ZHP72PYVBJT17R7A4WZ3W", "    scout: tests/launch/fixtures/scout.md", ...extra,
 ];

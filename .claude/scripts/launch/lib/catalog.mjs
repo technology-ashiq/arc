@@ -59,6 +59,9 @@ export function loadRegistry(path = PATHS.registry) {
 
 export function loadProfile(slug, venturesDir = PATHS.venturesDir) {
   if (!/^[a-z][a-z0-9-]{1,40}$/.test(slug || "")) throw new LaunchError("BAD_SLUG", `venture slug ${JSON.stringify(slug)} is not [a-z][a-z0-9-]{1,40}`);
+  // The slug becomes a state file, a lock file and a repo name; Windows opens `con.json` as a device whatever the
+  // extension (lanes.md; attack 3b48ed1 B11).
+  if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/.test(slug)) throw new LaunchError("BAD_SLUG", `venture slug ${slug} is a Windows reserved device name`);
   const p = readYaml(join(venturesDir, `${slug}.venture.yaml`), "venture profile");
   if (!p || p.slug !== slug) throw new LaunchError("SHAPE", `venture profile's slug ${JSON.stringify(p && p.slug)} is not ${slug}`);
   for (const [k, allowed] of Object.entries(PROFILE_FIELDS))

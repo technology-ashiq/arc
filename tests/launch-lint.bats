@@ -76,3 +76,23 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$output" == *"FAIL -- core slots with zero vetted providers: "*"dns"* ]] || { echo "$output"; false; }
 }
+
+@test "launch-lint: the adapter scanner refuses minified imports, world-reaching built-ins and ambient globals (B2, B3)" {
+  run node "$ARC_ROOT/tests/launch/scan-probe.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"SCAN_PROBE_DONE"* ]] || { echo "probe never finished: $output"; false; }
+  local want
+  for want in "minified: zero-dep-leg" "bare: zero-dep-leg" "reexport: zero-dep-leg" "commented: clean" "crypto: clean" \
+              "fs: zero-dep-leg" "child: zero-dep-leg" "env: ambient-capability" "template: ambient-capability" \
+              "prose: clean" "barefetch: ambient-capability" "ctxfetch: clean" "relative: import-boundary"; do
+    [[ "$output" == *"$want"* ]] || { echo "missing: $want"; echo "$output"; false; }
+  done
+}
+
+@test "launch-lint: a host entry that is a bare suffix is refused (B15)" {
+  sed 's/^      - api\.cloudflare\.com$/      - com/' "$ARC_ROOT/products/launch/launch.providers.yaml" > "$BATS_TEST_TMPDIR/h.yaml"
+  ! cmp -s "$ARC_ROOT/products/launch/launch.providers.yaml" "$BATS_TEST_TMPDIR/h.yaml" || { echo "fixture edit did not land"; false; }
+  run node "$(LINT)" --registry "$BATS_TEST_TMPDIR/h.yaml"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *'FAIL [hosts]'*'host "com" is not a bare hostname'* ]] || { echo "$output"; false; }
+}

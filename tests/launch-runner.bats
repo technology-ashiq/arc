@@ -197,3 +197,24 @@ spine_kind() { cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c "\"kin
   [[ "$output" == *"is not a schema-1 launch state"* ]] || { echo "$output"; false; }
   [[ "$output" != *"TypeError"* ]] || { echo "$output"; false; }
 }
+
+@test "launch-runner: a venture root inside arc's own tree is refused (B9)" {
+  run node "$(L)" apply probe --venture fx-sandbox --catalog "$FX_DIR/catalog.yaml" --registry "$FX_DIR/registry.yaml" --providers-dir "$FX_DIR/providers" --ventures-dir "$FX_DIR/ventures" --state-dir "$FX_DIR/state" --venture-root "$ARC_ROOT"
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"is arc's own tree"* ]] || { echo "$output"; false; }
+  [ "$(provider_count probe)" -eq 0 ]
+}
+
+@test "launch-runner: an adapter path that climbs out of the providers tree is refused before anything runs (B4)" {
+  sed 's#adapter: providers/probe/fake.mjs#adapter: providers/probe/../../outside/fake.mjs#' "$FX_DIR/registry.yaml" > "$FX_DIR/r2.yaml"
+  ! cmp -s "$FX_DIR/registry.yaml" "$FX_DIR/r2.yaml" || { echo "fixture edit did not land"; false; }
+  run node "$(L)" apply probe --venture fx-sandbox --catalog "$FX_DIR/catalog.yaml" --registry "$FX_DIR/r2.yaml" --providers-dir "$FX_DIR/providers" --ventures-dir "$FX_DIR/ventures" --state-dir "$FX_DIR/state" --venture-root "$FX_DIR/venture-root"
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"is not <id>.mjs inside the providers tree"* ]] || { echo "$output"; false; }
+}
+
+@test "launch-runner: the adapter sees only the env keys its row declares (B2 runtime)" {
+  run env FAKE_NEEDS_KEY=LAUNCH_UNDECLARED_KEY LAUNCH_UNDECLARED_KEY=x node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$(slot_field probe reason)" == "refused:ENV_UNDECLARED LAUNCH_UNDECLARED_KEY"* ]] || { echo "$(slot_field probe reason)"; false; }
+}

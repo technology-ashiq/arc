@@ -1,0 +1,140 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:guardedFetch",
+      "breaking_input": "An adapter whose row lists hosts: [api.github.com] calls ctx.fetch(\"https://api.github.com/x\") on a path that answers 302 to https://evil.example/collect, or it passes init {redirect: \"follow\"}. Global fetch follows redirects by default, and only the first URL is checked.",
+      "why": "The hosts[] allowlist is applied to the initial URL only. Any redirect lands on a host that was never checked, and the request still carries the body and non-credential headers. ADR-1719 says ctx.fetch refuses hosts outside hosts[].",
+      "fix": "Call fetch with redirect: \"manual\" (and ignore any init.redirect). Re-run hostAllowed on each Location, or refuse redirects outright.",
+      "twin_of": "every path check that validates one resolution and then writes through another (validate one read, use another)"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/scan.mjs:importFindings + worker.mjs (adapter import)",
+      "breaking_input": "An adapter with `import { writeFileSync } from \"node:fs\"; import https from \"node:https\"; import cp from \"node:child_process\";`, or one that just calls the global fetch() or process.env directly. zero-dep-leg passes it (every node: specifier is skipped). verify-is-probe passes it too, as long as ctx.fetch appears once in verify.",
+      "why": "Host confinement, write confinement and the env contract live only in ctx. The lint explicitly allows node: built-ins, and the worker runs the adapter in-process with the full process.env. An adapter can reach any host, write anywhere, run any binary and read every provider's token without touching ctx.",
+      "fix": "Allowlist the node: modules an adapter may import (e.g. node:crypto, node:path, node:url) and refuse fs/net/http/https/child_process/worker_threads/vm/module. Lint for globalThis.fetch, bare fetch( and process.env. Run the adapter with only its declared env keys.",
+      "twin_of": null
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/scan.mjs:specifiers",
+      "breaking_input": "An adapter containing `import{x}from\"lodash\";` or `import\"lodash\";` or `export{a}from\"lodash\";`. The static regexes require \\s+ after import and \\s before from, so none of these match. specifiers returns [] and zero-dep-leg is silent.",
+      "why": "The scanner reads raw source with whitespace assumptions and ignores valid minified syntax. The same raw-source scanning also flags `// import x from \"pkg\"` in a comment, because strings and comments are not blanked here as they are in verifyBody. That is the 'token inside a string/comment treated as code' defect left open in this scanner.",
+      "fix": "Use `import\\s*(?:[^'\"`;]*?\\sfrom\\s*)?[\"']` and `from\\s*[\"']`. Run the same string/comment blanking pass before scanning, while keeping the literal specifier text. Add the minified forms as fixtures and mutants.",
+      "twin_of": "Blanking comments before strings read the `//` inside \"https://...\" as a comment ... any other source scanner in the lane (specifiers, defaultWordHits) that treats a token inside a string as code"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "launch-lint.mjs adapter-path check; runner.mjs apply (adapterPath)",
+      "breaking_input": "Row `id: ../../../../tmp/x`, `slot: dns`, `adapter: providers/dns/../../../../tmp/x.mjs`. The lint compares the adapter string to a template built from the same row fields, so they are equal and it passes. The runner then does resolve(dirname(registry), prow.adapter) and imports a file outside providers/.",
+      "why": "The path rule is string equality against fields the row itself supplies. Neither the lint nor the runner checks that the resolved adapter sits inside providersDir. On the Windows leg, posix() also turns `providers\\dns\\x.mjs` into a pass, while the Linux leg fails it.",
+      "fix": "Require id and slot to match [a-z][a-z0-9-]*. In the lint and the runner, assert relative(providersDir, resolve(...)) does not start with '..' and is not absolute. Compare the raw adapter string without posix() normalisation.",
+      "twin_of": "every path check that validates one resolution and then writes through another (validate one read, use another)"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "runner.mjs apply (digest check) vs worker.mjs (import + loadRegistry)",
+      "breaking_input": "Between the parent's adapterDigest(adapterPath)===prow.digest check and the worker's `import(pathToFileURL(...))`, another process overwrites the adapter file. The worker also re-reads the registry from disk, so a swapped row (different hosts[] or sensitive_actions) takes effect.",
+      "why": "The parent hashes one read of the file and the worker executes a second read. The parent validates one registry row while the worker runs whatever row is on disk at that moment. The digest pin therefore does not bind the code that actually runs.",
+      "fix": "Have the parent pass the validated row and the digest to the worker. The worker re-hashes the exact bytes it imports (read the bytes, hash them, import via a data: or temp-file URL) and refuses on mismatch.",
+      "twin_of": "every path check that validates one resolution and then writes through another (validate one read, use another)"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "runner.mjs gate()",
+      "breaking_input": "Two simultaneous `apply gated` runs. Both read `row` without the lock, both see no approval_id, both call emit(\"approval.requested\"), and then saveUnderLock runs twice. The second overwrites approval_id with its own id.",
+      "why": "The check (no approval_id) and the act (emit) are outside the lock. Two approval requests are on the spine. The owner approves the first id in arc-inbox, but state holds the second, so decisionFor never finds a verdict and the slot is stuck awaiting.",
+      "fix": "Take the venture lock around the whole read, emit, save sequence in gate(). Re-read state under the lock and skip the emit if approval_id is already set.",
+      "twin_of": "every state the runner treats as terminal: does every re-entry path honour it?"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "runner.mjs runAttempt spawnSync(... timeout, killSignal SIGKILL)",
+      "breaking_input": "A hosting adapter spawns `pg_dump`, `gh` or `vercel` via node:child_process and the slot timeout fires. spawnSync kills only the worker pid; on Windows that is TerminateProcess with no tree kill. The grandchild keeps running and creating resources while the slot is marked failed(timeout).",
+      "why": "The timeout is described as a real process kill, but descendants survive it. The next attempt then races the orphan and can double the very resource the tag lookup is meant to protect.",
+      "fix": "On POSIX, run the worker detached and kill the process group (process.kill(-pid)). On Windows, run `taskkill /T /F /PID` or use a job object. Verify the descendants are gone before writing the receipt.",
+      "twin_of": "any code that infers a cause from status or signal"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "runner.mjs runAttempt (status 5 branch)",
+      "breaking_input": "A sensitive action pauses the worker (exit 5). The arc-event spawn then fails (spine lock timeout, ARC_SPINE_ROOT unwritable) and emit returns null. saveState records approval_id: null and the run returns AWAITING.",
+      "why": "Every later apply takes the sensitiveDecision path with a null approval_id, prints `awaiting null` and exits 5 forever. No approval.requested is ever re-emitted, and the slot cannot recover without hand-editing state. The null id is persisted as if a request existed.",
+      "fix": "If emit returns null, leave the slot in a state that re-emits (clear pending_action or set a flag) and return EXIT.FAILED. In sensitiveDecision, treat a missing approval_id as 'request again'.",
+      "twin_of": "every exit path of runAttempt, including the approval pause and refusals"
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": "runner.mjs apply (--venture-root handling); arc-launch.mjs cmdNew",
+      "breaking_input": "`arc-launch apply dns --venture arc-sandbox --venture-root .` (or the arc repo root, an ancestor, or `/`). The only check is existsSync. Adapter writes then land inside the public arc repo, or anywhere under that root.",
+      "why": "ADR-1722 and the repo rules say venture code must never land in the public arc repo. The venture root is the entire write boundary of ctx.write, and it is never checked to be outside arc's tree, a directory, or a repo named after the slug.",
+      "fix": "Require statSync(root).isDirectory(). Refuse a root equal to, inside, or containing the arc ROOT, and refuse a filesystem root. Optionally require the directory name to equal the slug.",
+      "twin_of": null
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "runner.mjs lockHolder",
+      "breaking_input": "The lock file holds garbage, is empty or truncated (host and pid undefined), or holds a live-but-unrelated pid reused after a reboot. For garbage, host !== hostname() leaves alive = true. For a reused pid, process.kill(pid, 0) succeeds.",
+      "why": "Any lock file that does not parse, or whose pid belongs to an unrelated live process, is treated as a live apply. Every later apply exits 3 'another apply holds the lock' with no takeover path.",
+      "fix": "Treat a non-numeric pid or an unparseable file as stale and take it over. Record process start time or a nonce in the lock and compare it. Cap the age that counts as alive for an unrelated pid.",
+      "twin_of": "withLock treats a holder older than ten minutes as a reused pid and breaks its lock ... any other caller of withLock with a long critical section"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "catalog.mjs loadProfile slug regex; state.mjs statePath; runner.mjs lockOpts",
+      "breaking_input": "`--venture nul`, `con`, `aux` or `com1`. All match [a-z][a-z0-9-]{1,40}. On the Windows leg statePath becomes `nul.json`, a reserved device name, and the lock is `.nul.lock`.",
+      "why": "lanes.md already records that reserved device names pass the grammar but break the filesystem on one CI leg only. The venture slug has no such exclusion.",
+      "fix": "Reject the Windows reserved names (con, prn, aux, nul, com0-9, lpt0-9) in loadProfile, and add a fixture for each.",
+      "twin_of": null
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "state.mjs saveState",
+      "breaking_input": "The state file p is truncated, and loadState has fallen back to .prev. The next saveState runs copyFileSync(p, p.prev) and overwrites the only good generation with the corrupt bytes. A kill before renameSync then leaves both p and .prev corrupt.",
+      "why": "The generation rotation copies whatever is at p, without checking that it parses. The 'previous generation survives' guarantee depends on the current file being good.",
+      "fix": "Rotate only if p parses. Otherwise keep .prev and write tmp over p. Or write .prev from the in-memory last good state.",
+      "twin_of": null
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "runner.mjs emit (spawnSync arc-event)",
+      "breaking_input": "arc-event blocks on a spine lock held by another session, or on a stuck volume. The emit spawnSync has no timeout, and it runs inside underLock for the venture.",
+      "why": "A hung receipt writer holds the venture lock forever, with no timeout and no kill. Every other apply exits 3 'locked' naming a live pid.",
+      "fix": "Pass timeout (for example 30000 ms) and killSignal to the emit spawnSync. Treat a timeout as UNRECEIPTED and return FAILED.",
+      "twin_of": "withLock treats a holder older than ten minutes as a reused pid ... any other caller of withLock with a long critical section"
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": "launch-lint.mjs block()/must() in the mutant self-test",
+      "breaking_input": "A Windows checkout with autocrlf, so launch.slots.yaml and launch.providers.yaml are CRLF. block() looks for `  - id: X\\n` and must() looks for `    tier: core\\n`, so indexOf finds nothing and throws 'mutant: no block' or 'edit target missing'.",
+      "why": "The self-test edits raw file bytes with LF-only literals. It crashes on a CRLF checkout, which is the Windows CI leg's exact condition (the digest code already normalises CRLF for that reason).",
+      "fix": "Normalise the file text to LF before applying the edits, or match with \\r?\\n. Add a CRLF run of the self-test.",
+      "twin_of": "Paths node prints on Windows carry backslashes that bash reads as escapes ... every helper whose output bats evals or globs"
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": "launch-lint.mjs hosts check; ctx.mjs hostAllowed",
+      "breaking_input": "A provider row with `hosts: [com]`, or `hosts: [\"\"]`, or a non-string entry such as a number. The lint only checks that hosts is a non-empty array. hostAllowed then permits every *.com host, or throws TypeError on a.toLowerCase().",
+      "why": "hosts[] is the whole network trust boundary, yet its entries are never validated as bare hostnames. A public-suffix or single-label entry silently allows far more than intended.",
+      "fix": "In the lint, require each entry to be a string matching a hostname grammar with at least two labels. Refuse entries on the public suffix list, and refuse a scheme, port, path or wildcard. In hostAllowed, skip non-strings.",
+      "twin_of": null
+    }
+  ]
+}

@@ -2,8 +2,8 @@
 // slot's timeout (a real process kill, not a timer the adapter can ignore), then writes the receipt. The child
 // persists state as it goes, so a kill at any point leaves what was created on the record for the next attempt.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, mkdirSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
+import { existsSync, readFileSync, mkdirSync, realpathSync } from "node:fs";
+import { join, resolve, dirname, relative, isAbsolute, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
 import { ROOT, PATHS, LaunchError, loadCatalog, loadRegistry, loadProfile, resolveBoard } from "./catalog.mjs";
@@ -31,7 +31,7 @@ export function resolvePaths(o = {}) {
 
 // A receipt goes through arc-event --strict, so a refused event is a failure here, never a silent exit 0.
 export function emit(kind, payload, slug, log) {
-  const r = spawnSync(process.execPath, [ARC_EVENT, "emit", kind, "--strict", "--process", PROCESS, "--venture", slug, "--payload", JSON.stringify(payload)], { encoding: "utf8" });
+  const r = spawnSync(process.execPath, [ARC_EVENT, "emit", kind, "--strict", "--process", PROCESS, "--venture", slug, "--payload", JSON.stringify(payload)], { encoding: "utf8", timeout: 60000, killSignal: "SIGKILL" });
   const id = (r.stdout || "").trim().split("\n").pop();
   if (r.status !== 0 || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id || "")) {
     log(`UNRECEIPTED: ${kind} was not recorded (${(r.stderr || "").trim().split("\n").pop() || `exit ${r.status}`})`);
@@ -79,8 +79,16 @@ export async function apply(opts, log = console.log) {
     const rows = loadRegistry(P.registry);
     const profile = loadProfile(slug, P.venturesDir);
     if (!opts.ventureRoot) throw new LaunchError("REFUSED", "--venture-root is required; launch never guesses where a venture's repo lives");
-    const ventureRoot = resolve(opts.ventureRoot);
-    if (!existsSync(ventureRoot)) throw new LaunchError("REFUSED", `--venture-root ${ventureRoot} does not exist`);
+    if (!existsSync(resolve(opts.ventureRoot))) throw new LaunchError("REFUSED", `--venture-root ${resolve(opts.ventureRoot)} does not exist`);
+    const ventureRoot = realpathSync(resolve(opts.ventureRoot));
+    // The venture root is ctx.write's whole boundary, and arc's repo is public: a root that is arc itself, inside it,
+    // or above it would put venture code where ADR-1722 says it never goes (attack 3b48ed1 B9).
+    const arcRoot = realpathSync(ROOT);
+    const rel = relative(arcRoot, ventureRoot);
+    const insideArc = rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+    const aboveArc = (() => { const up = relative(ventureRoot, arcRoot); return up !== "" && !up.startsWith("..") && !isAbsolute(up); })();
+    if (insideArc || aboveArc || dirname(ventureRoot) === ventureRoot)
+      throw new LaunchError("REFUSED", `--venture-root ${ventureRoot} is ${insideArc ? "arc's own tree" : "an ancestor of arc's tree or a filesystem root"} -- a venture lives in its own repo (ADR-1722)`);
     const board = resolveBoard(slots, profile);
     const entry = board.get(opts.slot);
     if (!entry) throw new LaunchError("REFUSED", `unknown slot ${opts.slot}`);
@@ -106,6 +114,11 @@ export async function apply(opts, log = console.log) {
 
     const prow = pickProvider(rows, slot.id, profile, opts.provider, opts.vet);
     const adapterPath = resolve(dirname(P.registry), prow.adapter);
+    // The row's adapter path is data: it may only name `<id>.mjs` under the providers tree, never climb out of it
+    // or spell itself with backslashes that read differently per OS (attack 3b48ed1 B4).
+    const inProviders = relative(P.providersDir, adapterPath);
+    if (/\\|(^|\/)\.\.(\/|$)/.test(String(prow.adapter)) || inProviders.startsWith("..") || isAbsolute(inProviders) || basename(adapterPath) !== `${prow.id}.mjs`)
+      throw new LaunchError("REFUSED", `${prow.id}'s adapter path ${prow.adapter} is not <id>.mjs inside the providers tree`);
     if (!existsSync(adapterPath)) throw new LaunchError("REFUSED", `candidate-unbuilt: ${prow.id}'s adapter ${prow.adapter} does not exist yet`);
     if (prow.status === "vetted" && !prow.digest) throw new LaunchError("REFUSED", `${prow.id} is vetted with no digest -- the registry is wrong (launch-lint)`);
     if (prow.digest && adapterDigest(adapterPath) !== prow.digest)
@@ -150,14 +163,36 @@ async function gate(P, slug, slot, prow, profile, state, row, log) {
     return null;
   }
   if (row.gate_approved) return null;
-  const id = emit("approval.requested", { what: `${slot.gate}: ${slot.id} via ${prow.id} for ${slug}`, gate: slot.gate, slot: slot.id, provider: prow.id, venture: slug, honesty_class: profile.honesty_class }, slug, log);
+  // Check-then-emit happens under the venture lock, against a fresh read: two concurrent applies must not both
+  // request, or the owner approves one id while state holds the other (attack 3b48ed1 B6).
+  let id;
+  try {
+    id = underLock(P, slug, () => {
+      const fresh = slotRow(loadState(P.stateDir, slug) || emptyState(profile), slot.id);
+      if (fresh.approval_id) return { already: fresh.approval_id };
+      const got = emit("approval.requested", { what: `${slot.gate}: ${slot.id} via ${prow.id} for ${slug}`, gate: slot.gate, slot: slot.id, provider: prow.id, venture: slug, honesty_class: profile.honesty_class }, slug, log);
+      if (got) {
+        const s = loadState(P.stateDir, slug) || emptyState(profile);
+        saveState(P.stateDir, setSlot(s, slot.id, rehearsalRefuses
+          ? { state: "absent", approval_id: got, reason: `rehearsal never crosses ${slot.gate} (approval.requested ${got} recorded, refusal path exercised)` }
+          : { state: "awaiting-approval", approval_id: got, provider: prow.id }));
+      }
+      return got;
+    }, log);
+  } catch (e) {
+    if (e.exit) { log(e.message); return e.exit; }
+    throw e;
+  }
+  if (id && id.already) {
+    if (rehearsalRefuses) { log(`${slot.id}: REFUSED -- a rehearsal venture never crosses ${slot.gate} (already recorded: ${id.already})`); return EXIT.REFUSED; }
+    log(`${slot.id}: ${slot.gate} already requested (${id.already}); decide with arc-inbox, then apply again`);
+    return EXIT.AWAITING;
+  }
   if (!id) return EXIT.FAILED;
   if (rehearsalRefuses) {
-    saveUnderLock(P, slug, (s) => setSlot(s, slot.id, { state: "absent", approval_id: id, reason: `rehearsal never crosses ${slot.gate} (approval.requested ${id} recorded, refusal path exercised)` }), profile, log);
     log(`${slot.id}: REFUSED -- a rehearsal venture never crosses ${slot.gate}; approval.requested ${id} recorded`);
     return EXIT.REFUSED;
   }
-  saveUnderLock(P, slug, (s) => setSlot(s, slot.id, { state: "awaiting-approval", approval_id: id, provider: prow.id }), profile, log);
   log(`${slot.id}: ${slot.gate} -- approval.requested ${id}; decide with arc-inbox, then apply again`);
   return EXIT.AWAITING;
 }
@@ -215,7 +250,7 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       }
       const attempt = (prev.attempt || 0) + 1;
       s = saveState(P.stateDir, setSlot(s, slot.id, { state: "applying", provider: prow.id, attempt, reason: null, receipt: null }));
-      const args = { ...P, venture: slug, slot: slot.id, provider: prow.id, ventureRoot, attempt, timeout: slot.timeout };
+      const args = { ...P, venture: slug, slot: slot.id, provider: prow.id, row: prow, adapterPath: resolve(dirname(P.registry), prow.adapter), ventureRoot, attempt, timeout: slot.timeout };
       const r = spawnSync(process.execPath, [WORKER, JSON.stringify(args)], { stdio: "inherit", timeout: Number(slot.timeout) * 1000, killSignal: "SIGKILL" });
       s = loadState(P.stateDir, slug, { onFallback: log }) || s;
       const after = slotRow(s, slot.id);
@@ -224,6 +259,13 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       for (const q of after.queued || []) emit(q.kind, { ...q.payload, venture: slug }, slug, log);
       if (r.status === 5 && after.state === "awaiting-approval") {
         const id = emit("approval.requested", { what: `${after.pending_action}: ${slot.id} via ${prow.id} for ${slug}`, gate: `sensitive:${after.pending_action}`, slot: slot.id, provider: prow.id, venture: slug, honesty_class: profile.honesty_class }, slug, log);
+        // An unrecorded request is a failure, never a pause: a slot "awaiting" an approval id that does not exist
+        // could only be freed by hand-editing state (attack 3b48ed1 B8).
+        if (!id) {
+          saveState(P.stateDir, setSlot(s, slot.id, { state: "failed", reason: `unreceipted:approval.requested for ${after.pending_action}`, pending_action: null, queued: [] }));
+          log(`${slot.id}: ${after.pending_action} needs the owner, but the request was not recorded -- failed, apply again`);
+          return EXIT.FAILED;
+        }
         saveState(P.stateDir, setSlot(s, slot.id, { approval_id: id, queued: [] }));
         log(`${slot.id}: ${after.pending_action} needs the owner -- approval.requested ${id}`);
         return EXIT.AWAITING;

@@ -1,0 +1,126 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/runner.mjs:runAttempt (spawnSync timeout)",
+      "breaking_input": "A slot adapter spawns a grandchild process (pg_dump, a shell, curl) and exceeds slot.timeout. spawnSync with killSignal SIGKILL kills only the worker, not its descendants.",
+      "why": "On Windows and POSIX the grandchild survives the kill and keeps creating provider resources or holding handles after the runner has recorded failed(timeout) and released the lock. A later retry can then double-create.",
+      "fix": "Spawn the worker in its own process group (detached on POSIX) and kill the whole group, or on Windows use taskkill /T /F. The adapter timeout should also kill any children it started."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/runner.mjs:underLock / lockHolder",
+      "breaking_input": "Two applies for the same venture start at the same moment. Both call lockHolder, find no lock file, and then both reach withLock.",
+      "why": "The live-holder check is a separate read before the lock is taken, so it is check-then-act. The loser falls through to withLock's 500ms wait and reports LOCK_TIMEOUT only after the timeout, while the stale-break logic of withLock (older than ten minutes) can still evict a legitimately live 15-minute hosting apply that started on another host.",
+      "fix": "Refuse a live holder inside the same critical section as acquisition, or extend withLock to take a stale threshold above the maximum slot timeout instead of pre-checking."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:lockHolder",
+      "breaking_input": "The lock file was written by a different host (a shared or synced state dir), or the pid has been reused by an unrelated process on this host.",
+      "why": "When host differs from hostname(), alive stays true, so a dead remote holder blocks forever and is never taken over. When the pid is reused locally, process.kill(pid,0) succeeds and a dead holder reads as live, so apply is refused permanently with exit 3.",
+      "fix": "Treat a foreign host as unknown and age it out by timestamp, and compare the process start time or a token in the lock file, not only the pid."
+    },
+    {
+      "id": "B4",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/worker.mjs:3-5 and runner.mjs spawnSync args",
+      "breaking_input": "The args JSON carries ventureRoot, catalog and registry paths in argv[2]; on Windows a path with a double quote or a very long path set makes the single-argument JSON exceed the ~32k command-line limit, or has its quotes mangled by CreateProcess argument escaping.",
+      "why": "JSON passed as one argv element relies on Windows quote escaping. Embedded quotes or backslashes before quotes in a path corrupt the JSON, JSON.parse throws at module top level, and the worker exits with a stack trace and no state written, which the runner then reports as 'ended without a result'.",
+      "fix": "Pass the args through an env var or a temp file path, not as argv JSON."
+    },
+    {
+      "id": "B5",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:confinedPath / write",
+      "breaking_input": "Between confinedPath's realpath check and writeFileSync, a symlink or junction is created inside the venture root pointing outside, or the final component already exists as a symlink to an outside file (rel = 'link.txt' where link.txt -> /etc/x).",
+      "why": "The check resolves the nearest existing ANCESTOR of dirname(abs), but never lstat's the final component. If the target file is itself a symlink pointing out of the root, writeFileSync follows it and writes outside the root. It is also a TOCTOU between check and write.",
+      "fix": "lstat the final path and refuse symlinks, resolve realpath of the target when it exists and re-check containment, and open with O_NOFOLLOW where available."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:confinedPath",
+      "breaking_input": "rel = 'a/../../x' or on Windows rel = 'C:foo' or a reserved device name such as 'nul' or 'con', or a path with alternate data stream 'file.txt:stream'.",
+      "why": "isAbsolute('C:foo') is false on Windows yet resolve() treats the drive-relative path as rooted on drive C, and the inside() check then relies on relative() returning a '..' prefix. Device names and ADS bypass the string containment model and write to non-file targets.",
+      "fix": "Reject any rel containing ':' , drive prefixes and reserved device names on win32, and normalise before the isAbsolute test."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:guardedFetch",
+      "breaking_input": "An allowed host answers with a 30x redirect to a host outside hosts[]. The call is fetch(u, {...init, signal}) with the default redirect: 'follow'.",
+      "why": "The host allowlist is checked once, only on the first URL. fetch follows the redirect to any host, including http, so ctx.fetch reaches hosts that the row never declared, which defeats the hosts[] boundary of ADR-1719. The same applies to init.redirect being caller-supplied.",
+      "fix": "Force redirect: 'manual' after spreading init, and re-validate each Location against the allowlist before following it."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:guardedFetch",
+      "breaking_input": "An adapter calls ctx.fetch('https://api.cloudflare.com.', ...) with a trailing dot, or a URL with userinfo 'https://api.cloudflare.com@evil.example/', or an IP-literal host.",
+      "why": "hostAllowed compares u.hostname lowercase suffixes. A trailing-dot FQDN fails the suffix check inconsistently, and a subdomain-takeover host under an allowed zone passes. Subdomain suffix matching means any attacker-controlled subdomain of a listed host (for example on a multi-tenant host like vercel.app style hosts) is allowed.",
+      "fix": "Strip a trailing dot, reject userinfo, and match exact hosts unless a wildcard is explicitly declared in the row."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/state.mjs:saveState",
+      "breaking_input": "The runner (parent) and the worker child each call saveState on the same file, and a process is killed between writeFileSync(.tmp) and renameSync, or two writers share the fixed '.tmp' name.",
+      "why": "The temp name is a fixed '<slug>.json.tmp', not unique per writer, and nothing is fsynced. The worker's save() runs without the venture lock (the parent holds it, but the worker does not acquire it), so a parent saveState and a worker save can interleave, and one copies .prev from a half-renamed file. On Windows renameSync over an existing file can fail with EPERM/EBUSY when an antivirus or reader holds it open, with no retry.",
+      "fix": "Use a per-pid unique temp name, fsync before rename, retry rename on EPERM/EBUSY, and serialise worker writes through the same lock or a generation compare-and-swap."
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/state.mjs:loadState",
+      "breaking_input": "state.json parses but fails check(), or is a valid JSON with a bad slot state, and .prev is also corrupt.",
+      "why": "The catch wraps both the parse and the shape check, so a LaunchError STATE_SHAPE from check() on the current file is swallowed and silently replaced by the older .prev generation. The runner then proceeds from older state, which can re-run a slot recorded as verified and double-create resources. The fallback also throws a raw SyntaxError (not LaunchError) from the .prev parse, which escapes apply as an uncaught exception.",
+      "fix": "Fall back to .prev only on JSON parse errors, let shape errors refuse, and wrap the .prev read in the same LaunchError path."
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:emit",
+      "breaking_input": "The payload JSON is passed as a single argv element to arc-event via spawnSync; on Windows a payload with embedded double quotes or a trailing backslash is re-parsed by the child's argv rules, and a payload over the command-line limit is cut.",
+      "why": "JSON.stringify output relies on CreateProcess quote escaping. Node escapes quotes correctly in the common case, but arc-event is run through process.execPath directly, so an MSYS or bash wrapper layer anywhere makes the '@file' and quote handling unreliable (the known msys response-file hazard). A mangled payload either fails --strict, producing an UNRECEIPTED slot, or records a truncated receipt.",
+      "fix": "Pass the payload via stdin or an env var, as the msys-at-file memory advises."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:emit",
+      "breaking_input": "arc-event writes extra lines to stdout after the id, for example a warning or a trailing note, or prints the id and then a deprecation line.",
+      "why": "The id is taken as the last non-empty line of stdout (split('\\n').pop()), so a trailing blank or a CRLF on Windows leaves a '\\r' on the line. The regex then fails and a perfectly recorded event is reported as UNRECEIPTED, after which the runner returns EXIT.FAILED and a retry emits a duplicate receipt.",
+      "fix": "Trim each line, take the last line that matches the ULID pattern, and do not treat an unparsed id as unrecorded without checking the spine."
+    },
+    {
+      "id": "B13",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/arc-launch.mjs:parseArgs",
+      "breaking_input": "`arc-launch apply dns --venture arc-sandbox --venture-root -- ` or a legitimate value beginning with '--' such as a path or a provider id, and also `--venture=arc-sandbox` form.",
+      "why": "Any value starting with '--' is refused as missing, and the --flag=value form is rejected as an unknown flag, so a state-dir path that begins with '--' cannot be given. More importantly the flag set is checked per verb nowhere: `new --provider x` or `new --vet` is accepted and silently ignored.",
+      "fix": "Accept the --flag=value form and the '--' terminator, and reject flags that the chosen verb does not use."
+    },
+    {
+      "id": "B14",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/launch-lint.mjs: adapter-without-row / specifiers in scan.mjs",
+      "breaking_input": "An adapter file that imports with a template-literal specifier, a bare `import x from 'lodash'` written across two lines with a comment between tokens, or `process.binding` / `module.createRequire(...)('lodash')` / `globalThis.process.mainModule.require('child_process')`.",
+      "why": "The zero-dep-leg scan is regex over raw source with no comment or string blanking (the verifyBody tokenizer fix was never applied to specifiers), so a commented-out import is flagged and a createRequire-based load or a node:child_process import passes: any node: built-in is allowed, including node:child_process and node:fs, which let an adapter spawn processes and bypass ctx.fetch, ctx.write and hosts[] entirely.",
+      "fix": "Allow-list the node: built-ins an adapter may import (not child_process, fs, net, http, worker_threads), block createRequire and process.binding, and reuse the one-pass tokenizer for specifiers."
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:runAttempt (r.status===5 path) and worker.mjs",
+      "breaking_input": "An adapter calls process.exit(5), or its own child exits 5 by coincidence, while the state shows awaiting-approval from a previous attempt.",
+      "why": "The runner trusts exit code 5 plus the persisted state to mean approval pending. A stale awaiting-approval row left from an earlier attempt, together with any adapter exit 5, is treated as a fresh approval request, emitting a new approval.requested with the stale pending_action. This is the same twin as inferring a cause from status or signal.",
+      "fix": "Have the worker write an attempt-stamped marker with the attempt number, and require it to match before treating exit 5 as an approval pause.",
+      "twin_of": "Windows reports a SIGKILLed child as plain exit 1, so a reason built from the exit code named the wrong cause -> any code that infers a cause from `status` or `signal`"
+    }
+  ]
+}

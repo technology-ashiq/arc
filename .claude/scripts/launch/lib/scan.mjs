@@ -14,33 +14,49 @@ export function defaultWordHits(text) {
   return hits;
 }
 
-// Every module specifier an adapter names: static import/export-from, dynamic import(), require().
-// Returns { spec, computed }: a dynamic specifier that is not one string literal is `computed`.
+// Comments blanked, strings KEPT -- specifiers live in strings, and a commented-out import is not an import.
+export function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|(["'`])(?:\\.|(?!\1)[^\\])*?\1/g, (m, q) => (q ? m : m.replace(/[^\n]/g, " ")));
+}
+
+// Every module specifier an adapter names, whitespace-free syntax included (`import{x}from"pkg"`, `import"pkg"`):
+// any `from "x"`, any bare `import "x"`, any dynamic import() or require(). A non-literal dynamic one is `computed`.
 export function specifiers(src) {
+  const code = stripComments(src);
   const out = [];
-  const statics = [/\bimport\s+(?:[^'"`;]*?\sfrom\s+)?["']([^"']+)["']/g, /\bexport\s+[^'"`;]*?\sfrom\s+["']([^"']+)["']/g];
-  for (const re of statics) for (const m of src.matchAll(re)) out.push({ spec: m[1], computed: false });
+  for (const re of [/\bfrom\s*["']([^"']+)["']/g, /\bimport\s*["']([^"']+)["']/g]) for (const m of code.matchAll(re)) out.push({ spec: m[1], computed: false });
   for (const re of [/\bimport\s*\(\s*([^)]*)\)/g, /\brequire\s*\(\s*([^)]*)\)/g])
-    for (const m of src.matchAll(re)) {
+    for (const m of code.matchAll(re)) {
       const lit = m[1].trim().match(/^["']([^"']+)["']$/);
       out.push(lit ? { spec: lit[1], computed: false } : { spec: m[1].trim(), computed: true });
     }
   return out;
 }
 
-export function importFindings(src, adapterPath, providersDir) {
+// The adapter's whole world is ctx (ADR-1704). A built-in that reaches the network, the filesystem, a process or the
+// environment would walk round every ctx guard, so only pure-computation built-ins are allowed (attack 3b48ed1 B2).
+// An adapter is ONE file: the worker runs the exact bytes it hashed, so there is nothing for a relative import to reach.
+export const ALLOWED_BUILTINS = new Set(["node:crypto", "node:url", "node:path", "node:buffer", "node:util"]);
+const AMBIENT = [
+  [/\bprocess\b/, "process"], [/\bglobalThis\b/, "globalThis"], [/\bglobal\b/, "global"], [/\beval\s*\(/, "eval"],
+  [/\bFunction\s*\(/, "Function()"], [/\bWebSocket\b/, "WebSocket"], [/\bXMLHttpRequest\b/, "XMLHttpRequest"],
+  [/(?<![.\w$])fetch\s*\(/, "bare fetch() -- use ctx.fetch"],
+];
+
+export function importFindings(src) {
   const out = [];
   for (const { spec, computed } of specifiers(src)) {
     if (computed) { out.push({ rule: "zero-dep-leg", msg: `computed module specifier ${spec} -- an adapter names its imports literally` }); continue; }
-    if (spec.startsWith("node:")) continue;
-    if (spec.startsWith("./") || spec.startsWith("../")) {
-      const rel = relative(providersDir, resolve(dirname(adapterPath), spec));
-      if (rel.startsWith("..") || isAbsolute(rel))
-        out.push({ rule: "import-boundary", msg: `imports ${spec}, outside the providers tree (an adapter never reaches venture or lane code)` });
+    if (spec.startsWith("node:") || /^(fs|child_process|net|http|https|os|vm|worker_threads|dns|tls|dgram|cluster)$/.test(spec)) {
+      if (!ALLOWED_BUILTINS.has(spec)) out.push({ rule: "zero-dep-leg", msg: `imports ${spec} -- an adapter reaches the world only through ctx (allowed: ${[...ALLOWED_BUILTINS].join(", ")})` });
       continue;
     }
+    if (spec.startsWith(".") || spec.startsWith("/")) { out.push({ rule: "import-boundary", msg: `imports ${spec} -- an adapter is one file and reaches no other code` }); continue; }
     out.push({ rule: "zero-dep-leg", msg: `imports package ${spec} -- adapters import no package (ADR-1715)` });
   }
+  // Quoted strings are blanked so prose cannot trip the rule; template literals are NOT, since `${...}` inside one is code.
+  const code = stripComments(src).replace(/(["'])(?:\\.|(?!\1)[^\\\n])*?\1/g, (m) => m[0] + " ".repeat(m.length - 2) + m[0]);
+  for (const [re, name] of AMBIENT) if (re.test(code)) out.push({ rule: "ambient-capability", msg: `uses ${name} -- an adapter reaches the world only through ctx` });
   return out;
 }
 
@@ -87,9 +103,10 @@ export function adapterFindings(path, providersDir) {
 
 // Digest pinned at vet (ADR-1719 amendment): sha256 over the bytes after CRLF -> LF, so a Windows checkout's line
 // endings cannot un-vet an adapter on one CI leg. That normalisation is the one thing the pin cannot see.
+export const normalizeAdapter = (text) => text.replace(/\r\n/g, "\n");
+export const digestOf = (normalized) => createHash("sha256").update(normalized, "utf8").digest("hex");
 export function adapterDigest(path) {
-  const text = readFileSync(path, "utf8").replace(/\r\n/g, "\n");
-  return createHash("sha256").update(text, "utf8").digest("hex");
+  return digestOf(normalizeAdapter(readFileSync(path, "utf8")));
 }
 
 export const posix = (p) => p.split(sep).join("/");

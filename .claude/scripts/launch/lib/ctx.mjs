@@ -42,7 +42,9 @@ export function makeCtx({ profile, board, slot, row, root, resources, tag, attem
     if (u.protocol !== "https:") throw refusal("HOST_REFUSED", `${u.protocol} refused; adapters speak https only`);
     if (!hostAllowed(u.hostname, hosts)) throw refusal("HOST_REFUSED", `${u.hostname} is not in this provider's hosts[] (${hosts.join(", ")})`);
     if (signal && signal.aborted) throw refusal("ABORTED", "slot timeout reached");
-    return fetch(u, { ...init, signal });
+    // Redirects are never followed: the allowlist checks one URL, and a followed 3xx would land on a host nobody
+    // checked (attack 3b48ed1 B1). The adapter sees the 3xx and may call ctx.fetch on its Location, which is checked.
+    return fetch(u, { ...init, redirect: "manual", signal });
   };
   const probeFetch = guardedFetch(PROBE_HOSTS);
   return Object.freeze({

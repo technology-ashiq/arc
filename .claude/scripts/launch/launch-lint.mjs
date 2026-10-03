@@ -90,6 +90,11 @@ export function lint({ catalog = PATHS.catalog, registry = PATHS.registry, provi
     if (!STATUSES.has(r.status)) add("enum", r.id, `status ${r.status} is not candidate | vetted | retired | blocked`);
     if (r.status === "blocked" && !r.reason) add("blocked-reason", r.id, "blocked without a reason");
     if (!Array.isArray(r.hosts) || !r.hosts.length) add("hosts", r.id, "no hosts[] -- an adapter with no declared hosts may call nothing (ADR-1719)");
+    // hostAllowed() admits every subdomain of an entry, so an entry must be a real host of two labels or more:
+    // `com` or `co.in` would admit the whole internet under it (attack 3b48ed1 B15).
+    for (const h of Array.isArray(r.hosts) ? r.hosts : [])
+      if (typeof h !== "string" || !/^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/.test(h) || /^(co|com|net|org|gov|ac|edu)\.[a-z]{2}$/.test(h))
+        add("hosts", r.id, `host ${JSON.stringify(h)} is not a bare hostname of two or more labels`);
     if (r.adapter && r.slot && posix(r.adapter) !== `providers/${r.slot}/${r.id}.mjs`) add("adapter-path", r.id, `adapter ${r.adapter} is not providers/${r.slot}/${r.id}.mjs`);
     const ap = r.adapter ? resolve(registryDir, r.adapter) : null;
     if (ap) referenced.add(ap);
@@ -140,10 +145,12 @@ function baseline(dir) {
   mkdirSync(join(providersDir, "dns"), { recursive: true });
   const catalog = join(dir, "launch.slots.yaml");
   const registry = join(dir, "launch.providers.yaml");
-  cpSync(PATHS.catalog, catalog);
+  // The mutants edit LF literals, so the copies are LF whatever the checkout did -- an autocrlf Windows leg would
+  // otherwise crash every mutant on a missing edit target (attack 3b48ed1 B14).
+  writeFileSync(catalog, readFileSync(PATHS.catalog, "utf8").replace(/\r\n/g, "\n"));
   const adapter = join(providersDir, "dns", "probe-dns.mjs");
   writeFileSync(adapter, CLEAN_ADAPTER);
-  let reg = readFileSync(PATHS.registry, "utf8");
+  let reg = readFileSync(PATHS.registry, "utf8").replace(/\r\n/g, "\n");
   reg += [
     "  - id: probe-dns", "    slot: dns", "    status: vetted", "    hosts:", "      - api.cloudflare.com",
     "    adapter: providers/dns/probe-dns.mjs", `    digest: ${adapterDigest(adapter)}`, "    approved_by: ashiq",

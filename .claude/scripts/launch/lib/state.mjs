@@ -43,7 +43,9 @@ export function saveState(dir, state) {
   const p = statePath(dir, state.venture);
   const next = { ...state, generation: (state.generation || 0) + 1 };
   writeFileSync(`${p}.tmp`, JSON.stringify(next, null, 2) + "\n");
-  if (existsSync(p)) copyFileSync(p, `${p}.prev`);
+  // Only a current file that parses becomes the previous generation; rotating a torn one in would destroy the
+  // good copy the fallback depends on (attack 3b48ed1 B12).
+  if (existsSync(p)) { try { JSON.parse(readFileSync(p, "utf8")); copyFileSync(p, `${p}.prev`); } catch { /* keep the last good .prev */ } }
   renameSync(`${p}.tmp`, p);
   return next;
 }
