@@ -742,7 +742,8 @@
       "portfolio": "board",
       "scheduler": "scheduler",
       "docs": "lane",
-      "org": "lane"
+      "org": "lane",
+      "launch": "lane"
     }
   },
   "commands": {
@@ -899,7 +900,8 @@
       "capability-vet": "develop",
       "arc-bytediff": "toolbelt",
       "face-coverage": "toolbelt",
-      "design-sources-lint": "design-studio"
+      "design-sources-lint": "design-studio",
+      "launch-lint": "lane"
     }
   },
   "concepts": {
@@ -1363,7 +1365,8 @@
       "leads": "leads",
       "legal": "legal",
       "memory": "memory",
-      "docs": "lane"
+      "docs": "lane",
+      "launch": "lane"
     }
   },
   "adrs": {
@@ -1375,6 +1378,7 @@
       "1400": "design-studio",
       "1500": "lane",
       "1600": "lane",
+      "1700": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1417,6 +1421,7 @@
       "PLAN-face-v2": "strategy",
       "PLAN-growth": "strategy",
       "PLAN-leads": "strategy",
+      "PLAN-launch": "strategy",
       "PLAN-ledger": "strategy",
       "PLAN-legal-pack": "strategy",
       "PLAN-memory": "strategy",
