@@ -24,11 +24,17 @@ const WANT = Object.freeze({
   placeAll: "function", scorecard: "function", isStaffed: "function", isId: "function", readTeam: "function", validateTeam: "function",
 });
 
-let loading = null;
-/** The org producers, imported once. A load failure refuses this route by name, with the loader's code only. */
-async function producers() {
+/**
+ * The org producers, imported once. A load failure refuses this request by name, with the loader's code only, and is
+ * forgotten: a transient import error (EMFILE, a file mid-checkout) must not refuse the route until the door restarts.
+ * Exported as a factory so a fixture can hand it an importer that fails once; the door uses the default.
+ * @param {(f: string) => Promise<any>} [at]
+ */
+export function producerLoader(at = (f) => import(new URL(f, ORG).href)) {
+  /** @type {Promise<any> | null} */
+  let loading = null;
+  return async function producers() {
   if (!loading) {
-    const at = (f) => import(new URL(f, ORG).href);
     loading = Promise.all([at("org-coverage.mjs"), at("org-catalog.mjs"), at("org-review.mjs"), at("lib/attribution.mjs"), at("lib/card.mjs"), at("org-team.mjs"), at("lib/team.mjs")])
       .then(([cov, cat, rev, att, card, team, teamLib]) => ({ m: {
         collect: cov.collect, chartModel: cat.chartModel, loadOrg: rev.loadOrg, readSpine: rev.readSpine, verdictFor: rev.verdictFor,
@@ -37,11 +43,14 @@ async function producers() {
   }
   const got = await loading;
   if (got.e) {
+    loading = null;
     const raw = String((got.e && (got.e.code || got.e.name)) || "Error");
     throw new ReadError("PARSER_UNAVAILABLE", `the org producers this route imports did not load (${/^[A-Za-z0-9_]{1,64}$/.test(raw) ? raw : "Error"})`);
   }
   return got.m;
+  };
 }
+const producers = producerLoader();
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
@@ -90,6 +99,8 @@ async function scorecardsOf(repo, spineDir, p) {
   // read that looked measured (found by the Phase 00 smoke, which was handed the events/ dir itself).
   if (typeof spineDir !== "string" || !isDir(join(spineDir, "events"))) return { state: "refused", code: "SPINE_UNAVAILABLE", human: "the door has no spine with an events/ directory to score from", rows: [] };
   const sp = await p.readSpine(repo, spineDir);
+  // An events/ dir that yields no event (empty, or every day file torn or unreadable) is the same empty read.
+  if (!Array.isArray(sp.events) || sp.events.length === 0) return { state: "refused", code: "SPINE_UNAVAILABLE", human: `the door's spine holds no readable event (${(sp.torn?.length ?? 0) + (sp.unreadable?.length ?? 0)} day file(s) torn or unreadable); nothing is scored`, rows: [] };
   const { placements, unattributed, conflicts } = p.placeAll(sp.events, org.rules, org.roleIds);
   const today = todayIst();
   const rows = org.cards.map((c) => {
@@ -140,7 +151,14 @@ export async function servedOrg(repo, spineDir, inject = {}) {
     if (JSON.stringify(served.chart.departments[i].roles[j]) !== JSON.stringify(r)) altered.add(r.id);
   }));
   body.scorecards.rows.forEach((r, i) => { if (JSON.stringify(served.scorecards.rows[i]) !== JSON.stringify(r)) altered.add(r.role); });
-  return { ...served, scrubbed: [...altered].sort() };
+  // Everything that is not a role row -- department names, team rows, refusal sentences -- is named by part.
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const parts = [];
+  if (!same(body.chart.departments.map((d) => [d.dept, d.name]), served.chart.departments.map((/** @type {any} */ d) => [d.dept, d.name]))) parts.push("departments");
+  if (!same(body.teams, served.teams)) parts.push("teams");
+  const { rows: _b, ...scB } = body.scorecards, { rows: _s, ...scS } = served.scorecards;
+  if (!same(scB, scS)) parts.push("scorecards");
+  return { ...served, scrubbed: [...altered].sort(), scrubbedParts: parts };
 }
 
 // One computation at a time per (mode, repo, spine): concurrent requests share it; nothing outlives the request. It

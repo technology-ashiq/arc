@@ -6,6 +6,7 @@
 //      those as DATA) refuses the scorecards by name; a producer set missing an export refuses PARSER_UNAVAILABLE.
 //   D. SCRUB SAYS WHAT IT DESTROYED: a role title carrying an absolute path is withheld AND listed in `scrubbed`.
 //   E. ONE COMPUTATION: two concurrent requests share one body (keyed by mode too); a query key is BAD_ARGS.
+//   F. A FAILED IMPORT IS FORGOTTEN: a transient producer import error refuses one request, not every later one.
 // The live door (token, Origin, GET-only) is held in tests/face/dash-doors.mjs.
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -43,6 +44,8 @@ try {
   const spine = join(tmp, "spine");
   const fx = spawnSync(process.execPath, [join(REPO, "tests/org/spine-fixture.mjs"), spine, "full"], { encoding: "utf8", timeout: 60000 });
   check("fixture: the full org spine was written (vacuous-pass guard)", fx.status === 0 && /^spine-fixture: [1-9]/.test(fx.stdout), `${fx.status} ${fx.stdout}${fx.stderr}`);
+  // Every arm below reads this spine: without it they throw and bury the cause (attack r2 B4).
+  if (failed) throw new Error(`the spine fixture was not written (status ${fx.status}${fx.signal ? `, ${fx.signal}` : ""}); the later arms are skipped`);
 
   // ---- A. one count ----
   {
@@ -52,7 +55,8 @@ try {
     check("A: the route's chart is org-catalog's chartModel over collect, byte for byte", JSON.stringify(body.chart) === JSON.stringify(want));
     const cli = spawnSync(process.execPath, [join(REPO, ".claude/scripts/org/org-review.mjs"), "--all", "--json", "--spine-dir", spine], { encoding: "utf8", timeout: 60000 });
     const at = cli.stdout.search(/^\{/m);
-    const roles = at >= 0 ? JSON.parse(cli.stdout.slice(at)).roles : [];
+    let roles = [];
+    try { roles = at >= 0 ? JSON.parse(cli.stdout.slice(at)).roles : []; } catch (e) { check("fixture: org-review --json printed parseable JSON", false, `${cli.status} ${String(e)}`); }
     check("fixture: org-review --all --json ran and scored at least 3 seats with evidence", cli.status === 0 && roles.filter((r) => r.evidence).length >= 3, `${cli.status} ${roles.filter((r) => r.evidence).length}`);
     check("A: the route's scorecard rows are org-review --all --json's rows, byte for byte (verdict fields aside)",
       body.scorecards.state === "ok" && JSON.stringify(body.scorecards.rows.map(strip)) === JSON.stringify(roles), `${body.scorecards.state} ${body.scorecards.rows.length} vs ${roles.length}`);
@@ -72,6 +76,12 @@ try {
     check("B: a spine root with no events/ refuses the scorecards (SPINE_UNAVAILABLE), never scores every seat no evidence",
       body.scorecards.state === "refused" && body.scorecards.code === "SPINE_UNAVAILABLE" && body.scorecards.rows.length === 0, JSON.stringify(body.scorecards).slice(0, 160));
     check("B: and the chart is still served whole beside that refusal", body.chart.counts.roles >= 50);
+    // Attack r2 B2: an events/ dir that exists but yields no event is the same empty read.
+    const hollow = join(tmp, "hollow-spine");
+    mkdirSync(join(hollow, "events"), { recursive: true });
+    const empty = await R.orgBody(REPO, hollow);
+    check("B: an events/ dir with no readable event refuses the scorecards (SPINE_UNAVAILABLE), never scores every seat no evidence",
+      empty.scorecards.state === "refused" && empty.scorecards.code === "SPINE_UNAVAILABLE" && empty.chart.counts.roles >= 50, JSON.stringify(empty.scorecards).slice(0, 160));
     const events = await R.orgBody(REPO, join(spine, "events"));
     check("B: handing the events/ directory itself (one level too deep) is refused the same way", events.scorecards.code === "SPINE_UNAVAILABLE");
   }
@@ -128,6 +138,25 @@ try {
     check("D: and that role is named in `scrubbed`, never changed silently", served.scrubbed.includes(first.id), JSON.stringify(served.scrubbed));
     const clean = await R.servedOrg(REPO, spine);
     check("D: over the real catalog the scrub altered nothing and says so", Array.isArray(clean.scrubbed) && clean.scrubbed.length === 0, JSON.stringify(clean.scrubbed));
+    check("D: and names no altered part", Array.isArray(clean.scrubbedParts) && clean.scrubbedParts.length === 0, JSON.stringify(clean.scrubbedParts));
+    // Attack r2 B3: a path in a team finding is withheld AND the teams part is named.
+    const prepo = join(tmp, "path-team-repo");
+    mkdirSync(join(prepo, "org", "teams"), { recursive: true });
+    writeFileSync(join(prepo, "org", "teams", "acme.team.yaml"), "venture: acme\n");
+    const leaky = await R.servedOrg(prepo, spine, { producers: { ...REAL, collect: async () => REAL.collect(REPO), loadOrg: async () => rev.loadOrg(REPO),
+      readTeam: () => ({ doc: { stage: "pilot", seats: {} } }), validateTeam: () => [`seat file C:\\Users\\someone\\secret.yaml not found`] } });
+    check("D: a team finding carrying an absolute path is withheld on the wire and the teams part is named",
+      leaky.teams.rows.length === 1 && !JSON.stringify(leaky.teams).includes("someone") && leaky.scrubbedParts.includes("teams"), JSON.stringify({ t: leaky.teams.rows, p: leaky.scrubbedParts }).slice(0, 200));
+  }
+
+  // ---- F. a failed producer import is forgotten (attack r2 B1) ----
+  {
+    let calls = 0;
+    const load = R.producerLoader(async (f) => { calls++; if (calls === 1) { const e = new Error("too many open files"); /** @type {any} */ (e).code = "EMFILE"; throw e; } return imp(`.claude/scripts/org/${f}`); });
+    const first = await refusal(load);
+    const second = await refusal(load);
+    check("F: the first request after a transient import failure is refused PARSER_UNAVAILABLE with the code", first !== null && first.code === "PARSER_UNAVAILABLE" && first.message.includes("EMFILE"), JSON.stringify(first));
+    check("F: and the next request retries the import and loads", second === null && calls > 7, JSON.stringify({ second, calls }));
   }
 
   // ---- E. one computation, no query ----

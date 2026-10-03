@@ -119,6 +119,8 @@ export function foldOrg(p) {
   if (total !== roleCount || classSum !== roleCount) notes.push(`The chart lists ${fmtInt(roleCount)} role rows, its count says ${fmtInt(total ?? 0)}, and its seat classes add up to ${fmtInt(classSum)} -- these should be one number.`);
   const scrubbed = Array.isArray(body["scrubbed"]) ? body["scrubbed"].filter((x) => typeof x === "string") : [];
   if (scrubbed.length > 0) notes.push(`The door withheld a path or an address in ${scrubbed.length === 1 ? "this role" : "these roles"}: ${scrubbed.join(", ")}.`);
+  const parts = Array.isArray(body["scrubbedParts"]) ? body["scrubbedParts"].filter((x) => typeof x === "string") : [];
+  if (parts.length > 0) notes.push(`The door withheld a path or an address in the ${parts.join(", ")} part${parts.length === 1 ? "" : "s"}.`);
 
   const sc = isObj(body["scorecards"]) ? /** @type {Record<string, unknown>} */ (body["scorecards"]) : {};
   /** @type {OrgView["scores"]} */

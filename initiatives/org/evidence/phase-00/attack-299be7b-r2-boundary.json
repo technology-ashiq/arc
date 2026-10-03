@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:25-41 (producers)",
+      "breaking_input": "One transient import failure (EMFILE, or org-review.mjs half-written during a git checkout) on the first request after the door starts. After that, any later request, even with the files healthy again.",
+      "why": "`loading` stores a promise that resolves to `{ e }` and is never reset. Every later call hits `got.e` and throws PARSER_UNAVAILABLE until the door process restarts. This was prior finding B7 and was not fixed. It is absent from fixed-defects.md and no test covers it. The route's own comment says 'nothing outlives the request', but this memo does.",
+      "fix": "When the result is an error, set `loading = null` before throwing so the next request retries the import. Add an arm that fails the first import and succeeds the second.",
+      "twin_of": "every in-flight or memo cache keyed off a request context"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:scorecardsOf (events/ check)",
+      "breaking_input": "spineDir/events/ exists but is empty, or holds only unreadable or torn day files. This happens right after a sim spine is created, or when a day file fails to read.",
+      "why": "`isDir(join(spineDir,'events'))` only proves the directory exists. readSpine then returns `events: []`, so the route answers `state: ok` with every staffed seat scored 'no evidence' and `total: 0`. That is the empty read that looks measured, which the code comment says the check prevents. This was prior finding B5 and was not fixed. Tests B only cover a missing events/ directory.",
+      "fix": "When `sp.events.length === 0`, refuse with SPINE_UNAVAILABLE. If that is too strict, serve ok with an explicit 'no receipts read' note. When `sp.unreadable.length > 0` and `events` is empty, refuse. Add an arm for an empty events/ directory.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/org/route.mjs:servedOrg",
+      "breaking_input": "A team manifest finding or refusal text that carries an absolute path, for example `findings: [\"C:\\\\Users\\\\x\\\\... not found\"]`, or a venture stem that scrubDeep alters.",
+      "why": "`altered` is computed only over chart roles and scorecard rows. scrubDeep also rewrites teams.rows[].findings, teams.why, scorecards.human and department names. Those withheld values are changed with no entry in `scrubbed`, so 'a withheld path is never silent' is false for those parts. This was prior finding B6 and was not fixed. The Phase 00 test only plants a path in a role title.",
+      "fix": "Diff the whole body against the served value, or have the scrub report which paths it touched. List team ventures and refusal parts in a separate `scrubbedParts` field. Add a test that plants a path in a team finding.",
+      "twin_of": "A gate that transforms what it measures must declare what the transform destroys"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/face/org-door.mjs:44-47 and 55-58",
+      "breaking_input": "The spine-fixture or org-review child exits non-zero or times out (status null). Or the child prints a log line that starts with `{` before the JSON.",
+      "why": "After the fixture check fails, the suite carries on. Later arms call `R.orgBody(REPO, spine)` on a spine that was never written, so they throw and the suite dies before printing `RAN:`. The failure then shows as 'never reached its end' with the cause buried. `cli.stdout.search(/^\\{/m)` also takes the first brace-initial line as the JSON, and JSON.parse throws on log noise. This was prior finding B9 and was not fixed.",
+      "fix": "If the fixture check fails, print `RAN:` and set the exit code immediately, skipping the later arms. Parse the last line that begins with `{`, or wrap JSON.parse in a named failing check.",
+      "twin_of": "The self-test spawned each arm with no timeout"
+    }
+  ]
+}
