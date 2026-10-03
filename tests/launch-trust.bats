@@ -35,7 +35,8 @@ provider_total() { node -e 'const fs=require("fs");const f=process.argv[1];conso
 
 @test "launch-trust: a CRLF copy of a vetted adapter keeps its digest and runs" {
   node -e 'const fs=require("fs");const p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace(/\r?\n/g,"\r\n"))' "$FX_ADAPTER"
-  grep -q $'\r' "$FX_ADAPTER" || { echo "CRLF conversion did not land"; false; }
+  # Read the bytes with node: Git Bash's grep on the Windows leg reads in text mode and never sees a CR.
+  node -e 'process.exit(require("fs").readFileSync(process.argv[1]).includes(13) ? 0 : 1)' "$FX_ADAPTER" || { echo "CRLF conversion did not land"; false; }
   run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"probe: verified"* ]] || { echo "$output"; false; }
