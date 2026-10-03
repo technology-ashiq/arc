@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-org (Cycle 19, opened 2026-10-03)
-phase: 00
+phase: 01
 appetite: 3d
-burn: 0d
+burn: 1d
 blocked-on: —
 depends-on: —
 
@@ -15,20 +15,28 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | `GET /api/org` + the roles section (71 roles by department) | 1.25d | ⏳ next |
-| 01 | Scorecards + teams sections, browser proof both moods | 1.25d | ⏳ |
+| 00 | `GET /api/org` + the roles section (71 roles by department) | 1.25d | ✅ 2026-10-03 |
+| 01 | Scorecards + teams sections, browser proof both moods | 1.25d | ✅ 2026-10-03 |
 
 ## Done-log
 
-(none yet)
+- **Phase 00 ✅ 2026-10-03** — `GET /api/org` (ADR-1625) imports org's own producers; the room renders 71 roles in 10
+  departments with the six-class counts line. Live on the main clone: counts equal `org/chart.json` (71 · 37 staffed ·
+  3 partial · 0 seated · 7 human · 24 vacant). PR #315 (`3c5b14ae`), CI run 37118877736 19/19 green, 3887 ok / 0 not ok
+  on ubuntu-20 incl. `org door` (1703) and `org room` (1736). Attack: boundary r1 10 (4 med) + r2 4 (2 med), logic
+  r1 on the merged diff 8 (1 high, 3 med) + boundary 6 (3 med) — every high/med fixed or shown not real (debt row 5).
+  1 day vs 1.25d. amendments: 0 · reopened: n · t-to-phase0: 0 days (kickoff 2026-10-03).
+- **Phase 01 ✅ 2026-10-03** — scorecards (37 staffed seats with verdicts, `no evidence` never 0) and the teams
+  section (the ADR-1612 sentence; no team exists). Same PR and CI run; the room opened in the real face in both moods,
+  0 console errors, and the session looked at roles, scorecards and teams screenshots before close. Shipped with
+  Phase 00, so 0 extra days vs 1.25d. amendments: 0 · reopened: n.
 
-**Appetite burn:** 0 of 3 days used.
+**Appetite burn:** 1 of 3 days used (33%; tripwire 50% not reached, Phase 00 done).
 
 ## Now
 
-**Current position:** kickoff 2026-10-03 (tier S). Owner ruling 2026-10-02: build it fully, do not wait, so the
-kickoff approval request is recorded and the build proceeds on that standing instruction.
-**Next step:** Phase 00 — write `tests/face/org-door.mjs` red first, then `route.mjs`.
+**Current position:** Phases 00 and 01 closed 2026-10-03; every REQ validated. The org room is live on main.
+**Next step:** `/arc-retro --lane org` for Cycle 19, then seal (LIVE → IDLE) once the phase approvals are stamped.
 
 **Kickoff attack (tier S, one merged A+C run):** 7 findings, 7 applied. F1's premise ("the door's ctx has no
 `root`") was false (`arc-dash.mjs:226` reads `ctx.root`); its mutation was applied with that corrected.

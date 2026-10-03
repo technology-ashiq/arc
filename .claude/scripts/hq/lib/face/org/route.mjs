@@ -11,7 +11,7 @@
 // PARTS REFUSE ON THEIR OWN. A wrong-shaped chart refuses the route whole. A spine that cannot be read, or an
 // attribution map with findings (`loadOrg` returns those as DATA, not a throw), refuses the scorecards part by name and
 // the chart is still served -- never an all-zero room that looks measured.
-import { readdirSync, statSync } from "node:fs";
+import { lstatSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ReadError, answer, scrub, scrubDeep, todayIst } from "../reads.mjs";
 
@@ -54,11 +54,22 @@ const producers = producerLoader();
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
+/**
+ * The teams directory, never followed: "absent" only when it does not exist. A link (symlink or junction) would publish
+ * content from outside the repo, and an unreadable directory is not an empty one -- both are refused by name.
+ * @returns {"dir" | "absent" | string} a refusal code otherwise
+ */
+const teamsDirState = (p) => {
+  let st;
+  try { st = lstatSync(p); } catch (e) { return /** @type {any} */ (e)?.code === "ENOENT" ? "absent" : String(/** @type {any} */ (e)?.code || "Error"); }
+  return st.isSymbolicLink() ? "LINK" : st.isDirectory() ? "dir" : "NOT_A_DIRECTORY";
+};
 const NO_TEAM = "no venture team exists yet: the pilot waits for the first registered venture (ADR-1612 Amendment 1)";
 /** A part that threw is refused by name with the error's code only -- the message may carry a path. */
 const partRefused = (part, e) => {
   const raw = String((e && (e.code || e.name)) || "Error");
-  return { state: "refused", code: "SOURCE_INVALID", human: `the ${part} could not be read (${/^[A-Za-z0-9_]{1,64}$/.test(raw) ? raw : "Error"}); the chart is still served`, rows: [] };
+  const human = `the ${part} could not be read (${/^[A-Za-z0-9_]{1,64}$/.test(raw) ? raw : "Error"}); the chart is still served`;
+  return { state: "refused", code: "SOURCE_INVALID", human, why: human, rows: [] };
 };
 
 /** The chart model's shape, checked whole: counts of integers, departments of { dept, name, roles: [{ id }] }. */
@@ -72,7 +83,9 @@ function chartOk(c) {
 /** Every team manifest under org/teams/, each read and validated by org-team's own functions. */
 function teamsOf(repo, w, p) {
   const dir = join(repo, "org", "teams");
-  if (!isDir(dir)) return { state: "none", why: NO_TEAM, rows: [] };
+  const at = teamsDirState(dir);
+  if (at === "absent") return { state: "none", why: NO_TEAM, rows: [] };
+  if (at !== "dir") throw Object.assign(new Error("org/teams is not a plain directory"), { code: at });
   const cards = new Map(w.cards.map((c) => [c.card?.id, c.card]).filter(([id]) => typeof id === "string"));
   const ventures = new Set(w.ventures);
   const rows = [];
@@ -95,6 +108,7 @@ function teamsOf(repo, w, p) {
 async function scorecardsOf(repo, spineDir, p) {
   const org = await p.loadOrg(repo);
   if (org.findings.length) return { state: "refused", code: "SOURCE_INVALID", human: `org/attribution.yaml has ${org.findings.length} finding(s); nothing is scored: ${org.findings.slice(0, 3).join(" · ")}`, rows: [] };
+  if (!Array.isArray(org.cards) || org.cards.length === 0) return { state: "refused", code: "SOURCE_INVALID", human: "the org loaded zero role cards; nothing is scored", rows: [] };
   // A spine root holds events/; a directory without one scored every seat "no evidence" and answered ok -- an empty
   // read that looked measured (found by the Phase 00 smoke, which was handed the events/ dir itself).
   if (typeof spineDir !== "string" || !isDir(join(spineDir, "events"))) return { state: "refused", code: "SPINE_UNAVAILABLE", human: "the door has no spine with an events directory to score from", rows: [] };
@@ -129,11 +143,14 @@ export async function orgBody(repo, spineDir, inject = {}) {
     if (!(p && Object.hasOwn(p, name) && typeof p[name] === kind)) throw new ReadError("PARSER_UNAVAILABLE", `the org producers do not export ${name} as a ${kind} (ADR-1625 imports it rather than re-deriving it)`);
   }
   const w = await p.collect(repo);
+  // collect() keeps going past a card it cannot read and records it on w.errors; `org-catalog --chart --check` exits 1
+  // on that same tree. The room says what the CLI says: refused whole, never a chart one card shorter.
+  if (Array.isArray(w?.errors) && w.errors.length) throw new ReadError("SOURCE_INVALID", `the org catalog has ${w.errors.length} unreadable or invalid source(s), so the chart is refused whole: ${w.errors.slice(0, 3).join(" · ")}`);
   const chart = p.chartModel(w);
   if (!chartOk(chart)) throw new ReadError("SOURCE_INVALID", "the org chart model is not counts plus departments of roles -- refused whole, never rendered in part");
   // Each part refuses on its own: one broken team file or one bad spine line never removes the chart from the room.
   let teams, scorecards;
-  try { teams = teamsOf(repo, w, p); } catch (e) { teams = { state: "refused", why: partRefused("venture teams", e).human, rows: [] }; }
+  try { teams = teamsOf(repo, w, p); } catch (e) { teams = partRefused("venture teams", e); }
   try { scorecards = await scorecardsOf(repo, spineDir, p); } catch (e) { scorecards = partRefused("scorecards", e); }
   return { schema: ORG_SCHEMA, chart, teams, scorecards };
 }

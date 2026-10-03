@@ -14,13 +14,13 @@
 - `room-copy.json` "org" sentence/lede name roles as well as lanes; `face-sections` regenerated; `products/hq/manifest.json` lists route.mjs; sync golden + wiki regenerated.
 
 ## Exit criteria (Definition of Done)
-- [ ] `GET /api/org` serves the chart model end-to-end and the room renders 71 roles
-- [ ] tests added & green on CI (`tests/face/org-door.mjs`, `tests/face/org-fold.mjs`, dash-doors arm)
-- [ ] live demo run + output checked
-- [ ] verified against the real system: the route over the main clone's spine
-- [ ] contract tests: n/a — no external dependency
-- [ ] `/arc-attack` two surfaces (route/decision logic; door/shell boundary) once on the local commit before push, with the lane fixed-defect list
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] `GET /api/org` serves the chart model end-to-end and the room renders 71 roles
+- [x] tests added & green on CI (`tests/face/org-door.mjs`, `tests/face/org-fold.mjs`, dash-doors arm)
+- [x] live demo run + output checked
+- [x] verified against the real system: the route over the main clone's spine
+- [x] contract tests: n/a — no external dependency
+- [x] `/arc-attack` two surfaces (route/decision logic; door/shell boundary) once on the local commit before push, with the lane fixed-defect list
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan
 - **Test command:** `node tests/face/org-door.mjs && node tests/face/org-fold.mjs` (run by `tests/face-dash.bats` / `tests/face-l3.bats` on CI)
