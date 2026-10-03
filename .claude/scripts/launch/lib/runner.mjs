@@ -2,7 +2,7 @@
 // slot's timeout (a real process kill, not a timer the adapter can ignore), then writes the receipt. The child
 // persists state as it goes, so a kill at any point leaves what was created on the record for the next attempt.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, mkdirSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
 import { join, resolve, dirname, relative, isAbsolute, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostname } from "node:os";
@@ -251,7 +251,11 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       const attempt = (prev.attempt || 0) + 1;
       s = saveState(P.stateDir, setSlot(s, slot.id, { state: "applying", provider: prow.id, attempt, reason: null, receipt: null }));
       const args = { ...P, venture: slug, slot: slot.id, provider: prow.id, row: prow, adapterPath: resolve(dirname(P.registry), prow.adapter), ventureRoot, attempt, timeout: slot.timeout };
-      const r = spawnSync(process.execPath, [WORKER, JSON.stringify(args)], { stdio: "inherit", timeout: Number(slot.timeout) * 1000, killSignal: "SIGKILL" });
+      // The args travel as a file, not one argv element: Windows caps a command line near 32k and re-parses quotes
+      // in it, so a long or quote-bearing path would reach the worker cut or changed (attack 06cbc03 B4).
+      const argsFile = join(P.stateDir, `.${slug}.worker-args.json`);
+      writeFileSync(argsFile, JSON.stringify(args));
+      const r = spawnSync(process.execPath, [WORKER, argsFile], { stdio: "inherit", timeout: Number(slot.timeout) * 1000, killSignal: "SIGKILL" });
       s = loadState(P.stateDir, slug, { onFallback: log }) || s;
       const after = slotRow(s, slot.id);
       const key = receiptKey(slug, slot.id, prow.id, attempt);

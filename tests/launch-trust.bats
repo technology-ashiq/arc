@@ -106,3 +106,12 @@ provider_total() { node -e 'const fs=require("fs");const f=process.argv[1];conso
   [[ "$(slot_field probe reason)" == "refused:WRITE_REFUSED"*"passes through a link"* ]] || { echo "$(slot_field probe reason)"; false; }
   [ ! -e "$FX_DIR/outside/target.txt" ]
 }
+
+@test "launch-trust: a write to a device name or an NTFS stream is refused on every OS (06cbc03 B6)" {
+  local p
+  for p in nul "a.txt:stream" "C:foo" "dir/con.txt"; do
+    run env FAKE_WRITE="$p" node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+    [ "$status" -eq 1 ] || { echo "$p: $output"; false; }
+    [[ "$(slot_field probe reason)" == "refused:WRITE_REFUSED"* ]] || { echo "$p: $(slot_field probe reason)"; false; }
+  done
+}

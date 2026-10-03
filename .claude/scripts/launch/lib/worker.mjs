@@ -7,7 +7,7 @@ import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
 import { loadState, saveState, slotRow, setSlot, resourceTag } from "./state.mjs";
 import { makeCtx } from "./ctx.mjs";
 
-const a = JSON.parse(process.argv[2]);
+const a = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const profile = loadProfile(a.venture, a.venturesDir);
 const slot = loadCatalog(a.catalog).find((s) => s.id === a.slot);
 // The row the PARENT checked, not a fresh read: a registry swapped between the check and this import must not

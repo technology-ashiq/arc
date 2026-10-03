@@ -18,6 +18,11 @@ export function hostAllowed(host, hosts) {
 // the leaf itself (attack 06cbc03 L1). An adapter never needs to write through a link, so none is followed.
 export function confinedPath(root, rel) {
   if (typeof rel !== "string" || rel === "" || isAbsolute(rel)) throw refusal("WRITE_REFUSED", `write path ${JSON.stringify(rel)} must be relative to the venture root`);
+  // `C:foo` (drive-relative), `file.txt:stream` (an NTFS stream) and device names read as files on one OS and as
+  // something else on Windows; none is a file an adapter needs (attack 06cbc03 B6).
+  for (const part of rel.split(/[\\/]/))
+    if (part.includes(":") || /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i.test(part) || /[. ]$/.test(part) && part !== "." && part !== "..")
+      throw refusal("WRITE_REFUSED", `write path ${JSON.stringify(rel)} has a component (${part}) that is not a plain file name on every OS`);
   const realRoot = realpathSync(root);
   const abs = resolve(realRoot, rel);
   const r = relative(realRoot, abs);
