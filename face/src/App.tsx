@@ -19,7 +19,7 @@ import './index.css'
 import { ASOF_ROUTES, Door, DoorError, decodeRegistry, tokenFromHash, unescapeDoorText } from './lib/door.mjs'
 import { findRoom, errorSentence } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
-import { buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash, referenceAt } from './lib/shell.mjs'
+import { SETTINGS_ITEM, buildHash, conceptsFromContract, isSettingsItem, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash, referenceAt } from './lib/shell.mjs'
 import { asOfReaches, attachModules, collectModules, EXEMPTION_FILE, extraRooms, homeRoom, modeChip, PULSE_MS, railGroups, refusedPayload, roomHoldingKind, withExtras } from './lib/registry.mjs'
 import type { ExtraRooms, ModuleContext } from './lib/registry.mjs'
 import { needsYouByRoom } from './lib/map.mjs'
@@ -376,7 +376,8 @@ export default function App() {
   const room = shownId === null ? null : findRoom(shell.rooms, shownId)
   // A template is not a room you can open; asking for it by URL is answered like any unknown id.
   const openable = room && !room.template ? room : null
-  const items: PaletteItem[] = paletteItems(shell.rooms, concepts)
+  // The workroom palette also opens Settings (Phase 11, REQ-15); the front door's never does (owner, 2026-10-01).
+  const items: PaletteItem[] = [...paletteItems(shell.rooms, concepts), SETTINGS_ITEM]
   const needs = needsYouByRoom(openItems ?? [], contract, shell.rooms.map((r) => r.id))
   const attached = openable ? attachment.attached[openable.id] : undefined
   const ctx: ModuleContext | null = openable
@@ -392,7 +393,7 @@ export default function App() {
         <Palette
           items={items}
           onClose={() => setPaletteOpen(false)}
-          onOpen={(item: PaletteItem) => { setPaletteOpen(false); open(item.room) }}
+          onOpen={(item: PaletteItem) => { setPaletteOpen(false); if (isSettingsItem(item)) setSettingsOpen(true); else open(item.room) }}
         />
       )}
 

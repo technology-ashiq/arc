@@ -324,3 +324,14 @@ export function rankMatches(items, query, limit = 12) {
   scored.sort((a, b) => (a.score - b.score) || (a.item.label.length - b.item.label.length));
   return scored.slice(0, limit).map((s) => s.item);
 }
+
+/**
+ * The palette's one entry that is not a place: HQ's Settings menu (Phase 11, REQ-15). Kept out of paletteItems, whose
+ * count is the contract's word count, and appended by the shell, which opens the menu instead of a room for it.
+ */
+/** @type {Readonly<{ id: string, label: string, hint: string, kind: "concept", room: string }>} */
+export const SETTINGS_ITEM = Object.freeze({ id: "action:settings", label: "Settings", hint: "models (add, test) and voice", kind: "concept", room: "" });
+/** @param {{ id: string } | null | undefined} item */
+export function isSettingsItem(item) {
+  return !!item && item.id === SETTINGS_ITEM.id;
+}

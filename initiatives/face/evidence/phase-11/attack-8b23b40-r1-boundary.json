@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:apiModelsTest (the `res.exit !== 0` branch, `: { ok: true, seconds, why: null }`)",
+      "breaking_input": "POST /api/models/test for a model whose provider answers 200 with a body that fails the face-ask schema or labels. arc-run exits 0 and the row shows a green check, while a real ask on the same model is refused by `judgeModelAnswer`.",
+      "why": "The code comment says a test passes exactly when a real general answer would, but stdout is never judged. `apiAsk` runs `judgeModelAnswer` and checks that the receipt was written. The test treats exit 0 as ok, so it can pass without proving the answer was usable or receipted. This is the vacuous-pass class: the code ran, but the assertion that matters was never made.",
+      "fix": "Run `judgeModelAnswer(res.stdout, res.stderr, ids, run)` on the result. Also confirm the receipted `run.completed` for this run, using the id arc-run printed. Report a failed judgement as ok:false with a plain cause.",
+      "twin_of": "A printed id credited as a receipt / Accept a claimed receipt only if the spine holds it as that process's run.completed"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:apiModelsTest (`const got = models.loadRegistry` ... `models.withTests(models.publicView(got.reg), tests)`)",
+      "breaking_input": "Press Test on a slow model (up to 60 s). While it runs, click 'use' on another model or 'remove' on this one. Only `busy` disables those buttons, not `testing`. When the test returns, the response carries the registry snapshot read before the 60 s wait, and `onTest` calls `setView(modelsView(...))` with it.",
+      "why": "The response is built from a stale registry. The face then shows the old active model, or a model that was already removed, overwriting the newer view. It is the stale-answer-landing-on-a-newer-card defect. In the door, `tests.set(hit.name.toLowerCase(), ...)` also runs after the await even if the model was removed or replaced in the meantime. A later add under the same name then shows the old model's lastTest, produced against a different baseUrl, model id or key, until a GET happens to prune it.",
+      "fix": "After the run, re-load the registry. Record the result only if a model of that name still exists with the same baseUrl and model id. Build the response from the fresh registry. In the UI, disable use/remove while `testing` is set, or key the answer to an attempt counter.",
+      "twin_of": "A stale answer landing on a newer card -> every async answer is keyed to the attempt or plan it was for"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:apiModelsTest / ROUTES row for /api/models/test",
+      "breaking_input": "Fire 20 concurrent POST /api/models/test requests with a valid name, from a script holding the token or from several tabs. The UI's `testing !== null` guard is client-side only.",
+      "why": "Each request spawns an arc-run child that bills the owner's paid key, up to 60 s each, with no server-side ceiling or per-model in-flight guard. The same defect class is already listed: a rate limit is not a concurrency limit.",
+      "fix": "Keep an in-flight set per ctx and per model. Return 429/BUSY for a second concurrent test, and cap the total number of concurrent tests.",
+      "twin_of": "No ceiling on paid children -> A rate limit is not a concurrency limit"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:apiModelsTest (`--owner-model`, `hit.model`)",
+      "breaking_input": "A registry model whose model id begins with `--`, for example a value shaped like a flag name. It reaches `args` as `--owner-model --<x>`.",
+      "why": "A flag consumes the next flag as its value, and a value starting with `--` should be refused. The model value from the registry file is passed straight into argv with no check at this call site. Whether the registry's add path rejects it is not shown in this diff. A hand-edited models.json bypasses add-time validation.",
+      "fix": "Refuse a model id that starts with `-` or contains control characters before spawning, or pass it with the `--owner-model=` form if arc-run accepts it.",
+      "twin_of": "A flag consumed the NEXT flag as its value -> a value that starts with `--` is refused"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:apiModelsTest (`existsSync(join(ctx.repo, \"processes\", \"face-ask.process.yaml\"))`)",
+      "breaking_input": "A directory named `face-ask.process.yaml` under processes/. existsSync is true, so the route proceeds to spawn, and the failure is then reported as a provider fault.",
+      "why": "existsSync accepts a directory as the process file. The result is a misleading failure cause, shown to the owner as if the model were at fault.",
+      "fix": "Use `statSync(...).isFile()` inside a try, and report MODELS_UNAVAILABLE on failure.",
+      "twin_of": "`existsSync` accepted a directory as a process -> \"Could not read\" is not \"there are none\""
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:apiModelsTest (`redactKey(String(res.stderr ?? \"\"), hit.key)`)",
+      "breaking_input": "A model registered with a very short key (under 8 characters, e.g. 4 characters), whose provider echoes the Authorization value in its error body. The text lands in `why`, is stored in MODEL_TESTS, and is returned by every later GET /api/models.",
+      "why": "The defect list says to redact raw, JSON-escaped and URL-encoded forms and to refuse keys under 8 characters. This path inherits whatever `redactKey` does for a short key and for non-raw spellings of the key. Here the result is persisted in memory and re-served on every read, so one leak lasts for as long as the door runs.",
+      "fix": "Redact all three spellings. Pass the output through `providerFault` and the same scrub the ask path uses. Refuse a short key at add time, or skip storing `why` when the key is under 8 characters.",
+      "twin_of": "A secret redacted in one spelling -> Redact raw, JSON-escaped and URL-encoded forms; refuse keys under 8 characters"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "face/src/App.tsx (`const items: PaletteItem[] = [...paletteItems(shell.rooms, concepts), SETTINGS_ITEM]`)",
+      "breaking_input": "On the front door at `/`, press Ctrl+K, type 'Settings' and select the entry. The comment says the front door's palette never offers it, but `items` is built once for whichever Palette is mounted.",
+      "why": "If the same `items` feeds the palette on `/`, the Settings entry appears on the door. It then opens a settings menu there, which contradicts the owner's 2026-10-01 ruling that the door carries no settings control. The smoke only checks `[data-hq-settings]`, `[data-models-panel]` and `[data-ask-settings]` before the palette is opened, so it does not catch this. The new `palette-settings` check runs only in the workroom.",
+      "fix": "Append SETTINGS_ITEM only when the shell is in the workroom. Add a smoke check that the palette on `/` lists no Settings entry.",
+      "twin_of": "A door-wide rule wired into one room -> A cross-cutting rule lives where every path passes, not in the one path that was asked about"
+    }
+  ]
+}

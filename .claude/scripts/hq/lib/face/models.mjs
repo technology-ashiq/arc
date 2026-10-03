@@ -131,6 +131,33 @@ export function publicView(reg) {
 }
 
 /**
+ * A model by name, the way activate and remove find one: case-insensitive, trimmed. @param {Registry} reg @param {unknown} name
+ */
+export function findModel(reg, name) {
+  if (typeof name !== "string") return null;
+  const n = name.trim().toLowerCase();
+  return reg.models.find((m) => m.name.toLowerCase() === n) ?? null;
+}
+
+/**
+ * The public view with each model's last test beside it (Phase 11, REQ-15). A test is kept by the door, keyed by the
+ * lowercased name; a name no longer in the registry is dropped here, so a removed model's result never shows, and a
+ * re-added model of the same name starts untested only once the door forgets it -- the row says when it was tested.
+ * @param {ReturnType<typeof publicView>} view @param {Map<string, { ok: boolean, seconds: number, why: string | null, at: string }>} tests
+ */
+export function withTests(view, tests) {
+  const names = new Set(view.models.map((m) => m.name.toLowerCase()));
+  for (const k of [...tests.keys()]) if (!names.has(k)) tests.delete(k);
+  return {
+    ...view,
+    models: view.models.map((m) => {
+      const t = tests.get(m.name.toLowerCase());
+      return { ...m, lastTest: t ? { ok: t.ok, seconds: t.seconds, why: t.why, at: t.at } : null };
+    }),
+  };
+}
+
+/**
  * What the owner reads when the model's provider refuses an ask, from arc-run's stderr. The owner saw the raw driver
  * log on the door (a 429 from a free OpenRouter model, 2026-10-02); a person needs the cause and the next step, not a
  * transcript warning. The last `status NNN` the driver printed decides; a timeout says so; anything else is generic.

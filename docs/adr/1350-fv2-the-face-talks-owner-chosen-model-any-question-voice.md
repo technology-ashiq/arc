@@ -35,3 +35,13 @@ Easier: the owner's design's main act — talk to the face — exists; any model
 Harder: a general answer cannot be verified, so the label is load-bearing and is held by a fixture. Chrome's `SpeechRecognition` sends audio to Google's servers (Edge's to Microsoft's) — the settings panel says so beside the switch. Speech mishears arc's words (ULIDs, kind names), which is why typing stays first-class. The door gains its first configuration write that is not a decision or an op; it is local-only and token-guarded like every other door write, and it writes nothing into the repo.
 
 Not done here: per-answer ₹ estimates and a spend cap (the owner picks free or paid knowingly; a cap is its own change if the owner asks), streaming tokens into the face, a wake word.
+
+## Amendment 1 (2026-10-03, owner) — one Settings menu: test a model, choose the voice
+
+**Why.** After #314 the owner found answers slow and asked for "models add verify and test" in one menu, and whether the voice can change. The spine showed one free model at 3-8 s at night and 36-37 s in the afternoon, and another refusing in under a second; the face had no way to show either before he asked.
+
+1. **One menu.** HQ's header Settings and a ⌘K "Settings" entry open one menu with two sections, Models and Voice. The front door's ask bar still carries no settings (the 2026-10-01 ruling stands).
+2. **Test a model.** `POST /api/models/test` (its own path; one method per path, as §2) takes a model's name, asks that model one fixed probe question through `arc-run --process face-ask`, and returns `ok` or `providerFault`'s plain cause, plus the seconds taken. It is receipted like any answer (§4), changes no active model, and returns no key. The door keeps each model's last test in memory while it runs, returned beside its row by `GET /api/models`; nothing new is written to disk. A test is pressed, never run on a timer: it spends the owner's quota.
+3. **Choose the voice.** The Voice section adds the browser's own `speechSynthesis` voices, a speed of 0.75x to 1.5x, and a preview. The choice is kept in the browser beside the switch (§6); no cloud voice, no new dependency, no key.
+
+Filed as REQ-15 / Phase 11, before the dogfood (Phase 08). Appetite +1.5d (total 38.5d). No new spine kind; streaming and a spend cap stay out.
