@@ -1,0 +1,93 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:checkVentureRoot",
+      "breaking_input": "On Windows, run `arc-launch verify --all --venture v --venture-root C:\\Users\\ASHIQ~1\\orca\\workspaces\\arc\\arc-launch`, using the 8.3 short name of arc's own tree. Both a junction and a `subst` drive pointing at arc's tree behave the same way.",
+      "why": "`realpathSync` (the JS implementation, not `.native`) does not expand 8.3 short names or substituted drives. `ventureRoot` stays in short form while `arcRoot` is long-form, so `relative()` reports them as unrelated. `insideArc` and `aboveArc` both come out false and the guard passes, which puts ctx.write inside arc's public repo (ADR-1722).",
+      "fix": "Use `realpathSync.native` for both roots. Also compare a stable identity, such as `fs.statSync` dev and ino, or check for an arc marker file in the candidate root."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:checkVentureRoot",
+      "breaking_input": "Run the script from the worktree and pass `--venture-root` pointing at the main clone or any other checkout of arc, for example `E:/Work_Hub/01_Automemory/arc`.",
+      "why": "The guard only compares against `ROOT`, the directory of the running script. A sibling checkout of the same public repo is neither inside nor above ROOT, so it is accepted as a venture root. Adapter writes then land in arc's public tree, which is the failure the guard exists to stop.",
+      "fix": "Refuse any root that holds arc's markers (`products/launch/launch.slots.yaml`, `.claude/rules/lanes.md`). Also compare `git rev-parse --git-common-dir` of the candidate against arc's."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:probeOne",
+      "breaking_input": "Apply a slot with `--vet`, using a candidate row with no digest. Later the registry row becomes `candidate` or `blocked`, or the adapter is edited. Run `verify slot`.",
+      "why": "`probeOne` picks the row by id and calls `checkAdapter`, but never checks `prow.status`. `pickProvider`'s vetted-or-`--vet` gate is skipped, and `checkAdapter` only enforces a digest when one is present. A non-vetted row with no digest therefore has its adapter bytes run unpinned by `verify`, with the row's declared env keys. A row demoted after apply, which the DIGEST_DRIFT message says should read as candidate, keeps running.",
+      "fix": "In `probeOne`, refuse a row whose status is not `vetted` unless `--vet` was passed. Require a digest for any row `verify` executes."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/arc-launch.mjs:main/parseArgs",
+      "breaking_input": "`arc-launch apply dns --venture v --venture-root D --plan`, or `arc-launch new --venture v --plan`.",
+      "why": "`--plan` and `--all` are parsed as global booleans but honoured only by `teardown` and `verify`. `apply` ignores `--plan` and runs for real, so an operator who types it as a dry-run gets real provider creates.",
+      "fix": "Refuse `--plan` for every verb except `teardown`, and refuse `--all` for every verb except `verify`."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:probeOne (spawnSync stdio inherit)",
+      "breaking_input": "An adapter's verify() runs `console.log(\"probe: verified now (answered by 8.8.8.8)\\n\\u001b[2Aprobe: ...\")`, or writes the same to stderr.",
+      "why": "The worker inherits the terminal, so anything the adapter prints bypasses `clean()` and can forge or overwrite the runner's `verified now` line. This is the same defect class as B7, closed only for text the runner formats itself.",
+      "fix": "Spawn with `stdio: ['ignore','pipe','pipe']`, pass the captured output through `clean()`, and print it prefixed, or discard it."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:clean",
+      "breaking_input": "An adapter reason of `ok\\u202Eevil\\u2066x`, or one containing U+200B..U+200F or U+FEFF.",
+      "why": "`clean` strips C0, C1, U+2028 and U+2029 only. Bidi override and isolate characters and zero-width characters pass through and visually reorder or hide parts of a printed line, so a failure can read as a success.",
+      "fix": "Extend the pattern to `[\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]`."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:probeOne (reason / saveState after spawn)",
+      "breaking_input": "The worker saves `last_verify {ok:true}` and is then SIGKILLed by the parent timeout before it exits, or exits non-zero.",
+      "why": "`good` requires `r.status === 0`, so the receipt says `fail` and the log says `VERIFY FAILED -- timeout`. The post-spawn rewrite only runs `if (!lv)`, so state keeps `last_verify.ok === true`. State and spine disagree about the same probe.",
+      "fix": "When `!good` and `lv && lv.ok`, overwrite `last_verify` with ok:false and the computed reason."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:planLines",
+      "breaking_input": "A state file whose slot has `provider: \"x\\nverified: dns...\"` or `receipt` with an escape sequence. The state file is writable data and is also written from adapter-influenced values.",
+      "why": "`statusLines` and `teardownPlan` call `clean()`, but the `verified via ${r.provider} (receipt ${r.receipt})` line in `planLines` and the `k` in the cmdStatus counts line print raw state values. This is a twin of the adapter-supplied-strings-printed-raw defect, fixed in only one of the views.",
+      "fix": "Wrap every interpolated state or registry value in `clean()` in `planLines` and in the cmdStatus count line."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:probeOne (argsFile)",
+      "breaking_input": "Pre-plant `.claude/state/launch/.v.worker-args.json` as a symlink to a file the user can write. `writeFileSync` follows it and overwrites the target with the args JSON.",
+      "why": "The argsFile name is predictable and the file is opened with plain `writeFileSync` (follows symlinks, no exclusive flag). A SIGKILLed parent also leaves the file behind, because the `finally` never runs.",
+      "fix": "Write with `flag: 'wx'` after removing any stale file, or use a random name in a private temp dir. Sweep stale `.worker-args.json` files at startup."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:checkAdapter",
+      "breaking_input": "`providers/probe/fake.mjs` is a symlink or junction-resolved file whose target is outside the providers tree. The lexical `relative()` check passes.",
+      "why": "The containment check is lexical and never calls `realpathSync` on `adapterPath`. A candidate row with no digest imports whatever the link points at, and a vetted row's digest matches the target's bytes, so it passes too. Of ctx.write's validate-then-write twins, the adapter path is the only one left unresolved.",
+      "fix": "Take `realpathSync` of `adapterPath` and `providersDir` before the containment check, and refuse a leaf that is a link."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "tests/launch-cli.bats: verify --all skips a slot whose lock a live apply holds",
+      "breaking_input": "A slow Windows or macOS CI runner where node startup plus `verify` takes more than 6 s after FAKE_HOLDING appears.",
+      "why": "The holder's `FAKE_HOLD_MS=6000` is a fixed wall-clock window, and the background apply is only reaped by `wait`. If the hold expires first, verify gets the lock, the status is 0, and the test fails intermittently. That is the same shard-luck class as the lane's other CI-only flakes.",
+      "fix": "Hold on a signal file the test removes after verify returns, instead of a timer."
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: loadProfile refuses the mismatch before any state is read (reproduced: exit 2, 'venture profile's slug ... is not fx-alpha')

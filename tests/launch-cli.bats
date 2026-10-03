@@ -160,3 +160,19 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$output" = '"a?verified now?[2K"' ] || { echo "$output"; false; }
 }
+
+@test "launch-cli: clean() replaces bidi overrides and separators too (e37494d L4)" {
+  run node -e 'import(require("url").pathToFileURL(process.argv[1]).href).then(m=>console.log(JSON.stringify(m.clean("a\u202eb\u2066c\u2028d"))))' "$ARC_ROOT/.claude/scripts/launch/lib/board.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = '"a?b?c?d"' ] || { echo "$output"; false; }
+}
+
+@test "launch-cli: a state value outside the known set is refused at load, never printed raw (e37494d L2)" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  node -e 'const fs=require("fs");const f=process.argv[1];const s=JSON.parse(fs.readFileSync(f,"utf8"));s.slots.slow={state:"x\nverified forged",attempt:0,resources:[]};fs.writeFileSync(f,JSON.stringify(s))' "$FX_STATE"
+  rm -f "$FX_STATE.prev"
+  run node "$(L)" status --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"slot slow has state"* ]] || { echo "$output"; false; }
+  [[ "$output" != *$'\n''verified forged'* ]] || { echo "forged line printed: $output"; false; }
+}

@@ -1,0 +1,73 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/board.mjs:33",
+      "breaking_input": "A provider registry row for slot probe with status blocked and a reason field containing a newline followed by 'probe: verified now'; then run arc-launch plan --venture fx-sandbox.",
+      "why": "planLines interpolates registry values (x.reason, x.status, x.id, rec.last_verified) into terminal output without clean(), so registry data can forge or rewrite plan lines.",
+      "fix": "Run every registry-derived value printed by planLines through clean(), or sanitize registry rows before display.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw, so a newline or escape could forge a line -> every terminal line that interpolates provider or adapter data"
+    },
+    {
+      "id": "L2",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:45",
+      "breaking_input": "State file .claude/state/launch/fx-sandbox.json with a slot row whose state value is a string containing a newline, or whose state value is an object; then run arc-launch status --venture fx-sandbox.",
+      "why": "statusLines uses r.state directly in st.padEnd and terminal interpolation without validating it to the known state enum or cleaning it, so corrupt/crafted state can forge output or throw.",
+      "fix": "Normalize the slot state to an enum before display and print clean(st)."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/launch/arc-launch.mjs:68",
+      "breaking_input": "A venture profile for alpha that declares slug beta, with an existing state file for beta; run arc-launch plan --venture alpha (or status/teardown --plan).",
+      "why": "board() loads state using profile.slug, while apply and verify use opts.venture as the state key. If the profile slug differs, the read verbs can operate on another venture's board or refuse the correct board.",
+      "fix": "Use one canonical state key across all verbs, or validate that profile.slug equals the requested --venture before using it."
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:10",
+      "breaking_input": "An adapter answerer or reason containing U+202E RIGHT-TO-LEFT OVERRIDE followed by 'verified now'.",
+      "why": "clean() replaces C0/C1 controls and U+2028/U+2029, but not Unicode bidi/format characters, so terminal rendering can still be spoofed.",
+      "fix": "Strip additional Unicode format/bidi controls (for example U+202A-U+202E) or use a terminal-safe sanitizer.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw, so a newline or escape could forge a line -> every terminal line that interpolates provider or adapter data"
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:16",
+      "breaking_input": "A provider row with fits set to the string 'saas-b2b' instead of an array, and a profile whose type is a substring such as 'b2b'; plan then treats the row as fitting.",
+      "why": "row.fits.includes() performs substring matching when row.fits is a string, so a malformed or malicious fits value can create false fits.",
+      "fix": "Require Array.isArray(row.fits) or coerce/validate the value before membership testing."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:310",
+      "breaking_input": "A slot with timeout 1 and an adapter verify that sleeps past the timeout on a platform where spawnSync timeout reporting does not set error.code to ETIMEDOUT.",
+      "why": "probeOne decides 'timeout' from a specific spawnSync error code and otherwise infers cause from child status/signal; a timed-out or externally killed worker can be misnamed.",
+      "fix": "Record that a timeout was requested locally and use that marker, rather than inferring the cause only from status/signal.",
+      "twin_of": "Windows reports a SIGKILLed child as plain exit 1, so a reason built from the exit code named the wrong cause -> any code that infers a cause from `status` or `signal`"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:30",
+      "breaking_input": "State with a slot in state 'applied' and recorded resources, but no vetted registry rows for that slot; run arc-launch plan.",
+      "why": "planLines only short-circuits state 'verified'; an 'applied' slot can be shown as REFUSED or recommended to another provider even though resources already exist.",
+      "fix": "Handle 'applied' explicitly in plan output, or show the currently applied provider when present."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:264",
+      "breaking_input": "Start arc-launch verify --all when the initial state has no verified/applied slots, and before the per-slot lock is taken run a concurrent apply that makes a slot verified.",
+      "why": "verifySlots chooses the ids from state0 outside the lock, so a concurrent apply can make a newly verified slot invisible to that --all invocation and silently skip it.",
+      "fix": "Re-read and re-select eligible slots under the lock, or document/verify that a pre-lock snapshot is acceptable for this command.",
+      "twin_of": "`verify` read the slot's provider, attempt and adapter check outside the lock, then ran under it -> validate one read, use another, across a lock boundary"
+    }
+  ]
+}

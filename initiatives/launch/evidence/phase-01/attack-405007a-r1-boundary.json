@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/runner.mjs:verifySlots (adapterPath line)",
+      "breaking_input": "A registry row for an applied slot whose `adapter` is `../../../tmp/evil.mjs` or an absolute path, with no `digest` field. Run `arc-launch verify SLOT --venture V`.",
+      "why": "`resolve(dirname(P.registry), prow.adapter)` is only checked with existsSync and a digest comparison that is skipped when `prow.digest` is falsy. verifySlots does not do the containment check apply has (test B4: an adapter path that climbs out of the providers tree is refused before anything runs). The path is registry data, and the worker then imports whatever it points at with the venture env keys and ctx. The no-digest case also fails open, because `prow.digest && ...` treats a missing pin as a pass.",
+      "fix": "Factor apply's adapter-path containment check into a shared function and call it in verifySlots. Refuse a row with no digest in verify as UNVERIFIABLE.",
+      "twin_of": "The adapter path was data the runner trusted: `providers/x/../../tmp/evil.mjs` ran, and backslashes passed on one OS only"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/runner.mjs:verifySlots (ventureRoot line)",
+      "breaking_input": "`arc-launch verify --all --venture V --venture-root .` run from the arc checkout, or `venture_root` in state pointing inside arc's tree. A nonexistent `--venture-root /nope` is the second case.",
+      "why": "The check that apply uses to refuse a venture root inside arc's tree (B9) is not applied here, so the verify worker's ctx.write boundary can be arc's public repo. A nonexistent root makes realpathSync throw a raw ENOENT. That is neither an `e.exit` error nor a LaunchError, so it is rethrown and the CLI dies with a stack trace and exit 1, which reads as slot-failed (EXIT.FAILED) instead of REFUSED (2).",
+      "fix": "Reuse apply's root validation (inside-arc refusal plus a LaunchError for a missing directory) before the realpath call.",
+      "twin_of": "`--venture-root .` pointed ctx.write at arc's public repo"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:verifySlots (spawnSync and log lines)",
+      "breaking_input": "A slot whose earlier verify failed, so last_verify.reason is 'provider holds 1 of 2'. The next verify exceeds the slot timeout and is SIGKILLed before it can save.",
+      "why": "After a kill, `lv` is the previous run's stale last_verify. The log prints `lv.reason`, which is the old failure, and the real cause (timeout) is only named when `lv.reason` is falsy. On Windows a SIGKILLed child can look like plain exit 1, so the cause is inferred from stale data. The stored last_verify also still describes a probe that never completed.",
+      "fix": "Clear last_verify, or write a `running` marker, before spawning. Decide the reason from r.error.code or r.signal first, and read lv only when the worker exited by itself.",
+      "twin_of": "Windows reports a SIGKILLed child as plain exit 1, so a reason built from the exit code named the wrong cause"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:verifySlots (state read, provider choice and attempt read before underLock)",
+      "breaking_input": "`verify --all` loads state. A concurrent `apply` of the same slot then takes the venture lock, switches provider or bumps the attempt, and releases it. Verify then takes the lock and runs.",
+      "why": "`r0`, `prow`, the adapter digest check and `attempt` are all read outside the lock. Inside it, verify runs the old provider's adapter and emits a run.completed with a stale attempt. It also verifies a slot that may now be failed or in progress. The slot's eligibility is never re-read under the lock.",
+      "fix": "Re-load state inside the underLock callback. Re-derive r0, the provider row and the digest check there, and skip with a message if the slot is no longer verified or applied.",
+      "twin_of": "Gate check-then-emit ran outside the lock, so two applies made two requests -- every check-then-act on shared state"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:verifySlots (underLock call, spawn timeout)",
+      "breaking_input": "A hosting slot with `timeout: 900` (a fifteen-minute critical section) whose verify probe runs about 12 minutes.",
+      "why": "The lock's staleness window is ten minutes. A second runner treats the holder as a reused pid and breaks the lock while verify is still running. A concurrent apply then writes state while the verify worker is mid-save.",
+      "fix": "Cap the verify timeout below the stale window, or have withLock refresh the lock's mtime or heartbeat during long sections.",
+      "twin_of": "`withLock` treats a holder older than ten minutes as a reused pid and breaks its lock, while a hosting apply may run fifteen"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:verifySlots (underLock rethrow in the loop)",
+      "breaking_input": "Verify --all over 3 slots. Slot 2's lock is held by a live apply, so underLock throws an e.exit=3 error.",
+      "why": "The throw leaves the for-loop and goes to the outer catch. Slot 1's result is already emitted but the summary line is lost, and slot 3 is never tried. Exit is 3, not 1. The run.completed receipt for any slot interrupted mid-run depends on the code path, which breaks the one-receipt-per-attempt invariant for verify.",
+      "fix": "Catch the lock error per slot, log it as 'lock held, skipped', count it as failed, continue, and print the summary.",
+      "twin_of": "A runner killed while holding the lock left its attempt with no receipt -- every exit path of runAttempt"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:teardownPlan and statusLines; runner.mjs verify log",
+      "breaking_input": "A provider adapter returns a resource id, a reason or an answerer such as 'x\\n  verified now (answered by 8.8.8.8)\\u001b[2K' (a newline plus an ANSI escape).",
+      "why": "Adapter-controlled strings from state (resource id, reason, answerer) are printed raw to the terminal. A newline forges a fake 'verified now' or teardown step line, and an escape sequence rewrites the display. An adversarial adapter can fake the external-answerer claim in the human output.",
+      "fix": "Normalise to a single line and strip control characters (`/[\\u0000-\\u001f\\u007f]/g`) before printing any state-derived field.",
+      "twin_of": ""
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:verifySlots (argsFile write)",
+      "breaking_input": "Run verify, then kill the parent after writeFileSync but before spawn. Or run verify on a state dir that holds a sibling `.slug.worker-args.json` from another apply.",
+      "why": "The args file is written with plain writeFileSync to a fixed shared name and is never removed. It holds the full registry row and paths, and it is left in the state dir (a venture-private path under the user's profile). A crash leaves the file for the next run to overwrite. The apply path uses the same name, so a leftover from a differently-moded run could be read if the write is ever skipped or fails partway.",
+      "fix": "Write to a unique temp name (pid plus a random suffix), remove it in a finally block, and pass the path via env rather than argv.",
+      "twin_of": "The worker's arguments travelled as one argv JSON element"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "initiatives/launch/evidence/phase-00/manifest.json",
+      "breaking_input": "Checkout on Windows with autocrlf, or on Linux with eol normalisation. The manifest is committed with CRLF, and the log and JSON attack files are hashed over their committed bytes.",
+      "why": "The sha256 values are over specific line-ending bytes. A checkout that converts line endings makes the evidence verifier report a mismatch on one leg, and the manifest file itself carries CRs that a literal-match edit or a jq-free parse may trip on.",
+      "fix": "Add a .gitattributes entry (`initiatives/**/evidence/** -text`) to pin bytes, or normalise to LF before hashing in the manifest builder and the verifier.",
+      "twin_of": "Two bats fixtures edited a checked-out YAML with a sed `$` anchor that misses on a CRLF line"
+    }
+  ]
+}
