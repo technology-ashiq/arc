@@ -2,8 +2,8 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 08
-appetite: 37d
+phase: 11
+appetite: 38.5d
 burn: 14d
 blocked-on: —
 depends-on: —
@@ -34,9 +34,10 @@ depends-on: —
 | 07 | Reference room — the docs wiki inside the face, a Reference link from every room (REQ-12, ADR-1346) | 10.5d | ✅ **CLOSED 2026-09-30** — 5d of 10.5d (worked 09-26, -27, -28, -29, -30); REQ-12 validated. The room, a Reference link from every room, page shape v1, 34 pages rewritten and accepted, and the owner-key proof. Two DoD rows ticked narrower than written (see the done log) |
 | 09 | Front door — the face at `/`, ENTER HQ with the warp, WebGL guard, a named surface (REQ-13, ADR-1349); runs BEFORE 08 | 1.5d | ✅ **CLOSED 2026-10-01** — 1d of 1.5d (built 10-01); REQ-13 validated. The face at `/`, ENTER HQ with the warp both ways, the WebGL guard, a named surface in coverage, the lint reading the stage; the owner read it against his design ("design ithu"). One DoD row ticked narrower than written: only the boundary attacker ran (see the done log) |
 | 10 | The face talks — any question, the owner's model added in the face, arc answers cited, general labelled, voice (REQ-14, ADR-1350); runs BEFORE 08 | 4d | ✅ **CLOSED 2026-10-02** — 1d of 4d (built 10-01..10-02); REQ-14 validated. The owner adds a model from HQ Settings, the key never returns, arc answers cited, general answers labelled, every model answer receipted, a neon ask bar on `/`, voice behind one switch, a fake provider in CI; the owner read it ("okay va iruku"). One DoD row ticked narrower than written: only the boundary attacker ran (see the done log) |
+| 11 | One Settings menu — Models with Test (ok/why, seconds, last test kept) and Voice (pick, speed, preview) (REQ-15, ADR-1350 Amendment 1); runs BEFORE 08 | 1.5d | building — `feat/face-v2-11-settings` |
 | 08 | Dogfood 2 real days on the final surface + retro (REQ-10) | 2d | spec'd |
 
-**Appetite burn: 14d of 37d (Phase 10 closed 2026-10-02: 1d of 4d; Phase 09 closed 2026-10-01: 1d of 1.5d; 33d until ADR-1350 added Phase 10's 4d on 2026-10-01; 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
+**Appetite burn (2026-10-03: total 38.5d after ADR-1350 Amendment 1 added Phase 11's 1.5d): 14d of 37d (Phase 10 closed 2026-10-02: 1d of 4d; Phase 09 closed 2026-10-01: 1d of 1.5d; 33d until ADR-1350 added Phase 10's 4d on 2026-10-01; 31.5d (Phase 07 closed 2026-09-30: 5d worked of 10.5d).** Blocks: A · look (00–02) 2/6d — **closed, 4d banked forward** · B · rooms + truth (03–04) 2/10d — **closed** ·
 C · verbs (05–06) 3/15d — **Phase 05 CLOSED at 3d of its 10d** (worked 2026-09-19, -20 and -23) — **re-banked 2026-09-19: 6d + 9 of the 12 banked days (ADR-1339)** · dogfood (07) 0/2d ·
 3d unallocated. Tripwires: Block A day 3 · Block B day 5 · Block C at Phase 05 day 5 (burn 9d) · 50% of total
 at 12d. **Block A, first clause read at day 1: Phase 00's browser suite is GREEN on CI** (run
@@ -478,6 +479,8 @@ stay bespoke folds.
   Receipts (main clone spine, `2026-10-01.jsonl`): `phase.closed` `01M3VR2HF2DYNZZ9N3JP6YES8G` · `approval.requested{gate: phase-done}` `01M3VR2JTVMM5XRTK66QQ25SYY`. The second waits on the owner's stamp, which also accepts the narrower attacker row.
 
 ## Now
+
+**CHANGE ROUTED (2026-10-03, `/arc-change --lane face`, owner: "work aguthu response slow ah iruku, yen settings thaniya vacha, atha oru menu la add pannalam la simple ah models add verify and test apdi, then voice la change panna mudiyatha?"; chose "Now, before dogfood"; then "complete all phase machi ... local tests panna venam ellame CI la than"):** after #314 the face answers from PowerShell, but slowly. The spine showed `z-ai/glm-5.3-flash` at 3.3-7.7 s on the night of 10-02 and 36-37 s on the afternoon of 10-03, and `gemma-4-26b-a4b-it` refused twice in under a second: the provider's load, which the face gave him no way to see before asking. Classified as **new capability**: **REQ-15 / Phase 11** (one Settings menu; a Test per model with ok-or-why and seconds, the last test kept; the voice picked, its speed, a preview), placed before the dogfood (Phase 08), the same way 09 and 10 went. Decision recorded as **ADR-1350 Amendment 1** (a new door route, `POST /api/models/test`, receipted through `face-ask`; no new spine kind). Active REQs: 2 (REQ-10, REQ-15) of a cap of 10. Appetite: total 37d to **38.5d** (+1.5d); burn 14d (36%), no tripwire near (all block tripwires are in closed blocks). Assumptions ledger: nothing fired. The owner pre-approved building it and every remaining phase without waiting (2026-10-03); Phase 08's two days stay his.
 
 **DEFECT ROUTED (2026-10-03, `/arc-change --lane face`, owner: "pannu unakuk theriyum la ethum venum nu"):** after the askfix merge (#313) the owner still saw every model answer fail as "The model could not answer this time", with no `run.completed` on the spine. Root cause, reproduced under his real Machine+User PATH: started from PowerShell, `bash` resolves to `C:\Windows\system32\bash.exe` (WSL, which has no `/bin/bash`), so `arc-run` cannot emit the run's receipt through `arc-event.sh`, exits non-zero, and the door shows its catch-all. Classified as a **bug against REQ-14** (validated; "a non-arc question returns the model's answer" did not hold when HQ starts from PowerShell), not a new REQ: fixed through the fix-issue flow on `feat/face-v2-08-gitbash` -- the launcher (`arc-face.mjs`) puts Git for Windows' `bin` first on the door's PATH on win32 (`gitBashEnv`, armed in its `--selftest`), and the door names a receipt that could not be written instead of the generic text (`providerFault`, pinned in `tests/face/talk.mjs`). Appetite: about 0.25d; burn stays 14d of 37d (38%), no tripwire near. Assumptions ledger: nothing fired. Phase 08's dogfood days start on the fixed launcher.
 
