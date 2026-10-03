@@ -141,6 +141,9 @@ export function providerFault(stderr) {
   const s = String(stderr ?? "");
   const codes = [...s.matchAll(/\bstatus (\d{3})\b/g)].map((m) => Number(m[1]));
   const code = codes.length ? codes[codes.length - 1] : null;
+  // Checked first: whatever the provider said, an answer with no receipt is never served, and the fix is on this box
+  // (2026-10-03: PowerShell resolved `bash` to WSL's, so every answer died here behind the generic line below).
+  if (/could not emit run\.completed/.test(s)) return "arc could not write this answer's receipt, so it is not shown. On Windows this is usually WSL's bash being found first: start HQ with node .claude/scripts/hq/arc-face.mjs (it puts Git Bash first), or from Git Bash.";
   if (code === 429) return "Your model's provider is busy and turned the question away (429, too many requests). Free models share one limit, so this is common: ask again in a minute, or pick another model in HQ Settings.";
   if (code === 401 || code === 403) return `The provider refused the key (${code}). Check the key for this model in HQ Settings.`;
   if (code === 402) return "The provider says the account has no credits left (402). Add credits there, or pick a free model in HQ Settings.";
