@@ -86,6 +86,15 @@ export function envContract() {
   return ["GITHUB_TOKEN"];
 }
 
+// The workflow is launch's only when launch committed it: content equal to ours is not enough, since an owner may have
+// copied it (attack 2b16424 L10). The newest commit touching the file must carry this slot's tag trailer.
+async function wroteIt(ctx, full) {
+  const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(PATH)}&sha=main&per_page=1`);
+  const top = list(log.body)[0];
+  const msg = top && top.commit && typeof top.commit.message === "string" ? top.commit.message : "";
+  return msg.split("\n").some((l) => l.trim() === `Arc-Launch-Tag: ${ctx.tag}`);
+}
+
 export async function scaffold(ctx) {
   const full = repo(ctx);
   ctx.write(PATH, WORKFLOW);
@@ -96,28 +105,36 @@ export async function scaffold(ctx) {
       message: `ci: arc-ci on ${LEGS.length} operating systems\n\nArc-Launch-Tag: ${ctx.tag}`,
       content: b64(WORKFLOW), branch: "main", ...(have ? { sha: have.sha } : {}),
     });
+  } else if (!(await wroteIt(ctx, full))) {
+    throw refuse("FOREIGN_WORKFLOW", `${full}:${PATH} already holds this workflow from a commit launch did not make; it is not adopted`);
   }
   // Reported the moment it exists: a protection call that fails next must not leave a commit nothing records
   // (attack faccecd B2).
   ctx.report({ kind: "github-workflow", id: `${full}:${PATH}` });
-  // An owner's existing protection is extended, never replaced: a PUT would drop their reviews and restrictions
-  // (attack faccecd B1). Protection without status checks is theirs to change, so it refuses.
+  // An owner's existing protection is extended, never replaced (attack faccecd B1): the missing checks are ADDED
+  // through the contexts endpoint, so their other checks and app bindings stay as they are (attack 2b16424 L6/B3).
+  // What launch created and what it only added are recorded apart, so the exit plan removes no owner rule
+  // (attack 2b16424 B2).
   const prot = await gh(ctx, "GET", `/repos/${full}/branches/main/protection`, undefined, { allow: [404] });
+  let kind;
   if (prot.status === 404) {
     await gh(ctx, "PUT", `/repos/${full}/branches/main/protection`, {
       required_status_checks: { strict: false, contexts: CHECKS },
       enforce_admins: false, required_pull_request_reviews: null, restrictions: null,
     });
+    kind = "branch-protection";
   } else {
     const rsc = prot.body && typeof prot.body === "object" ? prot.body.required_status_checks : null;
     if (!rsc || typeof rsc !== "object")
       throw refuse("PROTECTION_EXISTS", `${full}@main is protected without status checks; launch adds checks to protection, it does not rewrite the owner's rules`);
-    const have2 = Array.isArray(rsc.contexts) ? rsc.contexts.filter((c) => typeof c === "string") : [];
-    if (CHECKS.some((c) => !have2.includes(c)))
-      await gh(ctx, "PATCH", `/repos/${full}/branches/main/protection/required_status_checks`, { strict: rsc.strict === true, contexts: [...new Set([...have2, ...CHECKS])] });
+    const present = Array.isArray(rsc.contexts) ? rsc.contexts.filter((c) => typeof c === "string") : [];
+    const add = CHECKS.filter((c) => !present.includes(c));
+    if (add.length) await gh(ctx, "POST", `/repos/${full}/branches/main/protection/required_status_checks/contexts`, { contexts: add });
+    // Protection an earlier attempt of this slot created stays launch's on a re-run.
+    kind = ctx.resources.some((r) => r.kind === "branch-protection" && r.id === `${full}@main`) ? "branch-protection" : "required-checks";
   }
-  ctx.report({ kind: "branch-protection", id: `${full}@main` });
-  return { files: [PATH], resources: [{ kind: "github-workflow", id: `${full}:${PATH}` }, { kind: "branch-protection", id: `${full}@main` }], notes: [] };
+  ctx.report({ kind, id: `${full}@main` });
+  return { files: [PATH], resources: [{ kind: "github-workflow", id: `${full}:${PATH}` }, { kind, id: `${full}@main` }], notes: [] };
 }
 
 const wait = (ms, signal) => new Promise((res, rej) => {
@@ -129,20 +146,11 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 
 // Asked of GitHub: the three checks are required on main, and the run of the workflow for main's CURRENT head has all
 // three legs green. An older run is never the answer (attack faccecd B3); a run not yet created and a run still going
-// are reported apart (attack faccecd L2). Thirteen polls, 20 s apart, fit inside the slot's 300 s timeout.
-export async function verify(ctx) {
-  // Every answer below comes over ctx.fetch from api.github.com; the probe is GitHub, never state.
-  const ask = ctx.fetch.bind(ctx);
-  ctx = { ...ctx, fetch: ask };
+// are reported apart (attack faccecd L2). Thirteen polls, 20 s apart, fit inside the slot's 300 s timeout. Required
+// checks the owner added are theirs to judge (debt D15).
+async function probe(ctx) {
   const full = repo(ctx);
-  let prot;
-  try {
-    prot = await gh(ctx, "GET", `/repos/${full}/branches/main/protection/required_status_checks`, undefined, { allow: [404] });
-  } catch (e) {
-    // verify answers; it does not throw a refusal out of a read (attack faccecd B8).
-    if (e && e.code === "PLAN_LIMIT") return { ok: false, reason: `PLAN_LIMIT: ${e.message}` };
-    throw e;
-  }
+  const prot = await gh(ctx, "GET", `/repos/${full}/branches/main/protection/required_status_checks`, undefined, { allow: [404] });
   const contexts = prot.status === 200 && prot.body && Array.isArray(prot.body.contexts) ? prot.body.contexts : [];
   const missing = CHECKS.filter((c) => !contexts.includes(c));
   if (missing.length) return { ok: false, reason: `main does not require ${missing.join(", ")}` };
@@ -167,6 +175,22 @@ export async function verify(ctx) {
   return { ok: false, reason: last };
 }
 
+// verify answers; a coded refusal from anywhere in the probe (token, upstream, plan limit) becomes a not-ok answer,
+// never a throw out of a read (attack faccecd B8, 2b16424 L1/B1). Only the slot timeout propagates: the runner owns it.
+export async function verify(ctx) {
+  // Every answer below comes over ctx.fetch from api.github.com; the probe is GitHub, never state.
+  const ask = ctx.fetch.bind(ctx);
+  try {
+    return await probe({ ...ctx, fetch: ask });
+  } catch (e) {
+    if (e && e.code && e.code !== "ABORTED") return { ok: false, reason: `${e.code}: ${say(e.message)}` };
+    throw e;
+  }
+}
+
+// The exit plan undoes only what launch made: protection it created is removed, checks it added to the owner's
+// protection are removed from it, and the owner's rules stay.
 export async function teardown(ctx) {
-  return { steps: ctx.resources.filter((r) => r.kind === "github-workflow" || r.kind === "branch-protection").map((r, i) => ({ order: i + 1, action: r.kind === "branch-protection" ? "unprotect" : "delete", resource: r.id })) };
+  const action = { "github-workflow": "delete", "branch-protection": "unprotect", "required-checks": "remove-checks" };
+  return { steps: ctx.resources.filter((r) => action[r.kind]).map((r, i) => ({ order: i + 1, action: action[r.kind], resource: r.id })) };
 }

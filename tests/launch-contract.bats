@@ -185,6 +185,7 @@ arm() {
   [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.workflowCommits + " " + o.tagged + " " + o.local')" = "1 true true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.contexts.join(",")')" = "test (ubuntu-latest),test (windows-latest),test (macos-latest)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",") + " " + o.secondKinds.join(",")')" = "github-workflow,branch-protection github-workflow,branch-protection" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.github.com" ] || { echo "$DONE"; false; }
 }
 
@@ -242,6 +243,7 @@ arm() {
   [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.protection.contexts.join(",")')" = "lint,test (ubuntu-latest),test (windows-latest),test (macos-latest)" ] || { echo "$DONE"; false; }
   [ "$(j 'o.protection.strict + " " + o.protection.reviews.required_approving_review_count')" = "true 2" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "github-workflow,required-checks" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: protection without status checks refuses, and the committed workflow is still recorded" {
@@ -257,4 +259,27 @@ arm() {
   arm ci verify-plan-limit
   [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.verify.value.reason')" == "PLAN_LIMIT: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: repo adopts only a description that ENDS with its marker, and refuses an archived repo" {
+  arm repo marker-mid-text
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "FOREIGN_REPO 0" ] || { echo "$DONE"; false; }
+  arm repo archived
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "REPO_ARCHIVED 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: verify answers every coded refusal as not ok, never a throw (repo and ci)" {
+  arm repo verify-archived
+  [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.value.reason')" == "REPO_ARCHIVED: "* ]] || { echo "$DONE"; false; }
+  arm ci verify-refusals
+  [ "$(j 'o.badToken.ok + " " + o.badToken.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.badToken.value.reason')" == "BAD_TOKEN: "* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.noUpstream.value.reason')" == "UPSTREAM_MISSING: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci does not adopt an identical workflow the owner committed" {
+  arm ci foreign-workflow
+  [ "$(j 'o.scaffold.code')" = "FOREIGN_WORKFLOW" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.length')" = "0" ] || { echo "$DONE"; false; }
 }

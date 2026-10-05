@@ -13,7 +13,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
   const sha = () => (++n).toString(16).padStart(40, "0");
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const err = (status, message) => json(status, { message, documentation_url: "https://docs.github.com" });
-  const view = (full, r) => ({ full_name: full, name: full.split("/")[1], private: r.private, description: r.description, default_branch: "main" });
+  const view = (full, r) => ({ full_name: full, name: full.split("/")[1], private: r.private, description: r.description, default_branch: "main", archived: !!r.archived });
 
   function commit(r, message, files) {
     const c = { sha: sha(), message, files };
@@ -77,6 +77,18 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       if (!rsc) return err(404, "Required status checks not enabled");
       if (method === "GET") return json(200, rsc);
       if (method === "PATCH") { r.protection.contexts = [...body.contexts]; r.protection.strict = !!body.strict; return json(200, { contexts: r.protection.contexts }); }
+    }
+    if (method === "POST" && rest === "branches/main/protection/required_status_checks/contexts") {
+      if (planLimit) return err(403, "Upgrade to GitHub Pro or make this repository public to enable this feature.");
+      if (!r.protection || !r.protection.contexts) return err(404, "Required status checks not enabled");
+      for (const c of body.contexts) if (!r.protection.contexts.includes(c)) r.protection.contexts.push(c);
+      return json(200, r.protection.contexts);
+    }
+    // The newest commit on main that touched ?path=, the way the commits list answers it.
+    if (method === "GET" && rest === "commits") {
+      const path = url.searchParams.get("path");
+      const hits = r.commits.filter((c) => !path || (c.files && c.files[path])).reverse();
+      return json(200, hits.slice(0, Number(url.searchParams.get("per_page") || 30)).map((c) => ({ sha: c.sha, commit: { message: c.message } })));
     }
 
     // A run answers the branch and head_sha filters the way GitHub does; `pending` polls show it in progress first.

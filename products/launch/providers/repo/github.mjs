@@ -54,9 +54,12 @@ function repoName(ctx) {
 
 function own(ctx, repo, full) {
   if (!repo || typeof repo !== "object") throw new Error(`github returned no repo for ${full}`);
-  if (typeof repo.description !== "string" || !repo.description.includes(marker(ctx.tag)))
+  // The marker ENDS the description, as launch writes it: pasted mid-text it is not ownership (attack 2b16424 L5).
+  if (typeof repo.description !== "string" || !repo.description.trimEnd().endsWith(marker(ctx.tag)))
     throw refuse("FOREIGN_REPO", `${full} exists and is not tagged ${ctx.tag}; launch never adopts a repo it did not create`);
   if (repo.private !== true) throw refuse("NOT_PRIVATE", `${full} is public; a venture repo is private (ADR-1722)`);
+  // An archived repo is read-only: refused here, not discovered later as a failed commit (attack 2b16424 L9).
+  if (repo.archived === true) throw refuse("REPO_ARCHIVED", `${full} is archived (the exit plan ran); unarchive it by hand to launch again`);
   return repo;
 }
 
@@ -85,10 +88,7 @@ export async function scaffold(ctx) {
 }
 
 // Asked of GitHub, never of state: the repo is private, tagged, and its main branch holds a commit.
-export async function verify(ctx) {
-  // Every answer below comes over ctx.fetch from api.github.com; the probe is GitHub, never state.
-  const ask = ctx.fetch.bind(ctx);
-  ctx = { ...ctx, fetch: ask };
+async function probe(ctx) {
   const full = `${await login(ctx)}/${repoName(ctx)}`;
   const { status, body } = await gh(ctx, "GET", `/repos/${full}`, undefined, { allow: [404] });
   if (status === 404) return { ok: false, reason: `${full} does not exist` };
@@ -99,6 +99,19 @@ export async function verify(ctx) {
   if (head.status === 404 || !head.body || !head.body.commit || typeof head.body.commit.sha !== "string")
     return { ok: false, reason: `${full} branch ${branch} holds no commit` };
   return { ok: true, answerer: "api.github.com", evidence: { repo: full, private: true, branch, head: head.body.commit.sha } };
+}
+
+// verify answers; a coded refusal (token, slug, foreign, archived) becomes a not-ok answer, never a throw out of a read
+// (attack 2b16424 B1). Only the slot timeout propagates.
+export async function verify(ctx) {
+  // Every answer below comes over ctx.fetch from api.github.com; the probe is GitHub, never state.
+  const ask = ctx.fetch.bind(ctx);
+  try {
+    return await probe({ ...ctx, fetch: ask });
+  } catch (e) {
+    if (e && e.code && e.code !== "ABORTED") return { ok: false, reason: `${e.code}: ${say(e.message)}` };
+    throw e;
+  }
 }
 
 export async function teardown(ctx) {

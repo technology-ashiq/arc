@@ -49,7 +49,9 @@ const out = { scenario };
 switch (scenario) {
   case "twice":
     out.first = (await attempt(() => adapter.scaffold(ctxFor()))).ok;
-    out.second = (await attempt(() => adapter.scaffold(ctxFor()))).ok;
+    const second = await attempt(() => adapter.scaffold(ctxFor()));
+    out.second = second.ok;
+    out.secondKinds = second.ok ? second.value.resources.map((r) => r.kind) : [];
     out.workflowCommits = repo().commits.filter((c) => c.files && c.files[WF]).length;
     out.tagged = repo().commits.filter((c) => c.files && c.files[WF]).every((c) => c.message.includes(`Arc-Launch-Tag: ${TAG}`));
     out.contexts = repo().protection && repo().protection.contexts;
@@ -90,6 +92,23 @@ switch (scenario) {
   case "verify-plan-limit":
     out.verify = await attempt(() => adapter.verify(ctxFor()));
     break;
+  case "verify-refusals": {
+    // Every coded refusal inside verify comes back as an answer, never a throw.
+    const ctx = ctxFor();
+    out.badToken = await attempt(() => adapter.verify({ ...ctx, env: { GITHUB_TOKEN: "short" } }));
+    out.noUpstream = await attempt(() => adapter.verify(ctxFor({ upstream: {} })));
+    break;
+  }
+  case "foreign-workflow": {
+    // The owner committed launch's exact workflow by hand after launch did: same bytes, newest commit has no trailer.
+    await adapter.scaffold(ctxFor());
+    const r = repo();
+    r.commits.push({ sha: "c".repeat(40), message: "copy the workflow", files: { [WF]: r.files[WF].sha } });
+    reported.length = 0;
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    out.reported = reported.map((x) => x.kind);
+    break;
+  }
   case "bad-token": {
     const ctx = ctxFor();
     out.scaffold = await attempt(() => adapter.scaffold({ ...ctx, env: { GITHUB_TOKEN: `gho_fixture${String.fromCharCode(10)}Token0123456789` } }));

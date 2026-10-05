@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:117-125",
+      "breaking_input": "verify is called with GITHUB_TOKEN unset or shaped wrong (BAD_TOKEN), or with no repo in ctx.upstream (UPSTREAM_MISSING), or with a repo id such as \"../../evil\" (BAD_UPSTREAM). The same applies to repo/github.mjs verify, which throws BAD_TOKEN, BAD_SLUG, FOREIGN_REPO and NOT_PRIVATE out of the function. A slot-timeout abort during the poll throws ABORTED out of verify too.",
+      "why": "fixed-defects.md says 'verify catches it and answers not ok', but the try/catch wraps one call and handles only PLAN_LIMIT. repo(ctx) runs before the try. token() throws inside gh(), and the catch rethrows every code except PLAN_LIMIT. A coded refusal still escapes the read-only probe, so verify --all can still lose its summary.",
+      "fix": "Wrap the whole body of verify in the adapter, in both repo and ci, and return {ok:false, reason:`${e.code}: ${say(e.message)}`} for any coded error. Keep ABORTED rethrown only if the runner depends on it. Add arms that call verify with a bad token, a missing upstream and a foreign repo.",
+      "twin_of": "verify threw a refusal out of a read-only probe -> every verify: can anything it calls throw a coded refusal?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:100-103, 167-169",
+      "breaking_input": "The owner's main is already protected, with reviews and the three launch contexts, or with the contexts added by PATCH. scaffold takes the else branch and reports {kind:'branch-protection', id:full@main}. Later `teardown --plan` emits {action:'unprotect', resource: full@main}.",
+      "why": "The fix extends the owner's protection instead of replacing it. But the extended protection is recorded as a launch-created resource whose teardown step is a whole-branch 'unprotect', which removes the owner's reviews and restrictions. The PUT-replaces-owner-rules hazard moves from apply to the exit plan, and nothing records whether launch created the protection.",
+      "fix": "Record in the resource id or state whether launch created the protection or only extended it. For an extended one, make teardown remove only the three contexts (a PATCH of required_status_checks), never the whole protection.",
+      "twin_of": "A PUT replaced the owner's branch protection (reviews, restrictions) to add three checks -> every write to a setting the owner can also edit: extend, never replace"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:101-103",
+      "breaking_input": "The owner's required checks are bound to a specific GitHub App (a `checks` array with app_id values). scaffold sends PATCH required_status_checks with only {strict, contexts}.",
+      "why": "The adapter reads only `contexts`, which GitHub derives from `checks`, and writes `contexts` back. The write can rebind existing checks to 'any source' and drop the owner's app_id pins. That is a silent weakening of the owner's rules, and the fake cannot show it because it models only `contexts`.",
+      "fix": "Read required_status_checks.checks and PATCH with a `checks` array. Keep the existing entries with their app_id and append {context} for the missing ones. Model `checks` in the fake.",
+      "twin_of": "A PUT replaced the owner's branch protection (reviews, restrictions) to add three checks -> every write to a setting the owner can also edit: extend, never replace"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/repo/github.mjs:73-83 and ci/github-actions.mjs:78-90",
+      "breaking_input": "repo scaffold creates the repo with auto_init:true and returns at once. ci runs immediately afterwards. GitHub has not finished creating the initial commit on main, so the Contents PUT hits an unborn branch (409/422) or the protection GET answers 404 'Branch not found'.",
+      "why": "repo's scaffold never waits for main to hold a commit. The slot is only checked in verify (the 'holds no commit' branch). ci treats a 404 from the protection GET as 'unprotected', then its PUT fails with an unrelated 404. The fake creates the initial commit synchronously, so no test sees the race.",
+      "fix": "After a create, poll GET /repos/{full}/branches/{default_branch} until it answers 200, with a bound and the abort signal, before reporting the repo. Make the fake delay the initial commit for one read.",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired -> every wait, retry or poll loop in an adapter or the runner"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:27",
+      "breaking_input": "The frontend slot writes a package.json without a package-lock.json. The workflow step runs `npm ci && npm test --if-present` on all three legs.",
+      "why": "npm ci exits 1 when no lockfile exists. All three required checks go red on every venture push, and branch protection then blocks every merge. The step only guards on package.json, not on the lockfile that npm ci needs.",
+      "fix": "Use `if [ -f package-lock.json ]; then npm ci; elif [ -f package.json ]; then npm install; fi` and then `npm test --if-present`. Alternatively, require the frontend slot to commit a lockfile.",
+      "twin_of": ""
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/launch-contract.bats:239-242",
+      "breaking_input": "The branch-run test asserts only verify.ok === false after the only run is moved to branch 'feature'. Suppose verify fails for another reason, such as a thrown fake error or a protection mismatch, and the branch filter is later dropped from the adapter's URL.",
+      "why": "A bare false cannot tell 'filtered by branch' from 'failed for any reason'. The adjacent stale-run test checks the reason string; this one does not. A test that passes without proving the code path ran.",
+      "fix": "Assert the reason equals the no-run-for-head message, and assert that the fake's runs-list call carried branch=main.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/repo/github.mjs:78-82",
+      "breaking_input": "POST /user/repos answers 422 'name is invalid' or 'private repositories are disabled by policy'. The re-GET answers 404.",
+      "why": "The B5 fix still discards GitHub's own validation message. The thrown text says only 'refused to create ... (422) and no such repo exists', with no reason, because the 422 body from `made` is never read. The owner cannot tell a policy refusal from a bad name.",
+      "fix": "Keep made.body.message and the first errors[].message, pass them through say(), and append them to the thrown message. Re-GET only when the message says the name already exists.",
+      "twin_of": "Provider error text and resolver answers went raw into the slot's reason -> every adapter that builds a reason or message from a response body"
+    }
+  ]
+}

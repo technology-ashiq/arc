@@ -21,6 +21,8 @@ const TOKEN = "gho_fixtureToken0123456789";
 const ghOpts = {
   foreign: { repos: [{ name: "arc-sandbox", description: "someone's project", private: true, commits: [{ sha: "a".repeat(40) }] }] },
   public: { repos: [{ name: "arc-sandbox", description: `x [arc-launch ${TAG}]`, private: false, commits: [{ sha: "a".repeat(40) }] }] },
+  "marker-mid-text": { repos: [{ name: "arc-sandbox", description: `mine [arc-launch ${TAG}] pasted`, private: true, commits: [{ sha: "a".repeat(40) }] }] },
+  archived: { repos: [{ name: "arc-sandbox", description: `x [arc-launch ${TAG}]`, private: true, archived: true, commits: [{ sha: "a".repeat(40) }] }] },
 }[scenario] || {};
 const gh = makeGithub(ghOpts);
 globalThis.fetch = gh.fetch;
@@ -48,6 +50,8 @@ switch (scenario) {
     break;
   case "foreign":
   case "public":
+  case "marker-mid-text":
+  case "archived":
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
     out.creates = gh.calls.filter((c) => c === "POST /user/repos").length;
     break;
@@ -62,6 +66,10 @@ switch (scenario) {
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ token: `gho_fixture${String.fromCharCode(13, 10)}Token0123456789` })));
     out.calls = gh.calls.length;
     out.leaked = out.scaffold.message.includes("Token0123456789");
+    break;
+  case "verify-archived":
+    gh.store.set(FULL, { private: true, archived: true, description: `x [arc-launch ${TAG}]`, files: {}, runs: [], protection: null, commits: [{ sha: "a".repeat(40) }] });
+    out.verify = await attempt(() => adapter.verify(ctxFor()));
     break;
   case "verify-missing":
     out.verify = await adapter.verify(ctxFor());
