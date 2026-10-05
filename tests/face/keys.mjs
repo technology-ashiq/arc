@@ -30,6 +30,18 @@ const freePort = () => new Promise((res, rej) => { const srv = createServer(); s
 const PLANTED = ["planted", "keys", "VALUE", randomBytes(6).toString("hex"), "z9y8"].join("-");
 const OTHER = ["second", "keys", "VALUE", randomBytes(6).toString("hex"), "q4r5"].join("-");
 
+/**
+ * arc-run started WITHOUT blocking this process: the fake provider answers from this event loop, and spawnSync froze it
+ * so every attempt timed out with no request recorded (CI 37342372413, section G n=0). Resolves on exit or after 90 s.
+ * @param {string[]} args @param {Record<string, string | undefined>} env
+ */
+const runAsync = (args, env) => new Promise((res) => {
+  const c = spawn(process.execPath, args, { cwd: REPO, env, stdio: ["ignore", "ignore", "ignore"] });
+  const t = setTimeout(() => { c.kill(); res(null); }, 90_000);
+  c.on("exit", (code) => { clearTimeout(t); res(code); });
+  c.on("error", () => { clearTimeout(t); res(null); });
+});
+
 let ran = 0, failed = 0;
 const check = (name, cond, detail = "") => {
   ran++;
@@ -170,15 +182,15 @@ try {
   delete runEnv.ARC_LLM_API_KEY;
   delete runEnv.OPENROUTER_API_KEY;
   const before = llm.requests.length;
-  spawnSync(process.execPath, [join(REPO, ".claude/scripts/engine/arc-run.mjs"), "--process", "face-ask", "--driver", "generic-api", "--owner-model", "fake/owner-model:free", "--input", JSON.stringify({ q: "What is 2 + 2?", state: "MODE: sim (keys test)" })],
-    { cwd: REPO, env: runEnv, encoding: "utf8", timeout: 90_000 });
+  await runAsync([join(REPO, ".claude/scripts/engine/arc-run.mjs"), "--process", "face-ask", "--driver", "generic-api", "--owner-model", "fake/owner-model:free", "--input", JSON.stringify({ q: "What is 2 + 2?", state: "MODE: sim (keys test)" })],
+    runEnv);
   const sent = llm.requests[before];
   check("G: with ARC_LLM_API_KEY unset, the driver sent the stored key named by ARC_LLM_KEY_NAME", llm.requests.length > before && sent?.bearer === PLANTED,
     JSON.stringify({ n: llm.requests.length - before, bearerTail: sent?.bearer ? String(sent.bearer).slice(-4) : null }));
   const envWins = { ...runEnv, OPENROUTER_API_KEY: "from-the-environment-777" };
   const before2 = llm.requests.length;
-  spawnSync(process.execPath, [join(REPO, ".claude/scripts/engine/arc-run.mjs"), "--process", "face-ask", "--driver", "generic-api", "--owner-model", "fake/owner-model:free", "--input", JSON.stringify({ q: "What is 2 + 2?", state: "MODE: sim (keys test)" })],
-    { cwd: REPO, env: envWins, encoding: "utf8", timeout: 90_000 });
+  await runAsync([join(REPO, ".claude/scripts/engine/arc-run.mjs"), "--process", "face-ask", "--driver", "generic-api", "--owner-model", "fake/owner-model:free", "--input", JSON.stringify({ q: "What is 2 + 2?", state: "MODE: sim (keys test)" })],
+    envWins);
   check("G: a set environment variable of that name still wins over the store", llm.requests[before2]?.bearer === "from-the-environment-777", JSON.stringify({ n: llm.requests.length - before2 }));
 
   r = await post("/api/keys/set", { op: "remove", name: "OPENROUTER_API_KEY" });
