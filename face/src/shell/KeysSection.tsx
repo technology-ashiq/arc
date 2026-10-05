@@ -35,7 +35,13 @@ export default function KeysSection({ door }: { door: Door }) {
     try { setView(keysView(await p)); if (done) done() } catch (err) { setProblem(refusalOf(err).human) } finally { setBusy(false); setLoading(false) }
   }, [])
 
-  useEffect(() => { void send(door.keys()) }, [door, send])
+  // The first read only fills the list: it never holds `busy`, so a slow door cannot lock the add button (CI
+  // 37350862408: the button read disabled while the first GET was still in flight).
+  useEffect(() => {
+    let live = true
+    door.keys().then((b) => { if (live) setView(keysView(b)) }, (err) => { if (live) setProblem(refusalOf(err).human) }).finally(() => { if (live) setLoading(false) })
+    return () => { live = false }
+  }, [door])
 
   const onAdd = (ev: FormEvent) => {
     ev.preventDefault()

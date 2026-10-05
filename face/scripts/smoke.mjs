@@ -1288,13 +1288,15 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       const typeInto = async (sel, text) => (await val(P, `(function () { var i = document.querySelector(${JSON.stringify(sel)}); if (!i) return false; i.focus(); return document.activeElement === i; })()`)) === true && (await P.send("Input.insertText", { text }), true);
       const keysTab = menu && (await click(P, '[data-settings-tab="keys"]')) && (await until(async () => (await count(P, '[data-settings-section="keys"] [data-key-add]')) === 1, capMs));
       // Each sub-step is kept, so a failure names where it stopped and what the page said (CI 37346497004: added=false).
-      const typedName = keysTab && (await typeInto("[data-key-name]", "SMOKE_TEST_KEY"));
+      // The list has been read (its loading line is gone) before anything is typed.
+      const listed = keysTab && (await until(async () => !/reading your keys/.test(String(await val(P, "(function () { var s = document.querySelector('[data-settings-section=keys]'); return s ? s.textContent : ''; })()"))), capMs));
+      const typedName = listed && (await typeInto("[data-key-name]", "SMOKE_TEST_KEY"));
       const typedValue = typedName && (await typeInto("[data-key-value]", KEYV));
       const form = String(await val(P, "(function () { var n = document.querySelector('[data-key-name]'), v = document.querySelector('[data-key-value]'), b = document.querySelector('[data-key-add]'); return (n ? n.value : '-') + '|' + (v ? v.value.length : '-') + '|' + (b ? (b.disabled ? 'disabled' : 'enabled') : '-'); })()"));
       const pressed = typedValue && (await click(P, "[data-key-add]"));
       const added = pressed && (await until(async () => String(await shown()) === `…${KEYV.slice(-4)}`, capMs));
       const alertText = () => val(P, "(function () { var a = document.querySelector('[data-settings-section=keys] [role=alert]'); return a ? a.textContent : ''; })()");
-      const addWhy = added ? "" : ` [add stopped: typedName=${Boolean(typedName)} typedValue=${Boolean(typedValue)} form=${form} pressed=${Boolean(pressed)} alert=${JSON.stringify(String(await alertText()).slice(0, 160))}]`;
+      const addWhy = added ? "" : ` [add stopped: listed=${Boolean(listed)} typedName=${Boolean(typedName)} typedValue=${Boolean(typedValue)} form=${form} pressed=${Boolean(pressed)} alert=${JSON.stringify(String(await alertText()).slice(0, 160))}]`;
       const replaced = added && (await click(P, "[data-key-row=SMOKE_TEST_KEY] [data-key-replace]")) && (await typeInto("[data-key-replace-value]", KEYV2)) && (await click(P, "[data-key-replace-save]"))
         && (await until(async () => String(await shown()) === `…${KEYV2.slice(-4)}`, capMs));
       const noValue = !String(await val(P, "document.body.innerText")).includes("0123456789abcdef") && !String(await val(P, "document.body.innerText")).includes("fedcba9876543210");
