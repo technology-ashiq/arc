@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "design-jury.mjs:277",
+      "breaking_input": "docs/adr/ contains two files starting with '1411-': the real, fully-sealed ADR-1411 and a second '1411-*' file (e.g. from an ADR-number-band collision across two lanes, or a stub someone left mid-draft). readdirSync(...).find(n => n.startsWith('1411-')) returns whichever one the filesystem happens to list first -- not necessarily the real one -- so sealedPredictions() reads that file's text instead of the canonical ADR.",
+      "why": "find() stops at the first match instead of counting matches and refusing on ambiguity, so the 'score' gate's most important precondition (predictions sealed BEFORE scoring, per ADR-1411) is decided by directory listing order rather than by which file is actually ADR-1411. A shadow/duplicate file can either wrongly block a legitimate score or wrongly admit one if it happens to contain the four magic phrases.",
+      "fix": "Filter readdirSync(dir) to every name starting with '1411-', fail if the count is 0 (no ADR) or >1 (ambiguous/duplicate), and only then read the single match.",
+      "twin_of": "`find()` took the first of duplicate rows -> count matches; exactly one or refuse."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "design-jury.mjs:341-343",
+      "breaking_input": "Create docs/design/explore/jx/variant-a/self-review/ with 'manifest.md' as a DIRECTORY instead of a file (e.g. `mkdir manifest.md`), then run `design-explore.sh catch-rate jx`.",
+      "why": "existsSync(man) returns true for a directory, so the guard passes, but readFileSync(man, 'utf8') then throws EISDIR. Nothing in catchRate() wraps that call, so the command crashes with a raw Node stack trace (exposing internal paths) instead of the clean, named fail() message every other refusal path in this file produces -- and a race where the file is deleted between existsSync and readFileSync hits the same unguarded throw.",
+      "fix": "lstat the manifest path and require isFile() before reading, or wrap the readFileSync in try/catch and call fail() with a one-line message on any error, matching the pattern used for key.json parsing in loadKey().",
+      "twin_of": "A parser throw left to a stack trace beside two guarded siblings -> every step that can fail answers with a named ERR line."
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": "design-jury.mjs:329",
+      "breaking_input": "A reference item's source filename in refpacks (basename(file, ext), which becomes key.items[].source) contains raw control bytes, e.g. an ANSI escape sequence such as ESC[2K ESC[1A followed by fabricated text like 'arc beats it -- ship it', saved as the pack filename before the brief was dealt into the jury.",
+      "why": "unblind() interpolates r.source directly into console.log with no sanitization, while a few lines earlier in the very same diff the stderr excerpt from the note.logged spawn IS run through clean() before being printed. The unblind step's whole purpose is to give the owner a trustworthy 'does arc beat the control' verdict immune to gaming -- an unsanitized source field lets a crafted pack filename overwrite or spoof that terminal output for whoever is reading it.",
+      "fix": "Run r.source (and r.label) through the same clean()/control-character-stripping helper already applied to the stderr excerpt in score(), before interpolating into any console.log line.",
+      "twin_of": "Remote text reached a tab-separated log verbatim -> strip control characters from every logged field."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "design-jury.mjs:278,343",
+      "breaking_input": "Replace docs/adr/1411-owner-ritual.md with a symlink to an attacker-writable file outside docs/adr (e.g. a scratch file the attacker can rewrite at will containing the four sealed-prediction phrases), or replace a variant's self-review/manifest.md with a symlink to an arbitrary file elsewhere on disk.",
+      "why": "deal() explicitly checks `lstatSync(rubricFile).isSymbolicLink()` and refuses a symlinked rubric a few lines above, but sealedPredictions()'s ADR read and catchRate()'s manifest read perform no equivalent lstat/isSymbolicLink check -- the same class of file-identity guard was added for one input in this file and not for its two siblings.",
+      "fix": "Before readFileSync in sealedPredictions() and in the catch-rate loop, lstat the target and refuse if it is a symlink (or not a regular file), exactly as already done for the rubric file in deal().",
+      "twin_of": "A pin applied to one tool and not its twin -> a check added for one tool is added to every tool that resolves the same relative path."
+    }
+  ]
+}

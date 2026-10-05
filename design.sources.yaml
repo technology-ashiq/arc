@@ -35,12 +35,15 @@ sources:
       - provenance
     auth: none
     cost: free
-    status: active
+    status: off
     availability: unknown
     approved_by: ashiq
     added: 2026-08-23
     # robots.txt: `Allow: /`, only `/api/` disallowed. Server-rendered, so a plain fetch
     # returns real HTML rather than a JS shell.
+    # OFF 2026-09-27 (owner, ADR-1412 amendment): the first real pack build found its Cloudflare
+    # answering robots.txt with 403 to ClaudeBot and Claude-User, while a browser agent gets
+    # through. That is the site refusing Claude, and a borrowed agent string would be evasion.
 
   - id: saasframe
     kind:
@@ -53,12 +56,98 @@ sources:
       - provenance
     auth: none
     cost: free
-    status: active
+    status: off
     availability: unknown
     approved_by: ashiq
     added: 2026-08-23
     # robots.txt: the generic `*` group disallows only query URLs. Server-rendered, no JS
     # needed for the screens we read.
+    # OFF 2026-09-27 (owner, ADR-1412 amendment): browsing works, but every screenshot is served
+    # from Webflow's shared CDN (cdn.prod.website-files.com), never from saasframe.io. That host
+    # is not this row's, it is shared by every Webflow site, and its robots.txt answers 403, so
+    # permission is unknown for every image this gallery shows.
+
+  # ---- active since 2026-09-27 (owner, ADR-1412 amendment): the replacements ----
+  - id: nicelydone
+    kind:
+      - inspiration
+    access: fetch
+    hosts:
+      - nicelydone.club
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: none
+    cost: free
+    status: active
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-09-27
+    # Screens from shipped SaaS products, the closest fit to an app workspace. robots.txt is
+    # plain text and allows ClaudeBot and Claude-User; images are served from its own host. No
+    # terms page at the usual paths (checked 2026-09-27).
+
+  - id: collectui
+    kind:
+      - inspiration
+    access: fetch
+    hosts:
+      - collectui.com
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: none
+    cost: free
+    status: active
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-09-27
+    # UI collections by pattern (dashboards, tables, settings). robots.txt allows ClaudeBot and
+    # Claude-User with no blanket disallow; most images are on its own host. Some shots are
+    # concept work, so the curator prefers shipped products. No terms page at the usual paths.
+    # Observed 2026-09-27: a client-rendered app, so a plain fetch reaches no screen URL.
+
+  - id: saasui
+    kind:
+      - inspiration
+    access: fetch
+    hosts:
+      - saasui.design
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: none
+    cost: free
+    status: off
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-09-27
+    # SaaS product screens. Added by the owner on 2026-09-27 when collectui proved unreachable by
+    # a plain fetch: robots.txt is plain text allowing ClaudeBot and Claude-User. OFF the same
+    # day: the 51-of-51 own-host count was the homepage only; every screen on an application
+    # page is on cdn.sanity.io, a shared CDN that is not this row's host (the saasframe rule).
+    # Its /_next/image proxy sits on saasui.design but needs a ~120-byte query past the
+    # curator's 64-byte cap (ADR-1420); the owner declined that boundary change 2026-09-27.
+
+  - id: screensdesign
+    kind:
+      - inspiration
+    access: fetch
+    hosts:
+      - screensdesign.com
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: none
+    cost: free
+    status: off
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-09-27
+    # Scouted 2026-09-27 as saasui's replacement: robots.txt allows ClaudeBot and Claude-User and
+    # every screen image is on its own media.screensdesign.com. OFF on terms, not robots: its
+    # Terms of Service section (e) forbid any robot, spider or scraper without prior written
+    # consent (the dribbble rule). Mostly iOS screens as well, a weak fit for a desktop brief.
 
   # ---- active, but citation only: permitted to link, never to cache ----
   - id: awwwards

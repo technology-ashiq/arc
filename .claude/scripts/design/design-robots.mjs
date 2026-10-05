@@ -30,6 +30,8 @@
 
 import { readFileSync, realpathSync } from "node:fs";
 import { lookup } from "node:dns/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { isIP, isIPv4 } from "node:net";
 import { fileURLToPath } from "node:url";
 
@@ -39,6 +41,8 @@ export const EXIT = { ALLOW: 0, DISALLOW: 3, UNREADABLE: 4 };
 // RFC 9309 asks a parser to read at least 500 KiB; the rest is not read, and not waited for.
 export const ROBOTS_MAX_BYTES = 512 * 1024;
 const FETCH_TIMEOUT_MS = 15000;
+// Total matcher steps for one decision. Real files use a few thousand.
+const MATCH_STEPS = 20_000_000;
 const ROBOTS_MAX_HOPS = 5;
 // Past these the matcher's cost is the remote's choice. A rule or a path over the limit makes
 // the answer UNREADABLE -- never a skipped rule, because skipping a Disallow is an ALLOW.
@@ -115,13 +119,16 @@ export function parseRobots(text) {
 
 // `*` matches any run, a trailing `$` anchors the end, and otherwise the rule is a prefix.
 // Two pointers with one saved star: O(pattern x path) at worst, never exponential.
-export function globMatch(rulePath, path) {
+// `budget` is shared by every rule one decision tries: a 512 KiB file packs ~500 near-max rules, each a million-step
+// worst case, so one per-call bound still let one URL check cost billions (phase-02 attack G2 B2). Out of steps is null.
+export function globMatch(rulePath, path, budget = null) {
   let pat = rulePath;
   let anchored = false;
   if (pat.endsWith("$")) { anchored = true; pat = pat.slice(0, -1); }
   if (!anchored) pat += "*";
   let p = 0, i = 0, starP = -1, starI = 0;
   while (i < path.length) {
+    if (budget && --budget.left < 0) return null;
     if (p < pat.length && pat[p] !== "*" && pat[p] === path[i]) { p++; i++; }
     else if (p < pat.length && pat[p] === "*") { starP = p++; starI = i; }
     else if (starP !== -1) { p = starP + 1; i = ++starI; }
@@ -142,10 +149,13 @@ export function decide(robotsText, url, ua = DEFAULT_UA) {
   let groupName = token;
   if (chosen.length === 0) { chosen = groups.filter((g) => g.agents.includes("*")); groupName = "*"; }
   let best = null;
+  const budget = { left: MATCH_STEPS };
   for (const r of chosen.flatMap((g) => g.rules)) {
     const rp = normPath(r.path);
     if (rp.length > RULE_MAX_LEN) return { verdict: "UNREADABLE", reason: `a rule in group "${groupName}" is longer than ${RULE_MAX_LEN} bytes; the file was not read through` };
-    if (!globMatch(rp, path)) continue;
+    const m = globMatch(rp, path, budget);
+    if (m === null) return { verdict: "UNREADABLE", reason: `matching group "${groupName}" took more than ${MATCH_STEPS} steps; the file was not read through` };
+    if (!m) continue;
     if (!best || rp.length > best.len || (rp.length === best.len && r.allow && !best.allow)) best = { ...r, len: rp.length };
   }
   if (!best) {
@@ -163,7 +173,8 @@ export function decide(robotsText, url, ua = DEFAULT_UA) {
 
 // Serves robots.txt and one screen from disk. `robotsFile` alone is a 200; `robotsStatus` alone
 // is a bodiless status; with neither, robots.txt is a 404.
-export function fakeTransport({ robotsFile = null, robotsStatus = null, fixture = null } = {}) {
+// `redirect`: every screen request that is not already for that URL answers 302 to it, so a test can drive a hop.
+export function fakeTransport({ robotsFile = null, robotsStatus = null, fixture = null, redirect = null } = {}) {
   return {
     fake: true,
     async get(target) {
@@ -173,6 +184,7 @@ export function fakeTransport({ robotsFile = null, robotsStatus = null, fixture 
         const body = robotsFile && status >= 200 && status < 300 ? readFileSync(robotsFile) : Buffer.alloc(0);
         return { status, body, contentType: "text/plain" };
       }
+      if (redirect && u.href !== new URL(redirect).href) return { status: 302, body: Buffer.alloc(0), contentType: "", location: redirect };
       if (!fixture) return { status: 404, body: Buffer.alloc(0), contentType: "" };
       return { status: 200, body: readFileSync(fixture), contentType: "image/png" };
     },
@@ -227,40 +239,63 @@ export function isPrivateAddress(ip) {
   return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00;
 }
 
-async function refusePrivate(hostname) {
-  const host = hostname.replace(/^\[|\]$/g, "");
-  if (host === "localhost" || host.endsWith(".localhost")) throw new Error(`refused: ${host} is a local name`);
-  const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
-  for (const { address } of addrs) if (isPrivateAddress(address)) throw new Error(`refused: ${host} resolves to a private address`);
+// The check runs INSIDE the socket's own lookup, so the address that was checked is the address
+// that is connected to. A separate check-then-fetch resolved twice, and a host that rebinds its
+// DNS between the two passed the check and connected to 127.0.0.1 (attack r1 B1, phase-02 logic
+// pass). \`resolve\` is dns.lookup unless a test injects one.
+export function checkedLookup(resolve = lookup) {
+  return (hostname, options, cb) => {
+    if (typeof options === "function") { cb = options; options = {}; }
+    const host = String(hostname).replace(/^\[|\]$/g, "");
+    if (host === "localhost" || host.endsWith(".localhost")) { cb(new Error(`refused: ${host} is a local name`)); return; }
+    Promise.resolve(resolve(host, { all: true })).then((addrs) => {
+      if (!Array.isArray(addrs) || addrs.length === 0) { cb(new Error(`refused: ${host} did not resolve`)); return; }
+      for (const { address } of addrs) if (isPrivateAddress(address)) { cb(new Error(`refused: ${host} resolves to a private address`)); return; }
+      const all = addrs.map(({ address, family }) => ({ address, family: family || (isIPv4(address) ? 4 : 6) }));
+      if (options && options.all) cb(null, all); else cb(null, all[0].address, all[0].family);
+    }, (e) => cb(e));
+  };
 }
 
-export function realTransport({ ua = DEFAULT_UA } = {}) {
+export function realTransport({ ua = DEFAULT_UA, resolve = lookup } = {}) {
+  const pinned = checkedLookup(resolve);
   return {
     fake: false,
-    async get(target, { maxBytes = 15 * 1024 * 1024, truncate = false } = {}) {
-      await refusePrivate(new URL(target).hostname);
-      const res = await fetch(target, { headers: { "user-agent": ua }, redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-      const contentType = res.headers.get("content-type") || "";
-      const location = res.headers.get("location");
-      // Stream, and stop at the cap: a body with no content-length must not be buffered whole.
-      const chunks = [];
-      let total = 0, tooLarge = false, truncated = false;
-      if (res.body) {
-        const reader = res.body.getReader();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (total + value.length > maxBytes) {
-            if (truncate) { chunks.push(Buffer.from(value.subarray(0, maxBytes - total))); total = maxBytes; truncated = true; }
-            else tooLarge = true;
-            await reader.cancel().catch(() => {});
-            break;
-          }
-          chunks.push(Buffer.from(value));
-          total += value.length;
-        }
-      }
-      return { status: res.status, body: tooLarge ? Buffer.alloc(0) : Buffer.concat(chunks), contentType, location, tooLarge, truncated };
+    get(target, { maxBytes = 15 * 1024 * 1024, truncate = false } = {}) {
+      const u = new URL(target);
+      const host = u.hostname.replace(/^\[|\]$/g, "");
+      // node skips the lookup for an IP literal, so a literal is checked here, on the value used.
+      if (isIP(host) && isPrivateAddress(host)) return Promise.reject(new Error(`refused: ${host} is a private address`));
+      return new Promise((resolveGet, reject) => {
+        let settled = false;
+        const settle = (fn, v) => { if (!settled) { settled = true; clearTimeout(timer); fn(v); } };
+        const send = u.protocol === "https:" ? httpsRequest : httpRequest;
+        // Redirects are never followed here: the caller walks each hop through its own gates.
+        const req = send(u, { method: "GET", headers: { "user-agent": ua, "accept-encoding": "identity" }, lookup: pinned }, (res) => {
+          // Stream, and stop at the cap: a body with no content-length must not be buffered whole.
+          const chunks = [];
+          let total = 0, tooLarge = false, truncated = false;
+          const done = () => settle(resolveGet, { status: res.statusCode, body: tooLarge ? Buffer.alloc(0) : Buffer.concat(chunks), contentType: String(res.headers["content-type"] || ""), location: res.headers.location ?? null, tooLarge, truncated });
+          res.on("data", (value) => {
+            if (settled) return;
+            if (total + value.length > maxBytes) {
+              if (truncate) { chunks.push(value.subarray(0, maxBytes - total)); total = maxBytes; truncated = true; }
+              else tooLarge = true;
+              done();
+              req.destroy();
+              return;
+            }
+            chunks.push(value);
+            total += value.length;
+          });
+          res.on("end", done);
+          res.on("error", (e) => settle(reject, e));
+        });
+        // One deadline for the whole request, not a socket idle timer.
+        const timer = setTimeout(() => req.destroy(new Error(`timed out after ${FETCH_TIMEOUT_MS} ms`)), FETCH_TIMEOUT_MS);
+        req.on("error", (e) => settle(reject, e));
+        req.end();
+      });
     },
   };
 }
@@ -302,9 +337,32 @@ export async function preflight({ url, ua = DEFAULT_UA, transport, guard = null 
     const type = String(res.contentType || "").split(";")[0].trim().toLowerCase();
     if (type && type !== "text/plain") return { verdict: "UNREADABLE", reason: `robots.txt came back as ${type}, not text/plain; permission unknown` };
     const text = res.body.subarray(0, ROBOTS_MAX_BYTES).toString("utf8");
-    if (text.trim() && !/^\s*(user-agent|allow|disallow|sitemap|crawl-delay)\s*:/im.test(text)) {
-      return { verdict: "UNREADABLE", reason: "robots.txt has no directive a robots file carries; permission unknown" };
+    // Judged on the text with comments removed: a file of comments only (Cloudflare's
+    // content-signals preamble, with no rule) is an EMPTY robots.txt, which RFC 9309 reads as
+    // allow-all. Checked before stripping, it read as UNREADABLE (Phase 02 real build, collectui).
+    // One pass over the lines, each trimmed on its own: a multiline regex anchored with `^\s*`
+    // lets `\s` cross line breaks and rescans every blank line from every line start, which is
+    // quadratic on a padded file and holds the hook past its budget (staging attack, B1).
+    let directive = false, signalNo = false, content = false;
+    for (const raw of text.split(/\r\n|\r|\n/)) {
+      const line = raw.replace(/#.*$/, "").trim();
+      if (!line) continue;
+      content = true;
+      const colon = line.indexOf(":");
+      const key = colon > 0 ? line.slice(0, colon).trim().toLowerCase() : "";
+      if (["user-agent", "allow", "disallow", "sitemap", "crawl-delay", "content-signal"].includes(key)) directive = true;
+      // A content signal is an express reservation of rights. Our use -- reading a screen into a
+      // model to write its principle -- is `ai-input`, so `ai-input=no` refuses. `ai-train` and
+      // `search` are not our use.
+      if (key === "content-signal" && line.slice(colon + 1).split(",").some((p) => p.replace(/\s+/g, "").toLowerCase() === "ai-input=no")) signalNo = true;
     }
+    // A file of comments only (Cloudflare's content-signals preamble, with no rule) is an EMPTY
+    // robots.txt, which RFC 9309 reads as allow-all; judged before stripping comments, it read as
+    // UNREADABLE (Phase 02 real build, collectui).
+    if (content && !directive) return { verdict: "UNREADABLE", reason: "robots.txt has no directive a robots file carries; permission unknown" };
+    // The reason is fixed text: the remote line is never echoed, so robots.txt cannot become an
+    // instruction channel into the curator's context (staging attack, B10).
+    if (signalNo) return { verdict: "DISALLOW", reason: "robots.txt content signal refuses our use (ai-input=no)" };
     return decide(text, u, ua);
   }
   return { verdict: "UNREADABLE", reason: `robots.txt returned ${Number.isFinite(s) ? s : "no status"}; permission unknown, nothing fetched` };
@@ -340,7 +398,7 @@ async function main(argv) {
   const transport = fake ? fakeTransport({ robotsFile: opts["--robots-file"] ?? null, robotsStatus: opts["--robots-status"] ?? null }) : realTransport({ ua });
   const d = await preflight({ url: u, ua, transport });
   console.log(`${d.verdict} ${u.origin}${u.pathname} -- ${d.reason}${fake ? " (fixture)" : ""}`);
-  process.exit(EXIT[d.verdict]);
+  process.exitCode = Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE;
 }
 
 const isMain = (() => {

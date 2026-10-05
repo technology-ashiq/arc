@@ -72,8 +72,8 @@ Every count above is derived from the cards on disk. A vacant role is shown, nev
 |---|---|---|---|---|
 | Brand designer (`brand-designer`) | **VACANT** | vacant · own | -- | `design-director` |
 | Design critic (`design-critic`) | staffed | agent · own | design-critic | `design-director` |
-| Design director (`design-director`) | staffed | agent · own | design-director | `ceo` |
-| Design jury (`design-jury`) | staffed | agent · own | design-jury | `design-director` |
+| Design director (`design-director`) | staffed | agent · own | design-director, design-curator | `ceo` |
+| Design jury (`design-jury`) | staffed | agent · own | design-jury, design-jury-hj | `design-director` |
 | Design reviewer (`design-reviewer`) | staffed | agent · own | design-reviewer | `design-director` |
 | Graphics / video (`graphics-video`) | **VACANT** | vacant · own | -- | `design-director` |
 | UI designer (`ui-designer`) | staffed | agent · own | ui-composer | `design-director` |

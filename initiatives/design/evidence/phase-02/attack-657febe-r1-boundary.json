@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "design-sources-lint.mjs:93-95",
+      "breaking_input": "a source entry with `id: con` (or `id: \"../../../.git\"`) — every other required field filled in validly",
+      "why": "the lint checks only that `id` is a non-empty string and unique; it applies none of the charset/reserved-name grammar this repo already requires for lane names (`[a-z][a-z0-9-]*`, Windows device names con/prn/aux/nul/comN/lptN refused). This registry's own comments say `hosts` binds a URL 'to this row' for design-refpack.mjs to fetch, i.e. `id` is the key a downstream consumer uses to address a row and, by the same pattern the lanes system hit, is the natural choice for a per-source cache directory name. A reserved device name breaks `mkdir` on the Windows CI leg only; an id containing `..` or a path separator escapes the intended refpacks directory on every OS. The lint reports the registry clean (exit 0) in both cases.",
+      "fix": "apply the same grammar lanes.md already enforces: restrict `id` to `[a-z0-9][a-z0-9-]*`, cap its length, and refuse the closed set of Windows reserved device names, at the point the id is accepted here rather than trusting a downstream consumer to re-check it.",
+      "twin_of": "A Windows reserved device name passed the id grammar -> the lane-name reserved list applies to every id that becomes a directory."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/design-sources.bats:~195-203 (\"a PNG planted in a refpack dir is PROVEN ignored\")",
+      "breaking_input": "run this bats file twice concurrently (two CI shards on a shared checkout, or a re-run while a previous invocation was killed mid-test), both hitting this @test at the same time",
+      "why": "the probe directory `.claude/state/design/refpacks/ignore-probe` is a fixed path inside the live repo tree, not `$BATS_TEST_TMPDIR`. Two concurrent runs race `mkdir -p` / `printf > probe.png` / `rm -rf` on the same path with no lock; one process's `rm -rf` can remove the directory out from under the other's write, and a run killed between `mkdir` and `rm -rf` leaves `probe.png` behind as an untracked artifact for the next run to inherit.",
+      "fix": "use a per-PID or `$BATS_TEST_TMPDIR`-rooted path if the ignore rule under test still matches it, or mktemp -d a unique subdirectory name under refpacks/ per invocation.",
+      "twin_of": ""
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "design-sources-lint.mjs:74",
+      "breaking_input": "a design.sources.yaml whose text makes the frozen-subset parser throw synchronously instead of returning `{ok:false, error:...}` (e.g. a construct outside the subset that the parser doesn't itself guard, such as a tab-indented block)",
+      "why": "the import at line 68 and the `readFileSync` at line 61 are both wrapped in try/catch and answer with a structured `ERR [code]` line, but the `parseYamlSubset(text)` call at line 74 is not wrapped at all. A throw here crashes with Node's default uncaught-exception stack trace instead of the tool's own `ERR [registry-unparseable]` message — the header comment's contract ('Exit: 0 clean | 1 findings or unreadable. Never 2') happens to still hold only because Node defaults an uncaught exception to code 1, not because this file guarantees it.",
+      "fix": "wrap the `parseYamlSubset(text)` call in the same try/catch pattern used for the import and the read, so every parser failure is reported as a named `ERR [registry-unparseable]` line rather than depending on Node's default exit code for an uncaught throw.",
+      "twin_of": ""
+    }
+  ]
+}

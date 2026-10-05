@@ -183,22 +183,26 @@ hook: a small guard that blocks an action, such as a write outside an agent's ow
 
 - [/arc-design-critique](../commands/arc-design-critique.md) — Read-only vision critique of one route -- deterministic render, design-critic judges the pixels against the brief's four contracts, verdict + receipt derived by script. Never edits product code.
 
-## Agents (4)
+## Agents (6)
 
 - [design-critic](../agents/design-critic.md) — Read-only design critic. Reads the rendered screenshot back with vision, judges the surface against the brief's four contracts, and writes ONE critique artifact classing every finding VIOLATION / WEAKNESS / POLISH. Never edits product code and never scores. Invoked between design-critique.sh begin and finish.
+- [design-curator](../agents/design-curator.md) — Builds a per-brief reference pack of real screens from the registry's active galleries via design-refpack.mjs: robots.txt preflight per fetch, 5-8 screens from every active source that answers, an adaptable principle and avoid-this per screen.
 - [design-director](../agents/design-director.md) — Explore-mode director. Assigns three DIFFERENT product-structure theses from the brief, fills the IA-difference matrix at assignment time, and after the variants exist writes the explicit ≥3/7 divergence call — rejecting same-app-different-styling with at most one reassignment round. Never touches variant code.
-- [design-jury](../agents/design-jury.md) — Explore-mode blind juror. Ranks FOUR unlabelled items — the three variants plus a world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact.
+- [design-jury-hj](../agents/design-jury-hj.md) — Explore-mode blind juror at the high-judgment seat (ADR-1414): the same contract as design-jury, read from .claude/agents/design-jury.md, ranking N unlabelled items. One seat per panel, so the panel is model-mixed by construction (ADR-1405).
+- [design-jury](../agents/design-jury.md) — Explore-mode blind juror. Ranks N unlabelled items — the explore's variants plus at least one world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact.
 - [ui-composer](../agents/ui-composer.md) — Explore-mode composer. Builds exactly ONE variant from the brief and its assigned thesis — its own directory, its own invented visual system, realistic content. Blind to the other variants and never edits the brief, the matrix, or anything outside its own variant dir.
 
-## Scripts (15)
+## Scripts (17)
 
 - [`.claude/scripts/design/composer-bash-check.sh`](../../../.claude/scripts/design/composer-bash-check.sh)
 - [`.claude/scripts/design/composer-scope-check.sh`](../../../.claude/scripts/design/composer-scope-check.sh)
 - [`.claude/scripts/design/composer-write-check.sh`](../../../.claude/scripts/design/composer-write-check.sh)
 - [`.claude/scripts/design/critic-scope-check.sh`](../../../.claude/scripts/design/critic-scope-check.sh)
 - [`.claude/scripts/design/design-critique.sh`](../../../.claude/scripts/design/design-critique.sh)
+- [`.claude/scripts/design/design-expa1.mjs`](../../../.claude/scripts/design/design-expa1.mjs)
 - [`.claude/scripts/design/design-explore.sh`](../../../.claude/scripts/design/design-explore.sh)
 - [`.claude/scripts/design/design-gate.sh`](../../../.claude/scripts/design/design-gate.sh)
+- [`.claude/scripts/design/design-jury.mjs`](../../../.claude/scripts/design/design-jury.mjs)
 - [`.claude/scripts/design/design-lint.mjs`](../../../.claude/scripts/design/design-lint.mjs)
 - [`.claude/scripts/design/design-refpack.mjs`](../../../.claude/scripts/design/design-refpack.mjs)
 - [`.claude/scripts/design/design-render-serve.mjs`](../../../.claude/scripts/design/design-render-serve.mjs)

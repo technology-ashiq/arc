@@ -1,0 +1,22 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "design-robots.mjs:304,321,367-369 (preflight + realTransport)",
+      "breaking_input": "Host a robots.txt over 512 KiB (ROBOTS_MAX_BYTES) whose first 512 KiB contain no rule for /secret and whose `Disallow: /secret` line sits past byte 524288, served over real HTTP with `Content-Type: text/plain`. Run `design-robots.mjs --url http://target/secret`.",
+      "why": "preflight always calls `transport.get(target, { maxBytes: ROBOTS_MAX_BYTES, truncate: true })` (line 304). With `truncate: true`, realTransport's data handler (line 272) sets `truncated = true` and leaves `tooLarge` false whenever the cap is hit — `tooLarge` can only become true when `truncate` is false, which preflight never requests. So the later guard `if (res.tooLarge) return UNREADABLE` (line 321) is dead code that can never fire from this caller, and the cut-off body is handed straight to `decide()` as if it were the whole file. A Disallow rule placed past the cut is silently dropped and the verdict flips from the site's real DISALLOW to ALLOW, exactly the outcome the file's own header comment says must never happen (\"never a skipped rule, because skipping a Disallow is an ALLOW\"). `res.truncated` is computed but never read anywhere in the file.",
+      "fix": "Check `res.truncated` (not only `res.tooLarge`) and return UNREADABLE whenever the body was cut short, or stop passing `truncate: true` from preflight and let an oversize body reject via `tooLarge` as the existing check already expects.",
+      "twin_of": "An emptied oversize body passed through as a 2xx -> a capped read is truncated or refused, never handed on empty as a success."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "design-robots.mjs:147-152 (decide rule loop) with RULE_MAX_LEN=1024, PATH_MAX_LEN=8192, ROBOTS_MAX_BYTES=512*1024",
+      "breaking_input": "Serve a 512 KiB robots.txt consisting of one `User-agent: *` line followed by roughly 500 `Disallow:` lines each padded to just under 1024 bytes with alternating literal/`*` segments (e.g. `/a*a*a*a*...*aZ` repeated to the cap), then request a URL whose 8192-byte path+query is built from the same repeating character but never contains the final `Z`, forcing `globMatch` to backtrack through its saved-star pointer for nearly the full path on every rule.",
+      "why": "RULE_MAX_LEN and PATH_MAX_LEN only bound the cost of a single `globMatch` call (worst case ~1024x8192 char comparisons, ~8.4M ops); nothing bounds how many such rules a 512 KiB body can pack into the one matched group (`chosen.flatMap((g) => g.rules)` at line 147 has no count cap). ~500 near-max rules x ~8.4M worst-case comparisons each is on the order of 4 billion character operations for one URL check, entirely inside the size limits the file's own header comment claims make \"the matcher's cost... never exponential\" — the per-call bound is real but the total-work bound across all rules in the file is not.",
+      "fix": "Cap the number of rules examined per group (or a total operation/byte budget across the whole matching pass) and return UNREADABLE once exceeded, the same way an oversize single rule or path already does."
+    }
+  ]
+}

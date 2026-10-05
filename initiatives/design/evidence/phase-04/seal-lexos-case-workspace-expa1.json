@@ -1,0 +1,29 @@
+{
+  "id": "lexos-case-workspace-expa1",
+  "sealed": "2026-10-05T07:16:04.249Z",
+  "bundle": "initiatives/model-policy/evidence/phase-02",
+  "files": {
+    "SEALED-key.md": "31d1c233d3d8774a5fc99232178583be1db6cb4b5ef8c4ba78ad99647a16e102",
+    "blind/item-1.png": "e526d760510863200ee45104f7d510914791d7ef2c21c4f37f27487db33faf2d",
+    "blind/item-2.png": "f1aa51dc83789b09ef1d3a461dc77162650a237ddcca254a0723f852d32e7cde",
+    "blind/item-3.png": "35086605da320f074a7d176d3496dba1b70429a29382292a39bcdc0eb3ff7856",
+    "blind/item-4.png": "37a2835220845c258a000066cb09d859fc43b8919f8d51a37410152b12f75610",
+    "blind/item-5.png": "98a35358025408893bb7feda3acd9aab3d2c9448909225e23b646e412af7ecf8",
+    "blind/item-6.png": "51e88083f0f474785641e56abf6694297971d4c0596166d90d7751d758f7256e",
+    "fingerprints.md": "df071de1b07ae9ba29773e1d48ed5789b44914f744e31e20ec2b379291f3a55c",
+    "jury-ranking.md": "ab97c7334c6978c0799cb6af5a4dc808317cec812055d7194b360af849db393a",
+    "rankings.md": "8807fa63dfa03007224160368ca67ae7b5c00ade32ac821497d41d395df41fc8"
+  },
+  "prediction": {
+    "adr": "docs/adr/1416-the-exp-a1-prediction-is-session-authored-on-the-owners-delegation.md",
+    "adrSha256": "c2bd8d1c4b1f2979aebf9bab895078caf63cc98172a29e4a9815f72f7d44464a",
+    "authorship": "session-authored on the owner's delegation (ADR-1416); it calibrates the session, not the owner",
+    "text": "**Balanced-workhorse holds.** EXP-A1 will return **no material owner-visible gain** for the\nhigh-judgment arm, and the standing formula will therefore return **no promotion**.\n\nReasoning: [ADR-0049](0049-constraints-caused-the-convergence-freedom-restored.md) measured\nthat this loop's own **constraints**, not the model's capability, caused the convergence — the\nsame model produced clearly better design with the pipeline switched off than with it on.\nDesign v2 removes constraints and adds eyes, a pack and a craft-first jury. If regime dominates\ntier, then lifting the regime is what moves the output, and the tier gap stays below the\nowner-visible threshold. **Confidence: medium** — the honest counter is that a stronger model\nhas more to do with the room once the room exists, and that case has never been measured."
+  },
+  "formula": {
+    "gain": "high-judgment wins at least 2 of the 3 same-thesis pairs on the owner's blind score AND its mean beats balanced-workhorse's by at least 10 points out of 100",
+    "minPairsWon": 2,
+    "minMeanGap": 10,
+    "cost": "and the owner explicitly accepts the cost/time of the high-judgment seat; either half failing means no promotion"
+  }
+}

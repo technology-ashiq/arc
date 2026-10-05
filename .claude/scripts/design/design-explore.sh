@@ -22,6 +22,12 @@
 #   design-explore.sh render <id>                 # one shared render command, all variants
 #   design-explore.sh status <id>                 # where this explore stands
 #   design-explore.sh surfaces|coverage|selfreview <id>   # the REQ-03 / REQ-02b gates
+#   design-explore.sh jury <id> --n N --seed S --rubric <path> --ref <sha16> [--ref ...] [--control <v>] [--viewport WxH]
+#                                                 # deal N blinded items, seal the key (Phase 03 S1)
+#   design-explore.sh jury-check <id>             # every ranking against the key; deviations logged
+#   design-explore.sh score <id> --scores item-a=N,...   # the owner's blind 0-100, once (S4, ADR-1411)
+#   design-explore.sh unblind <id>                # refused until the score exists; the ordering is the assertion
+#   design-explore.sh catch-rate <id>             # self-review iterations that caught a defect
 #
 # compose/compose-done are the bookends, and they are the reason the gates are reachable at
 # all: the three of them shipped with zero production callers, so nothing armed the marker
@@ -53,6 +59,37 @@ esac
 
 EX="$ROOT/docs/design/explore/$ID"
 VARIANTS="a b c"
+# EXP-A1: each pair's TO side is a variant too. With the list fixed at a b c, compose-done on a
+# paired d/e/f judged only a-c and printed "3 of 3" -- the high-judgment arm went ungated.
+# Keyed on the committed seal as well as pairs.json, and read from the directories that exist
+# rather than parsed out of pairs.json: deleting or reformatting that file must not drop a
+# variant from the gates (attack c9094cd B1-B3, B5).
+if [ -f "$EX/pairs.json" ] || [ -f "$ROOT/initiatives/design/evidence/phase-04/seal-$ID.json" ]; then
+  for _vd in "$EX"/variant-*; do
+    [ -e "$_vd" ] || [ -L "$_vd" ] || continue
+    _to="${_vd##*/variant-}"
+    case "$_to" in
+      [abcdefghijklmnopqrstuvwxyz]) ;;
+      *) echo "design-explore: '${_vd##*/}' in a sealed or paired explore is not variant-<letter> -- refused, never skipped" >&2; exit 1;;
+    esac
+    # A link or a plain file in a variant's place is refused, not skipped (attack 22632d7 B3).
+    if [ -L "$_vd" ] || [ ! -d "$_vd" ]; then
+      echo "design-explore: '${_vd##*/}' is not a real directory -- refused, never skipped" >&2; exit 1
+    fi
+    case " $VARIANTS " in *" $_to "*) ;; *) VARIANTS="$VARIANTS $_to";; esac
+  done
+  # Every arm pairs.json names must still be on disk: deleting a variant's directory must not
+  # read as "no such arm" (attack 22632d7 B1). Parsed by node, so a reformat cannot hide a row.
+  if [ -f "$EX/pairs.json" ]; then
+    command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- a paired explore needs it to read pairs.json" >&2; exit 1; }
+    _arms="$(node "$DESIGN_DIR/design-expa1.mjs" arms --root "$ROOT" --id "$ID")" || exit 1
+    for _to in $_arms; do
+      case " $VARIANTS " in *" $_to "*) ;; *)
+        echo "design-explore: pairs.json names variant-$_to and no such directory exists -- an arm that vanished is refused, never dropped" >&2; exit 1;;
+      esac
+    done
+  fi
+fi
 
 case "$CMD" in
   init)
@@ -692,6 +729,12 @@ EOF
     _CS_MARKER="$ROOT/.claude/state/design/composer-session--$ID--variant-$V"
 
     if [ "$CMD" = "compose" ]; then
+      # EXP-A1 (Phase 04 S1/S2): a paired explore arms nothing while the sealed bundle or a
+      # paired thesis has moved. Keyed on the committed seal as well as the pairs file, so
+      # deleting pairs.json does not switch the check off (attack fab6c70 B3).
+      if [ -f "$EX/pairs.json" ] || [ -f "$ROOT/initiatives/design/evidence/phase-04/seal-$ID.json" ]; then
+        node "$DESIGN_DIR/design-expa1.mjs" pair-guard --root "$ROOT" --id "$ID" --variant "$V" || exit 1
+      fi
       # `env -u ARC_SCOPE_FORWARDED`, and then CHECK.
       #
       # composer-scope-check.sh honours --begin/--end only when ARC_SCOPE_FORWARDED != 1, and it
@@ -714,7 +757,7 @@ EOF
       echo "design-explore: read boundary ARMED for $ID variant-$V."
       echo "  writes:  docs/design/explore/$ID/variant-$V/"
       echo "  reads:   that dir, .claude/state/design/renders/$ID--variant-$V/,"
-      echo "           .claude/state/design/refpacks/$ID/   -- and nothing else"
+      echo "           the brief's pack: .claude/state/design/refpacks/<brief-id>/ and its sources.md -- and nothing else"
       echo "  renders: bash .claude/scripts/design/design-render.sh <page> --mode explore --session $ID--variant-$V --iter N"
       echo ""
       echo "Next: spawn the ui-composer agent for variant-$V, then run:"
@@ -767,6 +810,21 @@ EOF
     exit 0
     ;;
 
+  seal|seal-check|pair|exp-a1)
+    # EXP-A1's harness (Phase 04): the seal over model-policy's bundle and the prediction, the
+    # thesis pairs, and the per-pair report. Its own node module, like the jury.
+    command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- exp-a1 needs it" >&2; exit 1; }
+    node "$DESIGN_DIR/design-expa1.mjs" "$CMD" --root "$ROOT" --id "$ID" "$@"
+    exit $?
+    ;;
+  jury|jury-check|score|unblind|catch-rate)
+    # The jury step (Phase 03 S1, ADR-1405). Its logic is a node module, not a program in this
+    # shell string: it parses rankings and hashes images, and belongs in its own file.
+    command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- the jury needs it" >&2; exit 1; }
+    case "$CMD" in jury) sub=deal;; jury-check) sub=check;; *) sub="$CMD";; esac
+    node "$DESIGN_DIR/design-jury.mjs" "$sub" --root "$ROOT" --id "$ID" "$@"
+    exit $?
+    ;;
   render)
     [ -d "$EX" ] || { echo "design-explore: no explore '$ID'" >&2; exit 1; }
     # AN ARGUMENT LOOP, because this branch had none and silently swallowed everything after

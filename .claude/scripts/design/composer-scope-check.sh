@@ -344,7 +344,23 @@ esac
 
 OWN_VARIANT="docs/design/explore/$EX/$VARIANT"
 OWN_RENDERS=".claude/state/design/renders/$EX--$VARIANT"
-PACK=".claude/state/design/refpacks/$EX"
+# The pack is the BRIEF's, keyed by the brief id the explore records -- never by the explore id. It was
+# `refpacks/$EX` until Phase 03 S3: the curator writes refpacks/<brief-id>/, so on a real explore the
+# composer's pack grant named a directory nothing ever fills, and it read no pack at all. Unreadable or
+# absent explore.txt grants NO pack: fail closed, never back to the explore id.
+PACK=""
+PACK_SOURCES=""
+# A CRLF checkout (core.autocrlf on Windows) left a CR before the anchor, so the record never matched and the
+# pack was silently withheld (S3 attack B2). A symlinked record is not the explore's own (S3 attack B3).
+_brief_line=""
+if [ -f "$ROOT/docs/design/explore/$EX/explore.txt" ] && [ ! -L "$ROOT/docs/design/explore/$EX/explore.txt" ]; then
+  _brief_line="$(tr -d '\r' < "$ROOT/docs/design/explore/$EX/explore.txt" 2>/dev/null | sed -n 's#^brief=docs/design/briefs/\([a-z0-9][a-z0-9-]*\)/brief\.md$#\1#p' | head -1)"
+fi
+case "$_brief_line" in
+  ''|con|prn|aux|nul|com[0-9]|lpt[0-9]) ;;
+  *) PACK=".claude/state/design/refpacks/$_brief_line"
+     PACK_SOURCES="docs/design/refpacks/$_brief_line/sources.md";;
+esac
 
 # The allowlist, enumerated. Everything iron law 1 forbade stays forbidden: another variant's
 # dir, the matrix, the brief FILE, product files. The pack is admitted because it is images the
@@ -353,7 +369,9 @@ PACK=".claude/state/design/refpacks/$EX"
 case "$TARGET" in
   "$OWN_VARIANT"|"$OWN_VARIANT"/*) exit 0;;
   "$OWN_RENDERS"|"$OWN_RENDERS"/*) exit 0;;
-  "$PACK"|"$PACK"/*)               exit 0;;
+  "")                               ;;
+  "$PACK"|"$PACK"/*)               [ -n "$PACK" ] && exit 0;;
+  "$PACK_SOURCES")                 [ -n "$PACK_SOURCES" ] && exit 0;;
 esac
 
 # A sibling gets its own message, because it is the failure this boundary exists for: widening

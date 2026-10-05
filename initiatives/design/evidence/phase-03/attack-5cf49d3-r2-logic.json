@@ -1,0 +1,77 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L15",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-render.sh:758-762",
+      "breaking_input": "A meta whose recipe is the token `;confined-loopback` alone (e.g. only the transport suffix, with the rest empty or just `;confined-loopback`). Other_recipe equals `;confined-loopback` and RECIPE is empty, so the branch `[ \"$other_recipe\" = \"$RECIPE;confined-loopback\" ]` is true (empty plus token equals the token) and the same-recipe retry is allowed as a second look.",
+      "why": "The allow-list checks the full string equality of `other_recipe` to `RECIPE;confined-loopback`. If RECIPE is empty or is itself a short prefix, concatenating the token can collide with a different real recipe. The guard is keyed on the pair's exact text, not on a mode distinction, so an attacker who can write a meta whose recipe is only the token (or a recipe that is a prefix of another plus token) gets a crash-retry through. This matches the defect pattern 'an exception keyed on differs instead of on the one difference it means' — it still keys on a textual equality shape, not on the fact that one recipe is the other plus exactly a transport token.",
+      "fix": "Refuse when either recipe is empty. Require both recipes non-empty and check that the longer one is the shorter one plus `;confined-loopback` AND that the token is the only difference, by splitting on the token and comparing the base. Reject any base that itself contains the token, and reject a recipe that is just the token with an empty base.",
+      "twin_of": "An exception keyed on \"differs\" instead of on the one difference it means -> an allow-branch names the exact pair it admits; every other value, empty included, takes the refusal"
+    },
+    {
+      "id": "L16",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-render.sh:758-762",
+      "breaking_input": "A meta recipe in explore mode that itself contains the literal substring `;confined-loopback` in a different role, e.g. a real recipe `base;confined-loopback;extra` with RECIPE=`base;extra`. Then `other_recipe` does not equal `RECIPE;confined-loopback`, but if RECIPE is `base;confined-loopback` and other_recipe is `base;confined-loopback;confined-loopback`, the condition `[ \"$RECIPE\" = \"$other_recipe;confined-loopback\" ]` is false and `[ \"$other_recipe\" = \"$RECIPE;confined-loopback\" ]` is true, letting a same-recipe (modulo the extra token) retry through.",
+      "why": "The allow-list only checks the two orders of appending the token; it doesn't verify that the token is unique or that the full recipe is otherwise unchanged. A recipe that already ends in the token, or contains it embedded with a trailing component, makes the two recipes differ by more than the token yet still matches one of the two equalities. This lets a crash-retry that changes extra flags (adding another token-like suffix) through. Twin of the fixed B2, which the fix narrowed but did not close.",
+      "fix": "Parse the recipe into a base and an optional trailing token; require exactly one token, at the end, and both bases equal. Refuse when either side contains the token embedded elsewhere.",
+      "twin_of": "An exception keyed on \"differs\" instead of on the one difference it means -> an allow-branch names the exact pair it admits; every other value, empty included, takes the refusal"
+    },
+    {
+      "id": "L17",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:758-762",
+      "breaking_input": "A recipe that differs only by a trailing newline or CR (e.g. the JSON value carries an escaped CR or the file was written on Windows), making `other_recipe` equal `RECIPE;confined-loopback\\r`; the equality tests fail and the guard refuses a legitimate critique second look.",
+      "why": "The new tests assert the exact token but never normalise CR/LF. On a CRLF checkout or a meta written by a Windows tool, the two recipes that should form the allowed pair no longer match, so case 3 regresses to a refusal of the legitimate S5 critique — the exact Phase 03 S5 failure this amendment was meant to fix. This is the twin of the CRLF defect already recorded for a tracked-text parser.",
+      "fix": "Trim trailing CR (and newline) from both recipe values before comparing; then apply the token rule. Refuse only after normalisation.",
+      "twin_of": "A record parsed with an end anchor on a CRLF checkout -> strip CR before anchoring any line of a tracked text file."
+    },
+    {
+      "id": "L18",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:758-762",
+      "breaking_input": "A meta whose recipe is `RECIPE;confined-loopback` (the legitimate pair) but whose pixels are NOT identical — the guard's `continue` fires on the recipe match alone, before any pixel comparison, so a non-matching differ is admitted as a 'second look' when it is actually a different page/screenshot error.",
+      "why": "The diff places the new `continue` inside the cross-session branch before the pixel-matching check that refuse-on-identical-pixels relies on. The guard now admits any meta whose recipe matches the token rule regardless of whether the screenshots actually match, weakening the original case 3 which required byte-identical pixels. The ADR says matching pixels are expected; it does not say recipe difference alone suffices.",
+      "fix": "Only continue when the screenshots are byte-identical AND the recipe differs by exactly the token; otherwise fall through to the existing refusal.",
+      "twin_of": "An allow-branch names the exact pair it admits; every other value, empty included, takes the refusal"
+    },
+    {
+      "id": "L19",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:758-762",
+      "breaking_input": "The `_meta_field` failure path sets `other_recipe=\"\"`, and the guard then does not continue. But if the current RECIPE is also empty (because its own read failed or an empty recipe is a genuine value), then `[ -n \"$other_recipe\" ]` is false and the allow is skipped — the retry is refused, which is fail-closed. However, the asymmetric test still lets a *current* empty RECIPE be treated as a valid base: if other_recipe equals `;confined-loopback` (the token with empty base), the first branch matches and continue fires, admitting a retry whose real recipe is unknown.",
+      "why": "The guard checks `-n` on other_recipe only. It never verifies that RECIPE is non-empty and well-formed before using it as the base for the token comparison. A failed RECIPE read (empty) plus an other_recipe that is just the token admits a crash-retry. This is the same twin pattern as prior B1/L11: a failed probe of the current recipe falls back to empty and is read as a positive value.",
+      "fix": "Before the allow branch, fail closed if RECIPE is empty, and refuse when the base (RECIPE minus token) is empty.",
+      "twin_of": "A probe that falls back to a default on failure -> a failed probe refuses; it never supplies a value."
+    },
+    {
+      "id": "L20",
+      "severity": "medium",
+      "where": "tests/design-render-session.bats:152-205",
+      "breaking_input": "The new negative test plants recipes `other-recipe`, `''`, and `' '` but never a recipe that equals `RECIPE;confined-loopback` with a corrupted/tampered base, nor a recipe that is the token with an empty base, nor a CRLF betare. So the exact token-collision and CRLF fail-open paths are unexercised.",
+      "why": "The two new tests pin only the happy pair and four negative values. The B2 attack that motivated the fix (arbitrary recipe) is covered, but the narrower allow-list-style bypasses above are not. A test that aims a gate's refusal must include the boundary values where the allow-branch itself misfires.",
+      "fix": "Add cases: other_recipe=`;confined-loopback`, other_recipe=`RECIPE;confined-loopback;x`, other_recipe=`RECIPE;confined-loopback\\r`, and current RECIPE empty.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    },
+    {
+      "id": "L21",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:758-762",
+      "breaking_input": "A recipe whose value is not a string but a number or null in JSON, where `_meta_field` returns `null` or `0`. `-n` on numeric string `0` is true, and comparing `0` to `RECIPE;confined-loopback` could match a crafted RECIPE of the same shape, admitting a same-recipe retry.",
+      "why": "The code does not verify the recipe value's JSON type, only that it is non-empty. If a meta writer can place any scalar, the token concatenation still applies to it. The intended guard is about recipe strings; treating any non-empty string as the recipe base lets non-string values be normalised.",
+      "fix": "Have `_meta_field` reject non-string recipe values (or return non-zero); compare only genuine string recipes.",
+      "twin_of": "An absent field read as \"some other value\" and allowed -> an allow list, never a catch-all exit 0."
+    },
+    {
+      "id": "L22",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:758-762",
+      "breaking_input": "Two different legitimate second looks: an explore render and then a critique, and later another explore-render variations producing two metas in different sessions whose recipes both differ by the token. The allow branch matches each pair exactly-if-either-order, so a third distinct recipe (e.g. a second explore mode with a different viewport token) is refused even when pixels match and it is a genuine second look.",
+      "why": "The allow-list admits only one pair shape; any recipe that differs by more than the single token (for example an explore variant with an extra `-narrow` flag) is treated as a retry and refused, a false positive for a legitimate second look. The ADR says only the confined-loopback difference is meant, but other legitimate explore-modes exist. This is a denial-of-service correctness finding, matching the pattern 'an allow-branch names the exact pair it admits' — it names too narrow a pair.",
+      "fix": "Compare the full recipe structure (base plus one token each), and allow when the base is equal and the token set differs only by the presence of confined-loopback; refuse when the difference is anything else.",
+      "twin_of": "An exception keyed on \"differs\" instead of on the one difference it means -> an allow-branch names the exact pair it admits; every other value, empty included, takes the refusal"
+    }
+  ]
+}
