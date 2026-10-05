@@ -1,0 +1,85 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:72-90",
+      "breaking_input": "a venture repo whose default branch is not named main, e.g. GitHub default branch `master` or `trunk`, linked through the Vercel project",
+      "why": "scaffold always GETs `git/ref/heads/main`, creates the preview branch from it, and opens the PR with `base: \"main\"`, never reading the repo's default branch. On such a repo the GET 404s and scaffold throws an uncoded GitHub error, so the slot cannot prove previews for that venture.",
+      "fix": "Read the repository's `default_branch` from `/repos/{full}` and create the branch and PR against that; refuse with a clear coded error if the default branch is absent."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:113-118",
+      "breaking_input": "a Vercel preview deployment triggered via the Vercel GitHub App where the deployment `meta` lacks `githubCommitSha` (only `githubCommitRef` or a different sha is present) while a READY preview of `arc/preview-check` exists",
+      "why": "probe filters deployments by `x.meta.githubCommitSha === sha` and `x.target !== \"production\"`; Vercel preview metadata can omit `githubCommitSha`. The loop then returns `no preview deployment of <sha> yet` even though the preview exists and is READY, so verify permanently reports not-ok on a healthy venture.",
+      "fix": "Also match deployments whose branch metadata (`githubCommitRef`, `githubCommitRef` name) equals `arc/preview-check` at the current head, and only require the sha when the field is present."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:76-80",
+      "breaking_input": "two concurrent applies for the same venture, or a previous apply that timed out after creating the ref but before the contents PUT",
+      "why": "the 404 path performs GET ref, POST refs, then PUT contents as separate non-atomic calls. A concurrent or crashed run can create the ref between the GET 404 and the POST, making the POST throw an uncoded 422. If the ref was created but the tagged file was never written, the next run reads a head without the trailer and throws FOREIGN_BRANCH on launch's own branch; the slot cannot recover without manual cleanup.",
+      "fix": "Create the branch and tagged commit atomically (e.g. PUT contents with the new branch name so GitHub creates the ref), or on POST/PUT 422 refetch the ref and accept the branch if its head carries the slot's trailer."
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:99-101",
+      "breaking_input": "a re-run after the preview-check PR was closed by the owner or manually, while the launch-owned branch still exists",
+      "why": "scaffold queries only `state=open` and, finding no open PR, unconditionally POSTs a new PR. It never looks at closed PRs with the same head, so a re-run creates a second PR, breaking the ADR's one-standing-PR invariant and the contract test's `prs == 1` expectation.",
+      "fix": "Query pulls with `state=all&head=...`; if a closed PR with that head exists, reopen it (or refuse clearly) instead of creating a second PR."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:77-80,83-90",
+      "breaking_input": "a GitHub fine-grained PAT whose permission model returns 404 for the GET ref (metadata read denied), so the code interprets a permissions-shaped 404 as 'branch absent'",
+      "why": "the 404 branch is treated as 'branch absent, create it', so an auth-shaped 404 causes a create attempt that fails with another 404 and an uncoded GitHub error, instead of a clear token/access refusal. The 'read one value, then mutate based on its absence' pattern turns an auth failure into a create attempt.",
+      "fix": "Fetch the repo once and only treat a ref 404 as absent when the repo fetch succeeds and the default branch is known; otherwise throw a coded BAD_ACCESS/TOKEN error."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:119-121",
+      "breaking_input": "a legitimate Vercel preview deployment whose deployment host label is longer than 200 characters (long project/slug combinations) or whose preview domain is another Vercel suffix than `vercel.app`",
+      "why": "`say(d.url, 200)` truncates the URL before the regex validation, so a genuine READY preview with a >200-char URL is reported as 'has no vercel.app URL'. The regex also hard-codes only `vercel.app`, excluding other valid Vercel preview domains.",
+      "fix": "Validate the raw `d.url` before truncating/sanitising, and accept Vercel's documented preview domain set."
+    },
+    {
+      "id": "L7",
+      "severity": "high",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:85-91,102-106",
+      "breaking_input": "an SSL Labs READY result whose endpoint grade is A with `hstsPolicy.status` \"present\" but `maxAge: 0`, i.e. a real `Strict-Transport-Security: max-age=0` header on the endpoint",
+      "why": "the probe requires only `hstsPolicy.status === \"present\"` and never checks `maxAge` or `includeSubDomains`. SSL Labs reports an HSTS policy as present even with `max-age=0`, so a domain that actively disables HSTS is verified as A-with-HSTS, proving a tls slot the domain does not have.",
+      "fix": "Require `hstsPolicy.maxAge > 0` (and decide whether `includeSubDomains` is required) in addition to status \"present\"."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:127-146",
+      "breaking_input": "a teardown run after the owner manually closed the PR and deleted the branch, or after another actor took over the PR",
+      "why": "teardown returns close-pr and delete-branch steps purely from the recorded resource list with no runtime ownership re-check. The branch delete can fail after the owner deleted it, and the PR close step could close a PR launch no longer owns.",
+      "fix": "teardown should re-read the PR and branch head, verify the trailer/ownership marker, and omit or refuse steps for resources launch no longer owns."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:110-112",
+      "breaking_input": "a venture slug rename or a change of the slot tag format between apply and weekly re-verify, so `ctx.tag` differs from the tag stored in the branch head's trailer",
+      "why": "`isOurs` requires an exact line equal to `Arc-Launch-Tag: ${ctx.tag}`. The tag embeds the current venture slug; if the slug or tag format changes, the standing preview branch launch created is rejected as FOREIGN_BRANCH and the weekly verify cannot read its own probe.",
+      "fix": "Use a stable ownership marker independent of the current run's tag, e.g. a static marker plus slot id, and additionally verify the commit author matches the GitHub token's owner."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:93-97",
+      "breaking_input": "an SSL Labs READY response whose `endpoints` array is a JSON object rather than an array (e.g. a proxy rewriting the response), making `list()` return [] and verify report UNSCANNED('ssllabs returned no endpoints') despite a valid scanned answer",
+      "why": "the trust boundary is inverted: `list()` silently drops a non-array response, so a shape-changing response is reported as 'no endpoints' rather than as an error, and the reason string loses the actual shape. The slot then stays UNSCANNED forever even though the scanner did answer.",
+      "fix": "If `endpoints` is present but not an array, return an explicit UNSCANNED reason naming the bad shape instead of treating it as an empty list."
+    }
+  ]
+}
