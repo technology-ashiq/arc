@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:63,78-79,100-103",
+      "breaking_input": "A Cloudflare reply of HTTP 200 with `{\"success\":true,\"result\":{}}` to GET /zones, or `\"result\":[null]`, or a dns_records GET with `\"result\":null`. A DoH answer of `{\"Answer\":\"x\"}` or `{\"Answer\":[null]}` for verify.",
+      "why": "The `errors || []` fix covered only the error path. `(found || []).find` throws on a non-array object, and `bare(r.name)` throws on a null element, so the adapter dies with a raw TypeError. `(records || []).filter` and `r.comment` fail the same way. `result: null` on a records GET is treated as 'no records exist', which skips the FOREIGN_RECORD refusal and goes straight to POST. `cnames` calls `.filter` on a non-array `Answer`. `r.google` is dereferenced without checking that `probe.doh` returned an object.",
+      "fix": "Add one helper that returns an array of plain objects or throws a fixed-message error. Use it on every `result`, `Answer` and `doh` reply. Treat `result: null` on a records GET as a refusal, not an empty list.",
+      "twin_of": "`errors || []` trusted the provider to send an array of objects -> every `x || []` over a response body"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:70-90",
+      "breaking_input": "Slot timeout fires while `zoneOf` or the records GET is in flight. `cf()` passes no `signal` to `ctx.fetch`, and `scaffold` never checks `ctx.signal.aborted` before the POST or PATCH.",
+      "why": "If ctx.fetch does not bind the signal itself, a stalled request outlives the slot timeout. When it finally answers, scaffold goes on to create the CNAME after the runner has already recorded failed(timeout). That breaks the REQ-02(c) promise that the AbortSignal stops further creates. The `zoneOf` loop makes up to N sequential GETs with no abort check either. The contract test only exercises the abort path in `verify`.",
+      "fix": "Pass `signal: ctx.signal` in `cf()` and throw ABORTED before every mutating call and every `zoneOf` iteration. Add a scaffold arm that aborts between the GET and the POST and asserts zero POSTs.",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired, so the slot timeout was swallowed for the whole poll -> every wait, retry or poll loop in an adapter or the runner"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:14-16",
+      "breaking_input": "A resolver or provider string carrying U+00AD (soft hyphen), U+034F, U+180E, U+3164 or U+115F (invisible fillers), tag characters U+E0020-U+E007F, U+FFF9-U+FFFB (interlinear annotation), or an unpaired surrogate such as `\\ud800`.",
+      "why": "SKIP was widened for U+061C and the zero-width marks, but the same invisible and format-character classes are still printed. Tag characters can carry hidden text into the board. Lone surrogates survive the code-point iteration and print as replacement characters. Each round has added only the characters its attacker listed, not the Unicode category.",
+      "fix": "Drop every `\\p{Cf}`, `\\p{Cc}`, `\\p{Zl}`, `\\p{Zp}`, `\\p{Cs}` and `\\p{Co}` character, plus U+3164, U+115F and U+034F. Test one sample per category.",
+      "twin_of": "The sanitiser missed U+061C and the zero-width marks, and capped by UTF-16 units -> every sanitiser and every `.slice(0, n)` on display text"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:16,40,77,111",
+      "breaking_input": "An error object without `code`, a DoH answer with `data: null`, or a record with no `type` or `id`.",
+      "why": "`say(v)` runs `String(v)`, so undefined or null becomes the text 'undefined' or 'null'. That is the same coercion defect fixed for `ctx.upstream`. The reason reads `undefined: msg`, FOREIGN_RECORD names `undefined undefined`, and a null CNAME `data` becomes the label 'null' that `cnames` compares and prints.",
+      "fix": "Return '' from `say` for a non-string, non-number input. Omit empty fields from messages.",
+      "twin_of": "Upstream entries were coerced with `String()`, so a `null` id became the hostname \"null\" -> every value one adapter hands another through state"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/launch/launch-lint.mjs:65-68",
+      "breaking_input": "A catalog row with a bare `depends_on:` or `optional_for:` key and no value, which the subset parser reads as null. Also a non-string entry in `depends_on` that other lint rules read before this check runs.",
+      "why": "`s[k] !== undefined` makes a valueless key fail as 'must be a list' even though it is the natural empty form. The DAG, edge and predicate rules may already call `.has`, `.map` or `new Set` on the entries before this check reaches them. The new lines are placed after rules that read the same fields, so a non-string entry can crash the lint with a TypeError instead of producing the list-shape finding. The 123 mutant passes only because the DAG rules happen to tolerate numbers.",
+      "fix": "Run the list-shape check first and skip the rules that read the field once it fails. Decide explicitly whether null is allowed for an empty list.",
+      "twin_of": "A quoted YAML list item holding `: ` was parsed as a one-key mapping -> every YAML field the code reads as a string: assert its type, not its presence"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/worker.mjs:52-58",
+      "breaking_input": "A hosting slot that is `verified` but whose `resources` hold two `dns-target` entries after a re-scaffold, with the old target kept alongside the new one. Then `apply dns`.",
+      "why": "State resources accumulate across attempts and nothing here dedupes them. dns then refuses with 'hosting reported 2 dns-target resources', which blames the wrong slot. The runner has no re-entry path to retire a stale upstream value. Separately, nothing in the diff shows that `slotRow` returns an object for a dependency with no state row; if it returns undefined, `r.state` throws before the worker writes a receipt.",
+      "fix": "Have the runner replace a slot's resources by kind on re-scaffold. Make the worker use `(slotRow(st0, d) || {})`. Add a runner test for a dependency with no state row.",
+      "twin_of": "upstream handed an adapter resources from a dependency that had failed after recording them -> every value passed between slots: is its producer's state checked?"
+    }
+  ]
+}

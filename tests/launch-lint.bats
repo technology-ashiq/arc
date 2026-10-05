@@ -98,3 +98,28 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$output" == *'FAIL [hosts]'*'host "com" is not a bare hostname'* ]] || { echo "$output"; false; }
 }
+
+@test "launch-lint: a quoted exit criterion holding a colon stays a sentence; an unquoted one is refused" {
+  run node --input-type=module -e 'const { loadCatalog } = await import((await import("node:url")).pathToFileURL(process.argv[1]).href); const h = loadCatalog().find((s) => s.id === "hosting"); console.log("HOSTING " + JSON.stringify(h.exit_criteria));' "$ARC_ROOT/.claude/scripts/launch/lib/catalog.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *'HOSTING ["git-triggered deploy with githubDeployment: 1"]'* ]] || { echo "$output"; false; }
+  node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");const t=s.replace("- \"git-triggered deploy with githubDeployment: 1\"","- git-triggered deploy with githubDeployment: 1");if(t===s)process.exit(3);fs.writeFileSync(process.argv[2],t)' "$ARC_ROOT/products/launch/launch.slots.yaml" "$BATS_TEST_TMPDIR/c.yaml" || { echo "fixture edit did not land"; false; }
+  run node "$(LINT)" --catalog "$BATS_TEST_TMPDIR/c.yaml"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"FAIL [exit-criteria] hosting"* ]] || { echo "$output"; false; }
+}
+
+@test "launch-lint: a quoted mapping key in a list is a parse error, not a silent string (attack fb3a494 B5)" {
+  run node --input-type=module -e 'const { parseYamlSubset } = await import((await import("node:url")).pathToFileURL(process.argv[1]).href); for (const t of ["xs:\n  - \"a\": 1\n", "xs:\n  - \"a\" b\n", "xs:\n  - \"a: b\"\n"]) { const r = parseYamlSubset(t); console.log("CASE " + (r.ok ? "ok " + JSON.stringify(r.value.xs) : "err " + r.error.what)); }' "$ARC_ROOT/.claude/scripts/engine/yaml-subset.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(printf '%s\n' "$output" | grep -c '^CASE ')" -eq 3 ] || { echo "$output"; false; }
+  [ "$(printf '%s\n' "$output" | grep -c '^CASE err a sequence item that opens a quote')" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *'CASE ok ["a: b"]'* ]] || { echo "$output"; false; }
+}
+
+@test "launch-lint: depends_on entries that are not plain names are refused (attack fb3a494 B6)" {
+  node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");const t=s.replace("    depends_on:\n      - domain\n      - hosting\n","    depends_on:\n      - domain\n      - 123\n");if(t===s)process.exit(3);fs.writeFileSync(process.argv[2],t)' "$ARC_ROOT/products/launch/launch.slots.yaml" "$BATS_TEST_TMPDIR/c.yaml" || { echo "fixture edit did not land"; false; }
+  run node "$(LINT)" --catalog "$BATS_TEST_TMPDIR/c.yaml"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"FAIL [list-shape] dns"* ]] || { echo "$output"; false; }
+}

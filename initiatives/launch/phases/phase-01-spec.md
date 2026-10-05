@@ -9,7 +9,7 @@
 ## Scope
 
 - CLI six verbs complete: `new · plan · apply {slot} · verify [slot|--all] · status · teardown --plan`.
-- Adapters + vet (scout record, one real verify, `decision.recorded`, digest) for dns (cloudflare) · tls (hosting-managed) · repo (github) · ci (github-actions) · environments · hosting (vercel) · secrets · frontend (next shell) · release — **day-3 kill** — then backend · database (supabase) · orm (drizzle) · email-transactional (resend) · auth (supabase-auth) · authz · tenancy.
+- Adapters + vet (scout record, one real verify, `decision.recorded`, digest) for repo (github) · ci (github-actions) · environments · hosting (vercel) · dns (cloudflare, after hosting -- ADR-1725) · tls (hosting-managed) · secrets · frontend (next shell) · release — **day-3 kill** — then backend · database (supabase) · orm (drizzle) · email-transactional (resend) · auth (supabase-auth) · authz · tenancy.
 - Gate 2 (first prod deploy) emitted and decided for real; `domain` ends at its refusal path + `--dry-run`.
 
 ## Exit criteria (Definition of Done)
