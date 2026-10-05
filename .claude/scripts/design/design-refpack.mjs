@@ -252,6 +252,7 @@ const MCP_SEARCH = {
 const MCP_SEAMS = ["--registry", "--mcp-fixture", "--record-request"];
 const MCP_DEADLINE_MS = 30000;
 const MCP_MAX_BYTES = 2 * 1024 * 1024;
+const MCP_MAX_RESULTS = 50;
 // Built from code points, not escapes: an editor turned a typed escape for U+2028 into the real
 // character once, which ends a regex literal mid-line.
 const SCRUB_CTRL = new RegExp("[" + String.fromCharCode(0) + "-" + String.fromCharCode(0x1f) + String.fromCharCode(0x7f, 0x85, 0x2028, 0x2029) + "]+", "g");
@@ -291,7 +292,12 @@ function searchItems(result) {
   // The live shape: structuredContent.results. When it is present it is the answer, and the prose
   // beside it is a rendering of the same list, never a second count.
   const sc = result && result.structuredContent;
-  if (sc && typeof sc === "object" && Array.isArray(sc.results)) return sc.results.filter((x) => x && typeof x === "object");
+  if (sc && typeof sc === "object" && Array.isArray(sc.results)) {
+    // A hit is an object that names a component (a string name or an id); an empty object is not
+    // one. The list is capped at MCP_MAX_RESULTS, so a server ignoring `limit` cannot flood the
+    // count or the console (attack 22567d9 B2 B3).
+    return sc.results.slice(0, MCP_MAX_RESULTS).filter((x) => x && typeof x === "object" && ((typeof x.name === "string" && x.name.trim()) || typeof x.id === "number" || (typeof x.id === "string" && x.id.trim())));
+  }
   for (const c of (result && Array.isArray(result.content) ? result.content : [])) {
     if (!c || c.type !== "text") continue;
     let v;

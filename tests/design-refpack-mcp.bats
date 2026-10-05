@@ -257,8 +257,15 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   run node "$(_refpack)" --brief lexos --source 21st-dev --url https://cdn.21st.dev/u/status-bar/preview.png --principle "the state of each day is one coloured cell, so a week reads at a glance" --avoid "the uptime vocabulary" --robots-file "$SANDBOX/robots.txt" --fixture "$SANDBOX/shot.bin"
   [ "$status" -eq 0 ] || { echo "an mcp source image on its host was refused: $output"; false; }
   grep -q '| 21st-dev (fixture) |' "$SANDBOX/docs/design/refpacks/lexos/sources.md" || { cat "$SANDBOX/docs/design/refpacks/lexos/sources.md"; false; }
-  run node "$(_refpack)" --brief lexos --source 21st-dev --url https://evil.example/preview.png --principle p --avoid a --robots-file "$SANDBOX/robots.txt" --fixture "$SANDBOX/shot.bin"
+  # Same principle and avoid text as the passing call, so only the host binding can refuse (attack 22567d9 B1).
+  run node "$(_refpack)" --brief lexos --source 21st-dev --url https://evil.example/preview.png --principle "the state of each day is one coloured cell, so a week reads at a glance" --avoid "the uptime vocabulary" --robots-file "$SANDBOX/robots.txt" --fixture "$SANDBOX/shot.bin"
   [ "$status" -eq 2 ] || { echo "an image off the row's hosts was accepted: $output"; false; }
+  [[ "$output" == *"evil.example is not one of source '21st-dev' hosts"* ]] || { echo "refused, but not by the host binding: $output"; false; }
+  # Empty objects in structuredContent are not hits (attack 22567d9 B2).
+  printf '{"initialize":{"status":200,"body":{"jsonrpc":"2.0","id":1,"result":{}}},"tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"result":{"structuredContent":{"results":[{},{},{"name":"Real"}]}}}}}\n' > "$SANDBOX/fxempty.json"
+  run env API_KEY_21ST=k-test-0001 node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-fixture "$SANDBOX/fxempty.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"answered 1 of 3"* ]] || { echo "empty objects were counted: $output"; false; }
 }
 
 @test "this file registers the 11 tests it declares" {
