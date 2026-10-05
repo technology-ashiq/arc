@@ -261,6 +261,11 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   run node "$(_refpack)" --brief lexos --source 21st-dev --url https://evil.example/preview.png --principle "the state of each day is one coloured cell, so a week reads at a glance" --avoid "the uptime vocabulary" --robots-file "$SANDBOX/robots.txt" --fixture "$SANDBOX/shot.bin"
   [ "$status" -eq 2 ] || { echo "an image off the row's hosts was accepted: $output"; false; }
   [[ "$output" == *"evil.example is not one of source '21st-dev' hosts"* ]] || { echo "refused, but not by the host binding: $output"; false; }
+  # An mcp row with empty hosts is refused with its reason, before any host check (attack af751d5 B1).
+  sed 's/^    hosts:$/    hosts: none/; /^      - 21st.dev$/d' "$SANDBOX/design.sources.yaml" > "$SANDBOX/nohosts.yaml"
+  run node "$(_refpack)" --brief lexos --source 21st-dev --url https://cdn.21st.dev/u/p.png --principle "the state of each day is one coloured cell, so a week reads at a glance" --avoid "the uptime vocabulary" --robots-file "$SANDBOX/robots.txt" --fixture "$SANDBOX/shot.bin" --registry "$SANDBOX/nohosts.yaml"
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"needs a non-empty hosts list and a search adapter"* ]] || { echo "$output"; false; }
   # Empty objects in structuredContent are not hits (attack 22567d9 B2).
   printf '{"initialize":{"status":200,"body":{"jsonrpc":"2.0","id":1,"result":{}}},"tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"result":{"structuredContent":{"results":[{},{},{"name":"Real"}]}}}}}\n' > "$SANDBOX/fxempty.json"
   run env API_KEY_21ST=k-test-0001 node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-fixture "$SANDBOX/fxempty.json"

@@ -549,7 +549,9 @@ async function main(argv) {
   // the row's hosts and pass the same robots preflight below. Only the image is fetched here; the
   // search that found it went through --query. Every other access kind is refused.
   if (String(src.access) !== "fetch" && String(src.access) !== "mcp") fail(2, `refused: source '${id}' has access: ${field(src.access)}; this builder fetches a fetch or mcp source's images only`);
-  if (String(src.access) === "mcp" && src.hosts === undefined) fail(2, `refused: mcp source '${id}' names no hosts, so its image URL cannot be bound to it`);
+  // An mcp row needs a non-empty hosts list AND a search adapter here: an mcp source this builder
+  // cannot search (shadcn) has no business adding images (attack af751d5 B1).
+  if (String(src.access) === "mcp" && (asList(src.hosts).length === 0 || !Object.hasOwn(MCP_SEARCH, id))) fail(2, `refused: mcp source '${id}' needs a non-empty hosts list and a search adapter before its images are added`);
 
   // 2. host binding. A scratch registry may omit hosts; the real one may not.
   const fake = ["--robots-file", "--robots-status", "--fixture", "--redirect"].some((k) => o[k] != null);
